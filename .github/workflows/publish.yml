@@ -27,7 +27,7 @@ concurrency:
 jobs:
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: [self-hosted, yak]
+    runs-on: [self-hosted, gce]
     timeout-minutes: 20
     permissions:
       contents: read

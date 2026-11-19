@@ -9,21 +9,17 @@
 # (packages/admin/README.md, "The deploy catch-up").
 #
 # Runs on our own runner, not GitHub's — we buy no Actions minutes (M-9560).
-# It is gh-runner (LXC 112 on the homelab's pve, beside two other repos'
-# runners), as user `yak-runner` in /opt/actions-runner/yak, under the system
-# unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
-# docs/PROXMOX.md says how it was installed. Tests run in process through
-# the graph and DOM abstractions, without Chrome or platform services.
-# `runs-on` names the custom label `yak`, so a workflow can never silently
-# fall back to a hosted runner.
+# It is yak-ci, a c4d-highcpu-8 VM (four cores, eight threads, 15 GB) in GCP
+# project justyaks, us-central1-a, off the box's host so agent work here
+# cannot slow it. It runs as user `runner` in /opt/actions-runner, under the
+# system unit actions.runner.yak-sh-yak.yak-ci.service, and holds no keys
+# and no service account. bin/ci-runner-setup installs and registers it.
+# Tests run in process through the graph and DOM abstractions, without
+# Chrome or platform services. `runs-on` names the custom label `gce`, so a
+# workflow can never silently fall back to a hosted runner.
 #
-# Timing runs on CPUs 0-3 (four physical cores). Explicit
-# lxc.cgroup2.cpuset.cpus entries in pve's LXC configs keep its balancer
-# from moving them: the other running containers use only 4-5,10-11.
-# Both the container root and /ns cgroups carry that affinity. Leaving their SMT siblings 6-9 idle prevents agent work
-# from stealing the measured core.
-#
-#   ssh pve 'pct exec 112 -- systemctl status actions.runner.yak-sh-yak.gh-runner-yak'
+#   gcloud compute ssh yak-ci --project justyaks --zone us-central1-a \
+#     --command 'systemctl status actions.runner.yak-sh-yak.yak-ci'
 #   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
 #
 # The repo is public, so a fork PR must never reach the runner: the `if` below
@@ -51,7 +47,7 @@ concurrency:
 jobs:
   gate:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, yak]
+    runs-on: [self-hosted, gce]
     timeout-minutes: 30
     permissions:
       contents: read

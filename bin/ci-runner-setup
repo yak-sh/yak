@@ -1,0 +1,42 @@
+#!/bin/sh
+# Sets up yak-ci, the GCE VM in GCP project justyaks that runs the gate, as
+# a self-hosted GitHub Actions runner for yak-sh/yak with the label `gce`.
+# Run it as root on the VM with a registration token, which expires in an hour:
+#
+#   token=$(gh api -X POST repos/yak-sh/yak/actions/runners/registration-token --jq .token)
+#   gcloud compute ssh yak-ci --project justyaks --zone us-central1-a \
+#     --command "sudo sh -s $token" < bin/ci-runner-setup
+#
+# Rerunning it is safe: it installs what is missing and registers only once.
+# The VM gets what the gate uses and nothing else: git, Deno, Node for pnpm,
+# no Chrome, no service account, no keys. Its disk keeps the Deno cache and
+# the pnpm store between runs.
+set -eu
+DENO=v2.9.1
+token=$1
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -yq git curl unzip perl sqlite3 ca-certificates jq
+command -v node >/dev/null || {
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -yq nodejs
+}
+[ "$(deno --version 2>/dev/null | head -1 | cut -d' ' -f2)" = "${DENO#v}" ] || {
+  curl -fsSL -o /tmp/deno.zip \
+    "https://github.com/denoland/deno/releases/download/$DENO/deno-x86_64-unknown-linux-gnu.zip"
+  unzip -o -d /usr/local/bin /tmp/deno.zip && rm /tmp/deno.zip
+}
+
+id runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
+dir=/opt/actions-runner
+[ -f $dir/.runner ] && exit 0
+mkdir -p $dir && cd $dir
+version=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name)
+curl -fsSL "https://github.com/actions/runner/releases/download/$version/actions-runner-linux-x64-${version#v}.tar.gz" | tar xz
+chown -R runner:runner $dir
+./bin/installdependencies.sh
+su runner -c "./config.sh --unattended --url https://github.com/yak-sh/yak \
+  --token $token --name yak-ci --labels gce --work _work --replace"
+./svc.sh install runner
+./svc.sh start
