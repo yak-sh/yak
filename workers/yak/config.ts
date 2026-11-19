@@ -347,20 +347,15 @@ let workersAi: Plug = {
   with: { ai: { binding: 'AI' }, gateway: { binding: 'AI_GATEWAY' } },
 }
 
-// OpenAI, on the platform's key or through the account's AI Gateway on the
-// gateway's own token. The default key is the "yaks.app images" project's, which may
-// use only the GPT Image models, so OpenAI answers an app's image asks and
-// refuses the rest; no gateway is set (wrangler.toml).
+// OpenAI, on a key of the platform's: by default the "yaks.app images"
+// project's, which may use only the GPT Image models, so OpenAI answers an
+// app's image asks and refuses the rest. `OPENAI_API` is a probe's door to
+// somewhere other than OpenAI.
 let openai = (key = 'OPENAI_API_KEY'): Plug => ({
   use: '@yaks/openai',
   with: {
     key: { secret: key },
     base: { binding: 'OPENAI_API' },
-    gateway: {
-      account: { binding: 'CF_ACCOUNT' },
-      id: { binding: 'AI_GATEWAY' },
-      token: { secret: 'AI_GATEWAY_TOKEN' },
-    },
     web: false,
     images: false,
   },
@@ -380,13 +375,14 @@ let supplied = (key: string): Config => ({
 
 export let providing: Config = supplied('OPENAI_API_KEY')
 
-/** Operator conversations may use their own scoped key; image generation and
- * apps retain the platform's existing provider configuration. */
-export let operatorProviders = (separate = false): Config =>
-  separate ? supplied('OPENAI_OPERATOR_API_KEY') : providing
+/** The providers of Operator conversations: OpenAI on the key scoped to the
+ * Operator's text models, never the images key, so the Operator is on OpenAI
+ * only where the Worker holds that key. Image generation and apps keep
+ * `providing`'s. */
+export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY')
 
 /** What the platform's own agents run on, each a model of a provider
- * `providing` names: the builder's provider, whose models `BUILDER_MODEL_FREE`
+ * `providing` (the Operator's, `operatorProviders`) names: the builder's provider, whose models `BUILDER_MODEL_FREE`
  * and `BUILDER_MODEL_PAID` name, and the Operator's choices, the first taken
  * whose provider the Worker holds every credential of, with the stronger
  * model it hands coding to. `OPERATOR_MODEL` and `OPERATOR_DELEGATE` name
@@ -399,6 +395,7 @@ export let agents: {
 } = {
   builder: 'workers-ai',
   operator: [
+    { provider: 'openai', model: 'gpt-6.2-sol', delegate: 'gpt-6.2-astra' },
     {
       provider: 'anthropic',
       model: 'claude-sonnet-5-5',
