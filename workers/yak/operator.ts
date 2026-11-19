@@ -11,7 +11,7 @@ import {
   type NamedTool,
   namedTool,
 } from '@yaks/graph'
-import { begin, lend } from '@yaks/harness'
+import { begin, lend, seed } from '@yaks/harness'
 import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
@@ -151,6 +151,12 @@ import {
 } from './operator-schedules.ts'
 import { type Browsers, browserTools } from './operator-browser.ts'
 import { based, bases, personaFor, spaced } from './operator-persona.ts'
+import {
+  BASE,
+  type Choice,
+  listingOf,
+  namedBy,
+} from '@yaks/platform/operator-model'
 import {
   oracleContext,
   oracleMap,
@@ -712,12 +718,11 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
   },
 })
 
-/** What the Operator runs on (config.ts `agents`): the first choice whose
+/** What the Operator runs on where the directory names nothing
+ * (@yaks/platform/operator-model): the first of config.ts `agents` whose
  * provider the Worker holds every credential of, by default GPT-6.1 Sol on
- * the Operator's OpenAI key, handing coding and tricky work to GPT-6 Astra;
- * without that key Opus on the platform's Anthropic key; and without either
- * GLM on Workers AI. `OPERATOR_MODEL` and
- * `OPERATOR_DELEGATE` name other models of the provider chosen. */
+ * the Operator's OpenAI key; without that key Opus on the platform's
+ * Anthropic key; and without either GLM on Workers AI. */
 export let operatorChoice = (env: Env, machine = false) => {
   // On its person's own machine ({@link machineFor}) it asks for the first
   // model config.ts `agents.machine` names, of the provider `machine`.
@@ -730,10 +735,15 @@ export let operatorChoice = (env: Env, machine = false) => {
       agents.operator.at(-1)!
   return {
     provider: chosen.provider,
-    name: env.OPERATOR_MODEL ?? chosen.model,
-    delegate: chosen.delegate && (env.OPERATOR_DELEGATE ?? chosen.delegate),
+    name: chosen.model,
+    delegate: chosen.delegate,
   }
 }
+
+/** The stronger model of `provider` an Operator on it hands coding and tricky
+ * work to (config.ts `agents`), if it has one. */
+export let delegateOf = (provider: string) =>
+  agents.operator.find((c) => c.provider == provider)?.delegate
 
 /**
  * The machine that answers an Operator's model steps for `person` in `space`,
@@ -1015,12 +1025,10 @@ export let operating = (
       wholeLine(query),
     )
   }
+  // What it answers with where the directory names nothing (`current`).
   let choice = operatorChoice(env)
   let name = options.name ?? choice.name
   let provider = choice.provider
-  // Coding and tricky work go to a stronger model of the same provider, in a
-  // child session (`spawn`) whose answer comes back to the one that asked.
-  let delegate = choice.delegate
   // What it asks its person's own machine for, where one serves them.
   let mine = operatorChoice(env, true)
   let reachMachine = options.machine ??
@@ -1038,18 +1046,26 @@ export let operating = (
     ),
   )
   let children: ChildLimits = {
-    using: (u) =>
-      u.provider != machined ? u : {
-        ...u,
-        provider,
-        model: strong.has(String(u.model)) ? delegate ?? name : name,
-      },
+    using: async (u) => {
+      if (u.provider != machined) return u
+      let hosted = await current()
+      let to = strong.has(String(u.model)) && delegateOf(hosted.provider)
+      return { ...u, provider: hosted.provider, model: to || hosted.model }
+    },
   }
   let spawn = sessionTools(g, {
     ...children,
     childProperties: { topic: TOPIC },
   })
     .find((t) => t.name == 'spawn')!
+  // Coding and tricky work go to a stronger model of the provider a session
+  // is on (`delegateOf`), in a child session (`spawn`) whose answer comes
+  // back to the one that asked.
+  let delegates = new Map(
+    agents.operator.map((
+      c,
+    ) => [identityEid('provider', [c.provider]), c.delegate]),
+  )
   // `to` is the stronger model of the provider the session is on, if any.
   let delegated = (to?: string): Tool => ({
     ...spawn,
@@ -1069,7 +1085,6 @@ export let operating = (
     model,
     ...effort ? { effort } : {},
   })
-  let using = usingOf()
   // The session an ask is an entry of.
   let sessionOf = async (ask?: string) => {
     let [row] = ask ? await g.get([ask], ['entry']) : []
@@ -1139,6 +1154,7 @@ export let operating = (
   }
   let reads: Operator['reads'] = async (model, from, held, space) => {
     let selected = await chosen(
+      await current(space?.eid),
       model,
       from,
       held && space ? servedTo(held, space) : undefined,
@@ -1162,10 +1178,42 @@ export let operating = (
     held.catch(() => infos.delete(key))
     return held
   }
-  let priced = (model: string, from = provider) =>
+  // What a model's own row in the directory says of it (its price, window
+  // and longest reply), the platform's one catalogue
+  // (@yaks/platform/operator-model); what its provider lists where the row
+  // is silent.
+  let catalogued = (model: string) => listingOf(bases(env), model)
+  let priced = async (model: string, from = provider) =>
     options.price && from == provider
-      ? Promise.resolve(options.price)
-      : listed(model, from).then((info) => info?.price)
+      ? options.price
+      : (await catalogued(model))?.price ?? (await listed(model, from))?.price
+  // A model as the meter and the session weigh it: its row's word over its
+  // provider's, and its provider not asked where the row says all they need.
+  let rowed = (base: Model): Model =>
+    Object.assign((req: Parameters<Model>[0]) => base(req), base, {
+      info: async (model: string) => {
+        let row = await catalogued(model)
+        if (row?.price && row.context) return row
+        let own = await base.info?.(model)
+        return own || row ? { name: model, ...own, ...row } : undefined
+      },
+    })
+  // The hosted model it answers its space with, read at every turn so a
+  // write applies to the next one: what the space's persona names, else what
+  // the directory's base persona names, where a provider here serves it;
+  // else `operatorChoice`'s. A persona naming its person's machine asks the
+  // machine first, and leaves the hosted model to the base. A test naming
+  // its model keeps it.
+  let current = async (space?: string): Promise<Choice> => {
+    if (options.name) return { provider, model: name }
+    space ??= await spaceOf(store)
+    let own = space ? await namedBy(g, personaFor(space)) : undefined
+    let chosen = (own?.provider == MACHINE ? undefined : own) ??
+      await namedBy(bases(env), BASE)
+    return chosen && implementations[chosen.provider]
+      ? chosen
+      : { provider, model: name }
+  }
   // A space's trials are asked of its providers, charged to it.
   let lending: Lending = { models: implementations, priced, provider, name }
   trialRunning(store, env, lending)
@@ -1208,14 +1256,15 @@ export let operating = (
   // they chose it and it serves them (`first`), and only they may name it
   // (`served`).
   let chosen = async (
+    own: Choice,
     model?: string,
     asked?: string,
     served?: () => Promise<boolean>,
     first?: () => Promise<string | undefined>,
-  ) => {
-    let own = !model && !asked ? await first?.() : undefined
-    if (own) return { provider: MACHINE, model: own }
-    let from = asked ?? provider
+  ): Promise<Choice> => {
+    let theirs = !model && !asked ? await first?.() : undefined
+    if (theirs) return { provider: MACHINE, model: theirs }
+    let from = asked ?? own.provider
     if (from == MACHINE && !await served?.()) {
       throw refuse(
         'arguments',
@@ -1230,21 +1279,22 @@ export let operating = (
         `The Operator has no available ${from} provider.`,
       )
     }
-    if (from != provider && !model) {
+    if (from != own.provider && !model) {
       throw refuse(
         'arguments',
         'Name a model when selecting an Operator provider.',
       )
     }
-    if (!model || (from == provider && model == name)) {
-      return { provider: from, model: name }
+    if (!model || (from == own.provider && model == own.model)) {
+      return { provider: from, model: own.model }
     }
+    if (await catalogued(model)) return { provider: from, model }
     let info = await catalogue(from, () => listed(model, from))
     if (info) return { provider: from, model }
-    if (from != provider) {
+    if (from != own.provider) {
       throw await unknown(model, from)
     }
-    return { provider, model: name }
+    return own
   }
   // Each ask is charged to the space of the session asking, at the price of
   // the model it asks. One a machine answers (`free`) is its owner's own, on
@@ -1279,7 +1329,7 @@ export let operating = (
         let charged = free ? base : accounted(
           env,
           (dir) => space ? dir.at(space) : Promise.resolve(null),
-          base,
+          rowed(base),
           () => Promise.resolve(price),
           undefined,
           from,
@@ -1306,7 +1356,10 @@ export let operating = (
         // `weighing`).
         return free && reply.cost == null ? { ...reply, cost: 0 } : reply
       },
-      base,
+      // What it says of a model is its row's word, so the store's own row
+      // takes the window and price the directory's says (@yaks/session
+      // `providerResolver`).
+      free ? base : rowed(base),
       {
         result: resultOf(env, modelResults(g)),
       },
@@ -1397,14 +1450,15 @@ export let operating = (
   // for the machine (`unasked`, `away`).
   models[MACHINE] = Object.assign(
     falling(async (req) => {
+      let hosted = await current()
       let names = namesFor(req.model, agents.machine, {
-        model: name,
-        delegate,
+        model: hosted.model,
+        delegate: delegateOf(hosted.provider),
       })
       let own = names.machine.map((name) => ({ model: lent, name }))
       return await unasked(await sessionOf(req.call)) ? own : [
         ...own,
-        { model: models[provider], name: names.hosted, hosted: true },
+        { model: models[hosted.provider], name: names.hosted, hosted: true },
       ]
     }, fell),
     { result: resultOf(env, modelResults(g)) },
@@ -1733,10 +1787,9 @@ export let operating = (
       ...!(row?.spawned && !row.fork && !topicOf(row))
         ? [
           delegated(
-            new Map([
-              [identityEid('provider', [provider]), delegate],
-              [machined, delegate],
-            ]).get(String(comp(using, 'using')?.provider)),
+            comp(using, 'using')?.provider == machined
+              ? delegateOf((await current(space.eid)).provider)
+              : delegates.get(String(comp(using, 'using')?.provider)),
           ),
         ]
         : [],
@@ -1863,8 +1916,23 @@ export let operating = (
   let runner = lend({
     h: { g, fx, vocab, me, gone },
     providers: models,
-    name,
     provider,
+    // A summary is asked of the model it answers with now (`current`), its
+    // rows written where the store has not met it.
+    ...options.name ? { name } : {
+      defaultUsing: async () => {
+        let own = await current()
+        let rows = seed({ provider: own.provider, model: own.model })
+        let held = await g.get(rows.map((b) => b.entity.eid))
+        if (held.filter(Boolean).length < rows.length) {
+          await g.apply(rows, { trusted: true })
+        }
+        return {
+          provider: rows[0].entity.eid,
+          model: rows[1].entity.eid,
+        }
+      },
+    },
     // Its text is shown as it is written, once it is stored, so a reset
     // under a reply takes back none of what a person saw.
     streaming: true,
@@ -2078,14 +2146,16 @@ export let operating = (
       }]
       : []
   }
-  let started = (session: string, by: string, space: Space) =>
-    begin(g, undefined, {
+  let started = async (session: string, by: string, space: Space) => {
+    let own = await current(space.eid)
+    return begin(g, undefined, {
       eid: session,
       persona: personaFor(space.eid),
       by,
       project: space.eid,
-      using,
+      using: usingOf(own.model, own.provider),
     })
+  }
 
   // What any words given need first: the model and persona rows, the space
   // and the person.
@@ -2096,6 +2166,7 @@ export let operating = (
     from?: string,
   ) => {
     let selected = await chosen(
+      await current(space.eid),
       asked,
       from,
       servedTo(held, space),
@@ -2365,6 +2436,7 @@ export let operating = (
       given: async (_, words) => {
         let asked = (words.using ?? {}) as Record<string, string | undefined>
         let selected = await chosen(
+          await current(space.eid),
           asked.model,
           asked.provider,
           servedTo(held, space),

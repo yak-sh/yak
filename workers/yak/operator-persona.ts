@@ -36,10 +36,12 @@ import { chatPath } from '@yaks/platform/routes'
 import { planned } from '@yaks/platform/standing'
 import { choices, type Speaking } from './speech.ts'
 import { speechFrom } from '@yaks/speech'
+import { BASE } from '@yaks/platform/operator-model'
 
 /** The persona every Operator is worn on, kept in the directory: the file
- * plugins/yaks.app/persona/base.md, as each doc's eid is its file's name. */
-export let BASE = derivedEid('operator-persona|base')
+ * plugins/yaks.app/persona/base.md, as each doc's eid is its file's name, and
+ * the model every Operator runs on (@yaks/platform/operator-model). */
+export { BASE }
 
 /** The Operator is a persona; the space it works for is a topic. Their
  * contains edges serve different purposes. */

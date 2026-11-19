@@ -28,6 +28,7 @@ import { managePath } from '@yaks/platform/routes'
 import { ai, modelPage, platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
+import { operatorOn } from './operator-testing.ts'
 
 let b64url = (s: string) =>
   btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -148,13 +149,18 @@ let model = ai([
   },
   { text: 'It says hello, and you chose not to order.' },
 ])
+let env!: Env
 let k = await fresh({
   AI: model as Env['AI'],
-  OPERATOR_MODEL: '@cf/meta/llama-3.2-11b-vision-instruct',
   MODEL_FETCH: async () => {
     let page = modelPage(0.15, 0.5)
     return new Response(await page.text() + '\n| Vision | Yes |')
   },
+}, (e) => env = e)
+// A model that reads pictures, so it is shown the page as one.
+await operatorOn(env, 'workers-ai', '@cf/meta/llama-3.2-11b-vision-instruct', {
+  input: 0.15,
+  output: 0.5,
 })
 let slug = unique('lent')
 let { cookie, person, eids } = await seed(k, [{ slug, apps: [] }])

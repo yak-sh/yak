@@ -134,7 +134,14 @@ export let directoryConfig: Config = {
     },
     { use: '@yaks/git', words: ['ref', 'repository', 'commit'] },
     '@yaks/platform',
-    { use: '@yaks/model', facets: ['vocab'], words: ['cost'] },
+    // The model every Operator runs on (@yaks/platform/operator-model): the
+    // base persona's `using`, naming a model row that carries its price.
+    {
+      use: '@yaks/model',
+      facets: ['vocab'],
+      words: ['cost', 'model', 'price', 'provider'],
+    },
+    { use: '@yaks/session', facets: ['vocab'], words: ['using'] },
     {
       use: 'yak/app',
       words: [
@@ -382,12 +389,14 @@ export let providing: Config = supplied('OPENAI_API_KEY')
 export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY')
 
 /** What the platform's own agents run on, each a model of a provider
- * `providing` (the Operator's, `operatorProviders`) names: the builder's provider, whose models `BUILDER_MODEL_FREE`
- * and `BUILDER_MODEL_PAID` name, and the Operator's choices, the first taken
- * whose provider the Worker holds every credential of, with the stronger
- * model it hands coding to. `OPERATOR_MODEL` and `OPERATOR_DELEGATE` name
- * other models of that provider. `machine` is what the Operator of someone
- * whose own machine serves it asks that machine for instead. */
+ * `providing` (the Operator's, `operatorProviders`) names: the builder's
+ * provider, whose models `BUILDER_MODEL_FREE` and `BUILDER_MODEL_PAID` name,
+ * and the Operator's choices, the first taken whose provider the Worker holds
+ * every credential of, each with the stronger model of its provider it hands
+ * coding to. The model the directory's base persona names
+ * (@yaks/platform/operator-model) comes first, and these answer where it names
+ * none. `machine` is what the Operator of someone whose own machine serves it
+ * asks that machine for instead. */
 export let agents: {
   builder: string
   operator: { provider: string; model: string; delegate?: string }[]

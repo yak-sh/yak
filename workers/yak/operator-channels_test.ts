@@ -24,6 +24,7 @@ import {
   callable,
   operatorMemory,
   operatorModel,
+  operatorOn,
   operatorService,
   sentRows,
 } from './operator-testing.ts'
@@ -644,7 +645,10 @@ let letters: {
   text?: string
   headers?: Record<string, string>
 }[] = []
-f.env.OPERATOR_MODEL = '@cf/test/operator'
+await operatorOn(f.env, 'workers-ai', '@cf/test/operator', {
+  input: 1,
+  output: 2,
+})
 f.env.MODEL_FETCH = () =>
   Promise.resolve(
     new Response('$1 per M input tokens, $2 per M output tokens'),

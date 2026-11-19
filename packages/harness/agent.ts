@@ -169,8 +169,12 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   model?: Model
   /** implementations keyed by `provider.name` */
   providers?: Record<string, Model>
-  /** the model to ask for by name (otherwise the graph's `defaultUsing`) */
+  /** the model to ask for by name (otherwise `defaultUsing`'s) */
   name?: string
+  /** where the agent is lent no `name`, the `using{provider, model}` (eids)
+   * it asks, read again before every ask: by default the graph's own
+   * (./default.ts) */
+  defaultUsing?: () => Promise<Comp>
   /** the provider to ask, by name, and the one `model` serves */
   provider?: string
   /** what the agent may call */
@@ -460,8 +464,9 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   let kept = (inherited?: string, configured?: string) =>
     inheritedInstructions(inherited, undefined) ?? opened(configured)
   // Compaction is a text task, even when a transcript selects a media model:
-  // it asks the model this agent was lent by name, else the default
-  // (./default.ts), read again before every ask.
+  // it asks the model this agent was lent by name, else the one
+  // `defaultUsing` reads (./default.ts by default), read again before every
+  // ask.
   let compact: NonNullable<Deps['compactModel']> = {
     model,
     name,
@@ -485,7 +490,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     named: opts.named,
     toolSnapshot: async (phase, session, boundary, open) => {
       if (!name) {
-        let using = await defaultUsing(h.g)
+        let using = await (opts.defaultUsing?.() ?? defaultUsing(h.g))
         let [row] = await h.g.get([String(using.model)])
         Object.assign(
           compact,

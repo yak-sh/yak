@@ -31,31 +31,39 @@ no account list, login, logout, use, whoami or generic tool verb, and no
 `--owner` or `--admin` flags. Connector and app commands use the CLI's ordinary
 command path with the same optional `--as`.
 
-Store queries, writes, uploads, fee, client, tunnel and migration requests send
-the chosen connection's bearer. The platform checks that account's existing
-permissions. Infrastructure operations (`deploys`, `errors`, `tail`, `rollback`,
-`revert`) use this box's Cloudflare/GitHub credentials and require the selected
-account to be the platform admin or the configured person's own email. `errors`
-reads through the signed tracker door configured by `@yaks/tracker` in
-`tracker.json` beside this graph (or this config's own tracker plugin). The
-remote URL and vault reference come from that config. It lists every unresolved
-bug (not resolved or archived), however old, newest first, from every tracker on
-yaks.app: the platform's and each space's it lists (@yaks/tracker
-`./everywhere`), read in parallel. SPACE names the space whose tracker holds a
-bug, the `--scope` that `bug show` and `bug resolve` take, or `platform`; a
-tracker that could not be read is said on a `Not read` line. There is no time
-window by default; `--since` optionally narrows by last seen. The header counts
-the matching bugs; counts and first seen cover each bug's lifetime. Each row
-says whom the bug reached: people, test accounts only, or no person recorded.
-The last lines time the fixes: the median and worst time to fix (first seen, or
-its regression, to resolved) of the bugs resolved in the window, a week without
-`--since`, and how long the oldest open bug has been open. `--resolved` includes
-each resolved bug’s full explanation, for reviewing fixes. Then people's letters
-in the same window: each letter a person wrote to the platform's addresses
-(bot.yak.sh, yaks.app), how many have a reply in their thread with the median
-and worst time to that reply, and every one still waiting, oldest last. A letter
-that needs no answer is archived (`archived{}`) to leave the list; cancelling
-the task the letter filed (@yaks/mail) archives it.
+`yak admin model` reads the model every yaks.app Operator runs on, and
+`yak admin model <O- id or name> [--provider <name>]` sets it from the next
+turn, with no deploy: this graph's row of the model is copied whole to the
+directory, its price beside it, and the directory's base persona names it
+(@yaks/platform/operator-model). A row here with no price takes its list price
+first, so this graph's row stays the one source.
+
+Store queries, writes, uploads, fee, model, client, tunnel and migration
+requests send the chosen connection's bearer. The platform checks that account's
+existing permissions. Infrastructure operations (`deploys`, `errors`, `tail`,
+`rollback`, `revert`) use this box's Cloudflare/GitHub credentials and require
+the selected account to be the platform admin or the configured person's own
+email. `errors` reads through the signed tracker door configured by
+`@yaks/tracker` in `tracker.json` beside this graph (or this config's own
+tracker plugin). The remote URL and vault reference come from that config. It
+lists every unresolved bug (not resolved or archived), however old, newest
+first, from every tracker on yaks.app: the platform's and each space's it lists
+(@yaks/tracker `./everywhere`), read in parallel. SPACE names the space whose
+tracker holds a bug, the `--scope` that `bug show` and `bug resolve` take, or
+`platform`; a tracker that could not be read is said on a `Not read` line. There
+is no time window by default; `--since` optionally narrows by last seen. The
+header counts the matching bugs; counts and first seen cover each bug's
+lifetime. Each row says whom the bug reached: people, test accounts only, or no
+person recorded. The last lines time the fixes: the median and worst time to fix
+(first seen, or its regression, to resolved) of the bugs resolved in the window,
+a week without `--since`, and how long the oldest open bug has been open.
+`--resolved` includes each resolved bug’s full explanation, for reviewing fixes.
+Then people's letters in the same window: each letter a person wrote to the
+platform's addresses (bot.yak.sh, yaks.app), how many have a reply in their
+thread with the median and worst time to that reply, and every one still
+waiting, oldest last. A letter that needs no answer is archived (`archived{}`)
+to leave the list; cancelling the task the letter filed (@yaks/mail) archives
+it.
 
 ```sh
 yak admin errors --as admin

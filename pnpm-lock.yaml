@@ -451,6 +451,9 @@ importers:
       '@yaks/mail':
         specifier: 0.2.23
         version: link:../mail
+      '@yaks/model':
+        specifier: 0.2.32
+        version: link:../model
       '@yaks/platform':
         specifier: 0.2.30
         version: link:../platform

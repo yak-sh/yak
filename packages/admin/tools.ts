@@ -72,6 +72,9 @@ import { relocate } from './relocate.ts'
 import { homeOf, push, type PushProgress, read, versions } from './push.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
+import { modelLine, operatorModel, operatorRows } from './model.ts'
+import type { Rows } from '@yaks/platform/operator-model'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 type Args = Record<string, unknown>
 
@@ -332,6 +335,29 @@ export let runs = (
         ? await feeNow(at.bearer)
         : await setFee(at.bearer, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    // What every yaks.app Operator runs on: read it, or make this graph's
+    // row of a model, price and all, the one the directory names.
+    admin_model: verb(async (call, _vault, _keep, graph) => {
+      let a = argsOf(call)
+      let named = word(a, 'model')
+      let rows = named &&
+        await operatorRows(graph, named, word(a, 'provider'))
+      let at = await acting(a)
+      let directory: Rows = {
+        get: async (eids) =>
+          eids.length
+            ? await storeQuery(at.bearer, PLATFORM_STORE, [
+              `.entity.eid=${eids.join(',')}`,
+            ]) as Bundle[]
+            : [],
+      }
+      if (rows) {
+        if (rows.box.length) await graph.apply(rows.box)
+        await storeApply(at.bearer, PLATFORM_STORE, rows.directory)
+      }
+      return [said(call, modelLine(await operatorModel(directory)))]
     }),
 
     admin_budget: verb(async (call) => {

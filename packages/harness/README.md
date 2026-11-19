@@ -312,6 +312,11 @@ write changes it:
 yak graph apply --bundles '[{"entity": {"eid": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73"}, "using": {"provider": "openrouter", "model": "z-ai/glm-5.3"}}]'
 ```
 
+A host that keeps its default elsewhere lends `lend` its own reader as
+`defaultUsing`, which compaction reads before every ask where the agent is lent
+no `name`; yaks.app's Operator reads the model its directory's persona names
+(@yaks/platform/operator-model).
+
 The default may be routed instead. Each `routes` edge from that row to an
 offering (the `serves` edge of a provider and a model) is one model the default
 may run on, and the router (@yaks/model `route`) chooses among them by the

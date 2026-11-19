@@ -287,7 +287,7 @@ export type Env = {
   AI_GATEWAY?: string
   OPENAI_API_KEY?: string
   // The key scoped to OpenAI text models, for Operator conversations
-  // (config.ts `operatorProviders`): with it the Operator runs on GPT-6.1 Sol.
+  // (config.ts `operatorProviders`): with it the Operator may run on OpenAI.
   // OPENAI_API_KEY remains the image service's credential.
   OPENAI_OPERATOR_API_KEY?: string
   // The "yaks.app models" project's key, limited to the OpenAI models that
@@ -296,13 +296,10 @@ export type Env = {
   OPENAI_API?: string
   BUILDER_MODEL_FREE?: string
   BUILDER_MODEL_PAID?: string
-  OPERATOR_MODEL?: string
   // Claude for the Operator and builders (providers.ts): the platform's
-  // Anthropic key, for product use only. With it and without
-  // OPENAI_OPERATOR_API_KEY the Operator runs on Opus, handing coding to
-  // OPERATOR_DELEGATE where one is set.
+  // Anthropic key, for product use only. Which model the Operator runs on is
+  // a row in the directory (@yaks/platform/operator-model), not a secret.
   ANTHROPIC_API_KEY?: string
-  OPERATOR_DELEGATE?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
   // one build compiles in, bound as yak-sandbox's Durable Object namespace
   // (sandbox/wrangler.toml). Absent in a test run and the

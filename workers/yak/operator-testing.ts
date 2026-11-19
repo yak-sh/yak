@@ -11,7 +11,9 @@ import {
   operatorGraph,
   operatorVocab,
 } from './operator-store.ts'
-import type { Listed, Model, Request as Ask } from '@yaks/model'
+import type { Listed, Model, Price, Request as Ask } from '@yaks/model'
+import { choosing } from '@yaks/platform/operator-model'
+import { KERNEL, meta } from './meta.ts'
 import { assertEquals } from '@std/assert'
 import { background, caught, refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
@@ -78,6 +80,24 @@ export let callable = (req: Pick<Ask, 'tools'>): string[] => [
   ...(req.tools.find((t) => t.name == 'tool_load')?.description ?? '')
     .matchAll(/^- (\w+):/gm).map((m) => m[1]),
 ]
+
+/** Make `model`, priced at `price` with a window of `context` tokens, the
+ * one every Operator runs on, served by `provider`: the rows `yak admin model`
+ * writes in the directory. */
+export let operatorOn = (
+  env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>,
+  provider: string,
+  model: string,
+  price: Price,
+  context = 200_000,
+) =>
+  meta(env).apply(
+    choosing(
+      { entity: { eid: model }, model: { name: model, context }, price },
+      provider,
+    ),
+    KERNEL,
+  )
 
 // A test's Operator model, answered by whatever `answer` is when it is asked:
 // one Operator per store, its script changed between requests.

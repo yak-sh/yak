@@ -88,6 +88,7 @@
     "./publishing-graph": "./publishing-graph.ts",
     "./operator-vocab": "./operator-vocab.ts",
     "./operator-owner": "./operator-owner.ts",
+    "./operator-model": "./operator-model.ts",
     "./operator-graph": "./operator-graph.ts"
   },
   "license": "Apache-2.0",

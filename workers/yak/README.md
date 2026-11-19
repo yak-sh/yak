@@ -444,9 +444,8 @@ proved. Existing queued letters and receiving cursors are retained.
 | `OPENAI_APPS_CHALLENGE`                                          | optional   | the token OpenAI's apps directory issues                                                                                                                                                                                                                      | `/.well-known/openai-apps-challenge` 404s                                                                                            |
 | `CIMD`                                                           | optional   | `on` (default when unset) or `off`                                                                                                                                                                                                                            | nothing; `off` stops claiming Client ID Metadata Documents                                                                           |
 | `ANTHROPIC_API_KEY`                                              | optional   | the platform's Anthropic API key, for product use only (providers.ts)                                                                                                                                                                                         | without `OPENAI_OPERATOR_API_KEY` either, the Operator runs on `@cf/zai-org/glm-5.3`; a `claude-*` model is refused as a missing key |
-| `OPERATOR_DELEGATE`                                              | optional   | the model the Operator hands coding and tricky work to (default `claude-opus-5-5`)                                                                                                                                                                            | nothing                                                                                                                              |
 | `OPENAI_API_KEY`                                                 | models     | OpenAI key of the "yaks.app images" project, which may use only the GPT Image 2.5 and 2.6 models and spend $20 a month (1Password "OpenAI yaks.app images")                                                                                                   | an app's GPT Image asks are refused                                                                                                  |
-| `OPENAI_OPERATOR_API_KEY`                                        | optional   | the OpenAI key scoped to the Operator's text models and their native file inputs; with it the Operator runs on `gpt-6.1-sol` (config.ts `operatorProviders`), and image generation keeps `OPENAI_API_KEY`                                                     | the Operator runs on the next choice: Sonnet with `ANTHROPIC_API_KEY`, GLM without                                                   |
+| `OPENAI_OPERATOR_API_KEY`                                        | optional   | the OpenAI key scoped to the Operator's text models and their native file inputs; with it the Operator may run on OpenAI (config.ts `operatorProviders`), and image generation keeps `OPENAI_API_KEY`                                                         | the Operator runs on the next choice: Sonnet with `ANTHROPIC_API_KEY`, GLM without                                                   |
 | `OPENAI_MODELS_KEY`                                              | models     | OpenAI key of the "yaks.app models" project, which may use only GPT-6 Luna and GPT-6.1 Terra, the models that answer the chat names `./api/ai/run` aliases (config.ts `aliases`); $300 a month limit, not yet enforced (1Password "OpenAI yaks.app models")   | those names are answered by Workers AI again                                                                                         |
 | `AI_GATEWAY`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID`         | optional   | the other builder provider; all unset on purpose (T-34238)                                                                                                                                                                                                    | nothing; both tiers build on Workers AI                                                                                              |
 | `MAIL_DEV`                                                       | local      | `1`                                                                                                                                                                                                                                                           | never set on a deploy: each letter is printed on the log instead of sent                                                             |
@@ -1271,26 +1270,37 @@ stopped in, once for each bug. Its person is told in their Updates that it
 stopped on a yaks.app problem that is now fixed and ran again, with what came of
 it.
 
-The Operator runs on the first of config.ts `agents.operator` whose provider the
-Worker holds every credential of: `gpt-6.1-sol` on OpenAI when
+The Operator's model is a row, changed live with no deploy. The directory's base
+persona (operator-persona.ts `BASE`) names it by `using{provider, model}`,
+pointing at the model's own row, `model{name, context, …}` with its
+`price{input, output, …}` beside it (@yaks/platform/operator-model).
+`yak admin
+model <name or O- id> [--provider <name>] --as admin@bot.yak.sh`
+copies the box's `O-` row of the model there whole, its price included, and
+points the persona at it; the next turn of every Operator runs on it. A space's
+own persona may name another by its own `using`, or its person's machine
+(below). Where neither names one, or a provider the Worker lacks the keys of
+serves it, the Operator runs on the first of config.ts `agents.operator` whose
+provider the Worker holds every credential of: `gpt-6.1-sol` on OpenAI when
 `OPENAI_OPERATOR_API_KEY` is set, `claude-opus-5-5` on Anthropic when
-`ANTHROPIC_API_KEY` is, and otherwise `@cf/zai-org/glm-5.3` on Workers AI;
-`OPERATOR_MODEL` names another model of the provider chosen. Each is served by a
-plugin config.ts `operatorProviders` names, lent the platform's transport and
-keys (providers.ts); no layer imports a provider. Its OpenAI is always on
-`OPENAI_OPERATOR_API_KEY`, never the images key, which may use only the picture
-models. Image generation and app model calls keep their existing credentials. An
-input asking another model gets it where the Operator's provider lists it, and
-the Operator's own otherwise. The model must have a price, from its provider's
-list or @yaks/model's. With a delegate (`gpt-6-astra` on OpenAI; Opus has none),
-a conversation and its forks have `spawn`, whose description sends writing or
-fixing code and tasks that need careful reasoning to `OPERATOR_DELEGATE` (the
-delegate by default) in a child session working for the same space and charged
-to it; the child's answer comes back to the session that asked, and the child is
-offered no `spawn` of its own. This entry accepts text. Picture attachments and
-the email, chat and SMS interfaces are separate work. Interrupted requests
-remain in the graph and can be continued explicitly; they do not resume
-automatically.
+`ANTHROPIC_API_KEY` is, and otherwise `@cf/zai-org/glm-5.3` on Workers AI. Each
+provider is served by a plugin config.ts `operatorProviders` names, lent the
+platform's transport and keys (providers.ts); no layer imports a provider. Its
+OpenAI is always on `OPENAI_OPERATOR_API_KEY`, never the images key, which may
+use only the picture models. Image generation and app model calls keep their
+existing credentials. An input asking another model gets it where the directory
+holds its row or its provider lists it, and the Operator's own otherwise. Every
+step, a summary included, is priced and bounded by the model's row in the
+directory, and by its provider's list (then @yaks/model's) only where no row
+says. With a delegate (config.ts `agents.operator`: `gpt-6-astra` on OpenAI;
+Opus has none), a conversation and its forks have `spawn`, whose description
+sends writing or fixing code and tasks that need careful reasoning to the
+delegate of the provider the session is on, in a child session working for the
+same space and charged to it; the child's answer comes back to the session that
+asked, and the child is offered no `spawn` of its own. This entry accepts text.
+Picture attachments and the email, chat and SMS interfaces are separate work.
+Interrupted requests remain in the graph and can be continued explicitly; they
+do not resume automatically.
 
 A platform admin who owns a space with a tunnel can choose to be answered by
 their own machine instead (operator.ts `machineFor`, the one place that says

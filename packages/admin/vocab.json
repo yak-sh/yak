@@ -196,6 +196,33 @@
         "bps"
       ]
     },
+    "admin_model": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": true,
+      "noun": "admin",
+      "verb": "model",
+      "title": "Read or set the model yaks.app’s Operator runs on",
+      "description": "The model every yaks.app Operator runs on, from the next turn on, with no deploy: read it, or set it to a model this graph holds (an O- id or the model’s name). Its row is copied whole to the directory, its price beside it, and the directory’s base persona names it; a row with no price takes its list price first. A space’s own persona may still name another. The selected account must have the platform role.\n\n  yak admin model --as admin@bot.yak.sh\n  yak admin model gpt-6.1-sol --as admin@bot.yak.sh\n  yak admin model claude-opus-5-5 --provider anthropic --as admin@bot.yak.sh",
+      "input": {
+        "model": {
+          "type": "string",
+          "description": "the model, by its O- id or its name"
+        },
+        "provider": {
+          "type": "string",
+          "description": "the yaks.app provider that serves it (openai, anthropic, workers-ai); the model’s vendor where absent"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "model"
+      ]
+    },
     "admin_funnel": {
       "tool": true,
       "noun": "admin",
