@@ -1,0 +1,8 @@
+# iOS asks before a link opens another app: "Open in “Expo Go”?"
+appId: host.exp.Exponent
+---
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open

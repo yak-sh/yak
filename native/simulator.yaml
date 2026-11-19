@@ -8,6 +8,7 @@
 appId: host.exp.Exponent
 ---
 - openLink: exp://127.0.0.1:8081
+- runFlow: open.yaml
 # Expo Go's first launch shows its developer menu once.
 - runFlow:
     when:
@@ -26,6 +27,7 @@ appId: host.exp.Exponent
     timeout: 30000
 - takeScreenshot: 2-code
 - openLink: ${SIGNIN}
+- runFlow: open.yaml
 - extendedWaitUntil:
     visible: Apps
     timeout: 60000
