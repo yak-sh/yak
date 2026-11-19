@@ -57,4 +57,8 @@ test('a refusal says where the current answer is', async () => {
   let read = text((await saidBy('graph_query', { q: '.bok.colour=red' })).out)
   assertStringIncludes(read, '(closest declared: .book)')
   assert(read.endsWith(`. ${said}`), read)
+  // So does a property named as though it were a component.
+  let bare = text((await saidBy('graph_query', { q: '.price' })).out)
+  assertStringIncludes(bare, '.price is a property, not a component')
+  assert(bare.endsWith(`. ${said}`), bare)
 })

@@ -433,14 +433,26 @@ test('refusals', () => {
 })
 
 // A path with no operator the grammar has is refused with the ones it has.
+test('.doc.title^cake is refused with the operators', () => {
+  assertThrows(
+    () => parse('.doc.title^cake'),
+    SyntaxError,
+    'not a clause: .doc.title^cake; an operator is one of = != ~= < <= > >=',
+  )
+})
+
+// A `~` short of its `=` is refused with the match it meant.
 for (
-  let token of ['.web.url~cloudflare', '.doc.title^cake', 'doc.title~copy']
+  let [token, meant] of [
+    ['.web.url~cloudflare', '.web.url~=cloudflare'],
+    ['doc.title~copy', '.doc.title~=copy'],
+  ]
 ) {
-  test(`${token} is refused with the operators`, () => {
+  test(`${token} is refused with ${meant}`, () => {
     assertThrows(
       () => parse(token),
       SyntaxError,
-      `not a clause: ${token}; an operator is one of = != ~= < <= > >=`,
+      `${token} is written ${meant}`,
     )
   })
 }

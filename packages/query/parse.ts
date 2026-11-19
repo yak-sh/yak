@@ -176,7 +176,7 @@ let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 let spelled = (token: string, one: string) =>
   new SyntaxError(`${token} is written ${one}`)
 
-// A path followed by something no operator begins (`.p~v`, `.p^2`): the
+// A path followed by something no operator begins (`.p^2`): the
 // refusal names the operators there are, and the two ways to match text.
 let unknown = (token: string) =>
   new SyntaxError(
@@ -454,6 +454,10 @@ export let parseDot = (token: string): Clause[] | null => {
     // `.meeting?doc`: a second clause, `?doc`, with no `&` before it.
     if (/^\?[A-Za-z_]/.test(rest)) {
       throw spelled(token, `${head}&${rest}`)
+    }
+    // `.web.url~cloudflare`: a match on part of a value, short of its `=`.
+    if (/^~[^=]/.test(rest)) {
+      throw spelled(token, `${dotted ? '' : '.'}${head}~=${rest.slice(1)}`)
     }
     throw unknown(token)
   }

@@ -70,7 +70,7 @@ export type CoreOpts = {
 
 /**
  * The pointer a refusal naming a component or property this graph does not
- * declare is said with: to `graph_schema`, the tool that reports what this graph
+ * declare, or a property as though it were a component, is said with: to `graph_schema`, the tool that reports what this graph
  * declares. Any other refusal has none.
  * The write tool's input schema is the generic bundle, so the server is the
  * only authority on what a component accepts, and this refusal is where a
@@ -82,7 +82,8 @@ export type CoreOpts = {
  * the far side of a network hop and only its message comes back.
  */
 export let pointer = (said: string): string | undefined =>
-  /unknown (prop:|propert(y|ies)\b|components?:)/.test(said)
+  /unknown (prop:|propert(y|ies)\b|components?:)|is a property, not a component/
+      .test(said)
     ? 'graph_schema reports what this graph declares.'
     : undefined
 

@@ -98,6 +98,14 @@ test('graph_schema reads several components however the names are sent', () => {
     ]
   ) assertEquals(read(names), ['book', 'shelf'])
   assertEquals(read('book'), ['book'])
+  // a word set as one of its arguments is that argument, and any other names
+  // the arguments it takes
+  assertEquals(read('component=book'), ['book'])
+  assertThrows(
+    () => read('space=yourname'),
+    Refused,
+    'graph_schema takes component and kind, not space',
+  )
   assertThrows(
     () => read(['bok', 'book', 'shelv']),
     Refused,

@@ -443,9 +443,25 @@ export let runs = (seams: Seams = {}): Runs => {
       let v = graph.vocab
       // A component's name is one word, so a string of several, however they
       // are set apart (`topic persona`, `topic, persona`), is those names.
-      let named = strings([args.component].flat())
+      let words = strings([args.component].flat())
         .flatMap((s) => s.split(/[\s,]+/).filter(Boolean))
-      let kind = str(args.kind)
+      // A word set as an argument (`component=task`, `kind=task`) is that
+      // argument; one this tool does not take (`space=yourname`) is refused
+      // with the two it does, since it names no component.
+      let set = words.map((w) => w.match(/^(\w+)=(.*)$/))
+      let other = set.find((m) => m && !['component', 'kind'].includes(m[1]))
+      if (other) {
+        throw new Refused(
+          `graph_schema takes component and kind, not ${other[1]}: it ` +
+            `describes every component this graph declares, so call it ` +
+            `with no arguments for the index, or with component '<name>'`,
+        )
+      }
+      let named = words.flatMap((w, i) =>
+        !set[i] ? [w] : set[i][1] == 'component' ? [set[i][2]] : []
+      )
+      let kind = str(args.kind) || set.find((m) => m?.[1] == 'kind')?.[2] ||
+        ''
       let unknown = [...named, ...(kind && !v.kind(kind) ? [kind] : [])]
         .filter((name) => !v.comp(name))
       if (unknown.length) {

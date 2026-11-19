@@ -728,14 +728,23 @@ export type Read = {
 } | null
 
 // The type a property's value compares as, from the vocabulary and the
-// derived registry alone.
-let tagAt = (v: Vocab, derived: Derived, comp: string, prop: string): Tag =>
-  derived[`${comp}.${prop}`]?.tag ??
+// derived registry alone. The entity table's columns compare as text, except
+// a declared scalar such as `entity.num`, which compares as what it holds
+// (`.entity.num>1200`).
+let tagAt = (
+  v: Vocab,
+  derived: Derived,
+  comp: string,
+  prop: string,
+): Tag => {
+  let def = v.prop(comp, prop)
+  return derived[`${comp}.${prop}`]?.tag ??
     (comp == 'entity'
-      ? 'text'
+      ? def?.category == 'scalar' ? tagOf(def) : 'text'
       : prop == 'eid'
       ? 'eid'
-      : tagOf(v.prop(comp, prop)!))
+      : tagOf(def!))
+}
 
 // The same direct property read serves a filter, a projection and a rule
 // binding. The caller joins `deps` when the override needs other tables.

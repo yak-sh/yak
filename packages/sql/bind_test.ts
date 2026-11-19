@@ -485,10 +485,19 @@ test('a wide OR nests capped compounds and keeps its operands', () => {
 })
 
 test('a spine value that is no operand list keeps the column road', () => {
-  // an empty value is still absence grammar, and a range is a comparison the
-  // spine's untyped column declines exactly as it did before
+  // an empty value is still absence grammar, and the spine's declared number
+  // compares as a number, in a range or against a bound
   assert(compile(parse('!entity.eid'), v).sql.includes('is null'), 'absence')
-  assertThrows(() => compile(parse('.entity.num=3..5'), v), Unsupported)
+  let cases: [string, number[]][] = [
+    ['.entity.num=3..5', [3, 5]],
+    ['.entity.num>3', [3]],
+  ]
+  for (let [q, params] of cases) {
+    let { sql, params: bound } = compile(parse(q), v)
+    assert(sql.includes('"entity"."num"'), sql)
+    assertEquals(bound, params)
+  }
+  assertThrows(() => compile(parse('.entity.num>three'), v), Unsupported)
 })
 
 test('the membership statement excludes graves and answers one eid', () => {
