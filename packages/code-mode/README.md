@@ -8,10 +8,9 @@ Its `refused` option hears what the bridge refuses before any runner does (a
 tool outside the scope, a limit, a malformed argument or `results.read`, a call
 after the execution ended) as a runner's `refused` hears its own, each with the
 nested call it refused: the id a call keeps from the bridge to the runner, so a
-host deduping by call hears each call once. Its `strangerWrote` option says
-whether a nested call's answer brought words someone the caller does not work
-for wrote: that call's receipt carries `heard`, and so does the execution's
-answer, as a direct call's result would.
+host deduping by call hears each call once. When a tool or the host's
+`strangerWrote` option marks a nested answer `heard`, both the nested call's
+receipt and the execution's answer carry `heard`.
 
 The host supplies an isolated evaluator, and a `Strip` that reads a script's
 TypeScript as JavaScript: yaks.app strips through its compiler Worker, which

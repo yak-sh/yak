@@ -527,7 +527,7 @@ export let operatorRoster = async (
           : answer,
     )
     let refusal = out.find((b) => b.refusal)
-    if (refusal) {
+    if (refusal && !refusal.heard) {
       throw new CallError(
         String(comp(refusal, 'refusal')?.code),
         String(comp(refusal, 'content')?.body),
@@ -535,8 +535,8 @@ export let operatorRoster = async (
     }
     if (fault) throw fault
     let said = from == 'own' ? await work.readable(out) : out
-    // A code_mode script's reads are checked as it makes them, and its
-    // answer is `heard` when one of them was.
+    // A connected server or code_mode can stamp its own answer `heard`.
+    // Preserve that stamp even if the server answered with an error.
     let heard = out.some((b) => b.heard) ||
       from == 'apps' && await stranger(t, out)
     // Applied tools already wrote through their own store; generic writes
@@ -544,7 +544,9 @@ export let operatorRoster = async (
     return {
       text: worded(said, Infinity) || JSON.stringify(said),
       with: {
-        output: { source: call.entity.eid, value: resultValue(out, t) },
+        ...refusal
+          ? { refusal: comp(refusal, 'refusal')! }
+          : { output: { source: call.entity.eid, value: resultValue(out, t) } },
         ...heard ? { heard: {} } : {},
       },
     }

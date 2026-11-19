@@ -2,7 +2,7 @@ import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from '@yaks/platform/host'
 import { type Ask, type Offered, remoteCommands } from './mcp-remote.ts'
-import { asCaller, type Ctx, refuse, str } from './tool.ts'
+import { asCaller, type Ctx, type Out, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { argsOf, type Tool as GraphTool } from '@yaks/graph'
@@ -27,13 +27,17 @@ let commands = (ctx: Ctx, asking?: Calling) =>
 
 export let listConnectedCommands = (ctx: Ctx, said = '', asking?: Calling) =>
   commands(ctx, asking).list(said)
-export let runConnectedCommand = (
+/** MCP replies carry no verified authorship. */
+export let runConnectedCommand = async (
   ctx: Ctx,
   said: string,
   name: string,
   args: Record<string, unknown>,
   asking?: Calling,
-) => commands(ctx, asking).call(said, name, args)
+): Promise<Out> => ({
+  ...await commands(ctx, asking).call(said, name, args),
+  heard: true,
+})
 /** Several commands of one connected server, asked at once on one
  * connection, each answered or failed on its own. */
 export let runConnectedCommands = (
@@ -58,7 +62,9 @@ export let connectedInstructions = async (
 
 /** The same commands as named tools inside an Operator or code execution.
  * `asking` is who they are offered to, an Operator and its conversation or
- * else the person's connector, which a machine is told with each request. */
+ * else the person's connector, which a machine is told with each request.
+ * The Operator narrows its tools after reading a `heard` answer until the
+ * person speaks again (operator.ts `overheard`). */
 export let connectedTools = async (
   ctx: Ctx,
   asking?: Calling,
@@ -88,6 +94,7 @@ export let connectedTools = async (
         entity: { eid: '$said' },
         content: { body: out.text },
         output: { source: call.entity.eid, value: out.value },
+        ...out.heard ? { heard: {} } : {},
         ...out.value?.isError ? { refusal: { code: 'mcp_tool' } } : {},
       }]
     },

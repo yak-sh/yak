@@ -43,8 +43,7 @@ export type Receipt = {
   isError?: boolean
   error?: string
   pending?: boolean
-  /** its answer brought words someone the caller does not work for wrote
-   * (`Options.strangerWrote`) */
+  /** the tool or `Options.strangerWrote` marked the answer `heard` */
   heard?: true
 }
 export type Answer = { value: unknown; calls: Receipt[]; error?: string }
@@ -229,10 +228,13 @@ export let execute = async (
         if (bytes(result) > LIMITS.systemBytes) {
           throw new CallError('limit', TOO.system)
         }
-        if (failed) Object.assign(made, { isError: true, error: said(result) })
-        else if (await opts.strangerWrote?.(admitted.tool, answer)) {
+        if (
+          answer.some((b) => b.heard) ||
+          !failed && await opts.strangerWrote?.(admitted.tool, answer)
+        ) {
           made.heard = true
         }
+        if (failed) Object.assign(made, { isError: true, error: said(result) })
         return result
       })()
       pending.add(work)

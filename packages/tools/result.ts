@@ -189,6 +189,7 @@ let SPOKEN = new Set([
   'output',
   'refusal',
   'exception',
+  'heard',
 ])
 
 // A bundle said as a line of its own: the words a call said, its value, or a

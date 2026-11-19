@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
+import { evaluate } from '../../packages/code-mode/testing.ts'
 import { fixture } from '../../packages/mcp-client/testing.ts'
 import {
   connectedInstructions,
@@ -26,17 +27,23 @@ import { operatorTools } from './operator-tools.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import type { Request as ModelRequest } from '@yaks/model'
 import { drain } from './operator-store.ts'
+import { compiler } from './testing.ts'
 
 // The machine, and the gateway in the apps' namespace that reaches it while
 // it is `up`.
 let box = fixture(), up = true
+let answering = box
 let DISPATCH = {
   get: (name: string) => {
     if (!up) throw new Error(`Worker not found: ${name}`)
-    return { fetch: (r: Request) => box.fetcher(r) }
+    return { fetch: (r: Request) => answering.fetcher(r) }
   },
 } as unknown as Env['DISPATCH']
-let { env } = platform('machine-mcp', { DISPATCH })
+let { env } = platform('machine-mcp', {
+  DISPATCH,
+  CODE_MODE: evaluate,
+  ESBUILD: compiler(),
+})
 let dir = directoryOf(env.STORE)
 let ada = mint(), bob = mint()
 let eid = await dir.mint(ada, 'adas', 'Ada', {
@@ -378,3 +385,80 @@ test('a seated reply and its helper omit personal MCP tools and a later authenti
     true,
   )
 })
+
+// A server's words narrow the turn until its owner speaks again (T-1399).
+let tool = 'tasks__publish_mockup'
+let failedBox = fixture()
+failedBox.toolError()
+for (
+  let [mode, name, args] of [
+    ['directly', tool, { html: 'x' }],
+    ['inside code mode', 'code_mode', {
+      script: `return await tools.mcp.${tool}({html: 'x'})`,
+    }],
+    ['through command', 'command', {
+      app: at,
+      name: 'publish_mockup',
+      args: { html: 'x' },
+    }],
+  ] as const
+) {
+  for (let isError of [false, true]) {
+    let outcome = isError ? 'an error' : 'an answer'
+    let seen: ModelRequest[] = []
+    let work = operatorMemory()
+    let operator = operating(
+      work,
+      env,
+      operatorModel((req) => {
+        seen.push(req)
+        let last = req.items.at(-1)
+        return Promise.resolve({
+          id: mint(),
+          model: req.model,
+          items: last?.kind == 'user' && last.text.includes('Ask my server')
+            ? [{
+              kind: 'call',
+              id: mint(),
+              name,
+              args: JSON.stringify(args),
+            }]
+            : [{ kind: 'assistant', text: 'Done.' }],
+        })
+      }),
+    )
+    handleChannels(operator, env, { chat: () => Promise.resolve({}) })
+    test(`a connected server’s tool returning ${outcome} ${mode} narrows the Operator’s tools until its owner speaks again`, async () => {
+      answering = isError ? failedBox : box
+      try {
+        for (let say of ['Ask my server', 'Thanks']) {
+          await receive(work, { space: eid, person: ada, channel: 'chat' }, say)
+          await drain(work)
+        }
+      } finally {
+        answering = box
+      }
+      assertEquals(seen.length, 3)
+      let steps = seen.map(callable)
+      for (let name of ['spawn', 'code_mode', 'command', tool, 'graph_apply']) {
+        assertEquals(steps.map((step) => step.includes(name)), [
+          true,
+          false,
+          true,
+        ], name)
+      }
+      assertEquals(steps[1].includes('graph_query'), true)
+      let [answer] = await work.g.read('.entry .heard ?refusal ?content')
+      assertEquals(
+        answer?.refusal,
+        isError && name == tool ? { code: 'mcp_tool' } : undefined,
+      )
+      assertEquals(
+        JSON.stringify(answer?.content).includes(
+          'https://example.test/mockup/1',
+        ),
+        true,
+      )
+    })
+  }
+}

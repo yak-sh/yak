@@ -210,6 +210,7 @@ export let answered = async (
     entity: { eid: '$said' },
     ...(alone ? {} : { content: { body: out.text + news } }),
     ...(Object.keys(output).length ? { output } : {}),
+    ...(out.heard ? { heard: {} } : {}),
   }
   return alone && news
     ? [answer, { entity: { eid: '$said' }, content: { body: news.trim() } }]

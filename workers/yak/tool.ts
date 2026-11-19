@@ -131,6 +131,8 @@ export type Args = Record<string, unknown>
 // worded for whoever reads words, so the answer carries it once.
 export type Out = {
   text: string
+  /** The reply carries words without verified authorship. */
+  heard?: true
   space?: Space
   value?: Record<string, unknown>
   images?: Image[]

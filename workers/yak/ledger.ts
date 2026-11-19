@@ -38,6 +38,7 @@ import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
+import { sessionDoc } from '@yaks/session/vocab'
 import { appKeywords } from './vocab.ts'
 
 /** The words an invocation is made of: what stays in the ledger. */
@@ -49,6 +50,7 @@ let INVOCATION = [
   'output',
   'refusal',
   'exception',
+  'heard',
   'tool',
 ]
 
@@ -92,7 +94,11 @@ let both: Record<string, PropSchema> = {
 // (@yaks/graph `who`).
 let VOCAB = loadVocab([spineDoc, provenanceDoc, {
   title: 'invocation',
-  $defs: { ...without(toolsDoc, SHARED).$defs, ...both },
+  $defs: {
+    ...without(toolsDoc, SHARED).$defs,
+    ...both,
+    heard: sessionDoc.$defs!.heard,
+  },
 }], appKeywords)
 
 // Is this bundle the invocation's own? A bundle that says nothing at all — a
