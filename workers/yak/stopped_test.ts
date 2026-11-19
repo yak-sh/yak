@@ -116,6 +116,22 @@ test('a stopped store answers a read with how long to wait, and serves once the 
   assertEquals(await o.title('n0'), 'first')
 })
 
+// A ceiling's windows outlive its instance, and starting a store writes (its
+// key-value table, the write log, the rekey): a store restarted into a window
+// it spent past its writes still starts, and answers what it may read.
+let restarted = await object()
+test('a store restarted in a window spent past its writes answers a read', async () => {
+  let o = restarted
+  o.spend('written')
+  let again = new Store(o.ctx, {}, undefined, { now: () => o.at.t })
+  let read = await again.fetch(
+    new Request('http://store/query?q=.entity', {
+      headers: { ...KERNEL, 'x-store': NAME },
+    }),
+  )
+  assertEquals(read.status, 200)
+})
+
 let watched = await object()
 test('a stopped store refuses a watch with how long to wait', async () => {
   let o = watched

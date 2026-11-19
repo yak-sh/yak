@@ -1319,6 +1319,38 @@ export class Store extends Durable {
   }
 
   async #start(request?: Request) {
+    // Opening the store writes (its key-value table, the write log, the
+    // rekey, what the waking request tells it), and a ceiling's windows
+    // outlive its instance: one restarted into a window it spent past its
+    // writes opens free, or none of its reads is answered until the window
+    // ends. The work it then joins is charged, as any other.
+    await this.ceiling.free(() => this.#open(request))
+    if (!this.#refused && !this.#dormant) {
+      // Join this incarnation without discovering or starting work. Its own
+      // writes can then persist attempts in the transaction that owes them.
+      await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
+      // An alarm this object owes may have been spent by an instance that
+      // died before arming the next (`#holding`). Nobody waits for it: it is
+      // recovered behind the answer that woke this object, which would
+      // otherwise wait on this query, the first an isolate compiles, before
+      // its own (T-148354).
+      setTimeout(
+        () =>
+          this.#maintenance(async () =>
+            this.#arm(await this.#owed(this.#now()))
+          ).catch((e) =>
+            defect(e, { request: 'owed alarm', store: this.#name() })
+          ),
+        0,
+      )
+      // A lexicon not yet read is the alarm's to read, never this request's.
+      if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
+    }
+  }
+
+  // The store's housekeeping before it serves: its storage brought to this
+  // deploy's shape, its graph built, and a copy's runs forgiven.
+  async #open(request?: Request) {
     this.#expires = await this.#ctx.storage.get<Expiry>?.('expires')
     this.#startedDormant = !!this.#dormant
     let ctx = this.#ctx
@@ -1356,27 +1388,6 @@ export class Store extends Durable {
       told(heard, { read: (k) => this.#get(k), mode: (m) => this.#mode(m) })
     })
     if (!this.#refused && this.#get('copied') != null) await this.#forgiven()
-    if (!this.#refused && !this.#dormant) {
-      // Join this incarnation without discovering or starting work. Its own
-      // writes can then persist attempts in the transaction that owes them.
-      await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
-      // An alarm this object owes may have been spent by an instance that
-      // died before arming the next (`#holding`). Nobody waits for it: it is
-      // recovered behind the answer that woke this object, which would
-      // otherwise wait on this query, the first an isolate compiles, before
-      // its own (T-148354).
-      setTimeout(
-        () =>
-          this.#maintenance(async () =>
-            this.#arm(await this.#owed(this.#now()))
-          ).catch((e) =>
-            defect(e, { request: 'owed alarm', store: this.#name() })
-          ),
-        0,
-      )
-      // A lexicon not yet read is the alarm's to read, never this request's.
-      if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
-    }
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
