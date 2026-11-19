@@ -445,7 +445,7 @@ proved. Existing queued letters and receiving cursors are retained.
 | `CIMD`                                                           | optional   | `on` (default when unset) or `off`                                                                                                                                                                                                                            | nothing; `off` stops claiming Client ID Metadata Documents                                                                           |
 | `ANTHROPIC_API_KEY`                                              | optional   | the platform's Anthropic API key, for product use only (providers.ts)                                                                                                                                                                                         | without `OPENAI_OPERATOR_API_KEY` either, the Operator runs on `@cf/zai-org/glm-5.3`; a `claude-*` model is refused as a missing key |
 | `OPENAI_API_KEY`                                                 | models     | OpenAI key of the "yaks.app images" project, which may use only the GPT Image 2.5 and 2.6 models and spend $20 a month (1Password "OpenAI yaks.app images")                                                                                                   | an app's GPT Image asks are refused                                                                                                  |
-| `OPENAI_OPERATOR_API_KEY`                                        | optional   | the OpenAI key scoped to the Operator's text models and their native file inputs; with it the Operator may run on OpenAI (config.ts `operatorProviders`), and image generation keeps `OPENAI_API_KEY`                                                         | the Operator runs on the next choice: Sonnet with `ANTHROPIC_API_KEY`, GLM without                                                   |
+| `OPENAI_OPERATOR_API_KEY`                                        | optional   | the OpenAI key of the "yaks.app operator" project, which allows every model; with it the Operator may run on OpenAI (config.ts `operatorProviders`), and image generation keeps `OPENAI_API_KEY`                                                              | the Operator runs on the next choice: Sonnet with `ANTHROPIC_API_KEY`, GLM without                                                   |
 | `OPENAI_MODELS_KEY`                                              | models     | OpenAI key of the "yaks.app models" project, which may use only GPT-6 Luna and GPT-6.1 Terra, the models that answer the chat names `./api/ai/run` aliases (config.ts `aliases`); $300 a month limit, not yet enforced (1Password "OpenAI yaks.app models")   | those names are answered by Workers AI again                                                                                         |
 | `AI_GATEWAY`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID`         | optional   | the other builder provider; all unset on purpose (T-34238)                                                                                                                                                                                                    | nothing; both tiers build on Workers AI                                                                                              |
 | `MAIL_DEV`                                                       | local      | `1`                                                                                                                                                                                                                                                           | never set on a deploy: each letter is printed on the log instead of sent                                                             |
@@ -1281,7 +1281,7 @@ points the persona at it; the next turn of every Operator runs on it. A space's
 own persona may name another by its own `using`, or its person's machine
 (below). Where neither names one, or a provider the Worker lacks the keys of
 serves it, the Operator runs on the first of config.ts `agents.operator` whose
-provider the Worker holds every credential of: `gpt-6.1-sol` on OpenAI when
+provider the Worker holds every credential of: `gpt-6.2-sol` on OpenAI when
 `OPENAI_OPERATOR_API_KEY` is set, `claude-opus-5-5` on Anthropic when
 `ANTHROPIC_API_KEY` is, and otherwise `@cf/zai-org/glm-5.3` on Workers AI. Each
 provider is served by a plugin config.ts `operatorProviders` names, lent the
@@ -1292,7 +1292,7 @@ existing credentials. An input asking another model gets it where the directory
 holds its row or its provider lists it, and the Operator's own otherwise. Every
 step, a summary included, is priced and bounded by the model's row in the
 directory, and by its provider's list (then @yaks/model's) only where no row
-says. With a delegate (config.ts `agents.operator`: `gpt-6-astra` on OpenAI;
+says. With a delegate (config.ts `agents.operator`: `gpt-6.2-astra` on OpenAI;
 Opus has none), a conversation and its forks have `spawn`, whose description
 sends writing or fixing code and tasks that need careful reasoning to the
 delegate of the provider the session is on, in a child session working for the

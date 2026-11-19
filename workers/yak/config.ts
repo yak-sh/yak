@@ -382,9 +382,9 @@ let supplied = (key: string): Config => ({
 
 export let providing: Config = supplied('OPENAI_API_KEY')
 
-/** The providers of Operator conversations: OpenAI on the key scoped to the
- * Operator's text models, never the images key, so the Operator is on OpenAI
- * only where the Worker holds that key. Image generation and apps keep
+/** The providers of Operator conversations: OpenAI on the key of the
+ * "yaks.app operator" project, never the images key, so the Operator is on
+ * OpenAI only where the Worker holds that key. Image generation and apps keep
  * `providing`'s. */
 export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY')
 
@@ -404,7 +404,7 @@ export let agents: {
 } = {
   builder: 'workers-ai',
   operator: [
-    { provider: 'openai', model: 'gpt-6.1-sol', delegate: 'gpt-6-astra' },
+    { provider: 'openai', model: 'gpt-6.2-sol', delegate: 'gpt-6.2-astra' },
     { provider: 'anthropic', model: 'claude-opus-5-5' },
     { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3' },
   ],

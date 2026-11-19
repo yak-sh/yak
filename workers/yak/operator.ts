@@ -720,7 +720,7 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
 
 /** What the Operator runs on where the directory names nothing
  * (@yaks/platform/operator-model): the first of config.ts `agents` whose
- * provider the Worker holds every credential of, by default GPT-6.1 Sol on
+ * provider the Worker holds every credential of, by default GPT-6.2 Sol on
  * the Operator's OpenAI key; without that key Opus on the platform's
  * Anthropic key; and without either GLM on Workers AI. */
 export let operatorChoice = (env: Env, machine = false) => {

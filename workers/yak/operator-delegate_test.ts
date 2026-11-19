@@ -14,11 +14,12 @@ import { reply } from '@yaks/session/conversation'
 import { sentRows } from './operator-testing.ts'
 import { transcript } from '@yaks/session'
 import { PART } from '@yaks/persona'
+import { agents } from './config.ts'
 
 // The Operator runs on Sol and hands code to Astra in a child session: each
 // ask is priced at its own model's price.
-let SOL = 'gpt-6.1-sol'
-let ASTRA = 'gpt-6-astra'
+let SOL = agents.operator[0].model
+let ASTRA = agents.operator[0].delegate!
 let price = (name: string) => ({ input: name == ASTRA ? 4 : 2, output: 0 })
 let asked: Request[] = []
 // The child's answer comes back as words given to the session that asked.
