@@ -1,10 +1,12 @@
 /** A conversation follows its newest line until its reader scrolls up, and
  * draws the lines it is given, older ones when asked: on a linkedom page
  * whose pane scrolls as a browser's does, clamped to its content. */
-import { equal, test } from '@yaks/testing'
+import { equal, test, tick, typist } from '@yaks/testing'
 import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { desk, merge } from '@yaks/draft'
+import type { Drafts } from './host.ts'
 import { h, hydrate, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderToString } from 'preact-render-to-string'
@@ -313,7 +315,7 @@ test("a mark opens and closes its fold, on the server's line as on one drawn aga
 
 // A box on a linkedom page, its words kept in drafts held in a signal, as a
 // host's are, and what it emits kept.
-let boxed = () => {
+let boxed = (given?: Drafts) => {
   let { document, Event } = parseHTML(
     '<html><body><div id="box"></div></body></html>',
   )
@@ -323,7 +325,7 @@ let boxed = () => {
     configurable: true,
   })
   let texts = signal<Record<string, string>>({})
-  let drafts = {
+  let drafts = given ?? {
     text: (place: string) => texts.value[place] ?? '',
     type: (place: string, text: string) =>
       void (texts.value = { ...texts.value, [place]: text }),
@@ -355,10 +357,12 @@ let boxed = () => {
     draw,
     field,
     root,
-    type: (text: string) => {
-      field().value = text
-      field().dispatchEvent(new Event('input'))
-    },
+    // typed, and the box drawn again, as a browser does before the next key
+    type: (text: string) =>
+      act(() => {
+        field().value = text
+        field().dispatchEvent(new Event('input'))
+      }),
     key: (key: string, shiftKey = false) =>
       field().dispatchEvent(
         Object.assign(new Event('keydown', { cancelable: true }), {
@@ -443,4 +447,75 @@ test('given onFiles, a box takes files pasted or dropped on it, lit while they a
 test('without onFiles, a box leaves files to the page', () => {
   using b = boxed()
   equal(on(b, 'drop', carrying('a.pdf')), false)
+})
+
+// A store as the draft plugin keeps one: each write merged over what it holds
+// by the text it was typed over, its answer kept until it `land`s, and every
+// text it comes to hold heard by its watch first, as a socket can beat the
+// answer. `elsewhere` is another interface's write landing.
+let store = () => {
+  let held = { text: '', rev: 0 }, last: Bundle | undefined
+  let hear = new Set<(rows: Bundle[]) => void>()
+  let waiting: (() => void)[] = []
+  let hold = (b: Bundle, text: string) => {
+    held = { text, rev: held.rev + 1 }
+    let rows = [{ ...b, draft: { ...b.draft as object, ...held } }]
+    for (let h of hear) h(rows)
+    return rows
+  }
+  return {
+    mutate: (bundles: Bundle[]) =>
+      new Promise<Bundle[]>((answer) =>
+        waiting.push(() => {
+          let b = last = bundles.find((b) => b.draft)!
+          let { over } = b.typed as { over: string }
+          answer(
+            hold(b, merge(over, (b.draft as { text: string }).text, held.text)),
+          )
+        })
+      ),
+    watch: () => ({
+      value: [],
+      subscribe: (h: (rows: Bundle[]) => void) => {
+        hear.add(h)
+        return () => void hear.delete(h)
+      },
+    }),
+    land: () =>
+      act(async () => {
+        waiting.shift()?.()
+        await tick()
+      }),
+    elsewhere: (edit: (text: string) => string) =>
+      act(async () => {
+        hold(last!, edit(held.text))
+        await tick()
+      }),
+  }
+}
+
+test('words typed in the middle of a draft keep their place and caret as its syncs and the page land', async () => {
+  let s = store()
+  using b = boxed(desk(s, { by: () => 'p1', pace: 0 }))
+  let t = typist(b.field())
+  let shows = () => [b.field().value, b.field().selectionStart]
+  for (let c of 'Find the recipe') {
+    act(() => t.type(c))
+    await s.land()
+  }
+  await s.land()
+  t.at(4)
+  for (let c of ' me') {
+    act(() => t.type(c))
+    await s.land()
+  }
+  equal(shows(), ['Find me the recipe', 7])
+  await s.elsewhere((text) => text + ', please')
+  equal(shows(), ['Find me the recipe, please', 7])
+  await s.elsewhere((text) => 'Hi. ' + text)
+  equal(shows(), ['Hi. Find me the recipe, please', 11])
+  act(() => b.draw({ busy: true, said: 'Working' }))
+  act(() => t.type(' now'))
+  await s.land()
+  equal(shows(), ['Hi. Find me now the recipe, please', 15])
 })

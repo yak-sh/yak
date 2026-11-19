@@ -52,7 +52,7 @@ no browser tests or slow platform tier.
 
 | Export                   | Provides                                                                                                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/testing`          | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks`             |
+| `@yaks/testing`          | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `typist`, `clock`, `own`, `waits`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock`, `Looks`   |
 | `@yaks/testing/own`      | `own`, `waits`, `held`, `started`: a process's own time, for a coordinator that imports no tests                                                                         |
 | `@yaks/testing/find`     | `tested`, `paged`, `walk`, `examples`, `find`                                                                                                                            |
 | `@yaks/testing/examples` | `fences`, `doctests`, `typed`, `exported`, `declared`: a page's examples, compiled to run as tests or to type-check                                                      |
@@ -168,6 +168,15 @@ let now = own(Deno.pid, {
 equal(now(), 0) // the first look
 equal(now(), 70) // 100 ms passed, 30 of them waiting for a CPU
 ```
+
+## Typing in a field
+
+`typist(field)` keeps an input's or textarea's caret as a browser does, on a DOM
+that keeps none (linkedom): a value a script puts in moves the caret to the end,
+and `type` goes in at the caret and fires `input` for each character. `at` moves
+the caret or selects, and `compose` and `end` type as an input method does. A
+component that moves the caret when it should not fails here as it would in a
+browser.
 
 ## Examples beside the code
 

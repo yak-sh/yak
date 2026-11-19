@@ -25,6 +25,9 @@
  * await until(() => ready, { label: 'ready' })
  * ```
  *
+ * `typist` keeps a text field's caret as a browser does, on a DOM that keeps
+ * none, and types at it as a person does.
+ *
  * The runner, `@yaks/testing/main`, loads test modules and the examples
  * beside the code into one runtime and runs them.
  *
@@ -44,4 +47,5 @@ export {
   test,
 } from './suite.ts'
 export { type Looks, own, waits } from './own.ts'
+export { type Typist, typist } from './typist.ts'
 export { tick, until, type Wait } from './wait.ts'
