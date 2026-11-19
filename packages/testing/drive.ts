@@ -12,14 +12,18 @@ import type { Test } from './suite.ts'
 export let drive = async (
   paths: string[],
   load: (path: string) => Promise<Test[]>,
-  { timeout = 50_000, verbose = false, full = (): boolean => false } = {},
+  {
+    timeout = 50_000,
+    verbose = false,
+    full = (): boolean | Promise<boolean> => false,
+  } = {},
 ) => {
   let outcomes: Outcome[] = []
   let loading = 0
   let loads: Record<string, number> = {}
   let took: Record<string, number> = {}
   for (let [i, path] of paths.entries()) {
-    if (i && full()) {
+    if (i && await full()) {
       return { outcomes, loading, loads, took, rest: paths.slice(i) }
     }
     console.log(`loading ${path}`)

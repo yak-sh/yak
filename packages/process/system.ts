@@ -86,6 +86,33 @@ export let removeSignalListener = (signal: Signal, fn: () => void): void => {
 }
 export let cpuUsage = process.cpuUsage
 export let memoryUsage = (): NodeJS.MemoryUsage => process.memoryUsage()
+
+// glibc keeps what a process frees resident, for its next allocations: a test
+// runtime that closed hundreds of databases still held 280 MB of their pages.
+// `malloc_trim` gives it back. Deno alone opens a library, and only glibc's
+// libc has the call (musl's and macOS's do not), so elsewhere `trim` does
+// nothing.
+type Trims = { symbols: { malloc_trim: (pad: bigint) => number } }
+let trims: Trims | null | undefined
+let libc = (): Trims | null => {
+  let deno = (globalThis as unknown as {
+    Deno?: { dlopen: (path: string, symbols: object) => Trims }
+  }).Deno
+  if (!deno || process.platform != 'linux') return null
+  try {
+    return deno.dlopen('libc.so.6', {
+      malloc_trim: { parameters: ['usize'], result: 'i32' },
+    })
+  } catch {
+    // A libc that is not glibc's.
+    return null
+  }
+}
+
+/** Gives the memory this process freed back to the system, where it can. */
+export let trim = (): void => {
+  ;(trims === undefined ? trims = libc() : trims)?.symbols.malloc_trim(0n)
+}
 export let signalCode = (signal: Signal | null): number =>
   signal ? 128 + (constants.signals[signal] ?? 0) : 1
 export let unrefTimer = (timer: unknown): void => {

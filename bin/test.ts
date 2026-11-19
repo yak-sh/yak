@@ -117,13 +117,13 @@ let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
 /**
  * The runtime shares downloaded modules with the run, but keeps its own V8
- * code cache. Its source-position flag differs from the CLI and a test's
- * deno children: sharing their cache would have each replace code the other
- * cannot use. The flag-specific directory also keeps earlier worktrees'
- * eager compilation cache separate.
+ * code cache. Its V8 flags differ from the CLI and a test's deno children:
+ * sharing their cache would have each replace code the other cannot use. The
+ * directory is named for the flags, so a checkout running other flags keeps
+ * its cache apart.
  */
 export let runtimeDir = (shared: string = denoDir()) => {
-  let dir = `${shared.replace(/\/+$/, '')}-test-no-lazy-source-positions`
+  let dir = `${shared.replace(/\/+$/, '')}-test-no-lazy-source-positions-gc`
   Deno.mkdirSync(dir, { recursive: true })
   for (let { name } of Deno.readDirSync(shared)) {
     if (name.startsWith('v8_code_cache')) continue
@@ -148,8 +148,10 @@ export let runtime = (shared: string = denoDir()) => ({
     '-A',
     // Compile functions when used, so a selected run does not compile unused
     // Store and Builder methods. Keep their source positions when compiled:
-    // otherwise the first Error.stack reparses functions on its stack.
-    '--v8-flags=--no-enable-lazy-source-positions',
+    // otherwise the first Error.stack reparses functions on its stack. Let
+    // the runner collect before it judges itself full (@yaks/testing/main
+    // `--full`).
+    '--v8-flags=--no-enable-lazy-source-positions,--expose-gc',
     '--preload',
     new URL('./test-runtime.ts', import.meta.url).pathname,
   ],
