@@ -2462,17 +2462,23 @@ let turning = (turn) => {
   shown()
 }
 // A helper's row, put in place wherever the page draws it (operator-aside.ts
-// \`Work\`): in the Helpers box, in the step that started it, and in the band
-// on its own page, whose Helpers box lists only the helpers it started.
+// \`Work\`): in the Helpers box, where it runs folded away, in the step that
+// started it, and in the band on its own page, whose Helpers box lists only
+// the helpers it started.
 let helped = (helper) => {
   let at = '[data-help="' + helper.session + '"]'
-  for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(helperHtml(helper)))
+  // The Helpers box folds where it runs; a fold pressed open stays open.
+  let html = (row) => {
+    let fold = !!row?.closest('[data-helping]')
+    return helperHtml(helper, Date.now(), fold, !!row?.querySelector('[data-fold]')?.open)
+  }
+  for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(html(row)))
   if (helper.session == talk.task()) return
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   show()
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
-  if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper)))
+  if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper, Date.now(), true)))
   shown()
 }
 document.addEventListener('click', (e) => {

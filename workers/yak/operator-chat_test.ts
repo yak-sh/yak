@@ -16,6 +16,7 @@ import { operatorModel, operatorService, released } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { CONVERSATION } from './operator-host.ts'
+import { asideHtml } from './operator-rows.ts'
 import { notification } from './operator-updates.ts'
 import { toolEid } from '@yaks/tools/result'
 import { identityEid } from '@yaks/graph'
@@ -745,6 +746,33 @@ test('the Voice card shows back the voice, speed and model each save picked', as
   })
 })
 
+test('a helper whose steps its person’s machine answered says it runs there', async () => {
+  let helper = crypto.randomUUID()
+  let model = identityEid('model', ['claude-sonnet-5-5'])
+  let machine = identityEid('provider', ['machine'])
+  await service.store.g.apply([
+    { entity: { eid: model }, model: { name: 'claude-sonnet-5-5' } },
+    { entity: { eid: machine }, provider: { name: 'machine' } },
+    {
+      entity: { eid: helper },
+      session: { id: helper },
+      spawned: { parent: task },
+      operator_session: { space: eid, person },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: helper },
+      content: { body: 'Draft the game' },
+      using: { model, provider: machine },
+    },
+  ], { trusted: true })
+  let { document } = await sided('owner', helper)
+  assertEquals(
+    document.querySelector('.Talk_Helper [data-runs]')?.textContent,
+    'Your machine · Sonnet 5.5',
+  )
+})
+
 test('a helper’s page is zoomed in: held under the bar, the way back out, its row, and where words go', async () => {
   let helper = crypto.randomUUID()
   let model = identityEid('model', ['claude-sonnet-5-5'])
@@ -777,10 +805,32 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
     band.querySelector('.Rows_Meta .State')?.textContent,
     'Running',
   )
-  // Where it runs and its model, in one line under its standing.
+  // Where it runs and its model by its label, in one line under its
+  // standing, in view; the Helpers box folds it away.
   assertEquals(
     band.querySelector('[data-runs]')?.textContent,
     'yaks.app · Sonnet 5.5',
+  )
+  assertEquals(band.querySelector('[data-fold]'), null)
+  let listed = parseHTML(
+    asideHtml({
+      turn: null,
+      helpers: [{
+        session: helper,
+        title: 'Import the CSV',
+        step: '',
+        since: new Date().toISOString(),
+        standing: 'running',
+        runs: 'Your machine',
+        model: 'Sonnet 5.5',
+      }],
+    }),
+  ).document
+  let fold = listed.querySelector('[data-helping] [data-fold]')!
+  assertEquals(fold.hasAttribute('open'), false)
+  assertEquals(
+    fold.querySelector('[data-runs]')?.textContent,
+    'Your machine · Sonnet 5.5',
   )
   // Its row says how it stands, so the aside does not say it again.
   let aside = document.querySelector('[data-aside]')!

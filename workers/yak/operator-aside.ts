@@ -14,7 +14,7 @@
 // place on the page draws it with: the Helpers box, the step that started
 // it, the band on its own page, and the admin's list of the Operator's work.
 import { type ComponentChildren as Node, h } from 'preact'
-import { Card, Dot, Popover, Rows, State } from '@yaks/ui/parts'
+import { Card, Dot, More, Popover, Rows, State } from '@yaks/ui/parts'
 import type { Doing } from './mascot.ts'
 
 /** What a conversation's turn is doing while it runs, and since when. */
@@ -134,16 +134,26 @@ export let Stands = ({ standing }: { standing: Standing }) =>
  * linked to its page, its recap on hover, over what `about` says of it
  * first, how it stands and, while it works, its step and how long it has
  * taken, or once it ended, how long ago; then where it runs and its model,
- * where it says. The page puts a newer drawing of a
- * helper in place of each by its session (`[data-help]`). */
+ * where it says, in a line, or with `fold` (the Helpers box) under a `More`
+ * fold, closed unless `open`. The page puts a newer drawing of a helper in
+ * place of each by its session (`[data-help]`). */
 export let Work = (
-  { work: x, about = [], now = Date.now() }: {
+  { work: x, about = [], now = Date.now(), fold = false, open = false }: {
     work: Work
     about?: Node[]
     now?: number
+    fold?: boolean
+    open?: boolean
   },
-) =>
-  h(
+) => {
+  let runs = x.runs || x.model
+    ? h(
+      Rows.Meta,
+      { mod: 'line', 'data-runs': '' },
+      [x.runs, x.model].filter(Boolean).join(' · '),
+    )
+    : null
+  return h(
     Rows.Item,
     { 'data-help': x.session, 'data-going': going(x) ? '' : undefined },
     h(
@@ -166,15 +176,17 @@ export let Work = (
             : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
-      x.runs || x.model
+      runs && fold
         ? h(
-          Rows.Meta,
-          { mod: 'line', 'data-runs': '' },
-          [x.runs, x.model].filter(Boolean).join(' · '),
+          More,
+          { mod: 'quiet', open, 'data-fold': '' },
+          h(More.Summary, null, 'More'),
+          h(More.Body, null, runs),
         )
-        : null,
+        : runs,
     ),
   )
+}
 
 /** How many dots the summary draws before it says how many more. */
 export let DOTS = 4
@@ -277,7 +289,9 @@ export let Aside = (
         h(
           Rows,
           { 'data-helping': '' },
-          aside.helpers.map((helper) => h(Work, { work: helper, now })),
+          aside.helpers.map((helper) =>
+            h(Work, { work: helper, now, fold: true })
+          ),
         ),
       ),
     ),

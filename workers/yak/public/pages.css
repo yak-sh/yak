@@ -761,15 +761,19 @@
      under the bar in it says it is a helper with the way back out, its
      words lined up with the conversation's, and the conversation grows
      into place as it opens. */
-  .Talk-zoomed .Frame_Column {
-    background: color-mix(in srgb, var(--bg), var(--accent) 7%);
+  .Talk-zoomed {
+    --zoomed: color-mix(in srgb, var(--bg), var(--accent) 7%);
   }
+  .Talk-zoomed .Frame_Column {
+    background: var(--zoomed);
+  }
+  /* The band spans the page, as the bar over it does. */
   .Talk_Helper {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: .5rem .75rem;
-    padding: .5rem max(1.25rem, 50% - 23rem + 1.25rem);
+    padding: .5rem 1.25rem;
     background: color-mix(in srgb, var(--bg), var(--accent) 16%);
     border-bottom: 2px solid var(--accent);
   }
@@ -1268,6 +1272,10 @@
        filled with the paper the frame lays the page on (Shell.css). */
     .Sidebar_Nav {
       --nav-panel: var(--floor);
+    }
+    /* On a helper's page the page is tinted, and so is the tab joining it. */
+    .Talk-zoomed .Sidebar_Nav {
+      --nav-panel: var(--zoomed);
     }
     .Sidebar-rail {
       --sidebar-padding: .5rem;

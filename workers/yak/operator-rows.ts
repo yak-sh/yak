@@ -35,9 +35,14 @@ export let glanceHtml = (aside: Aside, open = false) =>
 export let turnHtml = (turn: Turn | null, now = Date.now()) =>
   renderToString(h(TurnNow, { turn, now }))
 
-/** A helper's row as HTML, as every place on the page draws it. */
-export let helperHtml = (helper: HelperLine, now = Date.now()) =>
-  renderToString(h(Work, { work: helper, now }))
+/** A helper's row as HTML, as every place on the page draws it: with
+ * `fold` as the Helpers box does, its fold `open` or not. */
+export let helperHtml = (
+  helper: HelperLine,
+  now = Date.now(),
+  fold = false,
+  open = false,
+) => renderToString(h(Work, { work: helper, now, fold, open }))
 // Its times said in the reader's clock and zone (dates.ts).
 export { dates } from './dates.ts'
 
