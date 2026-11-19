@@ -3,8 +3,8 @@
 Cloudflare's account API as code outside a binding reaches it: yaks.app's kernel
 Worker, the deploy doors of every Worker in this repository, and the box's admin
 (@yaks/admin). Each brings its own token, paths and queries; this package owns
-only how a call is sent, how an answer is read, and which Wrangler runs. No
-graph, credential lookup, server or wrangler.toml lives here.
+only how a call is sent, how an answer is read, which Wrangler runs and what a
+deployment says serves. No graph, server or wrangler.toml lives here.
 
 Unpublished: it pins the `wrangler` npm package, and its callers are this
 repository's.
@@ -23,6 +23,15 @@ repository's.
   sets it), and `said(answer)` reads its data or throws its errors, as
   `Unavailable` when every one is Cloudflare's internal failure. `api(env)` is
   where analytics reads go, the Analytics Engine SQL API's base as well.
+- `./deployed`: what serves a Worker. `reads(root, headers)` reads a config's
+  deployments and versions through the account API, with the headers
+  `credentials(WRANGLER, root)` gets from Wrangler's own login;
+  `script(toml,
+  env)` is the script and account a config names in an
+  environment. `serving(deployments)` says what serves now and the commit its
+  message names (`shaIn`); `sole(deployments)` is the newest deployment when one
+  version has all the traffic; `commits(reads, config, env)` is every commit
+  live now.
 - `./hook`: `hooked(status, body)` reads Workers Builds' answer to a deploy hook
   POST: whether it started a build, which, and in words. `PENDING` is what it
   says when a build of the branch already waits, which started nothing.

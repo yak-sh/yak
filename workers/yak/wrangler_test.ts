@@ -35,7 +35,7 @@ import {
   uploadDigest,
   uploadSibling,
 } from './wrangler.ts'
-import type { Reads, Version } from './deployed.ts'
+import type { Reads, Version } from '@yaks/cloudflare/deployed'
 import { ASSETS } from './assets.ts'
 
 let apiFailure =

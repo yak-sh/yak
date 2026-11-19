@@ -12,6 +12,7 @@ import {
   type StepResult,
   WRANGLER,
 } from '@yaks/cloudflare/wrangler'
+import { type Deployment as Cloudflare, shaIn } from '@yaks/cloudflare/deployed'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
 import type { Gateway } from './gateway.ts'
@@ -55,12 +56,7 @@ export type Version = {
   metadata: { created_on: string }
   annotations?: Record<string, string>
 }
-export type Deployment = {
-  id: string
-  created_on: string
-  versions: { version_id: string; percentage: number }[]
-  annotations?: Record<string, string>
-}
+export type Deployment = Cloudflare & { id: string }
 export type Deploy = {
   id: string
   created: string
@@ -145,34 +141,6 @@ export let compilerRefusal = (
     : target != current
     ? `no rollback: compiler protocol changed (${target} → ${current})`
     : undefined
-
-/// shaIn('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A release module…') -> '739f56b25cae820c8541a8b4a1ade2f7a6c7e9be'
-/// shaIn('yaks.app emergency rollback to 739f56b2: build path broken') -> undefined
-/** The commit a version's or deployment's message leads with, written in full
- * by the deploy door (workers/yak/wrangler.ts `--message`). */
-export let shaIn = (message?: string): string | undefined =>
-  message?.match(/^([a-f\d]{40})\b/i)?.[1].toLowerCase()
-
-/** What serves now: the newest deployment's leading version, the commit its
- * message names (a rollback's names none; its version's does), when it went
- * live, and whether an operator rolled back to it. */
-export let serving = (deployments: Deployment[]) => {
-  let now =
-    deployments.toSorted((a, b) =>
-      Date.parse(b.created_on) - Date.parse(a.created_on)
-    )[0]
-  let lead = now?.versions.toSorted((a, b) => b.percentage - a.percentage)[0]
-  return now && lead
-    ? {
-      version: lead.version_id,
-      sha: now.versions.length == 1
-        ? shaIn(now.annotations?.['workers/message'])
-        : undefined,
-      at: now.created_on,
-      rollback: now.annotations?.['workers/triggered_by'] == 'rollback',
-    }
-    : undefined
-}
 
 /// let put = (sha: string, created_on: string, triggered = 'upload') => ({ id: created_on, created_on, versions: [{ version_id: sha, percentage: 100 }], annotations: { 'workers/message': `${sha.repeat(40)} subject`, 'workers/triggered_by': triggered } })
 /// debuts([put('b', '2026-10-28T12:36:58Z'), put('b', '2026-10-28T12:36:52Z'), put('a', '2026-10-28T12:25:58Z')]) -> [{ sha: 'a'.repeat(40), at: '2026-10-28T12:25:58Z', version: 'a' }, { sha: 'b'.repeat(40), at: '2026-10-28T12:36:52Z', version: 'b' }]

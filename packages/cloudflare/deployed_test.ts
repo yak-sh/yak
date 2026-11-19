@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { join } from 'node:path'
-import { API, reads } from './deployed.ts'
+import { reads } from './deployed.ts'
 
 let root = Deno.makeTempDirSync()
 Deno.writeTextFileSync(
@@ -24,8 +24,8 @@ test('a read asks the script its config names in its environment', async () => {
   let version = reads(root, headers, answer(200, { id: 'v' }))
   assertEquals(await version.version('wrangler.toml', 'v'), { id: 'v' })
   assertEquals(sent, [
-    `${API}/accounts/acct/workers/scripts/yak-staging/deployments`,
-    `${API}/accounts/acct/workers/scripts/yak/versions/v`,
+    `https://api.cloudflare.com/client/v4/accounts/acct/workers/scripts/yak-staging/deployments`,
+    `https://api.cloudflare.com/client/v4/accounts/acct/workers/scripts/yak/versions/v`,
   ])
 })
 

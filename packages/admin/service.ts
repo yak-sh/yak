@@ -76,8 +76,6 @@ import {
   git,
   needGit,
   rowsIn,
-  serving,
-  shaIn,
   sourceOf,
   type Version,
   wrangler,
@@ -93,6 +91,7 @@ import {
 } from './usage.ts'
 import { ask, said as answered } from '@yaks/cloudflare/analytics'
 import { Unavailable } from '@yaks/cloudflare/api'
+import { serving, shaIn } from '@yaks/cloudflare/deployed'
 import { hooked, PENDING } from '@yaks/cloudflare/hook'
 
 /** How long the service waits between looks at main. */

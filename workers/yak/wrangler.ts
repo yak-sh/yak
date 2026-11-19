@@ -34,7 +34,15 @@ import {
   WRANGLER_VERSION,
 } from '@yaks/cloudflare/wrangler'
 import { WATCHED } from '@yaks/admin/watched'
-import { credentials, type Reads, reads } from './deployed.ts'
+import {
+  commits,
+  credentials,
+  envs,
+  messageOf,
+  type Reads,
+  reads,
+  sole,
+} from '@yaks/cloudflare/deployed'
 export { stale } from '@yaks/cli/dependencies'
 
 export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
@@ -410,33 +418,6 @@ export let preflight = async <T extends { remove: () => void }>(
   }
 }
 
-type Deployment = {
-  created_on: string
-  versions: { version_id: string; percentage: number }[]
-  annotations?: Record<string, string>
-}
-
-let singleServing = (deployments: unknown): Deployment | undefined => {
-  if (
-    !Array.isArray(deployments) ||
-    deployments.some((d) =>
-      !d || typeof d != 'object' || !Number.isFinite(Date.parse(d.created_on))
-    )
-  ) return
-  let latest =
-    deployments.toSorted((a, b) =>
-      Date.parse(b.created_on) - Date.parse(a.created_on)
-    )[0]
-  return Array.isArray(latest?.versions) && latest.versions.length == 1 &&
-      latest.versions[0]?.percentage == 100
-    ? latest
-    : undefined
-}
-
-let annotation = (release: { annotations?: Record<string, string> } | null) => {
-  let message = release?.annotations?.['workers/message']
-  return typeof message == 'string' ? message : ''
-}
 let INPUTS = /(?:\ninputs:[a-f0-9]{64}$|^inputs:[A-Za-z0-9_-]{43}(?:\n|$))/
 
 // All 256 bits fit in Cloudflare's 50-character deployment summary. Keep the
@@ -453,9 +434,9 @@ export let sameUpload = (
   deployments: unknown,
   version?: { id?: string; annotations?: Record<string, string> } | null,
 ): boolean => {
-  let live = singleServing(deployments)
+  let live = sole(deployments)
   if (!live) return false
-  let message = annotation(live)
+  let message = messageOf(live)
   let matches = (message: string) =>
     message.split('\n')[0] == siblingMessage(digest) ||
     message.endsWith(`\ninputs:${digest}`)
@@ -463,7 +444,7 @@ export let sameUpload = (
     (!INPUTS.test(message) &&
       typeof live.versions[0].version_id == 'string' &&
       version?.id == live.versions[0].version_id &&
-      matches(annotation(version ?? null)))
+      matches(messageOf(version ?? null)))
 }
 
 /** Read the full annotation only when the single serving summary lacks it.
@@ -474,10 +455,10 @@ export let sameServing = async (
   read: (id: string) => Promise<Parameters<typeof sameUpload>[2]>,
 ) => {
   let version: Parameters<typeof sameUpload>[2]
-  let current = singleServing(deployments)
+  let current = sole(deployments)
   if (
     current && typeof current.versions[0].version_id == 'string' &&
-    !INPUTS.test(annotation(current))
+    !INPUTS.test(messageOf(current))
   ) {
     try {
       version = await read(current.versions[0].version_id)
@@ -594,7 +575,7 @@ export let kernelStep = async (
       async (id) => await read.version('wrangler.toml', id, env) ?? null,
     )
   ) {
-    let { versions: [live] } = singleServing(deployments)!
+    let { versions: [live] } = sole(deployments)!
     console.log(
       `wrangler.toml: unchanged upload ${digest.slice(0, 12)} — ` +
         `deploying serving version ${live.version_id} under this commit`,
@@ -702,7 +683,7 @@ export let executor = async (
   if (typeof name != 'string') {
     throw Error('Executor config has no release name')
   }
-  if (!singleServing(await read(model))) {
+  if (!sole(await read(model))) {
     console.log(
       `${name}: no fully serving executor release; hosted calls remain inline`,
     )
@@ -1029,9 +1010,9 @@ export let prepareSibling = async (
           digest.slice(0, 12)
         } — already serving`,
       )
-      let current = singleServing(deployments)!
+      let current = sole(deployments)!
       let refresh = config != FRONT &&
-          annotation(current).split('\n')[0] == siblingMessage(digest)
+          messageOf(current).split('\n')[0] == siblingMessage(digest)
         ? undefined
         : [
           'versions',
@@ -1162,8 +1143,6 @@ let git = async (root: string, ...args: string[]) => {
   }).output()
   return { code: r.code, out: new TextDecoder().decode(r.stdout).trim() }
 }
-
-let SHA = /^[0-9a-f]{40}\b/
 
 // Fetches a commit a shallow clone lacks: its ancestry alone (`tree:0`), or
 // with its trees (`blob:none`) to compare it, never historical file contents.
@@ -1345,41 +1324,6 @@ export let guard = (
   }
 }
 
-// A command's `--env` arguments, as it wrote them.
-let envs = (args: string[]): string[] =>
-  args.flatMap((a, i) =>
-    a == '--env' || a == '-e'
-      ? [a, args[i + 1]]
-      : a.startsWith('--env=')
-      ? [a]
-      : []
-  )
-
-// The kernel's deployments in an environment, newest first; none unread.
-let deployments = async (env: string[]): Promise<Deployment[]> => {
-  let all = await cloudflare.deployments('wrangler.toml', env)
-  return (Array.isArray(all) ? all as Deployment[] : [])
-    .toSorted((a, b) => Date.parse(b.created_on) - Date.parse(a.created_on))
-}
-
-/** The commits the versions live now were deployed from, as the message this
- * door gives every version says (`--message` below), in the deploy's own
- * environment. Anything wrangler will not answer names no commit. */
-let serving = async (env: string[]): Promise<string[]> => {
-  let [now] = await deployments(env)
-  let annotated = SHA.exec(annotation(now ?? null))?.[0]
-  if (
-    now?.versions.length == 1 && now.versions[0].percentage == 100 && annotated
-  ) return [annotated]
-  let named = await Promise.all(
-    (now?.versions ?? []).filter((v) => v.percentage > 0).map(async (v) => {
-      let version = await cloudflare.version('wrangler.toml', v.version_id, env)
-      return SHA.exec(annotation(version ?? null))?.[0]
-    }),
-  )
-  return named.filter((sha) => sha != null)
-}
-
 if (import.meta.main) {
   let began = new Date()
   let started = performance.now()
@@ -1387,7 +1331,12 @@ if (import.meta.main) {
   let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let door = guarded
-    ? guard(() => seen(dir, readied.then(() => serving(envs(argv)))))
+    ? guard(() =>
+      seen(
+        dir,
+        readied.then(() => commits(cloudflare, 'wrangler.toml', envs(argv))),
+      )
+    )
     : undefined
   let inspect = async () => door ? await door.first() : true
   let still = async () => door ? await door.still() : true
