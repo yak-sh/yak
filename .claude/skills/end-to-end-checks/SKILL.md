@@ -104,6 +104,9 @@ waits for those background runs. `admin_deploys` as admin says what is live,
 `admin_errors` what broke, and a new failure reaches the tracker when it happens
 (M-37965). A live check of the platform runs in the agents' own space,
 `checks` (checks.yaks.app), as its owner `checks@bot.yak.sh`, and never as Jeff.
+It reads the rows the change wrote: a turn's `using{provider, model}` and
+`cost{dollars}` (`conversation_read --lines`), spend rows, the entities it
+changed. What a model says about itself is not evidence, so never ask it.
 
 ### Acting as checks
 

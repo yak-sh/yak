@@ -99,7 +99,8 @@ affected files without running unchanged consumers. There is no pre-land gate, n
 and no waiting for main's CI or a deploy: CI files a bug after a red run.
 Whatever it runs to check starts no other process: no probe server, no Chrome,
 no benchmark driving a server (M-132169, 18bc9a78). An end-to-end check runs in
-its own process (`end-to-end-checks`).
+its own process (`end-to-end-checks`). A live check reads the rows the change
+wrote, in `checks`; a brief never sends it into a person's conversation.
 
 **Tests worth having.** The behavior a new test must catch, or no new test at
 all. "Add a test" alone gets one that restates the code (M-39441).
