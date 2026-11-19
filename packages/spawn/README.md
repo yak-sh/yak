@@ -19,7 +19,7 @@ The task body is the agent's spec. Create it, optionally edit it, and spawn:
 ```sh
 yak task new "Fix the parser" --body @brief.md
 yak task update T-123 --body @revised-brief.md
-yak session spawn T-123 --provider codex --model gpt-6.1-sol --effort high
+yak session spawn T-123 --provider codex --model gpt-6.2-sol --effort high
 ```
 
 `--provider claude` uses Claude Code through the same lifecycle. Spawn takes the

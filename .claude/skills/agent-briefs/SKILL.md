@@ -151,7 +151,7 @@ Start it through the same tool for either CLI provider:
 ```text
 task_new({title: "<outcome>", project: "Task Graph", body: "<brief>"})
 task_update({task: "T-123", body: "<revised brief>"})
-session_spawn({task: "T-123", provider: "codex", model: "gpt-6.1-sol", effort: "high"})
+session_spawn({task: "T-123", provider: "codex", model: "gpt-6.2-sol", effort: "high"})
 ```
 
 The edit is optional. `provider: "claude"` selects Claude Code; `model` and

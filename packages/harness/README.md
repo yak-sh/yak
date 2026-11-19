@@ -327,12 +327,12 @@ the plan is used, and the step that records the reply keeps it. The session's
 first input records the choice and its reason, `using{provider, model, why}`,
 and keeps that model whatever the plans read later. The row's own `using`
 answers while no routed plan has a reading. This routes the default between
-GPT-6.1 Sol on the ChatGPT subscription and Opus 5.5 on Claude's:
+GPT-6.2 Sol on the ChatGPT subscription and Opus 5.5 on Claude's:
 
 ```sh
 yak graph apply --bundles '[
   {"entity": {"eid": "c7d76166-84c6-8e59-b1f0-ceedeb443c37"}, "provider": {"plan": "codex"}},
-  {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "64bd2270-26c0-825a-88be-b318e14d600b"}, "routes": {}},
+  {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "d0577d0c-2ad8-8862-8b11-9aa5796cebd8"}, "routes": {}},
   {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "b032077b-4a75-83d0-8580-7a1782959d1a"}, "routes": {}}]'
 ```
 

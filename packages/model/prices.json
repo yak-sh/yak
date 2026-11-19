@@ -1,6 +1,6 @@
 {
   "source": "https://openrouter.ai/api/v1/models",
-  "day": "2026-11-10",
+  "day": "2026-11-19",
   "prices": {
     "claude-fable-5": {
       "input": 10,
@@ -429,6 +429,34 @@
       "cache_write": 1.25,
       "web_search": 0.01
     },
+    "gpt-6.2-astra": {
+      "input": 8,
+      "output": 40,
+      "cached": 0.4,
+      "cache_write": 10,
+      "web_search": 0.01
+    },
+    "gpt-6.2-astra-pro": {
+      "input": 8,
+      "output": 40,
+      "cached": 0.4,
+      "cache_write": 10,
+      "web_search": 0.01
+    },
+    "gpt-6.2-sol": {
+      "input": 2,
+      "output": 10,
+      "cached": 0.1,
+      "cache_write": 2.5,
+      "web_search": 0.01
+    },
+    "gpt-6.2-sol-pro": {
+      "input": 2,
+      "output": 10,
+      "cached": 0.1,
+      "cache_write": 2.5,
+      "web_search": 0.01
+    },
     "gpt-audio": {
       "input": 2.5,
       "output": 10
@@ -449,9 +477,9 @@
       "cached": 0.075
     },
     "gpt-oss-20b": {
-      "input": 0.03,
-      "output": 0.13,
-      "cached": 0.03
+      "input": 0.018,
+      "output": 0.09,
+      "cached": 0.009
     },
     "gpt-oss-safeguard-20b": {
       "input": 0.075,

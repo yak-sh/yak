@@ -23,6 +23,9 @@ import { type Snapshot, snapshot } from '@yaks/context'
 import type { Model, Reply, Request } from '@yaks/model'
 import type { Bundle } from '@yaks/graph'
 
+/** The one model every candidate runs on, so results compare. */
+let required = 'gpt-6.2-sol'
+
 export type Condition = {
   id: string
   text: string
@@ -476,10 +479,10 @@ export async function run(packet: Packet, options: {
             options.native,
           )
           let modelId = source.find((b) =>
-            (b.model as { name?: string } | undefined)?.name == 'gpt-6.1-sol'
+            (b.model as { name?: string } | undefined)?.name == required
           )?.entity.eid
           if (!modelId) {
-            throw new Error('Snapshot must include gpt-6.1-sol; no downgrade')
+            throw new Error(`Snapshot must include ${required}; no downgrade`)
           }
           let binding = machines(host.graph)
           let nativeTools = options.native
@@ -492,7 +495,7 @@ export async function run(packet: Packet, options: {
             h: { g: host.graph, fx: host.fx, vocab: host.vocab, me: host.me },
             providers: { openai: model },
             provider: 'openai',
-            name: 'gpt-6.1-sol',
+            name: required,
             tools: nativeTools,
             requestItems: options.native
               ? (_, __, current) => skillItems(host.graph, current)
@@ -514,10 +517,10 @@ export async function run(packet: Packet, options: {
           }
           if (
             calls.some((call) =>
-              call.response && call.response.model != 'gpt-6.1-sol'
+              call.response && call.response.model != required
             )
           ) {
-            error = 'Returned model differs from required gpt-6.1-sol'
+            error = `Returned model differs from required ${required}`
           }
         } catch (e) {
           error = String(e)
@@ -528,7 +531,7 @@ export async function run(packet: Packet, options: {
         allCalls.push(...calls)
         results.push({
           caseId: c.id,
-          requestedModel: 'gpt-6.1-sol',
+          requestedModel: required,
           provider: 'openai',
           opening: packet.files
             ? 'frozen-packet'
@@ -552,7 +555,7 @@ export async function run(packet: Packet, options: {
           opening: packet.files
             ? 'frozen-packet'
             : options.opening ?? 'graph-only',
-          model: 'gpt-6.1-sol',
+          model: required,
           provider: 'openai',
           results,
           totals: totals(allCalls),
