@@ -844,11 +844,9 @@ installContext({
 // directory's effects leave, hold back no serving check (T-131212,
 // T-147454). A deleted entity's stamps and tombstone go with it.
 //
-// A sign-in code (`signin`) is an entity no copied line names: it is read only
-// where a code is asked for and spent (signin.ts), by the directory's own
-// query, never through the copy, and nothing points at one. So a write to
-// one, the stamps on it included, changes no answer the copy could give, and
-// asking, every guess and the burial a right one writes raise none (T-148651).
+// Sign-in codes (`signin`) and wrong guesses (`signin_miss`) are read only
+// by the directory when it issues or checks a code. Writing or deleting
+// these rows changes no answer the serving copy can give (T-148651).
 // Effect rows and their stamps likewise belong only to the pool; recording,
 // claiming and completing an errand change no copied authorization.
 // A stamp on any other entity is as fenced as what it stamps. Any other
@@ -869,7 +867,7 @@ installContext({
 // out to (`Unraised`). `$own` mints a person's space and seat
 // (facets/directory-graph.ts) whenever it is asked, so it fences from the
 // start.
-let UNNAMED = new Set(['signin', 'effect'])
+let UNNAMED = new Set(['signin', 'signin_miss', 'effect'])
 let STAMPS = new Set(PROVENANCE)
 let UNFENCED = new Set([
   ...RECEIPTS,

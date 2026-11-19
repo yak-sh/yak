@@ -1,18 +1,15 @@
 // The per-source ceilings on the anonymous doors (@yaks/workerd/rate, T-37884), held by
 // the Workers Rate Limiting bindings wrangler.toml declares. The kernel in
-// memory counts each address's minutes from its first request (testing.ts
-// `limiter`), so each door gets one burst sent at once from an address of its
-// own: one past the door's number, of which exactly one is turned away, and
-// then another address that is still let in.
+// memory starts each limit's minute at the first request (testing.ts
+// `limiter`). Each door gets one request past its allowance. Sign-in also
+// checks that a different IPv6 prefix has its own allowance.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { connector, kernel, seed, unique } from './probe.ts'
 
 let source = unique('rate').slice(-8)
-let from = (ip: string) => ({
-  'cf-connecting-ip': `2001:db8:${source.slice(0, 4)}:${
-    source.slice(4)
-  }::${ip}`,
+let from = (ip: string, prefix = source.slice(0, 4)) => ({
+  'cf-connecting-ip': `2001:db8:${prefix}:${source.slice(4)}::${ip}`,
 })
 
 let seen = async (r: Response) => ({
@@ -46,23 +43,27 @@ test(
         access: 'public',
       })
 
-      // Sign-in codes: five a minute from one place, whatever the address.
-      let login = (ip: string) =>
+      // Sign-in codes: five a minute shared by all addresses in one /48.
+      let login = (headers: Record<string, string>) =>
         k.at(k.host, '/login', {
           method: 'POST',
           headers: {
-            ...from(ip),
+            ...headers,
             'content-type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
             email: `${unique('rate')}@${k.host}`,
           }).toString(),
         }).then(seen)
-      let codes = await burst(6, () => login('198.51.100.1'))
-      let held = one(codes, (r) => r.status != 200)
+      let codes = await burst(5, () => login(from('198.51.100.1')))
+      assertEquals(codes.map((r) => r.status), [200, 200, 200, 200, 200])
+      let held = await login({
+        'cf-connecting-ip': `2001:db8:${source.slice(0, 4)}::2`,
+      })
       assertEquals(held.status, 429)
       assertStringIncludes(held.text, 'Too many codes')
-      assertEquals((await login('198.51.100.2')).status, 200)
+      let other = (parseInt(source.slice(0, 4), 16) ^ 1).toString(16)
+      assertEquals((await login(from('198.51.100.1', other))).status, 200)
 
       // OAuth client registration: ten a minute.
       let register = (ip: string) =>
