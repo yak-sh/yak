@@ -15,6 +15,7 @@ import {
   type Space,
 } from './directory.ts'
 import type { Meter } from '@yaks/platform/meter'
+import { STARTER } from '@yaks/platform/plans'
 import { analytics, platform } from './testing.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'
@@ -505,15 +506,16 @@ test("the admin's Invites page says who invited whom, when, and the month each f
 })
 
 test("the admin's Invites page says who was given the starter, when and to which space", () => {
+  let starter = `$${STARTER.toFixed(2)}`
   assertEquals(invites.starters, [
-    ['/admin/bo', 'Bo', '+12695550177', on('03'), 'bo', '$100.00', '$0.00'],
+    ['/admin/bo', 'Bo', '+12695550177', on('03'), 'bo', starter, '$0.00'],
     [
       '/admin/jeff',
       'Jeff',
       'jeff@x.com',
       on('01'),
       'jeff',
-      '$100.00',
+      starter,
       '$0.00',
     ],
   ])

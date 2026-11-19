@@ -10,6 +10,7 @@ import { test } from '@yaks/testing'
 import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from '@yaks/platform/meter'
+import { plans } from '@yaks/platform/standing'
 import { reserved, settled } from './model-spend.ts'
 import { type Tally, tallying } from './lib/hops.ts'
 
@@ -59,15 +60,16 @@ test('the pilot last answered call fits the remaining space budget', async () =>
   await hold.settle(hold.value.dollars)
   assertEquals(await pilot.used() <= 0.2, true)
   // What is left is said in words and points to the plans; the conversation
-  // that reads it names no amount.
+  // that reads it names no amount of the budget. The plans pointer may name
+  // the credit a subscription adds.
   let no = await assertRejects(
     () =>
       reserved(p.env, pilot.space, (left) => affordable(price, 100_000, left)),
     ModelError,
   )
-  assertStringIncludes(no.message, 'is too little for this call')
-  assertStringIncludes(no.message, 'Compare paid plans')
-  assertEquals(/\$\d/.test(no.message), false, no.message)
+  let said = no.message.replace(plans(pilot.space, {}), '')
+  assertEquals(said.trim().endsWith('is too little for this call.'), true, said)
+  assertEquals(/\$\d/.test(said), false, said)
 })
 
 test('model and realtime calls cannot reserve the same remaining dollars', async () => {
