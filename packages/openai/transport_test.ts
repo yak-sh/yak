@@ -351,23 +351,24 @@ test('responses scrubs failed-stream evidence and credential errors', async () =
   )
 })
 
-test('responses preserves an incomplete reason', async () => {
-  let client = responses({
-    credentials: auth(),
-    fetch: () =>
-      Promise.resolve(sse({
-        type: 'response.incomplete',
-        response: {
-          status: 'incomplete',
-          incomplete_details: { reason: 'max_output_tokens' },
-        },
-      })),
-  })
-  let error = await assertRejects(
-    () => client.run({ model: 'm', input: [] }),
-  ) as ResponseFault
-  assertEquals(error.message, 'responses: incomplete — max_output_tokens')
-  assertEquals(error.code, 'max_output_tokens')
+test('responses fails an incomplete response with its reason, unless it stopped at its output limit', async () => {
+  let run = (reason: string) =>
+    responses({
+      credentials: auth(),
+      fetch: () =>
+        Promise.resolve(sse({
+          type: 'response.incomplete',
+          response: {
+            model: 'm',
+            status: 'incomplete',
+            incomplete_details: { reason },
+          },
+        })),
+    }).run({ model: 'm', input: [] })
+  let error = await assertRejects(() => run('content_filter')) as ResponseFault
+  assertEquals(error.message, 'responses: incomplete — content_filter')
+  assertEquals(error.code, 'content_filter')
+  assertEquals((await run('max_output_tokens')).cut, true)
 })
 
 test('responses refreshes once on 401 and never returns credentials', async () => {

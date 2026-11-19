@@ -57,6 +57,8 @@ export type ResponseResult = {
   usage?: ResponseUsage
   response: Record<string, unknown>
   limits: RateLimits
+  /** The response stopped at `max_output_tokens`: its last item is unfinished. */
+  cut?: boolean
 }
 
 export type ResponseFault = Error & {
@@ -481,6 +483,7 @@ let terminal = async (
   let unknown: ResponseEvent[] = []
   let completed: Record<string, unknown> | undefined
   let ended: ResponseEvent | undefined
+  let cut = false
   for await (let parsed of frames(response.body)) {
     let frame =
       (secrets.length ? safe(parsed, secrets) : parsed) as ResponseEvent
@@ -495,10 +498,13 @@ let terminal = async (
       }
       items.push(item as ResponseItem)
     }
-    if (frame.type == 'response.completed') {
+    // A response stopped at its output limit is a reply cut short; one
+    // incomplete for any other reason failed.
+    let stopped = incomplete(frame) == 'max_output_tokens'
+    if (frame.type == 'response.completed' || stopped) {
+      cut = stopped
       completed = safe(frame.response, secrets)
-    }
-    if (
+    } else if (
       frame.type == 'response.failed' ||
       frame.type == 'response.incomplete' ||
       frame.type == 'error'
@@ -529,7 +535,9 @@ let terminal = async (
       ended,
     )
   }
-  if (completed.status != 'completed') throw failing('failed', completed)
+  if (completed.status != (cut ? 'incomplete' : 'completed')) {
+    throw failing('failed', completed)
+  }
   if (typeof completed.model != 'string') {
     throw fault(
       'malformed_stream',
@@ -544,6 +552,7 @@ let terminal = async (
     usage: usage(completed.usage),
     response: completed,
     limits: limits(response.headers),
+    ...cut ? { cut } : {},
   }
 }
 

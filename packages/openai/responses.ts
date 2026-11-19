@@ -387,7 +387,11 @@ let ask = (opts: Options) => {
       )
       if (receipt) await opts.receipts?.save({ ...receipt, reply })
       let limits = planLimits(out.limits, opts.account)
-      return limits.length ? { ...reply, limits } : reply
+      return {
+        ...reply,
+        ...out.cut ? { cut: true } : {},
+        ...limits.length ? { limits } : {},
+      }
     } catch (error) {
       // Invalid request history is a caller defect, not an operational refusal.
       // Keep the transport exception (including provider details) healable.

@@ -190,6 +190,37 @@ test('a streamed reply is read to its end', async () => {
   assertEquals((asked[0].body as { store: boolean }).store, false)
 })
 
+test('a reply stopped at its output limit is cut, its last call as far as written', async () => {
+  let { fetcher } = serving(
+    200,
+    sse(
+      {
+        type: 'response.output_item.done',
+        item: {
+          type: 'function_call',
+          call_id: 'k',
+          name: 'f',
+          arguments: '{"a',
+          status: 'incomplete',
+        },
+      },
+      {
+        type: 'response.incomplete',
+        response: {
+          id: 'r1',
+          model: 'm',
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+        },
+      },
+    ),
+  )
+  let reply = await responses({ credential: () => codex, fetch: fetcher })(req)
+  assertEquals([reply.cut, reply.items], [true, [
+    { kind: 'call', id: 'k', name: 'f', args: '{"a' },
+  ]])
+})
+
 test('the Codex endpoint is told which conversation a request continues', async () => {
   let done = sse({
     type: 'response.completed',
