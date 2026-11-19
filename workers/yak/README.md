@@ -1273,7 +1273,7 @@ it.
 
 The Operator runs on the first of config.ts `agents.operator` whose provider the
 Worker holds every credential of: `gpt-6.1-sol` on OpenAI when
-`OPENAI_OPERATOR_API_KEY` is set, `claude-sonnet-5-5` on Anthropic when
+`OPENAI_OPERATOR_API_KEY` is set, `claude-opus-5-5` on Anthropic when
 `ANTHROPIC_API_KEY` is, and otherwise `@cf/zai-org/glm-5.3` on Workers AI;
 `OPERATOR_MODEL` names another model of the provider chosen. Each is served by a
 plugin config.ts `operatorProviders` names, lent the platform's transport and
@@ -1282,38 +1282,42 @@ keys (providers.ts); no layer imports a provider. Its OpenAI is always on
 models. Image generation and app model calls keep their existing credentials. An
 input asking another model gets it where the Operator's provider lists it, and
 the Operator's own otherwise. The model must have a price, from its provider's
-list or @yaks/model's. With a delegate (`gpt-6-astra` on OpenAI,
-`claude-opus-5-5` on Anthropic), a conversation and its forks have `spawn`,
-whose description sends writing or fixing code and tasks that need careful
-reasoning to `OPERATOR_DELEGATE` (the delegate by default) in a child session
-working for the same space and charged to it; the child's answer comes back to
-the session that asked, and the child is offered no `spawn` of its own. This
-entry accepts text. Picture attachments and the email, chat and SMS interfaces
-are separate work. Interrupted requests remain in the graph and can be continued
-explicitly; they do not resume automatically.
+list or @yaks/model's. With a delegate (`gpt-6-astra` on OpenAI; Opus has none),
+a conversation and its forks have `spawn`, whose description sends writing or
+fixing code and tasks that need careful reasoning to `OPERATOR_DELEGATE` (the
+delegate by default) in a child session working for the same space and charged
+to it; the child's answer comes back to the session that asked, and the child is
+offered no `spawn` of its own. This entry accepts text. Picture attachments and
+the email, chat and SMS interfaces are separate work. Interrupted requests
+remain in the graph and can be continued explicitly; they do not resume
+automatically.
 
-A platform admin who owns a space with a tunnel is answered by their own machine
-instead (operator.ts `machineFor`, the one place that says admins only): words
-of theirs that name no model record `using{provider: machine, model}`, the first
-model config.ts `agents.machine` names. The provider `machine`
-(`provider{name, transport: 'machine'}`) is @yaks/model's forwarding provider
-over the space's tunnel (tunnel.ts `machine`), so each step is a POST to
-`/model/step` on the machine, which answers it from the providers its own config
-serves, by the model's name. The space is charged nothing for such a step, and
-no price is asked for its model. Anyone else's turn in the same space (a
-member's, a stranger's text, a form) runs on the hosted model as before, and so
-do words that name their own model, as a call's do. `operator_chat` takes
-`provider: "machine"` with a `model` from the machine's owner alone. The machine
-answers only the conversation itself: what it starts (a `fork`, a `spawn`, a
-`helper_spawn` naming no `machine`) runs on the hosted model as every Operator's
-helpers do, the stronger one where it asked the machine for its stronger one
-(operator.ts `children`, @yaks/session `ChildLimits.using`), and the space pays
-for it. A helper runs on the machine only where `helper_spawn` names it.
+A platform admin who owns a space with a tunnel can choose to be answered by
+their own machine instead (operator.ts `machineFor`, the one place that says
+admins only). The choice is the space persona's `using{provider, model}` naming
+the provider `machine`; no persona names it unless its owner sets it, so by
+default their Operator runs on the hosted model like everyone's. Once chosen,
+words of theirs that name no model record `using{provider: machine, model}`, the
+model the persona names, else the first config.ts `agents.machine` names. The
+provider `machine` (`provider{name, transport: 'machine'}`) is @yaks/model's
+forwarding provider over the space's tunnel (tunnel.ts `machine`), so each step
+is a POST to `/model/step` on the machine, which answers it from the providers
+its own config serves, by the model's name. The space is charged nothing for
+such a step, and no price is asked for its model. Anyone else's turn in the same
+space (a member's, a stranger's text, a form) runs on the hosted model as
+before, and so do words that name their own model, as a call's do.
+`operator_chat` takes `provider: "machine"` with a `model` from the machine's
+owner alone. The machine answers only the conversation itself: what it starts (a
+`fork`, a `spawn`, a `helper_spawn` naming no `machine`) runs on the hosted
+model as every Operator's helpers do, the stronger one where it asked the
+machine for its stronger one (operator.ts `children`, @yaks/session
+`ChildLimits.using`), and the space pays for it. A helper runs on the machine
+only where `helper_spawn` names it.
 
 A step the machine fails before its first output (the tunnel or the machine does
 not answer, a provider's allowance is spent, a provider takes no such input) is
-asked of the next model `agents.machine` names, which is the machine's other
-provider, and then of the hosted model, which the space pays for
+asked of the next model `agents.machine` names, where it names another provider
+of the machine's, and then of the hosted model, which the space pays for
 (operator-machine.ts `falling`). Every step asks the machine first, so nothing
 needs resetting once it is back. The first step of a conversation that falls to
 the hosted model writes a line there (`operator_hosted{code}`) telling the model

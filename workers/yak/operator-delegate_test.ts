@@ -15,11 +15,11 @@ import { sentRows } from './operator-testing.ts'
 import { transcript } from '@yaks/session'
 import { PART } from '@yaks/persona'
 
-// On Claude the Operator runs on Sonnet and hands code to Opus in a child
-// session: each ask is priced at its own model's price.
-let SONNET = 'claude-sonnet-5-5'
-let OPUS = 'claude-opus-5-5'
-let price = (name: string) => ({ input: name == OPUS ? 4 : 2, output: 0 })
+// The Operator runs on Sol and hands code to Astra in a child session: each
+// ask is priced at its own model's price.
+let SOL = 'gpt-6.1-sol'
+let ASTRA = 'gpt-6-astra'
+let price = (name: string) => ({ input: name == ASTRA ? 4 : 2, output: 0 })
 let asked: Request[] = []
 // The child's answer comes back as words given to the session that asked.
 let said = (r: Request) =>
@@ -27,17 +27,17 @@ let said = (r: Request) =>
 let model: Model = Object.assign(
   (req: Request) => {
     asked.push(req)
-    let items: Item[] = req.model == OPUS
+    let items: Item[] = req.model == ASTRA
       ? [{ kind: 'assistant', text: 'Fixed.' }]
       : said(req)
-      ? [{ kind: 'assistant', text: 'Opus fixed the page.' }]
+      ? [{ kind: 'assistant', text: 'Astra fixed the page.' }]
       : req.items.some((i) => i.kind == 'result')
-      ? [{ kind: 'assistant', text: 'Opus is on it.' }]
+      ? [{ kind: 'assistant', text: 'Astra is on it.' }]
       : [{
         kind: 'call',
         id: crypto.randomUUID(),
         name: 'spawn',
-        args: JSON.stringify({ prompt: 'Fix the page', model: OPUS }),
+        args: JSON.stringify({ prompt: 'Fix the page', model: ASTRA }),
       }]
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -53,8 +53,10 @@ let model: Model = Object.assign(
 )
 
 let owner = crypto.randomUUID()
-// The platform holds Anthropic's key, so the Operator is on Claude.
-let { env } = platform('operator-claude', { ANTHROPIC_API_KEY: 'probe' })
+// The platform holds the Operator's OpenAI key, so the Operator is on Sol.
+let { env } = platform('operator-delegate', {
+  OPENAI_OPERATOR_API_KEY: 'probe',
+})
 let dir = directoryOf(env.STORE)
 let id = await dir.mint(owner, 'claude', 'Claude', {
   'x-yak-person': owner,
@@ -62,7 +64,7 @@ let id = await dir.mint(owner, 'claude', 'Claude', {
 })
 let space = (await dir.at(id))!
 let store = operatorMemory()
-let out = await operating(store, env, { model, name: SONNET })
+let out = await operating(store, env, { model, name: SOL })
   .ask({ person: owner }, space, {
     say: 'The page is broken; fix it.',
   })
@@ -73,23 +75,23 @@ let entries = async (session: string) =>
     b.cost ? [(b.cost as { dollars: number }).dollars] : []
   )
 
-test('on Claude the Operator hands code to Opus, which works for its space at its own price', async () => {
+test('the Operator hands code to Astra, which works for its space at its own price', async () => {
   assertEquals(
     child.operator_session,
     (await store.g.get([out.session]))[0].operator_session,
   )
   let on = (name: string) => asked.filter((r) => r.model == name)
-  let [opus] = on(OPUS)
-  assertEquals(on(OPUS).length, 1)
-  // Told where spawn is given, which the helper on Opus is not.
+  let [astra] = on(ASTRA)
+  assertEquals(on(ASTRA).length, 1)
+  // Told where spawn is given, which the helper on Astra is not.
   assertStringIncludes(
-    on(SONNET)[0].tools.find((t) => t.name == 'spawn')!.description,
-    `spawn with model ${OPUS}`,
+    on(SOL)[0].tools.find((t) => t.name == 'spawn')!.description,
+    `spawn with model ${ASTRA}`,
   )
-  assertEquals(opus.tools.some((t) => t.name == 'spawn'), false)
+  assertEquals(astra.tools.some((t) => t.name == 'spawn'), false)
   // The child's answer wakes the session that asked, once.
-  assertEquals(on(SONNET).filter(said).length, 1)
-  assertEquals(said(on(SONNET).at(-1)!), true)
+  assertEquals(on(SOL).filter(said).length, 1)
+  assertEquals(said(on(SOL).at(-1)!), true)
   assertEquals(await entries(child.entity.eid), [0.004])
   assertEquals((await entries(out.session)).every((d) => d == 0.002), true)
 })
@@ -128,7 +130,7 @@ test('the conversation shows the context the Operator and each helper were given
       .innerHTML
   let whoOf = (m: string) =>
     first(m).instructions!.split(' Who you are\n')[1].split(PART)[0].trim()
-  for (let [d, m] of [[operator, SONNET], [helper, OPUS]] as const) {
+  for (let [d, m] of [[operator, SOL], [helper, ASTRA]] as const) {
     let all = layers(d)
     assertEquals(
       [all[0], ...all.slice(-3)].map(named),
@@ -152,13 +154,13 @@ test('the conversation shows the context the Operator and each helper were given
     let who = all.find((l) => named(l) == 'Who you are')!
     assertEquals(
       shown(who),
-      d == helper && whoOf(m) == whoOf(SONNET)
+      d == helper && whoOf(m) == whoOf(SOL)
         ? 'The same as above.'
         : drawn(whoOf(m)),
     )
   }
   // Each tool is drawn once on the page, where it was first offered.
-  let offers = [SONNET, OPUS].flatMap((m) =>
+  let offers = [SOL, ASTRA].flatMap((m) =>
     first(m).tools.map((t) => JSON.stringify(t))
   )
   assertEquals(
@@ -166,7 +168,7 @@ test('the conversation shows the context the Operator and each helper were given
     new Set(offers).size,
   )
   // Each tool by its name, opening on its description and its schema.
-  let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
+  let spawn = first(SOL).tools.find((t) => t.name == 'spawn')!
   let tool = layers(layers(operator).at(-1)!).find(
     (d) => named(d) == 'spawn',
   )!
@@ -200,14 +202,14 @@ test('the conversation shows the context the Operator and each helper were given
 let REFUSED = 'What is left of claude’s model and voice budget is too little'
 let talked = async (refused: boolean) => {
   let store = operatorMemory()
-  let opus: Model = Object.assign(
+  let astra: Model = Object.assign(
     (req: Request) =>
-      refused && req.model == OPUS
+      refused && req.model == ASTRA
         ? Promise.reject(new ModelError('limit', REFUSED))
         : model(req),
     { info: model.info },
   )
-  let { session } = await operating(store, env, { model: opus, name: SONNET })
+  let { session } = await operating(store, env, { model: astra, name: SOL })
     .ask({ person: owner }, space, { say: 'The page is broken; fix it.' })
   await drain(store)
   let { html } = await conversationOf(
@@ -273,7 +275,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
     r.items.filter((i) => i.kind == 'user' && i.text.endsWith(REFUSED)).length
   let three: Model = Object.assign(
     (req: Request) => {
-      if (req.model == OPUS) {
+      if (req.model == ASTRA) {
         return Promise.reject(new ModelError('limit', REFUSED))
       }
       parent = req.conversation
@@ -283,7 +285,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
           kind: 'call',
           id: crypto.randomUUID(),
           name: 'spawn',
-          args: JSON.stringify({ prompt: 'Fix an app', model: OPUS }),
+          args: JSON.stringify({ prompt: 'Fix an app', model: ASTRA }),
         }))
       return Promise.resolve({
         id: crypto.randomUUID(),
@@ -294,7 +296,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
     },
     { info: model.info },
   )
-  let { session } = await operating(store, env, { model: three, name: SONNET })
+  let { session } = await operating(store, env, { model: three, name: SOL })
     .ask({ person: owner }, space, { say: 'Fix every app with errors.' })
   await drain(store)
   assertEquals(

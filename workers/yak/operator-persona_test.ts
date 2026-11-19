@@ -19,7 +19,9 @@ import { PRICE } from '@yaks/platform/plans'
 
 let owner = crypto.randomUUID()
 // The platform holds Anthropic's key, so the Operator is on Claude.
-let { env } = platform('operator-persona', { ANTHROPIC_API_KEY: 'probe' })
+let { env } = platform('operator-persona', {
+  OPENAI_OPERATOR_API_KEY: 'probe',
+})
 let dir = directoryOf(env.STORE)
 let id = await dir.mint(owner, 'home', 'Home', {
   'x-yak-person': owner,
@@ -119,7 +121,7 @@ test('the guidance is a doc in the directory: an edit reaches the next turn', ()
 
 test("a tool's guidance is where the tool is given", () => {
   let spawn = first.tools.find((t) => t.name == 'spawn')!
-  assertStringIncludes(spawn.description, 'use spawn with model claude-opus')
+  assertStringIncludes(spawn.description, 'use spawn with model gpt-6-astra')
   assert(!String(first.instructions).includes('use spawn with model'))
   let update = first.tools.find((t) => t.name == 'task_update')!
   assert(!update.description.includes('carries on that task'))

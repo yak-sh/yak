@@ -396,21 +396,14 @@ export let agents: {
   builder: 'workers-ai',
   operator: [
     { provider: 'openai', model: 'gpt-6.1-sol', delegate: 'gpt-6-astra' },
-    {
-      provider: 'anthropic',
-      model: 'claude-sonnet-5-5',
-      delegate: 'claude-opus-5-5',
-    },
+    { provider: 'anthropic', model: 'claude-opus-5-5' },
     { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3' },
   ],
-  // What an Operator asks its person's own machine for (operator-machine.ts):
-  // a model for each provider a machine lends, by the model's own name, in
-  // the order asked, with the stronger model of that provider. The machine
-  // says which of its providers answers each.
-  machine: [
-    { model: 'sonnet', delegate: 'claude-opus-5-5' },
-    { model: 'gpt-6-sol', delegate: 'gpt-6-astra' },
-  ],
+  // What an Operator asks its person's own machine for, where they chose it
+  // (operator-machine.ts): a model for each provider a machine lends, by the
+  // model's own name, in the order asked, with the stronger model of that
+  // provider. The machine says which of its providers answers each.
+  machine: [{ model: 'gpt-6-sol', delegate: 'gpt-6-astra' }],
 }
 
 /** What the Operator makes pictures with (operator-images.ts): a provider

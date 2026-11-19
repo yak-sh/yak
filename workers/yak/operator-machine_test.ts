@@ -1,6 +1,7 @@
 // An Operator's steps on its person's own machine: a platform admin who owns
-// a space with a tunnel is answered by the machine behind it, through a stub
-// gateway, and everyone else in the space by the hosted model.
+// a space with a tunnel, and chose their machine, is answered by the machine
+// behind it, through a stub gateway, and everyone else in the space by the
+// hosted model.
 import { line as q } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
@@ -16,6 +17,7 @@ import type { Env } from './env.ts'
 import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating, operatorChoice } from './operator.ts'
+import { personaFor } from './operator-persona.ts'
 
 // The machine: what it was asked for, the models it has no allowance left for
 // (`spent`), and whether its tunnel's gateway reaches it (`up`).
@@ -93,6 +95,7 @@ let on = (provider: string, model: string) => ({
   model: identityEid('model', [model]),
 })
 let HOSTED = on(operatorChoice(env).provider, paid.name)
+let [lent] = agents.machine
 
 // One turn: what the machine and the hosted model were asked, the model its
 // input names, what it was answered, and what its entries cost the space.
@@ -119,12 +122,28 @@ let turn = async (
   }
 }
 
-test('an admin’s turn in the space whose tunnel is theirs is answered by their machine, and the space is charged nothing', async () => {
+test('an admin’s turn in the space whose tunnel is theirs is answered by the hosted model until they choose their machine', async () => {
   let t = await turn(jeff)
-  assertEquals(t.box, ['sonnet'])
+  assertEquals([t.box, t.hosted, t.using], [[], 1, HOSTED])
+  // Their space's persona names the machine, and every turn after is its.
+  let using = on('machine', lent.model)
+  await store.g.apply([
+    { entity: { eid: using.provider }, provider: { name: 'machine' } },
+    {
+      entity: { eid: using.model },
+      model: { name: lent.model, offered: false },
+      pending: {},
+    },
+    { entity: { eid: personaFor(eid) }, using },
+  ], { trusted: true })
+})
+
+test('an admin’s turn in the space whose tunnel is theirs, once chosen, is answered by their machine, and the space is charged nothing', async () => {
+  let t = await turn(jeff)
+  assertEquals(t.box, [lent.model])
   assertEquals(t.hosted, 0)
-  assertEquals(t.using, on('machine', 'sonnet'))
-  assertEquals(t.said, { body: "the machine's sonnet" })
+  assertEquals(t.using, on('machine', lent.model))
+  assertEquals(t.said, { body: `the machine's ${lent.model}` })
   // A machine lends its providers to its owner's Operator, and no app.
   assertEquals(callers, ['operator'])
   assertEquals(t.cost, 0)
@@ -140,14 +159,13 @@ test('a member’s turn in the same space is answered by the hosted model, which
   assertEquals(t.cost > 0, true)
 })
 
-test('a provider out of allowance passes the step to the machine’s other provider', async () => {
-  spent = ['sonnet']
+test('a machine out of allowance passes the step to the hosted model', async () => {
+  spent = [lent.model]
   let t = await turn(jeff)
   spent = []
-  assertEquals(t.box, ['sonnet', 'gpt-6-sol'])
-  assertEquals(t.hosted, 0)
-  assertEquals(t.said, { body: "the machine's gpt-6-sol" })
-  assertEquals([t.cost, t.told], [0, []])
+  assertEquals([t.box, t.hosted], [[lent.model], 1])
+  assertEquals(t.said, { body: 'the hosted model' })
+  assertEquals(t.cost > 0, true)
 })
 
 test('a machine that is off passes each step to the hosted model, which is told to say so once, until the machine answers again', async () => {
@@ -158,7 +176,7 @@ test('a machine that is off passes each step to the hosted model, which is told 
   up = false
   let first = await turn(jeff)
   assertEquals([first.box, first.hosted], [[], 1])
-  assertEquals(first.using, on('machine', 'sonnet'))
+  assertEquals(first.using, on('machine', lent.model))
   assertEquals(first.said, { body: 'the hosted model' })
   assertEquals(first.cost > 0, true)
   assertEquals([first.told, told()], [[false], 1])
@@ -168,7 +186,7 @@ test('a machine that is off passes each step to the hosted model, which is told 
   assertEquals([second.hosted, second.told, told()], [1, [false], 1])
   up = true
   let back = await turn(jeff)
-  assertEquals([back.box, back.hosted, back.told], [['sonnet'], 0, [true]])
+  assertEquals([back.box, back.hosted, back.told], [[lent.model], 0, [true]])
   up = false
   assertEquals((await turn(jeff)).told, [true, false])
   up = true

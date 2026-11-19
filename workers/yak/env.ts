@@ -299,8 +299,8 @@ export type Env = {
   OPERATOR_MODEL?: string
   // Claude for the Operator and builders (providers.ts): the platform's
   // Anthropic key, for product use only. With it and without
-  // OPENAI_OPERATOR_API_KEY the Operator runs on Sonnet and hands coding to
-  // OPERATOR_DELEGATE (Opus by default).
+  // OPENAI_OPERATOR_API_KEY the Operator runs on Opus, handing coding to
+  // OPERATOR_DELEGATE where one is set.
   ANTHROPIC_API_KEY?: string
   OPERATOR_DELEGATE?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container

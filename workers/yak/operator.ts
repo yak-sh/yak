@@ -715,8 +715,8 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
 /** What the Operator runs on (config.ts `agents`): the first choice whose
  * provider the Worker holds every credential of, by default GPT-6.1 Sol on
  * the Operator's OpenAI key, handing coding and tricky work to GPT-6 Astra;
- * without that key Sonnet on the platform's Anthropic key, handing it to
- * Opus; and without either GLM on Workers AI. `OPERATOR_MODEL` and
+ * without that key Opus on the platform's Anthropic key; and without either
+ * GLM on Workers AI. `OPERATOR_MODEL` and
  * `OPERATOR_DELEGATE` name other models of the provider chosen. */
 export let operatorChoice = (env: Env, machine = false) => {
   // On its person's own machine ({@link machineFor}) it asks for the first
@@ -745,7 +745,10 @@ export let operatorChoice = (env: Env, machine = false) => {
  * Operator is served by a machine (D-153799). Everyone else's turn in the
  * same space, a member's or a stranger's, is answered by a hosted model: an
  * Operator has the permissions of the person it is talking with, and a
- * subscription is its owner's alone.
+ * subscription is its owner's alone. Even for them the machine answers only
+ * words that name it, or every turn where their space's persona chose it
+ * (`using{provider: machine}`); otherwise their Operator runs on the hosted
+ * model as everyone's does.
  */
 export let machineFor = async (
   env: Env,
@@ -1121,11 +1124,25 @@ export let operating = (
   // Whether a machine serves this person in this space.
   let servedTo = (held: Asker, space: Space) => async () =>
     !!await reachMachine(space, held.person)
+  // The model a machine answers this person's words with before any other,
+  // where the space's persona chose its owner's machine (`using` naming the
+  // provider `machine`) and a machine serves them: the model `using` names,
+  // else the first `agents.machine` lends. No persona chooses it unless its
+  // owner sets it, so every Operator answers on the hosted model.
+  let firstTo = (held: Asker, space: Space) => async () => {
+    let [row] = await g.get([personaFor(space.eid)], ['using'])
+    let using = comp(row, 'using')
+    if (using?.provider != machined) return undefined
+    if (!await reachMachine(space, held.person)) return undefined
+    let [named] = using.model ? await g.get([String(using.model)]) : []
+    return String(comp(named, 'model')?.name ?? mine.name)
+  }
   let reads: Operator['reads'] = async (model, from, held, space) => {
     let selected = await chosen(
       model,
       from,
       held && space ? servedTo(held, space) : undefined,
+      held && space ? firstTo(held, space) : undefined,
     )
     return modelReads(implementations[selected.provider], selected.model)
   }
@@ -1188,15 +1205,16 @@ export let operating = (
   // An explicitly selected provider/model must be available; legacy channels
   // naming an unavailable model of the default provider retain their fallback.
   // Words that name neither are answered on the person's own machine where
-  // one serves them (`served`), and only they may name it.
+  // they chose it and it serves them (`first`), and only they may name it
+  // (`served`).
   let chosen = async (
     model?: string,
     asked?: string,
     served?: () => Promise<boolean>,
+    first?: () => Promise<string | undefined>,
   ) => {
-    if (!model && !asked && await served?.()) {
-      return { provider: MACHINE, model: mine.name }
-    }
+    let own = !model && !asked ? await first?.() : undefined
+    if (own) return { provider: MACHINE, model: own }
     let from = asked ?? provider
     if (from == MACHINE && !await served?.()) {
       throw refuse(
@@ -2077,7 +2095,12 @@ export let operating = (
     asked?: string,
     from?: string,
   ) => {
-    let selected = await chosen(asked, from, servedTo(held, space))
+    let selected = await chosen(
+      asked,
+      from,
+      servedTo(held, space),
+      firstTo(held, space),
+    )
     await base()
     await g.apply([
       ...await spaced(g.storage, space, env),
@@ -2345,6 +2368,7 @@ export let operating = (
           asked.model,
           asked.provider,
           servedTo(held, space),
+          firstTo(held, space),
         )
         if (asked.model && selected.model != asked.model) {
           throw await unknown(asked.model, selected.provider)
