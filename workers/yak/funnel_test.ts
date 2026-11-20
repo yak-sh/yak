@@ -254,7 +254,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     )
     // Each build begun on 2026-11-20 by somebody signed in, written before
     // the step said so, is read as theirs.
-    let signed = [1795150492, 1795151879].map((t) =>
+    let signed = [1795150492, 1795151880].map((t) =>
       `blob2 = 'started' AND timestamp = toDateTime(${t})`
     ).join(' OR ')
     assertStringIncludes(

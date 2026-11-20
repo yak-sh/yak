@@ -269,7 +269,7 @@ export let MISCOUNTED = [
  * at: U-334's two of 2026-11-20. A point is never rewritten, so these are read
  * as `started_signed_in` (`STEP`). Once they are further back than a step is
  * kept, they go. */
-export let SIGNED_IN = ['2026-11-20T04:54:52Z', '2026-11-20T05:17:59Z'] as const
+export let SIGNED_IN = ['2026-11-20T04:54:52Z', '2026-11-20T05:18:00Z'] as const
 
 // Which step a point is: the step it was written as, or `started_signed_in`
 // for one in SIGNED_IN.
