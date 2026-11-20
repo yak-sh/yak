@@ -52,7 +52,12 @@ jobs:
         working-directory: native
         run: |
           # Offline: an anonymous manifest, since the runner is signed in to no
-          # Expo account to sign one for this project with.
+          # Expo account to sign one for this project with. Expo Go asks for
+          # the manifest twice at once, and both asks write the CLI's missing
+          # code-signing settings file, one failing; it is written first here.
+          project=$(python3 -c 'import json; print(json.load(open("app.json"))["expo"]["extra"]["eas"]["projectId"])')
+          mkdir -p ~/.expo/codesigning/$project
+          echo '{}' > ~/.expo/codesigning/$project/development-code-signing-settings-2.json
           CI=1 nohup npx expo start --port 8081 --go --offline > "$RUNNER_TEMP/metro.log" 2>&1 &
           until curl -fsS http://127.0.0.1:8081/status; do sleep 2; done
           # The bundle before Expo Go asks for it, so the flow does not wait on
