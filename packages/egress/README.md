@@ -43,6 +43,13 @@ Before a sentinel is swapped:
 Anything else throws `Refused` (`Capped`, for a link at its cap), and nothing is
 sent. A request carrying no sentinel goes out as it came.
 
+A host that sends through a connection itself, as a pool of tools runs a
+connection's `request` or a built-in integration's tool for an app's code, asks
+the same of the call with `admit(host, caller, connection)`: it throws `Refused`
+or `Capped` by these rules, and counts the call on the link once admitted.
+`usable(ctx, caller)` lists the connections the app uses that the caller may
+call out through, each with its link and sentinels.
+
 A pasted key goes in as it is kept. An access token is refreshed first when it
 is about to expire, and when the service refuses it (401) the call is made once
 more with a refreshed one. A grant the service refuses marks the connection

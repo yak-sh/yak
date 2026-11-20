@@ -37,6 +37,7 @@ import {
   keyed,
   known,
   refresh,
+  type Resolved,
   used,
   USES,
 } from '@yaks/connections'
@@ -155,6 +156,38 @@ let destination = (hosts: readonly string[], url: URL, name: string) => {
   }
 }
 
+// Whether the caller may call out through a link: a person's own connection
+// is theirs to spend (`used` found it for them alone); a shared one asks what
+// the caller holds on the app.
+let may = (r: Resolved, caller: Caller) => {
+  let l = comp(r.link, USES)
+  return l.each == true || callsOut(l.anyone == true, caller.level)
+}
+
+// One connection the app uses, checked for a call by the caller: whether they
+// may call out through it, where the call goes, and the cap on its link.
+let admitted = async (
+  c: Ctx,
+  caller: Caller,
+  r: Resolved,
+  month: string,
+  url?: URL,
+) => {
+  let name = String(comp(r.connection, CONNECTION).integration)
+  if (!may(r, caller)) {
+    throw new Refused(`the caller may not call out through ${name}`)
+  }
+  let i = await known(c.graph.read, name)
+  let hosts = i?.hosts ?? []
+  if (url) destination(hosts, url, name)
+  let cap = capOf(r.link)
+  if (cap != null && spent(r.link, month) >= cap) {
+    let owner = String(comp(r.connection, CONNECTION).owner)
+    throw new Capped(owner, name, i?.title || name, cap)
+  }
+  return { name, hosts, oauth: !keyed(i!), link: r.link.entity.eid }
+}
+
 // The connections the caller may use. A request checks its destination before
 // reading credentials; a host grant lends its allowed destinations with them.
 let check = async (
@@ -173,26 +206,11 @@ let check = async (
       )
     }
     let eid = r.connection.entity.eid
-    let name = String(comp(r.connection, CONNECTION).integration)
-    // A person's own connection is theirs to spend (`used` found it for them
-    // alone); a shared one asks what the caller holds on the app.
-    let l = comp(r.link, USES)
-    if (!l.each && !callsOut(l.anyone == true, caller.level)) {
-      throw new Refused(`the caller may not call out through ${name}`)
-    }
-    let i = await known(c.graph.read, name)
-    let hosts = i?.hosts ?? []
-    if (url) destination(hosts, url, name)
-    let cap = capOf(r.link)
-    if (cap != null && spent(r.link, month) >= cap) {
-      let owner = String(comp(r.connection, CONNECTION).owner)
-      throw new Capped(owner, name, i?.title || name, cap)
-    }
+    let { name, ...hit } = await admitted(c, caller, r, month, url)
     let field = Object.keys(r.sentinels).find((f) => r.sentinels[f] == sentinel)
     let value = await credential(c, eid, field)
     if (!value) throw new Refused(`${name} holds no credential`)
-    let link = r.link.entity.eid
-    return { eid, sentinel, value, hosts, oauth: !keyed(i!), link }
+    return { eid, sentinel, value, ...hit }
   }))
 }
 
@@ -206,6 +224,34 @@ let count = (c: Host, hits: readonly Hit[], month: string) => {
   c.defer(async () =>
     await c.graph.apply(calling(hits.map((h) => h.link), month))
   )
+}
+
+/** The connections the caller's app uses that the caller may call out
+ * through, each with its link and sentinels: what the app's code may send
+ * through as this caller. */
+export let usable = async (c: Ctx, caller: Caller): Promise<Resolved[]> =>
+  (await used(c, caller.app, caller.person)).filter((r) => may(r, caller))
+
+/** Admit one call through `connection` for a caller, by the rules
+ * {@link forward} holds a sentinel to: refused where the app does not use it,
+ * the caller may not call out through it, or its link's cap is spent, and
+ * counted on the link once admitted. For a host that sends through the
+ * connection itself (@yaks/connections `call`), or runs a tool that does. */
+export let admit = async (
+  c: Host,
+  caller: Caller,
+  connection: Eid,
+): Promise<void> => {
+  let r = (await used(c, caller.app, caller.person))
+    .find((r) => r.connection.entity.eid == connection)
+  if (!r) {
+    throw new Refused(
+      `${caller.app} uses no connected connection ${connection}`,
+    )
+  }
+  let month = now(c)
+  let { link } = await admitted(c, caller, r, month)
+  c.defer(async () => await c.graph.apply(calling([link], month)))
 }
 
 /** Authorize only the requested sentinels for a vouched caller. Credentials

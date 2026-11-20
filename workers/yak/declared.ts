@@ -63,6 +63,8 @@ import {
   requests,
 } from '@yaks/connections'
 import { ctxOf } from './connections.ts'
+import { admit, type Caller, Refused, usable } from '@yaks/egress'
+import { egressOf } from './outbound.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
@@ -139,15 +141,45 @@ let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
 // Whose connections a caller sends through: their own where the channel
 // reaches the person's sources (connected-mcp.ts `reaches`), and a space's
 // for its owner in a context naming that space. An app's code sends through
-// the ones its person granted it, which are that person's own.
+// those the app uses that its caller may call out through (`usable`): the
+// connections its space allowed it and those its person granted it.
 let owners = async (ctx: Ctx): Promise<string[]> => {
-  if (ctx.app) return [ctx.person]
+  if (ctx.app) {
+    return (await usable(ctxOf(ctx.env), callerOf(ctx, ctx.app)))
+      .map((r) => String((r.connection[CONNECTION] as Comp).owner))
+  }
   let named = ctx.who?.spaceEid ??
     (ctx.who?.space ? (await ctx.dir.space(ctx.who.space))?.eid : undefined)
   let space = named &&
     await ctx.dir.role({ eid: named }, ctx.person) == 'owner'
   return [...reaches(ctx) ? [ctx.person] : [], ...space ? [named!] : []]
 }
+
+// The app's code calling, as the egress vouches for it: the person using the
+// app and what they hold on it.
+let callerOf = (ctx: Ctx, a: NonNullable<Ctx['app']>): Caller => ({
+  app: a.app.eid,
+  level: a.level ?? null,
+  person: ctx.person,
+})
+
+// An app's call through one of its connections, admitted and counted on the
+// app's link as a call through ./api/fetch is (@yaks/egress `admit`): a link
+// at its cap, or one the caller may not call out through, refuses it.
+let admitted = async (ctx: Ctx, said: string) => {
+  if (!ctx.app) return
+  try {
+    await admit(
+      egressOf(ctx.env, ctx.app.app.eid),
+      callerOf(ctx, ctx.app),
+      addressed(said)!.rest,
+    )
+  } catch (e) {
+    if (e instanceof Refused) throw refuse('access', e.message)
+    throw e
+  }
+}
+
 // The tools an integration built into yaks.app offers through a connection,
 // beside `request`, by the integration's name: the same ones the Operator
 // holds for it. Each is loaded when asked.
@@ -220,6 +252,7 @@ let SOURCES: Record<Kind, {
     run: async (ctx, said, name, args) => {
       let { read } = ctxOf(ctx.env).graph
       let held = await owners(ctx)
+      await admitted(ctx, said)
       if (name == 'request') {
         return {
           ...await request(ctxOf(ctx.env), {
@@ -244,9 +277,21 @@ let SOURCES: Record<Kind, {
 }
 
 // The sources an app's code reaches: those the person using it granted it,
-// read on every call, so a grant taken back stops the next one.
-let grants = (ctx: Ctx, app: App) =>
-  grantsOf(ctxOf(ctx.env).graph.read, { app: app.eid, person: ctx.person })
+// and the connections the app uses that they may call out through (its
+// space's, or their own), read on every call, so a grant taken back, or a
+// connection the space stops the app using, stops the next one.
+let grants = async (ctx: Ctx, a: NonNullable<Ctx['app']>) => {
+  let [granted, used] = await Promise.all([
+    grantsOf(ctxOf(ctx.env).graph.read, { app: a.app.eid, person: ctx.person }),
+    usable(ctxOf(ctx.env), callerOf(ctx, a)),
+  ])
+  let lent = await requests(
+    ctxOf(ctx.env).graph.read,
+    used.map((r) => String((r.connection[CONNECTION] as Comp).owner)),
+    used.map((r) => r.connection.entity.eid),
+  )
+  return [...new Set([...granted, ...lent.map((c) => c.at)])]
+}
 
 // The commands of every source outside an app `said` names: one source, every
 // source of a kind (`mcp:`), or all of them. An app's code is listed only the
@@ -255,7 +300,7 @@ let outside = async (ctx: Ctx, said: string): Promise<Command[]> => {
   let kind = addressed(said)?.kind
   let one = kind && said.length > kind.length + 1
   let asked = ctx.app
-    ? (await grants(ctx, ctx.app.app)).filter((at) =>
+    ? (await grants(ctx, ctx.app)).filter((at) =>
       !said || (one ? at == said : at.startsWith(said))
     )
     : (kind ? [kind] : Object.keys(SOURCES) as Kind[]).map((k) =>
@@ -284,12 +329,12 @@ export let runCommand = async (
 ): Promise<Out> => {
   let source = addressed(said)
   if (source) {
-    if (ctx.app && !(await grants(ctx, ctx.app.app)).includes(said)) {
+    if (ctx.app && !(await grants(ctx, ctx.app)).includes(said)) {
       throw refuse(
         'access',
         `${said} is not granted to this app: send the person using it to ./api/allow?at=${
           encodeURIComponent(said)
-        }, where they allow it`,
+        }, where they allow it, or connect it to this app in its space (connection_attach)`,
       )
     }
     return SOURCES[source.kind].run(ctx, said, name, args)

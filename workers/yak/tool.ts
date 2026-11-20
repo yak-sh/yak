@@ -13,7 +13,7 @@
 // Nothing here decides anything a caller could not decide for themselves; it
 // is the vocabulary a row is written in.
 import type { Security } from '@yaks/mcp'
-import { writes } from '@yaks/member'
+import { type Level, writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
 import type { Steps } from '@yaks/tools/title'
 import type { Image } from '@yaks/tools/value'
@@ -47,9 +47,10 @@ export type Ctx = {
    * (connected-mcp.ts `reaches`). */
   remote?: boolean
   /** The app whose code is calling, as the person using it (./api/command
-   * with `at`): it reaches only the sources that person granted it
-   * (declared.ts `admitted`). */
-  app?: { space: Space; app: App }
+   * with `at`), and what they hold on it: it reaches only the sources that
+   * person granted it and the connections it uses that they may call out
+   * through (declared.ts `grants`). */
+  app?: { space: Space; app: App; level?: Level | null }
   /** The invocation whose work a forwarded store call records as its source. */
   call?: string
   // How this caller got in, when a door knows (mcp.ts sets it from

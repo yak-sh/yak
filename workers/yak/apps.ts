@@ -1300,14 +1300,19 @@ let appDoor = async (
     return serviceRoute(req, env, dir, { space, app }, who, path)
   }
   // `at` names a source outside the app (an MCP server, a connection, an app
-  // service) of the person using it: the app reaches it as them, only where
-  // they granted it (declared.ts `outside`).
+  // service): the app reaches it as the person using it, only where they
+  // granted it or its space connected the app to it (declared.ts `grants`).
   let sourced = async () => {
     if (!who.person || who.service) {
       throw new CallError('access', 'Sign in to use what you connected')
     }
     let { listCommands, runCommand } = await import('./declared.ts')
-    let ctx: Ctx = { env, dir, person: who.person, app: { space, app } }
+    let ctx: Ctx = {
+      env,
+      dir,
+      person: who.person,
+      app: { space, app, level: who.role },
+    }
     return {
       list: (at: string) => listCommands(ctx, at),
       run: (at: string, name: string, args: Record<string, unknown>) =>

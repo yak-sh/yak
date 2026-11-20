@@ -151,35 +151,51 @@ an object keyed by command name, with each command's `description`, `input`,
 discover and call, using the same access rule as `POST ./api/command`. A page
 can use it to build its own command menu without copying that access rule.
 
-## Tools of what a person connected
+## Tools of what a person or a space connected
 
 Every tool outside an app is in one pool, each source named by an address:
 
 - `mcp:<server>`: an MCP server the person added on their connections page, with
   the tools they chose to offer.
-- `connection:<connection>`: a connection of theirs. Each offers `request`,
+- `connection:<connection>`: a connection, whether its key was pasted, it signs
+  in through a built-in integration or through Nango. Each offers `request`,
   which sends an HTTPS request to the hosts its integration names with the
-  credential added on the way, and an integration built into yaks.app offers its
-  own tools beside it, such as Google Calendar's `calendar_events`.
+  credential added as a bearer token, and an integration built into yaks.app
+  offers its own tools beside it, such as Google Calendar's `calendar_events`.
 - `service:<service app>/<app>`: an app service they connected.
 
 The person's Operator and agents list and call these with `commands` and
 `command`, passing the address as `app`. An app's own code reaches the same
-tools through its API, as the person using it:
+tools through its API, as the person using it, signed in. This page calls the
+first connection its space connected the app to:
 
-    let tools = await (await fetch('./api/commands?at=mcp:')).json()
+    let [hub] = await (await fetch('./api/commands?at=connection:')).json()
     let answer = await (await fetch('./api/command', {
       method: 'POST',
-      body: JSON.stringify({ at: tools[0].at, name: tools[0].name, args: {} }),
+      body: JSON.stringify({
+        at: hub.at,
+        name: 'request',
+        args: { url: 'https://api.github.com/user' },
+      }),
     })).json()
+    // answer.value: { status, headers, body }, the service's own answer
 
 `at` names one source, or every source of a kind (`mcp:`, `connection:`).
 `./api/commands?at=` answers a list, each with its `at`, `name`, `title`,
-`description`, `readOnly` and `input` (JSON Schema). An app reaches only what
-the person using it allowed it, and nobody else who uses the app reaches what
-they connected. Until they allow a source, its list is empty and a call to it is
-refused with `access`: link them to `./api/allow?at=mcp:`, which opens their
-connections page asking them. They stop it there, and the next call is refused.
+`description`, `readOnly` and `input` (JSON Schema). An app reaches two kinds of
+source:
+
+- **The connections its space connected it to**, with `connection_need` or
+  `connection_attach` (Backend Code, API keys and connections). They reach it
+  for the same callers as `./api/fetch`: someone with a role on the app, or
+  everyone signed in where the space opened the connection to anyone. Each call
+  counts on the app's link, and a link at its monthly cap refuses it with
+  `access`.
+- **What the person using it allowed it**: their MCP servers and their own
+  connections. Nobody else who uses the app reaches what they connected. Until
+  they allow a source, its list is empty and a call to it is refused with
+  `access`: link them to `./api/allow?at=mcp:`, which opens their connections
+  page asking them. They stop it there, and the next call is refused.
 
 **The connector's tool list is fixed.** A directory such as OpenAI's takes a
 snapshot of `tools/list` on the day a connector is submitted and serves that

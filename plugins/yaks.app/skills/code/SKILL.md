@@ -661,6 +661,11 @@ connections page shows how many calls each app made through a connection this
 month, and when a connection has a monthly cap, a call over it also returns
 `403`, saying whose limit it is and where to connect their own key.
 
+The same connection is also a source of tools for the app's code,
+`connection:<connection>`, whose `request` command sends the key as a bearer
+token, beside a built-in integration's own tools (App Commands, Tools of what a
+person or a space connected).
+
 ### Using a key from a worker
 
 A worker reads the same sentinel as `env.ESV`, and every fetch it makes goes out

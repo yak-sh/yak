@@ -272,6 +272,12 @@ grants one the space already has. What app builders read is the guide's
   on it and a count that fails reaches the tracker. A link's `uses.cap` is the
   most calls a month it may make; the connections page and `connection_list`
   say both.
+- An app's code also reaches each connection it uses as a source of tools,
+  `connection:<connection>` at `./api/commands?at=` and `./api/command`
+  (workers/yak/declared.ts `grants`): `request` sends through @yaks/connections
+  `call`, and a built-in integration's tools run beside it, each call admitted
+  and counted on the app's link by @yaks/egress `admit`, the same rules as
+  `./api/fetch`.
 - `direct: true` hands the worker the key itself, for a key it must sign with
   (a request signature, SigV4). Only a pasted key shared by everyone
   may be direct.

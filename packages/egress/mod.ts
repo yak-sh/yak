@@ -23,6 +23,7 @@
  */
 
 export {
+  admit,
   type Caller,
   Capped,
   forward,
@@ -32,6 +33,7 @@ export {
   type Host,
   Refused,
   sentinelsIn,
+  usable,
 } from './egress.ts'
 export {
   CALLED,
