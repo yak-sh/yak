@@ -91,7 +91,13 @@ export let operatorDoc: VocabDoc = {
           type: 'array',
           items: { type: 'string' },
           description:
-            'In a group text, everyone else in it besides its sender (`address`) and the number it reached (`reply_to`), who all read the answer. Its `person` is the guest who stands for the group.',
+            'In a group text, everyone else in it besides its sender (`address`) and the number it reached (`reply_to`), who all read the answer unless any is `withheld`. Its `person` is the guest who stands for the group.',
+        },
+        withheld: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'In a group text, those in `group` who have not agreed to texts from `reply_to` or replied STOP to it. While any are, the answer goes to its sender (`address`) alone.',
         },
         writer: {
           type: 'string',

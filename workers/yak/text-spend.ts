@@ -42,6 +42,20 @@ export let segments = (text: string) => {
 /** The dollars `text` costs, sent or received. */
 export let costOf = (text: string) => segments(text) * PER_SEGMENT
 
+/**
+ * The dollars sending `text` costs: its segments, to each number it reaches,
+ * since a group text is carried to everyone in it.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { PER_SEGMENT, sentCost } from './text-spend.ts'
+ * equal(sentCost({ text: 'Hi' }), PER_SEGMENT)
+ * equal(sentCost({ text: 'Hi', group: ['+12695550199'] }), 2 * PER_SEGMENT)
+ * ```
+ */
+export let sentCost = (text: { text: string; group?: string[] }) =>
+  costOf(text.text) * (1 + (text.group?.length ?? 0))
+
 /** Whether `error` is a text refused for the space's budget (`charged`). */
 export let unpaid = (error: unknown) =>
   error instanceof CallError && error.code == 'limit'
@@ -55,7 +69,7 @@ export let unpaid = (error: unknown) =>
 export let charged = (env: Env, space: Space, texter: Texter): Texter => ({
   ...texter,
   send: (text) => {
-    let cost = costOf(text.text)
+    let cost = sentCost(text)
     return onHold(env, space, cost, 'texts', async (spent) => {
       let receipt = await texter.send(text)
       spent(cost)

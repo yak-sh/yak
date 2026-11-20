@@ -37,6 +37,28 @@ export let textStopped = async (
   arrival: Pick<Arrival, 'from' | 'to'>,
 ) => !!(await g.get([consentAt(arrival)], ['cancelled']))[0]?.cancelled
 
+/**
+ * Of `numbers`, those the space's number `line` may not text unasked: whoever
+ * has not agreed to texts at that number (`sms_consent`, directory.ts
+ * `texting`) or replied STOP to the line ({@link textStopped}). Someone who
+ * texted the line is answered without asking; everyone else in a group text
+ * is texted only once they agreed.
+ */
+export let unagreed = async (
+  env: Env,
+  g: Pick<Graph, 'get'>,
+  line: string,
+  numbers: string[],
+) => {
+  let dir = directoryOf(env.STORE)
+  let refused = await Promise.all(numbers.map(async (number) => {
+    let person = await dir.phoned(number)
+    let agreed = person && (await dir.texting(person))?.number == number
+    return !agreed || await textStopped(g, { from: number, to: line })
+  }))
+  return numbers.filter((_, i) => refused[i])
+}
+
 export let SIGNUP =
   'You are helping this person sign up by text. Only use the sign-up tools, directly. List the open forms and their own registrations to find what they want or resume where they stopped. The registration is the whole progress of the conversation: read it each turn, even if the transcript says something different. Ask only the question returned by next, in its own words, with its choices and hint. Required questions come first. Tell them each optional question can be skipped by replying skip, and record that as null. Record an answer only when the person gave it; never infer agreement to announcements or other text consent. Repeat groups take arrays of answer objects; ask how many entries, then their questions as next returns them. After required answers are complete, explain that they are signed up and offer the remaining optional questions. Once next is null, give the form’s thanks. Reply briefly in plain text. You only answer the text you received; never start a text, delegate, set a wake-up, subscribe, or change anything outside their own registrations and private calendar link.'
 

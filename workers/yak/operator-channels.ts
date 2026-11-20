@@ -107,6 +107,10 @@ export type Request = {
   // is the guest who stands for the group, whose one conversation is the
   // group's (operator-texts.ts `textedOperator`).
   group?: string[]
+  // In a group text, those in `group` the number it reached may not text:
+  // they have not agreed to its texts or replied STOP to it (operator-signup.ts
+  // `unagreed`). While any are, the answer goes to its sender alone.
+  withheld?: string[]
   // In a group text, or a chat room the space hears in full (chat.ts
   // `arrived`), the person who wrote the words, whose they are kept as.
   writer?: string
@@ -717,6 +721,16 @@ export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`
 // every channel shares: by email, text or phone, in their Updates, or on the
 // page of yaks.app they wrote them on (`onPage`). A reply to a
 // letter the Operator wrote is somebody else's words, and says whose.
+let AND = new Intl.ListFormat('en', { type: 'conjunction' })
+
+// Why a group's answer goes to its sender alone, for the Operator to say.
+let withheldFrom = ({ withheld = [], address }: Request) =>
+  withheld.length
+    ? `${AND.format(withheld)} ${
+      withheld.length == 1 ? 'has' : 'have'
+    } not agreed to texts from this number, so your answer goes to ${address} alone, not to the group: tell them so, and that you answer a group only when everyone in it has agreed to texts from yaks.app, and that they can text you one-to-one. `
+    : ''
+
 let BY: Record<
   string,
   (request: Request, id: string, subject?: Bundle) => string
@@ -734,8 +748,8 @@ let BY: Record<
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   group: (request) =>
     `By group text with ${(request.group ?? []).join(', ')}. ${
-      cue({ group: true, to: !!request.addressed })
-    }From ${request.address}: `,
+      withheldFrom(request)
+    }${cue({ group: true, to: !!request.addressed })}From ${request.address}: `,
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   voice: (request) =>
     request.call
@@ -855,7 +869,7 @@ export let channels = (env: Env): Record<string, Channel> => {
     if (!space) throw new Error('Operator reply has no space')
     let { DISCLOSURE, signingIn } = await import('./operator-texts.ts')
     let { phoneOf } = await import('./phones.ts')
-    let { charged, costOf, unpaid } = await import('./text-spend.ts')
+    let { charged, sentCost, unpaid } = await import('./text-spend.ts')
     // A text to a number someone connected is answered from it, paid by
     // them (operator-line.ts `accountFor`); one to the space's or the
     // platform's from its phone, paid from the space's budget.
@@ -870,18 +884,22 @@ export let channels = (env: Env): Record<string, Channel> => {
       env,
       request.via ? { ...space.sender, via: request.via } : space.sender,
     )
+    // A group reads the answer whole only when nobody in it is withheld;
+    // else its sender alone does.
+    let group = request.withheld?.length ? [] : request.group ?? []
     let text = (words: string) => ({
       to: request.address!,
       text: `${words}\n\n${end}`,
       ...(back.from ? { from: back.from } : {}),
       ...(back.agent ? { agent: back.agent } : {}),
-      ...(request.group?.length ? { group: request.group } : {}),
+      ...(group.length ? { group } : {}),
     })
     try {
-      // Everyone in a group reads it, so its links sign nobody in.
+      // A group's conversation is everyone's in it, so its links sign nobody
+      // in, even in an answer to its sender alone.
       return await (line ? phone : charged(env, space, phone)).send(
         text(
-          request.group?.length
+          request.channel == 'group'
             ? answer.text
             : await signingIn(env, request.address!, answer.text),
         ),
@@ -894,7 +912,7 @@ export let channels = (env: Env): Record<string, Channel> => {
       // bounces with the same words.
       let said = text((error as Error).message)
       await phone.send(said)
-      await countedTexts(env, space, costOf(said.text))
+      await countedTexts(env, space, sentCost(said))
       throw error
     }
   }
@@ -1185,12 +1203,28 @@ export let HEARSAY = new Set(['subscription', 'error', 'escalated'])
  * DMARC (inbox.ts). */
 export let UNPROVEN = new Set(['text', 'rcs', 'texted'])
 
+/** The channels answered by a text to the number the words came to. */
+let TEXTED = new Set(['text', 'rcs', 'texted', 'signup', 'group'])
+
 export let handleChannels = (
   operator: Operator,
   env: Env,
   adapters = channels(env),
 ) => {
   let { g, fx } = operator.store
+  // A group request, with whom in it the number it reached may not text
+  // added to those already withheld: withheld once, its answer stays the
+  // sender's alone, as the Operator was told when it answered.
+  let heeded = async (request: Request): Promise<Request> => {
+    let { unagreed } = await import('./operator-signup.ts')
+    let withheld = [
+      ...new Set([
+        ...request.withheld ?? [],
+        ...await unagreed(env, g, request.reply_to!, request.group ?? []),
+      ]),
+    ]
+    return withheld.length ? { ...request, withheld } : request
+  }
   fx.handle({
     // How the Operator uses one of the person's own numbers changed: their
     // callbacks follow it (operator-line.ts `pointed`).
@@ -1289,6 +1323,7 @@ export let handleChannels = (
           ),
         )
         let [subject] = request.about ? await g.get([request.about]) : []
+        if (request.group?.length) request = await heeded(request)
         let framing = BY[request.channel]?.(request, row.entity.eid, subject) ??
           ''
         let body = String(part<Comp>(row, 'doc')?.body ?? '')
@@ -1398,7 +1433,9 @@ export let handleChannels = (
       let [about] = request.about ? await g.get([request.about]) : []
       let receipt
       try {
-        if (request.channel == 'signup' || request.channel == 'texted') {
+        // A text goes to nobody who replied STOP to the number it is sent
+        // from, and to a group only while everyone in it may be texted.
+        if (TEXTED.has(request.channel)) {
           let { textStopped } = await import('./operator-signup.ts')
           if (
             await textStopped(g, {
@@ -1408,6 +1445,7 @@ export let handleChannels = (
           ) {
             throw new Blocked('This person replied STOP.')
           }
+          if (request.group?.length) request = await heeded(request)
         }
         receipt = await adapter(
           request,
