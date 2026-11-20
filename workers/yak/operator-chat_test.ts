@@ -427,11 +427,22 @@ test('the page lists every way to reach the Operator below its helpers, each one
       a.getAttribute('href'),
     ]),
     [
-      ['clerk@yaks.app', 'mailto:clerk@yaks.app'],
-      [`Call ${shown('+15550100')}`, 'tel:+15550100'],
-      [`Text ${shown('+15550100')}`, 'sms:+15550100'],
+      ['Email', 'mailto:clerk@yaks.app'],
+      ['Call', 'tel:+15550100'],
+      ['Text', 'sms:+15550100'],
       ['Barn · #general', 'https://chat.example/g1/c1'],
       ['Chat', 'https://chat.example/g2'],
+    ],
+  )
+  // The address and the one number, each selectable with a copy button.
+  assertEquals(
+    [...section.querySelectorAll('.Copy')].map((c) => [
+      c.querySelector('.Copy_Text')?.textContent,
+      c.querySelector('.Copy_Go')?.getAttribute('aria-label'),
+    ]),
+    [
+      ['clerk@yaks.app', 'Copy the address'],
+      [shown('+15550100'), 'Copy the number'],
     ],
   )
   // The one button that adds the platform, back to this page after.
