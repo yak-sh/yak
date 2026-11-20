@@ -48,7 +48,7 @@ import {
 import { graph } from '@yaks/graph'
 import type { Meaning } from '@yaks/host'
 import { ranking, texts } from './embedding-read.ts'
-import { sight } from './operator-access.ts'
+import { type Reader, sight } from './operator-access.ts'
 import { operatorConfig } from './config.ts'
 import { load, vocabFacets } from './operator-load.ts'
 import { vocabsOf } from './vocabs.ts'
@@ -236,8 +236,8 @@ export let operatorStore = async (
   return {
     ...graphed,
     ...swept ? { vectors: swept } : {},
-    meaningFor: rank && ((person: string): Meaning => {
-      let meaning = rank(sight({ g: graphed.g, marks }, person))
+    meaningFor: rank && ((reader: Reader): Meaning => {
+      let meaning = rank(sight({ g: graphed.g, marks }, reader))
       return (words, opts) =>
         meaning(words, { ...opts, within: opts?.within || '*' })
     }),
@@ -261,8 +261,8 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
   waiting?: () => number
   /** its vectors' drains, where the object lends an embedder */
   vectors?: Sleeper
-  /** meaning ranked only among what the person can read in this store */
-  meaningFor?: (person: string) => Meaning
+  /** meaning ranked only among what the reader can read in this store */
+  meaningFor?: (reader: Reader) => Meaning
 }
 
 /** What a composition of the Operator's store is bound to: its storage, given

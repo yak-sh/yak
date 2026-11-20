@@ -6,7 +6,8 @@
 // members alone), and writes only what is theirs to write (`mayWrite`).
 //
 // The object the store stands in (build.ts) hands this its `/api/*` requests
-// and the sockets it accepted; its other sockets (a build's page, a lent
+// from people who write in the space, and only theirs, and the sockets it
+// accepted; its other sockets (a build's page, a lent
 // browser, a page on the Operator's frames from before) are not this door's.
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { type Hibernation, sockets } from '@yaks/durable-object'
@@ -15,7 +16,8 @@ import { mayWrite, sight } from './operator-access.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { paged } from './build-door.ts'
 
-/** Who a request is from, as the kernel said: a person in a space. */
+/** Who a request is from, as the kernel said: a person who writes in a
+ * space (build.ts `#operate`). */
 export type Asker = { person: string; space: string }
 
 /** @yaks/api over `store`, its sockets among the object's (`ctx`). */
@@ -37,7 +39,10 @@ export let operatorApi = (
     {
       // A socket keeps who opened it, and is read with their sight as it
       // stands on every wake.
-      read: (read) => ({ ...read, ...sight(store, String(read?.person)) }),
+      read: (read) => ({
+        ...read,
+        ...sight(store, { person: String(read?.person), member: true }),
+      }),
     },
   )
   // The store as `who` writes it: what is theirs, or nothing in the batch.
@@ -53,7 +58,7 @@ export let operatorApi = (
       graph: writing(who),
       subs,
       authenticate: () => ({ by: who.person }),
-      read: () => sight(store, who.person),
+      read: () => sight(store, { person: who.person, member: true }),
     })
   return {
     /** `/api/apply`, `/api/query` or `/api/ws`, asked by `who`. */

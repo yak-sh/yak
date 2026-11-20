@@ -8,7 +8,7 @@ import type { Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import type { Meta } from '@yaks/sqlite'
 import { invoke } from '@yaks/tools'
-import { seenBy } from './operator-access.ts'
+import { type Reader, seenBy } from './operator-access.ts'
 import { caught } from './defects.ts'
 import { refuse } from './tool.ts'
 import { toolsIn } from '@yaks/vocab/tools'
@@ -44,13 +44,13 @@ export let workNames: Set<string> = new Set(
 )
 
 /**
- * One of the shared work tools, called through the connector by `person`, a
- * writer in the space: run in the Operator's store as they read it, its
- * answer applied there, and the applied bundles returned.
+ * One of the shared work tools, called through the connector by `reader`:
+ * run in the Operator's store as they read it, its answer applied there, and
+ * the applied bundles returned.
  */
 export let working = async (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
-  person: string,
+  reader: Reader,
   name: string,
   args: unknown,
 ): Promise<Bundle[]> => {
@@ -58,8 +58,8 @@ export let working = async (
     ? held().find((t) => t.name == name)
     : undefined
   if (!tool) throw refuse('missing', `no Operator work tool ${name}`)
-  let self = seenBy(store, person)
-  let actor = { by: person }
+  let self = seenBy(store, reader)
+  let actor = { by: reader.person }
   let out = await invoke(
     {
       entity: { eid: crypto.randomUUID() },

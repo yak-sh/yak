@@ -367,7 +367,8 @@ test('resending an expired email code keeps the request and delivers a completio
   assertEquals(expiryMailed, true)
 })
 
-let hidden = await seenBy(sms.store, foreign.person).read('.operator_contact')
+let hidden = await seenBy(sms.store, { person: foreign.person, member: true })
+  .read('.operator_contact')
 let foreignEntry = await foreign.entry('Email me at stolen@example.net')
 let borrowed = await assertRejects(() =>
   sms.invoke({ address: 'stolen@example.net', source: foreignEntry })

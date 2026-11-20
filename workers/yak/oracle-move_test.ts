@@ -120,8 +120,10 @@ while (await oracleBackfill(repaired)) { /* bounded batches */ }
 await hidden()
 let again = await oracleBackfill(repaired)
 let rows = await store.g.get([subject, source, edge.entity.eid])
-let visible = await seenBy(store, other).get([source])
-let home = await seenBy(store, other).get([space], ['project'])
+let visible = await seenBy(store, { person: other, member: true }).get([source])
+let home = await seenBy(store, { person: other, member: true }).get([space], [
+  'project',
+])
 
 test('the query door hides legacy projections before repair, between batches and after completion', () => {
   equal([more, again, kept.get(ORACLES)], [true, false, 'done'])
@@ -145,9 +147,14 @@ await hid.g.apply([{
   content: { body: 'Legacy learned secret' },
   operator_oracle: { person: null, subject: space },
 }], { trusted: true })
-let before = await seenBy(hid, person).get([space], ['project'])
+let before = await seenBy(hid, { person, member: true }).get([space], [
+  'project',
+])
 while (await projectRepair(hid)) { /* bounded batches */ }
-let after = await seenBy(hid, person).get([space], ['project', 'content'])
+let after = await seenBy(hid, { person, member: true }).get([space], [
+  'project',
+  'content',
+])
 let moved = await hid.g.get([learned])
 
 test('a quarantined project is restored to every reader, its learned words kept hidden', () => {

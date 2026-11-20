@@ -80,7 +80,7 @@ import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
-import { conversant, seenBy } from './operator-access.ts'
+import { conversant, type Reader, seenBy } from './operator-access.ts'
 import { NAMING } from './operator-conversations.ts'
 import { writes } from '@yaks/member'
 import { inReach } from './declared.ts'
@@ -570,7 +570,7 @@ export let operatorRoster = async (
   // who writes in the space: its memories, tasks and conversations are the
   // space's work, none of a stranger's business (D-151808).
   let landing = ledger(g)
-  let self = seenBy(work, ctx.person)
+  let self = seenBy(work, { person: ctx.person, member })
   let own = new Map(
     member
       ? [
@@ -1177,8 +1177,6 @@ export let operating = (
   let watching: Watching = async (wake, { query, local }) => {
     let person = String((wake.wake as { for?: string } | undefined)?.for ?? '')
     if (!person) throw refuse('missing', 'That subscription names nobody.')
-    // A watch's query is its own, as the subscription wrote it.
-    if (local) return await seenBy(store, person).read(wholeLine(query))
     let eid = await spaceOf(store)
     let space = eid ? await dir().at(eid) : null
     if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
@@ -1188,6 +1186,11 @@ export let operating = (
       space,
       options.directory ?? opening(env),
     )
+    // A watch's query is its own, as the subscription wrote it.
+    if (local) {
+      return await seenBy(store, { person, member: writes(ctx.role) })
+        .read(wholeLine(query))
+    }
     return await (await reaching(ctx, await inReach(ctx))).read(
       wholeLine(query),
     )
@@ -2370,10 +2373,10 @@ export let operating = (
   // longer has in front of it (@yaks/session `recall`). The hosted embedder
   // reserves and settles spend around an inference call. Give that path
   // more time than the box's deadline, while bounding how long intake waits.
-  let recalling = (person: string) =>
+  let recalling = (reader: Reader) =>
     recall({
-      graph: seenBy(store, person),
-      meaning: store.meaningFor?.(person),
+      graph: seenBy(store, reader),
+      meaning: store.meaningFor?.(reader),
       floors: FLOORS,
       report: (e) => void caught(e, { request: 'operator recall' }),
     }, 2_500)
@@ -2383,7 +2386,11 @@ export let operating = (
     held: Asker,
     space: Space,
   ): Promise<Bundle[]> => {
-    let body = await recalling(held.person).said(
+    // Read as the person reads the store: someone outside the space recalls
+    // only what is theirs (operator-access.ts `sight`).
+    let seat = await dir().seat(space.eid, held.person, held.administrative)
+    let member = !!seat.administrative || writes(seat.role ?? null)
+    let body = await recalling({ person: held.person, member }).said(
       text,
       new Date().toISOString(),
       {

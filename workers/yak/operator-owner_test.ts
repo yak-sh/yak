@@ -27,12 +27,14 @@ let owners = async (...eids: string[]) =>
 // What each person reads by the kept owners, beside what the paths admit.
 let agree = async (g = store.g) => {
   for (let person of [ada, bea, id()]) {
-    let read = async (paths: boolean) =>
-      (await seenBy(
-        paths ? { g, marks: { get: () => undefined } } : { g },
-        person,
-      ).read('.entity&.fields=entity.eid')).map((b) => b.entity.eid).sort()
-    equal(await read(false), await read(true))
+    for (let member of [true, false]) {
+      let read = async (paths: boolean) =>
+        (await seenBy(
+          paths ? { g, marks: { get: () => undefined } } : { g },
+          { person, member },
+        ).read('.entity&.fields=entity.eid')).map((b) => b.entity.eid).sort()
+      equal(await read(false), await read(true))
+    }
   }
 }
 let session = (person: string, eid = id()): Bundle => ({
@@ -74,6 +76,22 @@ test('what hangs on a conversation is its person’s from the commit that makes 
     undefined,
   ])
   await agree()
+})
+
+test('what nobody owns is a member’s to read, and nobody else’s', async () => {
+  let shared = id()
+  await write([{ entity: { eid: shared }, memory: {}, doc: { title: 'n' } }])
+  let reads = async (member: boolean, paths: boolean) =>
+    (await seenBy(
+      paths ? { g: store.g, marks: { get: () => undefined } } : store,
+      { person: ada, member },
+    ).get([root, said, shared])).length
+  equal(
+    await Promise.all(
+      [true, false].flatMap((m) => [reads(m, false), reads(m, true)]),
+    ),
+    [3, 3, 2, 2],
+  )
 })
 
 test('an item a person’s words came in is theirs once their session takes it', async () => {
@@ -189,7 +207,9 @@ test('a store kept before its owners is read by the paths until its pass is done
     owner: null,
   }], { trusted: true, stamp: false })
   let hidden = async () =>
-    (await seenBy({ g: old.g, marks }, bea).read('.entry')).length
+    (await seenBy({ g: old.g, marks }, { person: bea, member: true }).read(
+      '.entry',
+    )).length
   // Unwritten owners are no reason to show bea ada's words.
   equal(await hidden(), 0)
   while (await ownerBackfill({ g: old.g, marks })) { /* the next batch */ }
@@ -211,9 +231,14 @@ test('a person reads every session of the Operator’s store under workerd’s S
     },
   ], { trusted: true })
   for (let q of [line`.session`, line`.entity`]) {
-    let read = await seenBy(at, ada).read(line`${sub(q)}&.fields=entity.eid`)
+    let read = await seenBy(at, { person: ada, member: true }).read(
+      line`${sub(q)}&.fields=entity.eid`,
+    )
     equal(read.some((b) => b.entity.eid == root), true)
     equal(read.some((b) => b.entity.eid == helper), false)
   }
-  equal((await seenBy(at, ada).read('.session')).length, 1)
+  equal(
+    (await seenBy(at, { person: ada, member: true }).read('.session')).length,
+    1,
+  )
 })

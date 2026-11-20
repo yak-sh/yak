@@ -1,6 +1,7 @@
 // The Operator's recall ranks by meaning over its store's own vectors
 // (operator-store.ts `Vectors`), so a memory worded differently from the
-// person's message still reaches the turn beside it (T-1674).
+// person's message still reaches the turn beside it (T-1674), and only for
+// someone who writes in the space.
 import { equal, test } from '@yaks/testing'
 import type { Embedder } from '@yaks/embedding'
 import type { Request } from '@yaks/model'
@@ -96,6 +97,19 @@ await receive(
 )
 await service.drain()
 let turn = JSON.stringify(asked.at(-1)!.items)
+// Someone outside the space, replying to a letter the Operator sent them.
+await receive(
+  store,
+  {
+    space: eid,
+    person: crypto.randomUUID(),
+    channel: 'letter',
+    address: 'cy@example.com',
+  },
+  'How often should my backyard veggies get a drink?',
+)
+await service.drain()
+let replied = JSON.stringify(asked.at(-1)!.items)
 
 test('a memory worded unlike the message reaches its turn by meaning', () => {
   equal(turn.includes('Nearest memories and decisions'), true)
@@ -103,6 +117,10 @@ test('a memory worded unlike the message reaches its turn by meaning', () => {
 })
 test("auto-recall leaves out another person's private memories", () => {
   equal(turn.includes(PRIVATE), false)
+})
+test('someone outside the space is brought none of its memories', () => {
+  equal(replied.includes('cy@example.com'), true)
+  equal(replied.includes('Nearest memories and decisions'), false)
 })
 test('its vectors are kept in the Operator store', async () => {
   equal(store.vectors!.owes(), false)

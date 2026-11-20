@@ -125,6 +125,18 @@ let claimed = (person: string) =>
     ),
   )
 
+// Those of them that name `person` somewhere: what is theirs alone.
+let named = (person: string) =>
+  or(
+    ...['', ...ON].flatMap((at) =>
+      OWNED.map(([name, by]) => eq(`${at}${name}.${by}`, person))
+    ),
+    and(
+      or(...MADE.map((c) => present(c))),
+      eq('created.via.operator_session.person', person),
+    ),
+  )
+
 // The same entities, by the owner each keeps: theirs, or nobody's.
 let theirs = (person: string) =>
   and(or(absent('owner'), eq('owner.person', person)))
@@ -187,30 +199,40 @@ let oracles = (person: string) =>
     ),
   )
 
-/** What `person` reads the Operator's store with: what is another person's
- * there is out of sight, wherever a read reaches it from, and the memories,
- * tasks and persona nobody owns stay in view. A store whose owners are not
- * all written yet is read by the paths they are named on. */
+/** Who reads the Operator's store: a person, and whether they write in its
+ * space (`member`, @yaks/member `writes`). */
+export type Reader = { person: string; member: boolean }
+
+/** What `reader` reads the Operator's store with: what is another person's
+ * there is out of sight, wherever a read reaches it from. For a member, the
+ * memories, tasks and persona nobody owns stay in view, the space's work; for
+ * anyone else only what is theirs does, as the space's own tools are none of
+ * theirs (operator.ts `operatorRoster`). A store whose owners are not all
+ * written yet is read by the paths they are named on. */
 export let sight = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
-  person: string,
+  { person, member }: Reader,
 ): ReadOpts => ({
   visibility: {
     entity: and(
-      owned(store) ? theirs(person) : claimed(person),
+      owned(store)
+        ? member ? theirs(person) : eq('owner.person', person)
+        : member
+        ? claimed(person)
+        : and(claimed(person), named(person)),
       ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
     ),
   },
 })
 
-/** The Operator's store as `person` reads it (`sight`). Only its reads are
+/** The Operator's store as `reader` reads it (`sight`). Only its reads are
  * narrowed; a write goes to the store as it stands. */
 export let seenBy = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
-  person: string,
+  reader: Reader,
 ): Graph => {
   let { g } = store
-  let { visibility } = sight(store, person)
+  let { visibility } = sight(store, reader)
   let narrow = (opts?: ReadOpts): ReadOpts => ({ ...opts, visibility })
   return {
     ...g,

@@ -155,12 +155,19 @@ let privateIds = [
   ...nestedResults.map((b) => b.entity.eid),
   snapshot,
 ]
-let outsider = await seenBy(store, crypto.randomUUID()).get(privateIds)
-let mine = await seenBy(store, person).get(privateIds)
-let shared = await seenBy(store, crypto.randomUUID()).get([memory])
+let outsider = await seenBy(store, {
+  person: crypto.randomUUID(),
+  member: true,
+}).get(privateIds)
+let mine = await seenBy(store, { person, member: true }).get(privateIds)
+let shared = await seenBy(store, { person: crypto.randomUUID(), member: true })
+  .get([memory])
 let listed = JSON.parse(String(await tools[1].run({}, context)))
 await tools[2].run({ wake: short(script.entity.eid) }, context)
-let afterCancel = await seenBy(store, crypto.randomUUID()).get(privateIds)
+let afterCancel = await seenBy(store, {
+  person: crypto.randomUUID(),
+  member: true,
+}).get(privateIds)
 await remove(store, [scriptRun.entity.eid])
 let removedHistory = (await store.g.get([
   scriptCall.entity.eid,

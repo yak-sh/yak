@@ -50,7 +50,9 @@ let said = (b: Bundle) =>
     (b.content as { body: string }).body
 
 test('a person’s search of the Operator’s store finds their words and what nobody owns, not another person’s', async () => {
-  let found = await textSearch(seenBy(store, person))('Pruning')
+  let found = await textSearch(seenBy(store, { person, member: true }))(
+    'Pruning',
+  )
   equal(found.map(said).sort(), [
     'Pruning canary',
     'Pruning memory',

@@ -10,6 +10,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
+import { writes } from '@yaks/member'
 import { eids } from '@yaks/markdown/structural'
 import {
   conversant,
@@ -1808,7 +1809,12 @@ export let operatorRequest = async (
     let { working } = await import('./operator-tasks.ts')
     return Response.json(
       await store.readable(
-        await working(store, person, String(args.tool), args.args ?? {}),
+        await working(
+          store,
+          { person, member: writes(held.role) },
+          String(args.tool),
+          args.args ?? {},
+        ),
       ),
     )
   }
@@ -2020,7 +2026,9 @@ export let operatorRequest = async (
   if (path == '/operator/skills') {
     let { kept } = await import('./operator-skills.ts')
     let { seenBy } = await import('./operator-access.ts')
-    return Response.json({ files: await kept(seenBy(store, person)) })
+    return Response.json({
+      files: await kept(seenBy(store, { person, member: writes(held.role) })),
+    })
   }
   // One skill, to publish it, and a shared one kept as a copy, to install or
   // update it (shared-skill.ts). Keeping one is a write: an editor's.
@@ -2028,7 +2036,7 @@ export let operatorRequest = async (
     let { skillText } = await import('./operator-skills.ts')
     let { seenBy } = await import('./operator-access.ts')
     let found = await skillText(
-      seenBy(store, person),
+      seenBy(store, { person, member: writes(held.role) }),
       String(args.title ?? ''),
     )
     return found ? Response.json(found) : Response.json({
@@ -2038,7 +2046,6 @@ export let operatorRequest = async (
   }
   if (path == '/operator/skill/keep') {
     let { keepCopy } = await import('./operator-skills.ts')
-    let { writes } = await import('@yaks/member')
     let { CallError } = await import('@yaks/tools/errors')
     if (!writes(held.role)) {
       return Response.json({

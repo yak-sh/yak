@@ -18,7 +18,7 @@ import type { Ctx } from './tools.ts'
 let store = operatorMemory()
 let person = crypto.randomUUID()
 let work = (name: string, args: Record<string, unknown>) =>
-  working(store, person, name, args)
+  working(store, { person, member: true }, name, args)
 let titles = (rows: Bundle[]) => rows.map((b) => (b.doc as Comp).title)
 let id = human(operatorVocab)
 
