@@ -125,7 +125,7 @@ let bare = (b: Bundle, body: string, rest: Bundle = {} as Bundle): Bundle => ({
 export let said = (lines: Bundle[]): Bundle[] => {
   let asked = lines.find(request)
   let reply = lines.findLast((b) =>
-    b.output && String(comp(b, 'content')?.body ?? '').trim()
+    b.output && !b.reasoning && String(comp(b, 'content')?.body ?? '').trim()
   )
   return [
     ...asked

@@ -480,6 +480,13 @@ let interrupted = (beside: Beside): Said => ({
 
 let stopped = (): Said => ({ node: h(Notice, {}, 'Stopped.') })
 
+/** What a model said of its reasoning: a quiet step among its tool calls,
+ * opening on its words, so an answer never appears from nowhere. */
+export let thought = (b: Bundle): Said | undefined =>
+  body(b).trim()
+    ? { node: step('Thought it through', '', markdown(body(b))), is: 'step' }
+    : undefined
+
 /** What a transcript's kinds are that are none of the person's words. */
 export let NOT_INPUT = [
   'operator_stopped',
@@ -493,6 +500,7 @@ export let NOT_INPUT = [
   'stop',
   'interrupted',
   'call',
+  'reasoning',
   'ask',
   'prompt',
   'tool_progress',
@@ -527,11 +535,12 @@ export let kind = <B extends Beside = Beside>(
   view = LINE,
 ): Kind<B> => ({ view, match: match ? query(match) : true, draw })
 
-/** The kinds of line any transcript has: a tool call, a refusal, a reply, a
- * failure, a stop, and a person's words, which is any entry no other kind
- * draws. */
+/** The kinds of line any transcript has: a tool call, a thought, a refusal,
+ * a reply, a failure, a stop, and a person's words, which is any entry no
+ * other kind draws. */
 export let kinds: Registry<Kind> = define<Kind>([
   kind('.call', tool),
+  kind('.reasoning', thought),
   kind('.refusal&!result', refused),
   kind('.output&.notice', (_, beside) => interrupted(beside)),
   kind('.output&.exception', (_, beside) => failed(beside)),

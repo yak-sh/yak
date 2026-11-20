@@ -150,8 +150,9 @@ export let wordsOf = (entries: Bundle[]): string[] => {
     let body = String(comp(b, 'content')?.body ?? '')
     let called = comp(b, 'operator_call')
     if (!body || inside.has(b.entity.eid) || called?.began) return []
-    // A helper's report and the platform's own words are no one's speech.
-    if (told(b, body) || b.system) return []
+    // A helper's report, the platform's own words and a model's thought are
+    // no one's speech.
+    if (told(b, body) || b.system || b.reasoning) return []
     let how = VIA[String(cameBy(b).name)]?.[1]
     let who = called?.said
       ? 'you, by phone'
@@ -338,7 +339,9 @@ let recapOf = (entries: Bundle[]) =>
   clipped(
     String(
       comp(
-        entries.findLast((b) => b.output && b.content && !b.notice),
+        entries.findLast((b) =>
+          b.output && b.content && !b.notice && !b.reasoning
+        ),
         'content',
       )
         ?.body ?? '',
@@ -491,6 +494,7 @@ export let aloud = (entries: Bundle[], names: Names, from: number) => {
   return entries.flatMap((b) => {
     if (Number(comp(b, 'entry')?.seq ?? 0) <= from) return []
     let body = String(comp(b, 'content')?.body ?? '')
+    if (b.reasoning) return []
     if (b.output && !b.notice && body.trim()) return [firstSaid(body)]
     if (!b.result || b.refusal || b.exception) return []
     let call = calls.get(String(comp(b, 'result')!.call))

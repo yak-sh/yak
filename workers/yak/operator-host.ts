@@ -778,7 +778,9 @@ export let helpingOf = async (
   return await Promise.all(helpers.map(async (helper) => {
     let { worked, lines } = await helperOf(store, helper, named)
     if (!going(worked)) return worked
-    let wrote = lines.findLast((b) => b.output && !b.notice && b.content)
+    let wrote = lines.findLast((b) =>
+      b.output && !b.notice && !b.reasoning && b.content
+    )
     return {
       ...worked,
       ...wrote ? { wrote: String(comp(wrote, 'content')!.body) } : {},

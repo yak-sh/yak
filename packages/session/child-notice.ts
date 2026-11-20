@@ -92,7 +92,7 @@ export let childNotice = async (
   let inputs = entries.filter((b) =>
     kindOf(b) == 'input' && !b.prompt && !b.notice
   )
-  let answer = entries.findLast((b) => b.output && !b.notice)
+  let answer = entries.findLast((b) => kindOf(b) == 'output' && !b.notice)
   let reports = entries.filter((b) => b.notice && b.delivery)
   let [named] = await g.get([child], ['session'])
   let body = [

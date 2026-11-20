@@ -2261,6 +2261,7 @@ export let operating = (
               return [...people.values()].map((k) => k.email)
             }),
             texted: !!confirm,
+            place: space.title || space.slug,
           },
         ))
         : tools
@@ -3291,12 +3292,13 @@ export type Operator = {
   /** One occurrence of a scheduled tool call and its optional checking helper. */
   scheduled: (row: Bundle, at: string) => Promise<void>
   /** Where the act a link approves stands for `who`, signed in, and with
-   * `press` the tap that carries it out (operator-approvals.ts
-   * `approvals`). */
+   * `press` the tap that carries it out, or with `decline` the one that
+   * spends it undone (operator-approvals.ts `approvals`). */
   approve: (
     approval: string,
     digest: string,
     press: boolean,
     who?: string | null,
+    decline?: boolean,
   ) => Promise<Standing>
 }

@@ -52,7 +52,6 @@ import {
   namer,
   type Names,
   type Naming,
-  readable,
   reply,
   type Said,
   type Sent,
@@ -189,12 +188,22 @@ export let told = (b: Bundle, body: string) =>
 // Where a helper's end is told: its report, or its stop.
 let ended = (b: Bundle) =>
   told(b, String(comp(b, 'content')?.body ?? '')) || !!b.operator_stopped
-let helper = (b: Bundle, body: string) => {
-  let outcome = comp(b, 'delivery')?.outcome ?? body.match(LEGACY)?.[1]
+// A helper's report, opening on what it said, and where its page opens
+// (`Heard.opens`), on every step it took to get there.
+let helper = (
+  b: Bundle,
+  body: string,
+  { opens }: Pick<Heard, 'opens'> = {},
+) => {
+  let delivery = comp(b, 'delivery')
+  let outcome = delivery?.outcome ?? body.match(LEGACY)?.[1]
   let said = body.replace(/^.*\n/, '')
   let name = 'A helper could not finish'
   let problem =
     'A helper the Operator started could not finish, so the Operator went on without it.'
+  let steps = opens && delivery?.child != null
+    ? h('a', { href: `${opens}/${delivery.child}` }, 'See each step it took')
+    : null
   return outcome == 'settled'
     ? {
       is: 'step' as const,
@@ -202,7 +211,8 @@ let helper = (b: Bundle, body: string) => {
         'Heard back from a helper',
         '',
         h(More.Label, {}, 'What came back'),
-        readable(said),
+        written(said),
+        steps,
       ),
     }
     : {
@@ -210,6 +220,7 @@ let helper = (b: Bundle, body: string) => {
         name,
         'no',
         trouble(problem, said),
+        steps,
       ),
       text: `${name}\n\n${problem}`,
       is: 'step' as const,
@@ -905,7 +916,9 @@ export let asked = (entries: Bundle[]) => {
       continue
     }
     inside.set(id, open)
-    if (b.output && !b.notice && comp(b, 'content')?.body) open = undefined
+    if (
+      b.output && !b.notice && !b.reasoning && comp(b, 'content')?.body
+    ) open = undefined
   }
   return inside
 }
@@ -1017,7 +1030,7 @@ let delivered = (b: Bundle, heard: Heard) => {
   let delivery = comp(b, 'delivery')!
   return delivery.outcome == 'stopped' && delivery.child != null
     ? halted(delivery.child, heard)
-    : helper(b, said(b))
+    : helper(b, said(b), heard)
 }
 
 // What a helper was asked by the session that started it, the first line
@@ -1068,7 +1081,7 @@ let own: Kind<Heard>[] = [
     '',
     (b, heard) =>
       told(b, said(b))
-        ? helper(b, said(b))
+        ? helper(b, said(b), heard)
         : isBrief(b)
         ? brief(b)
         : theirs(b) ||

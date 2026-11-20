@@ -1,6 +1,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { ModelError, type Request, type TextDelta } from '@yaks/model'
-import { conversation, messages, OPENER } from './mod.ts'
+import { conversation, messages, OPENER, thought } from './mod.ts'
+import { built, type Message } from './wire.ts'
 
 // The stream the API sends for one reply: text, then a tool call.
 let reply = (id = 'msg_1') => [
@@ -473,4 +474,39 @@ test('an older model is offered the plain web tools, and none without web', asyn
   )
   equal(sent[1].body.tools, undefined)
   equal(messages({ key: () => 'k', fetch }).hosted, undefined)
+})
+
+test("a reply's thinking blocks are its thought, as they streamed", () => {
+  let m: Message = {
+    id: 'm',
+    model: 'claude-sonnet-5-5',
+    content: [],
+    usage: { input_tokens: 1, output_tokens: 1 },
+  }
+  for (
+    let e of [
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'thinking' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Matt asked ' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'for a guide.' },
+      },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'text', text: 'Done.' },
+      },
+    ]
+  ) built(m, e)
+  equal(thought(m.content), 'Matt asked for a guide.')
+  equal(thought(m.content.slice(1)), undefined)
 })

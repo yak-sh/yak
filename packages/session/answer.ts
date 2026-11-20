@@ -211,7 +211,8 @@ export let replyOf = (
   // A model asked after its calls were answered, a refusal among them, is
   // where the work stands: what it answered, or that it answered nothing.
   let end = ordered(entries).findLast((b) =>
-    b.content && (b.output || b.refusal || b.exception) || b.failed ||
+    b.content && (b.output && !b.reasoning || b.refusal || b.exception) ||
+    b.failed ||
     kindOf(b) == 'stop' || kindOf(b) == 'ask'
   )
   if (end && kindOf(end) == 'ask' && !end.failed) end = undefined

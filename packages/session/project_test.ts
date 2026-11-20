@@ -34,3 +34,26 @@ for (let source of [undefined, 'ask']) {
     })
   }
 }
+
+test("a reply's thought is the person's to read, never sent back to a model", () => {
+  let entries = [
+    { entity: { eid: 'a' }, entry: { seq: 1 }, content: { body: 'Hi' } },
+    {
+      entity: { eid: 'b' },
+      entry: { seq: 2 },
+      content: { body: 'They said hi.' },
+      reasoning: {},
+      output: {},
+    },
+    {
+      entity: { eid: 'c' },
+      entry: { seq: 3 },
+      content: { body: 'Hello!' },
+      output: {},
+    },
+  ]
+  assertEquals(
+    project(entries, entries, new Map()).map((i) => i.kind),
+    ['user', 'assistant'],
+  )
+})

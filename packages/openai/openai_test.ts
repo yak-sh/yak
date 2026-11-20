@@ -6,6 +6,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ModelError, type Request, UNANCHORED } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
+import { thought } from './responses.ts'
 import { tokenUsage } from './responses.ts'
 
 let req: Request = {
@@ -56,13 +57,39 @@ test('a request is shaped the way the API wants', () => {
       b.instructions,
       b.max_output_tokens,
     ],
-    [{ effort: 'low' }, 'r0', true, true, 'be terse', 64],
+    [{ effort: 'low', summary: 'auto' }, 'r0', true, true, 'be terse', 64],
   )
   assertEquals(
     body({ ...req, anchor: undefined }).previous_response_id,
     undefined,
   )
   assertEquals(body(req).store, false)
+})
+
+test('a model that reasons is asked what it thought; one that does not, nothing', () => {
+  let asked = (model: string) =>
+    body({ ...req, model, effort: undefined }).reasoning
+  assertEquals(asked('gpt-6.2-sol'), { summary: 'auto' })
+  assertEquals(asked('o4-mini'), { summary: 'auto' })
+  assertEquals(asked('gpt-4.1'), undefined)
+})
+
+test("a reply's reasoning summaries are its thought, a paragraph a part", () => {
+  assertEquals(
+    thought([
+      {
+        type: 'reasoning',
+        summary: [
+          { type: 'summary_text', text: 'Matt asked for a guide.' },
+          { type: 'summary_text', text: ' Reply to his message. ' },
+        ],
+      },
+      { type: 'reasoning', summary: [] },
+      { type: 'message', content: [{ type: 'output_text', text: 'a' }] },
+    ]),
+    'Matt asked for a guide.\n\nReply to his message.',
+  )
+  assertEquals(thought([{ type: 'reasoning', summary: [] }]), undefined)
 })
 
 test('completed items come back neutral; reasoning is dropped', () => {

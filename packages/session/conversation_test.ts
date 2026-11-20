@@ -91,6 +91,20 @@ test('each kind of entry is drawn as the person reads it', () => {
   )
 })
 
+test("a model's thought is a step among its calls, opening on what it thought", () => {
+  let thought = e('r', {
+    output: {},
+    reasoning: {},
+    content: { body: 'Matt asked for a **guide**.' },
+  })
+  equal(read(thought), [
+    'step',
+    'Thought it through Matt asked for a guide .',
+    '',
+  ])
+  equal(read(e('q', { output: {}, reasoning: {}, content: {} })), null)
+})
+
 test('a call is one step: running, then settled by its result in place', () => {
   let call = e('c', { call: { to: 't', args: { path: 'a.txt' } } })
   let answer = (comps: object) => e('r', { result: { call: 'c' }, ...comps })

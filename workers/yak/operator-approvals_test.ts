@@ -63,7 +63,7 @@ let tools = confirming(
     tool('gmail_send'),
   ],
   ask,
-  { known, texted: true },
+  { known, texted: true, place: 'Craft & Concept' },
 )
 let named = (name: string) => tools.find((t) => t.name == name)!
 
@@ -94,7 +94,9 @@ test('an escalating call texts a link instead of running; any other runs', async
   equal(String(said).startsWith('Nothing has happened yet'), true)
   equal(texts.at(-1)!.to, NUMBER)
   equal(
-    texts.at(-1)!.words.startsWith('Add eve@x.com to the space as owner? Tap'),
+    texts.at(-1)!.words.startsWith(
+      'Add eve@x.com to Craft & Concept as an owner? Tap',
+    ),
     true,
   )
   await named('grant').run({ revoke: 'abc' })
@@ -120,6 +122,26 @@ test('opening spends nothing; the press runs it once; a second press runs nothin
   )
   equal(
     String((note.content as { body: string }).body).includes('eve@x.com'),
+    true,
+  )
+})
+
+test('Decline spends the link and runs nothing, and the conversation hears it', async () => {
+  await named('member_add').run({ email: 'zed@x.com' })
+  let { approval, digest } = await linked()
+  ran.length = 0
+  equal((await press(approval, digest, false, null, true)).state, 'declined')
+  equal((await press(approval, digest, true)).state, 'used')
+  equal(ran, [])
+  let notes = await store.g.read(
+    line`.entry.session=${session} .notice .fields=content.body`,
+  )
+  equal(
+    notes.some((n) =>
+      /Decline .*zed@x\.com.* was not done/.test(
+        String((n.content as { body: string }).body),
+      )
+    ),
     true,
   )
 })

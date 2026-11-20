@@ -157,6 +157,16 @@ let searching = (sites?: string[]) =>
     type: 'web_search',
   }
 
+// The models that reason, by name: the o-series, GPT-5 and after, and
+// Codex. The API's list says nothing of it, and refuses a `reasoning`
+// setting to a model that doesn't.
+let REASONS = /^(?:o\d|gpt-(?:[5-9]|\d{2,})|codex)/
+
+/** Whether `model` reasons, so a request asks what it thought: a summary of
+ * its reasoning, which a person reads beside the reply (@yaks/model
+ * `Reply.thought`). */
+export let reasons = (model: string): boolean => REASONS.test(model)
+
 /** The whole request body. */
 export let body = (
   req: Request,
@@ -174,7 +184,14 @@ export let body = (
       ...web ? [searching(req.sites)] : [],
     ].sort(toolOrder).map(canonical),
     ...req.conversation ? { prompt_cache_key: req.conversation } : {},
-    ...req.effort ? { reasoning: { effort: req.effort } } : {},
+    ...req.effort || reasons(req.model)
+      ? {
+        reasoning: {
+          ...req.effort ? { effort: req.effort } : {},
+          summary: 'auto',
+        },
+      }
+      : {},
     ...req.tokens ? { max_output_tokens: req.tokens } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
@@ -198,8 +215,17 @@ let citedText = (part: Frame): string => {
   return text
 }
 
-/** Completed output items as neutral items; reasoning and anything else the
- * API adds are not part of the conversation and are dropped. */
+/** What a reply's reasoning items summarized, a paragraph a part, or
+ * nothing where it summarized none. */
+export let thought = (done: Frame[]): string | undefined =>
+  done.filter((item) => item.type == 'reasoning').flatMap((item) =>
+    Array.isArray(item.summary) ? item.summary : []
+  ).map((part) => record(part) ? str(part.text).trim() : '').filter(Boolean)
+    .join('\n\n') || undefined
+
+/** Completed output items as neutral items; reasoning ({@link thought}) and
+ * anything else the API adds are not part of the conversation and are
+ * dropped. */
 export let items = (done: Frame[]): Item[] => {
   let out: Item[] = []
   for (let item of done) {
@@ -452,9 +478,11 @@ let delivery = async (
   images?: Images,
 ): Promise<Reply> => {
   let artifacts = await generatedImages(output, images)
+  let thinking = thought(output)
   return {
     id: str(response.id),
     model: str(response.model),
+    ...thinking ? { thought: thinking } : {},
     ...response.cache_expires_at !== undefined
       ? { cacheExpiresAt: cacheExpiry(response.cache_expires_at) ?? null }
       : {},

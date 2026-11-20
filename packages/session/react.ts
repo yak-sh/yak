@@ -1114,6 +1114,16 @@ export let react = async (
         ),
       ]) ?? await current()
     }
+    // What the model said of its reasoning comes before what it wrote, for a
+    // person to read beside its steps; no later turn is sent it, being no
+    // reply (./state.ts `kindOf`).
+    if (reply.thought?.trim()) {
+      added.push(line({
+        [CONTENT]: { body: reply.thought.trim() },
+        reasoning: {},
+        [OUTPUT]: { source: ask.entity.eid },
+      }))
+    }
     let textIndex = 0
     for (let item of reply.items) {
       if (item.kind == 'assistant') {

@@ -50,6 +50,14 @@ await g.apply([
     words('And the logo?'),
     { ...reply('The guide.'), output: { source: 'late-2' } },
   ),
+  // A reply's thought comes before it, and is no reply.
+  { entity: { eid: 'thinking' }, session: {} },
+  ...lines(
+    'thinking',
+    words('Answer Matt'),
+    { content: { body: 'Matt wants a guide.' }, reasoning: {}, output: {} },
+    reply('Replied to Matt in #founders.'),
+  ),
   { entity: { eid: 'stopped' }, session: {} },
   ...lines(
     'stopped',
@@ -104,5 +112,13 @@ test('a reply answers the words its ask heard, not those given while it was writ
       'late-3',
       ['late-3'],
     ]],
+  )
+})
+
+test("a reply's thought is never its answer", async () => {
+  let answer = await answerOf(g, 'thinking')
+  assertEquals(
+    [answer.text, answer.given.map((b) => b.entity.eid)],
+    ['Replied to Matt in #founders.', ['thinking-1']],
   )
 })

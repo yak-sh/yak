@@ -316,6 +316,10 @@ export type Reply = {
   id: string
   model: string
   items: Item[]
+  /** what the model said of its reasoning before these items, as its
+   * provider returns it (a summary, or its thinking): for a person to read,
+   * never sent back to a model */
+  thought?: string
   /** the answer to each of the request's questions, by the question's name */
   answers?: Record<string, Answer>
   usage?: Usage

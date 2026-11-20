@@ -202,6 +202,26 @@ test('an input is asked, a tool call is run, the transcript settles', async () =
   }])
 })
 
+test("a reply's thought is kept before what it wrote, and never sent again", async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    { ...calls(['c1', 'hi']), thought: 'Echo first.' },
+    { ...says('r2', 'done'), thought: 'Now say done.' },
+  ], false)
+  assertEquals(await rest(g, ids.s, { model, tools: [echo], mint }), 'settled')
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.map((b) => [kindOf(b), textOf(b)]).slice(1), [
+    ['ask', ''],
+    ['reasoning', 'Echo first.'],
+    ['call', ''],
+    ['result', textOf(entries[4])],
+    ['ask', ''],
+    ['reasoning', 'Now say done.'],
+    ['output', 'done'],
+  ])
+  assertEquals(asked[1].items.map((i) => i.kind), ['user', 'call', 'result'])
+})
+
 test('an anchor the provider no longer holds is answered by the whole conversation, once', async () => {
   let g = world()
   let { model, asked } = scripted([

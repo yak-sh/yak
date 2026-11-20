@@ -253,6 +253,12 @@ export let items = (content: Content[]): Item[] => {
   return out
 }
 
+/** What a reply's thinking blocks said, one paragraph a block, or nothing
+ * where it thought nothing it shows. */
+export let thought = (content: Content[]): string | undefined =>
+  content.filter((b) => b.type == 'thinking').map((b) => b.thinking?.trim())
+    .filter(Boolean).join('\n\n') || undefined
+
 /** A model as the API lists it, at the price @yaks/model's list has for its
  * name: the API says no price. */
 export let listed = (m: ModelInfo): Listed => {
@@ -392,10 +398,12 @@ export let messages = (options: Options): Model => {
     if (!cut && message.content.some((b) => b.json != null)) {
       throw new ModelError('malformed_stream', 'a tool call input is not JSON')
     }
+    let thinking = thought(message.content)
     return {
       id: message.id,
       model: message.model,
       items: items(message.content),
+      ...thinking ? { thought: thinking } : {},
       ...cut ? { cut } : {},
       usage: usage(message.usage),
       cacheExpiresAt: new Date(started + (hour(req) ? 3600 : 300) * 1000)

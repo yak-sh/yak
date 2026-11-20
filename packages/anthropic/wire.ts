@@ -59,6 +59,8 @@ export type Citation = { type: string; url?: string; title?: string | null }
 export type Content = {
   type: string
   text?: string
+  /** a thinking block's words */
+  thinking?: string
   id?: string
   name?: string
   input?: unknown
@@ -94,6 +96,7 @@ export type Event = {
   delta?: {
     type?: string
     text?: string
+    thinking?: string
     partial_json?: string
     citation?: Citation
     stop_reason?: string | null
@@ -214,7 +217,7 @@ let present = <T extends object>(o: T) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
 
 /** The message after one more event of its stream: a block begins, grows by
- * its delta (text, a tool call's input, a citation) or ends, or the message
+ * its delta (text, thinking, a tool call's input, a citation) or ends, or the message
  * says why it stopped and what it used. A tool call's input is parsed as its
  * block ends; input that spells no JSON keeps its text in `json`, which only
  * a reply cut at its output limit may hold (@yaks/model `Reply.cut`).
@@ -227,6 +230,9 @@ export let built = (m: Message, e: Event): Message => {
     m.content[at] = { ...e.content_block! }
   } else if (e.type == 'content_block_delta' && block) {
     if (d.type == 'text_delta') block.text = (block.text ?? '') + d.text
+    if (d.type == 'thinking_delta') {
+      block.thinking = (block.thinking ?? '') + d.thinking
+    }
     if (d.type == 'input_json_delta') {
       block.json = (block.json ?? '') + d.partial_json
     }

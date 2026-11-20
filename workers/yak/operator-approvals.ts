@@ -19,10 +19,12 @@
 // The link seals the row's eid and a digest of the act, so it is bound to
 // that one call and its arguments:
 //
-// - Opening it spends nothing: the page says what it does and has one
-//   button, so a preview fetch leaves it whole.
-// - The press spends it (`verified` on the row, before the act runs), then
+// - Opening it spends nothing: the page says what it does, for which space
+//   and its Operator, and has Approve and Decline, so a preview fetch
+//   leaves it whole.
+// - Approve spends it (`verified` on the row, before the act runs), then
 //   runs the call through the person's own tools as they stand now.
+//   Decline spends it too (`declined`), and runs nothing.
 // - A second press, or one after `LIFE`, runs nothing and says so.
 // - A row whose act changed after the text went out no longer matches the
 //   digest, and its link opens nothing.
@@ -35,16 +37,16 @@ import { sha256 } from '@yaks/graph/sha256'
 import { line } from '@yaks/query'
 import { type Tool, topOf } from '@yaks/session'
 import { integrationNamed } from '@yaks/session/conversation'
-import { Logo } from '@yaks/ui/parts'
+import { Button, Logo } from '@yaks/ui/parts'
 import { h } from 'preact'
 import { apex } from '@yaks/platform/host'
 import { APPROVE } from '@yaks/platform/routes'
 import type { Env } from './env.ts'
-import type { Space } from './directory.ts'
+import { directoryOf, type Space } from './directory.ts'
 import type { OperatorStore as Store } from './operator-store.ts'
 import { opened, seal } from './lib/token.ts'
 import { refuse } from './tool.ts'
-import { held, home, page, send } from './pages.ts'
+import { held, home, page } from './pages.ts'
 import { sessionAt } from './session.ts'
 
 /** How long a link to approve an act lives: a tap while the person is
@@ -53,17 +55,21 @@ export let LIFE = 15 * 60_000
 
 type Args = Record<string, unknown>
 
-// A role as a member_add says it, editor where it says none.
-let roleOf = (a: Args) => String(a.role ?? 'editor')
+// A role as a member_add says it, editor where it says none: "an editor".
+let roleOf = (a: Args) => {
+  let role = String(a.role ?? 'editor')
+  return `${/^[aeiou]/i.test(role) ? 'an' : 'a'} ${role}`
+}
 
 /** Whether the Operator already knows an address: a member's, or one it
  * wrote to before. */
 export type Known = (address: string) => Promise<boolean>
 
 /** What a call's escalation turns on beside its arguments: the addresses
- * the Operator knows, and whether the turn's words came by a number alone
- * (`texted`), which anyone can show. */
-export type Turn = { known: Known; texted?: boolean }
+ * the Operator knows, whether the turn's words came by a number alone
+ * (`texted`), which anyone can show, and the space's title (`place`), which
+ * an act on the space names. */
+export type Turn = { known: Known; texted?: boolean; place?: string }
 
 /** What the Operator of a space knows: its members' addresses, and every one
  * it wrote to before, which a known address or a tap let through. */
@@ -106,10 +112,10 @@ export let ESCALATING: Record<
     let to = await strangers(known, a.to)
     return to.length ? `Email ${to.join(', ')}` : undefined
   },
-  member_add: (a) =>
-    `Add ${a.email} to ${a.app ? `the app ${a.app}` : 'the space'} as ${
-      roleOf(a)
-    }`,
+  member_add: (a, { place }) =>
+    `Add ${a.email} to ${
+      a.app ? `the app ${a.app}` : place ?? 'the space'
+    } as ${roleOf(a)}`,
   grant: (a) =>
     a.revoke
       ? undefined
@@ -298,6 +304,7 @@ export type Standing = {
     | 'expired'
     | 'gone'
     | 'failed'
+    | 'declined'
     | 'theirs'
   say?: string
   said?: string
@@ -323,6 +330,7 @@ export let approvals = (
     digest: string,
     press: boolean,
     who: string | null = null,
+    decline = false,
   ): Promise<Standing> => {
     let [row] = await store.g.get([eid])
     let a = row?.operator_approval as Approval | undefined
@@ -335,8 +343,18 @@ export let approvals = (
         ? { logo: (await store.logos([named]))[named] ?? null }
         : {},
     }
-    if (row.verified || pressing.has(eid)) return { state: 'used', ...about }
+    if (row.verified || row.declined || pressing.has(eid)) {
+      return { state: 'used', ...about }
+    }
     if (Date.parse(a.expires) < now()) return { state: 'expired', ...about }
+    if (decline) {
+      let came: Standing = { state: 'declined', ...about }
+      await store.g.apply([
+        { entity: { eid }, declined: {} },
+        pressed(a, await topOf(store.g, a.session), came),
+      ], { trusted: true })
+      return came
+    }
     if (!press) return { state: 'waiting', ...about }
     pressing.add(eid)
     let came: Standing
@@ -374,6 +392,8 @@ export let pressed = (
     content: {
       body: standing.state == 'done'
         ? `They tapped Approve on ${link}, so "${a.say}" was carried out with ${a.tool}: ${standing.said}`
+        : standing.state == 'declined'
+        ? `They tapped Decline on ${link}, so "${a.say}" was not done, and won't be unless they ask again.`
         : `They tapped Approve on ${link}, but "${a.say}" could not be carried out: ${standing.said}`,
     },
     notice: {},
@@ -381,29 +401,40 @@ export let pressed = (
   }
 }
 
+// Whose a link is, as its page names them: the space and what its Operator
+// is called, where the page can say so.
+type Whose = { operator: string; space: string }
+
 let PAGE = {
-  waiting: (say: string) => ({
+  waiting: (say: string, { operator, space }: Whose) => ({
     title: `${say}?`,
-    lead: 'Your Operator asked you to approve this.',
+    lead:
+      `${operator}, the Operator of ${space}, will do this once you approve it. Nothing happens until you do.`,
   }),
   done: (say: string) => ({ title: 'Done', lead: `${say}: done.` }),
-  used: (say: string) => ({
-    title: 'Already approved',
-    lead: `${say}: this link was used already. It works once.`,
+  declined: (say: string, { operator }: Whose) => ({
+    title: 'Declined',
+    lead: `${say}: not done. ${operator} knows you declined it.`,
   }),
-  expired: (say: string) => ({
+  used: (say: string) => ({
+    title: 'Already answered',
+    lead: `${say}: this link was answered already. It works once.`,
+  }),
+  expired: (say: string, { operator }: Whose) => ({
     title: 'This link has expired',
     lead: `${say}: it waited ${
       LIFE / 60_000
-    } minutes. Ask your Operator again if you still want it.`,
+    } minutes. Ask ${operator} again if you still want it.`,
   }),
-  gone: () => ({
+  gone: (_: string, { operator }: Whose) => ({
     title: 'This link opens nothing',
-    lead: 'What it was for changed or is gone. Ask your Operator again.',
+    lead: `What it was for changed or is gone. Ask ${operator} again.`,
   }),
-  failed: (say: string) => ({
+  failed: (say: string, { operator }: Whose, why?: string) => ({
     title: 'It could not be done',
-    lead: `${say}: it did not go through. Your Operator has been told why.`,
+    lead: `${say}: it did not go through.${
+      why ? ` ${why.replace(/\s*$/, '').replace(/([^.!?])$/, '$1.')}` : ''
+    } ${operator} knows why.`,
   }),
   theirs: () => ({
     title: 'This link is for someone else',
@@ -411,36 +442,60 @@ let PAGE = {
   }),
 }
 
+// Where a link's person goes back to: their conversation with its Operator.
+let back = (env: Env, slug: string, { operator }: Whose) =>
+  h(
+    'a',
+    { class: 'Away', href: `https://${apex(env)}/manage/${slug}` },
+    `Back to ${operator}`,
+  )
+
 /**
  * `GET` and `POST` {@link APPROVE}: the page a link opens, and its press,
- * asked of the space's Operator (`/operator/approval`, build.ts) with who
- * is signed in. A link only its person opens sends a browser signed in as
- * nobody to sign in first.
+ * Approve or Decline, asked of the space's Operator (`/operator/approval`,
+ * build.ts) with who is signed in. A link only its person opens sends a
+ * browser signed in as nobody to sign in first. Its page names the space and
+ * its Operator and leads back to their conversation, except to someone else.
  */
 export let approvalDoor = async (req: Request, env: Env) => {
   let press = req.method == 'POST'
-  let t = press
-    ? String((await req.formData()).get('t') ?? '')
+  let form = press ? await req.formData() : undefined
+  let t = form
+    ? String(form.get('t') ?? '')
     : new URL(req.url).searchParams.get('t') ?? ''
+  // A Builder still on the code before Decline reads only `press`, so a
+  // decline is sent as no press: there it shows the link again, never runs.
+  let decline = form?.get('act') == 'decline'
   let pass = await opened<Pass>('approval', t, secretOf(env))
   let who = (await sessionAt(req, env))?.person ?? null
   let standing: Standing = { state: 'gone' }
+  let space: Space | null = null
   if (Array.isArray(pass)) {
-    let [space, approval, digest] = pass
+    let [eid, approval, digest] = pass
     let { builderOf, SPACE } = await import('./build-door.ts')
-    let answer = await builderOf(env, space)(() =>
-      new Request('https://builder/operator/approval', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-yak-kernel': '1',
-          [SPACE]: space,
-        },
-        body: JSON.stringify({ approval, digest, press, who }),
-      })
-    )
+    let [answer, at] = await Promise.all([
+      builderOf(env, eid)(() =>
+        new Request('https://builder/operator/approval', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-yak-kernel': '1',
+            [SPACE]: eid,
+          },
+          body: JSON.stringify({
+            approval,
+            digest,
+            press: press && !decline,
+            decline,
+            who,
+          }),
+        })
+      ),
+      directoryOf(env.STORE).at(eid),
+    ])
     if (!answer.ok) throw new Error(`approval: ${await answer.text()}`)
     standing = await answer.json()
+    space = at
   }
   if (standing.state == 'theirs' && !who && !press) {
     return new Response(null, {
@@ -450,7 +505,16 @@ export let approvalDoor = async (req: Request, env: Env) => {
       },
     })
   }
-  let { title, lead } = PAGE[standing.state](standing.say ?? '')
+  // Only the link's person, or anyone holding a texted one, reads whose it is.
+  let shown = space && standing.state != 'theirs'
+  let whose: Whose = shown
+    ? { operator: space!.operator, space: space!.title || space!.slug }
+    : { operator: 'your Operator', space: 'your space' }
+  let { title, lead } = PAGE[standing.state](
+    standing.say ?? '',
+    whose,
+    standing.said,
+  )
   return page(
     env,
     {
@@ -469,9 +533,14 @@ export let approvalDoor = async (req: Request, env: Env) => {
         'form',
         { class: 'Page_Form', method: 'post', action: APPROVE },
         held('t', t),
-        send('Approve'),
+        h(
+          Button,
+          { mod: 'go', type: 'submit', name: 'act', value: 'approve' },
+          'Approve',
+        ),
+        h(Button, { type: 'submit', name: 'act', value: 'decline' }, 'Decline'),
       )
       : null,
-    home(env),
+    shown ? back(env, space!.slug, whose) : home(env),
   )
 }

@@ -36,7 +36,7 @@ export let operatorDoc: VocabDoc = {
     operator_approval: {
       component: true,
       description:
-        "An act asked for in this person's conversation by a text or an unverified call, waiting for their tap on a link texted to that number (yaks.app's operator-approvals.ts); the tap marks it verified{} and carries it out.",
+        "A privileged act asked for in this person's conversation, waiting for their tap on a link: texted to their number where they wrote by text or call, else given in the Operator's answer (yaks.app's operator-approvals.ts). Approve marks it verified{} and carries it out; Decline marks it declined{} and runs nothing.",
       properties: {
         person: { type: 'string', ref: 'entity', death: 'keep' },
         session: { type: 'string', ref: 'session', death: 'keep' },
@@ -49,6 +49,12 @@ export let operatorDoc: VocabDoc = {
         number: { type: 'string', description: 'Where the link was texted.' },
         expires: { type: 'string', format: 'date-time' },
       },
+    },
+    declined: {
+      component: true,
+      description:
+        'On an operator_approval: the person pressed Decline on its link, so its act never runs and the link opens nothing more.',
+      properties: {},
     },
     unverified: {
       component: true,

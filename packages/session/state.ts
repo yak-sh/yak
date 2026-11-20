@@ -28,9 +28,12 @@ export let attemptState = (
     : 'completed'
 
 /** The kinds of entry: the component stored beside `entry`, or for prose,
- * `output` when an `output` is stored beside it and `input` when none is. */
+ * `output` when an `output` is stored beside it and `input` when none is.
+ * `reasoning` is what a model said of its reasoning beside a reply: neither
+ * the reply nor anyone's words. */
 export type Kind =
   | 'input'
+  | 'reasoning'
   | 'ask'
   | 'call'
   | 'output'
@@ -69,6 +72,7 @@ let KINDS: [string, Kind][] = [
   [ASK, 'ask'],
   [CALL, 'call'],
   ['interrupted', 'interrupted'],
+  ['reasoning', 'reasoning'],
 ]
 
 /** The components that make an entry a kind ranked before `kind`
@@ -248,7 +252,10 @@ export let statusOf = (
 }
 
 let entriesSay = (entries: Bundle[]): TranscriptStatus => {
-  let all = ordered(entries).filter((b) => !b.notice || stoppedNotice(b))
+  // A thought says nothing of where the work stands.
+  let all = ordered(entries).filter((b) =>
+    (!b.notice || stoppedNotice(b)) && !b.reasoning
+  )
   let newest = all.at(-1)
   if (!newest) return 'empty'
   let kind = kindOf(newest)
