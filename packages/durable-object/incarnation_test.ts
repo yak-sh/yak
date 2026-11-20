@@ -214,13 +214,19 @@ test("the statistics an install owes are the alarm's, and the next incarnation k
   write = await wake()
   assertEquals(statistics('recipe'), legacy)
 
-  // A table empty when last analyzed is owed once it holds rows, then kept.
+  // A table empty when last analyzed is owed once it holds rows; one
+  // analyzed at one row is owed again once it holds more, since SQLite scans
+  // a table it thinks holds one row rather than seek it (bug b5285b5d); then
+  // it is kept.
   let bytes = ctx.storage.sql.databaseSize
   await write('note', 'one')
   write = await wake()
-  let populated = statistics('note')
   assertEquals(rows('note'), 1)
   await write('note', 'two')
+  write = await wake()
+  let populated = statistics('note')
+  assertEquals(rows('note'), 2)
+  await write('note', 'three')
   write = await wake()
   assertEquals(statistics('note'), populated)
   assert(ctx.storage.sql.databaseSize < bytes * 10)
