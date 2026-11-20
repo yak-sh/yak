@@ -171,6 +171,24 @@ check(
   },
 )
 
+check(
+  "a letter about our own agent's call says so in its first line",
+  async (g) => {
+    let row = bug(), [error, request] = occurrence(row, crypto.randomUUID())
+    let tags = comp(error, 'error').tags as Record<string, string>
+    error.error = { ...comp(error, 'error'), tags: { ...tags, via: 's1' } }
+    await put(g, [row, error, request])
+    await replay(g, row)
+    let [letter] = await letters(g)
+    let { title, body } = comp(letter, 'doc') as Record<string, string>
+    ok(title.startsWith('[yaks.app t1/drills test account our agent] '), title)
+    equal(
+      body.split('\n')[0],
+      '**Made by our own agent:** session s1, not a person.',
+    )
+  },
+)
+
 // Multi-occasion scenarios own their writes at load; assertions inspect the
 // resulting letters, including duplicate delivery and a later regression.
 let regression = await (async () => {

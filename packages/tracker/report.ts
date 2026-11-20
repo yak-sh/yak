@@ -41,8 +41,14 @@ export type Context = {
   fallback?: Sink
 }
 
+// The header an agent's call names its session in (@yaks/api `VIA`): the
+// fleet's own sessions send it, so a failure one of them caused says so.
+let VIA = 'x-via'
+
 /** Runtime provenance uses the same request association on every reporting path.
- * Non-HTTP entries name their operation without inventing an HTTP request. */
+ * Non-HTTP entries name their operation without inventing an HTTP request.
+ * A request naming its session in `x-via` is tagged `via`: one of our own
+ * agents made it. */
 export let origin = (
   script: string,
   version: string | undefined,
@@ -50,8 +56,14 @@ export let origin = (
   request?: Request,
   eid: string = crypto.randomUUID(),
 ): Pick<Context, 'tags' | 'commit' | 'during' | 'request'> => {
+  let via = request?.headers.get(VIA)
   return {
-    tags: { script, version: version ?? 'unknown', entrypoint },
+    tags: {
+      script,
+      version: version ?? 'unknown',
+      entrypoint,
+      ...via ? { via } : {},
+    },
     commit: version,
     during: { request: eid },
     request: {

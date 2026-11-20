@@ -7,6 +7,20 @@ import type { Bundle } from '@yaks/graph'
 
 let failures = [
   [
+    'Durable Object on an older deploy refused a caller on a newer one: ' +
+    'unknown prop: .opening (closest declared: .pending)',
+    'Durable Object on an older deploy refused a caller on a newer one: ' +
+    'unknown prop: .parish_key — no component is named parish_key, and none ' +
+    'has a property of that name. Declare it, like https://yaks.app/docs/a',
+    'durable object on an older deploy refused a caller on a newer one: ' +
+    'unknown prop: .#',
+  ],
+  [
+    'unknown component release_remake',
+    'unknown component zzqx',
+    'unknown component #',
+  ],
+  [
     'Native dispatch timing drift: 895ms > 259.5ms prior median',
     'Native dispatch timing drift: 1200ms > 300.25ms prior median',
     'native dispatch timing drift: #ms > #ms prior median',

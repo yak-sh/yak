@@ -4,6 +4,11 @@ import type { Bundle } from '@yaks/graph'
 import { replaceIds } from '@yaks/id'
 import { comp, str, title } from './model.ts'
 
+// A refusal of a name the vocabulary does not know quotes the caller's word,
+// then teaches about that word (@yaks/vocab `unknownName`): one fault,
+// whichever word a caller guessed.
+let UNKNOWN = /\b(unknown (?:prop: \.|component ))[\w$-]+[^\n]*/g
+
 // Cloudflare names each of its runtime's internal failures with a reference.
 let REFERENCE = /(;\s*reference\s*=\s*)[a-z0-9]+\b/gi
 
@@ -23,6 +28,8 @@ export let stablePlace = (text: string): string =>
  *
  * normalize('T-42 failed at /srv/app.ts:10:3 after 300 tries')
  * // '# failed at # after # tries'
+ * normalize('unknown prop: .recipy (closest declared: .recipe)')
+ * // 'unknown prop: .#'
  * ```
  */
 export let normalize = (text: string): string =>
@@ -32,6 +39,7 @@ export let normalize = (text: string): string =>
       /\b(sub|cus|cs|pi|si|in|evt|pm|seti|ch|acct|price|prod)_(?:(?:test|live)_)?[a-z0-9]{12,}\b/g,
       '$1_#',
     ) // Stripe's long opaque object ids; keep the object type
+    .replace(UNKNOWN, '$1#') // the caller's word, and what is taught about it
     // Cloudflare's per-occurrence reference, after any of its internal errors
     .replace(REFERENCE, '$1#')
     .replace(

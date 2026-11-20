@@ -236,6 +236,27 @@ test('runtime reports retain script, release, entrypoint and a scrubbed request'
   }
 })
 
+test("an agent's call is tagged with the session it names in x-via", () => {
+  let asked = new Request('https://yaks.app/mcp', {
+    headers: { 'x-via': 's1' },
+  })
+  let tags = (r: Request) =>
+    comp(
+      capture(failure, {
+        ...origin('yak', 'v', 'fetch', r),
+        sink: () => {},
+      })[0],
+      'error',
+    ).tags
+  equal(tags(asked), {
+    script: 'yak',
+    version: 'v',
+    entrypoint: 'fetch',
+    via: 's1',
+  })
+  equal(tags(request), { script: 'yak', version: 'v', entrypoint: 'fetch' })
+})
+
 test("a report door files a person's breaks under the release their page ran, and nothing a bot's render or a flood sends", async () => {
   let filed: [string, number | null][] = [], asked = 0, over = false
   let report = door({

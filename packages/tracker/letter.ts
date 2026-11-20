@@ -102,6 +102,13 @@ export let tested = (errors: Bundle[]): boolean => {
   return kinds.length == 1 && kinds[0] == 'test'
 }
 
+/// agent([tagged({ via: 's1' }), tagged({ via: 's1' }), tagged({ via: 's2' })]) -> 's1 (+1 more)'
+/// agent([tagged({ source: 'box' })]) -> ''
+/** The fleet's own agent sessions that made the calls it broke in, which
+ * name themselves in `via`; '' when none did. */
+export let agent = (errors: Bundle[]): string =>
+  top(errors, (b) => tag(b, 'via'))
+
 /// reached([tagged({ user_id: 'a', account: 'person', space: 's' }), tagged({ user_id: 'b', account: 'test', space: 's' })]) -> '2 people, 1 of them a test account · 1 space'
 /// reached([tagged({ account: 'test', space: 't122930', app: 'drills' })]) -> 'test accounts only · 1 space · 1 app'
 /// reached([tagged({ account: 'person', space: 'jill', app: 'flavors' })]) -> "a person's space, no signed-in person recorded · 1 space · 1 app"
@@ -198,6 +205,7 @@ let SAID = new Set([
   'entrypoint',
   'user_id',
   'account',
+  'via',
   'tool',
   'handler',
   'role',
@@ -226,6 +234,7 @@ let list = (heading: string, lines: string[]) =>
 /// let broke = { entity: { eid: 'b' }, bug: {}, doc: { title: 'TypeError: x is undefined\n    at run' } }
 /// subject(broke, [tagged({ space: 'jill', app: 'flavors', account: 'test' })]) -> '[yaks.app jill/flavors test account] TypeError: x is undefined'
 /// subject(broke, [tagged({ source: 'box' })]) -> '[box] TypeError: x is undefined'
+/// subject(broke, [tagged({ via: 's1' })]) -> '[yaks.app our agent] TypeError: x is undefined'
 /** The subject: where it ran and what broke, in words. The bug's id is in the
  * body and its link; its later letters answer this one by `mail.reply_to`,
  * which goes out as In-Reply-To and References. */
@@ -235,6 +244,7 @@ export let subject = (bug: Bundle, errors: Bundle[]): string =>
       origin(errors),
       scope(errors).replace(/ \(.*$/, ''),
       tested(errors) ? 'test account' : '',
+      agent(errors) ? 'our agent' : '',
     ].filter(Boolean).join(' ')
   }] ${headline(said(bug))}`
 
@@ -250,6 +260,7 @@ export let letter = (
   let newest = errors[0]
   let back = comp(bug, 'regressed')
   let call = asked(request), commit = built(newest ? [newest] : [])
+  let made = agent(errors)
   let facts = [
     back.at
       ? `**Regressed:** ${when(str(back.at))}, after it was resolved`
@@ -264,6 +275,9 @@ export let letter = (
   return {
     title: subject(bug, errors),
     body: [
+      ...made
+        ? [`**Made by our own agent:** session ${made}, not a person.`, '']
+        : [],
       ((newest && said(newest)) || said(bug)).trim(),
       '',
       ...facts.map((f) => `- ${f}`),
