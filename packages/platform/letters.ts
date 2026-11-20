@@ -91,7 +91,7 @@ export type Invited = {
  *   by: 'Ada', verb: 'use', what: 'Cookbook (ada.yaks.app/cookbook)',
  *   accept: 'https://yaks.app/invite?t=x', email: 'bea@example.com', days: 14,
  * })
- * assertStringIncludes(body, "I'm Nova, the AI assistant for Ada's space")
+ * assertStringIncludes(body, "I'm Nova, the AI assistant for Ada’s space")
  * assertStringIncludes(body, 'Ada invited you to use Cookbook')
  * ```
  */
@@ -102,7 +102,7 @@ export let invitation = (o: Invited): string =>
   (o.note ? `${o.by ?? 'They'} wrote:\n\n${quoted(o.note)}\n\n` : '') +
   `I'm ${o.space.operator}, the AI assistant for ${
     o.space.title || o.space.slug
-  }'s space on yaks.app. ${o.by ?? 'Someone there'} invited you to ${o.verb} ` +
+  }’s space on yaks.app. ${o.by ?? 'Someone there'} invited you to ${o.verb} ` +
   `${o.what}. Accept with one click:\n\n${o.accept}\n\n` +
   `The link signs you in as ${o.email} for the next ${o.days} days. There ` +
   'is nothing to install and no account to make first. Until you accept, ' +
