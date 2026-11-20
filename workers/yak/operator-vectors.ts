@@ -4,10 +4,8 @@
 // store lends its own (graph.ts `#embedder`). Its recall then ranks what the
 // person said and kept by meaning (operator.ts `before`).
 //
-// A store learns its space from its sessions (operator-root.ts `spaceOf`).
-// Until one names it, nobody pays for a vector, so no embedder is lent: its
-// texts stay owed, its recall ranks by words, and nothing fails. Once the
-// space is known, `ready` starts the drain that was waiting.
+// A store uses the space it keeps, or learns it from its sessions
+// (operator-root.ts `spaceOf`). Its texts stay owed until that space is known.
 import type { Embedder } from '@yaks/embedding'
 import type { Env } from './env.ts'
 import { embedder, withheld } from './embedding.ts'
@@ -31,31 +29,35 @@ export let operatorVectors = (
   // before its first session was written answers no space, and is asked again.
   let asking: Promise<void> | null = null
   let again = false
-  let ask = (): void => {
-    if (asking) return void (again = true)
-    asking = spaceOf(o.space()).then((eid) => {
-      if (!eid) return
-      made = embedder({
-        ...env,
-        AI: env.AI && withheld(
-          metered(env, async (dir) => await dir.at(eid) ?? null),
-        ),
-      })
+  let lend = (eid: string) =>
+    embedder({
+      ...env,
+      AI: withheld(metered(env, async (dir) => await dir.at(eid) ?? null)),
+    })
+  let model = (): Embedder | null => {
+    if (made || !env.AI) return made
+    let at = spaceOf(o.space())
+    if (typeof at == 'string') return made = lend(at)
+    if (asking) {
+      again = true
+      return null
+    }
+    asking = at.then((eid) => {
+      if (!eid || made) return
+      made = lend(eid)
       if (made) o.ready?.()
     }).catch((e) => caught(e, { request: 'operator embedding space' }))
       .finally(() => {
         asking = null
         if (!made && again) {
           again = false
-          ask()
+          model()
         }
       })
+    return null
   }
   return {
-    model: () => {
-      if (!made) ask()
-      return made
-    },
+    model,
     arm: o.arm,
     hold: o.hold,
   }

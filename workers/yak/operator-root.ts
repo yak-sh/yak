@@ -52,9 +52,9 @@ let spaces = new WeakMap<object, Promise<string | undefined>>()
  * the one its sessions name. */
 export let spaceOf = (
   store: Pick<Store, 'g' | 'marks'>,
-): Promise<string | undefined> => {
+): string | Promise<string | undefined> => {
   let kept = store.marks?.get(SPACED)
-  if (kept) return Promise.resolve(kept)
+  if (kept) return kept
   let held = spaces.get(store.g)
   if (!held) {
     held = Promise.resolve(
