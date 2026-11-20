@@ -8,7 +8,7 @@
 import { type ComponentChildren, h, type JSX } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { More } from '@yaks/ui/parts'
+import { More, State } from '@yaks/ui/parts'
 
 /** The page entity carrying this owner's disclosure state. */
 export let disclosureAt = (owner: string): string =>
@@ -40,7 +40,8 @@ export type DisclosureProps = Disclosed & {
   mod?: string | (string | false | null | undefined)[]
   class?: string
   /** what it holds is drawn only while open, for content that asks for
-   * rows; closed, the server's page then has nothing to open */
+   * rows; closed, it holds only `Loading…`, which a page that holds the
+   * server's drawing shows as it opens until what it fetches replaces it */
   lazy?: boolean
   children?: ComponentChildren
 }
@@ -57,6 +58,10 @@ let pressed = ({ e, onChange }: Disclosed) =>
       onChange(disclosed(e, !isOpen(e)))
     }
     : undefined
+
+/** What a lazy disclosure holds until it is opened and drawn. */
+export let Loading = (): JSX.Element =>
+  h(State, { mod: ['pulse', 'active'] }, 'Loading…')
 
 /** Open as its state says; what it holds is drawn whether open or not, so a
  * page drawn on a server opens it with no script, unless it is `lazy`. */
@@ -83,7 +88,7 @@ export let Disclosure = (
     h(
       More.Body,
       e ? { id: bodyOf(e) } : {},
-      lazy && !open ? null : children,
+      lazy && !open ? h(Loading, null) : children,
     ),
   )
 }

@@ -44,6 +44,7 @@ import {
   DisclosureMark,
   type DisclosureProps,
   isOpen,
+  Loading,
 } from './Disclosure.ts'
 
 /** How many lines it draws before it is asked for more, and how many more
@@ -166,7 +167,7 @@ export let Fold = (
   props: Omit<DisclosureProps, keyof Disclosed>,
 ): JSX.Element => h(Disclosure, { ...props, ...useFold() })
 
-export { disclosed, Disclosure, DisclosureMark }
+export { disclosed, Disclosure, DisclosureMark, isOpen, Loading }
 
 // What scrolls the page.
 let paged = (doc: Document): HTMLElement =>

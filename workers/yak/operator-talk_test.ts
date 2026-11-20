@@ -71,11 +71,13 @@ let page = (
   })
   let box = document.querySelector('[data-conversation]') as HTMLElement
   let drawn = box.innerHTML
+  let errors: string[] = []
   let shown: Talking = mountTalk({
     box,
     words: docs,
     older: (take) => void heard.push({ take }),
     unfold,
+    onError: (e) => void errors.push(e.message),
     clock: () => at,
   })
   return {
@@ -83,6 +85,7 @@ let page = (
     drawn,
     talk: shown,
     Event,
+    errors,
     rows: () =>
       [...box.querySelector('.Transcript_Lines')!.children].map(canon),
     [Symbol.dispose]: () => {
@@ -190,34 +193,80 @@ test('a read of the newest lines keeps the earlier ones the page holds, and miss
   equal(p.box.querySelector('[data-task] > button'), null)
 })
 
-test('a fold the server drew closed and empty opens on its line, fetched as it is pressed', async () => {
-  let told = entry('told', 1, {
-    ask: {},
-    sending: { instructions: '# Base\nBe kind.' },
-  })
-  let said = entry('said', 2, { content: { body: 'Hello' } })
-  let all = [told, said]
+// A page whose first line is what the model was told, and that line's fold
+// as the person presses it: what it shows, and what the page asked for.
+let told = entry('told', 1, {
+  ask: {},
+  sending: { instructions: '# Base\nBe kind.' },
+})
+let telling = (fails = 0) => {
+  let all = [told, entry('said', 2, { content: { body: 'Hello' } })]
   let asked: string[] = []
-  using p = page(all, [], undefined, (line) => {
+  let answers: (() => void)[] = []
+  let p = page(all, [], undefined, (line) => {
     asked.push(line)
     let { lines } = frame('task-1', all, names, 0).operator
-    return Promise.resolve({
-      ...lines,
-      lines: lines.lines.filter((l) => l.id == line),
-    })
+    let one = { ...lines, lines: lines.lines.filter((l) => l.id == line) }
+    return new Promise((done, fail) =>
+      answers.push(() =>
+        asked.length <= fails ? fail(new Error('offline')) : done(one)
+      )
+    )
   })
   let fold = () => p.box.querySelector('#row-told [data-lazy]')!
-  equal(fold().querySelector('.More_Body')!.children.length, 0)
-  fold().querySelector('summary')!.dispatchEvent(
-    new p.Event('click', { bubbles: true, cancelable: true }),
-  )
-  await new Promise((done) => setTimeout(done, 0))
-  equal(asked, ['told'])
-  equal(fold().hasAttribute('open'), true)
-  equal(
-    [...fold().querySelectorAll('.More_Body summary')].map((s) =>
-      s.textContent
-    ),
-    ['Base'],
-  )
+  let press = (at: Element) =>
+    at.dispatchEvent(new p.Event('click', { bubbles: true, cancelable: true }))
+  return {
+    p,
+    asked,
+    press: () => press(fold().querySelector('summary')!),
+    retry: () => press(fold().querySelector('.More_Body button')!),
+    // the fetches asked for answered, and the page's drawing after them
+    answer: async () => {
+      answers.splice(0).forEach((a) => a())
+      await new Promise((done) => setTimeout(done, 0))
+    },
+    // what it shows: none of what a fold closed inside it holds
+    shown: () => {
+      let body = fold().querySelector('.More_Body')!.cloneNode(true) as Element
+      for (let b of body.querySelectorAll('details:not([open]) > .More_Body')) {
+        b.remove()
+      }
+      return {
+        open: fold().hasAttribute('open'),
+        says: body.textContent!.trim(),
+      }
+    },
+  }
+}
+
+test('a fold the server drew holding only Loading opens at once, its line fetched, and closes when pressed again', async () => {
+  let t = telling()
+  using _p = t.p
+  equal(t.shown(), { open: false, says: 'Loading…' })
+  t.press()
+  equal(t.shown(), { open: true, says: 'Loading…' })
+  await t.answer()
+  equal(t.asked, ['told'])
+  equal(t.shown(), { open: true, says: 'Base' })
+  t.press()
+  equal(t.shown().open, false)
+  t.press()
+  equal(t.shown(), { open: true, says: 'Base' })
+  equal(t.asked, ['told'])
+})
+
+test('a fold whose line could not be fetched says so, and its retry opens it', async () => {
+  let t = telling(1)
+  using _p = t.p
+  t.press()
+  await t.answer()
+  equal(t.shown(), { open: true, says: 'This could not be opened. Try again' })
+  equal(t.p.errors, ['offline'])
+  t.retry()
+  equal(t.shown(), { open: true, says: 'Loading…' })
+  await t.answer()
+  equal(t.shown(), { open: true, says: 'Base' })
+  t.press()
+  equal(t.shown().open, false)
 })

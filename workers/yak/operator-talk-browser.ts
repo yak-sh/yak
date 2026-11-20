@@ -9,7 +9,14 @@ import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docs as uxDocs } from '@yaks/ux/vocab'
-import { conversed, conversingOf, disclosed, TAKE } from '@yaks/ux/conversation'
+import {
+  conversed,
+  conversingOf,
+  isOpen,
+  Loading,
+  TAKE,
+} from '@yaks/ux/conversation'
+import { Button, Notice } from '@yaks/ui/parts'
 import { opening } from '@yaks/session/conversation'
 import { drawLines, type Lines } from './operator-draw.ts'
 import {
@@ -71,10 +78,11 @@ export type Talking = ReturnType<typeof mountTalk>
  * written (`typed`), a whole read (`read`, the `?talk=` answer's HTML) and
  * Stop pressed (`stopped`). Where its reader is goes to `onAway`, and
  * `newest` takes them back; `older` is asked for a read of `take` lines when
- * the reader asks for lines the page does not hold. A fold drawn closed and
- * empty (@yaks/ux `Disclosure` `lazy`) in a line held as the server drew it
- * opens once `unfold` has fetched that line's entries, from which it is drawn
- * here from then on; a failure goes to `onError`.
+ * the reader asks for lines the page does not hold. A fold drawn closed
+ * holding only `Loading…` (@yaks/ux `Disclosure` `lazy`) in a line held as
+ * the server drew it opens at once, and `unfold` fetches that line's entries,
+ * from which it is drawn here from then on; a fetch that fails says so in the
+ * fold, with a retry, and goes to `onError`.
  */
 export let mountTalk = (
   {
@@ -122,6 +130,7 @@ export let mountTalk = (
   // closed.
   let change = (b: Bundle) => {
     put([b])
+    if (isOpen(b)) unfolded(b.entity.eid)
     if (held && b.entity.eid == readerAt(held.task)) {
       let { take = TAKE, away: now = false } = conversingOf(
         front.ent(b.entity.eid),
@@ -168,27 +177,48 @@ export let mountTalk = (
     ;(box.firstChild ? hydrate : render)(tree(held), box)
   }
   draw()
-  // A lazy fold pressed in a line held as the server drew it: the line's
-  // entries fetched, the line drawn from them as the server drew it (so its
-  // folds keep their places), then the fold opened.
-  box.addEventListener('click', (ev) => {
-    let summary = (ev.target as Element).closest?.('summary')
-    let fold = summary?.parentElement
-    let row = fold?.closest('[id^="row-"]')
-    if (!fold?.hasAttribute('data-lazy') || !row || !held || !unfold) return
-    let id = row.id.slice('row-'.length)
-    if (held.lines.find((l) => l.id == id)?.uses) return
-    ev.preventDefault()
-    let eid = (fold as HTMLElement).dataset.disclosure
+  // A lazy fold opened in a line held as the server drew it, which holds
+  // only `Loading…`: the line's entries fetched, and the line drawn from them
+  // as the server drew it, so the fold keeps its place and whether it is open.
+  // One that could not be fetched says so, with a retry.
+  let fetching = new Set<string>()
+  let unfolded = (eid: string) => {
+    let fold = box.querySelector(`[data-lazy][data-disclosure="${eid}"]`)
+    let id = fold?.closest('[id^="row-"]')?.id.slice('row-'.length)
+    let line = held?.lines.find((l) => l.id == id)
+    if (!fold || !id || !line || line.uses || !unfold || fetching.has(id)) {
+      return
+    }
+    let body = fold.lastElementChild as HTMLElement
+    fetching.add(id)
+    render(h(Loading, null), body)
     unfold(id).then((sent) => {
-      if (!held || !sent) return
+      if (!sent?.lines.some((l) => l.id == id)) {
+        throw new Error(`Line ${id} was not among the lines fetched to open`)
+      }
+      fetching.delete(id)
+      if (!held) return
       put(sent.entries)
       held = heard(held, sent)
       draw()
-      if (eid) put([disclosed({ entity: { eid } }, true)])
-      draw()
-    }).catch(onError)
-  })
+    }).catch((e) => {
+      fetching.delete(id)
+      onError(e)
+      render(
+        h(
+          Notice,
+          { mod: 'negative' },
+          'This could not be opened. ',
+          h(Button, {
+            type: 'button',
+            mod: 'quiet',
+            onClick: () => unfolded(eid),
+          }, 'Try again'),
+        ),
+        body,
+      )
+    })
+  }
   let typing = false
   return {
     /** the task the page shows, once it shows one */

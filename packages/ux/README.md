@@ -278,12 +278,12 @@ opens what it holds. `Disclosure` takes `e` and emits `Disclosure{open}` through
 page graph and supplies it again, and it is open as that state says. Missing
 state is closed. What it holds is drawn closed too, so a page a server drew
 opens it with no script; `lazy` draws it only while open, for content that asks
-for rows or is too large to send unopened, and marks it `data-lazy` so a page
-holding the server's drawing knows to fetch what it holds before opening it.
-`summary` is its line, and `mod` its look (`quiet` for a step). `DisclosureMark`
-is a second way to open it, drawn outside it: a button over the same `e`, such
-as a phone mark in a caller's words. Without `e` a disclosure is a plain
-`details` its host opens by itself.
+for rows or is too large to send unopened, holding only `Loading…` until then,
+and marks it `data-lazy` so a page holding the server's drawing knows to fetch
+what it holds as it opens. `summary` is its line, and `mod` its look (`quiet`
+for a step). `DisclosureMark` is a second way to open it, drawn outside it: a
+button over the same `e`, such as a phone mark in a caller's words. Without `e`
+a disclosure is a plain `details` its host opens by itself.
 
 ```ts
 import { h } from 'preact'

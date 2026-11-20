@@ -11,7 +11,8 @@
  * - `Edit`, `Edit.Text`, `Edit.Control`: a property's value changed where it
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
  * - `Disclosure`: the kit's fold, its summary opening what it holds, and
- *   `DisclosureMark`, a second way to open it; `disclosureAt`, `isOpen`,
+ *   `DisclosureMark`, a second way to open it; `Loading`, what a lazy one
+ *   holds until opened; `disclosureAt`, `isOpen`,
  *   `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Fields`: controlled inputs and repeat groups (./Fields.ts).
  * - `Submit`: loading, durable drafts and submission lifecycle (./Submit.ts).
@@ -72,6 +73,7 @@ export {
   DisclosureMark,
   type DisclosureProps,
   isOpen,
+  Loading,
 } from './Disclosure.ts'
 export {
   type BoxProps,

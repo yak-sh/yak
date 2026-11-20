@@ -1088,12 +1088,15 @@ export let operatorAnswer = async (
     return socketTo(env, space, req, who, '/operator/browser')
   }
   // One line of a conversation as data, for a fold the page opens of a line
-  // it holds as the server drew it (operator-talk-browser.ts `mountTalk`).
+  // it holds as the server drew it (operator-talk-browser.ts `mountTalk`):
+  // read from where the page's reads start (`from`), so a line older than the
+  // newest lines is there as the page drew it.
   if (q.has('talk') && q.has('line')) {
     let { lines } = await operatorDoor(env, space, who, 'conversation', {
       at,
       open: q.get('talk')!,
       line: q.get('line')!,
+      ...q.has('from') ? { from: Number(q.get('from')) } : {},
     }).catch((e) => {
       if (e.status != 404) throw e
       return { lines: null }
@@ -2523,11 +2526,11 @@ let talk = mountTalk({
   onAway: (away) => boxed?.set({ away }),
   older: (take) => { taking = take; read().catch(said) },
   unfold: async (line) => {
-    let response = await ask('${at}?talk=' + encodeURIComponent(talk.task()) + '&line=' + encodeURIComponent(line))
-    if (!response.ok) throw new Error('That could not be opened. Try again.')
+    let start = talk.from()
+    let response = await ask('${at}?talk=' + encodeURIComponent(talk.task()) + '&line=' + encodeURIComponent(line) + (start == null ? '' : '&from=' + encodeURIComponent(start)))
+    if (!response.ok) throw new Error('A fold of line ' + line + ' could not be fetched: ' + response.status)
     return (await response.json()).lines
   },
-  onError: said,
 })
 let heading = document.querySelector('[data-title]')
 // The app open beside the chat (T-140509) is loaded again when the Operator
