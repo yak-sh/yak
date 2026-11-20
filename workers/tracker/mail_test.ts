@@ -1,76 +1,44 @@
-// Reopening configured mail preserves activation and writes only changed addresses.
+// Reopening configured mail writes only a changed recipient.
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, test } from '@yaks/testing'
 import { options, platform, vocab } from './core.ts'
-import { activate, sender } from './mail.ts'
+import { activate, activation, sender } from './mail.ts'
 
 let env = {
   MAIL: { send: () => Promise.resolve({}) },
   MAIL_FROM: 'tracker@example.test',
   MAIL_TO: 'one@example.test',
 }
-let since = '2026-10-01T00:00:00.000Z'
 let g = graph({ vocab, storage: ram(vocab, options) })
-await g.apply([{
-  entity: { eid: platform },
-  email: { address: env.MAIL_TO },
-}], { trusted: true })
 let writes: Bundle[] = [], apply = g.apply
 g.apply = async (...args) => {
   writes.push(...args[0])
   return await apply(...args)
 }
-let saved = new Map([['mail-since', since]])
-let metaWrites = 0
-let keeping = () => ({
-  get: (key: string) => saved.get(key),
-  set: (key: string, value: string) => {
-    metaWrites++
-    saved.set(key, value)
-  },
-})
 
-test('reopening mail with the same recipient and activation writes nothing', async () => {
-  // The fixture can also be reused by the budget runner's second pass.
+test('reopening mail with the same recipient writes nothing', async () => {
   await g.apply([{
     entity: { eid: platform },
     email: { address: env.MAIL_TO },
   }], { trusted: true })
   writes.length = 0
-  metaWrites = 0
-  equal(
-    await activate(
-      g,
-      env,
-      keeping,
-      () => 0,
-    ),
-    {
-      to: platform,
-      from: env.MAIL_FROM,
-      since,
-    },
-  )
+  equal(await activate(g, env), { to: platform, from: env.MAIL_FROM })
   equal(writes, [])
-  equal(metaWrites, 0)
 })
 
-test('changing a mail recipient updates delivery without resetting activation', async () => {
+test('changing a mail recipient updates delivery', async () => {
   writes.length = 0
-  metaWrites = 0
-  await activate(
-    g,
-    { ...env, MAIL_TO: 'two@example.test' },
-    keeping,
-    () => 0,
-  )
+  await activate(g, { ...env, MAIL_TO: 'two@example.test' })
   equal(writes.map((b) => b.email), [{ address: 'two@example.test' }])
-  equal(saved.get('mail-since'), since)
-  equal(metaWrites, 0)
 })
 
-test('switching the tracker to Resend preserves its activation and pending letters', async () => {
+test('a deploy that cannot send records its recipient and writes no letters', () => {
+  equal(activation({ MAIL_TO: env.MAIL_TO }).to, undefined)
+  equal(activation({}), {})
+})
+
+test('switching the tracker to Resend sends through Resend', async () => {
   let calls = 0
   let switched = {
     ...env,
@@ -81,11 +49,8 @@ test('switching the tracker to Resend preserves its activation and pending lette
       return Promise.resolve(Response.json({ id: 'provider-id' }))
     },
   }
-  let configured = await activate(g, switched, keeping, () => 0)
-  equal(configured.since, since)
-  equal(saved.get('mail-since'), since)
-  let selected = sender(switched)!
-  await selected.send({
+  equal((await activate(g, switched)).to, platform)
+  await sender(switched)!.send({
     from: env.MAIL_FROM,
     to: env.MAIL_TO,
     subject: 'A failure',

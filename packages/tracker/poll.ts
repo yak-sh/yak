@@ -20,7 +20,7 @@ import {
   Unavailable,
 } from './remote.ts'
 import { type Read, read } from './routes.ts'
-import type { Mark } from './letter.ts'
+import type { Mark } from './model.ts'
 import { type Clock, system } from '@yaks/fp'
 import { outage } from './outage.ts'
 import { pollThread } from './poll_thread.ts'

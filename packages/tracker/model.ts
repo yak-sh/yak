@@ -6,6 +6,8 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
  * bug's grouping, its frames and its letters. */
 export type Desk = Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'>
 export type Level = 'fatal' | 'error'
+/** A mark a fixer or a resolution puts on a bug. */
+export type Mark = 'taken' | 'resolved' | 'archived'
 export type Frame = {
   file: string
   line?: number

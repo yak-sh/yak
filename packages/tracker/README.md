@@ -16,7 +16,7 @@ references may name entities in other stores.
 | `./report`     | Capture, transport, `coalesce` and a page's reports                                 |
 | `./instrument` | A class whose construction and every method run inside a given reporting boundary   |
 | `./page`       | Classic browser capture script and twenty breadcrumbs                               |
-| `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`                             |
+| `./effects`    | `error_group`, `error_frames`, `bug_settle`, `error_trim`, `bug_digest`             |
 | `./views`      | Bug pages, list rows, error frames and the Bugs destination                         |
 | `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry` |
 | `./service`    | Spool record admission and acknowledgement                                          |
@@ -63,9 +63,9 @@ and thread as they were; a bug whose opening was told is not told again:
 yak bug reopen <bug>
 ```
 
-The resolved letter, the bug's page, `yak bug show` and `yak admin errors` read
-the same explanation (`explained` in `./resolution`). Bugs resolved before
-explanations were kept have none, and say so.
+The bug's page, `yak bug show` and `yak admin errors` read the same explanation
+(`explained` in `./resolution`). Bugs resolved before explanations were kept
+have none, and say so.
 
 ## Host interface
 
@@ -118,55 +118,26 @@ segment per record and removes it only on acknowledgement. An incomplete tail
 stays on disk while complete records continue. Segments use independent names,
 so concurrent processes never share an append offset.
 
-`effects({graph}, options)` accepts an `enrich` function for frame resolution, a
-space `notify` stream callback, or a platform/box mail `to`, `from` and global
-tracker `store` eid. Local CLI composition turns the configured
-`code: {cwd, url, origins}` into frame enrichment through the fleet catalog and
-a commit resolver for the bug tools. `forwarded` names capture sources another
-tracker writes the letters for: a bug whose kept occurrences all carry one of
-those `error.tags.source` values is marked seen without a letter, so a bug the
-box forwards to the platform tracker sends one letter, the box's. Each bug
-opening and each regression gets its own letter immediately. `side` names the
-side of the tracker web a store's bugs open on when they are not in its own
-graph: the platform tracker's letters (`side: 'yaks.app'`) name a bug by global
-eid and link to `/?.bug&side=yaks.app&bug=<eid>`, where the box's tracker web
-reads it through `/tracker/bugs` and draws it with the same pages. A space's
-tracker holds its own bugs, so its letters add its `scope`
-(`&scope=<space eid>`), which the page and `bug_show` read the bug from, and
-`bug_resolve`, `bug_archive` and `bug_reopen` mark it in. Its identity derives
-from the store, recipient, bug eid, opening or regression mark, and full
-`created.at` or `regressed.at`, so a replayed effect keeps the same letter. A
-letter is read alone by someone deciding whether it is urgent, so `letter.ts`
-writes from the bug and its retained occurrences all the tracker holds: the
-subject names where it ran (box or yaks.app, the space and app, and "test
-account" when only test accounts were reached) and the headline, never the bug's
-id; the body carries the whole message, where it ran (process or worker, app
-version, operation), whom it reached, how often and in the last hour, the
-failing request, the code, the commit, the top of the stack, the breadcrumbs
-before it, every other tag, and a link naming the bug. Reporters supply what it
-reads: the box tags its `command` and host `roles`, yaks.app its `space` and
-`app` slugs and whose space it is (`account`). A later letter takes the
-opening's subject after `Re:` and names the opening in `mail.reply_to`, which
-@yaks/mail sends as In-Reply-To and References: those headers make the thread. A
-regression's letter answers the opening's thread, and `bug_follow` adds one
-reply there when a bug is resolved or archived, and one when a fixer takes it
-(`taken{at, by, via, task}`, once per opening); a bug that opened without a
-letter stays quiet. The resolved reply says how long the bug was open, whom it
-reached and the resolution's explanation, its commits linked into the `repo`
-option's web pages (`"repo": "https://github.com/yak-sh/yak"`); a resolution
-without an explanation sends nothing until one is written. Bugs become notified
-only after their occasion's letter has its `delivered` mark; an earlier
-occasion's delivery cannot mark a later regression notified. Space replies own
-their own notified mark. Archived bugs still count but never notify. Retention
-keeps the newest hundred plus the first occurrence of each commit (or version
-without a commit) in the active graph. Every admitted occurrence is stored with
-its stack and tags before retention moves older ones into graph trash. Its
-identity remains, so redelivery never recounts an occurrence in trash. Bugs,
-letters and their lifecycle remain readable. Grouping reads its bug's counters,
-and an earlier occurrence only after a resolution, to ask whether one shares its
-release; trimming reads each occurrence's time and release, and none while the
-bug's hits are within the newest it keeps. Reframing writes a bug's culprit or
-spot only where it moved.
+`effects({graph}, options)` accepts an `enrich` function for frame resolution,
+and the digest's mail `to`, `from`, tracker web `url` and global tracker `store`
+eid. Local CLI composition turns the configured `code: {cwd, url, origins}` into
+frame enrichment through the fleet catalog and a commit resolver for the bug
+tools.
+
+No effect writes a letter about one bug. Agents hear of each new bug at once
+from the open-bug watch (@yaks/heal), which files its task and knocks; a person
+reads the daily digest (`./digest`), which the platform tracker sends to its
+`to`.
+
+Retention keeps the newest hundred plus the first occurrence of each commit (or
+version without a commit) in the active graph. Every admitted occurrence is
+stored with its stack and tags before retention moves older ones into graph
+trash. Its identity remains, so redelivery never recounts an occurrence in
+trash. Bugs, letters and their lifecycle remain readable. Grouping reads its
+bug's counters, and an earlier occurrence only after a resolution, to ask
+whether one shares its release; trimming reads each occurrence's time and
+release, and none while the bug's hits are within the newest it keeps. Reframing
+writes a bug's culprit or spot only where it moved.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was already seen
@@ -264,8 +235,6 @@ keeps the same effect pending and checks again after five seconds without
 spending attempts or reporting an outage as another bug. A terminal catalog
 error remains failed across restarts until explicitly retried. Editing an
 occurrence's stack or commit owes fresh frame resolution without recounting it.
-A notification whose destination is not configured likewise stays pending and
-checks for repaired configuration after a minute.
 
 The box resolver accepts paths only under its repository's Git checkout roots,
 or HTTP module URLs at explicitly configured origins. It checks regular files in
@@ -363,8 +332,8 @@ the pass after a fix goes out, and logs that the tracker is set up again. Any
 other failure (a refusal of what was sent or asked, a bad page, a failure on
 this side) is reported at once. Each report is admitted directly to the local
 tracker as `Tracker <direction> sync failed: <what failed>`, with the failure as
-its `cause`, a flood coalesced; its independent mail duty notifies the
-configured recipient without using the failing remote outbox.
+its `cause`, a flood coalesced, and stays open in the box tracker's bug list
+(`yak --config ~/.yak/tracker.json bug list`).
 
 A **standing pass** reads remote bug marks every thirty seconds and reconciles
 matching box groups by global eid or their fault and app. The Worker owns
@@ -425,12 +394,10 @@ the same `./outage.ts`.
 
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
-errors or mark bugs. Box captures carry `error.tags.source=box`; the Worker
-writes letters for platform bugs and leaves box bugs to the box tracker, and a
-person's app failures (`source=app`) to their space's
-(`forwarded: ['box',
-'app']`). Reports retain their capture time across retries.
-Host shutdown waits for every report's durable spool write.
+errors or mark bugs. Box captures carry `error.tags.source=box`, and a person's
+app failures `source=app`; the platform tracker records both, so its digest
+covers them. Reports retain their capture time across retries. Host shutdown
+waits for every report's durable spool write.
 
 ## Bounded trace admission
 

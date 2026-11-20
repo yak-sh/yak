@@ -108,13 +108,25 @@ test('box captures retain generated child session references across independent 
 
 let failedStorage = ram(vocab, options)
 await graph({ vocab, storage: failedStorage }).apply([
-  { entity: { eid: 'failed-bug' }, bug: { fault: 'failed-notification' } },
   {
-    entity: { eid: 'failed-notify' },
+    entity: { eid: 'failed-bug' },
+    bug: { fault: 'failed-settle' },
+    resolved: { at: '2026-10-02T00:00:00Z', cause: 'a leak' },
+  },
+  {
+    entity: { eid: 'failed-error' },
+    error: {
+      bug: 'failed-bug',
+      at: '2026-10-01T00:00:00Z',
+      tags: { scope: 'space', occurrence: 'o' },
+    },
+  },
+  {
+    entity: { eid: 'failed-settle' },
     effect: {
-      handler: 'bug_notify',
+      handler: 'bug_settle',
       target: 'failed-bug',
-      comp: 'bug',
+      comp: 'resolved',
       kind: 'created',
       state: 'pending',
       attempts: 1,
@@ -122,13 +134,11 @@ await graph({ vocab, storage: failedStorage }).apply([
   },
 ], { trusted: true })
 let reported: unknown[] = [], fallback: unknown[] = []
-let notificationFailure = Error('notification unavailable')
+let notificationFailure = Error('space tracker unavailable')
 await store(failedStorage, {
   sink: (rows) => void fallback.push(rows),
   report: (error) => void reported.push(error),
-  notify: () => {
-    throw notificationFailure
-  },
+  settle: () => Promise.reject(notificationFailure),
 }).drain()
 
 test('tracker effects report through their host without a second capture', () => {

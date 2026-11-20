@@ -42,7 +42,7 @@ for (let backend of ['ram', 'sqlite']) {
   }
 }
 
-test('declared effects group intake and retain occurrences downstream', async () => {
+test('declared effects group intake and regressions, and write no letter about a bug', async () => {
   let at = '2026-10-02T00:00:10.000Z'
   let g = fixture(
     { to: crypto.randomUUID(), store: 'box', retain: 1 },
@@ -74,7 +74,6 @@ test('declared effects group intake and retain occurrences downstream', async ()
       }),
       { trusted: true },
     )
-  let [first] = await g.read('.mail *')
   for (let version of [2, 3]) {
     await g.apply([{
       entity: bug.entity,
@@ -82,22 +81,10 @@ test('declared effects group intake and retain occurrences downstream', async ()
         at: version == 2 ? '2026-10-02T00:00:09Z' : '2026-10-02T00:00:20Z',
       },
     }], { trusted: true })
-    // Opening and regression are different occasions even if their clocks match.
     at = version == 2 ? '2026-10-02T00:00:10.000Z' : '2026-10-02T00:00:30.000Z'
     await hit(`back-${version}`, version)
     let [back] = await g.get([bug.entity.eid])
     equal(comp(back, 'regressed').at, at)
-    // Each resolve also answers the thread; those are notify_test's.
-    let letters = (await g.read('.mail *')).filter((b) =>
-      !String(comp(b, 'doc').body).startsWith('Resolved ')
-    )
-    equal(letters.length, version)
-    let letter = letters.find((b) =>
-      b.entity.eid != first.entity.eid && comp(b, 'mail').at == at
-    )!
-    equal(comp(letter, 'mail').target, bug.entity.eid)
-    await g.apply([{ entity: letter.entity, delivered: {} }], { trusted: true })
-    equal((await g.read('.bug .notified')).length, 1)
   }
-  equal(comp(first, 'mail').at, '2026-10-02T00:00:10.000Z')
+  equal(await g.read('.mail'), [])
 })

@@ -4,7 +4,7 @@
 import type { Doors } from './poll.ts'
 import type { Remote } from './remote.ts'
 import type { Read } from './routes.ts'
-import type { Mark } from './letter.ts'
+import type { Mark } from './model.ts'
 
 // Each ask carries the remote as it stands, read at use as every door's is,
 // so a fixed address or secret reaches the next poll without a restart.

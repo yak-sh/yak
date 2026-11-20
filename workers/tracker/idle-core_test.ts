@@ -11,20 +11,25 @@ let fixture = async (pending = false) => {
     {
       entity: { eid: 'bug' },
       bug: { fault: 'old' },
-      ...pending ? {} : { resolved: {} },
+      resolved: { at: '2026-10-02T00:00:00Z', cause: 'a leak' },
     },
     {
       entity: { eid: 'error' },
-      error: { bug: 'bug', message: 'Old failure' },
+      error: {
+        bug: 'bug',
+        message: 'Old failure',
+        at: '2026-10-01T00:00:00Z',
+        tags: { scope: 'space', occurrence: 'o' },
+      },
       exception: { type: 'Error', value: 'Old failure' },
     },
     ...pending
       ? [{
         entity: { eid: 'retry' },
         effect: {
-          handler: 'bug_notify',
+          handler: 'bug_settle',
           target: 'bug',
-          comp: 'bug',
+          comp: 'resolved',
           kind: 'created',
           state: 'pending',
           attempts: 1,
@@ -36,7 +41,7 @@ let fixture = async (pending = false) => {
   let notified = 0
   let tracker = store(storage, {
     sink: () => {},
-    notify: () => void notified++,
+    settle: () => Promise.resolve(void notified++),
   })
   let writes: Bundle[] = [], rows = 0
   let apply = tracker.graph.apply, read = tracker.graph.read

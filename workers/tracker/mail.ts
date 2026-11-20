@@ -1,5 +1,5 @@
-// An ordinary wake enables mail from its first activation onward. The stored
-// date survives eviction; a trace wake never asks for this setup.
+// The platform tracker's letters: one daily digest to the recipient MAIL_TO
+// names (@yaks/tracker/digest). A trace wake never asks for this setup.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { configured, holding, type Options } from '@yaks/host/config'
 import { lending, type Lends } from '@yaks/host/lending'
@@ -42,50 +42,32 @@ export let sender = (env: Mailbox, scope = platform) =>
 
 let enabled = (env: Mailbox) => !!(sender(env) && env.MAIL_FROM && env.MAIL_TO)
 
+/** Where the tracker's letters go: the recipient `MAIL_TO` names, as the
+ * platform's entity, and the sender, once the deploy can send. */
 export let activation = (
   env: Mailbox,
-  since: string | undefined,
-  now: () => number,
-): { recipient?: Bundle; to?: string; from?: string; since?: string } => {
-  return {
-    ...env.MAIL_TO
-      ? {
-        recipient: {
-          entity: { eid: platform },
-          email: { address: env.MAIL_TO },
-        },
-      }
-      : {},
-    ...enabled(env)
-      ? {
-        to: platform,
-        from: env.MAIL_FROM,
-        since: since || new Date(now()).toISOString(),
-      }
-      : {},
-  }
-}
-
-type Kept = {
-  get: (key: string) => string | undefined
-  set: (key: string, value: string) => void
-}
+): { recipient?: Bundle; to?: string; from?: string } => ({
+  ...env.MAIL_TO
+    ? {
+      recipient: {
+        entity: { eid: platform },
+        email: { address: env.MAIL_TO },
+      },
+    }
+    : {},
+  ...enabled(env) ? { to: platform, from: env.MAIL_FROM } : {},
+})
 
 export let activate = async (
   graph: Pick<Graph, 'apply' | 'get'>,
   env: Mailbox,
-  keeping: () => Kept,
-  now: () => number,
 ) => {
-  let kept = enabled(env) ? keeping() : undefined
-  let since = kept?.get('mail-since')
-  let { recipient, ...config } = activation(env, since, now)
+  let { recipient, ...config } = activation(env)
   if (recipient) {
     let [held] = await graph.get([recipient.entity.eid], ['email'])
     if ((held?.email as Comp | undefined)?.address != env.MAIL_TO) {
       await graph.apply([recipient], { trusted: true })
     }
   }
-  if (config.since && !since) kept!.set('mail-since', config.since)
   return config
 }
