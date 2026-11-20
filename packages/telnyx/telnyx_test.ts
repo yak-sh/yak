@@ -121,6 +121,7 @@ test('a call is attested only where its carrier vouched in full and the signatur
     }).ring?.attested ?? false
   let cases: [Record<string, unknown>, boolean][] = [
     [{ shaken_stir_attestation: 'A', shaken_stir_validated: true }, true],
+    [{ shaken_stir_attestation: 'a', shaken_stir_validated: true }, true],
     [{ shaken_stir_attestation: 'A', shaken_stir_validated: false }, false],
     [{ shaken_stir_attestation: 'B', shaken_stir_validated: true }, false],
     [{}, false],

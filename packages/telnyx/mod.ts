@@ -230,7 +230,10 @@ export let heard = (event: unknown): Heard => {
         to: String(p!.to ?? ''),
         at: data!.occurred_at ?? new Date().toISOString(),
         // Only full attestation, verified, says the caller holds the number.
-        ...p!.shaken_stir_attestation == 'A' && p!.shaken_stir_validated
+        // Telnyx sends it only where the connection has SHAKEN/STIR on, and
+        // in lower case ("a", seen live 2026-11-20).
+        ...p!.shaken_stir_attestation?.toUpperCase() == 'A' &&
+            p!.shaken_stir_validated
           ? { attested: true }
           : {},
       },
