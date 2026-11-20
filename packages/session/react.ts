@@ -221,6 +221,10 @@ export type Tool = Declared & {
   /** Its schema is sent only once a `tool_load` call names it; until then
    * that tool lists it by name and title (./deferred.ts). */
   deferred?: boolean
+  /** The runner holds it, but this turn does not, for this reason: it is
+   * neither listed, sent nor run, and a `tool_load` naming it is told the
+   * reason (./deferred.ts). */
+  withheld?: string
 }
 
 /** How long a background call (`tool_async`) runs before it is given a

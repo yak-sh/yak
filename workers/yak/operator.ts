@@ -456,8 +456,31 @@ let CORE = new Set([
   'escalate',
 ])
 // What a break's turn changes beyond its reads: the files of the app that
-// broke, checked and released (unseen.ts `fix`).
-let RELEASING = new Set(['app_files', 'app_preview', 'app_deploy'])
+// broke, checked and released, and its errors archived once the fix is seen
+// live (unseen.ts `fix`).
+let RELEASING = new Set([
+  'app_files',
+  'app_preview',
+  'app_deploy',
+  'app_errors',
+])
+
+// Why a turn whose words came from outside the space (operator-channels.ts
+// `HEARSAY`) holds only some of the Operator's tools, as `tool_load` tells it
+// of the rest (@yaks/session `withheld`).
+let OUTSIDE =
+  'this turn answers words from outside the space (a break, what visitors ' +
+  'wrote, or what another conversation raised), so it holds reads, telling ' +
+  'the person, and for a break app_files, app_preview, app_deploy and ' +
+  "app_errors; do the work with those. The person's own next message gives " +
+  'back every tool.'
+
+// The tools a turn holds, and the rest withheld with why.
+let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
+  tools.map((t) => held(t) ? t : { ...t, withheld: why })
+
+// What a caller other than a turn's own runner offers: the tools it holds.
+let offerable = (tools: Tool[]) => tools.filter((t) => !t.withheld)
 
 // A tool that says whether it is deferred keeps its word.
 let deferred = (tools: Tool[]): Tool[] =>
@@ -1908,8 +1931,14 @@ export let operating = (
         ? await threadOf(store, newest?.request)
         : undefined
       return deferred([
-        ...roster.filter((t) =>
-          t.readOnly || (channel == 'error' && RELEASING.has(t.name))
+        ...holding(
+          [
+            ...sessionTools(g, children).filter((t) => t.name == 'fork'),
+            delegated(),
+            ...roster,
+          ],
+          (t) => !!t.readOnly || (channel == 'error' && RELEASING.has(t.name)),
+          OUTSIDE,
         ),
         ...member
           ? [
@@ -1926,7 +1955,11 @@ export let operating = (
           ? [escalationAnswer(store, ctx, space)]
           : [],
         ...thread ? [onThread(thread)] : [],
-        ...(options.tools?.(ctx, files) ?? []).filter((t) => t.readOnly),
+        ...holding(
+          options.tools?.(ctx, files) ?? [],
+          (t) => !!t.readOnly,
+          OUTSIDE,
+        ),
       ])
     }
     return deferred([
@@ -1993,7 +2026,7 @@ export let operating = (
     if (!space) throw new Error('This Operator store holds no space')
     await fired(store, space, row, at, {
       runner: async (occurrence, ask) => {
-        let offered = await roster(occurrence)
+        let offered = offerable(await roster(occurrence))
         return toolRunner(recorded(g, occurrence, ask.space), {
           tools: offered.map((tool) => ({
             name: tool.name,
@@ -2563,7 +2596,7 @@ export let operating = (
   let tools: Operator['tools'] = async (held, space) => {
     let { session, fresh } = await conversing(held, space)
     if (fresh) await g.apply([fresh], { trusted: true })
-    let offered = (await roster(session))
+    let offered = offerable(await roster(session))
       .filter((t) => t.name != spawn.name && t.name != 'fork')
     let named = new Map(offered.map((t) => [t.name, t]))
     return {

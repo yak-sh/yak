@@ -166,6 +166,7 @@ test('words sent about an update reach the Operator with it', async () => {
 let FIXING = {
   app_files: true,
   app_deploy: true,
+  app_errors: true,
   notification_send: true,
   mail_send: false,
   graph_apply: false,
@@ -175,6 +176,7 @@ let FIXING = {
 
 test('a fixed break tells its person only what the Operator wrote them, linked to its chat', async () => {
   script.push(
+    call('tool_load', { names: ['code_mode'] }),
     call('notification_send', {
       subject: 'Recipes: printing works again',
       text: 'The print button stopped working. I fixed it; nothing to do.',
@@ -194,6 +196,10 @@ test('a fixed break tells its person only what the Operator wrote them, linked t
   for (let [tool, held] of Object.entries(FIXING)) {
     assertEquals(offered.includes(tool), held, tool)
   }
+  assertStringIncludes(
+    asked.at(-1)!,
+    'code_mode is not held in this turn: this turn answers words from outside the space',
+  )
   let all = (await read(ada)).updates
   let fixed = all.find((u) => u.subject == 'Recipes: printing works again')!
   // It opens its run's chat at the call that wrote it, and that call is a

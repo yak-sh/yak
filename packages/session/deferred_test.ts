@@ -32,3 +32,17 @@ test('a name no tool has is refused with the tools sharing a word with it', asyn
     'There is no tool called text_send; nearest: mail_send, notification_send',
   )
 })
+
+test('a withheld tool is neither offered nor listed, and loading it says why', async () => {
+  let tools = loading([
+    tool('search'),
+    tool('mail_send', true),
+    { ...tool('code_mode'), withheld: 'a break holds its reads' },
+  ])
+  equal(tools.map((t) => t.name), ['search', 'mail_send', 'tool_load'])
+  await throws(
+    async () =>
+      await tools.at(-1)!.run({ names: ['mail_send', 'tasks__code_mode'] }),
+    'tasks__code_mode is not held in this turn: a break holds its reads. Load one',
+  )
+})

@@ -7,7 +7,9 @@
 // is sent too, so a request never replays a call to a tool it does not carry.
 // The tools come first in a provider's cached prefix, so a set that only grows
 // keeps that prefix whatever a turn reads of its transcript (an anchor, a
-// window, a summary).
+// window, a summary). A tool the runner holds but a turn does not is
+// `withheld`: neither listed, sent nor run, and a `tool_load` naming it is told
+// why, so the turn works with what it holds instead of guessing at names.
 import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { CallError } from '@yaks/tools/errors'
@@ -43,20 +45,29 @@ export let named = (name: string, known: Set<string>): string | undefined => {
 }
 
 /**
- * The refusal of names no tool has, with the tools that share a word with
- * each, so the next call names one that is there.
+ * The refusal of names a turn cannot load: a withheld tool with why it is
+ * withheld, and a name no tool has with the tools that share a word with it,
+ * so the next call names one that is there.
  *
  * ```ts
  * unknown(['notification_send'], ['mail_send', 'search', 'notify_me'])
  * // 'There is no tool called notification_send; nearest: mail_send. Load one by a name tool_load lists.'
+ * unknown(['code_mode'], ['search'], new Map([['code_mode', 'it writes']]))
+ * // 'code_mode is not held in this turn: it writes. Load one by a name tool_load lists.'
  * ```
  */
-export let unknown = (missing: string[], names: string[]) => {
+export let unknown = (
+  missing: string[],
+  names: string[],
+  withheld = new Map<string, string>(),
+) => {
   let words = (n: string) => n.split('__').at(-1)!.split('_')
   let near = (n: string) =>
     names.filter((k) => words(k).some((w) => words(n).includes(w))).sort()
       .slice(0, 5)
   return missing.map((n) => {
+    let why = withheld.get(named(n, new Set(withheld.keys())) ?? '')
+    if (why) return `${n} is not held in this turn: ${why}`
     let some = near(n)
     return `There is no tool called ${n}` +
       (some.length ? `; nearest: ${some.join(', ')}` : '')
@@ -91,16 +102,24 @@ let namesOf = (call: Bundle): string[] => {
 /**
  * The tools a runner offers, with `tool_load` beside them when any is
  * deferred: its description lists each deferred one, and its call names
- * those to send from then on.
+ * those to send from then on. A withheld tool is left out, and named in
+ * `tool_load`'s refusal with why.
  *
  * ```ts
  * let tool = (name: string, deferred = false) =>
  *   ({ name, description: `${name}.`, parameters: {}, deferred, run: () => name })
  * loading([tool('search'), tool('buy', true)]).map((t) => t.name)
  * // ['search', 'buy', 'tool_load']
+ * let sell = { ...tool('sell'), withheld: 'it spends' }
+ * loading([tool('search'), tool('buy', true), sell]).map((t) => t.name)
+ * // ['search', 'buy', 'tool_load']
  * ```
  */
-export let loading = (tools: Tool[]): Tool[] => {
+export let loading = (offered: Tool[]): Tool[] => {
+  let withheld = new Map(
+    offered.flatMap((t) => t.withheld ? [[t.name, t.withheld]] : []),
+  )
+  let tools = offered.filter((t) => !t.withheld)
   let later = tools.filter((t) => t.deferred)
   if (!later.length || tools.some((t) => t.name == LOAD)) return tools
   let known = new Set(later.map((t) => t.name))
@@ -118,7 +137,10 @@ export let loading = (tools: Tool[]): Tool[] => {
       let held = names.flatMap((n) => named(n, sent) ?? [])
       let missing = names.filter((n) => !named(n, known) && !named(n, sent))
       if (missing.length) {
-        throw new CallError('tool', unknown(missing, [...known, ...sent]))
+        throw new CallError(
+          'tool',
+          unknown(missing, [...known, ...sent], withheld),
+        )
       }
       let loaded = names.flatMap((n) => named(n, known) ?? [])
       return [
