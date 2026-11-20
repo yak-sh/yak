@@ -319,13 +319,13 @@ export let kernel = async (): Promise<Kernel> => {
   if (!shared) {
     let mine = shared = boot()
     // It holds globals past the end of the file that booted it: `fetch`,
-    // which its stand-ins are routes on (./endpoints.ts), and the ones the
-    // Worker's modules install as boot first imports them
-    // (./binding-probe.ts `HTMLRewriter`, ./runtime.ts `Cloudflare`).
+    // which its stand-ins are routes on (./endpoints.ts), and `Cloudflare`,
+    // which ./runtime.ts installs as boot first imports it. `HTMLRewriter` is
+    // the runtime's own before any file loads (./html-rewriter.ts).
     kept(async () => {
       if (shared == mine) shared = undefined
       await (await mine).close()
-    }, ['fetch', 'HTMLRewriter', 'Cloudflare'])
+    }, ['fetch', 'Cloudflare'])
   }
   let { close: _, ...k } = await shared
   return owning(k)

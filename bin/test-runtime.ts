@@ -1,5 +1,7 @@
 // `cloudflare:workers` resolves to the kernel's own host module.
 import '../workers/yak/runtime-resolve.ts'
+// The Workers runtime's HTMLRewriter global, there before any file loads.
+import '../workers/yak/html-rewriter.ts'
 
 // Preloaded into each platform's runtime (bin/test.ts `runtime`): the runtime
 // runs on a module cache of its own, and what it starts runs on the run's.

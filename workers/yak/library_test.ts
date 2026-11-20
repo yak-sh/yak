@@ -6,7 +6,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import * as io from '@yaks/file/io'
-import './binding-probe.ts'
+import './html-rewriter.ts'
 import { ANSWER } from './documents.ts'
 import { embeds } from './testing.ts'
 import { client, connector, seed } from './probe.ts'

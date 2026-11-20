@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import './binding-probe.ts'
+import './html-rewriter.ts'
 import { previewed } from './preview-html.ts'
 import { woven } from './apps.ts'
 import { app } from './directory-fixture.ts'

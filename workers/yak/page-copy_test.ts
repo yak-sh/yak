@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import './binding-probe.ts'
+import './html-rewriter.ts'
 import { type Copy, filled } from './page-copy.ts'
 
 let copy: Copy = {

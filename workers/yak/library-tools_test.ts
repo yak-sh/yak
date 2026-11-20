@@ -6,7 +6,7 @@
 // floor is refused.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import './binding-probe.ts'
+import './html-rewriter.ts'
 import { embeds } from './testing.ts'
 import { connector, fresh, meta, seed, signIn } from './probe.ts'
 import { digest } from '@yaks/graph/sha256'

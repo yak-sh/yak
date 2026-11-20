@@ -1,5 +1,6 @@
+// The runtime's HTMLRewriter, for a run the test runner did not preload it in.
+import './html-rewriter.ts'
 import { decodedPath } from './request-path.ts'
-import { HTMLRewriter as LolHtml } from 'html-rewriter-wasm'
 import { createHash } from 'node:crypto'
 import { memoryMultipart } from '@yaks/blob'
 import { contentType } from 'mime-types'
@@ -19,49 +20,6 @@ import { Wire as Wired } from './stream.ts'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import type { Limiter } from '@yaks/workerd/rate'
 import { digest } from '@yaks/graph/sha256'
-
-// The HTMLRewriter binding: the runtime's own lol-html, compiled to
-// WebAssembly (html-rewriter-wasm, as Miniflare runs it), behind the
-// Response-in, Response-out shape the runtime gives it. The bytes a handler
-// does not touch pass through as they came, so a page's doctype, case and
-// whitespace survive the way they do in production.
-type Handlers = Parameters<LolHtml['on']>[1]
-type DocumentHandlers = Parameters<LolHtml['onDocument']>[0]
-
-class Rewriter {
-  #on: [string, Handlers][] = []
-  #documents: DocumentHandlers[] = []
-  on(selector: string, handlers: Handlers) {
-    this.#on.push([selector, handlers])
-    return this
-  }
-  onDocument(handlers: DocumentHandlers) {
-    this.#documents.push(handlers)
-    return this
-  }
-  transform(res: Response) {
-    let on = this.#on, documents = this.#documents
-    let body = new ReadableStream<Uint8Array>({
-      async start(c) {
-        let html = new LolHtml((chunk) => {
-          if (chunk.length) c.enqueue(chunk.slice())
-        })
-        for (let [selector, handlers] of on) html.on(selector, handlers)
-        for (let handlers of documents) html.onDocument(handlers)
-        try {
-          for await (let bytes of res.body ?? []) await html.write(bytes)
-          await html.end()
-        } finally {
-          html.free()
-        }
-        c.close()
-      },
-    })
-    return new Response(body, res)
-  }
-}
-
-;(globalThis as { HTMLRewriter?: unknown }).HTMLRewriter ??= Rewriter
 
 let sameBytes = (a: Uint8Array, b: Uint8Array) => {
   if (a.length != b.length) return false
