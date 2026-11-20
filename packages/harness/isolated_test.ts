@@ -29,7 +29,7 @@ let machine = (out: string, ran: string[]): Workspace => ({
 let office = async (diff = 'diff --git a/x b/x\n+fixed') => {
   let config = at()
   let host = await compose(
-    { ...config, plugins: [...config.plugins!, '@yaks/heal'] },
+    { ...config, plugins: [...config.plugins!, '@yaks/heal', '@yaks/mail'] },
     ['graph'],
     undefined,
   )
@@ -163,17 +163,28 @@ test('submit_patch hands the patch and the task’s claim to a lander; a sandbox
       content: { body: 'continue' },
       using: { provider: 'openai' },
     }], { trusted: true })
-    await r.tools.find((t) => t.name == 'shell')!.run(
-      { command: 'ls' },
-      { session: 'fixer', call: { entity: { eid: 'c3' } }, entries: [] },
-    )
+    let shell = (call: string) =>
+      r.tools.find((t) => t.name == 'shell')!.run(
+        { command: 'ls' },
+        { session: 'fixer', call: { entity: { eid: call } }, entries: [] },
+      )
+    await shell('c3')
     ok(o.requested.at(-1)!.id != o.disposed[0])
+    // Each ask of the run carries `using` too, and keeps the run's sandbox.
+    await o.g.apply([{
+      entity: { eid: 'turn' },
+      entry: { session: 'fixer' },
+      ask: {},
+      using: { provider: 'openai' },
+    }], { trusted: true })
+    await shell('c4')
+    equal(o.requested.at(-1)!.id, o.requested.at(-2)!.id)
   } finally {
     await o.host.close()
   }
 })
 
-test('a helper holding no task names the one its work is for, and hands it over with or without a patch', async () => {
+test('a helper holding no task hands over the one its letter filed, with or without a patch', async () => {
   for (let diff of ['diff --git a/x b/x\n+fixed', '']) {
     let o = await office(diff)
     try {
@@ -187,12 +198,22 @@ test('a helper holding no task names the one its work is for, and hands it over 
           call: { entity: { eid: call } },
           entries: [],
         })
+      // What it took filed the task: it needs no naming.
+      await o.g.apply([
+        { entity: { eid: 'mail' }, routine: { project: 'p' } },
+        { entity: { eid: 'mail' }, notified: {}, $actor: { via: 'helper' } },
+        {
+          entity: { eid: 'filed' },
+          about: {},
+          edge: { from: 'letter', to: 'mail' },
+        },
+      ], { trusted: true })
       equal(
         await hand({ summary: 'x', task: 'nothing' }, 'c1'),
         'No task nothing; nothing handed over.',
       )
       await hand(
-        { summary: 'Declined: answer the thread.', task: 'letter' },
+        { summary: 'Declined: answer the thread.' },
         'c2',
       )
       // Not the office's own lander of the helper's.

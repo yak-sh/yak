@@ -285,11 +285,13 @@ export let snapshot = (
 
 /** The sandbox `session` works in: one per run it is asked for (each input
  * carrying `using`, as heal's and a helper's do), let go when the transcript
- * ends or hands off its patch. A later run starts from a fresh snapshot. */
+ * ends or hands off its patch. A later run starts from a fresh snapshot. Every
+ * ask in a run carries `using` too, and is no new run: keyed by one, each turn
+ * would open a sandbox of its own, without the files the turn before wrote. */
 export let sandboxed = (g: Graph, sandbox: SandboxProvider) => {
   let ref = async (session: Eid): Promise<SandboxRequest> => {
     let [asked] = await g.read(
-      line`.entry.session=${session}&.using&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+      line`.entry.session=${session}&.using&!ask&.order=-entry.seq&.limit=1&.fields=entity.eid`,
     )
     return {
       id: derivedEid(`isolated ${session} ${asked?.entity.eid ?? ''}`),
@@ -302,6 +304,32 @@ export let sandboxed = (g: Graph, sandbox: SandboxProvider) => {
       (await sandbox.request!(await ref(session))).workspace,
     dispose: (at: SandboxRequest) => sandbox.dispose(at),
   }
+}
+
+// The one open task filed about what a helper took, such as the task a
+// letter's arrival filed: a helper holds no claim, and a lander holding no task
+// gets no checkout to land in. None where it took several such, or none.
+let filed = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+  if (!['routine', 'notified', 'about'].every((n) => g.vocab.comp(n))) {
+    return []
+  }
+  let took = await g.read(
+    line`.routine&.notified.via=${session}&.fields=entity.eid`,
+  )
+  let edges = (await Promise.all(
+    took.map((b) => g.read(line`.about&.edge.to=${b.entity.eid}&?edge`)),
+  )).flat()
+  let tasks = await Promise.all(
+    edges.map((e) =>
+      g.read(
+        line`.entity.eid=${
+          String(comp(e, 'edge')?.from)
+        }&.task&!completed&!cancelled&?doc`,
+      )
+    ),
+  )
+  let open = [...new Map(tasks.flat().map((t) => [t.entity.eid, t])).values()]
+  return open.length == 1 ? open : []
 }
 
 /** The tool that hands the sandbox's changes to a lander: a native session
@@ -359,7 +387,7 @@ export let submitPatch = (
       ? [held]
       : named
       ? await g.read(line`.entity.eid=${named}&.task&.limit=1&?doc`)
-      : []
+      : await filed(g, session)
     if (named && !task) return `No task ${named}; nothing handed over.`
     if (!patch.trim() && !task) {
       return 'Nothing changed in /workspace; no patch sent.'
