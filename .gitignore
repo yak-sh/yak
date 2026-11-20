@@ -96,6 +96,9 @@ node_modules
 
 /workers/yak/public/_dates.js
 
+# The contents list of long pages, generated from @yaks/ui/contents.
+/workers/yak/public/_contents.js
+
 /workers/yak/public/data.js
 /workers/yak/public/chart.js
 .claude/agents/

@@ -252,6 +252,7 @@ let CARRIED = {
   client_id: 1,
   broker: 1,
   hosts: 1,
+  api: 1,
   fields: 1,
   signature: 1,
   testing: 1,
