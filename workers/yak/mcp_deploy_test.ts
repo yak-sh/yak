@@ -310,6 +310,8 @@ test('a deploy is a version, and one word puts it back', async () => {
       {
         version: 2,
         sha: await digest('<h1>OOPS</h1>'),
+        size: 13,
+        mediaType: 'text/html; charset=utf-8',
         content: '<h1>OOPS</h1>',
       },
     )
