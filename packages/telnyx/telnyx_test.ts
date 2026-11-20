@@ -252,7 +252,7 @@ test('telnyx numbers find, buy onto the profile, release and verify', async () =
     reason: 'Add an opt-in picture',
   })
   assertEquals(calls, [
-    'GET /available_phone_numbers?filter[country_code]=US&filter[features][]=sms&filter[limit]=5&filter[phone_number_type]=toll_free&filter[phone_number][starts_with]=+18885550100',
+    'GET /available_phone_numbers?filter[country_code]=US&filter[features][]=sms&filter[limit]=5&filter[phone_number_type]=toll_free&filter[phone_number][contains]=8885550100',
     'GET /messaging_profiles?filter[name][eq]=yaks.app',
     'POST /number_orders',
     `GET /phone_numbers?filter[phone_number]=${FREE}`,

@@ -473,8 +473,10 @@ export let numbers = (
       })
       if (s.tollFree) q.set('filter[phone_number_type]', 'toll_free')
       if (s.area) q.set('filter[national_destination_code]', s.area)
-      if (s.contains) q.set('filter[phone_number][contains]', s.contains)
-      if (s.number) q.set('filter[phone_number][starts_with]', s.number)
+      // Telnyx matches digits within the national number, so one number
+      // is found by its digits after the country code (+1 here).
+      let digits = s.number?.replace(/^\+1?/, '') ?? s.contains
+      if (digits) q.set('filter[phone_number][contains]', digits)
       let said = await call(`/available_phone_numbers?${q}`)
       return ((said.data ?? []) as unknown as Available[]).flatMap(
         (n): Offer[] => {
