@@ -26,10 +26,16 @@ export type Said = {
   addressed?: Addressed
   /** the platform's id for the message it answers */
   reply_to?: string
+  /** whether these are its words as edited since it was first said: a
+   * platform gives an edit as heard with the message's own id, and the
+   * listener takes it only where it is addressed, as a message it has not
+   * answered yet (an edit that adds a mention) */
+  edited?: boolean
 }
 
-/** How a message was said to a bot: naming it, replying to one of its own,
- * or to it alone. */
+/** How a message was said to a bot: naming it; replying to one of its own,
+ * or to one that named it, so a thread with it goes on unnamed; or to it
+ * alone. */
 export type Addressed = 'mention' | 'reply' | 'direct'
 
 /** A reply to post into a room, answering a message where it names one. */
@@ -369,7 +375,7 @@ let placed = ({ room, name, direct, message, reply_to }: Place) =>
 let HOW: Record<Addressed | 'heard', string> = {
   direct: 'directly, from',
   mention: 'naming you, from',
-  reply: 'replying to you, from',
+  reply: 'replying in a thread with you, from',
   heard: 'in a room you hear but were not addressed in, from',
 }
 

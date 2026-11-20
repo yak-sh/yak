@@ -848,7 +848,10 @@ let toApps = async (
  * the space lets anyone do (operator.ts `actorOf`). Elsewhere, one addressed to the bot goes to its
  * writer's own conversation with that Operator; a direct one to yaks.app's
  * own, from someone linked here, to their own space's. Anything else is not
- * for the Operator.
+ * for the Operator. An edit is taken only where it is addressed, as a
+ * message said then: one the Operator already took is not answered again
+ * (operator-channels.ts `hear`), so an edit that adds a mention is answered
+ * and any other is not.
  */
 export let arrived = async (
   env: Env,
@@ -856,6 +859,7 @@ export let arrived = async (
   said: Said,
   bot: Bot = { via: platform.name },
 ) => {
+  if (said.edited && !said.addressed) return
   let heard = bot.connection
     ? await read(
       env,

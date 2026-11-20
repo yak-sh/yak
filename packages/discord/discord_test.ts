@@ -106,6 +106,47 @@ test('a mention, a reply, a direct message and a room message are heard as said;
   assertEquals(heard[0].author, { id: 'ann', name: 'Ann' })
 })
 
+test('a reply to words that named the bot is said to it; an edit is heard only once it is an edit', async () => {
+  let { h, w, heard } = held()
+  await say(h, w, ready)
+  await say(
+    h,
+    w,
+    message(2, {
+      content: 'and Friday?',
+      referenced_message: { author: { id: 'bo' }, mentions: [{ id: ME }] },
+    }),
+  )
+  let edit = (n: number, d: Record<string, unknown>) => ({
+    ...message(n, d),
+    t: 'MESSAGE_UPDATE',
+  })
+  // A link's preview filled in, then the words edited to name the bot.
+  await say(h, w, edit(3, { id: 'm1' }))
+  await say(
+    h,
+    w,
+    edit(4, {
+      id: 'm1',
+      content: `hello <@${ME}>`,
+      mentions: [{ id: ME }],
+      edited_timestamp: '2026-11-20T05:41:00.000Z',
+    }),
+  )
+  await say(
+    h,
+    w,
+    edit(5, { id: 'm1', edited_timestamp: 'x', author: undefined }),
+  )
+  assertEquals(
+    heard.map((s) => [s.id, s.text, s.addressed, s.edited]),
+    [
+      ['m2', 'and Friday?', 'reply', undefined],
+      ['m1', 'hello', 'mention', true],
+    ],
+  )
+})
+
 test('the servers the bot is in: all of them when ready, then each it joins or leaves', async () => {
   let { h, w, seated } = held()
   let guild = (t: string, d: Record<string, unknown>) =>

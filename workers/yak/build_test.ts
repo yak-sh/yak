@@ -25,7 +25,7 @@ import { draftEid } from '@yaks/draft'
 import { chatPath } from '@yaks/platform/routes'
 import { trashSpace } from './erase.ts'
 import { discord } from '@yaks/discord'
-import { roomEid } from '@yaks/chat'
+import { roomEid, type Said } from '@yaks/chat'
 import { PASS } from '@yaks/session/turn'
 import { arrived } from './chat.ts'
 import { registration } from '@yaks/connections'
@@ -746,15 +746,17 @@ let roomed = async (
     ))
   }
   o.bound()
-  // Ann says `text` as message `id`, naming the bot: as whoever the kernel
-  // finds her to be, or as `person`; and the turn it starts ends.
+  // Ann says `text` as message `id`, naming the bot unless `more` says
+  // otherwise: as whoever the kernel finds her to be, or as `person`; and the
+  // turn it starts ends.
   let says = async (
     id: string,
     text: string,
     person?: string,
     reply_to?: string,
+    more: Partial<Said> = {},
   ) => {
-    let said = {
+    let said: Said = {
       ...reply_to ? { reply_to } : {},
       id,
       room: BARN,
@@ -763,6 +765,7 @@ let roomed = async (
       text,
       at: `2026-11-20T05:4${id.at(-1)}:00.000Z`,
       addressed: 'mention' as const,
+      ...more,
     }
     if (!person) await arrived(o.env, discord, said)
     else {
@@ -854,6 +857,31 @@ test('named in a room, the Operator reads what was said there since its last ans
       .sort(),
     ['10', '7', '9'],
   )
+})
+
+// An edit is taken only where it is said to the Operator, and a message is
+// answered once: words edited to name it are answered, and edited again are
+// not.
+test('words edited to name the Operator are answered once; other edits are not heard', async () => {
+  let o = await seeded([{ text: 'Hello.' }, { text: 'Again.' }], VAULTED)
+  let r = await roomed(o, [])
+  let edited = (addressed?: Said['addressed']) =>
+    r.says('10', 'who is bringing pie?', undefined, undefined, {
+      addressed,
+      edited: true,
+    })
+  try {
+    await r.says('10', 'who is bringing pie?', undefined, undefined, {
+      addressed: undefined,
+    })
+    await edited()
+    assertEquals(r.model().length, 0)
+    await edited('mention')
+    await edited('mention')
+  } finally {
+    r.restore()
+  }
+  assertEquals(r.model().length, 1)
 })
 
 // A reply reaches the Operator with the chain it answers, up to the first

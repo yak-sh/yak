@@ -22,8 +22,9 @@ let API = 'https://discord.com/api/v10'
 let GATEWAY = 'wss://gateway.discord.gg'
 let QUERY = '/?v=10&encoding=json'
 
-/** The Gateway intents a bot cannot do without: servers, their messages,
- * direct messages, and the words of messages (Message Content, privileged),
+/** The Gateway intents a bot cannot do without: servers, their messages and
+ * direct messages, as said and as edited (MESSAGE_CREATE and MESSAGE_UPDATE),
+ * and the words of messages (Message Content, privileged),
  * so it hears a room it was given and not only the messages that name it. */
 export let NEEDED: number = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)
 
@@ -98,23 +99,30 @@ type Message = {
   author: User
   content: string
   timestamp: string
+  edited_timestamp?: string | null
   mentions?: { id: string }[]
   message_reference?: { message_id?: string }
-  referenced_message?: { author?: { id: string } } | null
+  referenced_message?:
+    | { author?: { id: string }; mentions?: { id: string }[] }
+    | null
 }
 
 /** A message Discord sent the bot, as @yaks/chat reads one: none for a bot's
  * own, or another bot's, so two bots never talk to each other forever. It is
  * addressed `direct` outside a server, as a `reply` when it answers one of
- * the bot's own (which Discord also counts a mention), and as a `mention`
- * when it names the bot; its words lose that mention. */
+ * the bot's own (which Discord also counts a mention) or one that named the
+ * bot, and as a `mention` when it names the bot; its words lose that
+ * mention. */
 export let said = (m: Message, me?: string): Said | undefined => {
   if (m.author.bot || m.author.id == me) return
+  let names = (m?: { mentions?: { id: string }[] } | null) =>
+    !!me && (m?.mentions ?? []).some((u) => u.id == me)
+  let to = m.referenced_message
   let addressed: Addressed | undefined = !m.guild_id
     ? 'direct'
-    : me && m.referenced_message?.author?.id == me
+    : me && (to?.author?.id == me || names(to))
     ? 'reply'
-    : me && (m.mentions ?? []).some((u) => u.id == me)
+    : names(m)
     ? 'mention'
     : undefined
   let text = me
@@ -222,6 +230,17 @@ export let gateway = (token: string): Socket<Session> => ({
         if (f.t == 'MESSAGE_CREATE') {
           let heard = said(f.d as Message, s.me)
           return { state, ...heard ? { heard: [heard] } : {} }
+        }
+        // An edit, which Discord sends whole: not a link's preview filled
+        // in (no `edited_timestamp`), nor one too partial to read.
+        if (f.t == 'MESSAGE_UPDATE') {
+          let m = f.d as Partial<Message>
+          let heard = m.edited_timestamp && m.author && m.content != null &&
+            said(m as Message, s.me)
+          return {
+            state,
+            ...heard ? { heard: [{ ...heard, edited: true }] } : {},
+          }
         }
         return { state }
       }
