@@ -1,3 +1,4 @@
+import { integrationDirectory } from './catalog.ts'
 import { copyOf } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's pages drawn from directory listings (the gallery and the
@@ -353,7 +354,7 @@ let rendered = async (
     let listed = await c.time('listed', () => gallery.listed(dir, env))
     page = gallery.page(gallery.pictures(listed, env), env)
   } else if (path == INTEGRATIONS.path) {
-    page = await c.time('listed', () => dir.integrations())
+    page = await c.time('listed', () => integrationDirectory(env, dir))
       .then((all) => rating(dir, all))
       .then((all) => integrations(all, env))
   } else if (path == LOGIN) {

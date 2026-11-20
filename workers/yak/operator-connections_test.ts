@@ -5,6 +5,7 @@ import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { connectionsOf } from './connections.ts'
 import { KERNEL } from './meta.ts'
+import { keepListings } from './catalog.ts'
 import { operating } from './operator.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 
@@ -34,6 +35,15 @@ await dir.apply({
     unchecked: {},
   }],
 }, KERNEL)
+// Nango lists it, so a connections page can add it.
+await keepListings(env, [{
+  name: 'youtube',
+  title: 'YouTube',
+  logo: '',
+  categories: ['video'],
+  hosts: ['www.googleapis.com'],
+  connects: 'signin',
+}])
 let operator = operating(
   operatorMemory(),
   env,

@@ -79,9 +79,12 @@ export let catalogue = (
     by.get(i.broker?.name == broker ? i.broker.integration : i.name) ??
       by.get(i.name)
   let taken = (name: string) => !!standIn(built, name, broker)
+  // A described one the broker signs in to is offered only while the broker
+  // lists it: it can connect nothing else.
   let pending = integrations.filter((i) =>
     !i.built && !i.owner && !i.testing && i.hosts.length &&
-    Array.isArray(i.categories) && !taken(i.name)
+    Array.isArray(i.categories) && !taken(i.name) &&
+    (i.broker?.name != broker || by.has(i.broker.integration))
   ).map((i): Offer => ({ ...i, categories: i.categories ?? [] }))
   let described = new Set(pending.map((i) => i.name))
   return [

@@ -31,12 +31,14 @@ import {
   type Integration,
   integrationEid,
   isSvg,
+  type Listed,
   type Listing,
   logoSources,
   type Offer,
 } from '@yaks/connections'
 import { patient } from '@yaks/blob'
 import { background, caught } from './defects.ts'
+import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { refuse } from './tool.ts'
 import { vaultOf } from './vault.ts'
@@ -80,6 +82,11 @@ let keep = async (env: Env, kept: Kept) => {
   held.set(env.BLOBS, kept)
   return kept
 }
+
+/** Keep `listings` as the broker's list, asked now: what a deploy without
+ * the broker's key, or a test, offers. */
+export let keepListings = (env: Env, listings: Listing[]) =>
+  keep(env, { at: Date.now(), listings, closed: [], v: VERSION })
 
 // The list asked of the broker and kept, or none while its key is not.
 let asked = async (env: Env, previous?: Kept): Promise<Kept | undefined> => {
@@ -159,6 +166,19 @@ export let offersOf = async (
     (kept?.listings ?? []).filter((l) => !closed.has(l.name)),
     BROKER,
   )
+}
+
+/** The integration directory as a person can use it: each built
+ * integration, each custom one its owner listed, and each described service
+ * the catalog offers, so every one it lists can be added on a connections
+ * page. */
+export let integrationDirectory = async (
+  env: Env,
+  dir: Pick<Directory, 'integrations'>,
+): Promise<Listed[]> => {
+  let all = await dir.integrations()
+  let offered = new Set((await offersOf(env, all)).map((o) => o.name))
+  return all.filter((i) => i.built || i.owner || offered.has(i.name))
 }
 
 type Fetch = typeof fetch

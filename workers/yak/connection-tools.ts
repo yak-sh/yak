@@ -1,5 +1,6 @@
 // The connection tools (T-38030), their rows apart from connections.ts so a
 // page that only serves a space never compiles the roster's words (T-148886).
+import { integrationDirectory } from './catalog.ts'
 import { line } from '@yaks/query'
 import {
   ABOUT,
@@ -347,7 +348,7 @@ let CONNECTIONS: Row[] = [
     },
     run: async (ctx, args) => {
       let words = args.words == null ? '' : String(args.words)
-      let offers = await ctx.dir.integrations()
+      let offers = await integrationDirectory(ctx.env, ctx.dir)
       let services = await Promise.all(
         offers.filter((i) => i.service).map((i) =>
           serviceOffer(ctx.env, ctx.dir, i)

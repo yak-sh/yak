@@ -247,9 +247,8 @@ test('graph catalog details survive broker refresh and adoption without exposing
   assertEquals(installed.description, described.description)
   assertEquals(installed.docs, described.docs)
   assertEquals(installed.built, true)
-  assertEquals(catalogue([described, own], [], 'nango').map((o) => o.name), [
-    'hub',
-  ])
+  // One its broker no longer lists can't be connected, so it is not offered.
+  assertEquals(catalogue([described, own], [], 'nango'), [])
 })
 
 test('seed installation updates operational fields and preserves graph descriptions', async () => {
