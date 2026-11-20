@@ -1456,14 +1456,23 @@ let hushed = <F extends { operator: { said: string[] } }>(
 
 export type Listener = {
   send: (data: string) => void
+  close?: (code?: number, reason?: string) => void
   deserializeAttachment: () => unknown
 }
 
-/** Frames for the pages watching this Operator, with each session's cursor. */
+/** Whether the person a socket was opened for still writes in its space, as
+ * the directory has it now (build.ts `#writes`). */
+export type Stands = (held: Held) => Promise<boolean>
+
+/** Frames for the pages watching this Operator, with each session's cursor.
+ * A page outlives the seat it was opened with, so its person's seat is asked
+ * again before each frame (`stands`): once they no longer write in the space
+ * their pages hear nothing more, and close. */
 export let operatorFrames = (
   store: Store,
   sockets: () => Listener[],
   named: Named = nameless,
+  stands: Stands = () => Promise.resolve(true),
 ) => {
   let told = new Map<string, number>()
   let tasks = new Map<string, string>()
@@ -1477,12 +1486,35 @@ export let operatorFrames = (
       let held = ws.deserializeAttachment() as Held
       return held.person == owner.person && held.space == owner.space
     })
+  // `pages`, all one person's, while that person still writes in the space.
+  // Each seat is answered after the one asked before it, so a reply's typing
+  // frames leave in the order they were written.
+  let asked: Promise<unknown> = Promise.resolve()
+  let seated = (pages: Listener[]) => {
+    let answered = asked.then(async () => {
+      if (
+        !pages.length || await stands(pages[0].deserializeAttachment() as Held)
+      ) {
+        return pages
+      }
+      for (let ws of pages) {
+        try {
+          ws.close?.(1012, 'authorization handshake required')
+        } catch {
+          // A page that has gone away is closed already.
+        }
+      }
+      return []
+    })
+    asked = answered.catch(() => {})
+    return answered
+  }
   // Whom a session works for is asked only while a page is open.
   let watching = async (session: string) => {
     let pages = open()
     if (!pages.length) return []
     let owner = await ownerOf(store, session)
-    return owner ? pagesOf(owner, pages) : []
+    return owner ? await seated(pagesOf(owner, pages)) : []
   }
   let send = (watching: Listener[], frame: unknown) => {
     let sent = JSON.stringify(frame)
@@ -1524,8 +1556,8 @@ export let operatorFrames = (
   return {
     /** A person's drafts as they now stand, to every page they have open, so
      * words typed on one show on the others as they land. */
-    drafts: (owner: Pick<Held, 'person' | 'space'>, bundles: Bundle[]) =>
-      send(pagesOf(owner), { drafts: bundles }),
+    drafts: async (owner: Pick<Held, 'person' | 'space'>, bundles: Bundle[]) =>
+      send(await seated(pagesOf(owner)), { drafts: bundles }),
     tell: async (session: string) => {
       let pages = await watching(session)
       if (!pages.length) return

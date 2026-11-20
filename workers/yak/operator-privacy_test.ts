@@ -232,6 +232,25 @@ test('live transcript and typing frames go only to the conversation’s owner', 
   assertEquals(elsewhere.sent, [])
 })
 
+test('a person who no longer writes in the space hears no frame, and their pages close', async () => {
+  let sent: string[] = [], closed = 0
+  let page = {
+    send: (data: string) => void sent.push(data),
+    close: () => void closed++,
+    deserializeAttachment: () => ({ ...who(ada), operator: true }),
+  }
+  let frames = operatorFrames(
+    store,
+    () => [page],
+    undefined,
+    (held) => Promise.resolve(held.person != ada),
+  )
+  await frames.tell(root)
+  await frames.typing(root, secret)
+  await frames.drafts(who(ada), [draft(ada, root)])
+  assertEquals([sent, closed], [[], 3])
+})
+
 let { env } = platform('operator-privacy')
 env.BUILDER = {
   idFromName: (name) => name,
@@ -293,19 +312,17 @@ test('a saved draft is told only to its owner’s pages in its space', async () 
     page('other', bea),
     page('elsewhere', ada, unknown),
   ])
-  let told: Bundle[][] = []
+  let told: Promise<void>[] = []
   let answered = await operatorRequest(
     operator,
     who(ada),
     '/operator/draft',
     { bundles: [draft(ada, root, 'Words on the way')] },
     () => undefined,
-    (bundles) => {
-      told.push(bundles)
-      frames.drafts(who(ada), bundles)
-    },
+    (bundles) => void told.push(frames.drafts(who(ada), bundles)),
   )
   assertEquals(told.length, 1)
+  await told[0]
   assertEquals(sent.get('own'), [
     { drafts: (await answered!.json()).bundles },
   ])

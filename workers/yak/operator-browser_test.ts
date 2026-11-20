@@ -9,7 +9,7 @@
 // frames reach the Builder the way the runtime delivers them,
 // `webSocketMessage` (build_test.ts drives a page's socket the same way).
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
-import { clock, test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import { answer, callOf } from '@yaks/extension/wire'
 import { PERSON } from '@yaks/extension/tools'
 import { CallError } from '@yaks/tools/errors'
@@ -44,6 +44,9 @@ let wire = (answering?: (frame: string) => void) => {
   return {
     sent,
     readyState: 1,
+    close() {
+      this.readyState = 3
+    },
     send: (data: string) => (sent.push(data), answering?.(data)),
     serializeAttachment: (v: unknown) => void (held = structuredClone(v)),
     deserializeAttachment: () => held,
@@ -90,13 +93,20 @@ let socket = (held: unknown, answering?: (frame: string) => void) => {
   return ws
 }
 let open: Socket[] = []
-let tab = browsers(() => open, time)
+// Who writes in the space, as the directory has it now.
+let seats = new Set<string>([ADA])
+let tab = browsers(
+  () => open,
+  (held) => Promise.resolve(seats.has(held.person)),
+  time,
+)
 
 test('a call goes to the person’s newest browser and its answer settles it', async () => {
   let older = socket(lent), newer = socket(lent)
   let theirs = socket({ ...lent, person: 'someone else' })
   open.splice(0, open.length, older, theirs, newer)
   let asked = tab.ask(ADA, 'browser_text', {})
+  await until(() => newer.sent.length > 0)
   let sent = callOf(newer.sent[0])!
   assertEquals([older.sent, sent.tool], [[], 'browser_text'])
   // Another person's browser can't answer it.
@@ -133,6 +143,27 @@ test('a call that waits on the person outlasts WAIT, and a browser gone fails it
     true,
     GONE,
   ])
+})
+
+test('a browser whose person no longer writes in the space answers nothing more, and closes', async () => {
+  let ws = socket(lent)
+  open.splice(0, open.length, ws)
+  let shot = tab.ask(ADA, 'browser_screenshot', {})
+  await until(() => ws.sent.length > 0)
+  let { id } = callOf(ws.sent[0])!
+  seats.delete(ADA)
+  try {
+    await tab.heard(lent, answer({ id, text: 'Hello' }))
+    let gone = await assertRejects(() => shot)
+    let none = await assertRejects(() => tab.ask(ADA, 'browser_text', {}))
+    assertEquals(
+      [(gone as Error).message, (none as Error).message, ws.sent.length],
+      [GONE, NONE, 1],
+    )
+    assertEquals(ws.readyState, 3)
+  } finally {
+    seats.add(ADA)
+  }
 })
 
 // ── Through the kernel ──────────────────────────────────────────────────
@@ -237,6 +268,7 @@ test('a member’s browser connects to their Operator by the token it bears', ()
     browser: true,
     person,
     space: eids[slug],
+    administrative: false,
   })
 })
 

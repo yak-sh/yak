@@ -10,7 +10,7 @@ import type { Hibernation, Wire } from '@yaks/durable-object'
 import { type DurableStorage, freely } from '@yaks/durable-object/sql'
 import type { Alarms } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
-import { writes } from '@yaks/member'
+import { type Level, writes } from '@yaks/member'
 import { directory } from './directory.ts'
 import { onceRead, owed, restart, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
@@ -109,7 +109,11 @@ export class Builder extends Durable {
     this.#ctx = ctx
     this.ceiling
     this.#env = env
-    this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
+    this.#lent = browsers(
+      () => ctx.getWebSockets(),
+      (held) => this.#writes(held),
+      env.CLOCK,
+    )
   }
 
   /**
@@ -414,6 +418,29 @@ export class Builder extends Durable {
     }).seat(eid, person, administrative)
   }
 
+  // The level `person`'s seat in the space `eid` gives them now, an
+  // administrator's read as an owner's, as `#operate` reads it: null for none.
+  async #level(
+    eid: string,
+    person: string,
+    administrative: boolean,
+  ): Promise<Level | null> {
+    let access = await this.#seat(eid, person, administrative)
+    if (!access.space) return null
+    return access.administrative ? 'owner' : access.role ?? null
+  }
+
+  // Whether the person a socket was opened for still writes in its space: a
+  // socket outlives the seat it was opened with, so each of the Operator's
+  // stands by the seat as it is now.
+  async #writes(
+    held: { person: string; space: string; administrative?: boolean },
+  ) {
+    return writes(
+      await this.#level(held.space, held.person, !!held.administrative),
+    )
+  }
+
   async #operate(request: Request): Promise<Response> {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
@@ -435,7 +462,12 @@ export class Builder extends Durable {
     let role = access.administrative ? 'owner' as const : access.role ?? null
     if (!writes(role)) return no(403, NOT_A_WRITER)
     if (new URL(request.url).pathname == '/operator/browser') {
-      return this.#accept({ browser: true, person, space: spaceId }, request)
+      return this.#accept({
+        browser: true,
+        person,
+        space: spaceId,
+        administrative: access.administrative,
+      }, request)
     }
     let read = await reading
     if (API.test(new URL(request.url).pathname)) {
@@ -449,9 +481,9 @@ export class Builder extends Durable {
       // Operator's frames, as it did when they were written there, until
       // T-165931.
       if (request.method == 'POST' && answer.ok) {
-        this.#frames?.drafts(
-          asker,
-          await read.store.g.read(ql`.draft.by=${person}`),
+        let drafts = await read.store.g.read(ql`.draft.by=${person}`)
+        void this.#frames?.drafts(asker, drafts).catch((e) =>
+          caught(e, { request: 'operator socket' })
         )
       }
       return answer
@@ -528,7 +560,10 @@ export class Builder extends Durable {
       new URL(request.url).pathname,
       args,
       () => this.#arming,
-      (bundles) => this.#frames?.drafts(held, bundles),
+      (bundles) =>
+        void this.#frames?.drafts(held, bundles).catch((e) =>
+          caught(e, { request: 'operator socket' })
+        ),
     )
     if (response) return response
     // Its steps run on the pool, as every other Operator session's do: words
@@ -658,6 +693,7 @@ export class Builder extends Durable {
           store,
           () => this.#ctx.getWebSockets(),
           named,
+          (held) => this.#writes(held),
         )
         // Its pages' reads and writes through @yaks/api, whose sockets the
         // runtime kept while the object was away are watching again.
@@ -668,10 +704,7 @@ export class Builder extends Durable {
           // now, an administrator's read as an owner's, as `#operate` reads it.
           seat: async (person, administrative) => {
             let space = await spaceOf(store)
-            if (!space) return null
-            let access = await this.#seat(space, person, administrative)
-            if (!access.space) return null
-            return access.administrative ? 'owner' : access.role ?? null
+            return space ? this.#level(space, person, administrative) : null
           },
           report: (e) => caught(e, { request: 'operator socket' }),
         })
@@ -963,7 +996,11 @@ export class Builder extends Durable {
         .catch((e) => caught(e, { request: 'operator socket' }))
     }
     // A lent browser answers the calls asked of it (operator-browser.ts).
-    if (held && 'browser' in held) this.#lent.heard(held, data)
+    if (held && 'browser' in held) {
+      this.#lent.heard(held, data).catch((e) =>
+        caught(e, { request: 'operator browser' })
+      )
+    }
   }
 
   /** A socket closed. A lent browser's calls fail at once, rather than

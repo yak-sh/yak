@@ -6,7 +6,10 @@
 // answered up it: words become the call's result, and a screenshot an image
 // the model is shown beside it (operator.ts `shown`). A call may wait on the
 // person (a site to allow, a Do it to press), so the Operator waits for it,
-// and a browser that goes away fails it at once.
+// and a browser that goes away fails it at once. A browser outlives the seat
+// it was lent with, so its person's seat is asked again on each call and each
+// answer: once they no longer write in the space it is asked and answers
+// nothing more, and closes.
 import { type Answer, answerOf, call } from '@yaks/extension/wire'
 import { PERSON, toolOf, TOOLS } from '@yaks/extension/tools'
 import { type Clock, system } from '@yaks/fp'
@@ -17,14 +20,25 @@ import type { Env } from './env.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { refuse } from './tool.ts'
 
-/** Who a lent browser's socket is: the attachment the Builder keeps on it. */
-export type Lent = { browser: true; person: string; space: string }
+/** Who a lent browser's socket is: the attachment the Builder keeps on it,
+ * `administrative` as the kernel vouched at the handshake. */
+export type Lent = {
+  browser: true
+  person: string
+  space: string
+  administrative?: boolean
+}
 
 /** A socket as the Builder holds it. */
 export type Socket = {
   send: (data: string) => void
+  close?: (code?: number, reason?: string) => void
   deserializeAttachment: () => unknown
 }
+
+/** Whether the person who lent a browser still writes in its space, as the
+ * directory has it now (build.ts `#writes`). */
+export type Stands = (held: Lent) => Promise<boolean>
 
 /** What a browser answered a call. */
 export type Said = Answer['answer']
@@ -44,11 +58,13 @@ export let GONE =
 /** The browsers lent to one space's Operator: whether a person has one
  * connected, a call asked of their newest, an answer a socket brought back,
  * which settles the call it names when it came from that person, and a
- * socket gone, which fails the calls asked of it. */
+ * socket gone, which fails the calls asked of it. A call is asked, and an
+ * answer heard, only while its person still writes in the space (`stands`). */
 export type Browsers = ReturnType<typeof browsers>
 
 export let browsers = (
   sockets: () => Socket[],
+  stands: Stands,
   clock: Clock = system,
   wait = WAIT,
 ) => {
@@ -59,8 +75,30 @@ export let browsers = (
       let held = ws.deserializeAttachment() as Partial<Lent> | null
       return held?.browser && held.person == person
     })
-  let ask = (person: string, tool: string, args: Record<string, unknown>) =>
-    new Promise<Said>((ok, no) => {
+  // Whether `held`'s person still writes in the space; once they do not,
+  // every browser they lent closes, and the calls asked of it fail.
+  let seated = async (held: Lent) => {
+    if (await stands(held)) return true
+    for (let ws of lentBy(held.person)) {
+      try {
+        ws.close?.(1012, 'authorization handshake required')
+      } catch {
+        // A browser that has gone away is closed already.
+      }
+      gone(ws)
+    }
+    return false
+  }
+  let ask = async (
+    person: string,
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<Said> => {
+    let newest = lentBy(person).at(-1)
+    if (!newest || !await seated(newest.deserializeAttachment() as Lent)) {
+      throw refuse('browser', NONE)
+    }
+    return await new Promise<Said>((ok, no) => {
       let ws = lentBy(person).at(-1)
       if (!ws) return no(refuse('browser', NONE))
       let id = crypto.randomUUID()
@@ -84,10 +122,12 @@ export let browsers = (
         no(refuse('browser', NONE))
       }
     })
-  let heard = (held: Lent, data: unknown) => {
+  }
+  let heard = async (held: Lent, data: unknown) => {
     let a = answerOf(data)
     let waiting = a && pending.get(a.id)
-    if (waiting && waiting.person == held.person) waiting.done(a!)
+    if (!waiting || waiting.person != held.person) return
+    if (await seated(held)) waiting.done(a!)
   }
   let gone = (ws: Socket) => {
     for (let p of [...pending.values()]) {
