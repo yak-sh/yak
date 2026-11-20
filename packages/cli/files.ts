@@ -35,6 +35,21 @@ let parts = (schema: Schema, root: Schema): Schema[] => {
   ]
 }
 
+// A schema with no keyword that narrows it accepts any value, and so does an
+// object's undeclared property or an array's undeclared items (JSON Schema's
+// default): a graph_apply bundle's components are strings of this kind.
+let ANY: Schema = {}
+let NARROWING = ['type', '$ref', 'allOf', 'anyOf', 'oneOf', 'enum', 'const']
+let open = (s: Schema) => !NARROWING.some((key) => key in s)
+let typed = (s: Schema, type: string) =>
+  s.type == type || Array.isArray(s.type) && s.type.includes(type)
+let within = (child: unknown): Schema[] =>
+  child === undefined || child === true
+    ? [ANY]
+    : child && typeof child == 'object'
+    ? [child as Schema]
+    : []
+
 let expanded = async (
   value: unknown,
   schemas: Schema[],
@@ -43,9 +58,7 @@ let expanded = async (
 ): Promise<unknown> => {
   let shapes = schemas.flatMap((s) => parts(s, root))
   if (typeof value == 'string') {
-    let string = shapes.some((s) =>
-      s.type == 'string' || Array.isArray(s.type) && s.type.includes('string')
-    )
+    let string = shapes.some((s) => open(s) || typed(s, 'string'))
     if (!string || !value.startsWith('@')) return value
     try {
       return await read(value.slice(1))
@@ -58,7 +71,7 @@ let expanded = async (
   }
   if (Array.isArray(value)) {
     let items = shapes.flatMap((s) =>
-      s.items && typeof s.items == 'object' ? [s.items as Schema] : []
+      open(s) || typed(s, 'array') ? within(s.items) : []
     )
     return await Promise.all(value.map((v) => expanded(v, items, root, read)))
   }
@@ -66,11 +79,13 @@ let expanded = async (
     return Object.fromEntries(
       await Promise.all(
         Object.entries(value).map(async ([key, v]) => {
-          let children = shapes.flatMap((s) => {
-            let child = (s.properties as Schema)?.[key] ??
-              s.additionalProperties
-            return child && typeof child == 'object' ? [child as Schema] : []
-          })
+          let children = shapes.flatMap((s) =>
+            open(s) || typed(s, 'object') || s.properties
+              ? within(
+                (s.properties as Schema)?.[key] ?? s.additionalProperties,
+              )
+              : []
+          )
           return [key, await expanded(v, children, root, read)]
         }),
       ),

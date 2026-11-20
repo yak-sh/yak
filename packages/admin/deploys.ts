@@ -336,16 +336,24 @@ export let table = (rows: Deploy[], observed?: Gateway): string => {
 
 type Output = StepResult & { stdout: string }
 
+/** What a Cloudflare command runs with beyond this box's environment: `{}`
+ * keeps Wrangler's own sign-in, and the admin's adds its scoped
+ * `CLOUDFLARE_API_TOKEN` (./tools.ts `cloudflare`), so Cloudflare's audit log
+ * names that token. */
+export type Login = Record<string, string>
+
 // One run of a platform command, its stderr as `output` for `transient`.
 let ran = async (
   cwd: string,
   cmd: string,
   args: string[],
   stopping: AbortSignal,
+  env: Login = {},
 ): Promise<Output> => {
   let r = await output(cmd, {
     cwd,
     args,
+    env,
     stdin: 'null',
     stdout: 'piped',
     stderr: 'piped',
@@ -392,12 +400,16 @@ export let wrangler = async (
   root: string,
   args: string[],
   stopping: AbortSignal,
-  { run = ran, wait = sleep }: { run?: typeof ran; wait?: typeof sleep } = {},
+  { run = ran, wait = sleep, login = {} }: {
+    run?: typeof ran
+    wait?: typeof sleep
+    login?: Login
+  } = {},
 ) => {
   let [cmd, ...argv] = [...WRANGLER, ...args]
   let r = await retried(
     args,
-    () => run(`${root}/workers/yak`, cmd, argv, stopping),
+    () => run(`${root}/workers/yak`, cmd, argv, stopping, login),
     { wait, signal: stopping },
   )
   if (r.code) throw failure(args, r)
@@ -418,11 +430,12 @@ export let deploymentLists = async (
 export let deploys = async (
   root: string,
   stopping: AbortSignal,
+  login: Login,
 ): Promise<Deploy[]> => {
   // Git has no credential store in common with Wrangler and can still read
   // beside it. Only the two Wrangler processes must not overlap.
   let [[vs, ds], log] = await Promise.all([
-    deploymentLists((args) => wrangler(root, args, stopping)),
+    deploymentLists((args) => wrangler(root, args, stopping, { login })),
     needGit(root, [
       'log',
       'main',
@@ -440,7 +453,9 @@ export let deploys = async (
   ) {
     if (versions.some((v) => v.id == id)) continue
     let raw = JSON.parse(
-      await wrangler(root, ['versions', 'view', id, '--json'], stopping),
+      await wrangler(root, ['versions', 'view', id, '--json'], stopping, {
+        login,
+      }),
     )
     versions.push(raw.result ?? raw)
   }
@@ -556,20 +571,27 @@ export let rollback = async (
   want: string | undefined,
   out: (line: string) => void,
   stopping: AbortSignal,
+  login: Login,
 ) => {
-  let target = rollbackTarget(await deploys(root, stopping), want)
+  let target = rollbackTarget(await deploys(root, stopping, login), want)
   out(
-    await wrangler(root, [
-      'rollback',
-      target.id,
-      '-y',
-      '--message',
-      `yaks.app emergency rollback to ${target.commit?.sha}: build path broken`,
-    ], stopping),
+    await wrangler(
+      root,
+      [
+        'rollback',
+        target.id,
+        '-y',
+        '--message',
+        `yaks.app emergency rollback to ${target.commit?.sha}: build path broken`,
+      ],
+      stopping,
+      { login },
+    ),
   )
   let checked = await output(systemProcess.execPath(), {
     cwd: root,
     args: ['run', '-A', 'bin/verify-deploy.ts', '--tail', '0'],
+    env: login,
     stdin: 'null',
   }, stopping)
   return checked.code

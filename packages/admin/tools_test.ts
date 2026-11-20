@@ -465,6 +465,11 @@ test('infrastructure rejects a throwaway but accepts the admin and own account w
       CallError,
       '<sha>',
     )
+    await assertRejects(
+      () => ask('admin_tail', { as: 'admin' }),
+      Error,
+      'CLOUDFLARE_ADMIN_TOKEN is not in this box’s vault',
+    )
     await kept('own@example.com')
     await assertRejects(
       () => ask('admin_revert', { sha: 'HEAD' }),

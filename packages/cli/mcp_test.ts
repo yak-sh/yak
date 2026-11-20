@@ -62,20 +62,21 @@ let call = async (args: Record<string, unknown>) =>
 await request('tools/list')
 await call({ body: 'warm' })
 
-test('local MCP file input expands declared strings once before sending', async () => {
+test('local MCP file input expands strings the schema allows once before sending', async () => {
   let out = await call({
     _files: true,
     body: '@/body.md',
-    nested: [{ body: '@/body.md' }, { body: null }],
+    nested: [{ body: '@/body.md' }, {
+      body: null,
+      secret: { value: '@/body.md' },
+    }],
   })
+  let nested = [{ body }, { body: null, secret: { value: body } }]
   equal(out.isError, undefined)
-  equal(JSON.parse(out.content[0].text), {
-    body,
-    nested: [{ body }, { body: null }],
-  })
+  equal(JSON.parse(out.content[0].text), { body, nested })
   equal((sent.at(-1) as { params: unknown }).params, {
     name: echo.name,
-    arguments: { body, nested: [{ body }, { body: null }] },
+    arguments: { body, nested },
   })
 })
 

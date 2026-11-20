@@ -20,6 +20,7 @@ import {
 import type { Options } from '@yaks/tracker/routes'
 import { WRANGLER } from '@yaks/cloudflare/wrangler'
 import { spawn, wasInterrupted } from './subprocess.ts'
+import type { Login } from './deploys.ts'
 
 export { GRACE } from './subprocess.ts'
 export { duration }
@@ -176,6 +177,7 @@ let live = async (
   receive: (row: Row) => void,
   note: Note,
   signal: AbortSignal,
+  login: Login,
   start = spawn,
 ) => {
   // Wrangler may start children with the pipe open. The tail is a process group of its own
@@ -185,6 +187,7 @@ let live = async (
   let run = start(WRANGLER[0], {
     args: [...WRANGLER.slice(1), 'tail', '--format', 'json'],
     cwd: `${root}/workers/yak`,
+    env: login,
     stdin: 'null',
     stdout: 'piped',
     stderr: 'inherit',
@@ -216,9 +219,10 @@ export let tail = (
   out: Note,
   note: Note,
   signal: AbortSignal,
+  login: Login,
   start = spawn,
 ): Promise<number> =>
-  live(root, (row) => out(eventLine(row)), note, signal, start)
+  live(root, (row) => out(eventLine(row)), note, signal, login, start)
 
 // Every bug the tracker's signed door answers for a query, page by page.
 // The platform's own addresses: what a person writes to, and what a letter

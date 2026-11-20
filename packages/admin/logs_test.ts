@@ -378,9 +378,11 @@ test('tail follows the local Wrangler stream without polling MCP', async () => {
       (line) => lines.push(line),
       () => {},
       new AbortController().signal,
+      { CLOUDFLARE_API_TOKEN: 'scoped' },
       (_command, options) => {
         assertEquals(options.args?.slice(-3), ['tail', '--format', 'json'])
         assertEquals(options.cwd, '/scratch/workers/yak')
+        assertEquals(options.env, { CLOUDFLARE_API_TOKEN: 'scoped' })
         return {
           child: {
             stdout,

@@ -335,6 +335,13 @@ Cloudflare had redacted the password, the email address and our ticket and
 left the other parameters; what it redacts elsewhere is unchecked, so print
 only the parameters you name.
 
+The admin's Wrangler commands have a token of their own:
+`yak admin deploys|tail|rollback --as admin` run Wrangler with
+`CLOUDFLARE_ADMIN_TOKEN` (Workers Scripts read and write, Workers Tail read;
+packages/admin/README.md). New Cloudflare tokens are minted as account-owned
+tokens with the 1Password "Homelab Cloudflare" item's token, and sealed into
+the vault by the minting script itself, never through a file or an argument.
+
 Wrangler's sign-in gets a 403 from this API. That refusal sends you here, not
 hunting for a token that might work. A token in another project's `.env` was
 minted for that project's job, so another project's `.env` is never read, not

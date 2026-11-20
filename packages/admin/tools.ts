@@ -68,7 +68,7 @@ import {
   unlink,
   zone,
 } from './api.ts'
-import { deploys, git, rollback, table } from './deploys.ts'
+import { deploys, git, type Login, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
 import { gateway } from './gateway.ts'
@@ -87,6 +87,8 @@ type Args = Record<string, unknown>
 // The vault name a machine's tunnel token is kept under, which the box's
 // config names for @yaks/tunnel's service.
 let TUNNEL_TOKEN = 'TUNNEL_TOKEN'
+// The admin's Cloudflare API token, minted for the five platform verbs.
+let ADMIN_TOKEN = 'CLOUDFLARE_ADMIN_TOKEN'
 
 let word = (a: Args, name: string): string | undefined =>
   typeof a[name] == 'string' ? a[name] as string : undefined
@@ -271,16 +273,32 @@ export let runs = (
 ): Runs => {
   let acting = (a: Args) => account(host)(word(a, 'as'))
   // Infrastructure uses the box's Cloudflare/GitHub logins. Only the platform
-  // admin or the configured person's own account may spend those credentials.
+  // admin or the configured person's own account may act on them.
   let platform = async (a: Args) => {
     let at = await acting(a)
     let owner = await person(host)
     let [own] = await host.graph.get(owner ? [owner] : [])
-    if (at.address != ADMIN && at.address != (own?.email as Comp)?.address) {
+    if (at.address == (own?.email as Comp)?.address) return at
+    if (at.address != ADMIN) {
       throw new Refused(
         'Infrastructure requires the platform admin or the configured person’s own account; select it with --as',
       )
     }
+    return at
+  }
+  // A Cloudflare command as the person's own account keeps Wrangler's sign-in;
+  // as the admin it runs with the scoped token in this box's vault (Workers
+  // Scripts read and write, Workers Tail read), so Cloudflare's audit log
+  // names the token, not the person.
+  let cloudflare = async (a: Args): Promise<Login> => {
+    if ((await platform(a)).address != ADMIN) return {}
+    let token = await reveal(host.vault, ADMIN_TOKEN)
+    if (!token) {
+      throw new Error(
+        `${ADMIN_TOKEN} is not in this box’s vault: the admin's Cloudflare commands run with it`,
+      )
+    }
+    return { CLOUDFLARE_API_TOKEN: token }
   }
   let verb = (run: Verb) => async (call: Bundle, graph: Graph) => {
     let keep: Bundle[] = []
@@ -882,9 +900,9 @@ export let runs = (
     }),
 
     admin_deploys: verb(async (call) => {
-      await platform(argsOf(call))
+      let login = await cloudflare(argsOf(call))
       let [rows, observed] = await Promise.all([
-        deploys(checkout, host.stopping),
+        deploys(checkout, host.stopping, login),
         gateway(host.stopping, host.fetch),
       ])
       return [said(call, table(rows, observed))]
@@ -901,12 +919,15 @@ export let runs = (
     }),
 
     admin_tail: verb(async (call) => {
-      await platform(argsOf(call))
-      return ended('tail', await tail(checkout, out, note, host.stopping))
+      let login = await cloudflare(argsOf(call))
+      return ended(
+        'tail',
+        await tail(checkout, out, note, host.stopping, login),
+      )
     }),
 
     admin_rollback: verb(async (call) => {
-      await platform(argsOf(call))
+      let login = await cloudflare(argsOf(call))
       note(
         'Cloudflare rollback is for a broken build path. Code corrections ' +
           'belong on main: yak admin revert <sha>.',
@@ -918,6 +939,7 @@ export let runs = (
           word(argsOf(call), 'version'),
           out,
           host.stopping,
+          login,
         ),
       )
     }),
