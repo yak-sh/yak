@@ -21,7 +21,7 @@
 # one killed; the user's slice is capped below the VM's memory, so sshd and
 # the system keep theirs however many runs there are.
 set -eu
-DENO=v2.9.1
+DENO=v2.9.8
 PNPM=12.16.1
 NODE=24
 SLICE=13G

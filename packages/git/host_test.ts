@@ -40,7 +40,10 @@ let procs: Procs = {
       ? gone()
       : is(`/cwd/${pid}`),
   links: () => is(['/open (deleted)', 'pipe:[9]', '']),
-  privileged: (pid) => is(pid == '4' ? ['/hidden', '/hidden/file'] : undefined),
+  privileged: (pids) => {
+    assertEquals(pids.sort(), ['2', '4'])
+    return is({ '4': ['/hidden', '/hidden/file'] })
+  },
 }
 
 test('a process the scan cannot read holds nothing', async () => {

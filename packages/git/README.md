@@ -634,9 +634,9 @@ user's live Linux processes, so agents outside the graph also keep their
 worktrees. A process that cannot be read holds nothing. It reads them through
 `Procs`, `procfs` by default, so a test hands it processes as data. Non-dumpable
 processes require a privileged read through a root-owned helper, launched by the
-systemd user manager. The helper returns a JSON array of the cwd and absolute
-open file paths, accepts one positive PID and checks that it belongs to the sudo
-caller. Install it from this package as root:
+systemd user manager once per scan. The helper checks that each positive PID
+belongs to the sudo caller and returns its cwd and absolute open file paths.
+Install it from this package as root:
 
 ```sh
 install -D -o root -g root -m 0755 packages/git/process-cwd.py /usr/local/libexec/yak-process-cwd
@@ -645,12 +645,12 @@ install -D -o root -g root -m 0755 packages/git/process-cwd.py /usr/local/libexe
 Grant the collecting user passwordless sudo for exactly that helper, with a
 trailing `*` for its argument. For a user named `collector`, the sudoers entry
 is `collector ALL=(root) NOPASSWD: /usr/local/libexec/yak-process-cwd *`. The
-helper refuses additional arguments, other users' processes and path traversal.
-Enable the user's systemd manager with `loginctl enable-linger
-collector`.
-Without the helper or manager, a non-dumpable process holds nothing, as does one
-the helper refuses (a deleted cwd). `processCwds()` remains available for
-callers needing only directories.
+helper omits unreadable processes and other users' processes. It rejects
+arguments that are not positive PIDs. Enable the user's systemd manager with
+`loginctl enable-linger
+collector`. Without the helper or manager, a
+non-dumpable process holds nothing, as does one the helper refuses (a deleted
+cwd). `processCwds()` remains available for callers needing only directories.
 
 `@yaks/git/service` collects explicitly managed checkouts in the local
 filesystem, and unmanaged ones under its `roots`: directories where agents cut

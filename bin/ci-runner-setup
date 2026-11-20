@@ -13,7 +13,7 @@
 # no Chrome, no service account, no keys. Its disk keeps the Deno cache and
 # the pnpm store between runs.
 set -eu
-DENO=v2.9.1
+DENO=v2.9.8
 token=$1
 
 export DEBIAN_FRONTEND=noninteractive

@@ -100,7 +100,9 @@ export let collect = async (
     }
     let seen = await discover(g, path).catch(() => row)
     if (!seen || await retained(g, seen.entity.eid)) continue
-    if (inUse(real, await processes())) continue
+    let free = async () =>
+      !signal?.aborted && !await retained(g, seen.entity.eid) &&
+      !inUse(real, await processes())
     let failed = () => 'failed' as Held
     // A checkout still at the commit it was cut from holds no work of its own.
     let base = (seen.checkout as Comp | undefined)?.base
@@ -108,13 +110,14 @@ export let collect = async (
       path,
       'refs/heads/main',
       typeof base == 'string' ? base : undefined,
+      free,
     ).catch(failed)
     // Work left this long is no agent's in progress: it moves onto its
     // branch, where it costs no disk, and the checkout goes.
-    if (held && held != 'failed' && quiet >= stale) {
-      held = await shelve(path, () => discover(g, path)).catch(failed)
+    if ((held == 'dirty' || held == 'unlanded') && quiet >= stale) {
+      held = await shelve(path, () => discover(g, path), free).catch(failed)
     }
-    if (held) kept[path] = held
+    if (held && held != 'taken') kept[path] = held
   }
   return kept
 }

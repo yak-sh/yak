@@ -557,17 +557,16 @@ export type Procs = {
   cwd: (pid: string) => Promise<string>
   /** Where a process's open descriptors point; one that closed reads `''`. */
   links: (pid: string) => Promise<string[]>
-  /** The cwd and absolute open file paths of a same-user process ptrace
-   * hides, or nothing when they cannot be read. */
-  privileged: (pid: string) => Promise<string[] | undefined>
+  /** The cwd and absolute open file paths of each same-user process ptrace
+   * hides, keyed by PID. Processes that cannot be read are absent. */
+  privileged: (pids: string[]) => Promise<Record<string, string[]>>
 }
 
 // Linux's ptrace checks can hide even a same-user cwd (a capability-bearing
 // manager or a non-dumpable PAM helper). Ask the user manager for a privileged
-// cwd reader. Its only operation reads this same-user link: no signal to
-// the observed PID and no filesystem mutation. The root-owned helper and sudo
-// permission are installed as described in README.md.
-let privileged = async (pid: string): Promise<string[] | undefined> => {
+// reader in one launch. The root-owned helper and sudo permission are
+// installed as described in README.md.
+let readPrivileged = async (pids: string[]): Promise<unknown> => {
   let read = await processCommand('systemd-run', {
     args: [
       '--user',
@@ -578,7 +577,7 @@ let privileged = async (pid: string): Promise<string[] | undefined> => {
       '/usr/bin/sudo',
       '-n',
       '/usr/local/libexec/yak-process-cwd',
-      pid,
+      ...pids,
     ],
     env: {
       XDG_RUNTIME_DIR: `/run/user/${system.uid()}`,
@@ -588,16 +587,36 @@ let privileged = async (pid: string): Promise<string[] | undefined> => {
     stderr: 'piped',
   }).output()
   if (!read.success) return
-  let found: unknown
   try {
-    found = JSON.parse(new TextDecoder().decode(read.stdout))
+    return JSON.parse(new TextDecoder().decode(read.stdout))
   } catch {
     return
   }
-  return Array.isArray(found) && found.length &&
-      found.every((path) => typeof path == 'string' && path.startsWith('/'))
-    ? found
-    : undefined
+}
+
+let absolutePaths = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.length > 0 &&
+  value.every((path) => typeof path == 'string' && path.startsWith('/'))
+
+let privileged: Procs['privileged'] = async (pids) => {
+  let found = await readPrivileged(pids)
+  if (found && typeof found == 'object' && !Array.isArray(found)) {
+    let rows = found as Record<string, unknown>
+    return Object.fromEntries(
+      pids.filter((pid) => absolutePaths(rows[pid])).map((pid) => [
+        pid,
+        rows[pid] as string[],
+      ]),
+    )
+  }
+  if (pids.length == 1) {
+    return absolutePaths(found) ? { [pids[0]]: found } : {}
+  }
+  // The original installed helper accepts a single PID.
+  return Object.assign(
+    {},
+    ...await Promise.all(pids.map((pid) => privileged([pid]))),
+  )
 }
 
 /** This Linux host's processes, read from `/proc`. */
@@ -625,29 +644,32 @@ export let procfs: Procs = {
   privileged,
 }
 
-// What `read` finds for each of this user's processes, asked of them all at
-// once, and what `hidden` keeps of a privileged read of one ptrace hides. A process that cannot be read holds nothing: it exited while it was
-// read, turned non-dumpable, or the privileged helper refused it, as it does
-// one whose cwd was deleted. Linux restricts other users' links even when
-// procfs is readable; their sessions are protected by their graph homes.
+// Ask procfs about this user's processes, then give the privileged reader
+// the PIDs ptrace hid. The helper checks their owner again.
 let scan = async (
   procs: Procs,
   read: (pid: string) => Promise<string[]>,
   hidden = (paths: string[]) => paths,
-): Promise<string[]> =>
-  (await Promise.all((await procs.pids()).map(async (pid) => {
+): Promise<string[]> => {
+  let denied: string[] = []
+  let paths = await Promise.all((await procs.pids()).map(async (pid) => {
     try {
       if (await procs.owner(pid) != system.uid()) return []
       try {
         return await read(pid)
       } catch (error) {
         if (!io.isPermissionDenied(error)) throw error
-        return hidden(await procs.privileged(pid) ?? [])
+        denied.push(pid)
       }
-    } catch {
-      return []
-    }
-  }))).flat()
+    } catch { /* The process went away before it could be read. */ }
+    return []
+  }))
+  if (denied.length) {
+    let found = await procs.privileged(denied).catch(() => ({}))
+    paths.push(...Object.values(found).map(hidden))
+  }
+  return paths.flat()
+}
 
 /** Canonical directories occupied by this user's live local processes,
  * including agents outside the graph. A process that cannot be read holds
@@ -676,7 +698,7 @@ export let processPaths = async (procs = procfs): Promise<Set<string>> =>
 
 /** A process using any path inside a worktree keeps the whole checkout. */
 export let inUse = (path: string, cwds: Set<string>): boolean =>
-  [...cwds].some((cwd) => cwd == path || cwd.startsWith(path + '/'))
+  cwds.has(path) || cwds.values().some((cwd) => cwd.startsWith(path + '/'))
 
 // A git command's output, or nothing when it failed or could not run at all —
 // a path that is not a checkout is an answer here, not an error.
@@ -881,9 +903,9 @@ export let reclaim = async (
   let common = await commonOf(path).catch(() => undefined)
   if (!common) return 'failed'
   return locked(common, await canonical(path), async () => {
-    if (!await free()) return 'taken'
     let { held, branch } = await holding(path, landed, base)
     if (held) return held
+    if (!await free()) return 'taken'
     await keepIgnored(path)
     if (await quiet(path, ['worktree', 'remove', path]) == null) {
       return 'failed'
@@ -913,17 +935,19 @@ export let LARGE = 1_000_000
 export let shelve = async (
   path: string,
   onBranch: () => Promise<unknown> = async () => {},
+  free: () => Promise<boolean> = () => Promise.resolve(true),
 ): Promise<Held | undefined> => {
   if (await lost(path)) return 'unlanded'
   let common = await commonOf(path).catch(() => undefined)
   if (!common) return 'failed'
-  return locked(common, await canonical(path), () => put(path, onBranch))
+  return locked(common, await canonical(path), () => put(path, onBranch, free))
 }
 
 // Shelve, under the lock creation takes at `path`.
 let put = async (
   path: string,
   onBranch: () => Promise<unknown>,
+  free: () => Promise<boolean>,
 ): Promise<Held | undefined> => {
   let at = await standing(path)
   if (!at) return 'unlanded'
@@ -938,6 +962,9 @@ let put = async (
       let size = await io.lstat(`${path}/${file}`).then((s) => s.size, () => 0)
       if (size >= LARGE) return 'dirty'
     }
+  }
+  if (!await free()) return 'taken'
+  if (at.dirty) {
     let shelved = await quiet(path, ['add', '-A']) != null &&
       await quiet(path, [
           '-c',

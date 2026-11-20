@@ -6,15 +6,10 @@ import os
 import re
 import sys
 
-try:
-    if len(sys.argv) != 2 or not re.fullmatch(r"[1-9][0-9]*", sys.argv[1]):
-        raise ValueError("expected one positive PID")
-    uid = os.environ.get("SUDO_UID", "")
-    if not re.fullmatch(r"[0-9]+", uid):
-        raise ValueError("expected the sudo caller's UID")
-    fd = os.open("/proc/" + sys.argv[1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+def paths(pid, uid):
+    fd = os.open("/proc/" + pid, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        if os.fstat(fd).st_uid != int(uid):
+        if os.fstat(fd).st_uid != uid:
             raise ValueError("process belongs to another user")
         cwd = os.readlink("cwd", dir_fd=fd)
         if not cwd.startswith("/"):
@@ -33,9 +28,30 @@ try:
                     pass
         finally:
             os.close(descriptors)
-        print(json.dumps(paths))
+        return paths
     finally:
         os.close(fd)
+
+
+try:
+    pids = sys.argv[1:]
+    if not pids or not all(re.fullmatch(r"[1-9][0-9]*", pid) for pid in pids):
+        raise ValueError("expected positive PIDs")
+    uid = os.environ.get("SUDO_UID", "")
+    if not re.fullmatch(r"[0-9]+", uid):
+        raise ValueError("expected the sudo caller's UID")
+    uid = int(uid)
+    # Keep the single-PID door for already running workers.
+    if len(pids) == 1:
+        print(json.dumps(paths(pids[0], uid)))
+    else:
+        found = {}
+        for pid in pids:
+            try:
+                found[pid] = paths(pid, uid)
+            except (OSError, ValueError):
+                pass
+        print(json.dumps(found))
 except (OSError, ValueError) as error:
     print("yak-process-cwd: " + str(error), file=sys.stderr)
     sys.exit(1)
