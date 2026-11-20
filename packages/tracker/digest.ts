@@ -237,6 +237,9 @@ export type Sending = {
   url?: string
   store?: string
   chart?: string
+  /** What makes this letter one of its own: the day by default, so the
+   * day's firings write one; a request that asks for one names its moment. */
+  key?: string
 }
 
 /** Write the digest due at `now` as a letter to `to`, once a day: a retried
@@ -244,11 +247,11 @@ export type Sending = {
 export let send = async (
   g: Desk,
   now: number,
-  { to, from, url, store, chart }: Sending,
+  { to, from, url, store, chart, key = day(now) }: Sending,
 ): Promise<void> => {
   if (!to) return
   let eid = derivedEid(
-    `tracker-digest|${JSON.stringify([store, to, day(now)])}`,
+    `tracker-digest|${JSON.stringify([store, to, key])}`,
   )
   let [held] = await g.get([eid])
   if (held?.mail) return

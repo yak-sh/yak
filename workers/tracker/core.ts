@@ -360,7 +360,7 @@ export let store = (storage: Storage, config: Config) => {
           trusted: true,
         })
       }
-      await send(g, now, { ...config, to })
+      await send(g, now, { ...config, to, key: new Date(now).toISOString() })
     },
     // Only composed handlers can make progress (@yaks/effects `next`), so an
     // unknown or disabled errand keeps no otherwise idle object awake. Behind
