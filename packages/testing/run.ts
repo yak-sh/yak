@@ -116,12 +116,12 @@ export let apart = () => {
   }
 }
 
-/** Keeps the globals as they stand, and gives back what puts them back: a
- * file run in this runtime, as in a runtime of its own, leaves no global to
- * the next. A test that sets `document` with `Object.defineProperty` and puts
- * back only one that was there before leaves a read-only `document`, which
- * the next file to assign one cannot. What a file added goes, and what it
- * changed is as it was; a property nobody may change or delete stays. */
+/** Keeps the globals as they stand, and gives back what puts them back, so a
+ * file's tests leave no global to the next file. A test that sets `document`
+ * with `Object.defineProperty` and puts back only one that was there before
+ * leaves a read-only `document`, which the next file to assign one cannot.
+ * What was added goes, and what was changed is as it was; a property nobody
+ * may change or delete stays. */
 export let globals = (): () => void => {
   let was = Object.getOwnPropertyDescriptors(globalThis) as Record<
     PropertyKey,

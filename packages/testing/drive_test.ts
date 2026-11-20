@@ -42,20 +42,26 @@ test('files load and execute in order, retaining reports without fixture bodies'
   equal(result.loading, Object.values(result.loads).reduce((a, b) => a + b, 0))
 })
 
-test('a file leaves no global to the next, even one nobody may assign', async () => {
-  let g = globalThis as { left?: unknown }
+test("a file's tests leave no global to the next, even one nobody may assign; what loading installed stays", async () => {
+  let g = globalThis as { left?: unknown; installed?: unknown }
   let seen: unknown[] = []
-  await drive(['a.ts', 'b.ts'], (path) => {
+  let body = (path: string) => () => {
     if (path == 'a.ts') {
       Object.defineProperty(globalThis, 'left', {
         value: 'a',
         configurable: true,
       })
-    } else seen.push(g.left, g.left = 'b')
-    return Promise.resolve([])
+    } else seen.push(g.left, g.left = 'b', g.installed)
+  }
+  await drive(['a.ts', 'b.ts'], (path) => {
+    if (path == 'a.ts') g.installed = 'polyfill'
+    return Promise.resolve([
+      { file: path, name: path, tags: [], skip: false, body: body(path) },
+    ])
   })
-  equal(seen, [undefined, 'b'])
+  equal(seen, [undefined, 'b', 'polyfill'])
   equal(Object.hasOwn(globalThis, 'left'), false)
+  delete g.installed
 })
 
 test('a full runtime loads no more files and leaves them for another', async () => {
