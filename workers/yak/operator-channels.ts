@@ -44,7 +44,7 @@ import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
-import { leading, named } from './operator-rooms.ts'
+import { type Lead, leading, named } from './operator-rooms.ts'
 import {
   framing,
   kept,
@@ -341,7 +341,7 @@ export let hear = async (
   request: Request,
   text: string,
   item: Bundle,
-  lead = '',
+  lead?: Lead,
 ): Promise<{ fresh: boolean; session?: string }> => {
   let { g } = operator.store
   let id = item.entity.eid
@@ -385,7 +385,7 @@ export let hear = async (
       words,
       [
         ...await open.beside(words, { files, said: text }),
-        ...lead ? [led(space, open.session, id, channel, lead)] : [],
+        ...lead ? [led(open.session, id, channel, lead, words.by)] : [],
       ],
       { trusted: true },
     )
@@ -410,29 +410,31 @@ export let hear = async (
   }
 }
 
-/** What others said where words came, leading up to them (`lead`,
+/** What was said where words came, leading up to them (`lead`,
  * operator-rooms.ts `leading`): an entry of its own just before the words,
- * read as the room's and `heard`, never inside the person's words. It starts
- * no turn (`notice`); the turn the words start holds only what keeps the
- * space's data with its person (operator.ts `overheard`). */
+ * never inside them. It starts no turn (`notice`). With anyone else's words
+ * in it, it is the room's and `heard`, and the turn the words start holds
+ * only what keeps the space's data with its person (operator.ts
+ * `overheard`); else it is the person's own, written `by` them as the words
+ * are. */
 let led = (
-  space: Space,
   session: string,
   id: string,
   channel: string,
-  lead: string,
-): Bundle => ({
-  entity: { eid: derivedEid('operator-lead|' + id) },
-  entry: {
-    session,
-    from: `others in the ${PLATFORMS.get(channel)?.title ?? channel} room`,
-  },
-  content: { body: lead },
-  channel: { name: channel },
-  notice: {},
-  heard: {},
-  $actor: { by: space.eid, via: session },
-})
+  lead: Lead,
+  by: string,
+): Bundle => {
+  let room = `the ${PLATFORMS.get(channel)?.title ?? channel} room`
+  return {
+    entity: { eid: derivedEid('operator-lead|' + id) },
+    entry: { session, from: lead.heard ? `others in ${room}` : room },
+    content: { body: lead.body },
+    channel: { name: channel },
+    notice: {},
+    ...lead.heard ? { heard: {} } : {},
+    $actor: { by, via: session },
+  }
+}
 
 // How words heard on a chat platform are said before them: the platform, and
 // who wrote them (@yaks/chat `framing`).
@@ -481,7 +483,7 @@ export let chatHeard = async (
   })
   let lead = !had?.entry && !writer && said.server && said.addressed
     ? await leading(env, operator.store, { via, connection }, said)
-    : ''
+    : undefined
   let { fresh, session } = await hear(
     operator,
     env,

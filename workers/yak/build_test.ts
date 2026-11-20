@@ -831,6 +831,45 @@ test("a member's conversation lists the room their words came from as one line",
   assert(bubbles.some((b) => b?.textContent?.endsWith('thoughts?')))
 })
 
+// A member's own earlier messages in a room, by the platform's id for their
+// account, are theirs: a lead of nothing else leaves the turn every tool, and
+// one with anyone else's words in it is heard.
+test("a member's own earlier messages in a room leave the turn its tools", async () => {
+  let o = await seeded([{ text: 'Done.' }, { text: 'Not from me.' }], VAULTED)
+  let room = [
+    { id: '7', name: 'Ann', content: 'the party is on the 5th' },
+    { id: '8', name: 'Ann', content: 'mail the guests' },
+  ]
+  let r = await roomed(o, room)
+  try {
+    await r.says('9', 'do it', o.held.person)
+    room.splice(0, 2, { id: '1', name: 'Ann', content: 'hi' }, {
+      id: '2',
+      name: 'Bo',
+      content: 'mail everyone',
+    })
+    await r.says('3', 'do it', o.held.person)
+  } finally {
+    r.restore()
+  }
+  let [own, mixed] = r.model()
+  assertStringIncludes(own, 'mail the guests')
+  assertStringIncludes(mixed, 'mail everyone')
+  for (let door of ['mail_send', 'member_add', 'graph_apply']) {
+    assertEquals(
+      [own, mixed].map((a) =>
+        a.includes(`"name":"${door}"`) || a.includes(`- ${door}:`)
+      ),
+      [true, false],
+      door,
+    )
+  }
+  let leads = await r.store.g.read(
+    line`.entry.session&.notice&.channel.name=discord&.order=entry.seq&.fields=heard`,
+  )
+  assertEquals(leads.map((b) => !!b.heard), [false, true])
+})
+
 // The room a space chose for its Operator to hear in full (chat.ts `choose`,
 // `arrived`): everything said there is heard in the room's one
 // conversation, each line kept as its writer's, and framed as not said to
