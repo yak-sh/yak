@@ -23,7 +23,7 @@ import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
-import { argsOf, type Tool as GraphTool } from '@yaks/graph'
+import { argsOf, type Bundle, type Tool as GraphTool } from '@yaks/graph'
 import { MCPError, nameOf } from '@yaks/mcp-client'
 import { CallError } from '@yaks/tools/errors'
 
@@ -107,13 +107,19 @@ export let mcpPage = async (
   env: Env,
   dir: Directory,
   who: Who,
-  asked: { open?: string; grant?: string; at?: string } = {},
+  asked: {
+    /** the person's `mcp_server` rows, where the page read them already */
+    kept?: Bundle[]
+    open?: string
+    grant?: string
+    at?: string
+  } = {},
 ): Promise<McpPage> => {
-  let { open, grant, at } = asked
+  let { open, grant, at, kept } = asked
   let { read } = ctxOf(env).graph
   let person = who.person ?? ''
   let remote = pageServers(env, dir, who)
-  let shown = await remote.shown()
+  let shown = await remote.shown(kept)
   let by = await grantees(read, shown.map((s) => s.id))
   let named = new Map<string, Grantee | null>()
   let name = async (eid: string) => {

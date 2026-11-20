@@ -1380,51 +1380,64 @@ let MCP_STATE: Record<string, [string, 'positive' | 'negative' | undefined]> = {
 // it stands, with its key, which of its tools are offered, the apps it is
 // granted to, turning it off and removing it; then a form adding one, and
 // those in the trash. Its forms post to `action`.
-let mcpServers = (m: McpPage, on: boolean, action: string, env: Host) => {
-  let appAt = (a: Grantee) => `https://${spaceHost(env, a.space)}/${a.slug}/`
-  // One grant's button: the app, the source and the act.
-  let granting = (a: Grantee, at: string, act: string, label: string) =>
+// One grant's button on the connections page: the app, the source and the
+// act, `source-grant` or `source-revoke`.
+let granting = (
+  action: string,
+  a: Grantee,
+  at: string,
+  act: string,
+  label: string,
+) =>
+  h(
+    'form',
+    { method: 'post', action, class: 'Card_Form' },
+    held('app', a.eid),
+    held('at', at),
+    press(act, label, act == 'source-revoke'),
+  )
+
+// An app asking the person for what they connected (`./api/allow`), at the
+// top of their connections page: each source it asks for, allowed or not.
+let sourceAsk = (ask: NonNullable<McpPage['ask']>, action: string, env: Host) =>
+  h(
+    Card,
+    { id: 'grant' },
+    h(Card.Title, null, `${ask.app.title} asks to use what you connected`),
     h(
-      'form',
-      { method: 'post', action, class: 'Card_Form' },
-      held('app', a.eid),
-      held('at', at),
-      press(act, label, act == 'source-revoke'),
-    )
-  let ask = m.ask
-    ? h(
-      Card,
-      { id: 'grant' },
-      h(Card.Title, null, `${m.ask.app.title} asks to use what you connected`),
-      h(
-        Card.Sub,
-        null,
-        `Whenever you use ${m.ask.app.title}, its code may call the tools of what you allow here, as you. Nobody else who uses it reaches them.`,
-      ),
-      m.ask.sources.length
-        ? m.ask.sources.map((src) =>
-          h(
-            Card.Sub,
-            null,
-            h('strong', null, src.title),
-            ` ${src.about} `,
-            src.granted
-              ? granting(m.ask!.app, src.at, 'source-revoke', 'Stop')
-              : granting(m.ask!.app, src.at, 'source-grant', 'Allow'),
-          )
-        )
-        : h(
+      Card.Sub,
+      null,
+      `Whenever you use ${ask.app.title}, its code may call the tools of what you allow here, as you. Nobody else who uses it reaches them.`,
+    ),
+    ask.sources.length
+      ? ask.sources.map((src) =>
+        h(
           Card.Sub,
           null,
-          'You have nothing of that kind connected yet: add it below, then allow it here.',
-        ),
-      h(
+          h('strong', null, src.title),
+          ` ${src.about} `,
+          src.granted
+            ? granting(action, ask.app, src.at, 'source-revoke', 'Stop')
+            : granting(action, ask.app, src.at, 'source-grant', 'Allow'),
+        )
+      )
+      : h(
         Card.Sub,
         null,
-        h('a', { href: appAt(m.ask.app) }, `Back to ${m.ask.app.title}`),
+        'You have nothing of that kind connected yet: add it below, then allow it here.',
       ),
-    )
-    : null
+    h(
+      Card.Sub,
+      null,
+      h(
+        'a',
+        { href: `https://${spaceHost(env, ask.app.space)}/${ask.app.slug}/` },
+        `Back to ${ask.app.title}`,
+      ),
+    ),
+  )
+
+let mcpServers = (m: McpPage, on: boolean, action: string) => {
   let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
     h(
       'form',
@@ -1502,7 +1515,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string, env: Host) => {
           Card.Sub,
           null,
           `Used by ${a.title} `,
-          granting(a, `mcp:${s.id}`, 'source-revoke', 'Stop'),
+          granting(action, a, `mcp:${s.id}`, 'source-revoke', 'Stop'),
         )
       ),
     )
@@ -1511,7 +1524,6 @@ let mcpServers = (m: McpPage, on: boolean, action: string, env: Host) => {
   let trashed = m.servers.filter((s) => s.trashed)
   return [
     h(Group, { id: 'mcp' }, 'MCP servers'),
-    ask,
     live.length ? h(Cards, null, live.map(card)) : h(
       Card.Sub,
       null,
@@ -1951,6 +1963,7 @@ let connections = (at: DeskPage, env: Host) => {
       inert: setup ? true : undefined,
       'data-connections': '',
     }, [
+      c.mcp?.ask ? sourceAsk(c.mcp.ask, action, env) : null,
       c.on ? null : h(
         Card,
         null,
@@ -2006,7 +2019,7 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
       group('Requested by agents', grid(asks.map(shown))),
       group('Yours', grid(yours)),
-      c.mcp ? mcpServers(c.mcp, c.on, action, env) : null,
+      c.mcp ? mcpServers(c.mcp, c.on, action) : null,
       group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
       c.list.length || c.services.length || c.borrowed.length ? null : empty(
         'No connections yet',

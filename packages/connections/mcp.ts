@@ -201,7 +201,9 @@ export type Remote = {
     patch: { enabled?: boolean; allow?: string[] | null },
   ) => Promise<void>
   tools: (id: string) => Promise<Choice[]>
-  shown: () => Promise<Shown[]>
+  /** Each server the person keeps, from `kept` where its rows were read
+   * already. */
+  shown: (kept?: Bundle[]) => Promise<Shown[]>
   list: (at?: string) => Promise<RemoteCommand[]>
   call: (
     at: string,
@@ -724,8 +726,8 @@ export let remoteCommands = (
     }))
   }
   /** Each server the person keeps, as their page shows it. */
-  let shown = async (): Promise<Shown[]> =>
-    await Promise.all((await kept()).map(async (row) => {
+  let shown = async (rows?: Bundle[]): Promise<Shown[]> =>
+    await Promise.all((rows ?? await kept()).map(async (row) => {
       let c = comp(row, 'mcp_server')
       let allow = c.allow == null ? undefined : JSON.parse(String(c.allow))
       let name = integration(row.entity.eid)

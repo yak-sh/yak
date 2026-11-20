@@ -85,7 +85,7 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
     )
     assertEquals(
       allow.headers.get('location'),
-      `https://yaks.app/manage/connections?grant=${app.eid}&at=mcp%3A#grant`,
+      `https://yaks.app/manage/connections?grant=${app.eid}&at=mcp%3A`,
     )
     let asked = await mcpPage(env, dir, who, { grant: app.eid, at: 'mcp:' })
     assertEquals(asked.ask?.sources.map((s) => [s.at, s.granted]), [

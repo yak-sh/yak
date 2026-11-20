@@ -1315,13 +1315,13 @@ let appDoor = async (
     }
   }
   // Where an app sends the person using it to allow it what they connected:
-  // their own connections page at the platform's address, which asks them,
-  // since the app's own address may not grant itself anything.
+  // their own connections page at the platform's address, which asks them
+  // at its top, since the app's own address may not grant itself anything.
+  // It names no hash: that page's hash is the address of a dialog.
   if (path == '/allow') {
     let to = new URL(hostUrl(env, '/manage/connections'))
     to.searchParams.set('grant', app.eid)
     to.searchParams.set('at', new URL(req.url).searchParams.get('at') ?? 'mcp:')
-    to.hash = 'grant'
     return Response.redirect(to.href, 303)
   }
   if (path == '/commands') {

@@ -662,6 +662,8 @@ export let connectionsAsked = async (
       catalogued(read),
       add ? known(read, add) : undefined,
       own ?? false,
+      // The MCP servers the person keeps, on their own space's page.
+      own ? read(line`.mcp_server.owner=${person}&*`) : [],
     ],
   )
 }
@@ -684,20 +686,22 @@ export let connectionsOf = async (
   at: Asked & {
     /** asked by the caller, and awaited only once the rest is read */
     services?: Promise<Service[]>
-    /** the person's MCP servers, asked by the caller like `services` */
-    mcp?: Promise<McpPage>
+    /** the page of the person's MCP servers, drawn from their rows read
+     * with the rest */
+    mcp?: (kept: Bundle[]) => Promise<McpPage>
     enable?: string[]
   } = {},
 ): Promise<Connections> => {
   let { enable = [], dir = dirOf(env) } = at
   // Awaited only on the person's own space.
   at.services?.catch(() => {})
-  at.mcp?.catch(() => {})
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
-  let [here, reached, ahead, listing, theirs, built, wanted, own] =
+  let [here, reached, ahead, listing, theirs, built, wanted, own, servers] =
     await connectionsAsked(env, space, person, { ...at, dir })
+  let mcp = own ? at.mcp?.(servers) : undefined
+  mcp?.catch(() => {})
   let mine = own ? theirs : []
   let [apps, held, out] =
     !reached || reached.some((b) => b.entity.eid == here.eid)
@@ -884,7 +888,7 @@ export let connectionsOf = async (
       : {},
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services: own ? await at.services ?? [] : [],
-    ...own && at.mcp ? { mcp: await at.mcp } : {},
+    ...mcp ? { mcp: await mcp } : {},
     borrowed: await Promise.all(
       loans.filter((l) => l[USES]).map(async (l): Promise<Borrowed> => {
         let eid = String(comp(l, 'edge').to)
