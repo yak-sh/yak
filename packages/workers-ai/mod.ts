@@ -325,9 +325,10 @@ let spent = (e: unknown) => /insufficient .*credits/i.test(message(e))
 // accepts it, which is the account holder's act, never a caller's.
 let unlicensed = (e: unknown) => /^5016:|prompt 'agree'/.test(message(e))
 
-// How the binding says it has no model by the name asked (5007): the
-// caller's name, which no account could be answered for.
-let missing = (e: unknown) => /^5007:|no such model/i.test(message(e))
+// How the binding says it has no model by the name asked: one it never had
+// (5007), or one Cloudflare retired (5028, "was deprecated").
+let missing = (e: unknown) =>
+  /^(5007|5028):|no such model|was deprecated/i.test(message(e))
 
 /**
  * Whether the binding refused the input it was asked with: it fits none of
@@ -396,7 +397,8 @@ let detailed = (e: unknown): unknown => {
  * is a {@link ModelError} coded `busy` that
  * may pass if asked again (`retry`), credits the account has spent
  * one coded `limit`, a model whose license the account has not accepted or a
- * name the binding has no model by one coded `model`, and a `ModelError` the
+ * name the binding has no model by (never had, or retired) one coded `model`,
+ * and a `ModelError` the
  * binding throws itself (one that
  * meters it, say) or anything else is passed on as it was thrown. For a host
  * that calls the binding without {@link workersAi}.

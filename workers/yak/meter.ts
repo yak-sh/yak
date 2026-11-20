@@ -15,6 +15,7 @@ import type { Env } from './env.ts'
 import {
   affordable,
   billed,
+  gone,
   measured,
   type Model,
   ModelError,
@@ -336,9 +337,10 @@ export let accounted = (
         })
       } catch (error) {
         // Media the space's files had no room to keep is not charged for,
-        // though its provider may have been paid.
+        // though its provider may have been paid; a model its provider says
+        // it has none by ran nothing to pay for.
         let unkept = error instanceof ModelError && error.code == 'space_full'
-        if (!submitted || unkept) await hold.settle(0, false)
+        if (!submitted || unkept || gone(error)) await hold.settle(0, false)
         throw error
       }
       let cost = measured(reply, tariff)

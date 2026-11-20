@@ -163,11 +163,18 @@ test('a rate limit, a timeout, spent credits, an unaccepted license and an unkno
   let unoffered = await assertRejects(() => gated.model(ask([])), ModelError)
   assertEquals(unoffered.code, 'model')
   assertEquals(/agree/.test(unoffered.message), false)
-  let nameless = binding(
-    new Error('5007: No such model @cf/nobody/no-such-model or task'),
-  )
-  let unknown = await assertRejects(() => nameless.model(ask([])), ModelError)
-  assertEquals(unknown.code, 'model')
+  for (
+    let said of [
+      '5007: No such model @cf/nobody/no-such-model or task',
+      '5028: @cf/zai-org/glm-5.3-flash was deprecated on 2026-11-20.',
+    ]
+  ) {
+    let gone = await assertRejects(
+      () => binding(new Error(said)).model(ask([])),
+      ModelError,
+    )
+    assertEquals(gone.code, 'model')
+  }
   let broken = new Error('boom')
   let other = await assertRejects(() => binding(broken).model(ask([])))
   assertEquals(other, broken)

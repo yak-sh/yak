@@ -116,6 +116,20 @@ test('settlement releases unused dollars and a replay never debits twice', async
   )
 })
 
+test('a call no provider charged is held again, and one charged nothing it reported is not', async () => {
+  let call = mint()
+  let hold = () =>
+    reserved(p.env, released.space, () => ({ dollars: 0.01 }), call)
+  await (await hold()).settle(0, false)
+  await (await hold()).settle(0.01)
+  await assertRejects(hold, ModelError, 'already holds')
+  let reported = mint()
+  let once = () =>
+    reserved(p.env, released.space, () => ({ dollars: 0.01 }), reported)
+  await (await once()).settle(0, true)
+  await assertRejects(once, ModelError, 'already holds')
+})
+
 test('an unanswered submitted call keeps its maximum unavailable', async () => {
   await reserved(p.env, uncertain.space, () => ({ dollars: 0.2 }))
   await assertRejects(

@@ -42,6 +42,7 @@ import {
   ModelError,
   modelReads,
   modelResults,
+  onward,
   type Price,
   type Request as Step,
 } from '@yaks/model'
@@ -792,6 +793,59 @@ export let delegateOf = (provider: string) =>
   agents.operator.find((c) => c.provider == provider)?.delegate
 
 /**
+ * The hosted models a step asked of `asked` goes on to where its provider
+ * says that model is retired or unknown (@yaks/model `onward`), in order:
+ * `asked`, the models its space may be answered with (`own`), then each of
+ * `choices` (config.ts `agents.operator`) whose provider `serves`. Where
+ * `asked` is a stronger model handed coding (a `delegate`), each is its
+ * provider's stronger model.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { chainOf } from './operator.ts'
+ * let choices = [
+ *   { provider: 'a', model: 'a1', delegate: 'A1' },
+ *   { provider: 'b', model: 'b1' },
+ *   { provider: 'c', model: 'c1' },
+ * ]
+ * let serves = (p: string) => p != 'c'
+ * let names = (asked: { provider: string; model: string }) =>
+ *   chainOf(asked, [{ provider: 'b', model: 'b2' }], choices, serves)
+ *     .map((c) => c.provider + ':' + c.model)
+ * equal(names({ provider: 'x', model: 'old' }), ['x:old', 'b:b2', 'a:a1', 'b:b1'])
+ * equal(names({ provider: 'a', model: 'A1' }), ['a:A1', 'b:b2', 'b:b1'])
+ * equal(
+ *   chainOf({ provider: 'b', model: 'A1' }, [choices[0]], choices, serves),
+ *   [{ provider: 'b', model: 'A1' }, { provider: 'a', model: 'A1' }, { provider: 'b', model: 'b1' }],
+ * )
+ * equal(names({ provider: 'b', model: 'b2' }), ['b:b2', 'a:a1', 'b:b1'])
+ * ```
+ */
+export let chainOf = (
+  asked: Choice,
+  own: Choice[],
+  choices: { provider: string; model: string; delegate?: string }[],
+  serves: (provider: string) => boolean,
+): Choice[] => {
+  let strong = choices.some((c) => c.delegate == asked.model)
+  let pick = (provider: string, model: string) => ({
+    provider,
+    model: strong
+      ? choices.find((c) => c.provider == provider)?.delegate ?? model
+      : model,
+  })
+  let all = [
+    asked,
+    ...own.map((c) => pick(c.provider, c.model)),
+    ...choices.filter((c) => serves(c.provider)).map((c) =>
+      pick(c.provider, c.model)
+    ),
+  ]
+  let key = (c: Choice) => c.provider + '\n' + c.model
+  return all.filter((c, i) => all.findIndex((d) => key(d) == key(c)) == i)
+}
+
+/**
  * The machine that answers an Operator's model steps for `person` in `space`,
  * as the `fetch` that reaches it through the space's tunnel, or null: the
  * space has a tunnel, the person is its owner (tunnel.ts `machine`), and they
@@ -1250,15 +1304,24 @@ export let operating = (
   // else `operatorChoice`'s. A persona naming its person's machine asks the
   // machine first, and leaves the hosted model to the base. A test naming
   // its model keeps it.
-  let current = async (space?: string): Promise<Choice> => {
-    if (options.name) return { provider, model: name }
+  let current = async (space?: string): Promise<Choice> =>
+    (await namings(space))[0]
+  // Every hosted model its space may be answered with, in that order: what
+  // the space's persona names, what the directory's base persona names, each
+  // where a provider here serves it, then `operatorChoice`'s.
+  let namings = async (space?: string): Promise<Choice[]> => {
+    let fallback = { provider, model: name }
+    if (options.name) return [fallback]
     space ??= await spaceOf(store)
     let own = space ? await namedBy(g, personaFor(space)) : undefined
-    let chosen = (own?.provider == MACHINE ? undefined : own) ??
-      await namedBy(bases(env), BASE)
-    return chosen && implementations[chosen.provider]
-      ? chosen
-      : { provider, model: name }
+    let all = [
+      own?.provider == MACHINE ? undefined : own,
+      await namedBy(bases(env), BASE),
+    ]
+    return [
+      ...all.filter((c): c is Choice => !!c && !!implementations[c.provider]),
+      fallback,
+    ]
   }
   // A space's trials are asked of its providers, charged to it.
   let lending: Lending = { models: implementations, priced, provider, name }
@@ -1484,9 +1547,34 @@ export let operating = (
     }
     return !await up(session, reach)
   }
-  let models = Object.fromEntries(
+  let charged = Object.fromEntries(
     Object.entries(implementations).filter(([p]) => p != MACHINE)
       .map(([p, m]) => [p, accounting(m, p)]),
+  )
+  // A hosted step whose provider says its model is retired or unknown goes
+  // on to the next model the Operator's choices name (`chainOf`), each
+  // charged as its own provider's step; the turn ends only when none is
+  // left. The model that failed is reported, so its row or its caller is
+  // fixed.
+  let serves = (p: string) => !!charged[p] && ready(env, p, operatorProviders)
+  let models: Record<string, Model> = Object.fromEntries(
+    Object.entries(charged).map(([p, m]) => [
+      p,
+      Object.assign(
+        onward(
+          async (req) =>
+            chainOf(
+              { provider: p, model: req.model },
+              await namings(),
+              agents.operator,
+              serves,
+            ).map((c) => ({ model: charged[c.provider], name: c.model })),
+          (name, error) =>
+            caught(error, { request: 'operator model', model: name }),
+        ),
+        m,
+      ),
+    ]),
   )
   // A step asked of the machine goes to each provider it lends and then to
   // the hosted model (operator-machine.ts), which is charged as any hosted

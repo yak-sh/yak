@@ -1,11 +1,12 @@
 // The model an Operator answers with is a row in the directory
 // (@yaks/platform/operator-model): switching it is one write, the next turn is
 // answered by it and charged at its row's price, a space's own persona may
-// name another, and a summary is asked of the same model.
+// name another, a model its provider retired passes the turn to the next, and
+// a summary is asked of the same model.
 import { identityEid, mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Model } from '@yaks/model'
+import { type Model, ModelError } from '@yaks/model'
 import { transcript } from '@yaks/session'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -29,12 +30,20 @@ let space = (await dir.at(
 
 // Each provider answers as itself, reporting `read` input tokens (a
 // thousand, so a step costs a thousandth of its model's input price) and no
-// dollars; a summary says so.
+// dollars; a summary says so. Each says it has no model `RETIRED` once the
+// call is submitted, as a provider says of one it took off its catalogue.
 let asked: string[] = []
 let read = 1000
+let RETIRED = 'gpt-retired'
 let answering = (provider: string): Model =>
   Object.assign(
     (req: Parameters<Model>[0]) => {
+      if (req.model == RETIRED) {
+        asked.push(`${provider} ${req.model} refused`)
+        return Promise.resolve(req.onSubmit?.()).then(() => {
+          throw new ModelError('model_not_found', `${RETIRED} was deprecated`)
+        })
+      }
       let summary = JSON.stringify(req.instructions ?? '').includes(
         'Summarize this transcript',
       )
@@ -93,6 +102,27 @@ test('a space whose persona names its own model is answered by it, at the direct
     },
   }], { trusted: true })
   assertEquals(await turn(), { asked: ['openai gpt-6.1-sol'], cost: 2 })
+  await store.g.apply([{ entity: { eid: own }, using: null }], {
+    trusted: true,
+  })
+})
+
+test('a space whose model its provider retired is answered by the directory’s, at its price', async () => {
+  await operatorOn(env, 'openai', RETIRED, { input: 1, output: 1 })
+  await operatorOn(env, 'anthropic', 'claude-opus-5-5', {
+    input: 5,
+    output: 25,
+  })
+  let own = personaFor(space.eid)
+  let model = identityEid('model', [RETIRED])
+  await store.g.apply([{ entity: { eid: model }, model: { name: RETIRED } }, {
+    entity: { eid: own },
+    using: { provider: identityEid('provider', ['openai']), model },
+  }], { trusted: true })
+  assertEquals(await turn(), {
+    asked: ['openai gpt-retired refused', 'anthropic claude-opus-5-5'],
+    cost: 5,
+  })
   await store.g.apply([{ entity: { eid: own }, using: null }], {
     trusted: true,
   })

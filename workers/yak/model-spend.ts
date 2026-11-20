@@ -152,6 +152,9 @@ export let reserved = async <T extends { dollars: number }>(
   let eid = receiptEid(call)
   let month = monthOf(now)
   let reading = space
+  // The call's receipt where it settled at nothing unreported: an earlier ask
+  // of it that no provider charged for, so it is asked anew.
+  let unpaid: Bundle | undefined
   for (let attempt = 0;; attempt++) {
     let tally = visitor && what == 'models'
       ? await tallied(env, space.eid, visitor, now)
@@ -183,7 +186,7 @@ export let reserved = async <T extends { dollars: number }>(
             entity: { eid },
             $was: {
               ...guard(undefined, 'model_reservation', ['dollars']),
-              ...guard(undefined, 'cost', ['dollars']),
+              ...guard(unpaid, 'cost', ['dollars']),
             },
             model_reservation: {
               space: space.eid,
@@ -213,6 +216,15 @@ export let reserved = async <T extends { dollars: number }>(
       }
     } catch (error) {
       if (error instanceof Stale && error.eid == eid) {
+        let receipt = unpaid ? undefined : await read(env, eid)
+        let cost = receipt?.cost as Comp | undefined
+        if (
+          receipt && !held(receipt) && cost?.dollars === 0 &&
+          cost.reported === false
+        ) {
+          unpaid = receipt
+          continue
+        }
         throw new ModelError(
           'submitted',
           'This model call already holds its budget',
