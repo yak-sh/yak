@@ -591,3 +591,31 @@ test('an unknown run model names the providers available models without asking f
   for (let name of choices) assertStringIncludes(body.message, name)
   assertEquals(catalogueAsks, 0)
 })
+
+test('a file of words opens as its words, never run as a page', async () => {
+  let words = crypto.randomUUID()
+  let form = new FormData()
+  form.set('request', words)
+  form.set('say', 'The notes')
+  form.append(
+    'file',
+    new Blob(['<b>Bring chairs.</b>'], { type: 'text/html' }),
+    'notes.html',
+  )
+  await operatorAnswer(
+    new Request(at, { method: 'POST', body: form }),
+    p.env,
+    space,
+    who,
+  )
+  await service.drain()
+  let read = (await operatorAnswer(
+    new Request(`${at}?attachment=${words}&file=0`),
+    p.env,
+    space,
+    who,
+  ))!
+  assertEquals(read.headers.get('content-type'), 'text/plain; charset=utf-8')
+  assertStringIncludes(read.headers.get('content-disposition')!, 'inline')
+  assertEquals(await read.text(), '<b>Bring chairs.</b>')
+})

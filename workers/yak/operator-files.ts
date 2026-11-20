@@ -7,7 +7,8 @@
 // files}`, and is read so until the pass says it is done.
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
-import { type Attached, attachedTo } from '@yaks/blob/attachment'
+import { type Attached, attachedTo, attachmentOf } from '@yaks/blob/attachment'
+import { and, eq, fields, list } from '@yaks/query/core'
 import type { Graph } from '@yaks/graph'
 import { attachmentKey } from './attachments.ts'
 import type { Space } from './directory.ts'
@@ -71,20 +72,127 @@ export let moved = (store: { marks?: Pick<Meta, 'get'> }) =>
   !store.marks || store.marks.get(FILES) == 'done'
 
 /** Each line's files as the conversation draws them (operator-draw.ts
- * `Kept`): their names and kinds, and the message their links name. */
+ * `Kept`): their names and kinds, and the message their links name; and for
+ * a step's result, the files the step read. */
 export let drawnFiles = async (
   store: { g: Pick<Graph, 'read' | 'get'>; marks?: Pick<Meta, 'get'> },
   lines: Bundle[],
-): Promise<Record<string, Kept>> =>
-  Object.fromEntries(
-    [...await filesOf(store, lines)].map(([line, { message, files }]) => [
-      line,
-      {
-        message,
-        files: files.map((f) => ({ name: f.name, mime: f.media_type })),
-      },
+): Promise<Record<string, Kept>> => {
+  let [made, read] = await Promise.all([
+    filesOf(store, lines),
+    readOf(store.g, lines),
+  ])
+  let out: Record<string, Kept> = {}
+  for (let [line, { message, files }] of made) {
+    out[line] = {
+      message,
+      files: files.map((f) => ({ name: f.name, mime: f.media_type })),
+    }
+  }
+  for (let [line, files] of read) {
+    out[line] = { ...out[line] ?? { message: line, files: [] }, read: files }
+  }
+  return out
+}
+
+/** A file a step read: its name and kind, and the message it is attached
+ * beside and its place there, which its link names
+ * (`?attachment=<message>&file=<i>`). */
+export type Read = { name: string; mime: string; message: string; file: number }
+
+// The 64 hex digits an attachment's bytes are kept by (attachments.ts).
+let ADDRESS = /^[0-9a-f]{64}$/
+
+let argsOf = (b: Bundle | undefined): Record<string, unknown> => {
+  let args = comp(b, 'call')?.args
+  if (typeof args == 'string') {
+    try {
+      args = JSON.parse(args)
+    } catch {
+      return {}
+    }
+  }
+  return args && typeof args == 'object' ? args as Record<string, unknown> : {}
+}
+
+// The attachment a call names, which any tool given one reads: the
+// attachment_read and sandbox_write tools take it alike.
+let named = (call: Bundle | undefined) => {
+  let id = argsOf(call).attachment
+  return typeof id == 'string' && ADDRESS.test(id) ? [id] : []
+}
+
+// The calls a step's script made (code_mode), which its answer lists by id.
+let nested = (result: Bundle): string[] => {
+  try {
+    let { calls } = JSON.parse(str(comp(result, 'content')?.body))
+    return Array.isArray(calls) ? calls.map((c) => str(c?.id)) : []
+  } catch {
+    return []
+  }
+}
+
+/** The files each step read, by its result's eid: the attachment its call
+ * names, and those the calls its script made name. A file no message of the
+ * store carries is left out. */
+export let readOf = async (
+  g: Pick<Graph, 'read' | 'get'>,
+  lines: Bundle[],
+): Promise<Map<string, Read[]>> => {
+  let results = lines.filter((b) => b.result)
+  let byEid = new Map(lines.map((b) => [b.entity.eid, b]))
+  let called = (r: Bundle) => str(comp(r, 'result')?.call)
+  let wanted = results.flatMap((r) => [
+    ...byEid.has(called(r)) ? [] : [called(r)],
+    ...nested(r),
+  ]).filter(Boolean)
+  for (let b of wanted.length ? await g.get(wanted, ['call']) : []) {
+    byEid.set(b.entity.eid, b)
+  }
+  let asked = new Map(
+    results.map((r) => [
+      r.entity.eid,
+      [
+        ...new Set(
+          [called(r), ...nested(r)].flatMap((id) => named(byEid.get(id))),
+        ),
+      ],
     ]),
   )
+  let addresses = [...new Set([...asked.values()].flat())]
+  if (!addresses.length) return new Map()
+  let uses = await g.read(and(
+    eq('attachment.artifact', list(...addresses)),
+    fields(
+      'attachment.name',
+      'attachment.media_type',
+      'attachment.artifact',
+      'attachment.message',
+    ),
+  ))
+  // Each file by its bytes, as the first message to carry them names it.
+  let files = new Map<string, Read>()
+  for (let b of uses) {
+    let use = comp(b, 'attachment')!
+    let message = str(use.message)
+    let address = str(use.artifact)
+    let file = Array.from({ length: 64 }, (_, i) => i)
+      .find((i) => attachmentOf(message, i) == b.entity.eid)
+    if (file == null || files.has(address)) continue
+    files.set(address, {
+      name: str(use.name) || address,
+      mime: str(use.media_type) || 'application/octet-stream',
+      message,
+      file,
+    })
+  }
+  return new Map(
+    [...asked].flatMap(([line, ids]) => {
+      let read = ids.flatMap((id) => files.get(id) ?? [])
+      return read.length ? [[line, read]] : []
+    }),
+  )
+}
 
 /** The files of each of these lines that has any: words given with what
  * came with them, a step's result with what it made. */

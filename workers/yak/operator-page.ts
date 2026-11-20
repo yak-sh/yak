@@ -99,7 +99,7 @@ import {
   type Lines,
   row,
 } from './operator-draw.ts'
-import { PICTURES, reply, trouble } from '@yaks/session/conversation'
+import { PICTURES, reply, textual, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting, draftsOf, theirs } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -734,14 +734,20 @@ export let operatorAnswer = async (
     }
     let kept = await env.BLOBS.get(attachmentKey(space, file.address))
     if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
-    // A picture opens in place, as the conversation draws it; anything else
-    // is saved. Neither is ever read as a page of yaks.app.
+    // A picture opens in place, as the conversation draws it, and words as
+    // plain text; anything else is saved. None is ever read as a page of
+    // yaks.app.
     let shows = PICTURES.includes(file.mime)
+    let reads = textual(file.mime)
     return new Response(await kept.arrayBuffer(), {
       headers: {
-        'content-type': shows ? file.mime : 'application/octet-stream',
+        'content-type': shows
+          ? file.mime
+          : reads
+          ? 'text/plain; charset=utf-8'
+          : 'application/octet-stream',
         'content-disposition': `${
-          shows ? 'inline' : 'attachment'
+          shows || reads ? 'inline' : 'attachment'
         }; filename*=UTF-8''${encodeURIComponent(file.name)}`,
         'x-content-type-options': 'nosniff',
         'content-security-policy': "sandbox; default-src 'none'",

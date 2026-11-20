@@ -1,6 +1,7 @@
 /**
  * Pictures and files, each a `Picture` (an `Image`) or a `File` (its `Kind`
- * and `Name`), linking to its original when given its `href`. `Attachments-held`
+ * and `Name`), linking to its original when given its `href`. A `Frame`
+ * shows a file of words as it is, where it is named. `Attachments-held`
  * is files held to send, not sent yet (a message box's): small, each with its
  * `Size`, a `Note` where one is needed and a `Remove` that takes it back.
  *
@@ -27,7 +28,8 @@ export let Attachments:
     | 'Name'
     | 'Size'
     | 'Note'
-    | 'Remove',
+    | 'Remove'
+    | 'Frame',
     Part
   > = block(
     'div',
@@ -42,6 +44,7 @@ export let Attachments:
       Size: 'span',
       Note: 'span',
       Remove: Button,
+      Frame: 'iframe',
     },
   )
 /** What this part presents. */
@@ -51,6 +54,7 @@ export let sheet = (c: Colors): Sheet => ({
   Attachments: { row: true, spaced: true },
   Attachments_File: { fg: c.link },
   Attachments_Image: { hidden: true },
+  Attachments_Frame: { hidden: true },
   Attachments_Kind: { fg: c.muted, bold: true },
   Attachments_Name: { fg: c.text, bold: true },
   Attachments_Size: { fg: c.muted },

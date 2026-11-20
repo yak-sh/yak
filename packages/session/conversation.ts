@@ -249,6 +249,11 @@ export let unsaid = (files: Sent[]): string =>
 /** The kinds a browser draws as a picture, never a drawing that runs (SVG). */
 export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
+/** Whether a file is words a browser shows as they are: text, and JSON,
+ * XML and YAML. */
+export let textual = (mime = ''): boolean =>
+  /^text\/|^application\/(json|xml|yaml|x-yaml)$|\+(json|xml)$/.test(mime)
+
 /** A file's kind as a person names it: its extension, else "File". */
 export let fileKind = (name: string): string =>
   name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File'
@@ -302,6 +307,24 @@ export let Filed = (
       away,
     )
 }
+
+/** A file opened where it is named, showing what it holds: a picture as
+ * itself, words in a frame of their own that loads once it is seen, and any
+ * other file as itself, which opens it. */
+export let Shown = (file: Filed): VNode =>
+  textual(file.mime) && file.href
+    ? h(Attachments.Frame, {
+      src: file.href,
+      title: file.name,
+      loading: 'lazy',
+      sandbox: '',
+    })
+    : h(Attachments, null, h(Filed, file))
+
+/** A file a step read or made, named in a quiet line that opens to what it
+ * holds (`Shown`): "Read notes.txt". */
+export let opened = (doing: string, file: Filed): VNode =>
+  step(`${doing} ${file.name}`, '', h(Shown, file))
 
 /** The files that came with a line, under it as a chat app shows them: a
  * person's sit at the `end`, on their side. None draws nothing. */

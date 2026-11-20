@@ -52,6 +52,7 @@ import {
   namer,
   type Names,
   type Naming,
+  opened,
   reply,
   type Said,
   type Sent,
@@ -64,6 +65,7 @@ import {
   yours,
 } from '@yaks/session/conversation'
 import { going, type HelperLine, Helping, Work } from './operator-aside.ts'
+import type { Read } from './operator-files.ts'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
 import {
@@ -163,7 +165,7 @@ export let attached = (row: string, sent: Sent[], mod?: 'end') =>
 /** The files a line came with, or a step brought back, and the message
  * they are attached beside, which their links name (operator-files.ts
  * `filesOf`). */
-export type Kept = { message: string; files: Sent[] }
+export type Kept = { message: string; files: Sent[]; read?: Read[] }
 
 /** A person's input: their words, and the files that came with them. */
 export let input = (b: Bundle, body: string, kept?: Kept) => {
@@ -1050,7 +1052,8 @@ let brief = (b: Bundle): Said => ({
  * heard back from, a line the platform wrote, a helper's brief, and a
  * person's words with the channel they came by and the files they sent. */
 let own: Kind<Heard>[] = [
-  // The files a step brought back (an image it made), open under it.
+  // The files a step brought back (an image it made), open under it, and
+  // each file it read, named in a quiet line that opens to what it holds.
   kind('.call', (b, heard) => {
     let step = draw(conversation, b, heard)!
     let kept = heard.result && heard.files?.[heard.result.entity.eid]
@@ -1062,6 +1065,13 @@ let own: Kind<Heard>[] = [
           null,
           step.node,
           attached(kept.message, kept.files),
+          ...(kept.read ?? []).map(({ name, mime, message, file }) =>
+            opened('Read', {
+              name,
+              mime,
+              href: `?attachment=${message}&file=${file}`,
+            })
+          ),
         ),
       }
       : step
