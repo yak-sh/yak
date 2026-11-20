@@ -902,7 +902,7 @@ export let storeQuery = (
       q: filters.join('&'),
     })
   }
-  return await storeRead(
+  return storeRead(
     session,
     at,
     `/query?${filters.join('&')}`,
