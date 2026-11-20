@@ -146,12 +146,13 @@ decision, a note beside their words). For that, type into checks' own chat
 page in the browser, as a person does (below), and read the rows with
 `yak <tool> --as checks`.
 
-`checks` is kept from the idle sweep, so what a check leaves there lasts, and
-an Operator check that spans several calls (a chat, then `operator_read` until
-it settles, then an answer) runs there too. A free space holds five apps:
-reuse one of its apps when the check allows it, and otherwise `app_delete` an
-old check's app (it stays recoverable in the trash) before `app_new`. Discard the
-drafts a check opens (`op=discard draft=<id>`). A check that needs an account
+`checks` is kept from the idle sweep and has a comped plan with no app cap.
+Concurrent checks share the space, and an Operator build can keep working
+between calls. Give every app a check creates a name and slug unique to that
+run, and keep the app ID it returns. When the run ends, even if the check
+fails, use `app_delete space=checks app=<id> --as checks` on only the apps
+created by that run. This moves them to recoverable trash. Discard the drafts
+the run opens (`op=discard draft=<id>`). A check that needs an account
 with nothing in it runs `yak admin throwaway '<command>'`, which puts its spaces
 in the trash once that command exits and so cuts off any Operator work still
 running. The account and its data remain recoverable until the person chooses
