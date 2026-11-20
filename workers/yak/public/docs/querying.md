@@ -366,7 +366,9 @@ page that needs a number should ask for the number, not fetch the rows to count.
 `.count` counts what the rest of the filter selects. `.tally=` counts each value
 of one property; `.distinct=` returns those values themselves, sorted. Both name
 one property, never a path, and your own properties must be written with their
-component — `.tally=recipe.cuisine`, not `.tally=cuisine`.
+component — `.tally=recipe.cuisine`, not `.tally=cuisine`. A time property is
+counted by the exact instant it stores; the grammar has no date functions, so to
+count by day, read the times with `.fields=` and group them in your code.
 
 The answer is an object, not an array, so a page has to branch on which it asked
 for. Ask for one aggregate at a time: with two in one filter, only the first is

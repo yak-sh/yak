@@ -243,6 +243,9 @@ test('an aggregate answers the same rows on both sides', () => {
       // a boolean is counted as false and true
       '.tally=book.available',
       '.distinct=review.book.book.available',
+      // a time is counted as the instant it stores
+      '.tally=book.released',
+      '.distinct=review.book.book.released',
     ]
   ) assertEquals(rows(q, shop, { now: NOW })(bundles), s.rows(q), q)
   assertEquals(s.rows('.tally=book.available'), [
@@ -338,7 +341,6 @@ test('a query neither side can answer is declined by both', () => {
       // a path through a hop that is no reference, or to a whole component
       '.review&.fields=review.stars.doc.title',
       '.order=book.author.member',
-      '.distinct=book.released',
     ]
   ) {
     assertThrows(() => s.rows(q), Error, 'cannot compile', q)

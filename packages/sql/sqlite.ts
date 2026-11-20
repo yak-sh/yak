@@ -536,8 +536,8 @@ export let stableSqlite: Dialect = {
 /**
  * How `.distinct` and `.tally` count a property of type `tag`, alike here and
  * in @yaks/match: a number as the number it is, a boolean as the 0 or 1 it is
- * stored as (read back as `false` or `true`), a text, an enum member or an eid
- * as its text, anything else not at all (null). A number cast to text would
+ * stored as (read back as `false` or `true`), a text, a time (its stored ISO
+ * text), an enum member or an eid as its text, anything else not at all (null). A number cast to text would
  * not read as JavaScript writes it (a real 2 is `2.0`).
  */
 export let tallied = (tag: Tag): 'number' | 'text' | 'binary' | null =>
@@ -545,6 +545,6 @@ export let tallied = (tag: Tag): 'number' | 'text' | 'binary' | null =>
     ? 'binary'
     : tag == 'number' || tag == 'priority' || tag == 'bool'
     ? 'number'
-    : tag == 'text' || tag == 'enum' || tag == 'eid'
+    : tag == 'text' || tag == 'time' || tag == 'enum' || tag == 'eid'
     ? 'text'
     : null
