@@ -598,8 +598,12 @@ export let letter = (
     `a letter for ${to} saying ${saying}`,
   )
 
-// The code in the latest letter to an address, past the letters already
-// received before requesting another sign-in.
+let DIGITS = /\b(\d{6})\b/
+
+// The code in the latest letter to an address that carries one, past the
+// letters already received before requesting another sign-in. Another letter
+// to the address (an invitation the pool sends after its write commits) can
+// land after the code's, so the newest letter is not always the code's.
 export let mailed = (
   k: Mailbox,
   to: string,
@@ -608,9 +612,9 @@ export let mailed = (
   posted(
     k,
     () =>
-      /\b(\d{6})\b/.exec(letters(k, to).slice(after).at(-1)?.subject ?? '')
-        ?.[1] ?? '',
-    `a letter for ${to}`,
+      letters(k, to).slice(after).map((l) => DIGITS.exec(l.subject)?.[1])
+        .findLast(Boolean) ?? '',
+    `a code letter for ${to}`,
   )
 
 // An invitation's one click, the way its person makes it (invite.ts): the link
