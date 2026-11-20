@@ -4557,8 +4557,11 @@ export class Store extends Durable {
       answer,
     )
     if (!e) return answer
-    let { name, message, retryable, running, caller } = e
-    return json({ error: name, message, retryable, running, caller }, 503)
+    let { name, message, retryable, running, caller, refusal } = e
+    return json(
+      { error: name, message, retryable, running, caller, refusal },
+      503,
+    )
   }
 
   // The object's move to a new address (relocate.ts). Answers before anything

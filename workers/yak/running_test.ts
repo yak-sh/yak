@@ -243,9 +243,10 @@ test('an idle Builder restarts for a newer caller', async () => {
 // answers a failure the caller's door sends again, which the newer code then
 // takes.
 // A store behind its caller after restarting for it, which refuses a word
-// only the caller's deploy declares; the next incarnation answers `next`.
-// Answers what the caller got, and what the tracker heard.
-let behind = async (next: Response) => {
+// only the caller's deploy declares; the next incarnation answers `next`,
+// or with none, the runtime keeps starting it on the older code. Answers
+// what the caller got, and what the tracker heard.
+let behind = async (next?: Response) => {
   learn(B)
   let reports: unknown[] = []
   let o = object()
@@ -255,7 +256,7 @@ let behind = async (next: Response) => {
   let reached = 0
   let ns = {
     idFromName: (name: string) => name,
-    get: () => reached++ ? { fetch: () => Promise.resolve(next) } : old,
+    get: () => reached++ && next ? { fetch: () => Promise.resolve(next) } : old,
   }
   let answer = await within(
     {
@@ -274,8 +275,12 @@ let behind = async (next: Response) => {
         }]),
       }),
   )
-  assertEquals([reached, o.restarts], [2, []])
-  return { status: answer.status, reports: JSON.stringify(reports) }
+  assertEquals([reached > 1, o.restarts], [true, []])
+  return {
+    status: answer.status,
+    said: await answer.text(),
+    reports: JSON.stringify(reports),
+  }
 }
 
 test('a refusal from a store behind its caller is sent again, and reported as skew when the newer code takes it', async () => {
@@ -291,4 +296,10 @@ test("a refusal the newer code repeats is the caller's own, answered plainly and
     }),
   )
   assertEquals([status, reports], [400, '[]'])
+})
+
+test('a store still behind after every resend answers its refusal as a refusal, and nothing is reported', async () => {
+  let { status, said, reports } = await behind()
+  assertEquals([status, reports], [400, '[]'])
+  assertMatch(said, /release_remake/)
 })

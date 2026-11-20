@@ -344,7 +344,13 @@ export let skewed = async (
   mine: Meta | null | undefined,
   answer: Response,
 ): Promise<
-  (Error & { retryable: true; running: string; caller: string }) | null
+  | (Error & {
+    retryable: true
+    running: string
+    caller: string
+    refusal: Refusal
+  })
+  | null
 > => {
   let theirs = caller(headers), here = versionOf(mine)
   if (!refused(answer)) return null
@@ -358,5 +364,46 @@ export let skewed = async (
     retryable: true as const,
     running: here.id,
     caller: theirs.id,
+    refusal: { status: answer.status, body: said },
+  })
+}
+
+/** The refusal a store behind its caller gave, as `skewed` carries it. */
+export type Refusal = { status: number; body: unknown }
+
+/**
+ * The answer a call gets when every resend met a store still behind its
+ * caller (@yaks/durable-object `resending`'s `settled`): the refusal that
+ * store gave, as the refusal it is. The older code's word is the only one
+ * there is yet; a refusal the newer code would repeat is the caller's own
+ * mistake, and one it would not lasts only until the runtime moves the
+ * store. Either way a deploy never fails a person's call. Null for any other
+ * failure.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
+ * let newer = new Headers({ [WORKER_VERSION]: 'b', [WORKER_VERSION_AT]: '2026-10-12T16:30:00Z' })
+ * let body = { error: 'Refused', message: 'unknown prop: .zzqx' }
+ * let e = (await skewed(newer, mine, Response.json(body, { status: 400 })))!
+ * // What the caller's door holds of the store's 503: its words and its body.
+ * let said = { message: e.message, refusal: e.refusal }
+ * let failure = Object.assign(new Error(said.message), { said })
+ * let answer = settled(failure)!
+ * assertEquals([answer.status, await answer.json()], [400, body])
+ * assertEquals(settled(new Error('Network connection lost.')), null)
+ * ```
+ */
+export let settled = (failure: unknown): Response | null => {
+  if (!(failure instanceof Error) || !failure.message.startsWith(SKEWED)) {
+    return null
+  }
+  let said = (failure as { said?: { refusal?: Partial<Refusal> } }).said
+  let { status, body } = said?.refusal ?? {}
+  let why = failure.message.slice(SKEWED.length).trim()
+  return Response.json(body ?? { error: 'Refused', message: why }, {
+    status: typeof status == 'number' && status >= 400 && status < 500
+      ? status
+      : 400,
   })
 }

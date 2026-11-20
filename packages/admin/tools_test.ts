@@ -348,16 +348,21 @@ test("an app's vocabulary is read from its store's vocab door, never probed for"
   let { host, kept, ask } = await box()
   try {
     await kept('own@example.com', 'own-bearer')
-    let doc = { $defs: { recipe: { component: true, type: 'object' } } }
+    let doc = {
+      $defs: {
+        recipe: { component: true, properties: { serves: {}, title: {} } },
+        made: { component: true },
+      },
+    }
     let urls: string[] = []
     await answering(
-      (url) => (urls.push(String(url)), Response.json(doc)),
+      (url) => (urls.push(String(url)), Response.json({ docs: [doc] })),
       async () => {
         let read = readable(host.vocab)(
           await ask('admin_schema', { where: 'jeff/recipes' }),
         )
         equal(structured(adminDoc.$defs!.admin_schema as Comp, read), {
-          result: doc,
+          result: { recipe: ['serves', 'title'], made: [] },
         })
         await assertRejects(
           () => ask('admin_schema', { where: 'jeff' }),

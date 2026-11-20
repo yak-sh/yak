@@ -636,11 +636,11 @@
         "properties": {
           "result": {
             "type": "object",
-            "description": "the app's vocab.json as deployed"
+            "description": "each component the app's store speaks, with its property names"
           }
         }
       },
-      "description": "The words an app declares, as its deployed vocab.json says them. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes --as admin",
+      "description": "Every word an app's store speaks, the platform's and the app's own, each component with its property names. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes --as admin",
       "input": {
         "where": {
           "type": "string",

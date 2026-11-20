@@ -16,7 +16,7 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { skew, stamp } from './running.ts'
+import { settled, skew, stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { retried } from '@yaks/durable-object/resets'
 import {
@@ -377,5 +377,7 @@ export let storeOf = (
         })
       }
     },
+    // A store still behind after every resend: its refusal, as a refusal.
+    settled: (failure) => settled(failure),
     wait,
   })

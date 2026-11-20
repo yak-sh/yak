@@ -902,7 +902,12 @@ export let storeQuery = (
       q: filters.join('&'),
     })
   }
-  return storeRead(session, at, `/query?${filters.join('&')}`, 'the query')
+  return await storeRead(
+    session,
+    at,
+    `/query?${filters.join('&')}`,
+    'the query',
+  )
 }
 
 // A GET of one of an app's store doors (`storeUrl`), its body as data: a
@@ -927,14 +932,26 @@ let storeRead = async (
   return body
 }
 
-/** The words the app `space/app` declares, as its vocab.json deployed them:
- * the read for what an app declares, so nobody asks its store for a word it
- * lacks to learn its words from the refusal. */
-export let storeSchema = (session: string, at: string): Promise<unknown> => {
+type Docs = { docs?: { $defs?: Record<string, { properties?: object }> }[] }
+
+/** Every word the app `space/app` speaks, the platform's and its own, as its
+ * store loaded them: each component with its properties. The read for what
+ * an app declares, so nobody asks its store for a word it lacks to learn its
+ * words from the refusal. */
+export let storeSchema = async (
+  session: string,
+  at: string,
+): Promise<Record<string, string[]>> => {
   if (where(at).length != 2) {
     throw new CallError('where', `name an app as space/app, not "${at}"`)
   }
-  return storeRead(session, at, '/vocab', 'its vocabulary')
+  let read = await storeRead(session, at, '/vocab', 'its vocabulary')
+  let { docs = [] } = read as Docs
+  return Object.fromEntries(
+    docs.flatMap((d) => Object.entries(d.$defs ?? {})).map((
+      [name, def],
+    ) => [name, Object.keys(def.properties ?? {})]),
+  )
 }
 
 /** Bundles applied to the app `space/app` names, as this account: created,

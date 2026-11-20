@@ -327,8 +327,12 @@ export let reset = async (r: Response): Promise<Error | null> => {
   if (r.status < 500) return null
   let said: { message?: unknown; retryable?: unknown } | null = await r
     .clone().text().then((t) => JSON.parse(t)).catch(() => null)
+  // The whole body rides along as `said`, for a caller that reads more of it.
   let e = typeof said?.message == 'string'
-    ? Object.assign(new Error(said.message), { retryable: said.retryable })
+    ? Object.assign(new Error(said.message), {
+      retryable: said.retryable,
+      said,
+    })
     : null
   return evicted(e) || starved(e) ? e : null
 }
@@ -358,10 +362,13 @@ let rebuildable = (init: RequestInit | Request) =>
  * a refusal for memory, the failures no retry should hide, with the path
  * that met it; `recovered` hears a call answered after a failure it was sent
  * again for, with that failure and the answer, so the caller judges what the
- * answer says of the failure; `wait` waits out each pause (`retried`). */
+ * answer says of the failure; `settled` may answer a call whose resends ran
+ * out, in place of its last failure; `wait` waits out each pause
+ * (`retried`). */
 export type Resend = {
   report?: (error: unknown, path: string) => void
   recovered?: (failure: unknown, answer: unknown, path: string) => void
+  settled?: (failure: unknown, path: string) => Response | null
   wait?: (ms: number) => Promise<void>
 }
 
@@ -406,7 +413,7 @@ export let resending = (door: Door, o: Resend = {}): Door => {
       ((r: Response) => (replayable ? received(r) : r) as T | Promise<T>)
     let failure: unknown = undefined
     let resent = (e: unknown) => evicted(e) || (!!read && safe && opaque(e))
-    return retried(
+    let sent = retried(
       async () => {
         try {
           let answer = await take(await thrown(await door(path, init, once)))
@@ -422,6 +429,11 @@ export let resending = (door: Door, o: Resend = {}): Door => {
       resent,
       o.wait,
     )
+    return sent.catch((e) => {
+      let answer = o.settled?.(e, path)
+      if (!answer) throw e
+      return take(answer)
+    })
   }
   return Object.assign(
     (
