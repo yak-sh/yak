@@ -156,10 +156,9 @@ test('a page lists its own sections, and every one of them is there', async () =
       p.slug,
     )
     // And the headings themselves wear those ids.
+    let { document } = parseHTML(html)
     for (let v of inside) {
-      assert(
-        parseHTML(html).document.querySelector(`h${v.depth}[id="${v.id}"]`),
-      )
+      assert(document.querySelector(`h${v.depth}[id="${v.id}"]`))
     }
   }
 })

@@ -2,7 +2,6 @@
 // selection stays in @yaks/testing.
 import { members } from '@yaks/cli/dependencies'
 import { tested } from '@yaks/testing/find'
-import { declared } from '@yaks/testing/names'
 
 type Run = (args: string[]) => Promise<string>
 type Comparison = { run?: Run; at?: string }
@@ -50,50 +49,35 @@ export let base = async (run: Run = git): Promise<string> => {
   return (await run(compare)).trim()
 }
 
-/// lines('+++ b/a.ts\n@@ -3,2 +3,3 @@ x\n@@ -9 +10,0 @@\n+++ b/b.ts\n@@ -0,0 +1 @@') -> { 'a.ts': [3, 4, 5, 10], 'b.ts': [1] }
-/// lines('+++ /dev/null\n@@ -1 +0,0 @@') -> {}
-/** The lines each path's hunks of a diff (`-U0`) leave edited, as the
- * changed file counts them: where a hunk only takes lines out, the line
- * before them. */
-export let lines = (diff: string): Record<string, number[]> => {
-  let at: Record<string, number[]> = {}
-  let file: number[] | undefined
-  for (let line of diff.split('\n')) {
-    if (line.startsWith('+++ ')) {
-      file = line.startsWith('+++ b/') ? (at[line.slice(6)] = []) : undefined
-      continue
-    }
-    let hunk = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(line)
-    if (!hunk || !file) continue
-    let from = Number(hunk[1]), count = Number(hunk[2] ?? 1)
-    if (!count) file.push(Math.max(from, 1))
-    for (let i = 0; i < count; i++) file.push(from + i)
-  }
-  return at
-}
-
-/** What this branch's changes edit in each module they change, staged,
- * unstaged or committed, but tests, which run for being changed: the
- * top-level declarations holding the lines they edit
- * (@yaks/testing/names `declared`), and `*` for a line outside every
- * declaration, such as an import or a statement, which runs for every
- * importer. */
+/** What this branch changes in each module. Tests run for being changed.
+ * The source check handles type-only changes even when there is no runtime
+ * declaration to name. */
 export let edits = async (
-  { run = git, at, read = (p) => Deno.readTextFile(p) }: Comparison & {
+  { run = git, at, paths, read = (p) => Deno.readTextFile(p) }: Comparison & {
+    paths?: string[]
     read?: (path: string) => Promise<string>
   } = {},
 ): Promise<Record<string, string[]>> => {
-  let diff = await run(['diff', '-U0', '--no-renames', at ?? await base(run)])
-  let edited: Record<string, string[]> = {}
-  for (let [path, at] of Object.entries(lines(diff))) {
-    if (!/\.[mc]?[jt]sx?$/.test(path) || tested(path)) continue
-    let text = await read(path).catch(() => undefined)
-    if (text == undefined) continue
-    let owners = declared(text)
-    let names = at.map((l) => owners[l - 1] ?? '*')
-    if (names.length) edited[path] = [...new Set(names)]
-  }
-  return edited
+  let from = at ?? await base(run)
+  let modules = (paths ?? await changes({ run, at: from })).filter((path) =>
+    /\.[mc]?[jt]sx?$/.test(path) && !tested(path)
+  )
+  if (!modules.length) return {}
+  let { declarations } = await import('./test-edits.ts')
+  return Object.fromEntries(
+    await Promise.all(modules.map(async (path) => {
+      let [before, after] = await Promise.all([
+        run(['show', `${from}:${path}`]).catch(() => undefined),
+        read(path).catch(() => undefined),
+      ])
+      return [
+        path,
+        before == undefined || after == undefined
+          ? ['*']
+          : declarations(path, before, after),
+      ]
+    })),
+  )
 }
 
 let workspace = new Set(members())

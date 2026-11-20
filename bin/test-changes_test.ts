@@ -56,21 +56,39 @@ test('a copied checkout uses the supplied base without consulting local refs', a
   equal(calls, [
     ['diff', '--name-only', '--no-renames', '-z', 'HEAD'],
     ['ls-files', '--others', '--exclude-standard', '-z'],
-    ['diff', '-U0', '--no-renames', 'HEAD'],
+    ['diff', '--name-only', '--no-renames', '-z', 'HEAD'],
+    ['ls-files', '--others', '--exclude-standard', '-z'],
   ])
 })
 
-test('an edit is its declaration, and a line outside every declaration is the whole module', async () => {
-  let text =
-    "import { x } from './x.ts'\n\nexport let a = () =>\n  x\nlet b = 2"
-  let at = (diff: string) =>
-    edits({
-      run: () => Promise.resolve(diff),
-      at: 'HEAD',
-      read: () => Promise.resolve(text),
-    })
-  equal(await at('+++ b/m.ts\n@@ -4 +4 @@'), { 'm.ts': ['a'] })
-  equal(await at('+++ b/m.ts\n@@ -1 +1 @@\n@@ -5 +5 @@'), {
-    'm.ts': ['*', 'b'],
+let before = "import { x } from './x.ts'\nexport let a = () => x\nlet b = 2"
+let edited = (after: string) =>
+  edits({
+    run: ([arg]) =>
+      Promise.resolve(arg == 'diff' ? 'm.ts\0' : arg == 'show' ? before : ''),
+    at: 'HEAD',
+    read: () => Promise.resolve(after),
   })
+
+test('test selection names the declarations whose runtime code changed', async () => {
+  equal(
+    await edited(
+      "import {\n  type A,\n  x,\n} from './x.ts'\n/** docs */\n" +
+        'export let a = () => x + 1\nlet b = 2',
+    ),
+    { 'm.ts': ['a'] },
+  )
+  equal(await edited(before.replace('let b = 2', '')), { 'm.ts': ['b'] })
+})
+
+test('a runtime import or top-level call changes the whole module', async () => {
+  equal(await edited(before.replace('./x.ts', './y.ts')), { 'm.ts': ['*'] })
+  equal(await edited(before + '\na()'), { 'm.ts': ['*'] })
+})
+
+test('a comment and a type-only edit leave runtime declarations alone', async () => {
+  equal(
+    await edited("import type { T } from './t.ts'\n/** docs */\n" + before),
+    { 'm.ts': [] },
+  )
 })

@@ -495,11 +495,13 @@ export let prepare = async (
   let all = flags.includes('--all')
   let comparison = { at: Deno.env.get('TASKS_TEST_BASE') }
   let changedPaths = all ? [] : await effects.changes(comparison)
+  let changedFiles = await effects.format(changedPaths)
   // What a whole change edits, which ranks the files naming it
   // (@yaks/testing/names); a run of named paths is no change's.
-  let edited = all || paths.length ? undefined : effects.edits(comparison)
+  let edited = all || paths.length || !changedPaths.length
+    ? undefined
+    : effects.edits({ ...comparison, paths: changedPaths })
   void edited?.catch(() => {})
-  let changedFiles = await effects.format(changedPaths)
   let snapshot = Promise.withResolvers<Survey | undefined>()
   void snapshot.promise.catch(() => {})
   let inspected = false
