@@ -132,7 +132,8 @@ export type Platform = {
    * room `room` there: how a page links to where its Operator is reached */
   link?: (server: string, room?: string) => string
   /** what `server` is called, as the bot with `credential` reads it; null
-   * where the bot is not in that server */
+   * where the bot is not in that server. Asked when the bot joins a server
+   * and kept, so a page names it without asking */
   serverName?: (
     credential: string,
     server: string,

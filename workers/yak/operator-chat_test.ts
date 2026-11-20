@@ -440,7 +440,7 @@ test('the side lists every way to reach the Operator, each one tap, and adds a p
 })
 
 test('a space with no chat connection is reached by its address, and offers no platform to anyone but its owner', async () => {
-  let editor = await waysOf(p.env, space, false)
+  let editor = await waysOf(p.env, space, false, [])
   assertEquals(editor.email, mailFrom(space.slug, null, p.env))
   assertEquals([editor.places, editor.unset], [[], []])
 })

@@ -129,13 +129,25 @@
           "ref": "entity",
           "death": "keep",
           "description": "the `chat_room` it hears, by its derived eid (`roomEid`), which names the room in every store though its row is kept beside its messages"
+        },
+        "id": {
+          "type": "string",
+          "description": "the platform's id for the room, which a link to it needs"
+        },
+        "server": {
+          "type": "string",
+          "description": "the platform's id for the server the room is in"
+        },
+        "name": {
+          "type": "string",
+          "description": "what the room was called when it was chosen, as the platform said, so a page names it without asking the platform"
         }
       }
     },
     "chat_serves": {
       "component": true,
       "type": "object",
-      "description": "on the chat connection of a bot a space brought (@yaks/connections, a pasted bot token), the servers that bot is in, as its platform last said over its socket: where its space's apps may post through it and whose rooms its space may choose to hear in full. A connection that added yaks.app's own bot to a server serves its `account` instead",
+      "description": "on the chat connection of a bot a space brought (@yaks/connections, a pasted bot token), the servers that bot is in, as its platform last said over its socket: where its space's apps may post through it and whose rooms its space may choose to hear in full. A connection that added yaks.app's own bot to a server serves its `account` instead, and keeps only its name here",
       "properties": {
         "servers": {
           "type": "array",
@@ -143,6 +155,13 @@
             "type": "string"
           },
           "description": "the platform's ids for the servers, sorted"
+        },
+        "names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "what each server it serves is called, by the platform's id for it, as the platform said when the bot joined it or was added, so a page names it without asking the platform. Kept for yaks.app's own bot's `account` too"
         }
       }
     },

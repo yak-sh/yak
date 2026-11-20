@@ -29,6 +29,9 @@ import {
   type Server,
 } from './chat.ts'
 import { chatCard } from './operator-page.ts'
+import { chatRows } from './connections.ts'
+
+let OWNER = crypto.randomUUID()
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
 let SPACE = crypto.randomUUID()
@@ -166,17 +169,13 @@ test('a server the bot was removed from is offered again, not reported', async (
   }
 })
 
-test('a space is reached in each server its bot is in, by name, in the room it hears; one with none offers Discord', async () => {
+test('a space is reached in each server its bot serves, named and in the room it hears as kept when they were set, asking Discord nothing on the way; one with none offers Discord', async () => {
   let { p, ada, bo, held } = await spaces()
-  let barn = await held(ada, 'barn')
-  await held(ada, 'mill')
-  await meta(p.env).apply([{
-    entity: { eid: barn },
-    chat_hears: { room: roomEid('discord', 'c1') },
-  }], KERNEL)
+  let barn = await held(ada, 'barn'), mill = await held(ada, 'mill')
   let answers: Record<string, unknown> = {
     'guilds/barn': { name: 'Barn' },
     'guilds/barn/channels': [{ id: 'c1', name: 'general', type: 0 }],
+    'channels/c1': { guild_id: 'barn' },
   }
   let was = globalThis.fetch
   globalThis.fetch = (input) => {
@@ -187,17 +186,24 @@ test('a space is reached in each server its bot is in, by name, in the room it h
         : Response.json({ message: 'Missing Access' }, { status: 403 }),
     )
   }
+  let rows = (space: { eid: string }) =>
+    chatRows(directory({ fetch: over(meta(p.env)) }), space.eid)
   try {
-    assertEquals(await reached(p.env, ada.eid), {
+    await connected(p.env, barn)
+    await connected(p.env, mill)
+    await choose(p.env, { person: OWNER, role: 'owner' }, ada.eid, barn, 'c1')
+    globalThis.fetch = (input) =>
+      Promise.reject(new Error(`Discord was asked: ${input}`))
+    assertEquals(await reached(p.env, await rows(ada)), {
       places: [{
         platform: 'Discord',
         server: 'Barn',
         room: 'general',
         href: 'https://discord.com/channels/barn/c1',
-      }],
+      }, { platform: 'Discord', href: 'https://discord.com/channels/mill' }],
       unset: [],
     })
-    assertEquals(await reached(p.env, bo.eid), {
+    assertEquals(await reached(p.env, await rows(bo)), {
       places: [],
       unset: [{ platform: 'Discord', integration: 'discord', testing: true }],
     })
@@ -457,7 +463,7 @@ test("yaks.app's bot goes by its space's Operator's name in the server it was ad
     await renamed(p.env, space.eid)
     let patch =
       'PATCH https://discord.com/api/v10/guilds/barn/members/@me Bot BOT'
-    assertEquals(asked, [
+    assertEquals(asked.filter((a) => a.startsWith('PATCH')), [
       `${patch} {"nick":"Pip"}`,
       `${patch} {"nick":"Wren"}`,
     ])

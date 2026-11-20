@@ -281,7 +281,7 @@ export let connected = async (env: Env, connection: string) => {
     for (let o of others) await ended(env, o.entity.eid)
   }
   await listen(env, bot)
-  await naming(env, c)
+  await Promise.all([naming(env, c), titled(env, c)])
 }
 
 /** Each bot that speaks for one of `space`'s chat connections goes by its
@@ -356,13 +356,53 @@ let seated = async (env: Env, connection: string, s: Seated) => {
         : had.filter((id) => id != s.left),
     ),
   ].sort()
-  if (now.join() == had.join() && comp(c, SERVES).servers) return
-  let { KERNEL, meta } = await need()
-  await meta(env).apply(
-    [{ entity: { eid: connection }, [SERVES]: { servers: now } }],
-    KERNEL,
-  )
-  await naming(env, c, now.filter((id) => !had.includes(id)))
+  if (now.join() != had.join() || !comp(c, SERVES).servers) {
+    let { KERNEL, meta } = await need()
+    await meta(env).apply(
+      [{ entity: { eid: connection }, [SERVES]: { servers: now } }],
+      KERNEL,
+    )
+    await naming(env, c, now.filter((id) => !had.includes(id)))
+  }
+  await titled(env, c, now)
+}
+
+// What each of `servers` of connection `c` is called, kept on it
+// (`chat_serves{names}`) so its Operator's page names them without asking
+// the platform on every load: asked of the platform for each it has no name
+// for yet. One the bot is not in, or that could not be named now, is asked
+// again the next time its bot is seated.
+let titled = async (env: Env, c: Bundle, servers = serves(c)) => {
+  let names = comp(c, SERVES).names as Record<string, string> | undefined ??
+    {}
+  let missing = servers.filter((id) => !names[id])
+  let { integration, status } = comp(c, CONNECTION)
+  if (!missing.length || status != 'connected') return
+  let { caught, ctxOf, installed, KERNEL, meta } = await need()
+  let via = (await installed(ctxOf(env).graph.read))
+    .find((i) => i.name == integration)?.chat
+  let p = via ? PLATFORMS.get(via) : undefined
+  let serverName = p?.serverName
+  if (!p || !serverName) return
+  let tags = { request: `${p.name} server`, connection: c.entity.eid }
+  let token = await speaker(env, p, c.entity.eid).catch((e) => {
+    caught(e, tags)
+  })
+  if (!token) return
+  let found = (await Promise.all(missing.map(async (server) =>
+    [
+      server,
+      await serverName(token, server).catch((e) => {
+        caught(e, { ...tags, server })
+        return null
+      }),
+    ] as const
+  ))).filter(([, name]) => name)
+  if (!found.length) return
+  await meta(env).apply([{
+    entity: { eid: c.entity.eid },
+    [SERVES]: { names: { ...names, ...Object.fromEntries(found) } },
+  }], KERNEL)
 }
 
 // The connected connections through which yaks.app's own bot speaks on
@@ -497,7 +537,7 @@ let servers = async (
 
 /** Where a space's Operator is reached on a chat platform, as its page's
  * side shows it (talk-sidebar.ts): a server one of its connections serves
- * ({@link serves}), by the name the platform gives it where it said one,
+ * ({@link serves}), by the name kept on the connection (`chat_serves{names}`),
  * the room it hears in full there (`chat_hears`), if that room is in it, and
  * the address that opens them. */
 export type Place = {
@@ -512,23 +552,15 @@ export type Place = {
  * `testing`. */
 export type Unset = { platform: string; integration: string; testing?: boolean }
 
-/** Every place `space`'s Operator is reached on a chat platform, and the
- * platforms where it is not yet ({@link Place}, {@link Unset}). A server its
- * bot is no longer in is left out; one the platform could not name now is
- * shown unnamed. */
+/** Every place a space's Operator is reached on a chat platform, read from
+ * its chat `connections` alone, and the platforms where it is not yet
+ * ({@link Place}, {@link Unset}). Nothing here asks a platform: a server
+ * whose name was never kept is shown unnamed. */
 export let reached = async (
   env: Env,
-  space: string,
-  rows?: Awaited<ReturnType<typeof chatRows>>,
+  connections: Awaited<ReturnType<typeof chatRows>>,
 ): Promise<{ places: Place[]; unset: Unset[] }> => {
-  let { botFrom, caught, chatRows, ctxOf, directoryOf, keyed, seeds } =
-    await need()
-  let connections = rows ?? await chatRows(directoryOf(env.STORE), space)
-  let ctx = ctxOf(env)
-  let failed = (request: string) => (e: unknown) => {
-    caught(e, { request })
-    return undefined
-  }
+  let { keyed, seeds } = await need()
   let each = await Promise.all([...PLATFORMS.values()].map(async (p) => {
     let theirs = connections.filter(({ integration }) =>
       integration.chat == p.name
@@ -548,33 +580,21 @@ export let reached = async (
     }
     let { link } = p
     if (!link) return { places: [], unset: [] }
-    let places = await Promise.all(theirs.map(async ({ row, integration }) => {
-      let token = await botFrom(ctx, row, integration)
-        .catch(failed(`${p.name} bot`))
-      let hears = comp(row, HEARS).room
-      return await Promise.all(
-        serves(row).map(async (server) => {
-          let [name, room] = token
-            ? await Promise.all([
-              p.serverName?.(token, server).catch(failed(`${p.name} server`)),
-              hears && p.rooms
-                ? p.rooms(token, server).then((rs) =>
-                  rs?.find((r) => roomEid(p.name, r.id) == hears)
-                ).catch(failed(`${p.name} rooms`))
-                : undefined,
-            ])
-            : []
-          if (name === null) return []
-          return [{
-            platform: p.title,
-            ...name ? { server: name } : {},
-            ...room ? { room: room.name } : {},
-            href: link(server, room?.id),
-          }]
-        }),
-      )
-    }))
-    return { places: places.flat(2), unset: [] }
+    let places = theirs.flatMap(({ row }) => {
+      let names = comp(row, SERVES).names as Record<string, string> | undefined
+      let hears = comp(row, HEARS)
+      return serves(row).map((server): Place => {
+        let name = names?.[server]
+        let room = hears.server == server && hears.id ? hears : undefined
+        return {
+          platform: p.title,
+          ...name ? { server: name } : {},
+          ...room?.name ? { room: String(room.name) } : {},
+          href: link(server, room ? String(room.id) : undefined),
+        }
+      })
+    })
+    return { places, unset: [] }
   }))
   return {
     places: each.flatMap((e) => e.places),
@@ -604,8 +624,32 @@ export let choose = async (
   }
   await ctxOf(env, who).graph.apply([{
     entity: { eid: connection },
-    [HEARS]: room ? { room: roomEid(via, room) } : null,
+    [HEARS]: room ? await heard(env, via, connection, room) : null,
   }])
+}
+
+// What `chat_hears` keeps of `room`, which `connection` serves on `via`:
+// its eid and id, and the server it is in and its name as the platform says
+// them now, so the Operator's page links and names it without asking. Where
+// the platform cannot say now, that is reported and the room is heard all
+// the same, unnamed.
+let heard = async (env: Env, via: string, connection: string, room: string) => {
+  let p = PLATFORMS.get(via)!
+  let at = await heldBy(env, p, { connection, room })
+    .then(async ({ token, server }) => ({
+      server,
+      name: (await p.rooms?.(token, server))?.find((r) => r.id == room)?.name,
+    }))
+    .catch(async (e) => {
+      ;(await need()).caught(e, { request: `${via} room`, connection })
+      return { server: null, name: null }
+    })
+  return {
+    room: roomEid(via, room),
+    id: room,
+    server: at.server,
+    name: at.name ?? null,
+  }
 }
 
 /** The guest who speaks as `id` on `via`: a person with no seat and no

@@ -188,19 +188,21 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
       page.catch(() => {})
       if (reads && !at.door) {
         let drawn = !at.open && !at.logo && !at.manifest
+        let chat = !!at.open && !url.searchParams.has('attachment')
         foresee(
           dir,
           person,
           at.view,
-          drawn
+          drawn || chat
             ? {
               env,
               slug: at.space,
               space: page.then((p) => p.space, () => null),
               add: url.searchParams.get('detail'),
+              drawn,
             }
             : undefined,
-          !!at.open && !url.searchParams.has('attachment'),
+          chat,
         )
       }
     } else if ('account' in at && reads) {
@@ -271,20 +273,22 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     // The page drawn on the dashboard, not a conversation in the chat app
     // or one of the space's files.
     let drawn = !at.open && !at.logo && !at.manifest
+    let chat = !!at.open && !url.searchParams.has('attachment')
     foresee(
       dir,
       person,
       view,
-      drawn
+      drawn || chat
         ? {
           env,
           slug: at.space,
           // A page read that fails is the page's to meet, below.
           space: paged.then((p) => p.space, () => null),
           add: url.searchParams.get('detail'),
+          drawn,
         }
         : undefined,
-      !!at.open && !url.searchParams.has('attachment'),
+      chat,
     )
   }
   let { space, role, administrative } = await paged
@@ -421,7 +425,9 @@ let keptIn = (res: Response, slug: string) => {
 // with whatever else this moment asks (directory-copy.ts `gathered`): each is
 // answered again from this reading when the page comes to it (hops.ts
 // `recall`), and a failure is the page's to meet when it does. A seat names its
-// space, so the side's selector comes with the person's seats.
+// space, so the side's selector comes with the person's seats; a page with
+// the chat app's side (`beside`) asks the space's chat connections, which
+// its Reach section lists.
 let foresee = (
   dir: ReturnType<typeof directory>,
   person: string,
@@ -430,6 +436,8 @@ let foresee = (
   chat = false,
 ) => {
   let seats = dir.seated(person)
+  let sided = view == 'updates' || view == 'matches' ||
+    view == 'operator' && chat
   void Promise.allSettled([
     feeOf(dir),
     dir.nameAt(person),
@@ -438,21 +446,26 @@ let foresee = (
     // The chat draws the lists their servers offer (operator-lists.ts), once
     // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
-    ...here
+    ...here?.drawn
       ? [
         dir.lines(walkTo(here.slug, here.space.then((s) => s?.eid ?? ''))),
         ...rowsAhead(dir, person, view, seats, here),
       ]
       : [],
+    ...here && sided
+      ? [chatRows(dir, walkTo(here.slug, here.space.then((s) => s?.eid ?? '')))]
+      : [],
   ])
 }
 
-// The space a page of one is at, while the read that learns it is in flight.
+// The space a page of one is at, while the read that learns it is in flight,
+// and whether the page is drawn on the dashboard, not the chat app.
 type Ahead = {
   env: Env
   slug: string
   space: Promise<Space | null>
   add: string | null
+  drawn: boolean
 }
 
 // The rows a page of a space shows of its own (`desk`), asked by the walk to
@@ -594,8 +607,14 @@ let beside = async (
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
     dir.collapsed(who.person),
-    import('./talk-sidebar.ts').then((s) =>
-      s.waysOf(env, space, who.role == 'owner')
+    // As the page asked it ahead (`foresee`), so it is answered from there.
+    chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
+      (await import('./talk-sidebar.ts')).waysOf(
+        env,
+        space,
+        who.role == 'owner',
+        rows,
+      )
     ),
   ])
   return {
