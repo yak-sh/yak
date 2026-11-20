@@ -265,6 +265,9 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
   vectors?: Sleeper
   /** meaning ranked only among what the reader can read in this store */
   meaningFor?: (reader: Reader) => Meaning
+  /** where the logo of each integration named is drawn from, as the
+   * platform keeps it (connections.ts `logosOf`), where the object lends it */
+  logos?: (named: string[]) => Promise<Record<string, string | null>>
 }
 
 /** What a composition of the Operator's store is bound to: its storage, given

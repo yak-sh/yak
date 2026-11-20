@@ -26,6 +26,8 @@
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import { type Tool, topOf } from '@yaks/session'
+import { integrationNamed } from '@yaks/session/conversation'
+import { Logo } from '@yaks/ui/parts'
 import { h } from 'preact'
 import { apex } from '@yaks/platform/host'
 import { APPROVE } from '@yaks/platform/routes'
@@ -242,6 +244,9 @@ export type Standing = {
   state: 'waiting' | 'done' | 'used' | 'expired' | 'gone' | 'failed'
   say?: string
   said?: string
+  /** where the logo of the integration its act names is drawn from
+   * (@yaks/ui `Logo`), `null` for one with none; absent where it names none */
+  logo?: string | null
 }
 
 /** An Operator's side of its links: what one's approval says, and its
@@ -262,21 +267,27 @@ export let approvals = (
     let [row] = await store.g.get([eid])
     let a = row?.operator_approval as Approval | undefined
     if (!a || digestOf(a) != digest) return { state: 'gone' }
-    let { say } = a
-    if (row.verified || pressing.has(eid)) return { state: 'used', say }
-    if (Date.parse(a.expires) < now()) return { state: 'expired', say }
-    if (!press) return { state: 'waiting', say }
+    let named = integrationNamed(a.args)
+    let about = {
+      say: a.say,
+      ...named && store.logos
+        ? { logo: (await store.logos([named]))[named] ?? null }
+        : {},
+    }
+    if (row.verified || pressing.has(eid)) return { state: 'used', ...about }
+    if (Date.parse(a.expires) < now()) return { state: 'expired', ...about }
+    if (!press) return { state: 'waiting', ...about }
     pressing.add(eid)
     let came: Standing
     try {
       await store.g.apply([{ entity: { eid }, verified: {} }], {
         trusted: true,
       })
-      came = { state: 'done', say, said: await run(a) }
+      came = { state: 'done', ...about, said: await run(a) }
     } catch (error) {
       came = {
+        ...about,
         state: 'failed',
-        say,
         said: error instanceof Error ? error.message : String(error),
       }
     } finally {
@@ -365,7 +376,9 @@ export let approvalDoor = async (req: Request, env: Env) => {
     env,
     {
       title,
-      lead,
+      lead: standing.logo === undefined
+        ? lead
+        : h(Logo, { src: standing.logo ?? undefined }, lead),
       status: standing.state == 'gone' ? 404 : 200,
       headers: {
         'cache-control': 'private, no-store',

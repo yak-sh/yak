@@ -113,6 +113,29 @@ test('a call is one step: running, then settled by its result in place', () => {
   )
 })
 
+test('a call naming an integration wears its logo, the plug where it has none', () => {
+  let names = namer({
+    tools: { t: { step: { doing: 'Asking…', done: 'Asked' } } },
+    logos: { gmail: 'data:image/svg+xml,g', mine: null },
+  })
+  let drawn = (args: object) =>
+    renderToString(
+      h(
+        Fragment,
+        null,
+        draw(kinds, e('c', { call: { to: 't', args } }), {
+          names,
+        })!.node,
+      ),
+    )
+  equal(
+    drawn({ integration: 'gmail' }).includes('src="data:image/svg+xml,g"'),
+    true,
+  )
+  equal(drawn({ connection: 'mine' }).includes('Logo_Mark-none'), true)
+  equal(drawn({ integration: 'other' }).includes('Logo'), false)
+})
+
 test("a host's kinds draw ahead of these, and pass an entry back to them", () => {
   let host = define<Kind>([
     kind('.marked', (b) => b.marked ? { node: 'Marked' } : undefined),

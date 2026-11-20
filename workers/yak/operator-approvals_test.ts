@@ -14,6 +14,7 @@ import {
   LIFE,
 } from './operator-approvals.ts'
 import type { Env } from './env.ts'
+import type { OperatorStore } from './operator-store.ts'
 import type { Space } from './directory.ts'
 
 let SECRET = 'secret'
@@ -162,4 +163,29 @@ test('after words a number alone vouched for, an act runs when the turn asks for
   await run('make me a token', 'grant', {})
   equal(ran, ['member_add {"email":"eve@x.com"}'])
   equal(texts.length, sent + 3)
+})
+
+test('an approval of an act naming an integration carries its logo', async () => {
+  let logos: OperatorStore = operatorMemory()
+  logos.logos = (named: string[]) =>
+    Promise.resolve(Object.fromEntries(named.map((n) => [n, `at:${n}`])))
+  let row = {
+    person,
+    session,
+    tool: 'connection_lend',
+    say: 'Lend it',
+    args: { app: 'a', integration: 'gmail', cap: 5 },
+    number: NUMBER,
+    expires: new Date(clock + LIFE).toISOString(),
+  }
+  let eid = crypto.randomUUID()
+  await logos.g.apply([{ entity: { eid }, operator_approval: row }], {
+    trusted: true,
+  })
+  let standing = await approvals(logos, () => Promise.resolve(''), () => clock)(
+    eid,
+    digestOf(row),
+    false,
+  )
+  equal([standing.state, standing.logo], ['waiting', 'at:gmail'])
 })

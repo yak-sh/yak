@@ -28,6 +28,7 @@ import { blocks, Host, type Options, parse } from '@yaks/markdown'
 import {
   Attachments,
   Body,
+  Logo,
   More,
   Notice,
   Pairs,
@@ -72,7 +73,21 @@ export type Tone = 'on' | 'no'
 /** How a call reads to the person, by its tool's eid (`call.to`) and its
  * arguments: what it is doing while it runs and what it did once it answered
  * (@yaks/tools `stepOf`). */
-export type Names = (tool: string, args?: Record<string, unknown>) => Step
+export type Names = (tool: string, args?: Record<string, unknown>) => Called
+
+/** How a call reads, and where the logo of the integration it names is drawn
+ * from (@yaks/ui `Logo`): `null` for one with none, which wears the plug, and
+ * absent where it names none. */
+export type Called = Step & { logo?: string | null }
+
+/** What a call's arguments name an integration by: its `integration`, or the
+ * `connection` it attaches. */
+export let integrationNamed = (
+  args?: Record<string, unknown> | null,
+): string | undefined =>
+  [args?.integration, args?.connection].find((v): v is string =>
+    typeof v == 'string' && !!v
+  )
 
 /** What a tool is called, of its `tool` component: its name, title and
  * steps (@yaks/tools `stepOf`). */
@@ -86,15 +101,24 @@ export type Naming = {
   tools?: Record<string, Named>
   person?: string | null
   ids?: Record<string, string>
+  /** where the logo of each integration a call names is drawn from, by what
+   * it names it by ({@link integrationNamed}); `null` for one with none */
+  logos?: Record<string, string | null>
 }
 
 /** How the calls read, from what names them. */
-export let namer = ({ tools = {}, person }: Naming): Names => (tool, args) =>
-  stepOf(
-    tools[tool] ?? { title: 'Use a tool' },
-    args,
-    person ? { person } : undefined,
-  )
+export let namer =
+  ({ tools = {}, person, logos = {} }: Naming): Names => (tool, args) => {
+    let step = stepOf(
+      tools[tool] ?? { title: 'Use a tool' },
+      args,
+      person ? { person } : undefined,
+    )
+    let named = integrationNamed(args)
+    return named != null && named in logos
+      ? { ...step, logo: logos[named] }
+      : step
+  }
 
 /** What a line is drawn with beside its entry: the result that answered it
  * when it is a call (`joined`), how calls read, what a call's step holds
@@ -379,7 +403,10 @@ let tool = (call: Bundle, beside: Beside): Said => {
   let c = comp(call, 'call')!
   let said = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
-  let name = ok == null ? said.doing : ok ? said.done : tried(said.doing)
+  let words = ok == null ? said.doing : ok ? said.done : tried(said.doing)
+  let name = said.logo === undefined
+    ? words
+    : h(Logo, { src: said.logo ?? undefined }, words)
   let problem = `This step did not work, so ${who(beside)} went on without it.`
   return {
     node: step(
@@ -399,7 +426,7 @@ let tool = (call: Bundle, beside: Beside): Said => {
             comp(result, 'refusal'),
         ),
     ),
-    text: ok === false ? `${name}\n\n${problem}` : undefined,
+    text: ok === false ? `${words}\n\n${problem}` : undefined,
     is: 'step',
     ...ok ? {} : { tone: ok == null ? 'on' : 'no' },
   }

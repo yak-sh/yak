@@ -683,6 +683,12 @@ export class Builder extends Durable {
             ready: () => store.vectors?.run(),
           }),
         )
+        // The logos of integrations its lines and approvals name, as the
+        // platform keeps them (connections.ts `logosOf`).
+        store.logos = async (named) => {
+          let { ctxOf, logosOf } = await import('./connections.ts')
+          return logosOf(ctxOf(this.#env).graph.read, this.#env, named)
+        }
         this.#fx = store.fx
         owing(store.fx, () => this.#work())
         // What a person is called, as the Operator asks it (operator.ts

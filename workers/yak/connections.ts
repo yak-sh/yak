@@ -89,6 +89,7 @@ import {
   using,
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
+import { integrationLogo } from '@yaks/platform/routes'
 import { PROVISIONAL } from '@yaks/effects'
 import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp, Taken } from '@yaks/graph'
@@ -145,6 +146,29 @@ let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 // One app's use of a connection.
 let integrationOf = (b: Bundle | undefined) =>
   String(comp(b, CONNECTION).integration)
+
+/** Where the logo of each integration `named` is drawn from
+ * (@yaks/platform/routes `integrationLogo`), by what a call names it by: its
+ * name, or a connection's eid (@yaks/session `integrationNamed`). `null` for
+ * one with no logo or none known, which wears the plug. */
+export let logosOf = async (
+  read: Read,
+  env: Env,
+  named: string[],
+): Promise<Record<string, string | null>> => {
+  let eids = named.filter((n) => EID.test(n))
+  let held = eids.length
+    ? await read(line`.entity.eid=${eids}&.${CONNECTION}`)
+    : []
+  let nameOf = (n: string) =>
+    EID.test(n) ? integrationOf(held.find((b) => b.entity.eid == n)) : n
+  return Object.fromEntries(
+    await Promise.all(named.map(async (n) => {
+      let i = await known(read, nameOf(n))
+      return [n, (i && integrationLogo(i, env)) ?? null] as const
+    })),
+  )
+}
 
 /** A service as a page draws it: what a person calls it, a line about it,
  * its site, its logo and how to get its key, each empty where its integration

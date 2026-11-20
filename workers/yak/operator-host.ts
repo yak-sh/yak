@@ -76,6 +76,7 @@ import {
   wire,
 } from './operator-draw.ts'
 import {
+  integrationNamed,
   type Named as ToolNamed,
   namer,
   type Names,
@@ -118,11 +119,15 @@ let namingOf = async (
   entries: Bundle[],
   named: Named,
 ): Promise<Naming> => {
-  let tools = await store.g.get([
+  let calls = entries.flatMap((b) => b.call ? [comp(b, 'call')!] : [])
+  let tools = await store.g.get([...new Set(calls.map((c) => String(c.to)))])
+  let integrations = [
     ...new Set(
-      entries.flatMap((b) => b.call ? [String(comp(b, 'call')!.to)] : []),
+      calls.flatMap((c) =>
+        integrationNamed(c.args as Record<string, unknown>) ?? []
+      ),
     ),
-  ])
+  ]
   return {
     tools: Object.fromEntries(
       tools.filter(Boolean).map((b) => {
@@ -132,6 +137,9 @@ let namingOf = async (
     ),
     person: await personOf(store, entries, named),
     ids: await idsOf(store, entries),
+    ...integrations.length && store.logos
+      ? { logos: await store.logos(integrations) }
+      : {},
   }
 }
 
