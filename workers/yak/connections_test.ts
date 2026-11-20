@@ -201,6 +201,57 @@ test(
 )
 
 test(
+  "a sign-in begun on another of the space's pages comes back there, never to another space's, and one that cannot finish says so there",
+  async () => {
+    let s = await setup()
+    await s.at.apply(
+      [registration('google', { id: 'yaks', secret: 's' })],
+      KERNEL,
+    )
+    let begun = async (back: string) => {
+      let went = await s.post(
+        { do: 'add', integration: 'google-calendar', back },
+        '?space=ada&enable=google-calendar',
+      )
+      assert(went instanceof Response)
+      let cookie = went.headers.get('set-cookie')!.split(';')[0]
+      let held = await opened<{ back: string }>(
+        'connect',
+        cookie.slice(cookie.indexOf('=') + 1),
+        SECRET,
+      )
+      return { cookie, back: held!.back }
+    }
+    let { cookie, back } = await begun('/manage/ada/operator')
+    assertEquals(
+      back,
+      'https://yaks.app/manage/ada/operator?enable=google-calendar',
+    )
+    for (let elsewhere of ['/manage/bo/operator', '//evil.test/x', 'x']) {
+      assertEquals(
+        (await begun(elsewhere)).back,
+        'https://yaks.app/manage/ada/connections?enable=google-calendar',
+      )
+    }
+    // Back with nobody signed in: told so on the page it was begun from.
+    let returned = (cookie?: string) =>
+      callback({
+        env: s.p.env,
+        req: new Request(`https://yaks.app${CALLBACK}?code=C&state=S`, {
+          headers: cookie ? { cookie } : {},
+        }),
+        path: CALLBACK,
+        space: null,
+      })
+    assertEquals(to((await returned(cookie))!), [
+      303,
+      'https://yaks.app/manage/ada/operator?enable=google-calendar&refused=1',
+    ])
+    assertEquals(to((await returned())!), [303, 'https://yaks.app/manage'])
+  },
+)
+
+test(
   'the directory holds the built integrations, and a space cannot change where their tokens go',
   async () => {
     let s = await setup()

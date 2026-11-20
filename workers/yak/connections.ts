@@ -584,6 +584,25 @@ let usersOf = async (env: Env, connection: string): Promise<string[]> =>
   (await readOf(env)(line`.edge.to=${connection}&.${USES}&*`))
     .map((l) => String(comp(l, 'edge').from))
 
+/** End connection `eid`, as its Disconnect button does: the apps that used
+ * it ask for another, and a bot the space brought stops with it, failing
+ * which its next alarm finds no token and stops. */
+export let ended = async (
+  env: Env,
+  eid: string,
+  apps?: string[],
+) => {
+  apps ??= await usersOf(env, eid)
+  let chat = await import('./chat.ts')
+  let bot = await chat.botFor(env, eid)
+  await disconnect(ctxOf(env), eid, ownersOf(env))
+  if (bot) {
+    await chat.quiet(env, bot)
+      .catch((e) => caught(e, { request: 'chat quiet', connection: eid }))
+  }
+  await rebound(env, apps)
+}
+
 // The same for each of those apps: after a key is kept, a sign-in finished,
 // or a connection ended. The person's act is done either way, so a worker
 // that could not be brought up to date is ours to hear about, not theirs.
@@ -1156,6 +1175,20 @@ let heard = async (env: Env, connection: string) =>
   await (await import('./chat.ts')).connected(env, connection)
     .catch((e) => caught(e, { request: 'chat listen', connection }))
 
+// Where a sign-in begun from one of the space's own pages (the Operator's
+// Add to Discord) comes back to: that page, still naming the testing
+// integrations, else the space's connections page. Any other address is not
+// the space's, and is ignored.
+let backTo = (env: Env, space: Space, req: Request, path: string) => {
+  let page = pageOf(env, space.slug)
+  let to = path.startsWith('/') && !path.startsWith('//')
+    ? new URL(path, page)
+    : null
+  let own = to && to.origin == new URL(page).origin &&
+    to.pathname.startsWith(`${MANAGE}/${encodeURIComponent(space.slug)}/`)
+  return enabling(own ? to!.href : page, enabled(req))
+}
+
 // A page, told how a sign-in went.
 let told = (page: string, how: 'connected' | 'refused') => {
   let to = new URL(page)
@@ -1304,7 +1337,10 @@ export let connecting = async (
       )
       eid = made[0].entity.eid
       let i = await known(c.graph.read, name)
-      if (i && !keyed(i)) return signingIn(req, env, c, space, who, eid)
+      if (i && !keyed(i)) {
+        let back = backTo(env, space, req, field('back'))
+        return signingIn(req, env, c, space, who, eid, back)
+      }
     }
     let [b] = EID.test(eid)
       ? await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}`)
@@ -1416,16 +1452,7 @@ export let connecting = async (
       }
     }
     if (act == 'disconnect') {
-      let chat = await import('./chat.ts')
-      let bot = await chat.botFor(env, eid)
-      await disconnect(ctxOf(env), eid, ownersOf(env))
-      // A bot the space brought stops with it; failing that, its next alarm
-      // finds no token and stops.
-      if (bot) {
-        await chat.quiet(env, bot)
-          .catch((e) => caught(e, { request: 'chat quiet', connection: eid }))
-      }
-      await rebound(env, apps)
+      await ended(env, eid, apps)
       return { say: 'Disconnected.', no: false }
     }
     if (owner == space.eid && await asking(c.graph.read, eid)) {
@@ -1484,11 +1511,34 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     ? await readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`)
     : []
   let owner = comp(b, CONNECTION).owner
-  if (
-    !held || !at || !who || !b ||
-    owner != who.person && !(owner == at.eid && who.role == 'owner')
-  ) {
-    return answer(url(env, MANAGE))
+  // A return that cannot be finished is a failure to hear about, and the
+  // person goes back to the page they began on, told so; never to another
+  // space's.
+  let why = !sealed
+    ? 'no sign-in was begun in this browser'
+    : !held
+    ? 'the sign-in in this browser could not be read'
+    : !at
+    ? 'its space is gone'
+    : !who?.person
+    ? 'nobody is signed in'
+    : who.person != held.person
+    ? 'someone else began it'
+    : !b
+    ? 'its connection is gone'
+    : owner != who.person && !(owner == at.eid && who.role == 'owner')
+    ? 'the signed-in person does not own its space'
+    : null
+  if (why || !held || !at || !who) {
+    caught(new Error(`A sign-in came back unfinished: ${why}.`), {
+      request: `GET ${CALLBACK}`,
+      ...held ? { space: held.space, connection: held.connection } : {},
+    })
+    return answer(
+      held
+        ? told(held.back ?? pageOf(env, held.space), 'refused')
+        : url(env, MANAGE),
+    )
   }
   // An attempt begun before its cookie named a page came from the space's.
   let back = held.back ?? pageOf(env, at.slug)

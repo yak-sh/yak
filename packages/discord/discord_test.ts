@@ -280,6 +280,18 @@ test("rooms lists a server's text channels in Discord's order, as the bot", asyn
   )
 })
 
+test('rooms is null for a server the bot is not in, or no longer', async () => {
+  for (
+    let [status, message] of [[403, 'Missing Access'], [404, 'Unknown Guild']]
+  ) {
+    assertEquals(
+      await discord.rooms!('T', 'g1', rest(+status, { message }).f),
+      null,
+    )
+  }
+  await assertRejects(() => discord.rooms!('T', 'g1', rest(502, {}).f), Unsent)
+})
+
 test("recent reads a room back oldest first, bots' own included, none addressed", async () => {
   let message = (id: string, author: Record<string, unknown>) => ({
     id,

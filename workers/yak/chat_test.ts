@@ -20,6 +20,7 @@ import { KERNEL, meta, metaOf } from './meta.ts'
 import {
   arrived,
   choose,
+  connected,
   offers,
   PLATFORMS,
   recent,
@@ -67,6 +68,7 @@ test('each button posts to the connections page, naming the integration still in
   assertStringIncludes(card, 'Add Kit to a Discord server you manage.')
   assertStringIncludes(card, 'Add to Discord')
   assertStringIncludes(card, 'Connect my Discord account')
+  assertStringIncludes(card, `name="back" value="${AT}"`)
   assertEquals(card.includes('?chat=1'), false)
 })
 
@@ -98,6 +100,78 @@ test("each server's channels are offered to hear in full, the chosen one picked"
   assertStringIncludes(
     await drawn(server(null)),
     "Discord did not list this server's channels just now.",
+  )
+})
+
+test('a server the bot is no longer in says so, with a button that adds it again', async () => {
+  let away = await drawn({ ...server(null), away: true })
+  assertStringIncludes(away, 'Kit is no longer in this Discord server.')
+  assertStringIncludes(away, 'Add to Discord again')
+  assertEquals(away.includes('?chat=1'), false)
+  assertStringIncludes(
+    await drawn({ ...server(null), away: true, own: true }),
+    'Your own Discord bot is no longer in this server.',
+  )
+})
+
+// Two spaces and the Discord connections they hold, yaks.app's own bot added
+// to the barn, on a platform that keeps its bot.
+let spaces = async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let at = meta(p.env)
+  let dir = directory({ fetch: over(at) })
+  await at.apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    { entity: { eid: '$a' }, space: { slug: 'ada', store: 'ada' } },
+    { entity: { eid: '$b' }, space: { slug: 'bo', store: 'bo' } },
+  ], KERNEL)
+  let [ada, bo] = [(await dir.space('ada'))!, (await dir.space('bo'))!]
+  let held = async (space: { eid: string }, account: string) =>
+    (await at.apply([{
+      entity: { eid: crypto.randomUUID() },
+      connection: {
+        integration: 'discord',
+        owner: space.eid,
+        account,
+        status: 'connected',
+      },
+    }], KERNEL))[0].entity.eid
+  let status = async (eid: string) => {
+    let [c] = await at.query(line`.entity.eid=${eid}&.connection&*`)
+    return c ? (c.connection as { status: string }).status : 'gone'
+  }
+  return { p, ada, bo, held, status }
+}
+
+test('a server the bot was removed from is offered again, not reported', async () => {
+  let { p, ada, held } = await spaces()
+  let eid = await held(ada, 'barn')
+  let was = globalThis.fetch
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({ message: 'Missing Access', code: 50001 }, {
+      status: 403,
+    }))
+  try {
+    let [{ servers }] = await offers(p.env, ada.eid)
+    assertEquals(servers.map((s) => [s.connection, s.rooms, s.away]), [
+      [eid, null, true],
+    ])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+test("yaks.app's bot added to a server from another space moves it there whole", async () => {
+  let { p, ada, bo, held, status } = await spaces()
+  let mine = await held(ada, 'barn'), mill = await held(ada, 'mill')
+  let theirs = await held(bo, 'barn')
+  await connected(p.env, theirs)
+  assertEquals(
+    await Promise.all([mine, mill, theirs].map(status)),
+    ['gone', 'connected', 'connected'],
   )
 })
 

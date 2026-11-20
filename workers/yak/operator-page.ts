@@ -249,8 +249,8 @@ let choices = (id: string, label: string, name: string, offers: Option[]) =>
 // yaks.app's own bot added to a server they manage, and their own account
 // there linked, so it knows them. Each button posts to the connections page,
 // which sends them straight to the platform to choose (connections.ts
-// `connecting`); one still in its service's testing mode is named there.
-// For each server it was added to, they choose the room it hears in full
+// `connecting`) and back here after; one still in its service's testing
+// mode is named there. For each server it was added to, they choose the room it hears in full
 // (chat.ts `choose`), posted here (`at`).
 export let chatCard = (
   at: string,
@@ -259,8 +259,36 @@ export let chatCard = (
   offers: Awaited<ReturnType<typeof import('./chat.ts').offers>>,
 ) =>
   offers.map(({ platform, bot, user, kept, servers }) => {
+    let adding = (i: { name: string; testing?: boolean }, label: string) =>
+      h(
+        'form',
+        {
+          method: 'post',
+          action: enabling(connections, i.testing ? [i.name] : []),
+        },
+        h('input', { type: 'hidden', name: 'do', value: 'add' }),
+        h('input', { type: 'hidden', name: 'integration', value: i.name }),
+        h('input', { type: 'hidden', name: 'back', value: at }),
+        h(Button, { type: 'submit' }, label),
+      )
     let hearing = (s: Server, i: number) => {
       let id = `chat-room-${i}`
+      // A server the bot was removed from, or never joined: it is added
+      // again, which keeps this connection.
+      if (s.away) {
+        return h(
+          'div',
+          null,
+          h(
+            'p',
+            null,
+            s.own
+              ? `Your own ${platform.title} bot is no longer in this server. Add it again from the ${platform.title} Developer Portal.`
+              : `${operator} is no longer in this ${platform.title} server. Add it again to choose its channel.`,
+          ),
+          !s.own && kept ? adding(bot, `Add to ${platform.title} again`) : null,
+        )
+      }
       return h(
         'form',
         { method: 'post', action: `${at}?chat=1` },
@@ -292,17 +320,6 @@ export let chatCard = (
         s.rooms ? h(Button, { type: 'submit' }, 'Save') : null,
       )
     }
-    let adding = (i: { name: string; testing?: boolean }, label: string) =>
-      h(
-        'form',
-        {
-          method: 'post',
-          action: enabling(connections, i.testing ? [i.name] : []),
-        },
-        h('input', { type: 'hidden', name: 'do', value: 'add' }),
-        h('input', { type: 'hidden', name: 'integration', value: i.name }),
-        h(Button, { type: 'submit' }, label),
-      )
     return titled(
       platform.title,
       h(

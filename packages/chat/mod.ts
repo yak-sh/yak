@@ -111,12 +111,13 @@ export type Platform = {
   ) => Promise<string | undefined>
   /** the rooms of `server` that people write in, as the bot with
    * `credential` reads them, where the platform lists them: what a space
-   * chooses the room its listener hears in full from (`chat_hears`) */
+   * chooses the room its listener hears in full from (`chat_hears`); null
+   * where the bot is not in that server */
   rooms?: (
     credential: string,
     server: string,
     fetch?: typeof globalThis.fetch,
-  ) => Promise<Room[]>
+  ) => Promise<Room[] | null>
   /** the messages of `room` said before `page.before`, oldest first, as the
    * bot with `credential` reads them, where the platform keeps them: none is
    * `addressed`, since none was said to the bot as it is read now, and a

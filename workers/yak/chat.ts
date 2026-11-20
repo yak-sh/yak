@@ -235,10 +235,23 @@ export let botFor = async (
 }
 
 /** After a space connects an integration: if it chats, its bot listens
- * (connections.ts). */
+ * (connections.ts). yaks.app's own bot added to a server serves it for that
+ * space alone from now on: another space's connection to the same server
+ * ends, so a server moves from one space's Operator to another's whole. */
 export let connected = async (env: Env, connection: string) => {
   let bot = await botFor(env, connection)
-  if (bot) await listen(env, bot)
+  if (!bot) return
+  if (!bot.connection) {
+    let [c] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}&*`)
+    let { account } = comp(c, CONNECTION)
+    let others = account
+      ? (await serving(env, bot.via, String(account)))
+        .filter((o) => o.entity.eid != connection)
+      : []
+    let { ended } = await need()
+    for (let o of others) await ended(env, o.entity.eid)
+  }
+  await listen(env, bot)
 }
 
 /** After a space disconnects `bot`'s connection: a bot the space brought
@@ -354,11 +367,14 @@ export let offers = async (
 /** A chat connection of a space, as its Operator settings show it: the
  * connection, the rooms people write in on the servers it serves
  * ({@link serves}), by their eids here (@yaks/chat `roomEid`), or none
- * where the platform would not list them now, the one its Operator hears in
- * full (`chat_hears`), and whether it is a bot the space brought. */
+ * where the platform would not list them now, whether its bot is no longer
+ * in a server it serves (`away`, kicked or never added), the one its
+ * Operator hears in full (`chat_hears`), and whether it is a bot the space
+ * brought. */
 export type Server = {
   connection: string
   rooms: (Room & { eid: string })[] | null
+  away?: boolean
   hears?: string
   own?: boolean
 }
@@ -381,14 +397,17 @@ let servers = async (
       )
       .map(async ({ row: c, integration }) => {
         let token = await botFrom(ctx, c, integration)
-        let listed = token
+        // A server the bot is not in lists nothing: it was removed there,
+        // and is added again from here.
+        let each = token
           ? await Promise.all(serves(c).map((id) => rooms(token, id)))
-            .then((each) => each.flat())
             .catch((e) => {
               caught(e, { request: `${platform.name} rooms` })
               return null
             })
           : null
+        let away = !!each?.length && each.every((r) => r == null)
+        let listed = each && !away ? each.flatMap((r) => r ?? []) : null
         let hears = comp(c, HEARS).room
         return {
           connection: c.entity.eid,
@@ -396,6 +415,7 @@ let servers = async (
             ...r,
             eid: roomEid(platform.name, r.id),
           })) ?? null,
+          ...away ? { away } : {},
           ...hears ? { hears: String(hears) } : {},
           ...keyed(integration) ? { own: true } : {},
         }

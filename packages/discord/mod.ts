@@ -285,16 +285,25 @@ export let typing = async (
 let WRITTEN = new Set([0, 5])
 
 /** The text channels of the server `server`, in the order Discord shows
- * them, as the bot with `token` reads them (GET /guilds/{id}/channels). */
+ * them, as the bot with `token` reads them (GET /guilds/{id}/channels); null
+ * where the bot is not in that server, or no longer: Discord answers 403
+ * Missing Access, or 404 Unknown Guild. */
 export let rooms = async (
   token: string,
   server: string,
   fetcher: typeof fetch = fetch,
-): Promise<Room[]> => {
+): Promise<Room[] | null> => {
+  let res = await fetcher(`${API}/guilds/${server}/channels`, {
+    headers: bot(token),
+  })
+  if (res.status == 403 || res.status == 404) {
+    await res.body?.cancel()
+    return null
+  }
   let channels = await answer<
     { id: string; name: string; type: number; position?: number }[]
   >(
-    await fetcher(`${API}/guilds/${server}/channels`, { headers: bot(token) }),
+    res,
     {
       unsent: 'Discord did not list the channels',
       refused: 'Discord refused to list the channels',
