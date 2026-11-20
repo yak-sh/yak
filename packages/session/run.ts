@@ -890,6 +890,7 @@ export let running = (
       : {},
     ...declared(g, 'session_recover') ? { session_recover: recover } : {},
     session_run: run,
+    ...declared(g, 'session_resume') ? { session_resume: run } : {},
     ...declared(g, 'session_result')
       ? {
         session_result: async (e: Event, _tx, _write, attempt) => {

@@ -1060,7 +1060,7 @@
       "created": [
         "content"
       ],
-      "target": ".entry !lines !using !output !notice",
+      "target": ".entry !lines !using !output !notice !stop !result !tool_progress !exception !refusal !ask !call !interrupted",
       "tries": 8,
       "description": "an input line inherits its transcript's selected model and owes one turn; an entry selecting a model is already owed by session_run"
     },
@@ -1089,16 +1089,24 @@
         "task_context"
       ],
       "changed": [
-        "dispatch.state",
-        "inference.receipt",
-        "attempt.by"
+        "dispatch.state"
       ],
       "removed": [
         "edge"
       ],
-      "target": ".entry !lines|.session|.task|.requires|.contains",
+      "target": ".entry !lines !ask|.session|.task|.requires|.contains",
       "tries": 8,
       "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a result or a Pending entry (a background call that outlasted its patience) is something new for the model to read, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
+    },
+    "session_resume": {
+      "effect": true,
+      "changed": [
+        "inference.receipt",
+        "attempt.by"
+      ],
+      "target": ".entry .ask !lines",
+      "tries": 8,
+      "description": "advance a transcript after a model receipt arrives or an attempt ends"
     },
     "session_release": {
       "effect": true,

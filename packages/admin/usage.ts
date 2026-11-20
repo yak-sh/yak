@@ -102,14 +102,14 @@ export let QUERY =
         limit: 10000
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
-        dimensions { namespaceId objectId datetimeHour }
+        dimensions { namespaceId objectId name datetimeHour }
         sum { rowsRead rowsWritten duration }
       }
       called: durableObjectsInvocationsAdaptiveGroups(
         limit: 10000
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
-        dimensions { scriptName namespaceId objectId datetimeHour }
+        dimensions { namespaceId objectId datetimeHour }
         sum { requests }
       }
       entries: durableObjectsInvocationsAdaptiveGroups(
@@ -185,20 +185,25 @@ export let readings = (answer: Answer) => {
     })
     add(subject, g, ['requests', 'cpuTimeUs'])
   }
-  for (let g of account.stored ?? []) {
-    add(object(g.dimensions), g, ['rowsRead', 'rowsWritten', 'duration'])
-  }
-  for (let g of account.called ?? []) {
+  let identify = (g: Group) => {
     let d = g.dimensions, subject = object(d)
+    let name = d.name || who.get(subject)?.tags.name
     who.set(subject, {
-      said: `${d.scriptName}'s Durable Object ${d.objectId?.slice(0, 12)}`,
+      said: `Durable Object ${d.objectId?.slice(0, 12)}` +
+        (name ? ` (named ${name})` : '') + ` in namespace ${d.namespaceId}`,
       tags: {
-        worker: String(d.scriptName),
         namespace: String(d.namespaceId),
         object: String(d.objectId),
+        ...name ? { name } : {},
       },
     })
-    add(subject, g, ['requests'])
+    return subject
+  }
+  for (let g of account.stored ?? []) {
+    add(identify(g), g, ['rowsRead', 'rowsWritten', 'duration'])
+  }
+  for (let g of account.called ?? []) {
+    add(identify(g), g, ['requests'])
   }
   // The last hour's entry points, most first, and the object's name.
   let entries = new Map<string, Group[]>()
@@ -207,19 +212,23 @@ export let readings = (answer: Answer) => {
     entries.set(subject, [...entries.get(subject) ?? [], g])
   }
   for (let [subject, groups] of entries) {
-    let known = who.get(subject)
-    if (!known) continue
+    let named = groups.find((g) => g.dimensions.name) ?? groups[0]
+    identify(named)
+    let known = who.get(subject)!
     let by = new Map<string, number>()
     for (let g of groups) {
       let type = String(g.dimensions.type)
       by.set(type, (by.get(type) ?? 0) + g.sum.requests)
     }
-    let name = groups.find((g) => g.dimensions.name)?.dimensions.name
     let mix = [...by].sort((a, b) => b[1] - a[1])
       .map(([type, n]) => `${count(n)} ${type}`).join(', ')
+    // An object's invocations can carry different script names. Its storage
+    // usage belongs to its namespace regardless of those labels.
+    let scripts = [...new Set(groups.map((g) => g.dimensions.scriptName))]
+      .filter((name) => name && name != '__unknown__').sort().join(', ')
     who.set(subject, {
-      said: `${known.said}${name ? ` (named ${name})` : ''}`,
-      tags: { ...known.tags, ...name ? { name } : {}, entries: mix },
+      ...known,
+      tags: { ...known.tags, ...scripts ? { scripts } : {}, entries: mix },
     })
   }
   return { series: [...series.values()], who }

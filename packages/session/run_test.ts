@@ -271,8 +271,14 @@ let replied = await (async () => {
     },
   })
   let owed: string[] = []
+  let redundant: string[] = []
   p.fx.created('effect', (e) => {
     if (e.comp?.kind == 'matched') owed.push(String(e.comp.handler))
+    if (
+      e.comp?.handler == 'session_input' ||
+      e.comp?.handler == 'session_run' && e.comp.comp == 'using' &&
+        e.comp.target != 'replied:in'
+    ) redundant.push(String(e.comp.handler))
   })
   let stop = new AbortController()
   let working = p.fx.work(p.g, stop.signal)
@@ -283,7 +289,7 @@ let replied = await (async () => {
     await until(async () =>
       statusOf(await transcript(p.g, 'replied')) == 'settled'
     )
-    return { owed, asks: asks() }
+    return { owed, redundant, asks: asks() }
   } finally {
     held.resolve('ok')
     stop.abort()
@@ -295,6 +301,7 @@ let replied = await (async () => {
 test('a step answers the wake its own reply owes', () => {
   assertEquals(replied.asks, 2)
   assertEquals(replied.owed, [])
+  assertEquals(replied.redundant, [])
 })
 
 // A process working the pool on a clock the test moves, with `s1` asked.

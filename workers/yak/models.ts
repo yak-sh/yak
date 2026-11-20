@@ -434,6 +434,7 @@ export let asking = (at: Stored): Handlers => {
   return {
     session_input: run.session_input,
     session_run: run.session_run,
+    session_resume: run.session_resume,
     session_result: run.session_result,
   }
 }

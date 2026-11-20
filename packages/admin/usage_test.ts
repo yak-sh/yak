@@ -17,7 +17,7 @@ let run = (normal: number, ...ran: number[]) => [
 // A tracker object that read and wrote these rows those hours, answering 3,100
 // fetches and 98 RPCs in the last.
 let answer = (read: number[], wrote = run(1)): Answer => {
-  let object = { scriptName: 'yak-tracker', namespaceId: 'ns', objectId: 'o1' }
+  let object = { namespaceId: 'ns', objectId: 'o1' }
   return {
     viewer: {
       accounts: [{
@@ -36,11 +36,21 @@ let answer = (read: number[], wrote = run(1)): Answer => {
         }],
         entries: [
           {
-            dimensions: { ...object, name: 'platform', type: 'jsrpc' },
+            dimensions: {
+              ...object,
+              scriptName: 'yak-browser',
+              name: 'platform',
+              type: 'jsrpc',
+            },
             sum: { requests: 98 },
           },
           {
-            dimensions: { ...object, name: 'platform', type: 'http' },
+            dimensions: {
+              ...object,
+              scriptName: 'yak-tracker',
+              name: 'platform',
+              type: 'http',
+            },
             sum: { requests: 3100 },
           },
         ],
@@ -60,10 +70,11 @@ test('an hour far past its normal is a jump that names the object and its entry 
   equal(rest, [])
   match(
     jump.error.message,
-    /^yak-tracker's Durable Object o1 \(named platform\) read 423\.8M rows in the hour from 2026-10-17T12:00:00\.000Z, 128\.4 times its normal of 3\.3M .* Its entry points: 3,100 http, 98 jsrpc\.$/,
+    /^Durable Object o1 \(named platform\) in namespace ns read 423\.8M rows in the hour from 2026-10-17T12:00:00\.000Z, 128\.4 times its normal of 3\.3M .* Its entry points: 3,100 http, 98 jsrpc\.$/,
   )
   equal(jump.context.fault, 'usage jump|object ns o1|rowsRead')
   equal(jump.context.tags.normal, '3300000')
+  match(jump.context.tags, { scripts: 'yak-browser, yak-tracker' })
 })
 
 test('an hour near its normal, or past it by less than a look is worth, is no jump', () => {
@@ -106,7 +117,7 @@ test('a look reports every jump it finds', async () => {
     at,
   )
   equal([jumped.length, sent.length], [1, 1])
-  match(sent[0], /^UsageJump: yak-tracker's Durable Object o1/)
+  match(sent[0], /^UsageJump: Durable Object o1/)
 })
 
 test('a look with no token to read analytics with passes its hour quietly', async () => {
