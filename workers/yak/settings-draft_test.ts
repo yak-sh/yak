@@ -51,7 +51,7 @@ test('settings drafts survive another load and belong to the signed-in person', 
     b.draft.place == place
   )
   assertEquals(result.bundles[0].entity.eid, draftEid(jo.person, place))
-  assertEquals(result.bundles[0].draft.by.eid, jo.person)
+  assertEquals(result.bundles[0].draft.by, jo.person)
   assertEquals(result.bundles[0].draft.place, place)
   assertEquals(result.bundles[0].draft.text, 'A new title')
   assertEquals(result.bundles[0].draft.rev, 1)

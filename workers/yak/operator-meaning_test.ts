@@ -116,6 +116,7 @@ test('its vectors are kept in the Operator store', async () => {
 // AI: a store no session names a space for has nobody to bill, so it lends no
 // embedder and its drains wait without failing, until a session names one.
 env.AI = embeds({} as never) as unknown as typeof env.AI
+let lent = Promise.withResolvers<void>()
 let alone: OperatorStore = await operatorStore(
   durable(),
   {},
@@ -123,7 +124,10 @@ let alone: OperatorStore = await operatorStore(
   operatorVectors(env, {
     space: () => alone,
     arm: () => Promise.resolve(),
-    ready: () => alone.vectors?.run(),
+    ready: () => {
+      alone.vectors?.run()
+      lent.resolve()
+    },
   }),
 )
 await alone.g.apply([{
@@ -147,10 +151,10 @@ await alone.g.apply([
     content: { body: 'Hello there.' },
   },
 ], { trusted: true })
-for (let i = 0; i < 9 && alone.vectors!.owes(); i++) {
-  await new Promise((done) => setTimeout(done, 0))
-  await alone.vectors!.work()
-}
+// The space is learned by a read, and the drain then runs: wait on each, not
+// on a count of ticks.
+await lent.promise
+for (let w; (w = alone.vectors!.work());) await w
 
 test('a store no session names a space for waits to embed, then drains', () => {
   equal([waited, alone.vectors!.owes()], [true, false])

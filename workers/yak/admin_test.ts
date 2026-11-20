@@ -368,8 +368,9 @@ test("the admin's funnel shows each step's count", async () => {
     assertEquals(page.status, 200)
     let { document } = parseHTML(await page.text())
     assertEquals(figures(document)['Home page visits'], '12')
-    // A day back, in the seconds the SQL API's toDateTime takes.
-    let at = Number(/toDateTime\((\d+)\)/.exec(sql.asked[0])![1]) * 1000
+    // A day back, in the seconds the SQL API's toDateTime takes: the
+    // window's start, not the miscounted steps' own seconds (funnel.ts).
+    let at = Number(/>= ?toDateTime\((\d+)\)/.exec(sql.asked[0])![1]) * 1000
     assertEquals(Math.round((Date.now() - at) / 86_400_000), 1)
   } finally {
     sql.done()
