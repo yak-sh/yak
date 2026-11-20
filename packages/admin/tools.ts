@@ -372,6 +372,7 @@ export let runs = (
             Math.round(got.duration / 100) / 10
           }s of browser`,
           ...files.map((f) => `shot      ${f}`),
+          ...got.dialogs.map((d) => `dialog    ${d.type}: ${d.message}`),
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
           ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')
             .map((m) => `console   ${m.type}: ${m.text}`),

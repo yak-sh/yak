@@ -1,6 +1,7 @@
 // What yak-browser does with a request: a page's address, viewport, the
 // cookies it is opened with and the steps a person takes on it posted in, its
-// screenshots, text, console, errors, status and accessibility check out, with
+// screenshots, text, console, dialogs, errors, status and accessibility check
+// out, with
 // the browser time it held. Browser control runs on Cloudflare; the small
 // session interface lets the load, steps, diagnostics and cleanup run in
 // process without a local browser.
@@ -80,7 +81,19 @@ export type Visit = {
   audit?: boolean
 }
 export type Message = { type(): string; text(): string }
-type Events = { console: Message; pageerror: unknown; error: Error }
+/** An alert, confirm, prompt or beforeunload dialog the page opened. Input
+ * waits while one is open, so a step that opens one would never return. */
+export type Dialog = {
+  type(): string
+  message(): string
+  dismiss(): Promise<void>
+}
+type Events = {
+  console: Message
+  dialog: Dialog
+  pageerror: unknown
+  error: Error
+}
 export type Page = {
   on<Event extends keyof Events>(
     event: Event,
@@ -146,6 +159,9 @@ export type Rendered = {
   /** The page's visible text, as far as `TEXT` characters. */
   text: string
   console: { type: string; text: string }[]
+  /** The dialogs the page opened, each dismissed as it opened: a confirm
+   * answers false and a prompt null. */
+  dialogs: { type: string; message: string }[]
   errors: string[]
   status: number
   /** The accessibility check, unless the visit asked for none. */
@@ -409,6 +425,7 @@ let loaded = async (
     async (signal) => {
       let page = await browser.newPage()
       let console: Rendered['console'] = []
+      let dialogs: Rendered['dialogs'] = []
       let errors: string[] = []
       let error = (e: unknown) => {
         if (errors.length < 100) errors.push(message(e))
@@ -417,6 +434,12 @@ let loaded = async (
         if (console.length < 100) {
           console.push({ type: m.type(), text: m.text().slice(0, 2000) })
         }
+      })
+      page.on('dialog', (d) => {
+        if (dialogs.length < 100) {
+          dialogs.push({ type: d.type(), message: d.message().slice(0, 2000) })
+        }
+        d.dismiss().catch(error)
       })
       page.on('pageerror', error)
       page.on('error', error)
@@ -499,7 +522,7 @@ let loaded = async (
       signal.throwIfAborted()
       stage = 'taking the final screenshot'
       let image = await shoot()
-      return { page, image, shots, console, errors, status }
+      return { page, image, shots, console, dialogs, errors, status }
     },
   )
   try {

@@ -298,6 +298,8 @@ export type Browsed = {
   shots: { name: string; image: string }[]
   text: string
   console: { type: string; text: string }[]
+  /** The dialogs the page opened, each dismissed. */
+  dialogs: { type: string; message: string }[]
   errors: string[]
   status: number
   duration: number

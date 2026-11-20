@@ -82,6 +82,9 @@ let page = (
     main?: typeof axe
     world?: typeof axe
     missing?: string
+    /** A selector whose press opens a confirm, as input does, returning only
+     * once it is dismissed. */
+    confirm?: string
   } = {},
 ) => {
   let log: string[] = []
@@ -95,10 +98,22 @@ let page = (
   let acts = actions((line) => log.push(line))
   let p: Page = {
     ...acts,
-    waitForSelector: (s, o) =>
-      s == options.missing
-        ? Promise.reject(new Error(`Waiting for selector \`${s}\` failed`))
-        : acts.waitForSelector(s, o),
+    waitForSelector: async (s, o) => {
+      if (s == options.missing) {
+        throw new Error(`Waiting for selector \`${s}\` failed`)
+      }
+      let el = (await acts.waitForSelector(s, o))!
+      if (s != options.confirm) return el
+      let click = () =>
+        new Promise<void>((dismiss) =>
+          hear.get('dialog')?.({
+            type: () => 'confirm',
+            message: () => 'Delete it?',
+            dismiss: () => (log.push('dismiss'), dismiss(), Promise.resolve()),
+          })
+        )
+      return { ...el, click, tap: click }
+    },
     on: (event: string, fn: (value: never) => void) => {
       hear.set(event, fn as (value: unknown) => void)
     },
@@ -264,6 +279,17 @@ test("a step that fails ends the steps, is the visit's error, and the page is st
   assertStringIncludes(result.errors.at(-1)!, 'step 1 {"tap":"#send"}')
   assertStringIncludes(result.errors.at(-1)!, 'Waiting for selector')
   assertEquals(result.image, 'png-bytes')
+})
+
+test('a dialog a step opens is dismissed and listed, and the steps go on', async () => {
+  let p = page({ confirm: '#delete' })
+  let result = await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view,
+    steps: [{ tap: '#delete' }, { press: 'Enter' }],
+  })
+  assertEquals(p.log.slice(-3), ['find #delete', 'dismiss', 'press Enter'])
+  assertEquals(result.dialogs, [{ type: 'confirm', message: 'Delete it?' }])
 })
 
 test('a page that extends Object.prototype still gets its accessibility audit', async () => {
