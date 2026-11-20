@@ -31,6 +31,7 @@ import { OWNERS } from '@yaks/platform/operator-owner'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
 import { WAKES, wakesMoved } from './wake-move.ts'
+import { TOLD } from './told-move.ts'
 import { LINES } from './line-move.ts'
 import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
@@ -167,6 +168,8 @@ export let operatorStore = async (
       if (born) marks.set(CHANNELS, 'done')
       if (born) marks.set(FILES, 'done')
       if (born) marks.set(INTAKE, 'done')
+      // Nor an ask holding the text of the instructions it sent.
+      if (born) marks.set(TOLD, 'done')
     },
     // How a run ended is written while the object is stopped too, so a run
     // that finished never runs again (@yaks/durable-object `bounded`).

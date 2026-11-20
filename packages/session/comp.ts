@@ -20,7 +20,7 @@
 //     + output{source}       what produced the prose beside it: the ask, for
 //                            what a model said
 //     + using{provider, model, effort}
-//     + sending{input, instructions, window, tools}
+//     + sending{input, instructions, window, tools, told, offer}
 //                            set or switch on an input; served on an ask
 //     + questions{asked}     typed questions the next ask carries
 //     + ask{to, served, through} the model was asked, from the prefix at

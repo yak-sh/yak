@@ -354,6 +354,10 @@ export let BOUNDARIES = [
   // Every space born before the starter became $20 keeps the $100 it held
   // (starter-move.ts, T-1313).
   'yak/store/starter-kept/1',
+  // Every ask names the instructions it sent by their told row, kept once per
+  // text, and an Operator's asks kept before are moved to it (told-move.ts,
+  // T-1617).
+  'yak/store/session-told/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and

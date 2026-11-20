@@ -139,6 +139,7 @@ export let heard = (was: Held, sent: Lines): Held => {
     beside: {
       tools: { ...b.tools, ...sent.tools },
       offers: { ...b.offers, ...sent.offers },
+      instructions: { ...b.instructions, ...sent.instructions },
       threads: { ...b.threads, ...sent.threads },
       helpers: [...helpers.values()],
       ...b.ids || sent.ids ? { ids: { ...b.ids, ...sent.ids } } : {},

@@ -44,12 +44,14 @@
 // answers from memory, and reads them by query again once one is no longer
 // the line it was or holds other components.
 //
-// No page reads a line's `sending`. Every ask records the instructions it sent,
-// tens of kilobytes the same from one ask to the next, and a model turn's
-// reading held one copy an ask: a Builder stepping a handful of long
-// transcripts at once ran out of memory (T-1572). A step reads what was sent
-// of the newest ask, the ask still in flight and each ask an open call came
-// from, and what is in force (`aspect`); those are read by name.
+// No page reads a line's `sending`. An ask once recorded the instructions it
+// sent as text, tens of kilobytes the same from one ask to the next, and a
+// model turn's reading held one copy an ask: a Builder stepping a handful of
+// long transcripts at once ran out of memory (T-1572). An ask now names them
+// (./told.ts), and an ask written before keeps its text until it is moved. A
+// step reads what was sent of the newest ask, the ask still in flight and each
+// ask an open call came from, and what is in force (`aspect`); those are read
+// by name.
 //
 // A fork reads through its segments (./window.ts): the parent up to the
 // anchor, then its own. A pending transcript with no checkpoint, no anchor and

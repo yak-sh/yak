@@ -23,6 +23,7 @@ import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { conversationOf } from './operator-host.ts'
 import { rootOf } from './operator-root.ts'
+import { instructionsOf } from '@yaks/session/told'
 import { KERNEL, meta } from './meta.ts'
 import { owned } from './operator-access.ts'
 import { operatorApi } from './operator-api.ts'
@@ -262,13 +263,15 @@ test('an oracle can only open a topic within the current reach', async () => {
 
 // Stored instruction snapshots are what the conversation displays too.
 let kept = await store.g.read(line`.entry.session=${root} *`)
+let sent = String(
+  await instructionsOf(store.g, kept.find((b) => b.ask)?.sending as Comp),
+)
 test('the system prompt saved beside the conversation is the one the model received', () => {
-  let sending = kept.find((b) => b.ask)?.sending as Comp
   assertStringIncludes(
-    String(sending.instructions),
+    sent,
     `${short(oracleOf(owner, app.eid))} app home/recipes`,
   )
-  assertEquals(String(sending.instructions).includes('connector guide'), false)
+  assertEquals(sent.includes('connector guide'), false)
 })
 
 // Every entity the context names is named by its short id, which the tools

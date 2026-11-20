@@ -875,7 +875,7 @@ The complete list of reserved names:
     sms_consent space space_logo speech_hear spend staged standing_link
     started starter stop stream_item submitted subscribed subscription
     supersedes supervises support sweep switched task text text_post theme
-    tool tool_refusal topic trashed tree_entry trend tunnel tunnel_tell
+    told tool tool_refusal topic trashed tree_entry trend tunnel tunnel_tell
     tunnel_trashed typed unchecked untrashed updated upstream usage uses
     using verified visit visitor_build visitor_calls visitor_share volume
     waitlisted wake wake_run wants watch web withdrawn worked worktree

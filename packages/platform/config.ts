@@ -150,6 +150,7 @@ export let appConfig: Config = {
         'using',
         'sending',
         'offer',
+        'told',
         'notice',
         'stop',
         'attempt',

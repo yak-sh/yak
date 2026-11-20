@@ -1244,6 +1244,11 @@ export class Builder extends Durable {
             let { wakeBackfill } = await import('./wake-move.ts')
             return backfill(wakeBackfill(store))
           },
+          // Each ask's instructions kept once per text (told-move.ts).
+          told: async () => {
+            let { toldBackfill } = await import('./told-move.ts')
+            return backfill(toldBackfill(store))
+          },
           drain: async (until) => {
             let { drain } = await import('./operator-store.ts')
             this.#draining = true

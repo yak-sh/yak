@@ -568,7 +568,7 @@ export let helperFrame = (
     Number(
       comp(helper.entries.find((b) => b.entity.eid == id), 'entry')?.seq ?? 0,
     )
-  let told = helped(helper, seen.offers).filter((r) => seq(r.id) > from)
+  let told = helped(helper, seen).filter((r) => seq(r.id) > from)
   let call = entries.some((b) => b.entity.eid == helper.call)
   let shown = { ...seen, helpers: [helper] }
   return {

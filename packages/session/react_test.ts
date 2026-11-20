@@ -8,6 +8,7 @@ import { seedIdentities } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import { attemptComputed } from './attempt.ts'
 import { executionComputed } from '@yaks/tools'
 import { effectDoc } from '@yaks/effects'
@@ -1013,6 +1014,50 @@ let lengthError = () =>
     undefined,
     { body: '{"error":{"code":"context_length_exceeded"}}' },
   )
+
+// An ask names the instructions it sent by their sha, kept once however
+// many asks send them; an input's own instructions are in force until another
+// input selects others, through the asks that named them.
+test('asks name the instructions they sent, each text kept once', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    says('r1', 'One.'),
+    says('r2', 'Two.'),
+    says('r3', 'Three.'),
+    says('r4', 'Four.'),
+  ], false)
+  let deps = { model, tools: [], mint, instructions: 'The stable persona.' }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  await appendEntry(g, ids.s, 'again')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  await g.apply([{
+    entity: { eid: 'chosen' },
+    entry: { session: ids.s },
+    content: { body: 'now differently' },
+    sending: { instructions: 'Chosen.' },
+  }])
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  await appendEntry(g, ids.s, 'and on')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(asked.map((r) => r.instructions), [
+    'The stable persona.',
+    'The stable persona.',
+    'Chosen.',
+    'Chosen.',
+  ])
+  let asks = (await transcript(g, ids.s)).filter((b) => b.ask)
+  assertEquals(
+    asks.map((b) => b.sending),
+    ['The stable persona.', 'The stable persona.', 'Chosen.', 'Chosen.']
+      .map((text) => ({ told: sha256(text) })),
+  )
+  assertEquals(
+    (await g.read('.told&.fields=told.instructions')).map((b) =>
+      (b.told as Comp).instructions
+    ).sort(),
+    ['Chosen.', 'The stable persona.'],
+  )
+})
 
 test('a length refusal bypasses GAP, compacts deeply and retries once', async () => {
   let g = await overflowing()

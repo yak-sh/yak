@@ -16,6 +16,7 @@ import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { sleep } from '@yaks/fp'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { sha256, token } from '@yaks/graph/sha256'
+import { instructionsOf, toldRow } from './told.ts'
 import { transient } from '@yaks/graph/read'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
@@ -86,7 +87,7 @@ import {
   USING,
 } from './native.ts'
 import {
-  cachedInstructions,
+  cachedSending,
   cold,
   kindOf,
   newestAsk,
@@ -1387,19 +1388,16 @@ export let react = async (
     comp(newestAsk(entries) ?? {} as Bundle, 'sending')?.scope === scope
   const cached = deps.runCall || !sameScope
     ? undefined
-    : cachedInstructions(entries, session)
+    : await instructionsOf(g, cachedSending(entries, session))
+  // The instructions in force: an input's text, or the row an ask names.
+  // Read only by a step that may ask the model.
+  let inherited: Promise<string | undefined> | undefined
+  const inheritedOf = () => inherited ??= instructionsOf(g, sending)
   // A step that will ask the model reads its instructions while its tools are
   // found: neither waits on the other, and each may be round trips away.
   const resolve = cached == null ? deps.resolveInstructions : undefined
   const instructed = !deps.runCall && !open.length && resolve
-    ? Promise.resolve().then(() =>
-      resolve(
-        sending?.instructions == null
-          ? undefined
-          : String(sending.instructions),
-        session,
-      )
-    )
+    ? inheritedOf().then((said) => resolve(said, session))
     : undefined
   instructed?.catch(() => {})
   // The tools are read with them wherever no line selected any: a list an
@@ -1850,15 +1848,8 @@ export let react = async (
       (instructed
         ? await instructed
         : deps.resolveInstructions
-        ? await deps.resolveInstructions(
-          sending?.instructions == null
-            ? undefined
-            : String(sending.instructions),
-          session,
-        )
-        : sending?.instructions == null
-        ? deps.instructions
-        : String(sending.instructions)),
+        ? await deps.resolveInstructions(await inheritedOf(), session)
+        : await inheritedOf() ?? deps.instructions),
     // A turn: what the model answers, never words of its own to finish.
     items: closed([
       ...dynamic.map((item) => message(item, item.from ?? 'the system')),
@@ -2020,9 +2011,11 @@ export let react = async (
         : req.items.slice(dynamic.length),
     ),
   }
-  // The tools sent, kept once per set under their sha (`offer{tools}`), so a
-  // reader sees exactly what the model was offered.
+  // The tools sent, kept once per set under their sha (`offer{tools}`), and
+  // the instructions, once per text (`told{instructions}`), so a reader sees
+  // exactly what the model was offered and told.
   let offer = req.tools.length ? sha256(JSON.stringify(req.tools)) : ''
+  let told = req.instructions ? toldRow(req.instructions) : undefined
   let ask = unfinished && executor ? unfinished : line({
     [ASK]: {
       to: modelEid,
@@ -2036,11 +2029,12 @@ export let react = async (
         },
       }
       : {},
-    ...sending || req.instructions || executor || offer
+    ...sending || told || executor || offer
       ? {
         sending: {
           ...sending,
-          instructions: req.instructions ?? null,
+          instructions: null,
+          told: told?.entity.eid ?? null,
           ...scope == null ? {} : { scope },
           // What it was offered, deferred tools too: a resumed ask sends
           // again what these entries loaded of them.
@@ -2094,9 +2088,16 @@ export let react = async (
     entity: b.entity,
     provisional: null,
   }))
-  let kept = offer && !(await g.get([offer]))[0]
-    ? [{ entity: { eid: offer }, offer: { tools: req.tools } }]
-    : []
+  let keep = [
+    ...offer ? [{ entity: { eid: offer }, offer: { tools: req.tools } }] : [],
+    ...told ? [told] : [],
+  ]
+  let stored = new Set(
+    (await g.get(keep.map((b) => b.entity.eid))).flatMap((b) =>
+      b ? [b.entity.eid] : []
+    ),
+  )
+  let kept = keep.filter((b) => !stored.has(b.entity.eid))
   ;[ask] = (await g.apply([ask, ...pending, ...kept], { trusted: true }))
     .filter((b) => b.entity.eid == ask.entity.eid)
   if (deps.streaming) {

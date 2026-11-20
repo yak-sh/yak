@@ -5,6 +5,7 @@ import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { attemptState } from './attempt.ts'
+import { toldRow } from './told.ts'
 import type { ModelResult } from '@yaks/model'
 import {
   MODEL,
@@ -107,7 +108,10 @@ export let compactAsk = async (
   let save = (rows: Bundle[]) =>
     g.apply(rows.map((b) => ({ ...b, $actor: actor })), { trusted: true })
   req = { ...req, conversation, call: ask }
+  let told = req.instructions ? toldRow(req.instructions) : undefined
+  let sending = { told: told?.entity.eid ?? null }
   await save([
+    ...told ? [told] : [],
     { entity: { eid: model }, model: { name: served.name } },
 
     { entity: { eid: tool }, tool: { name: 'session_compact' } },
@@ -128,7 +132,7 @@ export let compactAsk = async (
       entry: { session: conversation },
       notice: {},
       using: { model, ...provider ? { provider } : {} },
-      sending: { instructions: req.instructions },
+      sending,
       ask: { to: model, through: input },
       attempt: { by: conversation },
     },
@@ -152,7 +156,7 @@ export let compactAsk = async (
       {
         entity: { eid: ask },
         using,
-        sending: { instructions: req.instructions },
+        sending,
         attempt: { by: null },
         completed: {},
         ...usage ? { usage } : {},

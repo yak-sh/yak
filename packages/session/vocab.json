@@ -1242,7 +1242,13 @@
         },
         "instructions": {
           "type": "string",
-          "description": "system instructions in force for this transcript"
+          "description": "on an input, the system instructions it selects for this transcript"
+        },
+        "told": {
+          "type": "string",
+          "ref": "told",
+          "death": "keep",
+          "description": "on an ask, the system instructions it sent, as the told row named by their sha256"
         },
         "scope": {
           "type": "string",
@@ -1283,6 +1289,17 @@
             "type": "object"
           },
           "description": "each tool's name, description and parameters (JSON Schema)"
+        }
+      }
+    },
+    "told": {
+      "component": true,
+      "type": "object",
+      "description": "the system instructions an ask sent a model, exactly as sent; its eid is the sha256 of them, so a text many asks send is kept once",
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "description": "the instructions' text"
         }
       }
     }

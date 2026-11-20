@@ -281,6 +281,12 @@ export type Tool = {
 /** The tool offers asks name (`sending{offer}`), by their sha. */
 export type Offers = Map<string, Tool[]>
 
+/** The instructions asks name (`sending{told}`), by their sha. */
+export type Instructions = Map<string, string>
+
+/** What asks name of what they sent: their tools and their instructions. */
+export type Asked = { offers?: Offers; instructions?: Instructions }
+
 /** A layer of what a model was told: its name, what it holds drawn on a page
  * (once its text is drawn above, that it is the same), what tells a later
  * ask's from it (`key`, and `text`, what a person reads of it: no spacing, no
@@ -398,7 +404,8 @@ let context = (
     )
 
 /** What a transcript's model was told, from the record: at its first ask, one
- * entry holding each layer of its system prompt (`sending{instructions}`),
+ * entry holding each layer of its system prompt (`sending{told}`, or the text
+ * of an ask kept before, `sending{instructions}`),
  * each prompt entry before it (a fork's note, a helper's guidance) and the
  * tools it was offered (`sending{offer}`); and again at a later ask whose
  * context differs from the ask before it. A note stays in its session's
@@ -409,7 +416,7 @@ let context = (
 let briefed = (
   entries: Bundle[],
   who: string,
-  offers: Offers = new Map(),
+  { offers = new Map(), instructions = new Map() }: Asked = {},
   page: Drawn = new Set(),
   sources = new Map<string, string[]>(),
 ): Told[] => {
@@ -434,7 +441,7 @@ let briefed = (
     let was = last.get(session)
     let said = typeof sending.instructions == 'string'
       ? sending.instructions
-      : ''
+      : instructions.get(String(sending.told)) ?? ''
     let offer = typeof sending.offer == 'string' ? sending.offer : ''
     let tools = offers.get(offer)
     let kept = new Map(held.get(session))
@@ -490,6 +497,7 @@ export type Seen = {
   helpers?: Helper[]
   threads?: Record<string, Thread>
   offers?: Offers
+  instructions?: Instructions
   called?: string
   opens?: string
   /** where an id in the words opens for their reader, `{id}` where it goes
@@ -500,8 +508,8 @@ export type Seen = {
 } & Naming
 
 // What a helper was told, all its asks', in one place.
-export let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
-  briefed(h.entries, 'the helper', offers, page)
+export let helped = (h: Helper, sent?: Asked, page?: Drawn) =>
+  briefed(h.entries, 'the helper', sent, page)
 
 /** A line in its row, under its id, as the conversation and every fold in it
  * put one. */
@@ -656,6 +664,7 @@ let drawing = (
     helpers = [],
     threads = {},
     offers,
+    instructions,
     called = 'the Operator',
     opens,
     files,
@@ -665,7 +674,9 @@ let drawing = (
   let page: Drawn = new Set()
   let sources = new Map<string, string[]>()
   let told = new Map(
-    briefed(entries, called, offers, page, sources).map((r) => [r.id, r]),
+    briefed(entries, called, { offers, instructions }, page, sources).map((
+      r,
+    ) => [r.id, r]),
   )
   let beside: Heard = { names, who: 'the Operator', opens, files }
   // The entries each line is framed with, which a run of them is framed with.
@@ -688,7 +699,7 @@ let drawing = (
   // A helper's context, each line of it drawn and framed as the
   // conversation's are.
   let context = (one: Helper) => {
-    let briefs = helped(one, offers, page)
+    let briefs = helped(one, { offers, instructions }, page)
     let byAsk = new Map(briefs.map((r) => [r.id, r]))
     return briefs.flatMap((r) => {
       let b = one.entries.find((b) => b.entity.eid == r.id)
@@ -1038,6 +1049,8 @@ export type Lines = {
   person?: string | null
   helpers: Helper[]
   offers: Record<string, Tool[]>
+  /** the instructions their asks name, by sha */
+  instructions?: Record<string, string>
   called?: string
   opens?: string
   /** what the entities their prose names are called, by eid
@@ -1047,10 +1060,11 @@ export type Lines = {
   files?: Record<string, Kept>
 }
 
-// The tool offer an ask names.
-let offerOf = (b: Bundle) => {
-  let offer = comp(b, 'sending')?.offer
-  return typeof offer == 'string' ? offer : ''
+// The sha an ask names of what it sent, under `name`: its tools' (`offer`)
+// or its instructions' (`told`).
+let named = (name: string) => (b: Bundle) => {
+  let sha = comp(b, 'sending')?.[name]
+  return typeof sha == 'string' ? sha : ''
 }
 
 /** A line as {@link Lines} sends it. */
@@ -1070,9 +1084,9 @@ export let wire = (
     h.call && used.has(h.call) ||
     drawn.some((l) => h.entries.some((b) => b.entity.eid == l.id))
   ).map((h) => ({ ...h, entries: h.entries.filter((b) => b.ask || b.prompt) }))
-  let offers = new Set(
-    [...read, ...helpers.flatMap((h) => h.entries)].map(offerOf),
-  )
+  let asks = [...read, ...helpers.flatMap((h) => h.entries)]
+  let offers = new Set(asks.map(named('offer')))
+  let told = new Set(asks.map(named('told')))
   let tools = new Set(read.map((b) => String(comp(b, 'call')?.to ?? '')))
   let said = JSON.stringify([read, helpers])
   let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
@@ -1091,6 +1105,9 @@ export let wire = (
     offers: Object.fromEntries(
       [...seen.offers ?? []].filter(([sha]) => offers.has(sha)),
     ),
+    instructions: Object.fromEntries(
+      [...seen.instructions ?? []].filter(([sha]) => told.has(sha)),
+    ),
     ...seen.called ? { called: seen.called } : {},
     ...seen.opens ? { opens: seen.opens } : {},
     ...ids.length ? { ids: Object.fromEntries(ids) } : {},
@@ -1108,6 +1125,7 @@ export let drawLines = (
   let seen = {
     ...sent,
     offers: new Map(Object.entries(sent.offers ?? {})),
+    instructions: new Map(Object.entries(sent.instructions ?? {})),
   }
   let names = namer(sent)
   return sent.lines.flatMap(({ id, uses, of = [] }) => {

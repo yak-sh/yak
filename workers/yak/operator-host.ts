@@ -38,6 +38,7 @@ import {
   type Walkthrough,
 } from './walkthrough.ts'
 import { transcript } from '@yaks/session/transcript'
+import { toldOf } from '@yaks/session/told'
 import { dispatchStatus } from '@yaks/session/admission'
 import { labelOf, type Tool } from '@yaks/model'
 import { caught } from './defects.ts'
@@ -66,10 +67,10 @@ import { type Spending, spent } from './operator-spending.ts'
 import { margins, metadata } from './operator-metadata.ts'
 import { define } from '@yaks/render'
 import {
+  type Asked,
   type Helper,
   type Lines,
   lines as drawnLines,
-  type Offers,
   PERSON,
   type Thread,
   wire,
@@ -275,9 +276,10 @@ let linesOf = async (
 // The lines `where` names as a conversation draws them: every component but
 // two whose bulk it never draws, of which it reads only what it does. Of a
 // call's `result`, the call it answers, never its value (a page's screenshot,
-// a file); of a line's `sending`, its tool offer, and of an ask's the
-// instructions it sent, which most asks repeat from the ask before: read a
-// few asks at a time, each text held once.
+// a file); of a line's `sending`, the shas of its tool offer and its
+// instructions (`told`), read once each by `askedOf`. An ask kept before its
+// store's told pass (told-move.ts) holds its instructions' text: those are
+// read a few asks at a time, each text held once.
 let drawnOf = async (store: Store, where: Built) => {
   let [rows, slim] = await Promise.all([
     store.g.read(q`${sub(where)}&${sub(drawnComps(store.g))}`),
@@ -289,10 +291,13 @@ let drawnOf = async (store: Store, where: Built) => {
     if (b && s.result) b.result = s.result
     if (b && s.sending) b.sending = s.sending
   }
-  await instructed(store, rows.filter((b) => b.ask))
+  await instructed(
+    store,
+    rows.filter((b) => b.ask && !comp(b, 'sending')?.told),
+  )
   return rows
 }
-let SLIM = ['entity.eid', 'result.call', 'sending.offer']
+let SLIM = ['entity.eid', 'result.call', 'sending.offer', 'sending.told']
 let BULKY = ['result', 'sending']
 let drawn = new WeakMap<Graph, Built>()
 let drawnComps = (g: Graph) => {
@@ -466,21 +471,27 @@ let SHOWN = 300
 // The newest lines that say what a session is doing, and what a step changed.
 let TAIL = 60
 
-// The tool offers these transcripts' asks name, by their sha.
-let offersOf = async (store: Store, entries: Bundle[]): Promise<Offers> => {
-  let named = new Set(
-    entries.flatMap((b) => {
-      let offer = comp(b, 'sending')?.offer
-      return b.ask && typeof offer == 'string' ? [offer] : []
-    }),
-  )
-  let rows = await store.g.get([...named])
-  return new Map(
-    rows.filter((b) => b?.offer).map((b) => [
-      b.entity.eid,
-      comp(b, 'offer')!.tools as Tool[],
-    ]),
-  )
+// The tool offers and instructions these transcripts' asks name, by their
+// sha, each read once.
+let askedOf = async (store: Store, entries: Bundle[]): Promise<Asked> => {
+  let named = (name: string) =>
+    new Set(entries.flatMap((b) => {
+      let sha = comp(b, 'sending')?.[name]
+      return b.ask && typeof sha == 'string' ? [sha] : []
+    }))
+  let [rows, instructions] = await Promise.all([
+    store.g.get([...named('offer')], ['offer']),
+    toldOf(store.g, named('told')),
+  ])
+  return {
+    offers: new Map(
+      rows.filter((b) => b?.offer).map((b) => [
+        b.entity.eid,
+        comp(b, 'offer')!.tools as Tool[],
+      ]),
+    ),
+    instructions,
+  }
 }
 
 // What a conversation draws beside its sessions' transcripts.
@@ -493,7 +504,7 @@ let seenOf = async (
   let helpers = await helpersOf(store, sessions, calls)
   return {
     helpers,
-    offers: await offersOf(store, [
+    ...await askedOf(store, [
       ...entries,
       ...helpers.flatMap((h) => h.entries),
     ]),
@@ -1375,7 +1386,7 @@ export let frameOf = async (
       frame(await keyOf(store, session), entries, names, since, {
         helpers: await lined(store, helpers, names, opens),
         threads: await threadsOf(store, changed, named, called, opens),
-        offers: await offersOf(store, withHelpers(entries, helpers)),
+        ...await askedOf(store, withHelpers(entries, helpers)),
         files: await drawnFiles(store, changed),
         called,
         opens,
@@ -1422,7 +1433,7 @@ export let frameOf = async (
         names,
         from ?? 0,
         {
-          offers: await offersOf(store, helper.entries),
+          ...await askedOf(store, [...started, ...helper.entries]),
           called,
           opens,
           ...naming,

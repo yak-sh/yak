@@ -116,20 +116,17 @@ let expiry = (entries: Bundle[], session: string): number | undefined => {
   return expires ? Date.parse(expires) : undefined
 }
 
-/** The instructions a session's newest ask sent, while the prefix it cached
- * is still in the provider's prompt cache. An ask whose expiry is unknown
- * keeps none. */
-export let cachedInstructions = (
+/** What a session's newest ask sent (its `sending`, which names its
+ * instructions), while the prefix it cached is still in the provider's prompt
+ * cache. An ask whose expiry is unknown keeps none. */
+export let cachedSending = (
   entries: Bundle[],
   session: string,
   now: number = Date.now(),
-): string | undefined => {
-  let said = (newestAsk(entries)?.sending as Comp | undefined)?.instructions
-  return (expiry(entries, session) ?? -Infinity) > now &&
-      typeof said == 'string'
-    ? said
+): Comp | undefined =>
+  (expiry(entries, session) ?? -Infinity) > now
+    ? newestAsk(entries)?.sending as Comp | undefined
     : undefined
-}
 
 /** Whether the prefix a session's newest ask cached is known to have expired,
  * so the next request pays for its whole context whatever it sends. An
