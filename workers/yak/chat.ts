@@ -851,7 +851,9 @@ let toApps = async (
  * for the Operator. An edit is taken only where it is addressed, as a
  * message said then: one the Operator already took is not answered again
  * (operator-channels.ts `hear`), so an edit that adds a mention is answered
- * and any other is not.
+ * and any other is not; in a room heard in full, where it took the message
+ * unaddressed, one that adds a mention is answered unless it was already
+ * (operator-channels.ts `chatHeard`).
  */
 export let arrived = async (
   env: Env,

@@ -1153,14 +1153,10 @@ test("a member's own earlier messages in a room are theirs, and anyone else's ar
   )
 })
 
-// The room a space chose for its Operator to hear in full (chat.ts `choose`,
-// `arrived`): everything said there is heard in the room's one
-// conversation, each line kept as its writer's, and framed as not said to
-// it; it answers what is for it and passes the rest, which posts nothing.
-// Unaddressed words in any other room are not its, nor once the choice is
-// taken back.
-test('in the room a space chose, the Operator hears everyone and answers only what is for it', async () => {
-  let o = await seeded([{ text: 'It opens at nine.' }, { text: PASS }])
+// A space whose Operator hears room BARN in full, chosen by its owner with
+// `choose`, and `say`, which says words in a room as `name` (an edit, with
+// `more.edited`, of the message said last).
+let hearing = async (o: Awaited<ReturnType<typeof seeded>>) => {
   o.bound()
   let connection = crypto.randomUUID()
   let [SERVER, BARN, ELSEWHERE] = ['81384788765712384', '1310777', '1310888']
@@ -1192,17 +1188,36 @@ test('in the room a space chose, the Operator hears everyone and answers only wh
   }
   await choose(BARN)
   let n = 0
-  let say = async (room: string, name: string, text: string) => {
+  let say = async (
+    room: string,
+    name: string,
+    text: string,
+    more: Partial<Said> = {},
+  ) => {
     await arrived(o.env, discord, {
-      id: `13100000000000000${++n}`,
+      id: `13100000000000000${more.edited ? n : ++n}`,
       room,
       server: SERVER,
       author: { id: name, name },
       text,
       at: '2026-11-20T05:40:00.000Z',
+      ...more,
     })
     while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   }
+  return { connection, SERVER, BARN, ELSEWHERE, choose, say }
+}
+
+// The room a space chose for its Operator to hear in full (chat.ts `choose`,
+// `arrived`): everything said there is heard in the room's one
+// conversation, each line kept as its writer's, and framed as not said to
+// it; it answers what is for it and passes the rest, which posts nothing.
+// Unaddressed words in any other room are not its, nor once the choice is
+// taken back.
+test('in the room a space chose, the Operator hears everyone and answers only what is for it', async () => {
+  let o = await seeded([{ text: 'It opens at nine.' }, { text: PASS }])
+  o.bound()
+  let { connection, BARN, ELSEWHERE, choose, say } = await hearing(o)
   await say(BARN, 'Ann', 'does anyone know when the barn opens?')
   await say(BARN, 'Bo', "I'll bring pie")
   await say(ELSEWHERE, 'Cy', 'when does the barn open?')
@@ -1233,6 +1248,28 @@ test('in the room a space chose, the Operator hears everyone and answers only wh
   assertEquals(
     posted.map((b) => (b.doc as { body: string }).body),
     ['It opens at nine.'],
+  )
+})
+
+// In a room heard in full, an edit that names the Operator addresses a
+// message it took but did not answer (operator-channels.ts `chatHeard`): it
+// answers once, and never a message it answered already.
+test('in a room heard in full, an edit that adds a mention to a message it passed is answered once', async () => {
+  let o = await seeded([{ text: PASS }, { text: 'Bo is.' }, { text: 'Nine.' }])
+  let { connection, BARN, say } = await hearing(o)
+  let mention = { addressed: 'mention' as const, edited: true }
+  await say(BARN, 'Ann', 'who is bringing pie?')
+  await say(BARN, 'Ann', 'who is bringing pie?', mention)
+  await say(BARN, 'Ann', 'who is bringing pie, again?', mention)
+  await say(BARN, 'Ann', 'when does it open?', { addressed: 'mention' })
+  await say(BARN, 'Ann', 'when does it open, again?', mention)
+  let store = await operatorStore(o.ctx.storage)
+  let posted = await store.g.read(
+    line`.chat_message.connection=${connection}&.deliver&*`,
+  )
+  assertEquals(
+    posted.map((b) => (b.doc as { body: string }).body),
+    ['Bo is.', 'Nine.'],
   )
 })
 

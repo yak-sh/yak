@@ -598,6 +598,17 @@ export let chatHeard = async (
   let [room, author, message] = kept(via, said, connection)
   let { g } = operator.store
   let [had] = await g.get([inputOf(message.entity.eid)], ['entry'])
+  // In a room it hears in full, it took the message unaddressed; an edit
+  // that names it addresses it, and is taken once more as its own item,
+  // unless the message was answered already.
+  let again = !!(said.edited && said.addressed && had?.entry) &&
+    !await answered(g, via, said.id)
+  let item = again
+    ? {
+      ...message,
+      entity: { eid: derivedEid(`chat-edit|${message.entity.eid}`) },
+    }
+    : message
   await g.apply([await named(env, g, room, connection), author], {
     trusted: true,
   })
@@ -605,7 +616,7 @@ export let chatHeard = async (
   // Words said to it open with the room's basics, an entry of their own,
   // then the chain they reply to and what was said since its last answer.
   let leads: Lead[] = []
-  if (!had?.entry) {
+  if (!had?.entry || again) {
     let chain = await replying(env, operator.store, at, said)
     let since = !writer && said.server && said.addressed
       ? await leading(env, operator.store, at, said)
@@ -633,7 +644,7 @@ export let chatHeard = async (
       ...linked ? { linked } : {},
     },
     said.text,
-    message,
+    item,
     leads,
   )
   let working = operator.store.chatters?.[via]?.working
@@ -650,6 +661,12 @@ export let chatHeard = async (
     status: fresh ? 202 : 200,
   })
 }
+
+// Whether the Operator replied to message `id` heard on `via`.
+let answered = async (g: Store['g'], via: string, id: string) =>
+  (await g.read(
+    line`.chat_message.via=${via}&.chat_message.reply_to=${id}&*`,
+  )).some((b) => b.deliver)
 
 // A conversation whose turn is still working on its words.
 let BUSY = new Set(['pending', 'running'])
