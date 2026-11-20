@@ -541,9 +541,19 @@ export let letterRows = (
   ]
 }
 
-/** What a letter yaks.app owes a person says: whom it is to and for, and
- * its words (mail.ts `owe`). */
-export type Owed = { to: string; person: string; subject: string; body: string }
+/** What a letter yaks.app owes a person says: whom it is to and for, its
+ * words, and for an invitation what it invites its reader to (mail.ts
+ * `owe`). */
+export type Owed = {
+  to: string
+  person: string
+  subject: string
+  body: string
+  invite?: Invited
+}
+
+/** What an invitation letter invites its reader to (`operator_invite`). */
+export type Invited = { invite: string; place: string; role: string }
 
 /** The rows of a letter yaks.app owes a person, written by the space's
  * Operator ({@link letterRows}): marked `platform`, so the space's monthly
@@ -560,6 +570,7 @@ export let owedRows = (env: Env, space: Space, owed: Owed): Bundle[] => {
   return [recipient, {
     ...letter,
     operator_letter: { person: owed.person, platform: true },
+    ...owed.invite ? { operator_invite: owed.invite } : {},
   }]
 }
 
@@ -722,13 +733,17 @@ let BY: Record<
       ? 'On the phone, your voice on the call asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): '
       : 'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
   letter: (request, id, sent) =>
-    `By email from ${request.address}, replying to the letter you wrote them (letter ${
+    `By email from ${request.address}, replying to the letter you wrote them${
+      sent ? ` (letter ${short(sent.entity.eid)})` : ''
+    }${said(sent)}. Their reply is letter ${
       short(id)
-    })${said(sent)}. ${STRANGER}by email: `,
+    }, the id to name for it. ${invited(sent)}${STRANGER}by email: `,
   texted: (request, id, sent) =>
-    `By text from ${request.address}, replying to the text you sent them (text ${
+    `By text from ${request.address}, replying to the text you sent them${
+      sent ? ` (text ${short(sent.entity.eid)})` : ''
+    }${said(sent)}. Their reply is text ${
       short(id)
-    })${said(sent)}. ${STRANGER}by text, from the number they texted: `,
+    }, the id to name for it. ${STRANGER}by text, from the number they texted: `,
   wake: (_, __, wake) => {
     let every = part<{ every?: string } | undefined>(wake, 'wake')?.every
     return `Your wake-up ${wake ? short(wake.entity.eid) : '(gone)'} fired${
@@ -790,7 +805,25 @@ let FIXED =
 // person it was sent for is told what they said (operator-host.ts
 // `operatorReply`).
 let STRANGER =
-  'You are talking with them now, in their own conversation and with only their permissions; the person you sent it for is told what they said. What needs that person (their choice, their calendar, anything of theirs) you raise with escalate, naming this reply. Your answer goes back to them '
+  "You are talking with them now, in their own conversation and with only their permissions, so nothing of the person you sent it for is yours to read here: answer from what you sent and what they wrote. That person already has their words, in their Updates and in their conversation with you, so there is nothing to pass along, and you can tell them so. Only what needs that person's own choice or what is theirs (a time to pick, their calendar) you raise with escalate, naming their reply. Each answer you give goes to them as a letter or text of its own: answer once, with all you can say, and never only to say you are still looking. Your answer goes back to them "
+// What an invitation the Operator wrote invites its reader to, which their
+// own permissions cannot see (`operator_invite`, invite.ts `send`).
+let invited = (sent?: Bundle) => {
+  let o = part<Invited | undefined>(sent, 'operator_invite')
+  return o
+    ? `It was an invitation: accepting it with its link makes them ${
+      o.role == 'editor' || o.role == 'owner' ? 'an' : 'a'
+    } ${o.role} of ${o.place}, who can ${
+      CAN[o.role] ?? CAN.viewer
+    }. Until they accept, nothing there is shared with them. `
+    : ''
+}
+// What each role an invitation gives can do where it opens.
+let CAN: Record<string, string> = {
+  viewer: 'open it and read everything in it, and change nothing',
+  editor: 'open it, read everything in it, and add to and change it',
+  owner: 'do everything there, invite others too',
+}
 // What the Operator's letter or text said, which its reply answers.
 let said = (sent?: Bundle) => {
   let body = String(part<Comp | undefined>(sent, 'doc')?.body ?? '').trim()

@@ -177,6 +177,7 @@ export let send = async (
   let sent = await owe(env, space, {
     to: o.email,
     person: o.by,
+    invite: { invite: o.invite, place: what, role: o.role },
     subject: SUBJECT,
     body: invitation({
       space,

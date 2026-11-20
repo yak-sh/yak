@@ -91,7 +91,7 @@ let service = operatorService(
           to: 'eve@elsewhere.example',
           name: 'Dr Alvarez',
           text: 'Tuesday at 3 works; see you then.',
-          answering: named(words, /\(letter (\S+)\)/),
+          answering: named(words, /Their reply is letter (\S+),/),
         })
         : since == 1
         ? call('escalation_answer', {
@@ -105,7 +105,7 @@ let service = operatorService(
       ? since
         ? reply('Thank you; I have passed it on to Jeff.')
         : call('escalate', {
-          reply: named(words, /\(letter (\S+)\)/),
+          reply: named(words, /Their reply is letter (\S+),/),
           say: 'Dr Alvarez proposes Tuesday at 3 for the checkup.',
         })
       : /Asked Dr Alvarez/.test(words)

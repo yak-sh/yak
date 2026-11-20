@@ -371,6 +371,27 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_invite: {
+      component: true,
+      description:
+        "What an invitation letter the Operator wrote invites its reader to, beside its `operator_letter`: a reply to it is answered knowing the place and the role it grants, which that reader's own permissions cannot see.",
+      properties: {
+        invite: {
+          type: 'string',
+          description: "The invitation's eid in the directory.",
+        },
+        place: {
+          type: 'string',
+          description:
+            'What accepting opens, as the letter names it: a title and the address it opens at.',
+        },
+        role: {
+          type: 'string',
+          description:
+            'The role accepting gives them there: owner, editor or viewer.',
+        },
+      },
+    },
     operator_text: {
       component: true,
       description:

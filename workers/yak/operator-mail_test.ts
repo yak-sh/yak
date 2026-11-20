@@ -13,7 +13,7 @@ import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
-import { mailSend, receive } from './operator-channels.ts'
+import { mailSend, owedRows, receive } from './operator-channels.ts'
 import { signedFor } from '@yaks/platform/letters'
 import { rootOf } from './operator-root.ts'
 import { conversationOf, operatorReply } from './operator-host.ts'
@@ -86,6 +86,8 @@ let service = operatorService(
         })
       : said(req, /By email from alvarez/)
       ? reply('Thank you; I will tell Jeff.')
+      : said(req, /By email from bea/)
+      ? reply('It is a list Jeff keeps; you could read it.')
       : said(req, /Asked Dr Alvarez/)
       ? reply('I asked Dr Alvarez; I will tell you what they say.')
       : last?.kind == 'result'
@@ -115,25 +117,31 @@ let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
 // Dr Alvarez answers only the Operator, the way Reply does.
 let from = mailFrom('jeff', null, env)
-let answer = (id: string, answers: string): Inbound => {
+let answer = (
+  id: string,
+  answers: string,
+  writer = 'Dr Alvarez <Alvarez@Clinic.example>',
+  words = 'Tuesday at 3 works for us.',
+): Inbound => {
   let headers = new Headers({
-    From: 'Dr Alvarez <Alvarez@Clinic.example>',
+    From: writer,
     To: from,
     Subject: 'Re: Checkup on Tuesday',
     'Message-ID': `<${id}>`,
     'In-Reply-To': `<${answers}>`,
     References: `<${answers}>`,
     'Content-Type': 'text/plain',
-    'Authentication-Results':
-      'mx.cloudflare.net; dmarc=pass header.from=clinic.example; dkim=pass',
+    'Authentication-Results': `mx.cloudflare.net; dmarc=pass header.from=${
+      writer.match(/@([^>]+)>/)![1].toLowerCase()
+    }; dkim=pass`,
   })
   return {
-    from: 'alvarez@clinic.example',
+    from: writer.match(/<(.+)>/)![1].toLowerCase(),
     to: from,
     headers,
     raw: new Response(
       [...headers].map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-        '\r\n\r\nTuesday at 3 works for us.',
+        '\r\n\r\n' + words,
     ).body!,
     setReject: () => {},
   }
@@ -344,4 +352,56 @@ test('an authenticated machine at the recipient address tells the member without
   assertEquals(letters.slice(mailed).map((l) => l.to), ['jeff@example.com'])
   let note = await conversationOf(store, '/at', rootOf(eid, person))
   assertStringIncludes(note.html, autoReply.text)
+})
+
+// An invitation the Operator wrote for Jeff (invite.ts `send`): its reader's
+// question is answered knowing what accepting gives them, and that Jeff
+// already has their words, which their own permissions could never read.
+await store.g.apply(
+  owedRows(env, space, {
+    to: 'bea@example.com',
+    person,
+    subject: 'Jeff invited you',
+    body: 'Jeff invited you to see Packing List (jeff.yaks.app/packing).',
+    invite: {
+      invite: crypto.randomUUID(),
+      place: 'Packing List (jeff.yaks.app/packing)',
+      role: 'viewer',
+    },
+  }),
+  { trusted: true },
+)
+await service.drain()
+let invitation = letters.findLast((l) => l.to == 'bea@example.com')!
+let beaAsked = asked.length
+let beaReply = await arrived(
+  await reading(
+    answer(
+      'bea-1',
+      `sent-${letters.indexOf(invitation) + 1}`,
+      'Bea <bea@example.com>',
+      'What is the Packing List, and what could I do with it?',
+    ),
+    env,
+  ),
+  env,
+)
+await service.drain()
+let beaTurns = asked.slice(beaAsked)
+
+test("an invitee's reply is answered once, knowing the place and role the invitation gives and that the inviter has their words", () => {
+  assertEquals(beaTurns.length, 1)
+  let framed = JSON.stringify(beaTurns[0].items)
+  for (
+    let words of [
+      'a viewer of Packing List (jeff.yaks.app/packing)',
+      'read everything in it, and change nothing',
+      'already has their words',
+      `Their reply is letter ${short(beaReply)}`,
+    ]
+  ) assertStringIncludes(framed, words)
+  let answers = letters.filter((l) =>
+    l.to == 'bea@example.com' && l.subject?.startsWith('Re:')
+  )
+  assertEquals(answers.length, 1)
 })
