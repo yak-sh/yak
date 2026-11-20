@@ -351,6 +351,7 @@ import { freely } from '@yaks/durable-object/sql'
 import { load } from './load.ts'
 import { metering } from './metered.ts'
 import { appTexter } from './app-texts.ts'
+import { appChatters } from './chat.ts'
 import { heldBy, mailTags, outgoing } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
@@ -1788,6 +1789,12 @@ export class Store extends Durable {
           () => this.#get('space'),
         ),
       },
+      // An app's chat messages, posted by its connection's bot into that
+      // connection's server alone (chat.ts).
+      chatters: appChatters(this.#bind as Env, () => ({
+        space: this.#get('space'),
+        app: this.#get('app'),
+      })),
       duties: async () => {
         await this.#effects.work(this.#stored(this.#graph).graph)
       },
@@ -2586,8 +2593,12 @@ export class Store extends Durable {
       // Dropping the envelope is not writing one, and a bundle that is neither
       // a letter nor an ask to send has nothing to say about an address. A
       // text asks to be sent with `deliver` too (@yaks/phone), and is no
-      // letter: it goes from the app's number (app-texts.ts).
-      if (mail === null || (!mail && (!b[DELIVER] || b.text))) return b
+      // letter: it goes from the app's number (app-texts.ts). Nor is a chat
+      // message, posted by its connection's bot (@yaks/chat, chat.ts).
+      if (
+        mail === null ||
+        (!mail && (!b[DELIVER] || b.text || b.chat_message))
+      ) return b
       return {
         ...b,
         [MAIL]: { ...(mail ?? {}), from: this.#get('mail') ?? '' },

@@ -254,6 +254,35 @@ export let typing = async (
   }
 }
 
+/** The server (guild) the room `room` belongs to, as the bot with `token`
+ * sees it (GET /channels/{id}), none for a direct one. A 429 or a 5xx is
+ * {@link Unsent}; a room the bot cannot see is refused with what Discord
+ * said. */
+export let server = async (
+  token: string,
+  room: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | undefined> => {
+  let res = await fetcher(`${API}/channels/${room}`, {
+    headers: { authorization: `Bot ${token}` },
+  })
+  let body = await res.json().catch(() => ({})) as {
+    guild_id?: string
+    message?: string
+  }
+  if (res.status == 429 || res.status >= 500) {
+    throw new Unsent(`Discord did not say where ${room} is: ${res.status}`)
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Discord refused to show room ${room}: ${res.status} ${
+        body.message ?? ''
+      }`.trim(),
+    )
+  }
+  return body.guild_id
+}
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -262,5 +291,6 @@ export let discord: Platform = {
   user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,
+  server,
   working: { every: 8000, show: typing },
 }

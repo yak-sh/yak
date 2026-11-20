@@ -622,6 +622,34 @@ the input on the page where a person connects their own key, and in the
 the person through it. Only the space that created an integration can change
 what it says, and the hosts its key may be sent to cannot be changed.
 
+### Hearing and answering on a chat connection
+
+    connection_attach(app, connection: '<the space's Discord connection>')
+
+A space's chat connection (yaks.app's bot added to a Discord server, from the
+Operator's settings or the connections page) is attached to an app like any
+other connection. From then on every message the bot hears in that server lands
+in the app's store, written by the platform:
+
+    chat_message{via, room, author, message_id, reply_to, at, addressed, connection}
+      + doc{body}                     what was said, and the connection that heard it
+    chat_room{via, id, server, name}  the room it was said in
+    chat_account{via, id, name}       who said it
+
+`room` and `author` point at the other two rows. `addressed` is `mention`,
+`reply` or `direct` when it was said to the bot. A message heard twice is one
+row. The app answers by writing a message that asks to be delivered to a room:
+
+    { chat_message: { via: 'discord', connection: heard.connection,
+        reply_to: heard.message_id },
+      doc: { body: 'It opens at nine.' },
+      deliver: { to: heard.room } }
+
+The connection's bot posts it, and the row gains `delivered{at}` (and
+`chat_message.message_id`), or `bounced{reason}`. The app never holds the bot's
+token, and its messages go only into rooms of its own connection's server, by a
+connection it uses: anything else bounces.
+
 ### The integration directory
 
     integration_list(words: 'bible')

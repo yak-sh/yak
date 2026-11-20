@@ -436,7 +436,7 @@ export let chatHeard = async (
   if (!PLATFORMS.has(via)) {
     throw refuse('arguments', `yaks.app hears no chat platform ${via}`)
   }
-  let [room, author, message] = kept(via, said)
+  let [room, author, message] = kept(via, said, connection)
   await operator.store.g.apply([room, author], { trusted: true })
   let { fresh, session } = await hear(
     operator,
@@ -450,10 +450,7 @@ export let chatHeard = async (
       reply_to: said.room,
     },
     said.text,
-    {
-      ...message,
-      chat_message: { ...message.chat_message as Comp, connection },
-    },
+    message,
   )
   let working = operator.store.chatters?.[via]?.working
   if (fresh && session && working) {

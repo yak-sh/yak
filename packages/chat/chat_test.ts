@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { effects as registry } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -15,6 +15,7 @@ import { effects } from './effects.ts'
 import {
   accountEid,
   type Addressed,
+  confined,
   framing,
   kept,
   messageEid,
@@ -53,6 +54,27 @@ test('kept: the room, who said it, and the message naming both', () => {
   assertEquals(message.doc, { body: 'hello' })
   // One platform's ids never meet another's.
   assertEquals(messageEid('slack', 'm1') == message.entity.eid, false)
+  // Heard by a connection's bot, it names the connection an answer goes by.
+  let heard = kept('discord', said, 'c1')[2].chat_message as Comp
+  assertEquals(heard.connection, 'c1')
+})
+
+test('confined: a post goes only into a room of the server its connection serves', async () => {
+  let posted: string[] = []
+  let chatter = confined({
+    post: (chat) => (posted.push(chat.room), Promise.resolve({ id: 'r' })),
+  }, {
+    serves: (c) => Promise.resolve(c == 'ours' ? 'barn' : undefined),
+    server: ({ room }) =>
+      Promise.resolve({ general: 'barn', lobby: 'mill' }[room]),
+  })
+  let post = (connection: string, room: string) =>
+    chatter.post({ connection, room, text: 'hi' })
+  assertEquals(await post('ours', 'general'), { id: 'r' })
+  await assertRejects(() => post('ours', 'lobby'), Error, 'not in its')
+  await assertRejects(() => post('ours', 'dm'), Error, 'not in its')
+  await assertRejects(() => post('theirs', 'general'), Error, 'no server')
+  assertEquals(posted, ['general'])
 })
 
 test('framing says the platform, how it was said to the bot, and who wrote it', () => {

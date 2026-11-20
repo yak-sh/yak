@@ -12,11 +12,17 @@
 // own when their platform account is linked to a person here (the
 // platform's `user` integration), else a guest's, who has no seat and so
 // only what the space lets anyone do.
+//
+// Every message heard in a server is also kept in each app of the space
+// that `uses` the connection, as @yaks/chat's rows, for the app's own rules
+// to take up. An app holds no bot: a message it writes to a room is posted
+// by its connection's, and only into that connection's server
+// (`appChatters`).
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
-import { type Platform, platforms, type Said } from '@yaks/chat'
+import { confined, kept, type Platform, platforms, type Said } from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
 import { discord } from '@yaks/discord'
 import type { Chatter } from '@yaks/host/senders'
@@ -45,6 +51,19 @@ export type Chats = {
   get(id: unknown): { listen(via: string): Promise<unknown> }
 }
 
+// The credential of the bot that speaks on `p` for `connection`
+// (@yaks/connections `botOf`).
+let speaker = async (env: Env, p: Platform, connection: string) => {
+  let { botOf, ctxOf } = await need()
+  let token = await botOf(ctxOf(env), connection)
+  if (!token) {
+    throw new Error(
+      `No ${p.title} bot speaks for this connection now: connect ${p.title} again.`,
+    )
+  }
+  return token
+}
+
 /** The chatters the Operator's store posts its answers through, one per
  * platform: each posts with the bot that speaks for the answer's connection
  * (@yaks/connections `botOf`), and shows a room it is working on an answer
@@ -52,27 +71,18 @@ export type Chats = {
 export let chatters = (env: Env): Record<string, Chatter> =>
   Object.fromEntries(
     [...PLATFORMS.values()].map((p) => {
-      let bot = async (connection: string) => {
-        let { botOf, ctxOf } = await need()
-        let token = await botOf(ctxOf(env), connection)
-        if (!token) {
-          throw new Error(
-            `No ${p.title} bot speaks for this connection now: connect ${p.title} again.`,
-          )
-        }
-        return token
-      }
       let { working } = p
       return [
         p.name,
         {
-          post: async (chat) => p.send(await bot(chat.connection), chat),
+          post: async (chat) =>
+            p.send(await speaker(env, p, chat.connection), chat),
           ...working
             ? {
               working: {
                 every: working.every,
                 show: async (at) =>
-                  working.show(await bot(at.connection), at.room),
+                  working.show(await speaker(env, p, at.connection), at.room),
               },
             }
             : {},
@@ -80,6 +90,40 @@ export let chatters = (env: Env): Record<string, Chatter> =>
       ]
     }),
   )
+
+/** The chatters an app's store posts its rows through (graph.ts), one per
+ * platform that says which server a room is in: the Operator's,
+ * {@link confined} to the server of a connection that `at()`'s space owns,
+ * the app `uses`, and that chats on that platform, connected. So an app's
+ * row reaches only rooms of its own connection's server. */
+export let appChatters = (
+  env: Env,
+  at: () => { space?: string | null; app?: string | null },
+): Record<string, Chatter> => {
+  let all = chatters(env)
+  return Object.fromEntries(
+    [...PLATFORMS.values()].filter((p) => p.server).map((p) => [
+      p.name,
+      confined(all[p.name], {
+        serves: async (connection) => {
+          let { space, app } = at()
+          if (!space || !app) return undefined
+          let { usedBy, installed, ctxOf } = await need()
+          let c = comp(
+            await usedBy(env, space, app, connection) ?? undefined,
+            CONNECTION,
+          )
+          if (c.status != 'connected' || !c.account) return undefined
+          let i = (await installed(ctxOf(env).graph.read))
+            .find((i) => i.name == c.integration)
+          return i?.chat == p.name ? String(c.account) : undefined
+        },
+        server: async ({ connection, room }) =>
+          p.server!(await speaker(env, p, connection), room),
+      }),
+    ]),
+  )
+}
 
 let read = async (env: Env, q: string) =>
   await (await need()).ctxOf(env).graph.read(q as never) as Bundle[]
@@ -189,14 +233,52 @@ export let guestOf = async (env: Env, via: string, id: string) => {
   return person
 }
 
+/** A message heard through `connection`, kept in each app of its space that
+ * `uses` it (@yaks/chat `kept`), for the app's own rules to take up. */
+let toApps = async (
+  env: Env,
+  platform: Platform,
+  said: Said,
+  connection: Bundle,
+) => {
+  let users = await read(
+    env,
+    line`.edge.to=${connection.entity.eid}&.uses&*`,
+  )
+  if (!users.length) return
+  let { appStore, caught, directoryOf, KERNEL, metaOf } = await need()
+  let dir = directoryOf(env.STORE)
+  let space = await dir.at(String(comp(connection, CONNECTION).owner))
+  if (!space || space.trashed) return
+  let from = new Set(users.map((l) => String(comp(l, 'edge').from)))
+  let rows = kept(platform.name, said, connection.entity.eid)
+  await Promise.all(
+    (await dir.apps(space)).filter((a) => from.has(a.eid) && !a.trashed).map(
+      (app) =>
+        metaOf(appStore(env.STORE, space, app, env)).apply(rows, KERNEL)
+          .catch((e) =>
+            caught(e, {
+              request: `${platform.name} message`,
+              space: space.slug,
+              app: app.slug,
+            })
+          ),
+    ),
+  )
+}
+
 /**
- * A message yaks.app's own bot heard on `platform`. One addressed to it in a
- * server goes to the Operator of the space that added the bot there; a
- * direct one, from someone linked here, to their own space's. Anything else
- * is not for the Operator: a room the space chose for it to hear in full is
- * T-1644's next step.
+ * A message yaks.app's own bot heard on `platform`. One said in a server is
+ * kept in each app that uses a connection that added the bot there
+ * ({@link toApps}). One addressed to the bot in a server goes to the
+ * Operator of the space that added it there; a direct one, from someone
+ * linked here, to their own space's. Anything else is not for the
+ * Operator: a room the space chose for it to hear in full is T-1644's next
+ * step.
  */
 export let arrived = async (env: Env, platform: Platform, said: Said) => {
+  let heard = said.server ? await serving(env, platform.name, said.server) : []
+  await Promise.all(heard.map((c) => toApps(env, platform, said, c)))
   if (!said.addressed) return
   let { directoryOf, KERNEL } = await need()
   let dir = directoryOf(env.STORE)
@@ -204,7 +286,7 @@ export let arrived = async (env: Env, platform: Platform, said: Said) => {
   let space: Space | null = null
   let connection: string | undefined
   if (said.server) {
-    let [c] = await serving(env, platform.name, said.server)
+    let [c] = heard
     if (!c) return
     connection = c.entity.eid
     space = await dir.at(String(comp(c, CONNECTION).owner))

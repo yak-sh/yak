@@ -10,7 +10,7 @@ import { VISIT, type Vouch, vouchOf } from '@yaks/platform/app-authority'
 import { appAbout, type Row } from './directory.ts'
 import { visitEdge, visitOfRow, visitorRole } from '@yaks/platform/visits'
 
-type Word = 'name' | 'app' | 'access' | 'mail' | 'phone' | 'policy'
+type Word = 'name' | 'app' | 'space' | 'access' | 'mail' | 'phone' | 'policy'
 type Host = {
   read(key: Word): string | null
   write(key: Word, value: string): void
@@ -171,6 +171,10 @@ export let servingAuthority = (host: Host) => {
     if ((name ?? host.read('name')) != PLATFORM_STORE) {
       said.push(
         ['app', req.headers.get('x-yak-app')],
+        // The space it is in, the directory's word as well: whose connections
+        // its chat messages may be posted by (chat.ts `appChatters`) and whose
+        // number its texts leave from (app-texts.ts).
+        ['space', req.headers.get('x-yak-space')],
         ['access', req.headers.get('x-yak-access')],
         // The address this app's letters leave from (directory.ts `mailbox`).
         // Like the access mode it is the directory's word and is followed

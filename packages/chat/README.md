@@ -25,7 +25,8 @@ cuts an answer to fit, so a host wires every platform the same way.
 
 Each eid is derived from `via` and the platform's id (`messageEid`, `roomEid`,
 `accountEid`), so a message heard twice writes one row, and two platforms' ids
-never meet. `kept(via, said)` is the three rows.
+never meet. `kept(via, said, connection?)` is the three rows, the message naming
+the connection whose bot heard it.
 
 ## A platform
 
@@ -36,6 +37,11 @@ type Platform = {
   limit: number // the most characters one message carries
   socket?: (credential: string) => Socket<unknown>
   send: (credential: string, reply: Reply, fetch?) => Promise<Posted>
+  server?: (
+    credential: string,
+    room: string,
+    fetch?,
+  ) => Promise<string | undefined>
   working?: { every: number; show: (credential, room, fetch?) => Promise<void> }
 }
 ```
@@ -49,6 +55,12 @@ gives that the way @yaks/phone's providers do; none does yet.
 
 `send` posts a reply with a bot's credential. A refusal that never took it (a
 rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.
+
+`server` says which server a room belongs to, as the bot sees it, none for a
+direct room. `confined(chatter, {serves, server})` is a chatter that posts only
+into rooms of the server its connection serves and refuses anything else before
+the chatter sees it, so a host can lend a bot to whoever writes rows without
+holding it (an app) and still keep its posts in that one server.
 
 `working` is how a bot shows a room it is working on an answer, where the
 platform can (Discord's typing indicator): one show lasts `every` milliseconds.

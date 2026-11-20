@@ -1585,14 +1585,21 @@ export let own: Answer = async (
   }
 }
 
-// The connection an app may receive webhooks through: the space's, and used
-// by that app.
-let hookable = async (env: Env, space: Space, app: App, eid: string) => {
+/** The connection `eid` as the app `app` of the space `space` may hear and
+ * speak through: the space's own, and one the app `uses`; else null. What a
+ * webhook arrives through, and what an app's chat message is posted by
+ * (chat.ts `appChatters`). */
+export let usedBy = async (
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  space: string,
+  app: string,
+  eid: string,
+): Promise<Bundle | null> => {
   if (!EID.test(eid)) return null
   let read = readOf(env)
   let [b] = await read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
-  if (!b || comp(b, CONNECTION).owner != space.eid) return null
-  let used = await read(line`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}`)
+  if (!b || comp(b, CONNECTION).owner != space) return null
+  let used = await read(line`.edge.from=${app}&.edge.to=${eid}&.${USES}`)
   return used.length ? b : null
 }
 
@@ -1611,7 +1618,7 @@ export let hook: Door<Env> = async ({ env, req, path, space: slug }) => {
   let space = rest.length ? null : await dir.answering(slug)
   let app = space && name ? await dir.answeringApp(space, name) : null
   let b = space && app && !app.trashed
-    ? await hookable(env, space, app, eid)
+    ? await usedBy(env, space.eid, app.eid, eid)
     : null
   if (!space || !app || !b) return lost()
   let body = await req.text()

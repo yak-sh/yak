@@ -6,7 +6,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { Unsent } from '@yaks/host/senders'
+import { type Chat, type Chatter, Unsent } from '@yaks/host/senders'
 
 /** A message as a platform's plugin reads it: where it was said, by whom, in
  * which words, and whether it was said to the bot that heard it. */
@@ -88,6 +88,14 @@ export type Platform = {
     reply: Reply,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Posted>
+  /** the platform's id for the server a room belongs to, as the bot with
+   * `credential` sees it; none for a direct room. What a chatter
+   * {@link confined} to a server asks. */
+  server?: (
+    credential: string,
+    room: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<string | undefined>
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<
@@ -140,8 +148,9 @@ export let accountEid = (via: string, id: string): string =>
   derivedEid(`chat-account|${via}|${id}`)
 
 /** The rows that keep a message heard on `via`: the message with its words,
- * the room and who said it. Kept again, they write the same rows. */
-export let kept = (via: string, said: Said): Bundle[] => [
+ * the room and who said it, and the connection whose bot heard it, which
+ * an answer is posted by. Kept again, they write the same rows. */
+export let kept = (via: string, said: Said, connection?: string): Bundle[] => [
   {
     entity: { eid: roomEid(via, said.room) },
     chat_room: {
@@ -164,10 +173,41 @@ export let kept = (via: string, said: Said): Bundle[] => [
       at: said.at,
       ...said.addressed ? { addressed: said.addressed } : {},
       ...said.reply_to ? { reply_to: said.reply_to } : {},
+      ...connection ? { connection } : {},
     },
     doc: { body: said.text },
   },
 ]
+
+/**
+ * A chatter that posts only into rooms of the server its connection serves:
+ * `serves(connection)` names that server, and `server(chat)` the one the
+ * room is in. A connection serving none, or a room elsewhere or in none, is
+ * refused before `chatter` sees it. So whoever writes a message without
+ * holding the bot (an app's row) reaches only the server its connection was
+ * made for.
+ */
+export let confined = (
+  chatter: Chatter,
+  where: {
+    serves: (connection: string) => Promise<string | undefined>
+    server: (chat: Pick<Chat, 'connection' | 'room'>) => Promise<
+      string | undefined
+    >
+  },
+): Chatter => ({
+  ...chatter.waiting ? { waiting: chatter.waiting } : {},
+  post: async (chat) => {
+    let serves = await where.serves(chat.connection)
+    if (!serves) {
+      throw new Error(`connection ${chat.connection} posts into no server here`)
+    }
+    if (await where.server(chat) != serves) {
+      throw new Error(`room ${chat.room} is not in its connection's server`)
+    }
+    return chatter.post(chat)
+  },
+})
 
 /** How a message heard on a platform is said before its words to whoever
  * answers it: where it came from, who wrote it, and how it was said to the

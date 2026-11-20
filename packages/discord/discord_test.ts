@@ -219,3 +219,24 @@ test('typing shows the room the bot is working; a rate limit waits, a refusal is
     'Discord refused to show typing: 403 Missing Access',
   )
 })
+
+test('a room is known by its server, none for a direct one; one the bot cannot see is refused', async () => {
+  let { f, seen } = rest(200, { id: 'room', guild_id: 'barn' })
+  assertEquals(await discord.server!('T0K', 'room', f), 'barn')
+  assertEquals(seen[0].url, 'https://discord.com/api/v10/channels/room')
+  assertEquals(
+    (seen[0].init.headers as Record<string, string>).authorization,
+    'Bot T0K',
+  )
+  assertEquals(
+    await discord.server!('T', 'dm', rest(200, { id: 'dm' }).f),
+    undefined,
+  )
+  await assertRejects(() => discord.server!('T', 'r', rest(502, {}).f), Unsent)
+  await assertRejects(
+    () =>
+      discord.server!('T', 'r', rest(404, { message: 'Unknown Channel' }).f),
+    Error,
+    'Discord refused to show room r: 404 Unknown Channel',
+  )
+})

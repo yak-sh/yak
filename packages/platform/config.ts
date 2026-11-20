@@ -125,6 +125,10 @@ export let appConfig: Config = {
       words: ['phone', 'sms_consent', 'text', 'text_post'],
       with: { sender: { via: 'worker' } },
     },
+    // What is said on the chat connections the app uses, and what it says
+    // there: each message heard lands as a row, and a row it writes to a
+    // room is posted by the connection's bot (workers/yak chat.ts).
+    { use: '@yaks/chat', facets: ['vocab', 'effects'] },
     {
       use: '@yaks/tools',
       words: [

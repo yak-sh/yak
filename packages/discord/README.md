@@ -22,6 +22,10 @@ reply with the REST API. `discord` is the `Platform` both make.
 - **A reply** answers the message it names, when there still is one, and pings
   nobody. A 429 or 5xx is `Unsent`, tried again after what Discord says.
 
+- **A room's server** is what Discord says of the channel
+  (`server(token, room)`, GET `/channels/{id}`): its guild, none for a direct
+  one.
+
 - **Working on an answer** shows as typing (`typing(token, room)`, POST
   `/channels/{id}/typing`), which Discord keeps for ten seconds or until the
   bot's next message there, so it is `working` every 8 s. It needs no intent. A
