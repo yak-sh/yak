@@ -1349,15 +1349,10 @@
   }
 }
 
-/* A way to reach the Operator: its words to copy, and the buttons that open
-   them (operator-ways.ts). */
+/* The ways to reach the Operator: its words to copy, and the buttons that
+   open them (operator-ways.ts). */
 .Talk_Way {
   display: grid;
   gap: var(--half-gap);
   margin-bottom: var(--gap);
-}
-.Talk_Go {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--half-gap);
 }

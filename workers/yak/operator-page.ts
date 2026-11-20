@@ -2649,9 +2649,10 @@ let shown = () => {
   let a = aside()
   if (!a) return
   let helping = !!a.querySelector('[data-helping]').children.length
-  a.querySelector('[data-helpers]').hidden = !helping
+  let turn = !!a.querySelector('[data-turn] time')
+  a.querySelector('[data-helpers]').hidden = !helping && !turn
   let reach = !!a.querySelector('[data-reach]')
-  a.hidden = !helping && !reach && !a.querySelector('[data-turn] time')
+  a.hidden = !helping && !reach && !turn
   let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded(), reach))
   glance.innerHTML = next.innerHTML
   for (let name of ['aria-label', 'aria-expanded']) glance.setAttribute(name, next.getAttribute(name))

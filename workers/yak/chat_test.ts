@@ -3,7 +3,12 @@
 // the connections page that sends its owner on to Discord. And a space's
 // apps hear and answer on its Discord connection.
 
-import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
 import { accountEid, roomEid, type Said } from '@yaks/chat'
@@ -194,7 +199,16 @@ test('a space is reached in each server its bot serves, named and in the room it
     await choose(p.env, { person: OWNER, role: 'owner' }, ada.eid, barn, 'c1')
     globalThis.fetch = (input) =>
       Promise.reject(new Error(`Discord was asked: ${input}`))
-    assertEquals(await reached(p.env, await rows(ada)), {
+    // Each wears Discord's own mark, from its integration.
+    let marked = async (space: { eid: string }) => {
+      let { places, unset } = await reached(p.env, await rows(space))
+      let bare = <T extends { logo?: string }>({ logo, ...rest }: T) => {
+        assert(logo?.startsWith('<svg'))
+        return rest
+      }
+      return { places: places.map(bare), unset: unset.map(bare) }
+    }
+    assertEquals(await marked(ada), {
       places: [{
         platform: 'Discord',
         server: 'Barn',
@@ -203,7 +217,7 @@ test('a space is reached in each server its bot serves, named and in the room it
       }, { platform: 'Discord', href: 'https://discord.com/channels/mill' }],
       unset: [],
     })
-    assertEquals(await reached(p.env, await rows(bo)), {
+    assertEquals(await marked(bo), {
       places: [],
       unset: [{ platform: 'Discord', integration: 'discord', testing: true }],
     })

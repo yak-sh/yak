@@ -903,7 +903,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   )
   assertEquals(band.querySelector('.Chip-accent')?.textContent, 'Helper')
   assertEquals(
-    band.querySelector('.Rows_Meta .State')?.textContent,
+    band.querySelector('.Rows_Name .Dot')?.getAttribute('aria-label'),
     'Running',
   )
   // Where it runs and its model by its label, in one line under its

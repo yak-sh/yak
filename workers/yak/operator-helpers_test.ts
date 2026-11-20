@@ -211,7 +211,7 @@ test('the chat’s aside lists a helper by its title, how long ago it ended and 
   assertEquals(done.title, 'Friday schedule check')
   assertEquals(done.recap, 'Helper checked the schedule; Tuesday is free.')
   let html = helperHtml(done, Date.parse(done.until!) + 2 * 86_400_000)
-  assertStringIncludes(html, 'Done</')
+  assertStringIncludes(html, 'aria-label="Done"')
   assertStringIncludes(html, '2 days ago')
   assertStringIncludes(
     html,

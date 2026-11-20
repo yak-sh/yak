@@ -1,10 +1,11 @@
 // Every way to reach a space's Operator, in a card below its helpers on its
 // page (operator-aside.ts `Aside`): its email address and the numbers it is
-// called and texted at, each selectable with a copy button beside it and a
-// button apiece that opens the person's mail app or phone there, and each
-// chat server and room it is in, a link that opens their chat app.
+// called and texted at, each selectable with a copy button beside it, then
+// one row of buttons that open the person's mail app or phone there, and each
+// chat server and room it is in, a link under its platform's mark that opens
+// their chat app.
 import { h } from 'preact'
-import { Button, Card, Icon, SideNav } from '@yaks/ui/parts'
+import { Button, Card, Icon, SideNav, Toolbar } from '@yaks/ui/parts'
 import { copyable, copying } from './pages.ts'
 import { type IconName, icons } from './icons.ts'
 import type { Env } from './env.ts'
@@ -61,15 +62,36 @@ export let waysOf = async (
 
 type Press = { href: string; icon: IconName; label: string }
 
-// An address or number to copy, and the buttons that open it.
-let Line = ({ said, what, go }: { said: string; what: string; go: Press[] }) =>
-  h(
+// The address and numbers, each selectable with its copy button, then one
+// row of the buttons that open them: one number both called and texted is
+// one line, with both buttons.
+let lines = (ways: Ways) => {
+  let numbers = ways.call === ways.text ? [ways.call] : [ways.call, ways.text]
+  let go: Press[] = [
+    { href: `mailto:${ways.email}`, icon: 'mail', label: 'Email' },
+    ...ways.call
+      ? [{ href: `tel:${ways.call}`, icon: 'phone', label: 'Call' } as Press]
+      : [],
+    ...ways.text
+      ? [
+        {
+          href: `sms:${ways.text}`,
+          icon: 'message-square',
+          label: 'Text',
+        } as Press,
+      ]
+      : [],
+  ]
+  return h(
     'div',
     { class: 'Talk_Way' },
-    copyable(said, what),
+    copyable(ways.email, 'the address'),
+    numbers.filter((n): n is string => !!n).map((n) =>
+      copyable(shown(n), 'the number')
+    ),
     h(
-      'div',
-      { class: 'Talk_Go' },
+      Toolbar,
+      { mod: 'plain' },
       go.map((p) =>
         h(
           Button,
@@ -80,35 +102,11 @@ let Line = ({ said, what, go }: { said: string; what: string; go: Press[] }) =>
       ),
     ),
   )
-
-// The address and numbers: one number both called and texted is one line
-// with both buttons.
-let lines = (ways: Ways) => {
-  let call = ways.call &&
-    { href: `tel:${ways.call}`, icon: 'phone', label: 'Call' }
-  let text = ways.text &&
-    { href: `sms:${ways.text}`, icon: 'message-square', label: 'Text' }
-  let numbers = ways.call === ways.text
-    ? [ways.call && { said: ways.call, go: [call, text] }]
-    : [
-      ways.call && { said: ways.call, go: [call] },
-      ways.text && { said: ways.text, go: [text] },
-    ]
-  return [
-    h(Line, {
-      said: ways.email,
-      what: 'the address',
-      go: [{ href: `mailto:${ways.email}`, icon: 'mail', label: 'Email' }],
-    }),
-    ...numbers.filter((n) => !!n).map((n) =>
-      h(Line, {
-        said: shown(n.said),
-        what: 'the number',
-        go: n.go.filter((p): p is Press => !!p),
-      })
-    ),
-  ]
 }
+
+// A platform's mark as a link's image, where its integration keeps one.
+let mark = (logo?: string) =>
+  logo ? { image: `data:image/svg+xml,${encodeURIComponent(logo)}` } : {}
 
 // The side's links for each chat place the Operator is in, each opening the
 // person's chat app there, and each platform not set up yet the one button
@@ -117,6 +115,7 @@ let reaching = (space: Space, ways: Ways, here: string): Item[] => [
   ...ways.places.map((p): Item => ({
     href: p.href,
     icon: 'message-circle',
+    ...mark(p.logo),
     label: [p.server ?? p.platform, p.room && `#${p.room}`].filter(Boolean)
       .join(' · '),
     external: true,
@@ -127,6 +126,7 @@ let reaching = (space: Space, ways: Ways, here: string): Item[] => [
       u.testing ? [u.integration] : [],
     ),
     icon: 'plus',
+    ...mark(u.logo),
     label: `Add to ${u.platform}`,
     submit: true,
     fields: { do: 'add', integration: u.integration, back: here },

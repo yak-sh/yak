@@ -542,6 +542,8 @@ let servers = async (
  * the address that opens them. */
 export type Place = {
   platform: string
+  /** the platform's mark, an SVG document, from its integration */
+  logo?: string
   server?: string
   room?: string
   href: string
@@ -550,7 +552,12 @@ export type Place = {
 /** A platform yaks.app keeps a bot on that a space has not added it to yet:
  * `integration` adds it, still in its service's testing mode where
  * `testing`. */
-export type Unset = { platform: string; integration: string; testing?: boolean }
+export type Unset = {
+  platform: string
+  integration: string
+  logo?: string
+  testing?: boolean
+}
 
 /** Every place a space's Operator is reached on a chat platform, read from
  * its chat `connections` alone, and the platforms where it is not yet
@@ -573,6 +580,7 @@ export let reached = async (
           unset: [{
             platform: p.title,
             integration: bot.name,
+            ...bot.logo ? { logo: bot.logo } : {},
             ...bot.testing ? { testing: true } : {},
           }],
         }
@@ -580,7 +588,7 @@ export let reached = async (
     }
     let { link } = p
     if (!link) return { places: [], unset: [] }
-    let places = theirs.flatMap(({ row }) => {
+    let places = theirs.flatMap(({ row, integration }) => {
       let names = comp(row, SERVES).names as Record<string, string> | undefined
       let hears = comp(row, HEARS)
       return serves(row).map((server): Place => {
@@ -588,6 +596,7 @@ export let reached = async (
         let room = hears.server == server && hears.id ? hears : undefined
         return {
           platform: p.title,
+          ...integration.logo ? { logo: integration.logo } : {},
           ...name ? { server: name } : {},
           ...room?.name ? { room: String(room.name) } : {},
           href: link(server, room ? String(room.id) : undefined),

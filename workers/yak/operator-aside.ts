@@ -123,6 +123,15 @@ let WORD: Record<Standing, [string, (string | string[])?]> = {
   stopped: ['Stopped'],
 }
 
+// How each stands beside its title: a pip whose shape says it.
+let MARK: Record<Standing, string[]> = {
+  running: ['pulse', 'active'],
+  waiting: ['ring', 'caution'],
+  done: ['check', 'positive'],
+  failed: ['cross', 'negative'],
+  stopped: ['dashed'],
+}
+
 // How each stands as a summary's dot: its word's tone, what is at work
 // breathing.
 let TONE = (standing: Standing) => WORD[standing][1]
@@ -131,29 +140,23 @@ let TONE = (standing: Standing) => WORD[standing][1]
  * page, and to a call's voice (operator-glance.ts). */
 export let word = (standing: Standing) => WORD[standing][0]
 
-/** The turn under way, in a line: what it is doing and for how long, or that
- * nothing runs. */
+/** The turn under way, in a line: what it is doing and for how long, and
+ * hidden while nothing runs. */
 export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
   h(
     Popover.Line,
-    { 'data-turn': '' },
-    turn
-      ? [
-        h(State, { mod: TONE('running') }, turn.what.replace(/…$/, '')),
-        ' · ',
-        h(Popover.Time, { at: turn.since, now, lasting: true }),
-      ]
-      : h(State, null, 'Nothing running'),
+    { 'data-turn': '', hidden: !turn },
+    turn && [
+      h(State, { mod: TONE('running') }, turn.what.replace(/…$/, '')),
+      ' · ',
+      h(Popover.Time, { at: turn.since, now, lasting: true }),
+    ],
   )
 
-/** How a helper stands, in a word in its tone, breathing while it runs. */
-export let Stands = ({ standing }: { standing: Standing }) =>
-  h(State, { mod: WORD[standing][1] }, word(standing))
-
-/** A piece of work as a row, wherever it is drawn: its title in a line,
- * linked to its page, over what `about` says of it first, how it stands
- * and, while it works, its step and how long it has taken, or once it
- * ended, how long ago; then what it came to (its recap), where it runs and
+/** A piece of work as a row, wherever it is drawn: a pip saying how it
+ * stands (its word for a screen reader) beside its title in a line, the row
+ * opening its page, over what `about` says of it first and, while it works,
+ * its step and how long it has taken, or once it ended, how long ago; then what it came to (its recap), where it runs and
  * its model, in lines, or with `fold` (the Helpers box) under a `More`
  * fold, closed unless `open`. The page puts a newer drawing of a helper in
  * place of each by its session (`[data-help]`). */
@@ -177,38 +180,43 @@ export let Work = (
     )
     : null
   let more = recap || runs ? [recap, runs] : null
+  let title = [
+    x.standing &&
+    h(Dot, {
+      mod: MARK[x.standing],
+      role: 'img',
+      'aria-label': word(x.standing),
+    }),
+    ' ',
+    x.title,
+  ]
   return h(
     Rows.Item,
     { 'data-help': x.session, 'data-going': going(x) ? '' : undefined },
     h(
-      Rows.Main,
-      null,
-      h(
-        Rows.Name,
-        { mod: 'line', title: x.title },
-        x.href ? h('a', { href: x.href }, x.title) : x.title,
-      ),
+      Rows.Link,
+      x.href ? { as: 'a', href: x.href } : null,
+      h(Rows.Name, { mod: 'line', title: x.title }, title),
       h(
         Rows.Meta,
         null,
         [
           ...about,
-          x.standing && h(Stands, { standing: x.standing }),
-          x.step.replace(/…$/, ''),
+          going(x) && x.step.replace(/…$/, ''),
           x.until && !going(x)
             ? h(Popover.Time, { at: x.until, now })
             : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
-      more && fold
-        ? h(
-          More,
-          { mod: 'quiet', open, 'data-fold': '' },
-          h(More.Summary, null, 'More'),
-          h(More.Body, null, more),
-        )
-        : more,
     ),
+    more && fold
+      ? h(
+        More,
+        { mod: 'quiet', open, 'data-fold': '' },
+        h(More.Summary, null, 'More'),
+        h(More.Body, null, more),
+      )
+      : more,
   )
 }
 
@@ -296,8 +304,9 @@ export let Glance = (
   )
 }
 
-/** The aside: the summary, then Now (but on a helper's page, whose band
- * says it), Helpers while there are any, and below them `reach`, the ways
+/** The aside: the summary, then Helpers while anything runs or a helper
+ * was started, the turn under way at its top (but on a helper's page, whose
+ * band says it), and below them `reach`, the ways
  * to reach the Operator (operator-ways.ts). Hidden while nothing runs, no
  * helper was started and there is nothing below them. */
 export let Aside = (
@@ -322,16 +331,14 @@ export let Aside = (
     h(
       Popover.Body,
       { class: 'Talk_AsideIn', id: 'aside-now' },
-      aside.band ? null : h(
-        Card,
-        null,
-        h(Card.Head, null, h(Card.Title, null, 'Now')),
-        h(TurnNow, { turn: aside.turn, now }),
-      ),
       h(
         Card,
-        { hidden: !aside.helpers.length, 'data-helpers': '' },
+        {
+          hidden: !aside.helpers.length && (aside.band || !aside.turn),
+          'data-helpers': '',
+        },
         h(Card.Head, null, h(Card.Title, null, 'Helpers')),
+        aside.band ? null : h(TurnNow, { turn: aside.turn, now }),
         h(
           Rows,
           { 'data-helping': '' },

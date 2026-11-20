@@ -482,9 +482,10 @@ test('a helper’s row sits under its turn’s newest reply, live while it works
   ])
   assertEquals(row.live, true)
   let text = words(html(row))
-  for (let said of ['Building the yak generator', 'Running', 'Writing files']) {
+  for (let said of ['Building the yak generator', 'Writing files']) {
     assertStringIncludes(text, said)
   }
+  assertStringIncludes(html(row), 'aria-label="Running"')
   assertStringIncludes(html(row), 'href="/manage/mill/operator/yak"')
   // The step that started it holds the same row, never the helper's id.
   let step = words(html(drawn[1]))

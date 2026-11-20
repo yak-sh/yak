@@ -53,6 +53,29 @@
   outline-offset: 2px;
 }
 
+/* A row that opens its page, beside what folds under it: the whole of it
+   lit under the pointer, and the fold at the far side, across the row once
+   open. */
+.Rows_Item:where(:has(> .Rows_Link)) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--half-gap);
+}
+.Rows_Item > .Rows_Link {
+  display: grid;
+  flex: 1 1 12rem;
+  gap: 2px;
+  padding: .45rem .6rem;
+}
+.Rows_Item > .Rows_Link + .More {
+  padding-right: .6rem;
+}
+.Rows_Item > .Rows_Link + .More[open] {
+  flex-basis: 100%;
+  padding-left: .6rem;
+}
+
 /* A list put in order by dragging its rows. A row that can be picked up says
    so under the pointer, and a line says where a dragged one would land. */
 .Rows-ordered > .Rows_Item[draggable='true'] {
