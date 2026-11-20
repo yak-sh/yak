@@ -164,6 +164,16 @@
           "format": "uri",
           "description": "OpenID endpoint naming the signed-in account when the token answer has no id_token"
         },
+        "account": {
+          "type": "string",
+          "description": "the field of the token endpoint's answer naming the account, as a dotted path, where it is not an email address",
+          "examples": ["guild.id"]
+        },
+        "chat": {
+          "type": "string",
+          "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",
+          "examples": ["discord"]
+        },
         "instructions": {
           "type": "string",
           "description": "how a person gets the credential, in markdown, written for them and for the agent helping them: where to sign up, which page issues the key, what to paste. Shown beside every connection it is needed for"

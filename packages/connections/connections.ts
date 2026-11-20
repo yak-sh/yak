@@ -910,6 +910,7 @@ export let accountOf = async (
   tokens: Tokens,
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> => {
+  if (integration.account) return tokens.account
   let body: Record<string, unknown> = {}
   if (tokens.id_token) {
     body = claims(tokens.id_token)
@@ -970,6 +971,7 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
     answers: i.answers,
     resource: i.resource,
     issuer: i.issuer,
+    account: i.account,
   }, {
     store: staged
       ? {

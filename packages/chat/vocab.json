@@ -1,0 +1,112 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "chat",
+  "kinds": {
+    "chat_message": {
+      "description": "a message said in a room of a chat platform, its words in `doc{body}`",
+      "with": {
+        "doc": true
+      },
+      "examples": [
+        {
+          "chat_message": {
+            "via": "discord",
+            "message_id": "1310000000000000001",
+            "at": "2026-11-20T05:40:00.000Z",
+            "mentioned": true
+          },
+          "doc": {
+            "body": "what's on my calendar tomorrow?"
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "chat_message": {
+      "component": true,
+      "type": "object",
+      "description": "one message said in a room of a chat platform; its words are `doc{body}`. Its eid is derived from `via` and `message_id` (@yaks/chat `messageEid`), so hearing it twice writes one",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "the chat platform it was said on, by its plugin's name",
+          "examples": ["discord"]
+        },
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the `chat_room` it was said in"
+        },
+        "author": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the `chat_account` that said it"
+        },
+        "message_id": {
+          "type": "string",
+          "description": "the platform's id for it"
+        },
+        "reply_to": {
+          "type": "string",
+          "description": "the platform's id for the message it answers, where it answers one"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it was said"
+        },
+        "mentioned": {
+          "type": "boolean",
+          "description": "whether it named the bot that heard it, or was said to it alone"
+        }
+      }
+    },
+    "chat_room": {
+      "component": true,
+      "type": "object",
+      "description": "a place messages are said on a chat platform: a Discord or Slack channel, a direct conversation, a Telegram chat. Its eid is derived from `via` and `id` (`roomEid`)",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "the chat platform, by its plugin's name"
+        },
+        "id": {
+          "type": "string",
+          "description": "the platform's id for it"
+        },
+        "server": {
+          "type": "string",
+          "description": "the platform's id for the server or workspace it belongs to; none for a direct conversation"
+        },
+        "name": {
+          "type": "string",
+          "description": "what the platform calls it, where it says"
+        }
+      }
+    },
+    "chat_account": {
+      "component": true,
+      "type": "object",
+      "description": "someone on a chat platform. Which person here they are is said by that person's connection to the platform's sign-in, whose account is `id`, never on this row. Its eid is derived from `via` and `id` (`accountEid`)",
+      "properties": {
+        "via": {
+          "type": "string",
+          "description": "the chat platform, by its plugin's name"
+        },
+        "id": {
+          "type": "string",
+          "description": "the platform's id for them"
+        },
+        "name": {
+          "type": "string",
+          "description": "the name they go by there"
+        }
+      }
+    }
+  }
+}

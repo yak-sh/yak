@@ -1,0 +1,18 @@
+{
+  "name": "@yaks/discord",
+  "version": "0.2.0",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Discord for @yaks/chat: its Gateway read as messages said, and replies posted to a channel.",
+  "dependencies": {
+    "@yaks/chat": "0.2.0",
+    "@yaks/host": "0.2.29"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.30",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0"
+  }
+}

@@ -42,6 +42,10 @@ export type Provider = {
   /** The issuer every return must name (RFC 9207), for a server that says it
    * names one: a return from any other server is refused. */
   issuer?: string
+  /** The field of the token endpoint's answer that names the account the
+   * grant is for, as a dotted path, where the answer says it: Discord's
+   * `guild.id`, the server a bot was added to. It is kept as `account`. */
+  account?: string
 }
 
 /** One grant, as the store keeps it. `expires_at` is epoch milliseconds. */
@@ -53,6 +57,8 @@ export type Tokens = {
   refresh_token?: string
   expires_at?: number
   scope?: string
+  /** What the provider's `account` field said, retained across refresh. */
+  account?: string
 }
 
 /** The provider's refusal, carrying its error code: `invalid_grant` is a grant
@@ -115,6 +121,19 @@ let NONE: Tokens = {
   refresh_token: undefined,
   expires_at: undefined,
   scope: undefined,
+}
+
+// A dotted path's value in an answer, as a string, where it is one.
+let named = (body: Record<string, unknown>, path?: string) => {
+  let v: unknown = body
+  for (let k of path?.split('.') ?? []) {
+    v = v && typeof v == 'object'
+      ? (v as Record<string, unknown>)[k]
+      : undefined
+  }
+  return path && (typeof v == 'string' || typeof v == 'number')
+    ? String(v)
+    : undefined
 }
 
 export let client = (provider: Provider, o: Options): Client => {
@@ -185,6 +204,7 @@ export let client = (provider: Provider, o: Options): Client => {
         ? now() + life * 1000
         : undefined,
       scope: str(body.scope) ?? was.scope,
+      account: named(body, provider.account) ?? was.account,
     }
   }
 

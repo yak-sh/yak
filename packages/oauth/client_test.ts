@@ -158,6 +158,19 @@ test('complete: exchanges the code with the verifier and keeps the grant', async
   })
 })
 
+test("complete: keeps the account the provider's answer names", async () => {
+  let { c, held } = setup(undefined, [[200, {
+    access_token: 'A1',
+    guild: { id: '81384788765712384', name: 'Yak Barn' },
+  }]], { ...PROVIDER, account: 'guild.id' })
+  let { attempt } = await c.begin()
+  await c.complete(
+    attempt,
+    `${REDIRECT}?code=C&state=${attempt.state}&guild_id=81384788765712384`,
+  )
+  assertEquals(held.get('k')?.account, '81384788765712384')
+})
+
 test('complete: a mismatched, refused, doubled or late return makes no request', async () => {
   let { c, seen } = setup()
   let { attempt } = await c.begin()

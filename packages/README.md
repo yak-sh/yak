@@ -501,6 +501,19 @@ grouped approximately by function, **not** by dependency order.
   signed webhook at `/<via>/webhook`. Phone names no provider. A provider that
   takes calls says when one rings, answers it with its audio streamed, and names
   its stream's frames.
+- **[@yaks/chat](./chat)** — Chat platforms as plugins: a message said in a room
+  as `chat_message{via, room, author, message_id, reply_to, at,
+  mentioned}`
+  with its words in `doc{body}`, the room as
+  `chat_room{via, id,
+  server, name}` and who said it as
+  `chat_account{via, id, name}`. A platform package gives itself as data
+  (`Platform`: its socket as pure steps, how a reply is posted, its message
+  limit), and `@yaks/chat/socket` holds any platform's socket over a wire its
+  host opens. Chat names no platform.
+- **[@yaks/discord](./discord)** — Discord for @yaks/chat: its Gateway's
+  handshake, heartbeat and resume as pure steps, messages read as said, and
+  replies posted with a bot's token.
 - **[@yaks/push](./push)** — Web Push: a browser's subscription as
   `push_subscription{person, endpoint, p256dh, auth}`, and `push()`, which
   encrypts a message for that browser (RFC 8291) and signs it with the site's

@@ -25,6 +25,8 @@ import { CallError } from '@yaks/tools/errors'
 import { INTEGRATION, integrationEid } from './identity.ts'
 import anthropic from './anthropic.json' with { type: 'json' }
 import gmail from './gmail.json' with { type: 'json' }
+import discord from './discord.json' with { type: 'json' }
+import discordBot from './discord-bot.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import googleSearchConsole from './google-search-console.json' with {
   type: 'json',
@@ -58,6 +60,14 @@ export type Integration = {
   token?: string
   /** OpenID endpoint naming the account when no id_token is returned. */
   userinfo?: string
+  /** the field of the token endpoint's answer that names the account, as a
+   * dotted path, where it is not an email address: Discord's `guild.id`,
+   * the server its bot was added to (@yaks/oauth `Provider.account`) */
+  account?: string
+  /** the chat platform its connections talk through (@yaks/chat), by name:
+   * connecting it is all it takes for the Operator and the space's apps to
+   * hear and answer there */
+  chat?: string
   /** what a connection asks for when nothing narrower was needed */
   scopes?: string[]
   /** extra authorize parameters, such as Google's `access_type: 'offline'` */
@@ -120,6 +130,8 @@ export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 // is.
 let SEEDS: Integration[] = [
   anthropic,
+  discord,
+  discordBot,
   gmail,
   googleCalendar,
   googleSearchConsole,

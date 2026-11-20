@@ -3085,6 +3085,18 @@
           ]
         }
       },
+      "packages/chat": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/doc@0.2.24",
+            "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/ram@0.2.24",
+            "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/vocab@0.2.32"
+          ]
+        }
+      },
       "packages/claude": {
         "packageJson": {
           "dependencies": [
@@ -3317,6 +3329,16 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12"
+          ]
+        }
+      },
+      "packages/discord": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/chat@0.2.0",
+            "npm:@yaks/host@0.2.29",
+            "npm:@yaks/testing@0.2.30"
           ]
         }
       },
