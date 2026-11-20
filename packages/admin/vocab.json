@@ -636,22 +636,15 @@
         "properties": {
           "result": {
             "type": "object",
-            "description": "the vocabulary document graph_schema answers for the app"
+            "description": "the app's vocab.json as deployed"
           }
         }
       },
-      "description": "The words an app’s store reads its rows in, declared or borrowed, as graph_schema answers them for that app. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes\n  yak admin schema jeff/recipes recipe --as admin",
+      "description": "The words an app declares, as its deployed vocab.json says them. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes --as admin",
       "input": {
         "where": {
           "type": "string",
           "description": "the app, as space/app"
-        },
-        "component": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "component names to read whole"
         },
         "as": {
           "type": "string",
@@ -664,8 +657,7 @@
       "readOnly": true,
       "openWorld": true,
       "positional": [
-        "where",
-        "component..."
+        "where"
       ]
     },
     "admin_apply": {

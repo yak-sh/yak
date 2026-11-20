@@ -706,11 +706,7 @@ export let runs = (
     admin_schema: verb(async (call) => {
       let a = argsOf(call)
       let at = await acting(a)
-      let doc = await storeSchema(
-        at.bearer,
-        String(a.where),
-        (a.component ?? []) as string[],
-      )
+      let doc = await storeSchema(at.bearer, String(a.where))
       return [valued(call, { result: doc })]
     }),
 

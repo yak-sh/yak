@@ -70,11 +70,13 @@ test('forwarding requires an explicit credential selector', async () => {
 })
 
 test('forwarding preserves built-in store calls without returning the bearer', async () => {
-  let response = await handler(
-    request('https://ann.yaks.app/notes/api/query?q=.doc'),
-  )
-  equal(response.status, 200)
-  equal(sent.at(-1)?.headers.get('authorization'), `Bearer ${bearer}`)
+  for (let door of ['query?q=.doc', 'vocab']) {
+    let response = await handler(
+      request(`https://ann.yaks.app/notes/api/${door}`),
+    )
+    equal(response.status, 200)
+    equal(sent.at(-1)?.headers.get('authorization'), `Bearer ${bearer}`)
+  }
 })
 
 test('admin caller replaces credential placeholders with a local transport', () => {

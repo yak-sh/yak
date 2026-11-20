@@ -344,27 +344,20 @@ test("a store's rows are answered as data, their eids whole wherever the answer 
   }
 })
 
-test("an app's vocabulary is read through graph_schema for that app, never probed for", async () => {
+test("an app's vocabulary is read from its store's vocab door, never probed for", async () => {
   let { host, kept, ask } = await box()
   try {
     await kept('own@example.com', 'own-bearer')
     let doc = { $defs: { recipe: { component: true, type: 'object' } } }
-    let sent: unknown[] = []
+    let urls: string[] = []
     await answering(
-      (_url, init) => {
-        sent.push(JSON.parse(String(init?.body)).params)
-        return Response.json({ result: { structuredContent: doc } })
-      },
+      (url) => (urls.push(String(url)), Response.json(doc)),
       async () => {
         let read = readable(host.vocab)(
           await ask('admin_schema', { where: 'jeff/recipes' }),
         )
         equal(structured(adminDoc.$defs!.admin_schema as Comp, read), {
           result: doc,
-        })
-        await ask('admin_schema', {
-          where: 'jeff/recipes',
-          component: ['recipe'],
         })
         await assertRejects(
           () => ask('admin_schema', { where: 'jeff' }),
@@ -373,13 +366,7 @@ test("an app's vocabulary is read through graph_schema for that app, never probe
         )
       },
     )
-    equal(sent, [
-      { name: 'graph_schema', arguments: { app: 'jeff/recipes' } },
-      {
-        name: 'graph_schema',
-        arguments: { app: 'jeff/recipes', component: ['recipe'] },
-      },
-    ])
+    equal(urls, ['https://jeff.yaks.app/recipes/api/vocab'])
   } finally {
     await host.close()
   }

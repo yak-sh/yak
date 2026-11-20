@@ -38,7 +38,7 @@ let allowed = (url: URL) => {
       .test(url.pathname)
   }
   return /^[a-z0-9][a-z0-9-]*\.yaks\.app$/.test(url.hostname) &&
-    /^\/(?:[a-z0-9][a-z0-9-]*\/)?api\/(?:query|apply|blob|pay\/artifacts(?:\/[a-f0-9]+)?)$/
+    /^\/(?:[a-z0-9][a-z0-9-]*\/)?api\/(?:query|apply|blob|vocab|pay\/artifacts(?:\/[a-f0-9]+)?)$/
       .test(url.pathname)
 }
 

@@ -902,8 +902,18 @@ export let storeQuery = async (
       q: filters.join('&'),
     })
   }
-  let url = `${storeUrl(at, '/query')}?${filters.join('&')}`
-  let r = await sent(url, session)
+  return storeRead(session, at, `/query?${filters.join('&')}`, 'the query')
+}
+
+// A GET of one of an app's store doors (`storeUrl`), its body as data: a
+// refusal is the caller's, anything else that fails is ours.
+let storeRead = async (
+  session: string,
+  at: string,
+  path: string,
+  what: string,
+) => {
+  let r = await sent(storeUrl(at, path), session)
   if (redirected(r.status)) {
     await r.body?.cancel()
     throw pointed(r)
@@ -913,30 +923,18 @@ export let storeQuery = async (
     let refusal = refusedResponse(r, body)
     throw new CallError(refusal.code, refusal.message)
   }
-  if (!r.ok) {
-    throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
-  }
+  if (!r.ok) throw new Error(`${at} refused ${what}: ${JSON.stringify(body)}`)
   return body
 }
 
-/** The vocabulary the app `space/app` names reads its rows in, as the
- * connector's `graph_schema` answers it: bare, every word it declares or
- * borrows; with `component`, those words whole. The read for what an app
- * declares, so nobody asks a store for a word it lacks to learn its words. */
-export let storeSchema = async (
-  session: string,
-  at: string,
-  component?: string[],
-): Promise<unknown> => {
+/** The words the app `space/app` declares, as its vocab.json deployed them:
+ * the read for what an app declares, so nobody asks its store for a word it
+ * lacks to learn its words from the refusal. */
+export let storeSchema = (session: string, at: string): Promise<unknown> => {
   if (where(at).length != 2) {
     throw new CallError('where', `name an app as space/app, not "${at}"`)
   }
-  let answer = await rpc(session)('tools/call', {
-    name: 'graph_schema',
-    arguments: { app: at, ...component?.length ? { component } : {} },
-  })
-  saidBy(answer)
-  return answer.structuredContent
+  return storeRead(session, at, '/vocab', 'its vocabulary')
 }
 
 /** Bundles applied to the app `space/app` names, as this account: created,
