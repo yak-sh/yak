@@ -618,4 +618,14 @@ test('a file of words opens as its words, never run as a page', async () => {
   assertEquals(read.headers.get('content-type'), 'text/plain; charset=utf-8')
   assertStringIncludes(read.headers.get('content-disposition')!, 'inline')
   assertEquals(await read.text(), '<b>Bring chairs.</b>')
+  let shown = (await operatorAnswer(
+    new Request(`${at}?attachment=${words}&file=0&shown`),
+    p.env,
+    space,
+    who,
+  ))!
+  assertEquals(shown.headers.get('content-type'), 'text/html; charset=utf-8')
+  let page = await shown.text()
+  assertStringIncludes(page, 'content="light dark"')
+  assertStringIncludes(page, '<pre>&lt;b&gt;Bring chairs.&lt;/b&gt;</pre>')
 })

@@ -91,12 +91,13 @@
   display: none;
 }
 /* A file of words shown as it is, under the line that names it: its own
-   page, which draws dark words on white whatever the page around it. */
+   page (`framed`), which takes this page's color scheme and shows through
+   to its background. */
 .Attachments_Frame {
   display: block;
   width: 100%;
   height: min(20rem, 60vh);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #fff;
+  background: transparent;
 }

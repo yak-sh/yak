@@ -74,7 +74,10 @@ test('the line opens to what the file holds: a picture as itself, words in a fra
     `?attachment=${message}&file=0`,
   )
   let frame = words.querySelector('iframe')!
-  assertEquals(frame.getAttribute('src'), `?attachment=${message}&file=1`)
+  assertEquals(
+    frame.getAttribute('src'),
+    `?attachment=${message}&file=1&shown`,
+  )
   assertEquals(frame.getAttribute('loading'), 'lazy')
   assertEquals(frame.getAttribute('sandbox'), '')
 })

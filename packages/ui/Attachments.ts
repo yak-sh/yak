@@ -128,17 +128,27 @@ export let specimens = (): Specimen[] => [
   ],
   [
     'Attachments, Frame',
-    h(
-      Attachments,
-      {},
-      h(Attachments.Frame, {
-        title: 'message.txt',
-        sandbox: '',
-        srcdoc: 'A file of words, shown as it is.',
-      }),
-    ),
+    h(Attachments.Frame, {
+      title: 'notes.txt',
+      sandbox: '',
+      srcdoc: wordsPage('Bring chairs.\nBring the big pot.'),
+    }),
   ],
 ]
+
+let escape = (text: string) =>
+  text.replace(
+    /[&<>]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!,
+  )
+
+/** A file of words as the page a `Frame` shows: the words as they are, in
+ * the colors of the page around it, whose color scheme the frame inherits
+ * and the page within takes as its own. */
+export let wordsPage = (text: string): string =>
+  `<!doctype html><meta charset="utf-8"><meta name="color-scheme" content="light dark"><style>html{background:transparent}body{margin:0;padding:.5rem .75rem}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:.875rem/1.5 ui-monospace,monospace}</style><pre>${
+    escape(text)
+  }</pre>`
 
 /** The same interface on a native host. */
 export let native = (c: Colors): Native => ({

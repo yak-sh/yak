@@ -1,5 +1,5 @@
 import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
-import { Time } from '@yaks/ui/parts'
+import { Time, wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -737,23 +737,35 @@ export let operatorAnswer = async (
     // A picture opens in place, as the conversation draws it, and words as
     // plain text; anything else is saved. None is ever read as a page of
     // yaks.app.
+    // Words drawn in place (`&shown`) come as a page of their own in the
+    // colors of the conversation around them (@yaks/ui `wordsPage`).
     let shows = PICTURES.includes(file.mime)
     let reads = textual(file.mime)
-    return new Response(await kept.arrayBuffer(), {
-      headers: {
-        'content-type': shows
-          ? file.mime
-          : reads
-          ? 'text/plain; charset=utf-8'
-          : 'application/octet-stream',
-        'content-disposition': `${
-          shows || reads ? 'inline' : 'attachment'
-        }; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-        'x-content-type-options': 'nosniff',
-        'content-security-policy': "sandbox; default-src 'none'",
-        'cache-control': 'private, no-store',
+    let framing = reads && q.has('shown')
+    return new Response(
+      framing
+        ? wordsPage(new TextDecoder().decode(await kept.arrayBuffer()))
+        : await kept.arrayBuffer(),
+      {
+        headers: {
+          'content-type': shows
+            ? file.mime
+            : framing
+            ? 'text/html; charset=utf-8'
+            : reads
+            ? 'text/plain; charset=utf-8'
+            : 'application/octet-stream',
+          'content-disposition': `${
+            shows || reads ? 'inline' : 'attachment'
+          }; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+          'x-content-type-options': 'nosniff',
+          'content-security-policy': framing
+            ? "sandbox; default-src 'none'; style-src 'unsafe-inline'"
+            : "sandbox; default-src 'none'",
+          'cache-control': 'private, no-store',
+        },
       },
-    })
+    )
   }
   if (q.has('texts') && req.method == 'POST') {
     let form = await req.formData()

@@ -57,6 +57,7 @@ import {
   type Said,
   type Sent,
   step,
+  textual,
   theirs,
   type Tone,
   trouble,
@@ -161,6 +162,17 @@ export let attached = (row: string, sent: Sent[], mod?: 'end') =>
     })),
     mod,
   )
+
+// A file a step made or read, opened in place from its message's
+// attachment (`?attachment=`), its words as a page of their own (`&shown`).
+let shown = (
+  doing: string,
+  { name, mime, message, file }: Omit<Read, 'mime'> & { mime?: string },
+) => {
+  let href = `?attachment=${message}&file=${file}`
+  let src = textual(mime) ? `${href}&shown` : undefined
+  return opened(doing, { name, mime, href, src })
+}
 
 /** The files a line came with, or a step brought back, and the message
  * they are attached beside, which their links name (operator-files.ts
@@ -1061,8 +1073,8 @@ let brief = (b: Bundle): Said => ({
  * heard back from, a line the platform wrote, a helper's brief, and a
  * person's words with the channel they came by and the files they sent. */
 let own: Kind<Heard>[] = [
-  // The files a step brought back (an image it made), open under it, and
-  // each file it read, named in a quiet line that opens to what it holds.
+  // Each file a step made or read, named in a quiet line that opens to
+  // what it holds: "Made export.pdf", "Read notes.txt".
   kind('.call', (b, heard) => {
     let step = draw(conversation, b, heard)!
     let kept = heard.result && heard.files?.[heard.result.entity.eid]
@@ -1073,14 +1085,10 @@ let own: Kind<Heard>[] = [
           Fragment,
           null,
           step.node,
-          attached(kept.message, kept.files),
-          ...(kept.read ?? []).map(({ name, mime, message, file }) =>
-            opened('Read', {
-              name,
-              mime,
-              href: `?attachment=${message}&file=${file}`,
-            })
+          ...kept.files.map(({ name, mime }, file) =>
+            shown('Made', { name, mime, message: kept.message, file })
           ),
+          ...(kept.read ?? []).map((read) => shown('Read', read)),
         ),
       }
       : step

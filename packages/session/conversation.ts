@@ -309,12 +309,13 @@ export let Filed = (
 }
 
 /** A file opened where it is named, showing what it holds: a picture as
- * itself, words in a frame of their own that loads once it is seen, and any
+ * itself, words in a frame of their own that loads once it is seen (from its
+ * `src`, a page of them, else its `href`), and any
  * other file as itself, which opens it. */
 export let Shown = (file: Filed): VNode =>
   textual(file.mime) && file.href
     ? h(Attachments.Frame, {
-      src: file.href,
+      src: file.src ?? file.href,
       title: file.name,
       loading: 'lazy',
       sandbox: '',

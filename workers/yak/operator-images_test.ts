@@ -176,8 +176,15 @@ test('the picture a step made is drawn under it, opening the original', () => {
       files: { [result]: { message: call, files: [file] } },
     },
   ).map((r) => r.html).join('')
-  let img = parseHTML(`<div>${html}</div>`).document.querySelector(
-    '.Attachments_Picture img',
+  let { document } = parseHTML(`<div>${html}</div>`)
+  let line = [...document.querySelectorAll('.More-quiet')].at(-1)!
+  assertEquals(
+    line.querySelector(':scope > summary')?.textContent,
+    'Made image.png',
   )
-  assertEquals(img?.getAttribute('src'), `?attachment=${call}&file=0`)
+  assertEquals(line.hasAttribute('open'), false)
+  assertEquals(
+    line.querySelector('.Attachments_Picture img')?.getAttribute('src'),
+    `?attachment=${call}&file=0`,
+  )
 })
