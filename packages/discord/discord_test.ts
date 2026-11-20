@@ -279,3 +279,43 @@ test("rooms lists a server's text channels in Discord's order, as the bot", asyn
     'Bot T0K',
   )
 })
+
+test("recent reads a room back oldest first, bots' own included, none addressed", async () => {
+  let message = (id: string, author: Record<string, unknown>) => ({
+    id,
+    channel_id: 'c1',
+    author,
+    content: `<@me> hi from ${id}`,
+    timestamp: `2026-11-20T05:4${id}:00.000Z`,
+    mentions: [{ id: 'me' }],
+  })
+  let { f, seen } = rest(200, [
+    message('2', { id: 'me', username: 'kit', bot: true }),
+    message('1', { id: 'u1', username: 'ann', global_name: 'Ann' }),
+  ])
+  let read = await discord.recent!('T0K', 'c1', { before: '9', limit: 500 }, f)
+  assertEquals(read.map((s) => [s.id, s.author.name, s.addressed]), [
+    ['1', 'Ann', undefined],
+    ['2', 'kit', undefined],
+  ])
+  assertEquals(read[0].text, '<@me> hi from 1')
+  assertEquals(
+    seen[0].url,
+    'https://discord.com/api/v10/channels/c1/messages?before=9&limit=100',
+  )
+  assertEquals(
+    (seen[0].init.headers as Record<string, string>).authorization,
+    'Bot T0K',
+  )
+  await assertRejects(
+    () =>
+      discord.recent!(
+        'T',
+        'c1',
+        { before: '9', limit: 5 },
+        rest(403, { message: 'Missing Access' }).f,
+      ),
+    Error,
+    'Discord refused to read room c1: 403 Missing Access',
+  )
+})

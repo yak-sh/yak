@@ -50,6 +50,7 @@ type Platform = {
     fetch?,
   ) => Promise<string | undefined>
   rooms?: (credential: string, server: string, fetch?) => Promise<Room[]>
+  recent?: (credential, room, page: Page, fetch?) => Promise<Said[]>
   working?: { every: number; show: (credential, room, fetch?) => Promise<void> }
 }
 ```
@@ -69,9 +70,17 @@ direct room. `confined(chatter, {serves, server})` is a chatter that posts only
 into rooms of the servers its connection serves and refuses anything else before
 the chatter sees it, so a host can lend a bot to whoever writes rows without
 holding it (an app) and still keep its posts in those servers.
+`within(at,
+serves, server)` is that refusal alone, which a host reads a room's
+`recent` messages by too.
 
 `rooms` lists the rooms of a server people write in (`{id, name}`), where the
 platform can, so a space chooses the one it hears in full (`chat_hears`).
+
+`recent` reads back a room's messages said before one (`{before, limit}`),
+oldest first, where the platform keeps them: none `addressed`, and a bot's own
+among them. `since(said, last)` is those after the bot's last answer there, and
+`recounted(said, mine)` says them a line each, the bot's own as said by "you".
 
 `working` is how a bot shows a room it is working on an answer, where the
 platform can (Discord's typing indicator): one show lasts `every` milliseconds.

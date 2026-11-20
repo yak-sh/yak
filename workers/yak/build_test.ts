@@ -23,8 +23,13 @@ import { draftEid } from '@yaks/draft'
 import { chatPath } from '@yaks/platform/routes'
 import { trashSpace } from './erase.ts'
 import { discord } from '@yaks/discord'
+import { roomEid } from '@yaks/chat'
 import { PASS } from '@yaks/session/turn'
 import { arrived } from './chat.ts'
+import { registration } from '@yaks/connections'
+import { KERNEL, meta } from './meta.ts'
+import { d1 } from '../../packages/d1/testing.ts'
+import type { D1Like } from '@yaks/d1'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -43,8 +48,9 @@ let dirOf = (env: Env) =>
 
 // A space with Ada in it, and her Operator's object, which the kernel reaches
 // as the space's BUILDER.
-let seeded = async (script: Turn[] = []) => {
+let seeded = async (script: Turn[] = [], vars: Partial<Env> = {}) => {
   let { env, states } = platform(SECRET, {
+    ...vars,
     AI: ai(script) as Env['AI'],
     MODEL_FETCH: () =>
       Promise.resolve(
@@ -587,6 +593,114 @@ test('a Discord mention from a guest is heard, and answered in its room', async 
   assertEquals(again.status, 200)
   await again.body?.cancel()
   assertEquals(model.asked.length, 1)
+})
+
+// Named in a room it does not hear in full, the Operator is given what was
+// said there since its last answer, read back by the bot that heard it and
+// kept as the room's messages; and it reads further back with chat_read.
+test('named in a room, the Operator reads what was said there since its last answer', async () => {
+  let o = await seeded([
+    { calls: [{ name: 'chat_read', arguments: { before: '9', limit: 2 } }] },
+    { text: 'Bo is bringing pie.' },
+  ], {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+  })
+  let connection = crypto.randomUUID()
+  let [SERVER, BARN] = ['81384788765712384', '1310777']
+  await meta(o.env).apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    {
+      entity: { eid: connection },
+      connection: {
+        integration: 'discord',
+        owner: o.space.eid,
+        account: SERVER,
+        status: 'connected',
+      },
+    },
+  ], KERNEL)
+  let store = await operatorStore(o.ctx.storage)
+  // Its answer there before, posted as message 8.
+  await store.g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    chat_message: { via: 'discord', connection, message_id: '8' },
+    doc: { body: 'Hello all.' },
+    deliver: { to: roomEid('discord', BARN), tried: '2026-11-20T05:38:00Z' },
+    delivered: { at: '2026-11-20T05:38:00Z' },
+  }], { trusted: true })
+  let message = (id: string, name: string, content: string) => ({
+    id,
+    channel_id: BARN,
+    author: { id: name, username: name },
+    content,
+    timestamp: `2026-11-20T05:3${id}:00.000Z`,
+  })
+  let room = [
+    message('9', 'Bo', "I'll bring pie"),
+    message('8', 'Kit', 'Hello all.'),
+    message('7', 'Ann', 'who brings what?'),
+  ]
+  let asked: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    let url = new URL(String(input instanceof Request ? input.url : input))
+    if (url.host != 'discord.com') return was(input, init)
+    asked.push(url.pathname.split('/').at(-1) + url.search)
+    let before = url.searchParams.get('before')
+    return Promise.resolve(Response.json(
+      url.pathname.endsWith('/messages') && before
+        ? room.filter((m) => Number(m.id) < Number(before))
+          .slice(0, Number(url.searchParams.get('limit')))
+        : { id: 'r1' },
+    ))
+  }
+  o.bound()
+  try {
+    await arrived(o.env, discord, {
+      id: '10',
+      room: BARN,
+      server: SERVER,
+      author: { id: 'Ann', name: 'Ann' },
+      text: 'who is bringing pie?',
+      at: '2026-11-20T05:40:00.000Z',
+      addressed: 'mention',
+    })
+    while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  } finally {
+    globalThis.fetch = was
+  }
+  let model = o.env.AI as unknown as ReturnType<typeof ai>
+  let [first, second] = model.asked.map((a) => JSON.stringify(a))
+  assertStringIncludes(
+    first,
+    "since your last answer there, oldest first (chat_read before 9 reads further back):\\n[2026-11-20 05:39] Bo: I'll bring pie\\n\\n",
+  )
+  assert(!first.includes('Hello all.'))
+  assertStringIncludes(
+    first,
+    'On Discord, naming you, from Ann: who is bringing pie?',
+  )
+  assertStringIncludes(
+    second,
+    '[2026-11-20 05:37] Ann: who brings what?\\n[2026-11-20 05:38] you: Hello all.',
+  )
+  // Read back before the message said to it, then before 9; then answered.
+  assertEquals(asked.filter((a) => a.startsWith('messages')), [
+    'messages?before=10&limit=30',
+    'messages?before=9&limit=2',
+    'messages',
+  ])
+  let kept = await store.g.read(
+    line`.chat_message.room=${
+      roomEid('discord', BARN)
+    }&.fields=chat_message.message_id`,
+  )
+  assertEquals(
+    kept.map((b) => (b.chat_message as { message_id: string }).message_id)
+      .sort(),
+    ['10', '7', '9'],
+  )
 })
 
 // The room a space chose for its Operator to hear in full (chat.ts `choose`,

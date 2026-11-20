@@ -4,7 +4,15 @@
 // and `send` posts a reply with the REST API. A bot's token is all either
 // needs: yaks.app's own bot's, or the one a space brings.
 
-import type { Addressed, Platform, Room, Said, Socket, Step } from '@yaks/chat'
+import type {
+  Addressed,
+  Page,
+  Platform,
+  Room,
+  Said,
+  Socket,
+  Step,
+} from '@yaks/chat'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
@@ -75,22 +83,21 @@ export let said = (m: Message, me?: string): Said | undefined => {
   let text = me
     ? m.content.replaceAll(`<@${me}>`, '').replaceAll(`<@!${me}>`, '')
     : m.content
-  return {
-    id: m.id,
-    room: m.channel_id,
-    ...m.guild_id ? { server: m.guild_id } : {},
-    author: {
-      id: m.author.id,
-      name: m.author.global_name || m.author.username,
-    },
-    text: text.trim(),
-    at: m.timestamp,
-    ...addressed ? { addressed } : {},
-    ...m.message_reference?.message_id
-      ? { reply_to: m.message_reference.message_id }
-      : {},
-  }
+  return { ...read({ ...m, content: text }), ...addressed ? { addressed } : {} }
 }
+
+// A message as it was said, whoever said it.
+let read = (m: Message): Said => ({
+  id: m.id,
+  room: m.channel_id,
+  ...m.guild_id ? { server: m.guild_id } : {},
+  author: { id: m.author.id, name: m.author.global_name || m.author.username },
+  text: m.content.trim(),
+  at: m.timestamp,
+  ...m.message_reference?.message_id
+    ? { reply_to: m.message_reference.message_id }
+    : {},
+})
 
 /** Close codes after which the same token must not connect again
  * (opcodes-and-status-codes, Gateway Close Event Codes). */
@@ -317,6 +324,32 @@ export let server = async (
   return guild_id
 }
 
+/** The `page.limit` messages of `room` said before `page.before`, oldest
+ * first, bots' included, as the bot with `token` reads them
+ * (GET /channels/{id}/messages, at most 100). A room the bot cannot see is
+ * refused with what Discord said; a 429 or a 5xx is {@link Unsent}. */
+export let recent = async (
+  token: string,
+  room: string,
+  page: Page,
+  fetcher: typeof fetch = fetch,
+): Promise<Said[]> => {
+  let q = new URLSearchParams({
+    before: page.before,
+    limit: String(Math.min(100, Math.max(1, page.limit))),
+  })
+  let messages = await answer<Message[]>(
+    await fetcher(`${API}/channels/${room}/messages?${q}`, {
+      headers: bot(token),
+    }),
+    {
+      unsent: `Discord did not read room ${room}`,
+      refused: `Discord refused to read room ${room}`,
+    },
+  )
+  return messages.map(read).reverse()
+}
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -327,5 +360,6 @@ export let discord: Platform = {
   send,
   server,
   rooms,
+  recent,
   working: { every: 8000, show: typing },
 }

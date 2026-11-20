@@ -33,6 +33,10 @@ reply with the REST API. `discord` is the `Platform` both make.
 - **A server's rooms** are its text and announcement channels in the order
   Discord shows them (`rooms(token, server)`, GET `/guilds/{id}/channels`),
   which a space chooses the one it hears in full from.
+- **A room's recent messages** are read back newest first and given oldest first
+  (`recent(token, room, {before, limit})`, GET `/channels/{id}/messages`, at
+  most 100), bots' own included and none `addressed`. They carry no server:
+  Discord's answer leaves it out.
 
 Messages in rooms the bot was not named in carry their words only with the
 Message Content intent, which Discord reviews for a bot in over 100 servers.

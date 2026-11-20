@@ -136,6 +136,7 @@ import { strangerWrote } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
+import { chatRead, roomsOf } from './operator-rooms.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
@@ -1924,7 +1925,7 @@ export let operating = (
     let replied = g.read(
       q`.operator_request.person=${ctx.person}&.operator_request.channel=${REPLIES}&.limit=1&.fields=entity.eid`,
     )
-    let [roster, google, platform, [reply], [text]] = await Promise.all([
+    let [roster, google, platform, [reply], [text], rooms] = await Promise.all([
       operatorRoster(ctx, store, {
         space: space.eid,
         tasked: !!task,
@@ -1944,7 +1945,10 @@ export let operating = (
           session,
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
       ),
+      roomsOf(store, session),
     ])
+    // Addressed in a chat room, it reads back what was said there.
+    let chat = rooms.length ? [chatRead(env, store)] : []
     if (heard) {
       let thread = member && channel == 'escalated'
         ? await threadOf(store, newest?.request)
@@ -1974,6 +1978,7 @@ export let operating = (
           ? [escalationAnswer(store, ctx, space)]
           : [],
         ...thread ? [onThread(thread)] : [],
+        ...chat,
         ...holding(
           options.tools?.(ctx, files) ?? [],
           (t) => !!t.readOnly,
@@ -2021,6 +2026,7 @@ export let operating = (
         ]
         : [],
       ...reply ? [escalate(store, space)] : [],
+      ...chat,
       ...platform ? adminTools(env, whole) : [],
       ...(options.tools?.(ctx, files) ?? []).filter((t) =>
         member || t.readOnly

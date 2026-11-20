@@ -16,6 +16,8 @@
 // lets anyone do. In the room the space chose in its
 // Operator's settings (`chat_hears`), everything said is heard, in the
 // room's one conversation, and the Operator answers only what is for it.
+// Named in any other room, it is given what was said there since its last
+// answer, and reads further back (`recent`, operator-rooms.ts).
 //
 // Every message heard in a server is also kept in each app of the space
 // that `uses` the connection, as @yaks/chat's rows, for the app's own rules
@@ -29,12 +31,14 @@ import { line } from '@yaks/query'
 import {
   confined,
   kept,
+  type Page,
   type Platform,
   platforms,
   type Room,
   roomEid,
   type Said,
   type Seated,
+  within,
 } from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
 import { discord } from '@yaks/discord'
@@ -151,6 +155,33 @@ export let appChatters = (
       }),
     ]),
   )
+}
+
+/**
+ * The messages of `at.room` said before `page.before`, oldest first, read by
+ * the bot that speaks for `at.connection` ({@link Platform.recent}), each
+ * naming the room's server, and only in a server that connection serves
+ * ({@link serves}, @yaks/chat `within`): what the Operator reads of a room
+ * it was addressed in. `at.server` is where the room is as its bot heard it;
+ * none asks the platform. A platform that keeps no messages reads none.
+ */
+export let recent = async (
+  env: Env,
+  via: string,
+  at: { connection: string; room: string; server?: string },
+  page: Page,
+) => {
+  let p = PLATFORMS.get(via)
+  if (!p?.recent) return []
+  let [c] = await read(env, line`.entity.eid=${at.connection}&.${CONNECTION}&*`)
+  let held = comp(c, CONNECTION).status == 'connected' ? serves(c) : []
+  let token = held.length ? await speaker(env, p, at.connection) : ''
+  let server = await within(
+    at,
+    held,
+    async () => at.server ?? await p.server?.(token, at.room),
+  )
+  return (await p.recent(token, at.room, page)).map((s) => ({ ...s, server }))
 }
 
 let read = async (env: Env, q: string) =>

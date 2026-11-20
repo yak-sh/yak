@@ -20,9 +20,12 @@ import {
   kept,
   messageEid,
   pieces,
+  recounted,
   roomEid,
   type Said,
   showing,
+  since,
+  within,
 } from './mod.ts'
 
 let said: Said = {
@@ -77,6 +80,44 @@ test('confined: a post goes only into a room of the servers its connection serve
   await assertRejects(() => post('theirs', 'general'), Error, 'no server')
   assertEquals(await post('own', 'lobby'), { id: 'r' })
   assertEquals(posted, ['general', 'lobby'])
+})
+
+test('within: a room is read only in a server its connection serves', async () => {
+  let at = { connection: 'c1', room: 'general' }
+  let asked = 0
+  let where = (server?: string) => () => (asked++, Promise.resolve(server))
+  assertEquals(await within(at, ['barn', 'mill'], where('mill')), 'mill')
+  await assertRejects(
+    () => within(at, ['barn'], where('mill')),
+    Error,
+    'not in its',
+  )
+  await assertRejects(() => within(at, ['barn'], where()), Error, 'not in its')
+  await assertRejects(() => within(at, [], where('barn')), Error, 'no server')
+  assertEquals(asked, 3)
+})
+
+test("a room read back: what came after the bot's last answer, a line each", () => {
+  let line = (id: string, name: string, text: string): Said => ({
+    ...said,
+    id,
+    author: { id: name, name },
+    text,
+    at: `2026-11-20T05:4${id}:09.000Z`,
+  })
+  let room = [
+    line('1', 'Ann', 'who brings pie?'),
+    line('2', 'Kit', 'Bo does.'),
+    line('3', 'Bo', 'and cider'),
+  ]
+  assertEquals(since(room, '2').map((s) => s.id), ['3'])
+  assertEquals(since(room, 'gone').length, 3)
+  assertEquals(since(room).length, 3)
+  assertEquals(
+    recounted(room, new Set(['2'])),
+    '[2026-11-20 05:41] Ann: who brings pie?\n' +
+      '[2026-11-20 05:42] you: Bo does.\n[2026-11-20 05:43] Bo: and cider',
+  )
 })
 
 test('framing says the platform, how it was said to the bot, and who wrote it', () => {

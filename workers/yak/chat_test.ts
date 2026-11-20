@@ -17,7 +17,14 @@ import { platform } from './directory-rows-probe.ts'
 import { platform as hosted } from './testing.ts'
 import { type App, appStore, directory, over } from './directory.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import { arrived, choose, offers, PLATFORMS, type Server } from './chat.ts'
+import {
+  arrived,
+  choose,
+  offers,
+  PLATFORMS,
+  recent,
+  type Server,
+} from './chat.ts'
 import { chatCard } from './operator-page.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
@@ -117,6 +124,15 @@ let discordApi = (asked: string[]): typeof fetch => (input, init) => {
   if (path == url) return Promise.reject(new Error(`no network: ${url}`))
   asked.push(`${init?.method ?? 'GET'} ${path}`)
   let room = path.split('/')[1]
+  if (path.includes('/messages?')) {
+    return Promise.resolve(Response.json([{
+      id: 'm0',
+      channel_id: room,
+      author: { id: 'bo', username: 'Bo' },
+      content: 'pie at nine',
+      timestamp: '2026-11-20T05:39:00.000Z',
+    }]))
+  }
   return Promise.resolve(Response.json(
     path.endsWith('/messages')
       ? { id: 'p1' }
@@ -230,6 +246,50 @@ test('an app that uses the connection hears its server, and answers only into it
       'GET channels/general',
       'GET channels/lobby',
       'POST channels/general/messages',
+    ])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+// What the Operator reads back of a room (chat.ts `recent`): by the bot that
+// speaks for the connection, and only in a server that connection serves.
+test("a room is read back by its connection's bot, only in the servers it serves", async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let ours = crypto.randomUUID(), gone = crypto.randomUUID()
+  let connection = (eid: string, status: string) => ({
+    entity: { eid },
+    connection: {
+      integration: 'discord',
+      owner: crypto.randomUUID(),
+      account: 'barn',
+      status,
+    },
+  })
+  await meta(p.env).apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    connection(ours, 'connected'),
+    connection(gone, 'broken'),
+  ], KERNEL)
+  let asked: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = discordApi(asked)
+  try {
+    let page = { before: 'm1', limit: 30 }
+    let read = (connection: string, room: string, server?: string) =>
+      recent(p.env, 'discord', { connection, room, server }, page)
+    assertEquals(
+      (await read(ours, 'general', 'barn')).map((s) => [s.id, s.server]),
+      [['m0', 'barn']],
+    )
+    await assertRejects(() => read(ours, 'lobby'), Error, 'not in its')
+    await assertRejects(() => read(gone, 'general', 'barn'), Error, 'no server')
+    assertEquals(asked, [
+      'GET channels/general/messages?before=m1&limit=30',
+      'GET channels/lobby',
     ])
   } finally {
     globalThis.fetch = was

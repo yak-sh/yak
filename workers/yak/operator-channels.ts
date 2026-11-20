@@ -44,6 +44,7 @@ import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
+import { leading } from './operator-rooms.ts'
 import {
   framing,
   kept,
@@ -335,6 +336,7 @@ export let hear = async (
   request: Request,
   text: string,
   item: Bundle,
+  lead = '',
 ): Promise<{ fresh: boolean; session?: string }> => {
   let { g } = operator.store
   let id = item.entity.eid
@@ -349,8 +351,8 @@ export let hear = async (
   let { channel } = request
   try {
     let [about] = request.about ? await g.get([request.about]) : []
-    let framing = BY[channel]?.(request, id, about) ??
-      chatFraming(request, item)
+    let framing = lead + (BY[channel]?.(request, id, about) ??
+      chatFraming(request, item))
     let open = await operator.listening(
       { person: request.person, administrative: request.administrative },
       space,
@@ -422,7 +424,9 @@ let chatFraming = (request: Request, item: Bundle) => {
  * space hears in full, the guest who stands for the room, the words kept as
  * their `writer`'s. Its room and writer are kept, then the message itself is
  * taken in ({@link hear}), naming the connection whose bot heard it, which
- * answers it in the same room. While its turn works on the answer, the room
+ * answers it in the same room, after what was said in the room since its
+ * last answer there, where the room is not one it hears in full
+ * (operator-rooms.ts `leading`). While its turn works on the answer, the room
  * is shown so, where the platform's chatter can (@yaks/chat `showing`).
  */
 export let chatHeard = async (
@@ -437,7 +441,12 @@ export let chatHeard = async (
     throw refuse('arguments', `yaks.app hears no chat platform ${via}`)
   }
   let [room, author, message] = kept(via, said, connection)
-  await operator.store.g.apply([room, author], { trusted: true })
+  let { g } = operator.store
+  let [had] = await g.get([inputOf(message.entity.eid)], ['entry'])
+  await g.apply([room, author], { trusted: true })
+  let lead = !had?.entry && !writer && said.server && said.addressed
+    ? await leading(env, operator.store, { via, connection }, said)
+    : ''
   let { fresh, session } = await hear(
     operator,
     env,
@@ -452,10 +461,10 @@ export let chatHeard = async (
     },
     said.text,
     message,
+    lead,
   )
   let working = operator.store.chatters?.[via]?.working
   if (fresh && session && working) {
-    let { g } = operator.store
     void showing(
       {
         every: working.every,

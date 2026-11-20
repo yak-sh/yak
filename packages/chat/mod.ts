@@ -41,6 +41,10 @@ export type Posted = { id?: string }
 /** A room of a server, as a platform lists them: its id and its name. */
 export type Room = { id: string; name: string }
 
+/** Which of a room's messages to read back: the `limit` newest said before
+ * the message `before`. */
+export type Page = { before: string; limit: number }
+
 /**
  * A long-lived socket a platform sends its messages over (Discord's Gateway),
  * as pure steps a generic holder runs (./socket.ts): where to connect, and
@@ -113,6 +117,16 @@ export type Platform = {
     server: string,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Room[]>
+  /** the messages of `room` said before `page.before`, oldest first, as the
+   * bot with `credential` reads them, where the platform keeps them: none is
+   * `addressed`, since none was said to the bot as it is read now, and a
+   * bot's own are read too */
+  recent?: (
+    credential: string,
+    room: string,
+    page: Page,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<Said[]>
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<
@@ -215,17 +229,33 @@ export let confined = (
 ): Chatter => ({
   ...chatter.waiting ? { waiting: chatter.waiting } : {},
   post: async (chat) => {
-    let serves = await where.serves(chat.connection)
-    if (!serves.length) {
-      throw new Error(`connection ${chat.connection} posts into no server here`)
-    }
-    let server = await where.server(chat)
-    if (!server || !serves.includes(server)) {
-      throw new Error(`room ${chat.room} is not in its connection's servers`)
-    }
+    await within(
+      chat,
+      await where.serves(chat.connection),
+      () => where.server(chat),
+    )
     return chatter.post(chat)
   },
 })
+
+/** The server a room is in, refused when it is outside the servers its
+ * connection `serves`, or in none: what a {@link confined} chatter posts by,
+ * and what a host reads a room's {@link Platform.recent} messages by. Where
+ * the room is (`server()`) is asked only of a connection serving any. */
+export let within = async (
+  at: Pick<Chat, 'connection' | 'room'>,
+  serves: string[],
+  server: () => Promise<string | undefined>,
+): Promise<string> => {
+  if (!serves.length) {
+    throw new Error(`connection ${at.connection} posts into no server here`)
+  }
+  let where = await server()
+  if (!where || !serves.includes(where)) {
+    throw new Error(`room ${at.room} is not in its connection's servers`)
+  }
+  return where
+}
 
 /** How a message heard on a platform is said before its words to whoever
  * answers it: where it came from, who wrote it, and how it was said to the
@@ -241,6 +271,29 @@ let HOW: Record<Addressed | 'heard', string> = {
   reply: 'replying to you, from',
   heard: 'in a room you hear but were not addressed in, from',
 }
+
+/**
+ * A room's messages read back ({@link Platform.recent}), one line each,
+ * oldest first: when and who said it, the bot's own (`mine`, by the
+ * platform's ids) as said by `you`.
+ */
+export let recounted = (
+  said: Said[],
+  mine: Set<string> = new Set(),
+): string =>
+  said.map((s) =>
+    `[${s.at.slice(0, 16).replace('T', ' ')}] ${
+      mine.has(s.id) ? 'you' : s.author.name
+    }: ${s.text}`
+  ).join('\n')
+
+/**
+ * The messages of a room read back that came after the bot's last answer
+ * there (`last`, the platform's id for it), or all of them when it is not
+ * among them.
+ */
+export let since = (said: Said[], last?: string): Said[] =>
+  said.slice(said.findIndex((s) => s.id == last) + 1)
 
 /**
  * An answer cut to fit a platform's `limit`: at the last paragraph break
