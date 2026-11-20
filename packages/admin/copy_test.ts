@@ -19,6 +19,8 @@ for (let body of ['a', 'b', 'c']) {
   })
 }
 let empty = open(':memory:')
+// A copy into a fresh file.
+let into = () => ({ ...open(':memory:'), close: () => {} })
 let asking = (sql: typeof source) =>
 (
   _: string,
@@ -27,8 +29,8 @@ let asking = (sql: typeof source) =>
   let made = plan(sql)
   if (!asked.table) return Promise.resolve({ plan: made })
   let t = made.tables.find((t) => t.name == asked.table)!
-  let { rows, last } = page(sql, t, asked.after ?? 0, raised(), 2)
-  return Promise.resolve({ rows, cols: t.cols, last })
+  let { rows, last, ended } = page(sql, t, asked.after ?? 0, raised(), 2)
+  return Promise.resolve({ rows, cols: t.cols, last, ended })
 }
 
 test('a space’s store is copied table by table, and one with none says so', async () => {
@@ -49,6 +51,37 @@ test('a space’s store is copied table by table, and one with none says so', as
     made.query(select({ cols: [col('body')], from: table('note') })),
     [{ body: 'a' }, { body: 'b' }, { body: 'c' }],
   )
+})
+
+test('a space’s tables are read at once, and nothing past a table’s last page', async () => {
+  let sql = open(':memory:')
+  for (let name of ['note', 'tag']) {
+    sql.query({ t: 'create table', name, cols: [{ name: 'body' }] })
+  }
+  for (
+    let [into, body] of [['note', 'a'], ['note', 'b'], ['note', 'c'], [
+      'tag',
+      'x',
+    ]]
+  ) {
+    sql.query({ t: 'insert', into, cols: ['body'], rows: [[val(body)]] })
+  }
+  let read = asking(sql), asked: string[] = []
+  let both = Promise.withResolvers<void>()
+  let lines: string[] = []
+  await copy({
+    spaces: [{ eid: 'ada', slug: 'ada' }],
+    page: async (space, at) => {
+      if (at.table && asked.push(`${at.table}>${at.after}`) == 2) both.resolve()
+      if (at.table) await both.promise
+      return read(space, at)
+    },
+    open: into,
+    out: (line) => lines.push(line),
+    stopping: new AbortController().signal,
+  })
+  equal(asked, ['note>0', 'tag>0', 'note>2'])
+  equal(lines, ['ada  2 tables, 4 rows'])
 })
 
 test('a copy stops at the next page once its process stops', async () => {
@@ -126,9 +159,6 @@ test('a store that migrates while it is copied is copied again under its new col
     [{ at: '1', for: null }],
   )
 })
-
-// A copy into a fresh file, said as its lines once every space is read.
-let into = () => ({ ...open(':memory:'), close: () => {} })
 
 test('spaces are copied at once, and a space copied already is kept', async () => {
   let started: string[] = [], both = Promise.withResolvers<void>()

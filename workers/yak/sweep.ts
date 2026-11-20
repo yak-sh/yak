@@ -237,12 +237,18 @@ let copying = async (
   // only its first page: a sweep takes a page per 2,000 rows, and a record a
   // page wrote tens of thousands of entities to the directory in an hour.
   if (plan) await audit(env, who, { operation: 'operator_copy', space })
-  return await builderOf(env, space)(() =>
-    new Request(`https://builder${COPY}`, {
-      method: 'POST',
-      headers: { 'x-yak-kernel': '1', 'content-type': 'application/json' },
-      body,
-    })
+  // A page is a read: it is taken whole inside the retry that asked it, so a
+  // body cut off on its way from the object is asked again, and the answer
+  // leaves with its length, never as a stream that can end early behind a 200
+  // (bug 756bd62283).
+  return await builderOf(env, space)(
+    () =>
+      new Request(`https://builder${COPY}`, {
+        method: 'POST',
+        headers: { 'x-yak-kernel': '1', 'content-type': 'application/json' },
+        body,
+      }),
+    { replayable: true },
   )
 }
 

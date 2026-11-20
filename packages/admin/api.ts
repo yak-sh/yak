@@ -114,18 +114,36 @@ export let timing = {
 // arrived, and is thrown, unless the call only reads (`rereads`): a copy's
 // page, asked again on a pooled connection that broke as it was sent, is the
 // same page. A read the platform failed (a 5xx, as when an object it asked
-// was overloaded) is asked again the same way, and the last answer stands.
+// was overloaded), or whose JSON arrived cut short behind its status, is asked
+// again the same way, and the last answer stands.
 export let reconnect = { pauses: [200, 1000, 3000], sleep }
 
 let connecting = (err: unknown) =>
   /\(Connect\)/.test(String((err as Error)?.message ?? err))
 
+// A read's answer held whole, or null when its JSON did not arrive whole.
+let whole = async (r: Response): Promise<Response | null> => {
+  if (!/json/.test(r.headers.get('content-type') ?? '')) return r
+  let text = await r.text()
+  try {
+    JSON.parse(text)
+  } catch {
+    return null
+  }
+  let held = new Response(text, r)
+  Object.defineProperty(held, 'url', { value: r.url, configurable: true })
+  return held
+}
+
 let again = async (go: () => Promise<Response>, rereads = false) => {
   for (let pause of reconnect.pauses) {
     try {
       let r = await go()
-      if (!rereads || r.status < 500) return r
-      await r.body?.cancel()
+      if (!rereads) return r
+      if (r.status < 500) {
+        let held = await whole(r)
+        if (held) return held
+      } else await r.body?.cancel()
     } catch (err) {
       if (!connecting(err) && !(rereads && err instanceof TypeError)) throw err
     }

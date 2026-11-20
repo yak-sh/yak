@@ -3,7 +3,7 @@
 
 import * as fs from '@yaks/file/io'
 import { checkout } from './checkout.ts'
-import { basename, dirname } from 'node:path'
+import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
@@ -84,6 +84,19 @@ let TUNNEL_TOKEN = 'TUNNEL_TOKEN'
 
 let word = (a: Args, name: string): string | undefined =>
   typeof a[name] == 'string' ? a[name] as string : undefined
+
+// A path the caller named, read against the caller's own directory: this
+// process serves from its own, which is nobody's checkout.
+let within = (cwd: string | undefined, path: string) => {
+  if (isAbsolute(path)) return path
+  if (!cwd) {
+    throw new CallError(
+      'to',
+      `${path} is relative and no cwd was given: name an absolute to, or the cwd it is read against`,
+    )
+  }
+  return resolve(cwd, path)
+}
 
 let out = (line: string) => console.log(line)
 // A sweep's lines, printed as they come and kept for its answer, which is all a
@@ -716,8 +729,10 @@ export let runs = (
       let at = await acting(a)
       let where = word(a, 'space')
       let apps = a.apps === true
-      let to = word(a, 'to') ??
-        (apps ? '.scratch/stores' : '.scratch/operators')
+      let to = within(
+        word(a, 'cwd'),
+        word(a, 'to') ?? (apps ? '.scratch/stores' : '.scratch/operators'),
+      )
       // An app's store is named for where it stands (`space/app`, a sample's
       // or a visitor's after it), as a file name.
       let spaces = apps

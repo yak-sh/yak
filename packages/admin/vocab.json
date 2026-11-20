@@ -312,7 +312,12 @@
         },
         "to": {
           "type": "string",
-          "description": "the directory the copies are written to (default .scratch/operators, or .scratch/stores with --apps)"
+          "description": "the directory the copies are written to, read against cwd when relative (default .scratch/operators, or .scratch/stores with --apps)"
+        },
+        "cwd": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "absolute working directory a relative to is read against; the CLI supplies its own, and an MCP caller names its checkout or gives an absolute to"
         },
         "apps": {
           "type": "boolean",

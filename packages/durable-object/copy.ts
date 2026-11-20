@@ -130,7 +130,8 @@ export let raised = (): Copied => ({ rows: 0, digest: 2166136261 })
 
 /** The next rows of a table after a rowid, each led by its rowid, and the
  * tally with them in it. A page stops at `limit` rows or near `bytes`, so an
- * answer stays small whatever its rows hold. */
+ * answer stays small whatever its rows hold; `ended` says it holds the
+ * table's last row, so nothing past it need be asked. */
 export let page = (
   driver: Driver,
   t: Plan['tables'][number],
@@ -138,7 +139,7 @@ export let page = (
   held: Copied,
   limit = 200,
   bytes = 256 * 1024,
-): { rows: Cell[][]; last: number | null; held: Copied } => {
+): { rows: Cell[][]; last: number | null; held: Copied; ended: boolean } => {
   let read = driver.query(select({
     cols: [as(col(ROWID), ROWID), ...t.cols.map((c) => col(c))],
     from: table(t.name),
@@ -159,6 +160,7 @@ export let page = (
     rows,
     last: rows.length ? rows[rows.length - 1][0] as number : null,
     held: { rows: n, digest },
+    ended: read.length < limit && rows.length == read.length,
   }
 }
 

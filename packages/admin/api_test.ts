@@ -28,6 +28,7 @@ import {
   inviteIn,
   linkFor,
   listedOn,
+  operatorPage,
   plain,
   reconnect,
   renewing,
@@ -435,7 +436,7 @@ let answers = (made: (() => Response)[]) => {
   return { asked, done: () => void (globalThis.fetch = real) }
 }
 
-test('a copy page the platform failed is asked again, and a failure names the door and its request', async () => {
+test('a copy page the platform failed or cut short is asked again, and a failure names the door and its request', async () => {
   let was = { ...reconnect }, paused: number[] = []
   Object.assign(reconnect, {
     pauses: [1, 2],
@@ -466,16 +467,25 @@ test('a copy page the platform failed is asked again, and a failure names the do
   } finally {
     down.done()
   }
-  let cut = answers([() =>
+  let short = () =>
     new Response('{"plan":{"tables":[{"na', {
       headers: { 'content-type': 'application/json', 'x-request-id': 'req-2' },
-    })])
+    })
+  let healed = answers([short, () => Response.json({ last: null })])
+  try {
+    assertEquals(await operatorPage(through, 'ada', {}), { last: null })
+    assertEquals([healed.asked.length, paused.splice(0)], [2, [1]])
+  } finally {
+    healed.done()
+  }
+  let cut = answers([short])
   try {
     await assertRejects(
       () => storePage(through, 'ada/app', {}),
       Error,
       '/api/store-copy said 200, its JSON cut short at 23 bytes (request req-2)',
     )
+    assertEquals([cut.asked.length, paused], [3, [1, 2]])
   } finally {
     cut.done()
     Object.assign(reconnect, was)
