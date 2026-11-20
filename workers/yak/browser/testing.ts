@@ -11,12 +11,15 @@ export type Actions = Pick<
   | 'mouse'
   | 'touchscreen'
   | 'browserContext'
+  | 'mainFrame'
 >
 
 export let actions = (did: (line: string) => void = () => {}): Actions => {
   let done = (line: string) => (did(line), Promise.resolve())
+  let frame = {}
   return {
     bringToFront: () => Promise.resolve(),
+    mainFrame: () => frame,
     waitForSelector: async (s) => (await done(`find ${s}`), {
       tap: () => done(`tap ${s}`),
       hover: () => done(`hover ${s}`),

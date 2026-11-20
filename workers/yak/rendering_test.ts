@@ -337,6 +337,45 @@ test('a desktop visit keeps driving its original tab after a link opens another'
   assertEquals(clicks, ['#new-tab', '#original'])
 })
 
+test('a link visit photographs the destination after its document loads', async () => {
+  let p = page()
+  let time = clock()
+  let clicked = Promise.withResolvers<void>()
+  let destination = 'opening'
+  p.p.mouse.up = () => {
+    p.hear.get('request')?.({
+      isNavigationRequest: () => true,
+      frame: p.p.mainFrame,
+    })
+    clicked.resolve()
+    return Promise.resolve()
+  }
+  let pictures: string[] = []
+  p.p.screenshot = () => {
+    pictures.push(destination)
+    return Promise.resolve(destination)
+  }
+  let visit = capture(
+    p.browsing,
+    {
+      url: 'https://checks.yaks.app/',
+      view,
+      steps: [{ tap: '#link' }, { shot: 'destination' }],
+      audit: false,
+    },
+    undefined,
+    time,
+  )
+  await clicked.promise
+  await time.advance(0)
+  assertEquals(pictures, [])
+  destination = 'arrived'
+  p.hear.get('domcontentloaded')?.(undefined)
+  let result = await visit
+  assertEquals(result.shots, [{ name: 'destination', image: 'arrived' }])
+  assertEquals(result.image, 'arrived')
+})
+
 test('a page that extends Object.prototype still gets its accessibility audit', async () => {
   // orbits adds an enumerable Object.prototype.tap, which axe-core's color
   // spaces read as a fourth coordinate when it loads in that world.

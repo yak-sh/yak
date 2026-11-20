@@ -87,11 +87,18 @@ export type Dialog = {
   message(): string
   dismiss(): Promise<void>
 }
+type PageRequest = {
+  isNavigationRequest(): boolean
+  frame(): unknown
+}
 type Events = {
   console: Message
   dialog: Dialog
+  domcontentloaded: void
   pageerror: unknown
   error: Error
+  request: PageRequest
+  requestfailed: PageRequest
 }
 export type Page = {
   on<Event extends keyof Events>(
@@ -114,6 +121,7 @@ export type Page = {
     overridePermissions(origin: string, permissions: string[]): Promise<void>
   }
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
+  mainFrame(): unknown
   bringToFront(): Promise<void>
   waitForSelector(
     selector: string,
@@ -428,6 +436,29 @@ class BrowserClosed extends Error {
 
 let closed = (e: unknown) => interruption(e) == 'target'
 
+// A click can return while the destination is still loading. Wait for the
+// document the browser started to load before reading or acting on it.
+let navigating = (page: Page) => {
+  let request: PageRequest | undefined
+  let pending: PromiseWithResolvers<void> | undefined
+  let arrived = () => {
+    pending?.resolve()
+    pending = undefined
+    request = undefined
+  }
+  page.on('request', (asked) => {
+    if (asked.isNavigationRequest() && asked.frame() === page.mainFrame()) {
+      request = asked
+      pending ??= Promise.withResolvers<void>()
+    }
+  })
+  page.on('domcontentloaded', arrived)
+  page.on('requestfailed', (failed) => {
+    if (failed === request) arrived()
+  })
+  return () => pending?.promise
+}
+
 let loaded = async (
   browser: Browser,
   { url, view, cookies = [], steps = [], allow = [], audit }: Visit,
@@ -496,6 +527,14 @@ let loaded = async (
         error(e)
       }
       signal.throwIfAborted()
+      let navigation: ReturnType<typeof navigating> | undefined
+      let ready = async () => {
+        let loading = navigation?.()
+        if (!loading) return
+        stage = 'loading the page after navigation'
+        await loading
+        signal.throwIfAborted()
+      }
       if (view.wait) {
         stage = 'waiting after the page loaded'
         await pause(
@@ -510,6 +549,7 @@ let loaded = async (
       let shoot = () => page.screenshot({ type: 'png', encoding: 'base64' })
       for (let [i, step] of steps.entries()) {
         signal.throwIfAborted()
+        if (!('wait' in step)) await ready()
         let at = `Step ${i + 1}`
         stage = `taking step ${i + 1}`
         if ('wait' in step) {
@@ -522,6 +562,7 @@ let loaded = async (
           shots.push({ name: step.shot, image: await shoot() })
           continue
         }
+        navigation ??= navigating(page)
         try {
           await taken(page, view, step, async (selector, action) => {
             stage = `taking step ${i + 1} (waiting for a visible element)`
@@ -539,6 +580,7 @@ let loaded = async (
         }
       }
       signal.throwIfAborted()
+      await ready()
       stage = 'taking the final screenshot'
       let image = await shoot()
       return { page, image, shots, console, dialogs, errors, status }
