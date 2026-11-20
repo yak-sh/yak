@@ -1748,7 +1748,7 @@ export let installing = (space: Space) => {
 // (talk-sidebar.ts), and beside it the bar naming the page and whose Operator
 // it is, over `main`; the lists that do not wait on the person beside it
 // where the page has them (`column`, talk-beside.ts); and the app open beside
-// them all. The side's Updates from <Operator> is the page's one bell: what
+// them all. The side's Updates is the page's one bell: what
 // waits on the person there and in their servers' lists, counted once.
 let talkPage = (
   env: Env,

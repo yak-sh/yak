@@ -78,7 +78,7 @@ export let talkSide = (
             href: managePath('updates', space.slug),
             current: at.current.includes('updates'),
             icon: 'bell',
-            label: `Updates from ${space.operator}`,
+            label: 'Updates',
             waiting: at.waiting,
           },
         ],
