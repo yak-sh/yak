@@ -122,8 +122,9 @@ export type Ticket = {
    * it in `call`; none for a call streamed to us */
   carried?: string
   /** the carriers vouched that the caller holds `from` (@yaks/phone `Ring`):
-   * the call is trusted as chat is; any other confirms its privileged acts
-   * by a tap on a link texted to `from` (operator-approvals.ts) */
+   * its words are the caller's; any other's are marked unverified. Either
+   * way its privileged acts wait for a tap on a link texted to `from`
+   * (operator-approvals.ts) */
   attested?: boolean
 }
 
@@ -1072,7 +1073,7 @@ export let calling = async (
     ? await operator.tools(
       { person: ticket.person },
       space,
-      ticket.attested ? null : ticket.from,
+      ticket.from,
     ).catch((e) => {
       defect(e, CALL)
       return undefined

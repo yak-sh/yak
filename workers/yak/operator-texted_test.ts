@@ -119,11 +119,11 @@ for (let channel of ['chat', 'text', 'texted']) {
   })
 }
 
-test('an SMS turn, or a call the carriers did not vouch for, asks for a tap by approval_request', () => {
+test('every turn that can escalate asks for a tap by approval_request', () => {
   let asks = ['chat', 'text', 'texted', 'rcs', 'voice', 'vouched'].map((c) =>
     held.get(c)!.includes('approval_request')
   )
-  equal(asks, [false, true, true, false, true, true])
+  equal(asks, [true, true, true, false, true, true])
 })
 
 test('words that came by a number alone read as unverified to every later turn', () => {
@@ -170,17 +170,24 @@ test('a member added by text waits for the tap on the link texted to that number
   equal(await invited(), 1)
 })
 
-test("a chat turn acting on a text's ask waits for a tap at that number, unless its own words ask", async () => {
+test('a member added in chat waits for the tap on the link in the answer, which opens only for them', async () => {
   let invited = async () => (await ctx.dir.read('.invite')).length
   let before = await invited(), links = texted.length
-  await asked('chat', 'Call member_add as texted\nby chat')
-  equal(answered.get('chat')!.includes('Nothing has happened yet'), true)
-  equal(await invited(), before)
-  equal([texted.length, texted.at(-1)!.to], [links + 1, NUMBER])
   await asked(
     'chat',
     'Call member_add {"email":"ann@bot.yak.sh","role":"editor"}\nby chat',
   )
-  equal(answered.get('chat')!.includes('Nothing has happened yet'), false)
+  let said = answered.get('chat')!
+  equal(said.includes('Nothing has happened yet'), true)
+  equal([await invited(), texted.length], [before, links])
+  let t = said.match(/approve\?t=(\S+)/)![1]
+  let [, approval, digest] = (await opened<[string, string, string]>(
+    'approval',
+    t,
+    'secret',
+  ))!
+  equal((await operator.approve(approval, digest, true)).state, 'theirs')
+  equal(await invited(), before)
+  equal((await operator.approve(approval, digest, true, person)).state, 'done')
   equal(await invited(), before + 1)
 })

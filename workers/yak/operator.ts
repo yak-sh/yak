@@ -138,10 +138,10 @@ import {
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
 import {
+  acquainted,
   approvals,
   asker,
   confirming,
-  DRAWN,
   ESCALATING,
   type Standing,
 } from './operator-approvals.ts'
@@ -1151,8 +1151,8 @@ type Working = {
   administrative?: boolean
   signup?: string
   channel?: string
-  // The number its privileged acts are confirmed at (operator-channels.ts
-  // `confirmOf`).
+  // The number the links its privileged acts wait on are texted to
+  // (operator-channels.ts `confirmOf`).
   confirm?: string
   files?: File[]
 }
@@ -1164,7 +1164,7 @@ let workingOf = async ({ g }: Store, session: string) => {
 let channelAt = async (store: Store, session: string, work?: Working) =>
   work?.channel ??
     String((await requestAt(store, session))?.request?.channel ?? '')
-// The number a session's privileged acts are confirmed at
+// The number the links a session's privileged acts wait on are texted to
 // (operator-channels.ts `confirmOf`): as its words were carried, or for a
 // session carried before that was kept, from its conversation's newest words.
 let confirmAt = async (store: Store, session: string, work?: Working) => {
@@ -1172,11 +1172,7 @@ let confirmAt = async (store: Store, session: string, work?: Working) => {
   let channel = await channelAt(store, session, work)
   if (!SMS.has(channel) && channel != 'voice') return undefined
   let request = (await requestAt(store, session))?.request
-  return confirmOf({
-    channel,
-    address: request?.address,
-    attested: request?.channel == channel && request.attested,
-  })
+  return confirmOf({ channel, address: request?.address })
 }
 // The newest request of a session's conversation, and when it came.
 let requestAt = async (store: Store, session: string) => {
@@ -1187,30 +1183,6 @@ let requestAt = async (store: Store, session: string) => {
   return row && {
     request: comp(row, 'operator_request') as Requested | undefined,
     at: String(comp(row, 'created')?.at ?? ''),
-  }
-}
-// Words in a session's conversation that only a number vouches for
-// (`unverified`), come within `DRAWN`: the newest one's number, and the words
-// this turn acts on where the person's own came by a proven channel. A
-// privileged act of the turn waits for a tap on a link texted to that number,
-// unless those words ask for it (operator-approvals.ts `confirming`).
-let drawnFrom = async ({ g }: Store, session: string, now = Date.now()) => {
-  let top = await topOf(g, session)
-  let [[mark], [words]] = await Promise.all([
-    g.read(
-      q`.entry.session=${top} .unverified .order=-created.at .limit=1 .fields=unverified.number,created.at`,
-    ),
-    g.read(
-      q`.entry.session=${top} .intake !system .order=-created.at .limit=1 .fields=content.body,unverified.number`,
-    ),
-  ])
-  let at = Date.parse(String(comp(mark, 'created')?.at ?? ''))
-  if (!mark || !(now - at < DRAWN)) return undefined
-  return {
-    number: String(comp(mark, 'unverified')!.number),
-    said: words && !words.unverified
-      ? String(comp(words, 'content')?.body ?? '')
-      : '',
   }
 }
 // Whether a conversation has begun: its row is a session. Presence is
@@ -2103,13 +2075,13 @@ export let operating = (
   // one of them is the person's to have: the doors that text, mail, wake,
   // watch, draw, report, and reach their Google are the space's work, offered
   // to someone who writes in it and to nobody else (D-151808).
-  // `confirm` names the number its privileged acts are confirmed at, or null
-  // for none (an act a tap approved, a call the carriers vouched for); left
-  // out, the session's own words say (`confirmAt`). An act a tap `approved`
-  // asks nothing again.
+  // A member's privileged acts wait for their tap (operator-approvals.ts):
+  // `confirm` names the number its links are texted to, and left out, the
+  // session's own words say (`confirmAt`). An act a tap `approved` asks
+  // nothing again.
   let roster = async (
     session: string,
-    o: { confirm?: string | null; approved?: boolean } = {},
+    o: { confirm?: string; approved?: boolean } = {},
   ): Promise<Tool[]> => {
     reached('tools', null)
     // A step its person's machine answers reaches for the machine now, beside
@@ -2138,9 +2110,7 @@ export let operating = (
     // asked beside the reach and the space.
     let work = await workingOf(store, session)
     let channel = await channelAt(store, session, work)
-    let confirm = o.confirm === null
-      ? undefined
-      : o.confirm ?? await confirmAt(store, session, work)
+    let confirm = o.confirm ?? await confirmAt(store, session, work)
     // A turn started by words nobody in the space wrote (operator-channels.ts
     // `HEARSAY`) holds only what keeps the space's data with its person. A
     // turn the person started keeps every tool they hold: what others said in
@@ -2171,11 +2141,8 @@ export let operating = (
     let texted = member && UNPROVEN.has(channel)
     heard ||= texted
     let acts = member && !heard
-    // A turn of theirs after words a number alone vouched for confirms the
-    // privileged acts it draws from them at that number (`drawnFrom`).
-    let drawn = member && !confirm && !heard && !o.approved
-      ? await drawnFrom(store, session)
-      : undefined
+    // A turn that holds no escalating tool asks for no tap.
+    let asking = acts && !o.approved
     // A reply on a writer's thread goes back to them, and only there.
     let onThread = (
       t: NonNullable<Awaited<ReturnType<typeof threadOf>>>,
@@ -2206,9 +2173,7 @@ export let operating = (
         remote,
         trials,
         // A tap confirms an escalating call only when it is called direct.
-        ...confirm || drawn
-          ? { unscripted: new Set(Object.keys(ESCALATING)) }
-          : {},
+        ...asking ? { unscripted: new Set(Object.keys(ESCALATING)) } : {},
       })
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
@@ -2245,22 +2210,26 @@ export let operating = (
     let ruled = new Set(roster.map((t) => t.name))
     let listened = (tools: Tool[]) =>
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
-    // A member's privileged acts, where their words came by a number alone
-    // or draw on words that did, wait for a tap on a link texted to it
-    // (operator-approvals.ts).
-    let number = confirm ?? drawn?.number
+    // A member's privileged acts wait for their tap, on a link texted to
+    // their number or given in the answer (operator-approvals.ts).
     let confirmed = (tools: Tool[]) =>
-      member && number
+      asking
         ? deferred(confirming(
           tools,
           asker(
             env,
             store,
             space,
-            { person: ctx.person!, session, number },
+            { person: ctx.person!, session, number: confirm },
             (to, words) => textPerson(env, space, to, words),
           ),
-          confirm ? undefined : drawn?.said,
+          {
+            known: acquainted(store, async () => {
+              let people = await ctx.dir.persons(await ctx.dir.members(space))
+              return [...people.values()].map((k) => k.email)
+            }),
+            texted: !!confirm,
+          },
         ))
         : tools
     if (heard) {
@@ -3092,9 +3061,7 @@ export let operating = (
   // it, through the person's tools as they stand now and asking nothing
   // again (operator-approvals.ts).
   let approve = approvals(store, async (a) => {
-    let tool = offerable(
-      await roster(a.session, { confirm: null, approved: true }),
-    )
+    let tool = offerable(await roster(a.session, { approved: true }))
       .find((t) => t.name == a.tool)
     if (!tool) {
       throw new CallError('tool', `${a.tool} is not theirs to use any more.`)
@@ -3170,8 +3137,8 @@ export type Asking = {
   // leaves out of the person's words.
   channel?: string
   signup?: string
-  // The number the words came from, where it is all that says who sent them:
-  // their turn's privileged acts wait for a tap on a link texted to it
+  // The number the words came from, by text or call: their turn's
+  // privileged acts wait for a tap on a link texted to it
   // (operator-approvals.ts).
   confirm?: string
   // The number that alone vouches for the words, kept on them
@@ -3258,10 +3225,10 @@ export type Operator = {
   tools: (
     held: Asker,
     space: Space,
-    /** the number its privileged acts are confirmed at, or null for none
-     * (a call the carriers vouched for); left out, as the conversation's
-     * newest words came (operator-approvals.ts) */
-    confirm?: string | null,
+    /** the number the links its privileged acts wait on are texted to;
+     * left out, as the conversation's newest words came
+     * (operator-approvals.ts) */
+    confirm?: string,
   ) => Promise<{
     tools: { name: string; description: string; parameters: object }[]
     run: (name: string, args: Record<string, unknown>) => Promise<string>
@@ -3296,11 +3263,13 @@ export type Operator = {
   watching: Watching
   /** One occurrence of a scheduled tool call and its optional checking helper. */
   scheduled: (row: Bundle, at: string) => Promise<void>
-  /** Where the act a texted link approves stands, and with `press` the tap
-   * that carries it out (operator-approvals.ts `approvals`). */
+  /** Where the act a link approves stands for `who`, signed in, and with
+   * `press` the tap that carries it out (operator-approvals.ts
+   * `approvals`). */
   approve: (
     approval: string,
     digest: string,
     press: boolean,
+    who?: string | null,
   ) => Promise<Standing>
 }

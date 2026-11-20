@@ -234,6 +234,10 @@ await receive(
   'Put the dentist on my calendar Tuesday at 3 to 4, and email the front desk at front@dentist.example that I will be there.',
 )
 await service.drain()
+// Mail to someone new waits for the person's tap.
+let unsent = to('/gmail/v1/users/me/messages/send').length
+await service.approve()
+await service.drain()
 let names = callable
 
 test('before they connect, the Operator is told where to, and holds no Google tool', () => {
@@ -288,6 +292,7 @@ test('connected from the page, each names its account, and the Operator uses bot
     timeZone: 'America/Detroit',
   })
   let [sent] = to('/gmail/v1/users/me/messages/send')
+  assertEquals(unsent, 0)
   assertEquals(sent.headers.get('authorization'), 'Bearer G1')
   let raw = (await sent.json()).raw as string
   let letter = atob(raw.replaceAll('-', '+').replaceAll('_', '/'))

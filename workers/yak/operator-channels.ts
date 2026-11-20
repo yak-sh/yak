@@ -1246,25 +1246,24 @@ export let UNPROVEN = new Set(['rcs'])
  * comes to carry proof of its sender opts out of both by joining neither. */
 export let SMS = new Set(['text', 'texted'])
 
-/** The number a turn's privileged acts are confirmed at, where that number
- * is all that says who sent its words: an SMS, or a call the carriers did not
- * vouch for. A vouched call is trusted as chat is. */
-export let confirmOf = (
-  request: Pick<Request, 'channel' | 'address' | 'attested'>,
-) =>
-  SMS.has(request.channel) ||
-    (request.channel == 'voice' && !request.attested)
+/** The number the links a turn's privileged acts wait on are texted to: its
+ * sender's, on an SMS or a call, where a link said aloud or in a text's
+ * answer would reach nobody signed in. */
+export let confirmOf = (request: Pick<Request, 'channel' | 'address'>) =>
+  SMS.has(request.channel) || request.channel == 'voice'
     ? request.address
     : undefined
 
 /** The number that alone says who sent a request's words, which anyone can
- * show: a turn's own ({@link confirmOf}), or RCS's. Its words keep it as
- * `unverified{number}` in the conversation. */
+ * show: an SMS's, a call's the carriers did not vouch for, or RCS's. Its
+ * words keep it as `unverified{number}` in the conversation. */
 export let unverifiedOf = (
   request: Pick<Request, 'channel' | 'address' | 'attested'>,
 ) =>
-  confirmOf(request) ??
-    (UNPROVEN.has(request.channel) ? request.address : undefined)
+  SMS.has(request.channel) || UNPROVEN.has(request.channel) ||
+    (request.channel == 'voice' && !request.attested)
+    ? request.address
+    : undefined
 
 /** The channels answered by a text to the number the words came to. */
 let TEXTED = new Set(['text', 'rcs', 'texted', 'signup', 'group'])

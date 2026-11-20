@@ -130,6 +130,9 @@ await receive(
   `Ask Dr Alvarez (alvarez@clinic.example) when she can see me for my checkup; ${PRIVATE}`,
 )
 await service.drain()
+// Mail to someone new waits for the person's tap.
+await service.approve()
+await service.drain()
 
 let from = mailFrom('jeff', null, env)
 let answer = (id: string, answers: string): Inbound => {

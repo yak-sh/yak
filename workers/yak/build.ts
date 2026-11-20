@@ -352,16 +352,22 @@ export class Builder extends Durable {
             await this.#arming
             return answer
           }
-          // A texted link approving one act, opened or pressed
-          // (operator-approvals.ts `approvalDoor`).
+          // A link approving one act, opened or pressed, and who is signed
+          // in (operator-approvals.ts `approvalDoor`).
           if (url.pathname == '/operator/approval') {
-            let { approval, digest, press } = await request.json() as {
+            let { approval, digest, press, who } = await request.json() as {
               approval: string
               digest: string
               press?: boolean
+              who?: string | null
             }
             let operator = await this.#work()
-            let standing = await operator.approve(approval, digest, !!press)
+            let standing = await operator.approve(
+              approval,
+              digest,
+              !!press,
+              who ?? null,
+            )
             await this.#arming
             return Response.json(standing)
           }

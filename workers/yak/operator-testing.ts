@@ -274,6 +274,17 @@ export let operatorService = (
       await drain(store, undefined, operator.watching)
       await Promise.all(pending.splice(0))
     },
+    // Tap Approve on every act waiting for a tap, as its person signed in
+    // (operator-approvals.ts).
+    approve: async () => {
+      let { digestOf } = await import('./operator-approvals.ts')
+      let waiting = await store.g.read('.operator_approval !verified')
+      let rows = await store.g.get(waiting.map((r) => r.entity.eid))
+      return Promise.all(rows.map((r) => {
+        let a = r.operator_approval as Parameters<typeof digestOf>[0]
+        return operator.approve(r.entity.eid, digestOf(a), true, a.person)
+      }))
+    },
   }
 }
 

@@ -110,6 +110,10 @@ await receive(
   'Ask Dr Alvarez (alvarez@clinic.example) if Tuesday at 3 works for my checkup',
 )
 await service.drain()
+// Mail to someone new waits for the person's tap.
+let waited = letters.length
+await service.approve()
+await service.drain()
 let [sent] = letters
 let [kept] = await store.g.read('.operator_letter&*')
 let [fork] = await store.g.read(line`.spawned.parent=${rootOf(eid, person)}`)
@@ -173,7 +177,8 @@ await mailSend(env, ctx, space, store).run({
 await service.drain()
 let followed = letters.at(-1)!
 
-test("a fork's letter goes from the Operator's own address to its recipient, with the person copied and signed as their assistant", () => {
+test("a fork's letter to someone new waits for the person's tap, then goes from the Operator's own address to its recipient, with the person copied and signed as their assistant", () => {
+  assertEquals(waited, 0)
   assertEquals(sent.from, {
     name: `${space.operator} for Jeff Peterson`,
     email: from,

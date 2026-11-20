@@ -1,12 +1,14 @@
-// An act asked for by a number alone waits for a tap on a link texted to it
-// (T-1864): the link is spent once, lives LIFE, and is bound to the one act
-// and its arguments.
+// A member's escalating act waits for their tap on every channel (T-2075):
+// on a link texted to their number (T-1864), or given in the answer where
+// only they, signed in, open it. The link is spent once, lives LIFE, and is
+// bound to the one act and its arguments.
 import { equal, test } from '@yaks/testing'
 import { line } from '@yaks/query'
 import type { Tool } from '@yaks/session'
 import { operatorMemory } from './operator-testing.ts'
 import { opened } from './lib/token.ts'
 import {
+  acquainted,
   approvals,
   asker,
   confirming,
@@ -44,9 +46,17 @@ let tool = (name: string): Tool => ({
   parameters: { type: 'object' },
   run: (args) => (ran.push(`${name} ${JSON.stringify(args)}`), 'ran'),
 })
+// The space's one member, and an address the Operator wrote to before.
+let known = acquainted(store, () => Promise.resolve(['Ada@x.com']))
+await store.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  email: { address: 'bo@x.com' },
+  recipient: {},
+}], { trusted: true })
 let tools = confirming(
-  [tool('member_add'), tool('grant'), tool('app_files')],
+  [tool('member_add'), tool('grant'), tool('app_files'), tool('mail_send')],
   ask,
+  { known, texted: true },
 )
 let named = (name: string) => tools.find((t) => t.name == name)!
 
@@ -147,22 +157,42 @@ test('approval_request asks for any tool the turn holds, and only those', async 
   equal(refused, 'This turn holds no tool called nothing.')
 })
 
-test('after words a number alone vouched for, an act runs when the turn asks for it in its own words', async () => {
-  let turn = (said: string) =>
-    confirming([tool('member_add'), tool('grant')], ask, said)
-  let run = (said: string, name: string, args: Record<string, unknown>) =>
-    turn(said).find((t) => t.name == name)!.run(args)
+test('mail to a member or an address written to before sends at once; to someone new it waits', async () => {
   ran.length = 0
   let sent = texts.length
-  await run('Please add EVE@x.com', 'member_add', { email: 'eve@x.com' })
-  await run('go ahead', 'member_add', { email: 'eve@x.com' })
-  await run('add eve@x.com to recipes', 'member_add', {
-    email: 'eve@x.com',
-    app: 'blog',
-  })
-  await run('make me a token', 'grant', {})
-  equal(ran, ['member_add {"email":"eve@x.com"}'])
-  equal(texts.length, sent + 3)
+  await named('mail_send').run({ to: 'ada@x.com', text: 'hi' })
+  await named('mail_send').run({ to: 'BO@x.com', text: 'hi' })
+  equal(ran.length, 2)
+  let said = await named('mail_send').run({ to: 'eve@x.com', text: 'hi' })
+  equal(String(said).startsWith('Nothing has happened yet'), true)
+  equal(texts.at(-1)!.words.startsWith('Email eve@x.com? Tap'), true)
+  equal([ran.length, texts.length], [2, sent + 1])
+})
+
+test('in chat the link comes back in the answer, and opens only for its person signed in', async () => {
+  let given = confirming(
+    [tool('member_add')],
+    asker(
+      env,
+      store,
+      { eid: crypto.randomUUID() } as Space,
+      { person, session },
+      () => Promise.reject(new Error('nothing is texted')),
+      () => clock,
+    ),
+    { known },
+  )
+  let said = String(await given[0].run({ email: 'eve@x.com' }))
+  let t = said.match(/approve\?t=(\S+)/)![1]
+  let [, approval, digest] = (await opened<[string, string, string]>(
+    'approval',
+    t,
+    SECRET,
+  ))!
+  equal((await press(approval, digest, false)).state, 'theirs')
+  equal((await press(approval, digest, true, 'mallory')).state, 'theirs')
+  equal((await press(approval, digest, false, person)).state, 'waiting')
+  equal((await press(approval, digest, true, person)).state, 'done')
 })
 
 test('an approval of an act naming an integration carries its logo', async () => {
