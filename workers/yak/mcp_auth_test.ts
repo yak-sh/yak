@@ -589,13 +589,11 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       }),
     ) as { entity: { eid: string } }[]
     assertEquals(shown[0].entity.eid, run)
-    let found = JSON.parse(
-      await anon.tool('search', {
-        space: ada30,
-        app: 'runs',
-        words: 'Morning',
-      }),
-    ) as { entity: { eid: string } }[]
+    let found = (await anon.answer('search', {
+      space: ada30,
+      app: 'runs',
+      words: 'Morning',
+    })).rows
     assertEquals(found[0].entity.eid, run)
     // And the app's own word is in the schema it answers — the vocabulary of
     // that app, because it is the only one this caller is reading.

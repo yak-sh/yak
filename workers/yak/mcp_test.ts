@@ -982,11 +982,8 @@ test(
         ),
         [],
       )
-      let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
-      assertEquals(
-        found.map((r: { entity: { eid: string } }) => r.entity.eid),
-        [cake],
-      )
+      let found = (await agent.answer('search', { words: 'lemon' })).rows
+      assertEquals(found.map((r) => r.entity.eid), [cake])
 
       // A name outlives the batch (T-34390, @yaks/key + @yaks/alias): the same
       // seed written again patches the entity that already holds the name
