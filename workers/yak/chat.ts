@@ -775,8 +775,8 @@ export let arrived = async (
       : undefined
   }
   if (!space || space.trashed || !connection) return
-  let writer = await author() ??
-    await guestOf(env, platform.name, said.author.id)
+  let mine = await author()
+  let writer = mine ?? await guestOf(env, platform.name, said.author.id)
   let person = room
     ? await guestOf(env, platform.name, `room:${said.room}`)
     : writer
@@ -795,6 +795,10 @@ export let arrived = async (
         connection,
         said,
         ...room ? { writer } : {},
+        // Whether the writer's account is linked to a person here, which
+        // the Operator reads beside their words (operator-channels.ts
+        // `proofOf`).
+        ...mine ? { linked: true } : {},
       }),
     })
   )

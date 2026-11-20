@@ -131,9 +131,8 @@ import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import {
   escalate,
   escalationAnswer,
-  given,
-  REPLIES,
-  threadOf,
+  investigatorOf,
+  oddReport,
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
@@ -390,7 +389,7 @@ let servedIn = async (g: Graph, session: string) => {
 let outside = (space: Space, role: Role | null = null) =>
   role
     ? `Your role in ${space.slug} is ${role}: read only the apps and rows this person can read through your tools. You cannot change them or read the space's private Operator memories, tasks or other people's conversations. You may also help this person sign up through the sign-up tools when they are offered; ask the question returned by next and record only answers they gave.`
-    : `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. Answer what they ask from what they tell you, and say plainly when something needs one of the space's people. What needs the person you wrote to them for, raise with escalate.`
+    : `The person you are talking with is not a member of ${space.slug}: you have only their permissions, so you see none of the space's apps, rows, conversations or memories, and you can do for them only what they could do themselves. You are a helper with a guest's tools (web search and pages, feedback, the space's public parts, and your answer), not the Operator that works for the space's people. Answer what they ask from what they tell you and what those tools find. What needs one of the space's people (their answer, their choice, their data or their permissions), raise with escalate: who asked and what they want, in a line or two of your own words, and tell them you passed it on.`
 
 // What the Operator reads of itself: its own store, where each conversation
 // and every entry in it, its forks and helpers, its memories, its persona and
@@ -473,6 +472,7 @@ let CORE = new Set([
   'decision_relay',
   'notification_send',
   'escalate',
+  'odd_report',
 ])
 // What a break's turn changes beyond its reads: the files of the app that
 // broke, checked and released, and its errors archived once the fix is seen
@@ -488,8 +488,8 @@ let RELEASING = new Set([
 // `HEARSAY`) holds only some of the Operator's tools, as `tool_load` tells it
 // of the rest (@yaks/session `withheld`).
 let OUTSIDE =
-  'this turn answers words from outside the space (a break, what visitors ' +
-  'wrote, or what another conversation raised), so it holds reads, telling ' +
+  'this turn answers words from outside the space (a break, or what ' +
+  'visitors wrote), so it holds reads, telling ' +
   'the person, and for a break app_files, app_preview, app_deploy and ' +
   "app_errors; do the work with those. The person's own next message gives " +
   'back every tool.'
@@ -652,6 +652,7 @@ let OWN_WORDS = new Set([
   'subscription_cancel',
   'escalate',
   'escalation_answer',
+  'odd_report',
   'calendar_add',
   'gmail_send',
   'gmail_draft',
@@ -2143,27 +2144,7 @@ export let operating = (
     let acts = member && !heard
     // A turn that holds no escalating tool asks for no tap.
     let asking = acts && !o.approved
-    // A reply on a writer's thread goes back to them, and only there.
-    let onThread = (
-      t: NonNullable<Awaited<ReturnType<typeof threadOf>>>,
-    ) =>
-      t.kind == 'letter'
-        ? given(
-          mailSend(env, ctx, space, store),
-          { to: t.address, answering: t.reply },
-          `Here it writes back to ${t.address} on their own thread, and to nobody else.`,
-        )
-        : given(
-          phoneSend(env, ctx, space, store),
-          { to: t.address },
-          `Here it texts ${t.address} back, and nobody else.`,
-        )
-    // Someone who replied to what was sent for a person raises with that
-    // person's conversation what needs them (operator-escalate.ts).
-    let replied = g.read(
-      q`.operator_request.person=${ctx.person}&.operator_request.channel=${REPLIES}&.limit=1&.fields=entity.eid`,
-    )
-    let [roster, google, platform, [reply], [text], rooms] = await Promise.all([
+    let [roster, google, platform, [text], rooms] = await Promise.all([
       operatorRoster(ctx, store, {
         space: space.eid,
         tasked: !!task,
@@ -2178,7 +2159,6 @@ export let operating = (
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
       !heard && admin({ dir: whole, person: ctx.person! }),
-      replied,
       member ? [] : g.read(
         q`.operator_request.session=${await topOf(
           g,
@@ -2205,6 +2185,11 @@ export let operating = (
       ...subscriptionTools(store, watching),
       escalationAnswer(store, ctx, space),
     ]
+    // Any turn may report an odd request for a guest-tooled helper to look
+    // into, but that helper itself.
+    let odd = ctx.person == investigatorOf(space.eid)
+      ? []
+      : [oddReport(store, ctx, space, children)]
     // Every tool beside the roster's, whose answers its own runner hears
     // (`operatorRoster`), answers as the turn hears it (`attended`).
     let ruled = new Set(roster.map((t) => t.name))
@@ -2234,11 +2219,8 @@ export let operating = (
         : tools
     if (heard) {
       let why = texted ? TEXTED : OUTSIDE
-      let thread = member && channel == 'escalated'
-        ? await threadOf(store, (await requestAt(store, session))?.request)
-        : undefined
-      let back = thread ? [onThread(thread)] : []
       return confirmed(deferred(listened([
+        ...odd,
         ...holding(
           [
             ...sessionTools(g, children).filter((t) => t.name == 'fork'),
@@ -2248,22 +2230,14 @@ export let operating = (
           (t) => !!t.readOnly || (channel == 'error' && RELEASING.has(t.name)),
           why,
         ),
-        // A member keeps telling themselves, and what a writer's conversation
-        // raised is decided with the person's reads, and answered to that
-        // conversation and on the writer's own thread, to them alone
-        // (T-151880).
+        // A member keeps telling themselves.
         ...member
           ? holding(
-            [...mine(), ...await accounts].filter((t) =>
-              !back.some((b) => b.name == t.name)
-            ),
-            (t) =>
-              !!t.readOnly || TELLING.has(t.name) ||
-              (channel == 'escalated' && t.name == 'escalation_answer'),
+            [...mine(), ...await accounts],
+            (t) => !!t.readOnly || TELLING.has(t.name),
             why,
           )
           : [],
-        ...back,
         ...chat,
         ...holding(
           options.tools?.(ctx, files) ?? [],
@@ -2280,11 +2254,19 @@ export let operating = (
           : [],
       ])))
     }
+    // Someone who is not a member is answered in their own conversation, a
+    // helper with a guest's tools: no fork or stronger model at the space's
+    // cost, and what needs more is raised with the space's people
+    // (operator-escalate.ts).
+    let seated = !!ctx.role
     return confirmed(deferred(listened([
-      ...sessionTools(g, children).filter((t) => t.name == 'fork'),
+      ...odd,
+      ...seated
+        ? sessionTools(g, children).filter((t) => t.name == 'fork')
+        : [],
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
-      ...!(row?.spawned && !row.fork && !topicOf(row))
+      ...seated && !(row?.spawned && !row.fork && !topicOf(row))
         ? [
           delegated(
             comp(using, 'using')?.provider == machined
@@ -2303,7 +2285,7 @@ export let operating = (
         )
         : [],
       ...member ? [...mine(), ...google] : [],
-      ...reply ? [escalate(store, space)] : [],
+      ...seated ? [] : [escalate(store, ctx, space)],
       ...chat,
       ...platform ? adminTools(env, whole) : [],
       ...(options.tools?.(ctx, files) ?? []).filter((t) =>
@@ -2438,6 +2420,17 @@ export let operating = (
     prepareChild: async ({ parent, args }) => {
       let o = await workingOf(store, parent)
       if (!o) return {}
+      // A helper looking into an odd request works as nobody with a seat,
+      // with a guest's tools (operator-escalate.ts `oddReport`).
+      if (args.investigate) {
+        return {
+          operator_session: {
+            space: o.space,
+            person: investigatorOf(o.space),
+            channel: 'chat',
+          },
+        }
+      }
       if (!args.topic) return { operator_session: o }
       let ctx = await (await working(env, store, parent, options.directory))
         .ctx

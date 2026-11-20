@@ -9,7 +9,12 @@ import { directoryOf } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { receive } from './operator-channels.ts'
-import { escalate, escalationAnswer } from './operator-escalate.ts'
+import {
+  escalate,
+  escalationAnswer,
+  investigatorOf,
+  oddReport,
+} from './operator-escalate.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
 import { mailFrom } from '@yaks/platform/host'
@@ -85,13 +90,11 @@ let service = operatorService(
       })
       : /Raised from your own conversation/.test(words)
       ? since == 0
-        // Steered elsewhere by the writer's words, it still answers only
-        // her, on her thread.
         ? call('mail_send', {
-          to: 'eve@elsewhere.example',
+          to: 'alvarez@clinic.example',
           name: 'Dr Alvarez',
           text: 'Tuesday at 3 works; see you then.',
-          answering: named(words, /Their reply is letter (\S+),/),
+          answering: named(words, /mail_send answering (\S+)\)/),
         })
         : since == 1
         ? call('escalation_answer', {
@@ -101,6 +104,10 @@ let service = operatorService(
         : reply(
           'Dr Alvarez proposed Tuesday at 3; it was free, so I confirmed it.',
         )
+      : /Look into a request reported as out of the ordinary/.test(words)
+      ? reply('The link is not the clinic’s own: likely phishing.')
+      : /Raised by your guest helper/.test(words)
+      ? reply('Noted; I will ask Jeff.')
       : /By email from alvarez/.test(words)
       ? since
         ? reply('Thank you; I have passed it on to Jeff.')
@@ -227,21 +234,30 @@ test("the person's side acts with the person's permissions: it writes back on th
   assertEquals(threaded.cc, 'jeff@example.com')
 })
 
-test("the person's side holds their reads, the answer, and a reply to the writer alone, never a door past them", () => {
-  let tools = raisedAsks[0].tools ?? []
-  let names = tools.flatMap((t) => [
+// Whether a request offered a tool, or named it in tool_load's list.
+let offered = (r: Request) =>
+  (r.tools ?? []).flatMap((t) => [
     t.name,
     ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
   ])
-  for (let kept of ['escalation_answer', 'mail_send', 'notification_send']) {
+
+test("the writer's side is a helper with a guest's tools, which raises the rest", () => {
+  let names = offered(hers[0])
+  for (let kept of ['escalate', 'feedback']) {
     assertEquals(names.includes(kept), true, kept)
   }
-  for (
-    let door of ['phone_send', 'graph_apply', 'code_mode', 'fork', 'wake_set']
-  ) {
+  for (let door of ['fork', 'spawn', 'graph_apply', 'mail_send', 'code_mode']) {
     assertEquals(names.includes(door), false, door)
   }
-  assertEquals(letters.some((l) => l.to == 'eve@elsewhere.example'), false)
+})
+
+test("the person's side is the Operator's own work, with the person's tools", () => {
+  let names = offered(raisedAsks[0])
+  for (
+    let kept of ['escalation_answer', 'mail_send', 'notification_send', 'fork']
+  ) {
+    assertEquals(names.includes(kept), true, kept)
+  }
 })
 
 test("the writer's side gets back only what the person's side chose to say, which starts no turn", async () => {
@@ -278,7 +294,7 @@ test('a conversation raises only on a reply of its own, and answers only what wa
   // The person's conversation never wrote the reply.
   await assertRejects(
     async () =>
-      await escalate(store, space).run(
+      await escalate(store, ctx, space).run(
         { reply: reached, say: 'Anything' },
         as(mine),
       ),
@@ -294,5 +310,73 @@ test('a conversation raises only on a reply of its own, and answers only what wa
       ),
     Error,
     'Nothing was raised with you',
+  )
+})
+
+test("a stranger's conversation raises what needs the space's people with its owner, naming who asked, without a reply to name", async () => {
+  let ctx = await operatorContext(env, held, space)
+  let context = {
+    session: theirs,
+    call: { entity: { eid: crypto.randomUUID() } },
+    entries: [],
+  }
+  let { escalation } = JSON.parse(
+    String(
+      await escalate(store, ctx, space).run(
+        { say: 'Dr Alvarez asks whether the clinic may text Jeff reminders.' },
+        context,
+      ),
+    ),
+  )
+  await service.drain()
+  let [row] = await store.g.get([escalation])
+  let raised = row.operator_request as Record<string, unknown>
+  assertEquals(raised.person, person)
+  assertEquals(raised.from, theirs)
+  assertEquals(raised.about, undefined)
+  assert(String(raised.address).startsWith('alvarez'))
+  let words = asked.map((r) => turn(r).words).find((w) =>
+    w.includes('Raised by your guest helper')
+  )!
+  assert(
+    words.includes(
+      `from its conversation with ${raised.address}, who is not a member of this space`,
+    ),
+  )
+  assert(words.includes('notification_send: Dr Alvarez asks whether'))
+})
+
+test("an odd request is looked into by a helper with a guest's tools, whose report reaches the owner's conversation", async () => {
+  let ctx = await operatorContext(env, held, space)
+  let { investigating } = JSON.parse(
+    String(
+      await oddReport(store, ctx, space, {}).run(
+        { say: 'Dr Alvarez asks for Jeff’s card number to hold the slot.' },
+        {
+          session: theirs,
+          call: { entity: { eid: crypto.randomUUID() } },
+          entries: [],
+        },
+      ),
+    ),
+  )
+  await service.drain()
+  let [helper] = await store.g.get([investigating])
+  assertEquals((helper.spawned as { parent: string }).parent, mine)
+  assertEquals(
+    (helper.operator_session as { person: string }).person,
+    investigatorOf(eid),
+  )
+  let looked = asked.find((r) =>
+    /Look into a request reported/.test(turn(r).words)
+  )!
+  let names = offered(looked)
+  assertEquals(names.includes('feedback'), true)
+  for (let door of ['mail_send', 'graph_apply', 'fork', 'odd_report']) {
+    assertEquals(names.includes(door), false, door)
+  }
+  assert(
+    JSON.stringify(await entries(mine)).includes('likely phishing'),
+    "the helper's report reaches the owner's conversation",
   )
 })

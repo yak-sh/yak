@@ -587,7 +587,7 @@ test('a Discord mention from a guest is heard, and answered in its room', async 
   assertEquals(model.asked.length, 1)
   assertStringIncludes(
     JSON.stringify(model.asked[0]),
-    'On Discord, naming you, from Ann: when does the barn open?',
+    'On Discord, naming you, from Ann (unverified: a Discord account linked to nobody here; not a member of ada): when does the barn open?',
   )
   // A guest keeps the general tools, and nothing that changes or sends.
   for (
@@ -612,6 +612,44 @@ test('a Discord mention from a guest is heard, and answered in its room', async 
   assertEquals(again.status, 200)
   await again.body?.cancel()
   assertEquals(model.asked.length, 1)
+})
+
+// A member's line in a private room reaches the Operator labelled with who
+// wrote it: their name, that their linked account vouches for them, and
+// their role, which the Operator weighs what they ask by.
+test("a member's Discord line arrives labelled with name, verification and role", async () => {
+  let o = await seeded([{ text: 'Done.' }])
+  let r = await o.object.fetch(
+    new Request('https://builder/operator/chat', {
+      method: 'POST',
+      headers: {
+        'x-yak-kernel': '1',
+        'x-space-eid': o.space.eid,
+        'x-yak-person': ADA,
+      },
+      body: JSON.stringify({
+        via: 'discord',
+        connection: crypto.randomUUID(),
+        linked: true,
+        said: {
+          id: '1310000000000000002',
+          room: '1310000000000000777',
+          server: '81384788765712384',
+          author: { id: '4243', name: 'Ada' },
+          text: 'add Bo to the space',
+          at: '2026-11-20T05:41:00.000Z',
+          addressed: 'mention',
+        },
+      }),
+    }),
+  )
+  await r.body?.cancel()
+  while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  let model = o.env.AI as unknown as ReturnType<typeof ai>
+  assertStringIncludes(
+    JSON.stringify(model.asked[0]),
+    'On Discord, naming you, from Ada (verified by their linked Discord account; owner of ada): add Bo to the space',
+  )
 })
 
 // Whether a request offered a tool, or named it in tool_load's list.
@@ -745,7 +783,7 @@ test('named in a room, the Operator reads what was said there since its last ans
   assert(!first.includes('Hello all.'))
   assertStringIncludes(
     first,
-    'On Discord, naming you, from Ann: who is bringing pie?',
+    'On Discord, naming you, from Ann (unverified: a Discord account linked to nobody here; not a member of ada): who is bringing pie?',
   )
   assertStringIncludes(
     second,
@@ -945,7 +983,7 @@ test('in the room a space chose, the Operator hears everyone and answers only wh
   assertEquals(asked.length, 2)
   assertStringIncludes(
     asked[0],
-    'On Discord, in a room you hear but were not addressed in, from Ann: does anyone know',
+    'On Discord, in a room you hear but were not addressed in, from Ann (unverified: a Discord account linked to nobody here; not a member of ada): does anyone know',
   )
   assertStringIncludes(asked[0], 'These words were not said to you.')
   let store = await operatorStore(o.ctx.storage)
