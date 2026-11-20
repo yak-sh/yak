@@ -28,6 +28,7 @@ import type { Space } from './directory.ts'
 let need = async () => ({
   ...await import('@yaks/connections'),
   ...await import('./connections.ts'),
+  ...await import('./vault.ts'),
   ...await import('./directory.ts'),
   ...await import('./meta.ts'),
   ...await import('./defects.ts'),
@@ -76,12 +77,14 @@ let ours = async (env: Env, via: string) => {
   )
 }
 
-/** yaks.app's own bot on `via`: the one its OAuth client keeps. */
+/** yaks.app's own bot on `via`: the one its OAuth client keeps, read from
+ * the vault alone (the integrations are this build's own seeds), and none
+ * where no vault is set up. */
 export let platformBot = async (env: Env, via: string) => {
-  let { clientOf, ctxOf } = await need()
-  let ctx = ctxOf(env)
-  for (let i of await ours(env, via)) {
-    let bot = (await clientOf(ctx.vault, ctx.graph.read, i))?.bot
+  let { registered, seeds, keyed, vaultOf, vaulted } = await need()
+  if (!vaulted(env)) return undefined
+  for (let i of seeds().filter((i) => i.chat == via && !keyed(i))) {
+    let bot = i.client && (await registered(vaultOf(env), i.client))?.bot
     if (bot) return bot
   }
 }
@@ -138,15 +141,16 @@ export let linked = async (env: Env, platform: Platform, id: string) => {
 
 /** What a space's Operator settings offer for each platform whose bot
  * yaks.app keeps: the integration that adds that bot, and the one a person
- * links their account there with (operator-page.ts `chatCard`). Before the
+ * links their account there with (operator-page.ts `chatCard`), known from
+ * this build's seeds, so the page asks the directory nothing more. Before the
  * bot is kept there is nothing to add. */
 export let offers = async (env: Env) => {
-  let { ctxOf, installed } = await need()
-  let all = await installed(ctxOf(env).graph.read)
+  let { keyed, seeds } = await need()
+  let all = seeds()
   let each = await Promise.all(
     [...PLATFORMS.values()].map(async (platform) => ({
       platform,
-      bot: (await ours(env, platform.name))[0],
+      bot: all.find((i) => i.chat == platform.name && !keyed(i))!,
       user: all.find((i) => i.name == platform.user),
       kept: !!await platformBot(env, platform.name),
     })),

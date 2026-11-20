@@ -18,6 +18,7 @@ import {
 import type { Env } from './env.ts'
 import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
+import { caught } from './defects.ts'
 import {
   builderOf,
   carried,
@@ -1254,8 +1255,12 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
       dir.alerts(who.person ?? ''),
       dir.emailAt(who.person ?? ''),
       dir.pushes(who.person ?? ''),
+      // A chat platform that cannot be offered leaves the rest of the page.
       who.role == 'owner'
-        ? import('./chat.ts').then((c) => c.offers(env))
+        ? import('./chat.ts').then((c) => c.offers(env)).catch((e) => {
+          caught(e, { request: 'operator settings chat' })
+          return []
+        })
         : Promise.resolve([]),
     ])
   let from = phone?.transport().number

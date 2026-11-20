@@ -5,13 +5,12 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { install, registration } from '@yaks/connections'
+import { registration } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './directory-rows-probe.ts'
 import { KERNEL, meta } from './meta.ts'
 import { offers } from './chat.ts'
-import { ctxOf } from './connections.ts'
 import { chatCard } from './operator-page.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
@@ -19,8 +18,6 @@ let { env } = platform('a probe secret', {
   VAULT: d1() as unknown as D1Like,
   VAULT_KEY: KEY,
 })
-// The built integrations, as the directory's start-up effect installs them.
-await meta(env).apply(await install(ctxOf(env).graph.read), KERNEL)
 let names = async () =>
   (await offers(env)).map((o) => [o.platform.name, o.bot.name, o.user?.name])
 

@@ -74,6 +74,7 @@ export {
   type Marked,
   PUBLISHED,
   type Read,
+  seeds,
   set,
   told,
 } from './integrations.ts'

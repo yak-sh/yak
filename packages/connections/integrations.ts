@@ -143,6 +143,10 @@ let SEEDS: Integration[] = [
   voipms,
 ]
 
+/** The integrations this package builds, as shipped: what `install` writes,
+ * read here with no graph, for a host that only needs to know them. */
+export let seeds = (): Integration[] => SEEDS
+
 /** Whether a person connects it by pasting a key rather than signing in:
  * one with no token endpoint and no broker to sign in through. */
 export let keyed = (i: Integration): boolean => !i.token && !i.broker
