@@ -239,9 +239,9 @@ test('an idle Builder restarts for a newer caller', async () => {
 // A Worker on a newer deploy than its Store (T-140262): the store restarted
 // for that deploy and the runtime started it again on its older code, as
 // Cloudflare's deferred code updates do. A write naming a word the older code
-// does not know is no mistake of the caller's: the store reports it and
-// answers a failure the caller's door sends again, which the newer code then
-// takes.
+// does not know is no mistake of the caller's: the store answers a failure
+// the caller's door sends again, and the caller reports what the newer code
+// says or, with none, that the store stayed behind.
 // A store behind its caller after restarting for it, which refuses a word
 // only the caller's deploy declares; the next incarnation answers `next`,
 // or with none, the runtime keeps starting it on the older code. Answers
@@ -298,8 +298,9 @@ test("a refusal the newer code repeats is the caller's own, answered plainly and
   assertEquals([status, reports], [400, '[]'])
 })
 
-test('a store still behind after every resend answers its refusal as a refusal, and nothing is reported', async () => {
+test('a store still behind after every resend answers its refusal as a refusal, and reports it', async () => {
   let { status, said, reports } = await behind()
-  assertEquals([status, reports], [400, '[]'])
+  assertEquals(status, 400)
+  assertMatch(reports, /"fault":"behind:\/apply"/)
   assertMatch(said, /release_remake/)
 })

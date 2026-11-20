@@ -10,7 +10,10 @@
 // the deploy before working, and restarts itself only when that code refused
 // the caller (`owed`), since what it refused may be a door or a word only the
 // caller's deploy has; the caller's retry of the evicted request
-// (@yaks/durable-object `evicted`) then meets the new code. A restart is not
+// (@yaks/durable-object `evicted`) meets whatever code the runtime starts it
+// on. Under a deferred deploy (wrangler.toml `code_update_strategy`) that is
+// the code it had: only hibernating, or the update's delay running out,
+// moves an object, and a restart does neither (T-1887, T-2011). A restart is not
 // free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
 // its first line, where Cloudflare's own moves started in under a second
 // (T-150897). The Wire and the Builder restart before anything, when they are
@@ -18,7 +21,9 @@
 // still behind its caller after its restart answers a refusal as a
 // failure the caller sends again (`skewed`, T-140262). Only the caller can
 // say whether it was skew, by what the newer code answers (`skew`): a store
-// cannot tell a word its code lacks from a word nobody declares.
+// cannot tell a word its code lacks from a word nobody declares. A store
+// still behind after every resend has its refusal answered as a refusal and
+// reported (`settled`, door.ts `storeOf`).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -377,8 +382,8 @@ export type Refusal = { status: number; body: unknown }
  * store gave, as the refusal it is. The older code's word is the only one
  * there is yet; a refusal the newer code would repeat is the caller's own
  * mistake, and one it would not lasts only until the runtime moves the
- * store. Either way a deploy never fails a person's call. Null for any other
- * failure.
+ * store, so the caller reports it. Either way a deploy never fails a
+ * person's call with a 500. Null for any other failure.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

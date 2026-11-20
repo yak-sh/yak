@@ -377,7 +377,18 @@ export let storeOf = (
         })
       }
     },
-    // A store still behind after every resend: its refusal, as a refusal.
-    settled: (failure) => settled(failure),
+    // A store still behind after every resend: its refusal, as a refusal,
+    // and reported, since the newer code may well have taken the call.
+    // Under a deferred deploy only the runtime moves a store onto new code,
+    // when it hibernates or its update's delay runs out (wrangler.toml).
+    settled: (failure, path) => {
+      let answer = settled(failure), at = path.split('?')[0]
+      if (answer) {
+        defect(failure, { request: `store ${at}`, store: name }, {
+          fault: `behind:${at}`,
+        })
+      }
+      return answer
+    },
     wait,
   })
