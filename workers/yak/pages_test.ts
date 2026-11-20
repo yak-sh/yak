@@ -1001,6 +1001,11 @@ test('a service detail URL is a server-open modal with its pitch, access, provid
       'cal',
     )
     assertEquals(form.querySelector('button[name=do]')?.textContent, 'Connect')
+    // A sign-in through the broker opens its page in a new tab.
+    assertEquals(
+      form.querySelector('button[name=do]')?.getAttribute('formtarget'),
+      keyed ? null : '_blank',
+    )
     assertEquals(!!form.querySelector('input[type=password]'), keyed)
     let back = '/manage/ada/connections?enable=cal&q=calendar'
     assertEquals(form.getAttribute('action'), back)

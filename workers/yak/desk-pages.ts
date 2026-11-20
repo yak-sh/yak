@@ -83,6 +83,7 @@ import {
   said,
   send,
   sentence,
+  signingIn,
   state,
   status,
   tabbing,
@@ -969,7 +970,7 @@ let connection = (
   let waiting = c.status == 'needed' && c.apps.length && !c.each
   let actions = any(
     !ask && !c.keyed && open
-      ? form(press('signin', 'Connect', false), { class: 'Card_Form' })
+      ? form(signingIn(c.face, 'Connect', 'signin'), { class: 'Card_Form' })
       : null,
     ask || waiting ? null : form(
       press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
@@ -1308,7 +1309,12 @@ let borrowing = (
   let actions = mine
     ? form(press('attach', 'Use your own'), mine.eid, false, 'Card_Form')
     : on && !b.keyed
-    ? form(press('own', 'Connect your own'), b.eid, false, 'Card_Form')
+    ? form(
+      signingIn(b.face, 'Connect your own', 'own'),
+      b.eid,
+      false,
+      'Card_Form',
+    )
     : null
   let id = `own-${b.eid}-${b.app.app}`
   let own = on && b.keyed && !mine
@@ -1755,7 +1761,7 @@ let connections = (at: DeskPage, env: Host) => {
               '',
               i.face.fields,
             )
-            : h(Form.Actions, null, press('add', 'Connect', false)),
+            : h(Form.Actions, null, signingIn(i.face, 'Connect', 'add')),
         ),
     ])
   let add = h(

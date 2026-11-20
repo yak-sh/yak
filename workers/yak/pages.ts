@@ -246,7 +246,9 @@ ${links(env, 'pages.css', undefined, assets)}${
     main.includes('data-alerts-offer')
       ? `<script type="module" src="${file('_alerts.js')}"></script>`
       : ''
-  }<script src="${file('drop.js')}" defer></script>${deployed(env)}</body>
+  }<script src="${file('drop.js')}" defer></script><script src="${
+    file('away.js')
+  }" data-home="${esc(apex(env))}" defer></script>${deployed(env)}</body>
 </html>`
   return new Response(
     later
@@ -1070,6 +1072,22 @@ export let soon = (what: string, env: Host = {}) =>
 // One button that sends the form it is in.
 export let send = (label: Kids) =>
   h(Button, { mod: 'go', type: 'submit' }, label)
+
+/** The button that begins a sign-in at `face`'s service, sending its form's
+ * `do` as `act` where it names one. A sign-in through a broker (Nango) opens
+ * in a new tab, since the broker's page never sends the person back here;
+ * this page is read again once they come back to it (public/away.js). */
+export let signingIn = (
+  face: Pick<Face, 'broker'>,
+  label: Kids,
+  act?: string,
+) =>
+  h(Button, {
+    mod: 'go',
+    type: 'submit',
+    ...act ? { name: 'do', value: act } : {},
+    ...face.broker ? { formtarget: '_blank' } : {},
+  }, label)
 
 // A TV paired with a person (screen.ts, T-136193). The TV's own two pages
 // are a screen across a room, so they say one thing each, large: the code

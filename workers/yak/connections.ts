@@ -1617,6 +1617,8 @@ export let own: Answer = async (
   }
   let back = `https://${space.slug}.${apex(env)}/${app.slug}/`
   let page = async (said?: Said) => {
+    // A sign-in finished at a broker shows as connected here too.
+    await settling(env, [who.person!], integration)
     let mine = await using(c.graph.read, {
       app: app.eid,
       integration,

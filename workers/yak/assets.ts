@@ -48,6 +48,7 @@ export let ASSETS: Asset[] = [
     'deploy.js',
     'drop.js',
     'idle.js',
+    'away.js',
     'menu.js',
     'side.js',
     'pane.js',

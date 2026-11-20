@@ -9,7 +9,7 @@
 // exactly as the files say them.
 import type { VNode } from 'preact'
 import { esc, markup } from './html.ts'
-import { type Host } from '@yaks/platform/host'
+import { apex, type Host } from '@yaks/platform/host'
 import { asset, links } from './sheets.ts'
 import { island, signedIn } from './signed.ts'
 import { idle } from './mascot.ts'
@@ -39,6 +39,9 @@ ${previewTags(env, { title, description, at, image })}
 <link rel="apple-touch-icon" href="${asset(env, 'apple-touch-icon.png')}">
 ${links(env, 'style.css')}
 <script src="${asset(env, 'idle.js')}" defer></script>
+<script src="${asset(env, 'away.js')}" data-home="${
+    esc(apex(env))
+  }" defer></script>
 ${island}`
 
 export let top = `<header class="Top">

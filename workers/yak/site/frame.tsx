@@ -76,6 +76,7 @@ let Head = (
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
     <link rel='stylesheet' href='style.css' />
     <script src='idle.js' defer />
+    <script src='away.js' defer />
     {children}
   </head>
 )

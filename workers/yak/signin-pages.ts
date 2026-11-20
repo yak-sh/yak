@@ -50,6 +50,7 @@ import {
   run,
   said,
   send,
+  signingIn,
   state,
   status,
 } from './pages.ts'
@@ -599,7 +600,10 @@ export let askConnect = (at: {
           ? h(
             'form',
             { class: 'Page_Form', method: 'post' },
-            send(at.status == 'needed' ? 'Connect' : 'Connect again'),
+            signingIn(
+              at.face,
+              at.status == 'needed' ? 'Connect' : 'Connect again',
+            ),
           )
           : null,
       }),
