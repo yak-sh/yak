@@ -23,21 +23,22 @@ never feels. What makes us wince is a deploy that signs everyone out, a default
 that opens a door, a poll that wakes every store on the platform.
 
 Nothing an agent does erases a person's app or space, the demo space and test
-accounts included. A delete goes to the trash and stays recoverable until the person chooses
-permanent erasure through the shared confirmation page. Time passing never
-erases it. An app already in the trash releases its slug; a restore whose old
-slug was taken gets a free numbered slug and tells the person. Shared names
-(space slugs, phone numbers, domains and hostnames) stay held in the trash. A trash full of old apps
-is fine to leave there. A bot account's letters (`yourname@bot.yak.sh` and the
-other `@bot.yak.sh` owners) land where an agent can read them, and an erase link
-in one is still a person's to press, never an agent's. When a reply or a recording
-mentions the trash, the words are what to fix, never the trash.
+accounts included. A delete goes to the trash and stays recoverable until the
+person chooses permanent erasure through the shared confirmation page. Time
+passing never erases it. An app already in the trash releases its slug; a
+restore whose old slug was taken gets a free numbered slug and tells the person.
+Shared names (space slugs, phone numbers, domains and hostnames) stay held in
+the trash. A trash full of old apps is fine to leave there. A bot account's
+letters (`yourname@bot.yak.sh` and the other `@bot.yak.sh` owners) land where an
+agent can read them, and an erase link in one is still a person's to press,
+never an agent's. When a reply or a recording mentions the trash, the words are
+what to fix, never the trash.
 
 workers/yak/README.md is the reference for bindings, the Worker's own secrets
 and setup; this is the map and the feel.
 
-New code goes in a @yaks/* package, never in workers/yak: workers/yak only
-wires packages together (M-17).
+New code goes in a @yaks/* package, never in workers/yak: workers/yak only wires
+packages together (M-17).
 
 ## The parts
 
@@ -142,6 +143,11 @@ wires packages together (M-17).
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the
   kernel, each waking Store included, would compile on start.
+- **Drafts**: a new app is made, not drafted: its first version is released at
+  its own address. A draft (a change to a live app, or one of Several
+  directions) is handed as its short link, `/<app>/~<8 hex>/`, which a signed-in
+  writer opens through a ticket sealed for them (preview.ts `short`); an old
+  `_preview/<ticket>` link keeps opening until it expires.
 - **Previews**: yak-browser (`browser/`), the Worker behind BROWSER, renders a
   draft for app_preview with puppeteer and checks it with axe-core (`browser.ts`
   asks it; `browser/capture.ts` renders). Its own Worker for the same reason as
@@ -273,10 +279,10 @@ A query that works on the box can be refused in a store.
   has one.
 - **A promise another request settles or awaits is made by `resolvers`**
   (@yaks/fp; `sharing` keeps one). workerd runs a request's waiter in its own
-  request only while the promise carries that request's tag, and a
-  `new Promise` in code V8 has optimized carries none, so the code works until
-  it is hot and then fails with "Cannot perform I/O on behalf of a different
-  request" (cloudflare/workerd#8228). A local workerd shows it with v8Flags
+  request only while the promise carries that request's tag, and a `new Promise`
+  in code V8 has optimized carries none, so the code works until it is hot and
+  then fails with "Cannot perform I/O on behalf of a different request"
+  (cloudflare/workerd#8228). A local workerd shows it with v8Flags
   `--invocation-count-for-maglev=2 --invocation-count-for-turbofan=4`.
 - **An isolate's first wake runs every path cold.** Its boot and first read cost
   a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354): each
@@ -423,16 +429,15 @@ use of those apps, and adds no activity hop to those reads.
   turn it on; their inspector reads schema and entities without history. A store
   holding journal tables from that window retains them even when its current
   vocabulary no longer writes history. Changing a declaration never purges
-  stored journal data. A store's first branch (the
-  kernel-only `/branches` doors, graph.ts `#branching`) records @yaks/journal as
-  required, and from then on it composes config.ts `appVersionsConfig`: versions
-  on, attribution and feed off. Its live rows become their first versions a page
-  at a time from its alarm (`#seeding`, @yaks/sqlite `paced`), under the mover's
-  share of its windows; until the last page it makes no branch and answers 503
-  with `retry-after`. Each branch reads and writes through a graph of its own
-  over a driver of its own (@yaks/sqlite `moded`), running no effect. The
-  versions sit in the store's file, so the bytes it tells the directory count
-  them.
+  stored journal data. A store's first branch (the kernel-only `/branches`
+  doors, graph.ts `#branching`) records @yaks/journal as required, and from then
+  on it composes config.ts `appVersionsConfig`: versions on, attribution and
+  feed off. Its live rows become their first versions a page at a time from its
+  alarm (`#seeding`, @yaks/sqlite `paced`), under the mover's share of its
+  windows; until the last page it makes no branch and answers 503 with
+  `retry-after`. Each branch reads and writes through a graph of its own over a
+  driver of its own (@yaks/sqlite `moded`), running no effect. The versions sit
+  in the store's file, so the bytes it tells the directory count them.
 - **A trashed store sleeps.** Trashing or restoring an app or its space commits
   a `notify_trash` effect in the directory beside the mark (`trash.ts`). It
   tells every affected store, retries until acknowledged, and reads the present
@@ -455,12 +460,11 @@ use of those apps, and adds no activity hop to those reads.
   directory's source and declaration pointers. A deploy writes that snapshot
   before committing either pointer, including the retained words and
   borrowed-home declarations the Store accepted; they sit under the space's
-  handle, so a space rename moves none. Trashing an app keeps them;
-  a person's confirmed permanent erasure removes them.
-  `initialize`, `tools/list` and the schema preparation before a named tool call
-  read no app Store. Every release a pointer selects has a snapshot, so a
-  missing one is a defect the tracker hears about, never a reason to rebuild one
-  from files.
+  handle, so a space rename moves none. Trashing an app keeps them; a person's
+  confirmed permanent erasure removes them. `initialize`, `tools/list` and the
+  schema preparation before a named tool call read no app Store. Every release a
+  pointer selects has a snapshot, so a missing one is a defect the tracker hears
+  about, never a reason to rebuild one from files.
 
 ## An app's words
 
@@ -623,8 +627,8 @@ time, which is how T-161675 measured 80 of them.
   code and cause, which is its own platform letter to TaskMaster (mail-config.ts
   `toPlatform`), sent by the pool and marked `delivered{at}`. The letter is kept
   as the record; the same firing moves the occurrences a delivered one counted
-  into recoverable graph trash once they are 30 days old (`forgotten`).
-  Their retained snapshots are never automatically purged.
+  into recoverable graph trash once they are 30 days old (`forgotten`). Their
+  retained snapshots are never automatically purged.
 - hello@yaks.app is the public address: what people write to the platform, its
   replies to them, and what a person said that the platform relays (the feedback
   tool). Its owner gets a copy of every letter there. Internal mail never goes
@@ -643,8 +647,9 @@ time, which is how T-161675 measured 80 of them.
   auth yaks.app --as <address>` keeps a test account across commands; the
   daily sweep trashes its abandoned spaces after seven idle days.
   `yak admin erase <address> --as
-  admin@bot.yak.sh` puts its spaces in the trash now. Nothing is purged by
-  either path; permanent erasure is the person's choice through confirmation.
+  admin@bot.yak.sh` puts its spaces in the
+  trash now. Nothing is purged by either path; permanent erasure is the person's
+  choice through confirmation.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts `fix`,
   one request per break by `fixOf`), and the owner's Apps page shows its state

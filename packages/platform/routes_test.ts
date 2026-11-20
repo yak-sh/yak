@@ -372,6 +372,8 @@ test('paged: the token segment, where an app path starts', () => {
     ['/recipes/sub/~abc/api/query', false],
     ['/recipes/%7Eabc/api/query', false],
     ['/~/api/query', false],
+    ['/recipes/~ae67727c/', false],
+    ['/recipes/~ae67727c/api/query', false],
   ]
   for (let [path, want] of paths) assertEquals(paged(path), want, path)
 })

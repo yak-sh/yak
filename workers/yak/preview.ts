@@ -24,7 +24,14 @@
 import { stated } from './vocab.ts'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
-import { copyFor, storeApi, storing, unwritten, woven } from './apps.ts'
+import {
+  copyFor,
+  redirect,
+  storeApi,
+  storing,
+  unwritten,
+  woven,
+} from './apps.ts'
 import {
   type App,
   appStore,
@@ -54,6 +61,8 @@ import { configured } from './deploy_worker.ts'
 import { baseOf } from '@yaks/platform/woven'
 import { fileBytes, prefixOf } from './files.ts'
 import { spaceHost } from '@yaks/platform/host'
+import { route, signInAt } from '@yaks/platform/routes'
+import { writes } from '@yaks/member'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { COOKIE, opened, seal, sign } from './lib/token.ts'
 import { onHold } from './model-spend.ts'
@@ -77,6 +86,9 @@ import {
   resets,
   scriptOf,
   seeding,
+  shortened,
+  shortMount,
+  shortOf,
   shows,
   starting,
   stateOf,
@@ -86,7 +98,7 @@ import {
   viewer,
   within,
 } from '@yaks/platform/preview'
-import { vouched, type Who } from './session.ts'
+import { vouched, type Who, whoIs } from './session.ts'
 import { clock, headed } from './timing.ts'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
@@ -509,13 +521,16 @@ export let linkOf = async (
     draft,
     link: linkFor(app, draft),
     ...await sealed(ctx, space, app, draft.eid, screen),
+    short: `https://${spaceHost(ctx.env, space.slug)}${
+      shortMount(app.slug, draft.eid)
+    }`,
   }
 }
 
 /** The link to a draft by its id alone, marking nothing: a draft no longer
  * open shows what was released (`target`). */
 export let sealed = async (
-  ctx: Ctx,
+  ctx: Pick<Ctx, 'env' | 'person'>,
   space: Space,
   app: App,
   of: string,
@@ -745,9 +760,18 @@ export let preview = async (ctx: Ctx, args: Args) => {
     throw refuse('arguments', "draft: the id of one of the app's drafts")
   }
   let of = await shownDraft(ctx, space, app, who, args.draft as string)
-  let { draft, link, mount, at } = await linkOf(ctx, space, app, who, of)
+  let { draft, link, mount, at, short } = await linkOf(
+    ctx,
+    space,
+    app,
+    who,
+    of,
+  )
   await following(ctx, space, app, draft, link, mount, who)
-  let url = at + path
+  // The person is handed the short link; the browser, signed in as nobody,
+  // opens the sealed one.
+  let url = short + path
+  let ticketed = at + path
   let value: Record<string, unknown> = {
     url,
     draft: draft.eid,
@@ -755,10 +779,17 @@ export let preview = async (ctx: Ctx, args: Args) => {
     isolated: true,
     cost: 0,
   }
+  // A new app is made, not drafted: its first version goes live at its own
+  // address (T-1641).
+  let first = app.version
+    ? ''
+    : ` ${space.slug}/${app.slug} has no release yet: once this draft works, app_deploy releases it as the first version at ${
+      appUrl(space, app, ctx.env)
+    }, the address to hand the person, not this draft's link.`
   let follows =
-    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released, read-only. The link opens for at least ${
+    `The link opens for whoever writes in ${space.slug}, signed in. It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released, read-only. The link opens for at least ${
       LASTS / 3600
-    } hours; app_preview again gives a new one. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
+    } hours once opened. Each draft of the app has its own link and branch; discarding the draft drops its branch.${first}`
   if (!screenshot) {
     return {
       text:
@@ -767,7 +798,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
       value,
     }
   }
-  let shot = await rendering(ctx, space, app, { url, view })
+  let shot = await rendering(ctx, space, app, { url: ticketed, view })
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
   return {
     text: shot.said(
@@ -779,16 +810,54 @@ export let preview = async (ctx: Ctx, args: Args) => {
   }
 }
 
+let directoryAt = (env: Env) =>
+  directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
+
+// A draft's short link, `/<app>/~<id>/…` (T-1641). No credential rides in
+// it, so the visitor's own sign-in opens it, for someone who writes in the
+// space, as a link sealed for them now: its pages are served at that link's
+// mount, so their own requests, which a walled page sends with no cookie,
+// carry it. A draft no longer open sends them to the app's own address.
+let short = async (req: Request, env: Env): Promise<Response> => {
+  let url = new URL(req.url)
+  let at = shortened(url.pathname)
+  let { space: slug } = route(url.hostname, url.pathname, env)
+  if (!at || !slug || !env.SESSION_SECRET) return no()
+  let dir = directoryAt(env)
+  let space = await dir.space(slug)
+  if (!space || space.trashed) return no()
+  let [who, app] = await Promise.all([
+    whoIs(req, env, (person) => dir.role(space, person), space.eid, dir),
+    dir.app(space, at.app),
+  ])
+  if (!who.person) return redirect(signInAt(req.url, env), 303)
+  if (!app || app.trashed || !writes(who.role)) return no()
+  let of = (await draftsOf(dir, app)).find((d) => shortOf(d.eid) == at.id)
+  if (!of) {
+    return redirect(appUrl(space, app, env) + at.path.slice(1) + url.search)
+  }
+  let { mount } = await sealed(
+    { env, person: who.person },
+    space,
+    app,
+    of.eid,
+  )
+  return fetch(
+    new Request(new URL(mount + at.path.slice(1) + url.search, url), req),
+    env,
+  )
+}
+
 let target = async (req: Request, env: Env) => {
   let url = new URL(req.url)
   let aim = aimed(url.pathname)
   if (!aim || !env.SESSION_SECRET) return null
   let ticket = await opened<Ticket>('preview', aim.ticket, env.SESSION_SECRET)
   if (!ticket) return null
-  let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
-    copy: copyOf(env),
-    time: env.CLOCK,
-  })
+  let dir = directoryAt(env)
   let [found, paired, rows] = await Promise.all([
     dir.target(ticket.space, ticket.person, ticket.app),
     ticket.screen ? screenAt(dir, ticket.screen) : null,
@@ -852,6 +921,7 @@ let target = async (req: Request, env: Env) => {
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  if (shortened(new URL(req.url).pathname)) return short(req, env)
   let found = await target(req, env)
   if (!found) return no()
   let { dir, space, who, path, mount } = found

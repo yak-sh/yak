@@ -81,6 +81,11 @@ checkout, shell or computer is needed:
    and preview again. Each problem names its rule, element and one-line fix.
 4. Release with `app_deploy` and share the released app's URL.
 
+A new app is released this way as soon as its first draft works: its first
+version serves at `https://<space>.yaks.app/<app>/`, private to the space when
+`app_new` made it `access: 'private'`. A draft's link is for a change to an app
+that is already live, and for the drafts of an open-ended request.
+
 `path: 'about/'` opens another page. `wait` is milliseconds after
 DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to
 3000 (default 1000). `screenshot: false` gives only the private preview URL
@@ -94,13 +99,15 @@ shows up to 30 problems and five review items, with remaining counts. Findings
 never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
-The URL is a private bearer link to one draft: `draft` names it, else this
-conversation's own, else your one open draft. Each draft has a link and a branch
-of the app's store of its own, so several drafts preview side by side. Anyone
-holding it can exercise the preview as its author while that author remains a
-writer; keep it private. The preview reads the app's live rows as they stood
-when the draft was first previewed, in the draft's vocabulary, and what its
-pages write stays on the draft's branch.
+The URL is the draft's short link, `https://<space>.yaks.app/<app>/~<id>/`:
+`draft` names it, else this conversation's own, else your one open draft. It
+carries no credential: it opens for someone signed in who writes in the space,
+as themselves, and sends anyone else to sign in. Once the draft is released or
+discarded it leads to the app's own address. Each draft has a link and a branch
+of the app's store of its own, so several drafts preview side by side. The
+preview reads the app's live rows as they stood when the draft was first
+previewed, in the draft's vocabulary, and what its pages write stays on the
+draft's branch.
 
 Releasing the draft releases its files, vocabulary and worker; the rows its
 pages wrote stay on the branch, out of the live app, and the answer says how

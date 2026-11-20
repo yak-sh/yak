@@ -9,6 +9,14 @@ doc:
   title: 'Making a new app'
 ---
 
+A new app is made, not drafted. Once its first draft works (app_preview at phone
+and desktop widths shows it), release it with app_deploy as its first version
+and answer with the address app_deploy gives, `<space>.yaks.app/<slug>/`, never
+the draft's link. Make it private (app_new with access 'private') unless the
+person said who else it is for; they open it to others when they want. A draft
+and its link are for a change to an app that is already live, and for the drafts
+of Several directions.
+
 Before you write a new app's files, or change what an existing one does, read
 the guide, which every agent building on yaks.app is taught from: `guide` with
 no page for the recipe (the five steps, the store and `./api/client.js`), the

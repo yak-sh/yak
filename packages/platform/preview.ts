@@ -11,7 +11,9 @@
  * reads the directory and the draft's rows, keeps each state in R2 and runs a
  * state's worker in its dispatch namespace (workers/yak preview.ts). This
  * module says what those readings make: where a link is mounted (`mountOf`,
- * `aimed`), whom a ticket still admits, until when and as whom (`admits`,
+ * `aimed`), a draft's short link, which a signed-in writer opens as a ticket
+ * sealed for them (`shortOf`, `shortened`, `shortMount`), whom a ticket still
+ * admits, until when and as whom (`admits`,
  * `until`, `reading`, `viewer`), which
  * draft and link it shows (`shows`, `linkFor`), which of the link's doors a
  * request goes to (`door`), where a state is kept and what building it sets
@@ -79,6 +81,33 @@ export let within = (value: unknown): string | null => {
   ) return null
   return parsed.pathname.slice(1) + parsed.search + parsed.hash
 }
+
+/** A draft's short id: the first eight hex digits of its eid, unique among
+ * an app's open drafts and no credential: its short link opens only for
+ * someone signed in who writes in the space. */
+/// shortOf('ae67727c-8f09-8461-8f21-484e8f767ad0') -> 'ae67727c'
+export let shortOf = (draft: string): string =>
+  draft.replace(/-/g, '').slice(0, 8)
+
+/** A draft's short link as a request names it, `/<app>/~<id>/…`: its app's
+ * slug, the draft's short id, and the path under it from the app's root. */
+export type Shortened = { app: string; id: string; path: string }
+
+let SHORT = /^\/([^/]+)\/~([0-9a-f]{8})(\/.*)?$/
+
+/** The short link `pathname` is under, or null where it names none. */
+/// shortened('/cookbook/~ae67727c/about/') -> { app: 'cookbook', id: 'ae67727c', path: '/about/' }
+/// shortened('/cookbook/~ae67727c') -> { app: 'cookbook', id: 'ae67727c', path: '/' }
+/// shortened('/cookbook/~abc.def/') -> null
+export let shortened = (pathname: string): Shortened | null => {
+  let m = SHORT.exec(pathname)
+  return m && { app: m[1], id: m[2], path: m[3] ?? '/' }
+}
+
+/** Where a draft's short link is mounted: under its app, at its short id. */
+/// shortMount('cookbook', 'ae67727c-8f09-8461-8f21-484e8f767ad0') -> '/cookbook/~ae67727c/'
+export let shortMount = (app: string, draft: string): string =>
+  `/${app}/~${shortOf(draft)}/`
 
 /** What a link's ticket names: the draft it shows (`of`), as whom, and the
  * unix second it stops opening at (`exp`). A ticket for a paired TV names its

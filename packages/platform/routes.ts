@@ -786,9 +786,22 @@ export let askable = (
 // which no browser attaches on its own. What the token opens is the one app
 // it was sealed for; every other request on such a path is anonymous. A
 // draft's preview link is read the same way: its ticket is its path's
-// (`previews`).
+// (`previews`). A draft's short link (`drafted`) carries no credential, so the
+// visitor's own sign-in rides with it.
 export let paged = (pathname: string): boolean =>
-  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) || previews(pathname)
+  (/^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) && !drafted(pathname)) ||
+  previews(pathname)
+
+let DRAFTED = /^\/[^/]+\/~[0-9a-f]{8}(?:\/|$)/
+
+/** Whether `pathname` is under a draft's short link, `/<app>/~<id>/`, the
+ * id eight hex digits (@yaks/platform/preview `shortOf`). A page token is
+ * sealed, `<body>.<mac>`, so never has that shape. */
+/// drafted('/cookbook/~ae67727c/about') -> true
+/// drafted('/cookbook/~ae67727c') -> true
+/// drafted('/cookbook/~abc.def/') -> false
+/// drafted('/~ae67727c/') -> false
+export let drafted = (pathname: string): boolean => DRAFTED.test(pathname)
 
 /** The segment under an app its drafts' preview links are mounted at
  * (@yaks/platform/preview `mountOf`). */

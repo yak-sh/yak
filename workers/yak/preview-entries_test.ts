@@ -10,6 +10,7 @@ import { tools as previews } from './preview-tools.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import type { Drafted } from './written.ts'
 import type { Env } from './env.ts'
+import { sealedAt } from './preview-probe.ts'
 
 let fixture = async () => {
   let asks: Ask[] = []
@@ -91,7 +92,7 @@ let fixture = async () => {
     }).map(([path, content]) => ({ path, content })),
   })
   let out = await previews[0].run(ctx, { app: 'entries', screenshot: false })
-  let link = String(out.value!.url)
+  let link = await sealedAt(ctx, out)
   let sent: { draft: Drafted }[] = []
   let name = [...sockets.keys()].find((n) => n.endsWith('@1'))!
   sockets.get(name)!.push({

@@ -126,6 +126,10 @@ app_new:
     allowed to write can change data. Returns the app's entity id, URL and
     access setting. The URL serves nothing until app_deploy releases a
     version, so hand the person the link app_deploy answers, not this one.
+    A new app is made, not drafted: once app_preview shows its first draft
+    works, release it with app_deploy as its first version and hand the
+    person its address, never the draft's link. Drafts are for changes to
+    an app that is live and for the drafts of an open-ended request.
     A slug that already holds a live app makes nothing: the answer names that app
     and a free slug beside it, and the new app is built there. Never delete,
     trash, move or replace an existing app to rebuild it. An app already in
@@ -384,10 +388,12 @@ app_preview:
     The draft reads the app's live rows as they stood when it was first
     previewed, in the draft's vocabulary, on a branch of its own, so preview
     edits never change released app data unless app_deploy merges them
-    with rows: all. Each draft has its own private link, so several drafts
-    preview side by side: a page open on one shows each file written to
-    that draft, and once app_deploy releases it, what was released; do not
-    publish the link. screenshot: false returns only the URL without
+    with rows: all. Each draft has its own short link,
+    <space>.yaks.app/<app>/~<id>/, which opens for whoever writes in the
+    space, signed in, so several drafts preview side by side: a page open
+    on one shows each file written to that draft, and once app_deploy
+    releases it, what was released. A new app's first draft is released
+    with app_deploy and its address handed over, not this link. screenshot: false returns only the URL without
     browser cost. Browser use costs $0.09/hour from the space's monthly
     budget; the result reports the estimated cost. External database, bucket
     and Durable Object bindings are not available in a draft preview.

@@ -3,11 +3,12 @@ import { appStore, releaseOf, storeName } from './directory.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
+import { sealedAt as linked } from './preview-probe.ts'
 import { opened, seal } from './lib/token.ts'
 import { LASTS, type Ticket } from '@yaks/platform/preview'
 import { system } from '@yaks/fp'
 import { tools } from './preview-tools.ts'
-import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
+import { ADA, ADA_OWNS, as, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -71,8 +72,9 @@ await run('app_files', {
     },
   ],
 })
+let sealedAt = (out: { value?: Record<string, unknown> }) => linked(ctx, out)
 let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-let url = String(out.value!.url)
+let url = await sealedAt(out)
 let mount = url.slice(0, url.indexOf('/_preview/') + '/_preview/'.length)
 let token = url.slice(mount.length).split('/')[0]
 let app = (await dir.app(space, 'draft'))!
@@ -230,6 +232,39 @@ test('a link opens nothing once it expires, nor one sealed with no expiry', asyn
   equal((await kernel(new Request(url.replace(token, old)), env)).status, 404)
 })
 
+// A draft's short link carries no credential: the visitor's own sign-in
+// opens it, for someone who writes in the space, as the link sealed for them.
+test("a draft's short link opens for a signed-in writer, sends anyone signed out to sign in, and opens for nobody else", async () => {
+  let short = String(out.value!.url)
+  ok(/^https:\/\/ada\.yaks\.app\/draft\/~[0-9a-f]{8}\/$/.test(short), short)
+  let at = async (cookie: string | null, path = '') =>
+    await kernel(
+      new Request(new URL(path, short), cookie ? { headers: { cookie } } : {}),
+      env,
+    )
+  let page = await at(await as(ADA))
+  equal(page.status, 200)
+  let html = await page.text()
+  ok(html.includes('Private draft'), html)
+  ok(html.includes(`<base href="${new URL(url).pathname}">`), html)
+  equal(page.headers.get('cache-control'), 'private, no-store')
+  equal(
+    await (await at(await as(ADA), 'style.css')).text(),
+    'body { color: teal }',
+  )
+  let signedOut = await at(null)
+  equal(signedOut.status, 303)
+  ok(signedOut.headers.get('location')!.includes('login'))
+  let eli = 'e0000000-0000-4000-8000-000000000001'
+  await dir.apply(
+    { entities: [{ entity: { eid: eli }, person: {} }] },
+    ADA_OWNS,
+  )
+  let stranger = await at(await as(eli))
+  equal(stranger.status, 404)
+  await stranger.body?.cancel()
+})
+
 test('a walled preview page gets the platform localStorage, kept in the preview store', async () => {
   let opaque = { origin: 'null', 'content-type': 'application/json' }
   let html = await (await request()).text()
@@ -301,7 +336,7 @@ test('the link follows the draft: each write is told to its pages and served on 
   await run('app_deploy', { app: 'draft' })
   await write('style.css', 'body { color: plum }')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = String(out.value!.url)
+  let link = await sealedAt(out)
   let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   let page = await (await at()).text()
@@ -337,7 +372,7 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
     `render: (b, h) => h('p', null, '${word} ' + b.entity.eid) }])`
   await write('views.js', views('Soup'))
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = String(out.value!.url)
+  let link = await sealedAt(out)
   let sent = await heard(String(out.value!.draft))
   let { root, document, free } = stage()
   Object.defineProperty(document, 'baseURI', {
@@ -430,7 +465,7 @@ test("an app no release has seeded takes its draft's seed on the branch, and an 
   })
   await seed('seeded privately')
   let out = await tools[0].run(ctx, { app: 'sown', screenshot: false })
-  let link = String(out.value!.url)
+  let link = await sealedAt(out)
   let notes = async () =>
     (await (await kernel(
       new Request(new URL('api/query?q=.draft_note', link)),
@@ -446,7 +481,7 @@ test("an app no release has seeded takes its draft's seed on the branch, and an 
 test("an open link rides through its draft's release: its pages hear it and see what was released, and the next draft has a link of its own", async () => {
   await write('index.html', '<html><head></head><body>Before</body></html>')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = String(out.value!.url)
+  let link = await sealedAt(out)
   let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   ok((await (await at()).text()).includes('Before'))
@@ -461,6 +496,15 @@ test("an open link rides through its draft's release: its pages hear it and see 
   let page = await at()
   equal(page.status, 200)
   ok((await page.text()).includes('Before'))
+  // Its short link, the draft closed, is the app's own address.
+  let gone = await kernel(
+    new Request(String(out.value!.url) + 'about/', {
+      headers: { cookie: await as(ADA) },
+    }),
+    env,
+  )
+  equal(gone.status, 302)
+  equal(gone.headers.get('location'), 'https://ada.yaks.app/draft/about/')
   // Released, the link reads the live rows and never writes them.
   equal((await at('api/query?q=.doc')).status, 200)
   let wrote = await kernel(
@@ -482,9 +526,9 @@ test("an open link rides through its draft's release: its pages hear it and see 
   ok((await (await at()).text()).includes('Before'))
   let then = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   equal(then.value!.draft, next[0])
-  ok(String(then.value!.url) != link)
+  ok(await sealedAt(then) != link)
   ok(
-    (await (await kernel(new Request(String(then.value!.url)), env)).text())
+    (await (await kernel(new Request(await sealedAt(then)), env)).text())
       .includes('After'),
   )
 })
@@ -508,8 +552,8 @@ test('two drafts of one app preview side by side, each at its own link on its ow
       screenshot: false,
     })
     return {
-      url: String(out.value!.url),
-      text: await (await kernel(new Request(String(out.value!.url)), env))
+      url: await sealedAt(out),
+      text: await (await kernel(new Request(await sealedAt(out)), env))
         .text(),
     }
   }
@@ -551,7 +595,7 @@ test('a draft keeps a platform word its app held before the platform declared it
   let shown = async (slug: string) => {
     await run('app_files', { app: slug, files: [vocab] })
     let out = await tools[0].run(ctx, { app: slug, screenshot: false })
-    return kernel(new Request(String(out.value!.url)), env)
+    return kernel(new Request(await sealedAt(out)), env)
   }
   equal((await shown('held')).status, 200)
   await throws(

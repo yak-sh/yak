@@ -42,4 +42,6 @@ and let them choose:
    round settled the layout, the layout when it settled the words.
 
 A request with one obvious answer ("fix the typo", "add a phone field") gets one
-draft and no decision.
+draft and no decision. A new app the person describes by what it does ("a yak
+name generator", "a sign-up sheet for the potluck") is not open-ended: make it
+and release its first version (Making a new app).
