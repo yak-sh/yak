@@ -5,4 +5,7 @@ appId: host.exp.Exponent
     when:
       visible: Open
     commands:
-      - tapOn: Open
+      # The ask can go as the tap lands; the link opened all the same.
+      - tapOn:
+          text: Open
+          optional: true
