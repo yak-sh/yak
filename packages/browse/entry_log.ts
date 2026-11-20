@@ -122,8 +122,10 @@ let shown = (
   if (c.checkpoint) return { kind: 'sys', tag: 'checkpoint' }
   if (c.attention) return { kind: 'sys', tag: 'attention' }
   let body = textOf(b)
+  if (kind == 'reasoning') {
+    return body ? { kind: 'reason', text: body } : undefined
+  }
   if (kind == 'output') {
-    if (c.reasoning) return body ? { kind: 'reason', text: body } : undefined
     return { kind: 'say', role: 'agent', text: body }
   }
   if (kind == 'input') {
