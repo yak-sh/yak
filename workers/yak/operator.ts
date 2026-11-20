@@ -509,6 +509,11 @@ let TEXTED =
 let proven = (channel: string) =>
   !ANSWERING.has(channel) && !UNPROVEN.has(channel)
 
+// What anyone's turn holds beside reads, member or not: telling the platform
+// what they found. Web search and page reads are the provider's own, offered
+// to every turn.
+let OPEN = new Set(['feedback'])
+
 // What a turn on words from outside the space keeps of a member's own tools:
 // telling the person, and reporting a platform bug.
 let TELLING = new Set(['platform_bug', 'text_send', 'notification_send'])
@@ -522,9 +527,9 @@ let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
 // apps' files and settings, its memories, tasks, wakes and trials). Every
 // other answer is `heard` unless it is made only of rows no stranger wrote
 // (operator-heard.ts `heardIn`, T-1860): a command's display, a page, a
-// calendar, a letter, the gallery, a sandbox's output. A tool that should keep
-// every tool for the turn answers rows, or is named here once its words are
-// known to be the space's own. code_mode and a child session stamp their own
+// calendar, a letter, the gallery, a sandbox's output. The mark tells the
+// model whose words it reads; it takes no tool away. A tool answers rows, or
+// is named here once its words are known to be the space's own. code_mode and a child session stamp their own
 // answer from what they heard, an app command its own unless it only says
 // what it wrote (@yaks/platform/app-command `commandReply`), and the
 // integration directory its own when it lists what an owner wrote.
@@ -761,10 +766,9 @@ export let operatorRoster = async (
   // What the model reads of an answer from the Operator's own store is drawn
   // (operator-store.ts `readable`): an eid in its prose as the entity's id.
   // An answer is `heard` (operator-heard.ts) unless its words are the
-  // tool's own or it is made only of rows no stranger wrote, which leaves the
-  // rest of the turn its reads: in the Operator's own store, rows that are not
-  // hearsay (`heardIn`); in the apps, rows no app or stranger wrote
-  // (`unvouched`).
+  // tool's own or it is made only of rows no stranger wrote: in the
+  // Operator's own store, rows that are not hearsay (`heardIn`); in the apps,
+  // rows no app or stranger wrote (`unvouched`).
   let hears = async (
     t: { name?: string },
     out: Bundle[],
@@ -867,7 +871,9 @@ export let operatorRoster = async (
     { graph: work.g, person: ctx.person, space },
     remote,
   )).map(namedTool)
-    .filter((t) => !ownNamed.has(t.name) && (member || t.readOnly))
+    .filter((t) =>
+      !ownNamed.has(t.name) && (member || t.readOnly || OPEN.has(t.name))
+    )
   return [
     ...remote.map(namedTool).map((t): Tool => ({
       ...shaped(t),
@@ -1205,27 +1211,6 @@ let drawnFrom = async ({ g }: Store, session: string, now = Date.now()) => {
       ? String(comp(words, 'content')?.body ?? '')
       : '',
   }
-}
-// Whether words someone outside the space wrote (`heard`) came into this
-// session with or since the person's newest words in its conversation, which
-// give the turn after them every tool again: a tool's answer, or what was
-// said in a room before them (operator-channels.ts `led`), written with them.
-// Their words are any taken in from outside (`intake`) but the platform's own
-// (`system`), whatever door they came by.
-let overheard = async ({ g }: Store, session: string) => {
-  let [[answer], [words]] = await Promise.all([
-    g.read(
-      q`.entry.session=${session} .heard .order=-created.at .limit=1 .fields=created.at`,
-    ),
-    g.read(
-      q`.entry.session=${await topOf(
-        g,
-        session,
-      )} .intake !heard !system .order=-created.at .limit=1 .fields=created.at`,
-    ),
-  ])
-  let at = (b?: Bundle) => String(comp(b, 'created')?.at ?? '')
-  return !!answer && at(answer) >= at(words)
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
@@ -2155,11 +2140,12 @@ export let operating = (
     let confirm = o.confirm === null
       ? undefined
       : o.confirm ?? await confirmAt(store, session, work)
-    // Words nobody in the space wrote, whether they started the turn
-    // (operator-channels.ts `HEARSAY`) or came since, leave it
-    // holding only what keeps the space's data with its person, whoever's
-    // conversation it is in.
-    let heard = HEARSAY.has(channel) || await overheard(store, session)
+    // A turn started by words nobody in the space wrote (operator-channels.ts
+    // `HEARSAY`) holds only what keeps the space's data with its person. A
+    // turn the person started keeps every tool they hold: what others said in
+    // the room, or a tool's answer, is marked `heard` and read as information,
+    // never instructions, and takes none of their tools away (T-1902).
+    let heard = HEARSAY.has(channel)
     let remote = !work?.signup && proven(channel) && !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))

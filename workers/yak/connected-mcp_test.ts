@@ -386,7 +386,8 @@ test('a seated reply and its helper omit personal MCP tools and a later authenti
   )
 })
 
-// A server's words narrow the turn until its owner speaks again (T-1399).
+// A server's words are marked heard and leave its owner's turn every tool
+// (T-1902).
 let tool = 'tasks__publish_mockup'
 let failedBox = fixture()
 failedBox.toolError()
@@ -428,7 +429,7 @@ for (
       }),
     )
     handleChannels(operator, env, { chat: () => Promise.resolve({}) })
-    test(`a connected server’s tool returning ${outcome} ${mode} narrows the Operator’s tools until its owner speaks again`, async () => {
+    test(`a connected server’s tool returning ${outcome} ${mode} is heard and leaves the Operator its tools`, async () => {
       answering = isError ? failedBox : box
       try {
         for (let say of ['Ask my server', 'Thanks']) {
@@ -443,11 +444,10 @@ for (
       for (let name of ['spawn', 'code_mode', 'command', tool, 'graph_apply']) {
         assertEquals(steps.map((step) => step.includes(name)), [
           true,
-          false,
+          true,
           true,
         ], name)
       }
-      assertEquals(steps[1].includes('graph_query'), true)
       let [answer] = await work.g.read('.entry .heard ?refusal ?content')
       assertEquals(
         answer?.refusal,

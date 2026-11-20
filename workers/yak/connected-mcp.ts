@@ -229,9 +229,7 @@ export let connectedInstructions = async (
 
 /** The same commands as named tools inside an Operator or code execution.
  * `asking` is who they are offered to, an Operator and its conversation or
- * else the person's connector, which a machine is told with each request.
- * The Operator narrows its tools after reading a `heard` answer until the
- * person speaks again (operator.ts `overheard`). */
+ * else the person's connector, which a machine is told with each request. */
 export let connectedTools = async (
   ctx: Ctx,
   asking?: Calling,

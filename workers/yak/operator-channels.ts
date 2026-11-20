@@ -416,10 +416,9 @@ export let hear = async (
 /** What was said where words came, leading up to them (`lead`,
  * operator-rooms.ts `leading`): an entry of its own just before the words,
  * never inside them. It starts no turn (`notice`). With anyone else's words
- * in it, it is the room's and `heard`, and the turn the words start holds
- * only what keeps the space's data with its person (operator.ts
- * `overheard`); else it is the person's own, written `by` them as the words
- * are. */
+ * in it, it is the room's and `heard`, which the Operator reads as
+ * information, never instructions; else it is the person's own, written `by`
+ * them as the words are. */
 let led = (
   session: string,
   id: string,

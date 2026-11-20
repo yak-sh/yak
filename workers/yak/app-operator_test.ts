@@ -189,7 +189,7 @@ test('queued app words notify only the owner and remain passive information in t
   assertEquals(talks(before).includes(malicious), false)
   assertEquals(talks(before).includes('an older app notice'), false)
   assertStringIncludes(talks(read), malicious)
-  assertEquals(canWrite(read), false)
+  assertEquals(canWrite(read), true)
 })
 
 test('a page or a person cannot tell the Operator, and a tell says something by a key', async () => {

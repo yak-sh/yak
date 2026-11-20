@@ -261,7 +261,7 @@ test('connected from the page, each names its account, and the Operator uses bot
     ['calendar_events', 'calendar_add', 'gmail_send'].map((n) =>
       names(read).includes(n)
     ),
-    [true, false, false],
+    [true, true, true],
   )
   let [events] = to('/calendars/primary/events?')
   assertEquals(events.headers.get('authorization'), 'Bearer A1')
