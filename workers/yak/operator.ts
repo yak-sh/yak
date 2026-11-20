@@ -2269,22 +2269,27 @@ export let operating = (
   // longer has in front of it (@yaks/session `recall`). The hosted embedder
   // reserves and settles spend around an inference call. Give that path
   // more time than the box's deadline, while bounding how long intake waits.
-  let recalling = recall({
-    graph: g,
-    meaning: store.meaning,
-    floors: FLOORS,
-    report: (e) => void caught(e, { request: 'operator recall' }),
-  }, 2_500)
+  let recalling = (person: string) =>
+    recall({
+      graph: seenBy(store, person),
+      meaning: store.meaningFor?.(person),
+      floors: FLOORS,
+      report: (e) => void caught(e, { request: 'operator recall' }),
+    }, 2_500)
   let before = async (
     session: string,
     text: string,
     held: Asker,
     space: Space,
   ): Promise<Bundle[]> => {
-    let body = await recalling.said(text, new Date().toISOString(), {
-      by: held.person,
-      session,
-    })
+    let body = await recalling(held.person).said(
+      text,
+      new Date().toISOString(),
+      {
+        by: held.person,
+        session,
+      },
+    )
     return body
       ? [{
         entity: { eid: crypto.randomUUID() },

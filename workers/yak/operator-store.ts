@@ -4,7 +4,7 @@
 // @yaks/host's assembly, as the Store object composes each kind it serves.
 import { line } from '@yaks/query'
 import { statements } from '@yaks/sqlite'
-import type { Graph, Storage } from '@yaks/graph'
+import type { Graph, ReadOpts, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Held, held } from '@yaks/id/graph'
 import { drawing } from '@yaks/tools/readable'
@@ -48,6 +48,7 @@ import {
 import { graph } from '@yaks/graph'
 import type { Meaning } from '@yaks/host'
 import { ranking, texts } from './embedding-read.ts'
+import { sight } from './operator-access.ts'
 import { operatorConfig } from './config.ts'
 import { load, vocabFacets } from './operator-load.ts'
 import { vocabsOf } from './vocabs.ts'
@@ -169,13 +170,14 @@ export let operatorStore = async (
       caught(error, { request: 'operator embedding', ...context }),
     log: (line, ...detail) => console.warn(`yak operator ${line}`, ...detail),
   })
+  let rank = vectors && ((opts?: ReadOpts) =>
+    ranking(vectors.model, {
+      ...held(),
+      screen: (line) => store.screen(line, opts),
+    }))
   let graphed = operatorGraph(plan, {
     vectors: swept,
-    meaning: vectors &&
-      ranking(vectors.model, {
-        ...held(),
-        screen: (line) => store.screen(line),
-      }),
+    meaning: rank?.(),
     blobs: sqliteBlobs(statements(sql)),
     storage: (extend) =>
       store = storage(durable, operatorVocab, {
@@ -234,6 +236,11 @@ export let operatorStore = async (
   return {
     ...graphed,
     ...swept ? { vectors: swept } : {},
+    meaningFor: rank && ((person: string): Meaning => {
+      let meaning = rank(sight({ g: graphed.g, marks }, person))
+      return (words, opts) =>
+        meaning(words, { ...opts, within: opts?.within || '*' })
+    }),
     marks,
     upkeep: store.upkeep,
     lettered: () => !sole(sql),
@@ -254,6 +261,8 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
   waiting?: () => number
   /** its vectors' drains, where the object lends an embedder */
   vectors?: Sleeper
+  /** meaning ranked only among what the person can read in this store */
+  meaningFor?: (person: string) => Meaning
 }
 
 /** What a composition of the Operator's store is bound to: its storage, given

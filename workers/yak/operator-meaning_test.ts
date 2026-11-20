@@ -62,6 +62,8 @@ let service = operatorService(
 )
 env.BUILDER = service.binding
 let KEPT = 'Ada waters her tomatoes every morning before work'
+let PRIVATE = 'Bea uses rainwater on her veggies'
+let bea = crypto.randomUUID(), beas = crypto.randomUUID()
 let [, { entity: memory }] = await store.g.apply([
   { entity: { eid: person }, person: {} },
   {
@@ -70,6 +72,20 @@ let [, { entity: memory }] = await store.g.apply([
     doc: { title: KEPT, body: KEPT },
     $actor: { by: person },
   },
+  { entity: { eid: bea }, person: {} },
+  {
+    entity: { eid: beas },
+    session: {},
+    operator_session: { person: bea, space: eid },
+  },
+  // The private memories are closer than Ada's and would fill the ranking.
+  ...Array.from({ length: 6 }, (_, i) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: beas },
+    memory: {},
+    content: { body: `${PRIVATE} (${i + 1})` },
+    $actor: { by: bea },
+  })),
 ], { trusted: true })
 await store.vectors!.work()
 
@@ -84,6 +100,9 @@ let turn = JSON.stringify(asked.at(-1)!.items)
 test('a memory worded unlike the message reaches its turn by meaning', () => {
   equal(turn.includes('Nearest memories and decisions'), true)
   equal(turn.includes(KEPT), true)
+})
+test("auto-recall leaves out another person's private memories", () => {
+  equal(turn.includes(PRIVATE), false)
 })
 test('its vectors are kept in the Operator store', async () => {
   equal(store.vectors!.owes(), false)
