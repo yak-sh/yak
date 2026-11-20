@@ -228,7 +228,10 @@ place of the host's tools, persona tool lists and MCP servers:
 - `submit_patch`, which hands the sandbox's changes to a **lander**: a native
   session of the host's own (`lands{from}`), wearing the same persona and taking
   the task's claim, whose first input is the patch, to be read as untrusted
-  code, applied, landed and seen live;
+  code, applied, landed and seen live. A session holding no task (a helper)
+  names the one its work is for, such as the task a letter it took filed, and
+  with a task named it may hand over no patch, leaving the lander only what
+  needs the box, such as an answer to send;
 - the host tools the isolation names, by default reads (`graph_show`,
   `graph_query`, `graph_schema`, `search`, `bug_show`) and `session_handup`.
 

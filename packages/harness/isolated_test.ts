@@ -26,7 +26,7 @@ let machine = (out: string, ran: string[]): Workspace => ({
   write: () => Promise.resolve(),
 })
 
-let office = async () => {
+let office = async (diff = 'diff --git a/x b/x\n+fixed') => {
   let config = at()
   let host = await compose(
     { ...config, plugins: [...config.plugins!, '@yaks/heal'] },
@@ -49,7 +49,7 @@ let office = async () => {
     request: (r) => {
       requested.push(r)
       return Promise.resolve({
-        workspace: machine('diff --git a/x b/x\n+fixed', ran),
+        workspace: machine(diff, ran),
       })
     },
     connect: () => Promise.reject(new Error('unused')),
@@ -170,6 +170,45 @@ test('submit_patch hands the patch and the task’s claim to a lander; a sandbox
     ok(o.requested.at(-1)!.id != o.disposed[0])
   } finally {
     await o.host.close()
+  }
+})
+
+test('a helper holding no task names the one its work is for, and hands it over with or without a patch', async () => {
+  for (let diff of ['diff --git a/x b/x\n+fixed', '']) {
+    let o = await office(diff)
+    try {
+      await o.g.apply([
+        { entity: { eid: 'letter' }, task: {}, doc: { title: 'Letter: red' } },
+      ], { trusted: true })
+      let r = await o.scope('helper', o.runner)
+      let hand = (args: Record<string, string>, call: string) =>
+        r.tools.find((t) => t.name == 'submit_patch')!.run(args, {
+          session: 'helper',
+          call: { entity: { eid: call } },
+          entries: [],
+        })
+      equal(
+        await hand({ summary: 'x', task: 'nothing' }, 'c1'),
+        'No task nothing; nothing handed over.',
+      )
+      await hand(
+        { summary: 'Declined: answer the thread.', task: 'letter' },
+        'c2',
+      )
+      // Not the office's own lander of the helper's.
+      let [lander] = (await o.g.read('.lands.from=helper'))
+        .filter((b) => b.entity.eid != 'landing')
+      let [first] = await o.g.read(
+        line`.entry.session=${lander.entity.eid} ?content`,
+      )
+      let body = String((first.content as Comp).body)
+      ok(body.includes('Letter: red') && body.includes('Declined'))
+      equal(body.includes('+fixed'), !!diff)
+      let [task] = await o.g.get(['letter'], ['claim'])
+      equal((task.claim as Comp).session, lander.entity.eid)
+    } finally {
+      await o.host.close()
+    }
   }
 })
 

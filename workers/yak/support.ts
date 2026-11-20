@@ -33,7 +33,7 @@ import { type Bundle, mint, minted } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
 import { KERNEL, type Meta } from './meta.ts'
-import { toPlatform } from './mail-config.ts'
+import { INTERNAL, toPlatform } from './mail-config.ts'
 import { type Host, replyTo, url as hostUrl } from '@yaks/platform/host'
 import { isTestAddress } from '@yaks/platform/bots'
 import { REPO } from '@yaks/platform/names'
@@ -105,9 +105,10 @@ export type Thread = {
   messages: Message[]
 }
 
-/** The letter a message owes TaskMaster: its subject and the lines under the
- * words. */
-export type Letter = { subject: string; lines: string[] }
+/** The letter a message owes TaskMaster: its subject, the lines under the
+ * words, and where it goes when that is not the platform's public address
+ * (`to`). */
+export type Letter = { subject: string; lines: string[]; to?: string }
 
 type Row = Record<string, unknown>
 
@@ -155,7 +156,7 @@ let letterRows = (
     `thread \`${thread}\``,
     `answer: \`yak admin support ${thread} '<reply>' [--fix <id>] [--complete]\``,
   ]
-  return toPlatform(replyTo(env), derived('letter', about), {
+  return toPlatform(letter.to ?? replyTo(env), derived('letter', about), {
     subject: letter.subject,
     body: `${words.trim()}\n\n—\n${lines.join('\n')}`,
     about,
@@ -163,7 +164,7 @@ let letterRows = (
 }
 
 /** The rows that open a thread, and the letter it owes unless `letter` is
- * null (a test account's words go nowhere). */
+ * null. */
 export let opening = (
   env: Host,
   said: Said,
@@ -563,10 +564,13 @@ export let lately = async (store: Meta, person: string): Promise<number> => {
   }
 }
 
-/** Who said it, on the letter, and whether a letter goes at all: a test
- * account's words are kept and go nowhere (@yaks/platform/bots), since a
- * letter is a thing a person has to read. Nobody signed in is said plainly,
- * so a reader knows there is no address to answer. */
+/** Who said it, on the letter, and where the letter goes. A person's goes to
+ * the platform's public address, which the box files as work and its owner
+ * gets a copy of. A test account's (@yaks/platform/bots) goes to the
+ * platform's own address (mail-config.ts `INTERNAL`), which only the box
+ * reads: the fleet's own checks reach the agents that act on feedback, and
+ * no person's inbox. Nobody signed in is said plainly, so a reader knows
+ * there is no address to answer. */
 export let signer = async (
   dir: Pick<Directory, 'nameAt' | 'emailAt'>,
   person: string | null | undefined,
@@ -575,7 +579,7 @@ export let signer = async (
   let email = person ? await dir.emailAt(person) : null
   return {
     email,
-    test: isTestAddress(email ?? ''),
+    ...isTestAddress(email ?? '') ? { to: INTERNAL } : {},
     from: person
       ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
       : 'someone, signed out',
@@ -598,9 +602,10 @@ export let adding = async (
     env,
     t.eid,
     said,
-    me.test ? null : {
+    {
       subject: `feedback: ${t.title}`,
       lines: [me.from, `yaks.app ${VERSION} · ${new Date().toISOString()}`],
+      ...me.to ? { to: me.to } : {},
     },
     headers,
   )

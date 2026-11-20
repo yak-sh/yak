@@ -10,6 +10,7 @@ import {
   opens,
   read,
   saying,
+  signer,
   type Thread,
 } from './support.ts'
 import {
@@ -141,6 +142,20 @@ test('the same call opens the same thread and owes the same letter', () => {
   equal(more[0].comment, { target: 'thread' })
   equal(more[1], { entity: { eid: 'thread' }, completed: null }, 'reopens')
   equal((more[3].mail as { target: string }).target, more[0].entity.eid)
+})
+
+test("a person's letter goes to the public address, a test account's to the box's alone", async () => {
+  let dir = (email: string) => ({
+    nameAt: () => Promise.resolve('Ann'),
+    emailAt: () => Promise.resolve(email),
+  })
+  let to = async (email: string) => {
+    let me = await signer(dir(email), 'p')
+    let [, address] = opening({}, { words: 'x' }, where, { ...letter, ...me })
+    return address.email
+  }
+  equal(await to('ann@example.com'), { address: 'hello@yaks.app' })
+  equal(await to('checks@bot.yak.sh'), { address: 'hello@bot.yak.sh' })
 })
 
 test("the platform's answer is a message without support, a fix edge and a mark", () => {

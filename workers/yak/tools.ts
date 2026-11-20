@@ -8015,14 +8015,15 @@ let OURS: Row[] = [
           release: VERSION,
           at,
         },
-        me.test ? null : {
+        {
           subject: `feedback: ${title(said)}`,
           lines: [
             me.from,
-            ...where ? [where] : [],
+            ...where ? [`space ${where}`] : [],
             ...app && space ? [url(space, app, ctx.env)] : [],
             `yaks.app ${VERSION} · ${at}`,
           ],
+          ...me.to ? { to: me.to } : {},
         },
         await headers(),
       )
@@ -8032,12 +8033,9 @@ let OURS: Row[] = [
       // agent told "that failed" says it again and the person says it twice.
       return answer(
         t,
-        (me.test
-          ? 'The words are kept for the people who run yaks.app, and not ' +
-            `mailed: ${me.email} is a test account.`
-          : 'Kept as a thread for the people who run yaks.app' +
-            (where ? `, with ${where} and the versions` : '') +
-            '; they are told by mail and answer in the thread.') +
+        'Kept as a thread for the people who run yaks.app' +
+          (where ? `, with ${where} and the versions` : '') +
+          '; they are told by mail and answer in the thread.' +
           (ctx.person
             ? ''
             : ' It was said signed out, so nobody can read it back or be ' +

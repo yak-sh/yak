@@ -70,9 +70,11 @@ let filing = (letter: Bundle, project: Eid): Bundle[] => {
       }`,
       body: `A letter${from ? ` from ${from}` : ''} reached this project. ` +
         `Read it with \`yak mail show ${eid}\`. A reply (\`yak mail ` +
-        'reply`) or a letter sent `--about` it completes this task. When ' +
-        'the letter needs no answer, cancel this task: that archives the ' +
-        'letter.',
+        'reply`) or a letter sent `--about` it completes this task. An ' +
+        'answer given where the letter asks for one instead, such as a ' +
+        'support thread it names, does not, so complete the task once it is ' +
+        'given. When the letter needs no answer, cancel this task: that ' +
+        'archives the letter.',
     },
     filed: { project, priority: 1 },
   }]
