@@ -23,8 +23,14 @@ export let DEMO = `yourname${BOT}`
 // An address we cannot see is not proof, so it reads as somebody's: the safe
 // direction to be wrong in.
 export let isTestAddress = (address: string): boolean =>
-  (address.endsWith(BOT) && address != ADMIN && address != DEMO) ||
-  address.endsWith('.invalid')
+  isFleetAddress(address) && address != ADMIN && address != DEMO
+
+// Whether an address is no person's: any the fleet holds, the admin's and the
+// demo's too, or one on `.invalid`. What either does is the fleet's, so a
+// count of people (workers/yak funnel.ts) leaves it out, though neither is a
+// throwaway.
+export let isFleetAddress = (address: string): boolean =>
+  address.endsWith(BOT) || address.endsWith('.invalid')
 
 // A visit is nobody's when its link names the fleet's own checks as its
 // source (`utm_source=agent-check`): an agent checking a live page, through a

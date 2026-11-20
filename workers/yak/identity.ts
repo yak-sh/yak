@@ -116,7 +116,9 @@ import {
   directory,
   META,
   RESERVED,
+  type Row,
   type Space,
+  testIs,
 } from './directory.ts'
 import { type Book, listing, through } from './grant-rows.ts'
 import {
@@ -1123,7 +1125,9 @@ let begun = async (
   // A cookie outlives a newcomer whose space nobody kept and was erased
   // (erase.ts `vacated`): their browser is a stranger again.
   let [known] = person
-    ? await meta(env).query(line`.entity.eid=${person}&.person ?email`)
+    ? await meta(env).query(
+      line`.entity.eid=${person}&.person ?email ?newcomer`,
+    )
     : []
   if (!known) person = null
   let set: string | undefined
@@ -1169,7 +1173,12 @@ let begun = async (
     },
     options: { id: request },
   })
-  step(env, 'started', req, { who: addressIn(known) })
+  // A build by somebody the directory says is nobody's, such as a newcomer
+  // an agent's check opened, counts apart whatever their browser says now.
+  step(env, 'started', req, {
+    who: addressIn(known),
+    test: testIs(known as Row | undefined),
+  })
   return redirect(chat, set, 303)
 }
 

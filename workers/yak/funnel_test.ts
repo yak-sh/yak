@@ -17,7 +17,8 @@ import { FUNNEL, isHome, type Visited } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
-import { connector, kernel, mailed, unique } from './probe.ts'
+import { connector, kernel, mailed, signIn, unique } from './probe.ts'
+import { ADMIN, DEMO } from '@yaks/platform/bots'
 
 let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
 let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
@@ -105,8 +106,9 @@ test("a step for a test account, or for a space only test accounts own, is a tes
     ['snappy-survey@bot.yak.sh', 'test'],
     ['nobody@example.invalid', 'test'],
     [['a@bot.yak.sh', 'b@bot.yak.sh'], 'test'],
-    // The platform's own admin and the demo's holder are not throwaways.
-    ['admin@bot.yak.sh', ''],
+    // The platform's own admin and the demo's holder are no person either.
+    ['admin@bot.yak.sh', 'test'],
+    ['yourname@bot.yak.sh', 'test'],
     ['ada@example.com', ''],
     [['a@bot.yak.sh', 'ada@example.com'], ''],
     [['a@bot.yak.sh', null], ''],
@@ -235,8 +237,12 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       { client: 'bot', step: 'home', n: 5 },
     ])
     // An agent's check, tagged so in its link, is a test account's step,
-    // whatever client it was written with.
-    let who = "if(blob7 LIKE 'agent-check/%', 'test', blob6)"
+    // whatever client it was written with, and so is each build begun by
+    // the check of /churches on 2026-11-10 whose link did not say so.
+    let check = [1794343657, 1794344110, 1794344303, 1794344376].map((t) =>
+      ` OR blob2 = 'started' AND timestamp = toDateTime(${t})`
+    ).join('')
+    let who = `if(blob7 LIKE 'agent-check/%'${check}, 'test', blob6)`
     assertEquals(
       sql.asked.filter((q) => q.includes(`NOT ${who} IN ('browser', '')`))
         .length,
@@ -494,4 +500,44 @@ test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's
     ]),
   )
   assertEquals(stopped(f.stages), { after: f.stages![0], went: 0 })
+})
+
+test("a build begun in the home page's box is a person's only when a person began it", async () => {
+  let k = await kernel()
+  let builds = async (cookie = '') => {
+    let before = k.views.points.length
+    let r = await k.at(k.host, '/start', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'user-agent': BROWSER,
+        origin: 'https://yaks.app',
+        ...cookie ? { cookie } : {},
+      },
+      body: new URLSearchParams({ say: 'A prayer list' }).toString(),
+    })
+    await r.body?.cancel()
+    let [at] = k.views.points.slice(before)
+      .filter((p) => p.indexes?.[0] == FUNNEL && p.blobs![1] == 'started')
+    let session = r.headers.getSetCookie()
+      .find((c) => c.startsWith('yak_session='))?.split(';')[0]
+    return {
+      client: at?.blobs?.[5],
+      session: session ?? cookie,
+    }
+  }
+  assertEquals((await builds()).client, 'browser')
+  // An agent's check's newcomer, building again once its link no longer
+  // says so, is still nobody's (directory.ts `testIs`).
+  let check = await builds(
+    'yak_came=utm_source=agent-check&utm_campaign=box&at=5',
+  )
+  assertEquals((await builds(check.session)).client, 'test')
+  for (let address of [ADMIN, DEMO]) {
+    assertEquals(
+      (await builds((await signIn(k, address)).cookie)).client,
+      'test',
+    )
+  }
 })

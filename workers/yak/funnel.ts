@@ -12,7 +12,7 @@ import { caught } from './defects.ts'
 import type { Host } from '@yaks/platform/host'
 import { fromOurs } from './page-report.ts'
 import { isPerson } from './crawlers.ts'
-import { CHECK, isTestAddress } from '@yaks/platform/bots'
+import { CHECK, isFleetAddress } from '@yaks/platform/bots'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
 import {
   BUTTON,
@@ -42,6 +42,7 @@ import {
   ne,
   not,
   op,
+  or,
   select,
   table,
 } from '@yaks/sql/core'
@@ -141,7 +142,8 @@ export type Who = string | null | readonly (string | null)[]
  * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
  * as an agent going through the sign-up live, counts as nothing. One for a
  * test account (`who`, @yaks/platform/bots), such as an agent signing up
- * through a browser, is counted apart from a person's. One taken away from a
+ * through a browser, or for the admin or the demo's holder, is counted apart
+ * from a person's. One taken away from a
  * request counts under the `campaign` its taker came by, and apart when its
  * taker is nobody's (`test`, directory.ts `stepper`), so an agent's check's
  * newcomer building is counted apart too.
@@ -171,11 +173,11 @@ export let step = (
   }
 }
 
-// Whether a step is a test account's: it is for somebody, and every address
-// it is for is a test account's.
+// Whether a step is the fleet's: it is for somebody, and every address it is
+// for is one the fleet holds (@yaks/platform/bots `isFleetAddress`).
 let tested = (who: Who = []) => {
   let all = [who].flat()
-  return all.length > 0 && all.every((a) => a != null && isTestAddress(a))
+  return all.length > 0 && all.every((a) => a != null && isFleetAddress(a))
 }
 
 /** Where a page's script (public/cta.js) posts the call to action clicked. */
@@ -234,20 +236,41 @@ export let start = (window: number | Date, now = Date.now()) =>
     ),
   ))
 
+/** Steps written as a browser's that were an agent's check, each its step
+ * and the second it was written at: T-154822's check of the box on /churches,
+ * on 2026-11-10, whose visits did not name it (T-1824). A point is never
+ * rewritten, so these are read as a test's (`WHO`). Once they are further
+ * back than a step is kept, they go. */
+export let MISCOUNTED = [
+  ['started', '2026-11-10T20:47:37Z'],
+  ['started', '2026-11-10T20:55:10Z'],
+  ['started', '2026-11-10T20:58:23Z'],
+  ['started', '2026-11-10T20:59:36Z'],
+] as const
+
+let STEP = col(SLUG)
+let second = (at: Date) =>
+  fn('toDateTime', lit(Math.floor(at.getTime() / 1000)))
+
 // Who took a step: the client it was written with, or `test` for one whose
 // arrival names an agent's check as its source (@yaks/platform/bots `CHECK`),
-// though a browser, or a script saying it is one, took it. A person's step is
-// one a browser took, or one taken away from any request; a crawler's, an
-// agent's or a test account's is counted apart (`apart`).
+// though a browser, or a script saying it is one, took it, and for one in
+// MISCOUNTED. A person's step is one a browser took, or one taken away from
+// any request; a crawler's, an agent's or a test account's is counted apart
+// (`apart`).
 let WHO = fn(
   'if',
-  op('like', col(CAMPAIGN), lit(`${CHECK}/%`)),
+  or(
+    op('like', col(CAMPAIGN), lit(`${CHECK}/%`)),
+    ...MISCOUNTED.map(([step, at]) =>
+      and(eq(STEP, lit(step)), eq(col('timestamp'), second(new Date(at))))
+    ),
+  ),
   lit('test'),
   col(CLIENT),
 )
 let PEOPLE = among(WHO, [lit('browser'), lit('')])
 
-let STEP = col(SLUG)
 let N = as(COUNT, 'n')
 let busiest = [desc(col('n'))]
 let said = (blob: string) => ne(col(blob), lit(''))
@@ -262,10 +285,7 @@ let over = (
   where: and(
     eq(col('index1'), lit(FUNNEL)),
     who,
-    ge(
-      col('timestamp'),
-      fn('toDateTime', lit(Math.floor(since.getTime() / 1000))),
-    ),
+    ge(col('timestamp'), second(since)),
     ...more,
   ),
 })
