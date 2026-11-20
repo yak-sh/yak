@@ -80,6 +80,7 @@ export class Builder extends Durable {
   // What the pages watching the Operator are told, once it is at work.
   #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
   #arming?: Promise<void>
+  #revivals = 0
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
   // When the Operator's work stops starting runs (the alarm's slice),
@@ -135,6 +136,7 @@ export class Builder extends Durable {
    */
   async wipe() {
     let ctx = this.#ctx
+    this.#owed = undefined
     await ctx.storage.deleteAlarm?.()
     await ctx.storage.deleteAll()
     this.#operator = undefined
@@ -191,6 +193,12 @@ export class Builder extends Durable {
       // this object again once it has that answer (`OWED`), it waits for that
       // wake.
       if (this.#asked == 1) this.#resume()
+      return new Response(null, { status: 204 })
+    }
+    if (url.pathname == '/revive') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      this.#revivals++
+      await this.clock.arm(Date.now())
       return new Response(null, { status: 204 })
     }
     if (url.pathname == '/wipe') {
@@ -690,6 +698,21 @@ export class Builder extends Durable {
     } catch (e) {
       caught(e, { request: 'operator resume' })
     }
+  }
+
+  override async alarm(): Promise<void> {
+    let eid = this.ctx.id?.name
+    if (!eid) {
+      if (this.ceiling.stopped(true)) return await super.alarm()
+      // An older alarm can arrive without the object's name.
+      let { spaceOf } = await import('./operator-root.ts')
+      eid = await spaceOf((await this.#stored()).store)
+    }
+    let revivals = this.#revivals
+    let space = eid ? await dirPart.directoryOf(this.#env.STORE).at(eid) : null
+    if (space && !space.trashed) return await super.alarm()
+    // Leave a restore's alarm in place if it overtook the directory read.
+    if (revivals == this.#revivals) await this.#ctx.storage.deleteAlarm?.()
   }
 
   // What the package's object opens: the Operator, and what its alarm works

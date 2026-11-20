@@ -21,6 +21,7 @@ import { redone } from './defects.ts'
 import { restarting } from './running.ts'
 import { draftEid } from '@yaks/draft'
 import { chatPath } from '@yaks/platform/routes'
+import { trashSpace } from './erase.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -270,6 +271,34 @@ let posted = (o: Awaited<ReturnType<typeof seeded>>, path: string) =>
 
 let armed = async (o: { ctx: ReturnType<typeof state> }) =>
   (await o.ctx.storage.getAlarm()) != null
+
+test('an alarm from before the Builder was named clears itself when its space is trashed', async () => {
+  let o = await seeded()
+  await (await posted(o, '/operator/conversation')).text()
+  await trashSpace(o.env, dirOf(o.env), o.space, o.held)
+  await o.ctx.storage.setAlarm(Date.now())
+  await o.object.alarm()
+  assertEquals(await armed(o), false)
+  assertEquals(o.ctx.pending.size, 0)
+})
+
+test('an alarm delivered after a space is erased does not open the Builder store', async () => {
+  let { env } = platform(SECRET)
+  let ctx = Object.assign(state('', false), {
+    id: { name: crypto.randomUUID() },
+  })
+  using storage = ctx.storage
+  let object = new Builder(ctx, env)
+  await storage.setAlarm(Date.now())
+  await object.alarm()
+  assertEquals(await armed({ ctx }), false)
+  assertEquals(ctx.pending.size, 0)
+  assertEquals(
+    [...storage.sql.exec('select name from sqlite_master')]
+      .some((row) => row.name == 'entity'),
+    false,
+  )
+})
 
 // What the wiped incarnation opened knew the file before it was emptied, so
 // the object restarts rather than read tables that are gone (T-222): once

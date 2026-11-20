@@ -1658,14 +1658,16 @@ export let operating = (
   // ends in the session that started it.
   let unfinished = async (session: string, fault: string, request: string) => {
     let space = (await workingOf(store, session))?.space
+    let active = space ? await dir().at(space) : null
+    if (space && (!active || active.trashed)) return false
     let rerun = !!space && request == 'operator conversation'
     let sent = filed(Error(`Operator could not finish: ${fault}`), {
       request,
       session,
-      space: space ? (await dir().at(space))?.slug : null,
+      space: active?.slug ?? null,
       ...rerun ? { rerun: space } : {},
     })
-    if (!rerun || !sent) return
+    if (!rerun || !sent) return true
     let { faultOf } = await import('@yaks/tracker')
     await g.apply([{
       entity: { eid: session },
@@ -1673,6 +1675,7 @@ export let operating = (
     }], {
       trusted: true,
     })
+    return true
   }
   // The session's answer, once its turn ends: an answer to each request the
   // turn answers, which its channel delivers (operator_deliver), and on a
@@ -1788,9 +1791,10 @@ export let operating = (
     let kept = (await g.get(ids)).some(Boolean)
     // A conversation that could not finish reaches the tracker once, when
     // its answer is first written (M-37965).
-    if (reply.fault && !kept) {
-      await unfinished(session, reply.fault, 'operator conversation')
-    }
+    if (
+      reply.fault && !kept &&
+      !await unfinished(session, reply.fault, 'operator conversation')
+    ) return
     if (kept) return
     // A run nobody watches (a break's fix, a wake-up that fired, a
     // subscription that saw a change, what another conversation raised)

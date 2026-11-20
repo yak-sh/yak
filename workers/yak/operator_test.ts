@@ -27,6 +27,7 @@ import { appDoc, appVocab } from './vocab.ts'
 import { withKinds } from '@yaks/platform/app-commands'
 import { declared } from './directory-fixture.ts'
 import { trashSpace } from './erase.ts'
+import { within } from './defects.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {
@@ -932,4 +933,28 @@ test('the Operator of a space in the trash asks no model', async () => {
     () => {},
   )
   assertEquals(asked, 0)
+})
+
+test('a turn that reaches a trashed space finishes without filing a defect or rerun', async () => {
+  let { env, dir, held, space } = await fixture()
+  let store = operatorMemory()
+  let op = operate(
+    store,
+    { env, dir },
+    operatorModel(() => {
+      throw new Error('the model should never be called')
+    }),
+  )
+  let { session } = await op.ask(held, space, { say: 'Check my apps.' })
+  await trashSpace(env, dir, space, held)
+  let reports: unknown[] = []
+  await within(
+    {
+      ERRORS: { send: (rows) => Promise.resolve(void reports.push(rows)) },
+    },
+    { request: 'Builder alarm' },
+    () => drain(store),
+  )
+  assertEquals(reports, [])
+  assertEquals((await store.g.get([session]))[0]?.stalled, undefined)
 })

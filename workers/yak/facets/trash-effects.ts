@@ -2,6 +2,7 @@
 import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { delivered } from '../trash.ts'
+import { reviveBuilder } from '../build-door.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 
@@ -15,6 +16,12 @@ export let effects = (_host: unknown, options: Options): Handlers => {
           try {
             let [row] = await tx.get([event.entity.eid])
             if (!row || row.tombstone) return
+            if (row.space && !row.trashed && at.env.BUILDER) {
+              await reviveBuilder({
+                BUILDER: at.env.BUILDER,
+                CLOCK: at.env.CLOCK,
+              }, row.entity.eid)
+            }
             let apps: Bundle[] = row.app ? [row] : row.space
               ? await tx.read(
                 line`.app.space=${row.entity.eid} .app`,

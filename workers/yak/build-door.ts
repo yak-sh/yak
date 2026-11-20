@@ -104,6 +104,16 @@ export let builderOf = (env: Env, space: string) => {
   }
 }
 
+type Wiring = Pick<Env, 'BUILDER' | 'CLOCK'>
+
+let signal = (env: Wiring, space: string, path: string) =>
+  fetchOf(env.BUILDER, space, jittered(env.CLOCK))(() =>
+    new Request('https://builder' + path, {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1' },
+    })
+  )
+
 /** Wake the space's object (door.ts `WAKE`), ahead of what a person will ask
  * its Operator or behind an answer that says it owes work: it comes up as any
  * request brings it, makes what a read of the Operator needs, and takes up
@@ -114,16 +124,19 @@ export let woken = (
   retain?: (work: Promise<void>) => void,
 ): void =>
   ahead(
-    () =>
-      fetchOf(env.BUILDER, space, jittered(env.CLOCK))(() =>
-        new Request('https://builder' + WAKE, {
-          method: 'POST',
-          headers: { 'x-yak-kernel': '1' },
-        })
-      ),
+    () => signal(env, space, WAKE),
     { request: 'operator wake', space },
     retain,
   )
+
+/** A restored space's pending Operator work is due again. */
+export let reviveBuilder = async (env: Wiring, space: string) => {
+  let response = await signal(env, space, '/revive')
+  if (!response.ok) {
+    throw new Error(`${response.status} ${await response.text()}`)
+  }
+  await response.body?.cancel()
+}
 
 /**
  * A space's conversation, buried (T-34371). erase.ts is the only caller, and

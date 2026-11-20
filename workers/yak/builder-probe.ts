@@ -15,7 +15,7 @@ export let builders = (env: () => Env, state: (name: string) => State) => {
   let stateOf = (name: string): State => {
     let found = states.get(name)
     if (found) return found
-    let made = state(name), abort = made.abort
+    let made = Object.assign(state(name), { id: { name } }), abort = made.abort
     if (abort) {
       made.abort = (reason?: string) => {
         let now = alive.get(name)
