@@ -42,6 +42,22 @@ test('files load and execute in order, retaining reports without fixture bodies'
   equal(result.loading, Object.values(result.loads).reduce((a, b) => a + b, 0))
 })
 
+test('a file leaves no global to the next, even one nobody may assign', async () => {
+  let g = globalThis as { left?: unknown }
+  let seen: unknown[] = []
+  await drive(['a.ts', 'b.ts'], (path) => {
+    if (path == 'a.ts') {
+      Object.defineProperty(globalThis, 'left', {
+        value: 'a',
+        configurable: true,
+      })
+    } else seen.push(g.left, g.left = 'b')
+    return Promise.resolve([])
+  })
+  equal(seen, [undefined, 'b'])
+  equal(Object.hasOwn(globalThis, 'left'), false)
+})
+
 test('a full runtime loads no more files and leaves them for another', async () => {
   let loaded: string[] = []
   let result = await drive(['a.ts', 'b.ts', 'c.ts'], (path) => {

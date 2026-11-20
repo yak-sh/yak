@@ -116,6 +116,43 @@ export let apart = () => {
   }
 }
 
+/** Keeps the globals as they stand, and gives back what puts them back: a
+ * file run in this runtime, as in a runtime of its own, leaves no global to
+ * the next. A test that sets `document` with `Object.defineProperty` and puts
+ * back only one that was there before leaves a read-only `document`, which
+ * the next file to assign one cannot. What a file added goes, and what it
+ * changed is as it was; a property nobody may change or delete stays. */
+export let globals = (): () => void => {
+  let was = Object.getOwnPropertyDescriptors(globalThis) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >
+  return () => {
+    let now = Object.getOwnPropertyDescriptors(globalThis) as Record<
+      PropertyKey,
+      PropertyDescriptor
+    >
+    for (let key of Reflect.ownKeys(now)) {
+      let before = was[key as string]
+      let after = now[key as string]
+      if (!after.configurable) continue
+      if (!before) Reflect.deleteProperty(globalThis, key)
+      else if (!same(before, after)) {
+        Object.defineProperty(globalThis, key, before)
+      }
+    }
+    for (let key of Reflect.ownKeys(was)) {
+      if (!Object.hasOwn(globalThis, key)) {
+        Object.defineProperty(globalThis, key, was[key as string])
+      }
+    }
+  }
+}
+
+let same = (a: PropertyDescriptor, b: PropertyDescriptor) =>
+  a.value === b.value && a.get === b.get && a.set === b.set &&
+  a.writable === b.writable && a.enumerable === b.enumerable
+
 /** Runs one test, failing it once `timeout` passes without an end. */
 export let one = async (
   test: Test,
