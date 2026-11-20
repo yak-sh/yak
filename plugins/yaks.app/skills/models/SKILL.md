@@ -30,7 +30,7 @@ on the same entry sets what the model is sent:
         entity: { eid: '$said' },
         entry: { session: smith },
         content: { body: 'A stranger walks up to the forge.' },
-        using: { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3-flash' },
+        using: { provider: 'workers-ai', model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017' },
         sending: {
           instructions: 'You are the village smith: gruff, kind, brief.',
         },
@@ -60,15 +60,15 @@ Three more properties limit what a turn costs. `sending.window` is how many of
 the transcript's newest lines the model reads, extended back to the line that
 began the turn the window would otherwise cut into; without it every turn reads
 the whole transcript, so each new line makes a long conversation more expensive.
-`using.effort` sets how much reasoning the model does before it answers: GLM
-Flash accepts `low`, `high` or `max` (its default), and every reasoning token is
-billed as output. `sending.tokens` is the most a reply may write, reasoning
-included; a platform model writes at most 4,096 tokens without it, which a long
-answer (a builder's over many rows) needs more than.
+`using.effort` sets how much reasoning the model does before it answers:
+DeepSeek V4.1 Flash accepts `none`, `low`, `high` or `max`, and every reasoning
+token is billed as output. `sending.tokens` is the most a reply may write,
+reasoning included; a platform model writes at most 4,096 tokens without it,
+which a long answer (a builder's over many rows) needs more than.
 
     using: {
       provider: 'workers-ai',
-      model: '@cf/zai-org/glm-5.3-flash',
+      model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
       effort: 'low',
     },
     sending: {
@@ -586,7 +586,7 @@ These platform models spend the space's monthly yaks.app budget:
 
 | model                                                      | for             | per million tokens in | out   |
 | ---------------------------------------------------------- | --------------- | --------------------- | ----- |
-| `@cf/zai-org/glm-5.3-flash`                                | chat, and tools | $0.15                 | $0.50 |
+| `@cf/deepseek-ai/deepseek-v4.1-flash-1017`                 | chat, and tools | $0.30                 | $1.20 |
 | `@cf/meta/llama-4-scout-17b-16e-instruct`                  | pictures        | $0.27                 | $0.85 |
 | `typesafe/jev`                                             | typed questions | $0.042                | free  |
 | `@cf/baai/bge-base-en-v1.5`                                | embeddings      | $0.067                | —     |

@@ -11,7 +11,7 @@ import { type Binding, workersAi } from '@yaks/workers-ai'
 // `ai` is a Worker's `env.AI`: the binding its Wrangler configuration names.
 const hello = async (ai: Binding) => {
   const reply = await workersAi(ai)({
-    model: '@cf/zai-org/glm-5.3-flash',
+    model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
     items: [{ kind: 'user', text: 'Hello' }],
     tools: [],
   })

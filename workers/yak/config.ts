@@ -348,10 +348,21 @@ export let payments: Config & { via: string } = {
   }],
 }
 
+/** The Workers AI models Cloudflare retired, each with the current model of
+ * nearest price and ability that answers a caller still naming it: a shipped
+ * app, a builder row, a transcript's `using`. */
+export let successors: Record<string, string> = {
+  '@cf/zai-org/glm-5.3-flash': '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+}
+
 // Workers AI over the Worker's `AI` binding, which is its authorization.
 let workersAi: Plug = {
   use: '@yaks/workers-ai',
-  with: { ai: { binding: 'AI' }, gateway: { binding: 'AI_GATEWAY' } },
+  with: {
+    ai: { binding: 'AI' },
+    gateway: { binding: 'AI_GATEWAY' },
+    successors,
+  },
 }
 
 // OpenAI, on a key of the platform's: by default the "yaks.app images"

@@ -11,7 +11,7 @@ export { listed, listing, modelInfo, pagePrice } from './list.ts'
  *
  * let ai = { run: () => Promise.resolve({ response: 'Hello' }) }
  * let reply = await workersAi(ai)({
- *   model: '@cf/zai-org/glm-5.3-flash',
+ *   model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
  *   items: [{ kind: 'user', text: 'Hi' }],
  *   tools: [],
  * })
@@ -587,6 +587,20 @@ export let streamed = async (
 }
 
 /**
+ * The name a model is asked for under: its successor where Workers AI retired
+ * it, so a caller that still names a retired model keeps being answered.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * let current = successor({ '@cf/a/old': '@cf/b/new' })
+ * equal([current('@cf/a/old'), current('@cf/c/kept')], ['@cf/b/new', '@cf/c/kept'])
+ * ```
+ */
+export let successor =
+  (successors: Record<string, string> = {}) => (model: string): string =>
+    Object.hasOwn(successors, model) ? successors[model] : model
+
+/**
  * A model over the binding, failing as {@link failure} says. Music output
  * needs artifact storage and returns its measured/priced dollar cost.
  */
@@ -600,8 +614,11 @@ export let workersAi = (
     /** keeps a shared model-page read alive past its request (@yaks/model
      * `Lent.hold`) */
     hold?: Hold
+    /** each retired model's name, and the model that answers for it */
+    successors?: Record<string, string>
   } = {},
 ): Model => {
+  let current = successor(options.successors)
   let deliver = async (receipt: MediaReceipt): Promise<Reply> => {
     let audio = await pricedAudio(
       receipt.model,
@@ -638,7 +655,8 @@ export let workersAi = (
       costReported: receipt.costReported ?? false,
     }
   }
-  return Object.assign(async (req: Request) => {
+  return Object.assign(async (asked: Request) => {
+    let req = { ...asked, model: current(asked.model) }
     req.signal?.throwIfAborted()
     if (music(req.model) && !options.media) {
       throw new ModelError('media_storage', 'Music requires artifact storage')
@@ -743,12 +761,12 @@ export let workersAi = (
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
     list: () => listing(ai),
     info: (name: string) =>
-      modelInfo(name, options.fetch, { hold: options.hold }),
+      modelInfo(current(name), options.fetch, { hold: options.hold }),
     reads: (name: string) =>
-      nativeReads(name, options.fetch, { hold: options.hold }),
+      nativeReads(current(name), options.fetch, { hold: options.hold }),
     quote: (req: Request, remaining: number) =>
-      music(req.model)
-        ? musicQuote(req.model, req.input ?? {}, remaining)
+      music(current(req.model))
+        ? musicQuote(current(req.model), req.input ?? {}, remaining)
         : undefined,
   })
 }

@@ -65,7 +65,7 @@ let sourceTotal = async (env: Env, space: string, source: string) => {
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
-let FLASH = '@cf/zai-org/glm-5.3-flash'
+let FLASH = '@cf/deepseek-ai/deepseek-v4.1-flash-1017'
 let JEV = 'typesafe/jev'
 let SEED = 'bytedance-seed/seed-audio-1-0'
 
@@ -969,7 +969,7 @@ test('./api/ai/run answers a chat name apps already use from OpenAI, at its rate
   let messages = [{ role: 'user', content: 'hello' }]
   assertEquals(
     await v.run({
-      model: FLASH,
+      model: '@cf/zai-org/glm-5.3-flash',
       input: { messages, max_tokens: 400, temperature: 0.2 },
     }),
     { status: 200, said: { ...completion, response: 'Welcome.' } },

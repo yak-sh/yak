@@ -25,6 +25,7 @@ import {
   failure,
   routing,
   said,
+  successor,
   unfit,
   usageOf,
   workersAi,
@@ -36,6 +37,8 @@ export type Options = {
   ai?: Binding
   /** the AI Gateway a partner model (one not `@…`) is routed through */
   gateway?: string
+  /** each retired model's name, and the model that answers for it */
+  successors?: Record<string, string>
 }
 
 // No binding lent: every call, and every question about a model, is refused
@@ -59,6 +62,7 @@ export let providers = (
       gateway: options.gateway,
       receipts: lent.receipts,
       hold: lent.hold,
+      successors: options.successors,
     })
     : refusing,
 })
@@ -97,7 +101,8 @@ export let native = (
   options: Options,
   spending: Spending,
 ): Native => ({
-  run: async (model, input, opts) => {
+  run: async (asked, input, opts) => {
+    let model = successor(options.successors)(asked)
     let ai = options.ai
     if (!ai) throw unbound()
     let info = music(model)

@@ -30,6 +30,18 @@ let ask = (items: Item[], more: Partial<Request> = {}): Request => ({
 
 let calls = (items: Item[]) => items.flatMap((i) => i.kind == 'call' ? [i] : [])
 
+test('a retired model is asked for under its successor', async () => {
+  let sent: string[] = []
+  let model = workersAi({
+    run: (name) => (sent.push(name), Promise.resolve({ response: 'ok' })),
+  }, { successors: { '@cf/x/old': '@cf/x/y' } })
+  let reply = await model(ask([{ kind: 'user', text: 'hi' }], {
+    model: '@cf/x/old',
+  }))
+  await model(ask([{ kind: 'user', text: 'hi' }]))
+  assertEquals([sent, reply.model], [['@cf/x/y', '@cf/x/y'], '@cf/x/y'])
+})
+
 test('a conversation is sent as chat messages', async () => {
   let { asked, model } = binding({ response: 'ok' })
   let tool = { name: 'look', description: 'Look', parameters: {} }
