@@ -18,11 +18,54 @@ let refusal = async (response: Response, otherwise: string) => {
     : new CallError('arguments', message)
 }
 
+// How long to wait before each new try when the browser's push service
+// refuses a subscription.
+let WAITS = [10_000, 60_000, 300_000]
+
+/** Runs `attempt` again, after each of `waits`, while the browser's push
+ * service refuses it. Chrome answers `AbortError` ("Registration failed -
+ * push service error") when its push service cannot register the browser for
+ * a while; a bad key would be an `InvalidAccessError` instead. `waiting` is
+ * called once, at the first refusal, so the page can say it will try again. */
+export let persist = async <T>(
+  attempt: () => Promise<T>,
+  {
+    waits = WAITS,
+    sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
+    waiting,
+  }: {
+    waits?: number[]
+    sleep?: (ms: number) => Promise<void>
+    waiting?: () => void
+  } = {},
+): Promise<T> => {
+  for (let i = 0;; i++) {
+    try {
+      return await attempt()
+    } catch (error) {
+      if ((error as Error)?.name != 'AbortError') throw error
+      if (i == waits.length) {
+        throw new CallError(
+          'arguments',
+          "This browser's push service is not answering. Try again later.",
+        )
+      }
+      if (i == 0) waiting?.()
+      await sleep(waits[i])
+    }
+  }
+}
+
 /** Allows notifications on this browser: asks its permission, registers the
  * worker that shows them (public/push.js), subscribes with yaks.app's public
  * VAPID `key` and keeps the subscription at `at` (operator-page.ts `?push`).
- * Call it from the press itself: a browser asks only then. */
-export let allow = async (key: string, at: string) => {
+ * Call it from the press itself: a browser asks only then. While the push
+ * service refuses, it tries again later (`persist`), calling `waiting` once. */
+export let allow = async (
+  key: string,
+  at: string,
+  waiting?: () => void,
+) => {
   if (!('serviceWorker' in navigator) || !('PushManager' in globalThis)) {
     throw new CallError(
       'arguments',
@@ -42,10 +85,11 @@ export let allow = async (key: string, at: string) => {
     (c) => c.charCodeAt(0),
   )
   let sub = await worker.pushManager.getSubscription() ??
-    await worker.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: server,
-    })
+    await persist(() =>
+      worker.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: server,
+      }), { waiting })
   let response = await fetch(at, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -106,7 +150,14 @@ export let offer = async (root: Document = document) => {
     press.disabled = true
     said.textContent = ''
     try {
-      await allow(box.dataset.push!, `${box.dataset.at}?push=1`)
+      await allow(
+        box.dataset.push!,
+        `${box.dataset.at}?push=1`,
+        () =>
+          said.textContent =
+            "This browser's push service did not answer. Trying again in a little while.",
+      )
+      said.textContent = ''
       let response = await fetch(`${box.dataset.at}?alerts=1`, {
         method: 'POST',
         body: new URLSearchParams({ channel: 'push' }),
