@@ -274,6 +274,29 @@ export let named = (rows: Row[], { refs, names }: Names): Row[] => {
   )
 }
 
+/** The rows as the store keeps them: each reference {@link named} painted
+ * `{eid, name}` lowered to its eid, for a reader that compares eids. */
+export let unnamed = <R extends Row>(rows: R[]): R[] =>
+  rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([comp, held]) => [
+        comp,
+        props(held)
+          ? Object.fromEntries(
+            Object.entries(held).map((
+              [prop, v],
+            ) => [prop, painted(v) ? v.eid : v]),
+          )
+          : held,
+      ]),
+    ) as R
+  )
+
+// The shape `named` paints a reference in, and nothing else.
+let painted = (v: unknown): v is { eid: string; name: string } =>
+  props(v) && Object.keys(v).length == 2 && typeof v.eid == 'string' &&
+  typeof v.name == 'string'
+
 // The same rule over a door's JSON body — what the kernel hands a page back
 // from the store's own answer.
 export let listing = (body: string, asked: string): string => {

@@ -4,7 +4,7 @@
 import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { asking, listing, mentions, named } from './listing.ts'
+import { asking, listing, mentions, named, unnamed } from './listing.ts'
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { mem } from '@yaks/sqlite/testing'
@@ -255,4 +255,6 @@ test('a reference to a person answers with a name', () => {
   assertEquals(out[1].created, { by: 'nobody' })
   // Nobody to name is the rows themselves, untouched.
   assertEquals(named(rows, { refs: seen.refs, names: {} }), rows)
+  // And lowered, they are the rows the store keeps again.
+  assertEquals(unnamed(out), rows)
 })

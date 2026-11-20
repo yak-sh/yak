@@ -102,7 +102,7 @@ import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
-import { type Id, idOf } from '@yaks/platform/listing'
+import { type Id, idOf, unnamed } from '@yaks/platform/listing'
 import { sharing } from './lib/shared.ts'
 import type { BrowserSession } from './browser-sessions.ts'
 
@@ -2777,11 +2777,12 @@ export let directoryRows = (rows: {
     },
     // One filter line, answered as rows: a read the questions below don't
     // name (connections.ts `connectionsOf`), asked through this client so it
-    // travels with whatever else this moment asks.
+    // travels with whatever else this moment asks. The rows are as the store
+    // keeps them, each reference an eid: the door names a person's for the
+    // people who read it (listing.ts `named`), and these readers compare eids.
     read: async <Q extends string>(asked: Q & Asked<Q>): Promise<Bundle[]> =>
-      (await query(asked as Line)).map(({ policy: _, ...row }) =>
-        row as Bundle
-      ),
+      unnamed((await query(asked as Line)).map(({ policy: _, ...row }) => row))
+        .map((row) => row as Bundle),
     // A credential's row and its person's row, in one read: whether the
     // person still stands, and the row whose `cancelled` mark ends the
     // credential (browser-sessions.ts, grants.ts `shelf`, identity.ts

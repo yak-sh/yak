@@ -767,6 +767,17 @@ export let remoteCommands = (
   }
 }
 
+// What adding a server says, by where it stands: one still waiting on its
+// key or sign-in says which, and one that refused its key says so.
+let addedAs = (name: string, one: Shown | undefined) =>
+  one?.status == 'needed'
+    ? `${name} is added. ${
+      one.keyed ? 'Paste its key' : `Sign in to ${name}`
+    } to connect it.`
+    : one?.status == 'broken'
+    ? `${name} is added, but it refused the key.`
+    : `${name} is connected.`
+
 /** What a form on a person's connections page does to their MCP servers,
  * named by `do` (`mcp-add`, `mcp-key`, `mcp-tools`, `mcp-on`, `mcp-off`,
  * `mcp-remove`, `mcp-restore`), with the server it is about in `server`. It
@@ -785,7 +796,10 @@ export let acted = async (
       ...field('header') ? { header: field('header') } : {},
     })
     if (field('key')) await remote.give(made.server, field('key'))
-    return `${field('name')} is connected.`
+    let [one] = await remote.shown(
+      (await remote.kept()).filter((r) => r.entity.eid == made.server),
+    )
+    return addedAs(field('name'), one)
   }
   if (act == 'mcp-key') {
     if (!field('key')) throw refuse('arguments', 'Paste the key.')

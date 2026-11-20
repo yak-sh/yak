@@ -122,6 +122,13 @@ test('a person adds an MCP server with its key, chooses its tools, and removes a
   assertEquals((await page()).servers[0].trashed, false)
 })
 
+test('a server that asks for a key, added without one, says so', async () => {
+  assertEquals(
+    await post({ do: 'mcp-add', name: 'Lin', url: 'https://lin.test/mcp' }),
+    { say: 'Lin is added. Paste its key to connect it.', no: false },
+  )
+})
+
 test('a page form for a server the person does not keep says so', async () => {
   assertEquals(
     await post({ do: 'mcp-remove', server: crypto.randomUUID() }),
