@@ -277,7 +277,7 @@ import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
 import { CWD } from '@yaks/sandbox/cloudflare'
 import { attachmentBytes, attachmentText } from './attachments.ts'
-import { logoed } from './logo.ts'
+import { logoAt, logoed } from './logo.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
   connect,
@@ -3408,7 +3408,11 @@ let logoSent = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
   }
   if (args.logo == null) return undefined
   let id = text(args.logo, 'logo')
-  return id == UNLOGO ? null : await attachmentBytes(ctx.env, space, id, who)
+  if (id == UNLOGO) return null
+  if (!/^https?:/i.test(id)) return attachmentBytes(ctx.env, space, id, who)
+  let read = await logoAt(id)
+  if (typeof read == 'string') throw refuse('arguments', read)
+  return read
 }
 
 // A file the person attached in a conversation with their Operator, which
@@ -3779,7 +3783,8 @@ let OURS: Row[] = [
         },
         logo: str(
           "the space's logo: an attachment id from the conversation (64 hex " +
-            'characters) naming a PNG, JPEG, WebP or GIF up to 1 MB, or ' +
+            'characters) or an https address naming a PNG, JPEG, WebP or ' +
+            'GIF up to 1 MB, or ' +
             `"${UNLOGO}" to take the logo off`,
         ),
         logo_base64: str(

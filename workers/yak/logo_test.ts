@@ -14,6 +14,7 @@ import { parseHTML } from 'linkedom'
 import { connector, kernel, signIn } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
 import { digest } from '@yaks/graph/sha256'
+import { logoAt } from './logo.ts'
 
 let PNG = Uint8Array.from(
   atob(
@@ -131,4 +132,26 @@ test('space_set sets the logo its Operator is given, and an app with no icon wea
   } finally {
     await k.stop()
   }
+})
+
+test('logoAt reads a picture from an https address, and says why not', async () => {
+  let at = (status: number, body: BodyInit | null) => () =>
+    Promise.resolve(new Response(body, { status }))
+  assertEquals(await logoAt('https://cdn.test/i.png', at(200, PNG)), PNG)
+  assertEquals(
+    (await logoAt(
+      'https://cdn.test/big',
+      at(200, new Uint8Array(3_000_000)),
+    ) as Uint8Array)
+      .byteLength > 1_000_000,
+    true,
+  )
+  assertEquals(
+    await logoAt('https://cdn.test/gone', at(404, null)),
+    'cdn.test answered 404 for that picture',
+  )
+  assertEquals(
+    await logoAt('http://cdn.test/i.png', at(200, PNG)),
+    'a logo is read from an https address',
+  )
 })

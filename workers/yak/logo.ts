@@ -55,6 +55,40 @@ export let logoed = async (
   await dir.badge(space, logo, headers)
 }
 
+/** The picture at the https address `url`, read up to one byte past
+ * {@link LOGO}'s size so {@link logoed} answers that it is too big without
+ * holding more; refused with why it could not be read. */
+export let logoAt = async (
+  url: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Uint8Array<ArrayBuffer> | string> => {
+  let at: URL
+  try {
+    at = new URL(url)
+  } catch {
+    return `${url} is not an address`
+  }
+  if (at.protocol != 'https:') return 'a logo is read from an https address'
+  let res = await fetcher(at, { headers: { accept: LOGO.accept } }).catch(
+    (e) => e instanceof Error ? e : new Error(String(e)),
+  )
+  if (res instanceof Error) {
+    return `${at.host} could not be reached: ${res.message}`
+  }
+  if (!res.ok || !res.body) {
+    await res.body?.cancel()
+    return `${at.host} answered ${res.status} for that picture`
+  }
+  let parts: Uint8Array<ArrayBuffer>[] = []
+  let size = 0
+  for await (let part of res.body) {
+    parts.push(part)
+    size += part.byteLength
+    if (size > LOGO.size) break
+  }
+  return new Uint8Array(await new Blob(parts).arrayBuffer())
+}
+
 /** The bytes of the logo the space wears at `sha`, or none. */
 export let logoBytes = async (env: Env, space: Space, sha: string) =>
   space.logo?.sha == sha

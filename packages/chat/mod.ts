@@ -41,6 +41,10 @@ export type Posted = { id?: string }
 /** A room of a server, as a platform lists them: its id and its name. */
 export type Room = { id: string; name: string }
 
+/** A server (a Discord guild) as its platform tells it: what it is called,
+ * and the address of its icon where it has one. */
+export type Server = { name: string; icon?: string }
+
 /** Which of a room's messages to read back: the `limit` newest said before
  * the message `before`. */
 export type Page = { before: string; limit: number }
@@ -140,14 +144,15 @@ export type Platform = {
   /** the address that opens `server` in the platform's app or site, or its
    * room `room` there: how a page links to where its Operator is reached */
   link?: (server: string, room?: string) => string
-  /** what `server` is called, as the bot with `credential` reads it; null
-   * where the bot is not in that server. Asked when the bot joins a server
-   * and kept, so a page names it without asking */
-  serverName?: (
+  /** what `server` is called and its icon's address, as the bot with
+   * `credential` reads it; null where the bot is not in that server. Its
+   * name is asked when the bot joins a server and kept, so a page names it
+   * without asking */
+  about?: (
     credential: string,
     server: string,
     fetch?: typeof globalThis.fetch,
-  ) => Promise<string | null>
+  ) => Promise<Server | null>
   /** give the bot with `credential` the name `name` in `server`, where the
    * platform lets a bot go by its own name in each server: how it goes by
    * the name of the Operator it speaks for */

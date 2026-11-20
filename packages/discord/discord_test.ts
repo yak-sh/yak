@@ -320,16 +320,23 @@ test('rooms is null for a server the bot is not in, or no longer', async () => {
   await assertRejects(() => discord.rooms!('T', 'g1', rest(502, {}).f), Unsent)
 })
 
-test('serverName reads what a server is called, null where the bot is not in it', async () => {
-  let { f, seen } = rest(200, { id: 'g1', name: 'Barn' })
-  assertEquals(await discord.serverName!('T0K', 'g1', f), 'Barn')
+test('about reads what a server is called and where its icon is, null where the bot is not in it', async () => {
+  let { f, seen } = rest(200, { id: 'g1', name: 'Barn', icon: 'abc' })
+  assertEquals(await discord.about!('T0K', 'g1', f), {
+    name: 'Barn',
+    icon: 'https://cdn.discordapp.com/icons/g1/abc.png?size=512',
+  })
+  assertEquals(
+    await discord.about!('T', 'g1', rest(200, { name: 'Bare', icon: null }).f),
+    { name: 'Bare' },
+  )
   assertEquals(seen[0].url, 'https://discord.com/api/v10/guilds/g1')
   assertEquals(
-    await discord.serverName!('T', 'g1', rest(403, { message: 'x' }).f),
+    await discord.about!('T', 'g1', rest(403, { message: 'x' }).f),
     null,
   )
   await assertRejects(
-    () => discord.serverName!('T', 'g1', rest(502, {}).f),
+    () => discord.about!('T', 'g1', rest(502, {}).f),
     Unsent,
   )
 })

@@ -38,6 +38,7 @@ import {
   roomEid,
   type Said,
   type Seated,
+  type Server as Guild,
   within,
 } from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
@@ -209,6 +210,21 @@ export let roomName = async (
   if (!p?.rooms) return
   let { token, server } = await heldBy(env, p, at)
   return (await p.rooms(token, server))?.find((r) => r.id == at.room)?.name
+}
+
+/** The server `at.room` is in, as its connection's bot reads it: its name
+ * and its icon's address. Only in a server that connection serves, as
+ * {@link recent} reads; none for a direct room, or where the platform tells
+ * nothing of a server. */
+export let serverOf = async (
+  env: Env,
+  via: string,
+  at: { connection: string; room: string; server?: string },
+): Promise<Guild | undefined> => {
+  let p = PLATFORMS.get(via)
+  if (!p?.about) return
+  let { token, server } = await heldBy(env, p, at)
+  return server ? await p.about(token, server) ?? undefined : undefined
 }
 
 // The bot token of `at.connection` and the server of `at.room`, refused
@@ -399,8 +415,8 @@ let titled = async (env: Env, c: Bundle, servers = serves(c)) => {
   let via = (await installed(ctxOf(env).graph.read))
     .find((i) => i.name == integration)?.chat
   let p = via ? PLATFORMS.get(via) : undefined
-  let serverName = p?.serverName
-  if (!p || !serverName) return
+  let about = p?.about
+  if (!p || !about) return
   let tags = { request: `${p.name} server`, connection: c.entity.eid }
   let token = await speaker(env, p, c.entity.eid).catch((e) => {
     caught(e, tags)
@@ -409,10 +425,10 @@ let titled = async (env: Env, c: Bundle, servers = serves(c)) => {
   let found = (await Promise.all(missing.map(async (server) =>
     [
       server,
-      await serverName(token, server).catch((e) => {
+      (await about(token, server).catch((e) => {
         caught(e, { ...tags, server })
         return null
-      }),
+      }))?.name,
     ] as const
   ))).filter(([, name]) => name)
   if (!found.length) return

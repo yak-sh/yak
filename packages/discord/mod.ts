@@ -10,12 +10,14 @@ import type {
   Platform,
   Room,
   Said,
+  Server,
   Socket,
   Step,
 } from '@yaks/chat'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
+let CDN = 'https://cdn.discordapp.com'
 let GATEWAY = 'wss://gateway.discord.gg'
 let QUERY = '/?v=10&encoding=json'
 
@@ -337,24 +339,30 @@ export let rooms = async (
     .map(({ id, name }) => ({ id, name }))
 }
 
-/** The name of the server `server`, as the bot with `token` reads it
- * (GET /guilds/{id}); null where the bot is not in it, or no longer, as
- * {@link rooms} says. */
-export let serverName = async (
+/** What the server `server` is called and the address of its icon, where it
+ * has one, as the bot with `token` reads it (GET /guilds/{id}); null where
+ * the bot is not in it, or no longer, as {@link rooms} says. */
+export let guild = async (
   token: string,
   server: string,
   fetcher: typeof fetch = fetch,
-): Promise<string | null> => {
+): Promise<Server | null> => {
   let res = await fetcher(`${API}/guilds/${server}`, { headers: bot(token) })
   if (res.status == 403 || res.status == 404) {
     await res.body?.cancel()
     return null
   }
-  let { name } = await answer<{ name: string }>(res, {
-    unsent: `Discord did not name server ${server}`,
-    refused: `Discord refused to name server ${server}`,
-  })
-  return name
+  let { name, icon } = await answer<{ name: string; icon?: string | null }>(
+    res,
+    {
+      unsent: `Discord did not name server ${server}`,
+      refused: `Discord refused to name server ${server}`,
+    },
+  )
+  return {
+    name,
+    ...icon ? { icon: `${CDN}/icons/${server}/${icon}.png?size=512` } : {},
+  }
 }
 
 /** The address that opens the server `server` in Discord, or its channel
@@ -442,6 +450,6 @@ export let discord: Platform = {
   message,
   named,
   link,
-  serverName,
+  about: guild,
   working: { every: 8000, show: typing },
 }
