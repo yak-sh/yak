@@ -66,16 +66,23 @@ if mode in ('fresh', 'existing'):
     if os.path.exists(baseline):
         print('existing' if os.path.exists(ready) else 'fresh')
     else:
-        with open(baseline, 'w') as out:
-            # A pre-deploy running container has no pristine-image manifest.
-            # Keep all its bytes instead of mistaking its files for the image.
+        # A pre-deploy running container has no pristine-image manifest.
+        # Keep all its bytes instead of mistaking its files for the image.
+        # Written whole or not at all, so a failed scan leaves no baseline.
+        with open(baseline + '.part', 'w') as out:
             json.dump(scan() if mode == 'fresh' else {}, out)
+        os.replace(baseline + '.part', baseline)
         print('fresh')
 elif mode == 'ready':
     open(ready, 'a').close()
 elif mode == 'save':
-    with open(baseline) as source:
-        before = json.load(source)
+    # A baseline left empty by an interrupted write (before it was written
+    # whole) names no image files: keep every byte.
+    try:
+        with open(baseline) as source:
+            before = json.load(source)
+    except ValueError:
+        before = {}
     current = scan()
     removed = sorted(set(before) - set(current), key=len, reverse=True)
     with tarfile.open(archive, 'w:gz', dereference=False, compresslevel=1) as out:

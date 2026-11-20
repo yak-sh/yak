@@ -268,3 +268,33 @@ test('a snapshot skips entries it cannot read instead of failing', async () => {
     await Deno.remove(root, { recursive: true })
   }
 })
+
+test('a snapshot keeps every byte when an interrupted write left the baseline empty', async () => {
+  let root = await Deno.makeTempDir()
+  try {
+    await Deno.mkdir(`${root}/.yak-recovery`)
+    await Deno.writeTextFile(`${root}/.yak-recovery/baseline.json`, '')
+    await Deno.writeTextFile(`${root}/notes`, 'kept')
+    let fs = filesystem(
+      {
+        getState: () => Promise.resolve({ status: 'running' }),
+        exec: async (command) => {
+          let out = await new Deno.Command('sh', { args: ['-c', command] })
+            .output()
+          let text = new TextDecoder()
+          return {
+            exitCode: out.code,
+            stdout: text.decode(out.stdout),
+            stderr: text.decode(out.stderr),
+          }
+        },
+        writeFile: () => undefined,
+      },
+      async function* () {},
+      root,
+    )
+    equal(Number(await fs.run('save')) > 0, true)
+  } finally {
+    await Deno.remove(root, { recursive: true })
+  }
+})
