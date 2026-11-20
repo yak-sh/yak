@@ -205,6 +205,7 @@ import type { PoolCtx } from './declared.ts'
 import { CallError } from '@yaks/tools/errors'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
+import type { Reply } from '@yaks/platform/app-command'
 import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
 import {
   bearerOf,
@@ -1347,11 +1348,13 @@ let appDoor = async (
   }
   if (path == '/command') {
     if (!mayUse) return refuse('not_a_reader')
+    // A page reads what the command said; whether an Operator hears it as
+    // outsiders' words (`heard`) is the Operator's alone.
+    let said = ({ text, value }: Reply) => ({ text, value })
     let [route] = commandRoutes({
       command: async (name, args, at) =>
-        at != null
-          ? await (await sourced()).run(at, name, args)
-          : await commandIn(
+        at != null ? await (await sourced()).run(at, name, args) : said(
+          await commandIn(
             env,
             space,
             app,
@@ -1360,6 +1363,7 @@ let appDoor = async (
             args,
             acting(env, space, app, who),
           ),
+        ),
     })
     return route.handle(req)
   }

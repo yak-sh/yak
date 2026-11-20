@@ -162,6 +162,7 @@ export let browserTools = (
       description: t.description,
       parameters: t.parameters,
       waits: t.waits,
+      readOnly: t.readOnly,
       run: async (args, ctx) =>
         told(env, space, store, ctx, await lent.ask(person, t.name, args)),
     }))

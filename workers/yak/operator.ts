@@ -2278,6 +2278,14 @@ export let operating = (
           (t) => !!t.readOnly,
           why,
         ),
+        // The member's browser keeps its reads of the tab, never its steps.
+        ...member && options.browsers
+          ? holding(
+            browserTools(env, space, ctx.person, options.browsers, store),
+            (t) => !!t.readOnly,
+            why,
+          )
+          : [],
       ])))
     }
     return confirmed(deferred(listened([

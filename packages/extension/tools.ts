@@ -14,6 +14,9 @@ export type BrowserTool = {
   step: Step & { by?: Record<string, Record<string, Step>> }
   description: string
   parameters: Record<string, unknown>
+  /** The call only reads the tab, so a turn that heard outsiders' words
+   * keeps it. */
+  readOnly?: true
   /** A call may wait on the person: the browser waits for them at most
    * `PERSON`, and a host waits that much longer for its answer. */
   waits?: boolean
@@ -70,6 +73,7 @@ export let TOOLS: BrowserTool[] = [{
     "The tab the person is looking at in their browser: its address and title. Ask before guessing what they mean by 'this page'." +
     ASKS + FENCED,
   parameters: none,
+  readOnly: true,
   waits: true,
 }, {
   name: 'browser_text',
@@ -80,6 +84,7 @@ export let TOOLS: BrowserTool[] = [{
   },
   description: "The visible text of the person's current tab." + ASKS + FENCED,
   parameters: none,
+  readOnly: true,
   waits: true,
 }, {
   name: 'browser_selection',
@@ -92,6 +97,7 @@ export let TOOLS: BrowserTool[] = [{
     'The text the person has selected in their current tab, empty when they selected nothing.' +
     ASKS + FENCED,
   parameters: none,
+  readOnly: true,
   waits: true,
 }, {
   name: 'browser_screenshot',
@@ -104,6 +110,7 @@ export let TOOLS: BrowserTool[] = [{
     "A screenshot of the visible part of the person's current tab, shown to you as an image. Chrome takes one only after the person clicked the extension's button on that tab, so the first on a tab may wait for them to." +
     ASKS + FENCED,
   parameters: none,
+  readOnly: true,
   waits: true,
 }, {
   name: 'browser_elements',
@@ -116,6 +123,7 @@ export let TOOLS: BrowserTool[] = [{
     "The links, buttons and fields on the person's current tab, each with a ref (e1, e2, …) that browser_click and browser_type take, its name, and a field's value. A ref lasts until the page is replaced: list again after a step that loads a new page." +
     ASKS + FENCED,
   parameters: none,
+  readOnly: true,
   waits: true,
 }, {
   name: 'browser_click',
