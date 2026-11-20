@@ -140,17 +140,17 @@ test('the entry keeps only the words and points to the source the model reads', 
   let source = await addressOf(new TextEncoder().encode(text))
   assertEquals(entry.content, { body: text })
   assertEquals(entry.intake, { item: request, source })
-  assertEquals(entry.channel, {
-    name: 'chat',
-    framing: onPage('https://yaks.app/manage/clerk'),
-  })
+  // The words name their speaker before the page they were written on.
+  let framing = 'From someone (verified: signed in; owner of clerk). ' +
+    onPage('https://yaks.app/manage/clerk')
+  assertEquals(entry.channel, { name: 'chat', framing })
   let prose = ask.items.find((item) =>
     item.kind == 'user' &&
     item.text.includes(text)
   )
   assertStringIncludes(
     prose?.kind == 'user' ? prose.text : '',
-    onPage('https://yaks.app/manage/clerk') + text + sourceReference(source),
+    framing + text + sourceReference(source),
   )
 })
 
