@@ -891,9 +891,9 @@ test('a reply to a reply to a request brings all three to the turn', async () =>
 })
 
 // Each turn in a room opens with what anyone there sees (the server, its
-// icon, the room, its topic, who is talking and their roles), and chat_api
+// icon, the room, its topic, who is talking and their roles), and api_call
 // reads anything else a member could, as the bot, in its own server alone.
-test('a turn in a room opens with its basics, and chat_api reads what a member there sees', async () => {
+test('a turn in a room opens with its basics, and api_call reads what a member there sees', async () => {
   let o = await seeded([
     {
       calls: [
@@ -902,7 +902,10 @@ test('a turn in a room opens with its basics, and chat_api reads what a member t
         `/channels/${LOFT}/messages`,
         '/users/@me/guilds',
         '/guilds/999/roles',
-      ].map((path) => ({ name: 'chat_api', arguments: { path } })),
+      ].map((path) => ({
+        name: 'api_call',
+        arguments: { integration: 'discord', path },
+      })),
     },
     { text: 'Chairs.' },
   ], VAULTED)
@@ -917,7 +920,7 @@ test('a turn in a room opens with its basics, and chat_api reads what a member t
     first,
     `Where this is: the Discord server “Barn Folk” (id ${SERVER}; its icon is https://cdn.discordapp.com/icons/${SERVER}/abc.png?size=512), in #barn (id ${BARN}), whose topic is “party planning”.\\nTalking here, with their roles in the server: Ann (unverified: a Discord account linked to nobody here; not a member of ada), id Ann: Mod; Bo (unverified: a Discord account linked to nobody here; not a member of ada), id Bo: Mod.`,
   )
-  assert(offers(first, 'chat_api'))
+  assert(offers(first, 'api_call'))
   assertStringIncludes(second, 'Pinned: bring chairs')
   assertStringIncludes(second, '@everyone')
   assertStringIncludes(

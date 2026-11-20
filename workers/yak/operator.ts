@@ -149,7 +149,7 @@ import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
-import { chatApi, chatRead, roomsOf } from './operator-rooms.ts'
+import { chatRead, roomsOf } from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -2205,11 +2205,15 @@ export let operating = (
     // Addressed in a chat room, it reads back what was said there, and
     // anything else a member there could see.
     let chat = rooms.length
-      ? [
-        chatRead(env, store, speakersOf(env, space)),
-        chatApi(env, store, space, rooms.map((r) => r.via)),
-      ]
+      ? [chatRead(env, store, speakersOf(env, space))]
       : []
+    // Any service's API: a room's platform on any turn there, the person's
+    // connections on their own (operator-integrations.ts).
+    let vias = rooms.map((r) => r.via)
+    let api = (acting: boolean) =>
+      acting || vias.length
+        ? [apiCall(env, space, { ...acting ? { ctx } : {}, store, vias })]
+        : []
     // What a member's turn holds beyond the space's tools: their alerts,
     // texts, mail, numbers, wakes and subscriptions.
     let mine = () => [
@@ -2225,7 +2229,6 @@ export let operating = (
       ...wakeTools(store),
       ...subscriptionTools(store, watching),
       escalationAnswer(store, ctx, space),
-      apiCall(env, ctx, space),
     ]
     // Any turn may report an odd request for a guest-tooled helper to look
     // into, but that helper itself.
@@ -2282,6 +2285,7 @@ export let operating = (
           )
           : [],
         ...chat,
+        ...api(false),
         ...holding(
           options.tools?.(ctx, files) ?? [],
           (t) => !!t.readOnly,
@@ -2330,6 +2334,7 @@ export let operating = (
       ...member ? [...mine(), ...google] : [],
       ...seated ? [] : [escalate(store, ctx, space)],
       ...chat,
+      ...api(member),
       ...platform ? adminTools(env, whole) : [],
       ...(options.tools?.(ctx, files) ?? []).filter((t) =>
         member || t.readOnly

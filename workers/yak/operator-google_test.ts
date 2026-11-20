@@ -394,7 +394,7 @@ test('the same Google tools are in the pool of tools, at the connection that off
 test('an unusual read with no tool of its own, free/busy, is one api_call, and only writes wait for a tap', async () => {
   let ctx = await operatorContext(env, { person }, space)
   asked.length = 0
-  let said = await apiCall(env, ctx, space).run({
+  let said = await apiCall(env, space, { ctx }).run({
     integration: 'google-calendar',
     method: 'POST',
     path: '/freeBusy',
@@ -425,7 +425,10 @@ test('an unusual read with no tool of its own, free/busy, is one api_call, and o
 test('api_call names what is connected when asked for what is not', async () => {
   let ctx = await operatorContext(env, { person }, space)
   let refused = await Promise.resolve(
-    apiCall(env, ctx, space).run({ integration: 'canva', path: '/designs' }),
+    apiCall(env, space, { ctx }).run({
+      integration: 'canva',
+      path: '/designs',
+    }),
   ).then(() => '', (e: Error) => e.message)
   assertStringIncludes(refused, 'canva is not connected for them.')
   assertStringIncludes(refused, 'google-calendar')
