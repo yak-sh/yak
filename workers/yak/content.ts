@@ -314,7 +314,7 @@ export let WORDS: Record<string, Words> = {
   'mcp_connect': {
     'title': 'Connect an MCP server',
     'description':
-      "Connect or update your own MCP server. Its commands become available to your Operator and through commands/command. Sign in at the returned connection page when asked; credentials never pass through this tool. Name servers distinctly. For a server on your own machine, pass machine (a space you own whose tunnel goes to it) and the server's path there as url, such as /mcp: it is reached through the tunnel with no sign-in, and only for you. A server that takes a key rather than a sign-in asks the person for it on their connections page; pass header when it names the header the key goes in.",
+      "Connect or update an MCP server in a space, for you: that space's Operator uses its tools in turns with you, and apps you allow call them as you. An Operator connects it in its own space when space is omitted. When the server asks for a sign-in, give the person the returned link to that space's connections page, where they sign in; credentials never pass through this tool. Name servers distinctly. For a server on your own machine, pass machine (a space you own whose tunnel goes to it) and the server's path there as url, such as /mcp: it is connected in that space, reached through the tunnel with no sign-in, and only for you. A server that takes a key rather than a sign-in asks the person for it on the connections page; pass header when it names the header the key goes in.",
   },
   'mcp_remove': {
     'title': 'Remove an MCP server',

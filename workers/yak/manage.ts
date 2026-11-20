@@ -703,6 +703,7 @@ let desk = async (
             env,
             dir,
             { person: owner, role: who.role },
+            space.eid,
             {
               kept,
               open: q.get('mcp') ?? undefined,

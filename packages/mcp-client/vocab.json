@@ -12,6 +12,12 @@
           "death": "cascade",
           "description": "The person who configured this server; hosted discovery and calls use only their own definition and credentials."
         },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "The space this server is connected in: that space's Operator and connections page reach it, for its owner. Absent on a server connected before servers had a space, which reaches its owner in every space and at their own connector."
+        },
         "name": {
           "type": "string",
           "description": "Display name; normalized into a readable local tool namespace."

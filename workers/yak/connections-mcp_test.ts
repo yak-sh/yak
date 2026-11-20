@@ -34,7 +34,19 @@ await at.apply([
     member: { space: '$space', person, role: 'owner' },
   },
 ], { 'x-yak-person': person, 'x-yak-role': 'owner' })
+await at.apply([
+  {
+    entity: { eid: '$space' },
+    doc: { title: 'Club' },
+    space: { slug: 'club', store: 'club' },
+  },
+  {
+    entity: { eid: '$seat' },
+    member: { space: '$space', person, role: 'owner' },
+  },
+], { 'x-yak-person': person, 'x-yak-role': 'owner' })
 let space = (await dir.space('ada'))!
+let club = (await dir.space('club'))!
 let who: Who = { person, role: 'owner' }
 
 // The server, on the public internet as far as the page knows.
@@ -53,7 +65,7 @@ let reached = (fn: () => Promise<unknown>) => {
   }) as typeof fetch
   return fn().finally(() => globalThis.fetch = real)
 }
-let post = (fields: Record<string, string | string[]>) => {
+let post = (fields: Record<string, string | string[]>, on = space) => {
   let form = new FormData()
   for (let [k, v] of Object.entries(fields)) {
     for (let one of [v].flat()) form.append(k, one)
@@ -62,14 +74,14 @@ let post = (fields: Record<string, string | string[]>) => {
     connecting(
       new Request('https://yaks.app/manage/connections?space=ada'),
       p.env,
-      space,
+      on,
       who,
       form,
     )
   )
 }
-let page = (open?: string) =>
-  reached(() => mcpPage(p.env, dir, who, { open })) as ReturnType<
+let page = (open?: string, on = space) =>
+  reached(() => mcpPage(p.env, dir, who, on.eid, { open })) as ReturnType<
     typeof mcpPage
   >
 
@@ -120,6 +132,30 @@ test('a person adds an MCP server with its key, chooses its tools, and removes a
   assertStringIncludes(drawn, 'value="mcp-restore"')
   await post({ do: 'mcp-restore', server: one.id })
   assertEquals((await page()).servers[0].trashed, false)
+})
+
+test('a server is connected in the space whose page added it, and one kept from before spaces moves to the space connecting it again', async () => {
+  let names = async (on: typeof space) =>
+    (await page(undefined, on)).servers.filter((s) => !s.trashed).map((s) =>
+      s.name
+    ).sort()
+  let before = await names(space)
+  await post(
+    { do: 'mcp-add', name: 'Slides', url: 'https://slides.test/mcp' },
+    club,
+  )
+  assertEquals(await names(club), ['Slides'])
+  assertEquals(await names(space), before)
+  let legacy = crypto.randomUUID()
+  await at.apply([{
+    entity: { eid: legacy },
+    mcp_server: { owner: person, name: 'Old', url: 'https://old.test/mcp' },
+  }], { 'x-yak-person': person, 'x-yak-role': 'owner' })
+  assertEquals(await names(club), ['Old', 'Slides'])
+  assertEquals(await names(space), [...before, 'Old'].sort())
+  await post({ do: 'mcp-add', name: 'Old', url: 'https://old.test/mcp' }, club)
+  assertEquals(await names(club), ['Old', 'Slides'])
+  assertEquals(await names(space), before)
 })
 
 test('a server that asks for a key, added without one, says so', async () => {

@@ -14,7 +14,7 @@ import { short } from '@yaks/id'
 import { type ComponentChildren as Node, h } from 'preact'
 import { Badge, Button, Card, Empty, Field, More, Rows } from '@yaks/ui/parts'
 import { runConnectedCommands } from './connected-mcp.ts'
-import type { Asked } from '@yaks/connections/mcp'
+import { type Asked, reachedIn } from '@yaks/connections/mcp'
 import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -109,13 +109,15 @@ export let askOf = (b: Bundle): Ask => {
 }
 
 // The servers of `person`'s that this space's Operator reaches, with their
-// lists in order: one on a machine is reached only by the Operator of the
-// space whose tunnel goes there (tunnel.ts `machine`).
+// lists in order: those connected in this space (@yaks/connections/mcp
+// `reachedIn`), and one on a machine only by the Operator of the space whose
+// tunnel goes there (tunnel.ts `machine`).
 let listings = async (env: Env, person: string, space: string) => {
   let { servers, lists } = await directoryOf(env.STORE).listings(person)
   let reached = servers.filter((server) => {
     let { enabled, machine } = comp(server, 'mcp_server')
-    return enabled !== false && (!machine || machine == space)
+    return enabled !== false && (!machine || machine == space) &&
+      reachedIn(server, space)
   })
   let at = new Map(reached.map((s) => [s.entity.eid, s]))
   return {

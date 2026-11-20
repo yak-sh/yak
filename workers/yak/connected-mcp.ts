@@ -1,6 +1,7 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from '@yaks/platform/host'
+import { manageAt } from '@yaks/platform/routes'
 import {
   type Ask,
   type Choice,
@@ -17,7 +18,15 @@ import {
   grantees,
   revoke,
 } from '@yaks/connections'
-import { asCaller, type Ctx, type Out, refuse, str } from './tool.ts'
+import {
+  asCaller,
+  type Ctx,
+  inSpace,
+  type Out,
+  refuse,
+  SPACE,
+  str,
+} from './tool.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -28,41 +37,62 @@ import { MCPError, nameOf } from '@yaks/mcp-client'
 import { CallError } from '@yaks/tools/errors'
 
 // The tunnel's code is loaded by the first server on a machine, which almost
-// nobody has. The servers are the account's: a channel says whether it
-// reaches them (an Operator by its own rule, operator.ts `operatorRoster`),
-// and at a door that does not say, a credential narrowed to one space
-// (tool.ts `accounted`) sees nobody's.
+// nobody has. A server is connected in a space (@yaks/connections/mcp
+// `reachedIn`): a space's Operator reaches the servers its person connected
+// there, and the person's own connector only those kept from before servers
+// had a space. A channel says whether it reaches them (an Operator by its own
+// rule, operator.ts `operatorRoster`), and at a door that does not say, a
+// credential narrowed to one space sees nobody's.
 export let reaches = (ctx: Ctx): boolean => ctx.remote ?? !ctx.who?.space
-// The servers of `person`, held for them by `who`, with what reaches them.
+// The servers of `person` in `space`, held for them by `who`, with what
+// reaches them.
 let serversOf = (
   env: Env,
   dir: Directory,
   person: string,
   who: Who,
+  space?: string,
   asking?: Calling,
+  every = false,
 ) =>
   remoteCommands(person, {
     ...ctxOf(env, who),
+    ...space ? { space } : {},
+    ...every ? { every } : {},
     report: (e) => caught(e, { request: 'connected MCP' }),
-    signIn: url(env, '/manage/connections'),
+    signIn: space
+      ? async () => {
+        let at = await dir.at(space)
+        return at
+          ? manageAt(at.slug, 'connections', env)
+          : url(env, '/manage/connections')
+      }
+      : url(env, '/manage/connections'),
     machine: async (space) =>
       (await import('./tunnel.ts')).machine(env, space, person, asking),
     owned: async () =>
       (await dir.seats(person, 'owner')).map((s) => s.space.slug),
   })
-let commands = (ctx: Ctx, asking?: Calling) =>
+// An Operator reaches the servers of its own space (the space it asks for, or
+// its directory is narrowed to), and an app's code those the person granted
+// it, wherever they are; the person's connector, those kept without a space.
+let commands = async (ctx: Ctx, asking?: Calling, space?: string) =>
   serversOf(
     ctx.env,
     ctx.dir,
     reaches(ctx) ? ctx.person : '',
     asCaller(ctx, null),
+    space ?? (asking?.caller == 'operator'
+      ? asking.space
+      : (await ctx.dir.narrowedTo())?.eid),
     asking,
+    !!ctx.app,
   )
-/** A person's servers as their own space's connections page shows and
- * changes them: that page is at the platform's address, which no credential
- * narrowed to one space reaches. */
-export let pageServers = (env: Env, dir: Directory, who: Who) =>
-  serversOf(env, dir, who.person ?? '', who)
+/** A person's servers in `space` as its connections page shows and changes
+ * them: that page is at the platform's address, which no credential narrowed
+ * to one space reaches. */
+export let pageServers = (env: Env, dir: Directory, who: Who, space: string) =>
+  serversOf(env, dir, who.person ?? '', who, space)
 
 /** An app, as the connections page names it beside a source granted to it. */
 export type Grantee = {
@@ -107,6 +137,7 @@ export let mcpPage = async (
   env: Env,
   dir: Directory,
   who: Who,
+  space: string,
   asked: {
     /** the person's `mcp_server` rows, where the page read them already */
     kept?: Bundle[]
@@ -118,7 +149,7 @@ export let mcpPage = async (
   let { open, grant, at, kept } = asked
   let { read } = ctxOf(env).graph
   let person = who.person ?? ''
-  let remote = pageServers(env, dir, who)
+  let remote = pageServers(env, dir, who, space)
   let shown = await remote.shown(kept)
   let by = await grantees(read, shown.map((s) => s.id))
   let named = new Map<string, Grantee | null>()
@@ -193,7 +224,7 @@ export let sourceActed = async (
 }
 
 export let listConnectedCommands = (ctx: Ctx, said = '', asking?: Calling) =>
-  commands(ctx, asking).list(said)
+  commands(ctx, asking).then((c) => c.list(said))
 /** MCP replies carry no verified authorship. */
 export let runConnectedCommand = async (
   ctx: Ctx,
@@ -202,7 +233,7 @@ export let runConnectedCommand = async (
   args: Record<string, unknown>,
   asking?: Calling,
 ): Promise<Out> => ({
-  ...await commands(ctx, asking).call(said, name, args),
+  ...await (await commands(ctx, asking)).call(said, name, args),
   heard: true,
 })
 /** Several commands of one connected server, asked at once on one
@@ -212,7 +243,7 @@ export let runConnectedCommands = (
   said: string,
   asks: Ask[],
   asking?: Calling,
-) => commands(ctx, asking).calls(said, asks)
+) => commands(ctx, asking).then((c) => c.calls(said, asks))
 
 /** What the servers a person connected say to read before their tools, as
  * the instructions of the Operator `asking` names: each server's own text
@@ -223,7 +254,9 @@ export let connectedInstructions = async (
   ctx: Ctx,
   asking?: Calling,
 ): Promise<string> =>
-  (await commands(ctx, asking).told()).map(({ label, namespace, text }) =>
+  (await (await commands(ctx, asking)).told()).map((
+    { label, namespace, text },
+  ) =>
     `## ${label}\n\nThe MCP server ${label}, which the person you work for connected, says this of its tools (named ${namespace}__…):\n\n${text}`
   ).join('\n\n')
 
@@ -293,11 +326,12 @@ export let mcpConnect: Row = {
   destructive: false,
   idempotent: true,
   openWorld: true,
-  // A server is the person's own, offered to every connector and Operator.
-  account: true,
+  // A server is connected in a space, for the person connecting it: that
+  // space's Operator uses it in turns with them.
   input: {
     type: 'object',
     properties: {
+      space: SPACE,
       name: str('A short, distinct name for this MCP server.'),
       url: str(
         'The HTTPS Streamable HTTP MCP endpoint; with machine, its path on that machine, such as /mcp.',
@@ -360,13 +394,16 @@ export let mcpConnect: Row = {
     if (on === null) {
       throw refuse('missing', `No space is called ${args.machine}.`)
     }
+    // A server on a machine is connected in the space whose tunnel goes
+    // there; any other, in the space the call names or is in.
+    let { space } = on ? { space: on } : await inSpace(ctx, args, true)
     // A server on a machine is there for the space's Operator, and the
     // machine may open it to no other caller: its tools are discovered as
     // that Operator sees them.
     let asking: Calling | undefined = on
       ? { caller: 'operator', space: on.eid }
       : undefined
-    let value = await commands(ctx, asking).configure({
+    let value = await (await commands(ctx, asking, space.eid)).configure({
       name: String(args.name),
       url: String(args.url),
       ...on ? { machine: on.eid } : {},
@@ -388,7 +425,6 @@ export let mcpRemove: Row = {
   destructive: true,
   idempotent: false,
   openWorld: false,
-  account: true,
   input: {
     type: 'object',
     properties: {
@@ -403,7 +439,7 @@ export let mcpRemove: Row = {
       throw refuse('access', 'This channel cannot remove personal MCP servers.')
     }
     let id = String(args.server).replace(/^mcp:/, '')
-    await commands(ctx).remove(id)
+    await (await commands(ctx)).remove(id)
     return {
       text: `The MCP server is in the trash, with its tools and lists. ${
         url(ctx.env, '/manage/connections')

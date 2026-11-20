@@ -70,7 +70,7 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
       }),
       { say: 'Mockups is connected.', no: false },
     )
-    let [server] = (await mcpPage(env, dir, who)).servers
+    let [server] = (await mcpPage(env, dir, who, space.eid)).servers
     let at = `mcp:${server.id}`
     let api = apiOf(env)
     let call = (person: string | null = ADA) =>
@@ -95,7 +95,10 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
       allow.headers.get('location'),
       `https://yaks.app/manage/connections?grant=${app.eid}&at=mcp%3A`,
     )
-    let asked = await mcpPage(env, dir, who, { grant: app.eid, at: 'mcp:' })
+    let asked = await mcpPage(env, dir, who, space.eid, {
+      grant: app.eid,
+      at: 'mcp:',
+    })
     assertEquals(asked.ask?.sources.map((s) => [s.at, s.granted]), [
       [at, false],
     ])
@@ -106,7 +109,7 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
         no: false,
       },
     )
-    let page = await mcpPage(env, dir, who, { grant: app.eid, at })
+    let page = await mcpPage(env, dir, who, space.eid, { grant: app.eid, at })
     assertEquals(page.ask?.sources.map((s) => s.granted), [true])
     assertEquals(page.servers[0].apps.map((a) => a.eid), [app.eid])
     let drawn = await (await desk({

@@ -983,23 +983,29 @@ directory selects the space-bound memory save/recall loop, with space supplied
 by its host, and connections validate the selected owner and app. The Worker's
 own store facets live under `facets/`.
 
-`mcp_connect` configures a person's remote MCP server in the directory as
-`mcp_server{owner,name,url,machine,enabled,allow,header,client_id}`.
-`@yaks/connections/mcp` uses `@yaks/mcp-client` for discovery and calls, and
-`@yaks/connections` for that person's sign-in and vaulted credential. Operators
-receive namespaced tools; the connector discovers the same commands at
-`mcp:<server eid>` through `commands` and invokes them through `command`. Code
-mode lists them under its `mcp` object while the connector's published tool
-roster stays fixed. Discovery failures report to the tracker and leave a
-retryable connection status command. Calls recheck ownership and the current
-configuration, and never retry a remote mutation after a missing response or a
-sign-in challenge.
+`mcp_connect` configures a person's remote MCP server in a space, in the
+directory as
+`mcp_server{owner,space,name,url,machine,enabled,allow,header,client_id}`: the
+space the call names, else the Operator's own. That space's Operator reaches it
+in turns with its owner, and the space's connections page lists it
+(@yaks/connections/mcp `reachedIn`); an app's code reaches any server its person
+granted it. A server kept without `space`, from before servers had one, reaches
+its owner in every space and at their own connector, which reaches no other;
+connecting its address again in a space moves it there. `@yaks/connections/mcp`
+uses `@yaks/mcp-client` for discovery and calls, and `@yaks/connections` for
+that person's sign-in and vaulted credential. Operators receive namespaced
+tools; the connector discovers the same commands at `mcp:<server eid>` through
+`commands` and invokes them through `command`. Code mode lists them under its
+`mcp` object while the connector's published tool roster stays fixed. Discovery
+failures report to the tracker and leave a retryable connection status command.
+Calls recheck ownership and the current configuration, and never retry a remote
+mutation after a missing response or a sign-in challenge.
 
 A server that answers 401 and names no sign-in takes a key: its integration
 `mcp:<eid>` is then a keyed one, and the person gives the key on the connections
 page, sent as `Authorization: Bearer` or in the header `mcp_server.header` names
-(`mcp_connect` takes the header, never the key). The person's own space's
-connections page lists their servers (connected-mcp.ts `mcpPage`): each server's
+(`mcp_connect` takes the header, never the key). Each space's connections page
+lists the person's servers there (connected-mcp.ts `mcpPage`): each server's
 state, a box for its key, which of its tools are offered (`mcp_server.allow`),
 turning it off, and removing it. A removed server wears `trashed{}` and is
 served to nobody; the page's trash restores it, and `mcp_connect` with the same

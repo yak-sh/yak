@@ -1405,11 +1405,6 @@ let MCP_STATE: Record<string, [string, 'positive' | 'negative' | undefined]> = {
   broken: ['Its key or sign-in was refused', 'negative'],
 }
 
-// The MCP servers a person keeps (@yaks/connections/mcp), on their own
-// space's page: an app asking for one first, then each as a card saying how
-// it stands, with its key, which of its tools are offered, the apps it is
-// granted to, turning it off and removing it; then a form adding one, and
-// those in the trash. Its forms post to `action`.
 // One grant's button on the connections page: the app, the source and the
 // act, `source-grant` or `source-revoke`.
 let granting = (
@@ -1495,6 +1490,10 @@ let mcpCredential = (
     : null
 }
 
+// The MCP servers a person connected in this space (@yaks/connections/mcp):
+// each as a card saying how it stands, with its key, which of its tools are
+// offered, the apps it is granted to, turning it off and removing it; then a
+// form adding one, and those in the trash. Its forms post to `action`.
 let mcpServers = (m: McpPage, on: boolean, action: string) => {
   let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
     h(
@@ -1572,7 +1571,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
     live.length ? h(Cards, null, live.map(card)) : h(
       Card.Sub,
       null,
-      'An MCP server you add here offers its tools to your Operator, the assistants you connect, and the apps you allow.',
+      "An MCP server you add here offers its tools to this space's Operator when it works with you, and to the apps you allow.",
     ),
     h(
       More,

@@ -1,6 +1,11 @@
 // Person-owned remote commands. The host supplies graph, vault and transport;
 // OAuth and invocation remain in the existing connections and MCP packages.
 //
+// A server is connected in a space (`mcp_server.space`), never for the whole
+// account: the space's Operator and connections page reach it, for the person
+// who connected it. One kept from before servers had a space reaches its
+// person in every space, and at their own connector, which names no space.
+//
 // A server is reached one of two ways. One on the public internet is an HTTPS
 // address its person signs in to. One on a machine (`mcp_server.machine`, the
 // space whose tunnel goes there) is a path on that machine's own server, asked
@@ -43,13 +48,21 @@ export type Command = {
 
 type Host = Ctx & {
   report: (e: unknown) => void
-  signIn: string
+  /** The page a person signs in to a server on, or gives its key: the
+   * connections page of the space it is in. */
+  signIn: string | (() => Promise<string>)
   /** The machine a space's tunnel goes to, as a fetch for this person when
    * the space is theirs, and null to anyone else. A host without one reaches
    * no machine. */
   machine?: (space: string) => Promise<typeof fetch | null>
   /** The spaces this person owns: the machines they can name. */
   owned?: () => Promise<string[]>
+  /** The space the servers are reached in, by its eid; absent at a door that
+   * names none, which reaches only servers kept without a space. */
+  space?: string
+  /** Reaches the person's servers in every space: an app's code, which
+   * calls only the ones the person granted it (@yaks/connections `grant`). */
+  every?: boolean
 }
 export type Settings = {
   name: string
@@ -194,6 +207,13 @@ export type Choice = {
   allowed: boolean
 }
 
+/** Whether the server `row` is reached in `space`: one connected there, or
+ * one kept without a space, which reaches its person everywhere. */
+export let reachedIn = (row: Bundle, space?: string): boolean => {
+  let at = comp(row, 'mcp_server').space
+  return !at || at == space
+}
+
 /** A person's MCP servers, as {@link remoteCommands} gives them. */
 export type Remote = {
   set: (
@@ -227,10 +247,15 @@ export let remoteCommands = (
   host: Host,
   options: Options = {},
 ): Remote => {
-  // Every server the person keeps, those in the trash (`trashed{}`) too.
-  let kept = async () =>
+  // Every server the person keeps in every space, those in the trash
+  // (`trashed{}`) too; what is asked of one by its id is theirs wherever it is.
+  let mine = async () =>
     person ? await host.graph.read(line`.mcp_server.owner=${person}&*`) : []
+  // Those reached where the host asks.
+  let here = (r: Bundle) => host.every || reachedIn(r, host.space)
+  let kept = async () => (await mine()).filter(here)
   let rows = async () => (await kept()).filter((r) => !r.trashed)
+  let live = async () => (await mine()).filter((r) => !r.trashed)
   let reached = async (s: GraphServer): Promise<Reached | null> => {
     if (!s.server.machine) return s
     let fetch = await host.machine?.(s.server.machine)
@@ -348,7 +373,10 @@ export let remoteCommands = (
         },
       }])
     }
-    let link = `${host.signIn}#${encodeURIComponent(name)}`
+    let page = typeof host.signIn == 'string'
+      ? host.signIn
+      : await host.signIn()
+    let link = `${page}#${encodeURIComponent(name)}`
     let key = i ? keyed(i) : !found
     return {
       text: `${
@@ -571,7 +599,8 @@ export let remoteCommands = (
     }
     let url = machine ? settings.url : https(settings.url)
     let all = await rows()
-    // The same server again, one in the trash too, which this brings back.
+    // The same server again, one in the trash too, which this brings back;
+    // one kept without a space moves to this one.
     let same = (await kept()).find((r) => {
       let c = comp(r, 'mcp_server')
       return c.url == url && (c.machine ?? undefined) == machine
@@ -580,6 +609,7 @@ export let remoteCommands = (
       entity: { eid: same?.entity.eid ?? mint() },
       mcp_server: {
         owner: person,
+        ...host.space ? { space: host.space } : {},
         name: settings.name,
         url,
         ...machine ? { machine } : {},
@@ -645,7 +675,7 @@ export let remoteCommands = (
   /** Keep `key` as the credential of the person's server `id`, which it
    * then takes instead of a sign-in. */
   let give = async (id: string, key: string) => {
-    let row = (await rows()).find((r) => r.entity.eid == id)
+    let row = (await live()).find((r) => r.entity.eid == id)
     if (!row) {
       throw refuse('missing', 'This MCP server is not connected for you.')
     }
@@ -667,7 +697,7 @@ export let remoteCommands = (
   /** Put the person's server `id` in the trash: its tools and lists go with
    * it, and its credential stays, so `restore` brings it all back. */
   let remove = async (id: string) => {
-    let row = (await rows()).find((r) => r.entity.eid == id)
+    let row = (await live()).find((r) => r.entity.eid == id)
     if (!row) {
       throw refuse('missing', 'This MCP server is not connected for you.')
     }
@@ -675,7 +705,7 @@ export let remoteCommands = (
   }
   /** Bring the person's server `id` back out of the trash. */
   let restore = async (id: string) => {
-    let row = (await kept()).find((r) => r.entity.eid == id && r.trashed)
+    let row = (await mine()).find((r) => r.entity.eid == id && r.trashed)
     if (!row) throw refuse('missing', 'This MCP server is not in your trash.')
     let back = serverOf(row)
     try {
@@ -699,7 +729,7 @@ export let remoteCommands = (
     id: string,
     patch: { enabled?: boolean; allow?: string[] | null },
   ) => {
-    let row = (await rows()).find((r) => r.entity.eid == id)
+    let row = (await live()).find((r) => r.entity.eid == id)
     if (!row) {
       throw refuse('missing', 'This MCP server is not connected for you.')
     }
@@ -727,30 +757,34 @@ export let remoteCommands = (
   }
   /** Each server the person keeps, as their page shows it. */
   let shown = async (rows?: Bundle[]): Promise<Shown[]> =>
-    await Promise.all((rows ?? await kept()).map(async (row) => {
-      let c = comp(row, 'mcp_server')
-      let allow = c.allow == null ? undefined : JSON.parse(String(c.allow))
-      let name = integration(row.entity.eid)
-      let [held, i] = c.machine ? [] : await Promise.all([
-        pick(host.graph.read, person, name),
-        known(host.graph.read, name),
-      ])
-      return {
-        id: row.entity.eid,
-        name: String(c.name),
-        url: String(c.url),
-        ...c.machine ? { machine: String(c.machine) } : {},
-        enabled: c.enabled !== false,
-        ...allow ? { allow } : {},
-        ...c.header ? { header: String(c.header) } : {},
-        trashed: !!row.trashed,
-        status: c.machine
-          ? 'machine'
-          : (comp(held, 'connection').status as Shown['status']) ?? 'open',
-        ...held ? { connection: held.entity.eid } : {},
-        ...i ? { keyed: keyed(i) } : {},
-      }
-    }))
+    await Promise.all(
+      (rows ?? await mine()).filter(here).map(
+        async (row) => {
+          let c = comp(row, 'mcp_server')
+          let allow = c.allow == null ? undefined : JSON.parse(String(c.allow))
+          let name = integration(row.entity.eid)
+          let [held, i] = c.machine ? [] : await Promise.all([
+            pick(host.graph.read, person, name),
+            known(host.graph.read, name),
+          ])
+          return {
+            id: row.entity.eid,
+            name: String(c.name),
+            url: String(c.url),
+            ...c.machine ? { machine: String(c.machine) } : {},
+            enabled: c.enabled !== false,
+            ...allow ? { allow } : {},
+            ...c.header ? { header: String(c.header) } : {},
+            trashed: !!row.trashed,
+            status: c.machine
+              ? 'machine'
+              : (comp(held, 'connection').status as Shown['status']) ?? 'open',
+            ...held ? { connection: held.entity.eid } : {},
+            ...i ? { keyed: keyed(i) } : {},
+          }
+        },
+      ),
+    )
   return {
     set,
     tools,

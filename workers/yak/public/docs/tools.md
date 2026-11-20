@@ -165,8 +165,13 @@ can use it to build its own command menu without copying that access rule.
 
 Every tool outside an app is in one pool, each source named by an address:
 
-- `mcp:<server>`: an MCP server the person added on their connections page, with
-  the tools they chose to offer.
+- `mcp:<server>`: an MCP server the person connected in a space, with the tools
+  they chose to offer. They add it on that space's connections page, or give its
+  address to the space's Operator, which connects it and sends them the link to
+  sign in. It is theirs in that space alone: its Operator uses it only in turns
+  with them, and an app only where they allowed it. A server connected before
+  servers had a space reaches its person in every space and at their own
+  connector.
 - `connection:<connection>`: a connection, whether its key was pasted, it signs
   in through a built-in integration or through Nango. Each offers `request`,
   which sends an HTTPS request to the hosts its integration names with the

@@ -323,7 +323,7 @@ export type Connections = {
   trash?: { id: string; integration: string; at: number }[]
   /** whether this deploy can keep a key at all */
   on: boolean
-  /** the person's MCP servers, on their own space's page */
+  /** the person's MCP servers in this space */
   mcp?: McpPage
   list: Shown[]
   /** outside services holding a grant from the person (connected.ts), on
@@ -688,8 +688,9 @@ export let connectionsAsked = async (
       catalogued(read),
       add ? known(read, add) : undefined,
       own ?? false,
-      // The MCP servers the person keeps, on their own space's page.
-      own ? read(line`.mcp_server.owner=${person}&*`) : [],
+      // The MCP servers the person keeps, of which the page shows those in
+      // this space (@yaks/connections/mcp `reachedIn`).
+      read(line`.mcp_server.owner=${person}&*`),
     ],
   )
 }
@@ -726,7 +727,7 @@ export let connectionsOf = async (
   // Only what those answers name outside this space is asked after.
   let [here, reached, ahead, listing, theirs, built, wanted, own, servers] =
     await connectionsAsked(env, space, person, { ...at, dir })
-  let mcp = own ? at.mcp?.(servers) : undefined
+  let mcp = at.mcp?.(servers)
   mcp?.catch(() => {})
   let mine = own ? theirs : []
   let [apps, held, out] =
@@ -1288,7 +1289,7 @@ export let connecting = async (
       let dir = dirOf(env)
       let said = await sourceActed(env, dir, who, act, field) ??
         await acted(
-          pageServers(env, dir, who),
+          pageServers(env, dir, who, space.eid),
           act,
           field,
           (k) => form.getAll(k).map(String),

@@ -138,13 +138,11 @@ test('a call from the owner’s connector says so, and names no conversation', a
   )
 })
 
-test('a credential narrowed to the space at a door is offered none of the account’s servers, which its Operator reaches', async () => {
+test('a server connected in a space reaches neither the person’s connector nor a credential narrowed to the space, only its Operator', async () => {
   let door = (who: Ctx['who']) => ({ env, dir, person: ada, who })
   let named = async (who: Ctx['who']) =>
     (await connectedTools(door(who))).map((t) => t.name)
-  assertEquals(await named({ person: ada, via: 'oauth' }), [
-    'tasks__publish_mockup',
-  ])
+  assertEquals(await named({ person: ada, via: 'oauth' }), [])
   assertEquals(
     await named({ person: ada, via: 'grant', grant: mint(), space: 'adas' }),
     [],
