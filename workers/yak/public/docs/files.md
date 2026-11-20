@@ -904,7 +904,7 @@ An `open` library that answers anyone's questions keeps its documents to its
 editors this way. An upload from below the floor is refused before any bytes are
 kept, naming `attachment`, the row an upload writes:
 
-    someone signed out may not write attachment in <app> — editor is the least that may
+    someone signed out may not write attachment in <app> — editor is the least that may: a grant of editor on the app, which an owner of the app or of its space gives
 
 On an `open` app a signed-out guest's upload has no `created.by` at all. If the
 gallery shows who added each photo, ask them for a name and save it in your own

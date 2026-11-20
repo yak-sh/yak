@@ -35,8 +35,9 @@ export class Denied extends Error {
       `${actor ?? 'someone signed out'} may not ${act} ` +
         `${comp ? `${comp} in ` : ''}${app} — ${
           need == 'person'
-            ? 'only someone signed in may'
-            : `${need} is the least that may`
+            ? 'only someone signed in may: sign in first'
+            : `${need} is the least that may: a grant of ${need} on the ` +
+              `app, which an owner of the app or of its space gives`
         }`,
     )
     this.name = 'Denied'

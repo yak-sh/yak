@@ -465,8 +465,10 @@ import {
   appDerived,
   appDoc,
   appVocab,
+  ELSEWHERE,
   gitVocab,
   grew,
+  inAppWords,
   meant,
   metaKeywords,
   numbered,
@@ -2863,7 +2865,9 @@ export class Store extends Durable {
           if (person != appId) role = vouchOf(req).level
         }
         if (!reads(access, role)) {
-          throw new Denied(person, appId, 'viewer', 'read')
+          let denied = new Denied(person, appId, 'viewer', 'read')
+          if (person) denied.message += ' (member_add naming the app)'
+          throw denied
         }
         if (person) {
           this.#vouch({
@@ -5913,18 +5917,25 @@ export class Store extends Durable {
   async #taught(answer: Response): Promise<Response> {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
     let said = await answer.json() as { error?: string; message?: string }
-    let own = Object.keys(meant(this.#get('vocab')).$defs ?? {}).sort()
-    return /^unknown (prop: \.\w|component)/.test(said.message ?? '') &&
-        !said.message!.includes(url(this.#bind, '/docs.md'))
-      ? Response.json({
-        ...said,
-        message: said.message +
-          teach(this.#bind, own, this.#released()),
-      }, {
-        status: answer.status,
-        headers: answer.headers,
-      })
-      : Response.json(said, { status: answer.status, headers: answer.headers })
+    let defs = meant(this.#get('vocab')).$defs ?? {}
+    let own = Object.keys(defs).sort()
+    let message = inAppWords(
+      said.message ?? '',
+      own,
+      (c) => Object.keys(defs[c]?.properties ?? {}),
+    )
+    let word = /^unknown prop: \.(\w+)/.exec(message)?.[1]
+    let taught = /^unknown (prop: \.\w|component)/.test(message) &&
+      !(word && ELSEWHERE[word]) &&
+      !message.includes(url(this.#bind, '/docs.md'))
+    return Response.json({
+      ...said,
+      ...(said.message == null ? {} : {
+        message: taught
+          ? message + teach(this.#bind, own, this.#released())
+          : message,
+      }),
+    }, { status: answer.status, headers: answer.headers })
   }
 
   // The full-text hits for words, best first, over the text this reader may

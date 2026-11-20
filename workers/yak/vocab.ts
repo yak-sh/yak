@@ -14,6 +14,8 @@ import {
   said as syncValue,
   same,
   typesOf,
+  unknownName,
+  unqualified,
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
@@ -194,8 +196,9 @@ export let teach = (env: Host = {}, own?: string[], released = true) =>
           ? ` (it declares ${own.map((c) => `.${c}`).join(', ')})`
           : ' (it declares no components yet)'
         : '') +
-      `. Declare it there, like ${EXAMPLE}, and deploy the app with ` +
-      'app_deploy to install it'
+      '. graph_schema lists every word this space declares, with its ' +
+      'properties. Only for a new word: declare it in vocab.json, like ' +
+      `${EXAMPLE}, and deploy the app with app_deploy to install it`
     : ' — the app has not been deployed yet, so none of the words its ' +
       'vocab.json declares are installed: app_deploy installs them. A word ' +
       `the draft's vocab.json does not declare yet is declared there first, ` +
@@ -203,6 +206,50 @@ export let teach = (env: Host = {}, own?: string[], released = true) =>
   ` · how to declare one: call guide with page components, or ${
     url(env, '/docs.md')
   }`
+
+// Words callers guess for something the platform keeps elsewhere, and where
+// it is read instead.
+export let ELSEWHERE: Record<string, string> = {
+  draft_conflict:
+    "a draft's conflicts are no component: app_deploy's answer says how " +
+    'many properties wait for a pick, and each is a decision in the ' +
+    "person's Updates, read with conversation_inbox",
+}
+
+/** An app store's refusal of a word, said in the words the app speaks: a
+ * property named alone is pointed at the app's own components that declare
+ * it, never at the platform's machinery (`.provisional.note`, `.wake.note`),
+ * and a word the platform keeps elsewhere says where. `own` is the app's
+ * components and `props` their properties. Any other message is unchanged.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { inAppWords } from './vocab.ts'
+ * let props = (c: string) => c == 'check' ? ['note', 'done'] : []
+ * assertEquals(
+ *   inAppWords('.note is a property, not a component — name it .provisional.note or .wake.note', ['check'], props),
+ *   '.note is a property, not a component — name it .check.note',
+ * )
+ * assertEquals(
+ *   inAppWords('.note is a property, not a component — name it .wake.note', ['item'], props),
+ *   'unknown prop: .note — no component is named note, and none has a property of that name',
+ * )
+ * ```
+ */
+export let inAppWords = (
+  message: string,
+  own: string[],
+  props: (comp: string) => string[],
+): string => {
+  let word = /^unknown prop: \.(\w+)/.exec(message)?.[1]
+  if (word && ELSEWHERE[word]) {
+    return `unknown prop: .${word} — ${ELSEWHERE[word]}`
+  }
+  let alone = /^\.(\w+) is a property, not a component/.exec(message)?.[1]
+  if (!alone) return message
+  let at = own.filter((c) => props(c).includes(alone))
+  return at.length ? unqualified(alone, at) : unknownName(alone, own, props)
+}
 
 // The words that name a property's type, and the JSON Schema each is. A
 // manifest writes the schema; these are for reading one back in a sentence — a

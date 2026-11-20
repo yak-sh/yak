@@ -568,7 +568,7 @@ is anyone signed in; `viewer`, `editor` and `owner` require that role on the app
 or a higher one. A write that adds, changes or removes the component by anyone
 below the floor is refused, naming the component:
 
-    someone signed out may not write line in <app> — only someone signed in may
+    someone signed out may not write line in <app> — only someone signed in may: sign in first
 
 `pace` is how often one vouched browser or client may change this component on
 one entity: `"1s"`, `"500ms"`, `"5m"`. A write that comes sooner is refused,

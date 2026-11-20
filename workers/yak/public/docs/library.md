@@ -47,7 +47,7 @@ thing:
   become part of the library and be cited in answers. A visitor's upload is
   refused before any bytes are kept:
 
-      someone signed out may not write attachment in <app> — editor is the least that may
+      someone signed out may not write attachment in <app> — editor is the least that may: a grant of editor on the app, which an owner of the app or of its space gives
 
 Add the people who keep the library as editors with `member_add`. The owner is
 an editor already.
