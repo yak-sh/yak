@@ -35,9 +35,12 @@ export let frame = (m, tab, waiting) => {
     `
   )
   return {
-    top: html`<a class="brand" href="inbox"><b class="brand_Name">${
-      m.church?.name || 'Church'
-    }</b><small class="brand_Label">Messages</small></a><nav class="tabs">${tabs}</nav>`,
+    top: html`
+      <a class="brand"
+        href="inbox"><b class="brand_Name">${m.church?.name ||
+          'Church'}</b><small class="brand_Label">Messages</small></a><nav
+        class="tabs">${tabs}</nav>
+    `,
     bottom: html`${tabs}`,
   }
 }
@@ -151,16 +154,16 @@ export let thread = (m, number, who, ui) => {
       </form>
     `
     : readOnly
-  return html`${back('inbox', 'Inbox')}
-    <header class="who">${
-    avatar(c.name)
-  }<div><h1 class="who_Title">${c.name}</h1><p class="muted">${
-    shown(c.number)
-  }${lists.length ? ` · ${lists.join(', ')}` : ''}${
-    c.person ? '' : ' · not in the directory'
-  }</p></div></header>
-    <div class="bubbles">${bubbles}</div>
-    ${answer}`
+  return html`
+    ${back('inbox', 'Inbox')}
+        <header
+      class="who">${avatar(c.name)}<div><h1 class="who_Title">${c
+        .name}</h1><p class="muted">${shown(c.number)}${lists.length
+        ? ` · ${lists.join(', ')}`
+        : ''}${c.person ? '' : ' · not in the directory'}</p></div></header>
+        <div class="bubbles">${bubbles}</div>
+        ${answer}
+  `
 }
 
 // ---------- send ----------
@@ -486,26 +489,28 @@ export let list = (m, eid, who, ui) => {
 
 export let stoppedList = (m, ui) => {
   let rows = [...m.stopped].sort((a, b) => b[1].localeCompare(a[1]))
-  return html`${back('lists', 'Lists')}
-    <h1>Opted out</h1>
-    <p class="muted">These numbers texted STOP. The church can't text them until they text START.</p>
-    ${
-    rows.length
-      ? html`<ul class="people">${
-        rows.map(([n, at]) =>
-          html`
-            <li
-              class="people_Person person"><span class="grow"><b>${m.byNumber
-                .get(n)?.name ||
-                shown(n)}</b><span class="muted small">${shown(n)} · ${when(
-                  at,
-                  ui.now,
-                )}</span></span></li>
-          `
-        )
-      }</ul>`
-      : html`<p class="empty">Nobody has opted out.</p>`
-  }`
+  return html`
+    ${back('lists', 'Lists')}
+        <h1>Opted out</h1>
+        <p
+      class="muted">These numbers texted STOP. The church can't text them until they text START.</p>
+        ${rows.length
+          ? html`<ul class="people">${
+            rows.map(([n, at]) =>
+              html`
+                <li
+                  class="people_Person person"><span class="grow"><b>${m
+                    .byNumber
+                    .get(n)?.name ||
+                    shown(n)}</b><span class="muted small">${shown(n)} · ${when(
+                      at,
+                      ui.now,
+                    )}</span></span></li>
+              `
+            )
+          }</ul>`
+          : html`<p class="empty">Nobody has opted out.</p>`}
+  `
 }
 
 /** The screen a path names, and the tab it sits under. */
