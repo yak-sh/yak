@@ -272,8 +272,15 @@ export let glanceOf = ({ turn, helpers }: Aside) => {
 
 /** The summary's button: its dots and "+N", pressed to show or hide the
  * whole list (`[data-open]` on the aside). */
-export let Glance = ({ aside, open }: { aside: Aside; open: boolean }) => {
+export let Glance = (
+  { aside, open, reach = false }: {
+    aside: Aside
+    open: boolean
+    reach?: boolean
+  },
+) => {
   let { dots, more, label } = glanceOf(aside)
+  let idle = !dots.length && reach
   return h(
     Popover.Trigger,
     {
@@ -281,18 +288,25 @@ export let Glance = ({ aside, open }: { aside: Aside; open: boolean }) => {
       'data-glance': '',
       'aria-expanded': open ? 'true' : 'false',
       'aria-controls': 'aside-now',
-      'aria-label': label,
+      'aria-label': idle ? 'Ways to reach your Operator' : label,
     },
+    idle ? h(Popover.Count, { 'aria-hidden': 'true' }, 'Reach') : null,
     dots.map((mod) => h(Dot, { mod, 'aria-hidden': 'true' })),
     more ? h(Popover.Count, { 'aria-hidden': 'true' }, `+${more}`) : null,
   )
 }
 
 /** The aside: the summary, then Now (but on a helper's page, whose band
- * says it), and Helpers while there are any. Hidden while nothing runs and
- * no helper was started. */
+ * says it), Helpers while there are any, and below them `reach`, the ways
+ * to reach the Operator (operator-ways.ts). Hidden while nothing runs, no
+ * helper was started and there is nothing below them. */
 export let Aside = (
-  { aside, now, open = false }: { aside: Aside; now: number; open?: boolean },
+  { aside, now, open = false, reach }: {
+    aside: Aside
+    now: number
+    open?: boolean
+    reach?: Node
+  },
 ) =>
   h(
     Popover,
@@ -302,9 +316,9 @@ export let Aside = (
       'data-aside': '',
       'data-open': open ? '' : undefined,
       'aria-label': 'What is happening now',
-      hidden: !aside.turn && !aside.helpers.length,
+      hidden: !aside.turn && !aside.helpers.length && !reach,
     },
-    h(Glance, { aside, open }),
+    h(Glance, { aside, open, reach: !!reach }),
     h(
       Popover.Body,
       { class: 'Talk_AsideIn', id: 'aside-now' },
@@ -326,6 +340,7 @@ export let Aside = (
           ),
         ),
       ),
+      reach,
     ),
   )
 

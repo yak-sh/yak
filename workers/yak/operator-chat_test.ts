@@ -31,7 +31,7 @@ import {
 import { NAMES, pick } from '@yaks/persona'
 import { shown } from '@yaks/phone'
 import { mailFrom } from '@yaks/platform/host'
-import { waysOf } from './talk-sidebar.ts'
+import { waysOf } from './operator-ways.ts'
 import {
   chatPath,
   managed,
@@ -386,7 +386,7 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
   assertEquals(admin.to.Admin, '/admin')
 })
 
-test('the side lists every way to reach the Operator, each one tap, and adds a platform not set up', async () => {
+test('the page lists every way to reach the Operator below its helpers, each one tap, and adds a platform not set up', async () => {
   let ways = {
     email: 'clerk@yaks.app',
     text: '+15550100',
@@ -406,10 +406,20 @@ test('the side lists every way to reach the Operator, each one tap, and adds a p
     await (await chatPage(p.env, space, who, 'new', { ...beside, ways }))
       .text(),
   )
-  let section = document.querySelector('[aria-labelledby="side-reach"]')!
+  let section = document.querySelector('[data-reach]')!
   assertEquals(
-    document.getElementById('side-reach')?.textContent,
+    section.querySelector('#reach')?.textContent,
     `Reach ${space.operator}`,
+  )
+  // Below the helpers, shown with none running, and not in the side.
+  assertEquals(
+    section.previousElementSibling?.hasAttribute('data-helpers'),
+    true,
+  )
+  assertEquals(section.closest('[data-aside]')?.hasAttribute('hidden'), false)
+  assertEquals(
+    document.querySelector('.Sidebar [data-reach], #side-reach'),
+    null,
   )
   assertEquals(
     [...section.querySelectorAll('a')].map((a) => [

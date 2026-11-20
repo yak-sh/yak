@@ -91,7 +91,8 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
   )
 }
 
-let link = (at: Item) => {
+/** One item's link, or its form's button for a `submit` item. */
+export let link = (at: Item) => {
   let node = h(
     SideNav.Link,
     {

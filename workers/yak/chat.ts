@@ -535,8 +535,8 @@ let servers = async (
   )
 }
 
-/** Where a space's Operator is reached on a chat platform, as its page's
- * side shows it (talk-sidebar.ts): a server one of its connections serves
+/** Where a space's Operator is reached on a chat platform, as its page
+ * shows it (operator-ways.ts): a server one of its connections serves
  * ({@link serves}), by the name kept on the connection (`chat_serves{names}`),
  * the room it hears in full there (`chat_hears`), if that room is in it, and
  * the address that opens them. */

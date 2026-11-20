@@ -609,7 +609,7 @@ let beside = async (
     dir.collapsed(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
     chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
-      (await import('./talk-sidebar.ts')).waysOf(
+      (await import('./operator-ways.ts')).waysOf(
         env,
         space,
         who.role == 'owner',

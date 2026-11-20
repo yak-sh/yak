@@ -28,8 +28,8 @@ export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>
   renderToString(h(Aside, { aside, now, open }))
 
 /** The summary's button as HTML. */
-export let glanceHtml = (aside: Aside, open = false) =>
-  renderToString(h(Glance, { aside, open }))
+export let glanceHtml = (aside: Aside, open = false, reach = false) =>
+  renderToString(h(Glance, { aside, open, reach }))
 
 /** The turn's line as HTML. */
 export let turnHtml = (turn: Turn | null, now = Date.now()) =>

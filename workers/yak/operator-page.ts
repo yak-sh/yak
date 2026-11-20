@@ -31,7 +31,8 @@ import {
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
-import { aboutPath, talkSide, type Ways } from './talk-sidebar.ts'
+import { aboutPath, talkSide } from './talk-sidebar.ts'
+import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
@@ -1518,7 +1519,7 @@ export type Beside = {
   /** whether the person keeps the side folded to its icons
    * (`desk_sidebar{collapsed}`) */
   collapsed?: boolean
-  /** every way to reach this Operator (talk-sidebar.ts `waysOf`) */
+  /** every way to reach this Operator (operator-ways.ts `waysOf`) */
   ways?: Ways
 }
 
@@ -2262,8 +2263,14 @@ export let chatPage = async (
     ],
     // What it is doing now and the helpers it set going, in the bar
     // (operator-aside.ts).
-    aside: talked.aside
-      ? h(Aside, { aside: talked.aside, now: Date.now() })
+    // and below them, the ways to reach it (operator-ways.ts).
+    aside: talked.aside || beside.ways
+      ? h(Aside, {
+        aside: talked.aside ?? { turn: null, helpers: [] },
+        now: Date.now(),
+        reach: beside.ways &&
+          h(Reaching, { space, ways: beside.ways, here }),
+      })
       : undefined,
     script: chatScript(
       talked.aside ?? { turn: null, helpers: [] },
@@ -2643,8 +2650,9 @@ let shown = () => {
   if (!a) return
   let helping = !!a.querySelector('[data-helping]').children.length
   a.querySelector('[data-helpers]').hidden = !helping
-  a.hidden = !helping && !a.querySelector('[data-turn] time')
-  let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded()))
+  let reach = !!a.querySelector('[data-reach]')
+  a.hidden = !helping && !reach && !a.querySelector('[data-turn] time')
+  let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded(), reach))
   glance.innerHTML = next.innerHTML
   for (let name of ['aria-label', 'aria-expanded']) glance.setAttribute(name, next.getAttribute(name))
 }
@@ -2825,7 +2833,13 @@ let read = async () => {
         if (missing.length && !again) await left(missing)
       }
       from ??= talk.from()
-      if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown(), show()
+      if (got.aside && aside()) {
+        // The ways to reach the Operator are drawn once, and stay below the helpers.
+        let reach = aside().querySelector('[data-reach]')
+        happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded())))
+        if (reach) aside().querySelector('[data-helpers]').after(reach)
+        shown(), show()
+      }
       if (got.title) heading.textContent = got.title
       dates(document)
     } while (again)
