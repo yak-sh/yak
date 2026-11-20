@@ -208,9 +208,36 @@ yak admin delete reviewer --as reviewer
 ```
 
 The website's renewed cookie is written back under the same OAuth record's vault
-lock. Neither the bearer nor the cookie is included in graph text or tool
-answers. `delete` reads the website's list of what would be destroyed before
-submitting the space's name back to its deletion form.
+lock. A `@bot.yak.sh` test account whose session is missing or has expired signs
+itself in again when a browser-only act asks for it: it asks for a code, reads
+the letter from this graph's mail, and keeps the new session in the same record
+(@yaks/connections/yaks-app `botSession`). Neither the bearer nor the cookie is
+included in graph text or tool answers. `delete` reads the website's list of
+what would be destroyed before submitting the space's name back to its deletion
+form.
+
+## A browser, off the box
+
+`browse` opens a page of yaks.app in Cloudflare's browser
+(workers/yak/browse.ts, through the yak-browser Worker), signed in with the
+selected account's website session, and takes the steps a person would: tap,
+type, press a key, swipe, open a phone's keyboard, wait, take a screenshot. Each
+screenshot is written to `--to` (default `.scratch/browse`), the last as
+`end.png`; the answer says the status, the page's errors, its accessibility
+problems and its text. The window is a phone's, 390 × 844 with touch, unless
+named. Only the platform's test accounts and owners may use it, and only on
+yaks.app's own hosts.
+
+```sh
+yak admin browse /manage/checks/operator --as checks
+yak admin browse /manage/checks/operator --as checks --steps \
+  '[{"tap":"textarea"},{"keyboard":336},{"shot":"keyboard"}]'
+yak admin browse https://checks.yaks.app/ --width 1280 --height 800 --touch=false --as checks
+```
+
+The keyboard step shrinks the window by the keyboard's height, which is what a
+phone does for a page that asks to be resized; a headless browser has no
+on-screen keyboard of its own.
 
 ## OAuth clients
 

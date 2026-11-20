@@ -587,7 +587,7 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
       ? refuse('limit', e.message)
       : e
   })
-  let { image, text, ...diagnostics } = rendered
+  let { image, text, shots: _, ...diagnostics } = rendered
   return {
     png: image,
     cost: rendered.duration / 1000 * RATE,

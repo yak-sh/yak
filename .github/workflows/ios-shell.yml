@@ -6,8 +6,12 @@
 #
 # A hosted runner, as macos.yml's: GitHub's standard runners cost nothing for
 # a public repository, and it never touches the box. CHECKS_SIGNIN_LINK is a
-# standing sign-in link for checks@bot.yak.sh (`POST /login/link`, minted
-# from a checks session); a run with an expired one stops at the sign-in card.
+# standing sign-in link for checks@bot.yak.sh, minted for a year from the
+# box's checks session and handed straight to GitHub:
+#
+#   yak admin link --days 365 --as checks | head -1 | gh secret set CHECKS_SIGNIN_LINK
+#
+# A run with an expired one stops at the sign-in card.
 name: ios-shell
 
 on:

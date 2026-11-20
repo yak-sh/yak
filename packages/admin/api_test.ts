@@ -58,7 +58,9 @@ test('an invitation is accepted through the invitee session', async () => {
   }) as typeof fetch
   try {
     await acceptInvite('private.session', mail, 'admin@bot.yak.sh')
-    assertEquals(sent?.headers, { cookie: 'yak_session=private.session' })
+    assertEquals(sent?.headers, {
+      cookie: 'yak_session=private.session; __Host-yak_session=private.session',
+    })
     assertEquals(sent?.redirect, 'manual')
   } finally {
     globalThis.fetch = old
@@ -338,7 +340,10 @@ test('a renewed cookie is handed on, and an ordinary answer is quiet', async () 
   )
   try {
     await linkFor('old.token')
-    assertEquals(renewed.sent[0].cookie, 'yak_session=old.token')
+    assertEquals(
+      renewed.sent[0].cookie,
+      'yak_session=old.token; __Host-yak_session=old.token',
+    )
     assertEquals(fresh, ['slid.token'])
   } finally {
     renewed.done()

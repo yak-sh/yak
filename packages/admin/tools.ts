@@ -28,6 +28,8 @@ export { Refused } from './refusal.ts'
 import {
   acceptInvite,
   appStores,
+  type Browse,
+  browse,
   budgetNow,
   close,
   compNow,
@@ -145,14 +147,15 @@ let pushNote = (p: PushProgress) => {
 }
 
 // Browser-only acts cannot synthesize a cookie from an OAuth bearer.
-let website = (at: Account): string => {
-  if (!at.session) {
+let website = async (at: Account): Promise<string> => {
+  let session = at.signedIn ? await at.signedIn() : at.session
+  if (!session) {
     throw new Refused(
       `${at.address} was signed in through a browser and has no website session. ` +
         'This browser-only admin act requires a code sign-in (yak auth yaks.app --as <bot address>).',
     )
   }
-  return at.session
+  return session
 }
 
 // A platform verb's exit status, as the call's outcome. An interrupt is an
@@ -293,7 +296,7 @@ export let runs = (
     admin_accept: verb(async (call, _vault, _keep, graph) => {
       let a = argsOf(call)
       let at = await acting(a)
-      let session = website(at)
+      let session = await website(at)
       let letter = String(a.letter)
       let eid = (await graph.address([letter])).get(letter) ?? letter
       let [mail] = await graph.get([eid])
@@ -308,7 +311,7 @@ export let runs = (
       let at = await acting(a)
       let gone = word(a, 'revoke')
       if (gone) {
-        let ids = await unlink(website(at), gone)
+        let ids = await unlink(await website(at), gone)
         return [
           said(
             call,
@@ -319,7 +322,7 @@ export let runs = (
         ]
       }
       let got = await linkFor(
-        website(at),
+        await website(at),
         typeof a.days == 'number' ? a.days : undefined,
       )
       return [
@@ -328,6 +331,50 @@ export let runs = (
           `id        ${got.id}`,
           `expires   ${got.expires}`,
           ...got.links.length > 1 ? [`standing  ${got.links.join(' ')}`] : [],
+        ]),
+      ]
+    }),
+
+    // A page opened in Cloudflare's browser as the selected account, and the
+    // steps a person takes on it; its screenshots written beside the caller.
+    admin_browse: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let page = String(a.url ?? '/')
+      let url = page.startsWith('/') ? `https://${zone()}${page}` : page
+      let steps = typeof a.steps == 'string' ? JSON.parse(a.steps) : a.steps
+      let view = Object.fromEntries(
+        (['width', 'height', 'wait', 'touch'] as const)
+          .filter((k) => a[k] != null)
+          .map((k) => [k, a[k]]),
+      ) as Browse['view']
+      let got = await browse(await website(at), { url, view, steps })
+      let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
+      await fs.mkdir(to, { recursive: true })
+      let files: string[] = []
+      for (
+        let { name, image } of [...got.shots, { name: 'end', image: got.image }]
+      ) {
+        let file = `${to}/${name.replace(/[^\w.-]+/g, '-')}.png`
+        await fs.writeFile(
+          file,
+          Uint8Array.from(atob(image), (c) => c.charCodeAt(0)),
+        )
+        files.push(file)
+      }
+      let problems = got.accessibility.problems ?? []
+      return [
+        said(call, [
+          `${url} as ${at.address}: HTTP ${got.status}, ${
+            Math.round(got.duration / 100) / 10
+          }s of browser`,
+          ...files.map((f) => `shot      ${f}`),
+          ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
+          ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')
+            .map((m) => `console   ${m.type}: ${m.text}`),
+          ...problems.map((p) => `a11y      ${p.rule}: ${p.help}`),
+          '',
+          got.text,
         ]),
       ]
     }),
@@ -562,11 +609,11 @@ export let runs = (
     admin_delete: verb(async (call) => {
       let slug = String(argsOf(call).space)
       let at = await acting(argsOf(call))
-      let doomed = await doomedIn(website(at), slug)
+      let doomed = await doomedIn(await website(at), slug)
       return [
         said(call, [
           ...doomed.map((line) => `  - ${line}`),
-          await close(website(at), slug),
+          await close(await website(at), slug),
         ]),
       ]
     }),

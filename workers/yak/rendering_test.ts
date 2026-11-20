@@ -14,6 +14,7 @@ import {
   type Session,
 } from './browser/capture.ts'
 import { render } from './browser.ts'
+import { actions } from './browser/testing.ts'
 import { type Audit, report } from '@yaks/platform/preview-audit'
 import { within } from './defects.ts'
 import type { Bundle } from '@yaks/graph'
@@ -75,20 +76,30 @@ let page = (
     screenshot?: Error
     main?: typeof axe
     world?: typeof axe
+    missing?: string
   } = {},
 ) => {
+  let log: string[] = []
+  let shots = 0
   let cdp = devtools(options.main ?? axe, options.world ?? axe)
   let hear = new Map<string, (value: unknown) => void>()
   let viewport: unknown
   let cookies: Cookie[] = []
   let opened: Cookie[] | undefined
   let closed = false
+  let acts = actions((line) => log.push(line))
   let p: Page = {
+    ...acts,
+    waitForSelector: (s, o) =>
+      s == options.missing
+        ? Promise.reject(new Error(`Waiting for selector \`${s}\` failed`))
+        : acts.waitForSelector(s, o),
     on: (event: string, fn: (value: never) => void) => {
       hear.set(event, fn as (value: unknown) => void)
     },
     setViewport: (v) => {
       viewport = v
+      log.push(`view ${v.width}x${v.height}${v.hasTouch ? ' touch' : ''}`)
       return Promise.resolve()
     },
     setCookie: (...c) => {
@@ -109,7 +120,7 @@ let page = (
     screenshot: () =>
       options.screenshot
         ? Promise.reject(options.screenshot)
-        : Promise.resolve('png-bytes'),
+        : Promise.resolve(shots++ ? `png-${shots}` : 'png-bytes'),
   }
   let browser: Browser = {
     newPage: () => Promise.resolve(p),
@@ -131,6 +142,7 @@ let page = (
     viewport: () => viewport,
     opened: () => opened,
     closed: () => closed,
+    log,
   }
 }
 
@@ -180,6 +192,51 @@ test('a page opens with the cookies it was sent and answers its visible text', a
   })
   assertEquals(p.opened(), [signIn])
   assertEquals(result.text, 'Meetings\nAgenda')
+})
+
+test('a visit takes its steps in order on a phone, and keeps each named screenshot', async () => {
+  let p = page()
+  let result = await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view: { ...view, touch: true },
+    steps: [
+      { tap: 'textarea' },
+      { keyboard: 336 },
+      { type: 'hello', into: 'textarea' },
+      { shot: 'typed' },
+      { press: 'Enter' },
+      { swipe: [10, 400, 300, 400] },
+      { keyboard: 0 },
+    ],
+  })
+  assertEquals(p.log.filter((l) => !l.startsWith('move')), [
+    'view 390x844 touch',
+    'find textarea',
+    'tap textarea',
+    'view 390x508 touch',
+    'find textarea',
+    'type hello into textarea',
+    'press Enter',
+    'touch 10,400',
+    'lift',
+    'view 390x844 touch',
+  ])
+  assertEquals(p.log.filter((l) => l.startsWith('move')).at(-1), 'move 300,400')
+  assertEquals(result.shots, [{ name: 'typed', image: 'png-bytes' }])
+  assertEquals(result.image, 'png-2')
+})
+
+test("a step that fails ends the steps, is the visit's error, and the page is still pictured", async () => {
+  let p = page({ missing: '#send' })
+  let result = await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view,
+    steps: [{ tap: '#send' }, { press: 'Enter' }],
+  })
+  assertEquals(p.log.includes('press Enter'), false)
+  assertStringIncludes(result.errors.at(-1)!, 'step 1 {"tap":"#send"}')
+  assertStringIncludes(result.errors.at(-1)!, 'Waiting for selector')
+  assertEquals(result.image, 'png-bytes')
 })
 
 test('a page that extends Object.prototype still gets its accessibility audit', async () => {

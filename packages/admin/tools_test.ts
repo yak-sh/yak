@@ -424,7 +424,7 @@ test('delete walks website pages and keeps a renewed cookie only inside the OAut
     await answering((_url, init) => {
       equal(
         new Headers(init?.headers).get('cookie'),
-        'yak_session=old-website',
+        'yak_session=old-website; __Host-yak_session=old-website',
       )
       equal(new Headers(init?.headers).get('authorization'), null)
       hits++

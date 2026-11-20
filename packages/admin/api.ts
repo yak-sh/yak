@@ -63,9 +63,13 @@ export let storeUrl = (at: string, path: string, host = zone()) => {
   return `https://${space}.${host}${app ? `/${app}` : ''}/api${path}`
 }
 
+// A browser's session rides as both cookies a signed-in browser holds: the
+// shared one every space's host reads, and the apex's own, which the apex
+// alone reads once the shared one stops being honored there
+// (workers/yak/browser-cookie.ts `SHARED_UNTIL`).
 let head = (credential: string, browser: boolean) =>
   browser
-    ? { cookie: `${COOKIE}=${credential}` }
+    ? { cookie: `${COOKIE}=${credential}; __Host-${COOKIE}=${credential}` }
     : { authorization: `Bearer ${credential}` }
 
 // The claims a session carries, read without the secret (@yaks/secrets/signed
@@ -265,6 +269,55 @@ export type Link = {
 // the longer-lived credential of the two.
 export let linkFor = (session: string, days?: number): Promise<Link> =>
   said(posted(apex(LINK), days ? { days: String(days) } : {}, session, true))
+
+/** One thing done on a page in the browser (workers/yak/browser/capture.ts
+ * `Step`). */
+export type Step =
+  | { tap: string }
+  | { type: string; into?: string }
+  | { press: string }
+  | { swipe: [number, number, number, number] }
+  | { keyboard: number }
+  | { wait: number }
+  | { shot: string }
+
+/** A page to open in the browser: where, in what window, and what to do. */
+export type Browse = {
+  url: string
+  view?: { width?: number; height?: number; wait?: number; touch?: boolean }
+  steps?: Step[]
+}
+
+/** What the browser saw (workers/yak/browser/capture.ts `Rendered`). */
+export type Browsed = {
+  image: string
+  shots: { name: string; image: string }[]
+  text: string
+  console: { type: string; text: string }[]
+  errors: string[]
+  status: number
+  accessibility: { problems?: { rule: string; help: string }[] }
+  duration: number
+}
+
+export let BROWSE = '/api/browse'
+
+// A page of ours opened in Cloudflare's browser signed in as this account
+// (workers/yak/browse.ts): the website session is the browser's credential,
+// and the page is opened with it.
+export let browse = (session: string, asked: Browse): Promise<Browsed> =>
+  said(sent(
+    apex(BROWSE),
+    session,
+    {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(asked),
+    },
+    false,
+    true,
+  ))
 
 /** Taking one back, by its id or the front of one. Answers the ids that went. */
 export let unlink = async (session: string, id: string): Promise<string[]> =>

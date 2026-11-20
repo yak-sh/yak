@@ -30,6 +30,56 @@ let field = (html: string, name: string) => {
   }
   throw new Error(`the consent page has no ${name}`)
 }
+let form = (
+  go: typeof fetch,
+  origin: string,
+) =>
+(path: string, fields: Record<string, string>, cookies = '') =>
+  go(`${origin}${path}`, {
+    method: 'POST',
+    redirect: 'manual',
+    signal: AbortSignal.timeout(30_000),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      origin,
+      ...cookies ? { cookie: cookies } : {},
+    },
+    body: new URLSearchParams(fields),
+  })
+
+/** A website session for a bot, signed in at `origin` the way a person signs
+ * in: it asks for a code, reads it from the letter this bot's graph received,
+ * and spends it. No browser and nobody else is asked, so a bot whose session
+ * lapsed signs itself in again. */
+export let botSession = async (
+  graph: Pick<Graph, 'read'>,
+  origin: string,
+  address: string,
+  opts: { fetch?: typeof fetch; code?: typeof codeFor } = {},
+): Promise<string> => {
+  let post = form(opts.fetch ?? fetch, origin)
+  let since = Date.now()
+  let asked = await post('/login', { email: address })
+  await asked.body?.cancel()
+  if (asked.status != 200) {
+    throw new Error(`the sign-in page refused: ${asked.status}`)
+  }
+  let code = await (opts.code ?? codeFor)(graph.read, address, since)
+  let spent = await post(
+    '/login/code',
+    { email: address, code },
+    jar(asked.headers),
+  )
+  let session = spent.status == 303 ? cookie(spent.headers) : undefined
+  await spent.body?.cancel()
+  if (!session) {
+    throw new Error(
+      `the sign-in code returned no website session: ${spent.status}`,
+    )
+  }
+  return session
+}
+
 /** Spend the code sent to this bot's graph, then grant the OAuth request
  * through the page's own q and consent fields. Redirects are never followed
  * with a cookie or code, and the final return must name this flow's redirect. */
@@ -41,40 +91,9 @@ export let botCallback = async (
 ): Promise<Callback> => {
   let authorize = new URL(url), origin = authorize.origin
   let go = opts.fetch ?? fetch
-  let post = (path: string, fields: Record<string, string>, cookies = '') =>
-    go(`${origin}${path}`, {
-      method: 'POST',
-      redirect: 'manual',
-      signal: AbortSignal.timeout(30_000),
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        origin,
-        ...cookies ? { cookie: cookies } : {},
-      },
-      body: new URLSearchParams(fields),
-    })
-  let session = opts.session
-  if (!session) {
-    let since = Date.now()
-    let asked = await post('/login', { email: address })
-    await asked.body?.cancel()
-    if (asked.status != 200) {
-      throw new Error(`the sign-in page refused: ${asked.status}`)
-    }
-    let code = await (opts.code ?? codeFor)(graph.read, address, since)
-    let spent = await post(
-      '/login/code',
-      { email: address, code },
-      jar(asked.headers),
-    )
-    session = spent.status == 303 ? cookie(spent.headers) : undefined
-    await spent.body?.cancel()
-    if (!session) {
-      throw new Error(
-        `the sign-in code returned no website session: ${spent.status}`,
-      )
-    }
-  }
+  let post = form(go, origin)
+  let session = opts.session ??
+    await botSession(graph, origin, address, { fetch: go, code: opts.code })
   let page = await go(url, {
     headers: { cookie: `yak_session=${session}` },
     redirect: 'manual',

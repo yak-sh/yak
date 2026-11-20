@@ -539,7 +539,7 @@ service = "yak-esbuild"
 binding = "RASTER"
 service = "yak-raster"
 
-# What renders a draft for app_preview (browser.ts): yak-browser (browser/), a
+# What renders a draft for app_preview (browser.ts) and a test account's page (browse.ts): yak-browser (browser/), a
 # Worker of its own holding Cloudflare's browser, so puppeteer and axe-core are
 # compiled by the isolates that render and never by the kernel's. This Worker's
 # deploy deploys it first. Remote under `wrangler dev`, as drafts render on

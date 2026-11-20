@@ -8,6 +8,7 @@ import { packageAt } from '@yaks/platform/kept'
 import * as billing from './billing.ts'
 import * as budget from './budget.ts'
 import * as comp from './comp.ts'
+import * as browse from './browse.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
@@ -156,6 +157,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // before the connector for the same reason as the fee's.
   if (path == '/api/budget') return budget.fetch(req, env)
   if (path == '/api/comp') return comp.fetch(req, env)
+  // A page of ours in Cloudflare's browser, for the platform's test accounts
+  // (browse.ts, T-1637), before the connector for the same reason as the fee's.
+  if (path == browse.PATH) return browse.fetch(req, env)
   // TaskMaster's answers to support threads (support-door.ts), the owner's
   // door, before the connector for the same reason as the fee's.
   if (path == support.PATH) return support.fetch(req, env)

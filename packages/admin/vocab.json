@@ -81,6 +81,60 @@
         "letter"
       ]
     },
+    "admin_browse": {
+      "tool": true,
+      "destructive": false,
+      "noun": "admin",
+      "verb": "browse",
+      "title": "Open a page of yaks.app in a browser, signed in as this account",
+      "description": "Opens a page of yaks.app in Cloudflare's browser, signed in with the selected account's website session, takes the steps a person would, and writes each screenshot to <to>/<name>.png, the last as end.png. The answer says the HTTP status, the files, the page's errors and its accessibility problems, then its visible text. The window is a phone's (390 × 844, touch) unless named. For the platform's @bot.yak.sh test accounts and its owners. Requires the website session retained by a code sign-in.\n\nSteps, a JSON array taken in order after the page loads: {\"tap\": selector}, {\"type\": text, \"into\": selector}, {\"press\": key}, {\"swipe\": [x1, y1, x2, y2]}, {\"keyboard\": pixels} (a phone's on-screen keyboard opens over that many pixels, which shrinks the window; 0 closes it), {\"wait\": ms}, {\"shot\": name}. A step that fails ends the steps, and the page is still pictured.\n\n  yak admin browse /manage/checks/operator --as checks\n  yak admin browse /manage/checks/operator --steps '[{\"tap\":\"textarea\"},{\"keyboard\":336},{\"shot\":\"keyboard\"}]' --as checks\n  yak admin browse https://checks.yaks.app/roster/ --width 1280 --height 800 --touch=false --as checks",
+      "input": {
+        "url": {
+          "type": "string",
+          "description": "the page: a path on yaks.app, or an https address on its zone (default /)"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "what to do on the page, in order; a JSON array (see above)"
+        },
+        "width": {
+          "type": "number",
+          "description": "the window's width in pixels (default 390)"
+        },
+        "height": {
+          "type": "number",
+          "description": "the window's height in pixels (default 844)"
+        },
+        "wait": {
+          "type": "number",
+          "description": "milliseconds to wait after the page loads, before the steps (default 1000)"
+        },
+        "touch": {
+          "type": "boolean",
+          "description": "a phone's window: touch events and a mobile viewport (default true)"
+        },
+        "to": {
+          "type": "string",
+          "description": "the directory the screenshots are written to, read against cwd when relative (default .scratch/browse)"
+        },
+        "cwd": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "absolute working directory a relative to is read against; the CLI supplies its own, and an MCP caller names its checkout or gives an absolute to"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "url"
+      ]
+    },
     "admin_link": {
       "tool": true,
       "destructive": false,
