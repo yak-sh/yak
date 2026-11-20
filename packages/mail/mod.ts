@@ -108,4 +108,4 @@ export * from './options.ts'
 export * from './pull.ts'
 export * from './capture.ts'
 
-export { receipted } from './receipts.ts'
+export { deliveryField, receipted } from './receipts.ts'

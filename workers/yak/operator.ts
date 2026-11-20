@@ -760,7 +760,7 @@ export let operatorRoster = async (
     !OWN_WORDS.has(t.name ?? '') &&
     (from == 'own'
       ? await heardIn(self, out)
-      : await unvouched(g, ctx.dir, reach, ctx.person, out))
+      : await unvouched(g, ctx.dir, reach, ctx.person, space, out))
   let run = (
     t: NamedTool,
     host: Graph,

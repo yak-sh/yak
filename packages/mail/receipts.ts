@@ -3,9 +3,23 @@
 // committing it when the provider calls back. The provider's plugin owns the
 // route that verifies a receipt (@yaks/resend `./routes`). A deleted letter
 // has nothing left to update: a late receipt acknowledges its tombstone.
-import type { Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { token } from '@yaks/graph/sha256'
+import { sendable } from './addr.ts'
+
+/** The validated envelope values the transport files after handing off
+ * an outbound letter. Other fields can carry words from outside. */
+export let deliveryField = (
+  row: Bundle,
+  [comp, prop, ...rest]: string[],
+): boolean => {
+  if (!row.delivered || comp != 'mail' || rest.length) return false
+  let mail = row.mail as Comp | undefined
+  return prop == 'to' && typeof mail?.to == 'string' && sendable(mail.to) ||
+    prop == 'message_id' && typeof mail?.message_id == 'string' &&
+      /^[\w.-]+@[\w.-]+$/.test(mail.message_id)
+}
 
 /** Apply a provider-neutral receipt to the same recorded letter. */
 export let receipted = async (

@@ -1,16 +1,8 @@
-// Whether a tool's answer brings an Operator words someone it does not work
-// for wrote (T-1064, T-1860). Words a tool composed are heard, since nothing
-// says who wrote what they show: only rows can be vouched for. A row is heard
-// when an app's code wrote it, a person outside every space the Operator
-// reaches did, a visitor who never signed in did (a stamp with `via` and no
-// `by`), or nobody did: the kernel door files letters, texts, chat messages,
-// webhooks and receipts with no writer, and they carry words from outside
-// (T-1879). Rules carry the writer that fired them, so a member's ordinary
-// reads and writes keep every tool. An effect's later stamp on a member's row
-// (a sent letter's `mail.to`) has no writer either, and leaves the row its
-// filer's.
+// App answers are trusted when every row has known writers. A browser
+// stamp can stand for a member who later claimed it.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
+import { deliveryField } from '@yaks/mail'
 import { authors } from '@yaks/provenance/authorship'
 import { idOf } from '@yaks/platform/listing'
 import { appNotice } from '@yaks/platform/operator-source'
@@ -20,6 +12,13 @@ import type { Reach } from './reach.ts'
 type Stamp = { by?: string | { eid: string } | null; via?: string | null }
 
 let eidsOf = (out: Bundle[]) => [...new Set(out.map((b) => b.entity.eid))]
+
+let unsigned = (s?: Stamp | null) => !s?.by && !s?.via
+
+let writersOf = (row: Bundle): Stamp[] =>
+  row.delivered
+    ? authors(row, (path, span) => !unsigned(span) || !deliveryField(row, path))
+    : authors(row)
 
 /** Whether the Operator's own store answered words, or a row that is
  * hearsay. Reads may project away a notice's source and hearsay mark, so
@@ -38,57 +37,45 @@ export let heardIn = async (g: Pick<Graph, 'read'>, out: Bundle[]) => {
     )
 }
 
-/** The writers whose words survive, and the browsers of signed-out writers.
- * Older rows carry only their two surviving provenance stamps. */
-export let writersOf = (rows: (Bundle | undefined)[]) => {
-  let stamps = rows.flatMap(authors) as Stamp[]
-  return {
-    anonymous: [
-      ...new Set(stamps.flatMap((s) => s.via && !s.by ? [s.via] : [])),
-    ],
-    by: new Set(stamps.flatMap((s) => s.by ? [idOf(s.by)] : [])),
-  }
-}
-
-/** Whether a row was filed by nobody: its creation names no writer. */
-let unsigned = (row: Bundle) => {
-  let { by, via } = (row.created ?? {}) as Stamp
-  return !by && !via
-}
-
-/** Whether `out` is anything but rows `g`, the graph over `reach`, holds,
- * none of which an app or a stranger wrote (T-1860): a command's display of
- * rows or a page's text is heard whoever wrote what it shows, so a tool that
- * keeps every tool for the turn answers rows. One query reads the rows'
- * stamps (the reach's `get` answers rows without them), and the directory is
- * asked only about a writer who is neither `person`, a reached space's
- * Operator, nor (then) one of those spaces' members. */
+/** Whether an app answer includes words whose writers cannot all be vouched
+ * for. A projected row may omit its stamps, so read them again by identity. */
 export let unvouched = async (
   g: Pick<Graph, 'read'>,
-  dir: Pick<Directory, 'members' | 'peopleOrApps' | 'browserOwners'>,
+  dir: Pick<Directory, 'members' | 'browserOwners'>,
   reach: Reach[],
   person: string,
+  operator: string,
   out: Bundle[],
 ) => {
   let eids = eidsOf(out)
   if (!eids.length) return false
   let rows = await g.read(
-    line`.entity.eid=${eids}&.fields=created,updated,authorship`,
+    line`.entity.eid=${eids}&.fields=created,updated,authorship,delivered,mail.to,mail.message_id`,
   )
-  if (rows.length < eids.length || rows.some(unsigned)) return true
-  let { anonymous, by } = writersOf(rows)
-  if (reach.some(({ app }) => by.has(app.eid))) return true
+  if (
+    rows.length < eids.length || rows.some((b) => unsigned(b.created as Stamp))
+  ) {
+    return true
+  }
+  let writers = rows.map(writersOf)
+  if (writers.some((row) => !row.length || row.some(unsigned))) {
+    return true
+  }
+  let stamps = writers.flat()
+  let by = new Set(stamps.flatMap((s) => s.by ? [idOf(s.by)] : []))
+  let anonymous = [
+    ...new Set(stamps.flatMap((s) => !s.by && s.via ? [s.via] : [])),
+  ]
   if (anonymous.length) {
     let owners = await dir.browserOwners(anonymous)
     if (anonymous.some((via) => !owners.has(via))) return true
     for (let p of owners.values()) by.add(p)
   }
-  let spaces = new Map(reach.map((r) => [r.space.eid, r.space]))
+  let spaces = new Set([operator, ...reach.map((r) => r.space.eid)])
   let others = [...by].filter((p) => p != person && !spaces.has(p))
   if (!others.length) return false
   let members = new Set(
-    (await Promise.all([...spaces.values()].map((s) => dir.members(s)))).flat(),
+    (await Promise.all([...spaces].map((eid) => dir.members({ eid })))).flat(),
   )
-  others = others.filter((p) => !members.has(p))
-  return await dir.peopleOrApps(others)
+  return others.some((p) => !members.has(p))
 }

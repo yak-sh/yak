@@ -11,13 +11,21 @@ let identity = ({ by, via }: Actor) => JSON.stringify([by, via])
 let writers = (actors: Actor[]): Writers =>
   new Map(actors.map(({ by, via }) => [identity({ by, via }), { by, via }]))
 
-/** The authors of current values, or the only surviving evidence for a row
- * written before live attribution was retained. */
-export let authors = (row?: Bundle): Actor[] => {
+/** The authors of current values, optionally selecting spans by field, or
+ * the surviving stamps for a row that predates live attribution. */
+export let authors = (
+  row?: Bundle,
+  include?: (path: string[], span: Span) => boolean,
+): Actor[] => {
   let fields = (row?.authorship as { fields?: Fields } | undefined)?.fields
-  return fields
-    ? [...writers(Object.values(fields).flat()).values()]
-    : [row?.created, row?.updated].filter(Boolean) as Actor[]
+  if (!fields) return [row?.created, row?.updated].filter(Boolean) as Actor[]
+  let spans = include
+    ? Object.entries(fields).flatMap(([key, spans]) => {
+      let path = JSON.parse(key) as string[]
+      return spans.filter((span) => include(path, span))
+    })
+    : Object.values(fields).flat()
+  return [...writers(spans).values()]
 }
 
 let leaves = (value: unknown, path: string[], into: Map<string, unknown>) => {
