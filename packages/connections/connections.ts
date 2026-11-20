@@ -910,7 +910,7 @@ export let accountOf = async (
   tokens: Tokens,
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> => {
-  if (integration.account) return tokens.account
+  if (integration.account && tokens.account) return tokens.account
   let body: Record<string, unknown> = {}
   if (tokens.id_token) {
     body = claims(tokens.id_token)
@@ -930,6 +930,13 @@ export let accountOf = async (
       throw new Error(`the userinfo endpoint refused: ${res.status}`)
     }
     body = await res.json()
+  }
+  if (integration.account) {
+    let v = integration.account.split('.').reduce<unknown>(
+      (at, k) => at && typeof at == 'object' ? (at as Comp)[k] : undefined,
+      body,
+    )
+    return typeof v == 'string' || typeof v == 'number' ? String(v) : undefined
   }
   return typeof body.email == 'string' && body.email.includes('@')
     ? body.email.toLowerCase()

@@ -102,8 +102,9 @@ let FITTING = 3
  * (@yaks/embedding `sleeper`). */
 export let OUTAGE = 'operator:embedding-outage'
 
-// What it serves: its graph, and the effects of the one package whose config
-// names that facet, @yaks/mail's sending of its letters. The rest are the
+// What it serves: its graph, and the effects of the packages whose config
+// names that facet: @yaks/mail's sending of its letters, and @yaks/chat's
+// posting of its chat answers. The rest are the
 // Operator's own code's to handle (operator-channels.ts `handleChannels`).
 let ROLES = ['graph', 'effects'] as const
 let plan = (config: Config) => async (): Promise<Assembly> =>
@@ -143,7 +144,7 @@ export type Vectors = {
 export let operatorStore = async (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
-  senders: Bound['senders'] = {},
+  lends: Pick<Bound, 'senders' | 'chatters'> = {},
   vectors?: Vectors,
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
@@ -187,7 +188,7 @@ export let operatorStore = async (
         schemaReady: () => stood,
       }),
     extend: [search(text, sql)],
-    senders,
+    ...lends,
     fit: () => {
       print ??= printOf(`operator:${FITTING}:${store.print()}`, [
         ...beside(),
@@ -258,13 +259,15 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
 /** What a composition of the Operator's store is bound to: its storage, given
  * the clause compilers its plugins and `extend` add; where its bodies are
  * kept; the senders its letters leave through, by the name its config gives
- * (metered.ts `operatorPost`); how the file is brought to its schema; and its
- * effects' options. */
+ * (metered.ts `operatorPost`), and the chatters its chat answers are posted
+ * through, by platform (chat.ts `chatters`); how the file is brought to its
+ * schema; and its effects' options. */
 export type Bound = {
   storage: (extend: Extension[]) => Storage
   blobs?: Blobs
   extend?: Extension[]
   senders?: Host['senders']
+  chatters?: Host['chatters']
   fit?: () => void
   effects?: Parameters<typeof effects>[1]
   /** the drains of its vectors, which a committed write starts */
@@ -282,6 +285,7 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     host: {
       ...lent('operator', bound.blobs ?? memoryBlobs()),
       senders: bound.senders ?? {},
+      chatters: bound.chatters ?? {},
       ...bound.meaning ? { meaning: bound.meaning } : {},
     },
     // A text a write changed is embedded once it has committed.

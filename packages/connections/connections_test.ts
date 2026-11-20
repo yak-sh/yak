@@ -1759,3 +1759,18 @@ test("a chat connection's bot: the platform's, added to the server its account n
   await connect(c, texts, { key: 'tenant-key' })
   assertEquals(await botOf(c, texts), undefined)
 })
+
+test('a Discord account is named by its user id, read from userinfo', async () => {
+  let { g, c, needs } = await setup(
+    [200, { access_token: 'U1' }],
+    [200, { id: '4242', username: 'ann_k' }],
+  )
+  await g.apply([registration('discord', { id: 'app', secret: 's' })])
+  let link = await needs({ integration: 'discord-account', owner: 'ann' })
+  let { attempt } = await begin(c, link)
+  await connect(c, link, {
+    attempt: attempt!,
+    callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
+  })
+  assertEquals(of(await at(g, link), 'connection').account, '4242')
+})

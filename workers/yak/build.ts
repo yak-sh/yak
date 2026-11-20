@@ -285,6 +285,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/tell' ||
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
+          url.pathname == '/operator/chat' ||
           url.pathname == WALKTHROUGH
         ) {
           let space = request.headers.get(SPACE)
@@ -300,6 +301,23 @@ export class Builder extends Durable {
               trusted: true,
             })
             return Response.json({ ok: true })
+          }
+          // A message heard on a chat platform, from a person here or a
+          // guest the kernel already told apart (chat.ts `arrived`).
+          if (url.pathname == '/operator/chat') {
+            let person = request.headers.get('x-yak-person')
+            let at = await dirPart.directoryOf(this.#env.STORE).at(space)
+            if (!person || !at) return no(404, 'that space is gone')
+            let { chatHeard } = await import('./operator-channels.ts')
+            let answer = await chatHeard(
+              await this.#work(),
+              this.#env,
+              at,
+              person,
+              await request.json(),
+            )
+            await this.#arming
+            return answer
           }
           // A conversation a fixed yaks.app bug stopped, taken up again
           // (operator-rerun.ts).
@@ -551,6 +569,7 @@ export class Builder extends Durable {
         }
         let { operatorPost } = await import('./metered.ts')
         let { operatorVectors } = await import('./operator-vectors.ts')
+        let { chatters } = await import('./chat.ts')
         let store: OperatorStore = await operatorStore(
           this.#ctx.storage,
           {
@@ -562,7 +581,10 @@ export class Builder extends Durable {
               }),
             nudge,
           },
-          { operator: operatorPost(this.#env) },
+          {
+            senders: { operator: operatorPost(this.#env) },
+            chatters: chatters(this.#env),
+          },
           operatorVectors(this.#env, {
             space: () => store,
             arm: (at) => this.clock.arm(at),

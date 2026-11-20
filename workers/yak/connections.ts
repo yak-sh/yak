@@ -1480,6 +1480,10 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       throw new Error('The service did not return a connected account.')
     }
     await ready(env, connection)
+    // A chat integration is heard on as soon as it is connected (chat.ts);
+    // the connection stands whether or not its bot could start listening.
+    await (await import('./chat.ts')).connected(env, connection)
+      .catch((e) => caught(e, { request: 'chat listen', connection }))
     if (held.app) await attached(env, who, at, held.app, connection)
     await rebound(env, await usersOf(env, connection))
     return answer(told(back, 'connected'))

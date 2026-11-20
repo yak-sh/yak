@@ -40,6 +40,8 @@ import { channelOf } from './operator-view.ts'
 import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
+import { PLATFORMS } from './chat.ts'
+import { framing, kept, messageEid, pieces, type Said } from '@yaks/chat'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -273,9 +275,10 @@ export let receive = async (
   return id
 }
 
-/** The channels whose doors take their words in themselves ({@link hear});
- * the rest keep a request that `operator_receive` takes in, until each moves. */
-export let TAKING = new Set(['email'])
+/** The channels whose doors take their words in themselves ({@link hear}):
+ * email and each chat platform (chat.ts); the rest keep a request that
+ * `operator_receive` takes in, until each moves. */
+export let TAKING = new Set(['email', ...PLATFORMS.keys()])
 
 /** Who wrote words that came by a channel, where not the person they are
  * for (@yaks/session `Intake.from`). */
@@ -324,7 +327,8 @@ export let hear = async (
   let { channel } = request
   try {
     let [about] = request.about ? await g.get([request.about]) : []
-    let framing = BY[channel]?.(request, id, about) ?? ''
+    let framing = BY[channel]?.(request, id, about) ??
+      chatFraming(request, item)
     let open = await operator.listening(
       { person: request.person, administrative: request.administrative },
       space,
@@ -371,6 +375,61 @@ export let hear = async (
     ], { trusted: true })
     return { fresh: true }
   }
+}
+
+// How words heard on a chat platform are said before them: the platform, and
+// who wrote them (@yaks/chat `framing`).
+let chatFraming = (request: Request, item: Bundle) => {
+  let m = part<Comp | undefined>(item, 'chat_message')
+  let platform = PLATFORMS.get(request.channel)
+  return platform && m
+    ? framing(platform, {
+      name: request.address ?? 'someone',
+      addressed: m.addressed as Said['addressed'],
+    })
+    : ''
+}
+
+/**
+ * A message heard on a chat platform, brought by the kernel (chat.ts
+ * `arrived`, build.ts `/operator/chat`) as the words of `person`: a person
+ * here whose account there is linked, or a guest. Its room and writer are
+ * kept, then the message itself is taken in ({@link hear}), naming the
+ * connection whose bot heard it, which answers it in the same room.
+ */
+export let chatHeard = async (
+  operator: Pick<Operator, 'store' | 'listening'>,
+  env: Env,
+  space: Space,
+  person: string,
+  args: { via: string; connection: string; said: Said },
+) => {
+  let { via, connection, said } = args
+  if (!PLATFORMS.has(via)) {
+    throw refuse('arguments', `yaks.app hears no chat platform ${via}`)
+  }
+  let [room, author, message] = kept(via, said)
+  await operator.store.g.apply([room, author], { trusted: true })
+  let { fresh } = await hear(
+    operator,
+    env,
+    space,
+    {
+      space: space.eid,
+      person,
+      channel: via,
+      address: said.author.name,
+      reply_to: said.room,
+    },
+    said.text,
+    {
+      ...message,
+      chat_message: { ...message.chat_message as Comp, connection },
+    },
+  )
+  return Response.json({ request: messageEid(via, said.id) }, {
+    status: fresh ? 202 : 200,
+  })
 }
 
 /** A channel's door as the Operator's object serves it (build.ts
@@ -465,7 +524,9 @@ export let replyRows = (
   item: Bundle,
   reply: { eid: string; text: string; target?: string },
 ): Bundle[] =>
-  LETTERED.has(channel)
+  PLATFORMS.has(channel)
+    ? chatRows(channel, item, reply)
+    : LETTERED.has(channel)
     ? letterRows(env, space, {
       eid: reply.eid,
       to: String(part<Comp>(item, 'mail')?.from ?? ''),
@@ -475,6 +536,29 @@ export let replyRows = (
       target: reply.target,
     })
     : []
+
+// A chat answer: a message in the room the words were said in, answering
+// them, posted by the bot that heard them (@yaks/chat `chat_post`), cut to
+// the platform's limit, one message a piece.
+let chatRows = (
+  via: string,
+  item: Bundle,
+  reply: { eid: string; text: string },
+): Bundle[] => {
+  let heard = part<Comp | undefined>(item, 'chat_message')
+  let platform = PLATFORMS.get(via)!
+  if (!heard?.room || !heard.connection) return []
+  return pieces(reply.text, platform.limit).map((body, i) => ({
+    entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
+    chat_message: {
+      via,
+      connection: heard.connection,
+      ...heard.message_id && !i ? { reply_to: heard.message_id } : {},
+    },
+    doc: { body },
+    deliver: { to: heard.room },
+  }))
+}
 
 /** Whom a scheduled run is for: the space, and the person it runs as. */
 export type Ask = {

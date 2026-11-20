@@ -49,9 +49,10 @@ gives that the way @yaks/phone's providers do; none does yet.
 `send` posts a reply with a bot's credential. A refusal that never took it (a
 rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.
 
-`framing(platform, said)` is how a message is said before its words to whoever
-answers it ("On Discord, from Ann: "). `pieces(text, limit)` cuts an answer at
-the last paragraph, line or space that fits.
+`framing(platform, {name, addressed})` is how a message is said before its words
+to whoever answers it ("On Discord, naming you, from Ann: ").
+`pieces(text, limit)` cuts an answer at the last paragraph, line or space that
+fits.
 
 ## Holding a socket
 

@@ -9,81 +9,82 @@ import * as eager0_4 from '@yaks/archetype/vocab'
 import * as eager0_5 from '@yaks/blob/vocab'
 import * as eager0_6 from '@yaks/builders/vocab'
 import * as eager0_7 from '@yaks/canvas/vocab'
-import * as eager0_8 from '@yaks/claude/vocab'
-import * as eager0_9 from '@yaks/code/vocab'
-import * as eager0_10 from '@yaks/connections/vocab'
-import * as eager0_11 from '@yaks/context/vocab'
-import * as eager0_12 from '@yaks/design/vocab'
-import * as eager0_13 from '@yaks/doc/vocab'
-import * as eager0_14 from '@yaks/draft/vocab'
-import * as eager0_15 from '@yaks/dreaming/vocab'
-import * as eager0_16 from '@yaks/edge/vocab'
-import * as eager0_17 from '@yaks/effects/vocab'
-import * as eager0_18 from '@yaks/egress/vocab'
-import * as eager0_19 from '@yaks/embedding/vocab'
-import * as eager0_20 from '@yaks/events/vocab'
-import * as eager0_21 from '@yaks/file/vocab'
-import * as eager0_22 from '@yaks/filter/vocab'
-import * as eager0_23 from '@yaks/forms/vocab'
-import * as eager0_24 from '@yaks/game/vocab'
-import * as eager0_25 from '@yaks/git/vocab'
-import * as eager0_26 from '@yaks/goal/vocab'
-import * as eager0_27 from '@yaks/graph/vocab'
-import * as eager0_28 from '@yaks/harness/vocab'
-import * as eager0_29 from '@yaks/heal/vocab'
-import * as eager0_30 from '@yaks/hook/vocab'
-import * as eager0_31 from '@yaks/id/vocab'
-import * as eager0_32 from '@yaks/inbox/vocab'
-import * as eager0_33 from '@yaks/journal/vocab'
-import * as eager0_34 from '@yaks/kernel/vocab'
-import * as eager0_35 from '@yaks/key/vocab'
-import * as eager0_36 from '@yaks/lens/vocab'
-import * as eager0_37 from '@yaks/machine/vocab'
-import * as eager0_38 from '@yaks/mail/vocab'
-import * as eager0_39 from '@yaks/mcp-client/vocab'
-import * as eager0_40 from '@yaks/member/vocab'
-import * as eager0_41 from '@yaks/memory/vocab'
-import * as eager0_42 from '@yaks/model/vocab'
-import * as eager0_43 from '@yaks/notify/vocab'
-import * as eager0_44 from '@yaks/openai/vocab'
-import * as eager0_45 from '@yaks/openrouter/vocab'
-import * as eager0_46 from '@yaks/page/vocab'
-import * as eager0_47 from '@yaks/people/vocab'
-import * as eager0_48 from '@yaks/persona/vocab'
-import * as eager0_49 from '@yaks/phone/vocab'
-import * as eager0_50 from '@yaks/platform/vocab'
-import * as eager0_51 from '@yaks/process/vocab'
-import * as eager0_52 from '@yaks/project/vocab'
-import * as eager0_53 from '@yaks/provenance/vocab'
-import * as eager0_54 from '@yaks/push/vocab'
-import * as eager0_55 from '@yaks/rtc/vocab'
-import * as eager0_56 from '@yaks/sandbox/vocab'
-import * as eager0_57 from '@yaks/secrets/vocab'
-import * as eager0_58 from '@yaks/session/vocab'
-import * as eager0_59 from '@yaks/spawn/vocab'
-import * as eager0_60 from '@yaks/speech/vocab'
-import * as eager0_61 from '@yaks/spend/vocab'
-import * as eager0_62 from '@yaks/sqlite/vocab'
-import * as eager0_63 from '@yaks/task/vocab'
-import * as eager0_64 from '@yaks/timing/vocab'
-import * as eager0_65 from '@yaks/tmux/vocab'
-import * as eager0_66 from '@yaks/tools/vocab'
-import * as eager0_67 from '@yaks/topic/vocab'
-import * as eager0_68 from '@yaks/tracker/vocab'
-import * as eager0_69 from '@yaks/trial/vocab'
-import * as eager0_70 from '@yaks/tunnel/vocab'
-import * as eager0_71 from '@yaks/ux/vocab'
-import * as eager0_72 from '@yaks/visualize/vocab'
-import * as eager0_73 from '@yaks/vocab/vocab'
-import * as eager0_74 from '@yaks/wake/vocab'
-import * as eager0_75 from '@yaks/platform/app-vocab'
-import * as eager0_76 from '@yaks/platform/attribution-vocab'
-import * as eager0_77 from '@yaks/platform/directory-vocab'
-import * as eager0_78 from './facets/git-vocab.ts'
-import * as eager0_79 from '@yaks/platform/meter-vocab'
-import * as eager0_80 from '@yaks/platform/models-vocab'
-import * as eager0_81 from '@yaks/platform/refusals-vocab'
-import * as eager0_82 from '@yaks/platform/trash-vocab'
+import * as eager0_8 from '@yaks/chat/vocab'
+import * as eager0_9 from '@yaks/claude/vocab'
+import * as eager0_10 from '@yaks/code/vocab'
+import * as eager0_11 from '@yaks/connections/vocab'
+import * as eager0_12 from '@yaks/context/vocab'
+import * as eager0_13 from '@yaks/design/vocab'
+import * as eager0_14 from '@yaks/doc/vocab'
+import * as eager0_15 from '@yaks/draft/vocab'
+import * as eager0_16 from '@yaks/dreaming/vocab'
+import * as eager0_17 from '@yaks/edge/vocab'
+import * as eager0_18 from '@yaks/effects/vocab'
+import * as eager0_19 from '@yaks/egress/vocab'
+import * as eager0_20 from '@yaks/embedding/vocab'
+import * as eager0_21 from '@yaks/events/vocab'
+import * as eager0_22 from '@yaks/file/vocab'
+import * as eager0_23 from '@yaks/filter/vocab'
+import * as eager0_24 from '@yaks/forms/vocab'
+import * as eager0_25 from '@yaks/game/vocab'
+import * as eager0_26 from '@yaks/git/vocab'
+import * as eager0_27 from '@yaks/goal/vocab'
+import * as eager0_28 from '@yaks/graph/vocab'
+import * as eager0_29 from '@yaks/harness/vocab'
+import * as eager0_30 from '@yaks/heal/vocab'
+import * as eager0_31 from '@yaks/hook/vocab'
+import * as eager0_32 from '@yaks/id/vocab'
+import * as eager0_33 from '@yaks/inbox/vocab'
+import * as eager0_34 from '@yaks/journal/vocab'
+import * as eager0_35 from '@yaks/kernel/vocab'
+import * as eager0_36 from '@yaks/key/vocab'
+import * as eager0_37 from '@yaks/lens/vocab'
+import * as eager0_38 from '@yaks/machine/vocab'
+import * as eager0_39 from '@yaks/mail/vocab'
+import * as eager0_40 from '@yaks/mcp-client/vocab'
+import * as eager0_41 from '@yaks/member/vocab'
+import * as eager0_42 from '@yaks/memory/vocab'
+import * as eager0_43 from '@yaks/model/vocab'
+import * as eager0_44 from '@yaks/notify/vocab'
+import * as eager0_45 from '@yaks/openai/vocab'
+import * as eager0_46 from '@yaks/openrouter/vocab'
+import * as eager0_47 from '@yaks/page/vocab'
+import * as eager0_48 from '@yaks/people/vocab'
+import * as eager0_49 from '@yaks/persona/vocab'
+import * as eager0_50 from '@yaks/phone/vocab'
+import * as eager0_51 from '@yaks/platform/vocab'
+import * as eager0_52 from '@yaks/process/vocab'
+import * as eager0_53 from '@yaks/project/vocab'
+import * as eager0_54 from '@yaks/provenance/vocab'
+import * as eager0_55 from '@yaks/push/vocab'
+import * as eager0_56 from '@yaks/rtc/vocab'
+import * as eager0_57 from '@yaks/sandbox/vocab'
+import * as eager0_58 from '@yaks/secrets/vocab'
+import * as eager0_59 from '@yaks/session/vocab'
+import * as eager0_60 from '@yaks/spawn/vocab'
+import * as eager0_61 from '@yaks/speech/vocab'
+import * as eager0_62 from '@yaks/spend/vocab'
+import * as eager0_63 from '@yaks/sqlite/vocab'
+import * as eager0_64 from '@yaks/task/vocab'
+import * as eager0_65 from '@yaks/timing/vocab'
+import * as eager0_66 from '@yaks/tmux/vocab'
+import * as eager0_67 from '@yaks/tools/vocab'
+import * as eager0_68 from '@yaks/topic/vocab'
+import * as eager0_69 from '@yaks/tracker/vocab'
+import * as eager0_70 from '@yaks/trial/vocab'
+import * as eager0_71 from '@yaks/tunnel/vocab'
+import * as eager0_72 from '@yaks/ux/vocab'
+import * as eager0_73 from '@yaks/visualize/vocab'
+import * as eager0_74 from '@yaks/vocab/vocab'
+import * as eager0_75 from '@yaks/wake/vocab'
+import * as eager0_76 from '@yaks/platform/app-vocab'
+import * as eager0_77 from '@yaks/platform/attribution-vocab'
+import * as eager0_78 from '@yaks/platform/directory-vocab'
+import * as eager0_79 from './facets/git-vocab.ts'
+import * as eager0_80 from '@yaks/platform/meter-vocab'
+import * as eager0_81 from '@yaks/platform/models-vocab'
+import * as eager0_82 from '@yaks/platform/refusals-vocab'
+import * as eager0_83 from '@yaks/platform/trash-vocab'
 import * as eager1_0 from '@yaks/anthropic/provider'
 import * as eager1_1 from '@yaks/openai/provider'
 import * as eager1_2 from '@yaks/openrouter/provider'
@@ -99,81 +100,82 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/blob': eager0_5,
   '@yaks/builders': eager0_6,
   '@yaks/canvas': eager0_7,
-  '@yaks/claude': eager0_8,
-  '@yaks/code': eager0_9,
-  '@yaks/connections': eager0_10,
-  '@yaks/context': eager0_11,
-  '@yaks/design': eager0_12,
-  '@yaks/doc': eager0_13,
-  '@yaks/draft': eager0_14,
-  '@yaks/dreaming': eager0_15,
-  '@yaks/edge': eager0_16,
-  '@yaks/effects': eager0_17,
-  '@yaks/egress': eager0_18,
-  '@yaks/embedding': eager0_19,
-  '@yaks/events': eager0_20,
-  '@yaks/file': eager0_21,
-  '@yaks/filter': eager0_22,
-  '@yaks/forms': eager0_23,
-  '@yaks/game': eager0_24,
-  '@yaks/git': eager0_25,
-  '@yaks/goal': eager0_26,
-  '@yaks/graph': eager0_27,
-  '@yaks/harness': eager0_28,
-  '@yaks/heal': eager0_29,
-  '@yaks/hook': eager0_30,
-  '@yaks/id': eager0_31,
-  '@yaks/inbox': eager0_32,
-  '@yaks/journal': eager0_33,
-  '@yaks/kernel': eager0_34,
-  '@yaks/key': eager0_35,
-  '@yaks/lens': eager0_36,
-  '@yaks/machine': eager0_37,
-  '@yaks/mail': eager0_38,
-  '@yaks/mcp-client': eager0_39,
-  '@yaks/member': eager0_40,
-  '@yaks/memory': eager0_41,
-  '@yaks/model': eager0_42,
-  '@yaks/notify': eager0_43,
-  '@yaks/openai': eager0_44,
-  '@yaks/openrouter': eager0_45,
-  '@yaks/page': eager0_46,
-  '@yaks/people': eager0_47,
-  '@yaks/persona': eager0_48,
-  '@yaks/phone': eager0_49,
-  '@yaks/platform': eager0_50,
-  '@yaks/process': eager0_51,
-  '@yaks/project': eager0_52,
-  '@yaks/provenance': eager0_53,
-  '@yaks/push': eager0_54,
-  '@yaks/rtc': eager0_55,
-  '@yaks/sandbox': eager0_56,
-  '@yaks/secrets': eager0_57,
-  '@yaks/session': eager0_58,
-  '@yaks/spawn': eager0_59,
-  '@yaks/speech': eager0_60,
-  '@yaks/spend': eager0_61,
-  '@yaks/sqlite': eager0_62,
-  '@yaks/task': eager0_63,
-  '@yaks/timing': eager0_64,
-  '@yaks/tmux': eager0_65,
-  '@yaks/tools': eager0_66,
-  '@yaks/topic': eager0_67,
-  '@yaks/tracker': eager0_68,
-  '@yaks/trial': eager0_69,
-  '@yaks/tunnel': eager0_70,
-  '@yaks/ux': eager0_71,
-  '@yaks/visualize': eager0_72,
-  '@yaks/vocab': eager0_73,
-  '@yaks/wake': eager0_74,
-  'yak/app': eager0_75,
-  'yak/attribution': eager0_76,
-  'yak/directory': eager0_77,
-  'yak/git': eager0_78,
-  'yak/meter': eager0_79,
-  'yak/models': eager0_80,
-  'yak/refusals': eager0_81,
-  'yak/trash': eager0_82,
+  '@yaks/chat': eager0_8,
+  '@yaks/claude': eager0_9,
+  '@yaks/code': eager0_10,
+  '@yaks/connections': eager0_11,
+  '@yaks/context': eager0_12,
+  '@yaks/design': eager0_13,
+  '@yaks/doc': eager0_14,
+  '@yaks/draft': eager0_15,
+  '@yaks/dreaming': eager0_16,
+  '@yaks/edge': eager0_17,
+  '@yaks/effects': eager0_18,
+  '@yaks/egress': eager0_19,
+  '@yaks/embedding': eager0_20,
+  '@yaks/events': eager0_21,
+  '@yaks/file': eager0_22,
+  '@yaks/filter': eager0_23,
+  '@yaks/forms': eager0_24,
+  '@yaks/game': eager0_25,
+  '@yaks/git': eager0_26,
+  '@yaks/goal': eager0_27,
+  '@yaks/graph': eager0_28,
+  '@yaks/harness': eager0_29,
+  '@yaks/heal': eager0_30,
+  '@yaks/hook': eager0_31,
+  '@yaks/id': eager0_32,
+  '@yaks/inbox': eager0_33,
+  '@yaks/journal': eager0_34,
+  '@yaks/kernel': eager0_35,
+  '@yaks/key': eager0_36,
+  '@yaks/lens': eager0_37,
+  '@yaks/machine': eager0_38,
+  '@yaks/mail': eager0_39,
+  '@yaks/mcp-client': eager0_40,
+  '@yaks/member': eager0_41,
+  '@yaks/memory': eager0_42,
+  '@yaks/model': eager0_43,
+  '@yaks/notify': eager0_44,
+  '@yaks/openai': eager0_45,
+  '@yaks/openrouter': eager0_46,
+  '@yaks/page': eager0_47,
+  '@yaks/people': eager0_48,
+  '@yaks/persona': eager0_49,
+  '@yaks/phone': eager0_50,
+  '@yaks/platform': eager0_51,
+  '@yaks/process': eager0_52,
+  '@yaks/project': eager0_53,
+  '@yaks/provenance': eager0_54,
+  '@yaks/push': eager0_55,
+  '@yaks/rtc': eager0_56,
+  '@yaks/sandbox': eager0_57,
+  '@yaks/secrets': eager0_58,
+  '@yaks/session': eager0_59,
+  '@yaks/spawn': eager0_60,
+  '@yaks/speech': eager0_61,
+  '@yaks/spend': eager0_62,
+  '@yaks/sqlite': eager0_63,
+  '@yaks/task': eager0_64,
+  '@yaks/timing': eager0_65,
+  '@yaks/tmux': eager0_66,
+  '@yaks/tools': eager0_67,
+  '@yaks/topic': eager0_68,
+  '@yaks/tracker': eager0_69,
+  '@yaks/trial': eager0_70,
+  '@yaks/tunnel': eager0_71,
+  '@yaks/ux': eager0_72,
+  '@yaks/visualize': eager0_73,
+  '@yaks/vocab': eager0_74,
+  '@yaks/wake': eager0_75,
+  'yak/app': eager0_76,
+  'yak/attribution': eager0_77,
+  'yak/directory': eager0_78,
+  'yak/git': eager0_79,
+  'yak/meter': eager0_80,
+  'yak/models': eager0_81,
+  'yak/refusals': eager0_82,
+  'yak/trash': eager0_83,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {

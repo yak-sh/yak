@@ -271,6 +271,14 @@ class_name = "Outlast"
 name = "LEXICON"
 class_name = "Lexicon"
 
+# One object per bot listening on a chat platform's socket: yaks.app's own
+# Discord bot, which hears every server a space added it to (chat.ts,
+# index.ts `Chats`, @yaks/chat/listen). Its alarm opens the socket again
+# after a deploy or an eviction.
+[[durable_objects.bindings]]
+name = "CHATS"
+class_name = "Chats"
+
 # A busy object finishes what it is doing on the code it has, for up to five
 # minutes, before a deploy resets it: immediate (T-140262) reset every
 # Operator under its reply on each of the day's dozens of deploys, and cut
@@ -332,6 +340,10 @@ deleted_classes = ["Sandbox"]
 [[migrations]]
 tag = "v11"
 deleted_classes = ["Workspaces"]
+
+[[migrations]]
+tag = "v12"
+new_sqlite_classes = ["Chats"]
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing
@@ -719,6 +731,10 @@ class_name = "Outlast"
 name = "LEXICON"
 class_name = "Lexicon"
 
+[[env.staging.durable_objects.bindings]]
+name = "CHATS"
+class_name = "Chats"
+
 # As above: a busy object finishes on its code for up to five minutes.
 [env.staging.durable_objects.code_update_strategy]
 mode = "deferred"
@@ -767,6 +783,10 @@ deleted_classes = ["Sandbox"]
 [[env.staging.migrations]]
 tag = "v11"
 deleted_classes = ["Workspaces"]
+
+[[env.staging.migrations]]
+tag = "v12"
+new_sqlite_classes = ["Chats"]
 
 [[env.staging.send_email]]
 name = "MAIL"

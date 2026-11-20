@@ -245,6 +245,10 @@ export let operatorConfig: Config = {
     { use: '@yaks/trial', facets: ['vocab'] },
     // The texts it sends and receives for a person (operator-texts.ts).
     { use: '@yaks/phone', facets: ['vocab'], words: ['text', 'sender'] },
+    // What it hears and answers on a chat platform a space connected
+    // (chat.ts): each answer a row @yaks/chat's `chat_post` posts through the
+    // chatter the store lends for its platform.
+    { use: '@yaks/chat', facets: ['vocab', 'effects'] },
     // A person's Updates from the Operator (operator-updates.ts): what it
     // tells them, and what each has read.
     {

@@ -26,6 +26,7 @@ import { INTEGRATION, integrationEid } from './identity.ts'
 import anthropic from './anthropic.json' with { type: 'json' }
 import gmail from './gmail.json' with { type: 'json' }
 import discord from './discord.json' with { type: 'json' }
+import discordAccount from './discord-account.json' with { type: 'json' }
 import discordBot from './discord-bot.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import googleSearchConsole from './google-search-console.json' with {
@@ -60,9 +61,10 @@ export type Integration = {
   token?: string
   /** OpenID endpoint naming the account when no id_token is returned. */
   userinfo?: string
-  /** the field of the token endpoint's answer that names the account, as a
-   * dotted path, where it is not an email address: Discord's `guild.id`,
-   * the server its bot was added to (@yaks/oauth `Provider.account`) */
+  /** the field that names the account, as a dotted path, where it is not an
+   * email address: of the token endpoint's answer (Discord's `guild.id`, the
+   * server its bot was added to; @yaks/oauth `Provider.account`), else of
+   * the `userinfo` answer (a Discord user's `id`) */
   account?: string
   /** the chat platform its connections talk through (@yaks/chat), by name:
    * connecting it is all it takes for the Operator and the space's apps to
@@ -131,6 +133,7 @@ export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 let SEEDS: Integration[] = [
   anthropic,
   discord,
+  discordAccount,
   discordBot,
   gmail,
   googleCalendar,

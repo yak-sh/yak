@@ -234,6 +234,7 @@ export let discord: Platform = {
   name: 'discord',
   title: 'Discord',
   limit: 2000,
+  user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,
 }

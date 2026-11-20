@@ -14,6 +14,7 @@ import { chatDoc } from './vocab.ts'
 import { effects } from './effects.ts'
 import {
   accountEid,
+  type Addressed,
   framing,
   kept,
   messageEid,
@@ -53,11 +54,17 @@ test('kept: the room, who said it, and the message naming both', () => {
   assertEquals(messageEid('slack', 'm1') == message.entity.eid, false)
 })
 
-test('framing says the platform, a direct message, and who wrote it', () => {
-  assertEquals(framing({ title: 'Discord' }, said), 'On Discord, from Ann: ')
+test('framing says the platform, how it was said to the bot, and who wrote it', () => {
+  let said = (addressed?: Addressed) =>
+    framing({ title: 'Discord' }, { name: 'Ann', addressed })
   assertEquals(
-    framing({ title: 'Discord' }, { ...said, server: undefined }),
-    'On Discord, directly, from Ann: ',
+    [said('mention'), said('reply'), said('direct'), said()],
+    [
+      'On Discord, naming you, from Ann: ',
+      'On Discord, replying to you, from Ann: ',
+      'On Discord, directly, from Ann: ',
+      'On Discord, in a room you hear but were not addressed in, from Ann: ',
+    ],
   )
 })
 

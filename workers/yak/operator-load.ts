@@ -3,69 +3,72 @@ import type { Facets, Load, VocabFacet } from '@yaks/host'
 import * as eager0_0 from '@yaks/alias/vocab'
 import * as eager0_1 from '@yaks/anthropic/vocab'
 import * as eager0_2 from '@yaks/blob/vocab'
-import * as eager0_3 from '@yaks/context/vocab'
-import * as eager0_4 from '@yaks/doc/vocab'
-import * as eager0_5 from '@yaks/draft/vocab'
-import * as eager0_6 from '@yaks/edge/vocab'
-import * as eager0_7 from '@yaks/effects/vocab'
-import * as eager0_8 from '@yaks/goal/vocab'
-import * as eager0_9 from '@yaks/id/vocab'
-import * as eager0_10 from '@yaks/kernel/vocab'
-import * as eager0_11 from '@yaks/key/vocab'
-import * as eager0_12 from '@yaks/mail/vocab'
-import * as eager0_13 from '@yaks/memory/vocab'
-import * as eager0_14 from '@yaks/model/vocab'
-import * as eager0_15 from '@yaks/notify/vocab'
-import * as eager0_16 from '@yaks/openai/vocab'
-import * as eager0_17 from '@yaks/persona/vocab'
-import * as eager0_18 from '@yaks/phone/vocab'
-import * as eager0_19 from '@yaks/platform/vocab'
-import * as eager0_20 from '@yaks/project/vocab'
-import * as eager0_21 from '@yaks/provenance/vocab'
-import * as eager0_22 from '@yaks/session/vocab'
-import * as eager0_23 from '@yaks/speech/vocab'
-import * as eager0_24 from '@yaks/task/vocab'
-import * as eager0_25 from '@yaks/tools/vocab'
-import * as eager0_26 from '@yaks/topic/vocab'
-import * as eager0_27 from '@yaks/trial/vocab'
-import * as eager0_28 from '@yaks/wake/vocab'
-import * as eager0_29 from '@yaks/platform/operator-vocab'
+import * as eager0_3 from '@yaks/chat/vocab'
+import * as eager0_4 from '@yaks/context/vocab'
+import * as eager0_5 from '@yaks/doc/vocab'
+import * as eager0_6 from '@yaks/draft/vocab'
+import * as eager0_7 from '@yaks/edge/vocab'
+import * as eager0_8 from '@yaks/effects/vocab'
+import * as eager0_9 from '@yaks/goal/vocab'
+import * as eager0_10 from '@yaks/id/vocab'
+import * as eager0_11 from '@yaks/kernel/vocab'
+import * as eager0_12 from '@yaks/key/vocab'
+import * as eager0_13 from '@yaks/mail/vocab'
+import * as eager0_14 from '@yaks/memory/vocab'
+import * as eager0_15 from '@yaks/model/vocab'
+import * as eager0_16 from '@yaks/notify/vocab'
+import * as eager0_17 from '@yaks/openai/vocab'
+import * as eager0_18 from '@yaks/persona/vocab'
+import * as eager0_19 from '@yaks/phone/vocab'
+import * as eager0_20 from '@yaks/platform/vocab'
+import * as eager0_21 from '@yaks/project/vocab'
+import * as eager0_22 from '@yaks/provenance/vocab'
+import * as eager0_23 from '@yaks/session/vocab'
+import * as eager0_24 from '@yaks/speech/vocab'
+import * as eager0_25 from '@yaks/task/vocab'
+import * as eager0_26 from '@yaks/tools/vocab'
+import * as eager0_27 from '@yaks/topic/vocab'
+import * as eager0_28 from '@yaks/trial/vocab'
+import * as eager0_29 from '@yaks/wake/vocab'
+import * as eager0_30 from '@yaks/platform/operator-vocab'
 /** Each plugin's words, by plugin. */
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': eager0_0,
   '@yaks/anthropic': eager0_1,
   '@yaks/blob': eager0_2,
-  '@yaks/context': eager0_3,
-  '@yaks/doc': eager0_4,
-  '@yaks/draft': eager0_5,
-  '@yaks/edge': eager0_6,
-  '@yaks/effects': eager0_7,
-  '@yaks/goal': eager0_8,
-  '@yaks/id': eager0_9,
-  '@yaks/kernel': eager0_10,
-  '@yaks/key': eager0_11,
-  '@yaks/mail': eager0_12,
-  '@yaks/memory': eager0_13,
-  '@yaks/model': eager0_14,
-  '@yaks/notify': eager0_15,
-  '@yaks/openai': eager0_16,
-  '@yaks/persona': eager0_17,
-  '@yaks/phone': eager0_18,
-  '@yaks/platform': eager0_19,
-  '@yaks/project': eager0_20,
-  '@yaks/provenance': eager0_21,
-  '@yaks/session': eager0_22,
-  '@yaks/speech': eager0_23,
-  '@yaks/task': eager0_24,
-  '@yaks/tools': eager0_25,
-  '@yaks/topic': eager0_26,
-  '@yaks/trial': eager0_27,
-  '@yaks/wake': eager0_28,
-  'yak/operator': eager0_29,
+  '@yaks/chat': eager0_3,
+  '@yaks/context': eager0_4,
+  '@yaks/doc': eager0_5,
+  '@yaks/draft': eager0_6,
+  '@yaks/edge': eager0_7,
+  '@yaks/effects': eager0_8,
+  '@yaks/goal': eager0_9,
+  '@yaks/id': eager0_10,
+  '@yaks/kernel': eager0_11,
+  '@yaks/key': eager0_12,
+  '@yaks/mail': eager0_13,
+  '@yaks/memory': eager0_14,
+  '@yaks/model': eager0_15,
+  '@yaks/notify': eager0_16,
+  '@yaks/openai': eager0_17,
+  '@yaks/persona': eager0_18,
+  '@yaks/phone': eager0_19,
+  '@yaks/platform': eager0_20,
+  '@yaks/project': eager0_21,
+  '@yaks/provenance': eager0_22,
+  '@yaks/session': eager0_23,
+  '@yaks/speech': eager0_24,
+  '@yaks/task': eager0_25,
+  '@yaks/tools': eager0_26,
+  '@yaks/topic': eager0_27,
+  '@yaks/trial': eager0_28,
+  '@yaks/wake': eager0_29,
+  'yak/operator': eager0_30,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
   '@yaks/blob/graph': () => import('@yaks/blob/graph'),
+  '@yaks/chat/effects': () => import('@yaks/chat/effects'),
   '@yaks/draft/graph': () => import('@yaks/draft/graph'),
   '@yaks/id/graph': () => import('@yaks/id/graph'),
   '@yaks/key/graph': () => import('@yaks/key/graph'),

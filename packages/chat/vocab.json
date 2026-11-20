@@ -73,9 +73,7 @@
         },
         "connection": {
           "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "the connection whose bot heard it, or speaks it (@yaks/connections): yaks.app's own bot added to a server, or a bot a space brought"
+          "description": "the eid of the connection whose bot heard it, or speaks it (@yaks/connections): yaks.app's own bot added to a server, or a bot a space brought. Kept as an id, not a reference: the connection lives in its owner's directory, not beside the message"
         }
       }
     },

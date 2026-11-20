@@ -74,6 +74,10 @@ export type Platform = {
   title: string
   /** the most characters one message may carry */
   limit: number
+  /** the integration someone signs in to it with (@yaks/connections), whose
+   * connection's `account` is their id there: how a person here is known
+   * when they speak on it */
+  user?: string
   /** its socket, opened with a bot's credential, where it sends messages
    * over one */
   socket?: (credential: string) => Socket<unknown>
@@ -89,11 +93,11 @@ export type Platform = {
 export let platforms = (list: Platform[]): Map<string, Platform> =>
   new Map(list.map((p) => [p.name, p]))
 
-export let messageEid = (via: string, id: string) =>
+export let messageEid = (via: string, id: string): string =>
   derivedEid(`chat-message|${via}|${id}`)
-export let roomEid = (via: string, id: string) =>
+export let roomEid = (via: string, id: string): string =>
   derivedEid(`chat-room|${via}|${id}`)
-export let accountEid = (via: string, id: string) =>
+export let accountEid = (via: string, id: string): string =>
   derivedEid(`chat-account|${via}|${id}`)
 
 /** The rows that keep a message heard on `via`: the message with its words,
@@ -127,11 +131,19 @@ export let kept = (via: string, said: Said): Bundle[] => [
 ]
 
 /** How a message heard on a platform is said before its words to whoever
- * answers it: where it came from and who wrote it. */
-export let framing = (platform: Pick<Platform, 'title'>, said: Said) =>
-  `On ${platform.title}${
-    said.server ? '' : ', directly'
-  }, from ${said.author.name}: `
+ * answers it: where it came from, who wrote it, and how it was said to the
+ * bot, which is what the listener decides whether to answer by. */
+export let framing = (
+  platform: Pick<Platform, 'title'>,
+  said: { name: string; addressed?: Addressed },
+) => `On ${platform.title}, ${HOW[said.addressed ?? 'heard']} ${said.name}: `
+
+let HOW: Record<Addressed | 'heard', string> = {
+  direct: 'directly, from',
+  mention: 'naming you, from',
+  reply: 'replying to you, from',
+  heard: 'in a room you hear but were not addressed in, from',
+}
 
 /**
  * An answer cut to fit a platform's `limit`: at the last paragraph break

@@ -2,7 +2,7 @@
 // A space's Operator's object (build.ts), on the stand-in: its doors, its
 // wake and its wipe, and the old builder door that forwards a line into the
 // person's conversation.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import * as apps from './apps.ts'
 import { Builder } from './build.ts'
 import { builderOf, type Held, NOBODY, OWED, seated } from './build-door.ts'
@@ -494,4 +494,65 @@ test('the Operator page reads and writes its store through the kernel as the per
   await wrote.body?.cancel()
   assertEquals(await drafts(ADA), ['Plan the bake sale'])
   assertEquals(await drafts(BEA), [])
+})
+
+// A message heard on Discord (chat.ts `arrived`), from someone with no seat:
+// the kernel brings it, it is the next words of their own conversation, said
+// after where it came from, and the Operator's answer is a message to post in
+// the same room, answering it, through the bot that heard it.
+test('a Discord mention from a guest is heard, and answered in its room', async () => {
+  let o = await seeded([{ text: 'It opens at nine.' }])
+  let guest = 'c0000000-0000-4000-8000-0000000000c1'
+  await dirOf(o.env).apply({
+    entities: [{ entity: { eid: guest }, person: {} }],
+  }, { 'x-yak-kernel': '1' })
+  let connection = crypto.randomUUID()
+  let said = {
+    id: '1310000000000000001',
+    room: '1310000000000000777',
+    server: '81384788765712384',
+    author: { id: '4242', name: 'Ann' },
+    text: 'when does the barn open?',
+    at: '2026-11-20T05:40:00.000Z',
+    addressed: 'mention',
+  }
+  let post = () =>
+    o.object.fetch(
+      new Request('https://builder/operator/chat', {
+        method: 'POST',
+        headers: {
+          'x-yak-kernel': '1',
+          'x-space-eid': o.space.eid,
+          'x-yak-person': guest,
+        },
+        body: JSON.stringify({ via: 'discord', connection, said }),
+      }),
+    )
+  let r = await post()
+  assertEquals(r.status, 202)
+  await r.body?.cancel()
+  while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  let model = o.env.AI as unknown as ReturnType<typeof ai>
+  assertEquals(model.asked.length, 1)
+  assertStringIncludes(
+    JSON.stringify(model.asked[0]),
+    'On Discord, naming you, from Ann: when does the barn open?',
+  )
+  let store = await operatorStore(o.ctx.storage)
+  let [answer] = await store.g.read(
+    line`.chat_message.connection=${connection}&.deliver&*`,
+  )
+  assertEquals(answer?.chat_message, {
+    via: 'discord',
+    connection,
+    reply_to: said.id,
+  })
+  assertEquals((answer.doc as { body: string }).body, 'It opens at nine.')
+  let [room] = await store.g.get([(answer.deliver as { to: string }).to])
+  assertEquals((room.chat_room as { id: string }).id, said.room)
+  // Brought again, it is the same message, and nothing more is asked.
+  let again = await post()
+  assertEquals(again.status, 200)
+  await again.body?.cancel()
+  assertEquals(model.asked.length, 1)
 })

@@ -347,6 +347,10 @@ export type Env = {
   // waking stores (lexicon.ts, facets/kernel-worker.ts `Lexicon`). A test run binds none
   // unless it asks, and then every store is asked.
   LEXICON?: Lexicons
+  // The objects listening on chat platforms' sockets, one per bot (chat.ts,
+  // facets/kernel-worker.ts `Chats`). A test run binds none, so nothing
+  // listens.
+  CHATS?: import('./chat.ts').Chats
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
   // at deploy, and which strips TypeScript to JavaScript for the module walk
   // and code mode, so sucrase is in its upload and not this one (esbuild.ts

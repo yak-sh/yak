@@ -36,7 +36,7 @@ export let owed = (message: Bundle | undefined): boolean =>
  */
 export let posting = (
   chatterOf: (via: string) => Chatter | undefined,
-  now = () => new Date().toISOString(),
+  now = (): string => new Date().toISOString(),
 ): Handler =>
 async (event, tx, write, attempt) => {
   let entity: Entity = event.entity

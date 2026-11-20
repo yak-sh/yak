@@ -16,6 +16,7 @@ export let {
   PublicDirectory,
   Outlast,
   Lexicon,
+  Chats,
   Files,
   Site,
   Uses,

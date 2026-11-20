@@ -6,6 +6,7 @@ import { methods as answered } from '@yaks/tracker/instrument'
 import yak, * as entry from './index.ts'
 import {
   BUILDER,
+  CHATS,
   LEXICON,
   OUTLAST,
   PUBLIC_DIRECTORY,
@@ -20,6 +21,7 @@ import { PublicDirectoryStore } from './public-directory.ts'
 import { Purger } from '@yaks/workerd/purge'
 import { Outlast } from './outlast-object.ts'
 import { LexiconStore } from './lexicon.ts'
+import { Listening } from './chat.ts'
 
 // Every method the tracker's wrap gives the class, inherited ones too.
 let methods = (C: { prototype: object }) =>
@@ -35,6 +37,7 @@ test('each deferred object answers every method its class has', () => {
       PURGER,
       OUTLAST,
       LEXICON,
+      CHATS,
     ]
       .map((m) => [...m].sort()),
     [
@@ -45,6 +48,7 @@ test('each deferred object answers every method its class has', () => {
       Purger,
       Outlast,
       LexiconStore,
+      Listening,
     ]
       .map(methods),
   )
