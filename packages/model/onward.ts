@@ -30,10 +30,10 @@ export type Link = { model: Model; name: string }
 
 /**
  * A model that asks `chain(req)` in order: the first link answers the step,
- * and a link that fails {@link gone} before its first output passes the step
- * to the next. `passed` hears each such failure, with the name it was asked
- * by. Any other failure, one after output began, and the last link's are
- * thrown as they came.
+ * and a link that fails {@link gone} before acknowledging the request or
+ * producing output passes the step to the next. `passed` hears each such
+ * failure with the name it was asked by. Other failures are thrown as they
+ * came.
  *
  * ```ts
  * import { type Model, ModelError, onward } from '@yaks/model'
@@ -65,6 +65,10 @@ async (req) => {
       return await link.model({
         ...req,
         model: link.name,
+        onAck: async (mark) => {
+          begun = true
+          await req.onAck?.(mark)
+        },
         onFirst: () => {
           begun = true
           req.onFirst?.()

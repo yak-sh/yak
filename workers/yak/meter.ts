@@ -316,7 +316,7 @@ export let accounted = (
         { visitor, source },
       )
       reached('reserved', hold)
-      let submitted = false
+      let submitted = false, begun = false
       let requestedAt = Date.now()
       let reply: Awaited<ReturnType<Model>>
       try {
@@ -334,13 +334,26 @@ export let accounted = (
             await req.onSubmit?.()
             submitted = true
           },
+          onAck: async (mark) => {
+            begun = true
+            await req.onAck?.(mark)
+          },
+          onFirst: () => {
+            begun = true
+            req.onFirst?.()
+          },
+          onText: req.onText && ((delta) => {
+            begun = true
+            req.onText!(delta)
+          }),
         })
       } catch (error) {
-        // Media the space's files had no room to keep is not charged for,
-        // though its provider may have been paid; a model its provider says
-        // it has none by ran nothing to pay for.
+        // A provider refusal before any work lets the next model hold the
+        // same call. Media the space had no room to keep is free to the
+        // person too, but the provider may already have generated it.
         let unkept = error instanceof ModelError && error.code == 'space_full'
-        if (!submitted || unkept || gone(error)) await hold.settle(0, false)
+        if (unkept) await hold.settle(0, false)
+        else if (!begun && (!submitted || gone(error))) await hold.release()
         throw error
       }
       let cost = measured(reply, tariff)

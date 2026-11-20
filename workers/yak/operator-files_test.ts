@@ -132,10 +132,9 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
   assertEquals(source('document')?.media_type, 'application/pdf')
 })
 
-let { document } = parseHTML(
-  await (await chatPage(p.env, space, who, request)).text(),
-)
+let transcript = await (await chatPage(p.env, space, who, request)).text()
 test('the files show in the message they were sent with, a picture as itself', () => {
+  let { document } = parseHTML(transcript)
   let message = document.querySelector(
     '.Transcript_Lines > div:has(.Transcript_Bubble)',
   )!
@@ -196,9 +195,7 @@ class Held {
     return this.list
   }
 }
-let box = () => {
-  let { document, window } = parseHTML(fresh)
-  Object.assign(globalThis, { document, DataTransfer: Held })
+let box = ({ document, window }: ReturnType<typeof parseHTML>) => {
   let input = document.querySelector('#ask .Drop_File') as HTMLInputElement
   let files: File[] = []
   Object.defineProperties(input, {
@@ -245,50 +242,70 @@ let box = () => {
         ].filter(Boolean).join(' ')
       ),
     said: () => document.querySelector('#ask .Drop_Said')?.textContent,
-    [Symbol.dispose]: () => {
-      Reflect.deleteProperty(globalThis, 'document')
-      Reflect.deleteProperty(globalThis, 'DataTransfer')
-    },
   }
 }
+// Preact creates nodes through the global document during synchronous renders.
+let boxTest = (name: string, run: (b: ReturnType<typeof box>) => void) =>
+  test(name, () => {
+    let page = parseHTML(fresh)
+    let globals = { document: page.document, DataTransfer: Held }
+    let prior = Object.entries(globals).map(([key, value]) => ({
+      key,
+      value,
+      descriptor: Object.getOwnPropertyDescriptor(globalThis, key),
+    }))
+    try {
+      for (let { key, value } of prior) {
+        Object.defineProperty(globalThis, key, { value, configurable: true })
+      }
+      run(box(page))
+    } finally {
+      for (let { key, descriptor } of prior) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+        else Reflect.deleteProperty(globalThis, key)
+      }
+    }
+  })
 let file = (name: string, type: string, size = 3) =>
   Object.defineProperty(new File(['abc'], name, { type }), 'size', {
     value: size,
   })
 
-test('files picked, pasted and dropped join the box, each drawn as a sent one is, to take back', () => {
-  using b = box()
-  b.pick(file('flyer.png', 'image/png'))
-  b.paste(file('image.png', 'image/png'))
-  b.drop(
-    file('agenda.pdf', 'application/pdf'),
-    file('site.zip', 'application/zip'),
-  )
-  assertEquals(b.shown(), [
-    'picture flyer.png',
-    'picture image.png',
-    'PDF agenda.pdf',
-    'ZIP site.zip unread',
-  ])
-  assertEquals(b.sending(), [
-    'flyer.png',
-    'image.png',
-    'agenda.pdf',
-    'site.zip',
-  ])
-  b.remove(1)
-  assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
-  assertEquals(b.shown(), [
-    'picture flyer.png',
-    'PDF agenda.pdf',
-    'ZIP site.zip unread',
-  ])
-  // A choice cancelled keeps what is held; sent, the box lets go of them.
-  b.pick()
-  assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
-  b.sent()
-  assertEquals([b.shown(), b.sending()], [[], []])
-})
+boxTest(
+  'files picked, pasted and dropped join the box, each drawn as a sent one is, to take back',
+  (b) => {
+    b.pick(file('flyer.png', 'image/png'))
+    b.paste(file('image.png', 'image/png'))
+    b.drop(
+      file('agenda.pdf', 'application/pdf'),
+      file('site.zip', 'application/zip'),
+    )
+    assertEquals(b.shown(), [
+      'picture flyer.png',
+      'picture image.png',
+      'PDF agenda.pdf',
+      'ZIP site.zip unread',
+    ])
+    assertEquals(b.sending(), [
+      'flyer.png',
+      'image.png',
+      'agenda.pdf',
+      'site.zip',
+    ])
+    b.remove(1)
+    assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
+    assertEquals(b.shown(), [
+      'picture flyer.png',
+      'PDF agenda.pdf',
+      'ZIP site.zip unread',
+    ])
+    // A choice cancelled keeps what is held; sent, the box lets go of them.
+    b.pick()
+    assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
+    b.sent()
+    assertEquals([b.shown(), b.sending()], [[], []])
+  },
+)
 
 test('the box posts its words and files as a form where no script runs', () => {
   let form = parseHTML(fresh).document.querySelector('#ask')!
@@ -303,31 +320,38 @@ test('the box posts its words and files as a form where no script runs', () => {
   assertEquals(form.querySelector('[type=submit]')?.textContent, 'Send')
 })
 
-test('a file over the size the box takes is left out, and the box says so', () => {
-  using b = box()
-  b.pick(
-    file('scan.tiff', 'image/tiff', 16_000_001),
-    file('note.txt', 'text/plain'),
-  )
-  assertEquals(b.sending(), ['note.txt'])
-  assertEquals(b.said(), 'scan.tiff is larger than 16 MB, so it was left out.')
-  b.pick(file('next.txt', 'text/plain'))
-  assertEquals([b.sending(), b.said()], [['note.txt', 'next.txt'], ''])
-})
+boxTest(
+  'a file over the size the box takes is left out, and the box says so',
+  (b) => {
+    b.pick(
+      file('scan.tiff', 'image/tiff', 16_000_001),
+      file('note.txt', 'text/plain'),
+    )
+    assertEquals(b.sending(), ['note.txt'])
+    assertEquals(
+      b.said(),
+      'scan.tiff is larger than 16 MB, so it was left out.',
+    )
+    b.pick(file('next.txt', 'text/plain'))
+    assertEquals([b.sending(), b.said()], [['note.txt', 'next.txt'], ''])
+  },
+)
 
-test('past the most files the box takes, the rest are left out, and it says so', () => {
-  using b = box()
-  let many = Array.from(
-    { length: given.asking.count + 2 },
-    (_, i) => file(`page-${i}.txt`, 'text/plain'),
-  )
-  b.drop(...many)
-  assertEquals(b.sending().length, given.asking.count)
-  assertEquals(
-    b.said(),
-    `Up to ${given.asking.count} files go at a time, so the rest were left out.`,
-  )
-})
+boxTest(
+  'past the most files the box takes, the rest are left out, and it says so',
+  (b) => {
+    let many = Array.from(
+      { length: given.asking.count + 2 },
+      (_, i) => file(`page-${i}.txt`, 'text/plain'),
+    )
+    b.drop(...many)
+    assertEquals(b.sending().length, given.asking.count)
+    assertEquals(
+      b.said(),
+      `Up to ${given.asking.count} files go at a time, so the rest were left out.`,
+    )
+  },
+)
 
 // A model choice applies to file admission as well as the generated answer.
 let { operating } = await import('./operator.ts')

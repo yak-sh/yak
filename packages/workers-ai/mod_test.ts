@@ -175,9 +175,17 @@ test('a rate limit, a timeout, spent credits, an unaccepted license and an unkno
     )
     assertEquals(gone.code, 'model')
   }
-  let broken = new Error('boom')
-  let other = await assertRejects(() => binding(broken).model(ask([])))
-  assertEquals(other, broken)
+  for (
+    let said of [
+      'boom',
+      '5000: upstream failed after a tool named "was deprecated"',
+      "5000: internal error processing prompt 'agree'",
+    ]
+  ) {
+    let broken = new Error(said)
+    let other = await assertRejects(() => binding(broken).model(ask([])))
+    assertEquals(other, broken)
+  }
 })
 
 test('images are sent as native image parts and cancelled requests are never sent', async () => {

@@ -4,7 +4,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { affordable, ModelError } from '@yaks/model'
+import { affordable, type Model, ModelError } from '@yaks/model'
 import { mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { platform } from './testing.ts'
@@ -12,6 +12,7 @@ import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from '@yaks/platform/meter'
 import { plans } from '@yaks/platform/standing'
 import { reserved, settled } from './model-spend.ts'
+import { accounted } from './meter.ts'
 import { type Tally, tallying } from './lib/hops.ts'
 
 let p = platform('model spending')
@@ -38,6 +39,8 @@ let concurrent = await fixture(0.05)
 let helpers = await fixture()
 let released = await fixture()
 let uncertain = await fixture()
+let retried = await fixture()
+let started = await fixture()
 let measured = await fixture()
 let rollover = await fixture()
 let free = await fixture(0.20023140)
@@ -116,18 +119,37 @@ test('settlement releases unused dollars and a replay never debits twice', async
   )
 })
 
-test('a call no provider charged is held again, and one charged nothing it reported is not', async () => {
+test('a released call is held again, and a completed zero-cost call is final', async () => {
   let call = mint()
   let hold = () =>
-    reserved(p.env, released.space, () => ({ dollars: 0.01 }), call)
-  await (await hold()).settle(0, false)
-  await (await hold()).settle(0.01)
+    reserved(p.env, retried.space, () => ({ dollars: 0.05 }), call)
+  let first = await hold()
+  await first.release()
+  assertAlmostEquals(await retried.used(), 0)
+  let second = await hold()
+  await first.release()
+  assertAlmostEquals(await retried.used(), 0.05)
+  await second.settle(0, false)
+  assertAlmostEquals(await retried.used(), 0)
   await assertRejects(hold, ModelError, 'already holds')
-  let reported = mint()
-  let once = () =>
-    reserved(p.env, released.space, () => ({ dollars: 0.01 }), reported)
-  await (await once()).settle(0, true)
-  await assertRejects(once, ModelError, 'already holds')
+})
+
+test('a missing-model error after provider acknowledgement or output keeps the debit', async () => {
+  let raw = Object.assign(async (req: Parameters<Model>[0]) => {
+    await req.onSubmit?.()
+    if (req.model == 'accepted') await req.onAck?.({ fixture: { id: 'r' } })
+    else req.onFirst?.()
+    throw new ModelError('model_not_found')
+  }, { quote: () => ({ dollars: 0.05, tokens: 1 }) })
+  let callModel = accounted(p.env, (dir) => dir.at(started.space.eid), raw)
+  for (let model of ['accepted', 'streaming']) {
+    let req = { call: mint(), model, items: [], tools: [] }
+    let failure = await assertRejects(() => callModel(req), ModelError)
+    assertEquals(failure.code, 'model_not_found')
+    let retry = await assertRejects(() => callModel(req), ModelError)
+    assertEquals(retry.code, 'submitted')
+  }
+  assertAlmostEquals(await started.used(), 0.1)
 })
 
 test('an unanswered submitted call keeps its maximum unavailable', async () => {

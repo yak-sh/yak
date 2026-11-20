@@ -323,12 +323,11 @@ let spent = (e: unknown) => /insufficient .*credits/i.test(message(e))
 // How the binding says a model waits on its license being accepted for the
 // account (5016, a Llama vision model's): not offered here until someone
 // accepts it, which is the account holder's act, never a caller's.
-let unlicensed = (e: unknown) => /^5016:|prompt 'agree'/.test(message(e))
+let unlicensed = (e: unknown) => /^5016:/.test(message(e))
 
 // How the binding says it has no model by the name asked: one it never had
 // (5007), or one Cloudflare retired (5028, "was deprecated").
-let missing = (e: unknown) =>
-  /^(5007|5028):|no such model|was deprecated/i.test(message(e))
+let missing = (e: unknown) => /^(5007|5028):/.test(message(e))
 
 /**
  * Whether the binding refused the input it was asked with: it fits none of

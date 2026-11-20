@@ -73,15 +73,14 @@ export let reservation = async (
   call: string,
 ): Promise<Hold | undefined> => held(await read(env, receiptEid(call)))
 
-/** Settle measured usage once, including costs above the original quote and
- * media delivered after a restart. Later admissions see the full debit. */
-export let settled = async (
+// A release returns the hold without writing a completed cost.
+let finish = async (
   env: Env,
   call: string,
-  dollars: number,
-  reported = true,
+  dollars: number | null,
+  reported: boolean,
 ): Promise<boolean> => {
-  if (!Number.isFinite(dollars) || dollars < 0) {
+  if (dollars != null && (!Number.isFinite(dollars) || dollars < 0)) {
     throw new Error('Invalid model cost')
   }
   let eid = receiptEid(call)
@@ -90,16 +89,16 @@ export let settled = async (
     let hold = held(receipt)
     if (!hold) {
       let previous = (receipt?.cost as Comp | undefined)?.dollars
-      if (previous != null && previous != dollars) {
+      if (dollars != null && previous != null && previous != dollars) {
         throw new Error('The settled provider cost changed for the same call')
       }
-      return previous != null
+      return dollars != null && previous != null
     }
     // The provider has already spent these dollars. A low estimate must not
     // hide usage or strand delivery; the next admission sees the full debit.
     let space = await read(env, hold.space)
     let meter = space?.meter as Comp | undefined
-    let delta = dollars - hold.dollars
+    let delta = (dollars ?? 0) - hold.dollars
     // Last month's reservation stays in last month's reading. A late answer
     // must never reset this month's counters or free this month's dollars.
     let spends = meter?.month == hold.month && delta
@@ -120,7 +119,7 @@ export let settled = async (
           entity: { eid },
           $was: guard(receipt, 'model_reservation', ['dollars']),
           model_reservation: null,
-          cost: { dollars, reported },
+          ...dollars == null ? {} : { cost: { dollars, reported } },
         }, ...spends],
       })
       return true
@@ -129,6 +128,15 @@ export let settled = async (
     }
   }
 }
+
+/** Settle measured usage once, including costs above the original quote and
+ * media delivered after a restart. Later admissions see the full debit. */
+export let settled = (
+  env: Env,
+  call: string,
+  dollars: number,
+  reported = true,
+): Promise<boolean> => finish(env, call, dollars, reported)
 
 /** Hold a call's most against its space's month budget before it starts, in
  * one write: the quote is made on the caller's reading of the space, and the
@@ -147,14 +155,15 @@ export let reserved = async <T extends { dollars: number }>(
   call = mint(),
   { what = 'models', source, visitor, now = new Date() }: Paying = {},
 ): Promise<
-  { value: T; settle(dollars: number, reported?: boolean): Promise<boolean> }
+  {
+    value: T
+    settle(dollars: number, reported?: boolean): Promise<boolean>
+    release(): Promise<boolean>
+  }
 > => {
   let eid = receiptEid(call)
   let month = monthOf(now)
   let reading = space
-  // The call's receipt where it settled at nothing unreported: an earlier ask
-  // of it that no provider charged for, so it is asked anew.
-  let unpaid: Bundle | undefined
   for (let attempt = 0;; attempt++) {
     let tally = visitor && what == 'models'
       ? await tallied(env, space.eid, visitor, now)
@@ -186,7 +195,7 @@ export let reserved = async <T extends { dollars: number }>(
             entity: { eid },
             $was: {
               ...guard(undefined, 'model_reservation', ['dollars']),
-              ...guard(unpaid, 'cost', ['dollars']),
+              ...guard(undefined, 'cost', ['dollars']),
             },
             model_reservation: {
               space: space.eid,
@@ -210,21 +219,14 @@ export let reserved = async <T extends { dollars: number }>(
           },
         ],
       })
+      let released: Promise<boolean> | undefined
       return {
         value: value!,
         settle: (dollars, reported) => settled(env, call, dollars, reported),
+        release: () => released ??= finish(env, call, null, false),
       }
     } catch (error) {
       if (error instanceof Stale && error.eid == eid) {
-        let receipt = unpaid ? undefined : await read(env, eid)
-        let cost = receipt?.cost as Comp | undefined
-        if (
-          receipt && !held(receipt) && cost?.dollars === 0 &&
-          cost.reported === false
-        ) {
-          unpaid = receipt
-          continue
-        }
         throw new ModelError(
           'submitted',
           'This model call already holds its budget',

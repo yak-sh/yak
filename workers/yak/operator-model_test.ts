@@ -5,7 +5,7 @@
 // a summary is asked of the same model.
 import { identityEid, mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { type Model, ModelError } from '@yaks/model'
 import { transcript } from '@yaks/session'
 import { platform } from './directory-probe.ts'
@@ -119,10 +119,13 @@ test('a space whose model its provider retired is answered by the directory’s,
     entity: { eid: own },
     using: { provider: identityEid('provider', ['openai']), model },
   }], { trusted: true })
+  let used = async () => (await dir.at(space.eid))!.meter?.models ?? 0
+  let before = await used()
   assertEquals(await turn(), {
     asked: ['openai gpt-retired refused', 'anthropic claude-opus-5-5'],
     cost: 5,
   })
+  assertAlmostEquals(await used() - before, 0.005)
   await store.g.apply([{ entity: { eid: own }, using: null }], {
     trusted: true,
   })

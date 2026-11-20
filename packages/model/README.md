@@ -47,9 +47,10 @@ provider supports those operations.
 
 `onward(chain, passed?)` asks a chain of models in order: where a provider says
 the model asked is retired or unknown (`gone`: a `ModelError` coded `model`, or
-OpenAI's `model_not_found`) before any output, the step goes to the next model
-the chain names, and `passed` hears the failure. Only the last model's failure
-ends the step.
+OpenAI's `model_not_found`) before acknowledging the request or producing
+output, the step goes to the next model the chain names, and `passed` hears the
+failure. Once the provider acknowledges the request or produces output, its
+failure ends the step.
 
 A provider is a plugin. Its package exports a `./provider` facet
 (`ProviderFacet`): `providers(lent, options)` returns the models it serves,
