@@ -106,42 +106,30 @@ export let afterAll = (done: () => unknown): boolean => {
 }
 
 // What files asked the runtime to keep until it needs their memory back
-// (`kept`), the globals that holds, and the file that asked last.
+// (`kept`), and the file that asked last.
 let keeping: (() => unknown)[] = []
-let holding = new Set<PropertyKey>()
 let keeper = ''
 
 /**
  * Asks for `done` once the runtime needs back the memory a fixture holds
  * (./main.ts `full`), rather than once the file that made it ends: a fixture
  * that costs more to make than to keep (a kernel, say) serves every file
- * after it until then. `holds` names the globals the fixture replaced and
- * needs while it lives (a kernel's routes on `fetch`, say): a file's end puts
- * back every other global it changed (./run.ts `globals`), but leaves these
- * as they stand until `done`, which puts them back itself. Outside the runner
- * it does nothing, and answers false.
+ * after it until then. Outside the runner it does nothing, and answers false.
  *
  * ```ts ignore
  * let shared: Promise<Kernel> | undefined
  * let kernel = () => {
- *   if (!shared) kept(async () => (await shared)?.close(), ['fetch'])
+ *   if (!shared) kept(async () => (await shared)?.close())
  *   return shared ??= boot()
  * }
  * ```
  */
-export let kept = (
-  done: () => unknown,
-  holds: PropertyKey[] = [],
-): boolean => {
+export let kept = (done: () => unknown): boolean => {
   if (!tests) return false
   keeping.push(done)
-  for (let key of holds) holding.add(key)
   keeper = file
   return true
 }
-
-/** The globals what the runtime kept holds (`kept`). */
-export let held = (key: PropertyKey): boolean => holding.has(key)
 
 /** What the runtime kept (`kept`), run last asked first, with the file that
  * asked last; none when it keeps nothing. The runtime keeps nothing after. */
@@ -150,7 +138,6 @@ export let unkept = ():
   | undefined => {
   let asked = keeping
   keeping = []
-  holding = new Set()
   return asked.length ? { file: keeper, body: () => settle(asked) } : undefined
 }
 

@@ -84,10 +84,7 @@ file's end runs as one more test of it, `<path> ends`, said only when it fails.
 (past `--full`), or else once its files have run, rather than once the file that
 asked ends: a fixture that costs more to make than to keep, such as a kernel,
 serves every file loaded after it until then. It ends as one more test of the
-file that asked last, `<path> releases`, said only when it fails. A file's end
-puts back the globals its tests changed; `kept(done, ['fetch'])` names the ones
-the fixture replaced and needs while it lives, which stay as they stand until
-`done` puts them back.
+file that asked last, `<path> releases`, said only when it fails.
 
 Outside the runner, declarations register with `Deno.test` when it is available.
 In a runtime without `Deno.test`, declarations need the runner's collection

@@ -4,7 +4,7 @@ import * as system from '@yaks/process/system'
 // which what watches a run reads.
 import { threadtime } from '@yaks/benchmark'
 import { own } from './own.ts'
-import { closing, held, left, type Test, unkept } from './suite.ts'
+import { closing, left, type Test, unkept } from './suite.ts'
 
 /** How one test went. */
 export type Outcome = {
@@ -115,44 +115,6 @@ export let apart = () => {
     if (`on${type}` in globalThis) Reflect.set(globalThis, `on${type}`, null)
   }
 }
-
-/** Keeps the globals as they stand, and gives back what puts them back, so a
- * file's tests leave no global to the next file. A test that sets `document`
- * with `Object.defineProperty` and puts back only one that was there before
- * leaves a read-only `document`, which the next file to assign one cannot.
- * What was added goes, and what was changed is as it was; a property nobody
- * may change or delete stays, and so does one a fixture the runtime kept
- * holds (./suite.ts `kept`), which outlives the file that made it. */
-export let globals = (): () => void => {
-  let was = Object.getOwnPropertyDescriptors(globalThis) as Record<
-    PropertyKey,
-    PropertyDescriptor
-  >
-  return () => {
-    let now = Object.getOwnPropertyDescriptors(globalThis) as Record<
-      PropertyKey,
-      PropertyDescriptor
-    >
-    for (let key of Reflect.ownKeys(now)) {
-      let before = was[key as string]
-      let after = now[key as string]
-      if (!after.configurable || held(key)) continue
-      if (!before) Reflect.deleteProperty(globalThis, key)
-      else if (!same(before, after)) {
-        Object.defineProperty(globalThis, key, before)
-      }
-    }
-    for (let key of Reflect.ownKeys(was)) {
-      if (!Object.hasOwn(globalThis, key) && !held(key)) {
-        Object.defineProperty(globalThis, key, was[key as string])
-      }
-    }
-  }
-}
-
-let same = (a: PropertyDescriptor, b: PropertyDescriptor) =>
-  a.value === b.value && a.get === b.get && a.set === b.set &&
-  a.writable === b.writable && a.enumerable === b.enumerable
 
 /** Runs one test, failing it once `timeout` passes without an end. */
 export let one = async (

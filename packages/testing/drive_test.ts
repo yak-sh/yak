@@ -42,28 +42,6 @@ test('files load and execute in order, retaining reports without fixture bodies'
   equal(result.loading, Object.values(result.loads).reduce((a, b) => a + b, 0))
 })
 
-test("a file's tests leave no global to the next, even one nobody may assign; what loading installed stays", async () => {
-  let g = globalThis as { left?: unknown; installed?: unknown }
-  let seen: unknown[] = []
-  let body = (path: string) => () => {
-    if (path == 'a.ts') {
-      Object.defineProperty(globalThis, 'left', {
-        value: 'a',
-        configurable: true,
-      })
-    } else seen.push(g.left, g.left = 'b', g.installed)
-  }
-  await drive(['a.ts', 'b.ts'], (path) => {
-    if (path == 'a.ts') g.installed = 'polyfill'
-    return Promise.resolve([
-      { file: path, name: path, tags: [], skip: false, body: body(path) },
-    ])
-  })
-  equal(seen, [undefined, 'b', 'polyfill'])
-  equal(Object.hasOwn(globalThis, 'left'), false)
-  delete g.installed
-})
-
 test('a full runtime loads no more files and leaves them for another', async () => {
   let loaded: string[] = []
   let result = await drive(['a.ts', 'b.ts', 'c.ts'], (path) => {
@@ -131,26 +109,4 @@ test("what a file kept outlives it until the runtime releases it, and a failed r
   ])
   equal(released.map((o) => [o.test.name, o.ok]), [['b.ts releases', false]])
   equal(await release(1_000), [])
-})
-
-test('a global a kept fixture holds stands past its file until it is released; the others are put back', async () => {
-  let g = globalThis as Record<string, unknown>
-  let seen: unknown[] = []
-  let body = () => {
-    g.zzHeld = 'routed'
-    g.zzLoose = 'stubbed'
-    kept(() => void delete g.zzHeld, ['zzHeld'])
-  }
-  let declared = (file: string, run: () => void): Test[] => [
-    { file, name: file, tags: [], skip: false, body: run },
-  ]
-  await drive(['a.ts', 'b.ts'], (path) =>
-    Promise.resolve(
-      path == 'a.ts'
-        ? declared(path, body)
-        : declared(path, () => void seen.push(g.zzHeld, g.zzLoose)),
-    ))
-  equal(seen, ['routed', undefined])
-  await release(1_000)
-  equal('zzHeld' in g, false)
 })
