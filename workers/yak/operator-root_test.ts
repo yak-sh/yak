@@ -79,35 +79,36 @@ handleChannels(operator, env, {
   voice: channel('voice'),
 })
 
-let first = await receive(store, {
-  space: space.eid,
-  person: owner,
-  channel: 'text',
-  address: '+12695550142',
-}, 'Remind me about the dentist Tuesday at 3')
+let first = await receive(
+  store,
+  { space: space.eid, person: owner, channel: 'chat' },
+  'Remind me about the dentist Tuesday at 3',
+)
 await drain(store)
 let root = rootOf(space.eid, owner)
 let [fork] = await store.g.read(line`.spawned.parent=${root}`)
 let atFork = asked.find(forked)!
 let atRoot = asked.find((r) => !forked(r))!
-let texted = sent.splice(0)
+let answered = sent.splice(0)
 
-await receive(
-  store,
-  { space: space.eid, person: owner, channel: 'chat' },
-  'Make it Wednesday',
-)
+let byText = await receive(store, {
+  space: space.eid,
+  person: owner,
+  channel: 'text',
+  address: '+12695550142',
+}, 'Make it Wednesday')
 await drain(store)
 let later = asked.at(-1)!
 let sessions = await store.g.read('.session')
 let tasks = await store.g.read('.task')
 let listed = await workOf(store, space.eid, owner)
 let byRequest = await conversationOf(store, '/at', first)
+let wednesday = await conversationOf(store, '/at', byText)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
 // Then by email, and on a call: the Operator reads each with all that came
 // before, and the page shows the four as one conversation.
-let chatted = sent.splice(0)
+let texted = sent.splice(0)
 for (let [channel, say] of [['email', 'Or Thursday'], ['voice', 'Friday']]) {
   await receive(
     store,
@@ -138,17 +139,17 @@ let lines = [...page.querySelectorAll('.Transcript_Bubble')].map((p) => ({
   at: !!p.parentElement?.querySelector('.Transcript_When'),
 }))
 
-test("a person's text forks, and is answered at once and again when the fork comes back, by text", () => {
-  assertEquals(texted, [
+test("a person's message forks, and is answered at once and again when the fork comes back, where they asked", () => {
+  assertEquals(answered, [
     {
-      channel: 'text',
+      channel: 'chat',
       text: 'On it: adding a dentist reminder.',
-      to: '+12695550142',
+      to: undefined,
     },
     {
-      channel: 'text',
+      channel: 'chat',
       text: 'Your dentist reminder is in, Tuesday at 3.',
-      to: '+12695550142',
+      to: undefined,
     },
   ])
   assertEquals(
@@ -173,10 +174,10 @@ test('the next message, by any channel, is the same conversation, and files no t
   )
   assertEquals(tasks.length, 0)
   assertStringIncludes(JSON.stringify(later.items), 'dentist reminder is in')
-  assertEquals(chatted, [{
-    channel: 'chat',
+  assertEquals(texted, [{
+    channel: 'text',
     text: 'Moving the dentist to Wednesday.',
-    to: undefined,
+    to: '+12695550142',
   }])
 })
 
@@ -185,9 +186,10 @@ test('the chat app lists the conversation first and the work it started, and ope
   assertEquals(listed[1].title, 'Add a dentist reminder, Tuesday 3pm')
   assertEquals(listed[1].standing, 'done')
   assertEquals(byRequest.task, root)
-  assertStringIncludes(byRequest.html, 'title="By text"')
-  assertStringIncludes(byRequest.html, '</span>Remind me about the dentist')
-  assertEquals(byRequest.html.includes('By text:'), false)
+  assertStringIncludes(byRequest.html, 'Remind me about the dentist')
+  assertStringIncludes(wednesday.html, 'title="By text"')
+  assertStringIncludes(wednesday.html, '</span>Make it Wednesday')
+  assertEquals(wednesday.html.includes('By text:'), false)
   assertEquals(ofFork.task, fork.entity.eid)
   // A piece of work shows what it did, not the conversation it came from.
   assertEquals(ofFork.html.includes('Remind me about the dentist'), false)
@@ -217,11 +219,11 @@ test('texts, chat, email and calls are one conversation, read whole by the Opera
   assertStringIncludes(letters[0].text, 'Moving the dentist to Thursday.')
   assertEquals(lines, [
     {
-      via: 'By text',
+      via: undefined,
       said: 'Remind me about the dentist Tuesday at 3',
       at: true,
     },
-    { via: undefined, said: 'Make it Wednesday', at: true },
+    { via: 'By text', said: 'Make it Wednesday', at: true },
     { via: 'By email', said: 'Or Thursday', at: true },
     { via: 'By phone', said: 'Friday', at: true },
   ])

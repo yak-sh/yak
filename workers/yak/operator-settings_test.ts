@@ -68,21 +68,20 @@ let operator = operating(
 )
 let sent: string[] = []
 handleChannels(operator, env, {
-  text: (_: unknown, answer: { text: string }) => {
+  chat: (_: unknown, answer: { text: string }) => {
     sent.push(answer.text)
     return Promise.resolve({})
   },
 })
-let texted = async (words: string) => {
+let chatted = async (words: string) => {
   await receive(store, {
     space: space.eid,
     person: owner,
-    channel: 'text',
-    address: '+12695550142',
+    channel: 'chat',
   }, words)
   await drain(store)
 }
-await texted(`Call yourself ${renamed}, and speak in Pandora.`)
+await chatted(`Call yourself ${renamed}, and speak in Pandora.`)
 let [own] = await store.g.get([persona])
 
 test('asked, the Operator renames itself and changes its voice by writing its own persona', async () => {

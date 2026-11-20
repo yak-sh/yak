@@ -42,12 +42,11 @@ let operator = operating(
     })
   }),
 )
-handleChannels(operator, env, { text: () => Promise.resolve({}) })
+handleChannels(operator, env, { chat: () => Promise.resolve({}) })
 await receive(store, {
   space,
   person,
-  channel: 'text',
-  address: '+12695550143',
+  channel: 'chat',
 }, 'Find me a phone number and add it to my app.')
 await drain(store)
 

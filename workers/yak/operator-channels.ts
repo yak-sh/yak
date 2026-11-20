@@ -1174,6 +1174,17 @@ export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
  * their tools again, as they do after a tool's answer that was `heard`. */
 export let HEARSAY = new Set(['subscription', 'error', 'escalated'])
 
+/** The channels whose sender is known only by the number they texted from,
+ * which anyone can fake, since a text carries no carrier's mark of who sent
+ * it: a text or RCS message to the platform's number, and a reply to a text
+ * the Operator sent. A member's turn on one holds what a turn on `HEARSAY`
+ * does, and its answer goes by text to that number, so whoever faked it
+ * reads nothing of it. What changes the space or sends elsewhere waits for
+ * them where they are signed in: their chat, which a link in the answer
+ * opens signed in (operator-texts.ts `signingIn`), or a letter that passes
+ * DMARC (inbox.ts). */
+export let UNPROVEN = new Set(['text', 'rcs', 'texted'])
+
 export let handleChannels = (
   operator: Operator,
   env: Env,

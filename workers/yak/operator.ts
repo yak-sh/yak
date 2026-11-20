@@ -121,6 +121,7 @@ import {
   type Request as Requested,
   TAKING,
   UNASKED,
+  UNPROVEN,
 } from './operator-channels.ts'
 import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import {
@@ -480,6 +481,25 @@ let OUTSIDE =
   'the person, and for a break app_files, app_preview, app_deploy and ' +
   "app_errors; do the work with those. The person's own next message gives " +
   'back every tool.'
+
+// Why a member's turn on a text (operator-channels.ts `UNPROVEN`) holds only
+// some of the Operator's tools.
+let TEXTED =
+  "this turn answers a text, and a text's sender number can be faked, so it " +
+  'holds reads, telling the person, and its answer, which goes by text to ' +
+  'their number. Anything that changes the space or sends elsewhere waits ' +
+  'for them to ask in their chat, where a link in your answer signs them in, ' +
+  'or by email; tell them so.'
+
+// Whether words on `channel` are proven the person's own, so their turn
+// reaches the servers they connected: not a reply from someone outside the
+// space (`ANSWERING`) nor a text, whose number anyone can show (`UNPROVEN`).
+let proven = (channel: string) =>
+  !ANSWERING.has(channel) && !UNPROVEN.has(channel)
+
+// What a turn on words from outside the space keeps of a member's own tools:
+// telling the person, and reporting a platform bug.
+let TELLING = new Set(['platform_bug', 'text_send', 'notification_send'])
 
 // The tools a turn holds, and the rest withheld with why.
 let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
@@ -1014,7 +1034,7 @@ let working = async (
     return s
   })
   let openedFor = opened(env, o, o.space, space, reading, reach, session)
-  let remote = !o.signup && !ANSWERING.has(await channelAt(store, session, o))
+  let remote = !o.signup && proven(await channelAt(store, session, o))
   let here = { ...openedFor.here, remote }
   let ctx = openedFor.ctx.then((ctx) => ({ ...ctx, remote }))
   let google = googleAccounts(env, here, { eid: o.space })
@@ -1885,7 +1905,7 @@ export let operating = (
     // conversation it is in.
     let heard = HEARSAY.has(channel) ||
       await overheard(store, session, newest?.at)
-    let remote = !work?.signup && !ANSWERING.has(channel) && !heard
+    let remote = !work?.signup && proven(channel) && !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))
       : Promise.resolve([])
@@ -1904,6 +1924,10 @@ export let operating = (
     // read through the whole directory, which the Operator's is not.
     let whole = (options.directory ?? opening(env))()
     let member = writes(ctx.role)
+    // A member known only by the number they texted from is heard as anyone
+    // showing it would be.
+    let texted = member && UNPROVEN.has(channel)
+    heard ||= texted
     let acts = member && !heard
     // A reply on a writer's thread goes back to them, and only there.
     let onThread = (
@@ -1949,10 +1973,28 @@ export let operating = (
     ])
     // Addressed in a chat room, it reads back what was said there.
     let chat = rooms.length ? [chatRead(env, store)] : []
+    // What a member's turn holds beyond the space's tools: their alerts,
+    // texts, mail, numbers, wakes and subscriptions.
+    let mine = () => [
+      platformBug(ctx, space),
+      textSend(env, ctx, space),
+      contactAdd(env, ctx, space, store),
+      notificationSend(ctx, space, store),
+      mailSend(env, ctx, space, store),
+      phoneSend(env, ctx, space, store),
+      phoneNumbers(env, ctx, space, store),
+      imageNew(env, space, store),
+      ...pickTools(store, ctx.person!),
+      ...wakeTools(store),
+      ...subscriptionTools(store, watching),
+      escalationAnswer(store, ctx, space),
+    ]
     if (heard) {
+      let why = texted ? TEXTED : OUTSIDE
       let thread = member && channel == 'escalated'
         ? await threadOf(store, newest?.request)
         : undefined
+      let back = thread ? [onThread(thread)] : []
       return deferred([
         ...holding(
           [
@@ -1961,28 +2003,29 @@ export let operating = (
             ...roster,
           ],
           (t) => !!t.readOnly || (channel == 'error' && RELEASING.has(t.name)),
-          OUTSIDE,
+          why,
         ),
+        // A member keeps telling themselves, and what a writer's conversation
+        // raised is decided with the person's reads, and answered to that
+        // conversation and on the writer's own thread, to them alone
+        // (T-151880).
         ...member
-          ? [
-            platformBug(ctx, space),
-            textSend(env, ctx, space),
-            notificationSend(ctx, space, store),
-            ...(await accounts).filter((t) => t.readOnly),
-          ]
+          ? holding(
+            [...mine(), ...await accounts].filter((t) =>
+              !back.some((b) => b.name == t.name)
+            ),
+            (t) =>
+              !!t.readOnly || TELLING.has(t.name) ||
+              (channel == 'escalated' && t.name == 'escalation_answer'),
+            why,
+          )
           : [],
-        // What a writer's conversation raised is decided with the person's
-        // reads, and answered to that conversation and on the writer's own
-        // thread, to them alone (T-151880).
-        ...member && channel == 'escalated'
-          ? [escalationAnswer(store, ctx, space)]
-          : [],
-        ...thread ? [onThread(thread)] : [],
+        ...back,
         ...chat,
         ...holding(
           options.tools?.(ctx, files) ?? [],
           (t) => !!t.readOnly,
-          OUTSIDE,
+          why,
         ),
       ])
     }
@@ -2008,23 +2051,7 @@ export let operating = (
           String(comp(text, 'operator_request')!.address),
         )
         : [],
-      ...member
-        ? [
-          platformBug(ctx, space),
-          textSend(env, ctx, space),
-          contactAdd(env, ctx, space, store),
-          notificationSend(ctx, space, store),
-          mailSend(env, ctx, space, store),
-          phoneSend(env, ctx, space, store),
-          phoneNumbers(env, ctx, space, store),
-          imageNew(env, space, store),
-          ...pickTools(store, ctx.person!),
-          ...wakeTools(store),
-          ...subscriptionTools(store, watching),
-          ...google,
-          escalationAnswer(store, ctx, space),
-        ]
-        : [],
+      ...member ? [...mine(), ...google] : [],
       ...reply ? [escalate(store, space)] : [],
       ...chat,
       ...platform ? adminTools(env, whole) : [],
@@ -2194,7 +2221,7 @@ export let operating = (
         work?.person,
         work?.administrative,
         work?.signup,
-        ANSWERING.has(await channelAt(store, session, work)),
+        proven(await channelAt(store, session, work)),
       ])
     },
     // The conversation and its work forks share a short topic map. Only a
@@ -2215,7 +2242,7 @@ export let operating = (
       // Reply channels carry no personal server instructions.
       let work = await workingOf(store, session)
       let servers =
-        work?.signup || ANSWERING.has(await channelAt(store, session, work))
+        work?.signup || !proven(await channelAt(store, session, work))
           ? Promise.resolve('')
           : connectedInstructions(here, operatorAsking(store, eid, session))
       servers.catch(() => {})

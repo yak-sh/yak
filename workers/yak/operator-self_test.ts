@@ -106,17 +106,16 @@ let operator = operating(
 )
 let sent: string[] = []
 handleChannels(operator, env, {
-  text: (_: Intake, answer: { text: string }) => {
+  chat: (_: Intake, answer: { text: string }) => {
     sent.push(answer.text)
     return Promise.resolve({})
   },
 })
-let texted = async (words: string) => {
+let chatted = async (words: string) => {
   await receive(store, {
     space: space.eid,
     person: owner,
-    channel: 'text',
-    address: '+12695550142',
+    channel: 'chat',
   }, words)
   await drain(store)
 }
@@ -139,14 +138,14 @@ let settle = async () => {
   }], { trusted: true })
 }
 
-await texted('My dentist is Dr Alvarez on Main Street.')
+await chatted('My dentist is Dr Alvarez on Main Street.')
 await settle()
 let before = asked.length
-await texted('Who is my dentist?')
+await chatted('Who is my dentist?')
 let found = asked.slice(before)
 await settle()
 before = asked.length
-await texted('What do you remember about my dentist?')
+await chatted('What do you remember about my dentist?')
 let recalled = asked.slice(before)
 let marks = await store.g.get(
   (await store.g.read('.memory')).map((b) => b.entity.eid),

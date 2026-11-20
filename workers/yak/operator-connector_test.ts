@@ -57,7 +57,7 @@ let operator = operating(
 )
 let sent: string[] = []
 handleChannels(operator, env, {
-  text: (_: Intake, answer: { text: string }) => {
+  chat: (_: Intake, answer: { text: string }) => {
     sent.push(answer.text)
     return Promise.resolve({})
   },
@@ -65,8 +65,7 @@ handleChannels(operator, env, {
 await receive(store, {
   space: id,
   person: owner,
-  channel: 'text',
-  address: '+12695550142',
+  channel: 'chat',
 }, 'Call my space The Alvarez Home.')
 await drain(store)
 let names = callable
