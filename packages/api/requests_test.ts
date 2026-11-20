@@ -25,10 +25,21 @@ test('cancelled read owners finish before their reader is closed', async () => {
   read.active.cancel()
   await read.active.drain()
   let replies = await Promise.all(waiting)
-  equal(replies.map((response) => response.status), [499, 499, 499])
+  equal(replies.map((response) => response.status), [503, 503, 503])
+  equal(replies[0].headers.get('retry-after'), '1')
   read.answer.reject(new Error('the reader closed'))
   await read.finished.promise
   equal(read.errors, [])
+})
+
+test('a read whose caller hung up is answered 499', async () => {
+  let caller = new AbortController()
+  let active = requests(() => new Promise<Response>(() => {}))
+  let answer = active.handle(
+    new Request('http://test/query', { signal: caller.signal }),
+  )
+  caller.abort()
+  equal((await answer).status, 499)
 })
 
 let broken = (() => {
@@ -122,10 +133,10 @@ let stuck = (said: boolean) => {
   return { answer, ending, drained: () => drained }
 }
 
-test('a POST said to only read is answered 499 at the cut and not drained', async () => {
+test('a POST said to only read is answered 503 at the cut and not drained', async () => {
   let read = stuck(true)
   await read.ending
-  equal((await read.answer).status, 499)
+  equal((await read.answer).status, 503)
   let write = stuck(false)
   await new Promise((done) => setTimeout(done, 0))
   equal(write.drained(), false)

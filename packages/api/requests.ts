@@ -21,11 +21,18 @@ export let reading = (request: Request) =>
 let readers = new WeakMap<Request, () => void>()
 
 /** A request whose method is a write's but whose work only reads, such as an
- * MCP call to a read-only tool: the cut at the end of a grace answers it 499,
+ * MCP call to a read-only tool: the cut at the end of a grace answers it 503,
  * as it does a GET, and the drain no longer waits for it. */
 export let reads = (request: Request): void => readers.get(request)?.()
 
 let cuts = new WeakMap<Request, AbortSignal>()
+
+// A caller that hung up hears nothing: 499 only names it in logs. A read the
+// server cut while shutting down still has its caller, who is told to ask
+// again, as it would a server not yet up.
+let hungUp = () => new Response(null, { status: 499 })
+let closing = () =>
+  new Response(null, { status: 503, headers: { 'retry-after': '1' } })
 
 /** The cut at the end of a grace, for a write's request: what its admitted
  * work may still drop once its write is kept, such as the extras an MCP call
@@ -186,7 +193,7 @@ export let requests = (handler: Handler) => {
           (error) => {
             ended()
             if (error instanceof Cancelled) {
-              return new Response(null, { status: 499 })
+              return request.signal.aborted ? hungUp() : closing()
             }
             throw error
           },
@@ -202,7 +209,7 @@ export let requests = (handler: Handler) => {
         if (left || !read || !cut.signal.aborted) return
         left = true
         ended()
-        gone.resolve(new Response(null, { status: 499 }))
+        gone.resolve(closing())
       }
       cuts.set(request, cut.signal)
       readers.set(request, () => {
