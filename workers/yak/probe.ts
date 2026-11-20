@@ -1,5 +1,6 @@
 // The kernel and its network boundaries, driven in process. Each fixture
 // owns a synthetic origin; requests to it dispatch directly to its handler.
+import './runtime-resolve.ts'
 import * as io from '@yaks/file/io'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'

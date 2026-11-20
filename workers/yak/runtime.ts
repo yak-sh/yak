@@ -1,8 +1,8 @@
 // `cloudflare:workers` under Deno, for the one module that asks for it there:
 // the OAuth provider identity.ts is built on imports it for one `instanceof`,
-// and the kernel in memory (probe.ts `kernel`) serves identity.ts. The root
-// config points the name here within the provider alone (deno.json `scopes`);
-// esbuild never reads that map, so a bundle always gets the runtime's own.
+// and the kernel in memory (probe.ts `kernel`) serves identity.ts. A resolve
+// hook points the name here (./runtime-resolve.ts); esbuild never runs it, so
+// a bundle always gets the runtime's own.
 //
 // What is here is what the provider asks of it: the entrypoint base class,
 // the object and RPC base classes the Worker's classes extend

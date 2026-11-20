@@ -352,6 +352,7 @@ export let ALSO = [
 export let RUNS = [
   rel(new URL('../packages/testing/run.ts', import.meta.url)),
   rel(new URL('./test-runtime.ts', import.meta.url)),
+  rel(new URL('../workers/yak/runtime-resolve.ts', import.meta.url)),
 ]
 
 /** What the Worker's `ready` makes (workers/yak/wrangler.ts) is read by these:
