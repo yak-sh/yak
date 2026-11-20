@@ -134,6 +134,7 @@ export {
   namesOf,
   type Need,
   need,
+  opens,
   type Owners,
   type Path,
   pick,

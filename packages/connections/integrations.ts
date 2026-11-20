@@ -24,6 +24,7 @@ import type { Scheme } from '@yaks/hook'
 import { CallError } from '@yaks/tools/errors'
 import { INTEGRATION, integrationEid } from './identity.ts'
 import anthropic from './anthropic.json' with { type: 'json' }
+import canva from './canva.json' with { type: 'json' }
 import gmail from './gmail.json' with { type: 'json' }
 import discord from './discord.json' with { type: 'json' }
 import discordAccount from './discord-account.json' with { type: 'json' }
@@ -132,6 +133,7 @@ export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 // is.
 let SEEDS: Integration[] = [
   anthropic,
+  canva,
   discord,
   discordAccount,
   discordBot,

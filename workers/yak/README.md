@@ -1011,12 +1011,17 @@ listed, and a 401 naming protected-resource metadata registers this host as its
 OAuth client (`discover`), so the page goes straight to its sign-in; `configure`
 answers `needs: 'sign-in' | 'key'`. The page's Advanced settings (closed) take a
 name, an OAuth client id and secret, a key and its header, and this space's
-machine. A server that takes only clients it knows (Canva's refuses every
-redirect URI but those it lists) signs in as the person's own client, made in
-its developer portal with this host's callback as its redirect URI: `signsInAs`
-keeps its id and secret in the vault as `oauth_client mcp:<eid>`
-(@yaks/connections `registration`), named by the integration's `client`, and
-each server's card takes one too.
+machine. A server that takes only clients it knows signs in as the person's own
+client, made in its developer portal with this host's callback as its redirect
+URI: `signsInAs` keeps its id and secret in the vault as
+`oauth_client
+mcp:<eid>` (@yaks/connections `registration`), named by the
+integration's `client`, and each server's card takes one too. A server can
+refuse even that: mcp.canva.com answers 500 at its authorize page to a client
+from Canva's Developer Portal. @yaks/connections `begin` opens a server's
+sign-in page once before sending the person there, and a 5xx is said on the page
+in words, naming a built integration for the same service where there is one
+(Canva's, which signs in through Canva's REST API; @yaks/canva).
 
 A server that answers 401 and names no sign-in takes a key: its integration
 `mcp:<eid>` is then a keyed one, and the person gives the key on the connections

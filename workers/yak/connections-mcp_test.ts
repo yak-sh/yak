@@ -218,9 +218,10 @@ test('a dialog asked for what the page does not hold says why', async () => {
   assertStringIncludes(drawn, 'it was removed, or it belongs to another space')
 })
 
-test('a server added by its address alone, found to take a sign-in, goes straight to it', async () => {
+// A server that takes a sign-in, its login answering `login` at /authorize.
+let signsIn = (status: number) => {
   let login = 'https://login.test'
-  let said = async (req: Request) => {
+  return async (req: Request) => {
     let path = new URL(req.url).pathname
     if (path.includes('oauth-protected-resource')) {
       return Response.json({
@@ -243,6 +244,7 @@ test('a server added by its address alone, found to take a sign-in, goes straigh
         status: 201,
       })
     }
+    if (path == '/authorize') return new Response(null, { status })
     return new Response(null, {
       status: 401,
       headers: {
@@ -251,23 +253,41 @@ test('a server added by its address alone, found to take a sign-in, goes straigh
       },
     })
   }
+}
+
+// The connections page adding a server by its address, its fetches answered
+// by `said`.
+let adding = (said: (req: Request) => Promise<Response>) => {
   let form = new FormData()
   form.append('do', 'mcp-add')
   form.append('url', 'https://mcp.canva.test/mcp')
   globalThis.fetch =
     ((input: RequestInfo | URL, init?: RequestInit) =>
       said(new Request(input, init))) as typeof fetch
-  let res = await connecting(
+  return connecting(
     new Request('https://yaks.app/manage/connections?space=ada'),
     p.env,
     space,
     who,
     form,
-  ).finally(() => globalThis.fetch = real) as Response
+  ).finally(() => globalThis.fetch = real)
+}
+
+test('a server added by its address alone, found to take a sign-in, goes straight to it', async () => {
+  let res = await adding(signsIn(200)) as Response
   assertEquals(res.status, 303)
-  assertStringIncludes(res.headers.get('location')!, `${login}/authorize?`)
+  assertStringIncludes(
+    res.headers.get('location')!,
+    'https://login.test/authorize?',
+  )
   let [one] = (await page()).servers.filter((s) => s.name == 'canva.test')
   assertEquals([one.status, one.everyone], ['needed', false])
+})
+
+test('a server whose sign-in page fails for its client is said in words, not sent to the error', async () => {
+  let said = await adding(signsIn(500)) as { say: string; no: boolean }
+  assertEquals(said.no, true)
+  assertStringIncludes(said.say, 'login.test answers 500')
 })
 
 test('adding a server asks only for its address, with the rest behind Advanced', async () => {

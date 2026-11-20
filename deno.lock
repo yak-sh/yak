@@ -3072,6 +3072,16 @@
           ]
         }
       },
+      "packages/canva": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@1",
+            "npm:@yaks/session@0.2.33",
+            "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/tools@0.2.30"
+          ]
+        }
+      },
       "packages/canvas": {
         "packageJson": {
           "dependencies": [
@@ -5304,6 +5314,7 @@
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/builders@0.2.23",
+            "npm:@yaks/canva@0.2.0",
             "npm:@yaks/canvas@0.2.24",
             "npm:@yaks/chat@0.2.0",
             "npm:@yaks/claude@0.2.23",

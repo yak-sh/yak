@@ -553,6 +553,7 @@ test('the integration directory: every built one but those in testing, and each 
   assertEquals(names(await listing(g.read)), [
     'Anthropic',
     'calendar',
+    'Canva',
     'ESV API',
     'Gmail',
     'OpenAI',

@@ -1041,6 +1041,49 @@ export let begin = async (
   return (await signIn(c, b)).begin()
 }
 
+// The last two labels of a host: canva.com for mcp.canva.com.
+let domainOf = (url?: string) => {
+  try {
+    return new URL(url ?? '').host.split('.').slice(-2).join('.')
+  } catch {
+    return ''
+  }
+}
+
+/** An MCP server's sign-in page `url`, which `begin` gave for `connection`,
+ * opened once before a person's browser is sent there. A server that takes
+ * only the OAuth clients it lists can fail its page for any other:
+ * mcp.canva.com answers 500 to a client from Canva's Developer Portal. That
+ * refuses here in words, naming a built integration for the same service that
+ * signs in another way, instead of sending them to the server's error page. A
+ * page that can't be reached from here is left for the browser to try. */
+export let opens = async (c: Ctx, connection: Eid, url: string) => {
+  let b = await held(c.graph.read, connection)
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (!i?.resource) return
+  let res = await (c.fetch ?? fetch)(url, {
+    redirect: 'manual',
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined)
+  await res?.body?.cancel()
+  if (!res || res.status < 500) return
+  let at = domainOf(i.resource)
+  let other = (await installed(c.graph.read)).find((o) =>
+    o.name != i.name && !o.resource && domainOf(o.site) == at
+  )
+  throw new CallError(
+    'rejected',
+    `${i.title ?? i.name}'s sign-in page fails for this OAuth client: ` +
+      `${new URL(url).host} answers ${res.status} before anyone signs in. ` +
+      'This server takes only the clients it lists, so it refuses this one.' +
+      (other
+        ? ` ${
+          other.title ?? other.name
+        } in the list of services signs in another way: connect it there.`
+        : ''),
+  )
+}
+
 /** What an integration signs in with, where it is kept: its broker, when it
  * names one, else the OAuth client it names. `connectable` says whether
  * either is enough. */

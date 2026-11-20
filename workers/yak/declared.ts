@@ -56,6 +56,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { Tool } from '@yaks/session'
 import {
   addressed,
+  call,
   CONNECTION,
   grantsOf,
   type Kind,
@@ -204,9 +205,18 @@ type Built = (
 ) => Promise<Tool[]>
 let google = async (): Promise<Built> =>
   (await import('./operator-google.ts')).connectionTools
+// Canva's, each request sent through the connection (@yaks/canva).
+let canva = async (): Promise<Built> => {
+  let { tools } = await import('@yaks/canva')
+  return (env, _ctx, _space, held) =>
+    Promise.resolve(
+      tools((req) => call(ctxOf(env), held.entity.eid, req)),
+    )
+}
 let BUILT: Record<string, () => Promise<Built>> = {
   'google-calendar': google,
   gmail: google,
+  canva,
 }
 
 // The space a caller works in, for a built-in tool that speaks for it: the

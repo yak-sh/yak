@@ -373,6 +373,11 @@ grouped approximately by function, **not** by dependency order.
   sentinel, read a credential and refresh a token; `need` and `list` are its
   tools.
 
+- **[@yaks/canva](./canva)** — Canva for an Operator: designs found, made,
+  copied, resized, filled in and exported through Canva's REST API, as tools a
+  `canva` connection offers. Each request leaves through the connection, which
+  adds the person's credential. The API cannot edit text inside a design.
+
 - **[@yaks/egress](./egress)** — Calls going out with a credential the caller
   never holds: `forward` swaps each sentinel for its connection's key or token,
   in a header, the query or the body, once the caller may call out through it

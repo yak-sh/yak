@@ -74,6 +74,7 @@ import {
   namesOf,
   need,
   type Offer,
+  opens,
   type Owners,
   type Path,
   PUBLISHED,
@@ -1225,6 +1226,7 @@ let signingIn = async (
   if (!attempt) {
     return new Response(null, { status: 303, headers: { location: to } })
   }
+  await opens(c, eid, to)
   let held: Held = {
     space: space.slug,
     connection: eid,
@@ -1303,7 +1305,7 @@ export let connecting = async (
         )
       // A server found to take a sign-in goes straight to it.
       if (typeof said == 'object' && said) {
-        return signingIn(req, env, c, space, who, said.signIn)
+        return await signingIn(req, env, c, space, who, said.signIn)
       }
       if (said != null) return { say: said, no: false }
     } catch (e) {
@@ -1361,7 +1363,7 @@ export let connecting = async (
       let i = await known(c.graph.read, name)
       if (i && !keyed(i)) {
         let back = backTo(env, space, req, field('back'))
-        return signingIn(req, env, c, space, who, eid, back)
+        return await signingIn(req, env, c, space, who, eid, back)
       }
     }
     let [b] = EID.test(eid)
@@ -1385,7 +1387,7 @@ export let connecting = async (
       )
       let own = made[0].entity.eid
       if (i && !keyed(i)) {
-        return signingIn(req, env, c, space, who, own, undefined, app)
+        return await signingIn(req, env, c, space, who, own, undefined, app)
       }
       await connect(c, own, given as Given)
       await ready(env, own)
@@ -1480,7 +1482,7 @@ export let connecting = async (
     if (owner == space.eid && await asking(c.graph.read, eid)) {
       return no('Each person connects their own, from the app.')
     }
-    if (act == 'signin') return signingIn(req, env, c, space, who, eid)
+    if (act == 'signin') return await signingIn(req, env, c, space, who, eid)
     let given = await pasted(integrationOf(b))
     if (typeof given == 'string') return no(given)
     await connect(c, eid, given)
@@ -1502,6 +1504,7 @@ export let connecting = async (
       no: false,
     }
   } catch (e) {
+    if (e instanceof CallError) return no(e.message)
     caught(e, { request: 'POST /manage/connections' })
     return no(e instanceof Error ? e.message : "That didn't work.")
   }
@@ -1667,7 +1670,7 @@ export let own: Answer = async (
       }),
     )
     let eid = made.entity.eid
-    if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
+    if (!keyed(i)) return await signingIn(req, env, c, space, who, eid, back)
     await connect(c, eid, given as Given)
     let [now] = await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
     return now?.exception
@@ -1676,6 +1679,7 @@ export let own: Answer = async (
       )
       : Response.redirect(told(back, 'connected'), 303)
   } catch (e) {
+    if (e instanceof CallError) return page(no(e.message))
     caught(e, { request: `POST /api${path}` })
     return page(no(e instanceof Error ? e.message : "That didn't work."))
   }

@@ -18,6 +18,7 @@
     "@yaks/archetype": "0.2.24",
     "@yaks/blob": "0.2.30",
     "@yaks/builders": "0.2.23",
+    "@yaks/canva": "0.2.0",
     "@yaks/canvas": "0.2.24",
     "@yaks/chat": "0.2.0",
     "@yaks/claude": "0.2.23",

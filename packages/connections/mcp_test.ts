@@ -14,7 +14,9 @@ import {
   connect,
   connectionsDoc,
   disconnect,
+  install,
   known,
+  opens,
   pick,
 } from '@yaks/connections'
 import { ramVault, secrets, secretsDoc } from '@yaks/secrets'
@@ -651,4 +653,43 @@ test("a server that takes only clients it knows signs in as the person's own, wh
   assertEquals(new URL(url).searchParams.get('client_id'), 'mine')
   let rows = JSON.stringify(await g.read(line`*`))
   assert(!rows.includes('s3cret'))
+})
+
+test('a server whose sign-in page fails for the person’s client says so, and names the service’s built integration', async () => {
+  let { g, host, person } = await setup()
+  await g.apply(
+    await install(g.read, [{
+      name: 'design',
+      title: 'Design',
+      site: 'https://www.design.test',
+      authorize: 'https://www.design.test/oauth/authorize',
+      token: 'https://api.design.test/token',
+      hosts: ['api.design.test'],
+    }]),
+    { trusted: true },
+  )
+  let d = door('sign-in', 'mcp.design.test')
+  // The server's own login answers 500 to any client it does not list.
+  let fetcher: typeof fetch = (input, init) => {
+    let req = new Request(input, init)
+    return new URL(req.url).pathname == '/authorize'
+      ? Promise.resolve(new Response('Internal Server Error', { status: 500 }))
+      : d.fetcher(req)
+  }
+  let remote = remoteCommands(person, host, { fetch: fetcher })
+  let made = await remote.configure({
+    name: 'Design',
+    url: 'https://mcp.design.test/mcp',
+    client_id: 'mine',
+  })
+  await remote.signsInAs(made.server, { id: 'mine', secret: 's' })
+  let [held] = await g.read(
+    line`.connection.integration=${`mcp:${made.server}`}&*`,
+  )
+  let { url } = await begin(host, held.entity.eid)
+  let e = await assertRejects(() =>
+    opens({ ...host, fetch: fetcher }, held.entity.eid, url)
+  )
+  assertStringIncludes(String(e), 'login.test answers 500')
+  assertStringIncludes(String(e), 'Design in the list of services')
 })

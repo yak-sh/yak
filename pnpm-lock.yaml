@@ -989,6 +989,22 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/canva:
+    dependencies:
+      '@yaks/session':
+        specifier: 0.2.33
+        version: link:../session
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
+    devDependencies:
+      '@std/assert':
+        specifier: npm:@jsr/std__assert@^1.0.0
+        version: '@jsr/std__assert@1.0.19'
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
   packages/canvas:
     dependencies:
       '@yaks/graph':
@@ -6019,6 +6035,9 @@ importers:
       '@yaks/builders':
         specifier: 0.2.23
         version: link:../../packages/builders
+      '@yaks/canva':
+        specifier: 0.2.0
+        version: link:../../packages/canva
       '@yaks/canvas':
         specifier: 0.2.24
         version: link:../../packages/canvas
