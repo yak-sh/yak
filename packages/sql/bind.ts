@@ -4840,6 +4840,145 @@ let lower = (
     let { expr, tag } = resolveField(ctx, f.path.join('.'), undefined, true)
     cols.push(`${ctx.d.project(expr, tag)} as "${f.path.join('.')}"`)
   }
+  // A numbered component page need not sort that component's whole history.
+  // Try a bounded prefix in the exact requested order. Only when it holds a
+  // complete page can later entities be excluded; a sparse recent prefix takes
+  // the original component-driven road instead. Population density alone says
+  // nothing about where a component's newest numbered owners lie. A window in
+  // the default order is the same page: newest number first, then the owner.
+  // Either road selects the page's ids alone, and `.fields` projects only the
+  // rows on it: the Operator's 1,000 newest of each held series, each with its
+  // number and letter, sorted every belief its store held (bug 945f4afd).
+  let newest = order ? order.value == '-entity.num' : counts
+  let paging = (page: Frag, ...with_: Cte[]): Select =>
+    finished({
+      ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
+      with: with_.length ? with_ : undefined,
+      from: raw(`(${page.sql}) as "__number_page"`, page.params),
+      joins: [
+        {
+          how: 'cross',
+          src: raw(ctx.d.spine, [], 'entity'),
+          on: raw(`"__number_page"."id" = ${owner}`),
+        },
+        ...fields
+          ? rel(ctx.d.spine, { cols: [], joins: joinsOf(ctx), where: TRUE })
+            .joins ?? []
+          : [],
+      ],
+    })
+  if (
+    limit && Number.isSafeInteger(limit.n) && limit.n > 0 &&
+    newest && numbered && !after &&
+    !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
+    !sort?.ranked &&
+    !ctx.spine && !ctx.eids && !ctx.correlated &&
+    !cs.some((c) => claims(ctx, c.kind)) &&
+    !reads.length && filters.length == 1 && ctx.present &&
+    facetOf(ctx, filters[0])?.present &&
+    !computed(vocab, ctx.present) && ctx.d.owned &&
+    (ctx.d.scoped || ctx.d.spine == '"entity"')
+  ) {
+    // Where the catalog names the shapes wearing the component, each shape's
+    // owners stand in its number index in the page's order: a page of each
+    // shape's newest live owners is read off that index, and the page is the
+    // newest of them, about a page a shape however far back the component's
+    // newest owners lie. The prefix below finds a page only among the newest
+    // entities: on the platform, a component none of them wore sorted its
+    // whole history, 735,051 rows for 12.
+    let shapes = shaped(ctx, ctx.present)
+    if (shapes) {
+      let key = ctx.d.archetype!()
+      let arm = (id: number): Query => {
+        let a = render({
+          ...rel(ctx.d.archetypeSource!(ctx.v), {
+            cols: [owner + ' as "id"', '"entity"."num" as "num"'],
+            joins: paged,
+            where: and(windowed, cond({ sql: `${key} = ?`, params: [id] })),
+            order: ordered,
+          }),
+          limit: val(limit.n),
+        })
+        return select({
+          cols: [raw('"id"'), raw('"num"')],
+          from: raw(`(${a.sql})`, a.params),
+        })
+      }
+      let all = render(unionAllWithin(shapes.map(arm)))
+      let page = render({
+        ...select({
+          cols: [raw('"id"')],
+          from: raw(`(${all.sql})`, all.params),
+        }),
+        order: [raw('"num" desc'), raw('"id" desc')],
+        limit: val(limit.n),
+      })
+      return paging(page)
+    }
+  }
+  if (
+    limit && Number.isSafeInteger(limit.n) && limit.n > 0 &&
+    limit.n * 4 <= PREFIX &&
+    newest && numbered && !after &&
+    !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
+    !sort?.ranked &&
+    !ctx.spine && !ctx.eids && !ctx.correlated &&
+    !cs.some((c) => claims(ctx, c.kind)) &&
+    !reads.length && filters.length == 1 && ctx.present &&
+    facetOf(ctx, filters[0])?.present &&
+    !computed(vocab, ctx.present) && ctx.d.owned &&
+    (ctx.d.scoped || ctx.d.spine == '"entity"')
+  ) {
+    let prefix = fresh(ctx, [], '__number_prefix_')
+    let hits = fresh(ctx, [], '__number_hits_')
+    let cap = Math.max(64, limit.n * 4)
+    let recent = rel(ctx.d.spine, {
+      cols: ['"entity".*'],
+      joins: [],
+      where: TRUE,
+      order: [...new Set(ordered)],
+    })
+    let matching = rel(`"${prefix}" as "entity"`, {
+      cols: [owner + ' as "id"'],
+      joins: paged,
+      // Presence was elided when its component became the planned spine.
+      // The prefix must test it again, through the same visibility relation.
+      where: and(windowed, probed(ctx, ctx.present)),
+      order: ordered,
+    })
+    let full = raw(`exists (select 1 from "${hits}" limit 1 offset ?)`, [
+      limit.n - 1,
+    ])
+    let fallback = relation(ctx.d.spine, {
+      cols: [owner + ' as "id"'],
+      joins: paged,
+      where: windowed,
+      order: ordered,
+    })
+    // LIMIT, unlike WHERE, gates the whole fallback before its driving scan.
+    fallback.limit = { t: 'case', arms: [[full, val(0)]], else: val(limit.n) }
+    let slow = render(fallback)
+    let selected = render({
+      t: 'compound',
+      op: 'union all',
+      parts: [
+        select({ cols: [raw('"id"')], from: raw(`"${hits}"`), where: full }),
+        select({
+          cols: [raw('"id"')],
+          from: raw(`(${slow.sql})`, slow.params),
+        }),
+      ],
+    })
+    return paging(
+      selected,
+      { name: prefix, q: { ...recent, limit: val(cap) }, materialized: true },
+      {
+        name: hits,
+        q: { ...matching, limit: val(limit.n) },
+        materialized: true,
+      },
+    )
+  }
   // SQLite computes a result column before its sorter cuts the window, so a
   // projection is read for every row the filter selects, not just the page.
   // A window with projections therefore selects its page by id first, and
@@ -4998,128 +5137,6 @@ let lower = (
         how: 'cross',
         src: raw(ctx.d.spine, [], 'entity'),
         on: raw(`"__backlink_page"."id" = ${owner}`),
-      }],
-    })
-  }
-  // A numbered component page need not sort that component's whole history.
-  // Try a bounded prefix in the exact requested order. Only when it holds a
-  // complete page can later entities be excluded; a sparse recent prefix takes
-  // the original component-driven road instead. Population density alone says
-  // nothing about where a component's newest numbered owners lie. A window in
-  // the default order is the same page: newest number first, then the owner.
-  let newest = order ? order.value == '-entity.num' : counts
-  if (
-    limit && Number.isSafeInteger(limit.n) && limit.n > 0 &&
-    limit.n * 4 <= PREFIX &&
-    newest && numbered && !after && !fields &&
-    !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
-    !sort?.ranked &&
-    !ctx.spine && !ctx.eids && !ctx.correlated &&
-    !cs.some((c) => claims(ctx, c.kind)) &&
-    !reads.length && filters.length == 1 && ctx.present &&
-    facetOf(ctx, filters[0])?.present &&
-    !computed(vocab, ctx.present) && ctx.d.owned &&
-    (ctx.d.scoped || ctx.d.spine == '"entity"')
-  ) {
-    // Where the catalog names the shapes wearing the component, each shape's
-    // owners stand in its number index in the page's order: a page of each
-    // shape's newest live owners is read off that index, and the page is the
-    // newest of them, about a page a shape however far back the component's
-    // newest owners lie. The prefix below finds a page only among the newest
-    // entities: on the platform, a component none of them wore sorted its
-    // whole history, 735,051 rows for 12.
-    let shapes = shaped(ctx, ctx.present)
-    if (shapes) {
-      let key = ctx.d.archetype!()
-      let arm = (id: number): Query => {
-        let a = render({
-          ...rel(ctx.d.archetypeSource!(ctx.v), {
-            cols: [owner + ' as "id"', '"entity"."num" as "num"'],
-            joins: paged,
-            where: and(windowed, cond({ sql: `${key} = ?`, params: [id] })),
-            order: ordered,
-          }),
-          limit: val(limit.n),
-        })
-        return select({
-          cols: [raw('"id"'), raw('"num"')],
-          from: raw(`(${a.sql})`, a.params),
-        })
-      }
-      let all = render(unionAllWithin(shapes.map(arm)))
-      let page = render({
-        ...select({
-          cols: [raw('"id"')],
-          from: raw(`(${all.sql})`, all.params),
-        }),
-        order: [raw('"num" desc'), raw('"id" desc')],
-        limit: val(limit.n),
-      })
-      return finished({
-        ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
-        from: raw(`(${page.sql}) as "__number_page"`, page.params),
-        joins: [{
-          how: 'cross',
-          src: raw(ctx.d.spine, [], 'entity'),
-          on: raw(`"__number_page"."id" = ${owner}`),
-        }],
-      })
-    }
-    let prefix = fresh(ctx, [], '__number_prefix_')
-    let hits = fresh(ctx, [], '__number_hits_')
-    let cap = Math.max(64, limit.n * 4)
-    let recent = rel(ctx.d.spine, {
-      cols: ['"entity".*'],
-      joins: [],
-      where: TRUE,
-      order: [...new Set(ordered)],
-    })
-    let matching = rel(`"${prefix}" as "entity"`, {
-      cols: [owner + ' as "id"'],
-      joins: paged,
-      // Presence was elided when its component became the planned spine.
-      // The prefix must test it again, through the same visibility relation.
-      where: and(windowed, probed(ctx, ctx.present)),
-      order: ordered,
-    })
-    let full = raw(`exists (select 1 from "${hits}" limit 1 offset ?)`, [
-      limit.n - 1,
-    ])
-    let fallback = relation(ctx.d.spine, {
-      cols: [owner + ' as "id"'],
-      joins: paged,
-      where: windowed,
-      order: ordered,
-    })
-    // LIMIT, unlike WHERE, gates the whole fallback before its driving scan.
-    fallback.limit = { t: 'case', arms: [[full, val(0)]], else: val(limit.n) }
-    let slow = render(fallback)
-    let selected = render({
-      t: 'compound',
-      op: 'union all',
-      parts: [
-        select({ cols: [raw('"id"')], from: raw(`"${hits}"`), where: full }),
-        select({
-          cols: [raw('"id"')],
-          from: raw(`(${slow.sql})`, slow.params),
-        }),
-      ],
-    })
-    return finished({
-      ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
-      with: [
-        { name: prefix, q: { ...recent, limit: val(cap) }, materialized: true },
-        {
-          name: hits,
-          q: { ...matching, limit: val(limit.n) },
-          materialized: true,
-        },
-      ],
-      from: raw(`(${selected.sql}) as "__number_page"`, selected.params),
-      joins: [{
-        how: 'cross',
-        src: raw(ctx.d.spine, [], 'entity'),
-        on: raw(`"__number_page"."id" = ${owner}`),
       }],
     })
   }

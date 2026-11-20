@@ -3,6 +3,7 @@ import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
 import { Database } from './legacy.ts'
 import { loadVocab } from '@yaks/vocab'
+import { ID_URI, idKeywords } from '@yaks/id'
 import { compile, type Extension, insert, render } from '@yaks/sql'
 import { raw } from '../sql/ast.ts'
 import { search } from '../fts/compile.ts'
@@ -213,4 +214,62 @@ test("a numbered page of a component no recent entity wears reads each shape's n
   let spent = steps() - before
   equal(got, Array.from({ length: 12 }, (_, i) => `old-${598 - i}`))
   ok(spent < 5000, `${spent} VM steps`)
+})
+
+// The Operator's held series (@yaks/id `held`): its 1,000 newest owners of a
+// component, each with its number and letter. Projected as the page was
+// selected, or past a quarter of the prefix, the page sorted every belief its
+// store held (bug 945f4afd).
+test("a projected page of a crowded component reads each shape's newest", () => {
+  let lettered = loadVocab([{
+    $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
+    $defs: {
+      entity: {
+        component: true,
+        properties: {
+          num: { type: 'number', stamped: true },
+          prefix: { type: 'string' },
+        },
+      },
+      belief: {
+        component: true,
+        prefix: 'I',
+        properties: { about: { type: 'string' } },
+      },
+      noise: {
+        component: true,
+        prefix: 'N',
+        properties: { y: { type: 'number' } },
+      },
+    },
+  }], [idKeywords])
+  let { driver, steps } = stepping()
+  let s = storage(driver, lettered, { number: true })
+  s.install()
+  let g = graph({ storage: s, vocab: lettered })
+  for (let comp of ['belief', 'noise']) {
+    g.apply(Array.from({ length: 1100 }, (_, i) => ({
+      entity: { eid: `${comp}-${i}` },
+      [comp]: comp == 'belief' ? { about: 'x' } : { y: i },
+    })))
+  }
+  // 300 is past a quarter of the prefix, which no longer bounds the shapes.
+  for (
+    let [limit, fields] of [[100, '&.fields=entity.num,entity.prefix'], [
+      300,
+      '',
+    ]] as const
+  ) {
+    let before = steps()
+    let rows = s.rows(`.belief${fields}&.limit=${limit}`)
+    let spent = steps() - before
+    equal(
+      rows.map((r) => r.eid),
+      Array.from({ length: limit }, (_, i) => `belief-${1099 - i}`),
+    )
+    if (fields) {
+      equal([rows[0]['entity.num'], rows[0]['entity.prefix']], [1100, 'I'])
+    }
+    ok(spent < limit * 50, `${limit}: ${spent} VM steps`)
+  }
 })
