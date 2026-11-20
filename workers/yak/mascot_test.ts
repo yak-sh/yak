@@ -73,7 +73,22 @@ test("each thing the Operator does is one of the yak's poses, or one of his loop
   for (let move of Object.values(MOVES)) {
     if ('loop' in move) assert(move.loop in IDLE, move.loop)
     else {
-      for (let f of ['-1x', '', '-3x', '-still-1x', '-still', '-still-3x']) {
+      for (
+        let f of [
+          '-1x',
+          '',
+          '-3x',
+          '-still-1x',
+          '-still',
+          '-still-3x',
+          '-128-1x',
+          '-128',
+          '-128-3x',
+          '-still-128-1x',
+          '-still-128',
+          '-still-128-3x',
+        ]
+      ) {
         await served(`/mascot/${move.pose}${f}.webp`)
       }
     }
@@ -209,8 +224,8 @@ test('asked for a loop, he plays it at once, or as the one playing ends, then wa
 })
 
 let pose = (name: string) => [
-  `/mascot/${name}.webp`,
-  ['-1x', '', '-3x'].map((f, i) => `/mascot/${name}${f}.webp ${i + 1}x`)
+  `/mascot/${name}-128.webp`,
+  ['-1x', '', '-3x'].map((f, i) => `/mascot/${name}-128${f}.webp ${i + 1}x`)
     .join(', '),
 ]
 

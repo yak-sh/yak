@@ -5,7 +5,9 @@
 // a page names one of his poses in his `data-pose` (the Operator's chat, for
 // what it is doing: mascot.ts `MOVES`), he holds that pose, thinking with his
 // light bulb or checking his list, its own loop playing over and over, and
-// takes up his waiting again once it is gone. A person who asks for less
+// takes up his waiting again once it is gone. Each pose has its own files
+// on his rest frame's canvas (public/mascot/<pose>-128.webp, -still-128), so
+// he stays the same size, seated in the same spot, whatever he does. A person who asks for less
 // motion keeps him at rest, or in the pose's still frame.
 //
 // Each loop is fetched once, just before it first plays, at the density the
@@ -92,7 +94,7 @@
       if (name) {
         clearTimeout(timer)
         posed = true
-        return put(as(still.matches ? `${name}-still` : name))
+        return put(as(`${name}${still.matches ? '-still' : ''}-128`))
       }
       if (!posed) return playing || wait()
       posed = false
