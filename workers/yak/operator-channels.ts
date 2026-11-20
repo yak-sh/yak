@@ -805,7 +805,7 @@ let FIXED =
 // person it was sent for is told what they said (operator-host.ts
 // `operatorReply`).
 let STRANGER =
-  "You are talking with them now, in their own conversation and with only their permissions, so nothing of the person you sent it for is yours to read here: answer from what you sent and what they wrote. That person already has their words, in their Updates and in their conversation with you, so there is nothing to pass along, and you can tell them so. Only what needs that person's own choice or what is theirs (a time to pick, their calendar) you raise with escalate, naming their reply. Each answer you give goes to them as a letter or text of its own: answer once, with all you can say, and never only to say you are still looking. Your answer goes back to them "
+  "You are talking with them now, in their own conversation and with only their permissions, so nothing of the person you sent it for is yours to read here: answer from what you sent and what they wrote. That person already has their words, in their Updates and in their conversation with you, so there is nothing to pass along: whatever of theirs you cannot answer, tell them that person has their question and can answer it. Only what needs that person's own choice or what is theirs (a time to pick, their calendar) you raise with escalate, naming their reply. Each answer you give goes to them as a letter or text of its own: answer once, with all you can say, and never only to say you are still looking. Your answer goes back to them "
 // What an invitation the Operator wrote invites its reader to, which their
 // own permissions cannot see (`operator_invite`, invite.ts `send`).
 let invited = (sent?: Bundle) => {
