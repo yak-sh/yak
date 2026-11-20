@@ -132,13 +132,6 @@
               "type": "string",
               "format": "uri",
               "description": "the API's reference, which says every endpoint under `base`"
-            },
-            "reads": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "the calls that only read though their method is not GET, each `METHOD /path` under `base`, `*` standing for one segment of the path: Calendar's `POST /freeBusy`. An agent makes these, and every GET, without a person's tap"
             }
           },
           "description": "its API, for an agent calling it as a connection: where its paths are and where they are documented. None is reached at its first host"

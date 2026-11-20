@@ -21,11 +21,7 @@
   ],
   "api": {
     "base": "https://searchconsole.googleapis.com",
-    "docs": "https://developers.google.com/webmaster-tools/v1/api_reference_index",
-    "reads": [
-      "POST /webmasters/v3/sites/*/searchAnalytics/query",
-      "POST /v1/urlInspection/index:inspect"
-    ]
+    "docs": "https://developers.google.com/webmaster-tools/v1/api_reference_index"
   },
   "testing": true,
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"

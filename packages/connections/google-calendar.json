@@ -23,10 +23,7 @@
   ],
   "api": {
     "base": "https://www.googleapis.com/calendar/v3",
-    "docs": "https://developers.google.com/workspace/calendar/api/v3/reference",
-    "reads": [
-      "POST /freeBusy"
-    ]
+    "docs": "https://developers.google.com/workspace/calendar/api/v3/reference"
   },
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

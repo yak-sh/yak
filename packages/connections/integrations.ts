@@ -103,7 +103,7 @@ export type Integration = {
   /** its API: the address its paths are under, its reference, and the calls
    * that only read though their method is not GET (`POST /freeBusy`, `*` for
    * one segment); none is reached at its first host */
-  api?: { base: string; docs?: string; reads?: string[] }
+  api?: { base: string; docs?: string }
   /** what a person gives to connect a pasted-key one, when it is more than
    * one key; none is one key */
   fields?: Field[]

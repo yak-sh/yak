@@ -12,8 +12,7 @@ import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
 import { listCommands, runCommand } from './declared.ts'
-import { apiCall, integrationOf } from './operator-integrations.ts'
-import { ESCALATING } from './operator-approvals.ts'
+import { apiCall } from './operator-integrations.ts'
 import {
   eventBody,
   googleTools,
@@ -267,10 +266,6 @@ await receive(
   'Put the dentist on my calendar Tuesday at 3 to 4, and email the front desk at front@dentist.example that I will be there.',
 )
 await service.drain()
-// Mail to someone new waits for the person's tap.
-let unsent = to('/gmail/v1/users/me/messages/send').length
-await service.approve()
-await service.drain()
 let names = callable
 
 test('before they connect, the Operator is told where to, and holds no Google tool', () => {
@@ -330,7 +325,6 @@ test('connected from the page, each names its account, and the Operator uses bot
     timeZone: 'America/Detroit',
   })
   let [sent] = to('/gmail/v1/users/me/messages/send')
-  assertEquals(unsent, 0)
   assertEquals(sent.headers.get('authorization'), 'Bearer G1')
   let raw = (await sent.json()).raw as string
   let letter = atob(raw.replaceAll('-', '+').replaceAll('_', '/'))
@@ -410,7 +404,7 @@ test('the same Google tools are in the pool of tools, at the connection that off
   assertEquals(out.heard, true)
 })
 
-test('an unusual read with no tool of its own, free/busy, is one api_call, and only writes wait for a tap', async () => {
+test('an unusual read with no tool of its own, free/busy, is one api_call', async () => {
   let ctx = await operatorContext(env, { person }, space)
   asked.length = 0
   let said = await apiCall(env, space, { ctx }).run({
@@ -427,18 +421,6 @@ test('an unusual read with no tool of its own, free/busy, is one api_call, and o
   let [busy] = to('/calendar/v3/freeBusy')
   assertEquals(busy.headers.get('authorization'), 'Bearer A1')
   assertEquals((await busy.json()).items, [{ id: 'primary' }])
-  let turn = {
-    known: () => Promise.resolve(false),
-    integration: integrationOf(env),
-  }
-  let waits = (args: Record<string, unknown>) =>
-    ESCALATING.api_call({ integration: 'google-calendar', ...args }, turn)
-  assertEquals(await waits({ method: 'POST', path: '/freeBusy' }), undefined)
-  assertEquals(await waits({ path: '/users/me/settings' }), undefined)
-  assertEquals(
-    await waits({ method: 'DELETE', path: '/calendars/primary/events/e1' }),
-    'Send DELETE /calendars/primary/events/e1 to your google-calendar',
-  )
 })
 
 test('a call refused for want of a scope it was not granted says where to reconnect', async () => {

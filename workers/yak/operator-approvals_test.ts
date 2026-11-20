@@ -54,7 +54,14 @@ await store.g.apply([{
   recipient: {},
 }], { trusted: true })
 let tools = confirming(
-  [tool('member_add'), tool('grant'), tool('app_files'), tool('mail_send')],
+  [
+    tool('member_add'),
+    tool('grant'),
+    tool('app_files'),
+    tool('mail_send'),
+    tool('api_call'),
+    tool('gmail_send'),
+  ],
   ask,
   { known, texted: true },
 )
@@ -167,6 +174,34 @@ test('mail to a member or an address written to before sends at once; to someone
   equal(String(said).startsWith('Nothing has happened yet'), true)
   equal(texts.at(-1)!.words.startsWith('Email eve@x.com? Tap'), true)
   equal([ran.length, texts.length], [2, sent + 1])
+})
+
+test("an outside service's calls run with no tap, writes too; member_add still waits", async () => {
+  ran.length = 0
+  let sent = texts.length
+  let reply = {
+    integration: 'discord',
+    method: 'POST',
+    path: '/channels/7/messages',
+    body: { content: 'hi' },
+  }
+  let role = {
+    integration: 'discord',
+    method: 'PUT',
+    path: '/guilds/1/members/2/roles/3',
+  }
+  let mail = { to: 'eve@x.com', subject: 'hi' }
+  await named('api_call').run(reply)
+  await named('api_call').run(role)
+  await named('gmail_send').run(mail)
+  equal(ran, [
+    `api_call ${JSON.stringify(reply)}`,
+    `api_call ${JSON.stringify(role)}`,
+    `gmail_send ${JSON.stringify(mail)}`,
+  ])
+  equal(texts.length, sent)
+  await named('member_add').run({ email: 'eve@x.com' })
+  equal([ran.length, texts.length], [3, sent + 1])
 })
 
 test('in chat the link comes back in the answer, and opens only for its person signed in', async () => {

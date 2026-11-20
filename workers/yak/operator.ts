@@ -153,11 +153,7 @@ import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
-import {
-  apiCall,
-  integrationOf,
-  integrationsTold,
-} from './operator-integrations.ts'
+import { apiCall, integrationsTold } from './operator-integrations.ts'
 import { notification } from './operator-updates.ts'
 import {
   type Lending,
@@ -2261,7 +2257,6 @@ export let operating = (
               return [...people.values()].map((k) => k.email)
             }),
             texted: !!confirm,
-            integration: integrationOf(env),
           },
         ))
         : tools
