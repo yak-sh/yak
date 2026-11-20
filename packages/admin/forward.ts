@@ -16,7 +16,9 @@ export let forwarded = (
   headers.set('x-yak-credential', browser ? 'session' : 'bearer')
   let target = new URL(credential.slice(FORWARDED.length))
   target.searchParams.set('url', url)
-  return { url: target.href, init: { ...init, headers, redirect: 'error' } }
+  // The forwarder follows nothing, so a redirect arriving from it is the
+  // platform's own answer, relayed for the caller to read.
+  return { url: target.href, init: { ...init, headers, redirect: 'manual' } }
 }
 
 type Credentials = { bearer: string; session?: string }
@@ -62,9 +64,14 @@ export let forward = (doors: Forwarding) => async (request: Request) => {
   for (let key of ['authorization', 'cookie', 'host', 'x-yak-credential']) {
     headers.delete(key)
   }
+  // A session rides as both cookies a signed-in browser holds, as the
+  // direct client sends it (api.ts `head`): the apex reads only its own once
+  // the shared one stops being honored there.
   headers.set(
     mode == 'session' ? 'cookie' : 'authorization',
-    mode == 'session' ? `${COOKIE}=${secret}` : `Bearer ${secret}`,
+    mode == 'session'
+      ? `${COOKIE}=${secret}; __Host-${COOKIE}=${secret}`
+      : `Bearer ${secret}`,
   )
   let response = await (doors.fetch ?? fetch)(target.href, {
     method: request.method,

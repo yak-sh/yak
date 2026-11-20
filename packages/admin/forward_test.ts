@@ -33,7 +33,10 @@ test('forwarding adds credentials only in its private process and keeps renewal 
   let before = sent.length
   let result = await handler(request('https://yaks.app/api/fee', 'session'))
   equal(sent.length, before + 1)
-  equal(sent.at(-1)?.headers.get('cookie'), `yak_session=${session}`)
+  equal(
+    sent.at(-1)?.headers.get('cookie'),
+    `yak_session=${session}; __Host-yak_session=${session}`,
+  )
   equal(sent.at(-1)?.redirect, 'manual')
   equal(result.headers.get('set-cookie'), null)
   equal(result.headers.get('authorization'), null)
@@ -86,6 +89,7 @@ test('admin caller replaces credential placeholders with a local transport', () 
   equal(new URL(result.url).searchParams.get('url'), 'https://yaks.app/api/fee')
   equal(new Headers(result.init.headers).get('authorization'), null)
   equal(new Headers(result.init.headers).get('x-yak-credential'), 'bearer')
+  equal(result.init.redirect, 'manual')
 })
 
 test('selecting the private admin returns its transport without opening graph or vault', async () => {

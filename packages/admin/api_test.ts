@@ -24,6 +24,7 @@ import {
   codeFor,
   codeIn,
   cookieOf,
+  doomedIn,
   feeNow,
   inviteIn,
   linkFor,
@@ -304,6 +305,28 @@ test('a kernel page is read back as the words it says', () => {
     'dana & sam lose their way in',
   ])
   assertEquals(saidOn('not a page'), { title: '', lead: '' })
+})
+
+test('a redirect from a page is a refusal that says where it pointed', async () => {
+  let old = globalThis.fetch
+  let answer = (location: string) => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(null, { status: 302, headers: { location } }),
+      )) as typeof fetch
+  }
+  try {
+    answer('/login?return=%2Fspace%2Fnotes%2Fdelete')
+    let out = await assertRejects(() => doomedIn('s', 'notes'), CallError)
+    assertEquals((out as CallError).code, 'access')
+    assertStringIncludes(out.message, 'pointed to /login?return=')
+    answer('https://elsewhere.example/')
+    let away = await assertRejects(() => doomedIn('s', 'notes'), CallError)
+    assertEquals((away as CallError).code, 'redirect')
+    assertStringIncludes(away.message, 'pointed to https://elsewhere.example/')
+  } finally {
+    globalThis.fetch = old
+  }
 })
 
 // The sliding session, this end (T-35380): the platform re-mints a cookie past

@@ -676,6 +676,10 @@ export let setTunnel = (
 // is read back off that answer, so a new door's failure names itself.
 let said = async <T>(answer: Promise<Response>): Promise<T> => {
   let r = await answer
+  if (redirected(r.status)) {
+    await r.body?.cancel()
+    throw pointed(r)
+  }
   let body = await bodyOf(r)
   if (r.status >= 400 && r.status < 500) {
     let refusal = refusedResponse(r, body)
@@ -895,6 +899,10 @@ export let storeQuery = async (
   }
   let url = `${storeUrl(at, '/query')}?${filters.join('&')}`
   let r = await sent(url, session)
+  if (redirected(r.status)) {
+    await r.body?.cancel()
+    throw pointed(r)
+  }
   let body = await bodyOf(r)
   if (r.status >= 400 && r.status < 500) {
     let refusal = refusedResponse(r, body)
@@ -1027,12 +1035,27 @@ export let plain = (s: string) =>
   s.replaceAll('&#39;', "'").replaceAll('&quot;', '"')
     .replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&')
 
-// What a page answered, or the reason it would not: a refusal is a sentence
-// on the page itself, and 302 and 404 are the two answers that carry none.
-let read = (status: number, html: string) => {
-  if (status == 302) {
-    throw new CallError('access', 'this account is not signed in')
+// Where a redirect pointed, read as a refusal: a caller here never follows
+// one, and the platform's own sign-in page is the one place it expects.
+export let pointed = (r: Response) => {
+  let to = r.headers.get('location') ?? '(nowhere)'
+  if (/^(?:https:\/\/[^/]+)?\/login(?:[?/]|$)/.test(to)) {
+    return new CallError(
+      'access',
+      `this account is not signed in (it pointed to ${to})`,
+    )
   }
+  let from = r.url ? new URL(r.url).pathname : 'the platform'
+  return new CallError('redirect', `${from} pointed to ${to}`)
+}
+
+let redirected = (status: number) => status >= 300 && status < 400
+
+// What a page answered, or the reason it would not: a refusal is a sentence
+// on the page itself, and a redirect and 404 are the answers that carry none.
+let read = (r: Response, html: string) => {
+  let { status } = r
+  if (redirected(status)) throw pointed(r)
   if (status == 404) {
     throw new CallError('missing', 'no such space, or not this account\u2019s')
   }
@@ -1060,7 +1083,7 @@ export let doomedIn = async (session: string, slug: string) => {
     true,
   )
   let html = await r.text()
-  read(r.status, html)
+  read(r, html)
   return listedOn(html).map(plain)
 }
 
@@ -1073,5 +1096,5 @@ export let close = async (session: string, slug: string) => {
     session,
     true,
   )
-  return read(r.status, await r.text())
+  return read(r, await r.text())
 }

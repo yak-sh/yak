@@ -557,8 +557,8 @@
       "tool": true,
       "noun": "admin",
       "verb": "delete",
-      "title": "Close a space for good",
-      "description": "Close a space: its apps, their data, and its address. What would go is listed first, the same list the confirmation letter carries to a person whose agent asked.\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none.",
+      "title": "Move a space to the trash",
+      "description": "Move a space this account owns to the trash: its apps, their data, and its address, restorable until it is erased. What would go is listed first, the same list the confirmation letter carries to a person whose agent asked.\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none. A space another account owns answers as missing, the admin's included.",
       "input": {
         "space": {
           "type": "string",
