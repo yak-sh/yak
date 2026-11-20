@@ -94,7 +94,7 @@ test('a space’s tables are read at once, and nothing past a table’s last pag
   equal(lines, ['ada  2 tables, 4 rows'])
 })
 
-test('a long table is read in ranges sized by its first page, the last open past its tip', () => {
+test('a range is split by how dense its first page ran, the last ending where it did', () => {
   equal(ranges(0, 2, 10, 8), [
     { after: 2, until: 4 },
     { after: 4, until: 6 },
@@ -103,6 +103,11 @@ test('a long table is read in ranges sized by its first page, the last open past
   ])
   equal(ranges(0, 2, 100, 3).map((r) => r.until), [35, 68, undefined])
   equal(ranges(0, 50, 60, 8), [{ after: 50, until: undefined }])
+  equal(ranges(4, 5, 8, 8, 8), [
+    { after: 5, until: 6 },
+    { after: 6, until: 7 },
+    { after: 7, until: 8 },
+  ])
 })
 
 test('a long table’s ranges are read at once, and every row arrives once', async () => {

@@ -102,21 +102,22 @@ let gated = (n: number) => {
   }
 }
 
-// The rowid ranges past `last` a table is read in, sized by its first page,
-// which covered (after, last]. The final range runs past the tip, for rows
-// written while the copy reads.
+// The rowid ranges (last, end] is read in, sized by the page that covered
+// (after, last], at most `most` of them. The final one ends at `until`, which
+// a table's own read leaves open, for rows written while the copy reads.
 export let ranges = (
   after: number,
   last: number,
-  tip: number,
+  end: number,
   most: number,
+  until?: number,
 ) => {
-  let pages = Math.ceil((tip - last) / Math.max(1, last - after))
+  let pages = Math.ceil((end - last) / Math.max(1, last - after))
   let n = Math.max(1, Math.min(most, pages))
-  let span = Math.ceil((tip - last) / n)
+  let span = Math.ceil((end - last) / n)
   return Array.from({ length: n }, (_, i) => ({
     after: last + i * span,
-    until: i == n - 1 ? undefined : last + (i + 1) * span,
+    until: i == n - 1 ? until : last + (i + 1) * span,
   }))
 }
 
@@ -167,14 +168,16 @@ export let copy = async (o: {
       going()
       if (broke) throw new Interrupted(`${space.slug}'s copy stopped`)
     }
-    // A range of a table read a page at a time; a table's first page, once
-    // its tip is known, splits what is left into ranges read at once.
+    // A range of a table read a page at a time. Once a page says how dense
+    // its rows run, what is left of the range, to its end or the table's
+    // tip, is split into ranges read at once, each sized again by its own
+    // first page.
     let read = async (
       t: Plan['tables'][number],
       after: number,
       until?: number,
     ): Promise<void> => {
-      for (let first = until == null && after == 0;; first = false) {
+      for (;;) {
         reading()
         let next = await gate(() =>
           o.page(space.eid, { table: t.name, after, until })
@@ -189,9 +192,11 @@ export let copy = async (o: {
         arrived(sql, t, next.rows)
         rows += next.rows.length
         if (next.ended) return
-        let tip = tips?.[t.name]
-        if (first && tip && tip > next.last) {
-          let parts = ranges(after, next.last, tip, o.ranges ?? RANGES)
+        let end = until ?? tips?.[t.name] ?? 0
+        let parts = end > next.last
+          ? ranges(after, next.last, end, o.ranges ?? RANGES, until)
+          : []
+        if (parts.length > 1) {
           return all(parts.map((r) => read(t, r.after, r.until)))
         }
         after = next.last

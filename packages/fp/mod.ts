@@ -377,10 +377,12 @@ export let groupBy = <X, K>(
 
 /// toBase64(new Uint8Array([104, 105])) -> 'aGk='
 /**
- * Bytes as base64: `Uint8Array.prototype.toBase64`, which browsers before
- * Chrome 140 and Safari 18.2 lack.
+ * Bytes as base64: `Uint8Array.prototype.toBase64` where the runtime has it,
+ * which browsers before Chrome 140 and Safari 18.2 lack.
  */
 export let toBase64 = (bytes: Uint8Array): string => {
+  let native = (bytes as { toBase64?: () => string }).toBase64
+  if (native) return native.call(bytes)
   let text = ''
   for (let i = 0; i < bytes.length; i += 0x8000) {
     text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
@@ -390,11 +392,16 @@ export let toBase64 = (bytes: Uint8Array): string => {
 
 /// fromBase64('aGk=') -> new Uint8Array([104, 105])
 /**
- * The bytes base64 text names: `Uint8Array.fromBase64`, which browsers before
- * Chrome 140 and Safari 18.2 lack.
+ * The bytes base64 text names: `Uint8Array.fromBase64` where the runtime has
+ * it, which browsers before Chrome 140 and Safari 18.2 lack.
  */
-export let fromBase64 = (text: string): Uint8Array<ArrayBuffer> =>
-  Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+export let fromBase64 = (text: string): Uint8Array<ArrayBuffer> => {
+  let native = (Uint8Array as { fromBase64?: (t: string) => Uint8Array })
+    .fromBase64
+  return native
+    ? native(text) as Uint8Array<ArrayBuffer>
+    : Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+}
 
 /// toBase64url(new Uint8Array([251, 255])) -> '-_8'
 /** Bytes as base64url (RFC 4648 §5), without padding: safe in a URL, a

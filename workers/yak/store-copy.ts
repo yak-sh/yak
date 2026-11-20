@@ -11,6 +11,7 @@ import {
   page,
   type Plan,
   plan,
+  planFor,
   raised,
   tips,
 } from '@yaks/durable-object'
@@ -41,11 +42,11 @@ let BYTES = 1024 * 1024
  * its tables, or a refusal of a table it does not hold, which a file nobody
  * made holds none of. */
 export let copying = (sql: Driver, asked: Asked): Response => {
-  let made = plan(sql)
   if (asked.table == null) {
+    let made = plan(sql)
     return Response.json({ plan: made, tips: tips(sql, made) })
   }
-  let t = made.tables.find((t) => t.name == asked.table)
+  let t = planFor(sql, asked.table)
   if (!t) {
     return Response.json({
       error: { code: 'no_table', message: `no table ${asked.table}` },

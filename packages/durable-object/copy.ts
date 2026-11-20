@@ -27,6 +27,7 @@ import {
 } from '@yaks/sql'
 import { reserved } from './sql.ts'
 import { unit } from '@yaks/sqlite/unit'
+import { fromBase64, toBase64 } from '@yaks/fp'
 
 /** A value on its way between objects: a blob travels as base64. */
 export type Cell = string | number | null | { bytes: string }
@@ -62,30 +63,10 @@ let virtual = (sql: unknown) => /^create\s+virtual\b/i.test(String(sql))
  * wrong. */
 export let plan = (driver: Driver): Plan => {
   let objects = schema(driver)
-  let fts = objects.filter((o) => virtual(o.sql)).map((o) => {
-    let [name, sql] = [String(o.name), String(o.sql)]
-    if (!/\busing\s+fts5\b/i.test(sql)) {
-      throw new Error(`${name} cannot be copied row by row: ${sql}`)
-    }
-    return { name, sql }
-  })
-  let shadow = (name: string) =>
-    fts.some((f) =>
-      ['data', 'idx', 'content', 'docsize', 'config'].some((s) =>
-        name == `${f.name}_${s}`
-      )
-    )
-  let tables = objects.filter((o) =>
-    o.type == 'table' && !virtual(o.sql) && !shadow(String(o.name))
-  ).map((o) => {
-    let [name, sql] = [String(o.name), String(o.sql)]
-    if (/\bwithout\s+rowid\s*$/i.test(sql)) {
-      throw new Error(`${name} cannot be copied row by row: ${sql}`)
-    }
-    let cols = driver.query({ t: 'pragma', name: 'table_xinfo', arg: name })
-      .filter((c) => Number(c.hidden) == 0).map((c) => String(c.name))
-    return { name, sql, cols }
-  })
+  let fts = ftsOf(objects)
+  let tables = objects.filter((o) => rowed(o, fts)).map((o) =>
+    tableOf(driver, o)
+  )
   let sequences = objects.some((o) => /\bautoincrement\b/i.test(String(o.sql)))
     ? driver.query(select({
       cols: [col('name'), col('seq')],
@@ -102,19 +83,53 @@ export let plan = (driver: Driver): Plan => {
   }
 }
 
-let encoded = (bytes: Uint8Array) => {
-  let text = ''
-  for (let b of bytes) text += String.fromCharCode(b)
-  return btoa(text)
+/** One table of the plan, as `plan` would give it, or null when the plan has
+ * none of that name: what a page of it asks, without a plan's every table. */
+export let planFor = (
+  driver: Driver,
+  name: string,
+): Plan['tables'][number] | null => {
+  let objects = schema(driver)
+  let o = objects.find((o) => o.name == name)
+  return o && rowed(o, ftsOf(objects)) ? tableOf(driver, o) : null
+}
+
+type Listed = ReturnType<typeof schema>[number]
+
+let ftsOf = (objects: Listed[]) =>
+  objects.filter((o) => virtual(o.sql)).map((o) => {
+    let [name, sql] = [String(o.name), String(o.sql)]
+    if (!/\busing\s+fts5\b/i.test(sql)) {
+      throw new Error(`${name} cannot be copied row by row: ${sql}`)
+    }
+    return { name, sql }
+  })
+
+// Whether an object is a table whose rows travel: not a full-text index, and
+// not one of the shadow tables an index is made anew from.
+let rowed = (o: Listed, fts: Plan['fts']) =>
+  o.type == 'table' && !virtual(o.sql) &&
+  !fts.some((f) =>
+    ['data', 'idx', 'content', 'docsize', 'config'].some((s) =>
+      o.name == `${f.name}_${s}`
+    )
+  )
+
+let tableOf = (driver: Driver, o: Listed) => {
+  let [name, sql] = [String(o.name), String(o.sql)]
+  if (/\bwithout\s+rowid\s*$/i.test(sql)) {
+    throw new Error(`${name} cannot be copied row by row: ${sql}`)
+  }
+  let cols = driver.query({ t: 'pragma', name: 'table_xinfo', arg: name })
+    .filter((c) => Number(c.hidden) == 0).map((c) => String(c.name))
+  return { name, sql, cols }
 }
 
 let cell = (v: unknown): Cell =>
-  v instanceof Uint8Array ? { bytes: encoded(v) } : v as Cell
+  v instanceof Uint8Array ? { bytes: toBase64(v) } : v as Cell
 
 let bound = (c: Cell) =>
-  c != null && typeof c == 'object'
-    ? Uint8Array.from(atob(c.bytes), (b) => b.charCodeAt(0))
-    : c
+  c != null && typeof c == 'object' ? fromBase64(c.bytes) : c
 
 // A row's mark on its table's running digest (a 32-bit FNV-1a). It finds a copy
 // gone wrong; nothing here is adversarial.
@@ -164,7 +179,8 @@ export let page = (
     rows,
     last: rows.length ? rows[rows.length - 1][0] as number : null,
     held: { rows: n, digest },
-    ended: read.length < limit && rows.length == read.length,
+    ended: rows.length == read.length &&
+      (read.length < limit || (until != null && rows.at(-1)?.[0] == until)),
   }
 }
 
@@ -308,8 +324,8 @@ export let arrived = (
 }
 
 /** The far end's last step: indexes, triggers, views, counters and statistics,
- * foreign keys on, and every table's tally to compare with the source's. */
-export let ending = (driver: Driver, p: Plan): Record<string, Copied> => {
+ * and foreign keys on. */
+export let ending = (driver: Driver, p: Plan): void => {
   unit(driver, () => {
     for (let sql of p.views) driver.query({ t: 'catalogued', sql })
     for (let { name, sql } of p.fts) {
@@ -332,10 +348,5 @@ export let ending = (driver: Driver, p: Plan): Record<string, Copied> => {
     }
   })
   driver.query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
-  let tallies: Record<string, Copied> = {}
-  for (let t of p.tables) {
-    tallies[t.name] = tallied(driver, t)
-    if (tallies[t.name].rows) driver.query({ t: 'analyze', table: t.name })
-  }
-  return tallies
+  for (let t of p.tables) driver.query({ t: 'analyze', table: t.name })
 }

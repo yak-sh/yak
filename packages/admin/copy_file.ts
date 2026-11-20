@@ -15,6 +15,11 @@ export let copyFile = (to: string, slug: string): Target => {
   let sql
   try {
     sql = open(path, { wal: false })
+    // A private file, published only once whole, needs no commit to reach the
+    // disk: a commit a page and an ANALYZE a table each waited on an fsync,
+    // a quarter of a copy's time. Neither pragma stays with the file.
+    sql.query({ t: 'pragma', name: 'synchronous', value: 'off' })
+    sql.query({ t: 'pragma', name: 'journal_mode', value: 'memory' })
   } catch (error) {
     fs.removeSync(dir, { recursive: true })
     throw error

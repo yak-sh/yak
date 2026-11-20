@@ -8,9 +8,11 @@ import {
   overwritten,
   page,
   plan,
+  planFor,
   raised,
   reread,
   stale,
+  tallied,
 } from './copy.ts'
 import { driver } from './sql.ts'
 import { durable } from './testing.ts'
@@ -100,7 +102,9 @@ let copyOf = (from: ReturnType<typeof driver>) => {
     }
     here[t.name] = held
   }
-  return { to, here, there: ending(to, p), p }
+  ending(to, p)
+  let there = Object.fromEntries(p.tables.map((t) => [t.name, tallied(to, t)]))
+  return { to, here, there, p }
 }
 
 test('a copy holds the same rows, rowids and blobs, firing nothing', () => {
@@ -164,4 +168,12 @@ test('a second look sends only what changed, deletions included', () => {
   equal(fired.map((c) => c.table), ['child'])
   for (let c of fired) overwritten(to, p, c, reread(from, p, c))
   equal(stale(to, p, chunks(from, p)), [])
+})
+
+test('one table of the plan is had alone, and nothing the plan leaves out', () => {
+  let from = source(), p = plan(from)
+  for (let t of p.tables) equal(planFor(from, t.name), t)
+  equal(planFor(from, 'text_fts_data'), null)
+  equal(planFor(from, 'text_fts'), null)
+  equal(planFor(from, 'nothing'), null)
 })

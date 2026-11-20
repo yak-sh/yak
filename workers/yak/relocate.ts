@@ -57,6 +57,7 @@ import {
   reread,
   retried,
   stale,
+  tallied,
 } from '@yaks/durable-object'
 import { col, eq, select, table, val } from '@yaks/sql'
 
@@ -136,7 +137,13 @@ let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
       for (let p of told.pages) arrived(sql, p.table, p.rows)
       return Response.json({ written })
     case 'end':
-      return Response.json({ tallies: ending(sql, told.plan), written })
+      ending(sql, told.plan)
+      return Response.json({
+        tallies: Object.fromEntries(
+          told.plan.tables.map((t) => [t.name, tallied(sql, t)]),
+        ),
+        written,
+      })
     case 'stale':
       return Response.json(stale(sql, told.plan, told.chunks))
     case 'replace':
