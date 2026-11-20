@@ -501,6 +501,60 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
   )
 })
 
+// A deploy moving the directory's serving copy fails every fenced write in
+// the runtime's own words for minutes (T-1630): each tick is a line in the
+// log, the wake is reported once it has been refused for STUCK, and once.
+test('a wake the runtime refuses is reported only once refused for STUCK', async () => {
+  let rows: Bundle[] = []
+  let p = platform('wake moving', {
+    CLOCK: { ...system, now: () => at('05:00') },
+    ERRORS: {
+      send: (sample: Bundle[]) => (rows.push(...sample), Promise.resolve()),
+    },
+  })
+  let store = await directory(p)
+  await meta(p.env).apply([{
+    entity: { eid: 'yak-meter' },
+    wake: { at: iso('05:00'), every: '@hourly' },
+  }])
+  let moving = true
+  ;(await store.door).graph.use({
+    name: 'moving-copy',
+    hooks: {
+      precondition: (rows) => {
+        if (
+          moving && rows.some((r) => r.entity.eid == 'yak-meter' && r.fired)
+        ) {
+          throw new Error('internal error; reference = moving')
+        }
+        return rows
+      },
+    },
+  })
+  let told = async (now: number) => {
+    let warn = console.warn
+    console.warn = () => {}
+    try {
+      await within(p.env, {}, () => store.tick(now), clock())
+    } finally {
+      console.warn = warn
+    }
+    return rows.splice(0).filter((r) => r.exception)
+      .map((r) => (r.exception as { value: string }).value)
+  }
+  assertEquals(await told(at('05:00')), [])
+  assertEquals(await told(at('05:00') + STUCK - 1), [])
+  let since = iso('05:00')
+  assertEquals(await told(at('05:00') + STUCK), [
+    `wake yak-meter: the runtime has refused its firing since ${since}`,
+  ])
+  assertEquals(await told(at('05:00') + STUCK + Store.RETRY), [])
+  // The wake fires once the runtime answers, and a new streak starts afresh.
+  moving = false
+  assertEquals(await told(at('05:00') + STUCK + 2 * Store.RETRY), [])
+  assert((await wake(p.env, 'yak-meter')).wake.at! > since)
+})
+
 test('a write arms the object for the wake it just heard, and the alarm fires it', async () => {
   let p = platform('wake alarm')
   await directory(p)

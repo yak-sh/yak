@@ -47,6 +47,7 @@ import { KERNEL, meta } from './meta.ts'
 import { defect } from './defects.ts'
 import { BucketUnavailable } from '@yaks/blob'
 import { Unavailable } from '@yaks/cloudflare/api'
+import { opaque } from '@yaks/durable-object/resets'
 import type { Wake as Schedule } from '@yaks/wake'
 
 /** A directory schedule row, with the tags its job matches. */
@@ -207,6 +208,41 @@ let unanswered = async (
  * whether its runs died or Cloudflare could not answer them: longer than a
  * burst of deploys, shorter than anyone waits for a sweep. */
 export let STUCK = 15 * 60_000
+
+/** What a store does with each wake its tick left refused: the failure to
+ * report now, or null for one that waits. The runtime failing a firing in its
+ * own words (@yaks/durable-object `opaque`), through every resend, is what a
+ * deploy moving an object does for a while, the directory's serving copy
+ * included, and the tick comes back for the wake a minute on: so it is a line
+ * in the log until the wake has been refused for {@link STUCK}, and then
+ * reported once, with the failure as its cause. Any other refusal is reported
+ * at once. A streak is this incarnation's, held in memory, since the write
+ * that would keep it is what the runtime refuses; a wake that fires ends its
+ * own. */
+export let refusals = () => {
+  let streaks = new Map<string, { since: number; told: boolean }>()
+  return {
+    fired: (wake: string) => void streaks.delete(wake),
+    refused: (wake: string, error: unknown, now: number): unknown => {
+      if (!opaque(error)) return error
+      let streak = streaks.get(wake) ?? { since: now, told: false }
+      streaks.set(wake, streak)
+      let since = new Date(streak.since).toISOString()
+      if (streak.told || now - streak.since < STUCK) {
+        console.warn(
+          `wake ${wake}: refused since ${since}: ${error.message}; ` +
+            'the next tick tries again',
+        )
+        return null
+      }
+      streak.told = true
+      return new Error(
+        `wake ${wake}: the runtime has refused its firing since ${since}`,
+        { cause: error },
+      )
+    },
+  }
+}
 
 /** How long a run goes before a job with more to do stops and fires again:
  * well inside the runtime's fifteen minutes for an alarm. */

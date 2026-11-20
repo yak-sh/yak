@@ -364,7 +364,7 @@ import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
 import { conditionalWakes } from './conditional-wakes.ts'
-import { resumed } from './wake.ts'
+import { refusals, resumed } from './wake.ts'
 import { ledger } from './ledger.ts'
 import {
   ACROSS,
@@ -1631,8 +1631,12 @@ export class Store extends Durable {
               return result
             } catch (e) {
               // The runtime's own internal error is outside this handler, so
-              // the pool tries it again and reports it only if it persists.
-              throw opaque(e) ? Object.assign(e, { retry: {} }) : e
+              // the pool tries it again and reports it only if it persists:
+              // a minute apart, so its tries outlast a deploy moving the
+              // objects it calls, which can refuse them for minutes.
+              throw opaque(e)
+                ? Object.assign(e, { retry: { after: Store.RETRY } })
+                : e
             }
           },
         ]),
@@ -3192,11 +3196,17 @@ export class Store extends Durable {
 
   #fire = async (now: number): Promise<Ticked> => {
     let fired = await tick(this.#firing, now)
+    for (let { entity } of fired.fired) this.#refusals.fired(entity.eid)
     for (let { wake, error } of fired.refused) {
-      await this.#broke(`wake ${wake.entity.eid}`, error)
+      let eid = wake.entity.eid
+      let failure = this.#refusals.refused(eid, error, now)
+      if (failure != null) await this.#broke(`wake ${eid}`, failure)
     }
     return fired
   }
+
+  // Each refused wake's streak, reported once it lasts (wake.ts `refusals`).
+  #refusals = refusals()
 
   // A tick that refused an occurrence comes back for it a minute on.
   #again = (fired: Ticked, now: number) =>
