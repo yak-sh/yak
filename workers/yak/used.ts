@@ -12,6 +12,7 @@ import { answered, KERNEL } from './meta.ts'
 import { background, defect, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
+import { system } from '@yaks/fp'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
@@ -160,10 +161,32 @@ let starting = (path: string, request: string) =>
   )
 }
 
+// A store woken a moment ago is still up. A burst of views (a crawler
+// walking an app's pages) sends its store one wake per isolate per `AWAKE`,
+// not one per view queued behind the reads the views make (T-1112).
+let AWAKE = 10_000
+let WOKEN = 1024
+let woken = new Map<string, number>()
+let waking = starting(WAKE, 'store wake')
+
 /** Boot the store `store` names (door.ts `WAKE`) for a page's scripts, whose
  * first `/api/` call would otherwise wait out its whole start and boot
- * (T-149697, T-150366). */
-export let wake = starting(WAKE, 'store wake')
+ * (T-149697, T-150366), unless this isolate woke it in the last ten seconds. */
+export let wake = (
+  env: Partial<Env>,
+  store: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  let now = (env.CLOCK ?? system).now()
+  if (now - (woken.get(store) ?? -Infinity) < AWAKE) return
+  woken.delete(store)
+  woken.set(store, now)
+  for (let old of woken.keys()) {
+    if (woken.size <= WOKEN) break
+    woken.delete(old)
+  }
+  waking(env, store, retain)
+}
 
 /** Start the object a birth names (door.ts `WARM`) for its first write
  * (T-143307). Its store holds nothing yet, and the start reads nothing, so one

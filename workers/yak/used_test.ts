@@ -1,11 +1,18 @@
 import { line } from '@yaks/query'
-import { equal, test, until } from '@yaks/testing'
+import { clock, equal, test, until } from '@yaks/testing'
 import { ownedBy } from './directory-fixture.ts'
 import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { useDoc } from '@yaks/platform/directory-vocab'
-import { recordUse, scheduleBy, scheduleUse, useUntil, using } from './used.ts'
+import {
+  recordUse,
+  scheduleBy,
+  scheduleUse,
+  useUntil,
+  using,
+  wake,
+} from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, storeOf } from './door.ts'
 import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
@@ -482,4 +489,27 @@ test('a write to an app stamps when its store changed, and an install does not',
   equal(again.status, 200)
   await again.body?.cancel()
   equal((await row()).changed!.at, at)
+})
+
+test('a store woken a moment ago is not woken again for every view', async () => {
+  let woke: string[] = []
+  let time = clock()
+  let env = {
+    CLOCK: time,
+    STORE: {
+      idFromName: (name: string) => name,
+      get: (name: string) => ({
+        fetch: () => (woke.push(name), Promise.resolve(new Response(null))),
+      }),
+    },
+  } as never
+  let held: Promise<void>[] = []
+  let view = (store: string) => wake(env, store, (w) => void held.push(w))
+  view('a'), view('a'), view('b')
+  await time.advance(9_999)
+  view('a')
+  await time.advance(1)
+  view('a')
+  await Promise.all(held)
+  equal(woke.sort(), ['a', 'a', 'b'])
 })

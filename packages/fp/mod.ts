@@ -625,6 +625,18 @@ export let heard = (
   return () => cancel()
 }
 
+/** What `asking` answers within `ms` heard on `clock` ({@link heard}), or
+ * null once they lapse. What it throws in time is thrown. */
+export let within = <T>(
+  asking: Promise<T>,
+  ms: number,
+  clock?: Clock,
+): Promise<T | null> =>
+  new Promise<T | null>((resolve, reject) => {
+    let cancel = heard(ms, () => resolve(null), clock)
+    asking.then(resolve, reject).finally(cancel)
+  })
+
 /** A timer cut short by a signal; a cancelled wait resolves without work. */
 export let sleep = (
   ms: number,

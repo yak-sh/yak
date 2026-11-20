@@ -297,9 +297,11 @@ runtime's, which everything else in the runtime shares.
 1, doubling up to 300000. `sleep(ms, signal?, clock?)` returns a promise that
 resolves when the clock's timer expires or the signal aborts; aborting does not
 reject. An already aborted signal resolves without waiting.
+`within(asking, ms, clock?)` is what `asking` answers within `ms` of the clock's
+time (`heard`), or null once they lapse.
 
 ```ts
-import { backoff, sleep } from '@yaks/fp'
+import { backoff, sleep, within } from '@yaks/fp'
 import { clock, equal } from '@yaks/testing'
 
 equal([1, 2, 3, 10].map(backoff), [1000, 2000, 4000, 300000])
@@ -314,6 +316,11 @@ let slept = sleep(60_000, undefined, time).then(() => woke = true)
 await time.advance(60_000)
 await slept
 equal([woke, time.now()], [true, 60_000])
+
+let late = within(new Promise(() => {}), 2000, time)
+await time.advance(1000)
+await time.advance(1000)
+equal([await late, await within(Promise.resolve(1), 2000, time)], [null, 1])
 ```
 
 ## Shared reads

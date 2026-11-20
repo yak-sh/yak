@@ -33,7 +33,7 @@
  * @module
  */
 import { evicted, jittered, retried } from '@yaks/durable-object/resets'
-import { type Clock, heard } from '@yaks/fp'
+import { type Clock, within } from '@yaks/fp'
 import type { Purged } from './purge.ts'
 
 // What `cf-cache-status` says of an answer the cache gave: a fresh one, or a
@@ -146,7 +146,9 @@ export type Through = {
   clock?: Clock
   /** told of a status Cloudflare's cache answered for want of an answer */
   failed?: (res: Response, req: Request) => void
-  /** how long a read waits on the cache, in ms; 5 s unless said */
+  /** how long a read waits on the cache, in ms; 5 s unless said. Infinity
+   * waits the hop out, for a read only the entrypoint's origin can answer,
+   * which answering in-process would ask a second time. */
   patience?: number
   /** told of a read the cache did not answer within `patience` */
   held?: (req: Request, ms: number) => void
@@ -188,7 +190,9 @@ export let through = async (
       evicted,
       jittered(clock),
     )
-    let answer = read ? await within(asking, patience, clock) : await asking
+    let answer = read && patience < Infinity
+      ? await within(asking, patience, clock)
+      : await asking
     if (!answer) {
       stop.abort()
       asking.then((late) => late.body?.cancel(), () => {})
@@ -203,14 +207,6 @@ export let through = async (
   }
   return await local(req)
 }
-
-// What `asking` answers within `ms` heard on `clock` (@yaks/fp `heard`), or
-// null once they lapse.
-let within = <T>(asking: Promise<T>, ms: number, clock?: Clock) =>
-  new Promise<T | null>((resolve, reject) => {
-    let cancel = heard(ms, () => resolve(null), clock)
-    asking.then(resolve, reject).finally(cancel)
-  })
 
 /** What the runtime lends an entrypoint whose cache is on: `ctx.cache`. */
 export type EntryCache = { purge(o: { tags: string[] }): Promise<Purged> }

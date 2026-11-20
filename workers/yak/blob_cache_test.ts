@@ -254,10 +254,8 @@ test('the gateway asks Files about an app anyone may read, and the store when Fi
       eid,
     )
   assertEquals([(await gateway('yes'))?.address, asked], [sha, 0])
-  assertEquals(
-    String(await gateway('failed').catch((e) => e)),
-    `Error: ${overloaded}`,
-  )
+  // A store that fails is answered with the yes heard a moment ago.
+  assertEquals([(await gateway('failed'))?.address, asked], [sha, 0])
   assertEquals([(await gateway('no'))?.address, asked], [sha, 1])
   assertEquals([(await gateway('failed', 'private'))?.address, asked], [
     sha,

@@ -54,6 +54,7 @@ import { drawn, ICON_SVG } from './raster.ts'
 import { type Config, parse } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 import { sharing } from './lib/shared.ts'
+import { system, within } from '@yaks/fp'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
@@ -185,23 +186,22 @@ export let servesSaid = (dir?: string) =>
 export let door = (env: Env): Fetcher => ({
   fetch: (req) => {
     hop('files')
-    return elapsed('files_wait', async () =>
-      relayed(
-        // Request.cache is not carried across a service binding. Honor it
-        // before the hop, where a fresh servability read still knows it.
-        await through(
-          req.cache == 'no-store' ? undefined : env.FILES,
-          req,
-          (asked) => fetch(asked, env),
-          {
-            clock: env.CLOCK,
-            failed: unanswered,
-            held,
-          },
-        ),
-      ))
+    return elapsed('files_wait', () => trip(env, req))
   },
 })
+
+// One trip through `door`, uncounted. `patience` is `through`'s.
+let trip = async (env: Env, req: Request, patience?: number) =>
+  relayed(
+    // Request.cache is not carried across a service binding. Honor it
+    // before the hop, where a fresh servability read still knows it.
+    await through(
+      req.cache == 'no-store' ? undefined : env.FILES,
+      req,
+      (asked) => fetch(asked, env),
+      { clock: env.CLOCK, failed: unanswered, held, patience },
+    ),
+  )
 
 // A files cache that answered for want of an answer from Files.
 let unanswered = (cached: Response, req: Request) =>
@@ -374,9 +374,39 @@ export let keptBytes = async (
   throw await answered(r)
 }
 
+// A page of three hundred images asks its app's store three hundred times
+// whether each is served (`serves`), once Files' cache lets each yes go, and a
+// burst of views asks as often again for each view. An isolate shares one ask
+// per upload among the reads that want it at once, and remembers the last yes
+// it heard. When the store fails, or has not said within `GLANCE`, that yes
+// answers: a store overloaded by the burst neither takes every image down with
+// it nor is asked a second time in-process (`through` waits the hop out). With
+// no yes heard, a read waits `PATIENCE` for the store, then fails. Freshness
+// stays Files' cache's (`SERVED`); a yes heard answers only for a store that
+// cannot (T-1112).
+let asking = new Map<string, Promise<Representation | null>>()
+let heard = new Map<string, { rep: Representation; at: number }>()
+let reported = new WeakSet<object>()
+let HEARD = 4096
+let STANDS = 10 * 60_000
+let GLANCE = 1_000
+let PATIENCE = 5_000
+
+let remember = (url: string, rep: Representation | null, at: number) => {
+  heard.delete(url)
+  if (!rep) return
+  heard.set(url, { rep, at })
+  for (let old of heard.keys()) {
+    if (heard.size <= HEARD) break
+    heard.delete(old)
+  }
+}
+
 /** The representation `rep` of the bytes at `sha` that an app anyone may
  * read still serves, as this part keeps it, or none known (@yaks/blob/upload
- * `servable`). A store that could not say throws what it said. */
+ * `servable`). A store that could not say throws what it said, unless this
+ * isolate heard a yes for it in the last ten minutes, which answers instead;
+ * a fresh read (`cache` no-store) is answered only by the store. */
 export let servableOf = async (
   env: Env,
   app: { eid: string },
@@ -385,11 +415,62 @@ export let servableOf = async (
   rep: string,
   cache?: RequestCache,
 ): Promise<Representation | null> => {
-  let r = await door(env).fetch(
-    new Request(servableAt(app.eid, sha, rep), {
-      cache,
-      headers: { [STORE]: JSON.stringify(store) },
-    }),
+  let url = servableAt(app.eid, sha, rep)
+  let now = () => (env.CLOCK ?? system).now()
+  let last = cache == 'no-store' ? undefined : heard.get(url)
+  let stale = last && now() - last.at < STANDS ? last.rep : null
+  // Shared while it travels; the next read after it lands asks again.
+  let key = `${cache ?? ''} ${url}`
+  let ask = sharing(asking, key, async () => {
+    let said = await askedServable(env, url, store, cache)
+    remember(url, said, now())
+    return said
+  })
+  let landed = () => void (asking.get(key) == ask && asking.delete(key))
+  ask.then(landed, landed)
+  // The store's failure, met once per ask however many reads it answers.
+  let tell = (error: unknown) => {
+    if (reported.has(ask)) return
+    reported.add(ask)
+    caught(error, { request: 'GET servable', cache_url: url })
+  }
+  hop('files')
+  let answer
+  try {
+    answer = await elapsed('files_wait', () =>
+      within(
+        ask.then((rep) => ({ rep })),
+        stale ? GLANCE : PATIENCE,
+        env.CLOCK,
+      ))
+  } catch (e) {
+    if (!stale) throw e
+    tell(e)
+    return stale
+  }
+  if (answer) return answer.rep
+  let late = new Error(
+    `the app's store did not say within ${
+      (stale ? GLANCE : PATIENCE) / 1000
+    } s whether an upload is served`,
+  )
+  if (!stale) throw late
+  tell(late)
+  return stale
+}
+
+// Files' answer, waited out: only the store can give it, and the hop a
+// read gives up on goes on asking it.
+let askedServable = async (
+  env: Env,
+  url: string,
+  store: StoreAt,
+  cache?: RequestCache,
+): Promise<Representation | null> => {
+  let r = await trip(
+    env,
+    new Request(url, { cache, headers: { [STORE]: JSON.stringify(store) } }),
+    Infinity,
   )
   if (r.ok) return await r.json() as Representation
   if (r.status == 404) {
