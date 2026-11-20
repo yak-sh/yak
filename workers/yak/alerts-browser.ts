@@ -1,7 +1,7 @@
 // Alerts on the device a person is holding (operator-alerts.ts): allowing a
 // browser's notifications, the offer in the conversation that does it in one
-// press (operator-page.ts `alertsOffer`), and the installed page's icon
-// showing how many things need them. Apple delivers web push only to a page
+// press once the Operator starts long work (operator-page.ts `alertsOffer`),
+// and the installed page's icon showing how many things need them. Apple delivers web push only to a page
 // added to an iPhone's Home Screen, after a press there, so in an iPhone's
 // browser the offer says to add it first.
 import { CallError } from '@yaks/tools/errors'
@@ -127,29 +127,85 @@ let alerting = async (on: boolean) => {
   return !!await worker?.pushManager.getSubscription()
 }
 
+/** The event the chat sends when the Operator starts work that will take a
+ * while (operator-aside.ts `long`), which is when the offer asks; the chat
+ * also marks the offer `data-due`, in case it said so before this ran. */
+export let LONG_WORK = 'yak-long-work'
+
+// The offer's moment: the work is long.
+let due = (root: Document, box: HTMLElement) =>
+  new Promise<void>((done) =>
+    box.hasAttribute('data-due')
+      ? done()
+      : root.addEventListener(LONG_WORK, () => done(), { once: true })
+  )
+
 /** The offer of alerts on this device, as `alertsOffer` drew it: each of its
- * parts hidden until this device is known. A device that already brings them
- * shows nothing; an iPhone's browser says to add the page to the Home Screen;
- * one that can be allowed offers the press, which allows it and chooses
- * notifications as the way the person is alerted. */
+ * parts hidden until this device is known and the Operator starts long work
+ * (`LONG_WORK`). A device that already brings them, or a person who said Not
+ * now, is offered nothing; an iPhone's browser says to add the page to the
+ * Home Screen; one that can be allowed offers the press, which allows it and
+ * chooses notifications as the way the person is alerted. Not now is kept on
+ * the person (operator-page.ts `?alerts`), and the offer says where alerts
+ * are turned on instead. */
 export let offer = async (root: Document = document) => {
   let box = root.querySelector<HTMLElement>('[data-alerts-offer]')
   if (!box) return
   if (box.dataset.badge) badge(Number(box.dataset.badge))
   let part = (name: string) =>
-    box.querySelector<HTMLElement>(`[data-shows=${name}]`)!
-  let show = (name: string) => part(name).hidden = false
-  if (apple() && !installed()) return show('install')
-  if (!('serviceWorker' in navigator) || !('PushManager' in globalThis)) return
-  if (Notification.permission == 'denied') return
-  if (await alerting(box.dataset.on != null)) return
-  show('offer')
-  let press = part('offer').querySelector<HTMLButtonElement>('button')!
-  let said = part('offer').querySelector<HTMLElement>('[data-status]')!
-  press.addEventListener('click', async () => {
-    press.disabled = true
-    said.textContent = ''
-    try {
+    box.querySelector<HTMLElement>(`[data-shows=${name}]`)
+  if (!part('offer')) return
+  let asked = apple() && !installed()
+    ? 'install'
+    : !('serviceWorker' in navigator) || !('PushManager' in globalThis) ||
+        Notification.permission == 'denied' ||
+        await alerting(box.dataset.on != null)
+    ? null
+    : 'offer'
+  if (!asked) return
+  await due(root, box)
+  let card = part(asked)!
+  let said = card.querySelector<HTMLElement>('[data-status]')!
+  let leave = (name: string) => {
+    card.hidden = true
+    let left = part(name)!
+    left.hidden = false
+    left.addEventListener('animationend', () => box.remove())
+  }
+  let choose = async (body: Record<string, string>, otherwise: string) => {
+    let response = await fetch(`${box.dataset.at}?alerts=1`, {
+      method: 'POST',
+      body: new URLSearchParams(body),
+    })
+    if (!response.ok) throw await refusal(response, otherwise)
+  }
+  let pressed =
+    (act: () => Promise<void>, otherwise: string) => async (e: Event) => {
+      let press = e.currentTarget as HTMLButtonElement
+      press.disabled = true
+      said.textContent = ''
+      try {
+        await act()
+      } catch (error) {
+        if (!(error instanceof CallError)) report(error)
+        said.textContent = error instanceof CallError
+          ? error.message
+          : otherwise
+      }
+      press.disabled = false
+    }
+  card.hidden = false
+  card.querySelector('[data-not-now]')!.addEventListener(
+    'click',
+    pressed(async () => {
+      await choose({ declined: '1' }, 'That could not be saved. Try again.')
+      leave('away')
+    }, 'That could not be saved. Try again.'),
+  )
+  if (asked != 'offer') return
+  card.querySelector('.Button-go')!.addEventListener(
+    'click',
+    pressed(async () => {
       await allow(
         box.dataset.push!,
         `${box.dataset.at}?push=1`,
@@ -158,24 +214,13 @@ export let offer = async (root: Document = document) => {
             "This browser's push service did not answer. Trying again in a little while.",
       )
       said.textContent = ''
-      let response = await fetch(`${box.dataset.at}?alerts=1`, {
-        method: 'POST',
-        body: new URLSearchParams({ channel: 'push' }),
-      })
-      if (!response.ok) {
-        throw await refusal(response, 'Alerts could not be chosen. Try again.')
-      }
-      part('offer').hidden = true
-      show('on')
-      part('on').addEventListener('animationend', () => box.remove())
-    } catch (error) {
-      if (!(error instanceof CallError)) report(error)
-      said.textContent = error instanceof CallError
-        ? error.message
-        : 'Alerts could not be turned on. Try again.'
-    }
-    press.disabled = false
-  })
+      await choose(
+        { channel: 'push' },
+        'Alerts could not be chosen. Try again.',
+      )
+      leave('on')
+    }, 'Alerts could not be turned on. Try again.'),
+  )
 }
 
 if (typeof document != 'undefined') offer().catch(report)

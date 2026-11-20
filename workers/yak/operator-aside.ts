@@ -54,6 +54,32 @@ export type Aside = { turn: Turn | null; helpers: HelperLine[]; band?: true }
 export let going = ({ standing }: { standing?: Standing }) =>
   standing == 'running' || standing == 'waiting'
 
+/** How long a turn runs before its work counts as long. */
+export let LONG = 20_000
+
+/**
+ * Whether the conversation is at work that will take a while, `now`: a
+ * helper running, or its turn going for `LONG` or more. That is when the
+ * page offers an alert for when it is done (operator-page.ts
+ * `alertsOffer`).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { long } from './operator-aside.ts'
+ * let now = Date.parse('2026-11-20T09:00:30Z')
+ * let turn = (since: string) => ({ what: 'Thinking…', since })
+ * let helper = { session: 's', title: '', step: '', since: '' }
+ * equal(long({ turn: null, helpers: [] }, now), false)
+ * equal(long({ turn: turn('2026-11-20T09:00:20Z'), helpers: [] }, now), false)
+ * equal(long({ turn: turn('2026-11-20T09:00:00Z'), helpers: [] }, now), true)
+ * equal(long({ turn: null, helpers: [{ ...helper, standing: 'running' }] }, now), true)
+ * equal(long({ turn: null, helpers: [{ ...helper, standing: 'done' }] }, now), false)
+ * ```
+ */
+export let long = (aside: Aside, now: number) =>
+  aside.helpers.some((x) => x.standing == 'running') ||
+  !!aside.turn && now - Date.parse(aside.turn.since) >= LONG
+
 // What a conversation is doing while it works, each a loop the yak plays
 // over and over (mascot.ts `MOVES`).
 let AT_WORK: Doing[] = ['thinking', 'tool', 'writing']

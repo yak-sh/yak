@@ -905,7 +905,7 @@ export type Row = MeteredRow & {
     verification?: string | null
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
-  operator_alerts?: { channel?: Alerting | null }
+  operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
   push_subscription?: {
     person: Id
@@ -4016,6 +4016,11 @@ export let directoryRows = (rows: {
     // null when they have not chosen (operator-alerts.ts `routeOf`).
     alerts: async (person: string): Promise<Alerting | null> =>
       (await one(line`.entity.eid=${person}`))?.operator_alerts?.channel ??
+        null,
+    // When this person answered Not now to alerts offered on a device, or
+    // null (operator-page.ts `alertsOffer`).
+    alertsDeclined: async (person: string): Promise<string | null> =>
+      (await one(line`.entity.eid=${person}`))?.operator_alerts?.declined ??
         null,
     // Whether this person keeps the side of their pages collapsed to icons.
     collapsed: async (person: string): Promise<boolean> =>

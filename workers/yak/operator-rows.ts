@@ -21,7 +21,7 @@ export { mountAsk } from './operator-box-browser.ts'
 export { browserDrafts } from '@yaks/draft/browser'
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).
-export { ordered, showing } from './operator-aside.ts'
+export { long, ordered, showing } from './operator-aside.ts'
 
 /** The aside as HTML, its list shown or not. */
 export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>

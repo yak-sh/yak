@@ -219,12 +219,15 @@ export let directoryDoc: VocabDoc = {
     // How a person is told what their Operators tell them away from the page
     // (operator-alerts.ts): on the browsers they allowed, by text, by email,
     // or only in their Updates. Without it, by text when they agreed to
-    // texts, else by email.
+    // texts, else by email. `declined` is when they answered Not now to
+    // alerts on a device offered in the conversation, which is then not
+    // offered again; their settings still turn alerts on.
     operator_alerts: {
       component: true,
       type: 'object',
       properties: {
         channel: { type: 'string', enum: ['push', 'text', 'email', 'updates'] },
+        declined: { type: 'string', format: 'date-time' },
       },
     },
     // How a person keeps the side of their yaks.app pages (desk-pages.ts

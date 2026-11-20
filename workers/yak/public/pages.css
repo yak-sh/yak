@@ -934,11 +934,16 @@
   /* The offer of alerts over the box (operator-page.ts `alertsOffer`). Once
      taken, its word that alerts are on stands in the offer's place a few
      seconds, then fades and gives the room back (alerts-browser.ts). */
-  .Talk_Alerts > [data-shows=on] {
+  .Talk_Alerts > [data-shows=on],
+  .Talk_Alerts > [data-shows=away] {
     margin: 0 0 .5rem;
     color: var(--muted);
     text-align: center;
     animation: Talk_Fade .6s ease 4s forwards;
+  }
+  /* Where the offer went stays long enough to read and follow. */
+  .Talk_Alerts > [data-shows=away] {
+    animation-delay: 10s;
   }
   @keyframes Talk_Fade {
     to {

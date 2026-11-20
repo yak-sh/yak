@@ -125,6 +125,13 @@ export let alertsRow = (person: string, channel: string): Bundle => {
   return { entity: { eid: person }, operator_alerts: { channel } }
 }
 
+/** The directory row keeping that `person` answered Not now, `at`, to
+ * alerts offered on a device; it is not offered them again. */
+export let declinedRow = (person: string, at: string): Bundle => ({
+  entity: { eid: person },
+  operator_alerts: { declined: at },
+})
+
 /** The directory row keeping a browser `person` allowed notifications on,
  * as the page's `pushManager.subscribe` gave it. */
 export let pushRow = (person: string, sub: unknown): Bundle => {

@@ -241,6 +241,10 @@ let allowed = [
 await page('alerts', { channel: 'push' })
 let chosePush = await operatorBody(env, space, held)
 let chatOn = await chatted()
+// Not now, said to the offer, is kept on the person and keeps their choice.
+let declined = await page('alerts', { declined: '1' })
+let chatDeclined = await chatted()
+let choiceKept = await dir.alerts(person)
 // What was written before a browser was allowed is not pushed to it.
 let owed = await routeFor(dir, person, '2000-01-01T00:00:00.000Z')
 let since = await routeFor(dir, person, new Date().toISOString())
@@ -287,7 +291,7 @@ test('a person allows browser notifications on the Operator page, one subscripti
   assertStringIncludes(chosePush, 'on the 2 browsers you allowed')
 })
 test('the conversation offers alerts on this device in one press, once yaks.app can push', () => {
-  assertEquals(chatOfferless.includes('data-alerts-offer'), false)
+  assertEquals(/<div[^>]*data-alerts-offer/.test(chatOfferless), false)
   assertStringIncludes(chatOffered, 'data-alerts-offer')
   assertStringIncludes(chatOffered, 'data-at="/manage/ana/operator"')
   assertStringIncludes(chatOffered, '_alerts')
@@ -295,6 +299,14 @@ test('the conversation offers alerts on this device in one press, once yaks.app 
   assertEquals(chatOffered.includes('data-on'), false)
   assertStringIncludes(chatOn, 'data-on')
   assertMatch(chatOn, /data-badge="0"/)
+})
+test('Not now puts the offer away for good, pointing at the Alerts setting', () => {
+  assertStringIncludes(chatOffered, 'data-not-now')
+  assertStringIncludes(chatOffered, 'href="/manage/ana/operator#alerts"')
+  assertMatch(declined.said.declined, /^\d{4}-/)
+  assertEquals(/data-shows="(offer|install)"/.test(chatDeclined), false)
+  assertMatch(chatDeclined, /data-alerts-offer[^>]*data-badge="0"/)
+  assertEquals(choiceKept, 'push')
 })
 test('a browser allowed after an alert was written is not told it', () => {
   assertEquals(owed?.by, 'text')

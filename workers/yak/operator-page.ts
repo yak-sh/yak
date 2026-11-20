@@ -55,6 +55,7 @@ import { CONSENT, stopping, type Texting } from './operator-texts.ts'
 import {
   type Alerting,
   alertsRow,
+  declinedRow,
   pushRow,
   routeOf,
   vapidOf,
@@ -441,54 +442,73 @@ export let alertsCard = (
 
 /**
  * Alerts on this device, offered in the conversation (alerts-browser.ts
- * `offer`): one press allows this browser's notifications and chooses them as
- * how the person is alerted. On an iPhone's browser it says to add the page
- * to the Home Screen first, since Apple pushes only to a page opened from
- * there. Every part is hidden until the script knows what this device can do
- * and whether it already brings alerts (`on`: notifications are the person's
- * choice). `count` is how many things need them, which the installed page's
- * icon shows. Nothing is offered where yaks.app has no VAPID key (`key`).
+ * `offer`) when the Operator starts work that will take a while: one press
+ * allows this browser's notifications and chooses them as how the person is
+ * alerted, and Not now (`declined`) puts it away for good, saying where it
+ * went: the Alerts setting (`alertsCard`) stays one tap away. On an iPhone's
+ * browser it says to add the page to the Home Screen first, since Apple
+ * pushes only to a page opened from there. Every part is hidden until the
+ * script knows what this device can do, whether it already brings alerts
+ * (`on`: notifications are the person's choice) and that the work is long.
+ * `count` is how many things need them, which the installed page's icon
+ * shows. Nothing is offered where yaks.app has no VAPID key (`key`).
  */
 export let alertsOffer = (
   at: string,
   key: string | null,
   on: boolean,
   count: number | null = null,
-) =>
-  key
-    ? h(
-      'div',
-      {
-        class: 'Talk_Alerts',
-        'data-alerts-offer': '',
-        'data-push': key,
-        'data-at': at,
-        'data-on': on ? '' : undefined,
-        'data-badge': count ?? undefined,
-      },
-      h(
-        Card,
-        { 'data-shows': 'offer', hidden: true },
-        h('p', null, 'Get an alert on this device when something needs you.'),
+  declined = false,
+) => {
+  if (!key) return null
+  let notNow = h(
+    Button,
+    { type: 'button', mod: 'quiet', 'data-not-now': '' },
+    'Not now',
+  )
+  let asked = (name: string, words: string, ...actions: Node[]) =>
+    h(
+      Card,
+      { 'data-shows': name, hidden: true },
+      h('p', null, words),
+      h(Card.Actions, null, ...actions, notNow),
+      h('p', { 'data-status': '', role: 'status' }),
+    )
+  return h(
+    'div',
+    {
+      class: 'Talk_Alerts',
+      'data-alerts-offer': '',
+      'data-push': key,
+      'data-at': at,
+      'data-on': on ? '' : undefined,
+      'data-badge': count ?? undefined,
+    },
+    declined ? null : [
+      asked(
+        'offer',
+        'This may take a while. Want an alert on this device when it’s done?',
         h(Button, { type: 'button', mod: 'go' }, 'Turn on alerts'),
-        h('p', { 'data-status': '', role: 'status' }),
       ),
-      h(
-        Card,
-        { 'data-shows': 'install', hidden: true },
-        h(
-          'p',
-          null,
-          'To get alerts on this iPhone, add this page to your Home Screen first: tap Share, then Add to Home Screen, and open it from there. Apple sends alerts only to a page on the Home Screen.',
-        ),
+      asked(
+        'install',
+        'This may take a while. To get an alert on this iPhone when it’s done, add this page to your Home Screen first: tap Share, then Add to Home Screen, and open it from there. Apple sends alerts only to a page on the Home Screen.',
       ),
       h(
         'p',
         { 'data-shows': 'on', hidden: true, role: 'status' },
-        'Alerts are on for this device.',
+        'Alerts are on. You’ll get one on this device when it’s done.',
       ),
-    )
-    : null
+      h(
+        'p',
+        { 'data-shows': 'away', hidden: true, role: 'status' },
+        'You can turn alerts on anytime in ',
+        h('a', { href: `${at}#alerts` }, 'Settings'),
+        '.',
+      ),
+    ],
+  )
+}
 
 // Where a space's people change what its Operator is called, its persona's
 // name (@yaks/persona's card).
@@ -678,12 +698,18 @@ export let operatorAnswer = async (
     let form = await req.formData()
     try {
       let person = who.person ?? ''
-      await directoryOf(env.STORE).apply({
+      let dir = directoryOf(env.STORE)
+      // Not now, said to alerts offered in the conversation.
+      if (form.has('declined')) {
+        await dir.apply({
+          entities: [declinedRow(person, new Date().toISOString())],
+        }, vouched(who))
+        return Response.json({ declined: await dir.alertsDeclined(person) })
+      }
+      await dir.apply({
         entities: [alertsRow(person, String(form.get('channel') ?? ''))],
       }, vouched(who))
-      return Response.json({
-        channel: await directoryOf(env.STORE).alerts(person),
-      })
+      return Response.json({ channel: await dir.alerts(person) })
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -1964,7 +1990,7 @@ export let chatPage = async (
   // Their lists are read with every conversation, at once with it, and
   // never hold it back (`reading`).
   let lists = reading(env, space, who)
-  let [talked, newcomer, { mentions }, alerting] = await Promise.all([
+  let [talked, newcomer, { mentions }, alerting, declined] = await Promise.all([
     lists.listing.then((l) =>
       conversationOf(env, space, who, at, open == 'new' ? '' : open, {
         updates: true,
@@ -1975,6 +2001,7 @@ export let chatPage = async (
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,
     lists.listing,
     who.person ? directoryOf(env.STORE).alerts(who.person) : null,
+    who.person ? directoryOf(env.STORE).alertsDeclined(who.person) : null,
   ])
   let listed = await lists.drawn()
   let news = talked.updates!
@@ -2083,6 +2110,7 @@ export let chatPage = async (
           who.person ? pushKey(env) : null,
           alerting == 'push',
           needCount(listed ?? [], news.updates),
+          !!declined,
         )
         : null,
       boxed
@@ -2233,7 +2261,7 @@ let chatScript = (
   `<script type="module">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, menus, mountAsk, mountTalk, ordered, showing, storeAt, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, long, menus, mountAsk, mountTalk, ordered, showing, storeAt, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
@@ -2475,6 +2503,15 @@ let unfold = (open) => {
   a.toggleAttribute('data-open', open)
   shown()
 }
+// Work that will take a while is when the page offers an alert for when it
+// is done (alerts-browser.ts \`offer\`), once.
+let longSaid = false
+let lengthy = () => {
+  if (longSaid || happening.band || !long(happening, Date.now())) return
+  longSaid = true
+  document.querySelector('[data-alerts-offer]')?.setAttribute('data-due', '')
+  document.dispatchEvent(new Event('yak-long-work'))
+}
 let turning = (turn) => {
   if (happening.band) return
   happening.turn = turn ?? null
@@ -2501,6 +2538,7 @@ let helped = (helper) => {
   if (!list) return
   if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper, Date.now(), true)))
   shown()
+  lengthy()
 }
 document.addEventListener('click', (e) => {
   let a = aside()
@@ -2516,7 +2554,7 @@ document.addEventListener('keydown', (e) => {
 // Every time on the page is the kit's (\`Time\`), said again in the person's
 // clock and zone each second, so a duration counts up, and at once after
 // anything is drawn here.
-setInterval(() => dates(document), 1000)
+setInterval(() => (dates(document), lengthy()), 1000)
 // The yak beside the box shows what the Operator is doing, and once the
 // conversation rests, what its helpers are (operator-aside.ts \`showing\`,
 // over the helpers the aside lists): a loop over and over while it lasts
