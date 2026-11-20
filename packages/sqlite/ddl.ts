@@ -1212,11 +1212,7 @@ let owing = (
 ): Statistics | undefined => {
   let owed = previous?.owed ?? []
   if (previous && unchanged && bytes < previous.bytes * 10) {
-    let stands = new Set(
-      driver.query({ t: 'pragma', name: 'table_list' }).map((r) =>
-        String(r.name)
-      ),
-    )
+    let stands = new Set(analyzable(driver))
     let empty = previous.empty.filter((name) => stands.has(name))
     let ones = (previous.few ?? few(stat1(driver)))
       .filter((name) => stands.has(name) && !owed.includes(name))

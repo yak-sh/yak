@@ -1108,4 +1108,13 @@ test("statistics never probe the engine's own tables", () => {
     ...previous,
     few: ['one'],
   })
+  // Nor when a receipt already names one.
+  assertEquals(
+    analyzed(
+      refusing,
+      { ...previous, empty: ['_cf_KV'], few: ['_cf_KV'] },
+      true,
+    ),
+    { ...previous, few: [] },
+  )
 })
