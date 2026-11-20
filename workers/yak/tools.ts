@@ -103,7 +103,7 @@ import {
 } from './files.ts'
 import { seedy } from '@yaks/platform/files'
 import { linkFor } from '@yaks/platform/preview'
-import { perusal, peruse } from './files_read.ts'
+import { glance, perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Unfound, unfound } from './asset_url.ts'
 import {
@@ -4333,7 +4333,8 @@ let OURS: Row[] = [
           },
         }
       }
-      // One path is that file whole, as its text. Several, or none, is the
+      // One path is that file whole, as what it is (files_read.ts `glance`):
+      // text as its text, a picture as one. Several, or none, is the
       // app read back in one call (files_read.ts): what an assistant coming
       // back to an app needs before it changes anything (T-124200). The text
       // rides in the value too, for a program: the words can carry more than
@@ -4343,11 +4344,12 @@ let OURS: Row[] = [
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
         if (!bytes) throw refuse('missing', noFile(String(args.path)))
-        let content = decoded(bytes)
+        let { text: said, value, images } = await glance(path, bytes)
         return {
-          text: content,
+          text: said,
           space,
-          value: { version: app.version ?? 0, sha: d.files[path], content },
+          value: { version: app.version ?? 0, ...value },
+          ...images ? { images } : {},
         }
       }
       // The releases' own words come with it: what the agents before this one

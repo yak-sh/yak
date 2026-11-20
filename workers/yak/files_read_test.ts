@@ -5,9 +5,16 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { peruse } from './files_read.ts'
 import { digest } from '@yaks/graph/sha256'
 import { connector, kernel, seed, unique } from './probe.ts'
+import type { Bundle } from '@yaks/graph'
 
 let encode = (s: string) => new TextEncoder().encode(s)
 let WASM = new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0])
+// A 1×1 lossless WebP.
+let WEBP = Uint8Array.from(
+  atob('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=='),
+  (c) => c.charCodeAt(0),
+)
+let b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
 
 // An `open` over files in memory, the way a bucket answers one.
 type Held = Record<string, string | Uint8Array<ArrayBuffer>>
@@ -69,7 +76,8 @@ await agent.tool('app_files', {
   ...app,
   files: [
     ...Object.entries(files).map(([path, content]) => ({ path, content })),
-    { path: 'add.wasm', base64: btoa(String.fromCharCode(...WASM)) },
+    { path: 'add.wasm', base64: b64(WASM) },
+    { path: 'art.webp', base64: b64(WEBP) },
   ],
 })
 await agent.tool('app_deploy', app)
@@ -95,6 +103,7 @@ test('op read with no path answers every text file of the app', async () => {
   assertEquals(all.value?.files, await listed(files))
   assertEquals(all.value?.unread, [
     { path: 'add.wasm', why: 'binary', size: WASM.byteLength },
+    { path: 'art.webp', why: 'binary', size: WEBP.byteLength },
   ])
   assertEquals(all.value?.version, 1)
   // claude.ai's model reads only the words, so they carry it all too.
@@ -122,4 +131,45 @@ test('op read with paths answers those, naming what is missing', async () => {
 
 test('op read with one path is that file whole, as its text', () => {
   assertEquals(one.text, 'v2')
+})
+
+// A file read whole as what it is: the reply's blocks, its data, its words.
+let whole = async (path: string) => {
+  let out = await agent.call('tools/call', {
+    name: 'app_files',
+    arguments: { ...app, op: 'read', path },
+  })
+  let said = JSON.stringify(out)
+  return {
+    images: out.content.filter((b: { type: string }) => b.type == 'image'),
+    value: out.structuredContent.result.find((b: Bundle) => b.output)?.output
+      ?.value,
+    said,
+  }
+}
+
+test('op read of a picture answers the picture, never its bytes as text', async () => {
+  let { images, value, said } = await whole('art.webp')
+  assertEquals(images, [
+    { type: 'image', data: b64(WEBP), mimeType: 'image/webp' },
+  ])
+  assertEquals(value, {
+    version: 1,
+    sha: await digest(WEBP),
+    size: WEBP.byteLength,
+    mediaType: 'image/webp',
+  })
+  assertEquals(said.includes('WEBPVP8'), false)
+})
+
+test('op read of other bytes answers their sha, size and media type', async () => {
+  let { images, value, said } = await whole('add.wasm')
+  assertEquals(images, [])
+  assertEquals(value, {
+    version: 1,
+    sha: await digest(WASM),
+    size: WASM.byteLength,
+    mediaType: 'application/wasm',
+  })
+  assertEquals(said.includes('\\u0000'), false)
 })

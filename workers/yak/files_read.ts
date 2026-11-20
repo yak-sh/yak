@@ -7,9 +7,11 @@
 // nothing of where the bytes live: today an app's draft over its release,
 // later its git objects (D-124238). So a file past the budget costs its size
 // and never its bytes, and the budget bounds what one call holds in memory.
-import { type Opened, utf8 } from '@yaks/blob'
+import { mediaTypeOf, mimeOf, type Opened, utf8 } from '@yaks/blob'
 import { digest } from '@yaks/graph/sha256'
 import { size } from '@yaks/fp'
+import type { Image } from '@yaks/tools/value'
+import { base64, type Bytes } from './bytes.ts'
 
 /** The most bytes of file text one read of several files answers: well
  * inside what a client shows a model of one tool result. One path alone is
@@ -95,7 +97,10 @@ export let perusal = ({ files, unread }: Perused, version: number) => {
   return [
     ...files.length || unread.length ? files.map(block) : ['(no files)'],
     gone.length ? `No file ${gone.map((u) => u.path).join(', ')}.` : '',
-    binary.length ? `Not text: ${binary.map((u) => u.path).join(', ')}.` : '',
+    binary.length
+      ? `Not text: ${binary.map((u) => u.path).join(', ')} — op: read with ` +
+        'path answers one as what it is.'
+      : '',
     past.length
       ? `Past the ${size(READ)} one read answers: ${
         past.map((u) => `${u.path} (${size(u.size ?? 0)})`).join(', ')
@@ -106,4 +111,52 @@ export let perusal = ({ files, unread }: Perused, version: number) => {
         'made over these.'
       : 'Nothing is released yet.',
   ].filter(Boolean).join('\n')
+}
+
+/** The most bytes of an image one read answers as a picture: what a model
+ * takes in one image, 5 MB once base64. */
+export let SEEN = 3.75 * 1024 * 1024
+
+export type Glanced = {
+  text: string
+  value: { sha: string; size: number; mediaType: string; content?: string }
+  images?: Image[]
+}
+
+/**
+ * One file, read whole as what it is: text as its text, a picture a model
+ * can see as that picture, and any other bytes as their sha, size and media
+ * type. Never bytes decoded as text, which no model reads and every later
+ * turn of a conversation carries again (T-1577).
+ */
+export let glance = async (
+  path: string,
+  bytes: Bytes,
+): Promise<Glanced> => {
+  let sha = await digest(bytes)
+  if (utf8(bytes)) {
+    let content = new TextDecoder().decode(bytes)
+    let mediaType = mimeOf(path)
+    return {
+      text: content,
+      value: { sha, size: bytes.byteLength, mediaType, content },
+    }
+  }
+  let image = mediaTypeOf(bytes)
+  let mediaType = image ?? mimeOf(path)
+  let value = { sha, size: bytes.byteLength, mediaType }
+  let said = `${path} — ${mediaType}, ${size(bytes.byteLength)}, sha256 ${sha}`
+  if (image && bytes.byteLength <= SEEN) {
+    return {
+      text: `${said}; the picture is beside these words.`,
+      value,
+      images: [{ data: base64(bytes), mime_type: image }],
+    }
+  }
+  return {
+    text: `${said}; not text, so its bytes are not answered${
+      image ? ` (a picture past the ${size(SEEN)} one read shows)` : ''
+    }.`,
+    value,
+  }
 }
