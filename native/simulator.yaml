@@ -9,7 +9,13 @@ appId: host.exp.Exponent
 ---
 - openLink: exp://127.0.0.1:8081
 - runFlow: open.yaml
-# Expo Go's first launch shows its developer menu once.
+# The app's name is on its sign-in card, and on the developer menu Expo Go
+# shows over it once on its first launch.
+- extendedWaitUntil:
+    visible: yaks.app
+    timeout: 300000
+- waitForAnimationToEnd:
+    timeout: 10000
 - runFlow:
     when:
       visible: Continue
@@ -17,7 +23,7 @@ appId: host.exp.Exponent
       - tapOn: Continue
 - extendedWaitUntil:
     visible: Send me a code
-    timeout: 300000
+    timeout: 30000
 - takeScreenshot: 1-sign-in
 - tapOn: you@example.com
 - inputText: checks@bot.yak.sh
