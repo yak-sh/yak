@@ -280,7 +280,7 @@ test('a conversation raises only on a reply of its own, and answers only what wa
         as(mine),
       ),
     Error,
-    'There is no reply',
+    'the id to name for it',
   )
   // Her conversation cannot answer what was raised with the person.
   await assertRejects(

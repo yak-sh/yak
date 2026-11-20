@@ -237,18 +237,19 @@ export let notMember = async (
 ) =>
   refuse(
     'access',
-    `not a member of ${space.slug} — ${await yours(ctx)}. ` +
-      `Send space: '<one of your spaces>', or connect with an account that ` +
-      `belongs to ${space.slug} before naming it. app_list() lists your apps.`,
+    `not a member of ${space.slug} — ${await yours(ctx)} Or connect with ` +
+      `an account that belongs to ${space.slug} before naming it.`,
   )
 
-// The spaces the caller holds a seat in, as a refusal names the next call's
-// choice from them.
+// The spaces the caller holds a seat in and the next call naming one, or,
+// holding none, how to get one.
 let yours = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
   let mine = ctx.person ? await ctx.dir.seats(ctx.person) : []
   return mine.length
-    ? `your spaces are ${listed(mine.map((s) => s.space.slug))}`
-    : 'you are a member of no space yet'
+    ? `your spaces are ${listed(mine.map((s) => s.space.slug))}. ` +
+      "Send space: '<one of your spaces>'; app_list() lists their apps."
+    : 'you are a member of no space yet. Get one by signing up at ' +
+      "https://yaks.app, or by accepting an invitation to someone's space."
 }
 
 /** The refusal of an app a space does not hold, naming the ones it does. Said
@@ -516,8 +517,7 @@ let named = async (ctx: Ctx, slug: string) => {
   }
   throw refuse(
     'missing',
-    `no space ${slug} — ${await yours(ctx)}. ` +
-      "Send space: '<one of your spaces>'; app_list() lists their app slugs.",
+    `no space ${slug} — ${await yours(ctx)}`,
   )
 }
 

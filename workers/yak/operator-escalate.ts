@@ -11,6 +11,7 @@
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { short } from '@yaks/id'
+import { line as q } from '@yaks/query'
 import type { Tool, ToolContext } from '@yaks/session'
 import type { Space } from './directory.ts'
 import type { Request } from './operator-channels.ts'
@@ -35,6 +36,25 @@ let once = (what: string, context?: ToolContext) =>
   derivedEid(
     `operator-${what}|${context?.call?.entity.eid ?? crypto.randomUUID()}`,
   )
+
+// The refusal of a reply id this conversation has none of, naming where one
+// comes from and the conversation's own.
+let noReply = async (store: Store, person: string, id: unknown) => {
+  let rows = await store.g.read(
+    q`.operator_request.person=${person} ?created .order=-created.at .limit=50`,
+  )
+  let ids = rows.filter((r) =>
+    REPLIES.includes(String(part<Request>(r, 'operator_request').channel))
+  ).slice(0, 5).map((r) =>
+    `${kindOf(part<Request>(r, 'operator_request'))} ${short(r.entity.eid)}`
+  )
+  return `There is no reply ${id} of yours. A reply's id is the one its ` +
+    'words come with in this conversation ("Their reply is letter …, the ' +
+    'id to name for it"). ' +
+    (ids.length
+      ? `Yours, newest first: ${ids.join(', ')}.`
+      : 'No reply has reached this conversation yet.')
+}
 
 /** What a reply was to: a letter or a text. */
 export let kindOf = (request?: Request) =>
@@ -74,7 +94,7 @@ export let escalate = (store: Store, space: Space): Tool => ({
       !request || request.person != person ||
       !REPLIES.includes(request.channel)
     ) {
-      throw refuse('missing', `There is no reply ${args.reply} of yours.`)
+      throw refuse('missing', await noReply(store, person, args.reply))
     }
     let [sent] = request.about ? await store.g.get([request.about]) : []
     let kind = kindOf(request)
