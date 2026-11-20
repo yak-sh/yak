@@ -38,6 +38,7 @@ import {
   seeds,
 } from '@yaks/connections'
 import { patient } from '@yaks/blob'
+import { LOGOS } from '@yaks/platform/routes'
 import { background, caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
@@ -47,9 +48,6 @@ import { KERNEL, meta } from './meta.ts'
 
 /** The broker whose catalog is offered. */
 export let BROKER = 'nango'
-
-/** Where a card's logo is served: this and the service's name. */
-export let LOGOS = '/connections/logo/'
 
 // Where the list and its logos are kept, how long the list stands before it
 // is asked again, the most of a logo the bucket keeps, and the most an

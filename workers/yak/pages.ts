@@ -29,6 +29,7 @@ import {
   Empty,
   Field,
   Form,
+  Logo,
   More,
   Notice,
   Rows,
@@ -53,7 +54,12 @@ import { type Invitation, qr } from './referral.ts'
 
 export { esc } from './html.ts'
 
-import { chatPath, managePath, type ManageView } from '@yaks/platform/routes'
+import {
+  chatPath,
+  integrationLogo,
+  managePath,
+  type ManageView,
+} from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 
@@ -818,23 +824,12 @@ export let sentence = (text: string) =>
   (/^\S+@/.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1)) +
   (/[.!?]$/.test(text) ? '' : '.')
 
-// A service's logo, drawn as an image of its own SVG and never as markup: an
-// SVG an <img> loads runs no script and fetches nothing. A catalog's service
-// with none kept here is drawn from our own door at the apex (catalog.ts
-// `logoDoor`), once it scrolls near.
-export let logo = (f: Face, env: Host = {}) =>
-  f.logo || f.image
-    ? h(Card.Mark, {
-      as: 'img',
-      src: f.logo
-        ? `data:image/svg+xml,${encodeURIComponent(f.logo)}`
-        : url(env, f.image),
-      alt: '',
-      width: 24,
-      height: 24,
-      ...f.logo ? {} : { loading: 'lazy', decoding: 'async' },
-    })
-    : null
+// A service's logo at the head of its card, read from its integration's row
+// (@yaks/platform/routes `integrationLogo`); a neutral mark where it has none.
+export let logo = (
+  f: { name: string; logo?: string; image?: string },
+  env: Host = {},
+) => h(Logo.Mark, { src: integrationLogo(f, env), class: 'Card_Mark' })
 
 // A line about a service and a link to its site, where it has them. Only an
 // https address is linked, so a site can never be a script.

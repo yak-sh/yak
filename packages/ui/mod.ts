@@ -11,7 +11,7 @@
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
  *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Peek`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
- *   `Chips`, `Address`, `Icon`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
+ *   `Chips`, `Address`, `Icon`, `Logo`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
  *   `State`, `Loading`, `Sparkline`, `Columns`,
  *   `Say`, `Index`, `SideNav`, `Contents`, `Catalog`, `Gallery`, `Cards`: the parts (`TabSet`
  *   is `Tabs` holding their panels); `groups`, the parts by

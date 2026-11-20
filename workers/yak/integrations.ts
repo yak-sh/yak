@@ -24,6 +24,7 @@ import { raw } from './html.ts'
 import { type Host, url } from '@yaks/platform/host'
 import { managePath } from '@yaks/platform/routes'
 import { drawn, head } from './shell.ts'
+import { logo } from './pages.ts'
 import { drawn as theirs } from './theirs.ts'
 import { type Directory, NO_UPTAKE } from './directory.ts'
 import { type Reputation, reputationOf, reputed } from './gallery-row.ts'
@@ -84,18 +85,6 @@ let site = (i: Listed) =>
     )
     : null
 
-// Its mark, as an image of its own SVG and never as markup.
-let logo = (i: Listed) =>
-  i.logo
-    ? h(Card.Mark, {
-      as: 'img',
-      src: `data:image/svg+xml,${encodeURIComponent(i.logo)}`,
-      alt: '',
-      width: 24,
-      height: 24,
-    })
-    : null
-
 let small = (...said: ComponentChildren[]) =>
   h('p', { class: 'Note Note-small' }, ...said)
 
@@ -116,7 +105,7 @@ let card = async (i: Rated, env: Host) => {
     h(
       Card.Head,
       null,
-      logo(i),
+      logo(i, env),
       h(Card.Title, null, title),
       h(
         Card.Actions,

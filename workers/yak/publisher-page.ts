@@ -28,7 +28,7 @@ import { paged, skillAt } from './skill-page.ts'
 import { type ComponentChildren, h } from 'preact'
 import { Card } from '@yaks/ui/parts'
 import { type Host, spaceHost, url as siteUrl } from '@yaks/platform/host'
-import { lost } from './pages.ts'
+import { logo, lost } from './pages.ts'
 import { drawn, head } from './shell.ts'
 
 /** A skill as its publisher's page lists it. */
@@ -138,13 +138,14 @@ let small = (...said: ComponentChildren[]) =>
 let times = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n == 1 ? one : many}`
 
-// A skill or an integration as a card: its name, linked to where it is
+// A skill or an integration as a card: an integration's logo, its name, linked to where it is
 // listed, what it is, and what yaks.app says of it.
 let item = (
   title: string,
   href: string,
   about: string,
   said: ComponentChildren,
+  mark: ComponentChildren = null,
 ) =>
   h(
     Card,
@@ -152,6 +153,7 @@ let item = (
     h(
       Card.Head,
       null,
+      mark,
       h(Card.Title, { as: 'h3' }, h(Card.Link, { href }, title)),
     ),
     about ? h(Card.Sub, null, about) : null,
@@ -255,6 +257,7 @@ export let page = (p: Published, env: Host = {}) => {
                   reputationOf(i.reputation, [
                     'Listed by its owner, not reviewed by yaks.app',
                   ]),
+                  logo(i, env),
                 )
               ),
             ),

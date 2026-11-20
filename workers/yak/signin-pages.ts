@@ -590,7 +590,7 @@ export let askConnect = (at: {
       Card,
       null,
       heading(at.face.title, {
-        mark: logo(at.face),
+        mark: logo(at.face, env),
         status: at.status == 'needed'
           ? null
           : at.status == 'broken'

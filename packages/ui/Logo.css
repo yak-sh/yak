@@ -1,0 +1,32 @@
+/* An integration's name with its logo: the logo a little taller than the
+   words, centred on them, a narrow gap between. Alone, a logo takes the size
+   its place gives it (a card's mark) or its own 24 pixels. */
+.Logo {
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+.Logo_Mark {
+  flex: none;
+  object-fit: contain;
+}
+.Logo > .Logo_Mark {
+  width: 1.25em;
+  height: 1.25em;
+}
+/* Where there is no logo, a plug on a soft rounded square. */
+.Logo_Mark-none {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: var(--radius);
+  background: var(--soft);
+  color: var(--muted);
+}
+.Logo_Mark-none .Icon {
+  width: 60%;
+  height: 60%;
+}

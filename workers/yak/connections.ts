@@ -122,7 +122,7 @@ import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, refuse } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
-import { adopting, BROKER, LOGOS, offersOf } from './catalog.ts'
+import { adopting, BROKER, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -158,10 +158,12 @@ export type Face = {
   connects?: Integration['connects']
   broker?: string
   site: string
+  /** its integration's name, which a logo kept elsewhere is served by */
+  name: string
   /** an SVG document, drawn as an image */
   logo: string
-  /** where its logo is served from, for a service with no SVG kept here (a
-   * catalog's, catalog.ts `logoDoor`) */
+  /** its logo's address, for a service with no SVG kept here, served from
+   * our own door (@yaks/platform/routes `integrationLogo`) */
   image: string
   /** how a person gets its key, drawn from its markdown as HTML, its links
    * marked as the writer's (theirs.ts) */
@@ -188,8 +190,9 @@ export let faceOf = async (
   connects: i?.connects ?? (i?.token || i?.broker ? 'signin' : 'key'),
   broker: i?.broker?.name ?? '',
   site: i?.site ?? '',
+  name,
   logo: i?.logo ?? '',
-  image: !i?.logo && i?.image ? `${LOGOS}${encodeURIComponent(name)}` : '',
+  image: i?.image ?? '',
   instructions: brief ? '' : await drawn(i?.instructions),
   theirs: !!i?.owner,
   fields: fieldsOf(i),

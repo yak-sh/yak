@@ -19,6 +19,7 @@ import {
   Form,
   Group,
   Icon,
+  Logo,
   Modal,
   More,
   Notice,
@@ -951,6 +952,7 @@ let connection = (
   action: string,
   close: Kids,
   context: Kids,
+  env: Host,
 ) => {
   let ask = c.each && !c.own
   let id = (what: string) => `${what}-${c.eid}`
@@ -1265,7 +1267,7 @@ let connection = (
     Modal.Body,
     { 'data-connection': c.eid },
     heading(c.face.title, {
-      mark: logo(c.face),
+      mark: logo(c.face, env),
       status: stands,
       actions: [actions, close],
     }),
@@ -1294,6 +1296,7 @@ let connection = (
 // connection it holds already, a sign-in, or a key pasted under the fold.
 let borrowing = (
   b: Borrowed,
+  env: Host,
   on: boolean,
   action: string,
   close: Kids,
@@ -1351,7 +1354,7 @@ let borrowing = (
     Modal.Body,
     { 'data-borrowed': b.eid },
     heading(b.face.title, {
-      mark: logo(b.face),
+      mark: logo(b.face, env),
       status: status(`Borrowed from ${b.lender}`, 'positive'),
       actions: [actions, close],
     }),
@@ -1453,7 +1456,7 @@ let sourceAsk = (ask: NonNullable<McpPage['ask']>, action: string, env: Host) =>
         h(
           Card.Sub,
           null,
-          h('strong', null, src.title),
+          h('strong', null, h(Logo, null, src.title)),
           ` ${src.about} `,
           src.granted
             ? granting(action, ask.app, src.at, 'source-revoke', 'Stop')
@@ -1611,6 +1614,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
       Card,
       { id: `mcp-${s.id}` },
       heading(s.name, {
+        mark: logo(s),
         status: status(word, tone),
         actions: form(s.id, [
           press(
@@ -1820,7 +1824,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
             h(
               Card,
               null,
-              h(Card.Title, null, s.name),
+              h(Card.Head, null, logo(s), h(Card.Title, null, s.name)),
               h(Card.Sub, null, s.url),
               form(
                 s.id,
@@ -2007,7 +2011,7 @@ let connections = (at: DeskPage, env: Host) => {
     ...c.services.map((s) =>
       card(
         env,
-        { title: s.name, logo: '', image: '' } as Face,
+        { name: s.name, title: s.name, logo: '', image: '' } as Face,
         [
           'Signed in with your yaks.app account ',
           h(Time, { at: new Date(s.connectedAt * 1000).toISOString() }),
@@ -2132,6 +2136,7 @@ let connections = (at: DeskPage, env: Host) => {
       one.own ? null : to(
         one.status == 'needed' ? 'It will be connected to' : 'Connected for',
       ),
+      env,
     )
   // An MCP server is opened by its integration's name, `mcp:<id>`, the address
   // an agent sends a person to sign in at (@yaks/connections `authorization`).
@@ -2144,10 +2149,10 @@ let connections = (at: DeskPage, env: Host) => {
     : open
     ? contents(open)
     : loan
-    ? borrowing(loan, c.on, action, close, mine(loan))
+    ? borrowing(loan, env, c.on, action, close, mine(loan))
     : server
     ? h(Modal.Body, null, [
-      heading(server.name, { actions: close }),
+      heading(server.name, { mark: logo(server), actions: close }),
       h(Card.Sub, null, server.url),
       mcpCredential(server, c.on, action) ??
         h('p', null, `${server.name} needs no sign-in.`),
@@ -2200,7 +2205,7 @@ let connections = (at: DeskPage, env: Host) => {
   let templates = [
     ...c.list.map((one) => template(keyOf(one), contents(one), false, one.eid)),
     ...c.borrowed.map((b) =>
-      template(b.eid, borrowing(b, c.on, action, close, mine(b)))
+      template(b.eid, borrowing(b, env, c.on, action, close, mine(b)))
     ),
     ...c.built.map((i) => template(i.name, offer(i), true)),
   ]

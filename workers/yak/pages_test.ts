@@ -13,6 +13,7 @@ import { PRICE, YEARLY } from '@yaks/platform/plans'
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
 let named = (title: string) => ({
+  name: title.toLowerCase(),
   title,
   tagline: '',
   site: '',
@@ -23,6 +24,7 @@ let named = (title: string) => ({
   fields: [KEY],
 })
 let CAL = {
+  name: 'cal',
   title: 'Cal',
   tagline: 'Your calendar.',
   site: 'https://cal.test/',
@@ -259,9 +261,9 @@ test('connections: first a grid of cards, theirs on their own space and then the
       .map((h) => h.textContent),
     ['OpenRouter'],
   )
-  assertEquals(document.querySelectorAll('.Card_Mark').length, 0)
+  // A card whose service has no logo leads with the neutral mark.
   for (let card of document.querySelectorAll('.Card-button')) {
-    assert(card.firstElementChild?.matches('.Card_Title'))
+    assert(card.firstElementChild?.matches('.Card_Mark.Logo_Mark-none'))
   }
   // Nothing on the first visit asks for a key but the fold for a service
   // nobody lists.
@@ -283,7 +285,7 @@ test('connections: first a grid of cards, theirs on their own space and then the
   let top = opened.querySelector('#connect')!
   assertStringIncludes(top.textContent!, 'Connected for ada.yaks.fyi')
   assert(top.querySelector('[data-connection="Weather"]'))
-  assertEquals(top.querySelector('.Card_Mark'), null)
+  assert(top.querySelector('.Card_Mark.Logo_Mark-none'))
   let actions = [...opened.querySelectorAll('form')].filter((f) =>
     f.querySelector('input[name="connection"]')
   ).map((f) => f.getAttribute('action'))

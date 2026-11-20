@@ -104,9 +104,9 @@ let lines = (ways: Ways) => {
   )
 }
 
-// A platform's mark as a link's image, where its integration keeps one.
-let mark = (logo?: string) =>
-  logo ? { image: `data:image/svg+xml,${encodeURIComponent(logo)}` } : {}
+// A platform's logo as a link's image, where its integration has one
+// (chat.ts `Place`).
+let mark = (logo?: string) => logo ? { image: logo } : {}
 
 // The side's links for each chat place the Operator is in, each opening the
 // person's chat app there, and each platform not set up yet the one button

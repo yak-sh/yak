@@ -3,6 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
+import { integrationLogo } from '@yaks/platform/routes'
 import { type Line, line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
@@ -1276,8 +1277,12 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
       find: 'hub',
     })
     assertEquals(
-      found.catalog!.found.map((o) => [o.name, o.face.title, o.face.image]),
-      [['hubspot', 'HubSpot', '/connections/logo/hubspot']],
+      found.catalog!.found.map((o) => [
+        o.name,
+        o.face.title,
+        integrationLogo(o.face),
+      ]),
+      [['hubspot', 'HubSpot', 'https://yaks.app/connections/logo/hubspot']],
     )
     let page = await connectionsOf(s.p.env, s.space, s.person)
     let featured = page.catalog!.featured.map((o) => o.name)

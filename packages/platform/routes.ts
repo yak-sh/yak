@@ -140,6 +140,35 @@ export let logoPath = (
   space.logo
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
+/** Where the connections page serves the logos it does not keep as SVG
+ * (workers/yak catalog.ts `logoDoor`), by the integration's name. */
+export let LOGOS = '/connections/logo/'
+/** Where an integration's logo is drawn from, read from its row: its own
+ * SVG as a `data:` address, else the logo door for a row that names its
+ * logo's address (`image`), made absolute on the apex, or none where it has
+ * neither (@yaks/ui `Logo` then draws a neutral mark).
+ *
+ * ```ts
+ * import { integrationLogo } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * let env = { APEX: 'yaks.test' }
+ * assertEquals(
+ *   integrationLogo({ name: 'gmail', image: 'https://x.test/g.svg' }, env),
+ *   'https://yaks.test/connections/logo/gmail',
+ * )
+ * assertEquals(integrationLogo({ name: 'x', logo: '<svg/>' }), 'data:image/svg+xml,%3Csvg%2F%3E')
+ * assertEquals(integrationLogo({ name: 'mine' }), undefined)
+ * ```
+ */
+export let integrationLogo = (
+  i: { name: string; logo?: string; image?: string },
+  env: Host = {},
+): string | undefined =>
+  i.logo
+    ? `data:image/svg+xml,${encodeURIComponent(i.logo)}`
+    : i.image
+    ? url(env, `${LOGOS}${encodeURIComponent(i.name)}`)
+    : undefined
 let SHA = /^[0-9a-f]{64}$/
 /** The name a web manifest answers at, under an app's mount or a space's
  * Operator. */

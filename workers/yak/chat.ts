@@ -47,6 +47,8 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { chatRows } from './connections.ts'
+import type { Integration } from '@yaks/connections'
+import { integrationLogo } from '@yaks/platform/routes'
 
 // What answering and hearing need, loaded when they first run: the
 // Operator's channels import the platform list alone.
@@ -542,7 +544,8 @@ let servers = async (
  * the address that opens them. */
 export type Place = {
   platform: string
-  /** the platform's mark, an SVG document, from its integration */
+  /** where its integration's logo is drawn from (@yaks/platform/routes
+   * `integrationLogo`), for @yaks/ui `Logo` */
   logo?: string
   server?: string
   room?: string
@@ -555,8 +558,15 @@ export type Place = {
 export type Unset = {
   platform: string
   integration: string
+  /** where its logo is drawn from, as a {@link Place}'s */
   logo?: string
   testing?: boolean
+}
+
+// An integration's logo, where it has one.
+let marked = (i: Integration, env: Env) => {
+  let logo = integrationLogo(i, env)
+  return logo ? { logo } : {}
 }
 
 /** Every place a space's Operator is reached on a chat platform, read from
@@ -580,7 +590,7 @@ export let reached = async (
           unset: [{
             platform: p.title,
             integration: bot.name,
-            ...bot.logo ? { logo: bot.logo } : {},
+            ...marked(bot, env),
             ...bot.testing ? { testing: true } : {},
           }],
         }
@@ -596,7 +606,7 @@ export let reached = async (
         let room = hears.server == server && hears.id ? hears : undefined
         return {
           platform: p.title,
-          ...integration.logo ? { logo: integration.logo } : {},
+          ...marked(integration, env),
           ...name ? { server: name } : {},
           ...room?.name ? { room: String(room.name) } : {},
           href: link(server, room ? String(room.id) : undefined),

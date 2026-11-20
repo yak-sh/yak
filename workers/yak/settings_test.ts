@@ -108,6 +108,7 @@ let connectionPage = (open?: string) =>
         keyed: true,
         hosts: ['api.weather.test'],
         face: {
+          name: 'weather',
           title: 'Weather',
           tagline: '',
           site: '',

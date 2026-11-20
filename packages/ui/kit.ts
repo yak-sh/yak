@@ -45,6 +45,7 @@ import { halved } from './halved.ts'
 import * as group from './Group.ts'
 import * as head from './Head.ts'
 import * as icon from './Icon.ts'
+import * as logo from './Logo.ts'
 import * as id from './Id.ts'
 import * as index from './Index.ts'
 import * as menu from './Menu.ts'
@@ -123,6 +124,7 @@ let modules = {
     Chips: chips,
     Address: address,
     Icon: icon,
+    Logo: logo,
     Match: match,
     Value: value,
     Meter: meter,
