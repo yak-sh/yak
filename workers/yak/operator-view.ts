@@ -332,13 +332,36 @@ export let helping = (
   }
 }
 
-// The first line of a helper's final reply, its markup's marks taken off.
+// The first line of a helper's final reply, its markup's marks taken off,
+// and past `RECAP` characters cut at a word, so it never ends mid-word.
 let recapOf = (entries: Bundle[]) =>
-  String(
-    comp(entries.findLast((b) => b.output && b.content && !b.notice), 'content')
-      ?.body ?? '',
-  ).split('\n').map((l) => l.replace(/^[\s#>*_-]+|[\s*_]+$/g, ''))
-    .find(Boolean)?.slice(0, 200) ?? ''
+  clipped(
+    String(
+      comp(
+        entries.findLast((b) => b.output && b.content && !b.notice),
+        'content',
+      )
+        ?.body ?? '',
+    ).split('\n').map((l) => l.replace(/^[\s#>*_-]+|[\s*_]+$/g, ''))
+      .find(Boolean) ?? '',
+  )
+
+let RECAP = 280
+
+/**
+ * A line kept to `most` characters, cut at the last word that fits.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { clipped } from './operator-view.ts'
+ * equal(clipped('Imported 40 rows.'), 'Imported 40 rows.')
+ * equal(clipped('A new message rather than a reply', 20), 'A new message rather…')
+ * ```
+ */
+export let clipped = (line: string, most = RECAP) =>
+  line.length <= most
+    ? line
+    : line.slice(0, line.lastIndexOf(' ', most) + 1 || most).trimEnd() + '…'
 
 /** What the session is doing as its yak shows it (mascot.ts `MOVES`):
  * thinking or using a tool while it works, done or failed as it ends, and
