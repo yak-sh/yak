@@ -692,7 +692,7 @@ export let useDoc: VocabDoc = {
       type: 'object',
       wire: false,
       journal: false,
-      properties: { at: owned(time) },
+      properties: { at: owned({ ...time, index: true }) },
     },
     changed: {
       description:
