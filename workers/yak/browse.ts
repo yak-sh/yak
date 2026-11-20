@@ -31,7 +31,12 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 /** What a caller posts: the page, its window and the steps taken on it. */
-export type Asked = { url: string; view?: Partial<View>; steps?: Step[] }
+export type Asked = {
+  url: string
+  view?: Partial<View>
+  steps?: Step[]
+  allow?: string[]
+}
 
 // A phone's window unless the caller names another.
 let PHONE: View = { width: 390, height: 844, wait: 1000, touch: true }
@@ -99,6 +104,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
           view,
           cookies: held(token, env),
           steps: Array.isArray(asked.steps) ? asked.steps : [],
+          allow: Array.isArray(asked.allow)
+            ? asked.allow.filter((p) => typeof p == 'string')
+            : [],
           // What a check looks at is the page and what it does; axe-core
           // over a long live page outlasts its deadline, and the audit is
           // app_preview's.

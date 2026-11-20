@@ -63,6 +63,10 @@ export type Visit = {
   view: View
   cookies?: Cookie[]
   steps?: Step[]
+  /** Browser permissions the page holds as it opens, such as
+   * `notifications`: a headless browser turns every ask down, so a page
+   * that offers what a permission allows offers nothing without it. */
+  allow?: string[]
   /** Whether axe-core checks the page's accessibility (default true). */
   audit?: boolean
 }
@@ -85,6 +89,9 @@ export type Page = {
     timeout: number
   }): Promise<{ status(): number } | null>
   createCDPSession(): Promise<Session>
+  browserContext(): {
+    overridePermissions(origin: string, permissions: string[]): Promise<void>
+  }
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
   waitForSelector(
     selector: string,
@@ -344,7 +351,7 @@ let checked = async (
 
 export let capture = async (
   browsing: Browsing,
-  { url, view, cookies = [], steps = [], audit = true }: Visit,
+  { url, view, cookies = [], steps = [], allow = [], audit = true }: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   time: Clock = system,
 ): Promise<Rendered> => {
@@ -374,6 +381,12 @@ export let capture = async (
       page.on('error', error)
       await page.setViewport(viewport(view))
       if (cookies.length) await page.setCookie(...cookies)
+      if (allow.length) {
+        await page.browserContext().overridePermissions(
+          new URL(url).origin,
+          allow,
+        )
+      }
       let status = 0
       try {
         status = (await page.goto(url, {

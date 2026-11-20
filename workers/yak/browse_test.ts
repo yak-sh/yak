@@ -98,6 +98,17 @@ test('the platform owner may browse, and a window named is the one opened', asyn
   })
 })
 
+test('a page opens holding the permissions asked for, as a person who allowed them', async () => {
+  did.length = 0
+  let r = await browse(
+    { url: manage.url, allow: ['notifications', 7] },
+    { cookie: checks.cookie },
+  )
+  equal(r.status, 200)
+  equal(visits.at(-1)!.allow, ['notifications'])
+  equal(did, [`allow notifications on https://${k.host}`])
+})
+
 test('a person, a bearer and a page off our zone are each refused', async () => {
   let seen = visits.length
   equal((await browse(manage, { cookie: stranger.cookie })).status, 403)

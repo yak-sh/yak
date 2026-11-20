@@ -220,7 +220,10 @@ yak admin browse https://checks.yaks.app/roster/ --width 1280 --height 800 --tou
 | `{"shot": "typed"}`     | takes a screenshot named `typed`                        |
 
 A step that fails stops the rest and is listed among the errors; the page is
-still pictured. A headless browser has no on-screen keyboard, so `keyboard`
+still pictured. A headless browser turns every permission ask down, so a page
+that offers what one allows (the Operator's offer of alerts) shows nothing
+until the visit holds it: `--allow notifications` opens the page as a person
+who allowed them. A headless browser has no on-screen keyboard, so `keyboard`
 shrinks the window by its height, which is what a phone does for our pages:
 they ask for `interactive-widget=resizes-content` (workers/yak/pages.ts).
 

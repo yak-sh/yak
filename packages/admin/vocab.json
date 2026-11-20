@@ -116,6 +116,10 @@
           "type": "boolean",
           "description": "a phone's window: touch events and a mobile viewport (default true)"
         },
+        "allow": {
+          "type": "string",
+          "description": "browser permissions the page holds as it opens, comma-separated, such as notifications; a headless browser turns every ask down otherwise"
+        },
         "to": {
           "type": "string",
           "description": "the directory the screenshots are written to, read against cwd when relative (default .scratch/browse)"

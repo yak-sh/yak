@@ -3,7 +3,10 @@
 // what one that does reads back in order.
 import type { Page } from './capture.ts'
 
-export type Actions = Pick<Page, 'waitForSelector' | 'keyboard' | 'touchscreen'>
+export type Actions = Pick<
+  Page,
+  'waitForSelector' | 'keyboard' | 'touchscreen' | 'browserContext'
+>
 
 export let actions = (did: (line: string) => void = () => {}): Actions => {
   let done = (line: string) => (did(line), Promise.resolve())
@@ -20,6 +23,10 @@ export let actions = (did: (line: string) => void = () => {}): Actions => {
       down: (key) => done(`down ${key}`),
       up: (key) => done(`up ${key}`),
     },
+    browserContext: () => ({
+      overridePermissions: (origin, permissions) =>
+        done(`allow ${permissions.join(',')} on ${origin}`),
+    }),
     touchscreen: {
       touchStart: (x, y) => done(`touch ${x},${y}`),
       touchMove: (x, y) => done(`move ${x},${y}`),

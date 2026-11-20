@@ -348,7 +348,9 @@ export let runs = (
           .filter((k) => a[k] != null)
           .map((k) => [k, a[k]]),
       ) as Browse['view']
-      let got = await browse(await website(at), { url, view, steps })
+      let allow = word(a, 'allow')?.split(',').map((p) => p.trim())
+        .filter(Boolean)
+      let got = await browse(await website(at), { url, view, steps, allow })
       let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
       await fs.mkdir(to, { recursive: true })
       let files: string[] = []

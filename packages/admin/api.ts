@@ -287,6 +287,9 @@ export type Browse = {
   url: string
   view?: { width?: number; height?: number; wait?: number; touch?: boolean }
   steps?: Step[]
+  /** Browser permissions the page holds as it opens, such as
+   * `notifications`. */
+  allow?: string[]
 }
 
 /** What the browser saw (workers/yak/browser/capture.ts `Rendered`). */
