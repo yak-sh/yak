@@ -925,9 +925,25 @@ test('words sent are drawn before the Operator takes them in, then once as its l
   body.set('say', 'Ask the shelter about tables')
   body.set('request', crypto.randomUUID())
   await serve(base, { method: 'POST', body })
-  let read = async () =>
-    (await (await serve(`${base}?talk=${park}`)).json()).html as string
-  let waiting = await read()
+  let reading = async () =>
+    (await (await serve(`${base}?talk=${park}`)).json()) as {
+      html: string
+      aside?: { turn: { what: string } | null }
+    }
+  let read = async () => (await reading()).html
+  // Before it is taken in, the turn is under way wherever the page says so:
+  // the line under the conversation, the yak beside the box, the aside.
+  let before = await reading()
+  let thread = parseHTML(before.html).document.querySelector('[data-task]')!
+  assertEquals(
+    [
+      thread.querySelector('[data-now]')?.textContent,
+      thread.getAttribute('data-doing'),
+      before.aside?.turn?.what,
+    ],
+    ['Thinking…', 'thinking', 'Thinking…'],
+  )
+  let waiting = before.html
   await p.builder(eid).alarm()
   await p.settled()
   let taken = await read()

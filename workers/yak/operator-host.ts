@@ -1110,13 +1110,29 @@ export let standingAt = async (
   return standing(drawn, newest.flat(), archived)
 }
 
+// Lines `arrived` as the newest of `session`'s entries, numbered after them.
+let newest = (arrived: Bundle[], entries: Bundle[], session: string) => {
+  let last = Math.max(
+    0,
+    ...entries.map((b) => Number(comp(b, 'entry')?.seq ?? 0)),
+  )
+  return arrived.map((b, i) => ({
+    ...b,
+    entry: { session, seq: last + i + 1 },
+  }))
+}
+
 // The person's words their conversation has not drawn yet: each request of
 // theirs since its lines begin that no other session or task took, and whose
 // line is not among those read, drawn after them as that line, under its id
 // (`inputOf`). A page read while the Operator takes it in shows it, the line
 // put in its place replaces it, and one taken in between the two reads here
 // is still drawn.
-let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
+let arriving = async (
+  store: Store,
+  row: Bundle,
+  entries: Bundle[],
+): Promise<Bundle[]> => {
   let own = comp(row, 'operator_session')
   let person = String(own?.person ?? '')
   if (
@@ -1252,15 +1268,17 @@ export let conversationOf = async (
     let names = namer(seen)
     let view = await viewOf(store, entries, !!everyone)
     seen.helpers = await lined(store, seen.helpers, names, opens)
-    let shown = helper
-      ? entries
-      : [...entries, ...await arriving(store, row, entries)]
+    let arrived = helper ? [] : await arriving(store, row, entries)
+    let shown = [...entries, ...arrived]
+    // Words sent and not yet taken in are the turn under way: the newest
+    // input, which the Operator answers next.
+    let working = [...entries, ...newest(arrived, entries, eid)]
     let drawn = drawnLines(shown, names, seen, view)
     return {
       ...helper
         ? { helper: await helperPage(store, row, entries, names, opens) }
         : {},
-      aside: asideOf(entries, seen.helpers, names, helper),
+      aside: asideOf(working, seen.helpers, names, helper),
       task: eid,
       begun: open,
       title: helper
@@ -1270,12 +1288,12 @@ export let conversationOf = async (
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,
-      html: talk({ entity: { eid } } as Bundle, shown, names, seen, {
+      html: talk({ entity: { eid } } as Bundle, working, names, seen, {
         drawn,
         take,
       }),
       lines: () => wire(drawn, shown, seen),
-      now: now(entries, names),
+      now: now(working, names),
       waiting: [],
       making: making(entries, seen.helpers),
       standing: await standingOf(store, [row], entries, seen.helpers),
