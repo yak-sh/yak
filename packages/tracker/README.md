@@ -23,6 +23,8 @@ references may name entities in other stores.
 | `./remote`     | Signed remote reads, bug marks and durable error delivery                           |
 | `./poll`       | A polled watch of the platform tracker's bugs, or a space tracker's, with marks     |
 | `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                  |
+| `./digest`     | The daily digest of bugs: its letter, its wake and its sending                      |
+| `./chart`      | The digest's chart as a PNG, drawn from its address's query string                  |
 | `./errors`     | The admin_errors report: unresolved bugs, newest first, and their time to fix       |
 | `./everywhere` | One read of every tracker on yaks.app: the platform's and each space's it lists     |
 | `./graph`      | The precondition refusing an unexplained resolution                                 |
@@ -119,15 +121,42 @@ stays on disk while complete records continue. Segments use independent names,
 so concurrent processes never share an append offset.
 
 `effects({graph}, options)` accepts an `enrich` function for frame resolution,
-and the digest's mail `to`, `from`, tracker web `url` and global tracker `store`
-eid. Local CLI composition turns the configured `code: {cwd, url, origins}` into
-frame enrichment through the fleet catalog and a commit resolver for the bug
-tools.
+and the digest's mail `to`, `from`, tracker web `url`, global tracker `store`
+eid and `chart` address. Local CLI composition turns the configured
+`code: {cwd, url, origins}` into frame enrichment through the fleet catalog and
+a commit resolver for the bug tools.
 
 No effect writes a letter about one bug. Agents hear of each new bug at once
 from the open-bug watch (@yaks/heal), which files its task and knocks; a person
-reads the daily digest (`./digest`), which the platform tracker sends to its
-`to`.
+reads the daily digest (below), which the platform tracker sends to its `to`.
+
+### The daily digest
+
+The owner reads one letter a morning about bugs, not one per bug. Its wake
+(`wake()` in `./digest`, `digest{}` beside a recurring `wake` at 07:00
+America/Detroit) fires `bug_digest`, which writes that day's letter to `to` from
+the bug rows: the bugs that opened (first seen or regressed) and were fixed in
+the day before, each fix's time to fix and their median, every open bug with how
+long it has been open and the task a fixer took it for (`taken.task`, "nobody"
+without one), and whom each reached, a person's in bold. Open bugs that reached
+a person come first, then the most hit; the letter lists fifteen and counts the
+rest. A day owns one letter (its eid derives from the store, recipient and day),
+so a retried firing writes nothing more.
+
+Above the tables is a chart of the last fourteen days: bugs opened (red) and
+fixed (green) each day, and the median time to fix of the day's fixes (amber).
+It is a PNG, since a mail client draws no SVG and fetches what it shows: the
+letter's image points at the `chart` option's `/chart.png` with the days in its
+query string (`query()` in `./chart`), and `serve()` draws it from that alone,
+so the door that serves it reads nothing and needs no ticket.
+
+```ts
+import { equal } from '@yaks/testing'
+import { days, query } from '@yaks/tracker/chart'
+
+let week = [{ day: '2026-11-19', opened: 3, fixed: 1, fix: 240_000 }]
+equal(days(new URLSearchParams(query(week))), week)
+```
 
 Retention keeps the newest hundred plus the first occurrence of each commit (or
 version without a commit) in the active graph. Every admitted occurrence is

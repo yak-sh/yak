@@ -24,6 +24,8 @@ import { timingDoc } from '@yaks/timing/vocab'
 import { caught, origin, type Sink } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
 import { survivor } from '@yaks/tracker/merge'
+import { send, wake } from '@yaks/tracker/digest'
+import { derivedEid } from '@yaks/graph/identity'
 import { type Explanation, resolutions } from '@yaks/tracker/resolution'
 import {
   after,
@@ -341,6 +343,24 @@ export let store = (storage: Storage, config: Config) => {
         }
       }
       return found.length
+    },
+    // The daily digest's wake, written once: a recurring wake moves itself.
+    schedule: async (now = Date.now()) => {
+      let row = wake(now)
+      let [held] = await g.get([row.entity.eid], ['wake'])
+      if (!held?.wake) await g.apply([row], { trusted: true })
+    },
+    // Today's digest, now, to `address` beside its daily recipient: how a
+    // check reads the letter without waiting for the morning.
+    digest: async (address: string, now = Date.now()) => {
+      let to = derivedEid(`tracker-digest-to|${address}`)
+      let [held] = await g.get([to], ['email'])
+      if ((held?.email as Comp | undefined)?.address != address) {
+        await g.apply([{ entity: { eid: to }, email: { address } }], {
+          trusted: true,
+        })
+      }
+      await send(g, now, { ...config, to })
     },
     // Only composed handlers can make progress (@yaks/effects `next`), so an
     // unknown or disabled errand keeps no otherwise idle object awake. Behind

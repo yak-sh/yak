@@ -74,3 +74,30 @@ test('an eid the sender names reads as its id; code keeps it literal', () => {
   )
   assertEquals(text(body), body.replaceAll('`', ''))
 })
+
+test('a table: its head and rows in both renderings, a pipe in a cell kept', () => {
+  let body = '| Bug | Fix |\n|---|---|\n| [a \\| b](https://x.example/a) | 4m |'
+  assertEquals(
+    html(body),
+    '<table style="border-collapse:collapse"><thead><tr>' +
+      '<th style="padding:2px 10px 2px 0;text-align:left;vertical-align:top">Bug</th>' +
+      '<th style="padding:2px 10px 2px 0;text-align:left;vertical-align:top">Fix</th>' +
+      '</tr></thead><tbody><tr>' +
+      '<td style="padding:2px 10px 2px 0;text-align:left;vertical-align:top"><a href="https://x.example/a">a | b</a></td>' +
+      '<td style="padding:2px 10px 2px 0;text-align:left;vertical-align:top">4m</td>' +
+      '</tr></tbody></table>',
+  )
+  assertEquals(text(body), 'Bug · Fix\na | b (https://x.example/a) · 4m')
+})
+
+test('an image on its own line, only from an absolute http(s) address', () => {
+  assertEquals(
+    html('![Bugs by day](https://x.example/c.png?o=1,2)'),
+    '<p><img src="https://x.example/c.png?o=1,2" alt="Bugs by day" style="max-width:100%"></p>',
+  )
+  assertEquals(
+    text('![Bugs by day](https://x.example/c.png)'),
+    'Bugs by day (https://x.example/c.png)',
+  )
+  assertEquals(html('![x](javascript:alert)'), '<p>!x</p>')
+})

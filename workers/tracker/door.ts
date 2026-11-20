@@ -234,6 +234,22 @@ async (request: Request): Promise<Response> => {
   if (path == '/unseen') {
     return json(await tracker.unseen(url.searchParams.get('app') ?? undefined))
   }
+  // Today's digest, now, to an address of the caller's: an admin's check of
+  // the letter the morning brings.
+  if (request.method == 'POST' && path == '/digest') {
+    if (scope != platform || !access.admin || access.mark !== true) {
+      return json({ error: 'tracker digest denied' }, 403)
+    }
+    let body = await request.json().catch(() => null) as
+      | { to?: unknown }
+      | null
+    let to = body?.to
+    if (typeof to != 'string' || !/^[^\s@]+@[^\s@]+$/.test(to)) {
+      return json({ error: 'body must be JSON naming to: an address' }, 400)
+    }
+    await tracker.digest(to)
+    return json({ ok: true })
+  }
   // A failed effect run back to the pool once its fix is live, so the fix is
   // seen to work: a bug's settling, its frames, its letter. The same
   // capability as a bug's mark.

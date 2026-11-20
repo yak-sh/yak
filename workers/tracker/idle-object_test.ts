@@ -5,6 +5,7 @@ import { type State, Tracker } from './object.ts'
 import { platform } from './core.ts'
 import { canary } from './worker.ts'
 import type { Comp } from '@yaks/graph'
+import { wake } from '@yaks/tracker/digest'
 
 let now = Date.parse('2026-10-10T00:00:00Z')
 let env = {
@@ -68,9 +69,11 @@ test('a warm tracker boot reuses readiness and mail without writes', async () =>
   equal(idle.writes, [])
 })
 
-test('an idle tracker alarm stops without installation, effects or alarm writes', () => {
-  equal(alarm.writes, [])
-  equal(idleAlarm, null)
+// Its one standing errand is the morning's digest.
+let morning = Date.parse(String((wake(now).wake as Comp).at))
+test('an idle tracker alarm sleeps until the digest, without installation or effects', () => {
+  equal(alarm.writes, [`alarm ${morning}`])
+  equal(idleAlarm, morning)
 })
 
 test('an obsolete readiness stamp installs before recording the new schema', () => {

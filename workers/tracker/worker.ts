@@ -17,6 +17,7 @@ import { lent } from './mail.ts'
 import type { Settings } from './object.ts'
 import type { Explanation } from '@yaks/tracker/resolution'
 import { calling } from './rpc.ts'
+import { serve } from '@yaks/tracker/chart'
 
 export type Stub = {
   fetch: (request: Request) => Promise<Response>
@@ -303,6 +304,10 @@ export let worker = (
   return {
     fetch: async (request: Request): Promise<Response> => {
       let url = new URL(request.url)
+      // The digest's chart reads nothing but its address, so anyone may ask.
+      if (url.pathname == '/chart.png' && request.method == 'GET') {
+        return await serve(url)
+      }
       // A provider's notice about a letter, at `/mail/<via>`, is read by the
       // notices that provider lends (config.ts).
       let via = url.pathname.match(/^\/mail\/([a-z0-9-]+)$/)?.[1]

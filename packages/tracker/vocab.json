@@ -359,6 +359,23 @@
       ],
       "target": ".error !error.bug !probe.grouped"
     },
+    "digest": {
+      "component": true,
+      "type": "object",
+      "description": "Marks the recurring wake that sends the daily bug digest (./digest.ts).",
+      "properties": {}
+    },
+    "bug_digest": {
+      "effect": true,
+      "description": "Send the daily digest of bugs, once a day: new, fixed with time to fix, still open and who is on each, and which reached a person, above a chart of the last two weeks.",
+      "created": [
+        "fired"
+      ],
+      "changed": [
+        "fired.at"
+      ],
+      "target": ".digest .fired"
+    },
     "bug_settle": {
       "effect": true,
       "description": "Archive, in a space's tracker, the reports of a person's app that a resolved bug's occurrences stand for, and resolve with the resolution's explanation a bug of the space's they leave with no open occurrence, so its owner and Operator stop hearing of a break yaks.app fixed; and hand each space whose Operator conversations the bug stopped (occurrences tagged rerun) the faults they were filed under, so it runs them again.",

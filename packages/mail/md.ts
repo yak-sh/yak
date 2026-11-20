@@ -1,8 +1,8 @@
 // A letter's body is markdown, and it goes out twice: once as the plain text
 // part and once as HTML. This file is both renderings, from one small reader.
 //
-// It is deliberately minimal — paragraphs, headings, bullets, links, bold,
-// italic, code — because a mail client renders a small subset of HTML anyway
+// It is deliberately minimal — paragraphs, headings, bullets, tables, an image
+// on a line of its own, links, bold, italic, code — because a mail client renders a small subset of HTML anyway
 // and because a markdown library is a dependency this package would otherwise
 // not need. If you already have a renderer you trust, hand its output in as
 // the message's `html` and none of this runs.
@@ -135,6 +135,28 @@ let flat = (line: string, names?: Names): string =>
       : t.text
   ).join('')
 
+// An image stands on a line of its own, at an absolute http(s) address: a mail
+// client fetches it from there, and has no other way to show one.
+let IMAGE = /^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/i
+
+// A table is a run of lines that start with a pipe; a row of dashes under the
+// first makes it the head. A cell holds a pipe written `\|`.
+let ROW = /^\s*\|/
+let RULE = /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/
+let cells = (line: string): string[] =>
+  line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))
+let table = (lines: string[]) => {
+  let ruled = lines.length > 1 && RULE.test(lines[1])
+  return {
+    head: ruled ? cells(lines[0]) : undefined,
+    rows: lines.slice(ruled ? 2 : 0).map(cells),
+  }
+}
+
+// Mail clients drop a stylesheet, so a table's few rules ride on its cells.
+let CELL = 'padding:2px 10px 2px 0;text-align:left;vertical-align:top'
+
 // A block is a run of lines between blank ones. Its first line determines what
 // kind of block it is.
 let block = (lines: string[], names?: Names): string => {
@@ -142,6 +164,23 @@ let block = (lines: string[], names?: Names): string => {
   if (head) {
     let n = head[1].length
     return `<h${n}>${inline(head[2], names)}</h${n}>`
+  }
+  let image = lines.length == 1 && IMAGE.exec(lines[0].trim())
+  if (image) {
+    return `<p><img src="${escape(image[2])}" alt="${
+      escape(image[1])
+    }" style="max-width:100%"></p>`
+  }
+  if (lines.every((l) => ROW.test(l))) {
+    let t = table(lines)
+    let row = (cs: string[], tag: string) =>
+      `<tr>${
+        cs.map((c) => `<${tag} style="${CELL}">${inline(c, names)}</${tag}>`)
+          .join('')
+      }</tr>`
+    return `<table style="border-collapse:collapse">${
+      t.head ? `<thead>${row(t.head, 'th')}</thead>` : ''
+    }<tbody>${t.rows.map((r) => row(r, 'td')).join('')}</tbody></table>`
   }
   if (lines.every((l) => /^\s*[-*]\s+/.test(l))) {
     let items = lines.map((l) =>
@@ -176,12 +215,18 @@ export let html = (body: string, names?: Names): string =>
  * no HTML can still follow it.
  */
 export let text = (body: string, names?: Names): string =>
-  blocks(body).map((lines) =>
-    lines.map((l) =>
+  blocks(body).map((lines) => {
+    let image = lines.length == 1 && IMAGE.exec(lines[0].trim())
+    if (image) return `${image[1]} (${image[2]})`
+    if (lines.every((l) => ROW.test(l))) {
+      let t = table(lines)
+      return [...t.head ? [t.head] : [], ...t.rows]
+        .map((r) => r.map((c) => flat(c, names)).join(' · ')).join('\n')
+    }
+    return lines.map((l) =>
       flat(
         l.replace(/^(#{1,6})\s+/, '').replace(/^\s*[-*]\s+/, '- '),
         names,
       )
-    )
-      .join('\n')
-  ).join('\n\n')
+    ).join('\n')
+  }).join('\n\n')

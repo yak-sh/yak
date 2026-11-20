@@ -25,12 +25,15 @@
     "./errors": "./errors.ts",
     "./everywhere": "./everywhere.ts",
     "./merge": "./merge.ts",
-    "./instrument": "./instrument.ts"
+    "./instrument": "./instrument.ts",
+    "./digest": "./digest.ts",
+    "./chart": "./chart.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",
   "dependencies": {
     "@yaks/api": "0.2.29",
+    "@yaks/blob": "0.2.30",
     "@yaks/code": "0.2.23",
     "@yaks/effects": "0.2.33",
     "@yaks/file": "0.2.28",
@@ -49,6 +52,7 @@
     "@yaks/ui": "0.2.30",
     "@yaks/ux": "0.2.23",
     "@yaks/vocab": "0.2.32",
+    "@yaks/wake": "0.2.24",
     "preact": "10.29.7"
   },
   "devDependencies": {
@@ -62,7 +66,6 @@
     "@yaks/testing": "0.2.30",
     "@yaks/text": "0.2.24",
     "@yaks/timing": "0.2.23",
-    "@yaks/wake": "0.2.24",
     "preact-render-to-string": "6.7.0"
   }
 }

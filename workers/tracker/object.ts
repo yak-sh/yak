@@ -205,8 +205,10 @@ export class Tracker extends Durable {
       // run that finished never runs again.
       free: (write) => this.ceiling.free(write),
       store: this.scope,
-      // The box's tracker web, which reads platform bugs through.
+      // The box's tracker web, which reads platform bugs through, and this
+      // Worker's own chart door, which draws the digest's chart.
       url: 'https://tracker.yak.sh',
+      chart: 'https://yak-tracker.yaks.workers.dev/chart.png',
       // The object hibernates ten seconds after its last request, so the
       // bugs' tag is kept in its storage, not its memory.
       kept: {
@@ -370,6 +372,7 @@ export class Tracker extends Durable {
     // box's bugs and people's apps', which it also records.
     if (this.scope == platform) {
       Object.assign(this.#config, await activate(this.tracker!.graph, this.env))
+      if (this.#config.to) await this.tracker!.schedule(this.now())
     }
     this.#mailReady = true
   }

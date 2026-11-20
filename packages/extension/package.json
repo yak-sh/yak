@@ -11,6 +11,7 @@
   "license": "Apache-2.0",
   "description": "A browser extension that lends a person's tab to their agent: reading and acting on the page with per-site consent, a Do it before any step that sends, buys, posts or deletes, and an unpacked Chrome extension built from a configuration.",
   "dependencies": {
+    "@yaks/blob": "0.2.30",
     "@yaks/fp": "0.2.23",
     "@yaks/oauth": "0.2.23",
     "esbuild": "0.28.1"

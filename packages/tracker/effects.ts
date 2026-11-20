@@ -11,6 +11,7 @@ import { enrichFrames } from './frames.ts'
 import { occurring } from './reading.ts'
 import { type Explanation, explanation, unexplained } from './resolution.ts'
 import { tags } from './spread.ts'
+import { send } from './digest.ts'
 
 export type Options = {
   enrich?: Enrich
@@ -21,6 +22,8 @@ export type Options = {
   store?: string
   /** Tracker web address for links in the digest. */
   url?: string
+  /** Where the digest's chart is drawn: a `/chart.png` (./chart.ts). */
+  chart?: string
   retain?: number
   /** Archive these occurrences in the tracker of `scope` (a space's) for
    * `reason`, as its owner's `fixed` would, and resolve with `said` a bug of
@@ -144,6 +147,13 @@ export let effects = (
         }
         throw error
       }
+    },
+    // The day's digest is the one due when its wake fired, so a retry
+    // writes the same letter.
+    bug_digest: async (e) => {
+      let [row] = await host.graph.get([e.entity.eid], ['fired'])
+      let at = Date.parse(str(comp(row, 'fired').at))
+      if (Number.isFinite(at)) await send(host.graph, at, options)
     },
     bug_settle: (e) => settle(host.graph, e.entity.eid, options),
     error_trim: async (e) => {

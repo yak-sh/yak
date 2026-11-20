@@ -538,9 +538,10 @@ before storage. Normalization does not impose uniqueness on email entities.
 ## Bodies
 
 `message()` renders a Markdown body as plain text and HTML. The small renderer
-supports paragraphs, headings, bullets, links, bold, italic, and inline code. It
-escapes input HTML and emits links only for absolute `http`, `https`, `mailto`,
-and `tel` URLs. Relative links remain text. To use another renderer, construct a
+supports paragraphs, headings, bullets, pipe tables, an image on a line of its
+own (`![alt](https://…)`), links, bold, italic, and inline code. It escapes
+input HTML and emits links only for absolute `http`, `https`, `mailto`, and
+`tel` URLs. Relative links remain text. To use another renderer, construct a
 `Message` with your own `html` and pass it to a sender directly.
 
 ## Exports

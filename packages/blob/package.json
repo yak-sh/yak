@@ -14,7 +14,8 @@
     "./graph": "./graph.ts",
     "./routes": "./routes.ts",
     "./upload": "./upload.ts",
-    "./serve": "./serve.ts"
+    "./serve": "./serve.ts",
+    "./png": "./png.ts"
   },
   "license": "Apache-2.0",
   "description": "Stores text and binary content under SHA-256 addresses, with transparent graph text reads and writes, verified artifacts and HTTP responses.",

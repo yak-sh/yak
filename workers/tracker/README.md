@@ -288,11 +288,18 @@ sends nothing within 10 s, files a fatal occurrence on that door's own bug
 (`tracker|platform-uptime|MCP`, `…|app`, `…|query`), and an activated box
 heartbeat older than five minutes files one on `tracker|box-heartbeat`. A door
 that answers again resolves nothing: the bug stays open until an agent finds why
-it failed and fixes it, and its last occurrence says when it stopped. Each
-tracker graph sends one letter per new bug opening through its own `MAIL`
-binding, with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs
+it failed and fixes it, and its last occurrence says when it stopped. No tracker
+writes a letter about one bug: agents hear of each from the box's open-bug watch
+(@yaks/heal). The platform tracker sends `MAIL_TO` one digest a morning
+([@yaks/tracker](../../packages/tracker/README.md#the-daily-digest)). Space bugs
 stream through their store's graph subscription and remain unseen until their
 caller marks notification in the platform integration.
+
+`GET /chart.png` draws the digest's chart from its query string alone
+(`@yaks/tracker/chart`), so it takes no ticket: a mail client fetches it.
+Platform-only `POST /digest` with `{"to": "<address>"}` sends today's digest now
+to that address beside the daily recipient, for an admin ticket with the mark
+capability: how a check reads the morning's letter.
 
 ## Activation and deployment
 
@@ -305,13 +312,11 @@ nonsecret `TRACKER_URL` with the Worker URL. The build may deploy only this
 Worker. Source is ready; production queue and build activation are separate
 account operations.
 
-The first ordinary wake with all mail settings persists the activation time and
-refreshes the recipient in an already installed platform tracker. Earlier bug
-openings stay unseen and produce no letter; later openings and regressions each
-own one durable letter. Trace intake does not activate mail. A deployment's
-canary is a probe (`probe{grouped}` in
-[@yaks/tracker](../../packages/tracker/README.md#probes)): no bug, so no letter
-and nothing for a fixer.
+The platform tracker's first ordinary wake with all mail settings records the
+recipient and writes the digest's recurring wake. Trace intake does not activate
+mail. A deployment's canary is a probe (`probe{grouped}` in
+[@yaks/tracker](../../packages/tracker/README.md#probes)): no bug, and nothing
+for a fixer.
 
 Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
 build command empty. The wrapper installs Deno and the pinned npm dependencies.
