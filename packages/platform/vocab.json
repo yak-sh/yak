@@ -909,7 +909,7 @@
         "from": {
           "type": "string",
           "stamped": true,
-          "description": "on a texted code, who asked: a mac of the address the request came from, so texts per visitor are counted"
+          "description": "who asked: a mac of the network the request came from (signin.ts `visitor`), so codes and texts per visitor are counted by the hour (signin.ts `asked`, `mayText`)"
         },
         "code": {
           "type": "string",
@@ -954,6 +954,11 @@
           "stamped": true,
           "description": "the verified browser that typed it; absent when none did"
         },
+        "from": {
+          "type": "string",
+          "stamped": true,
+          "description": "who typed it: a mac of the network the request came from (signin.ts `visitor`), so a network's wrong guesses are counted across every address; absent for a request from inside"
+        },
         "at": {
           "type": "string",
           "format": "date-time",
@@ -961,7 +966,7 @@
           "description": "when it was typed"
         }
       },
-      "description": "a typed sign-in code that matched none of the address's open codes: an address's wrong guesses are counted across every browser for the hour (signin.ts `barred`)"
+      "description": "a typed sign-in code that matched none of the address's open codes: wrong guesses are counted by the hour per address across every browser, and per network across every address (signin.ts `barred`)"
     },
     "space": {
       "component": true,
@@ -1317,7 +1322,7 @@
       ]
     },
     "signin_miss": {
-      "description": "a sign-in code typed wrong, kept for the hour so an address's wrong guesses are counted whichever browser typed them"
+      "description": "a sign-in code typed wrong, kept for the hour so wrong guesses are counted per address whichever browser typed them, and per network whatever address they were for"
     },
     "space": {
       "description": "one customer’s area of the platform, at its own slug",

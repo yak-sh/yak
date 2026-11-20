@@ -1233,8 +1233,9 @@ export let codeCheck = async (
   newcomer?: string,
   session?: SessionSeed,
   browser?: string,
+  from?: string,
 ): Promise<Arrived | Response> =>
-  await guess(store, address, digest, { newcomer, session, browser }) ??
+  await guess(store, address, digest, { newcomer, session, browser, from }) ??
     askCode({
       address,
       q,
@@ -1724,17 +1725,18 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return c.counting(async () => {
       // Per source, before `mint`, so a loop spends none of any address's
       // letters: the address cap above protects an inbox, this one the
-      // platform's mail from somebody asking for a code at every address. A
-      // text is counted per visitor by the hour as well (signin.ts VISITS),
-      // since this one is by the minute and a text costs.
-      let from = text ? await visitor(secret(env), source(req)) : ''
+      // platform's mail from somebody asking for a code at every address. It
+      // is counted per visitor by the hour as well, since this one is by the
+      // minute: the codes nobody spent, in the write that keeps the code
+      // (signin.ts `asked`), and texts here (`mayText`), since a text costs.
+      let from = await visitor(secret(env), source(req))
       if (
         !await c.time(
           'rate',
           async () =>
             (await Promise.all([
               within(env.SIGNIN_RATE, place(req), failing('rate limit')),
-              mayText(meta(env), from),
+              !text || mayText(meta(env), from),
             ])).every(Boolean),
         )
       ) {
@@ -1783,6 +1785,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           newcomer,
           session,
           instrumentEid(session.via),
+          await visitor(secret(env), source(req)),
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       return timed(

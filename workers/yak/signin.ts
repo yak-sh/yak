@@ -62,9 +62,21 @@ export let WINDOW = 60 * 60_000
 // a stranger's phone, and the form texts whatever number is typed into it, so
 // a loop walking numbers (SMS pumping) is held per number by SENDS and per
 // visitor here. The door's per-minute ceiling (@yaks/workerd/rate `SIGNIN_RATE`) would
-// still let one visitor text thousands of numbers a day. Mail has no such
-// count: a letter costs nothing that matters.
+// still let one visitor text thousands of numbers a day.
 export let VISITS = 5
+
+// What one visitor (`visitor`: a network, the /48 for IPv6) gets by the hour
+// across every address: the codes nobody spent, mailed or texted, and the
+// typed guesses that matched nothing (`barred`). A code that opens buries its
+// rows and its browser's misses at that address, so a household or an office
+// signing in, typos and all, counts only what it left unused. A stranger
+// spraying codes across many addresses opens nothing and spends both: its
+// comparisons an hour are NETWORK_MISSES guesses, each against at most SENDS
+// codes. The door's per-minute ceiling (@yaks/workerd/rate `SIGNIN_RATE`)
+// alone let one network ask 300 letters an hour and compare five guesses at
+// each.
+export let NETWORK_SENDS = 60
+export let NETWORK_MISSES = 30
 
 export type Signin = {
   entity: { eid: string }
@@ -208,11 +220,17 @@ let recent = async (store: Meta, all: Signin[]) => {
 export let signinLine = (address: string) =>
   line`.signin.${key(address)}=${canon(address)}`
 
+/** The filter line that reads every row a visitor's asks left (`visitor`),
+ * whatever address they were for. */
+export let sentFrom = (from: string) => line`.signin.from=${from}`
+
 /**
  * What asking for a code writes, decided over every row the address holds
- * where they are kept (facets/signin-graph.ts), in the transaction that
- * writes the new code: the rows fallen out of the hour buried, and the new
- * row unless the address has had its SENDS letters this hour.
+ * and every row its visitor's asks left (`sent`, read by `sentFrom`) where
+ * they are kept (facets/signin-graph.ts), in the transaction that writes the
+ * new code: the rows fallen out of the hour buried, and the new row unless
+ * the address has had its SENDS letters this hour, or the visitor
+ * NETWORK_SENDS whose codes nobody spent.
  *
  * ```ts
  * import { asked, LIFE } from './signin.ts'
@@ -230,12 +248,19 @@ export let signinLine = (address: string) =>
  * ])
  * let full = ['a', 'b', 'c'].map((eid) => row(eid, now - 60_000))
  * assertEquals(asked(ask, full, now), [])
+ * let sent = Array.from({ length: 60 }, (_, i) => row(`s${i}`, now - 60_000))
+ * assertEquals(asked(ask, [], now, sent), [])
  * ```
  */
-export let asked = (ask: Bundle, rows: Signin[], now: number): Bundle[] => {
-  let stale = rows.filter((r) => !standing(now)(r)).map((r) =>
-    bury(r.entity.eid)
-  )
+export let asked = (
+  ask: Bundle,
+  rows: Signin[],
+  now: number,
+  sent: Signin[] = [],
+): Bundle[] => {
+  let stale = [
+    ...new Map([...rows, ...sent].map((r) => [r.entity.eid, r])).values(),
+  ].filter((r) => !standing(now)(r)).map((r) => bury(r.entity.eid))
   let live = rows.filter(standing(now))
   let scope = ask.signin as Signin['signin']
   let own = live.filter(({ signin: r }) =>
@@ -243,7 +268,10 @@ export let asked = (ask: Bundle, rows: Signin[], now: number): Bundle[] => {
     r.space == scope.space
   )
   let limit = scope.email ? ADDRESS_SENDS : SENDS
-  return own.length >= SENDS || live.length >= limit ? stale : [...stale, ask]
+  return own.length >= SENDS || live.length >= limit ||
+      sent.filter(standing(now)).length >= NETWORK_SENDS
+    ? stale
+    : [...stale, ask]
 }
 
 /**
@@ -294,16 +322,24 @@ export type Miss = {
 export let missLine = (address: string) =>
   line`.signin_miss.${key(address)}=${canon(address)}`
 
+/** The filter line that reads every wrong guess typed from a visitor's
+ * network (`visitor`), whatever address it was typed for. */
+export let missesFrom = (from: string) => line`.signin_miss.from=${from}`
+
 /**
- * Whether a typed guess from this browser is compared at all. Wrong guesses
- * are counted per address, whichever browser typed them, since a new browser
- * is free to make and each one's codes have tries of their own. Once TRIES
- * of them are spent in the hour, a browser that guessed wrong there gets no
- * more, and a browser that has not still gets one: the person holding the
- * letter or the text types it once, whatever a stranger burned (T-781).
+ * Whether a typed guess from this browser is compared at all, given the
+ * address's wrong guesses and those typed from this network (`here`, read by
+ * `missesFrom`). A network that has typed NETWORK_MISSES wrong in the hour,
+ * across every address, gets no more: that count is the stranger's own and
+ * nobody else can spend it. Wrong guesses are also counted per address,
+ * whichever browser typed them, since a new browser is free to make and each
+ * one's codes have tries of their own. Once TRIES of them are spent in the
+ * hour, a browser that guessed wrong there gets no more, and a browser that
+ * has not still gets one: the person holding the letter or the text types it
+ * once, whatever a stranger burned (T-781).
  *
  * ```ts
- * import { barred, TRIES } from './signin.ts'
+ * import { barred, NETWORK_MISSES, TRIES } from './signin.ts'
  * import { assert, assertFalse } from '@std/assert'
  * let now = Date.parse('2026-11-07T12:00:00Z')
  * let miss = (browser: string, ago = 60_000) => ({
@@ -312,36 +348,44 @@ export let missLine = (address: string) =>
  *     at: new Date(now - ago).toISOString() },
  * })
  * let spent = Array.from({ length: TRIES }, () => miss('stranger'))
- * assert(barred(spent, 'stranger', now))
- * assertFalse(barred(spent, 'person', now))
- * assertFalse(barred(spent.slice(1), 'stranger', now))
- * assertFalse(barred(spent.map(() => miss('stranger', 2 * 3600_000)),
+ * assert(barred(spent, [], 'stranger', now))
+ * assertFalse(barred(spent, [], 'person', now))
+ * assertFalse(barred(spent.slice(1), [], 'stranger', now))
+ * assertFalse(barred(spent.map(() => miss('stranger', 2 * 3600_000)), [],
  *   'stranger', now))
+ * let spray = Array.from({ length: NETWORK_MISSES }, () => miss('stranger'))
+ * assert(barred([], spray, 'another', now))
+ * assertFalse(barred([], spray.slice(1), 'another', now))
  * ```
  */
 export let barred = (
   misses: Miss[],
+  here: Miss[],
   browser: string | undefined,
   now: number,
 ) => {
+  if (here.filter(missing(now)).length >= NETWORK_MISSES) return true
   let hour = misses.filter(missing(now))
   return hour.length >= TRIES &&
     hour.some((m) => m.signin_miss.browser == browser)
 }
 
 /** What a typed guess that compared and opened nothing writes beside its
- * tries: the miss, and the burial of the misses fallen out of the hour. A
- * guess that opened buries this browser's own misses instead. */
+ * tries: the miss, kept with the network it was typed from (`from`), and the
+ * burial of the misses fallen out of the hour, the address's and the
+ * network's (`here`). A guess that opened buries this browser's own misses
+ * at the address instead. */
 export let missed = (
-  misses: Miss[],
+  { misses, here }: { misses: Miss[]; here: Miss[] },
   address: string,
-  browser: string | undefined,
+  { browser, from }: { browser?: string; from?: string },
   now: number,
   opened: boolean,
 ): Bundle[] => [
-  ...misses
+  ...[...new Map([...misses, ...here].map((m) => [m.entity.eid, m])).values()]
     .filter((m) =>
-      !missing(now)(m) || (opened && m.signin_miss.browser == browser)
+      !missing(now)(m) ||
+      (opened && misses.includes(m) && m.signin_miss.browser == browser)
     )
     .map((m) => bury(m.entity.eid)),
   ...opened ? [] : [{
@@ -349,6 +393,7 @@ export let missed = (
     signin_miss: {
       [key(address)]: canon(address),
       ...(browser ? { browser } : {}),
+      ...(from ? { from } : {}),
       at: new Date(now).toISOString(),
     },
   }],
@@ -379,10 +424,8 @@ export let visitor = async (secret: string, source: string) =>
 /** Whether this visitor may have another code texted this hour (VISITS). */
 export let mayText = async (store: Meta, from: string) =>
   !from ||
-  (await recent(
-      store,
-      await signins(store, line`.signin.from=${from}`),
-    )).length < VISITS
+  (await recent(store, await signins(store, sentFrom(from))))
+      .filter((r) => r.signin.phone).length < VISITS
 
 // A code still worth typing: not expired, and not already out of guesses.
 let open = (r: Signin, now: number) =>
@@ -393,8 +436,8 @@ let open = (r: Signin, now: number) =>
 // minted, nothing to send. Codes already standing are left standing: the
 // store keeps a mac and not the digits, so a second ask cannot re-send the
 // first letter's code, and letting the first one live is what a slow letter
-// needs. `from` is the visitor (`visitor`), kept on a texted code so
-// `mayText` can count it.
+// needs. `from` is the visitor (`visitor`), kept on the code so `asked`
+// and `mayText` can count it.
 //
 // One trip: the store reads the address's rows and decides in the write's
 // own transaction (`asked`), so asks sent at once cannot all pass the
@@ -436,7 +479,7 @@ export let lodge = async (
     entity: { eid: '$code' },
     signin: {
       [key(address)]: canon(address),
-      ...(from && texted(canon(address)) ? { from } : {}),
+      ...(from ? { from } : {}),
       ...scope,
       code: await mac(address, ask.code, secret),
       expires: ask.expires,
@@ -476,6 +519,9 @@ export type Arrival = {
   person?: string
   space?: string
   source?: string
+  /** The visitor typing it (`visitor`), whose wrong guesses are counted
+   * across every address (`barred`). */
+  from?: string
 }
 
 export type Via = 'code' | 'link' | Named
@@ -502,8 +548,16 @@ export let guess = async (
   store: Meta,
   address: string,
   want: string,
-  { newcomer, via = 'code', person, space, source, session, browser }: Arrival =
-    {},
+  {
+    newcomer,
+    via = 'code',
+    person,
+    space,
+    source,
+    session,
+    browser,
+    from,
+  }: Arrival = {},
 ): Promise<Arrived | null> => {
   for (;;) {
     try {
@@ -517,6 +571,7 @@ export let guess = async (
           ...(person ? { person, space, source } : {}),
           ...(session ? { session } : {}),
           ...(browser ? { browser } : {}),
+          ...(from ? { from } : {}),
         },
       }])
       return arrivedIn(applied, session, person)

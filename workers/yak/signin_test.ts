@@ -22,6 +22,7 @@ import {
   mac,
   mayText,
   mint,
+  NETWORK_SENDS,
   personOf,
   SENDS,
   spend,
@@ -450,9 +451,9 @@ test('a code for a number is kept under the number, with who asked', async () =>
     'v1',
   ])
   assertEquals(signin.code, await mac(NUMBER, code!, SECRET))
-  // A letter keeps no visitor: only texts are counted per visitor.
+  // A letter keeps its visitor too: letters are counted per visitor.
   await mint(d.at, SECRET, ME, 'v1')
-  assertEquals((await d.rows())[0].signin.from, undefined)
+  assertEquals((await d.rows())[0].signin.from, 'v1')
 })
 
 test('a number signs in with its code, and a person wears the number', async () => {
@@ -478,10 +479,10 @@ test('a number signs in with its code, and a person wears the number', async () 
 
 // Who asks is kept as a mac, so a row names nobody, and the same visitor is
 // the same mac.
-let visit = (from: string, ago: number) => ({
+let visit = (from: string, ago: number, phone = NUMBER) => ({
   entity: { eid: `e${++n}` },
   signin: {
-    phone: NUMBER,
+    ...phone ? { phone } : { email: ME },
     from,
     code: 'x'.repeat(64),
     expires: new Date(Date.now() - ago + LIFE).toISOString(),
@@ -515,6 +516,18 @@ test('five texted codes an hour from one visitor, and no more', async () => {
   assert(forgotten(old.wrote))
   // A request from inside is never counted.
   assert(await mayText(asking(() => []).at, ''))
+})
+
+test('a visitor gets NETWORK_SENDS codes nobody spent an hour, at any address', async () => {
+  let me = await visitor(SECRET, '203.0.113.9')
+  let d = await held(
+    Array.from({ length: NETWORK_SENDS - 1 }, () => visit(me, 60_000, '')),
+  )
+  assert(await mint(d.at, SECRET, 'one@example.net', me))
+  assertEquals(await mint(d.at, SECRET, 'two@example.net', me), null)
+  // Letters leave the texts' own count alone, and other visitors' counts.
+  assert(await mayText(d.at, me))
+  assert(await mint(d.at, SECRET, 'two@example.net', 'another'))
 })
 
 // The code is what a person opens the letter for, so it leads the letter,

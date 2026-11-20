@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { kernel, letters, mailed, unique } from './probe.ts'
 import { browserOf } from './session.ts'
-import { mac, mint, SENDS, spend, TRIES } from './signin.ts'
+import { mac, mint, NETWORK_MISSES, SENDS, spend, TRIES } from './signin.ts'
 import { held } from './signin-fixture.ts'
 
 let a = crypto.randomUUID(), b = crypto.randomUUID()
@@ -51,6 +51,31 @@ test('an address’s wrong guesses count across browsers, and a browser new to t
   )
   assertEquals(tried, { [s1]: TRIES, [s2]: 1, [person]: 0 })
   assert(await guess(person, '123456'))
+})
+
+test('a network’s wrong guesses count across every address, and spend no other network’s', async () => {
+  let stranger = crypto.randomUUID(), person = crypto.randomUUID()
+  let sprayed = Array.from(
+    { length: NETWORK_MISSES / 2 + 1 },
+    (_, i) => `sprayed${i}@example.net`,
+  )
+  let at = await held([
+    ...sprayed.map((to) => ({
+      entity: { eid: crypto.randomUUID() },
+      signin: { email: to, browser: stranger, code: 'x', expires, tries: 0 },
+    })),
+    scoped(person, digest),
+  ])
+  let guess = (to: string, from: string, browser = stranger, code = '654321') =>
+    spend(at.at, secret, to, code, { browser, from })
+  for (let i = 0; i < NETWORK_MISSES; i++) {
+    assertEquals(await guess(sprayed[i >> 1], 'spray'), null)
+  }
+  // Spent: the next address is not compared at all.
+  assertEquals(await guess(sprayed.at(-1)!, 'spray'), null)
+  assertEquals(await at.tries(sprayed.at(-1)!), [0])
+  // The person's own network still opens their code.
+  assert(await guess(address, 'home', person, '123456'))
 })
 
 test('typed codes stay with their browser and emailed links open on another', async () => {

@@ -6,8 +6,9 @@
 // An ask is the new `signin` row itself: it is written, beside the burial of
 // the rows fallen out of the hour, unless the address has had its letters,
 // and the answer says which. A guess is the request `$guess{email | phone,
-// code, via}`: it becomes a try off every open code, and for a typed code a
-// `signin_miss` counting it against the address (signin.ts `barred`), or the
+// code, via, from}`: it becomes a try off every open code, and for a typed
+// code a `signin_miss` counting it against the address and the network it
+// came from (signin.ts `barred`), or the
 // burial of every row when it opens one, beside whoever it signs in, stamped
 // as signed in (signin.ts `stamped`), and the space they land on, said as it
 // stands (`landing`). An arrival is the request
@@ -23,7 +24,7 @@
 // stand by the hooks that ask what a delete takes (graph.ts's serving fence,
 // pages-graph.ts `quietened`), and its counts are checked by the core's
 // `$was` like any caller's.
-import { line } from '@yaks/query'
+import { type Line, line } from '@yaks/query'
 import { instrumentEid } from '@yaks/platform/instrument'
 import type { Bundle, Plugin, Tx } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
@@ -38,9 +39,11 @@ import {
   guessed,
   type Miss,
   missed,
+  missesFrom,
   missLine,
   type Person,
   personLine,
+  sentFrom,
   type Signin,
   signinLine,
   stamped,
@@ -69,22 +72,36 @@ type Guess = {
   person?: string
   space?: string
   source?: string
+  from?: string
 }
 
 // How somebody arrives, by a guess that opened or by an `$arrive`.
 type Arriving = Pick<Guess, 'newcomer' | 'via' | 'session'>
 
-// Every wrong guess an address holds (signin.ts `barred`).
-let misses = (tx: Tx, address: string) =>
+// Every wrong guess a line reads: an address's, or a network's (signin.ts
+// `barred`).
+let misses = (tx: Tx, filter: Line) =>
   after(
-    tx.read(missLine(address)),
+    tx.read(filter),
     (found) => found.filter((r) => r.signin_miss) as unknown as Miss[],
   )
 
-// Every row an address's codes left.
-let rows = (tx: Tx, address: string) =>
+// The wrong guesses a typed code is held to: its address's, and those typed
+// from its network (`here`), which a request from inside has none of.
+let seen = (tx: Tx, address: string, from?: string) =>
   after(
-    tx.read(signinLine(address)),
+    misses(tx, missLine(address)),
+    (ms) =>
+      after(from ? misses(tx, missesFrom(from)) : [], (here) => ({
+        misses: ms,
+        here,
+      })),
+  )
+
+// Every row a line reads: an address's codes', or a visitor's asks'.
+let rows = (tx: Tx, filter: Line) =>
+  after(
+    tx.read(filter),
     (found) => found.filter((r) => r.signin) as unknown as Signin[],
   )
 
@@ -252,15 +269,18 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
                 },
               )
             })
-          // A typed code is also held to the address's wrong guesses
-          // (`barred`); a letter's link opens its own code from anywhere.
+          // A typed code is also held to the wrong guesses of its address and
+          // of its network (`barred`); a letter's link opens its own code
+          // from anywhere.
           let typed = g.via != 'link'
           let decide = () =>
             after(
-              rows(tx, address),
+              rows(tx, signinLine(address)),
               (all) =>
-                after(typed ? misses(tx, address) : [], (ms) => {
-                  if (typed && barred(ms, g.browser, now)) return []
+                after(typed ? seen(tx, address, g.from) : null, (held) => {
+                  if (
+                    held && barred(held.misses, held.here, g.browser, now)
+                  ) return []
                   let scoped = all.filter((r) =>
                     r.signin.person == g.person && r.signin.space == g.space &&
                     (typed
@@ -269,8 +289,11 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
                   )
                   let tried = guessed(scoped, g.code, now)
                   let opened = tried.some((w) => w.tombstone)
-                  let wrote = typed && tried.length
-                    ? [...tried, ...missed(ms, address, g.browser, now, opened)]
+                  let wrote = held && tried.length
+                    ? [
+                      ...tried,
+                      ...missed(held, address, g, now, opened),
+                    ]
                     : tried
                   if (!opened) return wrote
                   if (g.person) {
@@ -302,9 +325,14 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
         }
 
         if (asking(b)) {
+          let s = b.signin as Signin['signin']
           return after(
-            rows(tx, addressOf(b.signin as Signin['signin'])),
-            (all) => asked(b, all, now),
+            rows(tx, signinLine(addressOf(s))),
+            (all) =>
+              after(
+                s.from ? rows(tx, sentFrom(s.from)) : [],
+                (sent) => asked(b, all, now, sent),
+              ),
           )
         }
         return [b]
