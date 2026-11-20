@@ -169,6 +169,23 @@ name `~/.deno/bin/yak` in it. Acting as the owner is his to grant (M-31958).
 The box's own server runs main after `yak restart`. The platform itself is
 `yaks-app`.
 
+### Texting and calling as checks
+
+Two local numbers on yaks.app's Telnyx account are the agents' own. Text and
+call only between them and the Operators' numbers; never a person's number.
+
+| number         | role                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| +12694929622   | the checks person's phone: the number checks texts and calls from (`test-call.ts --from`), held by no space |
+| +12692383446   | the `checks` space's own number (`number_status --space checks --as checks`): checks' Operator answers on it |
+
+Send from +12694929622 with the Telnyx API (key: `op read 'op://Yak Shaving
+LLC/telnyx API/credential'`), `POST /v2/messages` for one text, and read
+what was sent and answered in `GET /v2/detail_records?filter[record_type]=messaging`.
+A group text needs three local numbers: `POST /v2/messages/group_mms` to one
+other number arrives as a one-to-one text, and carriers refuse a group that
+includes a toll-free number such as yaks.app's own.
+
 ### Checking the public pages as a stranger
 
 A visitor who opens yaks.app's pages, types in a box or signs up is read as a
