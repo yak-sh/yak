@@ -21,6 +21,15 @@ appId: host.exp.Exponent
       visible: Continue
     commands:
       - tapOn: Continue
+# Continue leaves the developer menu open; a tap above its sheet closes it.
+- runFlow:
+    when:
+      visible: Reload
+    commands:
+      - tapOn:
+          point: 50%,15%
+      - waitForAnimationToEnd:
+          timeout: 5000
 - extendedWaitUntil:
     visible: Send me a code
     timeout: 30000
