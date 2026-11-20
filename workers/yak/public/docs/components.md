@@ -878,7 +878,8 @@ The complete list of reserved names:
     tool tool_refusal topic trashed tree_entry trend tunnel tunnel_tell
     tunnel_trashed typed unchecked untrashed updated upstream usage uses
     using verified visit visitor_build visitor_calls visitor_share volume
-    waitlisted wake wake_run wants watch web worked worktree written
+    waitlisted wake wake_run wants watch web withdrawn worked worktree
+    written
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

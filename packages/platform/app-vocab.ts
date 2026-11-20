@@ -147,11 +147,14 @@ export let kernelDoc: VocabDoc = {
       description:
         'Hear an upload whole once asked, writing each turn and charging its minutes.',
     },
+    // An upload's content row gone (its `blob`, or a model's `artifact`):
+    // no row names its bytes any more, so its address stops answering. The
+    // bytes stay, for recovery from trash.
     delete_upload: {
       effect: true,
-      removed: ['blob'],
+      removed: ['blob', 'artifact'],
       description:
-        'finish queued upload deletions, retaining their bytes in trash',
+        'tell the platform an upload is no longer served, retaining its bytes in trash',
     },
     // Every entity here carries `created`, so its removal is the entity's
     // death (deaths.ts).

@@ -171,6 +171,7 @@ import {
   recorded,
   type Restorable,
 } from './recover.ts'
+import { withdrew } from './withdrawn.ts'
 import { operatorRecovery } from './build-door.ts'
 import {
   inspect as inspectWrites,
@@ -5338,6 +5339,9 @@ let OURS: Row[] = [
         at,
         ctx.person,
       )
+      // Uploads made after `at` are named by no row now, though nothing
+      // deleted them.
+      if (!operator) await withdrew(ctx.env, of.eid)
       let when = at.toISOString()
       return {
         text: `${name} is being put back to ${when}. It restarts to pick ` +

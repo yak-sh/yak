@@ -142,7 +142,7 @@ test('the same bytes sent again are served again', async () => {
 serveRows = rows.read('.entity')
 for (let upload of [bread, bun, returned]) {
   let q = `.entity.eid=${upload.eid} .representation|${
-    uploads.names([upload.sha])
+    uploads.names(upload.sha)
   }`
   serving.set(q, matcher(q, vocab))
 }

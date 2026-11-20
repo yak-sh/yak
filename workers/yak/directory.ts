@@ -364,6 +364,10 @@ export type AppInfo = {
   // What this app's own store spent this month, as the hourly sweep last read
   // it (usage.ts). Null until it has been metered once.
   meter: Meter | null
+  // The mark its store moves each time its rows stop naming an upload
+  // (uploads.ts `withdrew`), under which the gateway keeps whether each of
+  // its uploads is served (files.ts `servableOf`). Absent until one is.
+  withdrawn?: string | null
   // The offer it stands as right now, null unless it is published, and where
   // it was installed from, null unless it was.
   published: Offer | null
@@ -687,6 +691,7 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
  * and meter among them (@yaks/platform/meter `MeteredRow`). */
 export type Row = MeteredRow & {
   policy?: { revision: number }
+  withdrawn?: { at?: string | null; mark?: string | null }
   switched?: {
     app: string
     from?: string | null
@@ -1319,6 +1324,7 @@ export let APP_PARTS = [
   'former',
   'home',
   'meter',
+  'withdrawn',
   'published',
   'installed',
   'gallery',
@@ -1622,6 +1628,7 @@ export let appAbout = (r: Row): AppInfo => ({
   home: r.home != null,
   first: firstOf(r.home),
   meter: meterOf(r),
+  withdrawn: r.withdrawn?.mark ?? null,
   published: offerOf(r),
   installed: r.installed
     ? {

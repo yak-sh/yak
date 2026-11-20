@@ -64,14 +64,16 @@ import {
 } from '@yaks/platform/kept'
 
 // What a row is made of (directory.ts) is what its pages can show, except
-// these: an app's draft, its counters and its gallery listing (but for the
-// pill its space's index shows, `indexed`), a space's bills and letters, and
-// the birth stamp the graph writes on every row, which an app's ranking reads
-// (directory.ts `ranked`) but which no write after its birth changes.
+// these: an app's draft, its counters, the mark of its last withdrawn upload
+// and its gallery listing (but for the pill its space's index shows,
+// `indexed`), a space's bills and letters, and the birth stamp the graph
+// writes on every row, which an app's ranking reads (directory.ts `ranked`)
+// but which no write after its birth changes.
 // A part added to either row is purged until it is named here.
 let UNSEEN = [
   'created',
   'meter',
+  'withdrawn',
   'gallery',
   'code_review',
   'featured',

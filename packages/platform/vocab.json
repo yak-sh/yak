@@ -382,6 +382,21 @@
         }
       }
     },
+    "withdrawn": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "When an app's rows last stopped naming one of its uploads (its store's `delete_upload`, or a restore), and a mark that moves each time: the gateway keeps each upload's servable answer under it, so a moved mark asks again",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "mark": {
+          "type": "string"
+        }
+      }
+    },
     "meter": {
       "component": true,
       "journal": false,

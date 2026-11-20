@@ -131,11 +131,23 @@ export let keptAt = (eid: string, name: string): string =>
   generation(`https://files.invalid/kept/${eid}/${name}`)
 
 /** Where Files keeps whether an app's rows still name the bytes at `sha` as
- * representation `rep`. Both are in the key: one upload may be framed under
- * more than one representation, and each is its own answer. */
+ * representation `rep`, while the app's `withdrawn` mark stands. Both are in
+ * the key: one upload may be framed under more than one representation, and
+ * each is its own answer. The mark moves whenever the app's rows stop naming
+ * an upload, so every answer kept under the last one is asked again. */
 /// servableAt('a', 'ab', 'r') -> 'https://files.invalid/servable/a/ab/r?g=4'
-export let servableAt = (eid: string, sha: string, rep: string): string =>
-  generation(`https://files.invalid/servable/${eid}/${sha}/${rep}`)
+/// servableAt('a', 'ab', 'r', 'm') -> 'https://files.invalid/servable/a/ab/r?withdrawn=m&g=4'
+export let servableAt = (
+  eid: string,
+  sha: string,
+  rep: string,
+  withdrawn?: string | null,
+): string =>
+  generation(
+    `https://files.invalid/servable/${eid}/${sha}/${rep}${
+      withdrawn ? `?withdrawn=${encodeURIComponent(withdrawn)}` : ''
+    }`,
+  )
 
 /** Where Files keeps a compiler-owned package file, the same for every app. */
 /// packageAt('/__packages/d/mod.js') -> 'https://files.invalid/__packages/d/mod.js?g=4'
@@ -304,13 +316,10 @@ export let visitor = (url: string, asking?: Request): Request | null => {
   if (session && searchParams.get('who') == heldBy(session)) {
     headers.set('cookie', `${COOKIE}=${session}`)
   }
-  let path = pathname.slice(at)
-  // A new edge keep must ask whether the upload is still served now, rather
-  // than starting another lifetime from Files' cached yes.
-  return new Request(`https://${host}${path}`, {
-    headers,
-    ...uploaded(path) ? { cache: 'no-store' } : {},
-  })
+  // An upload's fill may take Files' yes: it is kept under its app's mark,
+  // which moves the moment an upload is withdrawn, so only this keep's own
+  // freshness bounds a removed upload.
+  return new Request(`https://${host}${pathname.slice(at)}`, { headers })
 }
 
 /** Whether a key is a session's own (`pageAt`). */

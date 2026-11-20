@@ -26,7 +26,7 @@ import {
   rangedOpen,
   type Representation,
 } from '@yaks/blob'
-import { type Asked, servables } from '@yaks/blob/upload'
+import { servable } from '@yaks/blob/upload'
 import { uploads } from '@yaks/platform/uploads'
 import {
   inside,
@@ -47,14 +47,14 @@ import { through } from '@yaks/workerd/cache'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { background, caught, relayed, responding } from './defects.ts'
+import { caught, relayed, responding } from './defects.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from '@yaks/platform/versions'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Config, parse } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 import { sharing } from './lib/shared.ts'
-import { batching, system, within } from '@yaks/fp'
+import { system, within } from '@yaks/fp'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
@@ -375,15 +375,15 @@ export let keptBytes = async (
 }
 
 // A page of three hundred images asks its app's store three hundred times
-// whether each is served (`serves`), once Files' cache lets each yes go, and a
-// burst of views asks as often again for each view. An isolate shares one ask
-// per upload among the reads that want it at once, and remembers the last yes
-// it heard. When the store fails, or has not said within `GLANCE`, that yes
-// answers: a store overloaded by the burst neither takes every image down with
-// it nor is asked a second time in-process (`through` waits the hop out). With
-// no yes heard, a read waits `PATIENCE` for the store, then fails. Freshness
-// stays Files' cache's (`SERVED`); a yes heard answers only for a store that
-// cannot (T-1112).
+// whether each is served (`serves`) wherever Files' cache holds no yes: in a
+// location that never asked, and for every one at once once the app's mark
+// moves. An isolate shares one ask per upload among the reads that want it at
+// once, and remembers the last yes it heard. When the store fails, or has not
+// said within `GLANCE`, that yes answers: a store overloaded by the burst
+// neither takes every image down with it nor is asked a second time
+// in-process (`through` waits the hop out). With no yes heard, a read waits
+// `PATIENCE` for the store, then fails. A yes heard is kept under the mark it
+// was heard under, so it never answers for an upload withdrawn since (T-1112).
 let asking = new Map<string, Promise<Representation | null>>()
 let heard = new Map<string, { rep: Representation; at: number }>()
 let reported = new WeakSet<object>()
@@ -403,19 +403,20 @@ let remember = (url: string, rep: Representation | null, at: number) => {
 }
 
 /** The representation `rep` of the bytes at `sha` that an app anyone may
- * read still serves, as this part keeps it, or none known (@yaks/blob/upload
- * `servable`). A store that could not say throws what it said, unless this
- * isolate heard a yes for it in the last ten minutes, which answers instead;
- * a fresh read (`cache` no-store) is answered only by the store. */
+ * read still serves, as this part keeps it under the app's `withdrawn` mark,
+ * or none known (@yaks/blob/upload `servable`). A store that could not say
+ * throws what it said, unless this isolate heard a yes for it under the same
+ * mark in the last ten minutes, which answers instead; a fresh read (`cache`
+ * no-store) is answered only by the store. */
 export let servableOf = async (
   env: Env,
-  app: { eid: string },
+  app: { eid: string; withdrawn?: string | null },
   store: StoreAt,
   sha: string,
   rep: string,
   cache?: RequestCache,
 ): Promise<Representation | null> => {
-  let url = servableAt(app.eid, sha, rep)
+  let url = servableAt(app.eid, sha, rep, app.withdrawn)
   let now = () => (env.CLOCK ?? system).now()
   let last = cache == 'no-store' ? undefined : heard.get(url)
   let stale = last && now() - last.at < STANDS ? last.rep : null
@@ -480,65 +481,36 @@ let askedServable = async (
   throw await answered(r)
 }
 
-// What a cache may do with a yes: keep it half a minute, the longest an
-// upload deleted meanwhile goes on being served, and then ask again. Never
-// past that while it asks, since the answer it would be replaced with is a
-// no, which is not kept.
-let SERVED = 'public, max-age=30'
+// What a cache may do with a yes: keep it as long as it likes. It is kept
+// under the app's mark (@yaks/platform/kept `servableAt`), which moves when
+// the app's rows stop naming an upload, so a yes is never asked again while
+// it holds.
+let SERVED = immutable['cache-control']
 
 // Whether an app's rows still name an upload's bytes, asked before a frozen
 // blob address of an app anyone may read is served (uploads.ts `blobDoor`). The
 // store is asked what it would tell a stranger, which is the same for
 // everyone the gateway lets in, so a yes is kept: a page loading a hundred
 // images, or a hundred visitors loading one, costs the store one read per
-// address per location every half minute, not one per request (T-124546). A
-// no is not kept, and the gateway asks for itself as before. A store that
-// fails is answered with what it threw, never kept, and the gateway reports
-// it.
-//
-// Every half minute a page's pictures are asked again, all at once, and a
-// store answers one read at a time: 204 lookups at 7 ms each held
-// openai-math's store for 1.4 s (T-1600). So the asks an isolate has for one
-// store travel together (`servables`): one read, and those that arrive while
-// it is out go in the next.
+// address per location until one of the app's uploads is withdrawn
+// (./withdrawn.ts), not one per request (T-124546) nor one every half minute
+// (T-1600). A no is not kept, and the gateway asks for itself as before. A
+// store that fails is answered with what it threw, never kept, and the
+// gateway reports it.
 let serves = (req: Request, env: Env, path: string) => {
   let match = /^\/servable\/([^/]+)\/([0-9a-f]{64})\/([0-9a-f-]+)$/.exec(path)
   let store = told(req.headers.get(STORE))
   if (!match || !store) return Promise.resolve(no(400))
-  let [, app, sha, eid] = match
-  return servedAs(() => sent(env, app, store)({ sha, eid }))
-}
-
-// One store's asks, by the stores they reach, the app whose uploads they are
-// and everything the store is told (`STORE`), since the store learns its app
-// from each request: asks told something newer go apart from those told
-// something older.
-type Sent = (ask: Asked) => Promise<Representation | null>
-let sending = new WeakMap<object, Map<string, Sent>>()
-let TOGETHER = 1024
-let MOST = 100
-let sent = (env: Env, app: string, store: StoreAt): Sent => {
-  let together = sending.get(env.STORE) ?? new Map<string, Sent>()
-  sending.set(env.STORE, together)
-  let key = `${app} ${JSON.stringify(store)}`
-  let had = together.get(key)
-  if (had) return had
+  let [, app, sha, rep] = match
   let graph = metaOf(storeOf(env.STORE, store.name, store.app))
-  let ask = batching(
-    (asked: Asked[]) =>
-      servables(
-        (q) => graph.query(q as Line),
-        { scope: app, naming: uploads },
-        asked,
-      ),
-    { most: MOST, hold: background },
+  return servedAs(() =>
+    servable(
+      (q) => graph.query(q as Line),
+      { scope: app, naming: uploads },
+      sha,
+      rep,
+    )
   )
-  together.set(key, ask)
-  for (let old of together.keys()) {
-    if (together.size <= TOGETHER) break
-    together.delete(old)
-  }
-  return ask
 }
 
 let no = (status: number, body: unknown = null) =>

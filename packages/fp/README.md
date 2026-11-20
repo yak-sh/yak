@@ -356,32 +356,6 @@ await failing.catch(() => {})
 equal(await sharing(kept, 'f', read), 'page 2')
 ```
 
-## Asks that travel together
-
-`batching(run, { most?, hold? })` is an ask that goes out with whatever else is
-waiting: the first ask goes at once, and the asks made while it is out go
-together once it lands, at most `most` to a batch, as one call of `run`. `run`
-answers each ask by its place in the list it was given; what it throws, every
-ask in that batch throws. A reader that answers many keys in one trip (a store
-answering a page's every picture) is asked once per trip, not once per key.
-
-The next batch is begun by one of its own asks, in that caller's request, and
-`hold` keeps it alive until the batch lands, for the reason `sharing` holds a
-read.
-
-```ts
-import { batching } from '@yaks/fp'
-import { equal } from '@yaks/testing'
-
-let trips: number[][] = []
-let double = batching((xs: number[]) => {
-  trips.push(xs)
-  return Promise.resolve(xs.map((x) => x * 2))
-}, { most: 2 })
-equal(await Promise.all([1, 2, 3, 4].map(double)), [2, 4, 6, 8])
-equal(trips, [[1], [2, 3], [4]])
-```
-
 ## Limits
 
 The package has no dependencies. `system` needs the runtime's timer APIs, and

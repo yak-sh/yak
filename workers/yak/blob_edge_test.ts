@@ -3,6 +3,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { stored } from '@yaks/workerd/cache'
 import { pageAt, UNKEPT } from '@yaks/platform/kept'
 import { appStore, storeAt } from './directory.ts'
+import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { filed } from './uploads.ts'
 import * as apps from './apps.ts'
@@ -60,8 +61,9 @@ let cache = (draw: (req: Request) => Promise<Response>, now: () => number) => {
 
 let fixture = async (access = 'public', published = false) => {
   let time = clock(Date.now())
-  let { env } = platform({ CLOCK: time })
+  let { env, ring } = platform({ CLOCK: time })
   let { dir, space, app } = await seeded(env, access)
+  let mark = async () => (await dir.app(space, app.slug))?.withdrawn
   await dir.apply({
     entities: [{ entity: { eid: app.eid }, app: { worker: '' } }],
   }, KERNEL)
@@ -85,6 +87,22 @@ let fixture = async (access = 'public', published = false) => {
     'notes.txt',
   )
   await graph.apply(file.bundles, KERNEL)
+  // Each time the app's store is asked whether an upload is served.
+  let asked = 0
+  let stores = env.STORE
+  env.STORE = {
+    ...stores,
+    get: (id: never) => {
+      let store = stores.get(id)
+      return {
+        ...store,
+        fetch: (req: Request) => {
+          if (req.url.includes('representation')) asked++
+          return store.fetch(req)
+        },
+      }
+    },
+  } as Env['STORE']
   let inner = cache((req) => files.fetch(req, env), time.now)
   let edge = cache((req) => site.fetch(req, env), time.now)
   env.FILES = inner
@@ -105,18 +123,27 @@ let fixture = async (access = 'public', published = false) => {
     inner,
     edge,
     forwarded: () => forwarded,
+    asked: () => asked,
     ask: (init?: RequestInit) =>
       serve(visit(file.url, init), front, { waitUntil: () => {} }),
     origin: () =>
       site.fetch(new Request(pageAt('ada.yaks.app', file.url, null)), env),
-    drop: () =>
-      graph.apply(
+    // Deleted, and the store's work after the write done, which runs in its
+    // next alarm: until its app's mark moved (withdrawn.ts).
+    drop: async () => {
+      let was = await mark()
+      await graph.apply(
         file.bundles.filter((b) => !b.representation).map((b) => ({
           entity: b.entity,
           $delete: true,
         })),
         KERNEL,
-      ),
+      )
+      for (let n = 0; n < 100 && await mark() == was; n++) {
+        await time.advance(100)
+        await ring()
+      }
+    },
     restore: () => graph.apply(structuredClone(file.bundles), KERNEL),
   }
 }
@@ -195,10 +222,30 @@ await files.servableOf(
 await stacked.time.advance(29_000)
 await stacked.drop()
 
-test('a Site fill rechecks live rows instead of extending a cached servable yes', async () => {
+test('a Site fill after an upload is deleted asks its store again, however recently Files heard yes', async () => {
   let answer = await stacked.origin()
   assertEquals(answer.status, 204)
   assertEquals(answer.headers.get('cache-control'), UNKEPT)
+})
+
+let lasting = await fixture()
+let read = async () => {
+  let answer = await lasting.ask()
+  await answer.body?.cancel()
+  return answer.status
+}
+
+test('a kept yes outlives every refill until the app withdraws an upload', async () => {
+  let reads = [await read()]
+  for (let n = 0; n < 3; n++) {
+    await lasting.time.advance(31_000)
+    reads.push(await read())
+  }
+  let asked = lasting.asked()
+  await lasting.drop()
+  await lasting.time.advance(31_000)
+  reads.push(await read())
+  assertEquals([reads, asked], [[200, 200, 200, 200, 404], 1])
 })
 
 let privateBlob = await fixture('private', true)
