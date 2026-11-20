@@ -67,12 +67,15 @@ export let SCHEMA = 'schema'
 
 /** What a full-analysis engine's planner statistics stand at (./ddl.ts
  * `analyzed`): the stored bytes growth is measured from, the tables that held
- * no rows when last looked at (no SQLite statistics row remembers them), and
- * the tables owed an analysis, in the order they are worked off, and how far
- * the count of the first has got where it is counted (./ddl.ts `counted`). */
+ * no rows when last looked at (no SQLite statistics row remembers them), the
+ * tables their statistics say hold one row (./ddl.ts `few`), and the tables
+ * owed an analysis, in the order they are worked off, and how far the count of
+ * the first has got where it is counted (./ddl.ts `counted`). A receipt from
+ * before `few` was kept has none, and takes it from the statistics once. */
 export type Statistics = {
   bytes: number
   empty: string[]
+  few?: string[]
   owed?: string[]
   counting?: Counting
 }

@@ -1039,11 +1039,45 @@ test('statistics forget a table remembered empty once it is dropped', () => {
     name: 'kept',
     cols: [{ name: 'id', type: 'integer', pk: true }],
   })
-  let previous = { bytes: 1, empty: ['kept', 'gone'], owed: [] }
+  let previous = { bytes: 1, empty: ['kept', 'gone'], few: [], owed: [] }
   assertEquals(analyzed(d, previous, true), {
     bytes: 1,
     empty: ['kept'],
+    few: [],
     owed: [],
   })
   assertEquals(analyzed(d, { ...previous, empty: ['kept'] }, true), undefined)
+})
+
+// SQLite probes a table its statistics say holds one row by scanning it, so
+// one that grew since is owed an analysis, the store's bytes aside; a receipt
+// kept before this was remembered reads which they are off `sqlite_stat1`
+// (bug b5285b5d).
+test('statistics owe a table analyzed at one row once it holds more', () => {
+  let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
+  for (let [name, rows] of [['one', 1], ['grew', 3], ['many', 3]] as const) {
+    d.query({
+      t: 'create table',
+      name,
+      cols: [{ name: 'id', type: 'integer', pk: true }],
+    })
+    for (let id = 1; id <= rows; id++) d.query(insert(name, { id }))
+  }
+  d.query({ t: 'analyze' })
+  d.query({
+    t: 'update',
+    table: 'sqlite_stat1',
+    set: { stat: val('1') },
+    where: eq(col('tbl'), val('grew')),
+  })
+  let previous = { bytes: 1, empty: [], owed: [] }
+  let adopted = { bytes: 1, empty: [], few: ['one'], owed: ['grew'] }
+  assertEquals(analyzed(d, previous, true), adopted)
+  assertEquals(analyzed(d, { ...previous, few: ['one'] }, true), undefined)
+  d.query(insert('one', { id: 2 }))
+  assertEquals(analyzed(d, { ...previous, few: ['one'] }, true), {
+    ...previous,
+    few: [],
+    owed: ['one'],
+  })
 })

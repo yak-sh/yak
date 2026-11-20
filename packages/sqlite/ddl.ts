@@ -1060,7 +1060,8 @@ export let SAMPLE = 400
  * is owed, and so, after a schema change, is a populated table or index
  * without statistics. Existing complete statistics are adopted once by
  * installations predating receipts; empty tables are remembered and checked
- * with zero-billed counts.
+ * with zero-billed counts, and tables analyzed at one row ({@link few}) with
+ * counts of two rows at most.
  *
  * Optimize decides none of it: empty tables get no stat1 row, so it names
  * them on every run, and it names as often a table whose row count it guesses
@@ -1096,17 +1097,22 @@ let sample = (driver: Driver) => {
   }
 }
 
-// Those of `names` that hold a row, asked in one statement: a plain count
-// bills every row of a table, and this one row at most of each, as a probe of
-// its own would, but one statement for all of them.
-let populated = (driver: Driver, names: string[]): string[] => {
+// Those of `names` that hold more than `past` rows, asked in one statement: a
+// plain count bills every row of a table, and this `past + 1` rows at most of
+// each, as a probe of its own would, but one statement for all of them.
+let populated = (driver: Driver, names: string[], past = 0): string[] => {
   let filled: string[] = []
   for (let i = 0; i < names.length; i += PROBES) {
     let some = names.slice(i, i + PROBES)
     let [row] = driver.query(select({
       cols: some.map((name, j) =>
         as(
-          exists(select({ cols: [lit(1)], from: table(name), limit: lit(1) })),
+          exists(select({
+            cols: [lit(1)],
+            from: table(name),
+            limit: lit(1),
+            offset: past ? lit(past) : undefined,
+          })),
           `t${j}`,
         )
       ),
@@ -1127,6 +1133,37 @@ let extant = (driver: Driver, name: string) =>
 // Whether a table expected to hold rows does: one billed row at most.
 let holds = (driver: Driver, name: string) =>
   populated(driver, [name]).length > 0
+
+/**
+ * The tables whose statistics say they hold one row, read off
+ * `sqlite_stat1`. SQLite plans a probe of such a table by its key as a scan of
+ * it, which costs the same while it holds one row. Once it holds thousands,
+ * every probe reads all of them: `cost`, analyzed at one row and grown to
+ * 15,108 while the store as a whole grew less than tenfold, made a lookup of
+ * 29 receipts read 437,077 rows (bug b5285b5d). So these are remembered, and
+ * each is owed an analysis once it holds a second row, which a probe of two
+ * rows finds.
+ */
+export let few = (stats: readonly Row[]): string[] => {
+  let most = new Map<string, number>()
+  for (let r of stats) {
+    let tbl = String(r.tbl), n = Number(String(r.stat ?? '').split(' ')[0])
+    if (Number.isFinite(n)) most.set(tbl, Math.max(most.get(tbl) ?? 0, n))
+  }
+  return [...most].filter(([, n]) => n <= 1).map(([tbl]) => tbl)
+}
+
+// The rows of `sqlite_stat1`: one for each table and index analyzed.
+let stat1 = (driver: Driver): Row[] =>
+  extant(driver, 'sqlite_stat1')
+    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])
+    : []
+
+// Those of `names` that do not hold a second row.
+let single = (driver: Driver, names: string[]): string[] => {
+  let more = populated(driver, names, 1)
+  return names.filter((name) => !more.includes(name))
+}
 
 let joined = (owed: string[] = [], more: string[]) => [
   ...new Set([...owed, ...more]),
@@ -1172,24 +1209,32 @@ let owing = (
 ): Statistics | undefined => {
   let owed = previous?.owed ?? []
   if (previous && unchanged && bytes < previous.bytes * 10) {
-    let standing = new Set(
+    let stands = new Set(
       driver.query({ t: 'pragma', name: 'table_list' }).map((r) =>
         String(r.name)
       ),
     )
-    let empty = previous.empty.filter((name) => standing.has(name))
+    let empty = previous.empty.filter((name) => stands.has(name))
+    let ones = (previous.few ?? few(stat1(driver)))
+      .filter((name) => stands.has(name) && !owed.includes(name))
     let filled = populated(driver, empty)
-    if (!filled.length && empty.length == previous.empty.length) return
+    let grown = populated(driver, ones, 1)
+    if (
+      !filled.length && !grown.length &&
+      empty.length == previous.empty.length &&
+      ones.length == previous.few?.length
+    ) return
     return {
       bytes: previous.bytes,
       empty: empty.filter((name) => !filled.includes(name)),
-      owed: joined(owed, filled),
+      few: ones.filter((name) => !grown.includes(name)),
+      owed: joined(owed, [...filled, ...grown]),
     }
   }
   let tables = driver.query({ t: 'pragma', name: 'table_list' })
   let names = tables.filter(kept)
   let stats = tables.some((r) => r.name == 'sqlite_stat1')
-    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx'])
+    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])
     : []
   let taken = new Set(stats.map((r) => String(r.tbl)))
   let indexes = new Set(stats.map((r) => String(r.idx)))
@@ -1210,10 +1255,15 @@ let owing = (
           !indexes.has(String(r.wr == 1 && i.origin == 'pk' ? r.name : i.name))
         )
     ).map((r) => String(r.name))
+    let ones = few(stats).filter((name) =>
+      names.some((r) => r.name == name) && !owed.includes(name)
+    )
+    let grown = populated(driver, ones, 1)
     return {
       bytes: previous?.bytes ?? bytes,
       empty: missing.filter((name) => !filled.includes(name)),
-      owed: joined(owed, [...partial, ...filled]),
+      few: ones.filter((name) => !grown.includes(name)),
+      owed: joined(owed, [...partial, ...filled, ...grown]),
     }
   }
   if (!holds(driver, 'entity')) return
@@ -1225,16 +1275,18 @@ let owing = (
   return {
     bytes,
     empty: all.filter((name) => !filled.includes(name)),
+    few: [],
     owed: filled,
   }
 }
 
 /**
  * Analyze up to `n` of the tables `statistics` owes, one `ANALYZE` each, and
- * answer the receipt that follows: those tables no longer owed, and each that
- * holds no rows remembered as empty, since no statistics row will. A table
- * dropped since it was owed is no longer owed. Each statement reads that
- * table's index rows, so a caller bounds `n` to keep a window short.
+ * answer the receipt that follows: those tables no longer owed, each that
+ * holds no rows remembered as empty, since no statistics row will, and each
+ * that holds one row remembered as {@link few}. A table dropped since it was
+ * owed is no longer owed. Each statement reads that table's index rows, so a
+ * caller bounds `n` to keep a window short.
  */
 export let analyzing = (
   driver: Driver,
@@ -1244,13 +1296,20 @@ export let analyzing = (
   let owed = statistics.owed ?? []
   let taken = owed.slice(0, n)
   let empty = statistics.empty.filter((name) => !taken.includes(name))
+  let ones = (statistics.few ?? []).filter((name) => !taken.includes(name))
   if (taken.length) sample(driver)
   for (let name of taken) {
     if (!extant(driver, name)) continue
     driver.query({ t: 'analyze', table: name })
     if (!holds(driver, name)) empty.push(name)
+    else ones.push(...single(driver, [name]))
   }
-  return { bytes: statistics.bytes, empty, owed: owed.slice(taken.length) }
+  return {
+    ...statistics.few ? { few: ones } : {},
+    bytes: statistics.bytes,
+    empty,
+    owed: owed.slice(taken.length),
+  }
 }
 
 /**
@@ -1328,11 +1387,18 @@ export let tallied = (
   if (name != counting.table || standing?.after != since) return statistics
   if (!done) return { ...statistics, counting }
   let empty = statistics.empty.filter((e) => e != name)
+  let ones = (statistics.few ?? []).filter((e) => e != name)
   if (extant(driver, name)) {
     stated(driver, name, counting.rows)
     if (!counting.rows) empty.push(name)
+    if (counting.rows == 1) ones.push(name)
   }
-  return { bytes: statistics.bytes, empty, owed: rest }
+  return {
+    ...statistics.few ? { few: ones } : {},
+    bytes: statistics.bytes,
+    empty,
+    owed: rest,
+  }
 }
 
 // Write `rows` as the statistics of `name`, a table with no index, and have
