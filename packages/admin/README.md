@@ -337,21 +337,19 @@ their own, never main's gate going red. When main's head goes live through its
 own deploy, yaks.app's home page has to answer 200 within three tries ten
 seconds apart, or the catch-up reports `deploy down:yak`.
 
-Once main's head is live, the catch-up releases the apps main keeps in git
-(service.ts `RELEASED`): `apps/home`, yaks.app's own pages, to the `home` app in
-the `yak` space. It pushes the directory as the head holds it, as
-`yak admin push apps/home --space yak --as admin@bot.yak.sh` would from a clean
-checkout of main: the same `push`, signed in as the admin, its base kept beside
-the graph so a rollback made elsewhere holds until someone confirms a push over
-it. A version deployed since its base (a copy edit saved on the page, a push
-from another checkout of main) is no rollback: main is the app's source and the
-push keeps the page's copy edits, so the release deploys from live without a
-review, and a deploy that answers it deployed nothing fails. It pushes once for
-each git tree the directory has, so a commit that left the app alone pushes
-nothing, and a process that starts asks the app for its file list once. A
-release that fails is tried again at each look and reported once for its tree as
-`release:home`. Edits made on the app's page to `copy.json` are kept, as any
-push keeps them; they reach git only through a push from a checkout.
+The catch-up publishes the apps listed in `service.ts` (`RELEASED`) from main's
+committed files. This includes yak.sh and the demo apps whose source is in the
+repo. The platform home app follows the Worker deployment, which also builds
+those pages. Each target declares its space, app, and source directory. It can
+name a release account, linked files outside the directory, and files to carry
+forward from the live app.
+
+Publishing uses the same machinery as `yak admin push`. The service keeps the
+base beside the graph, preserves a deliberate rollback, and merges edits made to
+`copy.json` on the app's page. The service pushes on startup and when the source
+tree or a linked file changes. The push deploys only when files need releasing.
+A failure is reported under `release:<space>/<app>` and retried at the next
+look.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }

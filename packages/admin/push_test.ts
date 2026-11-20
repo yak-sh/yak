@@ -326,6 +326,15 @@ test('a changed file is written and an unchanged file is left alone', async () =
   assertEquals(said[0], 'wrote 1 file')
 })
 
+test('a release carries the live seed forward and deletes other missing files', async () => {
+  let p = platform({ demo: held('index.html', 'seed.json', 'old.js') })
+  await push(p.ask, [file('index.html'), file('new.js')], { app: 'demo' }, {
+    keep: ['seed.json'],
+  })
+  assertEquals(p.held('demo'), ['index.html', 'new.js', 'seed.json'])
+  assertEquals(p.deployed, ['demo'])
+})
+
 test('a released app with the same bytes causes no write or deploy', async () => {
   let p = platform({
     mail: new Map([

@@ -85,6 +85,7 @@ let fixture = (
     doors,
     at,
     look,
+    report,
     reports,
     get looked() {
       return looked
@@ -450,22 +451,30 @@ test("a head's clock starts when it is first shown and holds until the head move
   equal(shown('b'), { sha: 'b', at: 60_000 })
 })
 
-// A release of each tree the live commit's apps/home has: one push, none for
-// a commit that left it alone, and a failed push tried again at each look and
-// reported once.
-test('the home app is released once for each tree main puts live, and a failing release is retried', async () => {
+test('each destination releases changed source and retries a failed release independently', async () => {
   let trees: Record<string, string> = { a: 't1', b: 't1', c: 't2', d: 't3' }
+  let targets = ['first', 'second'].map((space) => ({
+    dir: 'apps/demo',
+    app: 'demo',
+    space,
+  }))
   let pushed: string[] = []
   let fails = 0
   let reports: string[] = []
-  let release = releases({
-    tree: (sha) => Promise.resolve(trees[sha]),
-    release: (sha, to) => {
-      if (sha == 'd' && fails++ < 2) return Promise.reject(new Error('503'))
-      pushed.push(`${sha}:${to.app}`)
-      return Promise.resolve([])
+  let release = releases(
+    {
+      tree: (sha) => Promise.resolve(trees[sha]),
+      release: (sha, to) => {
+        if (sha == 'd' && to.space == 'first' && fails++ < 2) {
+          return Promise.reject(new Error('503'))
+        }
+        pushed.push(`${sha}:${to.space}`)
+        return Promise.resolve([])
+      },
     },
-  }, (error, context) => void reports.push(`${context?.fault}: ${error}`))
+    (error, context) => void reports.push(`${context?.fault}: ${error}`),
+    targets,
+  )
   let log = console.log
   console.log = () => {}
   try {
@@ -473,6 +482,38 @@ test('the home app is released once for each tree main puts live, and a failing 
   } finally {
     console.log = log
   }
-  equal(pushed, ['a:home', 'c:home', 'd:home'])
-  equal(reports, ['release:home: Error: 503'])
+  equal(pushed, [
+    'a:first',
+    'a:second',
+    'c:first',
+    'c:second',
+    'd:second',
+    'd:first',
+  ])
+  equal(reports, ['release:first/demo: Error: 503'])
+})
+
+test('a landing releases yak.sh and the demo before the Worker goes live', async () => {
+  let f = fixture({ sha: HEAD })
+  let stop = new AbortController()
+  let pushed: string[] = []
+  f.doors.tree = (_sha, to) =>
+    Promise.resolve(
+      ['yak-sh', 'recipes', 'home'].includes(to.app) ? to.dir : undefined,
+    )
+  f.doors.release = (sha, to) => {
+    pushed.push(`${sha}:${to.space}/${to.app}:${f.looked}`)
+    return Promise.resolve([])
+  }
+  f.doors.wait = () => {
+    if (f.at.now == landed) f.at.now += LATE
+    else stop.abort()
+    return Promise.resolve()
+  }
+  await service(host(f.g, f.report), {}, stop.signal, f.doors)
+  equal(pushed, [
+    `${HEAD}:jeff/yak-sh:0`,
+    `${HEAD}:yourname/recipes:0`,
+    `${HEAD}:yak/home:1`,
+  ])
 })

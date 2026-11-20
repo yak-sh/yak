@@ -97,6 +97,8 @@ export type PushOptions = {
   base?: number
   confirm?: boolean
   review?: boolean
+  /** Files maintained in the app and carried into each release. */
+  keep?: string[]
   remember?: (version: number) => void | Promise<void>
   wait?: number
   poll?: number
@@ -393,7 +395,7 @@ export let push = async (
     }
   }
   let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
-  let keep = new Set(local.map((f) => f.path))
+  let keep = new Set([...local.map((f) => f.path), ...opts.keep ?? []])
   let gone = [...held.held.keys()].filter((p) =>
     !keep.has(p) && !pinned(p, keep) && !asset(p)
   )

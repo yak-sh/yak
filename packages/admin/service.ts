@@ -29,10 +29,8 @@
 // page is asked a few times apart, since a fresh deploy can leave it cold for
 // seconds.
 //
-// Once main's head is live, the apps main keeps in git (`RELEASED`) are pushed
-// as the head holds them (push.ts `push`, from git's blobs rather than a
-// working tree), signed in as the admin, once for each tree their directory
-// has.
+// The apps main keeps in git are pushed from its committed files. The
+// platform home app follows the live Worker, which builds its pages too.
 
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
@@ -115,14 +113,70 @@ export type Options = {
   account?: string
 }
 
-/** An app main keeps in git, released as the admin once main's head is live:
- * the directory it is drawn from, and the app and space it is pushed to. */
-export type Release = { dir: string; app: string; space: string }
+/** The source and destination of an app release. */
+export type Release = {
+  dir: string
+  app: string
+  space: string
+  as?: string
+  links?: string[]
+  keep?: string[]
+  afterWorker?: boolean
+}
 
-/** The apps main releases: yaks.app's own pages, which the apex answers from
- * the `home` app (workers/yak site.ts `HOME`). */
+let repoApps = (space: string, apps: string[], as?: string): Release[] =>
+  apps.map((app) => ({ dir: `apps/${app}`, app, space, as }))
+
+/** The apps whose files are maintained in this repo. */
 export let RELEASED: Release[] = [
-  { dir: 'apps/home', app: 'home', space: 'yak' },
+  { dir: 'apps/home', app: 'home', space: 'yak', afterWorker: true },
+  ...repoApps('yak', ['home-preview']),
+  {
+    dir: 'apps/yak-sh',
+    app: 'yak-sh',
+    space: 'jeff',
+    as: 'jeff@yak.sh',
+    links: ['packages/ui/gouache.css', 'packages/ui/paper/base.css'],
+  },
+  ...repoApps('jeff', [
+    'yak-sh-v2',
+    'housebook',
+    'hypermerge',
+    'ladders',
+    'middleware-engines',
+    'orbits',
+    'settlement',
+    'sound',
+  ], 'jeff@yak.sh'),
+  ...repoApps('yourname', [
+    'handouts',
+    'holdfast',
+    'housebook',
+    'packing',
+    'practice',
+    'vale',
+    'village-tasks',
+  ]),
+  {
+    dir: 'apps/recipes',
+    app: 'recipes',
+    space: 'yourname',
+    keep: ['seed.json'],
+  },
+  {
+    dir: 'apps/messages',
+    app: 'messages',
+    space: 'locustgrove',
+    as: 'jeff@yak.sh',
+  },
+  {
+    dir: 'apps/allfornothing',
+    app: 'site',
+    space: 'allfornothing',
+    as: 'jeff@yak.sh',
+  },
+  ...repoApps('crayonbloom', ['crayonbloom'], 'jeff@yak.sh'),
+  ...repoApps('printbound', ['printbound'], 'printbound@bot.yak.sh'),
 ]
 
 /** A commit's first deployment: its sha, when it went live (ms), and the
@@ -150,8 +204,8 @@ export type Doors = {
   build: (sha: string) => Promise<Build>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
-  /** the git tree a directory is at a commit, or nothing where it has none */
-  tree: (sha: string, dir: string) => Promise<string | undefined>
+  /** the source tree and its linked files at a commit */
+  tree: (sha: string, to: Release) => Promise<string | undefined>
   /** push an app's files as a commit holds them, and say what was done */
   release: (sha: string, to: Release) => Promise<string[]>
   now: () => number
@@ -330,21 +384,27 @@ export let box = (
         return 'the deploy hook could not be reached'
       }
     },
-    tree: async (sha, path) => {
-      let r = await git(
-        dir,
-        ['rev-parse', '--verify', '--quiet', `${sha}:${path}`],
-        stopping,
-      )
-      return r.ok ? r.out.trim() : undefined
+    tree: async (sha, to) => {
+      let tree = await run([
+        'ls-tree',
+        '--full-tree',
+        sha,
+        '--',
+        to.dir,
+        ...to.links ?? [],
+      ])
+      return tree.split('\n').some((line) => line.endsWith(`\t${to.dir}`))
+        ? tree
+        : undefined
     },
     release: async (sha, to) => {
-      let at = await account(host)(ADMIN)
+      let at = await account(host)(to.as ?? ADMIN)
       let files = await filesAt(run, blob, sha, to.dir)
       let key = JSON.stringify([zone(), at.address, 'main', to.space, to.app])
       return await push(rpc(at.bearer), files, to, {
         ...await versions(homeOf(host.config.db), key),
         review: false,
+        keep: to.keep,
         checkout: {
           earlier: async function* (path) {
             let log = await run([
@@ -419,8 +479,9 @@ export let pass = async (
   report: Report,
   { late = LATE, bound = BOUND }: Pick<Options, 'late' | 'bound'> = {},
   settled?: string,
+  tip?: { sha: string; at: number },
 ): Promise<{ sha: string; step: Step }> => {
-  let tip = await doors.main()
+  tip ??= await doors.main()
   if (tip.sha == settled) return { sha: tip.sha, step: 'done' }
   let [row] = await g.get([tip.sha])
   let mark = row?.rebuilt as Comp | undefined
@@ -587,13 +648,20 @@ let catchUp = async (
   let settled: string | undefined
   let live: string | undefined
   let failing = false
-  let releasing = releases(doors, report)
+  let landed = releases(doors, report, RELEASED.filter((to) => !to.afterWorker))
+  let deployed = releases(
+    doors,
+    report,
+    RELEASED.filter((to) => to.afterWorker),
+  )
   for (;;) {
     try {
-      let done = await pass(g, doors, report, options, settled)
+      let tip = await doors.main()
+      await landed(tip.sha)
+      let done = await pass(g, doors, report, options, settled, tip)
       if (SETTLED.includes(done.step)) settled = done.sha
       if (done.step == 'live') live = done.sha
-      if (live) await releasing(live)
+      if (live) await deployed(live)
       failing = false
     } catch (error) {
       // A look cut off by shutdown has not failed. A dead wrangler sign-in is
@@ -611,35 +679,39 @@ let catchUp = async (
   }
 }
 
-/** Releases each app in {@link RELEASED} from the commit live on yaks.app,
- * once for each tree its directory has there: a push of an unchanged app
- * still asks for its file list, and a commit that left the app alone keeps
- * its tree. A release that fails is tried again at each look, and reported
- * once for its tree. */
+/** Releases each target from the given commit when its source changes.
+ * A failed release is retried at the next look and reported once per source. */
 export let releases = (
   doors: Pick<Doors, 'tree' | 'release'>,
   report: Report,
+  targets: Release[],
 ) => {
-  let done = new Map<string, string>()
-  let told = new Set<string>()
+  let done = new Map<Release, { sha: string; tree?: string }>()
+  let told = new Map<Release, string>()
   return async (sha: string) => {
-    for (let to of RELEASED) {
-      let tree = await doors.tree(sha, to.dir)
-      if (!tree || done.get(to.dir) == tree) continue
+    for (let to of targets) {
+      let last = done.get(to)
+      if (last?.sha == sha) continue
+      let tree: string | undefined
       try {
-        let said = await doors.release(sha, to)
-        done.set(to.dir, tree)
-        console.log(
-          `@yaks/admin — pushed ${to.dir} at ${sha.slice(0, 8)}: ${
-            said.join('; ')
-          }`,
-        )
+        tree = await doors.tree(sha, to)
+        if (tree && tree != last?.tree) {
+          let said = await doors.release(sha, to)
+          console.log(
+            `@yaks/admin — pushed ${to.space}/${to.app} at ${
+              sha.slice(0, 8)
+            }: ${said.join('; ')}`,
+          )
+        }
+        done.set(to, { sha, tree })
+        told.delete(to)
       } catch (error) {
         if (error instanceof Interrupted) throw error
-        if (told.has(tree)) continue
-        told.add(tree)
+        let source = tree ?? sha
+        if (told.get(to) == source) continue
+        told.set(to, source)
         await report(error, {
-          fault: `release:${to.app}`,
+          fault: `release:${to.space}/${to.app}`,
           commit: sha,
           tags: { app: to.app, space: to.space },
         })

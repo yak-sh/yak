@@ -4,8 +4,9 @@ The yaks apps this repository builds and keeps. Each directory holds one app's
 files exactly as yaks.app serves them: `index.html`, `vocab.json`, `icon.png`,
 and whatever sits beside them.
 
-Git is an app's only source of code. A push sends a directory to its space
-through the connector's own tools, the ones any assistant calls:
+The deploy catch-up publishes [registered apps](../packages/admin/service.ts)
+from main when their source changes. To push a working directory manually, use
+the same connector tools:
 
 ```sh
 yak admin push apps/<name> --as admin
