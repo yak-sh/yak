@@ -802,6 +802,7 @@ let desk = async (
     // the platform's payment provider can be asked at all, since a button
     // that cannot work is worse than no block.
     sell: provider.shops.on() ? selling(space) : undefined,
+    shops: provider.shops.on(),
     provider: provider.name,
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
@@ -868,18 +869,29 @@ let mine = async (
     return nothingHere(env)
   }
   if (req.method != 'POST') foresee(dir, person, view)
-  let [picks, name, email, agents, theirs, referral, own, collapsed, sessions] =
-    await Promise.all([
-      pickable(dir, person),
-      dir.nameAt(person),
-      view == 'profile' ? dir.emailAt(person) : undefined,
-      view == 'agents' ? agentsOf(env, person, dir) : [],
-      view == 'shared' ? shared(dir, person) : undefined,
-      view == 'invite' ? invitation(env, dir, person) : undefined,
-      dir.own(person),
-      dir.collapsed(person),
-      view == 'profile' ? browsers(env, person) : [],
-    ])
+  let [
+    picks,
+    name,
+    email,
+    agents,
+    theirs,
+    referral,
+    own,
+    collapsed,
+    sessions,
+    provider,
+  ] = await Promise.all([
+    pickable(dir, person),
+    dir.nameAt(person),
+    view == 'profile' ? dir.emailAt(person) : undefined,
+    view == 'agents' ? agentsOf(env, person, dir) : [],
+    view == 'shared' ? shared(dir, person) : undefined,
+    view == 'invite' ? invitation(env, dir, person) : undefined,
+    dir.own(person),
+    dir.collapsed(person),
+    view == 'profile' ? browsers(env, person) : [],
+    payments(env),
+  ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
   let page = deskPage({
@@ -893,6 +905,7 @@ let mine = async (
     sessions,
     shared: theirs,
     referral,
+    shops: provider.shops.on(),
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
       {
         slug: own.slug,

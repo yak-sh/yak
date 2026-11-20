@@ -676,6 +676,9 @@ export type DeskPage = {
   viewDays?: number
   viewsOff?: string
   sell?: 'none' | 'setup' | 'ready'
+  /** whether the platform's payment provider takes sellers at all, which
+   * puts Selling in the side on every manage page */
+  shops?: boolean
   /** the name of the payment provider the space pays and sells through
    * (payments.ts), as the selling and billing cards say it */
   provider?: string

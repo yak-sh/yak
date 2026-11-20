@@ -8,6 +8,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
   client,
   connector,
+  fresh,
   kernel,
   meta,
   onPlus,
@@ -472,4 +473,20 @@ test('the yak space’s owner finds it in the selector, and its pages open', asy
     assertEquals(res.status, 200, path)
     await res.body?.cancel()
   }
+})
+
+test('every manage page’s side lists the same entries', async () => {
+  // Selling shows only where the platform takes sellers, as a kernel with a
+  // key for its payment provider does.
+  let sells = await fresh({ STRIPE_KEY: 'sk_test_side' })
+  let { cookie, email } = await signIn(sells)
+  let side = async (path: string) => {
+    let res = await sells.at('yaks.app', path, { headers: { cookie } })
+    let { document } = parseHTML(await res.text())
+    return [...document.querySelectorAll('[aria-labelledby="side-space"] a')]
+      .map((a) => a.textContent?.trim())
+  }
+  let space = await side(managePath('settings', email.split('@')[0]))
+  assert(space.includes('Selling'), String(space))
+  assertEquals(await side(managePath('profile')), space)
 })

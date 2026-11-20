@@ -77,7 +77,7 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
           item('operator', 'Operator'),
           item('connections', 'Connections'),
           item('visits', 'Visits'),
-          ...(at.sell ? [item('selling', 'Selling')] : []),
+          ...(at.shops ? [item('selling', 'Selling')] : []),
           item('billing', 'Billing'),
           item('settings', 'Space settings'),
           item('trash', 'Trash'),
