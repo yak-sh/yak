@@ -1147,6 +1147,14 @@
     min-width: 100%;
     max-width: 100%;
   }
+  /* The connect dialog's space switcher is sized to the space it shows. */
+  .Connect_Space {
+    width: fit-content;
+    max-width: 100%;
+  }
+  .Connect_Space .Menu-below {
+    min-width: 100%;
+  }
   .Sidebar_Title {
     margin: 0 .6rem;
     font-size: 1.25rem;

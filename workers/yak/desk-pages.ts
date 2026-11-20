@@ -4,7 +4,7 @@ import { Head } from '@yaks/ui/parts'
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
-import { spaceTile } from './space-picker.ts'
+import { choice, spaceTile } from './space-picker.ts'
 import { Time } from '@yaks/ui/parts'
 import { agentSetup, pasteLink } from './signin-pages.ts'
 import {
@@ -19,7 +19,6 @@ import {
   Form,
   Group,
   Icon,
-  Menu,
   Modal,
   More,
   Notice,
@@ -2093,22 +2092,23 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
     ]
     : grid(c.built.map(tile), finds)
-  // The selected service says which space it goes to and offers the others.
-  let elsewhere = (at.spaces ?? []).filter((s) => s.owner && s.slug != at.space)
+  // The selected service says which space it goes to, in the space switcher
+  // that offers the others.
+  let current = at.spaces?.find((s) => s.slug == at.space)
+  let owned = (at.spaces ?? []).filter((s) => s.owner)
   let to = (what: string, other?: (slug: string) => string) => [
     h(Card.Sub, null, `${what} ${host}, for its apps to use.`),
-    other && elsewhere.length
+    other && current && owned.length > 1
       ? h(
-        Menu.Fold,
-        { 'data-menu': '' },
-        h(Menu.Summary, null, 'Connect it to another space instead'),
-        h(
-          Menu,
-          { mod: 'below' },
-          h(Menu.Ask, null, 'Which space should it be connected to?'),
-          elsewhere.map((s) =>
-            h(Menu.Item, { href: other(s.slug) }, s.title || s.slug)
-          ),
+        'div',
+        { class: 'Connect_Space' },
+        choice(
+          current,
+          owned,
+          (s) => other(s.slug),
+          null,
+          undefined,
+          'Which space should it be connected to?',
         ),
       )
       : null,

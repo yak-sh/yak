@@ -29,13 +29,15 @@ export let spaceTile = (s: Picked, mod?: string) =>
 // The space selector over `all`, holding `here`: each space opens at `to`,
 // `make` follows the list, and `about` leads the line under each space's name
 // (the dashboard's side, and the Operator's chat app, which names each
-// space's Operator: operator-page.ts `chatPage`).
+// space's Operator: operator-page.ts `chatPage`), and `ask` heads the list
+// (the connect dialog asks where a connection goes: desk-pages.ts `to`).
 export let choice = (
   here: Picked,
   all: Picked[],
   to: (s: Picked) => string,
   make: { href: string; label: string } | null = null,
   about: (s: Picked) => string = () => '',
+  ask = 'Which space do you want to work in?',
 ) => {
   let add = make
     ? h(
@@ -79,7 +81,7 @@ export let choice = (
     h(
       Menu,
       { mod: 'below' },
-      h(Menu.Ask, {}, 'Which space do you want to work in?'),
+      h(Menu.Ask, {}, ask),
       all.map((s) =>
         h(
           Menu.Item,
