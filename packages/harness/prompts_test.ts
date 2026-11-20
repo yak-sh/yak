@@ -1,6 +1,7 @@
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
+import { instructionsOf } from '@yaks/session/told'
 import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry, snapshot } from '@yaks/context'
 import {
@@ -330,7 +331,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     )
     let current = await a.transcript(id)
     let latest = current.filter((b) => b.ask).at(-1)!
-    assertEquals((latest.sending as Comp | undefined)?.instructions, index)
+    assertEquals(await instructionsOf(h.g, latest.sending as Comp), index)
     // A child of historical context must not reintroduce the old baseline.
     let child = crypto.randomUUID()
     await h.g.apply([
