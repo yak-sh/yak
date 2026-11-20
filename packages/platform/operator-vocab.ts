@@ -87,6 +87,23 @@ export let operatorDoc: VocabDoc = {
           description:
             'The phone transport a text arrived on, used for its reply.',
         },
+        group: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'In a group text, everyone else in it besides its sender (`address`) and the number it reached (`reply_to`), who all read the answer. Its `person` is the guest who stands for the group.',
+        },
+        writer: {
+          type: 'string',
+          ref: 'person',
+          death: 'keep',
+          description:
+            'In a group text, the person who wrote the words, whose they are kept as.',
+        },
+        addressed: {
+          type: 'boolean',
+          description: 'In a group text, whether the words named the Operator.',
+        },
         files: { type: 'array', items: { type: 'object' } },
         provider: { type: 'string' },
         model: {

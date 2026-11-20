@@ -86,6 +86,9 @@ export type Text = {
   /** an RCS agent to send it as, with the text going as SMS from `from`
    * where the phone has no RCS */
   agent?: string
+  /** everyone else in the group text it answers, who get it too, as one
+   * group message: given only to a texter whose provider hears group texts */
+  group?: string[]
 }
 
 /** What a texter reports about a text it accepted. */

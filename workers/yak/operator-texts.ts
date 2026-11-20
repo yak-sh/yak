@@ -11,7 +11,9 @@ import {
   echo,
   keyword,
   type Text,
+  thread,
 } from '@yaks/phone'
+import { named } from '@yaks/session/turn'
 import { mobile } from '@yaks/phone/mobile'
 import { writes } from '@yaks/member'
 import { type Ctx, refuse } from './tool.ts'
@@ -315,6 +317,13 @@ export let arrived = async (
  * `arrival`, a request to `space`'s Operator in `person`'s own conversation,
  * answered by text from the number or RCS agent it reached. Counted once it
  * is the Operator's, and only the first time a provider posts it.
+ *
+ * Said in a group text, it goes instead to the group's conversation: the one
+ * conversation of a guest who stands for the group's thread (@yaks/phone
+ * `thread`), so the Operator follows everything said there, and a turn
+ * there has only what the space lets anyone do, whoever in it is a member.
+ * The words are kept as `person`'s, said whether they name the Operator, and
+ * answered to everyone in the group (@yaks/session/turn).
  */
 export let textedOperator = async (
   env: Env,
@@ -326,23 +335,38 @@ export let textedOperator = async (
   let { requestId } = await import('./operator-channels.ts')
   let { builderOf, SPACE } = await import('./build-door.ts')
   let { files, say } = await pictures(env, space, arrival)
+  let group = !arrival.rcs && arrival.group?.length ? arrival.group : null
+  let room = group
+    ? await (await import('./chat.ts')).guestOf(
+      env,
+      'text',
+      thread(arrival).join(','),
+    )
+    : null
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/receive', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-yak-person': person,
+        'x-yak-person': room ?? person,
         [SPACE]: space.eid,
       },
       body: JSON.stringify({
         say,
         request: {
-          channel: arrival.rcs ? 'rcs' : 'text',
+          channel: group ? 'group' : arrival.rcs ? 'rcs' : 'text',
           address: arrival.from,
           reply_to: arrival.to,
           via: arrival.via,
           files,
-          ...(signup ? { signup: true } : {}),
+          ...(group
+            ? {
+              group,
+              writer: person,
+              addressed: named(say, [space.operator, 'operator']),
+            }
+            : {}),
+          ...(signup && !group ? { signup: true } : {}),
         },
         options: {
           id: requestId(space.eid, `${arrival.via}:${arrival.id}`),

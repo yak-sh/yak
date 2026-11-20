@@ -239,7 +239,12 @@ export let spaceArrived = async (
     : { role: null }
   let route = textRoute(word, stopped, role)
   if (route == 'quiet') return
-  if (route == 'own') return await textedOperator(env, space, person, arrival)
+  // Anyone in a group text is heard in the group's conversation, where they
+  // have only what the space lets anyone do (operator-texts.ts
+  // `textedOperator`); nobody signs up there.
+  if (route == 'own' || route == 'signup' && arrival.group?.length) {
+    return await textedOperator(env, space, person, arrival)
+  }
   if (route == 'signup') {
     if (await signupArrived(env, space, arrival, person)) {
       let { countedTexts } = await import('./meter.ts')

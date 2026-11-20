@@ -39,6 +39,40 @@ export type Arrival = {
   rcs: boolean
   /** pictures and files sent with it (MMS), each at a provider URL */
   media: { url: string; type: string }[]
+  /** said in a group text: everyone else in it, besides its sender and the
+   * number it reached; absent for one said to that number alone */
+  group?: string[]
+}
+
+/**
+ * Everyone in the thread a text was said in, sorted: its sender, the number
+ * it reached, and the rest of a group. A group's thread is the same whoever
+ * in it speaks.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { thread } from '@yaks/phone'
+ * let ann = { from: '+12695550142', to: '+12695550100', group: ['+12695550199'] }
+ * let bo = { from: '+12695550199', to: '+12695550100', group: ['+12695550142'] }
+ * equal(thread(ann), thread(bo))
+ * equal(thread({ from: '+12695550142', to: '+12695550100' }).length, 2)
+ * ```
+ */
+export let thread = (
+  text: Pick<Arrival, 'from' | 'to' | 'group'>,
+): string[] => [...new Set([text.from, text.to, ...text.group ?? []])].sort()
+
+/** The rest of a group text's thread, besides its sender and the number it
+ * reached, from every number a provider says took part: none when nobody
+ * else did. */
+export let othersIn = (
+  text: Pick<Arrival, 'from' | 'to'>,
+  numbers: string[],
+): string[] | undefined => {
+  let others = [...new Set(numbers)].filter((n) =>
+    n && n != text.from && n != text.to
+  )
+  return others.length ? others : undefined
 }
 
 /** What became of a text that left, as the provider reports it later. */

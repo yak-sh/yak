@@ -160,7 +160,8 @@ export let offers = async (env: Env) => {
 
 /** The guest who speaks as `id` on `via`: a person with no seat and no
  * address, minted the first time they speak, as a stranger's number is
- * (operator-texts.ts `phonedIn`). */
+ * (operator-texts.ts `phonedIn`); or who stands for a group text's thread
+ * (operator-texts.ts `textedOperator`). */
 export let guestOf = async (env: Env, via: string, id: string) => {
   let person = derivedEid(`chatted|${via}|${id}`)
   let [had] = await read(env, line`.entity.eid=${person}&.person`)

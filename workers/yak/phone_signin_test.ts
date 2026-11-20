@@ -17,10 +17,20 @@ import { onceLink, type Pass } from './link.ts'
 import { cookieValue, opened, verify } from './lib/token.ts'
 
 let FREE = '+18885550100'
-let texts: { from: string; to: string; text: string }[] = []
+let texts: {
+  from: string
+  to: string | string[]
+  text: string
+  path: string
+}[] = []
 let telnyx = endpoints(globalThis).open(async (req) => {
   let sent = await req.json()
-  texts.push({ from: sent.from, to: sent.to, text: sent.text })
+  texts.push({
+    from: sent.from,
+    to: sent.to,
+    text: sent.text,
+    path: new URL(req.url).pathname,
+  })
   return Response.json({ data: { id: `msg-${texts.length}` } })
 })
 cleanup(() => telnyx.stop())
@@ -118,6 +128,21 @@ let session = await verify(
 )
 let twice = await go(link)
 
+// The same words answered in a group text, which everyone in it reads.
+await channels(env).group(
+  {
+    space: mine.eid,
+    person,
+    channel: 'group',
+    address: NUMBER,
+    reply_to: FREE,
+    group: ['+12695550199'],
+  },
+  { text: `Your page: ${PAGE}` },
+  '',
+)
+let [grouped] = texts.splice(0)
+
 test('until the platform texts strangers, the card asks for an email and a number is refused', () => {
   assert(offCard.querySelector('input[name="address"][type="email"]'))
   assertEquals(offCard.querySelector('#by-text'), null)
@@ -180,4 +205,10 @@ test("a link in the Operator's text signs its person in, once, onto the page it 
   assertEquals(followed.headers.get('location'), PAGE)
   assertEquals(session?.person, person)
   assertEquals(twice.status, 400, 'single use')
+})
+
+test('a group text is answered to everyone in it, its links signing nobody in', () => {
+  assertEquals(grouped.path, '/messages/group_mms')
+  assertEquals(grouped.to, [NUMBER, '+12695550199'])
+  assert(grouped.text.startsWith(`Your page: ${PAGE}\n\n`))
 })

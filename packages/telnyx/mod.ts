@@ -13,6 +13,7 @@ import {
   type Line,
   type Numbers,
   type Offer,
+  othersIn,
   type Receipt,
   type Sender,
   type Text,
@@ -138,9 +139,17 @@ export let telnyx = (
     })
   return {
     from: async () => (await ours()).number,
-    send: async ({ to, text, from, agent }: Text): Promise<Receipt> => {
+    send: async ({ to, text, from, agent, group }: Text): Promise<Receipt> => {
       let sender = from ?? (await ours()).number
-      let said = agent
+      // A group text goes to everyone in it as one MMS, from a long code
+      // only: Telnyx carries none on a toll-free number.
+      let said = group?.length
+        ? await call('/messages/group_mms', {
+          from: sender,
+          to: [to, ...group],
+          text,
+        })
+        : agent
         ? await call('/messages/rcs', {
           agent_id: agent,
           to,
@@ -166,6 +175,8 @@ type Payload = {
   // A text names its numbers as objects, a call as strings.
   from?: { phone_number?: string } | string
   to?: { phone_number?: string; agent_id?: string; status?: string }[] | string
+  // Everyone in a group text, as numbers or as objects naming them.
+  cc?: (string | { phone_number?: string })[]
   media?: { url?: string; content_type?: string }[]
   received_at?: string
   errors?: { code?: unknown; title?: string; detail?: string }[]
@@ -222,11 +233,18 @@ export let heard = (event: unknown): Heard => {
   if (data!.event_type == 'message.received') {
     let rcs = p.type == 'RCS'
     let to = (p.to as Exclude<Payload['to'], string>)?.[0]
+    let from = (p.from as { phone_number?: string })?.phone_number ?? ''
+    let at = (rcs ? to?.agent_id : to?.phone_number) ?? ''
+    let group = othersIn(
+      { from, to: at },
+      (p.cc ?? []).map((n) => typeof n == 'string' ? n : n.phone_number ?? ''),
+    )
     return {
       arrival: {
         id: p.id,
-        from: (p.from as { phone_number?: string })?.phone_number ?? '',
-        to: (rcs ? to?.agent_id : to?.phone_number) ?? '',
+        from,
+        to: at,
+        ...group ? { group } : {},
         text: p.text ?? p.body?.text ?? p.body?.suggestion_response?.text ??
           '',
         at: p.received_at ?? new Date().toISOString(),

@@ -119,6 +119,13 @@ message and updates consent using the same shapes for every provider.
 is scoped by `text.via`, so different providers cannot settle each other's
 texts. `arrivalEid(id, via)` derives a text's identity from both.
 
+An arrival said in a group text carries `group`: everyone else in it, besides
+its sender and the number it reached (`othersIn` reads them from every number a
+provider says took part). `thread(arrival)` is everyone in its thread, sorted,
+the same whoever in it speaks. A `Text` with `group` goes to them all as one
+group message; only a provider that hears group texts is given one. US carriers
+carry group texts on long codes only, never on a toll-free number.
+
 A provider plugin's door verifies its webhook before decoding it. Compose the
 provider plugin beside @yaks/phone and pass it its credentials and door:
 

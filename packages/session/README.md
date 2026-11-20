@@ -1172,6 +1172,17 @@ moment, they write nothing, and neither does what the host writes beside them.
 `conversation_start` and `conversation_send` (@yaks/harness) give theirs this
 way, as yaks.app's Operator gives a person's requests.
 
+## Whose turn it is
+
+Whether a turn is the listener's is decided the same way for every channel, a
+group text, a chat room or a call (`@yaks/session/turn`). A channel says only
+whether the words were said where others hear them and whether they were said to
+the listener; `named(text, names)` tells it for a channel without mentions.
+`cue({group, to})` is what the listener is told before them: in a group,
+everyone reads its answer, and it answers only when the words are for it and
+their speaker is done. Otherwise it answers `PASS` alone, which is kept in its
+transcript and sent nowhere (`passes(text)`). A pause is not a turn.
+
 ## When the bus looks
 
 The `@yaks/session/service` duty follows the graph's commits, its own and,

@@ -30,6 +30,7 @@ import {
   transcript,
   usingOf as usingIn,
 } from '@yaks/session'
+import { passes } from '@yaks/session/turn'
 import { derivedEid } from '@yaks/graph/identity'
 import { short } from '@yaks/id'
 import { CALLED, channelOf, HEARD } from './operator-view.ts'
@@ -1064,11 +1065,17 @@ let RERAN = {
     "Something you asked for stopped because of a problem in yaks.app. That problem is fixed now, so the work started again from where it stopped. You don't need to do anything.",
 }
 
-// The way a request is answered: its channel, and whom it reaches by it.
-let routeOf = (request?: Comp) =>
-  JSON.stringify(
-    ['channel', 'address', 'reply_to', 'via'].map((k) => request?.[k] ?? ''),
-  )
+// The way a request is answered: its channel, and whom it reaches by it, the
+// same for every request said in one group text, whoever in it wrote it.
+let routeOf = (request?: Comp) => {
+  let group = request?.group as string[] | undefined
+  return JSON.stringify([
+    request?.channel ?? '',
+    group ? [request?.address, ...group].sort().join() : request?.address ?? '',
+    request?.reply_to ?? '',
+    request?.via ?? '',
+  ])
+}
 
 // Who the Operator's replies name: yaks.app, where it failed, and itself.
 
@@ -1711,7 +1718,10 @@ export let operating = (
     // (@yaks/session `intake`), and are answered in its package's words
     // (operator-channels.ts `replyRows`). A queued request from before its
     // channel moved is answered by `operator_deliver` above.
-    let heard = reply.given.flatMap((b) => {
+    // A turn that passed (@yaks/session/turn) sends nothing, and one that
+    // answers several messages said in one room answers there once, to the
+    // newest.
+    let heard = passes(reply.text) ? [] : reply.given.flatMap((b) => {
       let item = comp(b, 'intake')?.item
       let channel = String(comp(b, 'channel')?.name ?? '')
       return item && TAKING.has(channel)
@@ -1720,8 +1730,12 @@ export let operating = (
     })
     let from = heard.length && space ? await dir().at(space) : undefined
     let items = from ? await g.get(heard.map((h) => h.item)) : []
+    let room = (i: number) =>
+      `${heard[i].channel}|${comp(items[i], 'chat_message')?.room ?? i}`
+    let newest = new Map(heard.map((_, i) => [room(i), i]))
     let sent = heard.flatMap(({ channel }, i) =>
-      items[i] && !items[i].operator_request && from
+      items[i] && !items[i].operator_request && from &&
+        newest.get(room(i)) == i
         ? replyRows(env, from, channel, items[i], {
           eid: derivedEid(
             `operator-reply|${items[i].entity.eid}|${mark.entity.eid}`,

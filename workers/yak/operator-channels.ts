@@ -42,6 +42,7 @@ import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
 import { framing, kept, messageEid, pieces, type Said } from '@yaks/chat'
+import { cue, passes } from '@yaks/session/turn'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -90,6 +91,16 @@ export type Request = {
   // holds the demo's lines through it where it began with them (`begun`),
   // and either way the space a copy of its app (walkthrough.ts `STEPPING`).
   stepped?: Stepped
+  // In a group text, everyone else in it besides its sender (`address`) and
+  // the number it reached (`reply_to`), who all read the answer; `person`
+  // is the guest who stands for the group, whose one conversation is the
+  // group's (operator-texts.ts `textedOperator`).
+  group?: string[]
+  // In a group text, the person who wrote the words, whose they are kept as.
+  writer?: string
+  // In a group text, whether the words named the Operator (@yaks/session/turn
+  // `named`).
+  addressed?: boolean
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean
@@ -293,6 +304,7 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
   voice: (r) => r.call ? 'your voice on the call' : 'the person on the phone',
   letter: (r) => r.address,
   texted: (r) => r.address,
+  group: (r) => r.address,
 }
 
 /**
@@ -382,11 +394,13 @@ export let hear = async (
 let chatFraming = (request: Request, item: Bundle) => {
   let m = part<Comp | undefined>(item, 'chat_message')
   let platform = PLATFORMS.get(request.channel)
+  // Only a direct message is said where nobody else hears the answer.
   return platform && m
-    ? framing(platform, {
-      name: request.address ?? 'someone',
-      addressed: m.addressed as Said['addressed'],
-    })
+    ? cue({ group: m.addressed != 'direct', to: !!m.addressed }) +
+      framing(platform, {
+        name: request.address ?? 'someone',
+        addressed: m.addressed as Said['addressed'],
+      })
     : ''
 }
 
@@ -654,6 +668,10 @@ let BY: Record<
   email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
   signup: () => 'By text, signing up for a form: ',
   text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
+  group: (request) =>
+    `By group text with ${(request.group ?? []).join(', ')}. ${
+      cue({ group: true, to: !!request.addressed })
+    }From ${request.address}: `,
   rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
   voice: (request) =>
     request.call
@@ -771,10 +789,16 @@ export let channels = (env: Env): Record<string, Channel> => {
       text: `${words}\n\n${end}`,
       ...(back.from ? { from: back.from } : {}),
       ...(back.agent ? { agent: back.agent } : {}),
+      ...(request.group?.length ? { group: request.group } : {}),
     })
     try {
+      // Everyone in a group reads it, so its links sign nobody in.
       return await (line ? phone : charged(env, space, phone)).send(
-        text(await signingIn(env, request.address!, answer.text)),
+        text(
+          request.group?.length
+            ? answer.text
+            : await signingIn(env, request.address!, answer.text),
+        ),
       )
     } catch (error) {
       if (error instanceof Denied) throw refuse('connection', error.message)
@@ -829,6 +853,9 @@ export let channels = (env: Env): Record<string, Channel> => {
       return answerText(env, space, request, answer.text)
     },
     text: (request, answer) =>
+      texted(request, answer, { from: request.reply_to }),
+    // A group text is answered to everyone in it, from the number it reached.
+    group: (request, answer) =>
       texted(request, answer, { from: request.reply_to }),
     rcs: (request, answer) =>
       texted(request, answer, { agent: request.reply_to }),
@@ -1029,9 +1056,10 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
     : []
 
 // The channels someone who does not write in the space arrives on: their
-// answer to a letter or text the Operator sent them. Their conversation has
-// only their permissions (operator.ts `roster`).
-export let ANSWERING = new Set(['letter', 'texted', 'signup'])
+// answer to a letter or text the Operator sent them, and a group text, whose
+// conversation is the guest's who stands for the group. Their conversation
+// has only their permissions (operator.ts `roster`).
+export let ANSWERING = new Set(['letter', 'texted', 'signup', 'group'])
 
 /** The channels whose words are the Operator's or the platform's own, never
  * those of the person they are said for: a break to fix, what another
@@ -1187,6 +1215,8 @@ export let handleChannels = (
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             ...request.provider ? { provider: request.provider } : {},
+            // A group's words are their writer's, in the group's conversation.
+            ...request.writer ? { by: request.writer } : {},
             // Nobody asked for a break's fix, nor raised what another
             // conversation did: the Operator did.
             ...OWN.has(request.channel) ? { by: space.eid } : {},
@@ -1245,7 +1275,8 @@ export let handleChannels = (
       let [row] = await g.get([event.entity.eid])
       if (row.delivered) return
       let answer = part<Answer>(row, 'operator_answer')
-      if (answer.with) return
+      // A turn that passed (@yaks/session/turn) says nothing anywhere.
+      if (answer.with || passes(answer.text)) return
       let [asked] = answer.request ? await g.get([answer.request]) : [row]
       let request = part<Request>(asked, 'operator_request')
       // By email it is a letter in the thread it answers, carrying the

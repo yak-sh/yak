@@ -105,6 +105,42 @@ test('an RCS reply and a tapped suggestion read as texts that came as RCS', () =
   )
 })
 
+test('a group text reads everyone else in it, and an answer goes to them all as one MMS', async () => {
+  let BO = '+12695550199'
+  let said = heard({
+    data: {
+      event_type: 'message.received',
+      payload: {
+        id: 'g1',
+        type: 'MMS',
+        text: 'Mabel, when do we meet?',
+        from: { phone_number: ANA },
+        to: [{ phone_number: OURS }],
+        // Telnyx's sample lists the number it reached in `cc` too.
+        cc: [BO, ANA, OURS],
+      },
+    },
+  }).arrival
+  assertEquals(said?.group, [BO])
+  let alone = heard({
+    data: {
+      event_type: 'message.received',
+      payload: {
+        id: 'm2',
+        from: { phone_number: ANA },
+        to: [{ phone_number: OURS }],
+      },
+    },
+  }).arrival
+  assertEquals('group' in alone!, false)
+  posted.length = 0
+  await sender.send({ to: ANA, text: 'Tuesday', group: [BO] })
+  assertEquals(posted[0], {
+    path: '/messages/group_mms',
+    body: { from: OURS, to: [ANA, BO], text: 'Tuesday' },
+  })
+})
+
 test('a finalized failure names its code and whether a carrier blocked it', () => {
   let finalized = (code: string) =>
     heard({

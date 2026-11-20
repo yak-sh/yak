@@ -6,6 +6,12 @@ fallback. Without `from`, it discovers a number on the named messaging profile.
 verified Telnyx events to `Arrival` and `Outcome`. `provider.scheme` selects
 @yaks/hook's Ed25519 verification.
 
+A group text arrives with its participants in `cc`, which `heard` reads as the
+arrival's `group`; a `Text` with `group` is sent as one group MMS
+(`/messages/group_mms`, at most eight recipients). Telnyx carries group texts on
+long codes only, not on toll-free numbers or short codes
+([group messaging](https://developers.telnyx.com/docs/messaging/messages/group-messaging)).
+
 `caller({ key, api?, fetch? })` is Call Control for a number whose voice
 connection is a Call Control application: `answer` streams the call's audio both
 ways as μ-law (PCMU), the telephone's own, so nothing is transcoded; `reject`

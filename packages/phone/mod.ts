@@ -31,11 +31,13 @@ export {
   echo,
   type Keyword,
   keyword,
+  othersIn,
   type Outcome,
   type Receipt,
   type Sender,
   stoppedBy,
   type Text,
+  thread,
 } from './text.ts'
 export { type Stash, stash } from './stash.ts'
 export { arrivalEid, kept, settled } from './received.ts'

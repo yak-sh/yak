@@ -76,6 +76,6 @@ Platforms: [@yaks/discord](../discord/README.md).
 ## Who answers
 
 Whether a message is answered is never a platform's call. A platform says only
-how it was `addressed`; the listener (the Operator's shared conversation logic,
-the same for every channel) reads everything it hears, and answers when it is
-addressed or the words are clearly for it.
+how it was `addressed`; the listener reads everything it hears, and answers when
+it is addressed or the words are clearly for it, by the conversation logic every
+channel shares (@yaks/session's `turn`, which a group text uses too).
