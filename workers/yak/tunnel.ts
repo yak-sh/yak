@@ -20,7 +20,7 @@
 //
 // The space's owner reaches the same gateway with no app between (`machine`
 // below): the MCP servers they keep on the machine are asked through it
-// (mcp-remote.ts), each request naming the Operator conversation it was made
+// (@yaks/connections/mcp), each request naming the Operator conversation it was made
 // in and whose it is, which no app's request may say for itself.
 //
 // The machine speaks back by the owner's own connection, not the tunnel: what

@@ -690,6 +690,14 @@ let desk = async (
         ),
         // Asked beside the directory's reads, and kept only on their own.
         services: identity().then((part) => part.services(env, owner, dir)),
+        // The MCP servers they keep, and the tools of the one opened.
+        mcp: import('./connected-mcp.ts').then((part) =>
+          part.mcpPage(env, dir, { person: owner, role: who.role }, {
+            open: q.get('mcp') ?? undefined,
+            grant: q.get('grant') ?? undefined,
+            at: q.get('at') ?? undefined,
+          })
+        ),
         enable: enabled(req),
         add: q.get('detail') ?? undefined,
         find: q.get('q') ?? undefined,

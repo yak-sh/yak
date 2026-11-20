@@ -1,29 +1,190 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from '@yaks/platform/host'
-import { type Ask, type Offered, remoteCommands } from './mcp-remote.ts'
+import {
+  type Ask,
+  type Choice,
+  type Offered,
+  remoteCommands,
+  type Shown,
+} from '@yaks/connections/mcp'
+import {
+  addressed,
+  grant as grantSource,
+  type Grantable,
+  grantable,
+  granted,
+  grantees,
+  revoke,
+} from '@yaks/connections'
 import { asCaller, type Ctx, type Out, refuse, str } from './tool.ts'
+import type { Directory } from './directory.ts'
+import type { Env } from './env.ts'
+import type { Who } from './session.ts'
 import type { Row } from './tool-words.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { argsOf, type Tool as GraphTool } from '@yaks/graph'
-import { nameOf } from '@yaks/mcp-client'
+import { MCPError, nameOf } from '@yaks/mcp-client'
+import { CallError } from '@yaks/tools/errors'
 
 // The tunnel's code is loaded by the first server on a machine, which almost
 // nobody has. The servers are the account's: a channel says whether it
 // reaches them (an Operator by its own rule, operator.ts `operatorRoster`),
 // and at a door that does not say, a credential narrowed to one space
 // (tool.ts `accounted`) sees nobody's.
-let reaches = (ctx: Ctx) => ctx.remote ?? !ctx.who?.space
-let commands = (ctx: Ctx, asking?: Calling) =>
-  remoteCommands(reaches(ctx) ? ctx.person : '', {
-    ...ctxOf(ctx.env, asCaller(ctx, null)),
+export let reaches = (ctx: Ctx): boolean => ctx.remote ?? !ctx.who?.space
+// The servers of `person`, held for them by `who`, with what reaches them.
+let serversOf = (
+  env: Env,
+  dir: Directory,
+  person: string,
+  who: Who,
+  asking?: Calling,
+) =>
+  remoteCommands(person, {
+    ...ctxOf(env, who),
     report: (e) => caught(e, { request: 'connected MCP' }),
-    signIn: url(ctx.env, '/manage/connections'),
+    signIn: url(env, '/manage/connections'),
     machine: async (space) =>
-      (await import('./tunnel.ts')).machine(ctx.env, space, ctx.person, asking),
+      (await import('./tunnel.ts')).machine(env, space, person, asking),
     owned: async () =>
-      (await ctx.dir.seats(ctx.person, 'owner')).map((s) => s.space.slug),
+      (await dir.seats(person, 'owner')).map((s) => s.space.slug),
   })
+let commands = (ctx: Ctx, asking?: Calling) =>
+  serversOf(
+    ctx.env,
+    ctx.dir,
+    reaches(ctx) ? ctx.person : '',
+    asCaller(ctx, null),
+    asking,
+  )
+/** A person's servers as their own space's connections page shows and
+ * changes them: that page is at the platform's address, which no credential
+ * narrowed to one space reaches. */
+export let pageServers = (env: Env, dir: Directory, who: Who) =>
+  serversOf(env, dir, who.person ?? '', who)
+
+/** An app, as the connections page names it beside a source granted to it. */
+export type Grantee = {
+  eid: string
+  title: string
+  space: string
+  slug: string
+}
+
+/** What the connections page shows of a person's servers: each with the apps
+ * it is granted to; with `open`, every tool that one offers, for choosing
+ * which are offered; and with `grant`, an app asking for the sources `at`
+ * names (@yaks/connections `grantable`), each with whether it holds it. */
+export type McpPage = {
+  servers: (Shown & { apps: Grantee[] })[]
+  tools?: {
+    server: string
+    list?: Choice[]
+    failed?: string
+  }
+  ask?: {
+    app: Grantee
+    at: string
+    sources: (Grantable & { granted: boolean })[]
+  }
+}
+
+// The app at `eid`, named, or null where there is none.
+let granteeOf = async (dir: Directory, eid: string) => {
+  let at = await dir.appAt(eid).catch(() => null)
+  return at && !at.app.trashed
+    ? {
+      eid,
+      title: at.app.title || at.app.slug,
+      space: at.space.slug,
+      slug: at.app.slug,
+    }
+    : null
+}
+
+export let mcpPage = async (
+  env: Env,
+  dir: Directory,
+  who: Who,
+  asked: { open?: string; grant?: string; at?: string } = {},
+): Promise<McpPage> => {
+  let { open, grant, at } = asked
+  let { read } = ctxOf(env).graph
+  let person = who.person ?? ''
+  let remote = pageServers(env, dir, who)
+  let shown = await remote.shown()
+  let by = await grantees(read, shown.map((s) => s.id))
+  let named = new Map<string, Grantee | null>()
+  let name = async (eid: string) => {
+    if (!named.has(eid)) named.set(eid, await granteeOf(dir, eid))
+    return named.get(eid)
+  }
+  let servers = await Promise.all(shown.map(async (s) => ({
+    ...s,
+    apps: (await Promise.all((by.get(s.id) ?? []).map(name))).filter((a) =>
+      a != null
+    ),
+  })))
+  let app = grant && at && addressed(at) ? await name(grant) : null
+  let ask = app && at
+    ? {
+      app,
+      at,
+      sources: await Promise.all(
+        (await grantable(read, person, at)).map(async (g) => ({
+          ...g,
+          granted: await granted(read, { app: app.eid, person, at: g.at }),
+        })),
+      ),
+    }
+    : undefined
+  let tools = open
+    ? await remote.tools(open).then(
+      (list) => ({ server: open, list }),
+      (e: unknown) => {
+        if (!(e instanceof CallError) && !(e instanceof MCPError)) {
+          caught(e, { request: 'MCP server tools' })
+        }
+        return {
+          server: open,
+          failed: e instanceof Error ? e.message : String(e),
+        }
+      },
+    )
+    : undefined
+  return { servers, ...tools ? { tools } : {}, ...ask ? { ask } : {} }
+}
+
+/** What a form on the connections page does to a person's grants of their
+ * sources to apps (`source-grant`, `source-revoke`, with `app` and `at`): what
+ * the page says, or null for a form about something else. Only an app that
+ * is there is granted anything. */
+export let sourceActed = async (
+  env: Env,
+  dir: Directory,
+  who: Who,
+  act: string,
+  field: (name: string) => string,
+): Promise<string | null> => {
+  if (act != 'source-grant' && act != 'source-revoke') return null
+  let c = ctxOf(env, who)
+  let app = await granteeOf(dir, field('app'))
+  if (!app) throw refuse('missing', 'That app is not there anymore.')
+  let at = field('at')
+  if (act == 'source-revoke') {
+    await c.graph.apply(revoke({ app: app.eid, at }))
+    return `${app.title} no longer uses it.`
+  }
+  await c.graph.apply(
+    await grantSource(c.graph.read, {
+      app: app.eid,
+      person: who.person ?? '',
+      at,
+    }),
+  )
+  return `${app.title} may use it now, whenever you use ${app.title}.`
+}
 
 export let listConnectedCommands = (ctx: Ctx, said = '', asking?: Calling) =>
   commands(ctx, asking).list(said)
@@ -143,6 +304,9 @@ export let mcpConnect: Row = {
       client_id: str(
         'An existing public OAuth client id, when the server does not support registration.',
       ),
+      header: str(
+        "The request header the server takes a key in, such as X-API-Key, for a server that takes a key rather than a sign-in; '' sends it as Authorization: Bearer. The person gives the key itself on their connections page, never here.",
+      ),
       enabled: { type: 'boolean', description: 'False disconnects its tools.' },
       allow: {
         type: 'array',
@@ -203,6 +367,7 @@ export let mcpConnect: Row = {
       url: String(args.url),
       ...on ? { machine: on.eid } : {},
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},
+      ...typeof args.header == 'string' ? { header: args.header } : {},
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},
       ...offered(args.lists),
@@ -211,5 +376,34 @@ export let mcpConnect: Row = {
         : {},
     })
     return { text: '', value }
+  },
+}
+
+export let mcpRemove: Row = {
+  name: 'mcp_remove',
+  destructive: true,
+  idempotent: false,
+  openWorld: false,
+  account: true,
+  input: {
+    type: 'object',
+    properties: {
+      server: str(
+        'The id of the MCP server, from mcp_connect or commands (mcp:<id>).',
+      ),
+    },
+    required: ['server'],
+  },
+  run: async (ctx, args) => {
+    if (!reaches(ctx)) {
+      throw refuse('access', 'This channel cannot remove personal MCP servers.')
+    }
+    let id = String(args.server).replace(/^mcp:/, '')
+    await commands(ctx).remove(id)
+    return {
+      text: `The MCP server is in the trash, with its tools and lists. ${
+        url(ctx.env, '/manage/connections')
+      } brings it back.`,
+    }
   },
 }

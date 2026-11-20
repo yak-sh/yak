@@ -200,7 +200,8 @@ import { MOVED } from '@yaks/sync'
 import { full } from './usage.ts'
 import { scheduleBy } from './used.ts'
 import { seen } from './views.ts'
-import { refuse } from './tool.ts'
+import { type Ctx, refuse } from './tool.ts'
+import { CallError } from '@yaks/tools/errors'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
@@ -1298,24 +1299,61 @@ let appDoor = async (
     let { serviceRoute } = await import('./service-api.ts')
     return serviceRoute(req, env, dir, { space, app }, who, path)
   }
+  // `at` names a source outside the app (an MCP server, a connection, an app
+  // service) of the person using it: the app reaches it as them, only where
+  // they granted it (declared.ts `outside`).
+  let sourced = async () => {
+    if (!who.person || who.service) {
+      throw new CallError('access', 'Sign in to use what you connected')
+    }
+    let { listCommands, runCommand } = await import('./declared.ts')
+    let ctx: Ctx = { env, dir, person: who.person, app: { space, app } }
+    return {
+      list: (at: string) => listCommands(ctx, at),
+      run: (at: string, name: string, args: Record<string, unknown>) =>
+        runCommand(ctx, at, name, args),
+    }
+  }
+  // Where an app sends the person using it to allow it what they connected:
+  // their own connections page at the platform's address, which asks them,
+  // since the app's own address may not grant itself anything.
+  if (path == '/allow') {
+    let to = new URL(hostUrl(env, '/manage/connections'))
+    to.searchParams.set('grant', app.eid)
+    to.searchParams.set('at', new URL(req.url).searchParams.get('at') ?? 'mcp:')
+    to.hash = 'grant'
+    return Response.redirect(to.href, 303)
+  }
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
     if (!mayUse) return refuse('not_a_reader')
-    return Response.json(await commandsIn(env, space, app, who))
+    let at = new URL(req.url).searchParams.get('at')
+    if (at == null) return Response.json(await commandsIn(env, space, app, who))
+    try {
+      return Response.json(await (await sourced()).list(at))
+    } catch (e) {
+      return rejection(e, {
+        request: 'GET /api/commands',
+        space: space.slug,
+        app: app.slug,
+      })
+    }
   }
   if (path == '/command') {
     if (!mayUse) return refuse('not_a_reader')
     let [route] = commandRoutes({
-      command: (name, args) =>
-        commandIn(
-          env,
-          space,
-          app,
-          who,
-          name,
-          args,
-          acting(env, space, app, who),
-        ),
+      command: async (name, args, at) =>
+        at != null
+          ? await (await sourced()).run(at, name, args)
+          : await commandIn(
+            env,
+            space,
+            app,
+            who,
+            name,
+            args,
+            acting(env, space, app, who),
+          ),
     })
     return route.handle(req)
   }

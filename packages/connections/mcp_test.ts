@@ -24,7 +24,7 @@ import { provenanceDoc } from '@yaks/provenance'
 import { edgeDoc } from '@yaks/edge'
 import { mcpDoc } from '@yaks/mcp-client/vocab'
 import { fixture } from '../../packages/mcp-client/testing.ts'
-import { remoteCommands } from './mcp-remote.ts'
+import { remoteCommands } from './mcp.ts'
 
 let setup = async () => {
   let vocab = loadVocab([
@@ -35,6 +35,17 @@ let setup = async () => {
     kernelDoc,
     provenanceDoc,
     edgeDoc,
+    // The host's mark for what is in the trash, as yaks.app's directory has.
+    {
+      title: 'trash',
+      $defs: {
+        trashed: {
+          component: true,
+          type: 'object',
+          properties: { at: { type: 'string' } },
+        },
+      },
+    },
   ])
   let vault = ramVault(), person = mint(), other = mint()
   let g = graph({
@@ -365,4 +376,116 @@ test('MCP OAuth asks for the current person to sign in once and revoked grants n
   assertEquals(await stranger.list(), [])
   assertEquals((await remote.list())[0].name, 'sign_in')
   assertEquals(failures, [])
+})
+
+// A server that takes `key` in `header` (a bearer token where none is named),
+// answers 401 to anything else, and names no sign-in.
+let locked = (key: string, header?: string) => {
+  let f = fixture()
+  let fetcher: typeof fetch = (input, init) => {
+    let req = new Request(input, init)
+    if (new URL(req.url).pathname.startsWith('/.well-known/')) {
+      return Promise.resolve(new Response(null, { status: 404 }))
+    }
+    let said = header
+      ? req.headers.get(header)
+      : req.headers.get('authorization')?.replace(/^Bearer /, '')
+    if (req.method == 'POST' && said != key) {
+      return Promise.resolve(new Response(null, { status: 401 }))
+    }
+    return f.fetcher(req)
+  }
+  return { ...f, fetcher }
+}
+
+for (
+  let [label, header] of [['a bearer token', undefined], [
+    'a header',
+    'X-API-Key',
+  ]]
+) {
+  test(`a server that takes a key in ${label} asks the person for it, and its calls carry it there alone`, async () => {
+    let { host, person, failures } = await setup()
+    let f = locked('k-1', header)
+    let remote = remoteCommands(person, host, { fetch: f.fetcher })
+    let made = await remote.configure({
+      name: 'Keys',
+      url: 'https://keys.test/mcp',
+      ...header ? { header } : {},
+    })
+    assertEquals(made.commands.map((c) => c.name), ['sign_in'])
+    assertStringIncludes(made.commands[0].description, 'Keys takes a key')
+    let name = `mcp:${made.server}`
+    assertEquals((await known(host.graph.read, name))?.token, undefined)
+    assertEquals(
+      ((await pick(host.graph.read, person, name))?.connection as {
+        status: string
+      }).status,
+      'needed',
+    )
+    await remote.give(made.server, 'k-1')
+    assertEquals((await remote.list()).map((c) => c.name), ['publish_mockup'])
+    f.requests.length = 0
+    let out = await remote.call(name, 'publish_mockup', { html: 'x' })
+    assertStringIncludes(out.text, 'https://example.test/mockup/1')
+    for (let r of f.requests) {
+      assertEquals(
+        r.headers.get(header ?? 'authorization'),
+        header ? 'k-1' : 'Bearer k-1',
+      )
+      if (header) assertEquals(r.headers.has('authorization'), false)
+    }
+    assertEquals(failures, [])
+  })
+}
+
+test('a credential is never sent in a header the transport owns', async () => {
+  let { host, person } = await setup()
+  let remote = remoteCommands(person, host, { fetch: fixture().fetcher })
+  for (let header of ['Cookie', 'Host', 'Mcp-Session-Id', 'X Key']) {
+    await assertRejects(
+      () =>
+        remote.configure({
+          name: 'Keys',
+          url: 'https://keys.test/mcp',
+          header,
+        }),
+      Error,
+      'MCP header',
+    )
+  }
+})
+
+test('a server removed goes to the trash with its tools, and comes back with its key', async () => {
+  let { host, person } = await setup()
+  let f = locked('k-1')
+  let remote = remoteCommands(person, host, { fetch: f.fetcher })
+  let { server } = await remote.configure({
+    name: 'Keys',
+    url: 'https://keys.test/mcp',
+  })
+  await remote.give(server, 'k-1')
+  let at = `mcp:${server}`
+  await remote.remove(server)
+  assertEquals(await remote.list(), [])
+  await assertRejects(
+    () => remote.call(at, 'publish_mockup', {}),
+    Error,
+    'not connected for you',
+  )
+  assertEquals((await remote.kept()).map((r) => !!r.trashed), [true])
+  await remote.restore(server)
+  assertEquals((await remote.list()).map((c) => c.name), ['publish_mockup'])
+  // Connecting the same address again brings it back too.
+  await remote.remove(server)
+  let again = await remote.configure({
+    name: 'Keys',
+    url: 'https://keys.test/mcp',
+  })
+  assertEquals(again.server, server)
+  assertEquals(again.commands.map((c) => c.name), ['publish_mockup'])
+  // A server named as one in the trash keeps it there.
+  await remote.remove(server)
+  await remote.configure({ name: 'Keys', url: 'https://other.test/mcp' })
+  await assertRejects(() => remote.restore(server), Error, 'rename one')
 })

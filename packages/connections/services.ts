@@ -4,6 +4,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
 import { integrationEid } from './identity.ts'
+import { grantOf } from './sources.ts'
 import {
   type About,
   type Integration,
@@ -63,24 +64,21 @@ export type ServiceAuthority = {
   operation: string
 }
 
-/** Check the current person-owned connection and its source-app link. */
+/** Check the current person-owned connection and its source-app link: the
+ * person's grant of it to the app (./sources.ts), carrying the operation. */
 export let serviceAuthority = async (
   read: Read,
   a: ServiceAuthority,
 ): Promise<boolean> => {
-  let rows = await read(
-    line`(.entity.eid=${a.connection}&.connection)|(.edge.from=${a.app}&.edge.to=${a.connection}&.uses)`,
-  )
-  let c = rows.find((b) => b.entity.eid == a.connection)?.connection as
-    | Comp
-    | undefined
-  return !!c && c.owner == a.person && c.status == 'connected' &&
+  let held = await grantOf(read, {
+    app: a.app,
+    person: a.person,
+    eid: a.connection,
+  })
+  let c = held?.source.connection as Comp | undefined
+  return !!c && c.status == 'connected' &&
     c.integration == serviceName(a.service) && Array.isArray(c.scopes) &&
-    c.scopes.includes(a.operation) &&
-    rows.some((b) =>
-      b.uses && (b.edge as Comp | undefined)?.from == a.app &&
-      (b.edge as Comp | undefined)?.to == a.connection
-    )
+    c.scopes.includes(a.operation)
 }
 
 /** The person's explicit selection of service operations, or its revocation. */
@@ -89,7 +87,7 @@ export let grantService = async (
   a: { person: string; connection: string; operations: string[] },
 ): Promise<Bundle[]> => {
   let [held] = await read(line`.entity.eid=${a.connection}&.connection`)
-  let c = held?.connection as Comp | undefined as Comp | undefined
+  let c = held?.connection as Comp | undefined
   if (!c || c.owner != a.person) {
     throw new CallError(
       'access',

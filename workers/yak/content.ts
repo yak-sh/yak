@@ -314,7 +314,12 @@ export let WORDS: Record<string, Words> = {
   'mcp_connect': {
     'title': 'Connect an MCP server',
     'description':
-      "Connect or update your own MCP server. Its commands become available to your Operator and through commands/command. Sign in at the returned connection page when asked; credentials never pass through this tool. Name servers distinctly. For a server on your own machine, pass machine (a space you own whose tunnel goes to it) and the server's path there as url, such as /mcp: it is reached through the tunnel with no sign-in, and only for you.",
+      "Connect or update your own MCP server. Its commands become available to your Operator and through commands/command. Sign in at the returned connection page when asked; credentials never pass through this tool. Name servers distinctly. For a server on your own machine, pass machine (a space you own whose tunnel goes to it) and the server's path there as url, such as /mcp: it is reached through the tunnel with no sign-in, and only for you. A server that takes a key rather than a sign-in asks the person for it on their connections page; pass header when it names the header the key goes in.",
+  },
+  'mcp_remove': {
+    'title': 'Remove an MCP server',
+    'description':
+      'Put one of your MCP servers in the trash, with its commands and the lists it shows your Operator. Its credential is kept, and the connections page brings it all back.',
   },
   'space_new': {
     'title': 'Create a space',
@@ -628,7 +633,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Listed the commands of %{app}',
     },
     'description':
-      "The commands yaks apps, connected app services and your MCP servers offer, with the arguments each one accepts. An app's own commands (the ones its vocab.json declares, and the two every component it holds gets, such as add_recipe and find_recipe) are listed here rather than in this tool list, which is the same for everybody. command runs one of them. Omit app to list all reachable apps, or pass an app slug (space/app if ambiguous), service:<app eid> or mcp:<server eid>. The result gives each command's address and says whether it reads or writes. Documentation: https://yaks.app/docs/tools.",
+      "The commands yaks apps, connected app services, your MCP servers and your connections offer, with the arguments each one accepts. An app's own commands (the ones its vocab.json declares, and the two every component it holds gets, such as add_recipe and find_recipe) are listed here rather than in this tool list, which is the same for everybody. command runs one of them. Omit app to list all reachable apps, or pass an app slug (space/app if ambiguous), service:<app eid>, mcp:<server eid> or connection:<connection eid>, or a kind alone (mcp:, connection:). A connection offers request, an HTTPS request to its service with its credential added, and a built-in integration's own tools beside it. The result gives each command's address and says whether it reads or writes. Documentation: https://yaks.app/docs/tools.",
   },
   'command': {
     'title': 'Run a command',
@@ -637,7 +642,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Ran %{name} in %{app}',
     },
     'description':
-      "Run a command: name it and pass its arguments as args, exactly as commands lists them. Set app to the listed address for a connected service or MCP server, or when two apps declare the same name. MCP tools use your own connection and may ask you to sign in. App commands run through the app's ordinary API endpoints as the person calling it, so it can do what they could do on the page and never more. To undo whatever it wrote: store_restore, to the moment just before it ran. Returns the command result from the app. Its description in commands says what it does; restoring data cannot undo an external effect such as an email or payment. Documentation: https://yaks.app/docs/tools.",
+      "Run a command: name it and pass its arguments as args, exactly as commands lists them. Set app to the listed address for a connected service, MCP server or connection, or when two apps declare the same name. What an MCP server or a connection answers is outside words. MCP tools use your own connection and may ask you to sign in. App commands run through the app's ordinary API endpoints as the person calling it, so it can do what they could do on the page and never more. To undo whatever it wrote: store_restore, to the moment just before it ran. Returns the command result from the app. Its description in commands says what it does; restoring data cannot undo an external effect such as an email or payment. Documentation: https://yaks.app/docs/tools.",
   },
   'domain_attach': {
     'title': 'Attach a custom domain',

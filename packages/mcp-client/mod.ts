@@ -113,6 +113,9 @@ export type Server = {
   machine?: string
   /** Exact remote names; omission exposes all discovered tools. */
   allow?: string[]
+  /** The header a credential is sent in, as it is kept; omission sends it
+   * as `Authorization: Bearer`. */
+  header?: string
   /** Explicit OAuth settings; tokens stay in the application's own storage. */
   oauth?: {
     redirectUrl?: string
@@ -250,7 +253,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         url.protocol !== 'https:' &&
         !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
       ) throw new MCPError('Credentials require HTTPS', server.name)
-      headers.set('authorization', `Bearer ${token}`)
+      if (server.header) headers.set(server.header, token)
+      else headers.set('authorization', `Bearer ${token}`)
     }
     const response = await (options.fetch ?? fetch)(input, {
       ...init,

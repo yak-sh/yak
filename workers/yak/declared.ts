@@ -45,8 +45,24 @@ import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
 import { told } from './stream.ts'
-import { listConnectedCommands, runConnectedCommand } from './connected-mcp.ts'
+import {
+  listConnectedCommands,
+  reaches,
+  runConnectedCommand,
+} from './connected-mcp.ts'
 import { listServiceCommands, runServiceCommand } from './service-call.ts'
+import { line } from '@yaks/query'
+import type { Bundle, Comp } from '@yaks/graph'
+import type { Tool } from '@yaks/session'
+import {
+  addressed,
+  CONNECTION,
+  grantsOf,
+  type Kind,
+  request,
+  requests,
+} from '@yaks/connections'
+import { ctxOf } from './connections.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
@@ -116,6 +132,142 @@ let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
   return said
 }
 
+// The sources outside any app, each by the kind its address names
+// (@yaks/connections `addressed`): a person's MCP servers, the app services
+// they connected, and their connections, each sent requests through.
+//
+// Whose connections a caller sends through: their own where the channel
+// reaches the person's sources (connected-mcp.ts `reaches`), and a space's
+// for its owner in a context naming that space. An app's code sends through
+// the ones its person granted it, which are that person's own.
+let owners = async (ctx: Ctx): Promise<string[]> => {
+  if (ctx.app) return [ctx.person]
+  let named = ctx.who?.spaceEid ??
+    (ctx.who?.space ? (await ctx.dir.space(ctx.who.space))?.eid : undefined)
+  let space = named &&
+    await ctx.dir.role({ eid: named }, ctx.person) == 'owner'
+  return [...reaches(ctx) ? [ctx.person] : [], ...space ? [named!] : []]
+}
+// The tools an integration built into yaks.app offers through a connection,
+// beside `request`, by the integration's name: the same ones the Operator
+// holds for it. Each is loaded when asked.
+type Built = (
+  env: Ctx['env'],
+  ctx: Ctx,
+  space: Space,
+  held: Bundle,
+) => Promise<Tool[]>
+let google = async (): Promise<Built> =>
+  (await import('./operator-google.ts')).connectionTools
+let BUILT: Record<string, () => Promise<Built>> = {
+  'google-calendar': google,
+  gmail: google,
+}
+
+// The space a caller works in, for a built-in tool that speaks for it: the
+// app's, the one its credential names, else the person's own.
+let workingIn = async (ctx: Ctx): Promise<Space> =>
+  ctx.app?.space ??
+    (ctx.who?.space ? await ctx.dir.space(ctx.who.space) : null) ??
+    await ctx.dir.own(ctx.person)
+
+// The built-in tools of the connection at `at`, where its integration has any.
+let builtIn = async (ctx: Ctx, at: string): Promise<Tool[]> => {
+  let [held] = await ctxOf(ctx.env).graph.read(
+    line`.entity.eid=${addressed(at)!.rest}&.${CONNECTION}&*`,
+  )
+  let made = held &&
+    BUILT[String((held[CONNECTION] as Comp).integration)]
+  return made ? (await made())(ctx.env, ctx, await workingIn(ctx), held) : []
+}
+
+// What a connection says reaches the caller as outside words, as an MCP
+// server's reply does (connected-mcp.ts `runConnectedCommand`).
+let SOURCES: Record<Kind, {
+  list: (ctx: Ctx, said: string) => Promise<Command[]>
+  run: (
+    ctx: Ctx,
+    said: string,
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<Out>
+}> = {
+  service: { list: listServiceCommands, run: runServiceCommand },
+  mcp: { list: listConnectedCommands, run: runConnectedCommand },
+  connection: {
+    list: async (ctx, said) => {
+      let listed = await requests(
+        ctxOf(ctx.env).graph.read,
+        await owners(ctx),
+        said.length > 'connection:'.length
+          ? [addressed(said)!.rest]
+          : undefined,
+      )
+      let built = await Promise.all(
+        listed.map(async (c) =>
+          (await builtIn(ctx, c.at)).map((t): Command => ({
+            at: c.at,
+            name: t.name,
+            title: t.title ?? t.name,
+            description: t.description,
+            readOnly: !!t.readOnly,
+            input: t.parameters,
+          }))
+        ),
+      )
+      return [...listed, ...built.flat()]
+    },
+    run: async (ctx, said, name, args) => {
+      let { read } = ctxOf(ctx.env).graph
+      let held = await owners(ctx)
+      if (name == 'request') {
+        return {
+          ...await request(ctxOf(ctx.env), {
+            at: said,
+            owners: held,
+            name,
+            args,
+          }),
+          heard: true,
+        }
+      }
+      let [mine] = await requests(read, held, [addressed(said)!.rest])
+      if (!mine) {
+        throw refuse('access', `${said} is not a connection you can use`)
+      }
+      let tool = (await builtIn(ctx, said)).find((t) => t.name == name)
+      if (!tool) throw refuse('missing', `${said} has no command ${name}`)
+      let told = await tool.run(args)
+      return { text: typeof told == 'string' ? told : told.text, heard: true }
+    },
+  },
+}
+
+// The sources an app's code reaches: those the person using it granted it,
+// read on every call, so a grant taken back stops the next one.
+let grants = (ctx: Ctx, app: App) =>
+  grantsOf(ctxOf(ctx.env).graph.read, { app: app.eid, person: ctx.person })
+
+// The commands of every source outside an app `said` names: one source, every
+// source of a kind (`mcp:`), or all of them. An app's code is listed only the
+// sources its person granted it, each asked alone.
+let outside = async (ctx: Ctx, said: string): Promise<Command[]> => {
+  let kind = addressed(said)?.kind
+  let one = kind && said.length > kind.length + 1
+  let asked = ctx.app
+    ? (await grants(ctx, ctx.app.app)).filter((at) =>
+      !said || (one ? at == said : at.startsWith(said))
+    )
+    : (kind ? [kind] : Object.keys(SOURCES) as Kind[]).map((k) =>
+      one ? said : `${k}:`
+    )
+  let lists = await Promise.all(asked.map((at) => {
+    let { kind, rest } = addressed(at)!
+    return SOURCES[kind].list(ctx, rest ? at : '')
+  }))
+  return lists.flat()
+}
+
 /**
  * One command, run. `said` names the app where the caller named one, and is ''
  * where they left it out — which works whenever one app of theirs declares the
@@ -130,11 +282,23 @@ export let runCommand = async (
   name: string,
   args: Record<string, unknown>,
 ): Promise<Out> => {
-  if (said.startsWith('mcp:')) {
-    return runConnectedCommand(ctx, said, name, args)
+  let source = addressed(said)
+  if (source) {
+    if (ctx.app && !(await grants(ctx, ctx.app.app)).includes(said)) {
+      throw refuse(
+        'access',
+        `${said} is not granted to this app: send the person using it to ./api/allow?at=${
+          encodeURIComponent(said)
+        }, where they allow it`,
+      )
+    }
+    return SOURCES[source.kind].run(ctx, said, name, args)
   }
-  if (said.startsWith('service:')) {
-    return runServiceCommand(ctx, said, name, args)
+  if (ctx.app) {
+    throw refuse(
+      'arguments',
+      'at names a source, mcp:, service: or connection:; leave it out for this app’s own commands',
+    )
   }
   let all = await reachable(ctx)
   let mine = picked(all, said)
@@ -222,12 +386,8 @@ export let listCommands = async (
   ctx: Ctx,
   said = '',
 ): Promise<Command[]> => {
-  if (said.startsWith('mcp:')) return listConnectedCommands(ctx, said)
-  if (said.startsWith('service:')) return listServiceCommands(ctx, said)
-  let out: Command[] = [
-    ...await listServiceCommands(ctx, said),
-    ...await listConnectedCommands(ctx, said),
-  ]
+  if (ctx.app || addressed(said)) return outside(ctx, said)
+  let out = said ? [] : await outside(ctx, '')
   // Every app's declaration at once: one round trip for the reach, not one
   // per app (T-34986).
   let apps = picked(await reachable(ctx), said)

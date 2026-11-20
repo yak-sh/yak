@@ -15,7 +15,7 @@ import {
   runConnectedCommand,
 } from './connected-mcp.ts'
 import { ctxOf } from './connections.ts'
-import { SAID } from './mcp-remote.ts'
+import { SAID } from '@yaks/connections/mcp'
 import { platform } from './directory-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'

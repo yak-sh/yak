@@ -38,7 +38,14 @@
  * {@link through},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
  * {@link used} and {@link envOf}, {@link credential}, {@link refresh}, and
- * {@link call} for a call out by the one who holds the connection. A host
+ * {@link call} for a call out by the one who holds the connection.
+ *
+ * A person's sources of tools (an MCP server, a connection sent requests
+ * through, an app service) are named by address, and an app reaches one only
+ * where the person granted it: {@link grant}, {@link granted},
+ * {@link grantees},
+ * {@link grantsOf}, {@link revoke} and {@link grantable}. A connection's own
+ * command is {@link requests} and {@link request}. A host
  * that composes this package
  * composes @yaks/secrets, over its vault, and @yaks/edge beside it; the egress
  * that swaps sentinels is @yaks/egress.
@@ -148,6 +155,26 @@ export {
 export { REDIRECT, type SignIns, signins } from './signin.ts'
 
 export { codeFor, codeIn, lettersFor } from './signin-mail.ts'
+
+export {
+  addressed,
+  grant,
+  type Grantable,
+  grantable,
+  granted,
+  grantees,
+  grantOf,
+  grantsOf,
+  type Kind,
+  revoke,
+  serviceAt,
+} from './sources.ts'
+export {
+  type Answer,
+  request,
+  requests,
+  type SourceCommand,
+} from './requests.ts'
 
 export {
   grantService,

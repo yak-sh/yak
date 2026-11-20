@@ -4,6 +4,25 @@ import { MACHINE, nameOf, namespaceOf, type Server } from './mod.ts'
 
 export type GraphServer = { id: string; label: string; server: Server }
 
+// Headers the transport, the protocol or the browser own, which a credential
+// never replaces.
+const OWNED = new Set([
+  'accept',
+  'connection',
+  'content-length',
+  'content-type',
+  'cookie',
+  'host',
+  'last-event-id',
+  'mcp-protocol-version',
+  'mcp-session-id',
+  'origin',
+  'transfer-encoding',
+])
+/** Whether a credential may be sent in the header `name`. */
+export const credentialHeader = (name: string): boolean =>
+  /^[A-Za-z0-9-]+$/.test(name) && !OWNED.has(name.toLowerCase())
+
 /** Validate one definition before connecting. Invalid rows need not block other servers. */
 export const serverOf = (row: Bundle): GraphServer | undefined => {
   const c = row.mcp_server as Comp | undefined
@@ -38,6 +57,12 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
     }
     allow = value
   }
+  const header = c.header == null ? undefined : String(c.header)
+  if (header !== undefined && !credentialHeader(header)) {
+    throw new Error(
+      'MCP header must be a header name a credential may go in, such as X-API-Key',
+    )
+  }
   const oauth = Object.fromEntries([
     ['redirectUrl', c.redirect_url],
     ['clientId', c.client_id],
@@ -54,6 +79,7 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
       url: url.href,
       ...machine ? { machine } : {},
       ...allow ? { allow } : {},
+      ...header ? { header } : {},
       ...Object.keys(oauth!).length ? { oauth } : {},
     },
   }

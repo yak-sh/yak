@@ -983,15 +983,41 @@ by its host, and connections validate the selected owner and app. The Worker's
 own store facets live under `facets/`.
 
 `mcp_connect` configures a person's remote MCP server in the directory as
-`mcp_server{owner,name,url,machine,enabled,allow,client_id}`. `mcp-remote.ts`
-uses `@yaks/mcp-client` for discovery and calls, and `@yaks/connections` for
-that person's sign-in and vaulted credential. Operators receive namespaced
-tools; the connector discovers the same commands at `mcp:<server eid>` through
-`commands` and invokes them through `command`. Code mode lists them under its
-`mcp` object while the connector's published tool roster stays fixed. Discovery
-failures report to the tracker and leave a retryable connection status command.
-Calls recheck ownership and the current configuration, and never retry a remote
-mutation after a missing response or a sign-in challenge.
+`mcp_server{owner,name,url,machine,enabled,allow,header,client_id}`.
+`@yaks/connections/mcp` uses `@yaks/mcp-client` for discovery and calls, and
+`@yaks/connections` for that person's sign-in and vaulted credential. Operators
+receive namespaced tools; the connector discovers the same commands at
+`mcp:<server eid>` through `commands` and invokes them through `command`. Code
+mode lists them under its `mcp` object while the connector's published tool
+roster stays fixed. Discovery failures report to the tracker and leave a
+retryable connection status command. Calls recheck ownership and the current
+configuration, and never retry a remote mutation after a missing response or a
+sign-in challenge.
+
+A server that answers 401 and names no sign-in takes a key: its integration
+`mcp:<eid>` is then a keyed one, and the person gives the key on the connections
+page, sent as `Authorization: Bearer` or in the header `mcp_server.header` names
+(`mcp_connect` takes the header, never the key). The person's own space's
+connections page lists their servers (connected-mcp.ts `mcpPage`): each server's
+state, a box for its key, which of its tools are offered (`mcp_server.allow`),
+turning it off, and removing it. A removed server wears `trashed{}` and is
+served to nobody; the page's trash restores it, and `mcp_connect` with the same
+address brings it back too.
+
+Every tool outside an app is one pool, each source named by an address
+(@yaks/connections `addressed`): `mcp:<server>`, `connection:<connection>` and
+`service:<service app>/<app>` (declared.ts `SOURCES`). A connection offers
+`request` through its credential (@yaks/connections `request`), and an
+integration built in here offers its own tools beside it (declared.ts `BUILT`:
+Google Calendar's and Gmail's, operator-google.ts `connectionTools`). What an
+MCP server or a connection answers is `heard`. The Operator and the connector
+list and call the pool with `commands` and `command`; an app's code does at its
+own `./api/commands?at=` and `./api/command` with `at`, as the person using it,
+reaching only the sources that person granted the app (@yaks/connections
+`grant`, a `uses` link naming no binding, read on every call). `./api/allow`
+sends them to their connections page, which asks them (connected-mcp.ts
+`mcpPage` `ask`, `sourceActed`): only that page grants, since its forms are
+refused from any other address.
 
 A server with `machine` runs on the machine a space's tunnel goes to: `machine`
 is that space, `url` the server's path on the machine, and `mcp_connect` takes
@@ -1010,10 +1036,10 @@ a call from `command` carries none. A machine that is off, a tunnel with no
 gateway and a path the machine has not opened leave the connection status
 command and report nothing to the tracker.
 
-A server's schema loses each `ref` it says on an argument (`mcp-remote.ts`
-`foreign`): a graph's own MCP door names a kind in its graph there, and this
-host would resolve it in the person's graph and refuse an id only the server
-knows.
+A server's schema loses each `ref` it says on an argument
+(`@yaks/connections/mcp` `foreign`): a graph's own MCP door names a kind in its
+graph there, and this host would resolve it in the person's graph and refuse an
+id only the server knows.
 
 A machine's server that lists `comment_new` gives its owner's Operator one more
 tool, `<server>__message_relay` (`operator-relay.ts`): one of the person's own
@@ -1062,9 +1088,9 @@ the box answered all three in 51–110 ms at the box, as the tunnel's Operator
 caller. Through the tunnel, ten loads took 1,055–2,244 ms of `machine_wait`
 while each list opened its own connection and listed the server's tools before
 calling one: 15 requests a page. A server's lists now share one connection, and
-a call is sent without listing first (mcp-remote.ts `calls`): 6 requests. Ten
-loads after that read 469–1,079 ms, about 700 ms typically, beside 1,021–1,782
-ms of `operator_wait`.
+a call is sent without listing first (@yaks/connections/mcp `calls`): 6
+requests. Ten loads after that read 469–1,079 ms, about 700 ms typically, beside
+1,021–1,782 ms of `operator_wait`.
 
 The lists never hold the conversation back: the page waits on the directory for
 which lists there are (operator-lists.ts `listingOf`), and those whose servers

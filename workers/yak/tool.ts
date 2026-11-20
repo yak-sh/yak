@@ -46,6 +46,10 @@ export type Ctx = {
    * at a door, where a credential narrowed to one space reaches none
    * (connected-mcp.ts `reaches`). */
   remote?: boolean
+  /** The app whose code is calling, as the person using it (./api/command
+   * with `at`): it reaches only the sources that person granted it
+   * (declared.ts `admitted`). */
+  app?: { space: Space; app: App }
   /** The invocation whose work a forwarded store call records as its source. */
   call?: string
   // How this caller got in, when a door knows (mcp.ts sets it from

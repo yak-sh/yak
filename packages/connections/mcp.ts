@@ -8,29 +8,38 @@
 // to the space's owner alone, so such a server is its person's only while the
 // space is, and to anyone else it is not connected.
 import { line } from '@yaks/query'
-import {
-  credential,
-  type Ctx,
-  integrationEid,
-  known,
-  need,
-  pick,
-} from '@yaks/connections'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
+import { CallError } from '@yaks/tools/errors'
 import {
   checkNamespaces,
   checkToolNames,
-  connect,
+  connect as client,
   MCPAuthorizationRequired,
   MCPError,
   nameOf,
   type Options,
   unsaid,
 } from '@yaks/mcp-client'
-import { discover } from '@yaks/mcp-client/oauth'
+import { AuthorizationError, discover } from '@yaks/mcp-client/oauth'
 import { type GraphServer, serverOf } from '@yaks/mcp-client/servers'
-import { type Out, refuse } from './tool.ts'
-import type { Command } from './declared.ts'
+import { connect, credential, type Ctx, need, pick } from './connections.ts'
+import { integrationEid } from './identity.ts'
+import { keyed, known } from './integrations.ts'
+
+let refuse = (code: string, text: string) => new CallError(code, text)
+
+/** What one command answers: its words, and the rest of its reply. */
+export type Out = { text: string; value?: Record<string, unknown> }
+/** One remote command, as a host lists it: `at` is its server's address,
+ * `mcp:<server eid>`, and `name` its exact remote name. */
+export type Command = {
+  at: string
+  name: string
+  title: string
+  description: string
+  readOnly: boolean
+  input: unknown
+}
 
 type Host = Ctx & {
   report: (e: unknown) => void
@@ -42,18 +51,40 @@ type Host = Ctx & {
   /** The spaces this person owns: the machines they can name. */
   owned?: () => Promise<string[]>
 }
-type Settings = {
+export type Settings = {
   name: string
   url: string
   machine?: string
   enabled?: boolean
   allow?: string[]
   client_id?: string
+  // The header the key it takes goes in, where it takes one; null sends a
+  // credential as a bearer token. The key itself arrives through `give`,
+  // never with these, which a tool call carries as its text.
+  header?: string | null
   // The lists this server offers the person's Operator page, in order
   // (operator-lists.ts): each replaces the ones before, and none says none.
   lists?: Offered[]
   // Where an id it names opens, `{id}` where the id goes; null opens none.
   mentions?: string | null
+}
+/** One server a person keeps, as their connections page shows it. `status`
+ * is its connection's (`connection`), `open` where it asked for no
+ * credential yet, and `machine` for one reached through a tunnel. */
+export type Shown = {
+  id: string
+  name: string
+  url: string
+  machine?: string
+  enabled: boolean
+  allow?: string[]
+  header?: string
+  trashed: boolean
+  status: 'open' | 'machine' | 'needed' | 'connected' | 'broken'
+  connection?: string
+  /** whether its credential is a key the person gives, rather than a
+   * sign-in; absent where it asked for neither */
+  keyed?: boolean
 }
 /** One list a server offers, as `mcp_connect` takes it. */
 export type Offered = {
@@ -63,8 +94,9 @@ export type Offered = {
   waits: boolean
 }
 // `machine` is the space whose tunnel reaches the server, where it is on one.
-type RemoteCommand = Command & { namespace: string; machine?: string }
-type Listed = Awaited<ReturnType<ReturnType<typeof connect>['list']>>
+/** One tool of a server, as a command at its address. */
+export type RemoteCommand = Command & { namespace: string; machine?: string }
+type Listed = Awaited<ReturnType<ReturnType<typeof client>['list']>>
 // A server with the way to its machine, where it is on one.
 type Reached = GraphServer & { fetch?: typeof fetch }
 /** How much of what one server says to read before its tools an Operator is
@@ -154,14 +186,49 @@ let described = (s: GraphServer, tools: Listed): RemoteCommand[] =>
     }
   })
 
+/** One tool a server offers, with whether its allow list offers it. */
+export type Choice = {
+  name: string
+  title: string
+  description: string
+  allowed: boolean
+}
+
+/** A person's MCP servers, as {@link remoteCommands} gives them. */
+export type Remote = {
+  set: (
+    id: string,
+    patch: { enabled?: boolean; allow?: string[] | null },
+  ) => Promise<void>
+  tools: (id: string) => Promise<Choice[]>
+  shown: () => Promise<Shown[]>
+  list: (at?: string) => Promise<RemoteCommand[]>
+  call: (
+    at: string,
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<Out>
+  calls: (at: string, asks: Ask[]) => Promise<Asked[]>
+  told: () => Promise<Told[]>
+  configure: (
+    settings: Settings,
+  ) => Promise<{ server: string; commands: RemoteCommand[] }>
+  give: (id: string, key: string) => Promise<void>
+  remove: (id: string) => Promise<void>
+  restore: (id: string) => Promise<void>
+  kept: () => Promise<Bundle[]>
+}
+
 /** Each operation reads ownership anew; no roster retains authority. */
 export let remoteCommands = (
   person: string,
   host: Host,
   options: Options = {},
-) => {
-  let rows = async () =>
+): Remote => {
+  // Every server the person keeps, those in the trash (`trashed{}`) too.
+  let kept = async () =>
     person ? await host.graph.read(line`.mcp_server.owner=${person}&*`) : []
+  let rows = async () => (await kept()).filter((r) => !r.trashed)
   let reached = async (s: GraphServer): Promise<Reached | null> => {
     if (!s.server.machine) return s
     let fetch = await host.machine?.(s.server.machine)
@@ -181,6 +248,38 @@ export let remoteCommands = (
     }
     return found
   }
+  // The server's integration as one a person gives a key to: no sign-in, and
+  // the key sent to the server's host alone. One it signed in through before
+  // becomes this, and its connection asks for a key.
+  let keying = (s: GraphServer) =>
+    host.graph.apply([{
+      entity: { eid: integrationEid(integration(s.id)) },
+      integration: {
+        name: integration(s.id),
+        owner: person,
+        title: s.label,
+        resource: s.server.url,
+        hosts: [new URL(s.server.url).hostname],
+        authorize: null,
+        token: null,
+        client_id: null,
+        scopes: null,
+        issuer: null,
+        userinfo: null,
+        auth: null,
+      },
+    }])
+  // The person's connection to a server's integration, asked for where they
+  // hold none.
+  let holding = async (s: GraphServer) => {
+    let name = integration(s.id)
+    let b = await pick(host.graph.read, person, name)
+    if (b) return b
+    await host.graph.apply(
+      await need(host.graph.read, { owner: person, integration: name }),
+    )
+    return await pick(host.graph.read, person, name)
+  }
   let authorization = async (
     s: GraphServer,
     challenge: MCPAuthorizationRequired['challenge'] = {},
@@ -194,8 +293,17 @@ export let remoteCommands = (
         'This MCP credential belongs to another connection.',
       )
     }
-    if (!i) {
-      let found = await discover(s.server.url, challenge, options.fetch)
+    let found = i ? undefined : await discover(
+      s.server.url,
+      challenge,
+      options.fetch,
+    ).catch((e) => {
+      // A server that asks for a credential and names no sign-in takes a key.
+      if (e instanceof AuthorizationError) return undefined
+      throw e
+    })
+    if (!i && !found) await keying(s)
+    if (found) {
       let client = s.server.oauth?.clientId ??
         await found.register(host.redirect!)
       await host.graph.apply([{
@@ -210,23 +318,15 @@ export let remoteCommands = (
         },
       }])
     } else if (
-      s.server.oauth?.clientId && i.client_id != s.server.oauth.clientId
+      i && !keyed(i) && s.server.oauth?.clientId &&
+      i.client_id != s.server.oauth.clientId
     ) {
       await host.graph.apply([{
         entity: { eid: integrationEid(name) },
         integration: { client_id: s.server.oauth.clientId },
       }])
     }
-    let held = await pick(host.graph.read, person, name)
-    if (!held) {
-      await host.graph.apply(
-        await need(host.graph.read, {
-          owner: person,
-          integration: name,
-        }),
-      )
-      held = await pick(host.graph.read, person, name)
-    }
+    let held = await holding(s)
     if (
       held &&
       (comp(held, 'connection').status == 'connected' || challenge.scope)
@@ -247,9 +347,11 @@ export let remoteCommands = (
       }])
     }
     let link = `${host.signIn}#${encodeURIComponent(name)}`
+    let key = i ? keyed(i) : !found
     return {
-      text:
-        `Sign in to ${s.label} at ${link}, then ask again. No call was retried.`,
+      text: `${
+        key ? `${s.label} takes a key: give it` : `Sign in to ${s.label}`
+      } at ${link}, then ask again. No call was retried.`,
       value: {
         authorization: {
           server: s.id,
@@ -259,12 +361,15 @@ export let remoteCommands = (
       },
     }
   }
+  // A connection to the server; `every` lists its tools past its allow list,
+  // for the person choosing them.
   let using = async <T>(
     s: Reached,
-    run: (c: ReturnType<typeof connect>) => Promise<T>,
+    run: (c: ReturnType<typeof client>) => Promise<T>,
+    every = false,
   ) => {
-    let client = connect(
-      s.server,
+    let c = client(
+      every ? { ...s.server, allow: undefined } : s.server,
       s.fetch ? { ...options, fetch: s.fetch } : {
         ...options,
         token: async () => {
@@ -291,9 +396,9 @@ export let remoteCommands = (
       },
     )
     try {
-      return await run(client)
+      return await run(c)
     } finally {
-      await client.close().catch(host.report)
+      await c.close().catch(host.report)
     }
   }
   let listing = async (s: Reached): Promise<RemoteCommand[]> => {
@@ -353,7 +458,7 @@ export let remoteCommands = (
   // so a call through a tunnel costs one request on the connection, not two.
   let asked = async (
     s: Reached,
-    c: ReturnType<typeof connect>,
+    c: ReturnType<typeof client>,
     { name, args }: Ask,
   ): Promise<Out> => {
     if (name == 'connection_status') {
@@ -456,9 +561,16 @@ export let remoteCommands = (
         }.`,
       )
     }
+    if (machine && settings.header) {
+      throw refuse(
+        'arguments',
+        'A server on a machine is reached through its tunnel and takes no key.',
+      )
+    }
     let url = machine ? settings.url : https(settings.url)
     let all = await rows()
-    let same = all.find((r) => {
+    // The same server again, one in the trash too, which this brings back.
+    let same = (await kept()).find((r) => {
       let c = comp(r, 'mcp_server')
       return c.url == url && (c.machine ?? undefined) == machine
     })
@@ -472,13 +584,18 @@ export let remoteCommands = (
         enabled: settings.enabled ?? true,
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},
+        ...settings.header !== undefined
+          ? { header: settings.header?.trim() || null }
+          : {},
       },
       ...settings.mentions !== undefined
         ? { mentions: settings.mentions ? { url: settings.mentions } : null }
         : {},
+      ...same?.trashed ? { trashed: null } : {},
     }
+    let next: GraphServer | undefined
     try {
-      let next = serverOf(row)
+      next = serverOf(row)
       if (next) nameOf(next.server.namespace!, 'connection_status')
       checkNamespaces([
         ...all.filter((r) => r.entity.eid != row.entity.eid)
@@ -509,6 +626,13 @@ export let remoteCommands = (
       ]
       : []
     await host.graph.apply([row, ...lists])
+    // A server said to take a key in a header asks for one now, rather
+    // than at its first refusal.
+    if (next && row.mcp_server.header) {
+      let i = await known(host.graph.read, integration(next.id))
+      if (!i || !keyed(i)) await keying(next)
+      await holding(next)
+    }
     return {
       server: row.entity.eid,
       commands: row.mcp_server.enabled
@@ -516,5 +640,177 @@ export let remoteCommands = (
         : [],
     }
   }
-  return { list, call, calls, told, configure }
+  /** Keep `key` as the credential of the person's server `id`, which it
+   * then takes instead of a sign-in. */
+  let give = async (id: string, key: string) => {
+    let row = (await rows()).find((r) => r.entity.eid == id)
+    if (!row) {
+      throw refuse('missing', 'This MCP server is not connected for you.')
+    }
+    let s = serverOf({
+      ...row,
+      mcp_server: { ...comp(row, 'mcp_server'), enabled: true },
+    })!
+    if (s.server.machine) {
+      throw refuse(
+        'arguments',
+        'A server on a machine is reached through its tunnel and takes no key.',
+      )
+    }
+    let i = await known(host.graph.read, integration(id))
+    if (!i || !keyed(i)) await keying(s)
+    let b = await holding(s)
+    await connect(host, b!.entity.eid, { key })
+  }
+  /** Put the person's server `id` in the trash: its tools and lists go with
+   * it, and its credential stays, so `restore` brings it all back. */
+  let remove = async (id: string) => {
+    let row = (await rows()).find((r) => r.entity.eid == id)
+    if (!row) {
+      throw refuse('missing', 'This MCP server is not connected for you.')
+    }
+    await host.graph.apply([{ entity: row.entity, trashed: {} }])
+  }
+  /** Bring the person's server `id` back out of the trash. */
+  let restore = async (id: string) => {
+    let row = (await kept()).find((r) => r.entity.eid == id && r.trashed)
+    if (!row) throw refuse('missing', 'This MCP server is not in your trash.')
+    let back = serverOf(row)
+    try {
+      checkNamespaces([
+        ...(await rows()).map(serverOf).filter((s) => s != null),
+        ...back ? [back] : [],
+      ].map((s) => s.server))
+    } catch {
+      throw refuse(
+        'conflict',
+        `Another of your MCP servers has the name ${
+          comp(row, 'mcp_server').name
+        }; rename one of them first.`,
+      )
+    }
+    await host.graph.apply([{ entity: row.entity, trashed: null }])
+  }
+  /** Turn the person's server `id` on or off, or say which of its tools are
+   * offered: `allow` null offers every one. */
+  let set = async (
+    id: string,
+    patch: { enabled?: boolean; allow?: string[] | null },
+  ) => {
+    let row = (await rows()).find((r) => r.entity.eid == id)
+    if (!row) {
+      throw refuse('missing', 'This MCP server is not connected for you.')
+    }
+    await host.graph.apply([{
+      entity: row.entity,
+      mcp_server: {
+        ...patch.enabled != null ? { enabled: patch.enabled } : {},
+        ...patch.allow !== undefined
+          ? { allow: patch.allow && JSON.stringify(patch.allow) }
+          : {},
+      },
+    }])
+  }
+  /** Every tool the person's server `id` offers, those its allow list leaves
+   * out too, each with whether it is offered. */
+  let tools = async (id: string): Promise<Choice[]> => {
+    let s = await owned(id)
+    let allow = s.server.allow
+    return (await using(s, (c) => c.list(), true)).map((t) => ({
+      name: t.name,
+      title: t.title ?? t.name,
+      description: t.description ?? '',
+      allowed: !allow || allow.includes(t.name),
+    }))
+  }
+  /** Each server the person keeps, as their page shows it. */
+  let shown = async (): Promise<Shown[]> =>
+    await Promise.all((await kept()).map(async (row) => {
+      let c = comp(row, 'mcp_server')
+      let allow = c.allow == null ? undefined : JSON.parse(String(c.allow))
+      let name = integration(row.entity.eid)
+      let [held, i] = c.machine ? [] : await Promise.all([
+        pick(host.graph.read, person, name),
+        known(host.graph.read, name),
+      ])
+      return {
+        id: row.entity.eid,
+        name: String(c.name),
+        url: String(c.url),
+        ...c.machine ? { machine: String(c.machine) } : {},
+        enabled: c.enabled !== false,
+        ...allow ? { allow } : {},
+        ...c.header ? { header: String(c.header) } : {},
+        trashed: !!row.trashed,
+        status: c.machine
+          ? 'machine'
+          : (comp(held, 'connection').status as Shown['status']) ?? 'open',
+        ...held ? { connection: held.entity.eid } : {},
+        ...i ? { keyed: keyed(i) } : {},
+      }
+    }))
+  return {
+    set,
+    tools,
+    shown,
+    list,
+    call,
+    calls,
+    told,
+    configure,
+    give,
+    remove,
+    restore,
+    kept,
+  }
+}
+
+/** What a form on a person's connections page does to their MCP servers,
+ * named by `do` (`mcp-add`, `mcp-key`, `mcp-tools`, `mcp-on`, `mcp-off`,
+ * `mcp-remove`, `mcp-restore`), with the server it is about in `server`. It
+ * answers what the page says, and null for a form about something else. */
+export let acted = async (
+  remote: Remote,
+  act: string,
+  field: (name: string) => string,
+  fields: (name: string) => string[],
+): Promise<string | null> => {
+  let id = field('server')
+  if (act == 'mcp-add') {
+    let made = await remote.configure({
+      name: field('name'),
+      url: field('url'),
+      ...field('header') ? { header: field('header') } : {},
+    })
+    if (field('key')) await remote.give(made.server, field('key'))
+    return `${field('name')} is connected.`
+  }
+  if (act == 'mcp-key') {
+    if (!field('key')) throw refuse('arguments', 'Paste the key.')
+    await remote.give(id, field('key'))
+    return 'Saved. The key is kept safe and never shown again.'
+  }
+  if (act == 'mcp-tools') {
+    let every = (await remote.tools(id)).map((t) => t.name)
+    let chosen = fields('tool').filter((t) => every.includes(t))
+    await remote.set(id, {
+      allow: chosen.length == every.length ? null : chosen,
+    })
+    return chosen.length == every.length
+      ? 'Every tool it offers is offered to your agents and apps.'
+      : `${chosen.length} of its ${every.length} tools are offered.`
+  }
+  if (act == 'mcp-on' || act == 'mcp-off') {
+    await remote.set(id, { enabled: act == 'mcp-on' })
+    return act == 'mcp-on' ? 'Turned on.' : 'Turned off.'
+  }
+  if (act == 'mcp-remove') {
+    await remote.remove(id)
+    return 'Moved to the trash. Restore it from the trash below.'
+  }
+  if (act == 'mcp-restore') {
+    await remote.restore(id)
+    return 'Restored.'
+  }
+  return null
 }

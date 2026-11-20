@@ -151,6 +151,36 @@ an object keyed by command name, with each command's `description`, `input`,
 discover and call, using the same access rule as `POST ./api/command`. A page
 can use it to build its own command menu without copying that access rule.
 
+## Tools of what a person connected
+
+Every tool outside an app is in one pool, each source named by an address:
+
+- `mcp:<server>`: an MCP server the person added on their connections page, with
+  the tools they chose to offer.
+- `connection:<connection>`: a connection of theirs. Each offers `request`,
+  which sends an HTTPS request to the hosts its integration names with the
+  credential added on the way, and an integration built into yaks.app offers its
+  own tools beside it, such as Google Calendar's `calendar_events`.
+- `service:<service app>/<app>`: an app service they connected.
+
+The person's Operator and agents list and call these with `commands` and
+`command`, passing the address as `app`. An app's own code reaches the same
+tools through its API, as the person using it:
+
+    let tools = await (await fetch('./api/commands?at=mcp:')).json()
+    let answer = await (await fetch('./api/command', {
+      method: 'POST',
+      body: JSON.stringify({ at: tools[0].at, name: tools[0].name, args: {} }),
+    })).json()
+
+`at` names one source, or every source of a kind (`mcp:`, `connection:`).
+`./api/commands?at=` answers a list, each with its `at`, `name`, `title`,
+`description`, `readOnly` and `input` (JSON Schema). An app reaches only what
+the person using it allowed it, and nobody else who uses the app reaches what
+they connected. Until they allow a source, its list is empty and a call to it is
+refused with `access`: link them to `./api/allow?at=mcp:`, which opens their
+connections page asking them. They stop it there, and the next call is refused.
+
 **The connector's tool list is fixed.** A directory such as OpenAI's takes a
 snapshot of `tools/list` on the day a connector is submitted and serves that
 snapshot from then on; only `tools/call` reaches the live server

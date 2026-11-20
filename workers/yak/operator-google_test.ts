@@ -12,6 +12,7 @@ import { minted } from './session.ts'
 import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
+import { listCommands, runCommand } from './declared.ts'
 import {
   eventBody,
   googleTools,
@@ -288,6 +289,29 @@ test('reading mail is offered by what the connection was granted', async () => {
   let ctx = await operatorContext(env, { person }, space)
   let offered = (await googleTools(env, ctx, space)).map((t) => t.name)
   assert(offered.includes('gmail_read'))
+})
+
+test('the same Google tools are in the pool of tools, at the connection that offers them', async () => {
+  // In the space the connections are made for, by its owner.
+  let ctx = {
+    env,
+    dir,
+    person,
+    who: { person, via: 'session' as const, space: 'jeff', spaceEid: eid },
+  }
+  let pool = (await listCommands(ctx, 'connection:'))
+    .map((c) => [c.at.startsWith('connection:'), c.name])
+  for (let name of ['request', 'calendar_events', 'gmail_send', 'gmail_read']) {
+    assert(pool.some(([at, n]) => at && n == name), name)
+  }
+  let at = (await listCommands(ctx, 'connection:'))
+    .find((c) => c.name == 'calendar_events')!.at
+  let out = await runCommand(ctx, at, 'calendar_events', {
+    from: '2026-11-10T00:00:00-05:00',
+    to: '2026-11-11T00:00:00-05:00',
+  })
+  assertStringIncludes(out.text, 'Standup')
+  assertEquals(out.heard, true)
 })
 
 test('what Google is asked: an all-day event ends the next day, and a subject beyond ASCII is encoded', () => {

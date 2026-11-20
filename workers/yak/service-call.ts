@@ -6,6 +6,7 @@ import {
   known,
   need,
   type Read,
+  serviceAt,
   type ServiceAuthority,
   serviceAuthority,
   serviceName,
@@ -266,10 +267,6 @@ export let callService = async (
   )
   return { ...answer, value: { ...answer.value, service: authority } }
 }
-
-/** Stable connector address, including the app that holds the connection. */
-export let serviceAt = (service: string, app: string) =>
-  `service:${service}/${app}`
 
 export let runServiceCommand = async (
   ctx: Ctx,

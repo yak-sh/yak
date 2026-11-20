@@ -8,14 +8,16 @@ type Route = { method: string; path: string; handle: Handler }
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-/** POST `{name,args}` to one caller-scoped command runner. */
-let command = (
-  run: (
-    name: string,
-    args: Record<string, unknown>,
-  ) => Promise<Record<string, unknown>>,
-): Handler =>
-async (req) => {
+// What runs a command: by its name and arguments, and `at`, where the
+// caller named where it is.
+type Run = (
+  name: string,
+  args: Record<string, unknown>,
+  at?: string,
+) => Promise<Record<string, unknown>>
+
+/** POST `{name,args,at?}` to one caller-scoped command runner. */
+let command = (run: Run): Handler => async (req) => {
   if (req.method != 'POST') {
     return Response.json({
       error: { code: 'method_not_allowed', message: 'command takes POST' },
@@ -31,7 +33,10 @@ async (req) => {
     if (typeof body.name != 'string' || !body.name) {
       throw new CallError('arguments', 'command needs a name')
     }
-    let out = await run(body.name, parsed(body.args))
+    if (body.at != null && typeof body.at != 'string') {
+      throw new CallError('arguments', 'command at must be a string')
+    }
+    let out = await run(body.name, parsed(body.args), body.at ?? undefined)
     return Response.json({ ...out, ok: true })
   } catch (e) {
     return refused(e)
@@ -39,12 +44,7 @@ async (req) => {
 }
 
 /** One HTTP route for a host that offers declared command invocation. */
-export let routes = (host: {
-  command?: (
-    name: string,
-    args: Record<string, unknown>,
-  ) => Promise<Record<string, unknown>>
-}): Route[] =>
+export let routes = (host: { command?: Run }): Route[] =>
   host.command
     ? [{ method: 'POST', path: '/command', handle: command(host.command) }]
     : []

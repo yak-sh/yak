@@ -259,6 +259,38 @@ its vault, and the redirect):
   no other, following no redirect, and once more with a refreshed token when the
   service answers 401.
 
+## MCP servers
+
+`./mcp` is a person's remote MCP servers as commands:
+`remoteCommands(person,
+host)` lists and calls the tools of each
+`mcp_server{owner, name, url, machine,
+enabled, allow, header}` the person keeps
+(@yaks/mcp-client), each addressed `mcp:<server eid>` with its exact remote
+name. A server's credential is the person's connection to the integration
+`mcp:<server eid>`: a sign-in its OAuth metadata names, discovered when the
+server first refuses a call, or a key where it names none (`give`), sent as
+`Authorization: Bearer` or in the header `mcp_server.header` names. Every call
+rereads the definition and the credential, so changing either stops later calls.
+
+`configure` adds or changes a server, `set` turns it off or says which tools are
+offered (`allow`), `remove` puts it in the trash (`trashed{}`, the host's mark)
+and `restore` brings it back. `shown` and `tools` are what a page shows, and
+`acted` is what a page's forms do. The host gives the graph, the vault, where a
+person signs in, and how a server on a machine is reached.
+
+## Sources of tools
+
+A person's sources of tools are named by address: `mcp:<server>`,
+`connection:<connection>` and `service:<service app>/<app>` (`addressed`). An
+app's code reaches one only where the person holding it granted it to that app:
+`grant` is a `uses` link from the app to the source, spent by that person alone
+and naming no binding; `revoke` removes it, and `granted`, `grantsOf` and
+`grantees` read it on every call. `grantable` is what a page offers them to
+grant. A connection's own command is `request` (`requests` lists it), an HTTPS
+request to its integration's hosts with the credential added, answered without
+it.
+
 ## Brokers
 
 A broker signs a person in through its own app with a service, keeps the refresh

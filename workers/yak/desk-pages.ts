@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Cards,
+  Check,
   Chip,
   Chips,
   Empty,
@@ -35,6 +36,7 @@ import type {
   Using,
 } from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
+import type { Grantee, McpPage } from './connected-mcp.ts'
 import { detail } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icons } from './icons.ts'
@@ -1364,6 +1366,241 @@ let card = (
 let openedOn = (action: string, value: string) =>
   `${action}#${encodeURIComponent(value)}`
 
+// What each of a server's states says, beside its name.
+let MCP_STATE: Record<string, [string, 'positive' | 'negative' | undefined]> = {
+  open: ['Connected', 'positive'],
+  machine: ['On your machine', 'positive'],
+  connected: ['Connected', 'positive'],
+  needed: ['Waiting for a key or sign-in', 'negative'],
+  broken: ['Its key or sign-in was refused', 'negative'],
+}
+
+// The MCP servers a person keeps (@yaks/connections/mcp), on their own
+// space's page: an app asking for one first, then each as a card saying how
+// it stands, with its key, which of its tools are offered, the apps it is
+// granted to, turning it off and removing it; then a form adding one, and
+// those in the trash. Its forms post to `action`.
+let mcpServers = (m: McpPage, on: boolean, action: string, env: Host) => {
+  let appAt = (a: Grantee) => `https://${spaceHost(env, a.space)}/${a.slug}/`
+  // One grant's button: the app, the source and the act.
+  let granting = (a: Grantee, at: string, act: string, label: string) =>
+    h(
+      'form',
+      { method: 'post', action, class: 'Card_Form' },
+      held('app', a.eid),
+      held('at', at),
+      press(act, label, act == 'source-revoke'),
+    )
+  let ask = m.ask
+    ? h(
+      Card,
+      { id: 'grant' },
+      h(Card.Title, null, `${m.ask.app.title} asks to use what you connected`),
+      h(
+        Card.Sub,
+        null,
+        `Whenever you use ${m.ask.app.title}, its code may call the tools of what you allow here, as you. Nobody else who uses it reaches them.`,
+      ),
+      m.ask.sources.length
+        ? m.ask.sources.map((src) =>
+          h(
+            Card.Sub,
+            null,
+            h('strong', null, src.title),
+            ` ${src.about} `,
+            src.granted
+              ? granting(m.ask!.app, src.at, 'source-revoke', 'Stop')
+              : granting(m.ask!.app, src.at, 'source-grant', 'Allow'),
+          )
+        )
+        : h(
+          Card.Sub,
+          null,
+          'You have nothing of that kind connected yet: add it below, then allow it here.',
+        ),
+      h(
+        Card.Sub,
+        null,
+        h('a', { href: appAt(m.ask.app) }, `Back to ${m.ask.app.title}`),
+      ),
+    )
+    : null
+  let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
+    h(
+      'form',
+      { method: 'post', action, ...at, class: 'Page_Form' },
+      held('server', id),
+      kids,
+    )
+  let opened = (id: string) =>
+    `${action}${action.includes('?') ? '&' : '?'}mcp=${
+      encodeURIComponent(id)
+    }#mcp-${id}`
+  let tools = (id: string) => {
+    let t = m.tools?.server == id ? m.tools : undefined
+    if (!t) {
+      return h(Button, { href: opened(id), mod: 'quiet' }, 'Choose its tools')
+    }
+    if (t.failed) {
+      return h(Notice, null, `Its tools could not be listed: ${t.failed}`)
+    }
+    return form(id, [
+      h(Card.Sub, null, 'The tools your agents and apps may use:'),
+      t.list!.map((tool) =>
+        h(
+          Check,
+          null,
+          h(Check.Input, {
+            type: 'checkbox',
+            name: 'tool',
+            value: tool.name,
+            checked: tool.allowed,
+          }),
+          tool.title,
+          tool.description ? h(Check.Note, null, ` ${tool.description}`) : null,
+        )
+      ),
+      h(Form.Actions, null, press('mcp-tools', 'Save tools', false)),
+    ])
+  }
+  let card = (s: McpPage['servers'][number]) => {
+    let [word, tone] = s.enabled ? MCP_STATE[s.status] : ['Off', undefined]
+    let wants = s.status == 'needed' || s.status == 'broken'
+    return h(
+      Card,
+      { id: `mcp-${s.id}` },
+      heading(s.name, {
+        status: status(word, tone),
+        actions: form(s.id, [
+          press(
+            s.enabled ? 'mcp-off' : 'mcp-on',
+            s.enabled ? 'Turn off' : 'Turn on',
+          ),
+          press('mcp-remove', 'Remove'),
+        ], { class: 'Card_Form' }),
+      }),
+      h(Card.Sub, null, s.machine ? `${s.url} on your machine` : s.url),
+      s.header
+        ? h(Card.Sub, null, `Its key goes in the ${s.header} header.`)
+        : null,
+      wants && s.keyed && on
+        ? form(
+          s.id,
+          keyBox(`mcp-key-${s.id}`, 'Its key', press('mcp-key', 'Save', false)),
+        )
+        : wants
+        ? h(
+          Card.Sub,
+          null,
+          h('a', { href: `${action}#mcp:${s.id}` }, `Sign in to ${s.name}`),
+          ' to use its tools.',
+        )
+        : null,
+      s.enabled ? tools(s.id) : null,
+      s.apps.map((a) =>
+        h(
+          Card.Sub,
+          null,
+          `Used by ${a.title} `,
+          granting(a, `mcp:${s.id}`, 'source-revoke', 'Stop'),
+        )
+      ),
+    )
+  }
+  let live = m.servers.filter((s) => !s.trashed)
+  let trashed = m.servers.filter((s) => s.trashed)
+  return [
+    h(Group, { id: 'mcp' }, 'MCP servers'),
+    ask,
+    live.length ? h(Cards, null, live.map(card)) : h(
+      Card.Sub,
+      null,
+      'An MCP server you add here offers its tools to your Operator, the assistants you connect, and the apps you allow.',
+    ),
+    h(
+      More,
+      null,
+      h(More.Summary, null, 'Add an MCP server'),
+      h(
+        More.Body,
+        null,
+        h(
+          Form,
+          { class: 'Page_Form', method: 'post', action },
+          held('do', 'mcp-add'),
+          labeled(
+            'mcp-name',
+            'Name',
+            h(Field, { id: 'mcp-name', name: 'name', required: true }),
+          ),
+          labeled(
+            'mcp-url',
+            'Address',
+            h(Field, {
+              id: 'mcp-url',
+              name: 'url',
+              type: 'url',
+              required: true,
+            }),
+            'Its Streamable HTTP endpoint, such as https://example.com/mcp.',
+          ),
+          labeled(
+            'mcp-header',
+            'Header',
+            h(Field, {
+              id: 'mcp-header',
+              name: 'header',
+              placeholder: 'Authorization',
+            }),
+            'For a server that takes a key in a header of its own, such as X-API-Key. Leave it empty to send a key as a bearer token.',
+          ),
+          on
+            ? labeled(
+              'mcp-key',
+              'Key',
+              h(Field, {
+                id: 'mcp-key',
+                name: 'key',
+                type: 'password',
+                autocomplete: 'off',
+              }),
+              'Leave it empty for a server you sign in to, or one that needs nothing.',
+            )
+            : null,
+          h(
+            Form.Actions,
+            null,
+            h(Button, { type: 'submit', mod: 'go' }, 'Add'),
+          ),
+        ),
+      ),
+    ),
+    trashed.length
+      ? h(
+        More,
+        null,
+        h(More.Summary, null, 'MCP servers in the trash'),
+        h(
+          More.Body,
+          null,
+          trashed.map((s) =>
+            h(
+              Card,
+              null,
+              h(Card.Title, null, s.name),
+              h(Card.Sub, null, s.url),
+              form(
+                s.id,
+                h(Form.Actions, null, press('mcp-restore', 'Restore', false)),
+              ),
+            )
+          ),
+        ),
+      )
+      : null,
+  ]
+}
+
 // One persistent dialog follows the hash; templates keep forms ready without
 // another page request, and a service outside them is fetched into the dialog.
 let connections = (at: DeskPage, env: Host) => {
@@ -1769,6 +2006,7 @@ let connections = (at: DeskPage, env: Host) => {
         : null,
       group('Requested by agents', grid(asks.map(shown))),
       group('Yours', grid(yours)),
+      c.mcp ? mcpServers(c.mcp, c.on, action, env) : null,
       group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
       c.list.length || c.services.length || c.borrowed.length ? null : empty(
         'No connections yet',

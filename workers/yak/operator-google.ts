@@ -292,19 +292,58 @@ export let googleTools = async (
     ctx,
     space,
   )
-  // What reads mail is what the connection was granted, where it says;
-  // else what its integration asks for.
-  let granted = mail && comp(mail, CONNECTION).scopes
+  return [
+    ...calendar ? toolsOf(env, ctx, space, calendar, undefined) : [],
+    ...mail ? toolsOf(env, ctx, space, mail, gmail) : [],
+  ]
+}
+
+// What reads mail is what the connection was granted, where it says; else
+// what its integration asks for.
+let readsMail = (mail: Bundle, gmail: Integration | undefined) => {
+  let granted = comp(mail, CONNECTION).scopes
   let scopes = Array.isArray(granted) && granted.length
     ? granted.map(String)
     : gmail?.scopes
-  let reads = !!(mail && scopes?.some((s) => READS.includes(s)))
+  return !!scopes?.some((s) => READS.includes(s))
+}
+
+// The tools one Google connection offers: its calendar's, or its mail's.
+let toolsOf = (
+  env: Env,
+  ctx: Ctx,
+  space: Space,
+  held: Bundle,
+  i: Integration | undefined,
+): Tool[] => {
+  let name = comp(held, CONNECTION).integration
+  if (name == CALENDAR) return calendarTools(env, held)
+  if (name != GMAIL) return []
   return [
-    ...calendar ? calendarTools(env, calendar) : [],
-    ...mail ? [gmailSend(env, ctx, space, mail)] : [],
-    ...mail && reads ? [gmailRead(env, mail)] : [],
+    gmailSend(env, ctx, space, held),
+    ...readsMail(held, i) ? [gmailRead(env, held)] : [],
   ]
 }
+
+/** The tools a connected Google connection offers as a source of tools
+ * (declared.ts `BUILT`), for a caller in `space`: the same ones the
+ * Operator holds for it. */
+export let connectionTools = async (
+  env: Env,
+  ctx: Ctx,
+  space: Space,
+  held: Bundle,
+): Promise<Tool[]> =>
+  toolsOf(
+    env,
+    ctx,
+    space,
+    held,
+    await known(
+      ctxOf(env).graph.read,
+      String(comp(held, CONNECTION).integration),
+    ),
+  )
 
 /** What the Operator is told of the person's Google accounts: each one
  * connected, and where they connect each that this deploy can connect and

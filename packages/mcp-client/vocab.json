@@ -34,6 +34,10 @@
           "type": "string",
           "description": "Optional JSON array of exact remote tool names; [] exposes none."
         },
+        "header": {
+          "type": "string",
+          "description": "The request header the server's credential is sent in, such as X-API-Key, for a server that takes a key; absent sends it as `Authorization: Bearer`. The credential is the person's connection to the integration `mcp:<eid>`."
+        },
         "redirect_url": {
           "type": "string"
         },

@@ -5,6 +5,8 @@ import {
 } from './credential-trash.ts'
 import { type Built, line, sub } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
+import { CallError } from '@yaks/tools/errors'
+import type { McpPage } from './connected-mcp.ts'
 // Connections on yaks.app (D-38019): what the dashboard's connections page
 // shows and does, the door an outside service sends a person back to after
 // they sign in there, and the door its webhooks arrive at. What a connection
@@ -320,6 +322,8 @@ export type Connections = {
   trash?: { id: string; integration: string; at: number }[]
   /** whether this deploy can keep a key at all */
   on: boolean
+  /** the person's MCP servers, on their own space's page */
+  mcp?: McpPage
   list: Shown[]
   /** outside services holding a grant from the person (connected.ts), on
    * their own space's page */
@@ -680,12 +684,15 @@ export let connectionsOf = async (
   at: Asked & {
     /** asked by the caller, and awaited only once the rest is read */
     services?: Promise<Service[]>
+    /** the person's MCP servers, asked by the caller like `services` */
+    mcp?: Promise<McpPage>
     enable?: string[]
   } = {},
 ): Promise<Connections> => {
   let { enable = [], dir = dirOf(env) } = at
   // Awaited only on the person's own space.
   at.services?.catch(() => {})
+  at.mcp?.catch(() => {})
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
@@ -877,6 +884,7 @@ export let connectionsOf = async (
       : {},
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services: own ? await at.services ?? [] : [],
+    ...own && at.mcp ? { mcp: await at.mcp } : {},
     borrowed: await Promise.all(
       loans.filter((l) => l[USES]).map(async (l): Promise<Borrowed> => {
         let eid = String(comp(l, 'edge').to)
@@ -1208,6 +1216,28 @@ export let connecting = async (
   }
   if (['key', 'add', 'own'].includes(act) && !vaulted(env)) {
     return no("Keys can't be saved here yet.")
+  }
+  if (act.startsWith('mcp-') || act.startsWith('source-')) {
+    if (['mcp-add', 'mcp-key'].includes(act) && !vaulted(env)) {
+      return no("Keys can't be saved here yet.")
+    }
+    let { pageServers, sourceActed } = await import('./connected-mcp.ts')
+    let { acted } = await import('@yaks/connections/mcp')
+    try {
+      let dir = dirOf(env)
+      let said = await sourceActed(env, dir, who, act, field) ??
+        await acted(
+          pageServers(env, dir, who),
+          act,
+          field,
+          (k) => form.getAll(k).map(String),
+        )
+      if (said != null) return { say: said, no: false }
+    } catch (e) {
+      if (e instanceof CallError) return no(e.message)
+      caught(e, { request: 'POST /manage/connections' })
+      return no(e instanceof Error ? e.message : "That didn't work.")
+    }
   }
   try {
     if (act == 'restore-credential') {

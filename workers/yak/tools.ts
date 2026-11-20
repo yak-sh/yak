@@ -6,7 +6,7 @@ import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
 import { leftWith } from './operator-reach.ts'
-import { mcpConnect } from './connected-mcp.ts'
+import { mcpConnect, mcpRemove } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { searchConsoleTools } from './search-console.ts'
@@ -8391,6 +8391,7 @@ export let TOOLS: Tool[] = [
   ...viewsTools,
   ...connectionTools,
   worded(mcpConnect),
+  worded(mcpRemove),
   ...numberTools.map(worded),
   ...searchConsoleTools.map(worded),
 ].map(accounted).map((tool) => ({

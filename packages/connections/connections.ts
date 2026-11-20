@@ -487,6 +487,9 @@ export let carry = async (
   for (let l of out) {
     let c = comp(to.find((b) => b.entity.eid == far(l, 'from')), CONNECTION)
     let u = comp(l, USES)
+    // A link naming no binding is a person's grant of their own source
+    // (./sources.ts), not something the app's code asks for.
+    if (u.binding == null && u.lender == null) continue
     let each = u.each == true
     let key = `${each} ${c.integration}`
     if (comp(l, EDGE).from == a.app) {
@@ -1369,10 +1372,13 @@ export let call = async (
   let i = await known(c.graph.read, name)
   let url = new URL(req.url)
   if (url.protocol != 'https:' || !i?.hosts.includes(url.host)) {
-    throw new Error(`${name} sends its credential to no ${url.host}`)
+    throw new CallError(
+      'access',
+      `${name} sends its credential to no ${url.host}`,
+    )
   }
   let bearer = await credential(c, connection)
-  if (!bearer) throw new Error(`${name} holds no credential yet`)
+  if (!bearer) throw new CallError('missing', `${name} holds no credential yet`)
   let body = req.body ? await req.arrayBuffer() : undefined
   let send = (token: string) => {
     let headers = new Headers(req.headers)
