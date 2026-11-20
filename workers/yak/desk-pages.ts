@@ -1475,6 +1475,7 @@ let mcpCredential = (
   s: McpPage['servers'][number],
   on: boolean,
   action: string,
+  redirect?: string,
 ) => {
   if (s.status != 'needed' && s.status != 'broken') return null
   if (s.keyed) {
@@ -1483,19 +1484,76 @@ let mcpCredential = (
         'form',
         { method: 'post', action, class: 'Page_Form' },
         held('server', s.id),
+        labeled(
+          `mcp-header-${s.id}`,
+          'Header',
+          h(Field, {
+            id: `mcp-header-${s.id}`,
+            name: 'header',
+            value: s.header ?? '',
+            placeholder: 'Authorization',
+          }),
+          'The header its key goes in, such as X-API-Key. Left empty, it is sent as a bearer token.',
+        ),
         keyBox(`mcp-key-${s.id}`, 'Its key', press('mcp-key', 'Save', false)),
       )
       : h(Card.Sub, null, "Its key can't be saved here yet.")
   }
   return s.connection
-    ? h(
-      'form',
-      { method: 'post', action, class: 'Page_Form' },
-      held('connection', s.connection),
-      h(Form.Actions, null, press('signin', `Sign in to ${s.name}`, false)),
-    )
+    ? [
+      h(
+        'form',
+        { method: 'post', action, class: 'Page_Form' },
+        held('connection', s.connection),
+        h(Form.Actions, null, press('signin', `Sign in to ${s.name}`, false)),
+      ),
+      on ? mcpClient(s, action, redirect) : null,
+    ]
     : null
 }
+
+// A box for the OAuth client a server signs in as, for a server that takes
+// only clients it knows: one made in its developer portal.
+let mcpClient = (
+  s: McpPage['servers'][number],
+  action: string,
+  redirect?: string,
+) =>
+  h(
+    More,
+    null,
+    h(More.Summary, null, 'Sign in with your own OAuth client'),
+    h(
+      More.Body,
+      null,
+      h(
+        'form',
+        { method: 'post', action, class: 'Page_Form' },
+        held('server', s.id),
+        labeled(
+          `mcp-client-${s.id}`,
+          'Client id',
+          h(Field, {
+            id: `mcp-client-${s.id}`,
+            name: 'client_id',
+            required: true,
+          }),
+        ),
+        labeled(
+          `mcp-client-secret-${s.id}`,
+          'Client secret',
+          h(Field, {
+            id: `mcp-client-secret-${s.id}`,
+            name: 'client_secret',
+            type: 'password',
+            autocomplete: 'off',
+          }),
+          `Its redirect URI is ${redirect}. The secret is kept in the vault and never shown again.`,
+        ),
+        h(Form.Actions, null, press('mcp-client', 'Save', false)),
+      ),
+    ),
+  )
 
 // The MCP servers a person connected in this space (@yaks/connections/mcp):
 // each as a card saying how it stands, with its key, which of its tools are
@@ -1574,8 +1632,31 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
       s.header
         ? h(Card.Sub, null, `Its key goes in the ${s.header} header.`)
         : null,
-      mcpCredential(s, on, action),
+      mcpCredential(s, on, action, m.redirect),
       s.enabled ? tools(s.id) : null,
+      h(
+        More,
+        null,
+        h(More.Summary, null, 'Rename'),
+        h(
+          More.Body,
+          null,
+          form(
+            s.id,
+            h(
+              Form.Line,
+              null,
+              h(Field, {
+                name: 'name',
+                value: s.name,
+                required: true,
+                'aria-label': 'Name',
+              }),
+              press('mcp-name', 'Rename', false),
+            ),
+          ),
+        ),
+      ),
       s.apps.map((a) =>
         h(
           Card.Sub,
@@ -1607,20 +1688,18 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
           { class: 'Page_Form', method: 'post', action },
           held('do', 'mcp-add'),
           labeled(
-            'mcp-name',
-            'Name',
-            h(Field, { id: 'mcp-name', name: 'name', required: true }),
-          ),
-          labeled(
             'mcp-url',
             'Address',
             h(Field, {
               id: 'mcp-url',
               name: 'url',
-              type: 'url',
+              inputmode: 'url',
+              autocomplete: 'off',
+              spellcheck: 'false',
               required: true,
+              placeholder: 'https://example.com/mcp',
             }),
-            'Its Streamable HTTP endpoint, such as https://example.com/mcp.',
+            'Adding it finds out whether it takes a sign-in, a key or nothing, and names it.',
           ),
           labeled(
             'mcp-for-everyone',
@@ -1644,31 +1723,76 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
                 label,
               )
             ),
-            'Left unchosen: only you for a server you sign in to, everyone for one that takes a key.',
+            'Left unchosen: only you for a server you sign in to, everyone for one that takes a key or nothing.',
           ),
-          labeled(
-            'mcp-header',
-            'Header',
-            h(Field, {
-              id: 'mcp-header',
-              name: 'header',
-              placeholder: 'Authorization',
-            }),
-            'For a server that takes a key in a header of its own, such as X-API-Key. Leave it empty to send a key as a bearer token.',
+          h(
+            More,
+            null,
+            h(More.Summary, null, 'Advanced'),
+            h(
+              More.Body,
+              null,
+              labeled(
+                'mcp-name',
+                'Name',
+                h(Field, { id: 'mcp-name', name: 'name' }),
+                'Left empty, it is called what it calls itself, or by its host.',
+              ),
+              labeled(
+                'mcp-client',
+                'OAuth client id',
+                h(Field, { id: 'mcp-client', name: 'client_id' }),
+                `For a server you sign in to that registers no client for yaks.app: one made in its developer portal, with the redirect URI ${m.redirect}.`,
+              ),
+              on
+                ? labeled(
+                  'mcp-client-secret',
+                  'OAuth client secret',
+                  h(Field, {
+                    id: 'mcp-client-secret',
+                    name: 'client_secret',
+                    type: 'password',
+                    autocomplete: 'off',
+                  }),
+                  'Kept in the vault and never shown again.',
+                )
+                : null,
+              on
+                ? labeled(
+                  'mcp-key',
+                  'Key',
+                  h(Field, {
+                    id: 'mcp-key',
+                    name: 'key',
+                    type: 'password',
+                    autocomplete: 'off',
+                  }),
+                  'For a server that takes a key. Left empty, it is asked for if the server wants one.',
+                )
+                : null,
+              labeled(
+                'mcp-header',
+                'Header',
+                h(Field, {
+                  id: 'mcp-header',
+                  name: 'header',
+                  placeholder: 'Authorization',
+                }),
+                'The header its key goes in, such as X-API-Key. Left empty, a key is sent as a bearer token.',
+              ),
+              h(
+                Check,
+                null,
+                h(Check.Input, {
+                  type: 'checkbox',
+                  name: 'machine',
+                  id: 'mcp-machine',
+                  value: 'here',
+                }),
+                "On this space's machine, through its tunnel: the address is then its path there, such as /mcp. It is for you alone and takes no key.",
+              ),
+            ),
           ),
-          on
-            ? labeled(
-              'mcp-key',
-              'Key',
-              h(Field, {
-                id: 'mcp-key',
-                name: 'key',
-                type: 'password',
-                autocomplete: 'off',
-              }),
-              'Leave it empty for a server you sign in to, or one that needs nothing.',
-            )
-            : null,
           h(
             Form.Actions,
             null,

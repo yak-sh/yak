@@ -108,6 +108,9 @@ export type Grantee = {
  * names (@yaks/connections `grantable`), each with whether it holds it. */
 export type McpPage = {
   servers: (Shown & { apps: Grantee[] })[]
+  /** where a sign-in returns, the redirect URI a server's own OAuth client
+   * names */
+  redirect?: string
   tools?: {
     server: string
     list?: Choice[]
@@ -190,7 +193,12 @@ export let mcpPage = async (
       },
     )
     : undefined
-  return { servers, ...tools ? { tools } : {}, ...ask ? { ask } : {} }
+  return {
+    servers,
+    redirect: ctxOf(env).redirect,
+    ...tools ? { tools } : {},
+    ...ask ? { ask } : {},
+  }
 }
 
 /** What a form on the connections page does to a person's grants of their
@@ -336,9 +344,11 @@ export let mcpConnect: Row = {
         type: 'string',
         enum: ['everyone', 'me'],
         description:
-          "Who the space's Operator uses it with: everyone it works with, through your sign-in or key, which only a space's owner chooses; or me, you alone. Ask the person when they have not said. Left out, a new server is everyone's when it takes a key in a header and yours alone otherwise, and an existing one keeps its choice.",
+          "Who the space's Operator uses it with: everyone it works with, through your sign-in or key, which only a space's owner chooses; or me, you alone. Ask the person when they have not said. Left out, a new server is yours alone when it turns out to take your sign-in and everyone's when it takes a key or nothing, and an existing one keeps its choice.",
       },
-      name: str('A short, distinct name for this MCP server.'),
+      name: str(
+        'A short, distinct name for this MCP server. Left out, a new one is called what it calls itself, or by its host.',
+      ),
       url: str(
         'The HTTPS Streamable HTTP MCP endpoint; with machine, its path on that machine, such as /mcp.',
       ),
@@ -385,7 +395,7 @@ export let mcpConnect: Row = {
         "Where an id this server's rows carry, such as T-123, opens: an address with {id} where the id goes, such as https://tasks.yak.sh/{id}. Each such id in your Operator's replies is then a link there. An empty one links none.",
       ),
     },
-    required: ['name', 'url'],
+    required: ['url'],
   },
   run: async (ctx, args) => {
     if (!reaches(ctx)) {
@@ -419,7 +429,7 @@ export let mcpConnect: Row = {
       ? { caller: 'operator', space: on.eid }
       : undefined
     let value = await (await commands(ctx, asking, space.eid)).configure({
-      name: String(args.name),
+      ...typeof args.name == 'string' ? { name: args.name } : {},
       url: String(args.url),
       ...on ? { machine: on.eid } : {},
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},

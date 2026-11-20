@@ -21,6 +21,7 @@ import {
   checkNamespaces,
   checkToolNames,
   connect as client,
+  MACHINE,
   MCPAuthorizationRequired,
   MCPError,
   nameOf,
@@ -28,9 +29,14 @@ import {
   unsaid,
 } from '@yaks/mcp-client'
 import { AuthorizationError, discover } from '@yaks/mcp-client/oauth'
-import { type GraphServer, serverOf } from '@yaks/mcp-client/servers'
+import {
+  credentialHeader,
+  type GraphServer,
+  serverOf,
+} from '@yaks/mcp-client/servers'
 import { connect, credential, type Ctx, need, pick } from './connections.ts'
 import { integrationEid } from './identity.ts'
+import { registration } from './clients.ts'
 import { keyed, known } from './integrations.ts'
 
 let refuse = (code: string, text: string) => new CallError(code, text)
@@ -67,7 +73,10 @@ type Host = Ctx & {
   every?: boolean
 }
 export type Settings = {
-  name: string
+  // Unsaid, a new server is called what it calls itself (its `serverInfo`),
+  // or by its host where it says nothing before a sign-in; one connected
+  // already keeps its name.
+  name?: string
   url: string
   machine?: string
   enabled?: boolean
@@ -83,9 +92,20 @@ export type Settings = {
   // Where an id it names opens, `{id}` where the id goes; null opens none.
   mentions?: string | null
   // For everyone the space's Operator works with, rather than the person
-  // alone. Unsaid, a new server is everyone's when it takes a key in a header,
-  // a token rather than a person's sign-in, and an existing one keeps its own.
+  // alone. Unsaid, a new server is the person's alone when it turns out to
+  // take their sign-in, and everyone's when it takes a key or nothing; an
+  // existing one keeps its own.
   everyone?: boolean
+}
+/** What connecting a server found: its id and name, its tools (or the
+ * command to sign in, where it waits on one), and what it waits on, where it
+ * does: a sign-in, through the OAuth its metadata names, or a key, where it
+ * refused without naming one. */
+export type Configured = {
+  server: string
+  name: string
+  commands: RemoteCommand[]
+  needs?: 'sign-in' | 'key'
 }
 /** One server a person keeps, as their connections page shows it. `status`
  * is its connection's (`connection`), `open` where it asked for no
@@ -223,12 +243,41 @@ export let reachedIn = (row: Bundle, space?: string): boolean => {
   return !at || at == space
 }
 
+/** What changes on a server a person keeps: `allow` null offers every tool,
+ * and `header` null sends its key as a bearer token. */
+export type Patch = {
+  enabled?: boolean
+  allow?: string[] | null
+  everyone?: boolean
+  name?: string
+  header?: string | null
+}
+
+// What a server is called where it says nothing: its host, less the label
+// that only says it serves MCP, or its path on a machine.
+let hostOf = (url: string, machine?: string) => {
+  let u = new URL(url, MACHINE)
+  return machine
+    ? u.pathname.replace(/^\/+|\/+$/g, '') || 'Machine'
+    : u.hostname.replace(/^(mcp|www|api)\./, '')
+}
+
+// `name`, or the first of `name 2`, `name 3`… whose tools' prefix no server
+// in `rows` already has.
+let distinct = (name: string, rows: Bundle[]) => {
+  let space = (n: string) => n.trim().replace(/[^a-zA-Z0-9_-]+/g, '_')
+  let taken = new Set(
+    rows.map((r) => space(String(comp(r, 'mcp_server').name ?? ''))),
+  )
+  let n = 1
+  let next = name
+  while (taken.has(space(next))) next = `${name} ${++n}`
+  return next
+}
+
 /** A person's MCP servers, as {@link remoteCommands} gives them. */
 export type Remote = {
-  set: (
-    id: string,
-    patch: { enabled?: boolean; allow?: string[] | null; everyone?: boolean },
-  ) => Promise<void>
+  set: (id: string, patch: Patch) => Promise<void>
   tools: (id: string) => Promise<Choice[]>
   /** Each server the person keeps, from `kept` where its rows were read
    * already. */
@@ -241,10 +290,12 @@ export type Remote = {
   ) => Promise<Out>
   calls: (at: string, asks: Ask[]) => Promise<Asked[]>
   told: () => Promise<Told[]>
-  configure: (
-    settings: Settings,
-  ) => Promise<{ server: string; commands: RemoteCommand[] }>
+  configure: (settings: Settings) => Promise<Configured>
   give: (id: string, key: string) => Promise<void>
+  signsInAs: (
+    id: string,
+    given: { id: string; secret?: string },
+  ) => Promise<void>
   remove: (id: string) => Promise<void>
   restore: (id: string) => Promise<void>
   kept: () => Promise<Bundle[]>
@@ -319,6 +370,7 @@ export let remoteCommands = (
         authorize: null,
         token: null,
         client_id: null,
+        client: null,
         scopes: null,
         issuer: null,
         userinfo: null,
@@ -374,7 +426,7 @@ export let remoteCommands = (
         },
       }])
     } else if (
-      i && !keyed(i) && s.server.oauth?.clientId &&
+      i && !keyed(i) && !i.client && s.server.oauth?.clientId &&
       i.client_id != s.server.oauth.clientId
     ) {
       await host.graph.apply([{
@@ -647,19 +699,28 @@ export let remoteCommands = (
       let c = comp(r, 'mcp_server')
       return c.url == url && (c.machine ?? undefined) == machine
     })
+    let others = all.filter((r) => r.entity.eid != same?.entity.eid)
+    let name = settings.name?.trim() ||
+      (same ? String(comp(same, 'mcp_server').name) : distinct(
+        await called(url, machine) ?? hostOf(url, machine),
+        others,
+      ))
+    // Unsaid for a new server, who it is for waits on what it turns out to
+    // take; until then it is the person's alone.
+    let decided = settings.everyone ??
+      (same
+        ? comp(same, 'mcp_server').everyone === true
+        : !!settings.header || undefined)
     let row = {
       entity: { eid: same?.entity.eid ?? mint() },
       mcp_server: {
         owner: person,
         ...host.space ? { space: host.space } : {},
-        name: settings.name,
+        name,
         url,
         ...machine ? { machine } : {},
         enabled: settings.enabled ?? true,
-        everyone: !!host.space && (settings.everyone ??
-          (same
-            ? comp(same, 'mcp_server').everyone === true
-            : !!settings.header)),
+        everyone: !!host.space && !machine && !!decided,
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},
         ...settings.header !== undefined
@@ -676,8 +737,7 @@ export let remoteCommands = (
       next = serverOf(row)
       if (next) nameOf(next.server.namespace!, 'connection_status')
       checkNamespaces([
-        ...all.filter((r) => r.entity.eid != row.entity.eid)
-          .map(serverOf).filter((s) => s != null).map((s) => s.server),
+        ...others.map(serverOf).filter((s) => s != null).map((s) => s.server),
         ...next ? [next.server] : [],
       ])
     } catch (e) {
@@ -711,11 +771,58 @@ export let remoteCommands = (
       if (!i || !keyed(i)) await keying(next)
       await holding(next)
     }
+    // Listing its tools is what finds what it takes: a refusal naming OAuth
+    // metadata registers this host as its client and waits on a sign-in, and
+    // one naming none waits on a key (`authorization`).
+    let commands = row.mcp_server.enabled
+      ? await list(integration(row.entity.eid))
+      : []
+    let needs = next && !machine ? await waiting(next) : undefined
+    if (decided === undefined && host.space && !machine) {
+      await host.graph.apply([{
+        entity: row.entity,
+        mcp_server: { everyone: needs != 'sign-in' },
+      }])
+    }
     return {
       server: row.entity.eid,
-      commands: row.mcp_server.enabled
-        ? await list(integration(row.entity.eid))
-        : [],
+      name,
+      commands,
+      ...needs ? { needs } : {},
+    }
+  }
+  // What the server `s` waits on before it answers: nothing where it took
+  // no credential or holds one that works.
+  let waiting = async (s: GraphServer) => {
+    let name = integration(s.id)
+    let held = await pick(host.graph.read, whose(s), name)
+    if (!held || comp(held, 'connection').status == 'connected') return
+    let i = await known(host.graph.read, name)
+    return i && !keyed(i) ? 'sign-in' as const : 'key' as const
+  }
+  // What the server at `url` calls itself, asked with no credential: a
+  // server that wants a sign-in first says nothing.
+  let called = async (url: string, machine?: string) => {
+    let fetch = machine ? await host.machine?.(machine) : undefined
+    let c = client(
+      {
+        name: 'new',
+        url: machine ? new URL(url, MACHINE).href : url,
+        ...machine ? { machine } : {},
+      },
+      {
+        ...options,
+        ...fetch ? { fetch } : {},
+        token: undefined,
+        timeout: 10_000,
+      },
+    )
+    try {
+      return await c.about()
+    } catch {
+      return undefined
+    } finally {
+      await c.close().catch(() => {})
     }
   }
   /** Keep `key` as the credential of the person's server `id`, which it
@@ -739,6 +846,49 @@ export let remoteCommands = (
     if (!i || !keyed(i)) await keying(s)
     let b = await holding(s)
     await connect(host, b!.entity.eid, { key })
+  }
+  /** Sign in to the person's server `id` as the OAuth client `client`, kept
+   * in the vault (@yaks/connections `registration`), rather than one this
+   * host registers: for a server that registers no client for this host, or
+   * one that takes only clients it knows. Its id and secret never reach the
+   * graph or a tool's arguments. */
+  let signsInAs = async (
+    id: string,
+    given: { id: string; secret?: string },
+  ) => {
+    let row = (await live()).find((r) => r.entity.eid == id)
+    if (!row) {
+      throw refuse('missing', 'This MCP server is not connected for you.')
+    }
+    let s = serverOf({
+      ...row,
+      mcp_server: { ...comp(row, 'mcp_server'), enabled: true },
+    })!
+    if (s.server.machine) {
+      throw refuse(
+        'arguments',
+        'A server on a machine is reached through its tunnel and takes no sign-in.',
+      )
+    }
+    let name = integration(id)
+    let i = await known(host.graph.read, name)
+    if (!i || keyed(i)) {
+      throw refuse(
+        'arguments',
+        `${s.label} names no sign-in, so it takes no OAuth client.`,
+      )
+    }
+    await host.graph.apply([
+      registration(name, given),
+      {
+        entity: { eid: integrationEid(name) },
+        integration: { client: name, client_id: null },
+      },
+      {
+        entity: row.entity,
+        mcp_server: { client_id: given.id },
+      },
+    ])
   }
   /** Put the person's server `id` in the trash: its tools and lists go with
    * it, and its credential stays, so `restore` brings it all back. */
@@ -771,15 +921,36 @@ export let remoteCommands = (
   }
   /** Turn the person's server `id` on or off, or say which of its tools are
    * offered: `allow` null offers every one. */
-  let set = async (
-    id: string,
-    patch: { enabled?: boolean; allow?: string[] | null; everyone?: boolean },
-  ) => {
+  let set = async (id: string, patch: Patch) => {
     let row = (await live()).find((r) => r.entity.eid == id)
     if (!row) {
       throw refuse('missing', 'This MCP server is not connected for you.')
     }
     let c = comp(row, 'mcp_server')
+    let name = patch.name?.trim()
+    if (patch.name !== undefined && !name) {
+      throw refuse('arguments', 'Give it a name.')
+    }
+    if (name && name != c.name) {
+      let others = (await rows()).filter((r) => r.entity.eid != id)
+      if (distinct(name, others) != name) {
+        throw refuse(
+          'conflict',
+          `Another of your MCP servers has the name ${name}; choose another.`,
+        )
+      }
+    }
+    let header = patch.header === undefined
+      ? undefined
+      : patch.header?.trim() || null
+    if (header && (c.machine || !credentialHeader(header))) {
+      throw refuse(
+        'arguments',
+        c.machine
+          ? 'A server on a machine is reached through its tunnel and takes no key.'
+          : `${header} is not a header a key can go in; name one such as X-API-Key.`,
+      )
+    }
     await host.graph.apply([{
       entity: row.entity,
       mcp_server: {
@@ -790,6 +961,8 @@ export let remoteCommands = (
         ...patch.allow !== undefined
           ? { allow: patch.allow && JSON.stringify(patch.allow) }
           : {},
+        ...name ? { name } : {},
+        ...header !== undefined ? { header } : {},
       },
     }])
   }
@@ -846,6 +1019,7 @@ export let remoteCommands = (
     told,
     configure,
     give,
+    signsInAs,
     remove,
     restore,
     kept,
@@ -863,8 +1037,12 @@ let addedAs = (name: string, one: Shown | undefined) =>
     ? `${name} is added, but it refused the key.`
     : `${name} is connected.`
 
+/** What a page form did: what the page says, and the connection whose
+ * sign-in it goes straight to, where adding a server found it takes one. */
+export type Acted = string | { say: string; signIn: string }
+
 /** What a form on a person's connections page does to their MCP servers,
- * named by `do` (`mcp-add`, `mcp-key`, `mcp-tools`, `mcp-everyone`,
+ * named by `do` (`mcp-add`, `mcp-key`, `mcp-client`, `mcp-name`, `mcp-tools`, `mcp-everyone`,
  * `mcp-mine`, `mcp-on`, `mcp-off`, `mcp-remove`, `mcp-restore`), with the server it is about in `server`. It
  * answers what the page says, and null for a form about something else. */
 export let acted = async (
@@ -872,30 +1050,56 @@ export let acted = async (
   act: string,
   field: (name: string) => string,
   fields: (name: string) => string[],
-): Promise<string | null> => {
+): Promise<Acted | null> => {
   let id = field('server')
   if (act == 'mcp-add') {
-    // Unchosen, it is everyone's when it takes a key, a token rather than a
-    // person's sign-in, and the person's alone otherwise.
+    // Only the address is asked; the rest is the Advanced settings. Unchosen,
+    // who it is for follows what it turns out to take (`Settings.everyone`).
     let chosen = field('for')
     let made = await remote.configure({
-      name: field('name'),
       url: field('url'),
+      ...field('name') ? { name: field('name') } : {},
+      ...field('machine') ? { machine: field('machine') } : {},
+      ...field('client_id') ? { client_id: field('client_id') } : {},
       ...field('header') ? { header: field('header') } : {},
-      everyone: chosen
-        ? chosen == 'everyone'
-        : !!field('key') || !!field('header'),
+      ...chosen
+        ? { everyone: chosen == 'everyone' }
+        : field('key')
+        ? { everyone: true }
+        : {},
     })
     if (field('key')) await remote.give(made.server, field('key'))
+    if (field('client_secret') && field('client_id')) {
+      await remote.signsInAs(made.server, {
+        id: field('client_id'),
+        secret: field('client_secret'),
+      })
+    }
     let [one] = await remote.shown(
       (await remote.kept()).filter((r) => r.entity.eid == made.server),
     )
-    return addedAs(field('name'), one)
+    let say = addedAs(made.name, one)
+    return !field('key') && made.needs == 'sign-in' && one?.connection
+      ? { say, signIn: one.connection }
+      : say
   }
   if (act == 'mcp-key') {
     if (!field('key')) throw refuse('arguments', 'Paste the key.')
+    await remote.set(id, { header: field('header') || null })
     await remote.give(id, field('key'))
     return 'Saved. The key is kept safe and never shown again.'
+  }
+  if (act == 'mcp-client') {
+    if (!field('client_id')) throw refuse('arguments', 'Give its client id.')
+    await remote.signsInAs(id, {
+      id: field('client_id'),
+      ...field('client_secret') ? { secret: field('client_secret') } : {},
+    })
+    return 'Saved. Sign in to connect it.'
+  }
+  if (act == 'mcp-name') {
+    await remote.set(id, { name: field('name') })
+    return `Renamed ${field('name').trim()}.`
   }
   if (act == 'mcp-tools') {
     let every = (await remote.tools(id)).map((t) => t.name)

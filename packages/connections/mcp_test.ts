@@ -526,3 +526,129 @@ test("a server connected for everyone in a space reaches others there with its o
   await as(person).set(shared.server, { everyone: false })
   assertEquals(await names(other), [])
 })
+
+// A server at `host` that takes a sign-in through its OAuth metadata, a key
+// it names no sign-in for, or nothing, over the fixture's MCP.
+let door = (kind: 'sign-in' | 'key' | 'open', host: string) => {
+  let f = fixture()
+  let fetcher: typeof fetch = async (input, init) => {
+    let req = new Request(input, init), path = new URL(req.url).pathname
+    if (path.startsWith('/.well-known/')) {
+      if (kind != 'sign-in') return new Response(null, { status: 404 })
+      return Response.json(
+        path.includes('protected-resource')
+          ? {
+            resource: `https://${host}/mcp`,
+            authorization_servers: ['https://login.test'],
+          }
+          : {
+            issuer: 'https://login.test',
+            authorization_endpoint: 'https://login.test/authorize',
+            token_endpoint: 'https://login.test/token',
+            registration_endpoint: 'https://login.test/register',
+            response_types_supported: ['code'],
+            code_challenge_methods_supported: ['S256'],
+          },
+      )
+    }
+    if (path == '/register') {
+      return Response.json({ ...await req.json(), client_id: 'c-1' }, {
+        status: 201,
+      })
+    }
+    if (kind != 'open' && req.method == 'POST' && path == '/mcp') {
+      return new Response(null, {
+        status: 401,
+        ...kind == 'sign-in'
+          ? {
+            headers: {
+              'www-authenticate':
+                `Bearer resource_metadata="https://${host}/.well-known/oauth-protected-resource"`,
+            },
+          }
+          : {},
+      })
+    }
+    return f.fetcher(req)
+  }
+  return { fetcher, requests: f.requests }
+}
+
+test('a server added by its address alone is named, and found to take a sign-in, a key or nothing', async () => {
+  let { host, person, failures } = await setup()
+  let space = mint()
+  let at = (kind: 'sign-in' | 'key' | 'open', name: string) => {
+    let d = door(kind, name)
+    return {
+      d,
+      remote: remoteCommands(person, { ...host, space }, { fetch: d.fetcher }),
+    }
+  }
+  let found = async (kind: 'sign-in' | 'key' | 'open', name: string) => {
+    let { remote, d } = at(kind, name)
+    let made = await remote.configure({ url: `https://${name}/mcp` })
+    let [one] = await remote.shown(
+      (await remote.kept()).filter((r) => r.entity.eid == made.server),
+    )
+    return { made, one, d }
+  }
+  let open = await found('open', 'mcp.open.test')
+  let again = await found('open', 'mcp.again.test')
+  let oauth = await found('sign-in', 'mcp.canva.test')
+  let keyed = await found('key', 'keys.test')
+  assertEquals(
+    [open, again, oauth, keyed].map(({ made, one }) => [
+      made.name,
+      made.needs,
+      one.everyone,
+    ]),
+    [
+      ['mock', undefined, true],
+      ['mock 2', undefined, true],
+      ['canva.test', 'sign-in', false],
+      ['keys.test', 'key', true],
+    ],
+  )
+  assertEquals(oauth.made.commands.map((c) => c.name), ['sign_in'])
+  assertEquals(failures.map(String), [])
+  // No request leaves with a credential before the person gives one.
+  assert(
+    [oauth, keyed].every(({ d }) =>
+      d.requests.every((r) => !r.headers.has('authorization'))
+    ),
+  )
+  let { remote } = at('open', 'mcp.open.test')
+  await remote.set(again.made.server, { name: 'Notes' })
+  await assertRejects(
+    () => remote.set(again.made.server, { name: 'mock' }),
+    Error,
+    'has the name mock',
+  )
+  let renamed = await remote.configure({ url: 'https://mcp.again.test/mcp' })
+  assertEquals(renamed.name, 'Notes')
+})
+
+test("a server that takes only clients it knows signs in as the person's own, whose secret stays in the vault", async () => {
+  let { g, host, person } = await setup()
+  let d = door('sign-in', 'design.test')
+  let registered = 0
+  let fetcher: typeof fetch = (input, init) => {
+    let req = new Request(input, init)
+    if (new URL(req.url).pathname == '/register') registered++
+    return d.fetcher(req)
+  }
+  let remote = remoteCommands(person, host, { fetch: fetcher })
+  let made = await remote.configure({
+    url: 'https://design.test/mcp',
+    client_id: 'mine',
+  })
+  assertEquals([made.needs, registered], ['sign-in', 0])
+  await remote.signsInAs(made.server, { id: 'mine', secret: 's3cret' })
+  let [held] = await g.read(
+    line`.connection.integration=${`mcp:${made.server}`}&*`,
+  )
+  let { url } = await begin(host, held.entity.eid)
+  assertEquals(new URL(url).searchParams.get('client_id'), 'mine')
+  let rows = JSON.stringify(await g.read(line`*`))
+  assert(!rows.includes('s3cret'))
+})

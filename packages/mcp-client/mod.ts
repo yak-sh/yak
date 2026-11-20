@@ -205,6 +205,10 @@ export type Connection = {
    * `initialize` (the protocol's `instructions`), or nothing where it said
    * none. It is the server's own text, as trusted as the server is. */
   instructions: () => Promise<string | undefined>
+  /** What the server calls itself in its answer to `initialize` (the
+   * protocol's `serverInfo`): its `title` where it gave one, else its `name`;
+   * nothing where it gave neither. */
+  about: () => Promise<string | undefined>
   call: (
     name: string,
     args: Record<string, unknown>,
@@ -387,6 +391,10 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   return {
     list,
     instructions: async () => (await ensure()).getInstructions() || undefined,
+    about: async () => {
+      const info = (await ensure()).getServerVersion()
+      return info?.title?.trim() || info?.name?.trim() || undefined
+    },
     call,
     refresh: () => {
       generation++

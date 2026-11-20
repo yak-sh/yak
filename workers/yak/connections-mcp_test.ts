@@ -2,7 +2,7 @@
 // tools chosen, turned off, removed to the trash and restored, through the
 // page's own forms against a server that takes a key in a header.
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { fixture } from '../../packages/mcp-client/testing.ts'
@@ -216,4 +216,80 @@ test('a dialog asked for what the page does not hold says why', async () => {
   let drawn = await detail('gone')
   assertStringIncludes(drawn, 'data-modal-key="gone"')
   assertStringIncludes(drawn, 'it was removed, or it belongs to another space')
+})
+
+test('a server added by its address alone, found to take a sign-in, goes straight to it', async () => {
+  let login = 'https://login.test'
+  let said = async (req: Request) => {
+    let path = new URL(req.url).pathname
+    if (path.includes('oauth-protected-resource')) {
+      return Response.json({
+        resource: 'https://mcp.canva.test/mcp',
+        authorization_servers: [login],
+      })
+    }
+    if (path.startsWith('/.well-known/')) {
+      return Response.json({
+        issuer: login,
+        authorization_endpoint: `${login}/authorize`,
+        token_endpoint: `${login}/token`,
+        registration_endpoint: `${login}/register`,
+        response_types_supported: ['code'],
+        code_challenge_methods_supported: ['S256'],
+      })
+    }
+    if (path == '/register') {
+      return Response.json({ ...await req.json(), client_id: 'c-1' }, {
+        status: 201,
+      })
+    }
+    return new Response(null, {
+      status: 401,
+      headers: {
+        'www-authenticate':
+          'Bearer resource_metadata="https://mcp.canva.test/.well-known/oauth-protected-resource"',
+      },
+    })
+  }
+  let form = new FormData()
+  form.append('do', 'mcp-add')
+  form.append('url', 'https://mcp.canva.test/mcp')
+  globalThis.fetch =
+    ((input: RequestInfo | URL, init?: RequestInit) =>
+      said(new Request(input, init))) as typeof fetch
+  let res = await connecting(
+    new Request('https://yaks.app/manage/connections?space=ada'),
+    p.env,
+    space,
+    who,
+    form,
+  ).finally(() => globalThis.fetch = real) as Response
+  assertEquals(res.status, 303)
+  assertStringIncludes(res.headers.get('location')!, `${login}/authorize?`)
+  let [one] = (await page()).servers.filter((s) => s.name == 'canva.test')
+  assertEquals([one.status, one.everyone], ['needed', false])
+})
+
+test('adding a server asks only for its address, with the rest behind Advanced', async () => {
+  let html = await (await desk({
+    space: 'ada',
+    apps: [],
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [],
+      services: [],
+      built: [],
+      borrowed: [],
+      mcp: { servers: [] },
+    },
+  })).text()
+  let form = html.slice(html.indexOf('value="mcp-add"'))
+  form = form.slice(0, form.indexOf('</form>'))
+  let advanced = form.slice(form.indexOf('>Advanced<'))
+  assertEquals(form.match(/required/g)?.length, 1)
+  for (let name of ['name', 'client_id', 'key', 'header', 'machine']) {
+    assertStringIncludes(advanced, `name="${name}"`)
+  }
+  assert(!/<details[^>]*open/.test(form))
 })

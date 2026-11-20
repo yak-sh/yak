@@ -988,21 +988,35 @@ directory as
 `mcp_server{owner,space,everyone,name,url,machine,enabled,allow,header,client_id}`:
 the space the call names, else the Operator's own. That space's Operator reaches
 it in turns with its owner, or with everyone it works with where `everyone`
-(which only the space's owner sets, and which a key-taking server defaults to),
-each call then carrying the owner's credential; the space's connections page
-lists it (@yaks/connections/mcp `reachedIn`); an app's code reaches any server
-its person granted it. A server kept without `space`, from before servers had
-one, reaches its owner in every space and at their own connector, which reaches
-no other; connecting its address again in a space moves it there.
-`@yaks/connections/mcp` uses `@yaks/mcp-client` for discovery and calls, and
-`@yaks/connections` for that person's sign-in and vaulted credential. Operators
-receive namespaced tools; the connector discovers the same commands at
+(which only the space's owner sets, and which a server defaults to unless it
+takes its owner's sign-in), each call then carrying the owner's credential; the
+space's connections page lists it (@yaks/connections/mcp `reachedIn`); an app's
+code reaches any server its person granted it. A server kept without `space`,
+from before servers had one, reaches its owner in every space and at their own
+connector, which reaches no other; connecting its address again in a space moves
+it there. `@yaks/connections/mcp` uses `@yaks/mcp-client` for discovery and
+calls, and `@yaks/connections` for that person's sign-in and vaulted credential.
+Operators receive namespaced tools; the connector discovers the same commands at
 `mcp:<server eid>` through `commands` and invokes them through `command`. Code
 mode lists them under its `mcp` object while the connector's published tool
 roster stays fixed. Discovery failures report to the tracker and leave a
 retryable connection status command. Calls recheck ownership and the current
 configuration, and never retry a remote mutation after a missing response or a
 sign-in challenge.
+
+Connecting a server finds what it takes, as Claude's and ChatGPT's connectors
+do: only its address is needed. Unnamed, it is called what its `serverInfo`
+says, or by its host where it says nothing before a sign-in. Its tools are then
+listed, and a 401 naming protected-resource metadata registers this host as its
+OAuth client (`discover`), so the page goes straight to its sign-in; `configure`
+answers `needs: 'sign-in' | 'key'`. The page's Advanced settings (closed) take a
+name, an OAuth client id and secret, a key and its header, and this space's
+machine. A server that takes only clients it knows (Canva's refuses every
+redirect URI but those it lists) signs in as the person's own client, made in
+its developer portal with this host's callback as its redirect URI: `signsInAs`
+keeps its id and secret in the vault as `oauth_client mcp:<eid>`
+(@yaks/connections `registration`), named by the integration's `client`, and
+each server's card takes one too.
 
 A server that answers 401 and names no sign-in takes a key: its integration
 `mcp:<eid>` is then a keyed one, and the person gives the key on the connections

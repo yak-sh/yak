@@ -1283,20 +1283,28 @@ export let connecting = async (
     return no("Keys can't be saved here yet.")
   }
   if (act.startsWith('mcp-') || act.startsWith('source-')) {
-    if (['mcp-add', 'mcp-key'].includes(act) && !vaulted(env)) {
+    if (['mcp-add', 'mcp-key', 'mcp-client'].includes(act) && !vaulted(env)) {
       return no("Keys can't be saved here yet.")
     }
     let { pageServers, sourceActed } = await import('./connected-mcp.ts')
     let { acted } = await import('@yaks/connections/mcp')
     try {
       let dir = dirOf(env)
+      // The machine a server is added on is this space's, the one whose
+      // tunnel the page's owner holds.
+      let asked = (k: string) =>
+        k == 'machine' && field(k) ? space.eid : field(k)
       let said = await sourceActed(env, dir, who, act, field) ??
         await acted(
           pageServers(env, dir, who, space.eid),
           act,
-          field,
+          asked,
           (k) => form.getAll(k).map(String),
         )
+      // A server found to take a sign-in goes straight to it.
+      if (typeof said == 'object' && said) {
+        return signingIn(req, env, c, space, who, said.signIn)
+      }
       if (said != null) return { say: said, no: false }
     } catch (e) {
       if (e instanceof CallError) return no(e.message)
