@@ -461,16 +461,22 @@ export let runs = (
 
     admin_spaces: verb(async (call) => {
       let a = argsOf(call)
-      let person = String(a.person)
+      let person = word(a, 'person')
+      let role = word(a, 'role')
+      if (!person == !role) {
+        throw new CallError('person', 'say one: a person or a role')
+      }
       let spaces = word(a, 'spaces')
       if (spaces != null && !/^(\d+|unlimited|default)$/.test(spaces)) {
         throw new CallError('spaces', 'say a number, unlimited or default')
       }
+      let of = person ? { person } : { role: role! }
       let at = await acting(a)
       let now = spaces == null
-        ? await freeSpacesNow(at.bearer, person)
-        : await setFreeSpaces(at.bearer, person, spaces)
-      return [said(call, `${now.person}: ${now.spaces} free spaces`)]
+        ? await freeSpacesNow(at.bearer, of)
+        : await setFreeSpaces(at.bearer, of, spaces)
+      let who = 'person' in now ? now.person : `every ${now.role} of yak`
+      return [said(call, `${who}: ${now.spaces} free spaces`)]
     }),
 
     // The server answers support threads only to the account's seat in yak.

@@ -56,7 +56,12 @@ import {
   meterOf,
   topUp,
 } from '@yaks/platform/meter'
-import { freeSpaces, SUBSCRIBED, type Tier } from '@yaks/platform/plans'
+import {
+  type Allowance,
+  freeSpaces,
+  SUBSCRIBED,
+  type Tier,
+} from '@yaks/platform/plans'
 import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
@@ -924,6 +929,7 @@ export type Row = MeteredRow & {
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
   free_spaces?: { count?: number | null }
+  role_free_spaces?: Partial<Record<Role, Allowance>>
   push_subscription?: {
     person: Id
     endpoint: string
@@ -4051,9 +4057,20 @@ export let directoryRows = (rows: {
       (await one(line`.entity.eid=${person}`))?.operator_alerts?.declined ??
         null,
     // How many free spaces this person may own (@yaks/platform/plans
-    // `freeSpaces`): their own `free_spaces`, else one person's.
-    freeSpaces: async (person: string): Promise<number> =>
-      freeSpaces((await one(line`.entity.eid=${person}`))?.free_spaces),
+    // `freeSpaces`): their own `free_spaces`, else their seat's role in the
+    // platform's own space, else one person's.
+    freeSpaces: async (person: string): Promise<number> => {
+      let them = await one(line`.entity.eid=${person}`)
+      if (them?.free_spaces) return freeSpaces(them.free_spaces)
+      let meta = await one(line`.space.slug=${META.space}&?role_free_spaces`)
+      let role = meta && await self.role({ eid: meta.entity.eid }, person)
+      return freeSpaces(role && meta.role_free_spaces?.[role])
+    },
+    // The free spaces a seat of each role in the platform's own space may
+    // own, where one was set (`role_free_spaces`).
+    roleSpaces: async (): Promise<Partial<Record<Role, Allowance>>> =>
+      (await one(line`.space.slug=${META.space}&?role_free_spaces`))
+        ?.role_free_spaces ?? {},
     // Whether this person keeps the side of their pages collapsed to icons.
     collapsed: async (person: string): Promise<boolean> =>
       !!(await one(line`.entity.eid=${person}`))?.desk_sidebar?.collapsed,

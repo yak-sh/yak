@@ -89,7 +89,7 @@ test('one free space a person, and each space answers to its own allowances', as
   }
 })
 
-test("a person's own allowance of free spaces stands in for one person's", async () => {
+test("a person's own allowance of free spaces, else their role's, stands in for one person's", async () => {
   let k = await kernel()
   try {
     let ada = await signIn(k)
@@ -100,6 +100,9 @@ test("a person's own allowance of free spaces stands in for one person's", async
         .then(() => '', (e) => String(e))
     let allow = (free_spaces: { count: number | null } | null) =>
       meta(k).apply([{ entity: { eid: ada.person }, free_spaces }])
+    let [yak] = await meta(k).query('.space.slug=yak')
+    let editors = (editor: { count: number | null } | null) =>
+      meta(k).apply([{ entity: yak.entity, role_free_spaces: { editor } }])
 
     await allow({ count: 2 })
     assertEquals(await make(1), '')
@@ -108,6 +111,20 @@ test("a person's own allowance of free spaces stands in for one person's", async
     assertEquals(await make(3), '')
     await allow(null)
     assertStringIncludes(await make(4), 'one person gets one free space')
+
+    // An editor of the platform's space gets an editor's, and her own still
+    // comes first.
+    await editors({ count: 4 })
+    assertStringIncludes(await make(5), 'one person gets one free space')
+    await meta(k).apply([{
+      entity: { eid: '$seat' },
+      member: { space: yak.entity.eid, person: ada.person, role: 'editor' },
+    }])
+    assertEquals(await make(6), '')
+    assertStringIncludes(await make(7), 'you get 4 free spaces, and you own 4')
+    await allow({ count: 5 })
+    assertEquals(await make(8), '')
+    assertStringIncludes(await make(9), 'you get 5 free spaces, and you own 5')
   } finally {
     await k.stop()
   }

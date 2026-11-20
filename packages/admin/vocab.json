@@ -975,11 +975,16 @@
       "noun": "admin",
       "verb": "spaces",
       "title": "Read or set how many free spaces a person may own",
-      "description": "One person's allowance of free spaces, beside the one every person gets: a number, unlimited, or default to hand them back to it. Only the platform role may set it; act as the person's own account when they asked for it, so it is recorded as theirs.\n\n  yak admin spaces ada@example.com 3 --as admin@bot.yak.sh\n  yak admin spaces ada@example.com default --as admin@bot.yak.sh",
+      "description": "One person's allowance of free spaces, beside the one every person gets, or a role's: every person seated in the yak space with that role, who has no allowance of their own. A number, unlimited, or default to take it off. A person's own allowance comes first, then their role's, then the one every person gets. Only the platform role may set it; act as the person's own account when they asked for it, so it is recorded as theirs.\n\n  yak admin spaces ada@example.com 3 --as admin@bot.yak.sh\n  yak admin spaces ada@example.com default --as admin@bot.yak.sh\n  yak admin spaces --role editor --spaces unlimited --as admin@bot.yak.sh",
       "input": {
         "person": {
           "type": "string",
-          "description": "the person, by their email address"
+          "description": "the person, by their email address; or say a role"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "editor", "viewer"],
+          "description": "a role in the yak space, for the allowance of every seat of it"
         },
         "spaces": {
           "type": "string",
@@ -990,9 +995,6 @@
           "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
         }
       },
-      "required": [
-        "person"
-      ],
       "openWorld": true,
       "positional": [
         "person",

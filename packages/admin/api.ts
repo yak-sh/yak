@@ -375,21 +375,26 @@ export let setComp = (
 ): Promise<SpaceComp> =>
   said(posted(apex('/api/comp'), { space, tier, reason }, session))
 
-/** One person's allowance of free spaces (workers/yak free-spaces.ts): a
+/** One person's allowance of free spaces (workers/yak free-spaces.ts), or a
+ * role's, every seat of it in the `yak` space without one of their own: a
  * number, or `unlimited`. Only an owner of the `yak` space is answered. */
-export type FreeSpaces = { person: string; spaces: number | 'unlimited' }
+export type FreeSpaces =
+  & ({ person: string } | { role: string })
+  & { spaces: number | 'unlimited' }
+/** Whose allowance: a person by address, or a role in the `yak` space. */
+export type Holder = { person: string } | { role: string }
 export let freeSpacesNow = (
   session: string,
-  person: string,
+  of: Holder,
 ): Promise<FreeSpaces> =>
-  said(sent(apex(`/api/spaces?person=${encodeURIComponent(person)}`), session))
-/** Set it: a number, `unlimited`, or `default` for one person's. */
+  said(sent(apex(`/api/spaces?${new URLSearchParams(of)}`), session))
+/** Set it: a number, `unlimited`, or `default` to take it off. */
 export let setFreeSpaces = (
   session: string,
-  person: string,
+  of: Holder,
   spaces: string,
 ): Promise<FreeSpaces> =>
-  said(posted(apex('/api/spaces'), { person, spaces }, session))
+  said(posted(apex('/api/spaces'), { ...of, spaces }, session))
 
 /** The support threads people open with feedback (workers/yak
  * support-door.ts), each with `text`, the thread as TaskMaster reads it. Only

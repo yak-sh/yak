@@ -204,11 +204,19 @@ export let CURRENCY: string = 'USD'
  * otherwise ({@link freeSpaces}). */
 export let SPACES: number = 1
 
-/** The free spaces this person may own: the `count` of their own
- * `free_spaces` where an admin set one (admin_spaces), no limit where it was
- * set without a count, and {@link SPACES} where none was set. */
-export let freeSpaces = (own?: { count?: number | null } | null): number =>
-  own ? own.count ?? Infinity : SPACES
+/** An allowance of free spaces as an admin set it (admin_spaces): a
+ * `count`, or none for no limit. */
+export type Allowance = { count?: number | null }
+
+/** The free spaces this person may own: the first allowance set, in the
+ * order given (their own, then their role's), else {@link SPACES}. An
+ * allowance without a count is no limit. */
+export let freeSpaces = (
+  ...set: (Allowance | null | undefined)[]
+): number => {
+  let first = set.find(Boolean)
+  return first ? first.count ?? Infinity : SPACES
+}
 
 /** The monthly usage counters. Models, realtime and texts spend the same
  * space budget; their separate counters still say what each source cost. */

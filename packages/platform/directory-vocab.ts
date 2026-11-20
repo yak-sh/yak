@@ -238,6 +238,20 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { count: { type: 'integer', minimum: 0 } },
     },
+    // How many free spaces a seat of each role in the platform's own space
+    // may own, on that space's row (admin_spaces with a role, plans.ts
+    // `freeSpaces`): each role a `free_spaces`, beneath a person's own and
+    // above `SPACES`.
+    role_free_spaces: {
+      component: true,
+      type: 'object',
+      properties: Object.fromEntries(
+        ['owner', 'editor', 'viewer'].map((role) => [role, {
+          type: 'object',
+          properties: { count: { type: 'integer', minimum: 0 } },
+        }]),
+      ),
+    },
     // How a person keeps the side of their yaks.app pages (desk-pages.ts
     // `deskFrame`, operator-page.ts `side`): collapsed to a rail of icons,
     // or open with each one's name beside it, the way it was without it.
