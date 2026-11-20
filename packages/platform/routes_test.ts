@@ -311,6 +311,16 @@ test('sameOrigin: the page that asked, at the host it asked', () => {
   }
 })
 
+// A form our own no-referrer page posts says `Origin: null`; the browser's
+// Sec-Fetch-Site tells it from a sandboxed frame's.
+test('a null origin is ours only where the browser says the post is same-origin', () => {
+  let from = (site: string | null) => sameOrigin('yaks.app', 'null', {}, site)
+  assertEquals(
+    [from('same-origin'), from('same-site'), from('cross-site'), from(null)],
+    [true, false, false, false],
+  )
+})
+
 // The one exception to it (routes.ts `shared`): the read door, asked with GET.
 // Everything a write could ride on is outside — including `/ws`, which reads
 // but carries the write grant on the same socket.

@@ -739,17 +739,24 @@ let upgrading = (req: Request): boolean =>
 // the drop zone). A page that could forge a request
 // from the apex could already consent to an agent or close a space there, so
 // admitting it here gives nothing away.
+//
+// `Origin: null` is a stranger (a sandboxed frame's opaque origin), unless the
+// browser's own `Sec-Fetch-Site`, which no page can set, says the request
+// came from this very origin: a form posted from one of our pages served with
+// `Referrer-Policy: no-referrer` (the approval and sign-in pages) is sent with
+// `Origin: null`. A sandboxed frame's requests are `cross-site` there.
 export let sameOrigin = (
   host: string,
   origin: string | null,
   env: Host = {},
+  site: string | null = null,
 ): boolean => {
   if (!origin) return true
+  if (origin == 'null') return site == 'same-origin'
   try {
     let from = new URL(origin).hostname.toLowerCase()
     return from == host.toLowerCase() || from == apex(env)
   } catch {
-    // `Origin: null` — a sandboxed frame, an opaque origin — is a stranger.
     return false
   }
 }
@@ -944,7 +951,10 @@ export let admitted = (
       ? { answer: preflight(req) }
       : { req: without(req, ['cookie']), anyone: true }
   }
-  if (!guarded(req) || sameOrigin(host, origin, env)) {
+  if (
+    !guarded(req) ||
+    sameOrigin(host, origin, env, req.headers.get('sec-fetch-site'))
+  ) {
     return { req, anyone: false }
   }
   if (!shared(req.method, asked) && !askable(req.method, asked, origin)) {

@@ -173,7 +173,12 @@ export let kept = (
     (req.method != 'GET' && req.method != 'HEAD') ||
     platform(host, path, env) || handedOff(host, path, env) ||
     guarded(req) &&
-      !sameOrigin(host, req.headers.get('origin'), env) ||
+      !sameOrigin(
+        host,
+        req.headers.get('origin'),
+        env,
+        req.headers.get('sec-fetch-site'),
+      ) ||
     !settled(req)
   ) return null
   if (host == apex(env)) {
