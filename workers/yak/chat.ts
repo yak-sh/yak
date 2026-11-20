@@ -179,6 +179,21 @@ export let recent = async (
   return (await p.recent(token, at.room, page)).map((s) => ({ ...s, server }))
 }
 
+/** The message `id` of `at.room`, read by the bot of `at.connection` only
+ * in a server it serves, as {@link recent} reads; none where the platform
+ * reads no message alone. */
+export let message = async (
+  env: Env,
+  via: string,
+  at: { connection: string; room: string; server?: string },
+  id: string,
+): Promise<Said | undefined> => {
+  let p = PLATFORMS.get(via)
+  if (!p?.message) return
+  let { token, server } = await heldBy(env, p, at)
+  return { ...await p.message(token, at.room, id), server }
+}
+
 /**
  * What room `at.room` is called, as its connection's bot reads the rooms of
  * its server, only in a server that connection serves, as {@link recent}

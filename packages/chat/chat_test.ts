@@ -15,6 +15,7 @@ import { effects } from './effects.ts'
 import {
   accountEid,
   type Addressed,
+  chain,
   confined,
   framing,
   kept,
@@ -252,4 +253,22 @@ test('showing: shown at once and each beat while the work goes on, never past mo
     Error,
     'Missing Access',
   )
+})
+
+test('chain: up the replies to the first, oldest first, stopping at a cap, a loop or an unread one', async () => {
+  let up = (links: Record<string, string | undefined>, cap?: number) =>
+    chain(
+      { reply_to: 'c' },
+      (id) =>
+        Promise.resolve(
+          id in links
+            ? { ...said, id, ...links[id] ? { reply_to: links[id] } : {} }
+            : undefined,
+        ),
+      cap,
+    ).then((l) => l.map((s) => s.id))
+  assertEquals(await up({ c: 'b', b: 'a', a: undefined }), ['a', 'b', 'c'])
+  assertEquals(await up({ c: 'b', b: 'a', a: undefined }, 2), ['b', 'c'])
+  assertEquals(await up({ c: 'b', b: 'c' }), ['b', 'c'])
+  assertEquals(await up({ c: 'b' }), ['c'])
 })

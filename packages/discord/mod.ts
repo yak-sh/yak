@@ -407,6 +407,27 @@ export let recent = async (
   return messages.map(read).reverse()
 }
 
+/** The message `id` of `room`, as the bot with `token` reads it
+ * (GET /channels/{id}/messages/{id}). One the bot cannot see is refused with
+ * what Discord said; a 429 or a 5xx is {@link Unsent}. */
+export let message = async (
+  token: string,
+  room: string,
+  id: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Said> =>
+  read(
+    await answer<Message>(
+      await fetcher(`${API}/channels/${room}/messages/${id}`, {
+        headers: bot(token),
+      }),
+      {
+        unsent: `Discord did not read message ${id}`,
+        refused: `Discord refused to read message ${id}`,
+      },
+    ),
+  )
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -418,6 +439,7 @@ export let discord: Platform = {
   server,
   rooms,
   recent,
+  message,
   named,
   link,
   serverName,

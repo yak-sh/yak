@@ -44,7 +44,7 @@ import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
-import { type Lead, leading, named } from './operator-rooms.ts'
+import { type Lead, leading, named, replying } from './operator-rooms.ts'
 import {
   framing,
   kept,
@@ -504,6 +504,18 @@ let led = (
 let fromWhom = (who: string, framing: string) =>
   who ? `From ${who}. ${framing}` : framing
 
+// What leads up to words said in a room, one entry: the chain they reply
+// to, then what was said since the Operator's last answer.
+let joined = (...leads: (Lead | undefined)[]): Lead | undefined => {
+  let all = leads.filter((l) => !!l)
+  return all.length
+    ? {
+      body: all.map((l) => l.body).join('\n\n'),
+      heard: all.some((l) => l.heard),
+    }
+    : undefined
+}
+
 // How words heard on a chat platform are said before them: the platform, and
 // who wrote them ({@link speaker}, @yaks/chat `framing`).
 let chatFraming = (request: Request, item: Bundle, who: string) => {
@@ -555,9 +567,12 @@ export let chatHeard = async (
   await g.apply([await named(env, g, room, connection), author], {
     trusted: true,
   })
-  let lead = !had?.entry && !writer && said.server && said.addressed
-    ? await leading(env, operator.store, { via, connection }, said)
-    : undefined
+  let lead = had?.entry ? undefined : joined(
+    await replying(env, operator.store, { via, connection }, said),
+    !writer && said.server && said.addressed
+      ? await leading(env, operator.store, { via, connection }, said)
+      : undefined,
+  )
   let { fresh, session } = await hear(
     operator,
     env,

@@ -128,6 +128,15 @@ export type Platform = {
     page: Page,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Said[]>
+  /** the message `id` of `room`, as the bot with `credential` reads it,
+   * where the platform reads one alone: what a reply's {@link chain} is
+   * read up by */
+  message?: (
+    credential: string,
+    room: string,
+    id: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<Said>
   /** the address that opens `server` in the platform's app or site, or its
    * room `room` there: how a page links to where its Operator is reached */
   link?: (server: string, room?: string) => string
@@ -307,6 +316,31 @@ export let recounted = (
       mine.has(s.id) ? 'you' : s.author.name
     }: ${s.text}`
   ).join('\n')
+
+/** How many messages a reply's {@link chain} reads up, at most. */
+export let CHAIN = 10
+
+/**
+ * The messages `said` answers, up its chain of replies to the first, oldest
+ * first: at most `cap`, each read by `get`, which answers none for one it
+ * cannot read, where the chain stops.
+ */
+export let chain = async (
+  said: Pick<Said, 'reply_to'>,
+  get: (id: string) => Promise<Said | undefined>,
+  cap = CHAIN,
+): Promise<Said[]> => {
+  let up: Said[] = []
+  let seen = new Set<string>()
+  for (let id = said.reply_to; id && !seen.has(id) && up.length < cap;) {
+    seen.add(id)
+    let s = await get(id)
+    if (!s) break
+    up.unshift(s)
+    id = s.reply_to
+  }
+  return up
+}
 
 /**
  * The messages of a room read back that came after the bot's last answer
