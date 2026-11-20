@@ -31,9 +31,11 @@ let menu = (waiting?: number) =>
 
 export let frame = (at: {
   side: Kids
+  // before the title: the way back out of a page zoomed in from another
+  back?: Kids
   title: Kids
-  // whose it is, under the title
-  sub: Kids
+  // whose it is, under the title, where the page says
+  sub?: Kids
   // how many wait in the side, which Menu wears where the side is behind it
   waiting?: number
   // the bar's tools, after its title
@@ -42,8 +44,6 @@ export let frame = (at: {
   headed?: boolean
   // the page lies on a sheet, a card, rather than the floor
   sheet?: boolean
-  // under the bar, held with it
-  under?: Kids
   content: Kids
   // panes beside the column
   beside?: Kids
@@ -70,6 +70,7 @@ export let frame = (at: {
           Toolbar,
           { class: 'Frame_Bar' },
           menu(at.waiting),
+          at.back,
           h(
             Toolbar.Text,
             {},
@@ -78,11 +79,10 @@ export let frame = (at: {
               { as: at.headed ? 'span' : undefined, 'data-title': '' },
               at.title,
             ),
-            h(Toolbar.Sub, {}, at.sub),
+            at.sub ? h(Toolbar.Sub, {}, at.sub) : null,
           ),
           at.tools,
         ),
-        at.under,
         h(
           Shell.Body,
           { class: 'Frame_Body', id: 'content', tabindex: '-1' },

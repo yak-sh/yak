@@ -787,7 +787,7 @@ test('a helper’s page says it is one, where its parent opens, and how it stand
     href: `/chat/${middle}`,
     asked: 'Check the draft.',
   })
-  assertEquals(drawn.helper?.line?.standing, 'stopped')
+  assertEquals(drawn.aside?.self?.standing, 'stopped')
   let parent = await conversationOf(
     watched,
     '/chat',

@@ -8,6 +8,8 @@ import {
   Aside,
   Glance,
   type HelperLine,
+  Mark,
+  Self,
   type Turn,
   TurnNow,
   Work,
@@ -43,6 +45,14 @@ export let helperHtml = (
   fold = false,
   open = false,
 ) => renderToString(h(Work, { work: helper, now, fold, open }))
+/** A helper's own row on its own page as HTML (operator-aside.ts `Self`). */
+export let selfHtml = (helper: HelperLine, now = Date.now()) =>
+  renderToString(h(Self, { self: helper, now }))
+
+/** How a piece of work stands, as the pip beside its title, as HTML. */
+export let markHtml = (standing: HelperLine['standing']) =>
+  renderToString(h(Mark, { standing }))
+
 // Its times said in the reader's clock and zone (dates.ts).
 export { dates } from './dates.ts'
 

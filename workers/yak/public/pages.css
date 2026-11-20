@@ -731,33 +731,10 @@
     scroll-margin-block: 4rem;
   }
   /* A helper's page, zoomed in from the conversation that started it
-     (operator-page.ts `helperBand`): the page takes on the accent, a band
-     under the bar in it says it is a helper with the way back out, its
-     words lined up with the conversation's, and the conversation grows
-     into place as it opens. */
-  .Talk-zoomed {
-    --zoomed: color-mix(in srgb, var(--bg), var(--accent) 7%);
-  }
-  .Talk-zoomed .Frame_Column {
-    background: var(--zoomed);
-  }
-  /* The band spans the page, as the bar over it does. */
-  .Talk_Helper {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem .75rem;
-    padding: .5rem 1.25rem;
-    background: color-mix(in srgb, var(--bg), var(--accent) 16%);
-    border-bottom: 2px solid var(--accent);
-  }
-  /* A button is one line tall, so a long name is cut short on a phone. */
+     (operator-page.ts `backOut`): the bar holds the way back out before
+     its title, and the conversation grows into place as it opens. */
   .Talk_Out {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .Talk_Helper > .Rows {
-    flex: 1 1 12rem;
+    flex: none;
   }
   @media (prefers-reduced-motion: no-preference) {
     .Talk-zoomed .Talk_Column {
@@ -1075,8 +1052,7 @@
   }
   @media (max-width: 700px) {
     .Talk_Column,
-    .Talk_Box,
-    .Talk_Helper {
+    .Talk_Box {
       padding-inline: 1rem;
     }
     .Talk_Hello {
@@ -1272,10 +1248,6 @@
     .Sidebar_Nav {
       --nav-panel: var(--floor);
     }
-    /* On a helper's page the page is tinted, and so is the tab joining it. */
-    .Talk-zoomed .Sidebar_Nav {
-      --nav-panel: var(--zoomed);
-    }
     .Sidebar-rail {
       --sidebar-padding: .5rem;
       width: 4.5rem;
@@ -1378,13 +1350,12 @@
 }
 
 /* The ways to reach the Operator: its words to copy, and the buttons that
-   open them (operator-ways.ts), those in one row, close enough to share
-   a phone's width. */
+   open them (operator-ways.ts), those wrapping in one row, close enough to
+   share a phone's width. */
 .Talk_Way {
   --control-pad-inline: .6rem;
   display: grid;
   gap: var(--half-gap);
-  margin-bottom: var(--gap);
 }
 .Talk_Way > .Toolbar {
   gap: var(--half-gap);

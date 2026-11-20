@@ -1135,7 +1135,7 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
       ?.getAttribute('aria-label') ?? ''
   let row = `[data-helping] [data-help="${helper}"]`
   // The helper reads the same wherever it is drawn: in the aside, in the
-  // step that started it, and in the band on its own page.
+  // step that started it, and in the aside on its own page.
   let alike: string[][] = []
   let drawn = () => {
     let at = `[data-help="${helper}"] .Rows_Meta`
@@ -1143,10 +1143,10 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
       [
         text(theirs, `[data-helping] ${at}`),
         text(theirs, `[data-conversation] ${at}`),
-        text(own, `.Talk_Helper ${at}`),
+        text(own, `[data-self] ${at}`),
       ].map((t) => t.replace(/\d+s$/, 'Ns')),
     )
-    // A helper's own page says no turn of its own: its row in the band
+    // A helper's own page says no turn of its own: its row in the aside
     // does. The aside's row says how it stands, then where it runs.
     let says = (page: typeof own, at: string) =>
       text(page, at).replace(/\d+s$/, 'Ns')

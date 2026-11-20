@@ -418,33 +418,26 @@ let listedOf = async (
 
 /** What a helper's own page says of it: the session that started it, where
  * it opens and, when that is a helper too, what it was asked (else it is the
- * person's conversation), and the helper as the aside lists it, whose
- * standing says whether it can still be stopped. */
+ * person's conversation). How the helper stands is its aside's (`Aside`
+ * `self`). */
 export type HelperPage = {
   parent: { eid: string; href: string; asked?: string }
-  line: HelperLine | null
 }
 
 // A helper's page's word on it (`HelperPage`).
 let helperPage = async (
   store: Store,
   row: Bundle,
-  entries: Bundle[],
-  names: Names,
   opens: string,
 ): Promise<HelperPage> => {
   let parent = String(comp(row, 'spawned')?.parent ?? '')
-  let [[above], line] = await Promise.all([
-    store.g.get([parent], ['spawned', 'doc']),
-    listedOf(store, { session: row.entity.eid, entries }, names, opens),
-  ])
+  let [above] = await store.g.get([parent], ['spawned', 'doc'])
   return {
     parent: {
       eid: parent,
       href: `${opens}/${parent}`,
       ...above?.spawned ? { asked: await titleAt(store, above) } : {},
     },
-    line,
   }
 }
 
@@ -461,17 +454,17 @@ let lined = (
   }))
 
 // The aside a conversation draws (operator-aside.ts): its turn under way,
-// but on a helper's page (`band`), and its helpers' rows, those at work
-// first.
+// and its helpers' rows, those at work first; on a helper's page, the
+// helper's own row (`self`, null where it has none yet) in the turn's place.
 let asideOf = (
   entries: Bundle[],
   helpers: Helper[],
   names: Names,
-  band = false,
+  self?: HelperLine | null,
 ): Aside => ({
-  turn: band ? null : turnOf(entries, names),
+  turn: self === undefined ? turnOf(entries, names) : null,
   helpers: ordered(helpers.flatMap((h) => h.line ? [h.line] : [])),
-  ...band ? { band: true } : {},
+  ...self ? { self } : {},
 })
 
 // The newest lines a conversation draws: a long one is read from its end.
@@ -1260,11 +1253,15 @@ export let conversationOf = async (
     // input, which the Operator answers next.
     let working = [...entries, ...newest(arrived, entries, eid)]
     let drawn = drawnLines(shown, names, seen, view)
+    let [page, self] = helper
+      ? await Promise.all([
+        helperPage(store, row, opens),
+        listedOf(store, { session: eid, entries }, names, opens),
+      ])
+      : []
     return {
-      ...helper
-        ? { helper: await helperPage(store, row, entries, names, opens) }
-        : {},
-      aside: asideOf(working, seen.helpers, names, helper),
+      ...page ? { helper: page } : {},
+      aside: asideOf(working, seen.helpers, names, helper ? self : undefined),
       task: eid,
       begun: open,
       title: helper

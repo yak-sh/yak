@@ -7,12 +7,10 @@ import {
   Button,
   Card,
   Check,
-  Chip,
   Empty,
   Field,
   Form,
   Icon,
-  Rows,
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
@@ -87,7 +85,12 @@ import { talks } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { outcomeOf } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
-import { Aside, type Aside as Asided, Work } from './operator-aside.ts'
+import {
+  Aside,
+  type Aside as Asided,
+  type HelperLine,
+  Mark,
+} from './operator-aside.ts'
 import { framed, input, type Line, type Lines, row } from './operator-draw.ts'
 import { PICTURES, reply, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
@@ -1914,9 +1917,11 @@ let talkPage = (
     aside?: Node
     // whether the lists that do not wait on the person stand beside it
     column?: boolean
-    // under the bar, held with it: what part of a conversation this page
-    // is zoomed in on, and the way back out
-    band?: Node
+    // on a page zoomed in on part of a conversation (a helper's), the way
+    // back out, before its title in the bar, which then names it alone
+    back?: Node
+    // the title as the bar draws it, where it is more than its words
+    heading?: Node
   },
 ) => {
   let at = managePath('operator', space.slug)
@@ -1941,15 +1946,15 @@ let talkPage = (
         app: page.app?.slug,
         here: page.here,
       }),
-      title: page.title,
-      sub: whoseOf(space),
+      back: page.back,
+      title: page.heading ?? page.title,
+      sub: page.back ? null : whoseOf(space),
       waiting,
       tools: [
         page.app ? showing(page.app) : null,
         page.aside,
         lists.length ? besideButton() : null,
       ],
-      under: page.band,
       content: page.main,
       beside: [
         lists.length ? talkBeside(lists) : null,
@@ -1959,7 +1964,7 @@ let talkPage = (
         'Talk',
         page.app && 'Talk-app',
         listed && lists.length && 'Talk-beside',
-        page.band && 'Talk-zoomed',
+        page.back && 'Talk-zoomed',
       ].filter(Boolean).join(' '),
       skip: page.skip,
     })) + (page.script ?? '') +
@@ -2021,28 +2026,37 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
     [`What can ${operator} do?`, 'What can you do for me?'],
   ].map(([label, say]) => h(Button, { type: 'button', 'data-say': say }, label))
 
-// A helper's page is zoomed in from the conversation that started it: held
-// under the bar as the conversation scrolls, the way back out to that
-// conversation, that it is a helper, and its row, as that conversation draws
-// it. The box's Stop stops it while it works, which that conversation hears
-// as the person's own (operator.ts `stop`).
-let helperBand = ({ parent, line }: HelperPage) =>
+// A helper's page is zoomed in from the conversation that started it. Its
+// bar is one line: the way back out to that conversation, then the helper's
+// title after the pip saying how it stands; the rest of its row (when it
+// began or ended, what it came to, its model) is its aside's
+// (operator-aside.ts `Self`). The box's Stop stops it while it works, which
+// that conversation hears as the person's own (operator.ts `stop`).
+let backOut = (parent: HelperPage['parent']) =>
   h(
-    'div',
-    { class: 'Talk_Helper' },
-    h(
-      Button,
-      { href: parent.href, class: 'Talk_Out', mod: 'quiet' },
-      h(Icon, { of: icons['arrow-left'] }),
-      h(Toolbar.Label, {}, parentName(parent)),
-    ),
-    h(Chip, { mod: 'accent' }, 'Helper'),
-    line ? h(Rows, null, h(Work, { work: line })) : null,
+    Button,
+    {
+      href: parent.href,
+      class: 'Talk_Out',
+      mod: 'quiet',
+      'aria-label': `Back to ${parentName(parent)}`,
+      title: `Back to ${parentName(parent)}`,
+    },
+    h(Icon, { of: icons['arrow-left'] }),
   )
+
+let helperTitle = (title: string, self?: HelperLine) =>
+  self
+    ? [
+      h('span', { 'data-mark': '' }, h(Mark, { standing: self.standing })),
+      ' ',
+      title,
+    ]
+    : title
 
 // The conversation a helper's page zooms out to.
 let parentName = (parent: HelperPage['parent']) =>
-  parent.asked ? `The helper “${parent.asked}”` : 'Your conversation'
+  parent.asked ? `the helper “${parent.asked}”` : 'your conversation'
 
 // What a chat says before anything is in it: what it is for, in a heading
 // and a line.
@@ -2208,17 +2222,17 @@ export let chatPage = async (
   return talkPage(env, space, who, beside, {
     // The chat is the Operator's, an app open beside it or not.
     title: fresh ? `Message ${operator}` : talked.title || 'Not here',
-    band: talked.helper
-      ? helperBand({
-        ...talked.helper,
-        parent: {
+    ...talked.helper
+      ? {
+        back: backOut({
           ...talked.helper.parent,
           href: talked.helper.parent.eid == root
             ? chatPath(space.slug)
             : talked.helper.parent.href,
-        },
-      })
-      : undefined,
+        }),
+        heading: helperTitle(talked.title, talked.aside?.self),
+      }
+      : {},
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
     current: [shown, talked.task],
@@ -2262,13 +2276,13 @@ export let chatPage = async (
         : null,
     ],
     // What it is doing now and the helpers it set going, in the bar
-    // (operator-aside.ts).
-    // and below them, the ways to reach it (operator-ways.ts).
+    // (operator-aside.ts), and below them the ways to reach it
+    // (operator-ways.ts), but on a helper's page, which is about the helper.
     aside: talked.aside || beside.ways
       ? h(Aside, {
         aside: talked.aside ?? { turn: null, helpers: [] },
         now: Date.now(),
-        reach: beside.ways &&
+        reach: !talked.helper && beside.ways &&
           h(Reaching, { space, ways: beside.ways, here }),
       })
       : undefined,
@@ -2407,7 +2421,7 @@ let chatScript = (
   `<script type="module">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, long, menus, mountAsk, mountTalk, ordered, showing, storeAt, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, long, markHtml, menus, mountAsk, mountTalk, ordered, selfHtml, showing, storeAt, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
@@ -2652,7 +2666,7 @@ let shown = () => {
   let turn = !!a.querySelector('[data-turn] time')
   a.querySelector('[data-helpers]').hidden = !helping && !turn
   let reach = !!a.querySelector('[data-reach]')
-  a.hidden = !helping && !reach && !turn
+  a.hidden = !helping && !reach && !turn && !happening.self
   let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded(), reach))
   glance.innerHTML = next.innerHTML
   for (let name of ['aria-label', 'aria-expanded']) glance.setAttribute(name, next.getAttribute(name))
@@ -2667,22 +2681,23 @@ let unfold = (open) => {
 // is done (alerts-browser.ts \`offer\`), once.
 let longSaid = false
 let lengthy = () => {
-  if (longSaid || happening.band || !long(happening, Date.now())) return
+  if (longSaid || happening.self || !long(happening, Date.now())) return
   longSaid = true
   document.querySelector('[data-alerts-offer]')?.setAttribute('data-due', '')
   document.dispatchEvent(new Event('yak-long-work'))
 }
 let turning = (turn) => {
-  if (happening.band) return
+  if (happening.self) return
   happening.turn = turn ?? null
   let at = aside()?.querySelector('[data-turn]')
   if (at) at.replaceWith(drawn(turnHtml(happening.turn)))
   shown()
 }
 // A helper's row, put in place wherever the page draws it (operator-aside.ts
-// \`Work\`): in the Helpers box, where it runs folded away, in the step that
-// started it, and in the band on its own page, whose Helpers box lists only
-// the helpers it started.
+// \`Work\`): in the Helpers box, where it runs folded away, and in the step
+// that started it. On its own page, whose Helpers box lists only the helpers
+// it started, it is the aside's own row (\`Self\`), the pip in the bar's
+// title and the summary's dot.
 let helped = (helper) => {
   let at = '[data-help="' + helper.session + '"]'
   // The Helpers box folds where it runs; a fold pressed open stays open.
@@ -2690,8 +2705,14 @@ let helped = (helper) => {
     let fold = !!row?.closest('[data-helping]')
     return helperHtml(helper, Date.now(), fold, !!row?.querySelector('[data-fold]')?.open)
   }
+  if (helper.session == talk.task()) {
+    happening.self = helper
+    document.querySelector('[data-self] [data-help]')?.replaceWith(drawn(selfHtml(helper)))
+    let mark = document.querySelector('[data-title] [data-mark]')
+    if (mark) mark.innerHTML = markHtml(helper.standing)
+    return shown()
+  }
   for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(html(row)))
-  if (helper.session == talk.task()) return
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   show()
   let list = aside()?.querySelector('[data-helping]')

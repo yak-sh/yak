@@ -1,11 +1,10 @@
 // Every way to reach a space's Operator, in a card below its helpers on its
 // page (operator-aside.ts `Aside`): its email address and the numbers it is
 // called and texted at, each selectable with a copy button beside it, then
-// one row of buttons that open the person's mail app or phone there, and each
-// chat server and room it is in, a link under its platform's mark that opens
-// their chat app.
+// one row of buttons that open the person's mail app, phone or chat app
+// there, each chat place's wearing its platform's logo.
 import { h } from 'preact'
-import { Button, Card, Icon, SideNav, Toolbar } from '@yaks/ui/parts'
+import { Button, Card, Icon, Logo, Toolbar } from '@yaks/ui/parts'
 import { copyable, copying } from './pages.ts'
 import { type IconName, icons } from './icons.ts'
 import type { Env } from './env.ts'
@@ -17,7 +16,6 @@ import type { chatRows } from './connections.ts'
 import { phoneAt } from './phones.ts'
 import { caught } from './defects.ts'
 import type { Place, Unset } from './chat.ts'
-import { type Item, link } from './sidebar.ts'
 
 /** Every way to reach a space's Operator, as its page lists them: its email
  * address, the number it is texted at and the one it answers calls on, and
@@ -60,12 +58,54 @@ export let waysOf = async (
   }
 }
 
-type Press = { href: string; icon: IconName; label: string }
+// A button that opens a way to reach the Operator: a mail app, a phone, a
+// chat app (in a new tab), or one that adds the Operator to a platform,
+// posting `fields` to `href`. Its mark is an icon, or a platform's logo.
+type Press = {
+  href: string
+  label: string
+  icon?: IconName
+  logo?: string
+  external?: boolean
+  fields?: Record<string, string>
+}
+
+let press = (p: Press) => {
+  let face = p.icon
+    ? [h(Icon, { of: icons[p.icon] }), p.label]
+    : h(Logo, { src: p.logo }, p.label)
+  return p.fields
+    ? h(
+      'form',
+      { method: 'post', action: p.href, key: p.label },
+      Object.entries(p.fields).map(([name, value]) =>
+        h('input', { type: 'hidden', name, value })
+      ),
+      h(Button, { type: 'submit' }, face),
+    )
+    : h(
+      Button,
+      {
+        as: 'a',
+        href: p.href,
+        key: p.label,
+        ...p.external ? { target: '_blank', rel: 'noopener' } : {},
+      },
+      face,
+    )
+}
+
+// Where the Operator is on a chat platform, said as what its button opens.
+let opening = (p: Place) => {
+  let at = p.room ? `#${p.room}` : p.server
+  return at ? `Open ${at} in ${p.platform}` : `Open ${p.platform}`
+}
 
 // The address and numbers, each selectable with its copy button, then one
-// row of the buttons that open them: one number both called and texted is
-// one line, with both buttons.
-let lines = (ways: Ways) => {
+// row of the buttons that open them and each chat place, and that add the
+// Operator to each platform not set up yet, which comes back to `here`: one
+// number both called and texted is one line, with both buttons.
+let lines = (space: Space, ways: Ways, here: string) => {
   let numbers = ways.call === ways.text ? [ways.call] : [ways.call, ways.text]
   let go: Press[] = [
     { href: `mailto:${ways.email}`, icon: 'mail', label: 'Email' },
@@ -81,6 +121,21 @@ let lines = (ways: Ways) => {
         } as Press,
       ]
       : [],
+    ...ways.places.map((p): Press => ({
+      href: p.href,
+      logo: p.logo,
+      label: opening(p),
+      external: true,
+    })),
+    ...ways.unset.map((u): Press => ({
+      href: enabling(
+        managePath('connections', space.slug),
+        u.testing ? [u.integration] : [],
+      ),
+      logo: u.logo,
+      label: `Add to ${u.platform}`,
+      fields: { do: 'add', integration: u.integration, back: here },
+    })),
   ]
   return h(
     'div',
@@ -89,49 +144,9 @@ let lines = (ways: Ways) => {
     numbers.filter((n): n is string => !!n).map((n) =>
       copyable(shown(n), 'the number')
     ),
-    h(
-      Toolbar,
-      { mod: 'plain' },
-      go.map((p) =>
-        h(
-          Button,
-          { as: 'a', href: p.href, key: p.label },
-          h(Icon, { of: icons[p.icon] }),
-          p.label,
-        )
-      ),
-    ),
+    h(Toolbar, { mod: 'plain' }, go.map(press)),
   )
 }
-
-// A platform's logo as a link's image, where its integration has one
-// (chat.ts `Place`).
-let mark = (logo?: string) => logo ? { image: logo } : {}
-
-// The side's links for each chat place the Operator is in, each opening the
-// person's chat app there, and each platform not set up yet the one button
-// that adds it, which comes back to `here`.
-let reaching = (space: Space, ways: Ways, here: string): Item[] => [
-  ...ways.places.map((p): Item => ({
-    href: p.href,
-    icon: 'message-circle',
-    ...mark(p.logo),
-    label: [p.server ?? p.platform, p.room && `#${p.room}`].filter(Boolean)
-      .join(' · '),
-    external: true,
-  })),
-  ...ways.unset.map((u): Item => ({
-    href: enabling(
-      managePath('connections', space.slug),
-      u.testing ? [u.integration] : [],
-    ),
-    icon: 'plus',
-    ...mark(u.logo),
-    label: `Add to ${u.platform}`,
-    submit: true,
-    fields: { do: 'add', integration: u.integration, back: here },
-  })),
-]
 
 /** The card of `ways` to reach `space`'s Operator, each platform not set up
  * yet a button that adds it and comes back to `here`. */
@@ -146,13 +161,6 @@ export let Ways = (
       null,
       h(Card.Title, { id: 'reach' }, `Reach ${space.operator}`),
     ),
-    lines(ways),
-    ways.places.length || ways.unset.length
-      ? h(
-        SideNav,
-        { mod: 'alone', 'aria-labelledby': 'reach' },
-        reaching(space, ways, here).map(link),
-      )
-      : null,
+    lines(space, ways, here),
     copying(),
   )

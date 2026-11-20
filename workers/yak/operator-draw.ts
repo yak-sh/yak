@@ -972,11 +972,22 @@ let delivered = (b: Bundle, heard: Heard) => {
     : helper(b, said(b))
 }
 
+// What a helper was asked by the session that started it, the first line
+// of its own conversation (@yaks/session `children`): its brief, written
+// for a model, so closed until opened, never a bubble of the person's.
+let isBrief = (b: Bundle) =>
+  comp(b, 'entry')?.from == 'your parent session' && !b.prompt
+let brief = (b: Bundle): Said => ({
+  node: instructed('Brief', written(said(b))),
+  text: 'Brief',
+  is: 'step',
+})
+
 /** The kinds of line only the Operator's rows have, ahead of every
  * transcript's (@yaks/session `kinds`): a call's step with the files it
  * brought back, a contact card, a line of a phone call, a helper stopped or
- * heard back from, a line the platform wrote, and a person's words with the
- * channel they came by and the files they sent. */
+ * heard back from, a line the platform wrote, a helper's brief, and a
+ * person's words with the channel they came by and the files they sent. */
 let own: Kind<Heard>[] = [
   // The files a step brought back (an image it made), open under it.
   kind('.call', (b, heard) => {
@@ -1008,8 +1019,12 @@ let own: Kind<Heard>[] = [
   kind(
     '',
     (b, heard) =>
-      told(b, said(b)) ? helper(b, said(b)) : theirs(b) ||
-          heard.files?.[b.entity.eid]?.files.length
+      told(b, said(b))
+        ? helper(b, said(b))
+        : isBrief(b)
+        ? brief(b)
+        : theirs(b) ||
+            heard.files?.[b.entity.eid]?.files.length
         ? {
           node: input(b, said(b), heard.files?.[b.entity.eid]),
           is: 'theirs',

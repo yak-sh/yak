@@ -430,8 +430,8 @@ test('the page lists every way to reach the Operator below its helpers, each one
       ['Email', 'mailto:clerk@yaks.app'],
       ['Call', 'tel:+15550100'],
       ['Text', 'sms:+15550100'],
-      ['Barn · #general', 'https://chat.example/g1/c1'],
-      ['Chat', 'https://chat.example/g2'],
+      ['Open #general in Chat', 'https://chat.example/g1/c1'],
+      ['Open Chat', 'https://chat.example/g2'],
     ],
   )
   // The address and the one number, each selectable with a copy button.
@@ -869,12 +869,12 @@ test('a helper whose steps its person’s machine answered says it runs there', 
   ], { trusted: true })
   let { document } = await sided('owner', helper)
   assertEquals(
-    document.querySelector('.Talk_Helper [data-runs]')?.textContent,
+    document.querySelector('[data-self] [data-runs]')?.textContent,
     'Your machine · Sonnet 5.5',
   )
 })
 
-test('a helper’s page is zoomed in: held under the bar, the way back out, its row, and where words go', async () => {
+test('a helper’s page is zoomed in: one line in the bar, the way back out, its row in the aside, and where words go', async () => {
   let helper = crypto.randomUUID()
   let model = identityEid('model', ['claude-sonnet-5-5'])
   await service.store.g.apply([
@@ -887,6 +887,11 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
     },
     {
       entity: { eid: crypto.randomUUID() },
+      entry: { session: helper, from: 'your parent session' },
+      content: { body: 'Import the CSV in attachment 3f9a.' },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
       entry: { session: helper },
       content: { body: 'Import the CSV' },
       using: { model },
@@ -895,24 +900,36 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   let { document } = await sided('owner', helper)
   let theirs = chatPath(space.slug)
   assert(document.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
-  let band = document.querySelector('.Frame_Bar + .Talk_Helper')!
-  let out = band.querySelector('.Talk_Out')!
+  // The bar is one line: the way back out, then the title after its pip.
+  let bar = document.querySelector('.Frame_Bar')!
+  let out = bar.querySelector('.Talk_Out')!
   assertEquals(
-    [out.getAttribute('href'), out.textContent],
-    [theirs, 'Your conversation'],
+    [out.getAttribute('href'), out.getAttribute('aria-label')],
+    [theirs, 'Back to your conversation'],
   )
-  assertEquals(band.querySelector('.Chip-accent')?.textContent, 'Helper')
+  assertEquals(bar.querySelector('.Toolbar_Sub'), null)
   assertEquals(
-    band.querySelector('.Rows_Name .Dot')?.getAttribute('aria-label'),
+    bar.querySelector('[data-title] .Dot')?.getAttribute('aria-label'),
     'Running',
   )
-  // Where it runs and its model by its label, in one line under its
+  assertEquals(document.querySelector('.Talk_Helper'), null)
+  // The rest of its row is the aside's, which opens nowhere, and no Reach
+  // card: where it runs and its model by its label, in one line under its
   // standing, in view; the Helpers box folds it away.
+  let aside = document.querySelector('[data-aside]')!
+  let self = aside.querySelector('[data-self]')!
   assertEquals(
-    band.querySelector('[data-runs]')?.textContent,
+    self.querySelector('[data-runs]')?.textContent,
     'yaks.app · Sonnet 5.5',
   )
-  assertEquals(band.querySelector('[data-fold]'), null)
+  assertEquals(self.querySelector('[data-fold]'), null)
+  assertEquals(self.querySelector('a'), null)
+  assertEquals(aside.querySelector('[data-reach]'), null)
+  assertEquals(aside.hasAttribute('hidden'), false)
+  assertEquals(
+    aside.querySelector('[data-glance]')?.getAttribute('aria-label'),
+    'Running',
+  )
   let listed = parseHTML(
     asideHtml({
       turn: null,
@@ -933,14 +950,14 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
     fold.querySelector('[data-runs]')?.textContent,
     'Your machine · Sonnet 5.5',
   )
-  // Its row says how it stands, so the aside does not say it again.
-  let aside = document.querySelector('[data-aside]')!
+  // What it was asked is a closed Brief, not a bubble of the person's.
+  let brief = [...document.querySelectorAll('[data-conversation] details')]
+    .find((d) => d.querySelector('summary')?.textContent?.trim() == 'Brief')!
+  assertEquals(brief.hasAttribute('open'), false)
+  assertStringIncludes(brief.textContent!, 'attachment 3f9a')
+  // Its row says how it stands, so the aside does not say a turn too.
   assertEquals(aside.querySelector('[data-turn]'), null)
   assertEquals(aside.textContent!.includes('Nothing running'), false)
-  assertEquals(
-    band.querySelector('[data-help] a')?.getAttribute('href'),
-    `${managePath('operator', space.slug)}/${helper}`,
-  )
   let to = document.querySelector('#ask .Composer_To')!
   assertStringIncludes(to.textContent!, 'To your conversation with')
   assertStringIncludes(to.textContent!, 'not this helper')
@@ -951,7 +968,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   )
   // Their conversation is not zoomed and says nothing of where words go.
   let root = (await sided('owner')).document
-  assertEquals(root.querySelector('.Talk_Helper, .Composer_To'), null)
+  assertEquals(root.querySelector('.Talk_Out, [data-self], .Composer_To'), null)
   assert(!root.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
 })
 

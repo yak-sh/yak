@@ -12,7 +12,7 @@
 // that ended leaves the list a day later (`KEPT`); its place in the
 // conversation still opens it. A helper's row (`Work`) is the one every
 // place on the page draws it with: the Helpers box, the step that started
-// it, the band on its own page, and the admin's list of the Operator's work.
+// it, the aside on its own page, and the admin's list of the Operator's work.
 import { type ComponentChildren as Node, h } from 'preact'
 import { Card, Dot, More, Popover, Rows, State } from '@yaks/ui/parts'
 import type { Doing } from './mascot.ts'
@@ -46,9 +46,13 @@ export type Work = {
 export type HelperLine = Work & { standing: Standing }
 
 /** What the aside holds: the turn under way, and the helpers. On a helper's
- * own page (`band`) it holds no turn: the helper's row in the band says how
- * it stands, once. */
-export type Aside = { turn: Turn | null; helpers: HelperLine[]; band?: true }
+ * own page it holds the helper itself (`self`) in the turn's place, which
+ * says how it stands, once. */
+export type Aside = {
+  turn: Turn | null
+  helpers: HelperLine[]
+  self?: HelperLine
+}
 
 /** Whether a piece of work is still at it. */
 export let going = ({ standing }: { standing?: Standing }) =>
@@ -140,6 +144,11 @@ let TONE = (standing: Standing) => WORD[standing][1]
  * page, and to a call's voice (operator-glance.ts). */
 export let word = (standing: Standing) => WORD[standing][0]
 
+/** How a piece of work stands as a pip beside its title, whose shape says
+ * it, and its word to a screen reader. */
+export let Mark = ({ standing }: { standing: Standing }) =>
+  h(Dot, { mod: MARK[standing], role: 'img', 'aria-label': word(standing) })
+
 /** The turn under way, in a line: what it is doing and for how long, and
  * hidden while nothing runs. */
 export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
@@ -180,16 +189,7 @@ export let Work = (
     )
     : null
   let more = recap || runs ? [recap, runs] : null
-  let title = [
-    x.standing &&
-    h(Dot, {
-      mod: MARK[x.standing],
-      role: 'img',
-      'aria-label': word(x.standing),
-    }),
-    ' ',
-    x.title,
-  ]
+  let title = [x.standing && h(Mark, { standing: x.standing }), ' ', x.title]
   return h(
     Rows.Item,
     { 'data-help': x.session, 'data-going': going(x) ? '' : undefined },
@@ -258,9 +258,10 @@ export let DOTS = 4
  * )
  * ```
  */
-export let glanceOf = ({ turn, helpers }: Aside) => {
+export let glanceOf = ({ turn, helpers, self }: Aside) => {
   let dots = [
     ...turn ? [TONE('running')] : [],
+    ...self ? [TONE(self.standing)] : [],
     ...ordered(helpers, Infinity).map((x) => TONE(x.standing)),
   ]
   let counts = new Map<Standing, number>()
@@ -272,7 +273,7 @@ export let glanceOf = ({ turn, helpers }: Aside) => {
     dots: dots.slice(0, DOTS),
     more: Math.max(0, dots.length - DOTS),
     label: [
-      turn ? 'Working' : 'Nothing running',
+      self ? word(self.standing) : turn ? 'Working' : 'Nothing running',
       ...counted.length ? [`helpers: ${counted.join(', ')}`] : [],
     ].join('; '),
   }
@@ -304,11 +305,13 @@ export let Glance = (
   )
 }
 
-/** The aside: the summary, then Helpers while anything runs or a helper
- * was started, the turn under way at its top (but on a helper's page, whose
- * band says it), and below them `reach`, the ways
- * to reach the Operator (operator-ways.ts). Hidden while nothing runs, no
- * helper was started and there is nothing below them. */
+/** The aside: the summary, then on a helper's page the helper's own row
+ * (`self`), which says how it stands, when it began or ended, what it came
+ * to and its model; then Helpers while anything runs or a helper was
+ * started, the turn under way at its top (but on a helper's page), and below
+ * them `reach`, the ways to reach the Operator (operator-ways.ts). Hidden
+ * while nothing runs, no helper was started and there is nothing below
+ * them. */
 export let Aside = (
   { aside, now, open = false, reach }: {
     aside: Aside
@@ -325,20 +328,27 @@ export let Aside = (
       'data-aside': '',
       'data-open': open ? '' : undefined,
       'aria-label': 'What is happening now',
-      hidden: !aside.turn && !aside.helpers.length && !reach,
+      hidden: !aside.turn && !aside.helpers.length && !aside.self && !reach,
     },
     h(Glance, { aside, open, reach: !!reach }),
     h(
       Popover.Body,
       { class: 'Talk_AsideIn', id: 'aside-now' },
+      aside.self
+        ? h(
+          Card,
+          { 'data-self': '' },
+          h(Rows, null, h(Self, { self: aside.self, now })),
+        )
+        : null,
       h(
         Card,
         {
-          hidden: !aside.helpers.length && (aside.band || !aside.turn),
+          hidden: !aside.helpers.length && (!!aside.self || !aside.turn),
           'data-helpers': '',
         },
         h(Card.Head, null, h(Card.Title, null, 'Helpers')),
-        aside.band ? null : h(TurnNow, { turn: aside.turn, now }),
+        aside.self ? null : h(TurnNow, { turn: aside.turn, now }),
         h(
           Rows,
           { 'data-helping': '' },
@@ -350,6 +360,10 @@ export let Aside = (
       reach,
     ),
   )
+
+/** A helper's own row on its own page, which opens nowhere: it is there. */
+export let Self = ({ self, now }: { self: HelperLine; now?: number }) =>
+  h(Work, { work: { ...self, href: undefined }, now })
 
 /** How long a helper stays listed once it ended, in milliseconds. */
 export let KEPT = 86_400_000
