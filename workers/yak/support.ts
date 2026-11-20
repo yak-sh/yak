@@ -37,6 +37,7 @@ import { INTERNAL, toPlatform } from './mail-config.ts'
 import { type Host, replyTo, url as hostUrl } from '@yaks/platform/host'
 import { isTestAddress } from '@yaks/platform/bots'
 import { REPO } from '@yaks/platform/names'
+import { SHORT } from '@yaks/id'
 import type { Directory } from './directory.ts'
 import { admin } from './tool.ts'
 import { caught } from './defects.ts'
@@ -359,12 +360,31 @@ export let opens = async (t: Thread, a: Asking): Promise<boolean> => {
 
 let THREAD = line`.conversation&.report&?doc&?support&?completed&?created`
 
-/** A thread by its eid, or null where there is none. */
+// The eid a thread id names: itself, or the one thread whose eid a handle
+// starts (@yaks/id `short`); null for anything else, which never reaches a
+// query. Threads are few, so a handle is matched over their eids.
+let whole = async (
+  store: Pick<Meta, 'query'>,
+  id: string,
+): Promise<string | null> => {
+  if (minted(id)) return id
+  if (!SHORT.test(id)) return null
+  let start = id.slice(1).toLowerCase()
+  let hits = (await store.query(line`${sub(THREAD)}&.fields=entity.eid`))
+    .map((r) => r.entity.eid)
+    .filter((e) => e.replaceAll('-', '').startsWith(start))
+  return hits.length == 1 ? hits[0] : null
+}
+
+/** A thread by its eid, or by the handle (`#` and the start of its eid) a
+ * graph shows it as, which is how the letter's own answer line reads on the
+ * box; null where there is none. */
 export let read = async (
   store: Pick<Meta, 'query'>,
-  eid: string,
+  id: string,
 ): Promise<Thread | null> => {
-  if (!minted(eid)) return null
+  let eid = await whole(store, id)
+  if (!eid) return null
   let [row] = await store.query(line`.entity.eid=${eid}&${sub(THREAD)}`)
   if (!row) return null
   let messages = await store.query(

@@ -28,6 +28,7 @@ import type { Env } from './env.ts'
 import { carrying } from './support-reply.ts'
 import { managePath } from '@yaks/platform/routes'
 import { parseHTML } from 'linkedom'
+import { short } from '@yaks/id'
 
 // ---- who reads a thread ----------------------------------------------------
 
@@ -315,8 +316,10 @@ test('a thread is opened, answered and read in the same place', async () => {
   let listed = await (await support()).json()
   ok(listed.threads.some((t: { eid: string }) => t.eid == thread))
   equal((await support({ thread, text: 'x' }, them.cookie)).status, 403)
+  // By the handle the box's graph shows it as, as the letter's answer line
+  // reads there.
   let answered = await support({
-    thread,
+    thread: short(thread),
     text: 'Fixed: the board wraps now.',
     fix: crypto.randomUUID(),
     complete: 'true',

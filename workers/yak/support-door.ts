@@ -76,7 +76,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   await answer(
     store,
-    eid,
+    t.eid,
     {
       words,
       reply_to,
@@ -93,5 +93,5 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       ...who.via ? { via: who.via } : {},
     }),
   )
-  return Response.json(whole((await read(store, eid))!, env))
+  return Response.json(whole((await read(store, t.eid))!, env))
 }
