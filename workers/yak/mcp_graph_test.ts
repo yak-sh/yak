@@ -26,9 +26,10 @@ import { FREE } from '@yaks/platform/plans'
 import { monthOf } from '@yaks/platform/meter'
 import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
-import { token } from '@yaks/graph'
+import { type Bundle, token } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { Ajv } from 'ajv'
+import type { Hit } from '@yaks/graph/hit'
 
 // A client holds every answer to the output schema its tool is listed with
 // and refuses the whole answer when one row does not fit. Every row here says
@@ -61,12 +62,19 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     )
     let ajv = new Ajv({ strict: false })
     let { tools } = await agent.call('tools/list', {})
-    let held = async (name: string, args: Record<string, unknown>) => {
+    // A read answers the row, which says its kind; a search answers which
+    // entity, and its hit.
+    let held = async (
+      name: string,
+      args: Record<string, unknown>,
+      said = (row: Bundle) => row?.kind,
+      want: unknown = 'actor',
+    ) => {
       let fits = ajv.compile(
         tools.find((t: { name: string }) => t.name == name).outputSchema,
       )
       let out = await agent.call('tools/call', { name, arguments: args })
-      assertEquals(out.structuredContent.result[0]?.kind, 'actor', name)
+      assertEquals(said(out.structuredContent.result[0]), want, name)
       assert(fits(out.structuredContent), JSON.stringify(fits.errors))
     }
     let readNamed = async (cookie: string, args: Record<string, unknown>) => {
@@ -101,7 +109,7 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     await held('graph_query', { q: `.actor&.in=${at}` })
     await held('graph_query', { q: '.actor' })
     await held('graph_show', { ids: [eid] })
-    await held('search', { words: 'Root' })
+    await held('search', { words: 'Root' }, (row) => row?.entity.eid, eid)
     await readNamed(k.owner.cookie, { q: `.actor&.in=${at}` })
     let outsider = connector(k, (await signIn(k)).cookie)
     await assertRejects(
@@ -543,23 +551,17 @@ test('a read with no app composes every app the caller can reach', async () => {
       "the app's vocab.json does not declare it (it declares .loan)",
     )
     // Search with no app merges the ranked hits of every app.
-    let found = JSON.parse(
-      await agent.tool('search', { text: 'lemon' }),
-    ) as {
-      entity: { eid: string }
-      doc: { title: string }
-      recipe?: { serves: number }
-    }[]
+    let found = (await agent.answer('search', { text: 'lemon' })).rows
     assertEquals(
       found.filter((r) => [cake, pancakes, zester].includes(r.entity.eid))
-        .map((r) => r.doc.title).sort(),
+        .map((r) => (r.hit as Hit).title).sort(),
       ['Lemon cake', 'Lemon zester'],
     )
-    // And a hit carries the app's own components, not a doc and a rank
-    // alone: a word names nothing to leave out, so a page drawing cards from
-    // a search has what to draw (T-33144).
+    // A hit is its entity and line alone; graph_show reads the whole row,
+    // the app's own components with it.
+    let shown = await agent.answer('graph_show', { ids: [cake] })
     assertEquals(
-      found.find((r) => r.doc.title == 'Lemon cake')?.recipe?.serves,
+      (shown.rows as { recipe?: { serves: number } }[])[0].recipe?.serves,
       4,
     )
     // What a search reads is what the vocabulary declares searched — @yaks/doc
@@ -576,9 +578,9 @@ test('a read with no app composes every app the caller can reach', async () => {
       }],
     })
     assertEquals(
-      (JSON.parse(await agent.tool('search', { text: 'marzipan' })) as {
-        doc: { title: string }
-      }[]).map((r) => r.doc.title),
+      (await agent.answer('search', { text: 'marzipan' })).rows.map((r) =>
+        (r.hit as Hit).title
+      ),
       [],
     )
 
@@ -1456,9 +1458,9 @@ test('an app declares which of its own properties are searched', async () => {
       },
     })
     let titles = async (text: string) =>
-      (JSON.parse(await agent.tool('search', { text })) as {
-        doc: { title: string }
-      }[]).map((r) => r.doc.title)
+      (await agent.answer('search', { text })).rows.map((r) =>
+        (r.hit as Hit).title
+      )
 
     await made(
       'kitchen',

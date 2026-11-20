@@ -25,6 +25,7 @@ import {
 } from './probe.ts'
 import { VERSION } from './running.ts'
 import { HELLO, minted } from './mcp-probe.ts'
+import type { Hit } from '@yaks/graph/hit'
 
 // The other direction (T-32950): an app's breaks reach the person's agent,
 // and this is how the person reaches US. The tool writes a `report` row in
@@ -427,10 +428,8 @@ test('a project document is an entity, and search finds it', async () => {
     await write('# Combat\n\nA tick is ten seconds and a swing resolves once.')
 
     // Found by what it says, the moment it is written.
-    let hits = JSON.parse(
-      await agent.tool('search', { text: 'a swing resolves' }),
-    ) as { doc: { title: string } }[]
-    assertEquals(hits.map((h) => h.doc.title), ['Combat'])
+    let hits = (await agent.answer('search', { text: 'a swing resolves' })).rows
+    assertEquals(hits.map((h) => (h.hit as Hit).title), ['Combat'])
 
     // And listed by what it IS, without the app's own rows in the way.
     let listed = JSON.parse(

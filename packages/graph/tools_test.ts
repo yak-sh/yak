@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { BEST, loadTools, tier } from './tools.ts'
+import { BEST, loadTools, textSearch, tier } from './tools.ts'
 import { graph } from './graph.ts'
 import { ram } from '@yaks/ram'
 import { declared } from './vocab.ts'
@@ -228,6 +228,25 @@ test('a search that names no component says each row as its hit', async () => {
     snippet: '',
     source: 'text',
   })
+})
+
+test('the search tool answers each row as its entity and hit alone', async () => {
+  let search = tier({ search: textSearch(shelf) })
+    .find((t) => t.name == 'search')!
+  let rows = await search.run(
+    { entity: { eid: 'c' }, call: { args: { words: 'dragon 7' } } },
+    shelf,
+  ) as Bundle[]
+  assertEquals(rows, [{
+    entity: { eid: 'book-7' },
+    hit: {
+      id: 'book-7',
+      kind: 'entity',
+      title: 'Dragon 7',
+      snippet: '',
+      source: 'text',
+    },
+  }])
 })
 
 test('fields says what each row carries, as .fields= does', async () => {

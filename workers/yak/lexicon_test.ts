@@ -6,6 +6,7 @@ import { assertEquals } from '@std/assert'
 import { until } from '@yaks/testing'
 import { connector, fresh, seed, unique } from './probe.ts'
 import { type Entry, type Lexicon, lexicon, LIMIT } from './lexicon.ts'
+import type { Hit } from '@yaks/graph/hit'
 
 let memory = () => {
   let held = new Map<string, unknown>()
@@ -76,9 +77,9 @@ test('a search asks only the stores that could match', async () => {
         entities: [{ entity: { eid: '$new' }, doc: { title } }],
       })
     let found = async (text: string) =>
-      (JSON.parse(await agent.tool('search', { text })) as {
-        doc: { title: string }
-      }[]).map((r) => r.doc.title).sort()
+      (await agent.answer('search', { text })).rows.map((r) =>
+        (r.hit as Hit).title
+      ).sort()
     await write('soups', 'Tomato soup')
     await write('breads', 'Rye bread')
     let whole = () =>
