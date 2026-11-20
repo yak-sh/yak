@@ -4,7 +4,7 @@
 import { h, render } from 'preact'
 import { signal } from '@preact/signals'
 import { parseHTML } from 'linkedom'
-import { equal, test } from '@yaks/testing'
+import { equal, lend, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import type { Bundle, Io } from './host.ts'
@@ -65,8 +65,7 @@ let Probe = () => {
   return h('p', {}, got.value)
 }
 let turn = () => new Promise((go) => setTimeout(go, 0))
-let g = globalThis as { document?: unknown }
-g.document = document
+let back = lend('document', document)
 render(h(Probe, {}), root)
 for (let i = 0; i < 6; i++) await turn()
 let first = seen.map((s) => s.value)
@@ -76,7 +75,7 @@ written.value++
 for (let i = 0; i < 3; i++) await turn()
 let moved = seen.at(-1)
 render(null, root)
-delete g.document
+back()
 
 test('a reading reads on as each read is answered, and says when it is done', () => {
   equal(first.slice(0, 4), ['', 'one', 'one two', 'one two three'])

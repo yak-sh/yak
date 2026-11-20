@@ -8,7 +8,7 @@ import { querySearch } from '@yaks/query'
 import { h, render } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
-import { equal, ok, test } from '@yaks/testing'
+import { equal, lend, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { and } from '@yaks/query'
@@ -223,9 +223,7 @@ let mounted = async (
   wrote: Bundle[][] = [],
 ) => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
-  let g = globalThis as { document?: unknown }
-  let prior = g.document
-  g.document = document
+  let back = lend('document', document)
   let root = document.querySelector('main')!
   let front = page()
   try {
@@ -236,7 +234,7 @@ let mounted = async (
     return { html: root.innerHTML, did }
   } finally {
     render(null, root)
-    g.document = prior
+    back()
     front.close()
   }
 }

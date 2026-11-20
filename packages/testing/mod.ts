@@ -25,6 +25,9 @@
  * await until(() => ready, { label: 'ready' })
  * ```
  *
+ * `lend` sets a global, such as `document`, until it is put back, over one
+ * another module installed read-only.
+ *
  * `typist` keeps a text field's caret as a browser does, on a DOM that keeps
  * none, and types at it as a person does.
  *
@@ -46,6 +49,7 @@ export {
   type Test,
   test,
 } from './suite.ts'
+export { lend } from './lend.ts'
 export { type Looks, own, waits } from './own.ts'
 export { type Typist, typist } from './typist.ts'
 export { tick, until, type Wait } from './wait.ts'

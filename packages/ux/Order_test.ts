@@ -3,15 +3,14 @@
 // nothing in order is a plain one.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { equal, test } from '@yaks/testing'
+import { equal, lend, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { DRAGGED } from './drag.ts'
 import { landed, Order, orderAt } from './Order.ts'
 
 let { document } = parseHTML('<html><body><main></main></body></html>')
 let root = document.querySelector('main')!
-let g = globalThis as { document?: unknown }
-g.document = document
+let back = lend('document', document)
 
 let sent: Bundle[] = []
 let placed: [string, number][] = []
@@ -54,7 +53,7 @@ let handles = [...root.querySelectorAll('[draggable]')].map((n) =>
   n.textContent
 )
 render(null, root)
-delete g.document
+back()
 
 test('a row dragged over the list marks where it would land', () => {
   equal(over, [landed(state, 0)])
