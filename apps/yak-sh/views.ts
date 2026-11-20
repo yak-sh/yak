@@ -7,7 +7,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { parse } from '@yaks/query/core'
 import { define } from '@yaks/render'
 import { Prose, words } from './prose.ts'
-import { ink, mount, type Mounted, progress, type Tip } from '@yaks/diagram'
+import {
+  ink,
+  mount,
+  type Mounted,
+  progress,
+  type Tip,
+  zoom,
+  zoomed,
+} from '@yaks/diagram'
 import type { Bundle } from '@yaks/graph'
 import type { EntityProps } from '@yaks/preact'
 import type { Yak } from './yak.ts'
@@ -40,6 +48,20 @@ export type Ctx = {
 let Page: FunctionComponent<Ctx & { e: Bundle }> = (ctx) => {
   let { yak, Entity } = ctx
   useTold((l) => yak.watch('*', l))
+  useEffect(() => {
+    let viewport = globalThis.visualViewport
+    let focused = () => {
+      if (!viewport || viewport.scale != 1) return
+      let el = document.activeElement
+      if (!el?.matches('input, textarea')) return
+      let box = el.getBoundingClientRect()
+      if (box.bottom > viewport.offsetTop + viewport.height - 8) {
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      }
+    }
+    viewport?.addEventListener('resize', focused)
+    return () => viewport?.removeEventListener('resize', focused)
+  }, [])
   let root = text(ctx.e, 'layout', 'root')
   let panes = yak.rows()
     .filter((b) => text(b, 'pane', 'parent') == root)
@@ -118,7 +140,7 @@ let Hero: FunctionComponent<Ctx & { e: Bundle }> = ({ e }) =>
     h(
       'p',
       { class: 'Hint' },
-      'Scroll, and each step below runs in the graph in this tab while the drawing beside it adds what it wrote.',
+      'Scroll to run each step in this tab and see what it adds to the graph.',
     ),
   ])
 
@@ -218,7 +240,17 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
           }, name)
         ),
       ),
-      h(Figure, { ...ctx, pen, shown: () => show('Graph') }),
+      h(Figure, {
+        ...ctx,
+        pen,
+        shown: () => {
+          show('Graph')
+          pen.side?.querySelector<HTMLButtonElement>(
+            '.Plot_Panel[data-panel="Graph"]',
+          )
+            ?.focus({ preventScroll: true })
+        },
+      }),
       h(Prompt, ctx),
     ]),
   ])
@@ -414,6 +446,7 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
   let drawing = useRef<Mounted>()
   let [asked, setAsked] = useState(figure.query())
   let [fault, setFault] = useState('')
+  let [closer, setCloser] = useState(false)
   useEffect(() => {
     let el = sheet.current
     if (!el) return
@@ -475,7 +508,11 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
       stage: term.stage,
       title: 'The graph in this tab',
       // The leader follows what the reader zoomed or panned to.
-      viewed: () => paint(),
+      viewed: (view) => {
+        let layout = drawing.current?.layout
+        setCloser(!!layout && zoomed(layout, view))
+        paint()
+      },
       drawn: (layout) => {
         figure.saw(layout, performance.now())
         paint()
@@ -503,13 +540,33 @@ let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
       ctx.shown()
     }).catch((e) => setFault(e.message))
   }
+  let scale = (by: number) => {
+    let m = drawing.current
+    if (!m?.layout || !m.view) return
+    m.show(zoom(m.layout, m.view, by, [.5, .5]))
+  }
   return h('figure', { class: 'Figure' }, [
     h('div', { class: 'Figure_Bar' }, [
-      h('span', null, [
+      h('span', { class: 'Figure_Head' }, [
         h('b', { class: 'Figure_Label' }, 'fig. 1'),
         ' · the graph in this tab',
       ]),
       h('span', { class: 'Figure_State' }, `${yak.rows().length} entities`),
+      h('div', { class: 'Figure_Zoom' }, [
+        h('button', {
+          type: 'button',
+          class: 'Figure_Scale',
+          'aria-label': 'Zoom out',
+          disabled: !closer,
+          onClick: () => scale(1 / 1.7),
+        }, '−'),
+        h('button', {
+          type: 'button',
+          class: 'Figure_Scale',
+          'aria-label': 'Zoom in',
+          onClick: () => scale(1.7),
+        }, '+'),
+      ]),
     ]),
     h('div', { class: 'Figure_Sheet', ref: sheet }),
     h('form', {

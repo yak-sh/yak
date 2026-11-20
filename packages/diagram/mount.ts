@@ -130,6 +130,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   // The part of the sheet a reader zoomed to, kept on each new layout; none
   // while the whole sheet is shown, which then grows with it.
   let view: View | undefined
+  let steering: ReturnType<typeof steer> | undefined
   let shown = () => last && (view ? pan(last, view, 0, 0) : whole(last))
   let show = (v: View | undefined) => {
     view = v && last && zoomed(last, v) ? v : undefined
@@ -137,6 +138,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     let now = shown()
     if (!now) return
     el?.setAttribute('viewBox', now.map((x) => +x.toFixed(1)).join(' '))
+    steering?.touch()
     opts.viewed?.(now)
   }
   let draw = (bundles: Bundle[], s: number) => {
@@ -151,6 +153,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     })
     seen = remember(seen, last)
     sheet.innerHTML = svg(last, { still, ...opts, view: shown() })
+    steering?.touch()
     opts.viewed?.(shown()!)
     drawn?.(last)
     return last
@@ -170,13 +173,13 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     })
     return running
   }
-  let unsteer = opts.steered != false && 'addEventListener' in sheet
-    ? steer(sheet, {
+  if (opts.steered != false && 'addEventListener' in sheet) {
+    steering = steer(sheet, {
       layout: () => last,
       view: () => shown() ?? [0, 0, 1, 1],
       set: show,
     })
-    : () => {}
+  }
   let stop = follow(graph, () => {
     stage ??= opts.stage?.()
     redraw().catch(failed)
@@ -197,6 +200,6 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
       return shown()
     },
     show,
-    stop: () => (stop(), unsteer()),
+    stop: () => (stop(), steering?.stop()),
   }
 }

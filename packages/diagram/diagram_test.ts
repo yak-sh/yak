@@ -432,6 +432,11 @@ test("a mounted drawing zooms with a pinch or ctrl-scroll, pans with a drag once
   let box = () => sheet.querySelector('svg')!.getAttribute('viewBox')
   let fire = (type: string, props: object) =>
     sheet.dispatchEvent(Object.assign(new window.Event(type), props))
+  drawing.show([0, 0, 300, 200])
+  assertEquals(sheet.classList.contains('is-zoomed'), true)
+  assertEquals(sheet.style.touchAction, 'none')
+  drawing.show(undefined)
+  assertEquals(sheet.style.touchAction, 'pan-x pan-y')
   // The svg has no size here, so a pixel is a sheet unit and the drawing
   // starts at the sheet's corner.
   fire('wheel', { deltaY: 100, clientX: 0, clientY: 0 })

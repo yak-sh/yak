@@ -345,6 +345,9 @@ h2 {
 .Figure_State {
   white-space: nowrap;
 }
+.Figure_Zoom {
+  display: none;
+}
 .Figure_Sheet {
   flex: 1 1 auto;
   min-height: 0;
@@ -552,7 +555,7 @@ h2 {
     display: contents;
   }
   .Plot_Side {
-    --pane-height: 10rem;
+    --pane-height: 10.5rem;
     grid-row: 2;
     top: 0;
     z-index: 6;
@@ -591,9 +594,29 @@ h2 {
     overflow-y: auto;
   }
   .Figure_Bar {
-    padding: .4rem .6rem;
+    align-items: center;
+    padding: 0 .6rem;
     gap: .45rem;
     font: .8125rem/1.25 var(--font);
+  }
+  .Figure_Head {
+    display: none;
+  }
+  .Figure_Zoom {
+    display: flex;
+  }
+  .Figure_Scale {
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--link);
+    font: 1.35rem var(--font);
+    cursor: pointer;
+  }
+  .Figure_Scale:disabled {
+    color: var(--muted);
+    opacity: .55;
   }
   .Figure_Query {
     padding: .4rem .6rem 0;
@@ -617,6 +640,11 @@ h2 {
   .Editor_Field {
     font-size: 1rem;
     min-height: 44px;
+  }
+  .Prompt_Input,
+  .Figure_Input,
+  .Setup_Input {
+    scroll-margin-block: .75rem;
   }
   .Prompt_Run,
   .Figure_Show,

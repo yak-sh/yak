@@ -22,8 +22,11 @@ type Pointer = { pointerId: number; clientX: number; clientY: number }
 const SLOP = 4
 
 /** Follow a reader's gestures on `el`, which holds the drawing's `<svg>`;
- * returns what stops following them. */
-export let steer = (el: HTMLElement, s: Steering): () => void => {
+ * update its touch mode when the view changes and stop when it is removed. */
+export let steer = (
+  el: HTMLElement,
+  s: Steering,
+): { touch: () => void; stop: () => void } => {
   let down = new Map<number, [number, number]>()
   let moved = 0
   // Where a point on the screen is, as fractions of the view, and how many
@@ -48,13 +51,12 @@ export let steer = (el: HTMLElement, s: Steering): () => void => {
     el.style.touchAction = deep ? 'none' : 'pan-x pan-y'
     el.classList.toggle('is-zoomed', deep)
   }
-  let set = (v: View) => (s.set(v), touch())
   let wheel = (e: WheelEvent) => {
     let l = s.layout()
     if (!e.ctrlKey || !l) return
     e.preventDefault()
     let k = Math.exp(-e.deltaY * .01)
-    set(zoom(l, s.view(), k, frame().at(e.clientX, e.clientY)))
+    s.set(zoom(l, s.view(), k, frame().at(e.clientX, e.clientY)))
   }
   let pressed = (e: Pointer) => {
     down.set(e.pointerId, [e.clientX, e.clientY])
@@ -83,7 +85,7 @@ export let steer = (el: HTMLElement, s: Steering): () => void => {
       let now = Math.hypot(pts[0][0] - pts[1][0], pts[0][1] - pts[1][1])
       v = zoom(l, v, now / (spread || now), at(nx, ny))
     } else if (!zoomed(l, v)) return
-    set(pan(l, v, (ox - nx) * k, (oy - ny) * k))
+    s.set(pan(l, v, (ox - nx) * k, (oy - ny) * k))
   }
   let up = (e: Pointer) => void down.delete(e.pointerId)
   // A click that ends a drag or a pinch moved the drawing; it opens nothing.
@@ -103,7 +105,8 @@ export let steer = (el: HTMLElement, s: Steering): () => void => {
   ]
   for (let [type, fn, opts] of on) el.addEventListener(type, fn, opts)
   touch()
-  return () => {
+  let stop = () => {
     for (let [type, fn, opts] of on) el.removeEventListener(type, fn, opts)
   }
+  return { touch, stop }
 }
