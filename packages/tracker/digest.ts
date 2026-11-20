@@ -21,7 +21,7 @@ export let ZONE = 'America/Detroit'
 export let EVERY = `0 7 * * * ${ZONE}`
 /** How many days the chart shows. */
 export let SPAN = 14
-// The most open bugs the letter lists; the rest are a link away.
+// The most bugs a section lists; it counts the rest.
 let LISTED = 15
 let DAY = 86_400_000
 
@@ -81,10 +81,14 @@ export type Places = {
 
 // A cell holds a pipe as `\|`, and a line of its own.
 let cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s+/g, ' ')
+// A bug's name in a cell: its headline, cut to a line a table holds.
+let WIDE = 90
+let short = (s: string) =>
+  s.length > WIDE ? `${s.slice(0, WIDE - 1).trimEnd()}…` : s
 let name = (b: Bundle, places: Places) =>
-  `[${cell(headline(str(comp(b, 'doc').title)) || b.entity.eid.slice(0, 8))}](${
-    places.bug(b.entity.eid)
-  })`
+  `[${
+    cell(short(headline(str(comp(b, 'doc').title))) || b.entity.eid.slice(0, 8))
+  }](${places.bug(b.entity.eid)})`
 let reached = (b: Bundle) => {
   let { account, people } = comp(b, 'bug')
   return account == 'person'
@@ -94,7 +98,6 @@ let reached = (b: Bundle) => {
     : ''
 }
 let on = (b: Bundle) => str(comp(b, 'taken').task) || (b.taken ? 'taken' : '')
-let hits = (b: Bundle) => str(comp(b, 'bug').hits || 1)
 let table = (head: string[], rows: string[][]) =>
   [head, head.map(() => '---'), ...rows].map((r) => `| ${r.join(' | ')} |`)
     .join('\n')
@@ -127,21 +130,35 @@ export let digest = (
   places: Places,
 ): { title: string; body: string } => {
   let since = now - DAY
+  let hits = (b: Bundle) => Number(comp(b, 'bug').hits ?? 1)
+  // A person's bugs first, then the worst by `worst`.
+  let rank = (worst: (b: Bundle) => number) => (a: Bundle, b: Bundle) =>
+    Number(person(b)) - Number(person(a)) || worst(b) - worst(a)
   let fresh = bugs.filter((b) => opened(b) >= since && opened(b) <= now)
-    .sort((a, b) => opened(b) - opened(a))
+    .sort(rank(hits))
   let fixed = bugs.filter((b) =>
     at(b, 'resolved') >= since && fixtime(b) != undefined
-  ).sort((a, b) => fixtime(b)! - fixtime(a)!)
-  let still = bugs.filter(open).sort((a, b) =>
-    Number(person(b)) - Number(person(a)) ||
-    Number(comp(b, 'bug').hits ?? 1) - Number(comp(a, 'bug').hits ?? 1)
-  )
+  ).sort(rank((b) => fixtime(b)!))
+  let still = bugs.filter(open).sort(rank(hits))
   let hit = new Set([...fresh, ...fixed, ...still].filter(person))
   let days = series(bugs, now)
   let fixes = spread(fixed.map((b) => ({ ms: fixtime(b)!, of: b })))
-  let section = (head: string, rows: Bundle[], body: () => string) =>
-    `## ${head} (${rows.length})\n\n${rows.length ? body() : 'None.'}`
-  let shown = still.slice(0, LISTED)
+  // A section lists its first fifteen and counts the rest.
+  let section = (
+    head: string,
+    rows: Bundle[],
+    cols: string[],
+    row: (b: Bundle) => string[],
+    lead = '',
+  ) => {
+    let shown = rows.slice(0, LISTED), rest = rows.length - shown.length
+    return `## ${head} (${rows.length})\n\n${
+      rows.length
+        ? lead + table(cols, shown.map(row)) +
+          (rest ? `\n\nAnd ${rest} more.` : '')
+        : 'None.'
+    }`
+  }
   let body = [
     ...places.chart
       ? [
@@ -155,37 +172,33 @@ export let digest = (
         }).`,
       ]
       : [],
-    section('New', fresh, () =>
-      table(
-        ['Bug', 'Hits', 'Reached', 'On it'],
-        fresh.map((b) => [name(b, places), hits(b), reached(b), on(b)]),
-      )),
+    section(
+      'New',
+      fresh,
+      ['Bug', 'Hits', 'Reached', 'On it'],
+      (b) => [name(b, places), String(hits(b)), reached(b), on(b)],
+    ),
     section(
       'Fixed',
       fixed,
-      () =>
-        (fixes.median == undefined
-          ? ''
-          : `Median time to fix ${span(fixes.median)}.\n\n`) +
-        table(
-          ['Bug', 'Time to fix', 'Reached'],
-          fixed.map((b) => [name(b, places), span(fixtime(b)!), reached(b)]),
-        ),
+      ['Bug', 'Time to fix', 'Reached'],
+      (b) => [name(b, places), span(fixtime(b)!), reached(b)],
+      fixes.median == undefined
+        ? ''
+        : `Median time to fix ${span(fixes.median)}.\n\n`,
     ),
-    section('Open', still, () =>
-      table(
-        ['Bug', 'Open for', 'Hits', 'Reached', 'On it'],
-        shown.map((b) => [
-          name(b, places),
-          span(Math.max(0, now - opened(b))),
-          hits(b),
-          reached(b),
-          on(b) || 'nobody',
-        ]),
-      ) +
-      (still.length > shown.length
-        ? `\n\nAnd ${still.length - shown.length} more.`
-        : '')),
+    section(
+      'Open',
+      still,
+      ['Bug', 'Open for', 'Hits', 'Reached', 'On it'],
+      (b) => [
+        name(b, places),
+        span(Math.max(0, now - opened(b))),
+        String(hits(b)),
+        reached(b),
+        on(b) || 'nobody',
+      ],
+    ),
   ].join('\n\n')
   return {
     title: `Bugs, ${

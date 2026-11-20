@@ -97,3 +97,19 @@ test("a firing writes the day's digest once, and the next day's is another lette
   await fire('2026-11-21T12:00:00.000Z')
   equal((await g.read('.mail')).length, 2)
 })
+
+test("a section lists fifteen, a person's first, and counts the rest", () => {
+  let many = Array.from({ length: 20 }, (_, i) =>
+    bug(`b${i}`, {
+      bug: {
+        first: '2026-11-20T09:00:00Z',
+        hits: i,
+        ...i == 0 ? { account: 'person', people: 1 } : {},
+      },
+    }))
+  let { body } = digest(many, now, places)
+  let open = body.slice(body.indexOf('## Open (20)'))
+  equal(open.split('\n').filter((l) => l.startsWith('| [')).length, 15)
+  ok(open.indexOf('b0 \\|') < open.indexOf('b19 \\|'))
+  ok(open.includes('And 5 more.'))
+})

@@ -138,10 +138,11 @@ America/Detroit) fires `bug_digest`, which writes that day's letter to `to` from
 the bug rows: the bugs that opened (first seen or regressed) and were fixed in
 the day before, each fix's time to fix and their median, every open bug with how
 long it has been open and the task a fixer took it for (`taken.task`, "nobody"
-without one), and whom each reached, a person's in bold. Open bugs that reached
-a person come first, then the most hit; the letter lists fifteen and counts the
-rest. A day owns one letter (its eid derives from the store, recipient and day),
-so a retried firing writes nothing more.
+without one), and whom each reached, a person's in bold. Each table lists
+fifteen, those that reached a person first, then the most hit (the slowest fix
+among fixes), and counts the rest; a headline is cut to one short line. A day
+owns one letter (its eid derives from the store, recipient and day), so a
+retried firing writes nothing more.
 
 Above the tables is a chart of the last fourteen days: bugs opened (red) and
 fixed (green) each day, and the median time to fix of the day's fixes (amber).
