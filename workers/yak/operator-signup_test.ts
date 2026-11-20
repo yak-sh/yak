@@ -1,4 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
+import { signed } from '@yaks/graph'
 import type { Item, Request as ModelRequest } from '@yaks/model'
 import type { Arrival } from '@yaks/phone'
 import { platform } from './directory-rows-probe.ts'
@@ -252,12 +253,15 @@ await declared(env, space, app)
 let at = stores(env, appVocab(), {
   app: { eid: app.eid, mode: 'private', manifest: {} },
 })
-await at('church/notices').graph.apply([
-  {
+// The owner's notice: a row filed with no writer would be a stranger's
+// (T-1879), and its reading would leave the turn no tools.
+await at('church/notices').graph.apply(
+  signed([{
     entity: { eid: crypto.randomUUID() },
     doc: { title: 'Sunday service at ten' },
-  },
-], { trusted: true })
+  }], { by: member }),
+  { trusted: true },
+)
 await store.g.apply([
   {
     entity: { eid: crypto.randomUUID() },

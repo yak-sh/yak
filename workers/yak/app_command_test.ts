@@ -155,6 +155,8 @@ test('a page invokes declared commands as its owner; the command door refuses an
     body: {
       ok: true,
       text: 'owner_word: welcome in ada/cookbook',
+      // A worker's words are whoever wrote them (T-1860).
+      heard: true,
       value: { answer: 'welcome' },
     },
   })

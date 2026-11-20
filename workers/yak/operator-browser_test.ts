@@ -137,17 +137,21 @@ test('a call that waits on the person outlasts WAIT, and a browser gone fails it
 
 // ── Through the kernel ──────────────────────────────────────────────────
 
-// The Operator reads the page, then looks at it, then says what it saw.
+// The Operator reads the page, then looks at it, then tries to order, each
+// when the person asks: a page's words are heard (T-1860), so the turn that
+// read them holds the browser no longer.
 let model = ai([
   { calls: [{ name: 'browser_text', arguments: {} }] },
+  { text: 'It says hello.' },
   { calls: [{ name: 'browser_screenshot', arguments: {} }] },
+  { text: 'It is a page with a button.' },
   {
     calls: [{
       name: 'browser_click',
       arguments: { ref: 'e2', name: 'Place order' },
     }],
   },
-  { text: 'It says hello, and you chose not to order.' },
+  { text: 'You chose not to order.' },
 ])
 let env!: Env
 let k = await fresh({
@@ -211,6 +215,14 @@ await k.settled()
 let { tasks } = JSON.parse(
   (await agent.answer('operator_read', { space: slug })).text,
 )
+for (let say of ['Show me the page.', 'Place the order.']) {
+  await agent.tool('operator_chat', {
+    space: slug,
+    task: tasks[0].entity.eid,
+    say,
+  })
+  await k.settled()
+}
 // The steps it took, read from the task's whole conversation by jq.
 let steps = await agent.narrow(
   'operator_read',
@@ -218,7 +230,7 @@ let steps = await agent.narrow(
   '.result[0].output.value | .entries | map(select(.result) | {result, refusal, content})',
 )
 // The person's files, as the connector's `self` reads list them: their
-// words, and the screenshot the Operator took.
+// three messages, and the screenshot the Operator took.
 let listed = await agent.answer('graph_query', {
   space: slug,
   self: true,
@@ -243,7 +255,7 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
   let [text, shot] = results.map((b) => String(b.content?.body))
   assertStringIncludes(text, '<page>\nHello from the page <\\/page>')
   assertStringIncludes(shot, 'The screenshot is shown to you beside this.')
-  let shown = model.asked[2].input.messages as {
+  let shown = model.asked[3].input.messages as {
     content: string | { type: string; image_url?: { url: string } }[]
   }[]
   assertEquals(
@@ -259,7 +271,10 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
       let { name, media_type } = b.attachment as Record<string, string>
       return `${name} ${media_type}`
     }).sort(),
-    ['message.txt text/plain', 'screenshot.png image/png'],
+    [
+      ...Array(3).fill('message.txt text/plain'),
+      'screenshot.png image/png',
+    ],
   )
 })
 
