@@ -58,7 +58,7 @@ export const MADE = ['call', 'result', 'output']
  * is born done. */
 export let OWNERS = 'operator:owners'
 
-let NAMING = OWNED.map(([name]) => name)
+let NAMING = [...OWNED.map(([name]) => name), 'operator_memory']
 // What an entity's owner is read from: what names one on it, what it hangs
 // on, and what made it.
 let BEARING = [
@@ -80,12 +80,18 @@ let ref = (b: Bundle | undefined, comp: string, prop: string) => {
 // null where it names nobody. A person is named by their id; a reader that
 // is a key, a public snapshot's `public:<app>` (yaks.app's result-tools.ts), names
 // nobody.
-let named = (b: Bundle | undefined): (string | null)[] =>
-  !b || dead(b) ? [] : OWNED.flatMap(([name, by]) => {
-    let c = b[name] as Comp | undefined
-    let v = c?.[by]
-    return c ? [typeof v == 'string' && minted(v) ? v : null] : []
-  })
+let named = (b: Bundle | undefined): (string | null)[] => {
+  if (!b || dead(b)) return []
+  let memory = ref(b, 'operator_memory', 'person')
+  return [
+    ...memory ? [minted(memory) ? memory : null] : [],
+    ...OWNED.flatMap(([name, by]) => {
+      let c = b[name] as Comp | undefined
+      let v = c?.[by]
+      return c ? [typeof v == 'string' && minted(v) ? v : null] : []
+    }),
+  ]
+}
 
 // The input that took an item's words, where one did: the one its eid
 // derives, and only when that input names it.

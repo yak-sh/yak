@@ -93,6 +93,7 @@
     "./publishing-graph": "./publishing-graph.ts",
     "./operator-vocab": "./operator-vocab.ts",
     "./operator-owner": "./operator-owner.ts",
+    "./operator-memory": "./operator-memory.ts",
     "./operator-source": "./operator-source.ts",
     "./operator-words": "./operator-words.ts",
     "./operator-model": "./operator-model.ts",

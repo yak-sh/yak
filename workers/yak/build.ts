@@ -775,6 +775,12 @@ export class Builder extends Durable {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))
           },
+          memoryOwners: async () => {
+            let { memoryOwnerBackfill } = await import(
+              '@yaks/platform/operator-memory'
+            )
+            return backfill(memoryOwnerBackfill(store))
+          },
           // The files a tool made since the attachment pass, attached
           // beside the call that made them (output-move.ts).
           outputs: async () => {

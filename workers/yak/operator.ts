@@ -63,6 +63,7 @@ import { trialDoc } from '@yaks/trial/vocab'
 import { type Options as Trials, runs as trialRuns } from '@yaks/trial/tools'
 import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
+import { memoryAudience } from '@yaks/platform/operator-memory'
 import { held, workNames } from './operator-tasks.ts'
 import { worded } from '@yaks/tools'
 import { keepResult, resultValue } from './results.ts'
@@ -575,7 +576,9 @@ export let operatorRoster = async (
     member
       ? [
         ...listing({ graph: self, search: textSearch(self) }),
-        ...loadTools([memoryDoc], memoryRuns()),
+        ...loadTools([memoryDoc], memoryRuns()).map((t) =>
+          t.name == 'memory_save' ? memoryAudience(t, ctx.person) : t
+        ),
         ...loadTools([trialDoc], trialRuns(trials)),
         ...held(),
         skillRead,

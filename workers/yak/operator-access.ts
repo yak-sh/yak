@@ -4,6 +4,7 @@ import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or, pred, present } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
+import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import type { Held } from './build-door.ts'
 import type { Conversing } from '@yaks/harness/conversations'
 import type { OperatorStore } from './operator-store.ts'
@@ -113,6 +114,7 @@ export let owns = async (store: Store, open: string, who: Owner) => {
 // is read by this only until every entity's owner is written there.
 let claimed = (person: string) =>
   and(
+    or(absent('operator_memory.person'), eq('operator_memory.person', person)),
     ...['', ...ON].flatMap((at) =>
       OWNED.map(([name, by]) =>
         or(absent(`${at}${name}`), eq(`${at}${name}.${by}`, person))
@@ -128,6 +130,7 @@ let claimed = (person: string) =>
 // Those of them that name `person` somewhere: what is theirs alone.
 let named = (person: string) =>
   or(
+    eq('operator_memory.person', person),
     ...['', ...ON].flatMap((at) =>
       OWNED.map(([name, by]) => eq(`${at}${name}.${by}`, person))
     ),
@@ -221,6 +224,15 @@ export let sight = (
         ? claimed(person)
         : and(claimed(person), named(person)),
       ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
+      ...store.marks && store.marks.get(MEMORY_OWNERS) != 'done'
+        ? [
+          or(
+            absent('memory'),
+            present('operator_memory'),
+            eq('owner.person', person),
+          ),
+        ]
+        : [],
     ),
   },
 })

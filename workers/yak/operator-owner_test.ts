@@ -11,6 +11,10 @@ import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { seenBy } from './operator-access.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
+import {
+  MEMORY_OWNERS,
+  memoryOwnerBackfill,
+} from '@yaks/platform/operator-memory'
 import { ownerBackfill } from './owner-move.ts'
 import { inputOf } from '@yaks/session/intake'
 
@@ -24,13 +28,16 @@ let owners = async (...eids: string[]) =>
   (await store.g.get(eids, ['owner'])).map((b) =>
     b.owner ? (b.owner as { person?: string }).person ?? 'nobody' : undefined
   )
+let legacyOwners = {
+  get: (mark: string) => mark == MEMORY_OWNERS ? 'done' : undefined,
+}
 // What each person reads by the kept owners, beside what the paths admit.
 let agree = async (g = store.g) => {
   for (let person of [ada, bea, id()]) {
     for (let member of [true, false]) {
       let read = async (paths: boolean) =>
         (await seenBy(
-          paths ? { g, marks: { get: () => undefined } } : { g },
+          paths ? { g, marks: legacyOwners } : { g },
           { person, member },
         ).read('.entity&.fields=entity.eid')).map((b) => b.entity.eid).sort()
       equal(await read(false), await read(true))
@@ -83,7 +90,7 @@ test('what nobody owns is a member’s to read, and nobody else’s', async () =
   await write([{ entity: { eid: shared }, memory: {}, doc: { title: 'n' } }])
   let reads = async (member: boolean, paths: boolean) =>
     (await seenBy(
-      paths ? { g: store.g, marks: { get: () => undefined } } : store,
+      paths ? { g: store.g, marks: legacyOwners } : store,
       { person: ada, member },
     ).get([root, said, shared])).length
   equal(
@@ -241,4 +248,45 @@ test('a person reads every session of the Operator’s store under workerd’s S
     (await seenBy(at, { person: ada, member: true }).read('.session')).length,
     1,
   )
+})
+
+test('legacy memories with a saving conversation become private and untraceable ones stay shared', async () => {
+  let at = await operatorStore(durable())
+  let root = id(), fork = id(), kept = id(), shared = id(), unsupported = id()
+  await at.g.apply([
+    session(ada, root),
+    { entity: { eid: fork }, session: {}, spawned: { parent: root } },
+    {
+      entity: { eid: kept },
+      doc: { body: 'private words' },
+      memory: { via: fork },
+    },
+    {
+      entity: { eid: shared },
+      doc: { body: 'shared words' },
+      memory: { via: root },
+      operator_memory: {},
+    },
+    {
+      entity: { eid: unsupported },
+      doc: { body: 'unknown source' },
+      memory: {},
+    },
+  ], { trusted: true })
+  at.marks!.del(MEMORY_OWNERS)
+  let reads = async (person: string) =>
+    (await seenBy(at, { person, member: true }).read(
+      '.memory&.fields=entity.eid',
+    ))
+      .map((b) => b.entity.eid).sort()
+  equal(await reads(bea), [shared])
+  equal(await memoryOwnerBackfill(at), false)
+  equal(await reads(bea), [shared, unsupported].sort())
+  equal(await reads(ada), [kept, shared, unsupported].sort())
+  let [row] = await at.g.get([kept])
+  equal(row.doc, { body: 'private words' })
+  equal(row.owner, { person: ada })
+  at.marks!.del(MEMORY_OWNERS)
+  equal(await memoryOwnerBackfill(at), false)
+  equal(await at.g.get([kept]), [row])
 })

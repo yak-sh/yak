@@ -231,6 +231,14 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    operator_memory: {
+      component: true,
+      description:
+        'The audience of a saved memory. A person makes it theirs. An empty mark shares it with the space, subject to the ownership of its source.',
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+      },
+    },
     // Kept by the store's rule (./operator-owner.ts `owning`) in the commit
     // that makes or changes what it is read from; nobody else writes it.
     owner: {

@@ -277,8 +277,9 @@ export let clip = (words: string): string => {
 /** What a memory or a decision is called in a line: its title, or its words
  * where it has none, and the choice a decision was answered with. */
 export let titleOf = (b: Bundle): string => {
+  let doc = part(b, 'doc')
   let title = String(
-    part(b, 'doc').title || clip(String(part(b, 'content').body ?? '')),
+    doc.title || doc.body || part(b, 'content').body || '',
   )
   let choice = part(b, 'decided').choice
   return clip(choice ? `${title} → ${choice}` : title)

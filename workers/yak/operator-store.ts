@@ -28,6 +28,7 @@ import { FILES, INTAKE } from './operator-files.ts'
 import { operatorDoc } from '@yaks/platform/operator-vocab'
 import { ORACLES, PROJECTS } from './oracle-move.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
+import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
 import { WAKES, wakesMoved } from './wake-move.ts'
@@ -210,6 +211,7 @@ export let operatorStore = async (
       // A new file holds nothing written before the rule that keeps owners,
       // nor any wake in the Operator's old words.
       if (born) marks.set(OWNERS, 'done')
+      if (born) marks.set(MEMORY_OWNERS, 'done')
       if (born) marks.set(ORACLES, 'done')
       if (born) marks.set(PROJECTS, 'done')
       if (born) marks.set(WAKES, 'done')
