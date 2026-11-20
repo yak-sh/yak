@@ -135,6 +135,16 @@ probes in his). Reading through them is fine. Never
 check in the `jeff` space or any person's, and never drive a person's Operator
 to measure or exercise it.
 
+`operator_chat` and `conversation_start`/`conversation_send` speak as an
+outside agent (`entry.from`), in a fork under a task: never the person's own
+words, so they cannot check what the person's own message does (answering a
+decision, a note beside their words). For that, post to checks' own chat as
+checks: `admin_link` with `as: checks` and `days: 1` mints a link; POST its
+`t` to `https://yaks.app/login/link` (form-encoded, `origin` set) for the
+session cookie; POST a form with `say` to `/manage/checks/operator` with that
+cookie. Read the rows with `yak command <tool> --as checks`, then revoke the
+link (`admin_link` `revoke`) and delete what held it.
+
 `checks` is kept from the idle sweep, so what a check leaves there lasts, and
 an Operator check that spans several calls (a chat, then `operator_read` until
 it settles, then an answer) runs there too. A free space holds five apps:
