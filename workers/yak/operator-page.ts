@@ -2199,9 +2199,8 @@ export let chatPage = async (
   }
   let place = 'operator:' + (talked.begun || open)
   return talkPage(env, space, who, beside, {
-    title: fresh
-      ? app ? app.title || app.slug : `Message ${operator}`
-      : talked.title || 'Not here',
+    // The chat is the Operator's, an app open beside it or not.
+    title: fresh ? `Message ${operator}` : talked.title || 'Not here',
     band: talked.helper
       ? helperBand({
         ...talked.helper,
