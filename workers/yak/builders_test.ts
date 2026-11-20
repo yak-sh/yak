@@ -24,7 +24,7 @@ import valeWords from '../../apps/vale/vocab.json' with { type: 'json' }
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
 let BUILDER = 'a0000000-0000-4000-8000-0000000000bb'
-let MODEL = '@cf/zai-org/glm-5.3-flash'
+let MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017'
 let PRICE = { input: 0.15, output: 0.5 }
 
 let app = async (
