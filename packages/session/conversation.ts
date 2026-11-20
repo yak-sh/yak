@@ -405,31 +405,37 @@ let tool = (call: Bundle, beside: Beside): Said => {
   }
 }
 
-// Words said in plain words, with what went wrong waiting in Details.
-let failure = (said: string, detail: unknown): Said => ({
-  node: trouble(said, detail),
-  text: said,
-})
+// Words said in plain words. What a provider or the host said of a failure
+// is never a person's to read: it is the host's tracker's (./answer.ts
+// `replyOf` says it as `fault`), and the transcript keeps it for agents.
+let failure = (said: string): Said => ({ node: trouble(said), text: said })
 
-// A provider's refusal, with its own response kept beside it, or one that
-// came instead of any output; one beside an output is that output's.
+// A ceiling met (./state.ts `LIMIT`): said in the host's own sentence, which
+// is the line's words.
+let LIMIT = 'limit'
+
+// A provider's refusal, or the host's own ceiling in its words.
 let refused = (b: Bundle, beside: Beside) =>
-  b.response || !b.output
-    ? failure(
+  comp(b, 'refusal')?.code == LIMIT && body(b)
+    ? { node: reply(body(b)) }
+    : failure(
       `${
         Who(beside)
       } could not get an answer from its model, so it stopped before replying. Send your message again to try once more.`,
-      body(b) || comp(b, 'response')?.body || comp(b, 'refusal'),
     )
-    : undefined
 
-let failed = (b: Bundle, beside: Beside) =>
+let failed = (beside: Beside) =>
   failure(
     `Something went wrong, and ${
       who(beside)
     } stopped before it finished. Send your message again to try once more.`,
-    body(b) || b.exception || b.failed,
   )
+
+// A model's answer cut off on the way (the provider dropped it, or no longer
+// held what it continued from): the turn goes on, or ends on its own line.
+let interrupted = (beside: Beside): Said => ({
+  node: h(Notice, {}, `${Who(beside)}'s answer was interrupted.`),
+})
 
 let stopped = (): Said => ({ node: h(Notice, {}, 'Stopped.') })
 
@@ -486,9 +492,11 @@ export let kind = <B extends Beside = Beside>(
 export let kinds: Registry<Kind> = define<Kind>([
   kind('.call', tool),
   kind('.refusal&!result', refused),
+  kind('.output&.notice', (_, beside) => interrupted(beside)),
+  kind('.output&.exception', (_, beside) => failed(beside)),
   kind('.output', (b) => body(b) ? { node: reply(body(b)) } : undefined),
-  kind('.failed', failed),
-  kind('.exception', failed),
+  kind('.failed', (_, beside) => failed(beside)),
+  kind('.exception', (_, beside) => failed(beside)),
   kind('.stop', stopped),
   kind('.interrupted', stopped),
   kind('.cancel', stopped),

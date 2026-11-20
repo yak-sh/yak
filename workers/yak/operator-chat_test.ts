@@ -647,11 +647,7 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
     last('.Transcript_Error > p')?.textContent,
     'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.',
   )
-  // Its error shows only inside the closed Details.
-  let details = last('.Transcript_Error > details')!
-  assertEquals(details.hasAttribute('open'), false)
-  assertStringIncludes(details.textContent!, 'invalid_request_error')
-  details.remove()
+  // The provider's own words are nowhere on the page.
   assertEquals(thread.innerHTML.includes('invalid_request_error'), false)
   assertEquals(reread.html.includes('data-pending'), false)
 })

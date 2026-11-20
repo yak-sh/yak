@@ -61,22 +61,33 @@ test('each kind of entry is drawn as the person reads it', () => {
     null,
   )
   equal(read(e('stop', { stop: {} })), ['', 'Stopped.', ''])
+  // What a provider or the host said of a failure is never shown: the line
+  // says what happened in plain words.
+  let raw = '5028: @cf/zai-org/glm-5.3-flash was deprecated'
+  let ended = (comps: object) =>
+    read(
+      e('r', { output: { source: 'a' }, content: { body: raw }, ...comps }),
+      { who: 'the Operator' },
+    )?.[1]
+  let refused = 'The Operator could not get an answer from its model, so ' +
+    'it stopped before replying. Send your message again to try once more.'
+  equal(ended({ refusal: { code: 'model' } }), refused)
+  equal(ended({ refusal: { code: 'busy' }, response: { body: raw } }), refused)
+  equal(ended({ exception: {} }), failed.replace('the agent', 'the Operator'))
+  equal(ended({ notice: {} }), "The Operator's answer was interrupted.")
   equal(read(e('x', { exception: {}, content: { body: 'boom' } })), [
     '',
-    `${failed} Details boom`,
+    failed,
     failed,
   ])
+  // A ceiling met is said in the host's own words.
   equal(
-    read(e('r', { refusal: { code: 'busy' }, response: {} }), {
-      who: 'the Operator',
-    })![2],
-    'The Operator could not get an answer from its model, so it stopped ' +
-      'before replying. Send your message again to try once more.',
-  )
-  // A refusal beside an output is that output's words.
-  equal(
-    read(e('r', { refusal: {}, output: {}, content: { body: 'No.' } })),
-    ['', 'No.', ''],
+    read(e('r', {
+      refusal: { code: 'limit' },
+      output: {},
+      content: { body: 'The budget is spent.' },
+    })),
+    ['', 'The budget is spent.', ''],
   )
 })
 

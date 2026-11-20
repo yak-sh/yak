@@ -394,7 +394,7 @@ test('the lines sent paint natively, each step one line until pressed', async ()
   assertEquals(words[1], '3 steps')
   assertEquals(
     words.at(-2),
-    'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.|Details',
+    'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.',
   )
   free()
 })
