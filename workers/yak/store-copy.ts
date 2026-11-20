@@ -6,20 +6,29 @@
 // protocol), read while the store serves, so tables read at different
 // moments; it rehearses a migration, it is no backup.
 import type { Driver } from '@yaks/sql'
-import { type Cell, page, type Plan, plan, raised } from '@yaks/durable-object'
+import {
+  type Cell,
+  page,
+  type Plan,
+  plan,
+  raised,
+  tips,
+} from '@yaks/durable-object'
 
 /** The path an object answers a copy on, for the kernel alone. */
 export let COPY = '/copy'
 
-/** What a copy asks: the file's plan, or a table's rows past a rowid. */
-export type Asked = { table?: string; after?: number }
+/** What a copy asks: the file's plan, or a table's rows past a rowid, up to
+ * another when `until` names one. */
+export type Asked = { table?: string; after?: number; until?: number }
 
-/** What it is answered: the plan, or a page, the columns its rows hold after
- * their rowids, the rowid it ends at (null once the table is read), and
- * whether it holds the table's last row. A store that migrates while it is
- * copied answers a page under columns its plan did not name. */
+/** What it is answered: the plan and each table's last rowid, or a page, the
+ * columns its rows hold after their rowids, the rowid it ends at (null once
+ * the range is read), and whether nothing is left to ask past it. A store
+ * that migrates while it is copied answers a page under columns its plan did
+ * not name. */
 export type Copying =
-  | { plan: Plan }
+  | { plan: Plan; tips: Record<string, number> }
   | { rows: Cell[][]; cols: string[]; last: number | null; ended: boolean }
 
 // A page holds up to this many rows, or about this many bytes: each page is
@@ -33,7 +42,9 @@ let BYTES = 1024 * 1024
  * made holds none of. */
 export let copying = (sql: Driver, asked: Asked): Response => {
   let made = plan(sql)
-  if (asked.table == null) return Response.json({ plan: made })
+  if (asked.table == null) {
+    return Response.json({ plan: made, tips: tips(sql, made) })
+  }
   let t = made.tables.find((t) => t.name == asked.table)
   if (!t) {
     return Response.json({
@@ -47,6 +58,7 @@ export let copying = (sql: Driver, asked: Asked): Response => {
     raised(),
     ROWS,
     BYTES,
+    asked.until,
   )
   return Response.json({ rows, cols: t.cols, last, ended } satisfies Copying)
 }

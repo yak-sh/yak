@@ -38,7 +38,7 @@ export type CopyPlan = {
 
 export type CopyPage = {
   space: string
-  asked: { table?: string; after?: number }
+  asked: { table?: string; after?: number; until?: number }
 }
 
 type Thread = Port & { terminate: () => void }

@@ -18,6 +18,7 @@ import {
   col,
   type Driver,
   eq,
+  fn,
   gt,
   le,
   select,
@@ -128,10 +129,10 @@ let mixed = (digest: number, row: Cell[]) => {
 /** A table not yet read. */
 export let raised = (): Copied => ({ rows: 0, digest: 2166136261 })
 
-/** The next rows of a table after a rowid, each led by its rowid, and the
- * tally with them in it. A page stops at `limit` rows or near `bytes`, so an
- * answer stays small whatever its rows hold; `ended` says it holds the
- * table's last row, so nothing past it need be asked. */
+/** The next rows of a table after a rowid, up to `until` when one is named,
+ * each led by its rowid, and the tally with them in it. A page stops at
+ * `limit` rows or near `bytes`, so an answer stays small whatever its rows
+ * hold; `ended` says nothing is left to ask past it. */
 export let page = (
   driver: Driver,
   t: Plan['tables'][number],
@@ -139,11 +140,14 @@ export let page = (
   held: Copied,
   limit = 200,
   bytes = 256 * 1024,
+  until?: number,
 ): { rows: Cell[][]; last: number | null; held: Copied; ended: boolean } => {
   let read = driver.query(select({
     cols: [as(col(ROWID), ROWID), ...t.cols.map((c) => col(c))],
     from: table(t.name),
-    where: gt(col(ROWID), val(after)),
+    where: until == null
+      ? gt(col(ROWID), val(after))
+      : and(gt(col(ROWID), val(after)), le(col(ROWID), val(until))),
     order: [col(ROWID)],
     limit: val(limit),
   }))
@@ -163,6 +167,19 @@ export let page = (
     ended: read.length < limit && rows.length == read.length,
   }
 }
+
+/** Each table's last rowid as it stands, 0 for an empty one, so a reader
+ * can ask a long table in ranges at once. */
+export let tips = (driver: Driver, p: Plan): Record<string, number> =>
+  Object.fromEntries(p.tables.map((t) => [
+    t.name,
+    Number(
+      driver.query(select({
+        cols: [as(fn('max', col(ROWID)), 'tip')],
+        from: table(t.name),
+      }))[0]?.tip ?? 0,
+    ),
+  ]))
 
 /** One run of a table's rows, its digest and where it ends. */
 export type Chunk = {

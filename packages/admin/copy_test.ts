@@ -1,8 +1,8 @@
 import { equal, test } from '@yaks/testing'
 import { open } from '@yaks/sqlite/db'
-import { page, plan, raised } from '@yaks/durable-object'
+import { page, plan, raised, tips } from '@yaks/durable-object'
 import { col, select, table, val } from '@yaks/sql'
-import { copy, type Copying } from './copy.ts'
+import { type Asked, copy, type Copying, ranges } from './copy.ts'
 import { assertRejects } from '@std/assert'
 import { Interrupted } from '@yaks/tools/errors'
 
@@ -24,12 +24,22 @@ let into = () => ({ ...open(':memory:'), close: () => {} })
 let asking = (sql: typeof source) =>
 (
   _: string,
-  asked: { table?: string; after?: number },
+  asked: Asked,
 ): Promise<Copying> => {
   let made = plan(sql)
-  if (!asked.table) return Promise.resolve({ plan: made })
+  if (!asked.table) {
+    return Promise.resolve({ plan: made, tips: tips(sql, made) })
+  }
   let t = made.tables.find((t) => t.name == asked.table)!
-  let { rows, last, ended } = page(sql, t, asked.after ?? 0, raised(), 2)
+  let { rows, last, ended } = page(
+    sql,
+    t,
+    asked.after ?? 0,
+    raised(),
+    2,
+    Infinity,
+    asked.until,
+  )
   return Promise.resolve({ rows, cols: t.cols, last, ended })
 }
 
@@ -82,6 +92,52 @@ test('a space’s tables are read at once, and nothing past a table’s last pag
   })
   equal(asked, ['note>0', 'tag>0', 'note>2'])
   equal(lines, ['ada  2 tables, 4 rows'])
+})
+
+test('a long table is read in ranges sized by its first page, the last open past its tip', () => {
+  equal(ranges(0, 2, 10, 8), [
+    { after: 2, until: 4 },
+    { after: 4, until: 6 },
+    { after: 6, until: 8 },
+    { after: 8, until: undefined },
+  ])
+  equal(ranges(0, 2, 100, 3).map((r) => r.until), [35, 68, undefined])
+  equal(ranges(0, 50, 60, 8), [{ after: 50, until: undefined }])
+})
+
+test('a long table’s ranges are read at once, and every row arrives once', async () => {
+  let sql = open(':memory:')
+  sql.query({ t: 'create table', name: 'note', cols: [{ name: 'body' }] })
+  let bodies = Array.from({ length: 11 }, (_, i) => `n${i}`)
+  for (let body of bodies) {
+    sql.query({
+      t: 'insert',
+      into: 'note',
+      cols: ['body'],
+      rows: [[val(body)]],
+    })
+  }
+  let read = asking(sql), asked: Asked[] = []
+  let made = into()
+  await copy({
+    spaces: [{ eid: 'ada', slug: 'ada' }],
+    page: (space, at) => (at.table && asked.push(at), read(space, at)),
+    open: () => made,
+    out: () => {},
+    stopping: new AbortController().signal,
+  })
+  equal(asked.slice(0, 5).map((a) => [a.after, a.until]), [
+    [0, undefined],
+    [2, 4],
+    [4, 6],
+    [6, 8],
+    [8, 10],
+  ])
+  equal(
+    made.query(select({ cols: [col('body')], from: table('note') }))
+      .map((r) => r.body),
+    bodies,
+  )
 })
 
 test('a copy stops at the next page once its process stops', async () => {

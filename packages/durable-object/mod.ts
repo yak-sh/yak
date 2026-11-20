@@ -79,6 +79,7 @@ export {
   reread,
   stale,
   tallied,
+  tips,
 } from './copy.ts'
 export { storage, type Store } from './store.ts'
 export { type Keys, keys } from './keys.ts'
