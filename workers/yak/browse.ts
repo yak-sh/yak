@@ -73,6 +73,12 @@ let held = (token: string, env: Env): Cookie[] => [
   },
 ]
 
+let pageAddress = (url: string) => {
+  let { origin, pathname } = new URL(url)
+  let path = pathname.replace(/\/(?:~[^/]+|_preview\/[^/]+).*$/, '/<preview>')
+  return (origin + path).slice(0, 250)
+}
+
 let visitOf = async (req: Request, env: Env) => {
   let claims = await sessionAt(req, env)
   let token = sessionCookie(req, env)
@@ -125,7 +131,7 @@ let visitOf = async (req: Request, env: Env) => {
       }-second limit. Shorten the waits or split the visit.`,
     )
   }
-  return visit
+  return { visit, person: claims.person }
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -134,13 +140,19 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let where = { request: `POST ${PATH}` }
   try {
-    let visit = await bounded(
+    let asked = await bounded(
       env.CLOCK ?? system,
       5_000,
       () => 'Reading and authorizing the browser visit',
       () => visitOf(req, env),
     )
-    if (visit instanceof Response) return visit
+    if (asked instanceof Response) return asked
+    let { visit, person } = asked
+    Object.assign(where, {
+      browse_page: pageAddress(visit.url),
+      browse_caller: person,
+      browse_input: visit.view.touch ? 'touch' : 'mouse',
+    })
     return Response.json(await seen(env, visit, undefined, where))
   } catch (e) {
     if (e instanceof CallError) return refused(e)

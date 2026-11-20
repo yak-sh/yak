@@ -5,15 +5,21 @@ import type { Page } from '@yaks/platform/browser-visit'
 
 export type Actions = Pick<
   Page,
-  'waitForSelector' | 'keyboard' | 'touchscreen' | 'browserContext'
+  | 'bringToFront'
+  | 'waitForSelector'
+  | 'keyboard'
+  | 'mouse'
+  | 'touchscreen'
+  | 'browserContext'
 >
 
 export let actions = (did: (line: string) => void = () => {}): Actions => {
   let done = (line: string) => (did(line), Promise.resolve())
   return {
+    bringToFront: () => Promise.resolve(),
     waitForSelector: async (s) => (await done(`find ${s}`), {
       tap: () => done(`tap ${s}`),
-      click: () => done(`click ${s}`),
+      hover: () => done(`hover ${s}`),
       focus: () => done(`focus ${s}`),
       type: (text) => done(`type ${text} into ${s}`),
     }),
@@ -22,6 +28,10 @@ export let actions = (did: (line: string) => void = () => {}): Actions => {
       press: (key) => done(`press ${key}`),
       down: (key) => done(`down ${key}`),
       up: (key) => done(`up ${key}`),
+    },
+    mouse: {
+      down: () => done('mouse down'),
+      up: () => done('mouse up'),
     },
     browserContext: () => ({
       overridePermissions: (origin, permissions) =>

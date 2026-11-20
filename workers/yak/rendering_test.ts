@@ -104,7 +104,7 @@ let page = (
       }
       let el = (await acts.waitForSelector(s, o))!
       if (s != options.confirm) return el
-      let click = () =>
+      let tap = () =>
         new Promise<void>((dismiss) =>
           hear.get('dialog')?.({
             type: () => 'confirm',
@@ -112,7 +112,7 @@ let page = (
             dismiss: () => (log.push('dismiss'), dismiss(), Promise.resolve()),
           })
         )
-      return { ...el, click, tap: click }
+      return { ...el, tap }
     },
     on: (event: string, fn: (value: never) => void) => {
       hear.set(event, fn as (value: unknown) => void)
@@ -285,11 +285,56 @@ test('a dialog a step opens is dismissed and listed, and the steps go on', async
   let p = page({ confirm: '#delete' })
   let result = await capture(p.browsing, {
     url: 'https://checks.yaks.app/',
-    view,
+    view: { ...view, touch: true },
     steps: [{ tap: '#delete' }, { press: 'Enter' }],
   })
   assertEquals(p.log.slice(-3), ['find #delete', 'dismiss', 'press Enter'])
   assertEquals(result.dialogs, [{ type: 'confirm', message: 'Delete it?' }])
+})
+
+test('a desktop visit keeps driving its original tab after a link opens another', async () => {
+  let p = page()
+  let find = p.p.waitForSelector
+  let foreground = true
+  let moved = false
+  let pressed = false
+  let clicks: string[] = []
+  let selector = ''
+  p.p.bringToFront = () =>
+    Promise.resolve().then(() => {
+      foreground = true
+    })
+  p.p.waitForSelector = async (s, options) => {
+    let el = (await find(s, options))!
+    return {
+      ...el,
+      hover: () =>
+        Promise.resolve().then(() => {
+          if (!foreground) throw new Error('viewport observer stalled')
+          selector = s
+          moved = true
+        }),
+    }
+  }
+  p.p.mouse.down = () => {
+    if (!moved) throw new Error('mouse still moving')
+    return Promise.resolve().then(() => {
+      pressed = true
+    })
+  }
+  p.p.mouse.up = () => {
+    if (!pressed) throw new Error('mouse still pressing')
+    clicks.push(selector)
+    foreground = selector != '#new-tab'
+    moved = pressed = false
+    return Promise.resolve()
+  }
+  await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view,
+    steps: [{ tap: '#new-tab' }, { tap: '#original' }],
+  })
+  assertEquals(clicks, ['#new-tab', '#original'])
 })
 
 test('a page that extends Object.prototype still gets its accessibility audit', async () => {

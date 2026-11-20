@@ -1,8 +1,7 @@
 // What yak-browser does with a request: a page's address, viewport, the
 // cookies it is opened with and the steps a person takes on it posted in, its
 // screenshots, text, console, dialogs, errors, status and accessibility check
-// out, with
-// the browser time it held. Browser control runs on Cloudflare; the small
+// out, with the browser time it held. Browser control runs on Cloudflare; the small
 // session interface lets the load, steps, diagnostics and cleanup run in
 // process without a local browser.
 import { type Clock, type Hold, sleep, system } from '@yaks/fp'
@@ -115,6 +114,7 @@ export type Page = {
     overridePermissions(origin: string, permissions: string[]): Promise<void>
   }
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
+  bringToFront(): Promise<void>
   waitForSelector(
     selector: string,
     options: { timeout: number; visible: true; signal?: AbortSignal },
@@ -125,6 +125,10 @@ export type Page = {
     down(key: string): Promise<void>
     up(key: string): Promise<void>
   }
+  mouse: {
+    down(): Promise<void>
+    up(): Promise<void>
+  }
   touchscreen: {
     touchStart(x: number, y: number): Promise<void>
     touchMove(x: number, y: number): Promise<void>
@@ -134,7 +138,7 @@ export type Page = {
 /** An element a step found on the page. */
 export type Element = {
   tap(): Promise<void>
-  click(): Promise<void>
+  hover(): Promise<void>
   focus(): Promise<void>
   type(text: string): Promise<void>
 }
@@ -266,28 +270,43 @@ let pause = (
 
 let said = (step: Step) => JSON.stringify(step).slice(0, 200)
 
+// Hover moves the mouse to the element's visible point. Chrome receives its
+// reply before the press, and the press before release. Sending all three
+// together can close a Cloudflare browser's connection on link navigation.
+let click = async (page: Page, el: Element, signal: AbortSignal) => {
+  await el.hover()
+  signal.throwIfAborted()
+  await page.mouse.down()
+  signal.throwIfAborted()
+  await page.mouse.up()
+}
+
 // One step, on a page laid out at `view`. A finger's swipe moves in ten
 // stages so a page's touchmove handlers see it travel.
 let taken = async (
   page: Page,
   view: View,
   step: Step,
-  find: (selector: string) => Promise<Element>,
+  find: (selector: string, action: string) => Promise<Element>,
   signal: AbortSignal,
 ) => {
+  // A link can open a foreground tab. Keep acting on the visit's original
+  // tab, where Puppeteer's viewport observer and input need it visible.
+  await page.bringToFront()
+  signal.throwIfAborted()
   if ('tap' in step) {
-    let el = await find(step.tap)
+    let el = await find(step.tap, view.touch ? 'tapping' : 'clicking')
     signal.throwIfAborted()
-    return view.touch ? el.tap() : el.click()
+    return view.touch ? el.tap() : click(page, el, signal)
   }
   if ('type' in step) {
     if (!step.into) return page.keyboard.type(step.type)
-    let el = await find(step.into)
+    let el = await find(step.into, 'typing into')
     signal.throwIfAborted()
     return el.type(step.type)
   }
   if ('clear' in step) {
-    let el = await find(step.clear)
+    let el = await find(step.clear, 'clearing')
     signal.throwIfAborted()
     await el.focus()
     signal.throwIfAborted()
@@ -504,12 +523,12 @@ let loaded = async (
           continue
         }
         try {
-          await taken(page, view, step, async (selector) => {
+          await taken(page, view, step, async (selector, action) => {
             stage = `taking step ${i + 1} (waiting for a visible element)`
             finding = { step: at, selector }
             let el = await shown(page, selector, at, signal)
             finding = undefined
-            stage = `taking step ${i + 1} (acting on the element)`
+            stage = `taking step ${i + 1} (${action} the element)`
             return el
           }, signal)
         } catch (e) {

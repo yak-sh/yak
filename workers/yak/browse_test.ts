@@ -1,13 +1,17 @@
 // The browse door (browse.ts): a page of ours opened in the browser signed in
 // as its caller, for the platform's test accounts and owners alone.
-import { cleanup, clock, equal, test } from '@yaks/testing'
-import { answer, type Browsing, type Visit } from '@yaks/platform/browser-visit'
+import { cleanup, clock, equal, match, test } from '@yaks/testing'
+import {
+  answer,
+  type Browsing,
+  MOST,
+  type Visit,
+} from '@yaks/platform/browser-visit'
 import { actions } from './browser/testing.ts'
 import { fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
-import { within } from './defects.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Comp } from '@yaks/graph'
 
 let time = clock()
 let visits: Visit[] = []
@@ -27,7 +31,10 @@ let browsing: Browsing = {
                 `Waiting for selector \`${selector}\` failed: Waiting failed: ${options.timeout}ms exceeded`,
               )
             }
-            return controls.waitForSelector(selector, options)
+            let el = await controls.waitForSelector(selector, options)
+            return el && selector == '#stalled'
+              ? { ...el, tap: () => time.advance(MOST) }
+              : el
           },
           on: () => {},
           setViewport: () => Promise.resolve(),
@@ -55,7 +62,9 @@ let browsing: Browsing = {
 }
 let rendering = answer(browsing)
 let slow = answer(browsing, time)
-let k: Kernel = await fresh({}, (env) => {
+let k: Kernel = await fresh({
+  ERRORS: { send: () => Promise.resolve() },
+}, (env) => {
   env.BROWSER = {
     fetch: async (req: Request) => {
       let visit: Visit = await req.clone().json()
@@ -83,17 +92,20 @@ let browse = (body: unknown, headers: Record<string, string>) =>
   })
 let manage = { url: `https://${k.host}/manage`, steps: [{ tap: 'textarea' }] }
 
-let reportedBrowse = async (steps: Visit['steps']) => {
-  let reports: Bundle[] = []
-  let r = await within(
-    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
-    { request: 'POST /api/browse' },
-    () =>
-      browse({ url: `${manage.url}?slow`, view: { wait: 0 }, steps }, {
-        cookie: checks.cookie,
-      }),
-  )
-  return { status: r.status, body: await r.json(), reports }
+let reportedBrowse = async (
+  steps: Visit['steps'],
+  url = `${manage.url}?slow`,
+) => {
+  let from = k.reported.length
+  let r = await browse({ url, view: { wait: 0 }, steps }, {
+    cookie: checks.cookie,
+  })
+  await k.flushReports()
+  return {
+    status: r.status,
+    body: await r.json(),
+    reports: k.reported.slice(from),
+  }
 }
 
 test('a test account opens a page of ours signed in as itself, on a phone unless it names a window', async () => {
@@ -186,4 +198,26 @@ test('a missing visible element is a refusal naming the step and selector', asyn
     'Step 1 waited for a visible element matching [data-not-now].',
   )
   equal(reports, [])
+})
+
+test('a stalled action reports its page, caller and step without preview credentials', async () => {
+  let url = `https://${k.host}/app/~preview-code/?slow=private-value#private`
+  let { status, body, reports } = await reportedBrowse([
+    { shot: 'first' },
+    { shot: 'before' },
+    { tap: '#stalled' },
+  ], url)
+  equal(status, 504)
+  equal(
+    body.error.message,
+    'Browser visit while taking step 3 (tapping the element) timed out after 20 seconds',
+  )
+  let error = reports.find((row) => row.error)?.error as Comp | undefined
+  let tags = error?.tags
+  match(tags, {
+    request: 'POST /api/browse',
+    browse_page: `https://${k.host}/app/<preview>`,
+    browse_caller: checks.person,
+    browse_input: 'touch',
+  })
 })
