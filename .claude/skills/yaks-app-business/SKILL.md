@@ -1,9 +1,9 @@
 ---
 name: yaks-app-business
 description: >
-  Use for yaks.app pricing, plans, allowances/limits, upgrade/refusal
-  text, marketing pages, sign-up/onboarding, billing, gallery, homepage examples
-  or audience decisions. Covers its customers, spaces and plans. Business
+  Use for yaks.app pricing, plans, allowances/limits, upgrade/refusal text,
+  marketing pages, sign-up/onboarding, billing, gallery, homepage examples or
+  audience decisions. Covers its customers, spaces and plans. Business
   principles are business-model; how any marketing page's copy is written is
   marketing-site; platform mechanics are yaks-app.
 ---
@@ -233,6 +233,36 @@ Jeff's are (M-31946).
 
 Other people find yaks.app through an app someone shared with them, and through
 the assistants' connector directories for those who already use one.
+
+## Reading the Meta ads
+
+yaks.app's ads run on Meta ad account act_1643626184171464 ("yaks.app"). Any
+session started by Claude Code under Jeff's claude.ai login reaches it through
+the claude.ai Meta Ads connector (`mcp__claude_ai_Meta_Ads__*`). Its tools are
+deferred, so load them with ToolSearch first (`select:` with
+`ads_get_ad_accounts`, `ads_get_ad_entities` and `ads_get_field_context`).
+Sessions of other kinds do not carry claude.ai connectors and cannot read Meta:
+`yak session new`, codex and API-key sessions.
+
+A reading uses `ads_get_ad_entities` with `ad_account_id` 1643626184171464:
+
+1. Spend by day: `level` ad_account, `fields` amount_spent and impressions,
+   a `time_range`, and `time_increment` "1".
+2. What can still spend: `level` adset with status, effective_status, end_time
+   and `delivery`. An ad set past its end time keeps `status` and
+   `effective_status` ACTIVE, and its `delivery` says "completed". Read
+   `delivery` and the day's spend, never ACTIVE alone, before saying an ad is
+   spending. That ACTIVE misread is how the six night1 ads, which ended
+   2026-11-07, were reported "ACTIVE and spending" on 2026-11-19.
+3. Drafts: `object_state` draft, with no `object_ids`. Meta has draft mode on
+   for this account, so a campaign made through the connector is staged until
+   someone publishes it. A draft is absent from live reads, and a live read by
+   its id reports it as "not campaign entities".
+
+A connector tool that fails with "Tool definitions have changed since your
+session started" means Meta changed its tool list after the session started.
+A new session gets the new list. Publishing, pausing, editing and budgets are
+Jeff's: a reading writes nothing in Meta.
 
 ## Where it lives
 
