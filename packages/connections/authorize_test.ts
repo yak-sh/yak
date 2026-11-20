@@ -14,6 +14,7 @@ let open = () =>
       '@yaks/provenance',
       '@yaks/id',
       '@yaks/doc',
+      '@yaks/edge',
       '@yaks/effects',
       '@yaks/secrets',
       '@yaks/connections',
