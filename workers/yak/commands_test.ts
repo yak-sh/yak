@@ -93,6 +93,15 @@ let named = await call(ctx, 'commands', { app: 'recipes' })
 let qualified = await call(ctx, 'commands', { app: 'kitchen/recipes' })
 let withoutCommands = await call(ctx, 'commands', { app: 'empty' })
 let unnamed = await call(ctx, 'commands', {})
+let installed = await make('installed')
+await dir.stamp({
+  entities: [{
+    entity: { eid: installed.eid },
+    installed: { of: crypto.randomUUID(), version: 1 },
+  }],
+})
+let namedCopy = await call(ctx, 'commands', { app: 'installed' })
+let includingCopy = await call(ctx, 'commands', {})
 await make('quiet', {
   $defs: {
     shift: {
@@ -131,6 +140,17 @@ await dir.apply({
 }, who)
 let limited = await call({ ...ctx, person: editor }, 'commands', {
   app: 'recipes',
+})
+
+test('listing installed commands marks their text as heard', () => {
+  equal([named.heard, unnamed.heard, namedCopy.heard, includingCopy.heard], [
+    undefined,
+    undefined,
+    true,
+    true,
+  ])
+  ok(namedCopy.text.includes('Find recipes'))
+  ok(includingCopy.text.includes('kitchen/installed'))
 })
 
 test('naming an app returns its components, commands and notes in order', () => {

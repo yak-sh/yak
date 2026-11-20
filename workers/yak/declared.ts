@@ -457,11 +457,13 @@ export type Command = {
  * words. Two apps may spell one command; both are listed, and `command` asks
  * which when it is called with neither named.
  */
-export let listCommands = async (
+export let commandListing = async (
   ctx: PoolCtx,
   said = '',
-): Promise<Command[]> => {
-  if (ctx.app || addressed(said)) return outside(ctx, said)
+) => {
+  if (ctx.app || addressed(said)) {
+    return { commands: await outside(ctx, said) }
+  }
   let actor = personal(ctx)
   let out = said ? [] : await outside(ctx, '')
   // Every app's declaration at once: one round trip for the reach, not one
@@ -471,6 +473,8 @@ export let listCommands = async (
     apps.map(({ space, app }) => toolsOf(ctx.env, space, app)),
   )
   let callers = await Promise.all(apps.map(({ space }) => whoIn(actor, space)))
+  let named = said && apps.length == 1 ? apps[0] : undefined
+  let heard = !!named?.app.installed
   for (let [i, { space, app }] of apps.entries()) {
     for (let [name, tool] of Object.entries(tools[i])) {
       let who = callers[i]
@@ -478,6 +482,7 @@ export let listCommands = async (
         tool.discoverable === false ||
         !mayCall(tool.floor, who.person, who.role)
       ) continue
+      heard ||= !!app.installed
       let input = schemaOf(tool, { short: true })
       let options = legacyOptions({
         positional: tool.positional,
@@ -507,8 +512,11 @@ export let listCommands = async (
       })
     }
   }
-  return out
+  return { commands: out, named, heard }
 }
+
+export let listCommands = async (ctx: PoolCtx, said = ''): Promise<Command[]> =>
+  (await commandListing(ctx, said)).commands
 
 // An app whose views moved is news to everyone who can reach it: their
 // resource list is stale, and MCP's word for that is `notifications/resources/

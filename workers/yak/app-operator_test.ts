@@ -102,10 +102,30 @@ await receive(
   { id: queued },
 )
 // Reopen on persisted intake, as a deploy does, before the queued request runs.
+let later: Request[] = []
 let reopened = operating(store, p.env, {
-  ...operatorModel(() =>
-    Promise.reject(new Error('An app must not ask a model'))
-  ),
+  ...operatorModel((req) => {
+    later.push(req)
+    let last = req.items.at(-1)
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: last?.kind == 'user' && last.text.includes('Read my app notice')
+        ? [{
+          kind: 'call',
+          id: crypto.randomUUID(),
+          name: 'graph_query',
+          args: JSON.stringify({
+            self: true,
+            q: `.entity.eid=${
+              derivedEid('operator-app-notice|' + queued)
+            } .fields=content.body`,
+          }),
+        }]
+        : [{ kind: 'assistant', text: 'Ready.' }],
+      cost: 0.001,
+    })
+  }),
   directory: () => p.dir,
 })
 handleChannels(reopened, p.env)
@@ -113,6 +133,7 @@ await drain(store)
 
 test('queued app words notify only the owner and remain passive information in their conversation', async () => {
   assertEquals(asks.length, 1)
+  assertEquals(later.length, 0)
   let { updates } = await updatesOf(store, owner, spaceId)
   assertEquals(updates.map((u) => u.words), [malicious])
   assertEquals(
@@ -130,7 +151,14 @@ test('queued app words notify only the owner and remain passive information in t
     String((note.content as { body: string }).body),
     malicious,
   )
-  assertEquals([!!note.notice, !!note.system, !!note.using, !!note.intake], [
+  assertEquals([
+    !!note.heard,
+    !!note.notice,
+    !!note.system,
+    !!note.using,
+    !!note.intake,
+  ], [
+    true,
     true,
     true,
     false,
@@ -139,6 +167,29 @@ test('queued app words notify only the owner and remain passive information in t
   assertEquals((await store.g.read('.session')).length, 1)
   assertEquals((await store.g.read('.ask')).length, 1)
   assertEquals((await store.g.read('.call')).length, 0)
+  await store.g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: root },
+    content: { body: "An app's code reported this: an older app notice" },
+    notice: {},
+    system: {},
+  }], { trusted: true })
+  await receive(
+    store,
+    { space: spaceId, person: owner, channel: 'chat' },
+    'Read my app notice.',
+  )
+  await drain(store)
+  assertEquals(later.length, 2)
+  let [before, read] = later
+  let talks = (req: Request) => JSON.stringify(req.items)
+  let canWrite = (req: Request) =>
+    req.tools?.some((t) => t.name == 'graph_apply')
+  assertEquals(canWrite(before), true)
+  assertEquals(talks(before).includes(malicious), false)
+  assertEquals(talks(before).includes('an older app notice'), false)
+  assertStringIncludes(talks(read), malicious)
+  assertEquals(canWrite(read), false)
 })
 
 test('a page or a person cannot tell the Operator, and a tell says something by a key', async () => {

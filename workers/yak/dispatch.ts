@@ -22,7 +22,8 @@
 // different actor (T-34303). The kernel seals a second grant naming the app
 // entity with `editor`, sends it in its own header, and the shim holds that
 // one too — so `env.APP.fetch('/apply', …)` writes the app's own store
-// whatever the app's `access` says, and the batch is signed by the app. It is
+// whatever the app's `access` says. The batch is signed by the app, with the
+// visitor's instrument when it is answering a visit. It is
 // what makes a per-row rule buildable at all: an app that is `private` to the
 // world, with a worker that checks an invitation code and then writes the one
 // row that code names. Both grants are the kernel's own word, minted per
@@ -403,6 +404,7 @@ export let granted = async (
   if (!g || g.store != store) return null
   let sealed = req.headers.get(GRANT)!
   let role = g.role ?? null
+  let via = g.visitor?.via ?? g.via
   // An anonymous instrument carries no standing to revoke. Its current app
   // mode still decides access; every person/app grant must match authority.
   if (
@@ -417,7 +419,7 @@ export let granted = async (
     person: g.person ?? null,
     role,
     via: instrumentEid(
-      typeof g.via == 'string' && g.via ? g.via : `visit:${sha256(sealed)}`,
+      typeof via == 'string' && via ? via : `visit:${sha256(sealed)}`,
     ),
   }
 }

@@ -133,7 +133,7 @@ import {
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
-import { strangerWrote } from './operator-heard.ts'
+import { heardIn, strangerWrote } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
@@ -640,7 +640,8 @@ export let operatorRoster = async (
     // A connected server or code_mode can stamp its own answer `heard`.
     // Preserve that stamp even if the server answered with an error.
     let heard = out.some((b) => b.heard) ||
-      from == 'apps' && await stranger(t, out)
+      from == 'apps' && await stranger(t, out) ||
+      from == 'own' && !!t.readOnly && await heardIn(self, out)
     // Applied tools already wrote through their own store; generic writes
     // return patches and use the same graph application as the connector.
     return {
@@ -2229,6 +2230,8 @@ export let operating = (
         servedIn(g, session),
       ])
       return JSON.stringify([
+        // Rebuild any provider context that included passive app notice text.
+        'app notices through tools',
         served.model?.entity.eid,
         served.provider?.entity.eid,
         work?.person,

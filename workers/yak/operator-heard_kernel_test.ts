@@ -2,13 +2,14 @@
 // when a stranger wrote a row in it, a person outside the space or a visitor
 // who never signed in, and stays ordinary for the space's own people. A
 // code_mode script's reads are heard the same way (T-1066).
-import { equal, test } from '@yaks/testing'
+import { equal, match, test } from '@yaks/testing'
 import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn } from './probe.ts'
-import { directoryOf } from './directory.ts'
+import { directoryOf, storeName } from './directory.ts'
+import { GRANT, owning } from './dispatch.ts'
 import { compiler } from './testing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { idOf } from '@yaks/platform/listing'
@@ -53,6 +54,32 @@ await client(k, host, app, stranger.cookie).applied(note('stranger'))
 await client(k, host, app).applied(note('visitor'))
 
 let stored = (await dir.app(space, app))!
+let browser = mint()
+for (
+  let [by, visitor] of [
+    ['app', undefined],
+    ['app-visitor', { person: null, via: browser }],
+  ] as const
+) {
+  let res = await k.at(host, `/${app}/api/apply`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      [GRANT]: await owning(
+        k.secret,
+        storeName(space, stored),
+        stored,
+        visitor,
+      ),
+      'x-yak-via': mint(),
+    },
+    body: JSON.stringify(note(by)),
+  })
+  if (!res.ok) throw new Error(`App write ${res.status}: ${await res.text()}`)
+}
+let appNotes = await client(k, host, app, owner.cookie).get(
+  '.note.by=app,app-visitor&?created&.order=note.by',
+)
 await dir.apply({
   entities: [{
     entity: { eid: mint() },
@@ -117,14 +144,28 @@ let heard = async (name: string, args: Record<string, unknown>) => {
   })
   return typeof out == 'object' && !!out.with?.heard
 }
-let writers = ['owner', 'colleague', 'stranger', 'visitor']
+let writers = [
+  'owner',
+  'colleague',
+  'stranger',
+  'visitor',
+  'app',
+  'app-visitor',
+]
+
+test('env.APP stamps the app and the verified instrument that prompted its write', () => {
+  match(appNotes, [
+    { created: { by: stored.eid, via: stored.eid } },
+    { created: { by: stored.eid, via: browser } },
+  ])
+})
 
 test("an Operator's read is heard when a stranger wrote a row of it, and not when its space's people did", async () => {
   equal(
     await Promise.all(
       writers.map((by) => heard('graph_query', { app, q: `.note.by=${by}` })),
     ),
-    [false, false, true, true],
+    [false, false, true, true, true, true],
   )
 })
 
@@ -136,7 +177,7 @@ test("a code_mode script's read is heard as a direct one is", async () => {
           return 'read'`,
       })
     )),
-    [false, false, true, true],
+    [false, false, true, true, true, true],
   )
 })
 

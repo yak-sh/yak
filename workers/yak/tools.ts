@@ -156,9 +156,7 @@ import { DEMO, demonstrate, ours } from './gallery-demo.ts'
 import * as shared from './shared-skill.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
-  listCommands,
-  picked,
-  reachable as reachableApps,
+  commandListing,
   reachChanged,
   runCommand,
   viewsMoved,
@@ -6365,16 +6363,14 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let said = args.app == null ? '' : text(args.app, 'app')
-      let all = await listCommands(ctx, said)
+      let { commands: all, named, heard } = await commandListing(ctx, said)
       // Each command whole, for a program: the words below are the same list
       // said for a model, grouped and shortened.
       let value = { commands: all }
-      if (said && !sourceAt(said)) {
-        let apps = picked(await reachableApps(ctx), said)
-        if (apps.length == 1) {
-          let { space, app } = apps[0]
-          return { value, text: await appEntry(ctx, space, app, all) }
-        }
+      let outside = heard ? { heard: true as const } : {}
+      if (named) {
+        let { space, app } = named
+        return { value, text: await appEntry(ctx, space, app, all), ...outside }
       }
       if (!all.length) {
         if (sourceAt(said)) {
@@ -6411,6 +6407,7 @@ let OURS: Row[] = [
       }
       return {
         value,
+        ...outside,
         text: `${lines.join('\n')}\n\nRun one with command(name, args) — and ` +
           'app too where two apps spell the same command.',
       }

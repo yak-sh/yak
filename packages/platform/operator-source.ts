@@ -36,9 +36,19 @@ export let cameBy = (entry: Bundle): { name?: string; framing?: string } => {
   }
 }
 
-/** Render the source note only for inputs written in the new form. A legacy
- * input already carries its framing and source note in its body. */
+/** A passive app tell, including notices written before the app channel. */
+export let appNotice = (entry: Bundle, body: string) =>
+  !!entry.notice && (cameBy(entry).name == 'app' ||
+    !!entry.system && body.startsWith("An app's code reported this"))
+
+/** Render transcript input for the model. Legacy inputs already carry their
+ * framing and source note in their body. */
 export let inputBody = (entry: Bundle, body: string) => {
+  // A tell stays visible in the person's conversation. The model reads its
+  // words on demand through a tool, so the read narrows that turn's roster.
+  if (appNotice(entry, body)) {
+    return `An app left a notice in Updates. To read it, call graph_show with id ${entry.entity.eid} and self true.`
+  }
   let source = sourceOf(entry)
   if (source == null) return body
   return (cameBy(entry).framing ?? '') + body +

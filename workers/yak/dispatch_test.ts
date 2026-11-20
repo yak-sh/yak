@@ -588,9 +588,10 @@ test('a worker is handed the app itself, and only on its own store', async () =>
     )
   // The app entity, at editor — the level that carries it past its own access
   // mode and no further: an editor writes the data and not the roster.
-  assertEquals(standing(await back(mine)), {
+  assertEquals(await back(mine), {
     person: app.eid,
     role: 'editor',
+    via: who.via,
   })
   // And it opens nowhere else, exactly like the visitor's.
   assertEquals(await back(mine, 'jeff/photos'), null)

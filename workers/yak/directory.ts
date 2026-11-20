@@ -4167,6 +4167,13 @@ export let directoryRows = (rows: {
       if (!persons.length) return new Map()
       return personsOf(await query(line`.entity.eid=${persons}`))
     },
+    // Which writers are people or apps, including authors outside the reach
+    // of the store that kept their words. Platform actors and agents have
+    // their own rows and carry neither of these shapes.
+    peopleOrApps: async (eids: string[]): Promise<boolean> =>
+      eids.length > 0 && (await query(
+          line`.entity.eid=${eids}&(.person|.email|.app)&.limit=1&.fields=entity.eid`,
+        )).length > 0,
     // The verified people who claimed these browsers' earlier guest words.
     // Live authorship may retain a browser after both row stamps changed.
     browserOwners: async (vias: string[]): Promise<Map<string, string>> => {
