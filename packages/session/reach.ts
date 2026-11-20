@@ -44,6 +44,13 @@
 // answers from memory, and reads them by query again once one is no longer
 // the line it was or holds other components.
 //
+// No page reads a result's `value` either: what a tool answered as data,
+// which can hold a page's screenshot or another search's whole rows, megabytes
+// a result, while a model is sent its words. A turn held every one it reached
+// at once, and a Builder stepping several such transcripts ran out of memory
+// (T-1786). A page reads `result` without it, and a model's view of a result
+// reads its value by name where it needs it (@yaks/context `outputView`).
+//
 // No page reads a line's `sending`. An ask once recorded the instructions it
 // sent as text, tens of kilobytes the same from one ask to the next, and a
 // model turn's reading held one copy an ask: a Builder stepping a handful of
@@ -118,6 +125,8 @@ type Read = {
   g: Graph
   segs: Segment[]
   names?: string[]
+  /** read `result` without its `value` */
+  valueless?: boolean
   fields: Built
   found: Map<string, Promise<Bundle | undefined>>
   shapes: Map<string, string[]>
@@ -188,7 +197,14 @@ let selected = async (r: Read, ...asks: Ask[]): Promise<Bundle[]> => {
 
 // The entities of `owners`, rows naming each one's eid and archetype, holding
 // the components of `r.names` their archetypes hold.
-let gathered = async (r: Read, owners: Row[]): Promise<Bundle[]> => {
+// A page's lines (`r.valueless`) hold `result` without its value: read by
+// query, or as a reading before found it (`results`), since a result's call
+// and time are kept as it landed.
+let gathered = async (
+  r: Read,
+  owners: Row[],
+  results?: Map<Eid, Comp>,
+): Promise<Bundle[]> => {
   let ids = owners.map((b) => String(b['entity.eid']))
   if (!ids.length) return []
   let names = r.names
@@ -213,13 +229,42 @@ let gathered = async (r: Read, owners: Row[]): Promise<Bundle[]> => {
       }
     }
   }
+  let light = r.valueless && names?.includes(RESULT)
+  if (light) names = names!.filter((n) => n != RESULT)
   let rows = new Map((await r.g.get(ids, names)).map((b) => [b.entity.eid, b]))
+  if (light) {
+    let asked: Eid[] = []
+    for (let [id, b] of rows) {
+      let held = results?.get(id)
+      if (held) b[RESULT] = { ...held }
+      else if (
+        r.shapes.get(String(b.entity.archetype))?.includes(RESULT) ?? true
+      ) asked.push(id)
+    }
+    for (let b of await valueless(r.g, asked)) {
+      let row = rows.get(b.entity.eid)
+      if (row) row[RESULT] = b[RESULT]
+    }
+  }
   return ids.flatMap((id) => rows.get(id) ?? [])
 }
 
+// The results among `ids`, each carrying every property of `result` but its
+// value.
+let valueless = async (g: Graph, ids: Eid[]) =>
+  !ids.length ? [] : await g.read(
+    line`.${RESULT}&.fields=${[
+      'entity.eid',
+      ...g.vocab.props(RESULT).filter((p) => p != 'value').map((p) =>
+        `${RESULT}.${p}`
+      ),
+    ]}`,
+    { eids: ids },
+  )
+
 // A segment's lines a reading reached, newest first from the segment's newest,
 // with their shapes, and the seq they were read down to.
-type Shape = Line & { archetype: Eid }
+type Shape = Line & { archetype: Eid; result?: Comp }
 type Reached = { from: number; lines: Shape[] }
 const WINDOWS = 64
 let windows = new WeakMap<Graph, Map<string, Reached>>()
@@ -250,6 +295,7 @@ let recalled = async (
       'entity.eid': l.eid,
       'entity.archetype': l.archetype,
     })),
+    new Map(wanted.flatMap((l) => l.result ? [[l.eid, l.result]] : [])),
   )
   let stands = found.length == wanted.length &&
     found.every((b, k) =>
@@ -261,13 +307,14 @@ let recalled = async (
 }
 
 // Older rows of the whole chain, `n` at a time, newest first, without what
-// they sent.
+// they sent or a result's value.
 let pages = (r: Read) => {
   let { segs } = r
   let i = segs.length - 1, after = line``
   let without = (...gone: string[]): Read => ({
     ...r,
     names: (r.names ?? r.g.vocab.all).filter((n) => !gone.includes(n)),
+    valueless: true,
   })
   let page = without(SENDING)
   let below = without(SENDING, ...LIFECYCLES)
@@ -345,6 +392,9 @@ let pages = (r: Read) => {
           eid: b.entity.eid,
           seq: Number(comp(b, ENTRY)?.seq),
           archetype: String(b.entity.archetype ?? ''),
+          ...b.result && !('value' in (b.result as Comp))
+            ? { result: b.result as Comp }
+            : {},
         }))
         if (
           !lines.length ||

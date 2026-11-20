@@ -122,7 +122,7 @@ let script = (seed: number, size: number, forked = false): Bundle[] => {
         } else if (r < 0.25) last = call
         else {
           last = line({
-            result: { call },
+            result: { call, value: { answered: call } },
             content: { body: 'ok' },
           }, owner)
         }
@@ -276,6 +276,24 @@ test('a turn holds what the asks it reads sent, not what every ask sent', async 
   let asks = all.filter((b) => b.ask)
   assertEquals(held.length <= 1 + openCalls(all).length, true)
   assertEquals(asks.length > 10, true, `${asks.length} asks`)
+})
+
+// What a tool answered as data is read by name where a model's view needs it
+// (@yaks/context `outputView`), so a turn holds none of it.
+test('a turn holds each result’s call, not what its tool answered as data', async () => {
+  let g = await world(script(1, 80))
+  let all = (await transcript(g, 's')).filter((b) => b.result)
+  let held = (await reach(g, 's', { turn: true })).filter((b) => b.result)
+  assertEquals(all.length > 10, true, `${all.length} results`)
+  assertEquals(held.filter((b) => 'value' in (b.result as Comp)), [])
+  assertEquals(
+    held.map((b) => (b.result as Comp).call),
+    all.flatMap((b) =>
+      held.some((h) => h.entity.eid == b.entity.eid)
+        ? [(b.result as Comp).call]
+        : []
+    ),
+  )
 })
 
 // Four hundred lines of turns, then a window or a checkpoint that bounds what

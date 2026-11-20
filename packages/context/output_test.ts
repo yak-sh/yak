@@ -7,7 +7,16 @@ import { ram } from '@yaks/ram'
 import { contextDoc, snapshot } from './mod.ts'
 import { outputView } from './output.ts'
 
-const vocab = loadVocab([contextDoc])
+// A tool's answer as data (@yaks/tools `result`), declared here alone.
+const vocab = loadVocab([contextDoc, {
+  $defs: {
+    result: {
+      component: true,
+      type: 'object',
+      properties: { call: { type: 'string' }, value: { type: 'object' } },
+    },
+  },
+}])
 const g = graph({ vocab, storage: ram(vocab) })
 const source = crypto.randomUUID()
 const body = 'a'.repeat(2000)
@@ -42,4 +51,21 @@ test('concise tool prose survives large structured backing data', async () => {
     result: { value: { result: [{ content: { body } }] } },
   }
   assertEquals(await outputView(g, compact, 512), text)
+})
+
+test('a result read without its value is viewed by the value it keeps', async () => {
+  let eid = crypto.randomUUID()
+  let value = { rows: [body] }
+  await g.apply([{ entity: { eid }, result: { call: 'c', value } }])
+  let read = await outputView(
+    g,
+    { entity: { eid }, result: { call: 'c' } },
+    512,
+  )
+  let whole = await outputView(g, {
+    entity: { eid },
+    result: { call: 'c', value },
+  }, 512)
+  assertEquals(read, whole)
+  assertEquals(JSON.parse(read).bytes > 512, true)
 })

@@ -16,6 +16,15 @@ export let outputValue = (text: string): unknown => {
   }
 }
 
+// A result's `result` with its value, read by name where the line was read
+// without it.
+let valued = async (g: Graph, entry: Bundle): Promise<Comp> => {
+  let result = entry.result as Comp | undefined
+  if (!result || 'value' in result) return result ?? {}
+  let [row] = await g.get([entry.entity.eid], ['result'])
+  return (row?.result as Comp | undefined) ?? result
+}
+
 /** The source entry remains unchanged. Hosts may supply a scoped snapshot store. */
 export const outputView = async (
   g: Graph,
@@ -27,17 +36,18 @@ export const outputView = async (
     throw new Error('output limit must be an integer >= 512')
   }
   let text = String((entry.content as Comp | undefined)?.body ?? '')
+  // The model receives the tool's prose. A concise view (search hits, for
+  // example) stays useful even when its backing rows carry large bodies, so
+  // the value is read only where there is no prose or too much of it: a
+  // transcript is read without its results' values (@yaks/session `reach`).
+  let fits = new TextEncoder().encode(text).length <= limit
+  if (fits && text.length > 0) return text
   // A result keeps its tool's answer as data in `result{value}`; an answer
   // not yet landed carries it in `output{value}`.
-  let kept = (entry.result as Comp | undefined)?.value ??
+  let kept = (await valued(g, entry)).value ??
     (entry.output as Comp | undefined)?.value
   let value = kept ?? outputValue(text)
-  // The model receives the tool's prose. A concise view (search hits, for
-  // example) stays useful even when its backing rows carry large bodies.
-  if (
-    new TextEncoder().encode(text).length <= limit &&
-    (text.length > 0 || resultBytes(value) <= limit)
-  ) return text
+  if (fits && resultBytes(value) <= limit) return text
   if (keep) return JSON.stringify(await keep(value, entry))
   let body = kept == null ? text : JSON.stringify(value)
   let revision = (await snapshot(body, entry.entity.eid)).revision
