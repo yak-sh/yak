@@ -1297,6 +1297,15 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     })
     assertEquals([adding.asked?.name, adding.asked?.keyed], ['abyssale', true])
     assertStringIncludes(adding.asked!.face.instructions, 'workspace API key')
+    // Opened to add one the directory describes, it says what it is, though
+    // the catalog reads no prose.
+    let described = await connectionsOf(s.p.env, s.space, s.person, {
+      add: 'hubspot',
+    })
+    assertEquals(
+      [described.asked?.face.description, described.asked?.face.details],
+      ['A customer workspace.', 'Reads contacts.'],
+    )
     // Connect makes it ready at Nango, writes it as an integration with its
     // logo, and sends the person to sign in there.
     let sent = await s.post({ do: 'add', integration: 'hubspot' })

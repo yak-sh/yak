@@ -213,10 +213,63 @@ let marked = (b: Bundle): Marked => ({
   ...b[FEATURED] ? { featured: true } : {},
 })
 
-/** The host catalog's rows, including integrations not connected yet. */
-export let catalogued = async (read: Read): Promise<Marked[]> =>
-  (await read(line`.${INTEGRATION}&?${FEATURED}`)).map(marked)
+/** What a person reads at length about an integration: drawn only for the
+ * one a page opens, read by name (`known`), and for those built here. */
+export type Prose = 'description' | 'details' | 'docs' | 'instructions'
+
+// Every property but its prose, which a catalog's card, search and offer
+// read: a new property of an integration is a type error here until it is
+// named, so a catalog never silently goes without one.
+let CARRIED = {
+  name: 1,
+  service: 1,
+  title: 1,
+  tagline: 1,
+  site: 1,
+  connects: 1,
+  categories: 1,
+  image: 1,
+  logo: 1,
+  authorize: 1,
+  token: 1,
+  userinfo: 1,
+  account: 1,
+  chat: 1,
+  scopes: 1,
+  params: 1,
+  auth: 1,
+  refresh_encoding: 1,
+  answers: 1,
+  resource: 1,
+  issuer: 1,
+  client: 1,
+  client_id: 1,
+  broker: 1,
+  hosts: 1,
+  fields: 1,
+  signature: 1,
+  testing: 1,
+  built: 1,
+  owner: 1,
+} satisfies Record<Exclude<keyof Integration, Prose>, 1>
+let CATALOGUED = [
+  ...Object.keys(CARRIED).map((p) => `${INTEGRATION}.${p}`),
+  FEATURED,
+]
+
+/** The host catalog's rows, including integrations not connected yet: those
+ * built here whole, the rest without their prose (`Prose`), which is half of
+ * each and drawn only for the one a page opens. */
+export let catalogued = async (read: Read): Promise<Marked[]> => {
+  let [whole, rest] = await Promise.all([
+    read(line`.${INTEGRATION}.built=true&?${FEATURED}`),
+    read(line`.${INTEGRATION}&!${INTEGRATION}.owner&.fields=${CATALOGUED}`),
+  ])
+  let built = new Map(whole.map((b) => [b.entity.eid, b]))
+  return [...whole, ...rest.filter((b) => !built.has(b.entity.eid))]
+    .map(marked)
     .filter((i) => !i.owner && (i.built || Array.isArray(i.categories)))
+}
 
 /** What a person reads about an integration, which its owner may change:
  * never where its credential is sent. */

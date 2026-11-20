@@ -924,7 +924,12 @@ export let connectionsOf = async (
     (wanted.built
       ? await offered(wanted)
       : listed.has(integrationEid(wanted.name)) && connectable(wanted))
-  let fromCatalog = at.add ? can.find((o) => o.name == at.add) : undefined
+  // The catalog reads no prose (@yaks/connections `catalogued`): the one
+  // opened has its own, read by name.
+  let found = at.add ? can.find((o) => o.name == at.add) : undefined
+  let fromCatalog = found && wanted?.name == found.name
+    ? { ...found, ...prose(wanted) }
+    : found
   let described = wanted && !wanted.owner && Array.isArray(wanted.categories)
     ? wanted
     : undefined
@@ -975,6 +980,13 @@ export let connectionsOf = async (
     ...asked ? { asked } : {},
   }
 }
+
+// What an integration says at length (@yaks/connections `Prose`).
+let prose = (i: Integration) =>
+  Object.fromEntries(
+    (['description', 'details', 'docs', 'instructions'] as const)
+      .flatMap((k) => i[k] == null ? [] : [[k, i[k]]]),
+  )
 
 // A lend changes host-owned caps in other spaces. Ownership is checked by
 // its caller; only the resulting bundles are applied as the host.
