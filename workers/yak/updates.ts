@@ -184,7 +184,8 @@ let shownChoices = (space: Space, u: Update, choices: Choice[]) =>
   )
 
 // What needs a person: the Operator's question, its choices, a button for
-// each (the one it recommends first and filled), and below them a way to ask
+// each (the one it recommends first and filled), "Other" for an answer in
+// their own words, and below them a way to ask
 // about it, opened in place. Choices that show something are drawn with it.
 let needsCard = (space: Space, u: Update) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
@@ -209,6 +210,7 @@ let needsCard = (space: Space, u: Update) => {
       head,
       words(u.words),
       shownChoices(space, u, choices),
+      other(space, u),
       replying(space, u),
     )
   }
@@ -245,9 +247,36 @@ let needsCard = (space: Space, u: Update) => {
         ),
       )
       : null,
+    other(space, u),
     replying(space, u),
   )
 }
+
+// The last choice, always there: "Other", opened in place, a box for the
+// person's own words, which answer the question as theirs and reach the
+// Operator as the answer.
+let other = (space: Space, u: Update) =>
+  u.choices && h(
+    More,
+    { class: 'Update_Other' },
+    h(More.Summary, {}, 'Other'),
+    h(
+      More.Body,
+      {},
+      form(
+        space,
+        [['choose', u.eid]],
+        h(Field, {
+          class: 'Update_Input',
+          lines: true,
+          name: 'choice',
+          required: true,
+          'aria-label': 'Your own answer',
+        }),
+        h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
+      ),
+    ),
+  )
 
 // A way to send the Operator words about an update, opened in place.
 let replying = (space: Space, u: Update) =>

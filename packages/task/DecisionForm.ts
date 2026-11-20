@@ -1,7 +1,8 @@
 /**
  * A decision's question, choices and answer, shared by browser and terminal.
- * The question, labels and descriptions are Markdown. An answer of one's own
- * takes several lines: Shift-Enter types a new one, and Enter or the button
+ * The question, labels and descriptions are Markdown. The last choice is
+ * always "Other": an answer of one's own, recorded as theirs, which takes
+ * several lines: Shift-Enter types a new one, and Enter or the button
  * sends it, as in a chat box. A choice that shows entities (its `shows`
  * edges, read with `showing` and grouped by `shown`) draws each over its
  * button through the host's `show`, which draws them by their components.
@@ -114,6 +115,8 @@ export let DecisionForm = (
         decided.by ? [' · by ', name(String(decided.by))] : '',
         decided.at ? ` · ${decided.at}` : '',
       ),
+    // The last choice, always there: "Other", the person's own words.
+    open && h('p', {}, `${d.choices.length + 1}. Other`),
     open && h(
       Say,
       {

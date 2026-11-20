@@ -894,6 +894,7 @@
   .Update_Draft .Preview_Frame {
     height: 20rem;
   }
+  .Update_Other .Update_Form,
   .Update_Reply .Update_Form {
     display: grid;
     gap: .5rem;

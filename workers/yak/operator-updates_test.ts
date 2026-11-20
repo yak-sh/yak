@@ -257,6 +257,56 @@ test('the Updates page shows what needs the person, a new chat counts it in the 
   assertEquals(buttons(await page(updatesPage(p.env, space, who))), [])
 })
 
+test('"Other" answers a question in the person\'s own words, which the Operator reads as the answer', async () => {
+  await store.g.apply([{
+    entity: { eid: 'when' },
+    task: {},
+    doc: { title: 'When should it meet?' },
+    decision: {
+      question: 'When should it meet?',
+      choices: [{ label: 'Mondays', description: 'After work' }],
+    },
+    filed: { project: eid, assignee: ada },
+  }], { trusted: true })
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let page = parseHTML(await (await updatesPage(p.env, space, who)).text())
+    .document
+  let other = page.querySelector('#u-when .Update_Other')!
+  assertEquals(other.querySelector('summary')?.textContent, 'Other')
+  assertEquals(
+    other.querySelector('input[name=choose]')?.getAttribute('value'),
+    'when',
+  )
+  assertEquals(!!other.querySelector('textarea[name=choice]'), true)
+  let sent = await updatesAnswer(
+    new Request('https://yaks.app' + managePath('updates', 'club'), {
+      method: 'POST',
+      body: new URLSearchParams({
+        choose: 'when',
+        choice: 'Only on Sundays',
+        id: 'r2',
+      }),
+    }),
+    p.env,
+    space,
+    who,
+  )
+  assertEquals(sent.status, 303)
+  await service.drain()
+  let [row] = await store.g.get(['when'])
+  assertEquals((row.decided as { choice: string }).choice, 'Only on Sundays')
+  assertEquals((row.decided as { by: string }).by, ada)
+  assertStringIncludes(
+    asked.at(-1)!,
+    'answering your question “When should it meet?”',
+  )
+  assertStringIncludes(
+    asked.at(-1)!,
+    'in their own words, none of your choices: Only on Sundays',
+  )
+})
+
 test('a choice shows a picture, prose or a draft, and only its asker reads the picture', async () => {
   let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])
   let sha = 'ab'.repeat(32)

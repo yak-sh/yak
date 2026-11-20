@@ -1,6 +1,7 @@
 import { line } from '@yaks/query'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
+import type { Choice } from '@yaks/task'
 import { cancel } from '@yaks/wake'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
@@ -604,11 +605,22 @@ let BY: Record<
     }; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: `,
   fixed: () => FIXED,
   update: (_, __, about) => {
-    let asked = part<Comp>(about, 'decision')?.question
+    let decision = part<Comp>(about, 'decision')
+    let asked = decision?.question
+    // A choice, or under "Other" their own words, answers it; words sent
+    // while it is open ask about it.
+    let chose = part<Comp>(about, 'decided')?.choice
+    let [how, own] = chose == null
+      ? ['asking about', '']
+      : (decision?.choices as Choice[] | undefined)?.some((c) =>
+          c.label == chose
+        )
+      ? ['choosing on', '']
+      : ['answering', ' in their own words, none of your choices']
     return asked
-      ? `In their Updates, choosing on your question “${asked}” (${
+      ? `In their Updates, ${how} your question “${asked}” (${
         short(about!.entity.eid)
-      }): `
+      })${own}: `
       : `In their Updates, replying to your update “${
         part<Comp>(about, 'doc')?.body ?? ''
       }” (${about ? short(about.entity.eid) : 'gone'}): `
