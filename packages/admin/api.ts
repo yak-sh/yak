@@ -890,7 +890,7 @@ let graphed = async (
 // named app is asked through the graph tier; a bare space is its front page's
 // store door. The platform's space names its directory, which is served only
 // through the graph tier.
-export let storeQuery = async (
+export let storeQuery = (
   session: string,
   at: string,
   filters: string[],
