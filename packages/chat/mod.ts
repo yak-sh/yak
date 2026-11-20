@@ -305,15 +305,17 @@ let HOW: Record<Addressed | 'heard', string> = {
 /**
  * A room's messages read back ({@link Platform.recent}), one line each,
  * oldest first: when and who said it, the bot's own (`mine`, by the
- * platform's ids) as said by `you`.
+ * platform's ids) as said by `you`, and anyone else as `names` calls their
+ * account, by its id on the platform, else by the name they show.
  */
 export let recounted = (
   said: Said[],
   mine: Set<string> = new Set(),
+  names: Map<string, string> = new Map(),
 ): string =>
   said.map((s) =>
     `[${s.at.slice(0, 16).replace('T', ' ')}] ${
-      mine.has(s.id) ? 'you' : s.author.name
+      mine.has(s.id) ? 'you' : names.get(s.author.id) ?? s.author.name
     }: ${s.text}`
   ).join('\n')
 

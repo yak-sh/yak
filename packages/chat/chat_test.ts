@@ -119,6 +119,10 @@ test("a room read back: what came after the bot's last answer, a line each", () 
     '[2026-11-20 05:41] Ann: who brings pie?\n' +
       '[2026-11-20 05:42] you: Bo does.\n[2026-11-20 05:43] Bo: and cider',
   )
+  assertEquals(
+    recounted(room.slice(0, 1), new Set(), new Map([['Ann', 'Ann (owner)']])),
+    '[2026-11-20 05:41] Ann (owner): who brings pie?',
+  )
 })
 
 test('framing says the platform, how it was said to the bot, and who wrote it', () => {

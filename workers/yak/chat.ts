@@ -742,9 +742,10 @@ let toApps = async (
  * one said in the room the connection's space chose for its Operator to hear
  * in full (`chat_hears`) goes to that room's one conversation, as a group
  * text goes to its group's (operator-texts.ts `textedOperator`): the
- * conversation of a guest who stands for the room, so a turn there has only
- * what the space lets anyone do, whoever in it is a member, and the words are
- * kept as their writer's. Elsewhere, one addressed to the bot goes to its
+ * conversation of a guest who stands for the room, the words kept as their
+ * writer's. A turn there acts for a member whose linked account wrote the
+ * newest words, with that member's tools, and for anyone else has only what
+ * the space lets anyone do (operator.ts `actorOf`). Elsewhere, one addressed to the bot goes to its
  * writer's own conversation with that Operator; a direct one to yaks.app's
  * own, from someone linked here, to their own space's. Anything else is not
  * for the Operator.

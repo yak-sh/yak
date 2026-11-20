@@ -43,8 +43,14 @@ import { channelOf } from './operator-view.ts'
 import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
-import { PLATFORMS } from './chat.ts'
-import { type Lead, leading, named, replying } from './operator-rooms.ts'
+import { linked, PLATFORMS } from './chat.ts'
+import {
+  type Lead,
+  leading,
+  named,
+  replying,
+  type Speakers,
+} from './operator-rooms.ts'
 import {
   framing,
   kept,
@@ -385,6 +391,37 @@ export let speakerOf = async (env: Env, space: Space, request: Request) => {
   return speaker(name, proofOf(request), role ?? null, space)
 }
 
+/** Who wrote each of a chat room's messages, by their account's id on the
+ * platform, as the Operator reads a speaker ({@link speaker}): known by the
+ * account's link to a person here, never by a name anyone can take, so every
+ * line read back from a room names its own speaker (T-2089). */
+export let speakersOf =
+  (env: Env, space: Space): Speakers => async (via, said) => {
+    let platform = PLATFORMS.get(via)
+    if (!platform) return new Map()
+    let dir = directoryOf(env.STORE)
+    let authors = new Map(said.map((s) => [s.author.id, s.author.name]))
+    return new Map(
+      await Promise.all(
+        [...authors].map(async ([id, name]) => {
+          let person = await linked(env, platform, id)
+          let [known, role] = person
+            ? await Promise.all([dir.known(person), dir.role(space, person)])
+            : []
+          return [
+            id,
+            speaker(
+              known?.name || name,
+              proofOf({ channel: via, linked: !!person }),
+              role ?? null,
+              space,
+            ),
+          ] as const
+        }),
+      ),
+    )
+  }
+
 /**
  * Words that came by a channel, taken in at the door they came to. The item
  * they arrived as (`item`, in its own package's words: a @yaks/mail letter)
@@ -567,10 +604,11 @@ export let chatHeard = async (
   await g.apply([await named(env, g, room, connection), author], {
     trusted: true,
   })
+  let at = { via, connection, speakers: speakersOf(env, space) }
   let lead = had?.entry ? undefined : joined(
-    await replying(env, operator.store, { via, connection }, said),
+    await replying(env, operator.store, at, said),
     !writer && said.server && said.addressed
-      ? await leading(env, operator.store, { via, connection }, said)
+      ? await leading(env, operator.store, at, said)
       : undefined,
   )
   let { fresh, session } = await hear(

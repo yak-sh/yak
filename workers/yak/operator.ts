@@ -123,6 +123,7 @@ import {
   replyRows,
   type Request as Requested,
   SMS,
+  speakersOf,
   TAKING,
   UNASKED,
   UNPROVEN,
@@ -149,6 +150,7 @@ import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
 import { chatRead, roomsOf } from './operator-rooms.ts'
+import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
@@ -1186,6 +1188,33 @@ let requestAt = async (store: Store, session: string) => {
     at: String(comp(row, 'created')?.at ?? ''),
   }
 }
+/** Whom a step of a conversation acts for: its person, or, in a room the
+ * space hears in full (chat.ts `arrived`), whose conversation is a guest's
+ * standing for the room, the member who wrote its newest words, with that
+ * member's tools (T-2089). A chat platform's words are kept as their writer's
+ * only when their account there is linked to them; anyone else's are a
+ * guest's, who holds no seat, so the room's guest acts for them. */
+export let actorOf = async (
+  store: Store,
+  session: string,
+  o: Working,
+  dir: Pick<Directory, 'role'>,
+): Promise<Working> => {
+  let [newest] = await store.g.read(
+    q`.entry.session=${await topOf(
+      store.g,
+      session,
+    )} .intake .order=-entry.seq .limit=1 .fields=channel.name,created.by`,
+  )
+  let writer = comp(newest, 'created')?.by as string | undefined
+  if (
+    !writer || writer == o.person ||
+    !PLATFORMS.has(String(comp(newest, 'channel')?.name))
+  ) return o
+  return await dir.role({ eid: o.space }, writer)
+    ? { ...o, person: writer, administrative: undefined }
+    : o
+}
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
 let conversed = async ({ g }: Store, session: string) =>
@@ -1218,9 +1247,11 @@ let working = async (
   session: string,
   open?: () => Directory,
 ) => {
-  let o = await workingOf(store, session)
-  if (!o) throw new Error(`Operator session ${session} names no space`)
+  let held = await workingOf(store, session)
+  if (!held) throw new Error(`Operator session ${session} names no space`)
   let reading = open ?? opening(env)
+  let dir = reading()
+  let o = await actorOf(store, session, held, dir)
   // The space, the person's reach in it, the apps the step's roster and
   // map read next, whether the person is the platform's admin (which the
   // roster and the machine ask) and their Google accounts are asked at once:
@@ -1228,7 +1259,6 @@ let working = async (
   // answered from these (lib/hops.ts `recall`). What needs only the person
   // and the space's eid is read through `here`; `ctx` waits for the space
   // and the reach.
-  let dir = reading()
   let reach = reachOf(dir, { eid: o.space }, o.person, o.administrative)
   let apps = dir.reachable(o.person)
   let platform = admin({ dir, person: o.person })
@@ -2168,7 +2198,9 @@ export let operating = (
       roomsOf(store, session),
     ])
     // Addressed in a chat room, it reads back what was said there.
-    let chat = rooms.length ? [chatRead(env, store)] : []
+    let chat = rooms.length
+      ? [chatRead(env, store, speakersOf(env, space))]
+      : []
     // What a member's turn holds beyond the space's tools: their alerts,
     // texts, mail, numbers, wakes and subscriptions.
     let mine = () => [
