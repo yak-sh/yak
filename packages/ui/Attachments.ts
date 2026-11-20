@@ -126,6 +126,18 @@ export let specimens = (): Specimen[] => [
       ),
     ),
   ],
+  [
+    'Attachments, Frame',
+    h(
+      Attachments,
+      {},
+      h(Attachments.Frame, {
+        title: 'message.txt',
+        sandbox: '',
+        srcdoc: 'A file of words, shown as it is.',
+      }),
+    ),
+  ],
 ]
 
 /** The same interface on a native host. */
