@@ -53,11 +53,12 @@ appId: host.exp.Exponent
     timeout: 15000
 - takeScreenshot: 3-operator
 - tapOn: Apps
+# A row is read as one element: its title, then its access.
 - extendedWaitUntil:
-    visible: Packing List
+    visible: Packing List.*
     timeout: 30000
 - takeScreenshot: 4-apps
-- tapOn: Packing List
+- tapOn: Packing List.*
 - waitForAnimationToEnd:
     timeout: 20000
 - takeScreenshot: 5-packing-list

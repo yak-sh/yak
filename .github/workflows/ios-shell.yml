@@ -84,12 +84,15 @@ jobs:
           echo "::add-mask::${pass#t=}"
           mkdir -p shots
           cd shots
-          maestro test -e SIGNIN="exp://127.0.0.1:8081/--/login/link?$pass" ../native/simulator.yaml
+          maestro test --test-output-dir "$RUNNER_TEMP/maestro" -e SIGNIN="exp://127.0.0.1:8081/--/login/link?$pass" ../native/simulator.yaml
       - name: what the simulator showed last
         if: always()
         run: |
           mkdir -p shots
-          find native -maxdepth 1 -name '*.png' -exec mv {} shots/ \;
+          # The flow's own screenshots, and none of Maestro's debug output,
+          # whose command log holds the sign-in link.
+          find native shots "$RUNNER_TEMP/maestro" ~/.maestro/tests -name '[0-9]-*.png' \
+            -exec cp {} shots/ \; 2>/dev/null || true
           xcrun simctl io booted screenshot shots/last.png || true
           pass="${LINK#*\?}"
           for f in metro device; do
