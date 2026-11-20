@@ -105,7 +105,10 @@ Google's app is in testing mode, where only the people Google lists may sign in,
 so yaks.app offers it only on a connections page opened with
 `?enable=google-calendar`. `gmail` is brokered by Nango's CASA-verified Google
 app (`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant
-reads and sends mail, and it sends its token to `gmail.googleapis.com` alone. A
+is the whole mailbox (`https://mail.google.com/`, the fixed scope of Nango's
+app), and it sends its token to `gmail.googleapis.com` alone. It stands in for
+Nango's own listing of Gmail (`standIn`): the catalog, the integration directory
+and a connections page opened at `#google-mail` all offer `gmail` instead. A
 gmail connection made earlier, directly as the `google` client asking for
 `gmail.send`, keeps signing in that way. `google-search-console` is built on the
 same `google` client: it asks for `webmasters`, which reads a site's search
@@ -363,16 +366,21 @@ categories, hosts, connects, fields, instructions, popular}`,
 `logo` the address of an SVG. Nango's comes from its provider list
 (`listingOf`): a service it signs in to with an OAuth app of its own (`signin`),
 one the person brings an OAuth client for (`client`), or a key (`key`), whose
-`fields` and `instructions` come from Nango's credential schema. A way to
-connect that hands back no access token is left out.
+`fields` and `instructions` come from Nango's credential schema. A sign-in is
+listed only for a provider Nango has an OAuth app of its own with, which its
+guide's list says (`managedIn`; its API tells only its dashboard): Nango refuses
+to make any other ready. A way to connect that hands back no access token is
+left out.
 
 - `catalogue(built, listings, broker)` merges them, direct first: a built
   integration stands in for the listing of the same name or the one its broker
-  names (Gmail for Nango's google-mail), takes that listing's kinds, and is
-  featured. A listing reached with a key is direct too: it becomes a pasted key
-  kept here and sent only to the listing's hosts, so the broker is never asked.
-  Only `signin` and `client` listings are brokered. A listing whose hosts depend
-  on the account (`${connectionConfig.subdomain}`) names none and is left out.
+  names (Gmail for Nango's google-mail, `standIn`), takes that listing's kinds,
+  and is featured. The integration directory (`listing`) leaves out a described
+  row a built one stands in for the same way. A listing reached with a key is
+  direct too: it becomes a pasted key kept here and sent only to the listing's
+  hosts, so the broker is never asked. Only `signin` and `client` listings are
+  brokered. A listing whose hosts depend on the account
+  (`${connectionConfig.subdomain}`) names none and is left out.
 - An `Offer` is the integration it would be, plus its `categories`, its logo's
   address (`image`) and whether it is `featured`: built, featured by its broker,
   or wearing the platform's `featured{at, by, via}` mark (@yaks/platform), which

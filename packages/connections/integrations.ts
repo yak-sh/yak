@@ -169,6 +169,21 @@ export let known = async (
   return b?.[INTEGRATION] as Integration | undefined
 }
 
+/** The built integration that stands in for the service `name`: the one of
+ * that name, else one signing in through a broker's listing of it (Gmail for
+ * Nango's google-mail). The catalog offers, the directory lists and the
+ * connections page adds that one in the listing's place. */
+export let standIn = <I extends Integration>(
+  built: I[],
+  name: string,
+  broker?: string,
+): I | undefined =>
+  built.find((i) => i.built && i.name == name) ??
+    built.find((i) =>
+      i.built && i.broker?.integration == name &&
+      (!broker || i.broker.name == broker)
+    )
+
 /** An integration by name, among rows already read: what `list` and
  * `borrowed` return beside their connections. */
 export let knownIn = (
@@ -287,15 +302,20 @@ export type Listed = Marked & { published?: string; unchecked?: boolean }
  */
 export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
   let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
-  let all = (await read(
+  let rows = await read(
     line`.${INTEGRATION}&?${PUBLISHED}&?unchecked&?${FEATURED}`,
-  )).flatMap(
+  )
+  let built = rows.map(marked).filter((i) => i.built)
+  let all = rows.flatMap(
     (b) => {
       let i = marked(b)
       let at = (b[PUBLISHED] as { at?: string } | undefined)?.at
-      // A listing whose owner is gone is nobody's to keep, or take down.
+      // A listing whose owner is gone is nobody's to keep, or take down; one
+      // a built integration stands in for is that one.
       return (!i.testing && !i.owner &&
-          (i.built || Array.isArray(i.categories))) || (b[PUBLISHED] && i.owner)
+          (i.built ||
+            Array.isArray(i.categories) && !standIn(built, i.name))) ||
+          (b[PUBLISHED] && i.owner)
         ? [{
           ...i,
           ...at ? { published: at } : {},

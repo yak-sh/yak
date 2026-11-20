@@ -654,6 +654,7 @@ let OWN_WORDS = new Set([
   'escalation_answer',
   'calendar_add',
   'gmail_send',
+  'gmail_draft',
   'admin_budget',
   'admin_fee',
 ])

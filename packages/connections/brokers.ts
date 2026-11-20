@@ -118,11 +118,17 @@ type Provider = {
 }
 
 /** A Nango provider (GET /providers) as the listing it is, or none where
- * Nango hands back nothing a connection here can use. Its hosts are its API's,
- * none where the account names them (`${connectionConfig.subdomain}`). */
-export let listingOf = (p: Provider): Listing | undefined => {
+ * Nango hands back nothing a connection here can use: a sign-in needs an app
+ * of Nango's own with the service, which only the providers `managed` names
+ * have. Its hosts are its API's, none where the account names them
+ * (`${connectionConfig.subdomain}`). */
+export let listingOf = (
+  p: Provider,
+  managed: ReadonlySet<string>,
+): Listing | undefined => {
   let connects = CONNECTS[p.auth_mode ?? '']
   if (!connects || !p.name || !p.display_name) return undefined
+  if (connects == 'signin' && !managed.has(p.name)) return undefined
   let base = p.proxy?.base_url ?? ''
   let host = !base.includes('${') && URL.canParse(base)
     ? new URL(base).hostname
@@ -156,6 +162,24 @@ let MIRRORS: [from: string, to: string][] = [[
   'https://raw.githubusercontent.com/NangoHQ/nango/master/packages/webapp/public/images/template-logos/',
 ]]
 
+// Where Nango says which providers it has an OAuth app of its own with: its
+// guide's list, the one place it publishes them (its API says so only to its
+// dashboard).
+let MANAGED =
+  'https://raw.githubusercontent.com/NangoHQ/nango/master/docs/guides/auth/overview.mdx'
+
+/** The providers Nango's guide lists as having an OAuth app of Nango's own:
+ * the last part of each link in its list of them. */
+/// managedIn('<a id="apis-with-a-nango-managed-oauth-app"></a>\n- [Gmail](/api-integrations/google-mail)\n- [Box](/integrations/all/box)\n</Accordion>\n- [Other](/x/other)') -> new Set(['google-mail', 'box'])
+export let managedIn = (guide: string): Set<string> => {
+  let list = guide.split('apis-with-a-nango-managed-oauth-app')[1]
+    ?.split('</Accordion>')[0] ?? ''
+  return new Set(
+    [...list.matchAll(/\]\(([^)\s]+)\)/g)]
+      .map((m) => m[1].replace(/\/$/, '').split('/').at(-1)!),
+  )
+}
+
 /** Every address a listing's logo may be fetched from, its own first. */
 /// logoSources('https://logos.example/hub.svg') -> ['https://logos.example/hub.svg']
 export let logoSources = (at: string): string[] => [
@@ -170,6 +194,16 @@ let strs = (v: unknown): string[] =>
     : typeof v == 'string'
     ? v.split(/[\s,]+/).filter(Boolean)
     : []
+
+// Nango's managed providers, from its guide; a guide that can't be read
+// fails the catalog, so the list kept before stands.
+let guide = async (fetcher: Fetch) => {
+  let res = await fetcher(MANAGED, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`Nango's guide answered ${res.status}`)
+  let managed = managedIn(await res.text())
+  if (!managed.size) throw new Error("Nango's guide lists no managed app")
+  return managed
+}
 
 /** Nango (nango.dev), reached with an environment's secret key. */
 export let nango = (key: string, fetcher: Fetch = fetch): Broker => {
@@ -203,8 +237,11 @@ export let nango = (key: string, fetcher: Fetch = fetch): Broker => {
     `provider_config_key=${encodeURIComponent(integration)}`
   return {
     catalog: async () => {
-      let { data } = await ask('/providers') as { data?: Provider[] }
-      return (data ?? []).flatMap((p) => listingOf(p) ?? [])
+      let [{ data }, managed] = await Promise.all([
+        ask('/providers') as Promise<{ data?: Provider[] }>,
+        guide(fetcher),
+      ])
+      return (data ?? []).flatMap((p) => listingOf(p, managed) ?? [])
     },
     enable: async (integration, connects) => {
       let at = `/integrations/${encodeURIComponent(integration)}`

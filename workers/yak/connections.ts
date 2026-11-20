@@ -82,6 +82,7 @@ import {
   set,
   settle,
   signsInWith,
+  standIn,
   type Status,
   USES,
   using,
@@ -725,8 +726,10 @@ export let connectionsOf = async (
   let read = readOn(dir)
   let month = monthOf(Date.now())
   // Only what those answers name outside this space is asked after.
-  let [here, reached, ahead, listing, theirs, built, wanted, own, servers] =
+  let [here, reached, ahead, listing, theirs, built, byName, own, servers] =
     await connectionsAsked(env, space, person, { ...at, dir })
+  // A service a built integration stands in for is added as that one.
+  let wanted = at.add && standIn(built, at.add, BROKER) || byName
   let mcp = at.mcp?.(servers)
   mcp?.catch(() => {})
   let mine = own ? theirs : []

@@ -59,7 +59,16 @@ let ROW_ROOM = 100_000
 
 /** The broker's list as it was kept: when it was asked, what it listed, and
  * the services it refused to make ready. */
-export type Kept = { at: number; listings: Listing[]; closed: string[] }
+export type Kept = {
+  at: number
+  listings: Listing[]
+  closed: string[]
+  v?: number
+}
+
+// What a kept list is read as: one kept by an older reading of the broker is
+// asked again.
+let VERSION = 2
 
 // This isolate's copy, and the read under way, for each bucket it is kept in.
 let held = new WeakMap<object, Kept>()
@@ -80,7 +89,7 @@ let asked = async (env: Env, previous?: Kept): Promise<Kept | undefined> => {
   let latest = await stored(env)
   if (latest && fresh(latest)) return latest
   let closed = latest?.closed ?? previous?.closed ?? []
-  return keep(env, { at: Date.now(), listings, closed })
+  return keep(env, { at: Date.now(), listings, closed, v: VERSION })
 }
 
 let stored = async (env: Env): Promise<Kept | undefined> => {
@@ -90,7 +99,8 @@ let stored = async (env: Env): Promise<Kept | undefined> => {
     : undefined
 }
 
-let fresh = (kept: Kept | undefined) => !!kept && Date.now() - kept.at <= DAY
+let fresh = (kept: Kept | undefined) =>
+  !!kept && kept.v == VERSION && Date.now() - kept.at <= DAY
 
 // One read at a time in an isolate: a page drawn while it is under way waits
 // on the same one, so the request that began it holds it to its end

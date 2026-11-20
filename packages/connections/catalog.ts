@@ -17,7 +17,7 @@
 
 import { cmp } from '@yaks/fp'
 import type { Listing } from './brokers.ts'
-import type { Integration, Marked } from './integrations.ts'
+import { type Integration, type Marked, standIn } from './integrations.ts'
 
 /** A service as the catalog offers it: the integration it is or would be,
  * the kinds of service it is, the address of its logo where it has no SVG of
@@ -78,10 +78,10 @@ export let catalogue = (
   let standing = (i: Integration) =>
     by.get(i.broker?.name == broker ? i.broker.integration : i.name) ??
       by.get(i.name)
-  let taken = new Set(built.flatMap((i) => [i.name, standing(i)?.name]))
+  let taken = (name: string) => !!standIn(built, name, broker)
   let pending = integrations.filter((i) =>
     !i.built && !i.owner && !i.testing && i.hosts.length &&
-    Array.isArray(i.categories) && !taken.has(i.name)
+    Array.isArray(i.categories) && !taken(i.name)
   ).map((i): Offer => ({ ...i, categories: i.categories ?? [] }))
   let described = new Set(pending.map((i) => i.name))
   return [
@@ -96,7 +96,7 @@ export let catalogue = (
     }),
     ...pending,
     ...listings.filter((l) =>
-      !taken.has(l.name) && !described.has(l.name) && l.hosts.length
+      !taken(l.name) && !described.has(l.name) && l.hosts.length
     )
       .map((l) => offerOf(l, broker)),
   ].sort((a, b) =>

@@ -36,11 +36,17 @@ import { caught } from './defects.ts'
 export let CALENDAR = 'google-calendar'
 export let GMAIL = 'gmail'
 
+/** The Gmail scopes that change mail, drafting and labelling it; any one in
+ * gmail's `scopes` offers `gmail_draft` and `gmail_label`. */
+export let CHANGES = [
+  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/gmail.modify',
+]
+
 /** The Gmail scopes that read mail; any one in gmail's `scopes` offers
  * `gmail_read`. */
 export let READS = [
-  'https://mail.google.com/',
-  'https://www.googleapis.com/auth/gmail.modify',
+  ...CHANGES,
   'https://www.googleapis.com/auth/gmail.readonly',
 ]
 
@@ -166,6 +172,7 @@ export let messageOf = (m: Record<string, unknown>) => {
     subject: header('subject'),
     date: header('date'),
     snippet: String(m.snippet ?? ''),
+    ...Array.isArray(m.labelIds) ? { labels: m.labelIds.map(String) } : {},
     ...text ? { text } : {},
   }
 }
@@ -298,14 +305,18 @@ export let googleTools = async (
   ]
 }
 
-// What reads mail is what the connection was granted, where it says; else
-// what its integration asks for.
-let readsMail = (mail: Bundle, gmail: Integration | undefined) => {
+// What a mail connection may do is what it was granted, where it says; else
+// what its integration asks for: any one of `of`.
+let grants = (
+  mail: Bundle,
+  gmail: Integration | undefined,
+  of: string[],
+) => {
   let granted = comp(mail, CONNECTION).scopes
   let scopes = Array.isArray(granted) && granted.length
     ? granted.map(String)
     : gmail?.scopes
-  return !!scopes?.some((s) => READS.includes(s))
+  return !!scopes?.some((s) => of.includes(s))
 }
 
 type Sender = Pick<Ctx, 'dir'> & { person: string | null }
@@ -323,7 +334,10 @@ let toolsOf = (
   if (name != GMAIL) return []
   return [
     gmailSend(env, ctx, space, held),
-    ...readsMail(held, i) ? [gmailRead(env, held)] : [],
+    ...grants(held, i, READS) ? [gmailRead(env, held)] : [],
+    ...grants(held, i, CHANGES)
+      ? [gmailDraft(env, held), gmailLabel(env, held)]
+      : [],
   ]
 }
 
@@ -590,6 +604,137 @@ let gmailRead = (env: Env, connection: Bundle): Tool => ({
     text: await gmailOf(env, connection, args),
     with: { heard: {} },
   }),
+})
+
+let gmailDraft = (env: Env, connection: Bundle): Tool => ({
+  name: 'gmail_draft',
+  title: 'Draft in their Gmail',
+  step: { doing: 'Drafting to %{to}…', done: 'Drafted to %{to}' },
+  description:
+    "Save an email as a draft in the Gmail of the person you work for, for them to read, change and send themselves. It is not signed: they send it as theirs. Give `thread` to draft a reply in that conversation (gmail_read gives each message's thread).",
+  parameters: {
+    type: 'object',
+    properties: {
+      to: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'The email addresses it goes to.',
+      },
+      cc: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Addresses to copy.',
+      },
+      subject: { type: 'string', description: 'Its subject.' },
+      text: { type: 'string', description: 'What it says, in plain text.' },
+      thread: { type: 'string', description: 'The thread it replies in.' },
+    },
+    required: ['to', 'subject', 'text'],
+  },
+  run: async (args) => {
+    let to = list(args.to), cc = list(args.cc)
+    let text = str(args.text), thread = str(args.thread)
+    if (!to.length || [...to, ...cc].some((a) => !a.includes('@'))) {
+      throw refuse('arguments', 'Give the email addresses it goes to.')
+    }
+    if (!text) throw refuse('arguments', 'Say what the email says.')
+    let made = await askGoogle(env, connection, `${GMAIL_API}/drafts`, {
+      method: 'POST',
+      body: JSON.stringify({
+        message: {
+          raw: letterOf({ to, cc, subject: str(args.subject), text }),
+          ...thread ? { threadId: thread } : {},
+        },
+      }),
+    })
+    return JSON.stringify({ draft: made.id, to })
+  },
+})
+
+type Label = { id: string; name: string; type?: string }
+
+/** The ids of the labels `names` names, by name or id in any case, and the
+ * names none matches. */
+export let labelIds = (labels: Label[], names: string[]) => {
+  let of = (n: string) =>
+    labels.find((l) =>
+      [l.id, l.name].some((x) => x.toLowerCase() == n.toLowerCase())
+    )?.id
+  return {
+    ids: names.flatMap((n) => of(n) ?? []),
+    missing: names.filter((n) => !of(n)),
+  }
+}
+
+let gmailLabel = (env: Env, connection: Bundle): Tool => ({
+  name: 'gmail_label',
+  title: 'Label their Gmail',
+  step: { doing: 'Labelling their mail…', done: 'Labelled their mail' },
+  description:
+    "Add labels to and remove them from messages in the Gmail of the person you work for, by the ids gmail_read gives. A label added that does not exist yet is made. Gmail's own labels do the rest: remove INBOX to archive, UNREAD to mark read, add STARRED to star, TRASH to move to the trash. With no messages, it lists their labels.",
+  parameters: {
+    type: 'object',
+    properties: {
+      messages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'The ids of the messages.',
+      },
+      add: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'The labels to add, by name.',
+      },
+      remove: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'The labels to remove, by name.',
+      },
+    },
+  },
+  run: async (args) => {
+    let messages = list(args.messages)
+    let add = list(args.add), remove = list(args.remove)
+    let labels = async () =>
+      ((await askGoogle(env, connection, `${GMAIL_API}/labels`)).labels ??
+        []) as Label[]
+    let all = await labels()
+    if (!messages.length) {
+      return JSON.stringify(all.map(({ id, name, type }) => ({
+        id,
+        name,
+        ...type == 'system' ? { system: true } : {},
+      })))
+    }
+    if (!add.length && !remove.length) {
+      throw refuse('arguments', 'Say which labels to add or remove.')
+    }
+    let made = await Promise.all(
+      labelIds(all, add).missing.map(async (name) =>
+        await askGoogle(env, connection, `${GMAIL_API}/labels`, {
+          method: 'POST',
+          body: JSON.stringify({ name }),
+        }) as Label
+      ),
+    )
+    let held = [...all, ...made]
+    let gone = labelIds(held, remove)
+    if (gone.missing.length) {
+      throw refuse(
+        'arguments',
+        `They have no label ${gone.missing.join(', ')}.`,
+      )
+    }
+    await askGoogle(env, connection, `${GMAIL_API}/messages/batchModify`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ids: messages,
+        addLabelIds: labelIds(held, add).ids,
+        removeLabelIds: gone.ids,
+      }),
+    })
+    return JSON.stringify({ messages, added: add, removed: remove })
+  },
 })
 
 let gmailOf = async (

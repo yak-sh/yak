@@ -3,7 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
-import { line } from '@yaks/query'
+import { type Line, line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -15,6 +15,7 @@ import {
   brokerKey,
   envOf,
   integrationEid,
+  listing,
   need,
   registration,
 } from '@yaks/connections'
@@ -1197,6 +1198,15 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     if (said == 'GET api.nango.dev/providers') {
       return answer({ data: PROVIDERS })
     }
+    if (u.host == 'raw.githubusercontent.com') {
+      return Promise.resolve(
+        new Response(
+          '<a id="apis-with-a-nango-managed-oauth-app"></a>\n' +
+            '- [HubSpot](/api-integrations/hubspot)\n' +
+            '- [Gmail](/api-integrations/google-mail)\n</Accordion>',
+        ),
+      )
+    }
     if (said == 'GET api.nango.dev/integrations/hubspot') {
       return answer({}, 404)
     }
@@ -1232,7 +1242,31 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
         description: 'A service needing an account-specific host.',
       },
       unchecked: {},
+    }, {
+      // Nango's own listing of Gmail, described for the directory: the built
+      // gmail stands in for it.
+      entity: { eid: integrationEid('google-mail') },
+      integration: {
+        name: 'google-mail',
+        title: 'Gmail',
+        categories: ['productivity'],
+        hosts: ['gmail.googleapis.com'],
+        broker: { name: 'nango', integration: 'google-mail' },
+      },
+      featured: { at: '2026-11-13T10:00:00.000Z' },
+      unchecked: {},
     }], KERNEL)
+    let directory = (await listing((q) => meta(s.p.env).query(q as Line))).map((
+      i,
+    ) => i.name)
+    assert(directory.includes('gmail') && !directory.includes('google-mail'))
+    let gmail = await connectionsOf(s.p.env, s.space, s.person, {
+      add: 'google-mail',
+    })
+    assertEquals(
+      [gmail.asked?.name, gmail.asked?.available],
+      ['gmail', undefined],
+    )
     let unavailable = await connectionsOf(s.p.env, s.space, s.person, {
       add: 'account-host',
     })

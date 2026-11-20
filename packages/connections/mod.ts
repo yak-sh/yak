@@ -76,6 +76,7 @@ export {
   type Read,
   seeds,
   set,
+  standIn,
   told,
 } from './integrations.ts'
 export { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'

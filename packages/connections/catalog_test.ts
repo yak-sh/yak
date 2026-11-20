@@ -4,7 +4,12 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Listing, listingOf, logoSources, nango } from './brokers.ts'
+import {
+  type Listing,
+  listingOf as listed,
+  logoSources,
+  nango,
+} from './brokers.ts'
 import {
   adopted,
   catalogue,
@@ -27,6 +32,8 @@ let provider = (name: string, auth_mode: string, more = {}) => ({
 })
 
 test('a Nango provider is a listing only where a connection here can use it', () => {
+  let managed = new Set(['hub'])
+  let listingOf = (p: Parameters<typeof listed>[0]) => listed(p, managed)
   assertEquals(listingOf(provider('hub', 'OAUTH2')), {
     name: 'hub',
     title: 'HUB',
@@ -38,6 +45,8 @@ test('a Nango provider is a listing only where a connection here can use it', ()
   })
   assertEquals(listingOf(provider('cc', 'OAUTH2_CC'))?.connects, 'client')
   assertEquals(listingOf(provider('tba', 'TBA')), undefined)
+  // A sign-in Nango has no app of its own for is not offered.
+  assertEquals(listingOf(provider('canva', 'OAUTH2')), undefined)
   // Hosts the account names are not known yet.
   assertEquals(
     listingOf(

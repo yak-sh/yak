@@ -15,6 +15,7 @@ import { listCommands, runCommand } from './declared.ts'
 import {
   eventBody,
   googleTools,
+  labelIds,
   letterOf,
   mailedFor,
   messageOf,
@@ -116,6 +117,16 @@ globalThis.fetch = (input, init) => {
         end: { dateTime: '2026-11-10T09:15:00-05:00' },
       }],
     }))
+  }
+  if (url.pathname.endsWith('/labels')) {
+    return Promise.resolve(Response.json(
+      r.method == 'POST' ? { id: 'Label_2', name: 'Bulletin' } : {
+        labels: [
+          { id: 'INBOX', name: 'INBOX', type: 'system' },
+          { id: 'Label_1', name: 'Church', type: 'user' },
+        ],
+      },
+    ))
   }
   if (url.pathname.endsWith('/calendarList/primary')) {
     return Promise.resolve(Response.json({ timeZone: 'America/Detroit' }))
@@ -291,10 +302,46 @@ test('connected from the page, each names its account, and the Operator uses bot
   )
 })
 
-test('reading mail is offered by what the connection was granted', async () => {
+test('reading, drafting and labelling mail are offered by what the connection was granted', async () => {
   let ctx = await operatorContext(env, { person }, space)
   let offered = (await googleTools(env, ctx, space)).map((t) => t.name)
-  assert(offered.includes('gmail_read'))
+  for (let name of ['gmail_read', 'gmail_draft', 'gmail_label']) {
+    assert(offered.includes(name), name)
+  }
+})
+
+test('a draft is saved in the thread it replies in, and labels are added by name, a new one made', async () => {
+  let ctx = await operatorContext(env, { person }, space)
+  let tools = await googleTools(env, ctx, space)
+  let run = (name: string, args: Record<string, unknown>) =>
+    tools.find((t) => t.name == name)!.run(args, {} as never)
+  asked.length = 0
+  await run('gmail_draft', {
+    to: ['pastor@church.example'],
+    subject: 'Sunday',
+    text: 'See you then.',
+    thread: 't1',
+  })
+  let [draft] = to('/drafts')
+  assertEquals((await draft.json()).message.threadId, 't1')
+  await run('gmail_label', {
+    messages: ['m1'],
+    add: ['church', 'Bulletin'],
+    remove: ['inbox'],
+  })
+  let made = to('/labels').filter((r) => r.method == 'POST')
+  assertEquals(await Promise.all(made.map((r) => r.json())), [{
+    name: 'Bulletin',
+  }])
+  assertEquals(await to('/batchModify')[0].json(), {
+    ids: ['m1'],
+    addLabelIds: ['Label_1', 'Label_2'],
+    removeLabelIds: ['INBOX'],
+  })
+  assertEquals(labelIds([{ id: 'UNREAD', name: 'UNREAD' }], ['unread', 'x']), {
+    ids: ['UNREAD'],
+    missing: ['x'],
+  })
 })
 
 test('the same Google tools are in the pool of tools, at the connection that offers them', async () => {
