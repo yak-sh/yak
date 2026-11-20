@@ -44,7 +44,7 @@ import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
-import { leading } from './operator-rooms.ts'
+import { leading, named } from './operator-rooms.ts'
 import {
   framing,
   kept,
@@ -454,7 +454,8 @@ let chatFraming = (request: Request, item: Bundle) => {
  * `arrived`, build.ts `/operator/chat`) into the conversation of `person`: a
  * person here whose account there is linked, or a guest; or, in a room the
  * space hears in full, the guest who stands for the room, the words kept as
- * their `writer`'s. Its room and writer are kept, then the message itself is
+ * their `writer`'s. Its room, named the first time (operator-rooms.ts
+ * `named`), and writer are kept, then the message itself is
  * taken in ({@link hear}), naming the connection whose bot heard it, which
  * answers it in the same room, after what was said in the room since its
  * last answer there, where the room is not one it hears in full
@@ -475,7 +476,9 @@ export let chatHeard = async (
   let [room, author, message] = kept(via, said, connection)
   let { g } = operator.store
   let [had] = await g.get([inputOf(message.entity.eid)], ['entry'])
-  await g.apply([room, author], { trusted: true })
+  await g.apply([await named(env, g, room, connection), author], {
+    trusted: true,
+  })
   let lead = !had?.entry && !writer && said.server && said.addressed
     ? await leading(env, operator.store, { via, connection }, said)
     : ''

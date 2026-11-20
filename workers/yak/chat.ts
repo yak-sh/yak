@@ -173,6 +173,34 @@ export let recent = async (
 ) => {
   let p = PLATFORMS.get(via)
   if (!p?.recent) return []
+  let { token, server } = await heldBy(env, p, at)
+  return (await p.recent(token, at.room, page)).map((s) => ({ ...s, server }))
+}
+
+/**
+ * What room `at.room` is called, as its connection's bot reads the rooms of
+ * its server, only in a server that connection serves, as {@link recent}
+ * reads it; none where the platform lists no rooms or this one is not among
+ * them.
+ */
+export let roomName = async (
+  env: Env,
+  via: string,
+  at: { connection: string; room: string; server?: string },
+): Promise<string | undefined> => {
+  let p = PLATFORMS.get(via)
+  if (!p?.rooms) return
+  let { token, server } = await heldBy(env, p, at)
+  return (await p.rooms(token, server))?.find((r) => r.id == at.room)?.name
+}
+
+// The bot token of `at.connection` and the server of `at.room`, refused
+// where the room is outside the servers the connection serves.
+let heldBy = async (
+  env: Env,
+  p: Platform,
+  at: { connection: string; room: string; server?: string },
+) => {
   let [c] = await read(env, line`.entity.eid=${at.connection}&.${CONNECTION}&*`)
   let held = comp(c, CONNECTION).status == 'connected' ? serves(c) : []
   let token = held.length ? await speaker(env, p, at.connection) : ''
@@ -181,7 +209,7 @@ export let recent = async (
     held,
     async () => at.server ?? await p.server?.(token, at.room),
   )
-  return (await p.recent(token, at.room, page)).map((s) => ({ ...s, server }))
+  return { token, server }
 }
 
 let read = async (env: Env, q: string) =>

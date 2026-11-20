@@ -16,6 +16,7 @@ import {
   lines,
   look,
   PERSON,
+  roomLine,
   type Seen,
   type View,
   wire,
@@ -288,6 +289,41 @@ test('an outside agent’s chat is a step named for whom it was with, holding th
   )
   assertEquals(row.html.includes('attachment_read'), false)
   assertEquals(row.html.includes('Asked:'), false)
+})
+
+test('a room words came from is one line before them, drawn again alike from what the socket sends', () => {
+  let said = entry('said', 1, {
+    content: { body: 'thoughts?' },
+    channel: { name: 'discord' },
+  })
+  let seen: Seen = {
+    rooms: {
+      said: {
+        eid: 'barn',
+        platform: 'Discord',
+        name: 'barn',
+        said: [
+          { who: 'Bo', body: "I'll bring pie", at: '2026-11-20T05:39:00Z' },
+          { who: 'Ann', body: 'thoughts?', at: '2026-11-20T05:40:00Z' },
+        ],
+        more: true,
+      },
+    },
+  }
+  let drawn = lines([said], namer({}), seen)
+  assertEquals(drawn.map((l) => l.id), [roomLine('barn'), 'said'])
+  let again = drawLines(wire(drawn, [said], seen))
+  assertEquals(again.map((l) => l.id), [roomLine('barn'), 'said'])
+  let html = renderToString(h(Fragment, null, again[0].node))
+  let fold = parseHTML(`<div>${html}</div>`).document
+  assertEquals(
+    fold.querySelector('summary')!.textContent,
+    'Discord, barn · 2+ messages · Ann: thoughts?',
+  )
+  assertEquals(
+    [...fold.querySelectorAll('.Quote_Text')].map((q) => q.textContent),
+    ["I'll bring pie", 'thoughts?'],
+  )
 })
 
 test('a context that changed draws only its changed layers, each with its change, and one changed in spacing alone is not drawn', () => {

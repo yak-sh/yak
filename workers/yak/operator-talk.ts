@@ -144,6 +144,7 @@ export let heard = (was: Held, sent: Lines): Held => {
       offers: { ...b.offers, ...sent.offers },
       instructions: { ...b.instructions, ...sent.instructions },
       threads: { ...b.threads, ...sent.threads },
+      rooms: { ...b.rooms, ...sent.rooms },
       helpers: [...helpers.values()],
       ...b.ids || sent.ids ? { ids: { ...b.ids, ...sent.ids } } : {},
       ...kept('person', sent, b),

@@ -24,6 +24,7 @@ import {
   Menu,
   More,
   Notice,
+  Quote,
   Rows,
   Transcript,
 } from '@yaks/ui/parts'
@@ -494,6 +495,7 @@ export type Helper = {
 export type Seen = {
   helpers?: Helper[]
   threads?: Record<string, Thread>
+  rooms?: Record<string, Room>
   offers?: Offers
   instructions?: Instructions
   called?: string
@@ -683,6 +685,7 @@ let drawing = (
   {
     helpers = [],
     threads = {},
+    rooms = {},
     offers,
     instructions,
     called = 'the Operator',
@@ -763,6 +766,10 @@ let drawing = (
       }]
       : []
     let these = unwrapped.map((l) => frame(l, result ? [b, result] : [b]))
+    // A room the words came from, as one line of its own just before them.
+    if (rooms[id]) {
+      these.unshift(frame({ ...roomed(rooms[id], called), uses: [id] }, [b]))
+    }
     before = sources.get(id) ?? before
     let at = inside.get(id)
     let fold = at && folds.get(at)
@@ -1075,6 +1082,60 @@ let threaded = (thread: Thread) => {
   return { node, text: name, is: 'step' as const }
 }
 
+/** A chat room words came from (`chat_message{room}`), drawn before the
+ * newest of them: what the platform is called and the room (`chat_room`),
+ * and what was said there, oldest first, as `chat_message` rows keep it,
+ * everyone's and the Operator's answers (`ours`). `more` says the room
+ * holds more than these. */
+export type Room = {
+  eid: string
+  platform: string
+  name?: string
+  said: { who: string; body: string; at?: string; ours?: boolean }[]
+  more?: boolean
+}
+
+/** The id of a room's line: one for the room, wherever it is drawn. */
+export let roomLine = (room: string) => derivedEid(['Room', room].join('|'))
+
+// A step like any other, named for the room, how many messages it holds and
+// the newest, opening on all of them, each quoted with who said it and when.
+let roomed = (room: Room, called: string) => {
+  let last = room.said.at(-1)
+  let count = `${room.said.length}${room.more ? '+' : ''} message${
+    room.said.length == 1 && !room.more ? '' : 's'
+  }`
+  let name = [
+    `${room.platform}, ${room.name ?? 'a room'}`,
+    count,
+    last && `${last.ours ? called : last.who}: ${cut(last.body, 80)}`,
+  ].filter(Boolean).join(' · ')
+  let node = step(
+    name,
+    '',
+    ...room.said.map((m) =>
+      h(
+        Quote,
+        {},
+        h(Quote.Text, {}, m.body),
+        h(
+          Quote.By,
+          {},
+          h('span', {}, m.ours ? called : m.who),
+          ...m.at ? [h(Transcript.When, { at: m.at })] : [],
+        ),
+      )
+    ),
+  )
+  return {
+    id: roomLine(room.eid),
+    node,
+    text: name,
+    is: 'step' as const,
+    alone: true,
+  }
+}
+
 /**
  * Lines as a page's socket sends them: each line by the id it is put by and
  * the entries it reads (`uses`), those entries in the transcript's order,
@@ -1085,6 +1146,8 @@ let threaded = (thread: Thread) => {
  */
 export type Lines = {
   threads?: Record<string, Thread>
+  /** the rooms words came from, by the entry each is drawn before */
+  rooms?: Record<string, Room>
   /** each line, and the entries it draws when it draws more than its own,
    * which it is drawn in place of */
   lines: Sending[]
@@ -1192,6 +1255,9 @@ export let wire = (
     helpers,
     threads: Object.fromEntries(
       Object.entries(seen.threads ?? {}).filter(([id]) => used.has(id)),
+    ),
+    rooms: Object.fromEntries(
+      Object.entries(seen.rooms ?? {}).filter(([id]) => used.has(id)),
     ),
     offers: Object.fromEntries(
       [...seen.offers ?? []].filter(([sha]) => offers.has(sha)),

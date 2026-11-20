@@ -7,7 +7,7 @@
 // inside the person's own. A room the space hears in full (`chat_hears`)
 // needs neither: all of it is already in its conversation.
 
-import type { Comp } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { line } from '@yaks/query'
 import {
   kept,
@@ -18,7 +18,8 @@ import {
   since,
 } from '@yaks/chat'
 import type { Tool } from '@yaks/session'
-import { PLATFORMS, recent } from './chat.ts'
+import { PLATFORMS, recent, roomName } from './chat.ts'
+import type { Room } from './operator-draw.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -125,6 +126,119 @@ export let roomsOf = async ({ g }: Store, session: string) => {
       }]
       : []
   })
+}
+
+/** `room`, a `chat_room` row about to be kept, with the name its platform
+ * calls it where the store holds none yet: read once, by the bot of
+ * `connection`. A direct room has no name, and a room that could not be
+ * read is kept without one, its failure reported. */
+export let named = async (
+  env: Env,
+  g: Store['g'],
+  room: Bundle,
+  connection: string,
+): Promise<Bundle> => {
+  let c = comp(room, 'chat_room')
+  if (!c.server) return room
+  let [held] = await g.get([room.entity.eid], ['chat_room'])
+  if (comp(held ?? undefined, 'chat_room').name) return room
+  let name = await roomName(env, String(c.via), {
+    connection,
+    room: String(c.id),
+    server: String(c.server),
+  }).catch((error) => {
+    caught(error, { request: `${c.via} room name`, connection })
+    return undefined
+  })
+  return name ? { ...room, chat_room: { ...c, name } } : room
+}
+
+/** How many of a room's newest messages its line holds, at most. */
+export let SAID = 100
+
+/**
+ * The rooms of a chat platform the words of `entries` came from, each by the
+ * newest of those words, where its line is drawn (operator-draw.ts `Room`):
+ * the platform's title, the room's name, and what was said there as the
+ * store keeps it, everyone's heard messages and the Operator's answers
+ * delivered there, oldest first.
+ */
+export let roomsBy = async (
+  { g }: Store,
+  entries: Bundle[],
+): Promise<Record<string, Room>> => {
+  let chat = entries.filter((b) =>
+    PLATFORMS.has(String(comp(b, 'channel').name)) && comp(b, 'intake').item
+  )
+  if (!chat.length) return {}
+  let items = await g.get(
+    chat.map((b) => String(comp(b, 'intake').item)),
+    ['chat_message'],
+  )
+  let newest = new Map<string, string>()
+  chat.forEach((b, i) => {
+    let room = comp(items[i] ?? undefined, 'chat_message').room
+    if (room) newest.set(String(room), b.entity.eid)
+  })
+  let read = await Promise.all(
+    [...newest].map(async ([eid, at]) => {
+      let room = await roomOf(g, eid)
+      return room ? [[at, room] as const] : []
+    }),
+  )
+  return Object.fromEntries(read.flat())
+}
+
+// A room as its line draws it, from the rows the store keeps of it.
+let roomOf = async (g: Store['g'], eid: string): Promise<Room | undefined> => {
+  let [held] = await g.get([eid], ['chat_room'])
+  let c = comp(held ?? undefined, 'chat_room')
+  let platform = PLATFORMS.get(String(c.via))
+  if (!platform) return
+  let [heard, answers] = await Promise.all([
+    g.read(
+      line`.chat_message.room=${eid}&.order=-chat_message.at&.limit=${SAID}&*`,
+    ),
+    g.read(
+      line`.chat_message.via=${platform.name}&.deliver.to=${eid}&.delivered&.order=-delivered.at&.limit=${SAID}&*`,
+    ),
+  ])
+  let authors = [
+    ...new Set(heard.map((b) => String(comp(b, 'chat_message').author))),
+  ]
+  let names = new Map(
+    (await g.get(authors, ['chat_account'])).map((b, i) => [
+      authors[i],
+      String(comp(b ?? undefined, 'chat_account').name ?? 'someone'),
+    ]),
+  )
+  let body = (b: Bundle) => String(comp(b, 'doc').body ?? '')
+  let said = [
+    ...heard.map((b) => ({
+      who: names.get(String(comp(b, 'chat_message').author)) ?? 'someone',
+      body: body(b),
+      at: String(comp(b, 'chat_message').at ?? ''),
+    })),
+    ...answers.map((b) => ({
+      who: '',
+      body: body(b),
+      at: String(comp(b, 'delivered').at ?? ''),
+      ours: true,
+    })),
+  ].sort((a, b) => a.at.localeCompare(b.at))
+  return {
+    eid,
+    platform: platform.title,
+    ...c.name
+      ? { name: String(c.name) }
+      : c.server
+      ? {}
+      : { name: 'direct messages' },
+    said: said.slice(-SAID),
+    ...said.length > SAID || heard.length == SAID || answers.length == SAID
+      ? { more: true }
+      : {},
+  }
 }
 
 /** The Operator's `chat_read`: a room's messages said before one, read

@@ -16,6 +16,8 @@ import { line } from '@yaks/query'
 import { sign } from './lib/token.ts'
 import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
+import { conversationOf } from './operator-host.ts'
+import { parseHTML } from 'linkedom'
 import { endpoints } from './endpoints.ts'
 import { redone } from './defects.ts'
 import { restarting } from './running.ts'
@@ -636,6 +638,8 @@ let roomed = async (
       url.pathname.endsWith('/messages') && before
         ? messages().filter((m) => Number(m.id) < Number(before))
           .slice(0, Number(url.searchParams.get('limit')))
+        : url.pathname.endsWith('/channels')
+        ? [{ id: BARN, name: 'barn', type: 0 }]
         : { id: 'r1' },
     ))
   }
@@ -776,6 +780,55 @@ test("what others said in a room leaves a member's turn its reads alone", async 
   assert(!JSON.stringify(ann).includes(BO))
   let lead = entries.filter((b) => JSON.stringify(b).includes(BO))
   assertEquals(lead.map((b) => !!b.heard), [true])
+})
+
+// The room a member's words came from is one line of their conversation,
+// just before their newest words there: the platform, the room's name, how
+// many messages it holds and the newest, opening on everyone's and the
+// Operator's answers. Their own words stay lines of their own.
+test("a member's conversation lists the room their words came from as one line", async () => {
+  let o = await seeded([{ text: 'Pie, then.' }, { text: 'Hello.' }], VAULTED)
+  let r = await roomed(o, [{ id: '9', name: 'Bo', content: "I'll bring pie" }])
+  try {
+    await r.says('10', 'thoughts?', o.held.person)
+    await r.says('11', 'say hello', o.held.person)
+  } finally {
+    r.restore()
+  }
+  let [one] = await r.store.g.read(
+    line`.entry.session&.intake&.limit=1&.fields=entry.session`,
+  )
+  let session = String((one.entry as { session: string }).session)
+  let page = await conversationOf(r.store, '/manage/ada/operator', session)
+  let doc = parseHTML(`<div>${page.html}</div>`).document
+  let rows = [...doc.querySelectorAll('.Transcript_Row')]
+  let fold = (row: Element) =>
+    row.querySelector('summary')?.textContent?.startsWith('Discord')
+  let rooms = rows.filter(fold)
+  assertEquals(rooms.length, 1)
+  assertEquals(
+    rooms[0].querySelector('summary')!.textContent,
+    'Discord, barn · 5 messages · the Operator: Hello.',
+  )
+  assertEquals(
+    [...rooms[0].querySelectorAll('.Quote')].map((
+      q,
+    ) => [
+      q.querySelector('.Quote_Text')!.textContent,
+      q.querySelector('.Quote_By span')!.textContent,
+    ]),
+    [
+      ["I'll bring pie", 'Bo'],
+      ['thoughts?', 'Ann'],
+      ['say hello', 'Ann'],
+      ['Pie, then.', 'the Operator'],
+      ['Hello.', 'the Operator'],
+    ],
+  )
+  let bubbles = rows.map((row) => row.querySelector('.Transcript_Bubble'))
+  let at = rows.indexOf(rooms[0])
+  assertEquals(bubbles[at + 1]?.textContent?.endsWith('say hello'), true)
+  assert(bubbles.some((b) => b?.textContent?.endsWith('thoughts?')))
 })
 
 // The room a space chose for its Operator to hear in full (chat.ts `choose`,
