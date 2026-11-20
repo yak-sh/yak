@@ -11,6 +11,7 @@ let fixture = () => {
   let archive = new Uint8Array()
   let restoreFailure = false
   let writeFailure = false
+  let partFailures = 0
   let box = {
     live: () => Promise.resolve(awake),
     read: async function* () {
@@ -57,6 +58,13 @@ let fixture = () => {
       let parts: Uint8Array[] = []
       return Promise.resolve({
         uploadPart: (partNumber, bytes) => {
+          if (partFailures > 0 && partFailures--) {
+            return Promise.reject(
+              new Error(
+                'uploadPart: We encountered an internal error. Please try again. (10001)',
+              ),
+            )
+          }
           parts.push(bytes)
           return Promise.resolve({ partNumber, etag: String(partNumber) })
         },
@@ -110,6 +118,9 @@ let fixture = () => {
     failWrite: (fail: boolean) => {
       writeFailure = fail
     },
+    failParts: (times: number) => {
+      partFailures = times
+    },
     stop: () => {
       awake = false
       baseline = false
@@ -159,6 +170,27 @@ test('failed head persistence leaves unique bytes live and a durable recovery re
   equal(bench.awake, true)
   equal(bench.files.get('/workspace/report'), 'unique')
   equal(bench.objects.size, 2)
+})
+
+test('a part R2 fails to store is sent again, and the snapshot is whole', async () => {
+  let bench = fixture()
+  await bench.prepare()
+  bench.files.set('/workspace/report', 'unique')
+  bench.failParts(2)
+  await bench.save()
+  bench.stop()
+  await bench.prepare()
+  equal(bench.files.get('/workspace/report'), 'unique')
+})
+
+test('a part R2 fails to store three times fails the save and leaves the workbench live', async () => {
+  let bench = fixture()
+  await bench.prepare()
+  bench.files.set('/workspace/report', 'unique')
+  bench.failParts(3)
+  await throws(bench.save, 'internal error')
+  equal(bench.awake, true)
+  equal(bench.files.get('/workspace/report'), 'unique')
 })
 
 test('disposal of a stopped workbench does not recreate its filesystem', async () => {

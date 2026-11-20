@@ -45,6 +45,23 @@ type Box = {
 let quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
 let live = (status: string) => status == 'running' || status == 'healthy'
 let PART = 5 * 1024 * 1024
+// R2 answers a part it could not store with an internal error (10001) and
+// asks for it again, so a part is sent up to three times before a save fails.
+let TRIES = 3
+
+let stored = async (
+  upload: Awaited<ReturnType<Archive['createMultipartUpload']>>,
+  part: number,
+  bytes: Uint8Array,
+) => {
+  for (let tried = 1;; tried++) {
+    try {
+      return await upload.uploadPart(part, bytes)
+    } catch (error) {
+      if (tried >= TRIES) throw error
+    }
+  }
+}
 let HEAD = 'workbench:head'
 
 export let filesystem = (
@@ -151,7 +168,7 @@ export let recovery = (
       let received = 0
       for await (let content of chunks(box.read(), PART)) {
         received += content.length
-        parts.push(await upload.uploadPart(parts.length + 1, content))
+        parts.push(await stored(upload, parts.length + 1, content))
       }
       if (received != size) throw new Error('workbench snapshot is incomplete')
       await upload.complete(parts)
