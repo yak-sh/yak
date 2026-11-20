@@ -5,6 +5,7 @@
 // hears its page token and never the cookie, one app's token opens no other, it
 // keeps its words to itself, and it keeps a page's storage.
 import { test } from '@yaks/testing'
+import { managePath } from '@yaks/platform/routes'
 import {
   assert,
   assertEquals,
@@ -407,6 +408,14 @@ test("a stranger's unreviewed release installs sandboxed, a reviewed one does no
       await installer.tool('app_update', { app: 'kept' }),
       `v2 of ${offer} waits`,
     )
+    // Its owner hears of it in their Updates, once however often it is asked.
+    await installer.tool('app_update', { app: 'kept' })
+    let updates = await (await k.at(
+      'yaks.app',
+      managePath('updates', space),
+      { headers: { cookie: them.cookie } },
+    )).text()
+    assertEquals(updates.split('v2 waits for review').length - 1, 1, updates)
     assertStringIncludes(
       await installer.tool('app_update', { app: 'raw' }),
       'from v1 to v2',

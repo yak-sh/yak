@@ -2540,6 +2540,34 @@ let vetting = async (
     )
 }
 
+// The space's owners hear in their Updates that v`to` of `named` waits for
+// review before their unsandboxed copy takes it (T-1899), once per held
+// version: the notice's id names the copy and the version, so a later check
+// tells nobody again.
+let heldBack = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  named: string,
+  to: number,
+  at: number,
+) => {
+  let { tell } = await import('./operator-updates.ts')
+  for (let owner of await ctx.dir.owners(space)) {
+    await tell(ctx.env, space, {
+      to: owner,
+      about: app.eid,
+      subject: `${app.title || app.slug}: v${to} waits for review`,
+      words: `A newer version of ${named}, v${to}, is waiting for review: ` +
+        `${UNVETTED(space)}. ${app.title || app.slug} stays at v${at} and ` +
+        'runs like your own apps until then. To take it now, put the app in ' +
+        'the sandbox (app_set sandboxed: true) and update it; that is your ' +
+        'choice.',
+      id: `held|${app.eid}|${to}|${owner}`,
+    })
+  }
+}
+
 // What an install or an update says of a copy of a release nobody vetted.
 let UNVETTED = (space: Space) =>
   `yaks.app has not reviewed its code and nobody in ${space.slug} made it`
@@ -7428,6 +7456,7 @@ let OURS: Row[] = [
         `${UNVETTED(space)}, and ${space.slug}/${app.slug} runs out of the ` +
         'sandbox. It moves once a review passes, or once the space ' +
         "owner's app_set(sandboxed: true) walls it off"
+      if (waits) await heldBack(ctx, space, app, named, to, take ?? was)
       if (take == null) {
         return { text: `${waits}; it stays at v${was}`, space }
       }
