@@ -121,6 +121,10 @@ export type Ticket = {
   /** the speech provider whose own line carries the call, with its id for
    * it in `call`; none for a call streamed to us */
   carried?: string
+  /** the carriers vouched that the caller holds `from` (@yaks/phone `Ring`):
+   * the call is trusted as chat is; any other confirms its privileged acts
+   * by a tap on a link texted to `from` (operator-approvals.ts) */
+  attested?: boolean
 }
 
 let secretOf = (env: Env) => {
@@ -229,6 +233,7 @@ export let rang = async (env: Env, via: string, ring: Ring) => {
     via,
     at: Date.now(),
     first: who.first,
+    ...ring.attested ? { attested: true } : {},
   }
   let sealed = await seal('call', ticket, secretOf(env))
   await caller.answer(
@@ -998,6 +1003,7 @@ export let calling = async (
         address: ticket.from,
         reply_to: ticket.to,
         via: ticket.via,
+        ...ticket.attested ? { attested: true } : {},
         model,
         ...call ? { call } : {},
       },
@@ -1063,7 +1069,11 @@ export let calling = async (
   // work to the Operator.
   let t = talkerOf(setup.provider, setup.model)
   let own = t?.duplex && t.backends.includes(setup.backend)
-    ? await operator.tools({ person: ticket.person }, space).catch((e) => {
+    ? await operator.tools(
+      { person: ticket.person },
+      space,
+      ticket.attested ? null : ticket.from,
+    ).catch((e) => {
       defect(e, CALL)
       return undefined
     })

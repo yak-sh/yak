@@ -3,7 +3,16 @@
 // a host sees, the same for every provider.
 
 /** A call that rang: who called which number, and the provider's id for it. */
-export type Ring = { id: string; from: string; to: string; at: string }
+export type Ring = {
+  id: string
+  from: string
+  to: string
+  at: string
+  /** the carriers vouched that the caller holds `from`, and the signature
+   * saying so checked out (STIR/SHAKEN full attestation, validated); absent
+   * where they did not, or the provider does not say */
+  attested?: boolean
+}
 
 /** What a provider is asked to do with a call. */
 export type Caller = {

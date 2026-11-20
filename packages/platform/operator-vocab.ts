@@ -33,6 +33,23 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_approval: {
+      component: true,
+      description:
+        "An act asked for in this person's conversation by a text or an unverified call, waiting for their tap on a link texted to that number (yaks.app's operator-approvals.ts); the tap marks it verified{} and carries it out.",
+      properties: {
+        person: { type: 'string', ref: 'entity', death: 'keep' },
+        session: { type: 'string', ref: 'session', death: 'keep' },
+        tool: { type: 'string', description: 'The tool the act calls.' },
+        args: { type: 'object', description: 'Its arguments.' },
+        say: {
+          type: 'string',
+          description: "What it does, in the person's words.",
+        },
+        number: { type: 'string', description: 'Where the link was texted.' },
+        expires: { type: 'string', format: 'date-time' },
+      },
+    },
     operator_contact: {
       component: true,
       description:
@@ -182,6 +199,11 @@ export let operatorDoc: VocabDoc = {
           description:
             "The call whose talking model asked it, in that model's words for the caller rather than the caller's own.",
         },
+        attested: {
+          type: 'boolean',
+          description:
+            'On a call, that the carriers vouched the caller holds the number they called from (STIR/SHAKEN full attestation, validated), so the call is trusted as chat is.',
+        },
       },
     },
     operator_oracle: {
@@ -217,6 +239,11 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description:
             'The newest input channel, inherited by helpers; reply channels carry no personal remote tools.',
+        },
+        confirm: {
+          type: 'string',
+          description:
+            "The number the newest words came from where it is all that says who sent them (an SMS, an unverified call), inherited by helpers: the session's privileged acts wait for a tap on a link texted to it.",
         },
         signup: {
           type: 'string',

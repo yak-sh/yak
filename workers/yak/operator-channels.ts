@@ -137,6 +137,9 @@ export type Request = {
   // The call whose talking model asked, in its words for the caller rather
   // than the caller's own (operator-calls.ts `talking`).
   call?: string
+  // On the `voice` channel, that the carriers vouched the caller holds the
+  // number they called from (operator-calls.ts `Ticket`).
+  attested?: boolean
 }
 type Answer = {
   id?: string
@@ -1226,15 +1229,34 @@ export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
 export let HEARSAY = new Set(['subscription', 'error', 'escalated'])
 
 /** The channels whose sender is known only by the number they texted from,
- * which anyone can fake, since a text carries no carrier's mark of who sent
- * it: a text or RCS message to the platform's number, and a reply to a text
- * the Operator sent. A member's turn on one holds what a turn on `HEARSAY`
- * does, and its answer goes by text to that number, so whoever faked it
- * reads nothing of it. What changes the space or sends elsewhere waits for
- * them where they are signed in: their chat, which a link in the answer
- * opens signed in (operator-texts.ts `signingIn`), or a letter that passes
- * DMARC (inbox.ts). */
-export let UNPROVEN = new Set(['text', 'rcs', 'texted'])
+ * which anyone can fake, and whose turns are read-only: RCS, left as it was
+ * when SMS moved to {@link SMS}. A member's turn on one holds what a turn on
+ * `HEARSAY` does, and its answer goes by text to that number, so whoever
+ * faked it reads nothing of it. What changes the space or sends elsewhere
+ * waits for them where they are signed in: their chat, which a link in the
+ * answer opens signed in (operator-texts.ts `signingIn`), or a letter that
+ * passes DMARC (inbox.ts). */
+export let UNPROVEN = new Set(['rcs'])
+
+/** SMS: a text to a number of ours, and a reply to a text the Operator sent.
+ * A text carries no carrier's mark of who sent it, so anyone can show a
+ * member's number; but only the member's phone reads what is texted back. A
+ * member's SMS turn holds their tools, and its privileged acts wait for a tap
+ * on a link texted to that number ({@link confirmOf}, operator-approvals.ts).
+ * SMS only: RCS stays in `UNPROVEN`, and it, iMessage or any channel that
+ * comes to carry proof of its sender opts out of both by joining neither. */
+export let SMS = new Set(['text', 'texted'])
+
+/** The number a turn's privileged acts are confirmed at, where that number
+ * is all that says who sent its words: an SMS, or a call the carriers did not
+ * vouch for. A vouched call is trusted as chat is. */
+export let confirmOf = (
+  request: Pick<Request, 'channel' | 'address' | 'attested'>,
+) =>
+  SMS.has(request.channel) ||
+    (request.channel == 'voice' && !request.attested)
+    ? request.address
+    : undefined
 
 /** The channels answered by a text to the number the words came to. */
 let TEXTED = new Set(['text', 'rcs', 'texted', 'signup', 'group'])
@@ -1371,6 +1393,7 @@ export let handleChannels = (
             files,
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},
+            ...confirmOf(request) ? { confirm: confirmOf(request) } : {},
             framing,
             from: FROM[request.channel]?.(request),
             ...request.call ? { call: request.call } : {},

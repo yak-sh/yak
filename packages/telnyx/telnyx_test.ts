@@ -105,6 +105,31 @@ test('an RCS reply and a tapped suggestion read as texts that came as RCS', () =
   )
 })
 
+test('a call is attested only where its carrier vouched in full and the signature checked out', () => {
+  let rang = (shaken: Record<string, unknown>) =>
+    heard({
+      data: {
+        event_type: 'call.initiated',
+        payload: {
+          call_control_id: 'v3:c1',
+          from: ANA,
+          to: OURS,
+          direction: 'incoming',
+          ...shaken,
+        },
+      },
+    }).ring?.attested ?? false
+  let cases: [Record<string, unknown>, boolean][] = [
+    [{ shaken_stir_attestation: 'A', shaken_stir_validated: true }, true],
+    [{ shaken_stir_attestation: 'A', shaken_stir_validated: false }, false],
+    [{ shaken_stir_attestation: 'B', shaken_stir_validated: true }, false],
+    [{}, false],
+  ]
+  for (let [shaken, attested] of cases) {
+    assertEquals(rang(shaken), attested, JSON.stringify(shaken))
+  }
+})
+
 test('a group text reads everyone else in it, and an answer goes to them all as one MMS', async () => {
   let BO = '+12695550199'
   let said = heard({

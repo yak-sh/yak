@@ -44,6 +44,9 @@ export type Door<E = unknown> = (
 // person's own, wherever they are, are `/manage/account/<page>` (T-136122),
 // which no space can be named (directory.ts `RESERVED` holds `account`).
 export let MANAGE = '/manage'
+/** A texted link's page approving one act the Operator was asked for by a
+ * number alone (yaks.app's operator-approvals.ts). */
+export let APPROVE = '/approve'
 export let ACCOUNT = 'account'
 /** A page of one space's. */
 export type SpaceView =

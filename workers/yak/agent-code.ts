@@ -6,17 +6,22 @@ import { inReach } from './declared.ts'
 import { stripping } from './esbuild.ts'
 import { ledger } from './ledger.ts'
 import { argsOf } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import { type Ctx, refuse, SPACE } from './tool.ts'
 import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
 import type { Graph, NamedTool, Tool } from '@yaks/graph'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 // A host that narrows a turn once it heard words it cannot vouch for says
-// which nested answers brought them (`hears`), by its direct calls' rule.
+// which nested answers brought them (`hears`), by its direct calls' rule,
+// and a host that confirms some calls first keeps them out of scripts
+// (`unscripted`, operator-approvals.ts), so they are only ever called direct.
 export let coded = <T extends Options>(
   opts: T & Pick<Coding, 'hears'> & {
     /** The tools this caller keeps in its own graph, under their usual names. */
     own?: { tools: NamedTool[]; graph: Graph; calls: Graph }
+    /** The tools a script may not call, though a direct call may. */
+    unscripted?: Set<string>
   },
   ctx: Ctx,
   local?: ResultHost,
@@ -24,7 +29,10 @@ export let coded = <T extends Options>(
 ) => {
   let { own } = opts
   let names = new Set(own?.tools.map((t) => t.name))
-  let appTools = (tools: Tool[]) => tools.filter((t) => !names.has(t.name!))
+  let appTools = (tools: Tool[]) =>
+    tools.filter((t) =>
+      !names.has(t.name!) && !opts.unscripted?.has(toolName(t))
+    )
   let ownRun = own && runner(own.calls, {
     tools: own.tools,
     host: own.graph,

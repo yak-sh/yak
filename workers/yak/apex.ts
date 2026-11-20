@@ -26,7 +26,14 @@ import { lost } from './pages.ts'
 import { callback } from './connections.ts'
 import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
-import { aim, LOGOUT, MANAGE, PAGE, PUBLISHER } from '@yaks/platform/routes'
+import {
+  aim,
+  APPROVE,
+  LOGOUT,
+  MANAGE,
+  PAGE,
+  PUBLISHER,
+} from '@yaks/platform/routes'
 import { apex } from '@yaks/platform/host'
 import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
@@ -89,6 +96,11 @@ let atApex = async (req: Request, env: Env, path: string) => {
     return bound(env.APPS, apps.fetch, env).fetch(
       aim(req, apex(env), { space: site.HOME.space, app: null }, env),
     )
+  }
+  // A texted link approving one act its Operator was asked for by a number
+  // alone (operator-approvals.ts).
+  if (path == APPROVE) {
+    return (await import('./operator-approvals.ts')).approvalDoor(req, env)
   }
   // A TV paired by a code (screen.ts): its page, and the phone's.
   if (path == '/tv' || path.startsWith('/tv/')) {

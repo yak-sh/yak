@@ -74,3 +74,46 @@ test('remote MCP tools run in code mode while the connector keeps its published 
   equal(out.value, { total: 12 })
   equal(calls, [{ pages: 32 }])
 })
+
+test('a tool a host keeps out of scripts is listed for a direct call and found by no script', async () => {
+  let { env } = platform('mcp-code-unscripted', {
+    CODE_MODE: evaluate,
+    ESBUILD: compiler(),
+  })
+  let person = mint(), dir = directoryOf(env.STORE)
+  let eid = await dir.mint(person, 'quiet', 'Quiet', {
+    'x-yak-person': person,
+    'x-yak-role': 'owner',
+  })
+  let ctx = await operatorContext(
+    env,
+    { person },
+    (await dir.at(eid))!,
+    () => dir,
+  )
+  let store = operatorMemory(), ran = 0
+  let mint_: Tool = {
+    name: 'quiet_mint',
+    description: 'Mint a token',
+    inputSchema: { type: 'object' },
+    run: () => (ran++, []),
+  }
+  let opts = { graph: store.g, core: false as const, tools: [mint_] }
+  let connected = coded(
+    { ...opts, unscripted: new Set(['quiet_mint']) },
+    ctx,
+    { graph: store.g, person, space: eid },
+  )
+  let names = listing(connected).map((t) => t.name)
+  equal(names.includes('quiet_mint'), true)
+  let code = listing(connected).find((t) => t.name == 'code_mode')!
+  let [said] = await code.run({
+    entity: { eid: mint() },
+    call: { args: { script: 'return await tools.yaks.quiet_mint({})' } },
+  }, store.g)
+  equal(
+    (said.output as { value: { error?: string } }).value.error != null,
+    true,
+  )
+  equal(ran, 0)
+})

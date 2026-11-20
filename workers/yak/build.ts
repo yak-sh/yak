@@ -303,6 +303,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
+          url.pathname == '/operator/approval' ||
           url.pathname == WALKTHROUGH
         ) {
           let space = request.headers.get(SPACE)
@@ -346,6 +347,19 @@ export class Builder extends Durable {
             )
             await this.#arming
             return answer
+          }
+          // A texted link approving one act, opened or pressed
+          // (operator-approvals.ts `approvalDoor`).
+          if (url.pathname == '/operator/approval') {
+            let { approval, digest, press } = await request.json() as {
+              approval: string
+              digest: string
+              press?: boolean
+            }
+            let operator = await this.#work()
+            let standing = await operator.approve(approval, digest, !!press)
+            await this.#arming
+            return Response.json(standing)
           }
           // A conversation a fixed yaks.app bug stopped, taken up again
           // (operator-rerun.ts).

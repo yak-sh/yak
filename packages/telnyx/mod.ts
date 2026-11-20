@@ -180,6 +180,10 @@ type Payload = {
   media?: { url?: string; content_type?: string }[]
   received_at?: string
   errors?: { code?: unknown; title?: string; detail?: string }[]
+  // A call's STIR/SHAKEN: the originating carrier's attestation of the
+  // caller's number (A, B or C), and whether its signature verified.
+  shaken_stir_attestation?: string
+  shaken_stir_validated?: boolean
 }
 
 let FAILED = ['sending_failed', 'delivery_failed']
@@ -225,6 +229,10 @@ export let heard = (event: unknown): Heard => {
         from: String(p!.from ?? ''),
         to: String(p!.to ?? ''),
         at: data!.occurred_at ?? new Date().toISOString(),
+        // Only full attestation, verified, says the caller holds the number.
+        ...p!.shaken_stir_attestation == 'A' && p!.shaken_stir_validated
+          ? { attested: true }
+          : {},
       },
     }
   }

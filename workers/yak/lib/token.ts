@@ -80,6 +80,7 @@ export type Use =
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
   | 'screen' // a TV's code and the pairing it finds by it (screen.ts)
   | 'oidc' // a sign-in at another provider, on its way back (oidc.ts)
+  | 'approval' // a tap approving one act asked for by text (operator-approvals.ts)
 
 type Obj = Record<string, unknown>
 

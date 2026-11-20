@@ -115,12 +115,14 @@ import type { OperatorStore } from './operator-store.ts'
 import { FLOORS } from './embedding.ts'
 import {
   ANSWERING,
+  confirmOf,
   HEARSAY,
   mailSend,
   messageFile,
   OWN,
   replyRows,
   type Request as Requested,
+  SMS,
   TAKING,
   UNASKED,
   UNPROVEN,
@@ -134,7 +136,14 @@ import {
   threadOf,
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
-import { textSend } from './operator-texts.ts'
+import { textPerson, textSend } from './operator-texts.ts'
+import {
+  approvals,
+  asker,
+  confirming,
+  ESCALATING,
+  type Standing,
+} from './operator-approvals.ts'
 import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
@@ -484,10 +493,10 @@ let OUTSIDE =
   "app_errors; do the work with those. The person's own next message gives " +
   'back every tool.'
 
-// Why a member's turn on a text (operator-channels.ts `UNPROVEN`) holds only
+// Why a member's turn on RCS (operator-channels.ts `UNPROVEN`) holds only
 // some of the Operator's tools.
 let TEXTED =
-  "this turn answers a text, and a text's sender number can be faked, so it " +
+  'this turn answers an RCS message, whose sender number can be faked, so it ' +
   'holds reads, telling the person, and its answer, which goes by text to ' +
   'their number. Anything that changes the space or sends elsewhere waits ' +
   'for them to ask in their chat, where a link in your answer signs them in, ' +
@@ -696,6 +705,7 @@ export let operatorRoster = async (
     connecting,
     trials,
     remote: allowRemote = member,
+    unscripted,
   }: {
     space: string
     tasked?: boolean
@@ -704,6 +714,8 @@ export let operatorRoster = async (
     remote?: boolean
     /** who would answer a trial's calls, which prices a round */
     trials?: Trials
+    /** the tools code_mode's scripts may not call (agent-code.ts) */
+    unscripted?: Set<string>
     // The person's servers, when the step already asked for them.
     connecting?: ReturnType<typeof connectedTools>
   },
@@ -848,6 +860,7 @@ export let operatorRoster = async (
       refused: hearing(ctx.env, () => ({ space, session })),
       hears: (t, out) =>
         hears(t, out, memories.some((m) => m.name == t.name) ? 'own' : 'apps'),
+      unscripted,
     },
     ctx,
     { graph: work.g, person: ctx.person, space },
@@ -1130,6 +1143,9 @@ type Working = {
   administrative?: boolean
   signup?: string
   channel?: string
+  // The number its privileged acts are confirmed at (operator-channels.ts
+  // `confirmOf`).
+  confirm?: string
   files?: File[]
 }
 let workingOf = async ({ g }: Store, session: string) => {
@@ -1140,6 +1156,20 @@ let workingOf = async ({ g }: Store, session: string) => {
 let channelAt = async (store: Store, session: string, work?: Working) =>
   work?.channel ??
     String((await requestAt(store, session))?.request?.channel ?? '')
+// The number a session's privileged acts are confirmed at
+// (operator-channels.ts `confirmOf`): as its words were carried, or for a
+// session carried before that was kept, from its conversation's newest words.
+let confirmAt = async (store: Store, session: string, work?: Working) => {
+  if (work?.confirm) return work.confirm
+  let channel = await channelAt(store, session, work)
+  if (!SMS.has(channel) && channel != 'voice') return undefined
+  let request = (await requestAt(store, session))?.request
+  return confirmOf({
+    channel,
+    address: request?.address,
+    attested: request?.channel == channel && request.attested,
+  })
+}
 // The newest request of a session's conversation, and when it came.
 let requestAt = async (store: Store, session: string) => {
   let top = await topOf(store.g, session)
@@ -2062,7 +2092,13 @@ export let operating = (
   // one of them is the person's to have: the doors that text, mail, wake,
   // watch, draw, report, and reach their Google are the space's work, offered
   // to someone who writes in it and to nobody else (D-151808).
-  let roster = async (session: string): Promise<Tool[]> => {
+  // `confirm` names the number its privileged acts are confirmed at, or null
+  // for none (an act a tap approved, a call the carriers vouched for); left
+  // out, the session's own words say (`confirmAt`).
+  let roster = async (
+    session: string,
+    o: { confirm?: string | null } = {},
+  ): Promise<Tool[]> => {
     reached('tools', null)
     // A step its person's machine answers reaches for the machine now, beside
     // its roster: what that reads of the directory is read once a step
@@ -2090,6 +2126,9 @@ export let operating = (
     // asked beside the reach and the space.
     let work = await workingOf(store, session)
     let channel = await channelAt(store, session, work)
+    let confirm = o.confirm === null
+      ? undefined
+      : o.confirm ?? await confirmAt(store, session, work)
     // Words nobody in the space wrote, whether they started the turn
     // (operator-channels.ts `HEARSAY`) or came since, leave it
     // holding only what keeps the space's data with its person, whoever's
@@ -2148,6 +2187,8 @@ export let operating = (
         connecting,
         remote,
         trials,
+        // A tap confirms an escalating call only when it is called direct.
+        ...confirm ? { unscripted: new Set(Object.keys(ESCALATING)) } : {},
       })
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
@@ -2184,13 +2225,28 @@ export let operating = (
     let ruled = new Set(roster.map((t) => t.name))
     let listened = (tools: Tool[]) =>
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
+    // A member's privileged acts, where their words came by a number alone,
+    // wait for a tap on a link texted to it (operator-approvals.ts).
+    let confirmed = (tools: Tool[]) =>
+      member && confirm
+        ? deferred(confirming(
+          tools,
+          asker(
+            env,
+            store,
+            space,
+            { person: ctx.person!, session, number: confirm },
+            (to, words) => textPerson(env, space, to, words),
+          ),
+        ))
+        : tools
     if (heard) {
       let why = texted ? TEXTED : OUTSIDE
       let thread = member && channel == 'escalated'
         ? await threadOf(store, (await requestAt(store, session))?.request)
         : undefined
       let back = thread ? [onThread(thread)] : []
-      return deferred(listened([
+      return confirmed(deferred(listened([
         ...holding(
           [
             ...sessionTools(g, children).filter((t) => t.name == 'fork'),
@@ -2222,9 +2278,9 @@ export let operating = (
           (t) => !!t.readOnly,
           why,
         ),
-      ]))
+      ])))
     }
-    return deferred(listened([
+    return confirmed(deferred(listened([
       ...sessionTools(g, children).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
@@ -2256,7 +2312,7 @@ export let operating = (
       ...member && options.browsers
         ? browserTools(env, space, ctx.person, options.browsers, store)
         : [],
-    ]))
+    ])))
   }
 
   // This object's runner, a new one each time the object starts: a Durable
@@ -2526,6 +2582,7 @@ export let operating = (
         space: space.eid,
         person: held.person,
         channel: o.channel ?? null,
+        confirm: o.confirm ?? null,
         ...o.signup ? { signup: o.signup } : {},
         administrative: held.administrative ?? null,
         ...conversation ? { conversation } : {},
@@ -2854,10 +2911,10 @@ export let operating = (
   // offered, through their reach in the space, each run as a call of that
   // conversation. Forking and starting helpers are the conversation's own,
   // so they are left out.
-  let tools: Operator['tools'] = async (held, space) => {
+  let tools: Operator['tools'] = async (held, space, confirm) => {
     let { session, fresh } = await conversing(held, space)
     if (fresh) await g.apply([fresh], { trusted: true })
-    let offered = offerable(await roster(session))
+    let offered = offerable(await roster(session, { confirm }))
       .filter((t) => t.name != spawn.name && t.name != 'fork')
     let named = new Map(offered.map((t) => [t.name, t]))
     return {
@@ -2997,6 +3054,24 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
+  // An act a texted link approved, run as a call of the session that asked
+  // it, through the person's tools as they stand now and asking nothing
+  // again (operator-approvals.ts).
+  let approve = approvals(store, async (a) => {
+    let tool = offerable(await roster(a.session, { confirm: null }))
+      .find((t) => t.name == a.tool)
+    if (!tool) {
+      throw new CallError('tool', `${a.tool} is not theirs to use any more.`)
+    }
+    let call = {
+      entity: { eid: crypto.randomUUID() },
+      call: { to: a.tool, args: a.args },
+    }
+    let told = await tool.run(a.args, { session: a.session, call, entries: [] })
+    options.tell?.(await topOf(g, a.session))
+    return typeof told == 'string' ? told : told.text
+  })
+
   return {
     store,
     confirmContact: async (held, id, number, agreed, code) => {
@@ -3027,6 +3102,7 @@ export let operating = (
     named,
     watching,
     scheduled,
+    approve,
   }
 }
 
@@ -3058,6 +3134,10 @@ export type Asking = {
   // leaves out of the person's words.
   channel?: string
   signup?: string
+  // The number the words came from, where it is all that says who sent them:
+  // their turn's privileged acts wait for a tap on a link texted to it
+  // (operator-approvals.ts).
+  confirm?: string
   framing?: string
   /** Writer of injected words, independent of the person whose access applies. */
   from?: string
@@ -3136,7 +3216,14 @@ export type Operator = {
   /** The tools the person's conversation is offered, for another model
    * working for them to call through the same reach: each `run` answers in
    * words, and refuses with a CallError as a tool does. */
-  tools: (held: Asker, space: Space) => Promise<{
+  tools: (
+    held: Asker,
+    space: Space,
+    /** the number its privileged acts are confirmed at, or null for none
+     * (a call the carriers vouched for); left out, as the conversation's
+     * newest words came (operator-approvals.ts) */
+    confirm?: string | null,
+  ) => Promise<{
     tools: { name: string; description: string; parameters: object }[]
     run: (name: string, args: Record<string, unknown>) => Promise<string>
   }>
@@ -3170,4 +3257,11 @@ export type Operator = {
   watching: Watching
   /** One occurrence of a scheduled tool call and its optional checking helper. */
   scheduled: (row: Bundle, at: string) => Promise<void>
+  /** Where the act a texted link approves stands, and with `press` the tap
+   * that carries it out (operator-approvals.ts `approvals`). */
+  approve: (
+    approval: string,
+    digest: string,
+    press: boolean,
+  ) => Promise<Standing>
 }

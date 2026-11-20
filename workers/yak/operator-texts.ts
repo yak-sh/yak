@@ -26,6 +26,7 @@ import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { onceLink, relink } from './link.ts'
 import { apex } from '@yaks/platform/host'
+import { APPROVE } from '@yaks/platform/routes'
 import { countedTexts } from './meter.ts'
 import { charged, costOf } from './text-spend.ts'
 
@@ -131,6 +132,8 @@ export let signingIn = (env: Env, number: string, text: string) => {
   if (!at || !secret) return Promise.resolve(text)
   let code: Promise<string | null> | undefined
   return relink(text, env, async (back) => {
+    // A link to approve an act is its own credential, worth that act alone.
+    if (new URL(back).pathname == APPROVE) return null
     let once = await (code ??= mint(meta(env), secret, at))
     return once && onceLink(secret, { email: at, code: once, back }, apex(env))
   })

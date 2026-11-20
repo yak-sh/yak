@@ -40,6 +40,7 @@ export const OWNED: [string, string][] = [
   ['operator_letter', 'person'],
   ['operator_text', 'person'],
   ['operator_contact', 'person'],
+  ['operator_approval', 'person'],
   ['context_output', 'reader'],
   ['deliver', 'to'],
   ['draft', 'by'],

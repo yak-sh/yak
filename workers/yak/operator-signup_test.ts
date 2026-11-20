@@ -148,10 +148,10 @@ test('a text from someone with no seat in the space runs as them, with only form
   equal((await store.g.get([rootOf(spaceId, walkIn)]))[0], undefined)
 })
 
-test("a member's text to the space's number is theirs to their own Operator, with their reads and nothing that writes", async () => {
+test("a member's text to the space's number is theirs to their own Operator, with their own tools", async () => {
   equal(memberTurns, 3)
   ok(offered(2).includes('graph_query'))
-  ok(!offered(2).includes('unrelated'))
+  ok(offered(2).includes('unrelated'))
   ok(!tools(2).some((t) => t.startsWith('signup_')))
   equal(asked(member).length, 1)
   ok((await store.g.get([rootOf(spaceId, member)]))[0]?.operator_session)
