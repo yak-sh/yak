@@ -1374,9 +1374,14 @@
 }
 
 /* The ways to reach the Operator: its words to copy, and the buttons that
-   open them (operator-ways.ts). */
+   open them (operator-ways.ts), those in one row, close enough to share
+   a phone's width. */
 .Talk_Way {
+  --control-pad-inline: .6rem;
   display: grid;
   gap: var(--half-gap);
   margin-bottom: var(--gap);
+}
+.Talk_Way > .Toolbar {
+  gap: var(--half-gap);
 }
