@@ -299,6 +299,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/replied' ||
           url.pathname == '/operator/support' ||
           url.pathname == '/operator/tell' ||
+          url.pathname == '/operator/write' ||
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
@@ -317,6 +318,17 @@ export class Builder extends Durable {
               trusted: true,
             })
             return Response.json({ ok: true })
+          }
+          // A letter yaks.app owes a person, written by the space's Operator
+          // (mail.ts `owe`).
+          if (url.pathname == '/operator/write') {
+            let at = await dirPart.directoryOf(this.#env.STORE).at(space)
+            if (!at) return no(404, 'that space is gone')
+            let { owedRows } = await import('./operator-channels.ts')
+            let { store } = await this.#stored()
+            let rows = owedRows(this.#env, at, await request.json())
+            await store.g.apply(rows, { trusted: true })
+            return Response.json({ letter: rows[1].entity.eid })
           }
           // A message heard on a chat platform, from a person here or a
           // guest the kernel already told apart (chat.ts `arrived`).
@@ -598,7 +610,12 @@ export class Builder extends Durable {
             nudge,
           },
           {
-            senders: { operator: operatorPost(this.#env) },
+            senders: {
+              operator: operatorPost(this.#env, async (letter) => {
+                let { owes } = await import('./operator-channels.ts')
+                return await owes(store, letter)
+              }),
+            },
             chatters: chatters(this.#env),
           },
           operatorVectors(this.#env, {

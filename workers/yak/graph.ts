@@ -343,7 +343,7 @@ import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import type { Words } from '@yaks/host/words'
 import { meet } from '@yaks/host/config'
-import { posts, worker } from './config.ts'
+import { worker } from './config.ts'
 import { appVersionsConfig, versions } from '@yaks/platform/config'
 import { privacyRules } from './privacy-move.ts'
 import { COPY as READ_OUT, copying } from './store-copy.ts'
@@ -352,7 +352,7 @@ import { load } from './load.ts'
 import { metering } from './metered.ts'
 import { appTexter } from './app-texts.ts'
 import { appChatters } from './chat.ts'
-import { heldBy, mailTags, outgoing } from './post.ts'
+import { heldBy, mailTags, outgoing, platformPost } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
@@ -1779,8 +1779,9 @@ export class Store extends Durable {
           outgoing(this.#bind, mailTags(name)),
         ),
         // The platform's own letters, which only the directory sends
-        // (config.ts): unmetered, from the platform's address.
-        platform: outgoing(this.#bind, {}, posts.platform),
+        // (config.ts): unmetered, from the platform's address or a space's
+        // Operator's.
+        platform: platformPost(this.#bind),
       },
       texters: {
         worker: appTexter(

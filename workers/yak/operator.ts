@@ -1097,9 +1097,9 @@ let taskOf = async (store: Store, session: string) => {
 // and that was run again; what came of it is in its chat, and whatever it
 // means them to read it tells them itself (notification_send).
 let RERAN = {
-  subject: 'Work that stopped has started again',
+  subject: 'I started your work again',
   words:
-    "Something you asked for stopped because of a problem in yaks.app. That problem is fixed now, so the work started again from where it stopped. You don't need to do anything.",
+    "Something you asked me for stopped because of a problem in yaks.app. That problem is fixed now, so I started again from where it stopped. You don't need to do anything, and you can reply with any question.",
 }
 
 // The way a request is answered: its channel, and whom it reaches by it, the
@@ -1129,8 +1129,8 @@ let REACHES = new Set(['unreachable', 'stalled'])
 // them (notification_send), or could not finish (`stoppedNotice`).
 let UNWATCHED: Record<string, (app: string) => string> = {
   error: (app) => `fixing an error in ${app}`,
-  wake: () => 'doing something you set it to do later',
-  subscription: () => 'looking into a change it watches for you',
+  wake: () => 'doing something you set me to do later',
+  subscription: () => 'looking into a change I watch for you',
   escalated: () => 'handling a reply someone sent you',
 }
 let SPENT = 60 * 60_000
@@ -1699,9 +1699,9 @@ export let operating = (
     )
     return [notification({
       to: String(asked.person),
-      subject: `${at.operator} couldn't finish ${doing}`,
+      subject: `I couldn't finish ${doing}`,
       words:
-        `${at.operator} was ${doing} when something went wrong on yaks.app's side, so it stopped before finishing. The people who run yaks.app have been told. You don't need to do anything.`,
+        `I was ${doing} when something went wrong on yaks.app's side, so I stopped before finishing. The people who run yaks.app have been told. You don't need to do anything, and you can reply to ask me to try again.`,
       ...asked.app ? { about: String(asked.app) } : {},
       by: space,
       via: session,

@@ -14,6 +14,8 @@ import { mint } from '@yaks/graph'
 import { type Clock, system } from '@yaks/fp'
 import { replyTo } from '@yaks/platform/host'
 import type { Env } from './env.ts'
+import type { Space } from './directory.ts'
+import type { Owed } from './operator-channels.ts'
 import { FROM, toPlatform } from './mail-config.ts'
 import { KERNEL, type Meta, meta } from './meta.ts'
 import { type Delivery, transport } from './post.ts'
@@ -28,6 +30,10 @@ export type Letter = {
   // Who the reader sees it from, where not the platform (signin.ts
   // `codeLetter`, the Operator's).
   name?: string
+  // The address it leaves from, where not the platform's: a space's own,
+  // whose Operator it is from (@yaks/platform/letters `envelope`). A reply
+  // goes there unless `replyTo` says otherwise.
+  from?: string
   /** the entity it concerns */
   about?: string
 }
@@ -52,8 +58,8 @@ export let letterRows = (
       body: l.body,
       about: l.about,
       name: l.name ?? 'yaks.app',
-      reply: l.replyTo ?? replyTo(env),
-      from: FROM,
+      reply: l.replyTo ?? (l.from ? undefined : replyTo(env)),
+      from: l.from ?? FROM,
       at,
     })
   )
@@ -93,4 +99,35 @@ export let bounce = async (
     if (!row || row.delivered) return null
   }
   return null
+}
+
+/**
+ * A letter yaks.app owes a person (an invitation, a contact code), written
+ * by the Operator of the space it concerns into its own store, whose pool
+ * sends it from the space's address, uncounted (operator-channels.ts
+ * `owedRows`). A reply to it from anyone reaches the Operator, which a
+ * letter only the directory kept could not offer someone who is not yet a
+ * member (inbox.ts `replied`). The letter's eid.
+ */
+export let owe = async (
+  env: Env,
+  space: Pick<Space, 'eid'>,
+  owed: Owed,
+): Promise<string> => {
+  let { builderOf, SPACE } = await import('./build-door.ts')
+  let r = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/write', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-kernel': '1',
+        [SPACE]: space.eid,
+      },
+      body: JSON.stringify(owed),
+    })
+  )
+  if (!r.ok) {
+    throw new Error(`the Operator did not write the letter: ${await r.text()}`)
+  }
+  return (await r.json() as { letter: string }).letter
 }

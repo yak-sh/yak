@@ -110,8 +110,12 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     return pending
   }
   let add = contactAdd(env, ctx, space, store)
-  let invoke = async (args: Record<string, unknown>) =>
-    JSON.parse(String(await add.run(args)))
+  // A code's letter is the Operator's, sent by its store's pool.
+  let invoke = async (args: Record<string, unknown>) => {
+    let out = JSON.parse(String(await add.run(args)))
+    await drain(store)
+    return out
+  }
   let notify = async (words: string) => {
     let tool = notificationSend(ctx, space, store)
     let out = JSON.parse(
@@ -270,6 +274,7 @@ await guestTools.run('contact_add', {
   address: 'new@example.net',
   source: request,
 })
+await drain(guest.store)
 let guestQueued = await guest.notify('Your work is ready.')
 let emailBefore = await guest.dir.emailAt(guest.person)
 let code = String(guest.letters[0].subject).match(/\d{6}/)![0]
@@ -329,6 +334,13 @@ test('an anonymous person verifies email in the same conversation before complet
   assertEquals(contactPerson, guest.person)
   assertEquals([guestMailed, guestLetters.length], [true, 2])
   assertStringIncludes(String(guestLetters[1].text), 'Your work is ready.')
+  // The code comes from the Operator, at the space's own address, and the
+  // alert invites a reply.
+  assertEquals(guestLetters[0].from, {
+    name: guest.space.operator,
+    email: 'contacts-guest@yaks.app',
+  })
+  assertStringIncludes(String(guestLetters[1].text), 'Reply to this email')
 })
 
 let expiry = await setup('expiry')

@@ -15,6 +15,7 @@
     "./mover": "./mover.ts",
     "./comp": "./comp.ts",
     "./host": "./host.ts",
+    "./letters": "./letters.ts",
     "./routes": "./routes.ts",
     "./ladder": "./ladder.ts",
     "./preview": "./preview.ts",

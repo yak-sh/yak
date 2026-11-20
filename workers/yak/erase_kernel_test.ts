@@ -86,6 +86,8 @@ test('a space erased: the letter, the act, and the name back', async () => {
       { timeout: 20_000, poll: 100, label: 'the delete letter' },
     )
     assertStringIncludes(mail!.body, `https://${slug}.yaks.app/notes/`)
+    // From the space's Operator, even with the space in the trash.
+    assertEquals(mail!.from, `${slug}@yaks.app`)
     let link = /https:\/\/yaks\.app(\/space\/[\w-]+\/delete\?t=[^\s]+)/
       .exec(mail!.body)
     assert(link, `no confirmation link in: ${mail!.body}`)

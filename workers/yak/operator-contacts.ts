@@ -14,7 +14,7 @@ import { owns } from './operator-access.ts'
 import { inputSource } from './operator-provenance.ts'
 import { canon, LIFE, mint, spend } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
-import { mail } from './mail.ts'
+import { contactCode } from '@yaks/platform/letters'
 import { managePath } from '@yaks/platform/routes'
 import { CONSENT } from './operator-texts.ts'
 import { provePhone } from './phone-contact.ts'
@@ -88,15 +88,22 @@ let pending = async (
     line`.operator_contact.person=${person} .operator_contact.session=${session} .operator_contact.address=${address} !cancelled ?created ?verified .order=-created.at .limit=1`,
   ))[0]
 
-// The code's letter, written into the directory, whose pool sends it and waits
-// out a mail outage: the code it carries is on its way either way.
-let sendCode = async (env: Env, address: string, code: string) => {
-  await mail(env)({
-    to: address,
-    subject: `${code} is your yaks.app contact code`,
-    body:
-      `Your yaks.app contact verification code is ${code}.\n\nType it in your Operator conversation to confirm this email address. It expires in ten minutes. If you did not ask for this, ignore it; no contact has changed.`,
-  })
+// The code's letter, from the Operator in its own store, whose pool sends it
+// uncounted and waits out a mail outage: the code it carries is on its way
+// either way. Mechanical, since the code is all it carries.
+let sendCode = async (
+  env: Env,
+  store: OperatorStore,
+  space: Space,
+  person: string,
+  address: string,
+  code: string,
+) => {
+  let { owedRows } = await import('./operator-channels.ts')
+  await store.g.apply(
+    owedRows(env, space, { to: address, person, ...contactCode(space, code) }),
+    { trusted: true },
+  )
 }
 
 // Only a code typed in this person's conversation is sent to the shared
@@ -325,7 +332,7 @@ export let contactAdd = (
         expires: new Date(Date.now() + LIFE).toISOString(),
       },
     }], { trusted: true })
-    await sendCode(env, address, code)
+    await sendCode(env, store, space, ctx.person, address, code)
     return JSON.stringify({
       address,
       next: 'Ask them to type the six-digit code here to confirm ownership.',

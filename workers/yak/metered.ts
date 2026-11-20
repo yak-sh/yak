@@ -65,10 +65,14 @@ export let metering = (
  * (operator-store.ts): a letter leaves from its space's own address, counted
  * against that space ({@link charging}), and its provider's notices about it
  * come back to that space's Operator (mail-receipts.ts). A letter from any
- * other address is not the Operator's to send, and bounces.
+ * other address is not the Operator's to send, and bounces. A letter
+ * yaks.app owes the person (`owed`, the letter's `operator_letter.platform`:
+ * an invitation, a contact code) is sent in the Operator's name and never
+ * counted, as the platform's own letters never are.
  */
 export let operatorPost = (
   env: Partial<Env> & { STORE: Namespace },
+  owed: (letter: string) => Promise<boolean> = () => Promise.resolve(false),
 ): Sender => ({
   send: async (m) => {
     let box = await mailedTo(m.from, directoryOf(env.STORE), env)
@@ -77,6 +81,7 @@ export let operatorPost = (
     }
     let { space } = box
     let sender = outgoing(env, { yak_operator: space.eid })
+    if (m.id && await owed(m.id)) return await sender.send(m)
     return await charging(env, space, sender).send(m)
   },
 })

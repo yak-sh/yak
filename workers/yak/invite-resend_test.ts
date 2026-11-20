@@ -4,10 +4,16 @@ import type { Bundle } from '@yaks/graph'
 import { again, SUBJECT, unsealed } from './invite.ts'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
+import { owedRows } from './operator-channels.ts'
 
 let SECRET = 'secret'
 let JEFF = 'jeff-eid'
-let space = { eid: 'sp', slug: 'jeff', title: 'Jeff' } as Space
+let space = {
+  eid: 'sp',
+  slug: 'jeff',
+  title: 'Jeff',
+  operator: 'Nova',
+} as Space
 let emailOf = (person: string) => `${person}@x.test`
 let cy = emailOf('cy')
 type Row = Record<string, string>
@@ -47,8 +53,21 @@ let resending = () => {
       query: () => Promise.resolve([]),
       apply: (b: Bundle[]) => (wrote.push(...b), Promise.resolve(b)),
     },
+    // The space's Operator, which writes an invitation's letter in its
+    // store (mail.ts `owe`).
+    BUILDER: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: async (r: Request) => {
+          assertEquals(new URL(r.url).pathname, '/operator/write')
+          let rows = owedRows(env, space, await r.json())
+          wrote.push(...rows)
+          return Response.json({ letter: rows[1].entity.eid })
+        },
+      }),
+    },
   } as unknown as Env
-  // The letters, as the rows written for the directory's pool to send.
+  // The letters, as the rows written for a pool to send.
   let sent = () =>
     wrote.filter((b) => b.deliver).map((b) => {
       let { to } = b.deliver as { to: string }
@@ -70,6 +89,18 @@ test('Send again mails a standing invitation again', async () => {
   let t = /\/invite\?t=(\S+)/.exec(sent()[0].body)![1]
   let sealed = await unsealed(decodeURIComponent(t), SECRET)
   assertEquals([sealed?.invite, sealed?.to], ['inv-cy', 'sp'])
+})
+
+test("Send again's letter is the space's Operator's, owed for its inviter", async () => {
+  let { press, wrote } = resending()
+  await press('inv-cy')
+  let letter = wrote.find((b) => b.deliver)!
+  assertEquals(letter.mail, {
+    from: 'jeff@yaks.app',
+    name: 'Nova',
+    at: (letter.mail as Row).at,
+  })
+  assertEquals(letter.operator_letter, { person: JEFF, platform: true })
 })
 
 test('Send again records that the standing invitation was mailed', async () => {

@@ -15,6 +15,7 @@
 // is two acts there: its owner may put it in the trash by typing its name,
 // and only a ticket erases it.
 import { apex, type Host } from '@yaks/platform/host'
+import { bullets, confirmation, envelope } from '@yaks/platform/letters'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { opened, seal } from './lib/token.ts'
@@ -126,8 +127,13 @@ export let door = (
   `https://${apex(env)}/space/${slug}/confirm/${kind}/${target}` +
   (token ? `?t=${encodeURIComponent(token)}` : '')
 
-let bullets = (lines: string[]) => lines.map((l) => `  - ${l}`).join('\n')
-
+/**
+ * The letter that carries a ticket, from the space's Operator (@yaks/platform
+ * /letters `confirmation`): mechanical, since its link and its list are the
+ * point. The directory sends it, so neither the space's monthly emails nor
+ * its trash ever hold it back; only its owner is sent one, so a reply reaches
+ * the Operator as any member's letter does (inbox.ts `operatorMail`).
+ */
 export let letter = <T>(
   k: Kind<T>,
   space: Space,
@@ -135,23 +141,18 @@ export let letter = <T>(
   link: string,
   env: Host = {},
 ) => ({
-  subject: k.title(t),
-  body: `Your assistant asked, in ${space.slug}.${apex(env)}: ${k.title(t)}
-
-Nothing has happened yet. ${k.until(t)} Nothing changes unless you open this
-link, and it only works for the next hour:
-
-${link}
-
-${
-    k.reversible
+  ...envelope(space, env),
+  ...confirmation({
+    space,
+    subject: k.title(t),
+    asked: `Your assistant asked, in ${space.slug}.${apex(env)}: ${k.title(t)}`,
+    until: k.until(t),
+    link,
+    what: k.reversible
       ? 'It stays recoverable until restored or its owner confirms a purge. What stops:'
-      : 'It cannot be undone. It destroys:'
-  }
-
-${bullets(k.lines(space, t, env))}
-
-If you did not ask for this, ignore this letter and nothing happens at all.`,
+      : 'It cannot be undone. It destroys:',
+    lines: k.lines(space, t, env),
+  }),
 })
 
 /**
@@ -182,7 +183,8 @@ export let requested = async <T>(
   )
   await mail(env)({ to, ...letter(k, space, t, link, env) })
   return `nothing has happened yet. ${k.until(t)} An assistant cannot do ` +
-    'this: a letter is on its way to the address they sign in with, ' +
+    'this: a letter from their Operator is on its way to the address they ' +
+    'sign in with, ' +
     'carrying a link that does it. It lasts an hour, and opening it asks ' +
     'them once more. Tell them to check their email. What it would ' +
     `destroy:\n${bullets(k.lines(space, t, env))}`

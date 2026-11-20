@@ -37,7 +37,8 @@ import { reachChanged } from './declared.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from '@yaks/platform/host'
-import { mail } from './mail.ts'
+import { owe } from './mail.ts'
+import { invitation } from '@yaks/platform/letters'
 import { closed, lost, sentence } from './pages.ts'
 import { invited } from './signin-pages.ts'
 import { INVITE } from '@yaks/platform/names'
@@ -133,16 +134,13 @@ export let invitedWords = (o: {
     `of ${space.slug} is in their reach, and member_remove withdraws it`
 }
 
-// Their words, marked as theirs: quoted the way a letter quotes, so a reader
-// can tell what the person wrote from what the platform did.
-let quoted = (said: string) =>
-  said.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
-
 /**
  * The letter for an invitation standing: the first, or another for somebody
- * who has not accepted yet. It goes from the platform's own sender, the one
- * the sign-in code rides (mail.ts), under fixed words; what the inviter chose
- * (their name, the app's title, their note) is in the body, marked as theirs.
+ * who has not accepted yet. The space's Operator writes it (mail.ts `owe`),
+ * uncounted, under a fixed subject; what the inviter chose (their name, the
+ * app's title, their note) is in the body, marked as theirs. A reply from the
+ * invited reaches the Operator, which answers them in their own conversation
+ * and tells the inviter.
  * It names what it opens with the address it opens at, and who invited them
  * by name, since an address is what a letter is sent to and never what a
  * person is called (T-32654). Once it is written, for the directory's pool to
@@ -176,21 +174,21 @@ export let send = async (
     invite: o.invite,
     to: app ? app.eid : space.eid,
   }, env)
-  let sent = await mail(env)({
+  let sent = await owe(env, space, {
     to: o.email,
+    person: o.by,
     subject: SUBJECT,
-    body: (o.name ? `Hi ${o.name},\n\n` : '') +
-      // Their words first, and marked as theirs, so a reader never takes the
-      // platform to be saying them (T-32963).
-      (o.note ? `${by ?? 'They'} wrote:\n\n${quoted(o.note)}\n\n` : '') +
-      `${by ?? 'Someone'} invited you to ` +
-      `${o.role == 'viewer' ? 'see' : 'use'} ${what}. ` +
-      `Accept with one click:\n\n` +
-      `${accept}\n\n` +
-      `The link signs you in as ${o.email} for the next ${DAYS} days. ` +
-      'There is nothing to install and no account to make first. Until ' +
-      'you accept, nothing of theirs is shared with you, and if you did ' +
-      'not expect this you can ignore it.',
+    body: invitation({
+      space,
+      by,
+      name: o.name,
+      note: o.note,
+      verb: o.role == 'viewer' ? 'see' : 'use',
+      what,
+      accept,
+      email: o.email,
+      days: DAYS,
+    }),
   }).then(() => true).catch((e) => {
     caught(e, { invite: o.invite, space: space.slug })
     return false

@@ -9,7 +9,7 @@ import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
-import { mailFrom } from '@yaks/platform/host'
+import { envelope, signed, signedFor } from '@yaks/platform/letters'
 import { digest } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
 import { keep } from '@yaks/blob'
@@ -522,7 +522,7 @@ export let letterRows = (
     target?: string
   },
 ): Bundle[] => {
-  let { eid, to, title, body, ...envelope } = letter
+  let { eid, to, title, body, ...given } = letter
   let address = to.trim().toLowerCase()
   let recipient = derivedEid('operator-address|' + address)
   return [
@@ -530,9 +530,8 @@ export let letterRows = (
     {
       entity: { eid },
       mail: {
-        from: mailFrom(space.slug, null, env),
-        name: space.operator,
-        ...Object.fromEntries(Object.entries(envelope).filter(([, v]) => v)),
+        ...envelope(space, env),
+        ...Object.fromEntries(Object.entries(given).filter(([, v]) => v)),
         at: new Date().toISOString(),
       },
       doc: { title, body },
@@ -540,6 +539,34 @@ export let letterRows = (
       $actor: { by: space.eid },
     },
   ]
+}
+
+/** What a letter yaks.app owes a person says: whom it is to and for, and
+ * its words (mail.ts `owe`). */
+export type Owed = { to: string; person: string; subject: string; body: string }
+
+/** The rows of a letter yaks.app owes a person, written by the space's
+ * Operator ({@link letterRows}): marked `platform`, so the space's monthly
+ * emails never count or refuse it (metered.ts `operatorPost`), and naming
+ * the person it is for, so a reply to it from anyone comes back to the
+ * Operator (inbox.ts `replied`). */
+export let owedRows = (env: Env, space: Space, owed: Owed): Bundle[] => {
+  let [recipient, letter] = letterRows(env, space, {
+    eid: crypto.randomUUID(),
+    to: owed.to,
+    title: owed.subject,
+    body: owed.body,
+  })
+  return [recipient, {
+    ...letter,
+    operator_letter: { person: owed.person, platform: true },
+  }]
+}
+
+/** Whether letter `eid` is one yaks.app owes its person ({@link owedRows}). */
+export let owes = async (store: Store, eid: string) => {
+  let [row] = await store.g.get([eid], ['operator_letter'])
+  return part<Comp | undefined>(row, 'operator_letter')?.platform === true
 }
 
 /** The letter that carries `eid` (an answer, a notification) by email: one
@@ -662,15 +689,6 @@ export let requestId = (space: string, message: string) =>
   message
     ? derivedEid(`operator-email|${space}|${message}`)
     : crypto.randomUUID()
-
-/** How a letter from a space's Operator is signed: its name, and whose. */
-export let signed = (space: Space) =>
-  `${space.operator}\n${space.title || space.slug}’s Operator`
-
-/** How a letter the Operator writes to someone else for a person is signed:
- * its name, whose assistant it is, and that they are copied. */
-export let signedFor = (space: Space, name: string) =>
-  `${space.operator}\n${name}’s AI assistant on yaks.app. ${name} is copied on this letter.`
 
 /** A text's sign-off: the Operator's name, and the brand. */
 export let textSigned = (space: Space) => `— ${space.operator}, yaks.app`

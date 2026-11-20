@@ -24,6 +24,7 @@ import { CallError } from '@yaks/tools/errors'
 import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
+import { alerted } from '@yaks/platform/letters'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { askAnchor, listsOf, needCount } from './operator-lists.ts'
 import { caught } from './defects.ts'
@@ -295,16 +296,17 @@ let sent = async (
     )
     return undefined
   }
-  let { letterFor, letterRows, signed } = await import(
-    './operator-channels.ts'
-  )
-  return letterRows(env, space, {
+  let { letterFor, letterRows } = await import('./operator-channels.ts')
+  let [recipient, letter] = letterRows(env, space, {
     eid: letterFor(id),
     to: route.to,
     title: subjectOf(subject ?? words),
-    body: `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`,
+    body: alerted(space, words, updates),
     target: id,
   })
+  // Written for the person it alerts, so a reply finds it from any address
+  // (inbox.ts `replied`), not only the one a member writes from.
+  return [recipient, { ...letter, operator_letter: { person } }]
 }
 
 // The most of an alert's line a notification shows.
@@ -383,7 +385,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
   title: 'Notify them',
   step: { doing: 'Notifying them…', done: 'Notified them' },
   description:
-    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, when something needs them, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, apart from any conversation, read later by someone who has not seen this one and may not be a programmer, so it must stand on its own: no file names, tool names, ids or error messages, which stay in this chat it links to. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
+    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, when something needs them, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, apart from any conversation, read later by someone who has not seen this one and may not be a programmer, so it must stand on its own: no file names, tool names, ids or error messages, which stay in this chat it links to. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone. Write it as yourself, in the first person (“I finished your report”), and say what they can reply to have done (“Reply renew and I’ll renew it”): a reply to a text or an email reaches you here. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
   parameters: {
     type: 'object',
     properties: {
@@ -395,7 +397,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
       text: {
         type: 'string',
         description:
-          'Two or three plain sentences to them, standing on their own: what happened, what you did, and what (if anything) they need to do.',
+          'Two or three plain sentences to them in your own voice, standing on their own: what happened, what you did, and what (if anything) they can reply to have done.',
       },
       about: {
         type: 'string',

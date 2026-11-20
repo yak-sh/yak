@@ -51,6 +51,9 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     let l = await letter(k, ana.email, '/invite?t=')
     assertEquals(l.subject, SUBJECT)
     assertStringIncludes(l.body, '> please look')
+    // From his space's Operator, at its address, which a reply reaches.
+    assertEquals(l.from, `${mine}@yaks.app`)
+    assertStringIncludes(l.body, 'Reply to this email')
 
     // Pending: not in her listing, not behind a bare app name, not in what
     // her agent is told.

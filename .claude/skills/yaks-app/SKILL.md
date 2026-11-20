@@ -539,6 +539,17 @@ from that:
 - **Input is precious** (M-59093). The owner, verbatim: "everything they input
   into a computer is precious and should be preserved". A draft, an unsent
   message or a form gets no short lifetime.
+- **A letter to a person comes from their Operator.** Anything yaks.app
+  mails a person that they might answer is from the Operator of the space it
+  concerns: its name, the space's own address (`<space>@yaks.app`), its first
+  person, and what a reply can ask for (@yaks/platform/letters). A letter the
+  Operator writes lives in its store (operator-channels.ts `letterRows`, and
+  mail.ts `owe` from the kernel for one yaks.app owes the person, uncounted),
+  so a reply from anyone finds it (inbox.ts `replied`). A confirmation link
+  goes through the directory, from the same address, so the space's trash or
+  allowance never holds it back. Only the sign-in code (from bot.yak.sh,
+  Reply-To `signup@`, which reaches the person's own Operator) and the "Not
+  delivered" answer to a stranger stay the platform's.
 - **Money spends from one budget per space** (D-398), whatever the source.
   Something new that costs money spends from it rather than growing an allowance
   of its own; embedding calls don't count yet (T-59279).

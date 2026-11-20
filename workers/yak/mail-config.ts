@@ -1,10 +1,10 @@
-// Who the platform writes as. The envelope sender must be an address the
-// fleet's Email Sending domain (src/mailaddr.ts `mailDomain`, bot.yak.sh —
-// DKIM signed, SPF/DMARC on cf-bounce.bot.yak.sh) is authorized to send;
-// yaks.app has no Email Sending setup, so a letter from there is refused at
-// the API. The reader still answers the platform: REPLY_TO is the yaks.app
-// address, and the display name is the platform's. A space that white-labels
-// its login will want its own pair; that is a later leaf's.
+// Who the platform writes as. FROM is the fleet's Email Sending domain
+// (bot.yak.sh, DKIM signed, SPF/DMARC on cf-bounce.bot.yak.sh), which the
+// platform's own post sends from: sign-in codes, and what it writes for its
+// agents. A letter to a person they might answer comes from their space's
+// Operator instead, at the space's own address (@yaks/platform/letters),
+// which the apps' post sends from yaks.app (post.ts `platformPost`), signed
+// and authorized for that domain the same way.
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { replyTo } from '@yaks/platform/host'

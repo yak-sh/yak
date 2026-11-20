@@ -355,9 +355,14 @@ export let operatorDoc: VocabDoc = {
     operator_letter: {
       component: true,
       description:
-        "A letter the Operator wrote for a person to someone else, beside its `mail` and `doc`: a reply that names it comes back into that person's conversation.",
+        "A letter the Operator wrote for a person, to someone else or to them, beside its `mail` and `doc`: a reply that names it comes back into its writer's conversation, and the person it was written for is told when that is someone else.",
       properties: {
         person: { type: 'string', ref: 'person', death: 'keep' },
+        platform: {
+          type: 'boolean',
+          description:
+            "A letter yaks.app owes the person, such as an invitation or a contact code, sent in the Operator's name: the space's monthly emails never count or refuse it.",
+        },
         session: {
           type: 'string',
           ref: 'session',

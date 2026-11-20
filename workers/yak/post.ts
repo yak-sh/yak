@@ -234,6 +234,18 @@ export let outgoing = (
   },
 })
 
+/** The sender the directory's own letters leave through: the platform's
+ * post, and the apps' post for a letter from an address at the apex (a
+ * space's own, whose Operator it is from, mail.ts `Letter.from`), since a
+ * post's key may send only from the domain it is for (config.ts `posts`). */
+export let platformPost = (env: Delivery): Sender => {
+  let platform = outgoing(env, {}, posts.platform), apps = outgoing(env)
+  let at = '@' + apex(env)
+  return {
+    send: (m) => (m.from.toLowerCase().endsWith(at) ? apps : platform).send(m),
+  }
+}
+
 /** A store locator as provider correlation metadata, never stored on mail. */
 export let mailTags = (store: string): Record<string, string> => ({
   yak_store: toBase64url(new TextEncoder().encode(store)),

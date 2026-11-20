@@ -55,6 +55,7 @@ import { unmail } from './domain-mail.ts'
 import { unmailSpace } from './space-mail.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host as HostEnv } from '@yaks/platform/host'
+import { confirmation, envelope } from '@yaks/platform/letters'
 import { purgedAll } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
@@ -288,39 +289,33 @@ export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
   'restore the space',
 ]
 
-// The letter an agent's ask sends, and the one letter the platform never
-// counts against a space's month (usage.ts `sending`): refusing to send it
-// would lock a person inside a space they are trying to close, and a person
-// deleting a space is a person we are about to stop billing anyway.
+// The letter an agent's ask sends, from the space's Operator
+// (@yaks/platform/letters `confirmation`), and never counted against a
+// space's month: refusing to send it would lock a person inside a space they
+// are trying to close. The directory sends it, so a space already in the
+// trash still gets the letter that erases it.
 export let letter = (
   d: Doomed,
   link: string,
   forever = false,
   env: HostEnv = {},
-) => ({
-  subject: `Delete ${d.space.slug}.${apex(env)}?`,
-  body: `Your assistant asked to delete ${d.space.slug}.${apex(env)}.
-
-Nothing has happened yet. Nothing will unless you open this link, and it only
-works for the next hour:
-
-${link}
-
-${
-    forever && !!d.space.trashed
-      ? `It cannot be undone. It destroys:
-
-${naming(d, env).map((l) => `  - ${l}`).join('\n')}`
-      : `It puts the space in the trash. Nothing is erased, and you
-can bring it back until you separately choose permanent erasure. What stops until you do:
-
-${keeping(d, env).map((l) => `  - ${l}`).join('\n')}
-
-It stays recoverable until you choose to erase it from the trash.`
+) => {
+  let erasing = forever && !!d.space.trashed
+  return {
+    ...envelope(d.space, env),
+    ...confirmation({
+      space: d.space,
+      subject: `Delete ${d.space.slug}.${apex(env)}?`,
+      asked: `Your assistant asked to delete ${d.space.slug}.${apex(env)}.`,
+      link,
+      what: erasing ? 'It cannot be undone. It destroys:' : 'It puts the ' +
+        'space in the trash. Nothing is erased, and you can bring it back ' +
+        'until you separately choose permanent erasure. What stops until ' +
+        'you do:',
+      lines: erasing ? naming(d, env) : keeping(d, env),
+    }),
   }
-
-If you did not ask for this, ignore this letter and nothing happens at all.`,
-})
+}
 
 // Ordinary cleanup retains bytes. Only a person's confirmed purge removes them.
 let swept = (env: Env, prefix: string, owner: string, purge = false) => {
