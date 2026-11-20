@@ -11,10 +11,10 @@ import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
 import type { Tool } from '@yaks/graph'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
-// A host that narrows a turn once it read a stranger's words says which
-// nested answers brought them (`strangerWrote`), as it does for a direct call.
+// A host that narrows a turn once it heard words it cannot vouch for says
+// which nested answers brought them (`hears`), by its direct calls' rule.
 export let coded = <T extends Options>(
-  opts: T & Pick<Coding, 'strangerWrote'>,
+  opts: T & Pick<Coding, 'hears'>,
   ctx: Ctx,
   local?: ResultHost,
   remote: Tool[] | (() => Promise<Tool[]>) = [],
@@ -75,7 +75,7 @@ export let coded = <T extends Options>(
           })
         },
         kept: resultStore(ctx, args, local),
-        strangerWrote: opts.strangerWrote,
+        hears: opts.hears,
       },
     )
   let base = offered()

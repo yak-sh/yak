@@ -161,12 +161,10 @@ let call = (name: string, args: unknown): Item[] => [{
   name,
   args: JSON.stringify(args),
 }]
-// The fork reads the calendar, adds the dentist, and emails the office.
+// The fork adds the dentist, emails the office, then reads the calendar:
+// once it read the invitations anyone can send, it adds and sends nothing
+// more (T-1860).
 let steps = [
-  call('calendar_events', {
-    from: '2026-11-10T00:00:00-05:00',
-    to: '2026-11-11T00:00:00-05:00',
-  }),
   call('calendar_add', {
     title: 'Dentist',
     start: '2026-11-10T15:00',
@@ -176,6 +174,10 @@ let steps = [
     to: ['front@dentist.example'],
     subject: 'Tuesday at 3',
     text: 'Jeff will see you Tuesday at 3.',
+  }),
+  call('calendar_events', {
+    from: '2026-11-10T00:00:00-05:00',
+    to: '2026-11-11T00:00:00-05:00',
   }),
 ]
 let requests: Asked[] = []
@@ -252,10 +254,19 @@ test('connected from the page, each names its account, and the Operator uses bot
     ),
     [true, true, true, true],
   )
-  let [read] = to('/calendars/primary/events?')
-  assertEquals(read.headers.get('authorization'), 'Bearer A1')
+  let read = requests.filter((r) =>
+    JSON.stringify(r.items).includes('fork of the')
+  ).at(-1)!
   assertEquals(
-    new URL(read.url).searchParams.get('timeMin'),
+    ['calendar_events', 'calendar_add', 'gmail_send'].map((n) =>
+      names(read).includes(n)
+    ),
+    [true, false, false],
+  )
+  let [events] = to('/calendars/primary/events?')
+  assertEquals(events.headers.get('authorization'), 'Bearer A1')
+  assertEquals(
+    new URL(events.url).searchParams.get('timeMin'),
     '2026-11-10T05:00:00.000Z',
   )
   let [added] = to('/calendars/primary/events').filter((r) =>

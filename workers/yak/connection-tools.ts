@@ -365,6 +365,10 @@ let CONNECTIONS: Row[] = [
           services.filter((i) => i != null).filter(matches).map((i) =>
             `\n\n${i.name} operations: ${JSON.stringify(i.commands)}`
           ).join(''),
+        // What an owner wrote of their integration, unreviewed, and what a
+        // service's space says of it are theirs; the catalog's own entries
+        // are the platform's words (T-1860).
+        ...all.some((i) => i.owner || i.service) ? { heard: true } : {},
       }
     },
   },

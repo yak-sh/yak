@@ -1,7 +1,9 @@
 // A member's Operator reading their app's rows (T-1064): an answer is `heard`
 // when a stranger wrote a row in it, a person outside the space or a visitor
 // who never signed in, and stays ordinary for the space's own people. A
-// code_mode script's reads are heard the same way (T-1066).
+// code_mode script's reads are heard the same way (T-1066). An answer in
+// words, such as a command's display of rows, is heard whoever wrote them
+// (T-1860).
 import { equal, match, test } from '@yaks/testing'
 import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -41,7 +43,7 @@ for (
     ['index.html', '<h1>Notes</h1>'],
     [
       'vocab.json',
-      '{"$defs":{"note":{"properties":{"by":{"type":"string"},"body":{"type":"string"},"heading":{"type":"string"}}}}}',
+      '{"$defs":{"note":{"properties":{"by":{"type":"string"},"body":{"type":"string"},"heading":{"type":"string"}}},"note_list":{"tool":true,"description":"List notes","input":{"by":{"type":"string"}},"query":".note.by=$by"},"note_add":{"tool":true,"description":"Add a note","input":{"by":{"type":"string"}},"apply":{"entity":{"eid":"$note"},"note":{"by":"$by"}}}}}',
     ],
   ]
 ) await agent.tool('app_files', { app, op: 'write', path, content })
@@ -198,4 +200,35 @@ test('an intermediate stranger stays heard after member edits, until their words
 
 test('claimed guest words belong to the verified member even after later edits', async () => {
   equal(await heard('graph_query', { app, q: '.note.by=claimed' }), false)
+})
+
+test("an app command's display of rows is heard, being words, whoever wrote them", async () => {
+  equal(
+    await Promise.all(
+      writers.map((by) =>
+        heard('command', { name: 'note_list', args: { by } })
+      ),
+    ),
+    writers.map(() => true),
+  )
+  equal(
+    await heard('code_mode', {
+      script: `await tools.yaks.command({name:'note_list',args:{by:'owner'}})
+        return 'read'`,
+    }),
+    true,
+  )
+})
+
+test("a member's own write and the Operator's own rows keep every tool", async () => {
+  equal(await heard('graph_apply', { app, bundles: note('again') }), false)
+  equal(
+    await heard('command', { name: 'note_add', args: { by: 'owner' } }),
+    false,
+  )
+  equal(
+    await heard('memory_save', { said: 'They like tea', title: 'Tea' }),
+    false,
+  )
+  equal(await heard('graph_query', { self: true, q: '.memory' }), false)
 })

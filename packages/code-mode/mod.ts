@@ -43,7 +43,7 @@ export type Receipt = {
   isError?: boolean
   error?: string
   pending?: boolean
-  /** the tool or `Options.strangerWrote` marked the answer `heard` */
+  /** the tool or `Options.hears` marked the answer `heard` */
   heard?: true
 }
 export type Answer = { value: unknown; calls: Receipt[]; error?: string }
@@ -93,10 +93,10 @@ export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
   current?: () => Promise<Runner>
   /** the results the host's harness kept, read by `results.read` */
   kept?: Kept
-  /** whether a nested call's answer brought words someone the caller does
-   * not work for wrote: its receipt says `heard`, and so does the
-   * execution's answer, as a direct call's result would */
-  strangerWrote?: (tool: Tool, answer: Bundle[]) => Promise<boolean>
+  /** whether the caller hears in a nested call's answer words it cannot
+   * vouch for, by the rule its direct calls take: its receipt says `heard`,
+   * and so does the execution's answer, as a direct call's result would */
+  hears?: (tool: Tool, answer: Bundle[]) => Promise<boolean>
 }
 let said = (r: Result) => r.content.map((c) => c.text).join('\n').slice(0, 1024)
 
@@ -230,7 +230,7 @@ export let execute = async (
         }
         if (
           answer.some((b) => b.heard) ||
-          !failed && await opts.strangerWrote?.(admitted.tool, answer)
+          !failed && await opts.hears?.(admitted.tool, answer)
         ) {
           made.heard = true
         }

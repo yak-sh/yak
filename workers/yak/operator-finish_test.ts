@@ -119,6 +119,7 @@ let operator = operating(operatorMemory(), env, {
     name: 'leaflet',
     description: 'A guide longer than a turn keeps',
     parameters: { type: 'object', properties: {} },
+    readOnly: true,
     run: () => Promise.resolve('Mail is sent with mail_send. '.repeat(16_000)),
   }, ...clashing ? [{ ...guide, name: 'guide' }] : []],
 })

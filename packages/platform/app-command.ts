@@ -11,8 +11,15 @@ import type { Bundle } from '@yaks/graph'
 /** Who runs a command: the person, and their role in the app. */
 export type Caller = { person: string | null; role: string | null }
 
-/** A command's answer: what is said, and the value beside it. */
-export type Reply = { text: string; value: Record<string, unknown> }
+/** A command's answer: what is said, and the value beside it. It is `heard`
+ * unless its words are only the receipt of a write: the rows a query shows
+ * and a worker's words are whoever wrote them, which a caller that narrows
+ * what it does after reading outsiders' words hears as theirs. */
+export type Reply = {
+  text: string
+  value: Record<string, unknown>
+  heard?: true
+}
 
 /** What a command reaches through its caller: the store's writes and reads,
  * and the app's worker where its host has one. */
@@ -104,9 +111,9 @@ export let commandReply = async (
     throw new CallError('access', `${name} requires the app ${tool.floor}`)
   }
   return await invoke<Reply>(tool, args, {
-    worker: (path, args) => {
+    worker: async (path, args) => {
       if (!door.worker) throw new Error('app worker is unavailable')
-      return door.worker(path, args)
+      return { ...await door.worker(path, args), heard: true }
     },
     query: async (line) => {
       let read = await door.query(line)
@@ -117,6 +124,7 @@ export let commandReply = async (
           Array.isArray(rows) ? `${n} ${n == 1 ? 'row' : 'rows'}` : 'answered'
         } in ${at}\n\n${display(rows)}`,
         value: { rows },
+        heard: true,
       }
     },
     apply: async (bundles) => {

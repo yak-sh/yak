@@ -26,6 +26,7 @@ import {
   sessionTools,
   take,
   taskSession,
+  type Told,
   type Tool,
   topOf,
   transcript,
@@ -134,7 +135,7 @@ import {
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
-import { heardIn, strangerWrote } from './operator-heard.ts'
+import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
@@ -506,6 +507,162 @@ let TELLING = new Set(['platform_bug', 'text_send', 'notification_send'])
 let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
   tools.map((t) => held(t) ? t : { ...t, withheld: why })
 
+// The tools whose answer in words is the platform's own: a receipt of what
+// the call did, or what the space's own people and its Operator wrote (its
+// apps' files and settings, its memories, tasks, wakes and trials). Every
+// other answer is `heard` unless it is made only of rows no stranger wrote
+// (operator-heard.ts `heardIn`, T-1860): a command's display, a page, a
+// calendar, a letter, the gallery, a sandbox's output. A tool that should keep
+// every tool for the turn answers rows, or is named here once its words are
+// known to be the space's own. code_mode and a child session stamp their own
+// answer from what they heard, an app command its own unless it only says
+// what it wrote (@yaks/platform/app-command `commandReply`), and the
+// integration directory its own when it lists what an owner wrote.
+let OWN_WORDS = new Set([
+  // the space, its apps, their files, releases and settings
+  'graph_schema',
+  'space_new',
+  'space_set',
+  'space_delete',
+  'space_restore',
+  'space_sell',
+  'app_new',
+  'app_files',
+  'app_deploy',
+  'app_versions',
+  'app_rollback',
+  'app_set',
+  'app_delete',
+  'app_restore',
+  'app_erase',
+  'app_list',
+  'app_publish',
+  'app_unpublish',
+  'app_published',
+  'app_rate',
+  'app_secret_set',
+  'app_secret_list',
+  'app_secret_remove',
+  'commands',
+  'sandbox_write',
+  'sandbox_stop',
+  'sandbox_ship',
+  'store_load',
+  'store_restore',
+  'store_retry',
+  'store_effect_retry',
+  'domain_attach',
+  'domain_status',
+  'domain_detach',
+  'member_add',
+  'member_remove',
+  'grant',
+  'screen_pair',
+  'feedback',
+  'guide',
+  'about',
+  'operator_remove',
+  'operator_stop',
+  'operator_retry',
+  'library_add',
+  'library_remove',
+  'connection_attach',
+  'connection_lend',
+  'connection_need',
+  'connection_list',
+  'service_connect',
+  'integration_publish',
+  'integration_set',
+  'integration_list',
+  'mcp_connect',
+  'mcp_remove',
+  'number_find',
+  'number_buy',
+  'number_assign',
+  'number_release',
+  'number_verify',
+  'number_status',
+  'search_sitemap',
+  'builder_choose',
+  'builder_build',
+  'builder_supply',
+  'store_builder_build',
+  'store_builder_supply',
+  'store_builder_choose',
+  'store_memory_save',
+  'store_connection_need',
+  'store_connection_list',
+  'store_mail_send',
+  'mail_reply',
+  'code_mode',
+  'command',
+  // the Operator's own work
+  'memory_save',
+  'memory_recall',
+  'memory_around',
+  'trial_pass',
+  'trial_hold',
+  'trial_tally',
+  'trial_plan',
+  'trial_match',
+  'trial_cap',
+  'trial_adopt',
+  'trial_pairs',
+  'trial_pick',
+  'task_new',
+  'task_list',
+  'task_update',
+  'decision_new',
+  'decision_relay',
+  'goal_new',
+  'goal_list',
+  'goal_update',
+  'skill_read',
+  'fork',
+  'spawn',
+  // what the person's own doors sent, set and hold
+  'platform_bug',
+  'text_send',
+  'contact_add',
+  'notification_send',
+  'mail_send',
+  'phone_send',
+  'phone_numbers',
+  'image_new',
+  'wake_set',
+  'wake_list',
+  'wake_cancel',
+  'subscription_set',
+  'subscription_list',
+  'subscription_cancel',
+  'escalate',
+  'escalation_answer',
+  'calendar_add',
+  'gmail_send',
+  'admin_budget',
+  'admin_fee',
+])
+
+// An answer recorded as `heard`.
+let heardOf = (said: Told): Told =>
+  typeof said == 'string'
+    ? { text: said, with: { heard: {} } }
+    : { ...said, with: { ...said.with, heard: {} } }
+
+// A tool whose answer is words, as the turn hears them: `heard`, unless its
+// words are its own (`OWN_WORDS`).
+let attended = (t: Tool): Tool =>
+  OWN_WORDS.has(t.name) ? t : {
+    ...t,
+    run: async (args, context) => heardOf(await t.run(args, context)),
+    ...t.recover && {
+      recover: async (args, context) => {
+        let said = await t.recover!(args, context)
+        return said === undefined ? said : heardOf(said)
+      },
+    },
+  }
+
 // What a caller other than a turn's own runner offers: the tools it holds.
 let offerable = (tools: Tool[]) => tools.filter((t) => !t.withheld)
 
@@ -587,10 +744,20 @@ export let operatorRoster = async (
   )
   // What the model reads of an answer from the Operator's own store is drawn
   // (operator-store.ts `readable`): an eid in its prose as the entity's id.
-  // A read of the apps whose rows a stranger wrote is `heard`
-  // (operator-heard.ts), which leaves the rest of the turn its reads.
-  let stranger = async (t: { readOnly?: boolean }, out: Bundle[]) =>
-    !!t.readOnly && await strangerWrote(g, ctx.dir, reach, ctx.person, out)
+  // An answer is `heard` (operator-heard.ts) unless its words are the
+  // tool's own or it is made only of rows no stranger wrote, which leaves the
+  // rest of the turn its reads: in the Operator's own store, rows that are not
+  // hearsay (`heardIn`); in the apps, rows no app or stranger wrote
+  // (`unvouched`).
+  let hears = async (
+    t: { name?: string },
+    out: Bundle[],
+    from: 'own' | 'apps' | 'remote' = 'apps',
+  ) =>
+    !OWN_WORDS.has(t.name ?? '') &&
+    (from == 'own'
+      ? await heardIn(self, out)
+      : await unvouched(g, ctx.dir, reach, ctx.person, out))
   let run = (
     t: NamedTool,
     host: Graph,
@@ -643,8 +810,7 @@ export let operatorRoster = async (
     // A connected server or code_mode can stamp its own answer `heard`.
     // Preserve that stamp even if the server answered with an error.
     let heard = out.some((b) => b.heard) ||
-      from == 'apps' && await stranger(t, out) ||
-      from == 'own' && !!t.readOnly && await heardIn(self, out)
+      await hears(t, out, from)
     // Applied tools already wrote through their own store; generic writes
     // return patches and use the same graph application as the connector.
     return {
@@ -675,7 +841,7 @@ export let operatorRoster = async (
       calls: ledger(g, session ? recorded(work.g, session, space) : work.g),
       report: (e) => caught(e, { request: 'operator code mode' }),
       refused: hearing(ctx.env, () => ({ space, session })),
-      strangerWrote: stranger,
+      hears: (t, out) => hears(t, out),
     },
     ctx,
     { graph: work.g, person: ctx.person, space },
@@ -688,7 +854,8 @@ export let operatorRoster = async (
       run: run(t, g, landing, 'remote'),
     })),
     // Their own words, sent on to their machine as theirs: only someone who
-    // writes in the space, as the rest of what changes anything is.
+    // writes in the space, as the rest of what changes anything is. What
+    // they answer is a receipt of the relay, in the platform's words.
     ...member
       ? [
         ...relayTools(ctx, work, remote, (s) => topOf(work.g, s), asking),
@@ -2006,13 +2173,18 @@ export let operating = (
       ...subscriptionTools(store, watching),
       escalationAnswer(store, ctx, space),
     ]
+    // Every tool beside the roster's, whose answers its own runner hears
+    // (`operatorRoster`), answers as the turn hears it (`attended`).
+    let ruled = new Set(roster.map((t) => t.name))
+    let listened = (tools: Tool[]) =>
+      tools.map((t) => ruled.has(t.name) ? t : attended(t))
     if (heard) {
       let why = texted ? TEXTED : OUTSIDE
       let thread = member && channel == 'escalated'
         ? await threadOf(store, (await requestAt(store, session))?.request)
         : undefined
       let back = thread ? [onThread(thread)] : []
-      return deferred([
+      return deferred(listened([
         ...holding(
           [
             ...sessionTools(g, children).filter((t) => t.name == 'fork'),
@@ -2044,9 +2216,9 @@ export let operating = (
           (t) => !!t.readOnly,
           why,
         ),
-      ])
+      ]))
     }
-    return deferred([
+    return deferred(listened([
       ...sessionTools(g, children).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
@@ -2078,7 +2250,7 @@ export let operating = (
       ...member && options.browsers
         ? browserTools(env, space, ctx.person, options.browsers, store)
         : [],
-    ])
+    ]))
   }
 
   // This object's runner, a new one each time the object starts: a Durable
