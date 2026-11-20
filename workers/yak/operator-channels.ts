@@ -45,6 +45,7 @@ import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { linked, PLATFORMS } from './chat.ts'
 import {
+  basics,
   type Lead,
   leading,
   named,
@@ -400,7 +401,7 @@ export let speakersOf =
     let platform = PLATFORMS.get(via)
     if (!platform) return new Map()
     let dir = directoryOf(env.STORE)
-    let authors = new Map(said.map((s) => [s.author.id, s.author.name]))
+    let authors = new Map(said.map((a) => [a.id, a.name]))
     return new Map(
       await Promise.all(
         [...authors].map(async ([id, name]) => {
@@ -428,7 +429,8 @@ export let speakersOf =
  * is kept first, so nothing a person sent is lost; then its words and how they
  * came (`BY`) are the next input of the person's
  * conversation (@yaks/session `take`), with the files they came with
- * attached to the item, after what led up to them ({@link led}). Given
+ * attached to the item, after what led up to them, an entry each
+ * ({@link led}). Given
  * again, they write nothing (`fresh` false).
  * Words that could not be taken in keep why on the item, and their channel
  * answers what the person reads: a refusal written for them, else
@@ -441,7 +443,7 @@ export let hear = async (
   request: Request,
   text: string,
   item: Bundle,
-  lead?: Lead,
+  leads: Lead[] = [],
 ): Promise<{ fresh: boolean; session?: string }> => {
   let { g } = operator.store
   let id = item.entity.eid
@@ -487,7 +489,9 @@ export let hear = async (
       words,
       [
         ...await open.beside(words, { files, said: text }),
-        ...lead ? [led(open.session, id, channel, lead, words.by)] : [],
+        ...leads.map((lead, n) =>
+          led(open.session, id, channel, lead, words.by, n)
+        ),
       ],
       { trusted: true },
     )
@@ -517,18 +521,22 @@ export let hear = async (
  * never inside them. It starts no turn (`notice`). With anyone else's words
  * in it, it is the room's and `heard`, which the Operator reads as
  * information, never instructions; else it is the person's own, written `by`
- * them as the words are. */
+ * them as the words are. The `n`th of the words' leads, each its own. */
 let led = (
   session: string,
   id: string,
   channel: string,
   lead: Lead,
   by: string,
+  n = 0,
 ): Bundle => {
   let room = `the ${PLATFORMS.get(channel)?.title ?? channel} room`
   return {
-    entity: { eid: derivedEid('operator-lead|' + id) },
-    entry: { session, from: lead.heard ? `others in ${room}` : room },
+    entity: { eid: derivedEid(`operator-lead|${id}${n ? `|${n}` : ''}`) },
+    entry: {
+      session,
+      from: lead.heard && !lead.place ? `others in ${room}` : room,
+    },
     content: { body: lead.body },
     channel: { name: channel },
     notice: {},
@@ -605,12 +613,23 @@ export let chatHeard = async (
     trusted: true,
   })
   let at = { via, connection, speakers: speakersOf(env, space) }
-  let lead = had?.entry ? undefined : joined(
-    await replying(env, operator.store, at, said),
-    !writer && said.server && said.addressed
+  // Words said to it open with the room's basics, an entry of their own,
+  // then the chain they reply to and what was said since its last answer.
+  let leads: Lead[] = []
+  if (!had?.entry) {
+    let chain = await replying(env, operator.store, at, said)
+    let since = !writer && said.server && said.addressed
       ? await leading(env, operator.store, at, said)
-      : undefined,
-  )
+      : undefined
+    let room = said.addressed
+      ? await basics(env, at, said, [
+        ...chain?.people ?? [],
+        ...since?.people ?? [],
+      ])
+      : undefined
+    let before = joined(chain, since)
+    leads = [...room ? [room] : [], ...before ? [before] : []]
+  }
   let { fresh, session } = await hear(
     operator,
     env,
@@ -626,7 +645,7 @@ export let chatHeard = async (
     },
     said.text,
     message,
-    lead,
+    leads,
   )
   let working = operator.store.chatters?.[via]?.working
   if (fresh && session && working) {

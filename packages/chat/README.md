@@ -52,6 +52,9 @@ type Platform = {
   rooms?: (credential: string, server: string, fetch?) => Promise<Room[]>
   recent?: (credential, room, page: Page, fetch?) => Promise<Said[]>
   named?: (credential, server, name: string, fetch?) => Promise<void>
+  api?: { base: string; scheme: string; reads: string[] }
+  open?: (credential, room, fetch?) => Promise<boolean>
+  basics?: (credential, room, people: string[], fetch?) => Promise<Basics>
   working?: { every: number; show: (credential, room, fetch?) => Promise<void> }
 }
 ```
@@ -60,8 +63,10 @@ A platform that sends its messages over a socket gives it as pure steps
 (`Socket`): where to connect, and for each frame what to send back, how often to
 beat, what was heard, and whether to connect again; and what a beat sends, or
 `again` when the last went unanswered. `ends(code)` says why a close cannot be
-tried again with the same credential. A platform that posts to a webhook instead
-gives that the way @yaks/phone's providers do; none does yet.
+tried again with the same credential, and `closed(state, code)`, where a close
+is answered by asking less (Discord's refused intents), what the socket
+remembers as it connects again. A platform that posts to a webhook instead gives
+that the way @yaks/phone's providers do; none does yet.
 
 `send` posts a reply with a bot's credential. A refusal that never took it (a
 rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.
@@ -92,6 +97,19 @@ platform can (Discord's typing indicator): one show lasts `every` milliseconds.
 `showing(working, still)` shows at once and again each `every` while `still()`
 says the work goes on, for at most ten minutes; a show refused for now
 (`Unsent`) waits for the next beat.
+
+`api` is what a bot may read of the platform's API for people there, as data:
+its `base`, the `scheme` a bot's credential is sent after in the authorization
+header, and the paths any member of a room could read (`reads`), where
+`{server}` and `{room}` name where it is read and any other `{name}` is one
+segment. `reading(api, path)` is the ids a path binds, none where no read
+matches, so a host confines a read to its bot's servers before the platform is
+asked. `open` says whether every member of a room's server sees it, which a room
+nobody named the bot in is read by.
+
+`basics` is what a person in a room sees without asking (`Basics`): the server
+and its icon, the room and its topic, and the people talking with their roles
+there. `setting(platform, basics, names)` says it, each id given for `api`.
 
 `framing(platform, {name, addressed})` is how a message is said before its words
 to whoever answers it ("On Discord, naming you, from Ann: ").

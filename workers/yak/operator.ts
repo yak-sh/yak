@@ -149,7 +149,7 @@ import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
-import { chatRead, roomsOf } from './operator-rooms.ts'
+import { chatApi, chatRead, roomsOf } from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -2197,9 +2197,13 @@ export let operating = (
       ),
       roomsOf(store, session),
     ])
-    // Addressed in a chat room, it reads back what was said there.
+    // Addressed in a chat room, it reads back what was said there, and
+    // anything else a member there could see.
     let chat = rooms.length
-      ? [chatRead(env, store, speakersOf(env, space))]
+      ? [
+        chatRead(env, store, speakersOf(env, space)),
+        chatApi(env, store, space, rooms.map((r) => r.via)),
+      ]
       : []
     // What a member's turn holds beyond the space's tools: their alerts,
     // texts, mail, numbers, wakes and subscriptions.

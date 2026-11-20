@@ -21,9 +21,11 @@ import {
   kept,
   messageEid,
   pieces,
+  reading,
   recounted,
   roomEid,
   type Said,
+  setting,
   showing,
   since,
   within,
@@ -275,4 +277,45 @@ test('chain: up the replies to the first, oldest first, stopping at a cap, a loo
   assertEquals(await up({ c: 'b', b: 'a', a: undefined }, 2), ['b', 'c'])
   assertEquals(await up({ c: 'b', b: 'c' }), ['b', 'c'])
   assertEquals(await up({ c: 'b' }), ['c'])
+})
+
+test('reading: the ids a path binds by the first read it matches, none for any other', () => {
+  let api = {
+    reads: [
+      '/guilds/{server}',
+      '/channels/{room}/messages/{message}',
+      '/users/{user}',
+    ],
+  }
+  let cases: [string, Record<string, string> | undefined][] = [
+    ['/guilds/1', { server: '1' }],
+    ['guilds/1/', { server: '1' }],
+    ['/channels/2/messages/3', { room: '2', message: '3' }],
+    ['/users/%40me', { user: '@me' }],
+    ['/guilds/1/bans', undefined],
+    ['/channels/2/messages', undefined],
+    ['/guilds/..', undefined],
+    ['/applications/1', undefined],
+  ]
+  for (let [path, ids] of cases) assertEquals(reading(api, path), ids, path)
+})
+
+test('setting: the server and its icon, the room and topic, and who is talking with their roles', () => {
+  let b = {
+    server: { id: 'g1', name: 'Barn', icon: 'https://cdn/i.png' },
+    room: { id: 'c1', name: 'hall', topic: 'hay' },
+    people: [
+      { id: 'ann', name: 'Annie', roles: ['Mod'] },
+      { id: 'bo', name: 'bo', roles: [] },
+    ],
+  }
+  assertEquals(
+    setting({ title: 'Discord' }, b, new Map([['ann', 'Ann (verified)']])),
+    'Where this is: the Discord server “Barn” (id g1; its icon is https://cdn/i.png), in #hall (id c1), whose topic is “hay”.\n' +
+      'Talking here, with their roles in the server: Ann (verified), id ann: Mod; bo, id bo: no roles.',
+  )
+  assertEquals(
+    setting({ title: 'Discord' }, { room: { id: 'd' }, people: [] }),
+    'Where this is: Discord, in a room (id d).',
+  )
 })

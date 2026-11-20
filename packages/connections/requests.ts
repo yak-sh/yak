@@ -6,7 +6,8 @@
 // Who may send through which connection is the host's to say (`owners`): the
 // person's own, the space's for its owner, an app's grants. A connection that
 // is an MCP server's credential, or an app service's, is a source of its own
-// kind already and is not offered here.
+// kind already and is not offered here, and a chat platform's bot is read
+// only through its platform (@yaks/chat), within the servers it serves.
 
 import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -64,7 +65,9 @@ let addressOf = (eid: Eid) => `connection:${eid}`
 
 // A connection that is a source of this kind, with its integration: connected,
 // held by one of `owners`, through an integration that names hosts and is
-// neither an MCP server's nor an app service's.
+// neither an MCP server's, an app service's, nor a chat platform's, whose bot
+// is read through its platform's API (@yaks/chat `Api`), confined to the
+// servers it serves.
 let offered = async (
   read: Read,
   b: Bundle,
@@ -76,7 +79,7 @@ let offered = async (
     typeof c.integration != 'string' || c.integration.startsWith('mcp:')
   ) return undefined
   let i = await known(read, c.integration)
-  return i && !i.service && i.hosts.length ? i : undefined
+  return i && !i.service && !i.chat && i.hosts.length ? i : undefined
 }
 
 let described = (b: Bundle, i: Integration): SourceCommand => {

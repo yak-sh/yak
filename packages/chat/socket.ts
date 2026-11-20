@@ -22,7 +22,8 @@ export type Holder = {
   frame: (wire: Wire, text: string) => Promise<Next>
   /** the beat that is due */
   beat: (wire: Wire) => Next
-  /** why a close with `code` cannot be tried again, if it cannot */
+  /** why a close with `code` cannot be tried again, if it cannot; one the
+   * socket answers by changing what it remembers is tried again */
   ended: (code: number) => string | undefined
 }
 
@@ -63,6 +64,10 @@ export let holder = <S>(
       return next
     },
     beat: (wire) => run(wire, socket.beat(state)),
-    ended: (code) => socket.ends?.(code),
+    ended: (code) => {
+      let changed = socket.closed?.(state, code)
+      if (changed === undefined) return socket.ends?.(code)
+      state = changed
+    },
   }
 }

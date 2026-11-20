@@ -309,7 +309,8 @@ and naming no binding; `revoke` removes it, and `granted`, `grantsOf` and
 `grantees` read it on every call. `grantable` is what a page offers them to
 grant. A connection's own command is `request` (`requests` lists it), an HTTPS
 request to its integration's hosts with the credential added, answered without
-it.
+it. A chat integration's connection offers none: its bot is read through its
+platform (@yaks/chat's `Api`), only in the servers it serves.
 
 ## Brokers
 

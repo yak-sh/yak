@@ -29,16 +29,17 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import {
+  type Basics,
   confined,
   kept,
   type Page,
   type Platform,
   platforms,
+  reading,
   type Room,
   roomEid,
   type Said,
   type Seated,
-  type Server as Guild,
   within,
 } from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
@@ -50,6 +51,7 @@ import type { Who } from './session.ts'
 import type { chatRows } from './connections.ts'
 import type { Integration } from '@yaks/connections'
 import { integrationLogo } from '@yaks/platform/routes'
+import { CallError } from '@yaks/tools/errors'
 
 // What answering and hearing need, loaded when they first run: the
 // Operator's channels import the platform list alone.
@@ -212,19 +214,101 @@ export let roomName = async (
   return (await p.rooms(token, server))?.find((r) => r.id == at.room)?.name
 }
 
-/** The server `at.room` is in, as its connection's bot reads it: its name
- * and its icon's address. Only in a server that connection serves, as
- * {@link recent} reads; none for a direct room, or where the platform tells
- * nothing of a server. */
-export let serverOf = async (
+/** What a person in `at.room` sees without asking, as its connection's
+ * bot reads it ({@link Platform.basics}), with each of `people` by their id
+ * there: only in a server that connection serves, as {@link recent} reads;
+ * none where the platform tells none. */
+export let basicsOf = async (
   env: Env,
   via: string,
   at: { connection: string; room: string; server?: string },
-): Promise<Guild | undefined> => {
+  people: string[],
+): Promise<Basics | undefined> => {
   let p = PLATFORMS.get(via)
-  if (!p?.about) return
-  let { token, server } = await heldBy(env, p, at)
-  return server ? await p.about(token, server) ?? undefined : undefined
+  if (!p?.basics) return
+  let { token } = await heldBy(env, p, at)
+  return await p.basics(token, at.room, people)
+}
+
+/** What a read through a platform's API answered: its status and body. */
+export type Answered = { status: number; body: string }
+
+/**
+ * GET `path` of `via`'s API as the bot of `at.connection`
+ * ({@link Platform.api}): a path one of its reads names, with any query, in
+ * a server that connection serves; a room only where the reader was in it
+ * (`at.rooms`, the platform's ids) or every member of its server sees it
+ * ({@link Platform.open}). Anything else is refused, saying why, before the
+ * platform is asked.
+ */
+export let apiRead = async (
+  env: Env,
+  via: string,
+  at: { connection: string; rooms: string[] },
+  path: string,
+): Promise<Answered> => {
+  let p = PLATFORMS.get(via)
+  let api = p?.api
+  if (!p || !api) {
+    throw new CallError('missing', `${p?.title ?? via} gives no API to read.`)
+  }
+  let base = new URL(api.base)
+  let url = new URL(
+    /^https?:/.test(path)
+      ? path
+      : base.href + (path.startsWith('/') ? '' : '/') + path,
+  )
+  let rest = url.pathname.slice(base.pathname.length)
+  let ids =
+    url.origin == base.origin && url.pathname.startsWith(base.pathname + '/')
+      ? reading(api, rest)
+      : undefined
+  if (!ids) {
+    throw new CallError(
+      'arguments',
+      `${p.title}'s API reads only ${api.reads.join(', ')}, under ${api.base}.`,
+    )
+  }
+  let [c] = await read(env, line`.entity.eid=${at.connection}&.${CONNECTION}&*`)
+  let held = comp(c, CONNECTION).status == 'connected' ? serves(c) : []
+  if (!held.length) {
+    throw new CallError(
+      'access',
+      `No ${p.title} server is connected for this space now.`,
+    )
+  }
+  let token = await speaker(env, p, at.connection)
+  if (ids.server && !held.includes(ids.server)) {
+    throw new CallError(
+      'access',
+      `Server ${ids.server} is not one this space's ${p.title} bot serves.`,
+    )
+  }
+  if (ids.room) {
+    let room = ids.room
+    await within(
+      { connection: at.connection, room },
+      held,
+      () => p.server ? p.server(token, room) : Promise.resolve(undefined),
+    ).catch(
+      () => {
+        throw new CallError(
+          'access',
+          `Room ${room} is not in a server this space's ${p.title} bot serves.`,
+        )
+      },
+    )
+    if (!at.rooms.includes(room) && !await p.open?.(token, room)) {
+      throw new CallError(
+        'access',
+        `Room ${room} is one only some members see, and nobody talking to you was in it.`,
+      )
+    }
+  }
+  let res = await fetch(url, {
+    headers: { authorization: `${api.scheme} ${token}` },
+  })
+  return { status: res.status, body: await res.text() }
 }
 
 // The bot token of `at.connection` and the server of `at.room`, refused

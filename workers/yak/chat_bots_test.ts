@@ -231,17 +231,21 @@ test('a pasted bot listens with its own token, and what it hears is its space’
 test('a final close reaches the tracker in Discord’s words, and pasting the key again tries again', async () => {
   let s = await setup()
   await s.call(() => s.held.object.alarm())
+  // Refused its privileged intents, it asks for the needed ones alone;
+  // refused those too, it stops.
   s.wires[0].fire.close({ code: 4014 })
+  await s.settled(() => s.wires.length > 1)
+  s.wires[1].fire.close({ code: 4014 })
   await s.settled(() => s.told.length > 0)
   assert(
     s.told.some((t) => t.includes('Turn on Message Content Intent')),
     s.told.join('\n'),
   )
   await s.call(() => s.held.object.alarm())
-  assertEquals(s.wires.length, 1)
+  assertEquals(s.wires.length, 2)
   await s.post({ do: 'key', connection: s.connection, key: TOKEN })
   await s.call(() => s.held.object.alarm())
-  assertEquals(s.wires.length, 2)
+  assertEquals(s.wires.length, 3)
   await s.call(() => s.held.object.stop())
 })
 

@@ -6,7 +6,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import type { Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
-import { discord, gateway, INTENTS } from './mod.ts'
+import { discord, everyone, gateway, INTENTS, NEEDED } from './mod.ts'
 
 let ME = '900'
 let wire = () => {
@@ -153,6 +153,19 @@ test('a refused token or intent ends the socket with what to do', () => {
   let { h } = held()
   assertEquals(h.ended(1006), undefined)
   assertEquals(h.ended(4004), 'Discord refused the bot token. Give a new one.')
+})
+
+test('refused its privileged intents, the bot identifies afresh with the needed ones, then ends', async () => {
+  let { h, w, sent } = held()
+  await say(h, w, { op: 10, d: { heartbeat_interval: 1 } })
+  await say(h, w, ready)
+  assertEquals(h.ended(4014), undefined)
+  assertEquals(h.url(), 'wss://gateway.discord.gg/?v=10&encoding=json')
+  await say(h, w, { op: 10, d: { heartbeat_interval: 1 } })
+  assertEquals(
+    sent.map((f) => (f as { d: { intents: number } }).d.intents),
+    [INTENTS, NEEDED],
+  )
   assertEquals(
     h.ended(4014),
     'Turn on Message Content Intent under Bot in the Discord Developer Portal.',
@@ -384,4 +397,123 @@ test("recent reads a room back oldest first, bots' own included, none addressed"
     Error,
     'Discord refused to read room c1: 403 Missing Access',
   )
+})
+
+// A REST endpoint answering each path it knows, 404 for any other.
+let routes = (answers: Record<string, unknown>) => {
+  let seen: string[] = []
+  let f = (url: string) => {
+    let path = url.replace('https://discord.com/api/v10', '')
+    seen.push(path)
+    return Promise.resolve(
+      path in answers
+        ? Response.json(answers[path])
+        : Response.json({ message: 'Unknown' }, { status: 404 }),
+    )
+  }
+  return { f: f as unknown as typeof fetch, seen }
+}
+
+let VIEW = String(1 << 10)
+let guild = (everyone: string) => ({
+  id: 'g1',
+  name: 'Barn',
+  icon: 'a_abc',
+  roles: [
+    { id: 'g1', name: '@everyone', permissions: everyone, position: 0 },
+    { id: 'r1', name: 'Mod', permissions: '0', position: 2 },
+    { id: 'r2', name: 'Artist', permissions: '0', position: 1 },
+  ],
+})
+
+test('everyone: the @everyone role sees a channel unless its overwrite denies it', () => {
+  let c = (o?: { allow: string; deny: string }) => ({
+    id: 'c',
+    type: 0,
+    ...o ? { permission_overwrites: [{ id: 'g1', ...o }] } : {},
+  })
+  assertEquals(everyone(guild(VIEW), c()), true)
+  assertEquals(everyone(guild(VIEW), c({ allow: '0', deny: VIEW })), false)
+  assertEquals(everyone(guild('0'), c()), false)
+  assertEquals(everyone(guild('0'), c({ allow: VIEW, deny: '0' })), true)
+  assertEquals(
+    everyone(guild(String(1 << 3)), c({ allow: '0', deny: VIEW })),
+    true,
+  )
+})
+
+test('open: a channel as everyone sees it, a thread as its channel, never a private thread or a direct room', async () => {
+  let { f } = routes({
+    '/guilds/g1': guild(VIEW),
+    '/channels/hall': { id: 'hall', type: 0, guild_id: 'g1' },
+    '/channels/mods': {
+      id: 'mods',
+      type: 0,
+      guild_id: 'g1',
+      permission_overwrites: [{ id: 'g1', allow: '0', deny: VIEW }],
+    },
+    '/channels/t1': { id: 't1', type: 11, guild_id: 'g1', parent_id: 'mods' },
+    '/channels/t2': { id: 't2', type: 12, guild_id: 'g1', parent_id: 'hall' },
+    '/channels/dm': { id: 'dm', type: 1 },
+  })
+  let open = (room: string) => discord.open!('T', room, f)
+  assertEquals(
+    await Promise.all(['hall', 'mods', 't1', 't2', 'dm'].map(open)),
+    [true, false, false, false, false],
+  )
+})
+
+test('basics: the server and its icon, the room and its topic, and who is talking with their roles', async () => {
+  let { f } = routes({
+    '/channels/hall': {
+      id: 'hall',
+      type: 0,
+      guild_id: 'g1',
+      name: 'hall',
+      topic: 'hay',
+    },
+    '/guilds/g1': guild(VIEW),
+    '/guilds/g1/members/ann': {
+      user: { id: 'ann', username: 'ann_k', global_name: 'Ann' },
+      nick: 'Annie',
+      roles: ['r2', 'r1'],
+    },
+    '/guilds/g1/members/bo': { user: { id: 'bo', username: 'bo' }, roles: [] },
+  })
+  assertEquals(await discord.basics!('T', 'hall', ['ann', 'bo', 'gone'], f), {
+    server: {
+      id: 'g1',
+      name: 'Barn',
+      icon: 'https://cdn.discordapp.com/icons/g1/a_abc.gif?size=512',
+    },
+    room: { id: 'hall', name: 'hall', topic: 'hay' },
+    people: [
+      { id: 'ann', name: 'Annie', roles: ['Mod', 'Artist'] },
+      { id: 'bo', name: 'bo', roles: [] },
+    ],
+  })
+  assertEquals(
+    await discord.basics!(
+      'T',
+      'dm',
+      ['ann'],
+      routes({ '/channels/dm': { id: 'dm', type: 1 } }).f,
+    ),
+    { room: { id: 'dm' }, people: [] },
+  )
+})
+
+test('api reads, as the bot, what a member could see, and never the servers the bot is in', () => {
+  let { api } = discord
+  assertEquals(api!.scheme, 'Bot')
+  for (
+    let path of [
+      '/guilds/{server}',
+      '/channels/{room}/messages/pins',
+      '/guilds/{server}/roles',
+    ]
+  ) {
+    assertEquals(api!.reads.includes(path), true, path)
+  }
+  assertEquals(api!.reads.some((r) => r.startsWith('/users/@me')), false)
 })

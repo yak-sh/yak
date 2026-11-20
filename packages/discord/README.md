@@ -6,9 +6,11 @@ websocket it holds open, so `gateway(token)` is its handshake, heartbeat and
 resume as @yaks/chat's pure `Socket` steps, and `send(token, reply)` posts a
 reply with the REST API. `discord` is the `Platform` both make.
 
-- **Hello** identifies with `INTENTS` (servers, their messages, direct messages
-  and Message Content), or resumes the session it had, and beats at the interval
-  Discord gives.
+- **Hello** identifies with `INTENTS` (servers, their messages, direct messages,
+  and all three privileged intents: Message Content, Server Members and
+  Presence), or resumes the session it had, and beats at the interval Discord
+  gives. A bot whose owner did not turn Members or Presence on is refused them
+  (4014), and identifies afresh with the `NEEDED` ones alone (`closed`).
 - **A message** is heard as `Said` (`said(message, me)`): a bot's own and other
   bots' are not, so two bots never answer each other. It is `mentioned` when it
   names the bot or was sent to it directly, and the bot's mention is taken out
@@ -40,11 +42,35 @@ reply with the REST API. `discord` is the `Platform` both make.
 
 - **Its name in a server** is its nickname there (`named(token, server, name)`,
   PATCH `/guilds/{id}/members/@me`), cut to Discord's 32 characters. It needs
-  Change Nickname, which yaks.app's authorize link asks for with View Channels,
-  Send Messages, Send Messages in Threads and Read Message History.
+  Change Nickname.
+
+- **What it may read** for people in a server is `api`: Discord's REST API as
+  the bot (`Bot` before its token), at the paths any member could read: the
+  server and its preview, channels, active threads, roles, members, emoji,
+  stickers and events; a channel, its messages, one message, its pins,
+  reactions, archived public threads, thread members and poll voters; a user.
+  Never the servers the bot is in, which are other spaces', nor what only
+  moderators see.
+- **A room every member sees** is `open(token, room)`: the server's @everyone
+  role, with the channel's overwrite for it, holds View Channel
+  (`everyone(guild, channel)`). A thread is its channel's; a private thread and
+  a direct room are open to nobody else.
+- **A room's basics** are `basics(token, room, people)`: the server's name and
+  icon (`icon(server, hash)`, on Discord's CDN, an animated one as GIF), the
+  channel's name and topic, and each of `people` by their nickname, with the
+  server's roles they hold, highest first.
+
+yaks.app's authorize link asks for `PERMISSIONS` (@yaks/connections'
+`discord.json` carries the same integer): View Channels and Read Message
+History; Send Messages, in threads too, with Embed Links, Attach Files, Send
+Polls, Add Reactions and outside emoji and stickers; creating and managing
+threads; Manage and Pin Messages; creating and managing events; and Change
+Nickname. A server that added the bot before keeps what it was given then until
+it adds it again.
 
 Messages in rooms the bot was not named in carry their words only with the
-Message Content intent, which Discord reviews for a bot in over 100 servers.
+Message Content intent, and a server's member list needs Server Members. Discord
+reviews the privileged intents of a bot in over 100 servers.
 
 The token is the host's to supply: yaks.app's own bot's, or the one a space
 brings (@yaks/connections' `discord` and `discord-bot` integrations). Nothing

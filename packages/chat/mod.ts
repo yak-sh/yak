@@ -50,6 +50,24 @@ export type Server = { name: string; icon?: string }
 export type Page = { before: string; limit: number }
 
 /**
+ * What a platform's API lets a bot read for whoever talks to it there, as
+ * data: where the API is (`base`), the word a bot's credential is sent
+ * after in the authorization header (`scheme`), and the paths a member of a
+ * room could read (`reads`). In a path, `{server}` and `{room}` name the
+ * server and room it is read in, which a host confines to its bot's
+ * servers; any other `{name}` is one segment, such as a message's id.
+ */
+export type Api = { base: string; scheme: string; reads: string[] }
+
+/** What a person in a room sees without asking: its server, with its icon,
+ * the room and its topic, and the people talking, with their roles there. */
+export type Basics = {
+  server?: { id: string; name: string; icon?: string }
+  room: { id: string; name?: string; topic?: string }
+  people: { id: string; name: string; roles: string[] }[]
+}
+
+/**
  * A long-lived socket a platform sends its messages over (Discord's Gateway),
  * as pure steps a generic holder runs (./socket.ts): where to connect, and
  * for each frame that arrives, what to send back, how often to beat, what
@@ -66,6 +84,10 @@ export type Socket<S> = {
   /** why a socket closed with `code` cannot be opened again with the same
    * credential, in words for whoever holds it; none means try again */
   ends?: (code: number) => string | undefined
+  /** what a close with `code` leaves the socket remembering, where it
+   * connects again changed rather than ending: asking less of the platform
+   * after it refused what was asked */
+  closed?: (state: S, code: number) => S | undefined
 }
 
 export type Step<S> = {
@@ -162,6 +184,24 @@ export type Platform = {
     name: string,
     fetch?: typeof globalThis.fetch,
   ) => Promise<void>
+  /** what its bot may read of its API for people there ({@link Api}) */
+  api?: Api
+  /** whether every member of the server `room` is in sees it, as the bot
+   * with `credential` reads its permissions: a room nobody named the bot
+   * in is read through {@link Api} only then */
+  open?: (
+    credential: string,
+    room: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<boolean>
+  /** what a person in `room` sees without asking ({@link Basics}), as the
+   * bot with `credential` reads it, the `people` by their ids there */
+  basics?: (
+    credential: string,
+    room: string,
+    people: string[],
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<Basics>
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<
@@ -374,4 +414,64 @@ export let pieces = (text: string, limit: number): string[] => {
   }
   if (rest) out.push(rest)
   return out.filter(Boolean)
+}
+
+/**
+ * The ids a path binds, read through `api` ({@link Api}): each `{name}` of
+ * the first read it matches, by name; none where it matches no read. A
+ * segment is one of the path's own, never empty, `.` or `..`.
+ */
+export let reading = (
+  api: Pick<Api, 'reads'>,
+  path: string,
+): Record<string, string> | undefined => {
+  let got = path.split('/').filter(Boolean)
+  if (got.some((s) => s == '.' || s == '..')) return
+  for (let read of api.reads) {
+    let want = read.split('/').filter(Boolean)
+    if (want.length != got.length) continue
+    let ids: Record<string, string> = {}
+    let ok = want.every((w, i) =>
+      w.startsWith('{') && w.endsWith('}')
+        ? (ids[w.slice(1, -1)] = decodeURIComponent(got[i]), true)
+        : w == got[i]
+    )
+    if (ok) return ids
+  }
+}
+
+/**
+ * The room's {@link Basics}, said before words said there: the server and
+ * its icon, the room and its topic, and who is talking, each as `names`
+ * calls their account by its id on the platform, else by the name they
+ * show, with their roles there. Each id is given, for the platform's API.
+ */
+export let setting = (
+  platform: Pick<Platform, 'title'>,
+  b: Basics,
+  names: Map<string, string> = new Map(),
+): string => {
+  let { server, room } = b
+  let where = server
+    ? `the ${platform.title} server “${server.name}” (id ${server.id}${
+      server.icon ? `; its icon is ${server.icon}` : ''
+    })`
+    : platform.title
+  let lines = [
+    `Where this is: ${where}, in ${
+      room.name ? `#${room.name}` : 'a room'
+    } (id ${room.id})${room.topic ? `, whose topic is “${room.topic}”` : ''}.`,
+  ]
+  if (b.people.length) {
+    lines.push(
+      `Talking here, with their roles in the server: ${
+        b.people.map((p) =>
+          `${names.get(p.id) ?? p.name}, id ${p.id}: ${
+            p.roles.length ? p.roles.join(', ') : 'no roles'
+          }`
+        ).join('; ')
+      }.`,
+    )
+  }
+  return lines.join('\n')
 }

@@ -6,6 +6,8 @@
 
 import type {
   Addressed,
+  Api,
+  Basics,
   Page,
   Platform,
   Room,
@@ -17,14 +19,45 @@ import type {
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
-let CDN = 'https://cdn.discordapp.com'
 let GATEWAY = 'wss://gateway.discord.gg'
 let QUERY = '/?v=10&encoding=json'
 
-/** The Gateway intents asked for: servers, their messages, direct messages,
- * and the words of messages (Message Content, privileged), so a bot hears a
- * room it was given and not only the messages that name it. */
-export let INTENTS = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)
+/** The Gateway intents a bot cannot do without: servers, their messages,
+ * direct messages, and the words of messages (Message Content, privileged),
+ * so it hears a room it was given and not only the messages that name it. */
+export let NEEDED: number = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)
+
+/** The Gateway intents asked for: the {@link NEEDED} ones, and the two
+ * other privileged ones, server members and presence, so the bot knows who
+ * is in a server and who is about. A bot whose owner has not turned those
+ * on is refused them (4014) and asks for the needed ones alone. */
+export let INTENTS: number = NEEDED | (1 << 1) | (1 << 8)
+
+/** What yaks.app's authorize link asks of a server, as Discord's
+ * permissions integer: View Channels and Read Message History; Send
+ * Messages, in threads too, with embeds, files, polls, reactions and
+ * outside emoji and stickers; create and manage threads; manage and pin
+ * messages; create and manage events; and Change Nickname. */
+export let PERMISSIONS: bigint = [
+  6, // Add Reactions
+  10, // View Channels
+  11, // Send Messages
+  13, // Manage Messages
+  14, // Embed Links
+  15, // Attach Files
+  16, // Read Message History
+  18, // Use External Emojis
+  26, // Change Nickname
+  33, // Manage Events
+  34, // Manage Threads
+  35, // Create Public Threads
+  36, // Create Private Threads
+  37, // Use External Stickers
+  38, // Send Messages in Threads
+  44, // Create Events
+  49, // Send Polls
+  51, // Pin Messages
+].reduce((all, bit) => all | 1n << BigInt(bit), 0n)
 
 /** The Gateway's opcodes this bot reads or sends (opcodes-and-status-codes). */
 let OP = {
@@ -43,6 +76,8 @@ let OP = {
  * its last heartbeat was answered. */
 export type Session = {
   seq: number | null
+  /** the intents it identifies with, {@link INTENTS} where none */
+  intents?: number
   session?: string
   resume?: string
   me?: string
@@ -130,7 +165,7 @@ export let gateway = (token: string): Socket<Session> => ({
             op: OP.identify,
             d: {
               token,
-              intents: INTENTS,
+              intents: s.intents ?? INTENTS,
               properties: {
                 os: 'linux',
                 browser: 'yaks.app',
@@ -154,7 +189,7 @@ export let gateway = (token: string): Socket<Session> => ({
         // A session Discord says it can resume is resumed; any other starts
         // afresh, with a new identify.
         return {
-          state: f.d === true ? state : { seq: null, acked: true, me: s.me },
+          state: f.d === true ? state : afresh(s),
           again: true,
         }
       case OP.dispatch: {
@@ -204,6 +239,20 @@ export let gateway = (token: string): Socket<Session> => ({
       }
       : { state: s, again: true },
   ends: (code) => ENDS[code],
+  // Refused an intent its owner never turned on, the bot asks for the
+  // needed ones alone, afresh.
+  closed: (s, code) =>
+    code == 4014 && (s.intents ?? INTENTS) != NEEDED
+      ? { ...afresh(s), intents: NEEDED }
+      : undefined,
+})
+
+// A session started over: a new identify, as the same bot.
+let afresh = (s: Session): Session => ({
+  seq: null,
+  acked: true,
+  ...s.me ? { me: s.me } : {},
+  ...s.intents ? { intents: s.intents } : {},
 })
 
 // What Discord answered a call with, read: a 429 or a 5xx never took it, so
@@ -352,7 +401,9 @@ export let guild = async (
     await res.body?.cancel()
     return null
   }
-  let { name, icon } = await answer<{ name: string; icon?: string | null }>(
+  let { name, icon: hash } = await answer<
+    { name: string; icon?: string | null }
+  >(
     res,
     {
       unsent: `Discord did not name server ${server}`,
@@ -361,7 +412,7 @@ export let guild = async (
   )
   return {
     name,
-    ...icon ? { icon: `${CDN}/icons/${server}/${icon}.png?size=512` } : {},
+    ...hash ? { icon: icon(server, hash) } : {},
   }
 }
 
@@ -436,6 +487,170 @@ export let message = async (
     ),
   )
 
+// GET `path` of Discord's API as the bot with `token`, refused as
+// {@link answer} says.
+let get = async <T>(
+  token: string,
+  path: string,
+  fetcher: typeof fetch,
+): Promise<T> =>
+  answer<T>(await fetcher(`${API}${path}`, { headers: bot(token) }), {
+    unsent: `Discord did not answer ${path}`,
+    refused: `Discord refused ${path}`,
+  })
+
+/** What a bot reads of Discord's API for people in a server: what any
+ * member there could see (resources/guild, channel, message, user, emoji,
+ * sticker, guild-scheduled-event, poll). Never the servers the bot is in,
+ * which are other people's, nor what only moderators see. */
+export let api: Api = {
+  base: API,
+  scheme: 'Bot',
+  reads: [
+    '/guilds/{server}',
+    '/guilds/{server}/preview',
+    '/guilds/{server}/channels',
+    '/guilds/{server}/threads/active',
+    '/guilds/{server}/roles',
+    '/guilds/{server}/roles/{role}',
+    '/guilds/{server}/members',
+    '/guilds/{server}/members/search',
+    '/guilds/{server}/members/{user}',
+    '/guilds/{server}/emojis',
+    '/guilds/{server}/emojis/{emoji}',
+    '/guilds/{server}/stickers',
+    '/guilds/{server}/stickers/{sticker}',
+    '/guilds/{server}/scheduled-events',
+    '/guilds/{server}/scheduled-events/{event}',
+    '/guilds/{server}/scheduled-events/{event}/users',
+    '/channels/{room}',
+    '/channels/{room}/messages',
+    '/channels/{room}/messages/pins',
+    '/channels/{room}/pins',
+    '/channels/{room}/messages/{message}',
+    '/channels/{room}/messages/{message}/reactions/{emoji}',
+    '/channels/{room}/threads/archived/public',
+    '/channels/{room}/thread-members',
+    '/channels/{room}/thread-members/{user}',
+    '/channels/{room}/polls/{message}/answers/{answer}',
+    '/users/{user}',
+    '/stickers/{sticker}',
+  ],
+}
+
+type Channel = {
+  id: string
+  type: number
+  guild_id?: string
+  name?: string
+  topic?: string | null
+  parent_id?: string | null
+  permission_overwrites?: { id: string; allow: string; deny: string }[]
+}
+type Guild = {
+  id: string
+  name: string
+  icon?: string | null
+  roles: { id: string; name: string; permissions: string; position: number }[]
+}
+
+/** Threads: announcement, public and private (channel, "Channel Types"). */
+let THREADS = new Set([10, 11, 12])
+let VIEW = 1n << 10n
+let ADMINISTRATOR = 1n << 3n
+
+/** Whether every member of `guild` sees `channel` (not a thread): its
+ * @everyone role's permissions, its own overwrite for @everyone applied
+ * (topics/permissions, "Permission Overwrites"). */
+export let everyone = (guild: Guild, channel: Channel): boolean => {
+  let base = BigInt(guild.roles.find((r) => r.id == guild.id)?.permissions ?? 0)
+  if (base & ADMINISTRATOR) return true
+  let o = channel.permission_overwrites?.find((o) => o.id == guild.id)
+  if (o) base = (base & ~BigInt(o.deny)) | BigInt(o.allow)
+  return (base & VIEW) != 0n
+}
+
+/** Whether every member of the server `room` is in sees it, as the bot with
+ * `token` reads it ({@link everyone}): a thread as its channel, but a
+ * private one, which only its own members see; never a direct room. */
+export let open = async (
+  token: string,
+  room: string,
+  fetcher: typeof fetch = fetch,
+): Promise<boolean> => {
+  let c = await get<Channel>(token, `/channels/${room}`, fetcher)
+  if (!c.guild_id || c.type == 12) return false
+  let [guild, at] = await Promise.all([
+    get<Guild>(token, `/guilds/${c.guild_id}`, fetcher),
+    THREADS.has(c.type) && c.parent_id
+      ? get<Channel>(token, `/channels/${c.parent_id}`, fetcher)
+      : c,
+  ])
+  return everyone(guild, at)
+}
+
+/** Where a server's icon is served, animated ones (`a_`) as GIF
+ * (reference, "Image Formatting"). */
+export let icon = (server: string, hash: string): string =>
+  `https://cdn.discordapp.com/icons/${server}/${hash}.${
+    hash.startsWith('a_') ? 'gif' : 'png'
+  }?size=512`
+
+/** What a person in `room` sees without asking, as the bot with `token`
+ * reads it: the server's name and icon, the room's name and topic, and each
+ * of `people` with the server's roles they hold, highest first, but
+ * @everyone. One who left the server is left out. */
+export let basics = async (
+  token: string,
+  room: string,
+  people: string[],
+  fetcher: typeof fetch = fetch,
+): Promise<Basics> => {
+  let c = await get<Channel>(token, `/channels/${room}`, fetcher)
+  let here = {
+    id: room,
+    ...c.name ? { name: c.name } : {},
+    ...c.topic ? { topic: c.topic } : {},
+  }
+  if (!c.guild_id) return { room: here, people: [] }
+  let server = c.guild_id
+  let [guild, members] = await Promise.all([
+    get<Guild>(token, `/guilds/${server}`, fetcher),
+    Promise.all(
+      [...new Set(people)].map((id) =>
+        get<
+          {
+            user: User
+            nick?: string | null
+            roles: string[]
+          }
+        >(token, `/guilds/${server}/members/${id}`, fetcher).catch(() =>
+          undefined
+        )
+      ),
+    ),
+  ])
+  let roles = new Map(guild.roles.map((r) => [r.id, r]))
+  return {
+    server: {
+      id: server,
+      name: guild.name,
+      ...guild.icon ? { icon: icon(server, guild.icon) } : {},
+    },
+    room: here,
+    people: members.flatMap((m) =>
+      m
+        ? [{
+          id: m.user.id,
+          name: m.nick || m.user.global_name || m.user.username,
+          roles: m.roles.flatMap((id) => roles.get(id) ?? [])
+            .sort((a, b) => b.position - a.position).map((r) => r.name),
+        }]
+        : []
+    ),
+  }
+}
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -451,5 +666,8 @@ export let discord: Platform = {
   named,
   link,
   about: guild,
+  api,
+  open,
+  basics,
   working: { every: 8000, show: typing },
 }
