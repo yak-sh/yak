@@ -1,3 +1,4 @@
+import { archetypeDoc } from '@yaks/archetype'
 import { equal, ok, test } from '@yaks/testing'
 import { storage } from '@yaks/sqlite'
 import { seed, stepping } from '@yaks/sqlite/testing'
@@ -14,7 +15,9 @@ let stamps = {
   },
 }
 let { driver, steps } = stepping()
-let previous = storage(driver, loadVocab([stamps, before]), { number: true })
+let previous = storage(driver, loadVocab([archetypeDoc, stamps, before]), {
+  number: true,
+})
 previous.install()
 let created = { at: '2026-11-20T10:00:00Z' }
 seed(previous, [
@@ -30,7 +33,7 @@ seed(previous, [
   { entity: { eid: 'other' }, app: { slug: 'notes' }, created },
 ])
 
-let store = storage(driver, loadVocab([stamps, words]), {
+let store = storage(driver, loadVocab([archetypeDoc, stamps, words]), {
   number: true,
   counts: 'lazy',
 })
@@ -38,7 +41,7 @@ store.install()
 
 test('a slug-only lookup seeks into an existing directory', async () => {
   let start = steps()
-  let rows = await store.rows('.created&.app.slug=recipes')
+  let rows = await store.rows('.app.slug=recipes&.app&.created')
   let cost = steps() - start
   equal(rows.map((row) => row.eid), ['first', 'second'])
   ok(cost < 500, `${cost} VM steps for ${rows.length} matching apps`)

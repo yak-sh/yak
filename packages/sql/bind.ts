@@ -1644,8 +1644,19 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
     )
   ) return
   let flat = flattened(cs)
+  // Both presence and required stored values bound the owners. With counts,
+  // walk the smallest such table when no narrower index drives the read.
+  let local = [
+    ...new Set(flat.flatMap((c) => {
+      let comp = needOf(ctx, c)
+      return comp && spined(ctx, comp) ? [comp] : []
+    })),
+  ]
+  let smallest = local.length > 1 ? ctx.rarest?.(local) : undefined
+  if (smallest) return smallest
   // A scalar test already implies its component. An additional required
   // component can be much smaller, especially inside an OR arm's scope.
+  // Prefer it when the store cannot compare their populations.
   let extra = flat.filter((c) =>
     c.kind == 'pred' && c.path.length == 1 &&
     !flat.some((p) =>
@@ -1653,9 +1664,6 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
       needs(opOf(p), p.value)
     )
   )
-  // Of several required components, the one the fewest entities hold drives,
-  // as the census counts them: `.call&.entry&.tool_async` read from `call`
-  // probed all 498,620 calls for their 45,890 background ones (T-147328).
   let required = (cs: Clause[]) => [
     ...new Set(
       cs.flatMap((c) =>
@@ -1690,9 +1698,7 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
   // A mandatory scalar value names its component too. Driving from its
   // owners keeps their physical order, so a page stops when it fills instead
   // of sorting the entire component through the joined entity's identity.
-  return flat.map((c) => needOf(ctx, c)).find((comp) =>
-    comp != null && spined(ctx, comp)
-  )
+  return local[0]
 }
 
 // An OR compiles to a UNION of selections, never to a disjunction in the WHERE
