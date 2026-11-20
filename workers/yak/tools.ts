@@ -220,7 +220,7 @@ import { type Mail, placed, readMail, ready, setUp } from './domain-mail.ts'
 import { subdomainBox, subdomainMail } from './space-mail.ts'
 import type { DomainRecord } from '@yaks/host/senders'
 import { bound, type Env } from './env.ts'
-import { integrationEid } from '@yaks/connections'
+import { addressed as sourceAt, integrationEid } from '@yaks/connections'
 // The gallery is its own part (gallery.ts): the two stamps, the letter that
 // carries the decision, and the listing every door here reads.
 import {
@@ -6324,8 +6324,10 @@ let OURS: Row[] = [
       properties: {
         app: str(
           'one app to ask about: its slug, or <space>/<app> when two of ' +
-            'their spaces have an app with that slug; service:<app eid> ' +
-            'or mcp:<server eid> for a connected service. Omit for all commands.',
+            'their spaces have an app with that slug; service:<app eid>, ' +
+            'mcp:<server eid> or connection:<connection eid> for what you ' +
+            'connected, or mcp: or connection: for every one of a kind. ' +
+            'Omit for all commands.',
         ),
       },
     },
@@ -6335,7 +6337,7 @@ let OURS: Row[] = [
       // Each command whole, for a program: the words below are the same list
       // said for a model, grouped and shortened.
       let value = { commands: all }
-      if (said && !/^(mcp|service):/.test(said)) {
+      if (said && !sourceAt(said)) {
         let apps = picked(await reachableApps(ctx), said)
         if (apps.length == 1) {
           let { space, app } = apps[0]
@@ -6343,7 +6345,7 @@ let OURS: Row[] = [
         }
       }
       if (!all.length) {
-        if (/^(mcp|service):/.test(said)) {
+        if (sourceAt(said)) {
           return {
             value,
             text:
