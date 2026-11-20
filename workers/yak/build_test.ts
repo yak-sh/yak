@@ -19,7 +19,7 @@ import { operatorStore } from './operator-store.ts'
 import { conversationOf } from './operator-host.ts'
 import { parseHTML } from 'linkedom'
 import { endpoints } from './endpoints.ts'
-import { redone } from './defects.ts'
+import { redone, within } from './defects.ts'
 import { restarting } from './running.ts'
 import { draftEid } from '@yaks/draft'
 import { chatPath } from '@yaks/platform/routes'
@@ -403,16 +403,27 @@ test('a wake beside an answer still under way leaves the work to the wake behind
 
 test('the door wakes a space’s object behind an answer that says it owes work', async () => {
   let o = await seeded()
-  let answer = await builderOf(o.env, o.space.eid)(() =>
-    new Request('https://builder/operator/conversation', {
-      method: 'POST',
-      headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
-      body: '{}',
-    })
+  // The wake goes on behind the answer; the runtime keeps it, as this does.
+  let behind: Promise<void>[] = []
+  let answer = await within(
+    {},
+    {},
+    () =>
+      builderOf(o.env, o.space.eid)(() =>
+        new Request('https://builder/operator/conversation', {
+          method: 'POST',
+          headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+          body: '{}',
+        })
+      ),
+    undefined,
+    { retain: (work) => behind.push(work) },
   )
   assertEquals(answer.status, 200)
+  await Promise.all(behind)
   let ctx = [...o.states].find(([name]) => name.startsWith('builder '))![1]
-  await until(() => armed({ ctx }))
+  await Promise.all(ctx.pending)
+  assertEquals(await armed({ ctx }), true)
 })
 
 test('a wake is the kernel’s alone', async () => {
