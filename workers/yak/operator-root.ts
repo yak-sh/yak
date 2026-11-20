@@ -33,10 +33,28 @@ export let whoseOf = async (
   return o
 }
 
+/** Where the file keeps the space it is the Operator's store for, as the
+ * object's requests name it (build.ts `#answer`). */
+export let SPACED = 'operator:space'
+
+/** Keep the space `store` is for, as a request to its object names it: a
+ * store that owes texts before anyone has talked with its Operator (a
+ * memory kept, an update told) pays for their vectors from it
+ * (operator-vectors.ts). */
+export let spacedAt = (store: Pick<Store, 'marks'>, space: string) => {
+  if (store.marks && store.marks.get(SPACED) != space) {
+    store.marks.set(SPACED, space)
+  }
+}
+
 let spaces = new WeakMap<object, Promise<string | undefined>>()
-/** The space an Operator store is: one space's, named by every session in
- * it. */
-export let spaceOf = (store: Pick<Store, 'g'>): Promise<string | undefined> => {
+/** The space an Operator store is: the one its file keeps (`spacedAt`), else
+ * the one its sessions name. */
+export let spaceOf = (
+  store: Pick<Store, 'g' | 'marks'>,
+): Promise<string | undefined> => {
+  let kept = store.marks?.get(SPACED)
+  if (kept) return Promise.resolve(kept)
   let held = spaces.get(store.g)
   if (!held) {
     held = Promise.resolve(

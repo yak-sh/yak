@@ -272,6 +272,14 @@ export class Builder extends Durable {
     // them.
     if (url.pathname.startsWith('/operator/') || API.test(url.pathname)) {
       try {
+        // The space this object is, as each request to its Operator names it,
+        // kept by its store: what the store owes before anyone talks with its
+        // Operator is paid for from it (operator-root.ts `spacedAt`).
+        let named = request.headers.get(SPACE)
+        if (named) {
+          let { spacedAt } = await import('./operator-root.ts')
+          spacedAt((await this.#stored()).store, named)
+        }
         // A reply to the Operator's letter is the kernel's to bring (inbox.ts),
         // and is asked by no person.
         if (

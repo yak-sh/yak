@@ -13,7 +13,7 @@ import type { OperatorStore, Vectors } from './operator-store.ts'
 export let operatorVectors = (
   env: Env,
   o: {
-    space: () => Pick<OperatorStore, 'g'>
+    space: () => Pick<OperatorStore, 'g' | 'marks'>
     arm: Vectors['arm']
     hold: Vectors['hold']
   },
