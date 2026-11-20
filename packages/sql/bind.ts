@@ -4681,7 +4681,11 @@ let lower = (
       ) ctx.present = comp
     }
   }
-  if (!ctx.present && !ctx.half && !find<Count>(cs, 'count')) {
+  // A count plans its owners too: with none, a window on an indexed stamp
+  // drives alone, and the platform store counted 10 asks created since an
+  // early bound by walking 274,559 stamps (bug 98bb25c886). With them, the
+  // statement reads the narrower of the window and the owners.
+  if (!ctx.present && !ctx.half) {
     ctx.present = presence(ctx, filters)
   }
   ctx.paged = seeksPage(ctx, cs)
