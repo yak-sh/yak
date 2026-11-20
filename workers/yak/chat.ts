@@ -11,7 +11,9 @@
 // next words of its writer's conversation with that space's Operator: their
 // own when their platform account is linked to a person here (the
 // platform's `user` integration), else a guest's, who has no seat and so
-// only what the space lets anyone do.
+// only what the space lets anyone do. In the room the space chose in its
+// Operator's settings (`chat_hears`), everything said is heard, in the
+// room's one conversation, and the Operator answers only what is for it.
 //
 // Every message heard in a server is also kept in each app of the space
 // that `uses` the connection, as @yaks/chat's rows, for the app's own rules
@@ -22,12 +24,21 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
-import { confined, kept, type Platform, platforms, type Said } from '@yaks/chat'
+import {
+  confined,
+  kept,
+  type Platform,
+  platforms,
+  type Room,
+  roomEid,
+  type Said,
+} from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
 import { discord } from '@yaks/discord'
 import type { Chatter } from '@yaks/host/senders'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
+import type { Who } from './session.ts'
 
 // What answering and hearing need, loaded when they first run: the
 // Operator's channels import the platform list alone.
@@ -40,6 +51,7 @@ let need = async () => ({
   ...await import('./defects.ts'),
 })
 let CONNECTION = 'connection'
+let HEARS = 'chat_hears'
 
 /** The chat platforms yaks.app hears and answers on, by name. */
 export let PLATFORMS: Map<string, Platform> = platforms([discord])
@@ -170,15 +182,23 @@ export let connected = async (env: Env, connection: string) => {
   if (i?.chat && !keyed(i)) await listen(env, i.chat)
 }
 
-// The connected connections through which a space added yaks.app's own bot
-// to `server`.
-let serving = async (env: Env, via: string, server: string) => {
+// The connected connections through which yaks.app's own bot speaks on
+// `via`, of those `where` selects.
+let through = async (env: Env, via: string, where: string) => {
   let names = new Set((await ours(env, via)).map((i) => i.name))
   return (await read(
     env,
-    line`.${CONNECTION}.account=${server}&.${CONNECTION}.status=connected&*`,
+    `${where}&${line`.${CONNECTION}.status=connected`}&*`,
   )).filter((b) => names.has(String(comp(b, CONNECTION).integration)))
 }
+
+// Those through which a space added yaks.app's own bot to `server`.
+let serving = (env: Env, via: string, server: string) =>
+  through(env, via, line`.${CONNECTION}.account=${server}`)
+
+// Those a space holds.
+let held = (env: Env, via: string, space: string) =>
+  through(env, via, line`.${CONNECTION}.owner=${space}`)
 
 /** The person here whose `platform.user` account is `id`, if one linked it:
  * a connection they hold, or one a space holds, which stands for its owner
@@ -201,11 +221,12 @@ export let linked = async (env: Env, platform: Platform, id: string) => {
 }
 
 /** What a space's Operator settings offer for each platform whose bot
- * yaks.app keeps: the integration that adds that bot, and the one a person
- * links their account there with (operator-page.ts `chatCard`), known from
- * this build's seeds, so the page asks the directory nothing more. Before the
- * bot is kept there is nothing to add. */
-export let offers = async (env: Env) => {
+ * yaks.app keeps (operator-page.ts `chatCard`): the integration that adds
+ * that bot, and the one a person links their account there with, known from
+ * this build's seeds; and each server the space added it to, with the rooms
+ * there it may hear in full ({@link servers}). Before the bot is kept there
+ * is nothing to add. */
+export let offers = async (env: Env, space: string) => {
   let { keyed, seeds } = await need()
   let all = seeds()
   let each = await Promise.all(
@@ -216,7 +237,81 @@ export let offers = async (env: Env) => {
       kept: !!await platformBot(env, platform.name),
     })),
   )
-  return each.filter((o) => o.bot && o.kept)
+  return await Promise.all(
+    each.filter((o) => o.bot && o.kept).map(async (o) => ({
+      ...o,
+      servers: await servers(env, o.platform, space),
+    })),
+  )
+}
+
+/** A server a space added a bot to, as its Operator settings show it: the
+ * connection that added it, the rooms there people write in, by their eids
+ * here (@yaks/chat `roomEid`), or none where the platform would not list
+ * them now, and the one its Operator hears in full (`chat_hears`). */
+export type Server = {
+  connection: string
+  rooms: (Room & { eid: string })[] | null
+  hears?: string
+}
+
+// The servers `space` added yaks.app's own bot on `platform` to, where the
+// platform lists their rooms.
+let servers = async (
+  env: Env,
+  platform: Platform,
+  space: string,
+): Promise<Server[]> => {
+  let { rooms } = platform
+  if (!rooms) return []
+  let { botOf, caught, ctxOf } = await need()
+  return await Promise.all(
+    (await held(env, platform.name, space)).map(async (c) => {
+      let token = await botOf(ctxOf(env), c.entity.eid)
+      let listed = token
+        ? await rooms(token, String(comp(c, CONNECTION).account))
+          .catch((e) => {
+            caught(e, { request: `${platform.name} rooms` })
+            return null
+          })
+        : null
+      let hears = comp(c, HEARS).room
+      return {
+        connection: c.entity.eid,
+        rooms: listed?.map((r) => ({
+          ...r,
+          eid: roomEid(platform.name, r.id),
+        })) ?? null,
+        ...hears ? { hears: String(hears) } : {},
+      }
+    }),
+  )
+}
+
+/** Choose the room of `connection`'s server whose every message the space's
+ * Operator hears (`chat_hears`), by its id on the platform; none hears only
+ * what is said to the bot. What the Operator's settings save, as `who`; a
+ * connection the space does not hold is refused. */
+export let choose = async (
+  env: Env,
+  who: Who,
+  space: string,
+  connection: string,
+  room: string | null,
+) => {
+  let { ctxOf, installed } = await need()
+  let [c] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}&*`)
+  let { owner, integration } = comp(c, CONNECTION)
+  let via = (await installed(ctxOf(env).graph.read))
+    .find((i) => i.name == integration)?.chat
+  if (owner != space || !via) {
+    let { refuse } = await import('./tool.ts')
+    throw refuse('missing', 'This space holds no such chat connection.')
+  }
+  await ctxOf(env, who).graph.apply([{
+    entity: { eid: connection },
+    [HEARS]: room ? { room: roomEid(via, room) } : null,
+  }])
 }
 
 /** The guest who speaks as `id` on `via`: a person with no seat and no
@@ -270,40 +365,48 @@ let toApps = async (
 /**
  * A message yaks.app's own bot heard on `platform`. One said in a server is
  * kept in each app that uses a connection that added the bot there
- * ({@link toApps}). One addressed to the bot in a server goes to the
- * Operator of the space that added it there; a direct one, from someone
- * linked here, to their own space's. Anything else is not for the
- * Operator: a room the space chose for it to hear in full is T-1644's next
- * step.
+ * ({@link toApps}). In a server, one said in
+ * the room the space that added the bot there chose for its Operator to hear
+ * in full (`chat_hears`) goes to that room's one conversation, as a group
+ * text goes to its group's (operator-texts.ts `textedOperator`): the
+ * conversation of a guest who stands for the room, so a turn there has only
+ * what the space lets anyone do, whoever in it is a member, and the words are
+ * kept as their writer's. Elsewhere in the server, one addressed to the bot
+ * goes to its writer's own conversation with that Operator; a direct one,
+ * from someone linked here, to their own space's. Anything else is not for
+ * the Operator.
  */
 export let arrived = async (env: Env, platform: Platform, said: Said) => {
   let heard = said.server ? await serving(env, platform.name, said.server) : []
   await Promise.all(heard.map((c) => toApps(env, platform, said, c)))
-  if (!said.addressed) return
   let { directoryOf, KERNEL } = await need()
   let dir = directoryOf(env.STORE)
-  let person = await linked(env, platform, said.author.id)
+  let known: Promise<string | undefined> | undefined
+  let author = () => known ??= linked(env, platform, said.author.id)
   let space: Space | null = null
   let connection: string | undefined
+  let room = false
   if (said.server) {
     let [c] = heard
     if (!c) return
+    room = comp(c, HEARS).room == roomEid(platform.name, said.room)
+    if (!room && !said.addressed) return
     connection = c.entity.eid
     space = await dir.at(String(comp(c, CONNECTION).owner))
-  } else if (person) {
+  } else if (said.addressed) {
+    let person = await author()
     let { spaceFor } = await import('./operator-texts.ts')
-    space = await spaceFor(env, person)
-    let names = new Set((await ours(env, platform.name)).map((i) => i.name))
-    let [c] = space
-      ? (await read(
-        env,
-        line`.${CONNECTION}.owner=${space.eid}&.${CONNECTION}.status=connected&*`,
-      )).filter((b) => names.has(String(comp(b, CONNECTION).integration)))
-      : []
-    connection = c?.entity.eid
+    space = person ? await spaceFor(env, person) : null
+    connection = space
+      ? (await held(env, platform.name, space.eid))[0]?.entity.eid
+      : undefined
   }
   if (!space || space.trashed || !connection) return
-  person ??= await guestOf(env, platform.name, said.author.id)
+  let writer = await author() ??
+    await guestOf(env, platform.name, said.author.id)
+  let person = room
+    ? await guestOf(env, platform.name, `room:${said.room}`)
+    : writer
   let { builderOf, SPACE } = await import('./build-door.ts')
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/chat', {
@@ -311,10 +414,15 @@ export let arrived = async (env: Env, platform: Platform, said: Said) => {
       headers: {
         'content-type': 'application/json',
         ...KERNEL,
-        'x-yak-person': person!,
+        'x-yak-person': person,
         [SPACE]: space!.eid,
       },
-      body: JSON.stringify({ via: platform.name, connection, said }),
+      body: JSON.stringify({
+        via: platform.name,
+        connection,
+        said,
+        ...room ? { writer } : {},
+      }),
     })
   )
   if (!response.ok) {

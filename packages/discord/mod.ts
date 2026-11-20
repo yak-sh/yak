@@ -4,7 +4,7 @@
 // and `send` posts a reply with the REST API. A bot's token is all either
 // needs: yaks.app's own bot's, or the one a space brings.
 
-import type { Addressed, Platform, Said, Socket, Step } from '@yaks/chat'
+import type { Addressed, Platform, Room, Said, Socket, Step } from '@yaks/chat'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
@@ -186,6 +186,33 @@ export let gateway = (token: string): Socket<Session> => ({
   ends: (code) => ENDS[code],
 })
 
+// What Discord answered a call with, read: a 429 or a 5xx never took it, so
+// it is {@link Unsent}, tried again after what Discord says; any other
+// refusal is thrown with Discord's own words.
+let answer = async <T>(
+  res: Response,
+  said: { unsent: string; refused: string },
+): Promise<T> => {
+  let body = await res.json().catch(() => ({})) as T & {
+    message?: string
+    retry_after?: number
+  }
+  if (res.status == 429 || res.status >= 500) {
+    throw new Unsent(
+      `${said.unsent}: ${res.status}`,
+      Math.ceil((body.retry_after ?? 1) * 1000),
+    )
+  }
+  if (!res.ok) {
+    throw new Error(
+      `${said.refused}: ${res.status} ${body.message ?? ''}`.trim(),
+    )
+  }
+  return body
+}
+
+let bot = (token: string) => ({ authorization: `Bot ${token}` })
+
 /** Post `reply` as the bot with `token`, answering the message it names
  * when there still is one, and pinging nobody. A 429 or a 5xx never took it,
  * so it is {@link Unsent} and tried again; any other refusal is thrown with
@@ -193,10 +220,7 @@ export let gateway = (token: string): Socket<Session> => ({
 export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
   let res = await fetcher(`${API}/channels/${reply.room}/messages`, {
     method: 'POST',
-    headers: {
-      authorization: `Bot ${token}`,
-      'content-type': 'application/json',
-    },
+    headers: { ...bot(token), 'content-type': 'application/json' },
     body: JSON.stringify({
       content: reply.text,
       allowed_mentions: { parse: [] },
@@ -210,23 +234,11 @@ export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
         : {},
     }),
   })
-  let body = await res.json().catch(() => ({})) as {
-    id?: string
-    message?: string
-    retry_after?: number
-  }
-  if (res.status == 429 || res.status >= 500) {
-    throw new Unsent(
-      `Discord did not take the reply: ${res.status}`,
-      Math.ceil((body.retry_after ?? 1) * 1000),
-    )
-  }
-  if (!res.ok) {
-    throw new Error(
-      `Discord refused the reply: ${res.status} ${body.message ?? ''}`.trim(),
-    )
-  }
-  return { id: body.id }
+  let { id } = await answer<{ id?: string }>(res, {
+    unsent: 'Discord did not take the reply',
+    refused: 'Discord refused the reply',
+  })
+  return { id }
 }
 
 /** Show the room `room` that the bot with `token` is typing, which Discord
@@ -238,20 +250,41 @@ export let typing = async (
   room: string,
   fetcher: typeof fetch = fetch,
 ): Promise<void> => {
-  let res = await fetcher(`${API}/channels/${room}/typing`, {
-    method: 'POST',
-    headers: { authorization: `Bot ${token}` },
-  })
-  let body = await res.json().catch(() => ({})) as { message?: string }
-  if (res.status == 429 || res.status >= 500) {
-    throw new Unsent(`Discord did not show typing: ${res.status}`)
-  }
-  if (!res.ok) {
-    throw new Error(
-      `Discord refused to show typing: ${res.status} ${body.message ?? ''}`
-        .trim(),
-    )
-  }
+  await answer(
+    await fetcher(`${API}/channels/${room}/typing`, {
+      method: 'POST',
+      headers: bot(token),
+    }),
+    {
+      unsent: 'Discord did not show typing',
+      refused: 'Discord refused to show typing',
+    },
+  )
+}
+
+/** The kinds of channel people write messages in: text and announcement
+ * (channel, "Channel Types"). */
+let WRITTEN = new Set([0, 5])
+
+/** The text channels of the server `server`, in the order Discord shows
+ * them, as the bot with `token` reads them (GET /guilds/{id}/channels). */
+export let rooms = async (
+  token: string,
+  server: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Room[]> => {
+  let channels = await answer<
+    { id: string; name: string; type: number; position?: number }[]
+  >(
+    await fetcher(`${API}/guilds/${server}/channels`, { headers: bot(token) }),
+    {
+      unsent: 'Discord did not list the channels',
+      refused: 'Discord refused to list the channels',
+    },
+  )
+  return channels.filter((c) => WRITTEN.has(c.type))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map(({ id, name }) => ({ id, name }))
 }
 
 /** The server (guild) the room `room` belongs to, as the bot with `token`
@@ -263,24 +296,14 @@ export let server = async (
   room: string,
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> => {
-  let res = await fetcher(`${API}/channels/${room}`, {
-    headers: { authorization: `Bot ${token}` },
-  })
-  let body = await res.json().catch(() => ({})) as {
-    guild_id?: string
-    message?: string
-  }
-  if (res.status == 429 || res.status >= 500) {
-    throw new Unsent(`Discord did not say where ${room} is: ${res.status}`)
-  }
-  if (!res.ok) {
-    throw new Error(
-      `Discord refused to show room ${room}: ${res.status} ${
-        body.message ?? ''
-      }`.trim(),
-    )
-  }
-  return body.guild_id
+  let { guild_id } = await answer<{ guild_id?: string }>(
+    await fetcher(`${API}/channels/${room}`, { headers: bot(token) }),
+    {
+      unsent: `Discord did not say where ${room} is`,
+      refused: `Discord refused to show room ${room}`,
+    },
+  )
+  return guild_id
 }
 
 /** Discord, as @yaks/chat takes a platform. */
@@ -292,5 +315,6 @@ export let discord: Platform = {
   socket: gateway as (token: string) => Socket<unknown>,
   send,
   server,
+  rooms,
   working: { every: 8000, show: typing },
 }

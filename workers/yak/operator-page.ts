@@ -16,6 +16,7 @@ import {
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
+import type { Server } from './chat.ts'
 import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
 import { reachOf } from './operator-reach.ts'
 import { caught } from './defects.ts'
@@ -248,12 +249,46 @@ let choices = (id: string, label: string, name: string, offers: Option[]) =>
 // there linked, so it knows them. Each button posts to the connections page,
 // which sends them straight to the platform to choose (connections.ts
 // `connecting`); one still in its service's testing mode is named there.
+// For each server it was added to, they choose the room it hears in full
+// (chat.ts `choose`), posted here (`at`).
 export let chatCard = (
+  at: string,
   connections: string,
   operator: string,
   offers: Awaited<ReturnType<typeof import('./chat.ts').offers>>,
 ) =>
-  offers.map(({ platform, bot, user }) => {
+  offers.map(({ platform, bot, user, servers }) => {
+    let hearing = (s: Server, i: number) => {
+      let id = `chat-room-${i}`
+      return h(
+        'form',
+        { method: 'post', action: `${at}?chat=1` },
+        h('input', { type: 'hidden', name: 'connection', value: s.connection }),
+        s.rooms
+          ? field(
+            id,
+            `The ${platform.title} channel ${operator} hears in full`,
+            h(
+              Field,
+              { choose: true, id, name: 'room' },
+              h('option', { value: '' }, 'None, only what is said to it'),
+              s.rooms.map((r) =>
+                h(
+                  'option',
+                  { value: r.id, selected: r.eid == s.hears },
+                  `#${r.name}`,
+                )
+              ),
+            ),
+          )
+          : h(
+            'p',
+            null,
+            `${platform.title} did not list this server's channels just now. Reload to try again.`,
+          ),
+        s.rooms ? h(Button, { type: 'submit' }, 'Save') : null,
+      )
+    }
     let adding = (i: { name: string; testing?: boolean }, label: string) =>
       h(
         'form',
@@ -273,6 +308,14 @@ export let chatCard = (
         `Add ${operator} to a ${platform.title} server you manage. Mention it there, reply to it, or message it directly, and it answers in the same place.`,
       ),
       adding(bot, `Add to ${platform.title}`),
+      servers.length
+        ? h(
+          'p',
+          null,
+          `In the channel you choose, ${operator} reads everything said and answers only what is for it. Everyone there is a guest to it, who can do only what anyone can in this space.`,
+        )
+        : null,
+      servers.map(hearing),
       user
         ? h(
           'p',
@@ -773,6 +816,31 @@ export let operatorAnswer = async (
       return Response.json({ message: e.message }, { status: 400 })
     }
   }
+  // The room of a chat server the Operator hears in full, chosen by the
+  // space's owner on its chat card (`chatCard`), and the page drawn again.
+  if (q.has('chat') && req.method == 'POST') {
+    let form = await req.formData()
+    try {
+      if (who.role != 'owner') {
+        throw refuse('forbidden', "Only the space's owner chooses this.")
+      }
+      let { choose } = await import('./chat.ts')
+      await choose(
+        env,
+        who,
+        space.eid,
+        String(form.get('connection') ?? ''),
+        String(form.get('room') ?? '') || null,
+      )
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return new Response(`That channel was not saved: ${e.message}`, {
+        status: 400,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      })
+    }
+    return new Response(null, { status: 303, headers: { location: at } })
+  }
   if (q.has('voice') && req.method == 'POST') {
     let form = await req.formData()
     try {
@@ -1257,10 +1325,12 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
       dir.pushes(who.person ?? ''),
       // A chat platform that cannot be offered leaves the rest of the page.
       who.role == 'owner'
-        ? import('./chat.ts').then((c) => c.offers(env)).catch((e) => {
-          caught(e, { request: 'operator settings chat' })
-          return []
-        })
+        ? import('./chat.ts').then((c) => c.offers(env, seen.eid)).catch(
+          (e) => {
+            caught(e, { request: 'operator settings chat' })
+            return []
+          },
+        )
         : Promise.resolve([]),
     ])
   let from = phone?.transport().number
@@ -1301,7 +1371,7 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
     voiceCard(at, operator, offered(env, space)),
     alertsCard(at, chosen, consent, email, browsers, pushKey(env)),
     textsCard(at, consent, from, call),
-    ...chatCard(managePath('connections', seen.slug), operator, chatting),
+    ...chatCard(at, managePath('connections', seen.slug), operator, chatting),
   ]) + settingsScript
 }
 

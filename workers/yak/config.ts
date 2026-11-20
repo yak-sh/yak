@@ -110,6 +110,10 @@ export let directoryConfig: Config = {
     },
     { use: '@yaks/topic', facets: ['vocab', 'graph'], words: ['topic'] },
     { use: '@yaks/connections', facets: toolFacets },
+    // The room of a chat connection's server its Operator hears in full
+    // (chat.ts `choose`, `arrived`). The messages themselves are the
+    // Operator's to keep, not here.
+    { use: '@yaks/chat', facets: ['vocab'], words: ['chat_hears'] },
     { use: '@yaks/mcp-client', facets: ['vocab'] },
     // Each call out through a `uses` link counted on it (outbound.ts).
     { use: '@yaks/egress', facets: ['vocab', 'graph'] },

@@ -3,7 +3,7 @@
 // the connections page that sends its owner on to Discord. And a space's
 // apps hear and answer on its Discord connection.
 
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
 import { accountEid, roomEid, type Said } from '@yaks/chat'
@@ -17,16 +17,20 @@ import { platform } from './directory-rows-probe.ts'
 import { platform as hosted } from './testing.ts'
 import { type App, appStore, directory, over } from './directory.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import { arrived, offers, PLATFORMS } from './chat.ts'
+import { arrived, choose, offers, PLATFORMS, type Server } from './chat.ts'
 import { chatCard } from './operator-page.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
+let SPACE = crypto.randomUUID()
+let AT = '/manage/ana/operator'
 let { env } = platform('a probe secret', {
   VAULT: d1() as unknown as D1Like,
   VAULT_KEY: KEY,
 })
 let names = async () =>
-  (await offers(env)).map((o) => [o.platform.name, o.bot.name, o.user?.name])
+  (await offers(env, SPACE)).map((
+    o,
+  ) => [o.platform.name, o.bot.name, o.user?.name, o.servers])
 
 let botless = await names()
 await meta(env).apply(
@@ -35,12 +39,12 @@ await meta(env).apply(
 )
 let kept = await names()
 let card = renderToString(
-  chatCard('/manage/ana/connections', 'Kit', await offers(env))[0],
+  chatCard(AT, '/manage/ana/connections', 'Kit', await offers(env, SPACE))[0],
 )
 
 test('Discord is offered once yaks.app keeps its bot, with the account a person links there', () => {
   assertEquals(botless, [])
-  assertEquals(kept, [['discord', 'discord', 'discord-account']])
+  assertEquals(kept, [['discord', 'discord', 'discord-account', []]])
 })
 
 test('each button posts to the connections page, naming the integration still in testing', () => {
@@ -56,6 +60,53 @@ test('each button posts to the connections page, naming the integration still in
   assertStringIncludes(card, 'Add Kit to a Discord server you manage.')
   assertStringIncludes(card, 'Add to Discord')
   assertStringIncludes(card, 'Connect my Discord account')
+  assertEquals(card.includes('?chat=1'), false)
+})
+
+// A server the space added the bot to, as `offers` gives it.
+let server = (rooms: [string, string][] | null, hears?: string): Server => ({
+  connection: 'c1',
+  rooms: rooms?.map(([id, name]) => ({
+    id,
+    name,
+    eid: roomEid('discord', id),
+  })) ?? null,
+  ...hears ? { hears: roomEid('discord', hears) } : {},
+})
+let drawn = async (...servers: Server[]) =>
+  renderToString(
+    chatCard(AT, '/manage/ana/connections', 'Kit', [{
+      ...(await offers(env, SPACE))[0],
+      servers,
+    }])[0],
+  )
+
+test("each server's channels are offered to hear in full, the chosen one picked", async () => {
+  let card = await drawn(server([['1', 'general'], ['2', 'barn']], '2'))
+  assertStringIncludes(card, `method="post" action="${AT}?chat=1"`)
+  assertStringIncludes(card, 'name="connection" value="c1"')
+  assertStringIncludes(card, '<option value>None, only what is said to it')
+  assertStringIncludes(card, '<option value="1">#general</option>')
+  assertStringIncludes(card, '<option value="2" selected>#barn</option>')
+  assertStringIncludes(
+    await drawn(server(null)),
+    "Discord did not list this server's channels just now.",
+  )
+})
+
+test('a space chooses a room only on a chat connection it holds', async () => {
+  await assertRejects(
+    () =>
+      choose(
+        env,
+        { person: crypto.randomUUID(), role: 'owner' },
+        SPACE,
+        crypto.randomUUID(),
+        '1',
+      ),
+    Error,
+    'This space holds no such chat connection.',
+  )
 })
 
 // Discord as the bot sees it: `general` is a room of the barn, `lobby` of

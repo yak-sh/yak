@@ -108,7 +108,8 @@ export type Request = {
   // is the guest who stands for the group, whose one conversation is the
   // group's (operator-texts.ts `textedOperator`).
   group?: string[]
-  // In a group text, the person who wrote the words, whose they are kept as.
+  // In a group text, or a chat room the space hears in full (chat.ts
+  // `arrived`), the person who wrote the words, whose they are kept as.
   writer?: string
   // In a group text, whether the words named the Operator (@yaks/session/turn
   // `named`).
@@ -366,7 +367,7 @@ export let hear = async (
     let words: Intake = {
       session: open.session,
       body: framing + (text.trim() || unsaid(files)) + reference,
-      by: OWN.has(channel) ? space.eid : request.person,
+      by: OWN.has(channel) ? space.eid : request.writer ?? request.person,
       item: id,
       ...from ? { from } : {},
       channel: channelOf(channel, framing),
@@ -418,21 +419,22 @@ let chatFraming = (request: Request, item: Bundle) => {
 
 /**
  * A message heard on a chat platform, brought by the kernel (chat.ts
- * `arrived`, build.ts `/operator/chat`) as the words of `person`: a person
- * here whose account there is linked, or a guest. Its room and writer are
- * kept, then the message itself is taken in ({@link hear}), naming the
- * connection whose bot heard it, which answers it in the same room. While
- * its turn works on the answer, the room is shown so, where the platform's
- * chatter can (@yaks/chat `showing`).
+ * `arrived`, build.ts `/operator/chat`) into the conversation of `person`: a
+ * person here whose account there is linked, or a guest; or, in a room the
+ * space hears in full, the guest who stands for the room, the words kept as
+ * their `writer`'s. Its room and writer are kept, then the message itself is
+ * taken in ({@link hear}), naming the connection whose bot heard it, which
+ * answers it in the same room. While its turn works on the answer, the room
+ * is shown so, where the platform's chatter can (@yaks/chat `showing`).
  */
 export let chatHeard = async (
   operator: Pick<Operator, 'store' | 'listening'>,
   env: Env,
   space: Space,
   person: string,
-  args: { via: string; connection: string; said: Said },
+  args: { via: string; connection: string; said: Said; writer?: string },
 ) => {
-  let { via, connection, said } = args
+  let { via, connection, said, writer } = args
   if (!PLATFORMS.has(via)) {
     throw refuse('arguments', `yaks.app hears no chat platform ${via}`)
   }
@@ -448,6 +450,7 @@ export let chatHeard = async (
       channel: via,
       address: said.author.name,
       reply_to: said.room,
+      ...writer ? { writer } : {},
     },
     said.text,
     message,

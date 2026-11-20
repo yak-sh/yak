@@ -119,6 +119,19 @@
         }
       }
     },
+    "chat_hears": {
+      "component": true,
+      "type": "object",
+      "description": "on a chat connection (@yaks/connections), the room of its server where its owner's Operator hears every message, not only those said to its bot: the room the space chose in the Operator's settings. Without it, the Operator hears only what is said to the bot",
+      "properties": {
+        "room": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the `chat_room` it hears, by its derived eid (`roomEid`), which names the room in every store though its row is kept beside its messages"
+        }
+      }
+    },
     "chat_post": {
       "effect": true,
       "created": [

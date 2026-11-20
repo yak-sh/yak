@@ -38,6 +38,9 @@ export type Reply = { room: string; text: string; reply_to?: string }
 /** What a platform answers when it took a reply: its id for it. */
 export type Posted = { id?: string }
 
+/** A room of a server, as a platform lists them: its id and its name. */
+export type Room = { id: string; name: string }
+
 /**
  * A long-lived socket a platform sends its messages over (Discord's Gateway),
  * as pure steps a generic holder runs (./socket.ts): where to connect, and
@@ -96,6 +99,14 @@ export type Platform = {
     room: string,
     fetch?: typeof globalThis.fetch,
   ) => Promise<string | undefined>
+  /** the rooms of `server` that people write in, as the bot with
+   * `credential` reads them, where the platform lists them: what a space
+   * chooses the room its listener hears in full from (`chat_hears`) */
+  rooms?: (
+    credential: string,
+    server: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<Room[]>
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<

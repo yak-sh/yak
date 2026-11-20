@@ -240,3 +240,21 @@ test('a room is known by its server, none for a direct one; one the bot cannot s
     'Discord refused to show room r: 404 Unknown Channel',
   )
 })
+
+test("rooms lists a server's text channels in Discord's order, as the bot", async () => {
+  let { f, seen } = rest(200, [
+    { id: 'c2', name: 'news', type: 5, position: 2 },
+    { id: 'v', name: 'Lounge', type: 2, position: 0 },
+    { id: 'c1', name: 'general', type: 0, position: 1 },
+    { id: 'k', name: 'Text Channels', type: 4, position: 0 },
+  ])
+  assertEquals(await discord.rooms!('T0K', 'g1', f), [
+    { id: 'c1', name: 'general' },
+    { id: 'c2', name: 'news' },
+  ])
+  assertEquals(seen[0].url, 'https://discord.com/api/v10/guilds/g1/channels')
+  assertEquals(
+    (seen[0].init.headers as Record<string, string>).authorization,
+    'Bot T0K',
+  )
+})

@@ -30,6 +30,9 @@ reply with the REST API. `discord` is the `Platform` both make.
   `/channels/{id}/typing`), which Discord keeps for ten seconds or until the
   bot's next message there, so it is `working` every 8 s. It needs no intent. A
   bot shows online on its own while its Gateway socket is open.
+- **A server's rooms** are its text and announcement channels in the order
+  Discord shows them (`rooms(token, server)`, GET `/guilds/{id}/channels`),
+  which a space chooses the one it hears in full from.
 
 Messages in rooms the bot was not named in carry their words only with the
 Message Content intent, which Discord reviews for a bot in over 100 servers.

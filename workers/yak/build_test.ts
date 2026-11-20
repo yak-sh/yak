@@ -22,6 +22,9 @@ import { restarting } from './running.ts'
 import { draftEid } from '@yaks/draft'
 import { chatPath } from '@yaks/platform/routes'
 import { trashSpace } from './erase.ts'
+import { discord } from '@yaks/discord'
+import { PASS } from '@yaks/session/turn'
+import { arrived } from './chat.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -584,4 +587,87 @@ test('a Discord mention from a guest is heard, and answered in its room', async 
   assertEquals(again.status, 200)
   await again.body?.cancel()
   assertEquals(model.asked.length, 1)
+})
+
+// The room a space chose for its Operator to hear in full (chat.ts `choose`,
+// `arrived`): everything said there is heard in the room's one
+// conversation, each line kept as its writer's, and framed as not said to
+// it; it answers what is for it and passes the rest, which posts nothing.
+// Unaddressed words in any other room are not its, nor once the choice is
+// taken back.
+test('in the room a space chose, the Operator hears everyone and answers only what is for it', async () => {
+  let o = await seeded([{ text: 'It opens at nine.' }, { text: PASS }])
+  o.bound()
+  let connection = crypto.randomUUID()
+  let [SERVER, BARN, ELSEWHERE] = ['81384788765712384', '1310777', '1310888']
+  await dirOf(o.env).apply({
+    entities: [{
+      entity: { eid: connection },
+      connection: {
+        integration: 'discord',
+        owner: o.space.eid,
+        account: SERVER,
+        status: 'connected',
+      },
+    }],
+  }, { 'x-yak-kernel': '1' })
+  // Chosen on the Operator's settings page, as its owner.
+  let choose = async (room: string) => {
+    let form = new FormData()
+    form.set('connection', connection)
+    form.set('room', room)
+    let r = await manage(
+      new Request('https://yaks.app/manage/ada/operator?chat=1', {
+        method: 'POST',
+        body: form,
+        headers: { cookie: await as(ADA), origin: 'https://yaks.app' },
+      }),
+      o.env,
+    )
+    assertEquals(r.status, 303)
+  }
+  await choose(BARN)
+  let n = 0
+  let say = async (room: string, name: string, text: string) => {
+    await arrived(o.env, discord, {
+      id: `13100000000000000${++n}`,
+      room,
+      server: SERVER,
+      author: { id: name, name },
+      text,
+      at: '2026-11-20T05:40:00.000Z',
+    })
+    while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  }
+  await say(BARN, 'Ann', 'does anyone know when the barn opens?')
+  await say(BARN, 'Bo', "I'll bring pie")
+  await say(ELSEWHERE, 'Cy', 'when does the barn open?')
+  await choose('')
+  await say(BARN, 'Di', 'hello?')
+  let model = o.env.AI as unknown as ReturnType<typeof ai>
+  let asked = model.asked.map((a) => JSON.stringify(a))
+  assertEquals(asked.length, 2)
+  assertStringIncludes(
+    asked[0],
+    'On Discord, in a room you hear but were not addressed in, from Ann: does anyone know',
+  )
+  assertStringIncludes(asked[0], 'These words were not said to you.')
+  let store = await operatorStore(o.ctx.storage)
+  let words = await store.g.read(
+    '.entry.session&.intake&.fields=entry.session,created.by',
+  )
+  let by = words.map((b) => (b.created as { by: string }).by)
+  assertEquals(
+    new Set(words.map((b) => (b.entry as { session: string }).session)).size,
+    1,
+  )
+  assertEquals(new Set(by).size, 2)
+  assert(!by.includes(ADA))
+  let posted = await store.g.read(
+    line`.chat_message.connection=${connection}&.deliver&*`,
+  )
+  assertEquals(
+    posted.map((b) => (b.doc as { body: string }).body),
+    ['It opens at nine.'],
+  )
 })
