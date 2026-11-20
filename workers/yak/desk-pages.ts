@@ -19,6 +19,7 @@ import {
   Form,
   Group,
   Icon,
+  Menu,
   Modal,
   More,
   Notice,
@@ -1962,22 +1963,24 @@ let connections = (at: DeskPage, env: Host) => {
     : grid(c.built.map(tile))
   // The selected service says which space it goes to and offers the others.
   let elsewhere = (at.spaces ?? []).filter((s) => s.owner && s.slug != at.space)
-  let to = (what: string, other?: (slug: string) => string) =>
-    h(
-      Card.Sub,
-      null,
-      `${what} ${host}, for its apps to use.`,
-      other && elsewhere.length
-        ? [
-          ' Connect it to another space instead: ',
-          elsewhere.flatMap((s, i) => [
-            i ? ', ' : '',
-            h('a', { href: other(s.slug) }, s.title || s.slug),
-          ]),
-          '.',
-        ]
-        : null,
-    )
+  let to = (what: string, other?: (slug: string) => string) => [
+    h(Card.Sub, null, `${what} ${host}, for its apps to use.`),
+    other && elsewhere.length
+      ? h(
+        Menu.Fold,
+        { 'data-menu': '' },
+        h(Menu.Summary, null, 'Connect it to another space instead'),
+        h(
+          Menu,
+          { mod: 'below' },
+          h(Menu.Ask, null, 'Which space should it be connected to?'),
+          elsewhere.map((s) =>
+            h(Menu.Item, { href: other(s.slug) }, s.title || s.slug)
+          ),
+        ),
+      )
+      : null,
+  ]
   let addTo = (name: string) => (slug: string) =>
     openedOn(managePath('connections', slug), name)
   let contents = (one: Shown) =>
