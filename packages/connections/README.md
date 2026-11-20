@@ -21,7 +21,7 @@ them.
 
 - `integration{name, title, tagline, site, logo, authorize, token, scopes,
   params, auth, refresh_encoding, client, client_id, broker, hosts, signature,
-  testing, built, instructions, owner}`
+  testing, built, instructions, owner, account, chat}`
   is an outside service. `name` is its identity, so one name is one integration.
   `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
   calls it, one line saying what it is, its address on the web, and its mark as
@@ -45,7 +45,12 @@ them.
   `title`, `tagline`, `site` or `instructions`. Its `hosts` may wait until it is
   used: a key kept with none is sent nowhere, and its owner names them once,
   after which nobody changes them. A built integration has no owner, and one
-  whose owner is gone is nobody's to change.
+  whose owner is gone is nobody's to change. `account` is the field that names a
+  connection's account where it is not an email address, as a dotted path: of
+  the token endpoint's answer (Discord's `guild.id`, the server its bot was
+  added to), else of `userinfo`'s (a Discord user's `id`). `chat` names the
+  [@yaks/chat](../chat) platform its connections talk through: connecting it is
+  all it takes for a space's Operator and apps to hear and answer there.
 - A custom integration its owner listed in the **integration directory**, which
   anyone may read and add to a space of their own apart from any app, wears
   @yaks/platform's `published{at}`, as anything shared on a platform does;
@@ -116,13 +121,18 @@ An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
 integration that names it: google-calendar and gmail name `google`, as a later
 google-drive would. The client is a secret, kept as `oauth_client <name>`:
-`registration(name, {id, secret})` is the bundle that seals it, so the graph
-holds its handle and the vault its id and secret, and `clientOf` reads it back
-at sign-in. A custom integration never signs in as a client a built one names,
-whose secret would go to the custom one's token endpoint. `connectable` says
-whether an integration can be connected there at all, and the page offers only
-those. A built integration with a public OAuth client carries its `client_id`
-directly as data; there is no secret to register or reveal.
+`registration(name, {id, secret, bot?})` is the bundle that seals it, so the
+graph holds its handle and the vault its id and secret, and `clientOf` reads it
+back at sign-in. `bot` is the token of the bot the client's application speaks
+as on a chat platform (Discord's), kept with `yak admin client --bot`.
+`botOf(ctx, connection)` answers the bot that speaks for a chat connection: that
+client's bot for one that added the platform's own bot to a server, or the
+pasted key of a bot the space brought (`discord-bot`). A custom integration
+never signs in as a client a built one names, whose secret would go to the
+custom one's token endpoint. `connectable` says whether an integration can be
+connected there at all, and the page offers only those. A built integration with
+a public OAuth client carries its `client_id` directly as data; there is no
+secret to register or reveal.
 
 ## Verbs
 
@@ -230,8 +240,9 @@ its vault, and the redirect):
   every field its integration names (`{fields}`), and no other, or completes a
   sign-in (`{attempt, callback}`), and marks the connection `connected`. A key
   goes from here straight to the vault. An OAuth sign-in names its account from
-  the exchanged `id_token` email or `integration.userinfo`. Another account
-  makes another connection; the same account renews behind its held handle.
+  the exchanged `id_token` email or `integration.userinfo`, or by the field
+  `integration.account` names. Another account makes another connection; the
+  same account renews behind its held handle.
 - `disconnect(ctx, connection)` trashes the connection and retains its
   credential in the vault’s trash for restoration. Each app that shared it is
   linked to a new `needed` connection in the same batch, by the same name, as
