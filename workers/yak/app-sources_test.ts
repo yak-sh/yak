@@ -16,9 +16,23 @@ import { desk } from './desk-pages.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 import type { Who } from './session.ts'
 import type { D1Like } from '@yaks/d1'
+import type { Env } from './env.ts'
 import { d1 } from '../../packages/d1/testing.ts'
 
 let ELI = 'e0000000-0000-4000-8000-000000000001'
+
+let apiOf =
+  (env: Env) => async (person: string | null, path: string, body?: unknown) => {
+    let res = await apps.fetch(
+      visit(`/cookbook/api${path}`, {
+        method: body ? 'POST' : 'GET',
+        headers: person ? { cookie: await as(person) } : {},
+        ...body ? { body: JSON.stringify(body) } : {},
+      }),
+      env,
+    )
+    return { status: res.status, body: await res.json() }
+  }
 
 test("an app calls the tools of a person's MCP server only once they allow it, and as them", async () => {
   await using p = platform({
@@ -58,18 +72,8 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
     )
     let [server] = (await mcpPage(env, dir, who)).servers
     let at = `mcp:${server.id}`
-    let api = async (person: string, path: string, body?: unknown) => {
-      let res = await apps.fetch(
-        visit(`/cookbook/api${path}`, {
-          method: body ? 'POST' : 'GET',
-          headers: { cookie: await as(person) },
-          ...body ? { body: JSON.stringify(body) } : {},
-        }),
-        env,
-      )
-      return { status: res.status, body: await res.json() }
-    }
-    let call = (person = ADA) =>
+    let api = apiOf(env)
+    let call = (person: string | null = ADA) =>
       api(person, '/command', {
         at,
         name: 'publish_mockup',
@@ -133,6 +137,8 @@ test("an app calls the tools of a person's MCP server only once they allow it, a
     assertStringIncludes(done.body.text, 'https://example.test/mockup/1')
     // Somebody else using the app reaches nothing of Ada's.
     assertEquals((await call(ELI)).status, 403)
+    assertEquals((await api(null, '/commands?at=mcp:')).status, 403)
+    assertEquals((await call(null)).status, 403)
 
     await form({ do: 'source-revoke', app: app.eid, at })
     assertEquals((await call()).status, 403)
@@ -156,26 +162,31 @@ test("an app calls a tool of a connection its space connected it to, as far as t
     'x-yak-person': ELI,
   })
   let c = ctxOf(env)
-  let made = await c.graph.apply(
-    await need(c.graph.read, {
-      owner: space.eid,
-      app: app.eid,
-      integration: 'Hub',
-      hosts: ['api.hub.test'],
-    }),
-  )
-  let eid = made.find((b) => b.connection)!.entity.eid
-  let f = new FormData()
-  f.append('do', 'key')
-  f.append('connection', eid)
-  f.append('key', 'sk-hub')
-  await connecting(
-    new Request('https://yaks.app/manage/ada/connections'),
-    env,
-    space,
-    { person: ADA, role: 'owner' },
-    f,
-  )
+  let connect = async (integration: string, key: string) => {
+    let made = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: space.eid,
+        app: app.eid,
+        integration,
+        hosts: ['api.hub.test'],
+      }),
+    )
+    let eid = made.find((b) => b.connection)!.entity.eid
+    let f = new FormData()
+    f.append('do', 'key')
+    f.append('connection', eid)
+    f.append('key', key)
+    await connecting(
+      new Request('https://yaks.app/manage/ada/connections'),
+      env,
+      space,
+      { person: ADA, role: 'owner' },
+      f,
+    )
+    return eid
+  }
+  let eid = await connect('Hub', 'sk-hub')
+  let other = `connection:${await connect('Other', 'sk-other')}`
   let at = `connection:${eid}`
   let sent: Request[] = []
   let real = globalThis.fetch
@@ -184,25 +195,15 @@ test("an app calls a tool of a connection its space connected it to, as far as t
     return Promise.resolve(Response.json({ hello: 'hub' }))
   }) as typeof fetch
   try {
-    let api = async (person: string, path: string, body?: unknown) => {
-      let res = await apps.fetch(
-        visit(`/cookbook/api${path}`, {
-          method: body ? 'POST' : 'GET',
-          headers: { cookie: await as(person) },
-          ...body ? { body: JSON.stringify(body) } : {},
-        }),
-        env,
-      )
-      return { status: res.status, body: await res.json() }
-    }
-    let call = (person = ADA) =>
+    let api = apiOf(env)
+    let call = (person: string | null = ADA, source = at) =>
       api(person, '/command', {
-        at,
+        at: source,
         name: 'request',
         args: { url: 'https://api.hub.test/v1' },
       })
 
-    let listed = await api(ADA, '/commands?at=connection:')
+    let listed = await api(ADA, `/commands?at=${at}`)
     assertEquals(
       listed.body.map((c: { at: string; name: string }) => [c.at, c.name]),
       [[at, 'request']],
@@ -219,15 +220,56 @@ test("an app calls a tool of a connection its space connected it to, as far as t
     assertEquals((await api(ELI, '/commands?at=connection:')).body, [])
     assertEquals((await call(ELI)).status, 403)
 
+    let { body: { HUB, OTHER } } = await api(ADA, '/env')
+    let target = 'https://api.hub.test/v1'
+    let fetched = async (sentinel = HUB) => {
+      let url = encodeURIComponent(`${target}?key=${sentinel}`)
+      let res = await apps.fetch(visit(`/cookbook/api/fetch?url=${url}`), env)
+      await res.body?.cancel()
+      return res.status
+    }
+    let pool = '/commands?at=connection:'
+    let open = (anyone: boolean) =>
+      c.graph.apply([{
+        entity: { eid: edgeEid(app.eid, USES, eid) },
+        [USES]: { anyone },
+      }])
+    assertEquals(await api(null, pool), { status: 200, body: [] })
+    assertEquals((await call(null)).status, 403)
+    assertEquals(await fetched(), 403)
+    assertEquals(sent.length, 1)
+
+    await open(true)
+    let publicPool = await api(null, pool)
+    assertEquals(publicPool.status, 200)
+    assertEquals(publicPool.body, listed.body)
+    assertEquals((await call(null)).status, 200)
+    assertEquals(await fetched(), 200)
+    assertEquals((await call(null, other)).status, 403)
+    assertEquals(await fetched(OTHER), 403)
+    assertEquals(
+      sent.slice(1).map((r) => [r.url, r.headers.get('authorization')]),
+      [
+        [target, 'Bearer sk-hub'],
+        [`${target}?key=sk-hub`, null],
+      ],
+    )
+
+    await open(false)
+    assertEquals(await api(null, pool), { status: 200, body: [] })
+    assertEquals((await call(null)).status, 403)
+    assertEquals(await fetched(), 403)
+
     // A link at its cap refuses the call before anything is sent.
     await c.graph.apply([{
       entity: { eid: edgeEid(app.eid, USES, eid) },
-      [USES]: { cap: 0 },
+      [USES]: { cap: 0, anyone: true },
     }])
-    let capped = await call()
+    let capped = await call(null)
     assertEquals(capped.status, 403)
     assertStringIncludes(capped.body.error.message, 'capped at 0')
-    assertEquals(sent.length, 1)
+    assertEquals(await fetched(), 403)
+    assertEquals(sent.length, 3)
   } finally {
     globalThis.fetch = real
   }

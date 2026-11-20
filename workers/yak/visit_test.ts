@@ -160,7 +160,12 @@ let APP_DOORS: [string, RequestInit?][] = [
   ['/stats'],
   ['/line'],
   ['/commands'],
+  ['/commands?at=connection:'],
   ['/command'],
+  ['/command', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'request', at: 'connection:' }),
+  }],
   ['/service/connect', { method: 'POST', body: '{}' }],
   ['/ai/run', { method: 'POST', body: '{}' }],
   ['/pdf?page=1', { method: 'POST', body: 'x' }],

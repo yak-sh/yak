@@ -134,30 +134,43 @@ let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
   return said
 }
 
-// The sources outside any app, each by the kind its address names
-// (@yaks/connections `addressed`): a person's MCP servers, the app services
-// they connected, and their connections, each sent requests through.
-//
+/** A signed-out caller reaches the pool through an app. */
+export type PoolCtx =
+  | Ctx
+  | (Omit<Ctx, 'person' | 'app'> & {
+    person: null
+    app: NonNullable<Ctx['app']>
+  })
+
+let personal = (ctx: PoolCtx): Ctx => {
+  if (ctx.person == null) {
+    throw refuse('access', 'Sign in to use what you connected')
+  }
+  return ctx
+}
+
 // Whose connections a caller sends through: their own where the channel
 // reaches the person's sources (connected-mcp.ts `reaches`), and a space's
 // for its owner in a context naming that space. An app's code sends through
 // those the app uses that its caller may call out through (`usable`): the
 // connections its space allowed it and those its person granted it.
-let owners = async (ctx: Ctx): Promise<string[]> => {
+let owners = async (ctx: PoolCtx): Promise<string[]> => {
   if (ctx.app) {
     return (await usable(ctxOf(ctx.env), callerOf(ctx, ctx.app)))
       .map((r) => String((r.connection[CONNECTION] as Comp).owner))
   }
-  let named = ctx.who?.spaceEid ??
-    (ctx.who?.space ? (await ctx.dir.space(ctx.who.space))?.eid : undefined)
+  let actor = personal(ctx)
+  let { person, who } = actor
+  let named = who?.spaceEid ??
+    (who?.space ? (await ctx.dir.space(who.space))?.eid : undefined)
   let space = named &&
-    await ctx.dir.role({ eid: named }, ctx.person) == 'owner'
-  return [...reaches(ctx) ? [ctx.person] : [], ...space ? [named!] : []]
+    await ctx.dir.role({ eid: named }, person) == 'owner'
+  return [...reaches(actor) ? [person] : [], ...space ? [named!] : []]
 }
 
 // The app's code calling, as the egress vouches for it: the person using the
 // app and what they hold on it.
-let callerOf = (ctx: Ctx, a: NonNullable<Ctx['app']>): Caller => ({
+let callerOf = (ctx: PoolCtx, a: NonNullable<Ctx['app']>): Caller => ({
   app: a.app.eid,
   level: a.level ?? null,
   person: ctx.person,
@@ -166,7 +179,7 @@ let callerOf = (ctx: Ctx, a: NonNullable<Ctx['app']>): Caller => ({
 // An app's call through one of its connections, admitted and counted on the
 // app's link as a call through ./api/fetch is (@yaks/egress `admit`): a link
 // at its cap, or one the caller may not call out through, refuses it.
-let admitted = async (ctx: Ctx, said: string) => {
+let admitted = async (ctx: PoolCtx, said: string) => {
   if (!ctx.app) return
   try {
     await admit(
@@ -185,7 +198,7 @@ let admitted = async (ctx: Ctx, said: string) => {
 // holds for it. Each is loaded when asked.
 type Built = (
   env: Ctx['env'],
-  ctx: Ctx,
+  ctx: PoolCtx,
   space: Space,
   held: Bundle,
 ) => Promise<Tool[]>
@@ -198,13 +211,13 @@ let BUILT: Record<string, () => Promise<Built>> = {
 
 // The space a caller works in, for a built-in tool that speaks for it: the
 // app's, the one its credential names, else the person's own.
-let workingIn = async (ctx: Ctx): Promise<Space> =>
+let workingIn = async (ctx: PoolCtx): Promise<Space> =>
   ctx.app?.space ??
     (ctx.who?.space ? await ctx.dir.space(ctx.who.space) : null) ??
-    await ctx.dir.own(ctx.person)
+    await ctx.dir.own(personal(ctx).person)
 
 // The built-in tools of the connection at `at`, where its integration has any.
-let builtIn = async (ctx: Ctx, at: string): Promise<Tool[]> => {
+let builtIn = async (ctx: PoolCtx, at: string): Promise<Tool[]> => {
   let [held] = await ctxOf(ctx.env).graph.read(
     line`.entity.eid=${addressed(at)!.rest}&.${CONNECTION}&*`,
   )
@@ -216,16 +229,24 @@ let builtIn = async (ctx: Ctx, at: string): Promise<Tool[]> => {
 // What a connection says reaches the caller as outside words, as an MCP
 // server's reply does (connected-mcp.ts `runConnectedCommand`).
 let SOURCES: Record<Kind, {
-  list: (ctx: Ctx, said: string) => Promise<Command[]>
+  list: (ctx: PoolCtx, said: string) => Promise<Command[]>
   run: (
-    ctx: Ctx,
+    ctx: PoolCtx,
     said: string,
     name: string,
     args: Record<string, unknown>,
   ) => Promise<Out>
 }> = {
-  service: { list: listServiceCommands, run: runServiceCommand },
-  mcp: { list: listConnectedCommands, run: runConnectedCommand },
+  service: {
+    list: (ctx, said) => listServiceCommands(personal(ctx), said),
+    run: (ctx, said, name, args) =>
+      runServiceCommand(personal(ctx), said, name, args),
+  },
+  mcp: {
+    list: (ctx, said) => listConnectedCommands(personal(ctx), said),
+    run: (ctx, said, name, args) =>
+      runConnectedCommand(personal(ctx), said, name, args),
+  },
   connection: {
     list: async (ctx, said) => {
       let listed = await requests(
@@ -280,9 +301,12 @@ let SOURCES: Record<Kind, {
 // and the connections the app uses that they may call out through (its
 // space's, or their own), read on every call, so a grant taken back, or a
 // connection the space stops the app using, stops the next one.
-let grants = async (ctx: Ctx, a: NonNullable<Ctx['app']>) => {
+let grants = async (ctx: PoolCtx, a: NonNullable<Ctx['app']>) => {
   let [granted, used] = await Promise.all([
-    grantsOf(ctxOf(ctx.env).graph.read, { app: a.app.eid, person: ctx.person }),
+    ctx.person == null ? [] : grantsOf(ctxOf(ctx.env).graph.read, {
+      app: a.app.eid,
+      person: ctx.person,
+    }),
     usable(ctxOf(ctx.env), callerOf(ctx, a)),
   ])
   let lent = await requests(
@@ -293,11 +317,16 @@ let grants = async (ctx: Ctx, a: NonNullable<Ctx['app']>) => {
   return [...new Set([...granted, ...lent.map((c) => c.at)])]
 }
 
-// The commands of every source outside an app `said` names: one source, every
-// source of a kind (`mcp:`), or all of them. An app's code is listed only the
-// sources its person granted it, each asked alone.
-let outside = async (ctx: Ctx, said: string): Promise<Command[]> => {
-  let kind = addressed(said)?.kind
+let sourceAt = (ctx: PoolCtx, said: string) => {
+  let source = addressed(said)
+  if (source && source.kind != 'connection') personal(ctx)
+  return source
+}
+
+// List one source, every source of a kind (`mcp:`), or all of them. In an app,
+// this lists the person's grants and the connections the caller may use.
+let outside = async (ctx: PoolCtx, said: string): Promise<Command[]> => {
+  let kind = sourceAt(ctx, said)?.kind
   let one = kind && said.length > kind.length + 1
   let asked = ctx.app
     ? (await grants(ctx, ctx.app)).filter((at) =>
@@ -322,12 +351,12 @@ let outside = async (ctx: Ctx, said: string): Promise<Command[]> => {
  * the command list is a person's own and a model cannot have memorized it.
  */
 export let runCommand = async (
-  ctx: Ctx,
+  ctx: PoolCtx,
   said: string,
   name: string,
   args: Record<string, unknown>,
 ): Promise<Out> => {
-  let source = addressed(said)
+  let source = sourceAt(ctx, said)
   if (source) {
     if (ctx.app && !(await grants(ctx, ctx.app)).includes(said)) {
       throw refuse(
@@ -345,7 +374,8 @@ export let runCommand = async (
       'at names a source, mcp:, service: or connection:; leave it out for this app’s own commands',
     )
   }
-  let all = await reachable(ctx)
+  let actor = personal(ctx)
+  let all = await reachable(actor)
   let mine = picked(all, said)
   if (said && !mine.length) {
     throw refuse(
@@ -371,7 +401,7 @@ export let runCommand = async (
     )
   }
   if (!found.length) {
-    let there = await offered(ctx, mine)
+    let there = await offered(actor, mine)
     throw refuse(
       'missing',
       `no command ${name}${said ? ` in ${said}` : ''} — ${
@@ -382,7 +412,7 @@ export let runCommand = async (
     )
   }
   let { space, app, tool } = found[0]
-  let who = await whoIn(ctx, space)
+  let who = await whoIn(actor, space)
   return {
     ...await commandAt(
       ctx.env,
@@ -428,18 +458,19 @@ export type Command = {
  * which when it is called with neither named.
  */
 export let listCommands = async (
-  ctx: Ctx,
+  ctx: PoolCtx,
   said = '',
 ): Promise<Command[]> => {
   if (ctx.app || addressed(said)) return outside(ctx, said)
+  let actor = personal(ctx)
   let out = said ? [] : await outside(ctx, '')
   // Every app's declaration at once: one round trip for the reach, not one
   // per app (T-34986).
-  let apps = picked(await reachable(ctx), said)
+  let apps = picked(await reachable(actor), said)
   let tools = await Promise.all(
     apps.map(({ space, app }) => toolsOf(ctx.env, space, app)),
   )
-  let callers = await Promise.all(apps.map(({ space }) => whoIn(ctx, space)))
+  let callers = await Promise.all(apps.map(({ space }) => whoIn(actor, space)))
   for (let [i, { space, app }] of apps.entries()) {
     for (let [name, tool] of Object.entries(tools[i])) {
       let who = callers[i]

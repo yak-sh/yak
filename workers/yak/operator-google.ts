@@ -308,10 +308,12 @@ let readsMail = (mail: Bundle, gmail: Integration | undefined) => {
   return !!scopes?.some((s) => READS.includes(s))
 }
 
+type Sender = Pick<Ctx, 'dir'> & { person: string | null }
+
 // The tools one Google connection offers: its calendar's, or its mail's.
 let toolsOf = (
   env: Env,
-  ctx: Ctx,
+  ctx: Sender,
   space: Space,
   held: Bundle,
   i: Integration | undefined,
@@ -330,7 +332,7 @@ let toolsOf = (
  * Operator holds for it. */
 export let connectionTools = async (
   env: Env,
-  ctx: Ctx,
+  ctx: Sender,
   space: Space,
   held: Bundle,
 ): Promise<Tool[]> =>
@@ -511,7 +513,7 @@ export let mailedFor = (space: Space, name: string) =>
 
 let gmailSend = (
   env: Env,
-  ctx: Ctx,
+  ctx: Sender,
   space: Space,
   connection: Bundle,
 ): Tool => ({
@@ -548,7 +550,7 @@ let gmailSend = (
       throw refuse('arguments', 'Give the email addresses it goes to.')
     }
     if (!text) throw refuse('arguments', 'Say what the email says.')
-    let me = await ctx.dir.known(ctx.person)
+    let me = ctx.person ? await ctx.dir.known(ctx.person) : null
     let sent = await askGoogle(env, connection, `${GMAIL_API}/messages/send`, {
       method: 'POST',
       body: JSON.stringify({

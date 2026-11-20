@@ -200,7 +200,8 @@ import { MOVED } from '@yaks/sync'
 import { full } from './usage.ts'
 import { scheduleBy } from './used.ts'
 import { seen } from './views.ts'
-import { type Ctx, refuse } from './tool.ts'
+import { refuse } from './tool.ts'
+import type { PoolCtx } from './declared.ts'
 import { CallError } from '@yaks/tools/errors'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
@@ -1300,14 +1301,14 @@ let appDoor = async (
     return serviceRoute(req, env, dir, { space, app }, who, path)
   }
   // `at` names a source outside the app (an MCP server, a connection, an app
-  // service): the app reaches it as the person using it, only where they
-  // granted it or its space connected the app to it (declared.ts `grants`).
+  // service): the pool uses the person's grants and the connections the
+  // app's space opened to this caller (declared.ts `grants`).
   let sourced = async () => {
-    if (!who.person || who.service) {
+    if (who.service) {
       throw new CallError('access', 'Sign in to use what you connected')
     }
     let { listCommands, runCommand } = await import('./declared.ts')
-    let ctx: Ctx = {
+    let ctx: PoolCtx = {
       env,
       dir,
       person: who.person,

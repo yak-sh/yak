@@ -26,7 +26,7 @@
 // a write to the directory nobody waits on (@yaks/egress `defer`), and a link
 // at its monthly cap is refused, saying whose limit it is and where the person
 // calling connects a key of their own.
-import { namesOf, used, USES } from '@yaks/connections'
+import { namesOf, USES } from '@yaks/connections'
 import {
   type Caller,
   Capped,
@@ -34,12 +34,13 @@ import {
   type Host,
   Refused,
   sentinelsIn,
+  usable,
 } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
-import { callsOut, mode, reads } from '@yaks/member'
+import { mode, reads } from '@yaks/member'
 import { ctxOf } from './connections.ts'
 import { bound, type Env } from './env.ts'
-import type { Answer } from './apps.ts'
+import type { Answer, Asked } from './apps.ts'
 import { background, caught, defect } from './defects.ts'
 import { directory, directoryOf } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -169,6 +170,12 @@ export let fromApp = async (
 let OURS =
   /^(cookie|host|origin|referer|content-length|connection|x-real-ip|true-client-ip|(x-yak|cf|x-forwarded|sec)-)/i
 
+let callerOf = ({ app, who }: Asked): Caller => ({
+  app: app.eid,
+  level: who.role,
+  person: who.person,
+})
+
 // `./api/env`: the sentinel for each connected connection the app uses, by the
 // name its code reads it by (one for each field of several, `S3_REGION`),
 // where this visitor may call out through it: a shared one as its link
@@ -176,14 +183,14 @@ let OURS =
 // A direct link's key is for a worker's code and never a page's. Both doors
 // are the app's to those who may read it, as its store doors are: a private
 // app's link opened to anyone is open to anyone it lets in.
-export let envDoor: Answer = async ({ env, path, app, who, refuse }) => {
+export let envDoor: Answer = async (asked) => {
+  let { env, path, app, who, refuse } = asked
   if (path != '/env') return null
   if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
   let out: Record<string, string> = {}
-  for (let r of await used(ctxOf(env), app.eid, who.person)) {
+  for (let r of await usable(ctxOf(env), callerOf(asked))) {
     let u = (r.link[USES] ?? {}) as Comp
     if (u.direct || typeof u.binding != 'string') continue
-    if (!u.each && !callsOut(u.anyone == true, who.role)) continue
     let names = namesOf(u.binding, Object.keys(r.sentinels))
     for (let [f, name] of Object.entries(names)) out[name] = r.sentinels[f]
   }
@@ -192,9 +199,8 @@ export let envDoor: Answer = async ({ env, path, app, who, refuse }) => {
 
 // `./api/fetch?url=…`: the page's call, sent on to that address as it was
 // made, minus what it says about us.
-export let fetchDoor: Answer = async (
-  { env, req, path, app, who, json, refuse },
-) => {
+export let fetchDoor: Answer = async (asked) => {
+  let { env, req, path, app, who, json, refuse } = asked
   if (path != '/fetch') return null
   if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
   let to = new URL(req.url).searchParams.get('url') ?? ''
@@ -217,7 +223,7 @@ export let fetchDoor: Answer = async (
   }
   let res = await sent(
     env,
-    { app: app.eid, level: who.role, person: who.person },
+    callerOf(asked),
     new Request(to, { method: req.method, headers, body }),
   ).catch(() => json(502, 'unanswered', `${new URL(to).host} did not answer`))
   // A cookie from somebody else's service would be set on this app's origin.
