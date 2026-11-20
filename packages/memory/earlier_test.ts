@@ -116,6 +116,21 @@ test('a quote in agent prose is not a person-authored input', () => {
   )
 })
 
+test('a meaning that fails rejects the recall, and leaves no read unheard', async () => {
+  let failed = 0
+  // Reads answered a turn later, as a read worker's are.
+  let later = () => new Promise((done) => setTimeout(done, 0, rows))
+  let asked = earlier({ ...g, read: later, get: later } as unknown as Graph, {
+    person: 'person',
+    name: 'Ada',
+    words: 'immutable attachments',
+    before: '2026-02-01T00:00:00Z',
+    meaning: () => (failed++, Promise.reject(new Error('no model'))),
+  })
+  equal(await asked.then(() => '', (e: Error) => e.message), 'no model')
+  equal(failed, 3)
+})
+
 let lexicalReads = 0
 let semanticAnswer = await earlier({
   ...g,
