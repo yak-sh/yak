@@ -974,14 +974,26 @@ let requestAt = async (store: Store, session: string) => {
     at: String(comp(row, 'created')?.at ?? ''),
   }
 }
-// Whether a tool answered this session with words someone outside the space
-// wrote (`heard`) since its conversation's newest request: the person's own
-// words, which give the turn after them every tool again.
-let overheard = async (store: Store, session: string, since = '') => {
-  let [answer] = await store.g.read(
-    q`.entry.session=${session} .heard .order=-created.at .limit=1 .fields=created.at`,
-  )
-  return !!answer && String(comp(answer, 'created')?.at ?? '') > since
+// Whether words someone outside the space wrote (`heard`) came into this
+// session with or since the person's newest words in its conversation, which
+// give the turn after them every tool again: a tool's answer, or what was
+// said in a room before them (operator-channels.ts `led`), written with them.
+// Their words are any taken in from outside (`intake`) but the platform's own
+// (`system`), whatever door they came by.
+let overheard = async ({ g }: Store, session: string) => {
+  let [[answer], [words]] = await Promise.all([
+    g.read(
+      q`.entry.session=${session} .heard .order=-created.at .limit=1 .fields=created.at`,
+    ),
+    g.read(
+      q`.entry.session=${await topOf(
+        g,
+        session,
+      )} .intake !heard !system .order=-created.at .limit=1 .fields=created.at`,
+    ),
+  ])
+  let at = (b?: Bundle) => String(comp(b, 'created')?.at ?? '')
+  return !!answer && at(answer) >= at(words)
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
@@ -1900,14 +1912,12 @@ export let operating = (
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
     let work = await workingOf(store, session)
-    let newest = await requestAt(store, session)
-    let channel = work?.channel ?? String(newest?.request?.channel ?? '')
+    let channel = await channelAt(store, session, work)
     // Words nobody in the space wrote, whether they started the turn
-    // (operator-channels.ts `HEARSAY`) or a tool brought them since, leave it
+    // (operator-channels.ts `HEARSAY`) or came since, leave it
     // holding only what keeps the space's data with its person, whoever's
     // conversation it is in.
-    let heard = HEARSAY.has(channel) ||
-      await overheard(store, session, newest?.at)
+    let heard = HEARSAY.has(channel) || await overheard(store, session)
     let remote = !work?.signup && proven(channel) && !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))
@@ -1995,7 +2005,7 @@ export let operating = (
     if (heard) {
       let why = texted ? TEXTED : OUTSIDE
       let thread = member && channel == 'escalated'
-        ? await threadOf(store, newest?.request)
+        ? await threadOf(store, (await requestAt(store, session))?.request)
         : undefined
       let back = thread ? [onThread(thread)] : []
       return deferred([

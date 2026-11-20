@@ -328,7 +328,8 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
  * is kept first, so nothing a person sent is lost; then its words and how they
  * came (`BY`) are the next input of the person's
  * conversation (@yaks/session `take`), with the files they came with
- * attached to the item. Given again, they write nothing (`fresh` false).
+ * attached to the item, after what led up to them ({@link led}). Given
+ * again, they write nothing (`fresh` false).
  * Words that could not be taken in keep why on the item, and their channel
  * answers what the person reads: a refusal written for them, else
  * {@link TROUBLE}. The person is the door's to have checked.
@@ -355,8 +356,8 @@ export let hear = async (
   let { channel } = request
   try {
     let [about] = request.about ? await g.get([request.about]) : []
-    let framing = lead + (BY[channel]?.(request, id, about) ??
-      chatFraming(request, item))
+    let framing = BY[channel]?.(request, id, about) ??
+      chatFraming(request, item)
     let open = await operator.listening(
       { person: request.person, administrative: request.administrative },
       space,
@@ -382,7 +383,10 @@ export let hear = async (
     let { fresh } = await take(
       g,
       words,
-      await open.beside(words, { files, said: text }),
+      [
+        ...await open.beside(words, { files, said: text }),
+        ...lead ? [led(space, open.session, id, channel, lead)] : [],
+      ],
       { trusted: true },
     )
     open.told()
@@ -405,6 +409,30 @@ export let hear = async (
     return { fresh: true }
   }
 }
+
+/** What others said where words came, leading up to them (`lead`,
+ * operator-rooms.ts `leading`): an entry of its own just before the words,
+ * read as the room's and `heard`, never inside the person's words. It starts
+ * no turn (`notice`); the turn the words start holds only what keeps the
+ * space's data with its person (operator.ts `overheard`). */
+let led = (
+  space: Space,
+  session: string,
+  id: string,
+  channel: string,
+  lead: string,
+): Bundle => ({
+  entity: { eid: derivedEid('operator-lead|' + id) },
+  entry: {
+    session,
+    from: `others in the ${PLATFORMS.get(channel)?.title ?? channel} room`,
+  },
+  content: { body: lead },
+  channel: { name: channel },
+  notice: {},
+  heard: {},
+  $actor: { by: space.eid, via: session },
+})
 
 // How words heard on a chat platform are said before them: the platform, and
 // who wrote them (@yaks/chat `framing`).
@@ -430,7 +458,7 @@ let chatFraming = (request: Request, item: Bundle) => {
  * taken in ({@link hear}), naming the connection whose bot heard it, which
  * answers it in the same room, after what was said in the room since its
  * last answer there, where the room is not one it hears in full
- * (operator-rooms.ts `leading`). While its turn works on the answer, the room
+ * (operator-rooms.ts `leading`, {@link led}). While its turn works on the answer, the room
  * is shown so, where the platform's chatter can (@yaks/chat `showing`).
  */
 export let chatHeard = async (
