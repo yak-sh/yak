@@ -192,6 +192,7 @@ let detail = async (open: string) => {
           name: 'Linear',
           url: 'https://mcp.linear.app/mcp',
           enabled: true,
+          everyone: false,
           trashed: false,
           status: 'needed',
           connection: 'c-1',

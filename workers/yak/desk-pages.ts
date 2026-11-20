@@ -1549,6 +1549,22 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
         ], { class: 'Card_Form' }),
       }),
       h(Card.Sub, null, s.machine ? `${s.url} on your machine` : s.url),
+      s.machine ? null : h(
+        Card.Sub,
+        null,
+        s.everyone
+          ? "This space's Operator uses it with everyone it works with, through your sign-in or key. "
+          : "This space's Operator uses it only with you. ",
+        form(
+          s.id,
+          press(
+            s.everyone ? 'mcp-mine' : 'mcp-everyone',
+            s.everyone ? 'Only me' : 'Everyone',
+            false,
+          ),
+          { class: 'Card_Form' },
+        ),
+      ),
       s.header
         ? h(Card.Sub, null, `Its key goes in the ${s.header} header.`)
         : null,
@@ -1571,7 +1587,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
     live.length ? h(Cards, null, live.map(card)) : h(
       Card.Sub,
       null,
-      "An MCP server you add here offers its tools to this space's Operator when it works with you, and to the apps you allow.",
+      "An MCP server you add here offers its tools to this space's Operator, with you alone or with everyone it works with, and to the apps you allow.",
     ),
     h(
       More,
@@ -1599,6 +1615,30 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
               required: true,
             }),
             'Its Streamable HTTP endpoint, such as https://example.com/mcp.',
+          ),
+          labeled(
+            'mcp-for-everyone',
+            "Who this space's Operator uses it with",
+            [
+              [
+                'everyone',
+                'Everyone it works with, through your sign-in or key',
+              ],
+              ['me', 'Only me'],
+            ].map(([value, label]) =>
+              h(
+                Check,
+                null,
+                h(Check.Input, {
+                  type: 'radio',
+                  name: 'for',
+                  id: `mcp-for-${value}`,
+                  value,
+                }),
+                label,
+              )
+            ),
+            'Left unchosen: only you for a server you sign in to, everyone for one that takes a key.',
           ),
           labeled(
             'mcp-header',

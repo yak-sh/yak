@@ -489,3 +489,40 @@ test('a server removed goes to the trash with its tools, and comes back with its
   await remote.configure({ name: 'Keys', url: 'https://other.test/mcp' })
   await assertRejects(() => remote.restore(server), Error, 'rename one')
 })
+
+test("a server connected for everyone in a space reaches others there with its owner's key, and one for its owner alone reaches nobody else", async () => {
+  let { host, person, other } = await setup()
+  let f = locked('k-1', 'X-API-Key')
+  let space = mint(), elsewhere = mint()
+  let as = (who: string, at = space) =>
+    remoteCommands(who, { ...host, space: at }, { fetch: f.fetcher })
+  let shared = await as(person).configure({
+    name: 'Team',
+    url: 'https://team.test/mcp',
+    header: 'X-API-Key',
+  })
+  await as(person).give(shared.server, 'k-1')
+  let mine = await as(person).configure({
+    name: 'Mine',
+    url: 'https://mine.test/mcp',
+    everyone: false,
+  })
+  let names = async (who: string, at = space) =>
+    (await as(who, at).list()).map((t) => t.namespace).sort()
+  assertEquals(await names(person), ['Mine', 'Team'])
+  assertEquals(await names(other), ['Team'])
+  assertEquals(await names(other, elsewhere), [])
+  let out = await as(other).call(`mcp:${shared.server}`, 'publish_mockup', {
+    html: 'x',
+  })
+  assertStringIncludes(out.text, 'https://example.test/mockup/1')
+  await assertRejects(
+    () => as(other).call(`mcp:${mine.server}`, 'publish_mockup', {}),
+    Error,
+    'not connected for you',
+  )
+  // Only the person who connected it changes it.
+  await assertRejects(() => as(other).remove(shared.server), Error)
+  await as(person).set(shared.server, { everyone: false })
+  assertEquals(await names(other), [])
+})

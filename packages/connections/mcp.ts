@@ -2,9 +2,11 @@
 // OAuth and invocation remain in the existing connections and MCP packages.
 //
 // A server is connected in a space (`mcp_server.space`), never for the whole
-// account: the space's Operator and connections page reach it, for the person
-// who connected it. One kept from before servers had a space reaches its
-// person in every space, and at their own connector, which names no space.
+// account, either for the person who connected it there or for everyone the
+// space's Operator works with (`mcp_server.everyone`), whose calls then go
+// with the credential of the person who connected it. One kept from before
+// servers had a space reaches its person in every space, and at their own
+// connector, which names no space.
 //
 // A server is reached one of two ways. One on the public internet is an HTTPS
 // address its person signs in to. One on a machine (`mcp_server.machine`, the
@@ -80,6 +82,10 @@ export type Settings = {
   lists?: Offered[]
   // Where an id it names opens, `{id}` where the id goes; null opens none.
   mentions?: string | null
+  // For everyone the space's Operator works with, rather than the person
+  // alone. Unsaid, a new server is everyone's when it takes a key in a header,
+  // a token rather than a person's sign-in, and an existing one keeps its own.
+  everyone?: boolean
 }
 /** One server a person keeps, as their connections page shows it. `status`
  * is its connection's (`connection`), `open` where it asked for no
@@ -93,6 +99,8 @@ export type Shown = {
   allow?: string[]
   header?: string
   trashed: boolean
+  /** whether it serves everyone the space's Operator works with */
+  everyone: boolean
   status: 'open' | 'machine' | 'needed' | 'connected' | 'broken'
   connection?: string
   /** whether its credential is a key the person gives, rather than a
@@ -207,8 +215,9 @@ export type Choice = {
   allowed: boolean
 }
 
-/** Whether the server `row` is reached in `space`: one connected there, or
- * one kept without a space, which reaches its person everywhere. */
+/** Whether the person's own server `row` is reached in `space`: one
+ * connected there, or one kept without a space, which reaches its person
+ * everywhere. */
 export let reachedIn = (row: Bundle, space?: string): boolean => {
   let at = comp(row, 'mcp_server').space
   return !at || at == space
@@ -218,7 +227,7 @@ export let reachedIn = (row: Bundle, space?: string): boolean => {
 export type Remote = {
   set: (
     id: string,
-    patch: { enabled?: boolean; allow?: string[] | null },
+    patch: { enabled?: boolean; allow?: string[] | null; everyone?: boolean },
   ) => Promise<void>
   tools: (id: string) => Promise<Choice[]>
   /** Each server the person keeps, from `kept` where its rows were read
@@ -256,6 +265,26 @@ export let remoteCommands = (
   let kept = async () => (await mine()).filter(here)
   let rows = async () => (await kept()).filter((r) => !r.trashed)
   let live = async () => (await mine()).filter((r) => !r.trashed)
+  // Who connected each server reached, whose credential its calls carry.
+  let owners = new Map<string, string>()
+  let whose = (s: GraphServer) => owners.get(s.id) ?? person
+  // Those another person connected in the space for everyone in it.
+  let shared = async () =>
+    host.space && person && !host.every
+      ? (await host.graph.read(
+        line`.mcp_server.space=${host.space}&.mcp_server.everyone=true&*`,
+      )).filter((r) =>
+        !r.trashed && comp(r, 'mcp_server').owner != person &&
+        !comp(r, 'mcp_server').machine
+      )
+      : []
+  let reachable = async () => {
+    let [own, theirs] = await Promise.all([rows(), shared()])
+    for (let r of [...own, ...theirs]) {
+      owners.set(r.entity.eid, String(comp(r, 'mcp_server').owner))
+    }
+    return [...own, ...theirs]
+  }
   let reached = async (s: GraphServer): Promise<Reached | null> => {
     if (!s.server.machine) return s
     let fetch = await host.machine?.(s.server.machine)
@@ -263,7 +292,7 @@ export let remoteCommands = (
   }
   let servers = async () => {
     let all = (await Promise.all(
-      (await rows()).map(serverOf).filter((s) => s != null).map(reached),
+      (await reachable()).map(serverOf).filter((s) => s != null).map(reached),
     )).filter((s) => s != null)
     checkNamespaces(all.map((s) => s.server))
     return all
@@ -283,7 +312,7 @@ export let remoteCommands = (
       entity: { eid: integrationEid(integration(s.id)) },
       integration: {
         name: integration(s.id),
-        owner: person,
+        owner: whose(s),
         title: s.label,
         resource: s.server.url,
         hosts: [new URL(s.server.url).hostname],
@@ -300,12 +329,12 @@ export let remoteCommands = (
   // hold none.
   let holding = async (s: GraphServer) => {
     let name = integration(s.id)
-    let b = await pick(host.graph.read, person, name)
+    let b = await pick(host.graph.read, whose(s), name)
     if (b) return b
     await host.graph.apply(
-      await need(host.graph.read, { owner: person, integration: name }),
+      await need(host.graph.read, { owner: whose(s), integration: name }),
     )
-    return await pick(host.graph.read, person, name)
+    return await pick(host.graph.read, whose(s), name)
   }
   let authorization = async (
     s: GraphServer,
@@ -314,7 +343,7 @@ export let remoteCommands = (
     await owned(s.id)
     let name = integration(s.id)
     let i = await known(host.graph.read, name)
-    if (i && (i.owner != person || i.resource != s.server.url)) {
+    if (i && (i.owner != whose(s) || i.resource != s.server.url)) {
       throw refuse(
         'access',
         'This MCP credential belongs to another connection.',
@@ -338,7 +367,7 @@ export let remoteCommands = (
         integration: {
           ...found.integration,
           name,
-          owner: person,
+          owner: whose(s),
           title: s.label,
           client_id: client,
           auth: 'post',
@@ -378,10 +407,17 @@ export let remoteCommands = (
       : await host.signIn()
     let link = `${page}#${encodeURIComponent(name)}`
     let key = i ? keyed(i) : !found
+    let them = whose(s) != person
     return {
       text: `${
-        key ? `${s.label} takes a key: give it` : `Sign in to ${s.label}`
-      } at ${link}, then ask again. No call was retried.`,
+        them
+          ? `${s.label} needs ${
+            key ? 'its key' : 'a sign-in'
+          } from whoever connected it in this space, at`
+          : key
+          ? `${s.label} takes a key: give it at`
+          : `Sign in to ${s.label} at`
+      } ${link}, then ask again. No call was retried.`,
       value: {
         authorization: {
           server: s.id,
@@ -411,13 +447,13 @@ export let remoteCommands = (
             )
           }
           let i = await known(host.graph.read, integration(s.id))
-          if (i && (i.owner != person || i.resource != s.server.url)) {
+          if (i && (i.owner != whose(s) || i.resource != s.server.url)) {
             throw refuse(
               'access',
               'This MCP credential belongs to another connection.',
             )
           }
-          let held = await pick(host.graph.read, person, integration(s.id))
+          let held = await pick(host.graph.read, whose(s), integration(s.id))
           if (!held || comp(held, 'connection').status != 'connected') {
             return null
           }
@@ -597,8 +633,14 @@ export let remoteCommands = (
         'A server on a machine is reached through its tunnel and takes no key.',
       )
     }
+    if (machine && settings.everyone) {
+      throw refuse(
+        'arguments',
+        'A server on a machine is its owner’s alone, never everyone’s in a space.',
+      )
+    }
     let url = machine ? settings.url : https(settings.url)
-    let all = await rows()
+    let all = [...await rows(), ...await shared()]
     // The same server again, one in the trash too, which this brings back;
     // one kept without a space moves to this one.
     let same = (await kept()).find((r) => {
@@ -614,6 +656,10 @@ export let remoteCommands = (
         url,
         ...machine ? { machine } : {},
         enabled: settings.enabled ?? true,
+        everyone: !!host.space && (settings.everyone ??
+          (same
+            ? comp(same, 'mcp_server').everyone === true
+            : !!settings.header)),
         ...settings.allow ? { allow: JSON.stringify(settings.allow) } : {},
         ...settings.client_id ? { client_id: settings.client_id } : {},
         ...settings.header !== undefined
@@ -727,16 +773,20 @@ export let remoteCommands = (
    * offered: `allow` null offers every one. */
   let set = async (
     id: string,
-    patch: { enabled?: boolean; allow?: string[] | null },
+    patch: { enabled?: boolean; allow?: string[] | null; everyone?: boolean },
   ) => {
     let row = (await live()).find((r) => r.entity.eid == id)
     if (!row) {
       throw refuse('missing', 'This MCP server is not connected for you.')
     }
+    let c = comp(row, 'mcp_server')
     await host.graph.apply([{
       entity: row.entity,
       mcp_server: {
         ...patch.enabled != null ? { enabled: patch.enabled } : {},
+        ...patch.everyone != null
+          ? { everyone: patch.everyone && !c.machine && !!c.space }
+          : {},
         ...patch.allow !== undefined
           ? { allow: patch.allow && JSON.stringify(patch.allow) }
           : {},
@@ -773,6 +823,7 @@ export let remoteCommands = (
             url: String(c.url),
             ...c.machine ? { machine: String(c.machine) } : {},
             enabled: c.enabled !== false,
+            everyone: c.everyone === true,
             ...allow ? { allow } : {},
             ...c.header ? { header: String(c.header) } : {},
             trashed: !!row.trashed,
@@ -813,8 +864,8 @@ let addedAs = (name: string, one: Shown | undefined) =>
     : `${name} is connected.`
 
 /** What a form on a person's connections page does to their MCP servers,
- * named by `do` (`mcp-add`, `mcp-key`, `mcp-tools`, `mcp-on`, `mcp-off`,
- * `mcp-remove`, `mcp-restore`), with the server it is about in `server`. It
+ * named by `do` (`mcp-add`, `mcp-key`, `mcp-tools`, `mcp-everyone`,
+ * `mcp-mine`, `mcp-on`, `mcp-off`, `mcp-remove`, `mcp-restore`), with the server it is about in `server`. It
  * answers what the page says, and null for a form about something else. */
 export let acted = async (
   remote: Remote,
@@ -824,10 +875,16 @@ export let acted = async (
 ): Promise<string | null> => {
   let id = field('server')
   if (act == 'mcp-add') {
+    // Unchosen, it is everyone's when it takes a key, a token rather than a
+    // person's sign-in, and the person's alone otherwise.
+    let chosen = field('for')
     let made = await remote.configure({
       name: field('name'),
       url: field('url'),
       ...field('header') ? { header: field('header') } : {},
+      everyone: chosen
+        ? chosen == 'everyone'
+        : !!field('key') || !!field('header'),
     })
     if (field('key')) await remote.give(made.server, field('key'))
     let [one] = await remote.shown(
@@ -849,6 +906,12 @@ export let acted = async (
     return chosen.length == every.length
       ? 'Every tool it offers is offered to your agents and apps.'
       : `${chosen.length} of its ${every.length} tools are offered.`
+  }
+  if (act == 'mcp-everyone' || act == 'mcp-mine') {
+    await remote.set(id, { everyone: act == 'mcp-everyone' })
+    return act == 'mcp-everyone'
+      ? 'The space’s Operator uses it with everyone it works with now.'
+      : 'The space’s Operator uses it only with you now.'
   }
   if (act == 'mcp-on' || act == 'mcp-off') {
     await remote.set(id, { enabled: act == 'mcp-on' })

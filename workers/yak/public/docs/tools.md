@@ -168,10 +168,12 @@ Every tool outside an app is in one pool, each source named by an address:
 - `mcp:<server>`: an MCP server the person connected in a space, with the tools
   they chose to offer. They add it on that space's connections page, or give its
   address to the space's Operator, which connects it and sends them the link to
-  sign in. It is theirs in that space alone: its Operator uses it only in turns
-  with them, and an app only where they allowed it. A server connected before
-  servers had a space reaches its person in every space and at their own
-  connector.
+  sign in. Whoever connects it chooses who the space's Operator uses it with:
+  only them, or everyone it works with, through their sign-in or key, which only
+  an owner of the space chooses. Left unchosen, a server they sign in to is
+  theirs alone and one that takes a key is everyone's. An app calls it only
+  where the person using the app allowed it. A server connected before servers
+  had a space reaches its person in every space and at their own connector.
 - `connection:<connection>`: a connection, whether its key was pasted, it signs
   in through a built-in integration or through Nango. Each offers `request`,
   which sends an HTTPS request to the hosts its integration names with the

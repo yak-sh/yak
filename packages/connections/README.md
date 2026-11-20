@@ -274,17 +274,19 @@ its vault, and the redirect):
 
 `./mcp` is a person's remote MCP servers as commands:
 `remoteCommands(person, host)` lists and calls the tools of each
-`mcp_server{owner, space, name, url, machine, enabled, allow, header}` the
-person keeps in `host.space` (@yaks/mcp-client), each addressed
+`mcp_server{owner, space, everyone, name, url, machine, enabled, allow, header}`
+the person keeps in `host.space` (@yaks/mcp-client), each addressed
 `mcp:<server eid>` with its exact remote name. A server is connected in a space
-(`reachedIn`); one kept without a space reaches its person in every space and
-where the host names none, and `host.every` reaches all of them, for an app's
-code, which calls only what the person granted it. A server's credential is the
-person's connection to the integration `mcp:<server eid>`: a sign-in its OAuth
-metadata names, discovered when the server first refuses a call, or a key where
-it names none (`give`), sent as `Authorization: Bearer` or in the header
-`mcp_server.header` names. Every call rereads the definition and the credential,
-so changing either stops later calls.
+(`reachedIn`), for its owner alone or, with `everyone`, for whoever the host
+asks for there, each call carrying the owner's credential; one kept without a
+space reaches its person in every space and where the host names none, and
+`host.every` reaches all of them, for an app's code, which calls only what the
+person granted it. A server's credential is the person's connection to the
+integration `mcp:<server eid>`: a sign-in its OAuth metadata names, discovered
+when the server first refuses a call, or a key where it names none (`give`),
+sent as `Authorization: Bearer` or in the header `mcp_server.header` names.
+Every call rereads the definition and the credential, so changing either stops
+later calls.
 
 `configure` adds or changes a server, `set` turns it off or says which tools are
 offered (`allow`), `remove` puts it in the trash (`trashed{}`, the host's mark)

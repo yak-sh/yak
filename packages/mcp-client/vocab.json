@@ -18,6 +18,10 @@
           "death": "cascade",
           "description": "The space this server is connected in: that space's Operator and connections page reach it, for its owner. Absent on a server connected before servers had a space, which reaches its owner in every space and at their own connector."
         },
+        "everyone": {
+          "type": "boolean",
+          "description": "True serves everyone its space's Operator works with, each call carrying the credential of the person who connected it; absent or false serves that person alone."
+        },
         "name": {
           "type": "string",
           "description": "Display name; normalized into a readable local tool namespace."

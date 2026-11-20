@@ -332,6 +332,12 @@ export let mcpConnect: Row = {
     type: 'object',
     properties: {
       space: SPACE,
+      for: {
+        type: 'string',
+        enum: ['everyone', 'me'],
+        description:
+          "Who the space's Operator uses it with: everyone it works with, through your sign-in or key, which only a space's owner chooses; or me, you alone. Ask the person when they have not said. Left out, a new server is everyone's when it takes a key in a header and yours alone otherwise, and an existing one keeps its choice.",
+      },
       name: str('A short, distinct name for this MCP server.'),
       url: str(
         'The HTTPS Streamable HTTP MCP endpoint; with machine, its path on that machine, such as /mcp.',
@@ -396,7 +402,16 @@ export let mcpConnect: Row = {
     }
     // A server on a machine is connected in the space whose tunnel goes
     // there; any other, in the space the call names or is in.
-    let { space } = on ? { space: on } : await inSpace(ctx, args, true)
+    let { space, who } = on
+      ? { space: on, who: null }
+      : await inSpace(ctx, args, true)
+    let owns = on != null || who?.role == 'owner'
+    if (args.for == 'everyone' && !owns) {
+      throw refuse(
+        'access',
+        `Only an owner of ${space.slug} connects a server for everyone in it; connect it for: 'me'.`,
+      )
+    }
     // A server on a machine is there for the space's Operator, and the
     // machine may open it to no other caller: its tools are discovered as
     // that Operator sees them.
@@ -410,6 +425,11 @@ export let mcpConnect: Row = {
       ...typeof args.client_id == 'string' ? { client_id: args.client_id } : {},
       ...typeof args.header == 'string' ? { header: args.header } : {},
       ...typeof args.enabled == 'boolean' ? { enabled: args.enabled } : {},
+      ...args.for == 'everyone' || args.for == 'me'
+        ? { everyone: args.for == 'everyone' }
+        : owns
+        ? {}
+        : { everyone: false },
       ...Array.isArray(args.allow) ? { allow: args.allow.map(String) } : {},
       ...offered(args.lists),
       ...typeof args.mentions == 'string'
