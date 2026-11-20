@@ -7,9 +7,11 @@
   "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
   "token": "https://oauth2.googleapis.com/token",
   "client": "google",
+  "broker": {
+    "name": "nango",
+    "integration": "google-drive"
+  },
   "scopes": [
-    "openid",
-    "email",
     "https://www.googleapis.com/auth/drive"
   ],
   "params": {
@@ -23,6 +25,5 @@
     "base": "https://www.googleapis.com/drive/v3",
     "docs": "https://developers.google.com/workspace/drive/api/reference/rest/v3"
   },
-  "testing": true,
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

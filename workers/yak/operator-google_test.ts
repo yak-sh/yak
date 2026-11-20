@@ -26,8 +26,9 @@ import {
 
 // A person connects their Google Calendar and Gmail from their connections
 // page, and their Operator reads their calendar, adds to it and sends mail
-// from their address in a conversation (T-138751). Gmail is signed in through
-// Nango (D-151626), and its token still goes straight to Google. Google and
+// from their address in a conversation (T-138751). Calendar and Gmail are
+// signed in through Nango (D-151626), and their tokens still go straight to
+// Google. Google and
 // Nango are faked at the fetch they are called through.
 let SECRET = 'operator-google'
 let vault = counting()
@@ -69,32 +70,41 @@ let real = globalThis.fetch
 let id_token = `e30.${
   btoa(JSON.stringify({ email: 'jeff@example.com' })).replace(/=+$/, '')
 }.sig`
-// Nango: the sign-in it was asked for, which the person finished there.
-let signing = ''
+// Nango: the sign-ins it was asked for, by integration, which the person
+// finished there. Calendar's token is A1, Gmail's G1.
+let signing = new Map<string, string>()
 let nango = async (r: Request, url: URL) => {
   if (r.method == 'POST') {
-    signing = (await r.json()).tags.end_user_id
+    let asked = await r.json()
+    signing.set(asked.allowed_integrations[0], asked.tags.end_user_id)
     return Response.json({
       data: { connect_link: 'https://connect.nango.dev/?session_token=s' },
     })
   }
   if (url.pathname == '/connections') {
+    let integration = url.searchParams.get('integrationId')!
+    let eid = signing.get(integration)
     return Response.json({
-      connections: signing
+      connections: eid
         ? [{
-          connection_id: 'n1',
-          provider_config_key: 'google-mail',
-          tags: { end_user_id: signing },
+          connection_id: `n-${integration}`,
+          provider_config_key: integration,
+          tags: { end_user_id: eid },
         }]
         : [],
     })
   }
+  let mail = url.searchParams.get('provider_config_key') == 'google-mail'
   return Response.json({
     connection_config: { emailAddress: 'jeff@example.com' },
     credentials: {
-      access_token: 'G1',
+      access_token: mail ? 'G1' : 'A1',
       expires_at: new Date(Date.now() + 3_600_000).toISOString(),
-      raw: { scope: `${READS[0]} openid email` },
+      raw: {
+        scope: mail
+          ? `${READS[0]} openid email`
+          : 'https://www.googleapis.com/auth/calendar',
+      },
     },
   })
 }
@@ -258,7 +268,7 @@ test('before they connect, the Operator is told where to, and holds no Google to
   let [first] = before
   assertStringIncludes(
     first.instructions!,
-    '- Google Calendar: not connected. They connect it at https://yaks.app/manage/jeff/connections?enable=google-calendar#google-calendar',
+    '- Google Calendar: not connected. They connect it at https://yaks.app/manage/jeff/connections#google-calendar',
   )
   assertStringIncludes(first.instructions!, '- Gmail: not connected.')
   assert(!names(first).some((n) => /^(calendar|gmail)_/.test(n)))
@@ -267,7 +277,7 @@ test('before they connect, the Operator is told where to, and holds no Google to
 
 test('connected from the page, each names its account, and the Operator uses both in a conversation', async () => {
   assertEquals(back.map((r) => r!.headers.get('location')), [
-    'https://yaks.app/manage/jeff/connections?enable=google-calendar&connected=1',
+    'https://connect.nango.dev/?session_token=s',
     'https://connect.nango.dev/?session_token=s',
   ])
   let fork = requests.find((r) =>

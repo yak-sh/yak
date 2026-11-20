@@ -556,6 +556,8 @@ test('the integration directory: every built one but those in testing, and each 
     'Canva',
     'ESV API',
     'Gmail',
+    'Google Calendar',
+    'Google Drive',
     'OpenAI',
     'OpenRouter',
     'texts',

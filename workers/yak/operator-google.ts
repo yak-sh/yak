@@ -11,9 +11,10 @@
 // Operator on every ask (`googleTold`), so it offers to connect one when a
 // request needs it. Reading mail is offered only once the connection was
 // granted a scope that reads it (`READS`), or, for one that does not say, its
-// integration asks for one. Gmail is brokered by Nango (D-151626), whose
-// verified Google app grants reading; a connection made directly keeps
-// working as it was made.
+// integration asks for one. Gmail, Calendar and Drive are brokered by Nango
+// (D-151626, M-20), whose verified Google apps grant the whole mailbox,
+// calendar and drive; a connection made directly keeps working as it was
+// made.
 import { toBase64, toBase64url } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import {

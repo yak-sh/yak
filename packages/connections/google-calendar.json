@@ -7,9 +7,11 @@
   "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
   "token": "https://oauth2.googleapis.com/token",
   "client": "google",
+  "broker": {
+    "name": "nango",
+    "integration": "google-calendar"
+  },
   "scopes": [
-    "openid",
-    "email",
     "https://www.googleapis.com/auth/calendar"
   ],
   "params": {
@@ -26,6 +28,5 @@
       "POST /freeBusy"
     ]
   },
-  "testing": true,
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

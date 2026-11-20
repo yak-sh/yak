@@ -51,7 +51,7 @@ let here: VocabDoc = {
   },
 }
 
-// The test's own built integrations, beside the package's (google-calendar).
+// The test's own built integrations, beside the package's (google-search-console).
 let SEEDS: Integration[] = [
   {
     name: 'calendar',
@@ -420,11 +420,11 @@ test('a refreshed token the service refuses too is its answer', async () => {
 })
 
 test(
-  'Google Calendar as shipped: a person signs in, and the app lists their calendars through the egress',
+  'Google Search Console as shipped: a person signs in directly, and the app lists their sites through the egress',
   async () => {
     let signing = { ...c, redirect: 'https://yaks.app/connections/callback' }
-    let gcal = await needs('google-calendar')
-    let { url, attempt } = await begin(signing, gcal)
+    let gsc = await needs('google-search-console')
+    let { url, attempt } = await begin(signing, gsc)
     let asked = new URL(url)
     assertEquals(
       [
@@ -442,7 +442,9 @@ test(
         'https://accounts.google.com/o/oauth2/v2/auth',
         'yaks-google',
         'https://yaks.app/connections/callback',
-        seeds().find((i) => i.name == 'google-calendar')!.scopes!.join(' '),
+        seeds().find((i) => i.name == 'google-search-console')!.scopes!.join(
+          ' ',
+        ),
         'offline',
         'consent',
         'S256',
@@ -453,11 +455,11 @@ test(
       [200, { email: 'ann@example.com' }],
       [200, { items: [] }],
     )
-    await connect(signing, gcal, {
+    await connect(signing, gsc, {
       attempt: attempt!,
       callback: `${signing.redirect}?code=C&state=${attempt!.state}`,
     })
-    let connected = (await resolve(c, 'app', 'google-calendar'))!
+    let connected = (await resolve(c, 'app', 'google-search-console'))!
     assertEquals(
       (connected.connection.connection as Comp).account,
       'ann@example.com',
@@ -470,9 +472,8 @@ test(
         new Request(at, { headers: { authorization: `Bearer ${sentinel}` } }),
       )
     assertEquals(
-      (await call(
-        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-      )).status,
+      (await call('https://searchconsole.googleapis.com/webmasters/v3/sites'))
+        .status,
       200,
     )
     assertEquals(seen.map((r) => [r.url, r.headers.get('authorization')]), [
@@ -485,7 +486,7 @@ test(
         'Bearer G1',
       ],
       [
-        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+        'https://searchconsole.googleapis.com/webmasters/v3/sites',
         'Bearer G1',
       ],
     ])

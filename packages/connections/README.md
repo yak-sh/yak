@@ -105,43 +105,41 @@ sent to `voip.ms` alone. A voip.ms key kept before it named fields, the two
 joined by a colon, is read as them the first time it is used and kept as them.
 `openrouter` is built: its sign-in needs no registered client, and its exchange
 answers an API key (`answers: 'key'`, @yaks/oauth), kept as the connection's
-grant. `google-calendar` is built: it asks for `calendar`, every calendar read
-and written, unless an app needs narrower, asks Google for offline access so the
-grant can be refreshed, and sends its token to `www.googleapis.com` alone. A
-connection made earlier keeps the `calendar.events` and
-`calendar.calendarlist.readonly` it was granted until it is connected again. It
-is `testing: true` while Google's app is in testing mode, where only the people
-Google lists may sign in, so yaks.app offers it only on a connections page
-opened with `?enable=google-calendar`. `gmail` is brokered by Nango's
-CASA-verified Google app (`broker: {name: 'nango', integration: 'google-mail'}`,
-D-439), whose grant is the whole mailbox (`https://mail.google.com/`, the fixed
-scope of Nango's app), and it sends its token to `gmail.googleapis.com` alone.
-It stands in for Nango's own listing of Gmail (`standIn`): the catalog, the
-integration directory and a connections page opened at `#google-mail` all offer
-`gmail` instead. A gmail connection made earlier, directly as the `google`
-client asking for `gmail.send`, keeps signing in that way.
-`google-search-console` is built on the same `google` client: it asks for
-`webmasters`, which reads a site's search numbers and submits its sitemaps, asks
-for offline access, sends its token to `searchconsole.googleapis.com` alone, and
-is `testing: true` as google-calendar is. `google-drive` is built on the same
-client: it asks for `drive`, every file read, made and shared, sends its token
-to `www.googleapis.com` alone, and is `testing: true`; `drive` is a restricted
-scope, so Google lets only the people it lists grant it until the app passes
-Google's security assessment. Each Google API an integration calls is enabled
-once in the Cloud project of the `google` client (project 538693127965); until
-then Google refuses every call with "API has not been used in project … or it is
-disabled". `openai` is built for the native harness's ChatGPT sign-in; it uses a
-public OAuth client, asks for a refreshable grant, and sends its bearer to
-`chatgpt.com`.
+grant. `gmail` is brokered by Nango's CASA-verified Google app
+(`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant is
+the whole mailbox (`https://mail.google.com/`, the fixed scope of Nango's app),
+and it sends its token to `gmail.googleapis.com` alone. It stands in for Nango's
+own listing of Gmail (`standIn`): the catalog, the integration directory and a
+connections page opened at `#google-mail` all offer `gmail` instead. A gmail
+connection made earlier, directly as the `google` client asking for
+`gmail.send`, keeps signing in that way. `google-calendar` and `google-drive`
+are brokered by Nango's managed Google apps the same way (M-20): Calendar's
+fixed grant is `calendar`, every calendar read and written, and Drive's is
+`drive`, every file read, made and shared. Each sends its token to
+`www.googleapis.com` alone. A calendar connection made earlier, directly as the
+`google` client asking for `calendar.events` and
+`calendar.calendarlist.readonly`, keeps signing in that way until it is
+connected again. `google-search-console` is built on the `google` client: it
+asks for `webmasters`, which reads a site's search numbers and submits its
+sitemaps, asks for offline access, sends its token to
+`searchconsole.googleapis.com` alone, and is `testing: true` while Google's app
+is in testing mode, where only the people Google lists may sign in, so yaks.app
+offers it only on a connections page opened with
+`?enable=google-search-console`. Each Google API an integration calls through
+the `google` client is enabled once in its Cloud project (project 538693127965);
+until then Google refuses every call with "API has not been used in project … or
+it is disabled". `openai` is built for the native harness's ChatGPT sign-in; it
+uses a public OAuth client, asks for a refreshable grant, and sends its bearer
+to `chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
-integration that names it: google-calendar, google-drive, google-search-console
-and gmail's direct connections name `google`. The client is a secret, kept as
-`oauth_client <name>`: `registration(name, {id, secret, bot?})` is the bundle
-that seals it, so the graph holds its handle and the vault its id and secret,
-and `clientOf` reads it back at sign-in. `bot` is the token of the bot the
-client's application speaks as on a chat platform (Discord's), kept with
+integration that names it: google-search-console, and the direct connections
+made earlier through google-calendar and gmail, name `google`. The client is a
+secret, kept as `oauth_client <name>`: `registration(name, {id, secret, bot?})`
+is the bundle that seals it, so the graph holds its handle and the vault its id
+and secret, and `clientOf` reads it back at sign-in. `bot` is the token of the
+bot the client's application speaks as on a chat platform (Discord's), kept with
 `yak admin client --bot`. `botOf(ctx, connection)` answers the bot that speaks
 for a chat connection: that client's bot for one that added the platform's own
 bot to a server, or the pasted key of a bot the space brought (`discord-bot`). A

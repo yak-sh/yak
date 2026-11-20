@@ -156,8 +156,10 @@ test(
   async () => {
     let s = await setup()
     let offered = async (enable?: string[]) =>
-      (await s.shown(enable)).built.filter((b) => b.name == 'google-calendar')
-    let google = ['google-calendar']
+      (await s.shown(enable)).built.filter((b) =>
+        b.name == 'google-search-console'
+      )
+    let google = ['google-search-console']
     assertEquals(await offered(google), [])
     await s.at.apply(
       [registration('google', { id: 'yaks', secret: 's' })],
@@ -166,11 +168,11 @@ test(
     // Still in Google's testing mode: offered only on `?enable=`.
     assertEquals(await offered(), [])
     let calendars = await offered(google)
-    assertEquals(calendars.map((b) => b.name), ['google-calendar'])
+    assertEquals(calendars.map((b) => b.name), ['google-search-console'])
     let [calendar] = calendars
     assertEquals(
       [calendar.face.title, calendar.face.site],
-      ['Google Calendar', 'https://calendar.google.com'],
+      ['Google Search Console', 'https://search.google.com/search-console'],
     )
   },
 )
@@ -184,14 +186,14 @@ test(
       KERNEL,
     )
     let went = await s.post(
-      { do: 'add', integration: 'google-calendar' },
-      '?space=ada&enable=google-calendar',
+      { do: 'add', integration: 'google-search-console' },
+      '?space=ada&enable=google-search-console',
     )
     assert(went instanceof Response)
     let back = await refused(s.p.env, stateOf(went))
     assertEquals(
       new URL(back.headers.get('location')!).searchParams.get('enable'),
-      'google-calendar',
+      'google-search-console',
     )
   },
 )
@@ -206,8 +208,8 @@ test(
     )
     let begun = async (back: string) => {
       let went = await s.post(
-        { do: 'add', integration: 'google-calendar', back },
-        '?space=ada&enable=google-calendar',
+        { do: 'add', integration: 'google-search-console', back },
+        '?space=ada&enable=google-search-console',
       )
       assert(went instanceof Response)
       return stateOf(went)
@@ -215,12 +217,12 @@ test(
     let state = await begun('/manage/ada/operator')
     assertEquals(to(await refused(s.p.env, state)), [
       303,
-      'https://yaks.app/manage/ada/operator?enable=google-calendar&refused=1',
+      'https://yaks.app/manage/ada/operator?enable=google-search-console&refused=1',
     ])
     for (let elsewhere of ['/manage/bo/operator', '//evil.test/x', 'x']) {
       assertEquals(to(await refused(s.p.env, await begun(elsewhere))), [
         303,
-        'https://yaks.app/manage/ada/connections?enable=google-calendar&refused=1',
+        'https://yaks.app/manage/ada/connections?enable=google-search-console&refused=1',
       ])
     }
     // A return naming no attempt, or one already finished, has no page of
@@ -248,7 +250,7 @@ test(
       ),
       [
         303,
-        'https://yaks.app/manage/ada/operator?enable=google-calendar&refused=1',
+        'https://yaks.app/manage/ada/operator?enable=google-search-console&refused=1',
       ],
     )
   },
@@ -763,9 +765,9 @@ test(
   'a testing integration is asked for only on a page opened with ?enable=',
   async () => {
     let s = await setup()
-    let { bob, door } = await asks(s, 'google-calendar')
+    let { bob, door } = await asks(s, 'google-search-console')
     let him: Who = { person: bob, role: null }
-    let path = '/connections/google-calendar?enable=google-calendar'
+    let path = '/connections/google-search-console?enable=google-search-console'
     assertEquals((await door(him)).status, 404)
     assertEquals((await door(him, undefined, path)).status, 200)
     assertEquals(to(await door(him, undefined, path, 'n.io')), [
