@@ -312,6 +312,41 @@ test('a deferred tool is listed by tool_load and sent once a call loads it', asy
   )
 })
 
+// A turn anchored on an ask long after the load reads no tool_load (a page of
+// the transcript holds 64 lines), yet sends the newest ask's tools: a set that
+// drops a tool changes the provider's whole cached prefix.
+test('a loaded tool stays sent after the turns read past its load', async () => {
+  let g = world()
+  let shout = { ...echo, name: 'shout', deferred: true }
+  let echoes = Array.from({ length: 25 }, (_, i) => ({
+    ...calls([`c${i}`, 'hi']),
+    id: `r${i}`,
+  }))
+  let { model, asked } = scripted([
+    {
+      id: 'load',
+      model: 'fake-1',
+      items: [{
+        kind: 'call',
+        id: 'load',
+        name: 'tool_load',
+        args: '{"names":["shout"]}',
+      }],
+    },
+    ...echoes,
+    says('done', 'done'),
+  ])
+  assertEquals(
+    await rest(g, ids.s, { model, tools: [echo, shout], mint }),
+    'settled',
+  )
+  assertEquals(asked.at(-1)!.anchor, 'r24')
+  assertEquals(
+    [...new Set(asked.slice(1).map((a) => a.tools?.map((t) => t.name).join()))],
+    ['echo,shout,tool_load'],
+  )
+})
+
 test('a tool_load naming its tools in one string of JSON loads them as a list would', async () => {
   let g = world()
   let shout = { ...echo, name: 'shout', deferred: true }

@@ -15,7 +15,6 @@ import {
   type Lent,
   type Model,
   type Native,
-  prefixCacheMark,
   type Spending,
 } from '@yaks/model'
 import {
@@ -29,6 +28,7 @@ import type { ImageGeneration, Images } from './images.ts'
 import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc, responseAnchor } from './vocab.ts'
+import { marking, RETENTION } from './mark.ts'
 import { native as door } from './native.ts'
 import { reads } from './reads.ts'
 
@@ -162,6 +162,11 @@ export let providers = (
     : base
     ? true
     : !!(options.key || fromEnv(lent.env))
+  // OpenAI's own API keeps a cached prefix for at least its documented
+  // minimum, so each reply records when its prefix expires, and a session
+  // sends the instructions it cached until then. Nothing documents a lifetime
+  // for the Codex backend or another endpoint: unknown there.
+  let retention = store ? RETENTION : undefined
   let signing = base
     ? {
       ...opened(lent, base, options.key),
@@ -189,13 +194,12 @@ export let providers = (
           receipts: lent.receipts,
           hold: lent.hold,
           store,
+          retention,
         })
       ),
     {
       vocab: openaiDoc,
-      mark: (reply, cache) => ({
-        openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
-      }),
+      mark: marking('openai', retention),
       anchor: (comps) => store ? responseAnchor(comps) : undefined,
       lateResults: true,
       recover: true,

@@ -489,6 +489,26 @@ export let reading = async (
   }
 }
 
+// The names of the tools the newest ask among `entries` sent (its
+// `sending.offer`), read only where some tool waits to be loaded: a turn sends
+// them again (./deferred.ts `schemas`), whatever it reads of its transcript.
+let sentBefore = async (
+  g: Graph,
+  entries: Bundle[],
+  tools: Tool[],
+): Promise<string[]> => {
+  let offer = comp(newestAsk(entries) ?? {} as Bundle, 'sending')?.offer
+  if (
+    typeof offer != 'string' || !g.vocab.comp('offer') ||
+    !tools.some((t) => t.deferred)
+  ) return []
+  let [row] = await g.get([offer], ['offer'])
+  let sent = comp(row ?? {} as Bundle, 'offer')?.tools
+  return Array.isArray(sent)
+    ? sent.flatMap((t) => typeof t?.name == 'string' ? [t.name] : [])
+    : []
+}
+
 // The prose of each line among `entries` that holds some, read in place.
 let withProse = async (g: Graph, entries: Bundle[]) => {
   let have = entries.filter((b) => b.content)
@@ -1856,11 +1876,9 @@ export let react = async (
         },
       ),
     ]),
-    tools: schemas(tools, entries).map(({ name, description, parameters }) => ({
-      name,
-      description,
-      parameters,
-    })),
+    tools: schemas(tools, entries, await sentBefore(g, entries, tools)).map((
+      { name, description, parameters },
+    ) => ({ name, description, parameters })),
     anchor: anchorId,
     conversation: session,
   }

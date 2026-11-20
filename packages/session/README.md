@@ -120,11 +120,14 @@ tools the transcript's persona contains), read when the instructions are and
 recorded on the ask.
 
 A tool marked `deferred` is offered without its schema: `tool_load` lists each
-one by name and title, and the deferred tools a `tool_load` call among the
-step's entries names, or a call among them called, are sent from then on
-(./deferred.ts). A runner holding many tools sends the few most turns use, and
-the rest cost a line each. A deferred tool runs whenever it is called; only what
-is sent changes.
+one by name and title, and the deferred tools a `tool_load` call names, or a
+call to one, are sent from then on (./deferred.ts). A turn sends the deferred
+tools the newest ask sent (its `sending.offer`) and those the entries since
+load, so a turn anchored past the load, or windowed or summarized past it, still
+sends them: the tools lead a provider's cached prefix, and a set that dropped
+one would change all of it. A runner holding many tools sends the few most turns
+use, and the rest cost a line each. A deferred tool runs whenever it is called;
+only what is sent changes.
 
 `sending.instructions` are the system instructions a turn is asked with (an ask
 keeps its predecessor's while the prefix that one cached is unexpired,

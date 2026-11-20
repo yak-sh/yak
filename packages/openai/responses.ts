@@ -9,7 +9,6 @@ import { dataUrl } from './media.ts'
 import {
   acknowledged,
   began,
-  type CacheContext,
   cacheExpiry,
   type Item,
   type Listed,
@@ -17,7 +16,6 @@ import {
   type MediaReceipts,
   type Model,
   ModelError,
-  prefixCacheMark,
   receivedMedia,
   recoveredMedia,
   type Reply,
@@ -28,6 +26,7 @@ import {
 } from '@yaks/model'
 import type { Credential } from './credential.ts'
 import { openaiDoc, responseAnchor } from './vocab.ts'
+import { marking } from './mark.ts'
 import { planLimits } from './limits.ts'
 import {
   request,
@@ -62,6 +61,10 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   /** keeps a shared model-list read alive past its request (@yaks/model
    * `Lent.hold`) */
   hold?: Hold
+  /** How long the endpoint keeps a cached prefix, in seconds: each reply's
+   * mark records the request's start plus this as its `cache_expires_at`.
+   * Unknown where absent. */
+  retention?: number
 }
 
 type Frame = Record<string, unknown>
@@ -249,12 +252,7 @@ export let responses = (opts: Options): Model => {
     list,
     info,
     vocab: openaiDoc,
-    mark: (reply: Reply, cache?: CacheContext) => ({
-      [opts.provider ?? OPENAI_COMP]: {
-        response_id: reply.id,
-        ...prefixCacheMark(reply, cache),
-      },
-    }),
+    mark: marking(opts.provider ?? OPENAI_COMP, opts.retention),
     anchor: (comps: Record<string, unknown>) =>
       opts.store
         ? responseAnchor(comps, opts.provider ?? OPENAI_COMP)

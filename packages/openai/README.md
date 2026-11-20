@@ -349,34 +349,18 @@ for provider behavior and supported models.
 
 ## Cached-prefix expiry
 
-The adapter accepts explicit `cache_expires_at` response metadata (ISO instant
-or Unix seconds) and records the effective expiry as `openai.cache_expires_at`.
-It does not infer prompt expiry from `expires_at`, `previous_response_id`, or
-cached-token usage. See
-[cached-prefix expiry](../model/README.md#cached-prefix-expiry) for the
-dispatch-time fallback and reader.
+Each reply's mark records when its cached prefix expires as
+`openai.cache_expires_at`: the response's own `cache_expires_at` (ISO instant or
+Unix seconds) where it sends one, else the request's start plus a retention
+(`responses({ retention })`, or a provider row's `cache_retention`), else
+unknown. See [cached-prefix expiry](../model/README.md#cached-prefix-expiry) for
+the reader. A session keeps sending the instructions its newest ask cached until
+then, so a prompt that changed meanwhile does not change the prefix.
 
 OpenAI's
 [prompt caching documentation](https://developers.openai.com/api/docs/guides/prompt-caching)
-distinguishes model families: GPT-5.6 and later default to a minimum of 30
-minutes after write or reuse; earlier models' in-memory retention is usually
-5–10 minutes, and extended retention has separate model/organization rules. This
-adapter does not select a retention policy. A conservative 300-second estimate
-is appropriate only for a provider row whose API models and configuration have a
-verified documented retention of at least that long. It is an estimate, not a
-cache-hit guarantee. API documentation is not a TTL promise for Codex's ChatGPT
-backend or an arbitrary compatible endpoint; those rows remain unknown unless an
-applicable retention is verified or explicit expiry is returned. No provider row
-is automatically seeded with a TTL.
-
-The public response schema does not promise `cache_expires_at`; the adapter
-accepts it as explicit endpoint metadata when returned, not assumed to exist.
-
-For the locus administering a verified API provider (replace the eid), after
-loading the vocabulary:
-
-```sh
-printf '%s\n' '[{"entity":{"eid":"<verified-api-provider-eid>"},"provider":{"cache_retention":300}}]' > retention.json
-yak graph apply --bundles @retention.json --check
-# Apply without --check only after verifying this provider's endpoint/models.
-```
+keeps a prefix 5–10 minutes for earlier models and at least 30 minutes for
+GPT-5.6 and later. The `openai` provider (`./provider`) marks replies from
+OpenAI's own API, on a key or through the AI Gateway, with the shortest of
+these, 300 seconds. Nothing documents a lifetime for the Codex backend or
+another endpoint (`base`), so there the expiry stays unknown.

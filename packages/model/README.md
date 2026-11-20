@@ -702,6 +702,7 @@ only from documentation applicable to that provider's endpoint and models; there
 is no transport-wide default. A row naming no retention leaves the expiry to the
 provider's own `mark`, which @yaks/session calls with the dispatch instant
 (`CacheContext.requestedAt`): @yaks/anthropic knows its documented five minutes,
+@yaks/openai's provider the five minutes OpenAI's own API documents at least,
 and a provider that knows none records the expiry unknown. Existing asks without
 expiry remain cold, so no backfill is needed.
 

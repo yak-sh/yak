@@ -1,10 +1,13 @@
 // Tools a transcript is offered by name until it loads them. A runner that
 // holds more tools than a turn needs marks the rest `deferred`: their schemas
 // stay out of the request, and one tool, `tool_load`, lists them by name and
-// title. A transcript that calls it is sent their schemas from then on, as
-// long as the call is among the entries a step reads. A deferred tool runs
-// whenever it is called, loaded or not, and once called it is sent too, so a
-// request never replays a call to a tool it does not carry.
+// title. A transcript that calls it is sent their schemas from then on: a
+// turn sends what the newest ask sent, and what the entries since loaded. A
+// deferred tool runs whenever it is called, loaded or not, and once called it
+// is sent too, so a request never replays a call to a tool it does not carry.
+// The tools come first in a provider's cached prefix, so a set that only grows
+// keeps that prefix whatever a turn reads of its transcript (an anchor, a
+// window, a summary).
 import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { CallError } from '@yaks/tools/errors'
@@ -108,8 +111,9 @@ export let loading = (tools: Tool[]): Tool[] => {
 }
 
 /**
- * The tools a request sends: every one not deferred, and the deferred ones a
- * `tool_load` call among `entries` named or a call among them called.
+ * The tools a request sends: every one not deferred, and the deferred ones
+ * `sent` names (what the newest ask sent), a `tool_load` call among `entries`
+ * named or a call among them called.
  *
  * ```ts
  * import { toolEid } from '@yaks/tools/result'
@@ -128,18 +132,24 @@ export let loading = (tools: Tool[]): Tool[] => {
  * schemas(tools, [quoted]).map((t) => t.name) // ['search', 'buy']
  * let wrong = { ...load, call: { ...load.call, args: { names: 7 } } }
  * schemas(tools, [wrong]).map((t) => t.name) // ['search']
+ * schemas(tools, [], ['sell', 'search']).map((t) => t.name) // ['search', 'sell']
  * ```
  */
-export let schemas = (tools: Tool[], entries: Bundle[]): Tool[] => {
+export let schemas = (
+  tools: Tool[],
+  entries: Bundle[],
+  sent: string[] = [],
+): Tool[] => {
   if (!tools.some((t) => t.deferred)) return tools
   let known = new Set(tools.filter((t) => t.deferred).map((t) => t.name))
   let load = toolEid(LOAD)
-  let loaded = new Set(
-    entries.flatMap((b) => {
+  let loaded = new Set([
+    ...sent.map(toolEid),
+    ...entries.flatMap((b) => {
       let to = (b[CALL] as { to?: unknown } | undefined)?.to
       if (to != load) return to ? [to] : []
       return namesOf(b).map((n) => toolEid(named(n, known) ?? n))
     }),
-  )
+  ])
   return tools.filter((t) => !t.deferred || loaded.has(toolEid(t.name)))
 }
