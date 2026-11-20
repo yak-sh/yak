@@ -1,7 +1,7 @@
 /** Narrow snapshots at the harness door; direct tool calls return complete data. */
-import { run } from '@gabrielbryk/jq-ts'
 import type { Comp, Graph } from '@yaks/graph'
 import { outputValue } from '@yaks/context'
+import { jqOver } from '@yaks/context/result'
 import type { Tool } from '@yaks/session'
 import { ToolError } from '@yaks/session'
 
@@ -22,23 +22,10 @@ export let resultTool = (g: Graph): Tool => ({
       throw new ToolError('result', 'Kept result unavailable')
     }
     try {
-      let values = run(
-        String(query),
-        outputValue(String(output.body)) as Parameters<typeof run>[1],
-        {
-          limits: {
-            maxSteps: 1_000_000,
-            maxDepth: 128,
-            maxOutputs: 33_554_432,
-          },
-        },
-      )
+      let values = jqOver(String(query), outputValue(String(output.body)))
       return JSON.stringify({ values })
     } catch (error) {
-      throw new ToolError(
-        'query',
-        'jq query failed: ' + (error as Error).message,
-      )
+      throw new ToolError('query', (error as Error).message)
     }
   },
 })

@@ -745,7 +745,8 @@ test('an order naming a whole component declines, naming its properties', () => 
   assertEquals(
     mine.message,
     '@yaks/match cannot compile a component where a property belongs: ' +
-      'doc — try doc.title, doc.body',
+      'doc — a directive names one property, as .order=doc.title or ' +
+      '.fields=doc.title; doc also has doc.body',
   )
   assertEquals(theirs.message, mine.message.replace('match', 'sql'))
 })

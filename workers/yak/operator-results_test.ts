@@ -1,4 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
+import { assertRejects } from '@std/assert'
+import { CallError } from '@yaks/tools/errors'
 import { mint } from '@yaks/graph'
 import { outputView } from '@yaks/context'
 import { keepResult, readResult } from './results.ts'
@@ -155,19 +157,31 @@ test('Operator reads its own store with self beside a space and app', async () =
   })
   let ctx = await operatorContext(env, { person }, space, () => dir)
   let tools = await operatorRoster(ctx, store, { space: eid })
-  let said = async (name: string, args: Record<string, unknown>) => {
+  let said = async (
+    name: string,
+    args: Record<string, unknown>,
+    self = true,
+  ) => {
     let call = { entity: { eid: mint() }, call: { to: toolEid(name), args } }
     return wordsOf(
       await tools.find((t) => t.name == name)!.run(
-        { self: true, space: 'mine', app: 'notes', ...args },
+        { self, space: 'mine', ...args },
         { session: mint(), call, entries: [] },
       ),
     )
   }
   for (
     let out of [
-      await said('graph_show', { id: row }),
-      await said('graph_query', { q: '.doc' }),
+      await said('graph_show', { id: row, app: 'notes' }),
+      await said('graph_query', { q: '.doc', app: 'notes' }),
+      // An id the apps do not hold is its own store's to answer.
+      await said('graph_show', { id: row }, false),
     ]
   ) ok(out.includes('Own row'), out)
+  // One neither holds is refused as the apps refuse it.
+  await assertRejects(
+    () => said('graph_show', { id: mint() }, false),
+    CallError,
+    'With self: true it reads your own store',
+  )
 })

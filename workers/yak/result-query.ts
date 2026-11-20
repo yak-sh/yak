@@ -1,10 +1,9 @@
-import { run } from '@gabrielbryk/jq-ts'
 import type { Bundle, Graph } from '@yaks/graph'
 import { readResult } from './results.ts'
-import { RESULT_MAX } from '@yaks/context/result'
+import { jqOver } from '@yaks/context/result'
 import { refuse } from './tool.ts'
 
-/** jq is interpreted by the library, with bounded work even for recursive filters. */
+/** A jq filter over a kept result (@yaks/context/result `jqOver`). */
 export let queryResult = async (
   g: Graph,
   id: string,
@@ -13,13 +12,9 @@ export let queryResult = async (
   person: string,
 ) => {
   let value = await readResult(g, id, person)
-  let values
   try {
-    values = run(query, value as Parameters<typeof run>[1], {
-      limits: { maxSteps: 1_000_000, maxDepth: 128, maxOutputs: RESULT_MAX },
-    })
+    return { values: jqOver(query, value) }
   } catch (error) {
-    throw refuse('arguments', 'jq query failed: ' + (error as Error).message)
+    throw refuse('arguments', (error as Error).message)
   }
-  return { values }
 }

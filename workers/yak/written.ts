@@ -195,7 +195,12 @@ export let chosen = (
       throw refuse(
         'missing',
         `no open draft ${asked} of ${app.slug}: it was released or ` +
-          `discarded${drafts.length ? `; ${whichDraft(drafts)}` : ''}`,
+          `discarded; ${
+            drafts.length
+              ? whichDraft(drafts)
+              : 'it has no open draft, so leave draft out: a read sees ' +
+                'the live files, and a write opens a new draft'
+          }`,
       )
     }
     return named

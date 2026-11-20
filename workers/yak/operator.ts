@@ -391,6 +391,9 @@ let SELF = {
 let IN_OWN = 'With self: true it reads your own store, where your ' +
   'conversations and their entries, your helpers, memories and tasks are'
 let IN_APPS = "Without self it reads the apps' and the space's own store"
+// Whether a read was refused for an id that names nothing in its store.
+let nowhere = (error: unknown) =>
+  error instanceof CallError && error.message.includes(' names nothing')
 let OWN_ONLY = 'This reads your own store: your conversations and their ' +
   "entries, memories and tasks; an app's rows are read with graph_show"
 // Its memories, and the skills the space keeps beside them, are its own
@@ -681,10 +684,20 @@ export let operatorRoster = async (
           },
         },
         // Its own store is one store, so the app and space that narrow a
-        // read of the apps name nothing there.
-        run: ({ self: reads, ...args }, context) => {
+        // read of the apps name nothing there. An id the apps do not hold
+        // is read there too, since an eid names one entity in one store, and
+        // refused as the apps refused it when that store holds none either.
+        run: async ({ self: reads, ...args }, context) => {
           let { space: _, app: __, ...own } = args
-          return reads ? here(own, context) : there(args, context)
+          if (reads) return here(own, context)
+          try {
+            return await there(args, context)
+          } catch (error) {
+            if (!nowhere(error)) throw error
+            return await Promise.resolve(here(own, context)).catch(() => {
+              throw error
+            })
+          }
         },
       }
     }),

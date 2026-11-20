@@ -496,6 +496,8 @@ let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
           `Fix this error in ${app.slug}: ${said(hit)}\n\nIt happened${
             at ? ` at ${at}` : ''
           }${e.version ? ` in version ${e.version}` : ''}. ` +
+          `It is error ${idOf(hit)}, which app_errors lists with the ` +
+          `app's other open errors; it is not a row in the app. ` +
           `Find its cause in ${space.slug}/${app.slug}. ` +
           `If the app's own files are wrong, fix them, deploy, and say in a ` +
           `line or two what you changed. If yaks.app itself is at fault, ` +
