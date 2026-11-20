@@ -256,9 +256,18 @@ test('a pasted bot whose connection is deleted stops at its next alarm', async (
   )
 })
 
-// Discord's REST as a pasted bot sees it: each server's one text channel.
-let channels: typeof fetch = (input) => {
-  let [, server] = String(input).match(/guilds\/(\w+)\/channels$/) ?? []
+// Discord's REST as a pasted bot sees it: each server's one text channel,
+// and the nicknames it is given, noted.
+let nicknames: string[] = []
+let channels: typeof fetch = (input, init) => {
+  let url = String(input)
+  let [, server] = url.match(/guilds\/(\w+)\/channels$/) ?? []
+  let [, named] = url.match(/guilds\/(\w+)\/members\/@me$/) ?? []
+  if (named) {
+    let h = init?.headers as Record<string, string>
+    nicknames.push(`${named} ${h.authorization} ${init?.body}`)
+    return Promise.resolve(Response.json({}))
+  }
   return Promise.resolve(
     server
       ? Response.json([{ id: `${server}-general`, name: 'general', type: 0 }])
@@ -266,69 +275,74 @@ let channels: typeof fetch = (input) => {
   )
 }
 
-test('the servers a pasted bot is in are kept on its connection, and its space chooses a room among them to hear in full', async () => {
+// In each server it is in, a pasted bot goes by its Operator's name, keeping
+// its own everywhere else; the one it joins later too.
+test('the servers a pasted bot is in are kept on its connection, named for its Operator, and its space chooses a room among them to hear in full', async () => {
   let s = await setup()
-  await s.call(() => s.held.object.alarm())
-  s.frame({ op: 10, d: { heartbeat_interval: 3_600_000 } })
-  s.frame({
-    op: 0,
-    t: 'READY',
-    s: 1,
-    d: {
-      session_id: 'session',
-      resume_gateway_url: 'wss://resume.test',
-      user: { id: ME, username: 'Kit' },
-      guilds: [{ id: 'barn', unavailable: true }],
-    },
-  })
-  s.frame({ op: 0, t: 'GUILD_CREATE', s: 2, d: { id: 'mill' } })
-  let kept = async () => {
-    let [c] = await s.at.query(line`.entity.eid=${s.connection}&*`)
-    return serves(c)
-  }
-  for (let i = 0; i < 400 && (await kept()).length < 2; i++) {
-    await new Promise((r) => setTimeout(r, 5))
-  }
-  assertEquals(await kept(), ['barn', 'mill'])
-
   let was = globalThis.fetch
   globalThis.fetch = channels
   try {
+    await s.call(() => s.held.object.alarm())
+    s.frame({ op: 10, d: { heartbeat_interval: 3_600_000 } })
+    s.frame({
+      op: 0,
+      t: 'READY',
+      s: 1,
+      d: {
+        session_id: 'session',
+        resume_gateway_url: 'wss://resume.test',
+        user: { id: ME, username: 'Kit' },
+        guilds: [{ id: 'barn', unavailable: true }],
+      },
+    })
+    s.frame({ op: 0, t: 'GUILD_CREATE', s: 2, d: { id: 'mill' } })
+    let kept = async () => {
+      let [c] = await s.at.query(line`.entity.eid=${s.connection}&*`)
+      return serves(c)
+    }
+    for (let i = 0; i < 400 && (await kept()).length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 5))
+    }
+    assertEquals(await kept(), ['barn', 'mill'])
+    await s.settled(() => nicknames.length > 1)
+    let nick = `Bot ${TOKEN} {"nick":"${s.space.operator}"}`
+    assertEquals(nicknames, [`barn ${nick}`, `mill ${nick}`])
+
     let [{ servers }] = await offers(s.p.env, s.space.eid)
     assertEquals(
       servers.map((v) => [v.connection, v.own, v.rooms?.map((r) => r.id)]),
       [[s.connection, true, ['barn-general', 'mill-general']]],
     )
+    await choose(
+      s.p.env,
+      { person: s.person, role: 'owner' },
+      s.space.eid,
+      s.connection,
+      'mill-general',
+    )
+    s.frame({
+      op: 0,
+      t: 'MESSAGE_CREATE',
+      s: 3,
+      d: {
+        id: '1310000000000000002',
+        channel_id: 'mill-general',
+        guild_id: 'mill',
+        author: { id: '4242', username: 'ann' },
+        content: 'the mill is quiet today',
+        timestamp: '2026-11-20T05:41:00.000Z',
+      },
+    })
+    await s.settled(() => s.asked.length > 0)
+    assertEquals(
+      s.asked.map((a) => [a.space, (a.body.said as { text: string }).text]),
+      [[s.space.eid, 'the mill is quiet today']],
+    )
+    assert(s.asked[0].body.writer)
+    await s.call(() => s.held.object.stop())
   } finally {
     globalThis.fetch = was
   }
-  await choose(
-    s.p.env,
-    { person: s.person, role: 'owner' },
-    s.space.eid,
-    s.connection,
-    'mill-general',
-  )
-  s.frame({
-    op: 0,
-    t: 'MESSAGE_CREATE',
-    s: 3,
-    d: {
-      id: '1310000000000000002',
-      channel_id: 'mill-general',
-      guild_id: 'mill',
-      author: { id: '4242', username: 'ann' },
-      content: 'the mill is quiet today',
-      timestamp: '2026-11-20T05:41:00.000Z',
-    },
-  })
-  await s.settled(() => s.asked.length > 0)
-  assertEquals(
-    s.asked.map((a) => [a.space, (a.body.said as { text: string }).text]),
-    [[s.space.eid, 'the mill is quiet today']],
-  )
-  assert(s.asked[0].body.writer)
-  await s.call(() => s.held.object.stop())
 })
 
 test('a connection serves the server yaks.app’s bot was added to, or every one a pasted bot is in', () => {

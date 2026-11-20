@@ -237,12 +237,13 @@ export let botFor = async (
 /** After a space connects an integration: if it chats, its bot listens
  * (connections.ts). yaks.app's own bot added to a server serves it for that
  * space alone from now on: another space's connection to the same server
- * ends, so a server moves from one space's Operator to another's whole. */
+ * ends, so a server moves from one space's Operator to another's whole. The
+ * bot goes by its Operator's name in the servers it serves ({@link naming}). */
 export let connected = async (env: Env, connection: string) => {
   let bot = await botFor(env, connection)
   if (!bot) return
+  let [c] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}&*`)
   if (!bot.connection) {
-    let [c] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}&*`)
     let { account } = comp(c, CONNECTION)
     let others = account
       ? (await serving(env, bot.via, String(account)))
@@ -252,6 +253,47 @@ export let connected = async (env: Env, connection: string) => {
     for (let o of others) await ended(env, o.entity.eid)
   }
   await listen(env, bot)
+  await naming(env, c)
+}
+
+/** Each bot that speaks for one of `space`'s chat connections goes by its
+ * Operator's name again, in every server it serves: what renaming the
+ * Operator does (operator-channels.ts `operator_named`). */
+export let renamed = async (env: Env, space: string) => {
+  let held = await read(
+    env,
+    line`.${CONNECTION}.owner=${space}&.${CONNECTION}.status=connected&*`,
+  )
+  await Promise.all(held.map((c) => naming(env, c)))
+}
+
+// The bot that speaks for connection `c` goes by the name of its space's
+// Operator in each of `servers`, where its platform names a bot per server
+// ({@link Platform.named}): yaks.app's own bot, whose global name is
+// yaks.app's, and a bot a space brought, which keeps the name its owner gave
+// it everywhere else. A server that refuses it is reported and the others
+// are still named.
+let naming = async (env: Env, c: Bundle | undefined, servers = serves(c)) => {
+  let { integration, owner, status } = comp(c, CONNECTION)
+  if (!c || status != 'connected' || !servers.length) return
+  let { caught, ctxOf, directoryOf, installed } = await need()
+  let via = (await installed(ctxOf(env).graph.read))
+    .find((i) => i.name == integration)?.chat
+  let p = via ? PLATFORMS.get(via) : undefined
+  if (!p?.named) return
+  let space = await directoryOf(env.STORE).at(String(owner))
+  if (!space || space.trashed) return
+  let tags = { request: `${p.name} nickname`, connection: c.entity.eid }
+  let token = await speaker(env, p, c.entity.eid).catch((e) => {
+    caught(e, tags)
+  })
+  if (!token) return
+  await Promise.all(
+    servers.map((server) =>
+      p.named!(token, server, space.operator)
+        .catch((e) => caught(e, { ...tags, server }))
+    ),
+  )
 }
 
 /** After a space disconnects `bot`'s connection: a bot the space brought
@@ -271,7 +313,8 @@ export let serves = (c: Bundle | undefined): string[] => {
 }
 
 // What a bot a space brought says of the servers it is in, kept on its
-// connection (`chat_serves`), written only when it changed.
+// connection (`chat_serves`), written only when it changed; in each server
+// it joined, it goes by its Operator's name.
 let seated = async (env: Env, connection: string, s: Seated) => {
   let [c] = await read(env, line`.entity.eid=${connection}&.${CONNECTION}&*`)
   if (!c) return
@@ -291,6 +334,7 @@ let seated = async (env: Env, connection: string, s: Seated) => {
     [{ entity: { eid: connection }, [SERVES]: { servers: now } }],
     KERNEL,
   )
+  await naming(env, c, now.filter((id) => !had.includes(id)))
 }
 
 // The connected connections through which yaks.app's own bot speaks on

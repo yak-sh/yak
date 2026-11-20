@@ -24,6 +24,7 @@ import {
   offers,
   PLATFORMS,
   recent,
+  renamed,
   type Server,
 } from './chat.ts'
 import { chatCard } from './operator-page.ts'
@@ -364,6 +365,60 @@ test("a room is read back by its connection's bot, only in the servers it serves
     assertEquals(asked, [
       'GET channels/general/messages?before=m1&limit=30',
       'GET channels/lobby',
+    ])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+// yaks.app's bot goes by the Operator's name in each server a space added it
+// to (chat.ts `connected`, `renamed`): its nickname there, set by the bot
+// that speaks for the connection, and set again when the Operator is
+// renamed; a connection that is not connected names nothing.
+test("yaks.app's bot goes by its space's Operator's name in the server it was added to, and again once renamed", async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let at = meta(p.env)
+  let dir = directory({ fetch: over(at) })
+  await at.apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    {
+      entity: { eid: '$space' },
+      space: { slug: 'ada', store: 'ada' },
+      operator: { name: 'Pip' },
+    },
+  ], KERNEL)
+  let space = (await dir.space('ada'))!
+  let ours = crypto.randomUUID(), gone = crypto.randomUUID()
+  let connection = (eid: string, account: string, status: string) => ({
+    entity: { eid },
+    connection: { integration: 'discord', owner: space.eid, account, status },
+  })
+  await at.apply([
+    connection(ours, 'barn', 'connected'),
+    connection(gone, 'mill', 'broken'),
+  ], KERNEL)
+  let asked: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    let h = init?.headers as Record<string, string>
+    asked.push(
+      `${init?.method} ${String(input)} ${h.authorization} ${init?.body}`,
+    )
+    return Promise.resolve(Response.json({}))
+  }
+  try {
+    await connected(p.env, ours)
+    await connected(p.env, gone)
+    await at.apply([{ entity: { eid: space.eid }, operator: { name: 'Wren' } }])
+    await renamed(p.env, space.eid)
+    let patch =
+      'PATCH https://discord.com/api/v10/guilds/barn/members/@me Bot BOT'
+    assertEquals(asked, [
+      `${patch} {"nick":"Pip"}`,
+      `${patch} {"nick":"Wren"}`,
     ])
   } finally {
     globalThis.fetch = was

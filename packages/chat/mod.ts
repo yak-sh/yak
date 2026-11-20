@@ -128,6 +128,15 @@ export type Platform = {
     page: Page,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Said[]>
+  /** give the bot with `credential` the name `name` in `server`, where the
+   * platform lets a bot go by its own name in each server: how it goes by
+   * the name of the Operator it speaks for */
+  named?: (
+    credential: string,
+    server: string,
+    name: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<void>
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<

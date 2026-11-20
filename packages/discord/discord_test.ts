@@ -241,6 +241,34 @@ test('typing shows the room the bot is working; a rate limit waits, a refusal is
   )
 })
 
+test('the bot is named in a server as its nickname there, cut to 32 characters; a missing permission is refused', async () => {
+  let { f, seen } = rest(200, { nick: 'Pip' })
+  await discord.named!('T0K', 'barn', 'Pip', f)
+  await discord.named!('T0K', 'barn', 'P'.repeat(40), f)
+  assertEquals(
+    seen.map((s) => [s.url, s.init.method, JSON.parse(String(s.init.body))]),
+    [
+      ['https://discord.com/api/v10/guilds/barn/members/@me', 'PATCH', {
+        nick: 'Pip',
+      }],
+      ['https://discord.com/api/v10/guilds/barn/members/@me', 'PATCH', {
+        nick: 'P'.repeat(32),
+      }],
+    ],
+  )
+  await assertRejects(
+    () =>
+      discord.named!(
+        'T',
+        'barn',
+        'Pip',
+        rest(403, { message: 'Missing Permissions' }).f,
+      ),
+    Error,
+    'Discord refused to rename the bot in barn: 403 Missing Permissions',
+  )
+})
+
 test('a room is known by its server, none for a direct one; one the bot cannot see is refused', async () => {
   let { f, seen } = rest(200, { id: 'room', guild_id: 'barn' })
   assertEquals(await discord.server!('T0K', 'room', f), 'barn')

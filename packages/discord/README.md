@@ -38,6 +38,11 @@ reply with the REST API. `discord` is the `Platform` both make.
   most 100), bots' own included and none `addressed`. They carry no server:
   Discord's answer leaves it out.
 
+- **Its name in a server** is its nickname there (`named(token, server, name)`,
+  PATCH `/guilds/{id}/members/@me`), cut to Discord's 32 characters. It needs
+  Change Nickname, which yaks.app's authorize link asks for with View Channels,
+  Send Messages, Send Messages in Threads and Read Message History.
+
 Messages in rooms the bot was not named in carry their words only with the
 Message Content intent, which Discord reviews for a bot in over 100 servers.
 

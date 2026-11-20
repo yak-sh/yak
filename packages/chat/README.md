@@ -51,6 +51,7 @@ type Platform = {
   ) => Promise<string | undefined>
   rooms?: (credential: string, server: string, fetch?) => Promise<Room[]>
   recent?: (credential, room, page: Page, fetch?) => Promise<Said[]>
+  named?: (credential, server, name: string, fetch?) => Promise<void>
   working?: { every: number; show: (credential, room, fetch?) => Promise<void> }
 }
 ```
@@ -81,6 +82,10 @@ platform can, so a space chooses the one it hears in full (`chat_hears`).
 oldest first, where the platform keeps them: none `addressed`, and a bot's own
 among them. `since(said, last)` is those after the bot's last answer there, and
 `recounted(said, mine)` says them a line each, the bot's own as said by "you".
+
+`named` gives a bot a name of its own in one server, where the platform lets a
+bot go by one per server (Discord's nickname), so a bot shared by many spaces,
+or one a space brought, goes by the name of the Operator it speaks for there.
 
 `working` is how a bot shows a room it is working on an answer, where the
 platform can (Discord's typing indicator): one show lasts `every` milliseconds.

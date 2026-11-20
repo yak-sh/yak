@@ -1343,12 +1343,15 @@ export let handleChannels = (
       }
     },
     // The Operator's name, set on its persona by its people or itself, is
-    // copied to its space's directory row, which the platform reads it off.
+    // copied to its space's directory row, which the platform reads it off,
+    // and its chat bots go by it in each server (chat.ts `renamed`).
     operator_named: async (event) => {
       let { named } = await import('./operator-persona.ts')
       let [row] = await g.get([event.entity.eid])
       let copy = named(row)
-      if (copy.length) await directoryOf(env.STORE).apply({ entities: copy })
+      if (!copy.length) return
+      await directoryOf(env.STORE).apply({ entities: copy })
+      await (await import('./chat.ts')).renamed(env, copy[0].entity.eid)
     },
     // What the Operator tells a person reaches them the way they chose
     // (operator-alerts.ts).

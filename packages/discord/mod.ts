@@ -280,6 +280,29 @@ export let typing = async (
   )
 }
 
+/** Give the bot with `token` the nickname `name` in the server `server`,
+ * cut to the 32 characters Discord allows
+ * (PATCH /guilds/{id}/members/@me, which needs Change Nickname). A 429 or a
+ * 5xx is {@link Unsent}; any other refusal is thrown with what Discord said. */
+export let named = async (
+  token: string,
+  server: string,
+  name: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> => {
+  await answer(
+    await fetcher(`${API}/guilds/${server}/members/@me`, {
+      method: 'PATCH',
+      headers: { ...bot(token), 'content-type': 'application/json' },
+      body: JSON.stringify({ nick: [...name].slice(0, 32).join('') }),
+    }),
+    {
+      unsent: `Discord did not rename the bot in ${server}`,
+      refused: `Discord refused to rename the bot in ${server}`,
+    },
+  )
+}
+
 /** The kinds of channel people write messages in: text and announcement
  * (channel, "Channel Types"). */
 let WRITTEN = new Set([0, 5])
@@ -370,5 +393,6 @@ export let discord: Platform = {
   server,
   rooms,
   recent,
+  named,
   working: { every: 8000, show: typing },
 }
