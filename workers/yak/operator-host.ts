@@ -1,4 +1,4 @@
-import { type Line, line as q, sub } from '@yaks/query'
+import { type Built, type Line, line as q, sub } from '@yaks/query'
 import { updatesOf, updating } from './operator-updates.ts'
 import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
@@ -169,7 +169,7 @@ let metadataOf = async (store: Store, entries: Bundle[]) => {
         q`.checkpoint .entry.session=${id}&.fields=entry.session,entry.seq`,
       )
     )).then((rows) => rows.flat()),
-    store.g.get(sources),
+    store.g.get(sources, ['ask', 'cost', 'usage', 'using']),
   ])
   let models = await store.g.get([
     ...new Set(asks.flatMap((b) => {
@@ -255,19 +255,75 @@ let linesOf = async (
   most: number,
   from?: number,
 ) => {
-  let newest = (await store.g.read(
-    q`.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
+  let newest = (await drawnOf(
+    store,
+    q`.entry.session=${session}&.order=-entry.seq&.limit=${most}`,
   )).reverse()
   let oldest = Number(comp(newest[0], 'entry')?.seq)
   if (from == null || newest.length < most || !(oldest > from + 1)) {
     return newest
   }
   return [
-    ...await store.g.read(
-      q`.entry.session=${session}&.entry.seq>${from}&.entry.seq<${oldest}&.order=entry.seq&*`,
+    ...await drawnOf(
+      store,
+      q`.entry.session=${session}&.entry.seq>${from}&.entry.seq<${oldest}&.order=entry.seq`,
     ),
     ...newest,
   ]
+}
+
+// The lines `where` names as a conversation draws them: every component but
+// two whose bulk it never draws, of which it reads only what it does. Of a
+// call's `result`, the call it answers, never its value (a page's screenshot,
+// a file); of a line's `sending`, its tool offer, and of an ask's the
+// instructions it sent, which most asks repeat from the ask before: read a
+// few asks at a time, each text held once.
+let drawnOf = async (store: Store, where: Built) => {
+  let [rows, slim] = await Promise.all([
+    store.g.read(q`${sub(where)}&${sub(drawnComps(store.g))}`),
+    store.g.read(q`${sub(where)}&.fields=${SLIM}`),
+  ])
+  let at = new Map(rows.map((b) => [b.entity.eid, b]))
+  for (let s of slim) {
+    let b = at.get(s.entity.eid)
+    if (b && s.result) b.result = s.result
+    if (b && s.sending) b.sending = s.sending
+  }
+  await instructed(store, rows.filter((b) => b.ask))
+  return rows
+}
+let SLIM = ['entity.eid', 'result.call', 'sending.offer']
+let BULKY = ['result', 'sending']
+let drawn = new WeakMap<Graph, Built>()
+let drawnComps = (g: Graph) => {
+  let held = drawn.get(g)
+  if (!held) {
+    let names = g.vocab.all.filter((n) => !BULKY.includes(n))
+    held = q`?${names[0]}`
+    for (let n of names.slice(1)) held = q`${sub(held)}&?${n}`
+    drawn.set(g, held)
+  }
+  return held
+}
+// How many asks' instructions one read holds.
+let FEW = 8
+let instructed = async (store: Store, asks: Bundle[]) => {
+  let held = new Map<string, string>()
+  for (let i = 0; i < asks.length; i += FEW) {
+    let some = asks.slice(i, i + FEW)
+    let read = await store.g.read(
+      q`.entity.eid=${
+        some.map((b) => b.entity.eid)
+      }&.fields=entity.eid,sending.instructions`,
+    )
+    let said = new Map(read.map((b) => [b.entity.eid, comp(b, 'sending')]))
+    for (let b of some) {
+      let text = said.get(b.entity.eid)?.instructions
+      if (typeof text != 'string') continue
+      if (!held.has(text)) held.set(text, text)
+      b.sending = { ...comp(b, 'sending'), instructions: held.get(text) }
+    }
+  }
 }
 // The helpers these calls started, each with its own lines.
 let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
