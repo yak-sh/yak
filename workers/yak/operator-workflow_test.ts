@@ -10,6 +10,7 @@ import { cloudflare, vars } from './probe.ts'
 import { appStore, directoryOf } from './directory.ts'
 import { connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
+import { keepListings } from './catalog.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { WINDOW } from '../../packages/workers-ai/testing.ts'
 import { operating } from './operator.ts'
@@ -50,6 +51,15 @@ await meta(env).apply([{
   },
   unchecked: {},
 }], KERNEL)
+// Nango lists it, so a connections page can add it.
+await keepListings(env, [{
+  name: 'youtube',
+  title: 'YouTube',
+  logo: '',
+  categories: ['video'],
+  hosts: ['www.googleapis.com'],
+  connects: 'signin',
+}])
 
 // App code is built while the connection is requested. The fixture supplies
 // the API fetch boundary; it does not exercise an OAuth connection.
