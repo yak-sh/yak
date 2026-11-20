@@ -1467,6 +1467,34 @@ let sourceAsk = (ask: NonNullable<McpPage['ask']>, action: string, env: Host) =>
     ),
   )
 
+// What a server waiting on its credential offers: a box for its key, or a
+// button that starts its sign-in (`signin` on its connection).
+let mcpCredential = (
+  s: McpPage['servers'][number],
+  on: boolean,
+  action: string,
+) => {
+  if (s.status != 'needed' && s.status != 'broken') return null
+  if (s.keyed) {
+    return on
+      ? h(
+        'form',
+        { method: 'post', action, class: 'Page_Form' },
+        held('server', s.id),
+        keyBox(`mcp-key-${s.id}`, 'Its key', press('mcp-key', 'Save', false)),
+      )
+      : h(Card.Sub, null, "Its key can't be saved here yet.")
+  }
+  return s.connection
+    ? h(
+      'form',
+      { method: 'post', action, class: 'Page_Form' },
+      held('connection', s.connection),
+      h(Form.Actions, null, press('signin', `Sign in to ${s.name}`, false)),
+    )
+    : null
+}
+
 let mcpServers = (m: McpPage, on: boolean, action: string) => {
   let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
     h(
@@ -1508,7 +1536,6 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
   }
   let card = (s: McpPage['servers'][number]) => {
     let [word, tone] = s.enabled ? MCP_STATE[s.status] : ['Off', undefined]
-    let wants = s.status == 'needed' || s.status == 'broken'
     return h(
       Card,
       { id: `mcp-${s.id}` },
@@ -1526,19 +1553,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
       s.header
         ? h(Card.Sub, null, `Its key goes in the ${s.header} header.`)
         : null,
-      wants && s.keyed && on
-        ? form(
-          s.id,
-          keyBox(`mcp-key-${s.id}`, 'Its key', press('mcp-key', 'Save', false)),
-        )
-        : wants
-        ? h(
-          Card.Sub,
-          null,
-          h('a', { href: `${action}#mcp:${s.id}` }, `Sign in to ${s.name}`),
-          ' to use its tools.',
-        )
-        : null,
+      mcpCredential(s, on, action),
       s.enabled ? tools(s.id) : null,
       s.apps.map((a) =>
         h(
@@ -1937,13 +1952,34 @@ let connections = (at: DeskPage, env: Host) => {
         one.status == 'needed' ? 'It will be connected to' : 'Connected for',
       ),
     )
-  let key = c.asked?.name ?? (open ? keyOf(open) : loan?.eid)
+  // An MCP server is opened by its integration's name, `mcp:<id>`, the address
+  // an agent sends a person to sign in at (@yaks/connections `authorization`).
+  let server = c.open && !open && !loan
+    ? c.mcp?.servers.find((s) => `mcp:${s.id}` == c.open)
+    : undefined
+  let key = c.asked?.name ?? (open ? keyOf(open) : loan?.eid ?? c.open)
   let setup = c.asked
     ? offer(c.asked)
     : open
     ? contents(open)
     : loan
     ? borrowing(loan, c.on, action, close, mine(loan))
+    : server
+    ? h(Modal.Body, null, [
+      heading(server.name, { actions: close }),
+      h(Card.Sub, null, server.url),
+      mcpCredential(server, c.on, action) ??
+        h('p', null, `${server.name} needs no sign-in.`),
+    ])
+    : c.open
+    ? h(Modal.Body, null, [
+      heading('Connection details', { actions: close }),
+      h(
+        'p',
+        { role: 'status' },
+        'This connection is not on this page: it was removed, or it belongs to another space.',
+      ),
+    ])
     : null
   let template = (name: string, kids: Kids, offered = false, alias?: string) =>
     name == key ? null : h(offered ? 'template' : 'div', {

@@ -128,3 +128,48 @@ test('a page form for a server the person does not keep says so', async () => {
     { say: 'This MCP server is not connected for you.', no: true },
   )
 })
+
+// The page as the dialog asks for it with `?detail=<open>`, beside a server
+// waiting on its sign-in.
+let detail = async (open: string) => {
+  let html = await (await desk({
+    space: 'ada',
+    apps: [],
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [],
+      services: [],
+      built: [],
+      borrowed: [],
+      open,
+      mcp: {
+        servers: [{
+          id: 's-1',
+          name: 'Linear',
+          url: 'https://mcp.linear.app/mcp',
+          enabled: true,
+          trashed: false,
+          status: 'needed',
+          connection: 'c-1',
+          keyed: false,
+          apps: [],
+        }],
+      },
+    },
+  })).text()
+  return html.slice(html.indexOf('<dialog'), html.indexOf('</dialog>'))
+}
+
+test('a server waiting on its sign-in opens as a dialog that starts it', async () => {
+  let drawn = await detail('mcp:s-1')
+  assertStringIncludes(drawn, 'data-modal-key="mcp:s-1"')
+  assertStringIncludes(drawn, 'name="connection" value="c-1"')
+  assertStringIncludes(drawn, 'value="signin"')
+})
+
+test('a dialog asked for what the page does not hold says why', async () => {
+  let drawn = await detail('gone')
+  assertStringIncludes(drawn, 'data-modal-key="gone"')
+  assertStringIncludes(drawn, 'it was removed, or it belongs to another space')
+})
