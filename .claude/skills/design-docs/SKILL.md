@@ -123,6 +123,10 @@ Any argument starting with `@` is read as a file path (the @file door), so
 `yak task new "@yaks/ui …"` fails with "No such file or directory". Phrase such
 a title so it doesn't start with `@` ("The @yaks/ui style guide …").
 
+A task that asked for the design links to it with `cites` (`graph_apply`
+links `{"from":"T-…","relation":"cites","to":"D-…"}`). Never `requires`: a
+`requires` target must be a task, and a run waits on it as one.
+
 One proposal is one design, so `graph_apply` revises its body rather than
 minting a second. A full replacement takes `id`, `text`, and the `was` token
 from `graph_show`:
