@@ -1124,6 +1124,10 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   let theirs = await load(storage(), false, park)
   let text = (page: typeof own, at: string) =>
     page.document.querySelector(at)?.textContent ?? ''
+  // How a row stands is its mark's label, beside its title.
+  let stands = (page: typeof own, at: string) =>
+    page.document.querySelector(`${at} .Rows_Name .Dot`)
+      ?.getAttribute('aria-label') ?? ''
   let row = `[data-helping] [data-help="${helper}"]`
   // The helper reads the same wherever it is drawn: in the aside, in the
   // step that started it, and in the band on its own page.
@@ -1143,7 +1147,9 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
       text(page, at).replace(/\d+s$/, 'Ns')
     return [
       says(own, '[data-turn]'),
-      says(theirs, `${row} .Rows_Name`) + says(theirs, `${row} .Rows_Meta`),
+      `${stands(theirs, row)}: ${says(theirs, `${row} .Rows_Name`).trim()} · ${
+        says(theirs, `${row} .Rows_Meta`)
+      }`,
       says(theirs, `${row} [data-runs]`),
     ]
   }
@@ -1178,7 +1184,7 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   theirs.leave()
   assertEquals(first, [
     '',
-    'Import the people CSVRunning · Thinking · Ns',
+    'Running: Import the people CSV · Thinking · Ns',
     'yaks.app',
   ])
   assertEquals(
@@ -1191,16 +1197,16 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
     false,
     'its tool, not thinking',
   )
-  assertStringIncludes(running[1], 'Running · ')
+  assertStringIncludes(running[1], 'Running: ')
   assertEquals(ended, [
     '',
-    'Import the people CSVDone · just now',
+    'Done: Import the people CSV · just now',
     'yaks.app',
   ])
   assertEquals(alike, [
-    Array(3).fill('Running · Thinking · Ns'),
+    Array(3).fill('Thinking · Ns'),
     alike[1].map(() => alike[1][0]),
-    Array(3).fill('Done · just now'),
+    Array(3).fill('just now'),
   ])
   assertEquals(
     theirs.document.querySelector(`${row} a`)?.getAttribute('href'),

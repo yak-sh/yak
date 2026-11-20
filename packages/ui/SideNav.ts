@@ -72,6 +72,15 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   [
+    'SideNav-alone',
+    h(
+      SideNav,
+      { mod: 'alone', 'aria-label': 'Reach' },
+      h(Link, { href: '#SideNav', mod: 'on', 'aria-current': 'page' }, 'Mail'),
+      h(Link, { href: '#SideNav' }, 'Chat'),
+    ),
+  ],
+  [
     'SideNav-rail, Label',
     h(
       SideNav,
