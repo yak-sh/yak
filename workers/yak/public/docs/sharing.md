@@ -635,16 +635,26 @@ connection and using its sentinel from a page or worker.
 
 ## How an installed app runs, and the sandbox
 
-An installed app runs like the space's own apps. It is served at
-`<space>.yaks.app/<app>/` on the space's origin, with the browser's own
-`localStorage`, `sessionStorage`, IndexedDB and the sign-in cookie, and its
-vocabulary is shared with the space's other apps the way theirs is. Like them,
-it can read and change everything in the space the person using it can: the
-space is the trust boundary.
+An installed app runs like the space's own apps when the space has reason to
+trust its release:
 
-**The sandbox.** The space's owner can isolate one installed app with
-`app_set(app, sandboxed: true)`, and `sandboxed: false` removes the isolation.
-Every response the app serves then carries
+- yaks.app reviewed the release's code (the review an app gets before the
+  gallery lists it), however it is installed;
+- somebody in the space made the release; or
+- it came from the same space, or from one of yaks.app's own.
+
+Such a copy is served at `<space>.yaks.app/<app>/` on the space's origin, with
+the browser's own `localStorage`, `sessionStorage`, IndexedDB and the sign-in
+cookie, and its vocabulary is shared with the space's other apps the way theirs
+is. Like them, it can read and change everything in the space the person using
+it can: the space is the trust boundary.
+
+Any other copy, such as one installed by a link to a stranger's app nobody
+reviewed, is installed in the sandbox, and the install's answer says so.
+
+**The sandbox.** The space's owner can let a sandboxed copy out with
+`app_set(app, sandboxed: false)`, and isolate any installed app with
+`sandboxed: true`. Every response the app serves then carries
 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups`, so
 the browser runs it in an origin of its own. What changes:
 
@@ -695,13 +705,22 @@ An update always keeps every row they saved, every file they uploaded, and
 everything else the store holds. The answer confirms that, and reports how many
 files were written and how many removed.
 
-Three cases where `app_update` does not update:
+A copy running out of the sandbox takes only a release its space has reason to
+trust (see "How an installed app runs, and the sandbox"): the newest reviewed
+one, or the newest one somebody in the space made. A newer release that is
+neither waits until it is reviewed, and the answer says which version waits. A
+sandboxed copy takes whatever is published.
+
+Four cases where `app_update` does not update:
 
 - The app was not installed from anywhere — it is their own app, and
   `app_deploy` releases what you write in it.
 - The app it came from is no longer published — the copy keeps working, data and
   all, and there is nothing to update it to.
 - It is already at that version — answered, not refused: "nothing to update".
+- It runs out of the sandbox and no newer release has been reviewed or made by
+  somebody in the space — answered, not refused, naming the version that waits.
+  It moves once a review passes, or once the space's owner sandboxes it.
 
 ## Installing instead of building
 

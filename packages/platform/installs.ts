@@ -7,10 +7,11 @@
  * where that is free ({@link landing}), and an update moves its pin to what
  * its publisher offers now ({@link reloads}).
  *
- * The space is the trust boundary (C-37980): an installed copy runs like the
- * space's own apps, and the sandbox (D-37901) is the exception, one install
- * at a time, which its space's owner turns on ({@link sandboxing}). A
- * sandboxed app is served the way a phone serves a third-party app, in an
+ * The space is the trust boundary (C-37980): a copy of a release the space
+ * has reason to trust runs like the space's own apps ({@link vetted}). Any
+ * other is born in the sandbox (D-37901, T-1857), and its space's owner may
+ * let it out, or put any copy in, one install at a time ({@link sandboxing}).
+ * A sandboxed app is served the way a phone serves a third-party app, in an
  * opaque origin of its own:
  *
  *  - The wall: every answer the app gives carries `Content-Security-Policy:
@@ -92,20 +93,67 @@ export let landing = async (
 }
 
 /** What an install writes on its copy's row beside the row a new app is born
- * with: the pin naming the app it came from and the version it took, out of
- * the sandbox, and, where it takes over a stranger's store (`visit`), that
- * the store was seeded already, at the version its sample was made at. */
+ * with: the pin naming the app it came from and the version it took, in the
+ * sandbox or out of it (`walled`), and, where it takes over a stranger's
+ * store (`visit`), that the store was seeded already, at the version its
+ * sample was made at. */
 export let pinned = (
   of: string,
   version: number,
+  walled: boolean,
   visit: { seeded: number | null } | null = null,
   now = new Date(),
 ) => ({
-  installed: { of, version, ...sandboxing(false, now.toISOString()) },
+  installed: { of, version, ...sandboxing(walled, now.toISOString()) },
   ...visit
     ? { seeded: { at: now.toISOString(), version: visit.seeded ?? version } }
     : {},
 })
+
+/**
+ * Whether a copy of a release may run out of the sandbox in a space
+ * (T-1857). Jeff, 2026-11-20: "Gallery apps are assumed safe since we do a
+ * code review", "Any reviewed app could be unsandboxed, however it's
+ * installed", "Or if the app author is in the space it's being installed
+ * into". So: the release passed code review, or the space knows who made it,
+ * because it is `kin` (the space the release was made in, or one of the
+ * platform's own) or `author` (the person who made it, an agent's for whom it
+ * writes) is among its `members`. Membership is read at each install and
+ * update, so an author who leaves holds back only the next update.
+ *
+ * ```ts
+ * import { vetted } from '@yaks/platform/installs'
+ * import { assertEquals } from '@std/assert'
+ * let at = { kin: false, members: new Set(['ann']) }
+ * assertEquals(vetted({ reviewed: false, author: 'bob' }, at), false)
+ * assertEquals(vetted({ reviewed: true, author: 'bob' }, at), true)
+ * assertEquals(vetted({ reviewed: false, author: 'ann' }, at), true)
+ * ```
+ */
+export let vetted = (
+  release: { reviewed?: boolean; author?: string | null },
+  at: { kin: boolean; members: ReadonlySet<string> },
+) =>
+  !!release.reviewed || at.kin ||
+  (!!release.author && at.members.has(release.author))
+
+/** The version an update moves a copy at `was` to, where its publisher
+ * offers `to`: `to` itself in the sandbox (`walled`), else the newest of
+ * their releases after `was` and up to `to` that `ok` vets (`to` alone where
+ * the offer went back), or null where none does and the copy waits. */
+export let next = <V extends Pick<Version, 'version'>>(
+  theirs: V[],
+  was: number,
+  to: number,
+  walled: boolean,
+  ok: (release: V) => boolean,
+): number | null =>
+  walled ? to : theirs
+    .filter((v) =>
+      (to <= was ? v.version == to : v.version > was && v.version <= to) &&
+      ok(v)
+    )
+    .reduce<number | null>((n, v) => Math.max(n ?? 0, v.version), null)
 
 /** Whether moving a copy from version `was` to `to` of its publisher's
  * releases (`theirs`) needs its open pages reloaded: going back, or crossing a

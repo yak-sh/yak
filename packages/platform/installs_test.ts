@@ -6,12 +6,14 @@ import {
   bearerOf,
   copying,
   landing,
+  next,
   pinned,
   reloads,
   SANDBOX,
   stored,
   taken,
   tokenOf,
+  vetted,
   walled,
 } from './installs.ts'
 
@@ -60,12 +62,41 @@ test('a copy is pinned to its version, and to its sample where it kept one', () 
   let now = new Date('2026-11-15T00:00:00Z')
   let at = now.toISOString()
   let pin = { of: 'a', version: 3, sandboxed: null, trusted: at }
-  assertEquals(pinned('a', 3, null, now), { installed: pin })
-  assertEquals(pinned('a', 3, { seeded: 2 }, now), {
+  assertEquals(pinned('a', 3, false, null, now), { installed: pin })
+  assertEquals(pinned('a', 3, false, { seeded: 2 }, now), {
     installed: pin,
     seeded: { at, version: 2 },
   })
-  assertEquals(pinned('a', 3, { seeded: null }, now).seeded?.version, 3)
+  assertEquals(pinned('a', 3, false, { seeded: null }, now).seeded?.version, 3)
+  assertEquals(pinned('a', 3, true, null, now).installed, {
+    of: 'a',
+    version: 3,
+    sandboxed: at,
+    trusted: null,
+  })
+})
+
+test('a copy runs out of the sandbox when it was reviewed or the space knows its maker', () => {
+  let at = (kin: boolean) => ({ kin, members: new Set(['ann']) })
+  let cases: [boolean, string | null, boolean, boolean][] = [
+    [false, 'bob', false, false],
+    [true, 'bob', false, true],
+    [false, 'ann', false, true],
+    [false, 'bob', true, true],
+    [false, null, false, false],
+  ]
+  for (let [reviewed, author, kin, out] of cases) {
+    assertEquals(vetted({ reviewed, author }, at(kin)), out)
+  }
+})
+
+test("an unsandboxed copy's update takes the newest vetted release, a sandboxed one the newest", () => {
+  let theirs = [1, 2, 3, 4].map((version) => ({ version, ok: version != 4 }))
+  let at = (was: number, walled: boolean) =>
+    next(theirs, was, 4, walled, (v) => v.ok)
+  assertEquals([at(1, false), at(3, false), at(1, true)], [3, null, 4])
+  assertEquals(next(theirs, 4, 2, false, (v) => v.ok), 2)
+  assertEquals(next(theirs, 3, 4, false, (v) => v.ok), null)
 })
 
 test('an update reloads going back or across a release that says so', () => {

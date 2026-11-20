@@ -45,6 +45,12 @@ export type Version = {
   /** The sha of a picture of this release as a browser drew it, among the
    * app's uploads (app_preview `keep`). */
   screenshot?: string | null
+  /** Who made it: the writer its row was created by, a person or an agent
+   * writing for one. */
+  by?: string | null
+  /** Whether it passed yaks.app's code review (`code_review` on its row,
+   * verdict approve). */
+  reviewed?: boolean
 }
 
 /** One move of an app's live pointer, as its `switched` row says it: the

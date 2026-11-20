@@ -818,27 +818,41 @@ export let drop = (env: Env, shared: Shared) =>
     }],
   })
 
-/** An agent's code review of the release asked about. A new ask or a
- * withdrawal clears it with the ask. */
+/** An agent's code review of the release asked about: on the shared row,
+ * where a new ask or a withdrawal clears it with the ask, and on the release
+ * itself (its `deploy` row), where it stays. A release that passed is one
+ * another space's copy may run unsandboxed (@yaks/platform/installs
+ * `vetted`, T-1857). */
 export let reviewed = (
   shared: Shared,
   code: Verdict,
   actor: Actor,
+  release: string | null,
   now = new Date(),
-): Bundle => ({
-  entity: { eid: shared.eid },
-  code_review: {
+): Bundle[] => {
+  let review = {
     verdict: code.verdict,
     findings: code.findings,
-    version: shared.published?.version ?? 0,
     at: now.toISOString(),
     by: actor.by ?? null,
     via: actor.via ?? null,
-  },
-})
+  }
+  return [
+    {
+      entity: { eid: shared.eid },
+      code_review: { ...review, version: shared.published?.version ?? 0 },
+    },
+    ...release ? [{ entity: { eid: release }, code_review: review }] : [],
+  ]
+}
 
-export let review = (env: Env, shared: Shared, code: Verdict, actor: Actor) =>
-  stamp(env, { entities: [reviewed(shared, code, actor)] }, { actor })
+export let review = (
+  env: Env,
+  shared: Shared,
+  code: Verdict,
+  actor: Actor,
+  release: string | null,
+) => stamp(env, { entities: reviewed(shared, code, actor, release) }, { actor })
 
 /** The platform's featured mark on something shared or on a space, or the
  * mark taken off (`gallery_feature`, T-160642). */

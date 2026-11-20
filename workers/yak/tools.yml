@@ -656,7 +656,8 @@ app_set:
     drops it: it stops redirecting and another app can take it, final for that
     address. sandboxed: true runs an app installed from someone else's release
     in a browser origin of its own, reaching only its own data, with
-    localStorage supplied by the platform; false lets it out again. join sets
+    localStorage supplied by the platform; false lets it out, including a
+    copy installed sandboxed because nobody reviewed its release. join sets
     who may join without an invitation. Installed copies use the policy set
     by their space owner. An empty join object clears the owner policy. Only
     the space owner may set home, screenshot, forget, sandboxed or join. Returns the
@@ -1092,10 +1093,13 @@ app_install:
     next version does not arrive on its own, and app_update moves the copy
     forward while keeping their data. Pass the published name and optionally
     as for the new app slug. By default it uses the source app slug if free,
-    otherwise the published name, adding -2, -3, and so on until free. The copy runs like the space's own apps,
-    with the browser's own storage and access to everything in the space;
-    the space owner's app_set(sandboxed: true) walls it off in a browser
-    origin of its own. Returns the installed version, file count, new URL
+    otherwise the published name, adding -2, -3, and so on until free. A
+    copy of a release yaks.app reviewed, or one somebody in the space made,
+    runs like the space's own apps, with the browser's own storage and
+    access to everything in the space. Any other copy is installed
+    sandboxed, in a browser origin of its own reaching only its own data,
+    and the answer says so; the space owner's app_set(sandboxed: false)
+    lets it out, and app_set(sandboxed: true) walls any copy off. Returns the installed version, file count, new URL
     and deployment details. Documentation:
     https://yaks.app/docs/sharing.
 app_update:
@@ -1109,8 +1113,10 @@ app_update:
     is replaced too. A vocab.json schema that only added properties is
     applied to their store; one that would retype a property their rows
     were written under is refused, and nothing moves. A connection the new
-    version uses that the copy did not is asked for, as app_install asks. It
-    reports what changed. To undo: app_rollback, since the update goes out as a version
+    version uses that the copy did not is asked for, as app_install asks. A
+    copy running out of the sandbox takes only a release yaks.app reviewed
+    or somebody in the space made: a newer one that is neither waits, and
+    the answer says so. It reports what changed. To undo: app_rollback, since the update goes out as a version
     like any other and app_versions lists the one before it. Documentation:
     https://yaks.app/docs/sharing.
 app_rate:

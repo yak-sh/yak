@@ -343,3 +343,76 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     await k.stop()
   }
 })
+
+// A copy of a stranger's release is born sandboxed (T-1857); one whose release
+// passed yaks.app's code review runs like the space's own, and its updates
+// take only reviewed releases while it does.
+test("a stranger's unreviewed release installs sandboxed, a reviewed one does not", async () => {
+  let k = await kernel()
+  try {
+    let maker = await signIn(k)
+    let publisher = connector(k, maker.cookie)
+    let mine = maker.email.split('@')[0]
+    let offer = `notes-${crypto.randomUUID().slice(0, 8)}`
+    let release = async (title: string) => {
+      await publisher.tool('app_files', {
+        space: mine,
+        app: 'notes',
+        files: [{
+          path: 'index.html',
+          content:
+            `<meta property="og:image" content="card.png"><h1>${title}</h1>`,
+        }],
+      })
+      await publisher.tool('app_deploy', { space: mine, app: 'notes' })
+      await publisher.tool('app_publish', {
+        space: mine,
+        app: 'notes',
+        name: offer,
+        gallery: true,
+      })
+    }
+    await publisher.tool('app_new', {
+      space: mine,
+      slug: 'notes',
+      title: 'Notes',
+    })
+    await release('v1')
+
+    let them = await signIn(k)
+    let installer = connector(k, them.cookie)
+    let space = them.email.split('@')[0]
+    let walled = async (app: string) =>
+      ((await k.at(`${space}.yaks.app`, `/${app}/`, {
+        headers: { cookie: them.cookie },
+      })).headers.get('content-security-policy') ?? '').includes('sandbox')
+    assertStringIncludes(
+      await installer.tool('app_install', { name: offer, as: 'raw' }),
+      'It runs sandboxed',
+    )
+    assertEquals(await walled('raw'), true)
+
+    await connector(k, k.owner.cookie).tool('gallery_code_review', {
+      app: `${mine}/notes`,
+      verdict: 'approve',
+      findings: 'Shows a heading.',
+    })
+    let said = await installer.tool('app_install', { name: offer, as: 'kept' })
+    assert(!said.includes('sandboxed'), said)
+    assertEquals(await walled('kept'), false)
+
+    // v2 has no review: the copy out of the sandbox waits, the walled one moves.
+    await release('v2')
+    assertStringIncludes(
+      await installer.tool('app_update', { app: 'kept' }),
+      `v2 of ${offer} waits`,
+    )
+    assertStringIncludes(
+      await installer.tool('app_update', { app: 'raw' }),
+      'from v1 to v2',
+    )
+    assertEquals(await walled('kept'), false)
+  } finally {
+    await k.stop()
+  }
+})

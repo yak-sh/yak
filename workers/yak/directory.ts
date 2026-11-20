@@ -787,7 +787,7 @@ export type Row = MeteredRow & {
     via?: Id | null
     reason?: string
   }
-  code_review?: { version?: number | null }
+  code_review?: { version?: number | null; verdict?: string | null }
   featured?: { at?: string | null }
   screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
@@ -1805,6 +1805,8 @@ export let deployOf = (r: Row) => ({
   screenshot: r.deploy!.screenshot ?? null,
   lenses: r.deploy!.lenses as Record<string, number> | undefined,
   speaks: r.deploy!.speaks as Record<string, number> | undefined,
+  by: r.created?.by ? idOf(r.created.by) : null,
+  reviewed: r.code_review?.verdict == 'approve',
 })
 
 /** One open draft of an app (written.ts `AppDraft`), as a row reads. */
@@ -3649,7 +3651,8 @@ export let directoryRows = (rows: {
       let all = byApp(
         await many(
           apps,
-          (eids) => line`.deploy.app=${eids}${sub(range)}&?created`,
+          (eids) =>
+            line`.deploy.app=${eids}${sub(range)}&?created&?code_review`,
         ),
         (row) => row.deploy?.app,
         deployOf,
@@ -3739,10 +3742,22 @@ export let directoryRows = (rows: {
         ...more.length ? await query(line`.entity.eid=${more}`) : [],
       ])
     },
+    // The person each writer stands for: an agent's, by its `acts_for`, and
+    // anyone else themself. Who made a release, as a space's membership
+    // knows them (@yaks/platform/installs `vetted`).
+    authors: async (eids: string[]): Promise<Map<string, string>> => {
+      let ids = [...new Set(eids)]
+      if (!ids.length) return new Map()
+      let rows = await query(line`.entity.eid=${ids}&?acts_for`)
+      let agents = new Map(
+        rows.map((r) => [r.entity.eid, principals([r])[0]] as const),
+      )
+      return new Map(ids.map((id) => [id, agents.get(id) ?? id]))
+    },
     // One release of the app, by its version.
     deployAt: async (app: App, version: number) => {
       let row = await one(
-        line`.deploy.app=${app.eid}&.deploy.version=${version}&?created`,
+        line`.deploy.app=${app.eid}&.deploy.version=${version}&?created&?code_review`,
       )
       return row?.deploy ? deployOf(row) : null
     },

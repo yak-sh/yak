@@ -267,7 +267,7 @@
         "sandboxed": {
           "type": "string",
           "format": "date-time",
-          "description": "when the space's owner put the copy in a sandbox, a browser origin of its own; empty while it runs like the space's own apps"
+          "description": "when the copy was put in a sandbox, a browser origin of its own: at install, for a release yaks.app did not review and nobody in the space made, or by the space's owner since; empty while it runs like the space's own apps"
         },
         "trusted": {
           "type": "string",
@@ -689,7 +689,7 @@
           "description": "the session that reviewed it"
         }
       },
-      "description": "an agent's review of somebody else's published app or skill before the platform's owner decides its listing; server-owned"
+      "description": "an agent's review of somebody else's published app or skill before the platform's owner decides its listing, on the shared row while the ask stands; and on the release it read (a deploy row), where an approve lets copies in other spaces run unsandboxed; server-owned"
     },
     "featured": {
       "component": true,

@@ -142,11 +142,13 @@ import { latestSpeaks, ownSpeaks } from '@yaks/platform/lenses'
 import {
   copying,
   landing,
+  next,
   pinned,
   reloads,
   sandboxed,
   sandboxing,
   taken,
+  vetted,
 } from '@yaks/platform/installs'
 import { unbranched, watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
@@ -2496,26 +2498,53 @@ let installing = (
   return version
 }
 
-let offered = async (
-  ctx: Ctx,
-  from: { space: Space; app: App },
-  number = from.app.published!.version,
-) => {
-  let version = (await ctx.dir.deploys(from.app)).find((v) =>
-    v.version == number
-  )
+// One of a publisher's releases (`theirs`, directory.ts `deploys`), by its
+// version.
+let releaseAt = <V extends Version>(theirs: V[], number: number) => {
+  let version = theirs.find((v) => v.version == number)
   if (!version) {
     throw refuse(
       'missing',
       `published version ${number} has no retained release`,
     )
   }
-  return taken(
+  return version
+}
+
+// The files a copy of a release takes.
+let offered = async (ctx: Ctx, version: Version) =>
+  taken(
     version.source
       ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
       : version.files,
   )
+
+// Whether `space` vets each of a publisher's releases (`theirs`) to run out
+// of the sandbox (@yaks/platform/installs `vetted`, T-1857): the space's
+// members and who made each release, read once.
+let vetting = async (
+  ctx: Ctx,
+  space: Space,
+  from: { space: Space },
+  theirs: Version[],
+) => {
+  let kin = from.space.eid == space.eid || await ours(ctx.dir, from.space)
+  let [members, persons] = kin
+    ? [new Set<string>(), new Map<string, string>()]
+    : await Promise.all([
+      ctx.dir.members(space).then((m) => new Set(m)),
+      ctx.dir.authors(theirs.flatMap((v) => v.by ?? [])),
+    ])
+  return (v: Version) =>
+    vetted(
+      { reviewed: v.reviewed, author: v.by ? persons.get(v.by) : null },
+      { kin, members },
+    )
 }
+
+// What an install or an update says of a copy of a release nobody vetted.
+let UNVETTED = (space: Space) =>
+  `yaks.app has not reviewed its code and nobody in ${space.slug} made it`
 
 // A publication's source and completed build travel together, named by their
 // shas, so an install copies no bytes. The copy earns its own history, and its
@@ -5609,10 +5638,11 @@ let OURS: Row[] = [
         join: JOIN,
         sandboxed: {
           type: 'boolean',
-          description: "for an app installed from someone else's release, " +
-            "which runs like the space's own apps: true runs it in a " +
-            'browser origin of its own, reaching only its own data; false ' +
-            'lets it out again. Only the space owner can set it',
+          description: "for an app installed from someone else's release: " +
+            'true runs it in a browser origin of its own, reaching only its ' +
+            "own data; false lets it out to run like the space's own apps, " +
+            'including a copy installed sandboxed because nobody reviewed ' +
+            'its release. Only the space owner can set it',
         },
         forget: FORGET,
       },
@@ -7174,7 +7204,15 @@ let OURS: Row[] = [
       )
       let claims = await taking(ctx, space, s, who)
       let version = installing(offer, args.version)
-      let source = await offered(ctx, offer, version)
+      let theirs = await ctx.dir.deploys(offer.app)
+      let release = releaseAt(theirs, version)
+      // A copy of a release the space has no reason to trust is born in the
+      // sandbox (T-1857), borrowing nothing, until its owner lets it out.
+      let [source, ok] = await Promise.all([
+        offered(ctx, release),
+        vetting(ctx, space, offer, theirs),
+      ])
+      let walled = !ok(release)
       // The words the copy will declare, read off the app it is copied from,
       // before anything is written. A release refuses a manifest it cannot
       // read (vocab.ts `appDoc`) — and that refusal used to arrive after the
@@ -7185,7 +7223,7 @@ let OURS: Row[] = [
       let accepted = Object.keys(
         appDoc(said.source ?? {}, said.file).$defs ?? {},
       )
-      if (said.source != null) {
+      if (said.source != null && !walled) {
         let { homes } = await homesIn(ctx, space, s)
         homed(appDoc(said.source, said.file), homes)
       }
@@ -7207,6 +7245,7 @@ let OURS: Row[] = [
         ...pinned(
           offer.app.eid,
           version,
+          walled,
           kept ? { seeded: offer.app.demo?.version ?? null } : null,
         ),
       }
@@ -7285,7 +7324,6 @@ let OURS: Row[] = [
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
       // its slug, its worker.js uploaded as its own script.
-      let theirs = await ctx.dir.deploys(offer.app)
       let out = await released(
         ctx,
         space,
@@ -7308,7 +7346,14 @@ let OURS: Row[] = [
               ? 'with everything this browser made there'
               : 'its own store and its own data'
           }, pinned to that version (app_update moves ` +
-          'it)' + asked.said + out.said +
+          'it)' +
+          (walled
+            ? `. It runs sandboxed, in a browser origin of its own and ` +
+              `reaching only its own data: ${UNVETTED(space)}. The space ` +
+              "owner's app_set(sandboxed: false) lets it out to run like " +
+              "the space's own apps"
+            : '') +
+          asked.said + out.said +
           (previews ? '. ' + HELD(previews.site) : '') +
           `. What yaks.app says of ${name}: ${
             reputed(
@@ -7376,7 +7421,21 @@ let OURS: Row[] = [
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
-      let source = await offered(ctx, from, to)
+      // A copy out of the sandbox takes only a release its space vets
+      // (T-1857): an unvetted newer one waits, and the answer says so.
+      let theirs = await ctx.dir.deploys(from.app)
+      let walled = sandboxed(app)
+      let ok = walled ? () => true : await vetting(ctx, space, from, theirs)
+      let take = next(theirs, was, to, walled, ok)
+      let waits = take == to ? '' : `v${to} of ${named} waits: ` +
+        `${UNVETTED(space)}, and ${space.slug}/${app.slug} runs out of the ` +
+        'sandbox. It moves once a review passes, or once the space ' +
+        "owner's app_set(sandboxed: true) walls it off"
+      if (take == null) {
+        return { text: `${waits}; it stays at v${was}`, space }
+      }
+      to = take
+      let source = await offered(ctx, releaseAt(theirs, to))
       let said = await offeredWords(r2RawObjects(ctx.env.BLOBS), source)
       let accepted = Object.keys(
         appDoc(said.source ?? {}, said.file).$defs ?? {},
@@ -7384,7 +7443,6 @@ let OURS: Row[] = [
       if (said.source != null) {
         await fits(ctx, space, app, store, said.source, said.file, accepted)
       }
-      let theirs = await ctx.dir.deploys(from.app)
       let reload = reloads(theirs, was, to)
       let { wrote, gone, draft } = await copied(
         ctx,
@@ -7424,7 +7482,8 @@ let OURS: Row[] = [
             wrote.length == 1 ? 'file' : 'files'
           }${
             gone.length ? `, ${gone.length} removed` : ''
-          } — everything it had saved is still there` + asked.said + out.said,
+          } — everything it had saved is still there` + asked.said + out.said +
+          (waits ? `. ${waits}` : ''),
         space,
       }
     },
@@ -8357,7 +8416,14 @@ let OURS: Row[] = [
       await mail(ctx.env)(
         await reviewLetter(ctx, at.space, at.app, owner, code),
       )
-      await reviewCode(ctx.env, at.app, code, await decider(ctx, args))
+      let release = await ctx.dir.deployAt(at.app, at.app.published!.version)
+      await reviewCode(
+        ctx.env,
+        at.app,
+        code,
+        await decider(ctx, args),
+        release?.eid ?? null,
+      )
       return {
         text: `${name}: code review recorded (${code.verdict}); its review ` +
           "request went to yaks.app's owner",

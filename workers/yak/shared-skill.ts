@@ -674,7 +674,7 @@ export let codeReviewed = async (
   let owner = await ctx.dir.nameAt(await owned(ctx.dir, at.space)) ??
     at.space.slug
   await mail(ctx.env)(await ownerLetter(ctx.env, { ...at, owner }, code))
-  await review(ctx.env, at.skill, code, actor)
+  await review(ctx.env, at.skill, code, actor, null)
   return {
     text: `${name}: code review recorded (${code.verdict}); its review ` +
       "request went to yaks.app's owner",
