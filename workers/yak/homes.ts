@@ -14,7 +14,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { Denied, mode, reads } from '@yaks/member'
 import { borrowed } from '@yaks/reach'
 import { sandboxed } from '@yaks/platform/installs'
-import type { App, Directory, Space } from './directory.ts'
+import type { App, Directory, Role, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Reach, vocabAt } from './reach.ts'
 import type { Who } from './session.ts'
@@ -23,27 +23,40 @@ import type { Who } from './session.ts'
  * install. Neither borrows across the space. */
 export let local = (app: App) => app.scope == 'store' || sandboxed(app)
 
-/** An app and the apps in its space homing the words it uses, as the
- * directory has them. */
-export type Homes = { space: Space; app: App; homes: App[] }
+type Home = { app: App; role: Role | null }
+
+/** An app and the homes of its words, with the caller's standing at each. */
+export type Homes = { space: Space; app: App; homes: Home[] }
+
+/** The person whose directory standing can be used at a home. A visit and
+ * an app acting as itself hold their standing in the borrowing store. */
+export let personAtHome = (app: Eid, who: Who): string | null =>
+  who.person == app || who.visit ? null : who.person
 
 /** The homes of the words `app` uses: none where it borrows none or keeps to
  * its own store, and null where the directory has no such app. */
 export let homesOf = async (
-  dir: Pick<Directory, 'appAt' | 'app'>,
+  dir: Pick<Directory, 'appAt' | 'page'>,
   app: Eid,
   uses: Record<string, string>,
+  person: string | null,
 ): Promise<Homes | null> => {
   let at = await dir.appAt(app)
   if (!at) return null
   let slugs = local(at.app) ? [] : [...new Set(Object.values(uses))]
-  let homes = (await Promise.all(slugs.map((slug) => dir.app(at.space, slug))))
-    .filter((one): one is App => !!one && !sandboxed(one))
+  let pages = await Promise.all(
+    slugs.map((slug) => dir.page(at.space.slug, slug, person)),
+  )
+  let homes = pages.flatMap(({ app: home, role, grants }): Home[] =>
+    home && home.space == at.space.eid && !home.trashed && !sandboxed(home)
+      ? [{ app: home, role: role ?? grants?.get(home.eid) ?? null }]
+      : []
+  )
   return { ...at, homes }
 }
 
 // Whether the caller may read a home now: a private one is its members'.
-let readable = (who: Who) => (home: App) => reads(mode(home.access), who.role)
+let readable = ({ app, role }: Home) => reads(mode(app.access), role)
 
 /** A read naming words the app borrows from a home its caller may not read
  * now. Alone, the app's store knows no such word, and would say so; this says
@@ -70,8 +83,8 @@ export let unlent = (
 ): Unlent | null => {
   let words = borrowed(line, uses)
   let home = homes.find((one) =>
-    !readable(who)(one) && words.some((w) => uses[w] == one.slug)
-  )
+    !readable(one) && words.some((w) => uses[w] == one.app.slug)
+  )?.app
   return home
     ? new Unlent(who, home, words.filter((w) => uses[w] == home.slug))
     : null
@@ -87,11 +100,20 @@ export let reachIn = (
   who: Who,
   self: Pick<Reach, 'door' | 'headers'>,
   heed: Record<string, string> = {},
-): Reach[] => [
-  { space, app, who, ...self },
-  ...homes.filter(readable(who))
-    .map((home) => ({ space, app: home, who, headers: heed })),
-]
+): Reach[] => {
+  let caller = personAtHome(app.eid, who)
+    ? who
+    : { person: null, role: null, via: who.via }
+  return [
+    { space, app, who, ...self },
+    ...homes.filter(readable).map(({ app: home, role }) => ({
+      space,
+      app: home,
+      who: { ...caller, role },
+      headers: heed,
+    })),
+  ]
+}
 
 /** The words a page of the reach's first store loads beside that store's
  * own documents: each home's declaration of the words this app uses from it,

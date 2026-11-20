@@ -11,11 +11,20 @@ import { installPair, made } from '../../packages/workerd/testing.ts'
 import { call, type Ctx } from './tools.ts'
 import { operators } from './operator-service-probe.ts'
 import { platform } from './testing.ts'
-import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
+import {
+  ADA,
+  ADA_OWNS,
+  as,
+  SECRET,
+  seeded,
+  visit,
+} from './serving-data-probe.ts'
 import { type App, appStore, storeName } from './directory.ts'
 import { ACROSS } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { homesOf } from './homes.ts'
+import { fetch as serve } from './apps.ts'
+import { GRANT, owning } from './dispatch.ts'
 
 let runtime = platform(SECRET, { BUILDER: operators })
 let { env } = runtime
@@ -158,10 +167,12 @@ test('a store-scoped app keeps the homes of the words it uses out of its reach',
   let found = await homesOf(
     {
       appAt: () => Promise.resolve({ space, app: scoped }),
-      app: () => Promise.resolve(shelf),
-    } as unknown as Parameters<typeof homesOf>[0],
+      page: () =>
+        Promise.reject(new Error('store-scoped app asked for a home')),
+    },
     scoped.eid,
     { book: 'shelf' },
+    ADA,
   )
   equal(found?.homes, [])
 })
@@ -171,9 +182,65 @@ let UNLENT =
 let access = (app: string, access: string) =>
   call(ctx, 'app_set', { space: 'ada', app, access })
 
-test('a visitor watches a borrowed word with the standing their visit holds', async () => {
+let page = (headers: Record<string, string>) => ({
+  read: async () =>
+    (await serve(visit('/loans/api/query?q=.book', { headers }), env)).json(),
+  check: async (word: Omit<Bundle, 'entity'>) => {
+    let res = await serve(
+      visit('/loans/api/apply?check=1', {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify([{ entity: { eid: '$new' }, ...word }]),
+      }),
+      env,
+    )
+    await res.body?.cancel()
+    return res.ok
+  },
+})
+
+test('a grantee reads and rehearses writes with their standing at the home', async () => {
   await access('loans', 'private')
   await access('shelf', 'private')
+  let person = crypto.randomUUID(), grant = crypto.randomUUID()
+  await dir.apply({
+    entities: [
+      { entity: { eid: person }, person: {} },
+      {
+        entity: { eid: crypto.randomUUID() },
+        grant: { app: loans.eid, person, access: 'editor' },
+      },
+    ],
+  }, KERNEL)
+  let { read, check } = page({ cookie: await as(person) })
+  let work = { book: { title: 'Kindred' } }
+  equal((await read()).error?.message, UNLENT)
+  equal(await check(work), false)
+  equal(await check({ loan: { to: 'Bo' } }), true)
+
+  let grantAtHome = (access: string) =>
+    dir.apply({
+      entities: [{
+        entity: { eid: grant },
+        grant: { app: shelf.eid, person, access },
+      }],
+    }, KERNEL)
+  await grantAtHome('viewer')
+  equal(titles(await read()), ['Dune', 'Emma', 'Kim'])
+  equal(await check(work), false)
+  await grantAtHome('editor')
+  equal(await check(work), true)
+})
+
+test("the app's worker can rehearse its own writes and has no standing at a private home", async () => {
+  let app = (await dir.app(space, 'loans'))!
+  let { read, check } = page({ [GRANT]: await owning(SECRET, name, app) })
+  equal((await read()).error?.message, UNLENT)
+  equal(await check({ loan: { to: 'Bo' } }), true)
+  equal(await check({ book: { title: 'Kindred' } }), false)
+})
+
+test('a sample visitor watching a word from a private home is refused', async () => {
   // A stranger views a private app on offer at its sample, which is the store
   // their socket opened (@yaks/platform/visits `visitorRole`).
   let offered = {
@@ -182,12 +249,12 @@ test('a visitor watches a borrowed word with the standing their visit holds', as
     demo: { store: name },
   }
   await dir.apply({ entities: [offered] }, KERNEL)
-  let visit = { 'x-yak-via': crypto.randomUUID(), 'x-yak-role': 'viewer' }
-  equal(await (await watching('loans', visit)).heard(), [[
-    'Dune',
-    'Emma',
-    'Kim',
-  ]])
+  let viewer = {
+    'x-yak-via': crypto.randomUUID(),
+    'x-yak-role': 'viewer',
+    'x-yak-visit': '1',
+  }
+  equal(await (await watching('loans', viewer)).heard(), [UNLENT])
   await dir.apply({
     entities: [{ entity: { eid: loans.eid }, published: null, demo: null }],
   }, KERNEL)

@@ -378,7 +378,14 @@ import {
   IDEMPOTENCY,
   type Namespace,
 } from '@yaks/durable-object/door'
-import { borrowedDocs, type Homes, homesOf, reachIn, unlent } from './homes.ts'
+import {
+  borrowedDocs,
+  type Homes,
+  homesOf,
+  personAtHome,
+  reachIn,
+  unlent,
+} from './homes.ts'
 import { type Reach, read, written } from './reach.ts'
 import { vouched, vouchedAs, type Who } from './session.ts'
 import type { Role } from './directory.ts'
@@ -4849,8 +4856,13 @@ export class Store extends Durable {
     if (path == '/apply' && !crosses(request)) return null
     let app = request.headers.get('x-yak-app') ?? this.#get('app')
     if (!app) return null
-    let found = await homesOf(this.#directory(), app, uses)
     let who = vouchedAs(request.headers)
+    let found = await homesOf(
+      this.#directory(),
+      app,
+      uses,
+      personAtHome(app, who),
+    )
     let refusal = found && path == '/query' && unlent(found, who, line, uses)
     if (refusal) return this.#refusal(refusal)
     let speaks = request.headers.get('x-yak-speaks')
@@ -4953,16 +4965,17 @@ export class Store extends Durable {
   // store's name beside (`HEED`), so a home knows whom to tell. Where its
   // homes are, and who may read them, is the directory's word as each round
   // of reads asks it: the reads one commit or one home's news raises share
-  // one answer, and the next round asks again, so a home made private is
-  // left out of the next answer as it is of the next page's read.
+  // an answer per person, and the next round asks again.
   #lending(branch: number | undefined, feed: () => void): Reached {
-    let asking: Promise<Homes | null> | undefined
-    let homes = () => {
-      let app = this.#get('app')
-      return asking ??=
-        (app
-          ? homesOf(this.#directory(), app, this.#uses())
-          : Promise.resolve(null)).finally(() => asking = undefined)
+    let asking = new Map<string | null, Promise<Homes | null>>()
+    let homes = (app: string, uses: Uses, asker: Who) => {
+      let person = personAtHome(app, asker)
+      let same = asking.get(person)
+      if (same) return same
+      let found = homesOf(this.#directory(), app, uses, person)
+        .finally(() => asking.delete(person))
+      asking.set(person, found)
+      return found
     }
     return reached({
       read: async (line, opts, writer) => {
@@ -4978,7 +4991,9 @@ export class Store extends Durable {
           ...vouched(asker),
           ...speaks,
         })
-        let at = await homes()
+        let app = this.#get('app')
+        let uses = this.#uses()
+        let at = app && await homes(app, uses, asker)
         if (!at) {
           let rows = await door.consume<Row[] | Reduced>(
             `/query?q=${encodeURIComponent(line)}&listing=1`,
@@ -4986,7 +5001,7 @@ export class Store extends Durable {
           )
           return Array.isArray(rows) ? listed(rows, line) as Bundle[] : rows
         }
-        let refusal = unlent(at, asker, line, this.#uses())
+        let refusal = unlent(at, asker, line, uses)
         if (refusal) throw refusal
         let reach = reachIn(at, asker, { door, headers: speaks }, {
           [HEED]: name,
@@ -5002,9 +5017,8 @@ export class Store extends Durable {
 
   // Who opened a socket's watch, as the door that let the socket in vouched
   // them (`#auth`, `#authority`): what its HTTP door hands a store it asks
-  // (`vouchedAs`), so a home hears the same caller from a page's watch as
-  // from its read, a visitor's instrument and standing included. Its person
-  // and level are the socket's as they stand now (`sockets`' `read`).
+  // (`vouchedAs`). Its person and level are the socket's as they stand now
+  // (`sockets`' `read`); each home's standing is read by `homesOf`.
   #opener(opts?: ReadOpts, writer?: PeerWriter): Who {
     let v = this.#authority(writer?.actor)
     let via = v?.via ?? writer?.actor?.via
