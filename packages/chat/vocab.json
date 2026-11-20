@@ -15,7 +15,7 @@
             "via": "discord",
             "message_id": "1310000000000000001",
             "at": "2026-11-20T05:40:00.000Z",
-            "mentioned": true
+            "addressed": "mention"
           },
           "doc": {
             "body": "what's on my calendar tomorrow?"
@@ -28,12 +28,14 @@
     "chat_message": {
       "component": true,
       "type": "object",
-      "description": "one message said in a room of a chat platform; its words are `doc{body}`. Its eid is derived from `via` and `message_id` (@yaks/chat `messageEid`), so hearing it twice writes one",
+      "description": "one message said in a room of a chat platform; its words are `doc{body}`. Its eid is derived from `via` and `message_id` (@yaks/chat `messageEid`), so hearing it twice writes one. One with @yaks/mail's `deliver{to}` asks to be posted in the `chat_room` `deliver.to` names, by the bot of its `connection`, and its outcome is `delivered` or `bounced`",
       "properties": {
         "via": {
           "type": "string",
           "description": "the chat platform it was said on, by its plugin's name",
-          "examples": ["discord"]
+          "examples": [
+            "discord"
+          ]
         },
         "room": {
           "type": "string",
@@ -60,9 +62,20 @@
           "format": "date-time",
           "description": "when it was said"
         },
-        "mentioned": {
-          "type": "boolean",
-          "description": "whether it named the bot that heard it, or was said to it alone"
+        "addressed": {
+          "type": "string",
+          "enum": [
+            "mention",
+            "reply",
+            "direct"
+          ],
+          "description": "how it was said to the bot that heard it, where it was: naming it, replying to it, or to it alone. Whether a message is answered is the listener's to decide, from this and its words"
+        },
+        "connection": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the connection whose bot heard it, or speaks it (@yaks/connections): yaks.app's own bot added to a server, or a bot a space brought"
         }
       }
     },
@@ -107,6 +120,16 @@
           "description": "the name they go by there"
         }
       }
+    },
+    "chat_post": {
+      "effect": true,
+      "created": [
+        "chat_message",
+        "deliver"
+      ],
+      "target": ".chat_message",
+      "tries": 6,
+      "description": "Post an outbound chat message through the poster its host lends for its platform, and record its outcome. A post the platform never took is tried again."
     }
   }
 }

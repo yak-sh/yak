@@ -4,7 +4,7 @@
 // and `send` posts a reply with the REST API. A bot's token is all either
 // needs: yaks.app's own bot's, or the one a space brings.
 
-import type { Platform, Said, Socket, Step } from '@yaks/chat'
+import type { Addressed, Platform, Said, Socket, Step } from '@yaks/chat'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
@@ -55,14 +55,23 @@ type Message = {
   timestamp: string
   mentions?: { id: string }[]
   message_reference?: { message_id?: string }
+  referenced_message?: { author?: { id: string } } | null
 }
 
 /** A message Discord sent the bot, as @yaks/chat reads one: none for a bot's
- * own, or another bot's, so two bots never talk to each other forever. Its
- * words lose the bot's mention of itself. */
+ * own, or another bot's, so two bots never talk to each other forever. It is
+ * addressed `direct` outside a server, as a `reply` when it answers one of
+ * the bot's own (which Discord also counts a mention), and as a `mention`
+ * when it names the bot; its words lose that mention. */
 export let said = (m: Message, me?: string): Said | undefined => {
   if (m.author.bot || m.author.id == me) return
-  let named = !!me && (m.mentions ?? []).some((u) => u.id == me)
+  let addressed: Addressed | undefined = !m.guild_id
+    ? 'direct'
+    : me && m.referenced_message?.author?.id == me
+    ? 'reply'
+    : me && (m.mentions ?? []).some((u) => u.id == me)
+    ? 'mention'
+    : undefined
   let text = me
     ? m.content.replaceAll(`<@${me}>`, '').replaceAll(`<@!${me}>`, '')
     : m.content
@@ -76,7 +85,7 @@ export let said = (m: Message, me?: string): Said | undefined => {
     },
     text: text.trim(),
     at: m.timestamp,
-    mentioned: named || !m.guild_id,
+    ...addressed ? { addressed } : {},
     ...m.message_reference?.message_id
       ? { reply_to: m.message_reference.message_id }
       : {},

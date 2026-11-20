@@ -7,11 +7,15 @@ cuts an answer to fit, so a host wires every platform the same way.
 
 ## Stored data
 
-- `chat_message{via, room, author, message_id, reply_to, at, mentioned}` is one
-  message said in a room, its words in @yaks/doc's `doc{body}`: the platform it
-  was said on (its plugin's name), the room and the account that said it (refs),
-  the platform's id for it and for the message it answers, when, and whether it
-  named the bot that heard it or was said to it alone.
+- `chat_message{via, room, author, message_id, reply_to, at, addressed, connection}`
+  is one message said in a room, its words in @yaks/doc's `doc{body}`: the
+  platform it was said on (its plugin's name), the room and the account that
+  said it (refs), the platform's id for it and for the message it answers, when,
+  how it was said to the bot that heard it (`addressed`: a `mention`, a `reply`
+  to the bot, or `direct`), and the connection whose bot heard it. With
+  @yaks/mail's `deliver{to}` naming a room, it asks to be posted there by that
+  bot: the `chat_post` effect hands it to the poster its host lends for the
+  platform (`Host.chatters`) and writes `delivered` or `bounced`.
 - `chat_room{via, id, server, name}` is a place messages are said: a channel, a
   direct conversation, a chat. `server` is the server or workspace it belongs
   to, none for a direct one.
@@ -59,3 +63,10 @@ What the socket remembers survives a reconnect, so a session is resumed. The
 host only connects, keeps time and closes.
 
 Platforms: [@yaks/discord](../discord/README.md).
+
+## Who answers
+
+Whether a message is answered is never a platform's call. A platform says only
+how it was `addressed`; the listener (the Operator's shared conversation logic,
+the same for every channel) reads everything it hears, and answers when it is
+addressed or the words are clearly for it.

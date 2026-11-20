@@ -1017,9 +1017,15 @@ importers:
 
   packages/chat:
     dependencies:
+      '@yaks/effects':
+        specifier: 0.2.33
+        version: link:../effects
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/host':
+        specifier: 0.2.29
+        version: link:../host
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab
@@ -1030,6 +1036,9 @@ importers:
       '@yaks/doc':
         specifier: 0.2.24
         version: link:../doc
+      '@yaks/mail':
+        specifier: 0.2.23
+        version: link:../mail
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram

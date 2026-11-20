@@ -107,6 +107,28 @@ export type Texter = {
   waiting?: () => string | undefined
 }
 
+/** One message to post in a room of a chat platform (@yaks/chat), by the
+ * bot of a connection: the portable chatter capability. */
+export type Chat = {
+  /** the connection whose bot speaks it (@yaks/connections) */
+  connection: string
+  /** the platform's id for the room */
+  room: string
+  /** the words */
+  text: string
+  /** the platform's id for the message it answers */
+  reply_to?: string
+}
+
+/** A chatter posts a message for one chat platform, resolving with the
+ * platform's id for it and rejecting as a {@link Texter} does. Which bot's
+ * credential posts it is the host's to know from the connection. */
+export type Chatter = {
+  post: (chat: Chat) => Promise<{ id?: string }>
+  /** Why it cannot post yet; absent or empty, it can. */
+  waiting?: () => string | undefined
+}
+
 /** A rejection that knows the message never left: the connection was never
  * made, or the provider refused to take it yet. Sending is at most once, so
  * only this rejection lets a letter be handed over again, no sooner than

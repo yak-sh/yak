@@ -20,11 +20,16 @@ export type Said = {
   /** its words, with the bot's own mention taken out */
   text: string
   at: string
-  /** it named the bot, or was said to it alone */
-  mentioned: boolean
+  /** how it was said to the bot that heard it, where it was; whether to
+   * answer is the listener's to decide */
+  addressed?: Addressed
   /** the platform's id for the message it answers */
   reply_to?: string
 }
+
+/** How a message was said to a bot: naming it, replying to one of its own,
+ * or to it alone. */
+export type Addressed = 'mention' | 'reply' | 'direct'
 
 /** A reply to post into a room, answering a message where it names one. */
 export type Reply = { room: string; text: string; reply_to?: string }
@@ -114,7 +119,7 @@ export let kept = (via: string, said: Said): Bundle[] => [
       author: accountEid(via, said.author.id),
       message_id: said.id,
       at: said.at,
-      mentioned: said.mentioned,
+      ...said.addressed ? { addressed: said.addressed } : {},
       ...said.reply_to ? { reply_to: said.reply_to } : {},
     },
     doc: { body: said.text },

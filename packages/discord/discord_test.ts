@@ -64,7 +64,7 @@ test('hello identifies with the intents and starts beating', async () => {
   }])
 })
 
-test('a mention, a direct message and a room message are heard as said; bots are not', async () => {
+test('a mention, a reply, a direct message and a room message are heard as said; bots are not', async () => {
   let { h, w, heard } = held()
   await say(h, w, ready)
   await say(
@@ -78,14 +78,24 @@ test('a mention, a direct message and a room message are heard as said; bots are
   )
   await say(h, w, message(3, { guild_id: undefined, content: 'hi' }))
   await say(h, w, message(4, { content: 'just chatting' }))
-  await say(h, w, message(5, { author: { id: 'b', username: 'b', bot: true } }))
+  await say(
+    h,
+    w,
+    message(5, {
+      content: 'and Friday?',
+      mentions: [{ id: ME }],
+      referenced_message: { author: { id: ME } },
+    }),
+  )
+  await say(h, w, message(8, { author: { id: 'b', username: 'b', bot: true } }))
   await say(h, w, message(6, { author: { id: ME, username: 'yaks.app' } }))
   assertEquals(
-    heard.map((s) => [s.id, s.text, s.mentioned, s.server, s.reply_to]),
+    heard.map((s) => [s.id, s.text, s.addressed, s.server, s.reply_to]),
     [
-      ['m2', "what's on   tomorrow?", true, 'barn', 'm0'],
-      ['m3', 'hi', true, undefined, undefined],
-      ['m4', 'just chatting', false, 'barn', undefined],
+      ['m2', "what's on   tomorrow?", 'mention', 'barn', 'm0'],
+      ['m3', 'hi', 'direct', undefined, undefined],
+      ['m4', 'just chatting', undefined, 'barn', undefined],
+      ['m5', 'and Friday?', 'reply', 'barn', undefined],
     ],
   )
   assertEquals(heard[0].author, { id: 'ann', name: 'Ann' })

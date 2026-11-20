@@ -550,6 +550,8 @@ export let assemble = (
       if (senders) host.senders = senders
       let texters = lending(graphs, host, 'texters', lent.texters)
       if (texters) host.texters = texters
+      let chatters = lending(graphs, host, 'chatters', lent.chatters)
+      if (chatters) host.chatters = chatters
       let embedders = lending(graphs, host, 'embedders', lent.embedders)
       if (embedders) host.embedders = embedders
       part?.('storage')

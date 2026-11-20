@@ -502,8 +502,9 @@ grouped approximately by function, **not** by dependency order.
   takes calls says when one rings, answers it with its audio streamed, and names
   its stream's frames.
 - **[@yaks/chat](./chat)** — Chat platforms as plugins: a message said in a room
-  as `chat_message{via, room, author, message_id, reply_to, at,
-  mentioned}`
+  as
+  `chat_message{via, room, author, message_id, reply_to, at,
+  addressed, connection}`
   with its words in `doc{body}`, the room as
   `chat_room{via, id,
   server, name}` and who said it as

@@ -18,6 +18,7 @@ import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Embedding, Feed, Host } from './mod.ts'
 import type {
   Arrival,
+  Chatter,
   MailDomains,
   Notices,
   Sender,
@@ -78,6 +79,8 @@ export type GraphFacet = {
   senders?: (host: Host, options: Options) => Record<string, Sender>
   /** The texters this plugin lends, by name ({@link Host.texters}). */
   texters?: (host: Host, options: Options) => Record<string, Texter>
+  /** The chatters this plugin lends, by platform ({@link Host.chatters}). */
+  chatters?: (host: Host, options: Options) => Record<string, Chatter>
   /** The embedders this plugin lends, by name ({@link Host.embedders}). */
   embedders?: (host: Host, options: Options) => Record<string, Embedding>
   /** The readers of a provider's signed notices about the letters it

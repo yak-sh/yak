@@ -29,8 +29,10 @@ import type { Finding, Registry, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
 import type { Meaning } from './facets.ts'
-import type { Sender, Texter } from './senders.ts'
+import type { Chatter, Sender, Texter } from './senders.ts'
 export type {
+  Chat,
+  Chatter,
   Message,
   Receipt,
   Sender,
@@ -113,6 +115,10 @@ export interface Host {
   /** Named texters this host lends, selected by @yaks/phone's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   texters?: Readonly<Record<string, Texter>>
+  /** Named chatters this host lends, one per chat platform, selected by
+   * @yaks/chat's `chat_post` by the platform's name. The host owns which
+   * bot's credential each connection posts with. */
+  chatters?: Readonly<Record<string, Chatter>>
   /** Explicit workspace execution bindings; never an implicit local default. */
   workspaces?: import('@yaks/machine/targets').Workspaces
   /** Default sandbox intentions; provisioning is the sandbox effect's work. */
