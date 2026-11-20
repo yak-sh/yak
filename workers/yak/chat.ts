@@ -116,7 +116,10 @@ let serving = async (env: Env, via: string, server: string) => {
   )).filter((b) => names.has(String(comp(b, CONNECTION).integration)))
 }
 
-/** The person here whose `platform.user` account is `id`, if one linked it. */
+/** The person here whose `platform.user` account is `id`, if one linked it:
+ * a connection they hold, or one a space holds, which stands for its owner
+ * as the Operator's own Google does (connections.ts `ownConnection`) when it
+ * has exactly one. */
 export let linked = async (env: Env, platform: Platform, id: string) => {
   if (!platform.user) return undefined
   let [b] = await read(
@@ -124,7 +127,31 @@ export let linked = async (env: Env, platform: Platform, id: string) => {
     line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${id}&.${CONNECTION}.status=connected&*`,
   )
   let owner = comp(b, CONNECTION).owner
-  return owner ? String(owner) : undefined
+  if (!owner) return undefined
+  let { directoryOf } = await need()
+  let dir = directoryOf(env.STORE)
+  let space = await dir.at(String(owner))
+  if (!space) return String(owner)
+  let owners = await dir.owners(space)
+  return owners.length == 1 ? owners[0] : undefined
+}
+
+/** What a space's Operator settings offer for each platform whose bot
+ * yaks.app keeps: the integration that adds that bot, and the one a person
+ * links their account there with (operator-page.ts `chatCard`). Before the
+ * bot is kept there is nothing to add. */
+export let offers = async (env: Env) => {
+  let { ctxOf, installed } = await need()
+  let all = await installed(ctxOf(env).graph.read)
+  let each = await Promise.all(
+    [...PLATFORMS.values()].map(async (platform) => ({
+      platform,
+      bot: (await ours(env, platform.name))[0],
+      user: all.find((i) => i.name == platform.user),
+      kept: !!await platformBot(env, platform.name),
+    })),
+  )
+  return each.filter((o) => o.bot && o.kept)
 }
 
 /** The guest who speaks as `id` on `via`: a person with no seat and no

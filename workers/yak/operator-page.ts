@@ -34,6 +34,7 @@ import { spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
   chatPath,
+  enabling,
   logoPath,
   MANAGE,
   managePath,
@@ -240,6 +241,47 @@ let choices = (id: string, label: string, name: string, offers: Option[]) =>
     h(Form.Label, { id }, label),
     offers.map((o) => choice(name, o, o.also)),
   )
+
+// Where the space's owner adds the Operator to a chat platform (chat.ts):
+// yaks.app's own bot added to a server they manage, and their own account
+// there linked, so it knows them. Each button posts to the connections page,
+// which sends them straight to the platform to choose (connections.ts
+// `connecting`); one still in its service's testing mode is named there.
+export let chatCard = (
+  connections: string,
+  operator: string,
+  offers: Awaited<ReturnType<typeof import('./chat.ts').offers>>,
+) =>
+  offers.map(({ platform, bot, user }) => {
+    let adding = (i: { name: string; testing?: boolean }, label: string) =>
+      h(
+        'form',
+        {
+          method: 'post',
+          action: enabling(connections, i.testing ? [i.name] : []),
+        },
+        h('input', { type: 'hidden', name: 'do', value: 'add' }),
+        h('input', { type: 'hidden', name: 'integration', value: i.name }),
+        h(Button, { type: 'submit' }, label),
+      )
+    return titled(
+      platform.title,
+      h(
+        'p',
+        null,
+        `Add ${operator} to a ${platform.title} server you manage. Mention it there, reply to it, or message it directly, and it answers in the same place.`,
+      ),
+      adding(bot, `Add to ${platform.title}`),
+      user
+        ? h(
+          'p',
+          null,
+          `Connect your own ${platform.title} account so ${operator} knows it is you. Anyone else who talks to it there is a guest, who can do only what anyone can in this space.`,
+        )
+        : null,
+      user ? adding(user, `Connect my ${platform.title} account`) : null,
+    )
+  })
 
 // The texts' terms, their addresses links to yaks.app's own pages.
 let TERMS = /https:\/\/yaks\.app\/(terms|privacy)/g
@@ -1201,6 +1243,7 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
     chosen,
     email,
     browsers,
+    chatting,
   ] = await Promise
     .all([
       settingsAt(env, seen, who),
@@ -1211,6 +1254,9 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
       dir.alerts(who.person ?? ''),
       dir.emailAt(who.person ?? ''),
       dir.pushes(who.person ?? ''),
+      who.role == 'owner'
+        ? import('./chat.ts').then((c) => c.offers(env))
+        : Promise.resolve([]),
     ])
   let from = phone?.transport().number
   let call = platform?.caller ? platform.transport().number : undefined
@@ -1250,6 +1296,7 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
     voiceCard(at, operator, offered(env, space)),
     alertsCard(at, chosen, consent, email, browsers, pushKey(env)),
     textsCard(at, consent, from, call),
+    ...chatCard(managePath('connections', seen.slug), operator, chatting),
   ]) + settingsScript
 }
 
