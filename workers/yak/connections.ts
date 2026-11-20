@@ -20,10 +20,12 @@ import type { McpPage } from './connected-mcp.ts'
 // the key was saved.
 //
 // A service sends a person back to one address, the one registered for
-// yaks.app, so the return is a door at the apex and the attempt rides a cookie
-// there from the page it was begun on: sealed for this use alone (lib/token.ts
-// `connect`), naming the person, the space and the connection it was begun
-// for, and the page to bring them back to.
+// yaks.app, so the return is a door at the apex. The attempt waits for it in
+// the vault, under the `state` the service carries back, naming the person and
+// the sign-in it was begun from, the space, the connection, and the page to
+// bring them back to. Nothing rides the browser: on a phone the service's page
+// may open in its own app and come back in another browser, and the return
+// still finds its attempt. It is spent on the way in, so it finishes once.
 //
 // An app may ask each person who uses it to connect their own account
 // (@yaks/connections `each`). The platform draws the Connect button for it, at
@@ -90,7 +92,7 @@ import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp, Taken } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
-import { reveal, SECRET } from '@yaks/secrets'
+import { reveal, sealed, SECRET, secretEid, unsealed } from '@yaks/secrets'
 import type { Service } from './connected.ts'
 import {
   type App,
@@ -102,7 +104,6 @@ import {
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, url } from '@yaks/platform/host'
-import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer } from './apps.ts'
 import type { Door } from '@yaks/platform/routes'
@@ -115,6 +116,7 @@ import {
 } from '@yaks/platform/routes'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
+import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, refuse } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
@@ -125,10 +127,8 @@ export let CALLBACK = '/connections/callback'
 /** Where a service's webhooks for one app and connection arrive. */
 export let HOOKS = `${OURS}/hooks/`
 
-// The cookie an attempt rides, and how long it may: the attempt's own ten
-// minutes (@yaks/oauth `attempt`).
-let ATTEMPT = 'yak_connect'
-let ATTEMPT_AGE = 600
+// The vault's name for an attempt waiting on its return, by its `state`.
+let pendingAt = (state: string) => `connect:${state}`
 
 // The biggest webhook body kept, as a store keeps it: one blob.
 let HOOK_ROOM = 1_000_000
@@ -1117,12 +1117,16 @@ let hostsOf = (text: string): string[] =>
   text.toLowerCase().split(/[\s,]+/).filter(Boolean)
 let HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/
 
-// The attempt a sign-in is begun with, as its cookie holds it, and the page to
-// bring the person back to.
+// The attempt a sign-in is begun with, as the vault holds it until it returns:
+// who began it and from which sign-in, and the page to bring them back to.
 type Held = {
   space: string
   connection: string
   person: string
+  /** the browser session it was begun from, which must still be signed in */
+  session?: string
+  /** the instrument it was begun from, credited with the connection */
+  via?: string
   attempt: { state: string; until: number; verifier: string }
   back: string
   /** the copy replacing a borrowed connection after a successful sign-in */
@@ -1201,7 +1205,7 @@ let told = (page: string, how: 'connected' | 'refused') => {
 let asking = async (read: Read, eid: string) =>
   (await read(line`.edge.to=${eid}&.${USES}&*`)).some((l) => comp(l, USES).each)
 
-// Send the person to the service, the attempt riding a cookie to the return.
+// Send the person to the service, the attempt kept for its return.
 let signingIn = async (
   req: Request,
   env: Env,
@@ -1221,23 +1225,29 @@ let signingIn = async (
     space: space.slug,
     connection: eid,
     person: who.person!,
+    ...who.session ? { session: who.session } : {},
+    ...who.via ? { via: who.via } : {},
     attempt,
     back,
     ...app ? { app } : {},
   }
-  let domain = domainOf(req, env)
-  return new Response(null, {
-    status: 303,
-    headers: {
-      location: to,
-      'set-cookie': `${ATTEMPT}=${await seal(
-        'connect',
-        held,
-        env.SESSION_SECRET!,
-      )}; ${
-        domain ? `Domain=${domain}; ` : ''
-      }Path=${CALLBACK}; Max-Age=${ATTEMPT_AGE}; Secure; HttpOnly; SameSite=Lax`,
-    },
+  await ctxOf(env).graph.apply([
+    sealed(pendingAt(attempt.state), JSON.stringify(held)),
+  ])
+  return new Response(null, { status: 303, headers: { location: to } })
+}
+
+// The attempt a return names, taken from the vault so no other return can
+// finish it; nothing for a state that names none, or one already spent.
+let taken = async (env: Env, state: string | null): Promise<Held | null> => {
+  if (!state) return null
+  let name = pendingAt(state)
+  let vault = vaultOf(env)
+  return await vault.lock(secretEid(name), async () => {
+    let text = await reveal(vault, name, { env: () => undefined })
+    if (!text) return null
+    await ctxOf(env).graph.apply([unsealed(name)])
+    return JSON.parse(text) as Held
   })
 }
 
@@ -1488,60 +1498,61 @@ export let connecting = async (
 // The directory the doors below ask, as apps.ts asks it.
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-// The return from a service's sign-in page. The attempt must be this
-// person's, for their own connection or one of a space they still own;
-// anything else is sent back to their account to start again.
+// The return from a service's sign-in page, in whichever browser or app it
+// lands. The attempt its `state` names must have been begun by a person still
+// signed in where they began it, for their own connection or one of a space
+// they still own; a browser signed in as anyone else may not finish it.
+// Anything else is sent back to the page it was begun on to start again.
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null || path != CALLBACK) return null
-  let gone = `${ATTEMPT}=; Path=${CALLBACK}; Max-Age=0; Secure; HttpOnly`
   let answer = (to: string) =>
-    new Response(null, {
-      status: 303,
-      headers: { location: to, 'set-cookie': gone },
-    })
-  let sealed = cookieValue(req.headers.get('cookie'), ATTEMPT)
-  let held = sealed && env.SESSION_SECRET
-    ? await opened<Held>('connect', sealed, env.SESSION_SECRET)
-    : null
+    new Response(null, { status: 303, headers: { location: to } })
+  let state = new URL(req.url).searchParams.get('state')
+  let held = await taken(env, state)
   let dir = dirOf(env)
   let at = held ? await dir.space(held.space) : null
-  let who = at &&
-    await whoIs(req, env, (p) => dir.role(at, p), at.eid)
-  let [b] = held && who?.person == held.person
+  let here = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)
+  let began = held && at && (!held.session ||
+    await live(env, held.person, held.via ?? '', held.session))
+  let who: Who | null = held && at && began &&
+      (!here?.person || here.person == held.person)
+    ? {
+      person: held.person,
+      role: await dir.role(at, held.person),
+      ...held.via ? { via: held.via } : {},
+      ...held.session ? { session: held.session } : {},
+    }
+    : null
+  let [b] = held && who
     ? await readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`)
     : []
   let owner = comp(b, CONNECTION).owner
   // A return that cannot be finished is a failure to hear about, and the
   // person goes back to the page they began on, told so; never to another
   // space's.
-  let why = !sealed
-    ? 'no sign-in was begun in this browser'
+  let why = !state
+    ? 'it named no attempt'
     : !held
-    ? 'the sign-in in this browser could not be read'
+    ? 'its attempt was never begun, or was already finished'
     : !at
     ? 'its space is gone'
-    : !who?.person
-    ? 'nobody is signed in'
-    : who.person != held.person
-    ? 'someone else began it'
+    : !began
+    ? 'the person who began it has since signed out'
+    : !who
+    ? 'someone else is signed in where it came back'
     : !b
     ? 'its connection is gone'
     : owner != who.person && !(owner == at.eid && who.role == 'owner')
-    ? 'the signed-in person does not own its space'
+    ? 'the person who began it does not own its space'
     : null
   if (why || !held || !at || !who) {
     caught(new Error(`A sign-in came back unfinished: ${why}.`), {
       request: `GET ${CALLBACK}`,
       ...held ? { space: held.space, connection: held.connection } : {},
     })
-    return answer(
-      held
-        ? told(held.back ?? pageOf(env, held.space), 'refused')
-        : url(env, MANAGE),
-    )
+    return answer(held ? told(held.back, 'refused') : url(env, MANAGE))
   }
-  // An attempt begun before its cookie named a page came from the space's.
-  let back = held.back ?? pageOf(env, at.slug)
+  let { back } = held
   try {
     let saved = await connect(ctxOf(env, who), held.connection, {
       attempt: held.attempt,
@@ -1571,9 +1582,9 @@ let OWN = '/connections/'
 // The Connect button an app asks for, drawn by the platform at the app's own
 // address. Whoever may read the app may connect their own account for it, once
 // the app asks each person for that integration; what they connect is theirs,
-// and only they call out through it. A sign-in's cookie must reach the
-// platform's callback, so a request at a space's own domain is sent to the
-// same page at the platform's address first.
+// and only they call out through it. A sign-in is begun at the platform's
+// address, so a request at a space's own domain is sent to the same page there
+// first.
 export let own: Answer = async (
   { env, req, path, space, app, who, refuse },
 ) => {

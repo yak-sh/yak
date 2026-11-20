@@ -42,7 +42,6 @@ import { KERNEL, meta } from './meta.ts'
 import { envDoor, fetchDoor, outbound } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
 import type { Asked } from './apps.ts'
-import { opened } from './lib/token.ts'
 import { desk } from './desk-pages.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
@@ -187,14 +186,9 @@ test(
       '?space=ada&enable=google-calendar',
     )
     assert(went instanceof Response)
-    let pair = went.headers.get('set-cookie')!.split(';')[0]
-    let held = await opened<{ back: string }>(
-      'connect',
-      pair.slice(pair.indexOf('=') + 1),
-      SECRET,
-    )
+    let back = await refused(s.p.env, stateOf(went))
     assertEquals(
-      new URL(held!.back).searchParams.get('enable'),
+      new URL(back.headers.get('location')!).searchParams.get('enable'),
       'google-calendar',
     )
   },
@@ -214,40 +208,47 @@ test(
         '?space=ada&enable=google-calendar',
       )
       assert(went instanceof Response)
-      let cookie = went.headers.get('set-cookie')!.split(';')[0]
-      let held = await opened<{ back: string }>(
-        'connect',
-        cookie.slice(cookie.indexOf('=') + 1),
-        SECRET,
-      )
-      return { cookie, back: held!.back }
+      return stateOf(went)
     }
-    let { cookie, back } = await begun('/manage/ada/operator')
-    assertEquals(
-      back,
-      'https://yaks.app/manage/ada/operator?enable=google-calendar',
-    )
-    for (let elsewhere of ['/manage/bo/operator', '//evil.test/x', 'x']) {
-      assertEquals(
-        (await begun(elsewhere)).back,
-        'https://yaks.app/manage/ada/connections?enable=google-calendar',
-      )
-    }
-    // Back with nobody signed in: told so on the page it was begun from.
-    let returned = (cookie?: string) =>
-      callback({
-        env: s.p.env,
-        req: new Request(`https://yaks.app${CALLBACK}?code=C&state=S`, {
-          headers: cookie ? { cookie } : {},
-        }),
-        path: CALLBACK,
-        space: null,
-      })
-    assertEquals(to((await returned(cookie))!), [
+    let state = await begun('/manage/ada/operator')
+    assertEquals(to(await refused(s.p.env, state)), [
       303,
       'https://yaks.app/manage/ada/operator?enable=google-calendar&refused=1',
     ])
-    assertEquals(to((await returned())!), [303, 'https://yaks.app/manage'])
+    for (let elsewhere of ['/manage/bo/operator', '//evil.test/x', 'x']) {
+      assertEquals(to(await refused(s.p.env, await begun(elsewhere))), [
+        303,
+        'https://yaks.app/manage/ada/connections?enable=google-calendar&refused=1',
+      ])
+    }
+    // A return naming no attempt, or one already finished, has no page of
+    // its own to go back to.
+    assertEquals(to(await refused(s.p.env, null)), [
+      303,
+      'https://yaks.app/manage',
+    ])
+    assertEquals(to(await refused(s.p.env, state)), [
+      303,
+      'https://yaks.app/manage',
+    ])
+    // A browser signed in as someone else may not finish it.
+    let other = crypto.randomUUID()
+    await s.at.apply([{ entity: { eid: other }, person: {} }], KERNEL)
+    let bo =
+      (await minted(new Request('https://yaks.app/'), s.p.env, SECRET, other))
+        .split(';')[0]
+    assertEquals(
+      to(
+        await returned(s.p.env, await begun('/manage/ada/operator'), {
+          cookie: bo,
+          query: 'code=C',
+        }),
+      ),
+      [
+        303,
+        'https://yaks.app/manage/ada/operator?enable=google-calendar&refused=1',
+      ],
+    )
   },
 )
 
@@ -675,6 +676,40 @@ let posted = (fields: Record<string, string> = {}) => {
 
 let to = (r: Response) => [r.status, r.headers.get('location')]
 
+// The state a sign-in was sent to its service with.
+let stateOf = (went: Response) =>
+  new URL(went.headers.get('location')!).searchParams.get('state')
+
+// The return from a service: refused there unless `query` says otherwise, in
+// a browser holding `cookie`, the service answering any exchange with a grant.
+let returned = async (
+  env: Env,
+  state: string | null,
+  { cookie, query = 'error=access_denied' }: {
+    cookie?: string
+    query?: string
+  } = {},
+) => {
+  let real = globalThis.fetch
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({ access_token: 'A', refresh_token: 'R' }))
+  try {
+    let named = state == null ? '' : `&state=${state}`
+    return (await callback({
+      env,
+      req: new Request(`https://yaks.app${CALLBACK}?${query}${named}`, {
+        headers: cookie ? { cookie } : {},
+      }),
+      path: CALLBACK,
+      space: null,
+    }))!
+  } finally {
+    globalThis.fetch = real
+  }
+}
+let refused = (env: Env, state: string | null, cookie?: string) =>
+  returned(env, state, { cookie })
+
 test(
   'a person connects their own account for an app that asks each person, and the space holds only the ask',
   async () => {
@@ -739,7 +774,7 @@ test(
 )
 
 test(
-  'a person signs in for their own connection and comes back to the app',
+  'a person signs in for their own connection and comes back to the app, though another browser finishes it',
   async () => {
     let s = await setup()
     await s.at.apply([registration('cal', { id: 'yaks' }), {
@@ -754,32 +789,8 @@ test(
     }], KERNEL)
     let { bob, door, his } = await asks(s, 'Cal')
     let went = await door({ person: bob, role: null }, posted())
-    let state = new URL(went.headers.get('location')!).searchParams.get(
-      'state',
-    )
-    let attempt = went.headers.get('set-cookie')!.split(';')[0]
-    let session = (await minted(
-      new Request('https://yaks.app/'),
-      s.p.env,
-      SECRET,
-      bob,
-    )).split(';')[0]
-    let real = globalThis.fetch
-    globalThis.fetch = () =>
-      Promise.resolve(Response.json({ access_token: 'A', refresh_token: 'R' }))
-    try {
-      let back = await callback({
-        env: s.p.env,
-        req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`, {
-          headers: { cookie: `${attempt}; ${session}` },
-        }),
-        path: CALLBACK,
-        space: null,
-      })
-      assertEquals(to(back!), [303, 'https://ada.yaks.app/notes/?connected=1'])
-    } finally {
-      globalThis.fetch = real
-    }
+    let back = await returned(s.p.env, stateOf(went), { query: 'code=C' })
+    assertEquals(to(back), [303, 'https://ada.yaks.app/notes/?connected=1'])
     let [mine] = await his()
     assertEquals([mine.integration, mine.status], ['Cal', 'connected'])
   },

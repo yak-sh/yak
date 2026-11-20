@@ -32,9 +32,9 @@ export type Provider = {
   /** A provider may require JSON for refresh while codes exchange as form. */
   refreshEncoding?: 'form' | 'json'
   /** What the exchange answers: tokens, or an API key, as OpenRouter's PKCE
-   * does. A key is kept as an access token that never expires, and its flow
-   * carries no state: PKCE already binds the code to this attempt (RFC 9700
-   * §2.1). */
+   * does. A key is kept as an access token that never expires. Its flow has
+   * no `state` parameter, so the attempt's state rides the `callback_url`,
+   * and the return names its attempt as every other flow's does. */
   answers?: 'tokens' | 'key'
   /** The resource the grant is for (RFC 8707), as an MCP server asks: sent
    * with the link and with every exchange. */
@@ -109,6 +109,14 @@ let form = (fields: Record<string, string | undefined>) =>
     Object.entries(fields).filter((f): f is [string, string] => f[1] != null),
   )
 let enc = (s: string) => form({ s }).toString().slice(2)
+
+// The return address with the attempt's state on it, for a flow whose
+// provider carries none back itself.
+let stated = (redirect: string, state: string) => {
+  let to = new URL(redirect)
+  to.searchParams.set('state', state)
+  return to.href
+}
 
 let str = (v: unknown) => typeof v == 'string' && v ? v : undefined
 
@@ -234,7 +242,7 @@ export let client = (provider: Provider, o: Options): Client => {
       let url = new URL(provider.authorize)
       let fields = {
         ...provider.params,
-        ...key ? { callback_url: o.redirect } : {
+        ...key ? { callback_url: stated(o.redirect, pending.state) } : {
           response_type: 'code',
           client_id: provider.client?.id,
           redirect_uri: o.redirect,
@@ -262,7 +270,7 @@ export let client = (provider: Provider, o: Options): Client => {
           'the authorization expired; begin again',
         )
       }
-      if (!key && q.get('state') != pending.state) {
+      if (q.get('state') != pending.state) {
         throw new OAuthError('state', 'the return does not match this attempt')
       }
       if (provider.issuer && q.get('iss') != provider.issuer) {

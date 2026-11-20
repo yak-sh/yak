@@ -8,7 +8,6 @@ import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting, connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
-import { minted } from './session.ts'
 import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
@@ -143,17 +142,13 @@ let connect = async (integration: string) => {
     { person, role: 'owner' },
     form,
   ) as Response
-  if (!went.headers.get('set-cookie')) return went
-  let state = new URL(went.headers.get('location')!).searchParams.get('state')
-  let attempt = went.headers.get('set-cookie')!.split(';')[0]
-  let session =
-    (await minted(new Request('https://yaks.app/'), env, SECRET, person))
-      .split(';')[0]
+  let state = new URL(went.headers.get('location') ?? 'x:').searchParams.get(
+    'state',
+  )
+  if (!state) return went
   return callback({
     env,
-    req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`, {
-      headers: { cookie: `${attempt}; ${session}` },
-    }),
+    req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`),
     path: CALLBACK,
     space: null,
   })

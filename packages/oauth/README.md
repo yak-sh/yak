@@ -86,8 +86,9 @@ let next = await calendar.refresh(token!)
 - A provider with `answers: 'key'` runs OpenRouter's PKCE exchange instead: the
   link carries `callback_url` and the challenge, the exchange posts JSON and
   answers `{key}`, and the key is kept as an access token that never expires. It
-  needs no registered client and carries no `state`; PKCE binds the code to the
-  attempt (RFC 9700 §2.1).
+  needs no registered client, and since the provider carries no `state`, the
+  attempt's state rides the `callback_url`, so its return names its attempt as
+  every other flow's does.
 - A refusal throws `OAuthError`, whose `code` is the provider's `error`
   (`invalid_grant` means the grant is gone and the person must connect again),
   `http_<status>` when the provider gave no code, or the client's own: `state`,

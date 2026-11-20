@@ -302,11 +302,11 @@ test('a provider answering a key: its own link, a JSON exchange, the key kept fo
   })
   let { url, attempt } = await c.begin()
   assertEquals(Object.fromEntries(new URL(url).searchParams), {
-    callback_url: REDIRECT,
+    callback_url: `${REDIRECT}?state=${attempt.state}`,
     code_challenge: await s256(attempt.verifier),
     code_challenge_method: 'S256',
   })
-  await c.complete(attempt, `${REDIRECT}?code=C`)
+  await c.complete(attempt, `${REDIRECT}?state=${attempt.state}&code=C`)
   assertEquals(seen[0].headers['content-type'], 'application/json')
   assertEquals(JSON.parse(seen[0].text), {
     code: 'C',

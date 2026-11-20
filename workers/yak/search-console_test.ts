@@ -7,7 +7,6 @@ import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
-import { minted } from './session.ts'
 import { call, type Ctx } from './tools.ts'
 import { propertyOf, statsBody } from './search-console.ts'
 
@@ -122,17 +121,12 @@ let connect = async () => {
     form,
   ) as Response
   let location = new URL(went.headers.get('location')!)
-  let attempt = went.headers.get('set-cookie')!.split(';')[0]
-  let session =
-    (await minted(new Request('https://yaks.app/'), env, SECRET, person))
-      .split(';')[0]
   await callback({
     env,
     req: new Request(
       `https://yaks.app${CALLBACK}?code=C&state=${
         location.searchParams.get('state')
       }`,
-      { headers: { cookie: `${attempt}; ${session}` } },
     ),
     path: CALLBACK,
     space: null,

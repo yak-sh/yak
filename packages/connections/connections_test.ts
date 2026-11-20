@@ -678,7 +678,7 @@ test(
     let { attempt } = await begin(c, eid)
     await connect(c, eid, {
       attempt: attempt!,
-      callback: `${REDIRECT}?code=C`,
+      callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
     })
     assertEquals(await credential(c, eid), 'sk-or')
   },
