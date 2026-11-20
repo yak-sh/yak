@@ -1,7 +1,7 @@
 // A page's actions for a fake browser, each heard by `did` as the line it
 // would be in a log: what a test that drives no steps leaves untouched, and
 // what one that does reads back in order.
-import type { Page } from './capture.ts'
+import type { Page } from '@yaks/platform/browser-visit'
 
 export type Actions = Pick<
   Page,

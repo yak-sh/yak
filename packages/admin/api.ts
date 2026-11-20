@@ -270,7 +270,7 @@ export type Link = {
 export let linkFor = (session: string, days?: number): Promise<Link> =>
   said(posted(apex(LINK), days ? { days: String(days) } : {}, session, true))
 
-/** One thing done on a page in the browser (workers/yak/browser/capture.ts
+/** One thing done on a page in the browser (@yaks/platform/browser-visit
  * `Step`). */
 export type Step =
   | { tap: string }
@@ -292,7 +292,7 @@ export type Browse = {
   allow?: string[]
 }
 
-/** What the browser saw (workers/yak/browser/capture.ts `Rendered`). */
+/** What the browser saw (@yaks/platform/browser-visit `Rendered`). */
 export type Browsed = {
   image: string
   shots: { name: string; image: string }[]

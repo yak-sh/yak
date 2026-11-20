@@ -18,6 +18,7 @@
     "./routes": "./routes.ts",
     "./ladder": "./ladder.ts",
     "./preview": "./preview.ts",
+    "./browser-visit": "./browser-visit.ts",
     "./preview-audit": "./preview-audit.ts",
     "./visits": "./visits.ts",
     "./installs": "./installs.ts",

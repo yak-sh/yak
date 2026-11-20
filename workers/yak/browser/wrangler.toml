@@ -2,7 +2,7 @@
 # ours for a test account checking it live (../browse.ts): puppeteer drives
 # Cloudflare's browser to the address, takes the steps it was given, its
 # screenshots, console, errors and status, and runs axe-core's accessibility
-# check in the page (capture.ts). Its own Worker because puppeteer, and axe-core's bundle,
+# check in the page (@yaks/platform/browser-visit). Its own Worker because puppeteer, and axe-core's bundle,
 # are code compiled when an isolate starts: in the kernel that would be every
 # isolate, a Store waking for one query included. Here it is only the isolates
 # that render.

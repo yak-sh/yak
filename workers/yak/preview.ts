@@ -114,7 +114,7 @@ import {
   withLegacy,
 } from './written.ts'
 import type { Objects } from '@yaks/blob'
-import type { Cookie, View, Visit } from './browser/capture.ts'
+import type { Cookie, View, Visit } from '@yaks/platform/browser-visit'
 import { sourceOf } from './wrangler_app.ts'
 import { walled } from '@yaks/platform/installs'
 import { screen as screenAt } from './screen.ts'
@@ -584,12 +584,12 @@ export let shownDraft = async (
 }
 
 // A page as yak-browser rendered it, held on the space's budget for the most
-// browser time a render can take, its load's and its check's (browser/
-// capture.ts), refused there in the directory's own transaction, and charged
+// browser time a load and its check can take (@yaks/platform/browser-visit),
+// refused there in the directory's own transaction, and charged
 // the time it took, failing or not (model-spend.ts `onHold`).
 let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
   let { render } = await import('./browser.ts')
-  let { RENDER, CHECK } = await import('./browser/capture.ts')
+  let { RENDER, CHECK } = await import('@yaks/platform/browser-visit')
   let rendered = await onHold(
     ctx.env,
     space,

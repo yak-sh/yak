@@ -1,7 +1,7 @@
 // The browse door (browse.ts): a page of ours opened in the browser signed in
 // as its caller, for the platform's test accounts and owners alone.
 import { cleanup, equal, test } from '@yaks/testing'
-import { answer, type Browsing, type Visit } from './browser/capture.ts'
+import { answer, type Browsing, type Visit } from '@yaks/platform/browser-visit'
 import { actions } from './browser/testing.ts'
 import { fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
@@ -33,8 +33,8 @@ let browsing: Browsing = {
             }),
           screenshot: () => Promise.resolve('png'),
         }),
-      close: () => Promise.resolve(),
     }),
+  release: () => Promise.resolve(),
   axe: { source: '', version: 'test' },
 }
 let rendering = answer(browsing)
@@ -118,5 +118,16 @@ test('a person, a bearer and a page off our zone are each refused', async () => 
       .status,
     400,
   )
+  equal(visits.length, seen)
+})
+
+test('a visit whose requested waits exceed its deadline is refused without opening a browser', async () => {
+  let seen = visits.length
+  let r = await browse(
+    { url: manage.url, steps: [{ wait: 60_000 }] },
+    { cookie: checks.cookie },
+  )
+  equal(r.status, 400)
+  equal((await r.json()).error.code, 'browser_wait_too_long')
   equal(visits.length, seen)
 })

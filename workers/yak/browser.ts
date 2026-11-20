@@ -5,15 +5,28 @@ import { system } from '@yaks/fp'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Checked } from '@yaks/platform/preview-audit'
-import type { Failed, Rendered, Visit } from './browser/capture.ts'
+import {
+  bounded,
+  BROWSE_REPLY,
+  BrowserTimeout,
+  type Fault,
+  PREVIEW_REPLY,
+  type Rendered,
+  type Reply,
+  type Visit,
+} from '@yaks/platform/browser-visit'
 
 // A failure yak-browser answered, raised here with the stack it had there.
-let relayed = ({ failed, stack }: Failed) =>
-  Object.assign(new Error(failed), stack ? { stack } : {})
+let relayed = ({ failed, stack, timeout }: Fault) =>
+  Object.assign(new Error(failed), { timeout }, stack ? { stack } : {})
+
+export let timedOut = (error: unknown) =>
+  error instanceof BrowserTimeout ||
+  (error instanceof Error && 'timeout' in error && error.timeout === true)
 
 // yak-browser's answer: a render, or a failure it reports as a 500.
 let answered = async (r: Response) => {
-  let said = await r.json().catch(() => null) as Rendered | Failed | null
+  let said = await r.json().catch(() => null) as Reply | null
   if (said && (r.ok || 'failed' in said)) return said
   throw new Error(`yak-browser ${r.status}`)
 }
@@ -35,27 +48,37 @@ export let seen = async (
   }
   let time = env.CLOCK ?? system
   let start = time.now()
-  let said: Rendered | Failed | undefined
+  let said: Reply | undefined
   try {
-    said = await answered(
-      await env.BROWSER.fetch(
-        new Request('https://browser.invalid/', {
-          method: 'POST',
-          body: JSON.stringify(visit),
-        }),
-      ),
+    let browser = env.BROWSER
+    said = await bounded(
+      time,
+      visit.audit === false ? BROWSE_REPLY : PREVIEW_REPLY,
+      () => 'Waiting for the browser service to answer',
+      async (signal) =>
+        answered(
+          await browser.fetch(
+            new Request('https://browser.invalid/', {
+              method: 'POST',
+              body: JSON.stringify(visit),
+              signal,
+            }),
+          ),
+        ),
     )
   } finally {
     await used(said?.duration ?? Math.max(0, time.now() - start))
   }
-  if ('failed' in said) throw relayed(said)
-  if (said.accessibility && 'failed' in said.accessibility) {
-    caught(new Error(said.accessibility.failed), {
+  let { faults = [], ...reply } = said
+  for (let fault of faults) caught(relayed(fault), where)
+  if ('failed' in reply) throw relayed(reply)
+  if (reply.accessibility && 'failed' in reply.accessibility) {
+    caught(new Error(reply.accessibility.failed), {
       request: 'app_preview accessibility',
       ...where,
     })
   }
-  return said
+  return reply
 }
 
 /** A render for app_preview: what {@link seen} answers, its accessibility

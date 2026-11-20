@@ -4,13 +4,21 @@
 // the browser time it held. Browser control runs on Cloudflare; the small
 // session interface lets the load, steps, diagnostics and cleanup run in
 // process without a local browser.
-import { type Clock, sleep, system } from '@yaks/fp'
+import { type Clock, type Hold, sleep, system } from '@yaks/fp'
+import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
+import { bounded, BrowserTimeout } from './browser-time.ts'
+
 import {
-  audit,
-  type Axe,
-  type Checked,
-  interruption,
-} from '@yaks/platform/preview-audit'
+  CONNECT,
+  OPEN,
+  RELEASE,
+  type SessionOptions,
+  type Sessions,
+  withSession,
+} from './browser-session.ts'
+
+export { CONNECT, OPEN, RELEASE } from './browser-session.ts'
+export { bounded, BrowserTimeout } from './browser-time.ts'
 
 /** A window: its size, how long to wait after loading, and whether it is a
  * phone's (touch events, a mobile viewport). */
@@ -124,14 +132,9 @@ export type Session = {
  * A browser to open, acquired as a session and then connected to, and the
  * audit's script to run in its page.
  */
-export type Browsing = {
-  acquire: () => Promise<string>
-  connect: (session: string) => Promise<Browser>
-  axe: Axe
-}
+export type Browsing = Sessions<Browser> & { axe: Axe }
 export type Browser = {
   newPage(): Promise<Page>
-  close(): Promise<void>
 }
 
 /** A rendered page, and the browser time it took. */
@@ -149,7 +152,15 @@ export type Rendered = {
   duration: number
 }
 /** A render that failed, and the browser time it held all the same. */
-export type Failed = { failed: string; stack?: string; duration: number }
+export type Fault = { failed: string; stack?: string; timeout?: boolean }
+export type Failed = Fault & { duration: number }
+export type Reply = (Rendered | Failed) & { faults?: Fault[] }
+
+let failure = (e: unknown): Fault => ({
+  failed: e instanceof Error ? e.message : String(e),
+  stack: e instanceof Error ? e.stack : undefined,
+  timeout: e instanceof BrowserTimeout || undefined,
+})
 
 let message = (error: unknown) => {
   if (!(error instanceof Error)) return String(error).slice(0, 2000)
@@ -188,66 +199,28 @@ let isolated = async (page: Page) => {
   }
 }
 
-let retried = async <T>(
-  run: () => Promise<T>,
-  pauses: number[],
-  time: Clock,
-  again: (error: unknown) => boolean = () => true,
-): Promise<T> => {
-  for (let pause of pauses) {
-    try {
-      return await run()
-    } catch (e) {
-      if (!again(e)) throw e
-      await sleep(pause, undefined, time)
-    }
-  }
-  return run()
-}
-
-let temporary = (error: unknown) =>
-  error instanceof Error &&
-  /^Unable to create new browser: code: 5\d\d:/.test(error.message)
-
-// Capacity can return a temporary 503 before a session exists. Once acquired,
-// a session may not take its websocket connection yet; retry that same session
-// rather than allocating another browser.
-let open = async (
-  { acquire, connect }: Browsing,
-  time: Clock,
-): Promise<Browser> => {
-  let session = await retried(acquire, [1000, 2000, 4000], time, temporary)
-  return retried(() => connect(session), [250, 500, 1000], time)
-}
-
-// A deadline for one stage of a preview, failing with what ran out of time.
-let deadline = (time: Clock, ms: number, said: string) => {
-  let cancel = () => {}
-  let timeout = new Promise<never>((_, reject) => {
-    cancel = time.after(ms, () => reject(new Error(said)))
-  })
-  timeout.catch(() => {})
-  return {
-    bounded: <T>(work: Promise<T>) => Promise.race([work, timeout]),
-    cancel,
-  }
-}
-
-// The page's load and screenshot have fifteen seconds; the accessibility
-// check then has ten of its own, so a slow load never leaves it the remainder.
 export let RENDER = 15_000
 export let CHECK = 10_000
-// Each step a visit takes adds two seconds and its own wait to the load's,
-// up to a minute in all.
+export let READ = 2_500
+export let MOST = 20_000
+// Allow time for the service binding and serialization outside the visit.
+export let BROWSE_REPLY = OPEN + MOST + READ + RELEASE + 2_500
+export let PREVIEW_REPLY = OPEN + RENDER + CHECK + RELEASE + 2_500
 export let STEP = 2_000
-export let MOST = 60_000
+
+let stepWait = (step: Step) => 'wait' in step ? Math.max(0, step.wait) : 0
+
+export let waiting = (
+  { view, steps = [] }: Pick<Visit, 'view' | 'steps'>,
+): number =>
+  Math.max(0, view.wait) + steps.reduce((ms, step) => ms + stepWait(step), 0)
 
 /** How long a visit's load, steps and screenshots may take. */
-export let allowed = ({ steps = [] }: Pick<Visit, 'steps'>) =>
+export let allowed = ({ steps = [] }: Pick<Visit, 'steps'>): number =>
   Math.min(
     MOST,
     RENDER + steps.reduce(
-      (ms, s) => ms + STEP + ('wait' in s ? Math.max(0, s.wait) : 0),
+      (ms, s) => ms + STEP + stepWait(s),
       0,
     ),
   )
@@ -259,20 +232,35 @@ let said = (step: Step) => JSON.stringify(step).slice(0, 200)
 
 // One step, on a page laid out at `view`. A finger's swipe moves in ten
 // stages so a page's touchmove handlers see it travel.
-let taken = async (page: Page, view: View, step: Step, time: Clock) => {
+let taken = async (
+  page: Page,
+  view: View,
+  step: Step,
+  time: Clock,
+  signal: AbortSignal,
+) => {
   if ('tap' in step) {
     let el = await shown(page, step.tap)
+    signal.throwIfAborted()
     return view.touch ? el.tap() : el.click()
   }
   if ('type' in step) {
     if (!step.into) return page.keyboard.type(step.type)
-    return (await shown(page, step.into)).type(step.type)
+    let el = await shown(page, step.into)
+    signal.throwIfAborted()
+    return el.type(step.type)
   }
   if ('clear' in step) {
-    await (await shown(page, step.clear)).focus()
+    let el = await shown(page, step.clear)
+    signal.throwIfAborted()
+    await el.focus()
+    signal.throwIfAborted()
     await page.keyboard.down('Control')
+    signal.throwIfAborted()
     await page.keyboard.press('a')
+    signal.throwIfAborted()
     await page.keyboard.up('Control')
+    signal.throwIfAborted()
     return page.keyboard.press('Backspace')
   }
   if ('press' in step) return page.keyboard.press(step.press)
@@ -280,15 +268,17 @@ let taken = async (page: Page, view: View, step: Step, time: Clock) => {
     let [x1, y1, x2, y2] = step.swipe
     await page.touchscreen.touchStart(x1, y1)
     for (let i = 1; i <= 10; i++) {
+      signal.throwIfAborted()
       await page.touchscreen.touchMove(
         x1 + (x2 - x1) * i / 10,
         y1 + (y2 - y1) * i / 10,
       )
     }
+    signal.throwIfAborted()
     return page.touchscreen.touchEnd()
   }
   if ('keyboard' in step) return page.setViewport(viewport(view, step.keyboard))
-  if ('wait' in step) return sleep(step.wait, undefined, time)
+  if ('wait' in step) return sleep(step.wait, signal, time)
   throw new Error(`no such step: ${said(step)}`)
 }
 
@@ -319,55 +309,65 @@ let checked = async (
   page: Page,
   axe: Axe | null,
   time: Clock,
+  report: (error: unknown) => void,
 ): Promise<{ accessibility?: Checked; text: string }> => {
-  let { bounded, cancel } = deadline(
-    time,
-    CHECK,
-    axe
-      ? `Accessibility check timed out after ${CHECK / 1000} seconds`
-      : `Reading the page's text timed out after ${CHECK / 1000} seconds`,
-  )
   try {
     return await bounded(
-      isolated(page).then(async (world) => ({
-        ...axe ? { accessibility: await audit(world, axe) } : {},
-        text: String(
+      time,
+      axe ? CHECK : READ,
+      () => axe ? 'Accessibility check' : "Reading the page's text",
+      async (signal) => {
+        let world = await isolated(page)
+        signal.throwIfAborted()
+        let accessibility = axe ? await audit(world, axe) : undefined
+        signal.throwIfAborted()
+        let text = String(
           await world.evaluate(
             `(document.body?.innerText ?? '').slice(0, ${TEXT})`,
           ),
-        ),
-      })),
+        )
+        return { ...accessibility ? { accessibility } : {}, text }
+      },
     )
   } catch (e) {
+    if (!axe) {
+      report(e)
+      return { text: '' }
+    }
     let interrupted = interruption(e)
-    let accessibility: Checked = interrupted
-      ? { interrupted }
-      : { failed: message(e) }
-    return { ...axe ? { accessibility } : {}, text: '' }
-  } finally {
-    cancel()
+    return {
+      accessibility: interrupted ? { interrupted } : { failed: message(e) },
+      text: '',
+    }
   }
 }
 
-export let capture = async (
-  browsing: Browsing,
-  { url, view, cookies = [], steps = [], allow = [], audit = true }: Visit,
-  used: (duration: number) => Promise<void> = () => Promise.resolve(),
-  time: Clock = system,
-): Promise<Rendered> => {
-  let start = time.now()
-  let browser = await open(browsing, time)
-  let duration = 0
-  let { bounded, cancel } = deadline(
+type Loaded = Omit<Rendered, 'duration' | 'accessibility' | 'text'> & {
+  page: Page
+}
+
+class BrowserClosed extends Error {
+  constructor(stage: string, cause: unknown) {
+    super(`The browser session closed while ${stage}`, { cause })
+  }
+}
+
+let closed = (e: unknown) => interruption(e) == 'target'
+
+let loaded = async (
+  browser: Browser,
+  { url, view, cookies = [], steps = [], allow = [] }: Visit,
+  ms: number,
+  time: Clock,
+): Promise<Loaded> => {
+  let stage = 'opening the page'
+  let loading = bounded(
     time,
-    allowed({ steps }),
-    'Browser preview timed out',
-  )
-  let result: Omit<Rendered, 'duration'>
-  try {
-    let loaded = await bounded((async () => {
+    ms,
+    () => `Browser visit while ${stage}`,
+    async (signal) => {
       let page = await browser.newPage()
-      let console: { type: string; text: string }[] = []
+      let console: Rendered['console'] = []
       let errors: string[] = []
       let error = (e: unknown) => {
         if (errors.length < 100) errors.push(message(e))
@@ -379,14 +379,19 @@ export let capture = async (
       })
       page.on('pageerror', error)
       page.on('error', error)
+      signal.throwIfAborted()
       await page.setViewport(viewport(view))
+      signal.throwIfAborted()
       if (cookies.length) await page.setCookie(...cookies)
+      signal.throwIfAborted()
       if (allow.length) {
         await page.browserContext().overridePermissions(
           new URL(url).origin,
           allow,
         )
       }
+      signal.throwIfAborted()
+      stage = 'loading the page'
       let status = 0
       try {
         status = (await page.goto(url, {
@@ -394,67 +399,123 @@ export let capture = async (
           timeout: 10_000,
         }))?.status() ?? 0
       } catch (e) {
+        if (closed(e)) throw e
         error(e)
       }
-      if (view.wait) await sleep(view.wait, undefined, time)
-      // A step that fails ends the steps: what follows it assumed it worked.
-      // The failure is the visit's error, and the page is still pictured.
+      signal.throwIfAborted()
+      if (view.wait) {
+        stage = 'waiting after the page loaded'
+        await sleep(view.wait, signal, time)
+      }
       let shots: Rendered['shots'] = []
       let shoot = () => page.screenshot({ type: 'png', encoding: 'base64' })
       for (let [i, step] of steps.entries()) {
+        signal.throwIfAborted()
+        stage = `taking step ${i + 1}`
         try {
           if ('shot' in step) {
             shots.push({ name: step.shot, image: await shoot() })
-          } else await taken(page, view, step, time)
+          } else await taken(page, view, step, time, signal)
         } catch (e) {
+          if (closed(e)) throw e
           error(new Error(`step ${i + 1} ${said(step)}: ${message(e)}`))
           break
         }
       }
+      signal.throwIfAborted()
+      stage = 'taking the final screenshot'
       let image = await shoot()
       return { page, image, shots, console, errors, status }
-    })())
-    cancel()
-    let { page, ...rest } = loaded
-    result = {
-      ...rest,
-      ...await checked(page, audit ? browsing.axe : null, time),
+    },
+  )
+  try {
+    return await loading
+  } catch (e) {
+    throw closed(e) ? new BrowserClosed(stage, e) : e
+  }
+}
+
+export let capture = async (
+  browsing: Browsing,
+  visit: Visit,
+  used: (duration: number) => Promise<void> = () => Promise.resolve(),
+  time: Clock = system,
+  { hold = () => {}, report = () => {} }: Partial<SessionOptions> = {},
+): Promise<Rendered> => {
+  let start = time.now()
+  let opening = start + OPEN
+  let render = allowed(visit)
+  let end = opening + render
+  let left = () => end - time.now()
+  let attempt = (openBy: number) =>
+    withSession(browsing, openBy, time, { hold, report }, async (browser) => {
+      let { page, ...shot } = await loaded(
+        browser,
+        visit,
+        Math.min(render, left()),
+        time,
+      )
+      return {
+        ...shot,
+        ...await checked(
+          page,
+          visit.audit === false ? null : browsing.axe,
+          time,
+          (e) => {
+            report(e)
+            if (shot.errors.length < 100) shot.errors.push(message(e))
+          },
+        ),
+      }
+    })
+  let result: Omit<Rendered, 'duration'>
+  let duration: number
+  try {
+    try {
+      result = await attempt(opening)
+    } catch (e) {
+      if (
+        !(e instanceof BrowserClosed) || left() <= CONNECT ||
+        visit.steps?.some((step) => !('wait' in step || 'shot' in step))
+      ) throw e
+      report(e)
+      result = await attempt(end)
     }
   } finally {
-    cancel()
-    try {
-      await browser.close()
-    } finally {
-      duration = Math.max(0, time.now() - start)
-      await used(duration)
-    }
+    duration = Math.max(0, time.now() - start)
+    await used(duration)
   }
   return { ...result, duration }
 }
 
-/**
- * yak-browser's answer to a posted `Visit`: what `capture` rendered,
- * or the reason it could not, as a 500. Both carry the browser time held, so
- * the kernel charges it either way.
- */
-export let answer =
-  (browsing: Browsing, time: Clock = system) =>
-  async (req: Request): Promise<Response> => {
-    let duration = 0
-    try {
-      let visit = await req.json() as Visit
-      return Response.json(
-        await capture(browsing, visit, (ms) => {
-          duration = ms
-          return Promise.resolve()
-        }, time),
-      )
-    } catch (e) {
-      let failed: Failed = {
-        failed: e instanceof Error ? e.message : String(e),
-        stack: e instanceof Error ? e.stack : undefined,
-        duration,
-      }
-      return Response.json(failed, { status: 500 })
-    }
+/** The browser service's reply carries elapsed time on both paths. */
+export let answer = (
+  browsing: Browsing,
+  time: Clock = system,
+  hold?: Hold,
+): (req: Request) => Promise<Response> =>
+async (req: Request): Promise<Response> => {
+  let duration = 0
+  let faults: Fault[] = []
+  let report = (e: unknown) => faults.push(failure(e))
+  let result: Rendered | Failed
+  let status = 200
+  try {
+    result = await capture(
+      browsing,
+      await req.json() as Visit,
+      (ms) => {
+        duration = ms
+        return Promise.resolve()
+      },
+      time,
+      { hold, report },
+    )
+  } catch (e) {
+    result = { ...failure(e), duration }
+    status = result.timeout ? 504 : 500
   }
+  return Response.json({ ...result, ...faults.length ? { faults } : {} }, {
+    status,
+  })
+}

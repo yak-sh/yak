@@ -5,7 +5,7 @@
 // handed, so what it reads is what the address answers them.
 import { cleanup, equal, test } from '@yaks/testing'
 import { assertRejects, assertStringIncludes } from '@std/assert'
-import { answer, type Browsing, type Visit } from './browser/capture.ts'
+import { answer, type Browsing, type Visit } from '@yaks/platform/browser-visit'
 import { actions } from './browser/testing.ts'
 import { connector, fresh, type Kernel, seed } from './probe.ts'
 import { verify } from './lib/token.ts'
@@ -49,9 +49,9 @@ let browsing: Browsing = {
             }),
           screenshot: () => Promise.resolve('png'),
         }),
-      close: () => Promise.resolve(),
     })
   },
+  release: () => Promise.resolve(),
   axe: { source: '', version: 'test' },
 }
 let rendering = answer(browsing)

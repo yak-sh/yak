@@ -1,7 +1,7 @@
 // A page of ours opened in Cloudflare's browser (yak-browser, browser/), signed
 // in as whoever asks, and the steps a person would take on it: the door an
 // agent checking yaks.app live drives a browser through, since the box it runs
-// on has none (T-1637). It answers what browser/capture.ts renders: the
+// on has none (T-1637). It answers what the browser visit renders: the
 // screenshots, the page's text, console, errors and status.
 //
 // It is the browser's own credential that opens it, the session cookie, and
@@ -23,7 +23,16 @@ import { bound, type Env } from './env.ts'
 import { sessionAt } from './session.ts'
 import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
 import { caught } from './defects.ts'
-import type { Cookie, Step, View } from './browser/capture.ts'
+import { system } from '@yaks/fp'
+import {
+  allowed,
+  bounded,
+  type Cookie,
+  type Step,
+  type View,
+  waiting,
+} from '@yaks/platform/browser-visit'
+import { seen, timedOut } from './browser.ts'
 
 export let PATH = '/api/browse'
 
@@ -63,10 +72,7 @@ let held = (token: string, env: Env): Cookie[] => [
   },
 ]
 
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  if (req.method != 'POST') {
-    return json(405, 'method_not_allowed', 'post a visit')
-  }
+let visitOf = async (req: Request, env: Env) => {
   let claims = await sessionAt(req, env)
   let token = sessionCookie(req, env)
   if (!claims || !token) {
@@ -78,9 +84,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let known = await dir.known(claims.person)
-  let meta = await dir.space(dirPart.META.space)
-  let owner = meta && await dir.role(meta, claims.person) == 'owner'
-  if (!owner && !isTestAddress(known?.email ?? '')) {
+  let permitted = isTestAddress(known?.email ?? '')
+  if (!permitted) {
+    let meta = await dir.space(dirPart.META.space)
+    permitted = !!meta && await dir.role(meta, claims.person) == 'owner'
+  }
+  if (!permitted) {
     return json(
       403,
       'not_a_test_account',
@@ -93,31 +102,48 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
-  let view = { ...PHONE, ...asked.view }
-  let { seen } = await import('./browser.ts')
-  try {
-    return Response.json(
-      await seen(
-        env,
-        {
-          url,
-          view,
-          cookies: held(token, env),
-          steps: Array.isArray(asked.steps) ? asked.steps : [],
-          allow: Array.isArray(asked.allow)
-            ? asked.allow.filter((p) => typeof p == 'string')
-            : [],
-          // What a check looks at is the page and what it does; axe-core
-          // over a long live page outlasts its deadline, and the audit is
-          // app_preview's.
-          audit: false,
-        },
-        undefined,
-        { request: `POST ${PATH}` },
-      ),
+  let visit = {
+    url,
+    view: { ...PHONE, ...asked.view },
+    cookies: held(token, env),
+    steps: Array.isArray(asked.steps) ? asked.steps : [],
+    allow: Array.isArray(asked.allow)
+      ? asked.allow.filter((p) => typeof p == 'string')
+      : [],
+    // axe-core belongs to app_preview. A browser visit reads the page and
+    // takes the steps it was asked to take.
+    audit: false,
+  }
+  let budget = allowed(visit)
+  if (waiting(visit) >= budget) {
+    return json(
+      400,
+      'browser_wait_too_long',
+      `The requested waits use up the visit's ${
+        budget / 1000
+      }-second limit. Shorten the waits or split the visit.`,
     )
+  }
+  return visit
+}
+
+export let fetch = async (req: Request, env: Env): Promise<Response> => {
+  if (req.method != 'POST') {
+    return json(405, 'method_not_allowed', 'post a visit')
+  }
+  let where = { request: `POST ${PATH}` }
+  try {
+    let visit = await bounded(
+      env.CLOCK ?? system,
+      5_000,
+      () => 'Reading and authorizing the browser visit',
+      () => visitOf(req, env),
+    )
+    if (visit instanceof Response) return visit
+    return Response.json(await seen(env, visit, undefined, where))
   } catch (e) {
-    caught(e, { request: `POST ${PATH}` })
+    caught(e, where)
+    if (timedOut(e)) return json(504, 'browser_timeout', (e as Error).message)
     return json(502, 'browser_failed', (e as Error).message)
   }
 }

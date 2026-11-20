@@ -3,17 +3,22 @@ import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Clock } from '@yaks/fp'
 import {
   answer,
+  BROWSE_REPLY,
   type Browser,
   type Browsing,
   capture,
   CHECK,
+  CONNECT,
   type Cookie,
   type Message,
+  MOST,
+  OPEN,
   type Page,
+  RELEASE,
   RENDER,
   type Session,
-} from './browser/capture.ts'
-import { render } from './browser.ts'
+} from '@yaks/platform/browser-visit'
+import { render, seen } from './browser.ts'
 import { actions } from './browser/testing.ts'
 import { type Audit, report } from '@yaks/platform/preview-audit'
 import { within } from './defects.ts'
@@ -124,14 +129,16 @@ let page = (
   }
   let browser: Browser = {
     newPage: () => Promise.resolve(p),
-    close: () => {
-      closed = true
-      return Promise.resolve()
-    },
   }
+  let released: string[] = []
   let browsing: Browsing = {
     acquire: () => Promise.resolve('session'),
     connect: () => Promise.resolve(browser),
+    release: (id) => {
+      closed = true
+      released.push(id)
+      return Promise.resolve()
+    },
     axe: { source: '', version: 'test' },
   }
   return {
@@ -142,6 +149,7 @@ let page = (
     viewport: () => viewport,
     opened: () => opened,
     closed: () => closed,
+    released,
     log,
   }
 }
@@ -452,7 +460,7 @@ test('a screenshot failure closes its browser and the kernel charges its time', 
   let p = page({ screenshot: new Error('browser unavailable') })
   let time = clock()
   let duration = 0
-  p.browser.close = async () => {
+  p.browsing.release = async () => {
     await time.advance(200)
   }
   let browsing = {
@@ -568,7 +576,7 @@ test('a session not ready yet is connected to again', async () => {
 })
 
 test('a session that never takes a connection fails the preview', async () => {
-  let { browsing, sessions } = flaky(Infinity)
+  let { browsing, sessions, p } = flaky(Infinity)
   let time = clock()
   let rendering = capture(
     browsing,
@@ -580,6 +588,187 @@ test('a session that never takes a connection fails the preview', async () => {
   await paused(time)
   await assertRejects(() => rendering, Error, "reading 'accept' of null")
   assertEquals(sessions.length, 4)
+  assertEquals(p.released, ['session 0'])
+})
+
+test('an acquisition that answers after the timeout releases its session without connecting', async () => {
+  let p = page()
+  let time = clock()
+  let held: Promise<void>[] = []
+  let connects = 0
+  p.browsing.acquire = () =>
+    new Promise((resolve) => time.after(OPEN + 100, () => resolve('late')))
+  p.browsing.connect = () => {
+    connects++
+    return Promise.resolve(p.browser)
+  }
+  let running = capture(
+    p.browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+    {
+      hold: (work) => held.push(work),
+    },
+  )
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'Acquiring a browser session timed out',
+  )
+  await time.advance(OPEN)
+  await failed
+  await time.advance(100)
+  await Promise.all(held)
+  assertEquals([connects, p.released, time.pending()], [0, ['late'], 0])
+})
+
+test('a stalled connection releases by session ID even when release stalls', async () => {
+  let p = page()
+  let time = clock()
+  let released: string[] = []
+  let errors: string[] = []
+  let signal: AbortSignal | undefined
+  let releaseStarted = Promise.withResolvers<void>()
+  p.browsing.connect = (_, stop) => {
+    signal = stop
+    return new Promise(() => {})
+  }
+  p.browsing.release = (id) => {
+    released.push(id)
+    releaseStarted.resolve()
+    return new Promise(() => {})
+  }
+  let running = capture(
+    p.browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+    {
+      report: (error) => errors.push((error as Error).message),
+    },
+  )
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'Connecting to the browser session timed out',
+  )
+  await time.advance(CONNECT)
+  await releaseStarted.promise
+  assertEquals(signal?.aborted, true)
+  assertEquals(released, ['session'])
+  await time.advance(RELEASE)
+  await failed
+  assertStringIncludes(errors[0], 'Releasing the browser session timed out')
+  assertEquals(time.pending(), 0)
+})
+
+test('a lost screenshot session is released and the read-only visit starts on a fresh one', async () => {
+  let first = page({
+    screenshot: Object.assign(
+      new Error(
+        'Protocol error (Page.bringToFront): Session closed. Most likely the page has been closed.',
+      ),
+      { originalMessage: '' },
+    ),
+  })
+  let second = page()
+  let next = 0
+  let released: string[] = []
+  let faults: string[] = []
+  let browsing: Browsing = {
+    ...first.browsing,
+    acquire: () => Promise.resolve(String(++next)),
+    connect: (id) =>
+      Promise.resolve(id == '1' ? first.browser : second.browser),
+    release: (id) => {
+      released.push(id)
+      return Promise.resolve()
+    },
+  }
+  let result = await capture(
+    browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    clock(),
+    {
+      report: (error) => faults.push((error as Error).message),
+    },
+  )
+  assertEquals(result.image, 'png-bytes')
+  assertEquals(released, ['1', '2'])
+  assertEquals(faults, [
+    'The browser session closed while taking the final screenshot',
+  ])
+
+  next = 0
+  released.length = 0
+  await assertRejects(
+    () =>
+      capture(
+        browsing,
+        { url: 'https://x.invalid/', view, steps: [{ press: 'Enter' }] },
+      ),
+    Error,
+    'The browser session closed while taking the final screenshot',
+  )
+  assertEquals(released, ['1'])
+  assertEquals(first.log.filter((line) => line == 'press Enter'), [
+    'press Enter',
+  ])
+})
+
+test('a long visit stops at its deadline without taking the remaining steps', async () => {
+  let p = page()
+  let time = clock()
+  let running = capture(
+    p.browsing,
+    {
+      url: 'https://x.invalid/',
+      view,
+      steps: [{ wait: 60_000 }, { press: 'Enter' }],
+    },
+    undefined,
+    time,
+  )
+  let failed = assertRejects(() => running, Error, 'taking step 1 timed out')
+  await time.advance(MOST)
+  await failed
+  assertEquals(p.log.filter((line) => line == 'press Enter'), [])
+  assertEquals(p.released, ['session'])
+  assertEquals(time.pending(), 0)
+})
+
+test('the kernel bounds even a browser binding that never replies', async () => {
+  let time = clock()
+  let signal: AbortSignal | undefined
+  let charged = 0
+  let BROWSER = {
+    fetch: (req: Request): Promise<Response> => {
+      signal = req.signal
+      return new Promise(() => {})
+    },
+  }
+  let running = seen({ BROWSER, CLOCK: time }, {
+    url: 'https://x.invalid/',
+    view,
+    audit: false,
+  }, (ms) => {
+    charged = ms
+    return Promise.resolve()
+  })
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'Waiting for the browser service to answer timed out',
+  )
+  await time.advance(BROWSE_REPLY)
+  await failed
+  assertEquals([signal?.aborted, charged, time.pending()], [
+    true,
+    BROWSE_REPLY,
+    0,
+  ])
 })
 
 test('a yak-browser that cannot say is charged the time the kernel waited', async () => {
@@ -643,7 +832,11 @@ test('a stalled screenshot releases its browser and accounts for elapsed time', 
     },
     time,
   )
-  let failed = assertRejects(() => running, Error, 'Browser preview timed out')
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'taking the final screenshot timed out',
+  )
   await time.advance(15_000)
   await failed
   assertEquals(p.closed(), true)
