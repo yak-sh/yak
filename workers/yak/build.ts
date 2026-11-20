@@ -597,6 +597,7 @@ export class Builder extends Durable {
             space: () => store,
             arm: (at) => this.clock.arm(at),
             hold: (work) => this.#ctx.waitUntil?.(work),
+            ready: () => store.vectors?.run(),
           }),
         )
         this.#fx = store.fx

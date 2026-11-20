@@ -8,7 +8,9 @@ import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
-import { operatorStore } from './operator-store.ts'
+import { type OperatorStore, operatorStore } from './operator-store.ts'
+import { operatorVectors } from './operator-vectors.ts'
+import { embeds } from './testing.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 
 // An embedder that puts the memory .62 from the person's message, as near as
@@ -89,4 +91,48 @@ test('its vectors are kept in the Operator store', async () => {
     (await store.meaning!('tomatoes', { limit: 1 }))[0]?.entity,
     memory.eid,
   )
+})
+
+// The lender the Builder gives its store (operator-vectors.ts), over Workers
+// AI: a store no session names a space for has nobody to bill, so it lends no
+// embedder and its drains wait without failing, until a session names one.
+env.AI = embeds({} as never) as unknown as typeof env.AI
+let alone: OperatorStore = await operatorStore(
+  durable(),
+  {},
+  {},
+  operatorVectors(env, {
+    space: () => alone,
+    arm: () => Promise.resolve(),
+    ready: () => alone.vectors?.run(),
+  }),
+)
+await alone.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  memory: {},
+  doc: { title: KEPT },
+}], { trusted: true })
+await alone.vectors!.work()
+let waited = alone.vectors!.owes()
+// A session arrives with the words it was started on.
+let started = crypto.randomUUID()
+await alone.g.apply([
+  {
+    entity: { eid: started },
+    operator_session: { space: eid, person },
+    session: { id: started },
+  },
+  {
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: started },
+    content: { body: 'Hello there.' },
+  },
+], { trusted: true })
+for (let i = 0; i < 9 && alone.vectors!.owes(); i++) {
+  await new Promise((done) => setTimeout(done, 0))
+  await alone.vectors!.work()
+}
+
+test('a store no session names a space for waits to embed, then drains', () => {
+  equal([waited, alone.vectors!.owes()], [true, false])
 })
