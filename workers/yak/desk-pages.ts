@@ -1498,7 +1498,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
   let form = (id: string, kids: Kids, at: Record<string, unknown> = {}) =>
     h(
       'form',
-      { method: 'post', action, ...at, class: 'Page_Form' },
+      { method: 'post', action, class: 'Page_Form', ...at },
       held('server', id),
       kids,
     )
