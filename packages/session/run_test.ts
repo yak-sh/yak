@@ -1285,3 +1285,35 @@ let ending = await (async () => {
 test('a transcript that ends is told so, a stop written while it rests too', () => {
   assertEquals([ending.replied > 0, ending.last], [true, 'stopped'])
 })
+
+// Words given while a reply is written: the reply is told to its host at once
+// (`replied`), and the turn carries on to the words, which end it.
+let carried = await (async () => {
+  let told: string[] = []
+  let calls = 0
+  let model: Model = async (req) => {
+    if (!calls++) {
+      await p.g.apply([{
+        entity: { eid: 'late:more' },
+        entry: { session: 'late' },
+        content: { body: 'and the logo' },
+      }])
+    }
+    return { id: `r${calls}`, model: req.model, items: done }
+  }
+  let p = proc(store(), 'w1', model, {
+    replied: (session) => Promise.resolve(void told.push(`replied ${session}`)),
+    ended: (session) => Promise.resolve(void told.push(`ended ${session}`)),
+  })
+  await p.g.apply(ask('late'))
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  return { told, kinds: (await transcript(p.g, 'late')).map(kindOf) }
+})()
+
+test('a reply said while newer words wait is told at once, and the turn carries on', () => {
+  assertEquals(carried, {
+    told: ['replied late', 'ended late'],
+    kinds: ['input', 'ask', 'input', 'output', 'ask', 'output'],
+  })
+})

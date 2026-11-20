@@ -46,20 +46,14 @@ import { kindOf } from './operator-escalate.ts'
 import { linked, PLATFORMS } from './chat.ts'
 import {
   basics,
+  chatRows,
   type Lead,
   leading,
   named,
   replying,
   type Speakers,
 } from './operator-rooms.ts'
-import {
-  framing,
-  kept,
-  messageEid,
-  pieces,
-  type Said,
-  showing,
-} from '@yaks/chat'
+import { framing, kept, messageEid, type Said, showing } from '@yaks/chat'
 import { cue, passes } from '@yaks/session/turn'
 
 /** What a person reads when the Operator could not start on their request
@@ -438,7 +432,7 @@ export let hear = async (
     let who = await speakerOf(env, space, request)
     let framing = BY[channel]
       ? fromWhom(who, BY[channel](request, id, about))
-      : chatFraming(request, item, who)
+      : await chatFraming(g, request, item, who)
     let open = await operator.listening(
       { person: request.person, administrative: request.administrative },
       space,
@@ -537,19 +531,38 @@ let joined = (...leads: (Lead | undefined)[]): Lead | undefined => {
     : undefined
 }
 
-// How words heard on a chat platform are said before them: the platform, and
-// who wrote them ({@link speaker}, @yaks/chat `framing`).
-let chatFraming = (request: Request, item: Bundle, who: string) => {
+// How words heard on a chat platform are said before them: the platform,
+// the room and message they were said in, which chat_send answers them by,
+// and who wrote them ({@link speaker}, @yaks/chat `framing`).
+let chatFraming = async (
+  g: Store['g'],
+  request: Request,
+  item: Bundle,
+  who: string,
+) => {
   let m = part<Comp | undefined>(item, 'chat_message')
   let platform = PLATFORMS.get(request.channel)
+  if (!platform || !m) return ''
+  let room = String(m.room ?? '')
+  let [held] = room ? await g.get([room], ['chat_room']) : []
+  let c = part<Comp | undefined>(held ?? undefined, 'chat_room')
   // Only a direct message is said where nobody else hears the answer.
-  return platform && m
-    ? cue({ group: m.addressed != 'direct', to: !!m.addressed }) +
-      framing(platform, {
-        name: who || (request.address ?? 'someone'),
-        addressed: m.addressed as Said['addressed'],
-      })
-    : ''
+  return cue({ group: m.addressed != 'direct', to: !!m.addressed }) +
+    framing(platform, {
+      name: who || (request.address ?? 'someone'),
+      addressed: m.addressed as Said['addressed'],
+      ...c?.id && m.message_id
+        ? {
+          at: {
+            room: String(c.id),
+            ...c.name ? { name: String(c.name) } : {},
+            ...c.server ? {} : { direct: true },
+            message: String(m.message_id),
+            ...m.reply_to ? { reply_to: String(m.reply_to) } : {},
+          },
+        }
+        : {},
+    })
 }
 
 /**
@@ -784,29 +797,6 @@ export let replyRows = (
     })
     : []
 
-// A chat answer: a message in the room the words were said in, answering
-// them, posted by the bot that heard them (@yaks/chat `chat_post`), cut to
-// the platform's limit, one message a piece.
-let chatRows = (
-  via: string,
-  item: Bundle,
-  reply: { eid: string; text: string },
-): Bundle[] => {
-  let heard = part<Comp | undefined>(item, 'chat_message')
-  let platform = PLATFORMS.get(via)!
-  if (!heard?.room || !heard.connection) return []
-  return pieces(reply.text, platform.limit).map((body, i) => ({
-    entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
-    chat_message: {
-      via,
-      connection: heard.connection,
-      ...heard.message_id && !i ? { reply_to: heard.message_id } : {},
-    },
-    doc: { body },
-    deliver: { to: heard.room },
-  }))
-}
-
 /** Whom a scheduled run is for: the space, and the person it runs as. */
 export type Ask = {
   space: string
@@ -887,6 +877,12 @@ let withheldFrom = ({ withheld = [], address }: Request) =>
     } not agreed to texts from this number, so your answer goes to ${address} alone, not to the group: tell them so, and that you answer a group only when everyone in it has agreed to texts from yaks.app, and that they can text you one-to-one. `
     : ''
 
+// A text's framing: the number it came from, which its answer goes back to.
+let byText = (request: Request) =>
+  `By text${request.signup ? ', signing up' : ''}${
+    request.address ? ` from ${request.address}` : ''
+  }: `
+
 let BY: Record<
   string,
   (request: Request, id: string, subject?: Bundle) => string
@@ -899,14 +895,15 @@ let BY: Record<
       : request.page
       ? onPage(request.page, request.app)
       : ''),
-  email: (request) => request.signup ? 'By email, signing up: ' : 'By email: ',
+  email: (request, id) =>
+    `By email${request.signup ? ', signing up' : ''} (letter ${short(id)}): `,
   signup: () => 'By text, signing up for a form: ',
-  text: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
+  text: (request) => byText(request),
   group: (request) =>
     `By group text with ${(request.group ?? []).join(', ')}. ${
       withheldFrom(request)
     }${cue({ group: true, to: !!request.addressed })}From ${request.address}: `,
-  rcs: (request) => request.signup ? 'By text, signing up: ' : 'By text: ',
+  rcs: (request) => byText(request),
   voice: (request) =>
     request.call
       ? 'On the phone, your voice on the call asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): '
@@ -1176,7 +1173,7 @@ export let mailSend = (
       answering: {
         type: 'string',
         description:
-          'The letter id of a reply, or of a letter you sent, to write back in its thread.',
+          'The letter id of a letter someone wrote you, a reply, or a letter you sent, to write back in its thread.',
       },
     },
     required: ['to', 'name', 'text'],

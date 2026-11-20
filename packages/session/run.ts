@@ -50,6 +50,7 @@ import {
   type TranscriptStatus,
 } from './state.ts'
 import { UnknownSession } from './unknown.ts'
+import { said } from './answer.ts'
 import { cleanEnd, requested, rouse, unlinked, waits, wake } from './wake.ts'
 import { watch } from './watch.ts'
 import { text } from './texted.ts'
@@ -81,6 +82,10 @@ export type Runner = Deps & ChildLimits & {
    * that finds it ended, so what it does is idempotent (./answer.ts
    * `answerOf` reads its answer). */
   ended?: (session: Eid) => Promise<void>
+  /** a reply said while newer words wait, so the turn carries on to them:
+   * what the reply answers goes back now, read as `ended`'s is (./answer.ts
+   * `answerOf`), and the newer words are the next reply's */
+  replied?: (session: Eid) => Promise<void>
   /** reconcile borrowed resources after this pass releases its lease */
   idle?: (session: Eid) => Promise<void>
   /** how long a transcript's lease stands between renewals (ms) */
@@ -387,6 +392,12 @@ let readied = async (
   return { read, status: statusOf(read.entries, { ended: read.ended }) }
 }
 
+// A step that said a reply while newer words wait: its turn carries on, and
+// what the reply answers goes back now (`Runner.replied`).
+let carried = async (session: Eid, s: Step, r: Runner) => {
+  if (s.status == 'pending' && s.added.some(said)) await r.replied?.(session)
+}
+
 // The steps a held transcript takes: until one does nothing, or it ends.
 // Answers the newest seq it saw.
 let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
@@ -414,6 +425,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
       if (await currentStatus(g, session) == 'pending') continue
       break
     }
+    await carried(session, s, r)
     if (s.did == 'nothing') {
       return { ...await newest(g, session), waiting: s.waiting }
     }
@@ -605,6 +617,7 @@ let advance = (
       let s = pass.took = await step(g, session, { ...r, stopping }, read)
       await r.each?.(s, session)
       if (ENDED.includes(s.status)) await end()
+      else await carried(session, s, r)
     })
   }).finally(async () => {
     if (here.get(session) == pass) here.delete(session)

@@ -18,12 +18,29 @@ let comp = (b: Bundle | undefined, name: string) =>
  * compaction's checkpoint, is no one's words, so it never starts a turn. */
 export let given = (b: Bundle): boolean => kindOf(b) == 'input' && !b.notice
 
-let said = (b: Bundle) => kindOf(b) == 'output' && !!b.content
+/** A reply: what a model said, which answers the words given before it. */
+export let said = (b: Bundle): boolean => kindOf(b) == 'output' && !!b.content
+
+// Where the reply at `i` stopped hearing, as an end to slice before: past the
+// last line its ask was sent (`ask{through}`, as ./state.ts reads a turn's
+// status), since words given while it was being written are the next
+// reply's to answer. Undefined where that lies before the lines read
+// (`whole` false).
+let heardTo = (entries: Bundle[], i: number, whole: boolean) => {
+  let source = comp(entries[i], 'output')?.source
+  if (!source) return i
+  let ask = entries.find((b) => b.entity.eid == source)
+  let through = comp(ask, 'ask')?.through
+  if (!through) return ask || whole ? i : undefined
+  let at = entries.findIndex((b) => b.entity.eid == through)
+  return at >= 0 ? at + 1 : whole ? i : undefined
+}
 
 /**
  * The inputs a turn ending at `end` answers: each line given since the reply
  * before it, with a helper's report standing for the inputs of the turn whose
- * call started it. `calls` names that call for each child
+ * call started it. A reply hears up to the ask that wrote it: words given
+ * while it was being written are left to the next. `calls` names that call for each child
  * (`spawned{parent, call}`). Of a transcript's newest lines alone (`whole`
  * false), it is undefined where the inputs lie before them.
  *
@@ -39,6 +56,16 @@ let said = (b: Bundle) => kindOf(b) == 'output' && !!b.content
  * ]
  * equal(origins(lines, 4, new Map([['h', 'c']]))?.map((b) => b.entity.eid), ['a'])
  * equal(origins(lines.slice(2), 2, new Map(), false), undefined)
+ * let late = [
+ *   line('a', { content: { body: 'Write the guide' } }),
+ *   line('k', { ask: { through: 'a' } }),
+ *   line('b', { content: { body: 'And the logo?' } }),
+ *   line('g', { content: { body: 'The guide' }, output: { source: 'k' } }),
+ *   line('k2', { ask: { through: 'g' } }),
+ *   line('l', { content: { body: 'Logo set' }, output: { source: 'k2' } }),
+ * ]
+ * equal(origins(late, 3, new Map())?.map((b) => b.entity.eid), ['a'])
+ * equal(origins(late, 5, new Map())?.map((b) => b.entity.eid), ['b'])
  * ```
  */
 export let origins = (
@@ -49,8 +76,13 @@ export let origins = (
 ): Bundle[] | undefined => {
   let from = entries.findLastIndex((b, i) => i < end && said(b))
   if (from < 0 && !whole) return
+  let start = from < 0 ? 0 : heardTo(entries, from, whole)
+  let stop = end < entries.length && said(entries[end])
+    ? heardTo(entries, end, whole)
+    : end
+  if (start == undefined || stop == undefined) return
   let found: Bundle[] = []
-  for (let b of entries.slice(from + 1, end).filter(given)) {
+  for (let b of entries.slice(start, stop).filter(given)) {
     let child = comp(b, 'delivery')?.child
     if (!child) {
       found.push(b)
@@ -67,21 +99,28 @@ export let origins = (
   return found
 }
 
-// The newest words given (`mark`), and the inputs the turn that followed them
-// answers. The turn ends at its reply, or where the transcript does when it
-// ended without one (stopped, failed). Undefined where they lie before the
-// lines read (`whole` false).
+// The inputs the newest turn answers, the newest of the words its reply heard
+// (`mark`), and where it ends (`through`, past its reply). The turn ends at
+// its reply, or where the transcript does when it ended without one (stopped,
+// failed). Undefined where they lie before the lines read (`whole` false).
 let turnAt = (
   entries: Bundle[],
   calls: Map<string, string>,
   whole = true,
 ) => {
-  let mark = entries.findLast(given)
-  if (!mark) return whole ? { mark, given: [] } : undefined
+  let newest = entries.findLastIndex(given)
+  if (newest < 0) {
+    return whole
+      ? { mark: undefined, given: [], through: entries.length }
+      : undefined
+  }
   let reply = entries.findLastIndex(said)
-  let end = reply > entries.indexOf(mark) ? reply : entries.length
+  let end = reply > newest ? reply : entries.length
+  let heard = end < entries.length ? heardTo(entries, end, whole) : end
   let found = origins(entries, end, calls, whole)
-  return found && { mark, given: found }
+  if (!found || heard == undefined) return
+  let mark = entries.findLast((b, i) => i < heard && given(b))
+  return { mark, given: found, through: Math.min(end + 1, entries.length) }
 }
 
 /**
@@ -241,9 +280,9 @@ export let answerOf = async (
     await starts(read)
     return !!turnAt(read, calls, false)
   })
-  let reply = replyOf(turnOf(entries), naming)
-  if (helper) return { ...reply, given: [] }
+  if (helper) return { ...replyOf(turnOf(entries), naming), given: [] }
   await starts(entries)
   let turn = turnAt(entries, calls, whole)
+  let reply = replyOf(turnOf(entries.slice(0, turn?.through)), naming)
   return { ...reply, mark: turn?.mark, given: turn?.given ?? [] }
 }

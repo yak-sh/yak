@@ -40,6 +40,16 @@ await g.apply([
     reply('The app is fine.'),
   ),
   ...lines('helper', words('Check the app'), reply('It is fine.')),
+  // Words given while a reply was being written (`late-4`) are the next
+  // reply's: the first answers only what its ask was sent with.
+  { entity: { eid: 'late' }, session: {} },
+  ...lines(
+    'late',
+    words('Write the guide'),
+    { ask: { through: 'late-1' } },
+    words('And the logo?'),
+    { ...reply('The guide.'), output: { source: 'late-2' } },
+  ),
   { entity: { eid: 'stopped' }, session: {} },
   ...lines(
     'stopped',
@@ -70,5 +80,29 @@ test('a stopped turn answers its words with the stop, and is no fault', async ()
   assertEquals(
     [answer.text, answer.fault, answer.given.map((b) => b.entity.eid)],
     ['Stopped by the person watching.', undefined, ['stopped-1']],
+  )
+})
+
+test('a reply answers the words its ask heard, not those given while it was written', async () => {
+  let first = await answerOf(g, 'late')
+  let [ask, logo] = lines(
+    'late',
+    ...Array(4),
+    { ask: { through: 'late-4' } },
+    { ...reply('Logo set.'), output: { source: 'late-5' } },
+  ).slice(4)
+  await g.apply([ask, logo])
+  let next = await answerOf(g, 'late')
+  assertEquals(
+    [first, next].map((a) => [
+      a.text,
+      a.mark?.entity.eid,
+      a.given.map((b) => b.entity.eid),
+    ]),
+    [['The guide.', 'late-1', ['late-1']], [
+      'Logo set.',
+      'late-3',
+      ['late-3'],
+    ]],
   )
 })

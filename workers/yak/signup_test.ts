@@ -1,6 +1,6 @@
 import { cleanup, test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf, type Space } from './directory.ts'
@@ -165,9 +165,9 @@ test('a letter to the sign-up address makes its sender a person with their own s
 
 test('the letter is their first words to the Operator, marked as signing up, and it answers in the thread', () => {
   assertEquals(said?.kind, 'user')
-  assertStringIncludes(
+  assertMatch(
     said?.kind == 'user' ? said.text : '',
-    'By email, signing up: Hi yaks.app, sign me up!',
+    /By email, signing up \(letter \S+\): Hi yaks\.app, sign me up!/,
   )
   assertStringIncludes(html, 'sign me up!')
   assertEquals(reply.to, 'dana@example.com')
@@ -181,9 +181,9 @@ test('the letter is their first words to the Operator, marked as signing up, and
 test('a second letter from them reaches the same space, with no second person', () => {
   let { heard, ...rest } = again
   assertEquals(rest, { person, spaces: 1, letters: 1 })
-  assertStringIncludes(
+  assertMatch(
     heard?.kind == 'user' ? heard.text : '',
-    'By email: Hi yaks.app, sign me up!',
+    /By email \(letter \S+\): Hi yaks\.app, sign me up!/,
   )
 })
 
@@ -281,7 +281,7 @@ test('the Operator hears the text as signing up and answers it once, with STOP a
   assertEquals(anaAsked?.kind, 'user')
   assertStringIncludes(
     anaAsked?.kind == 'user' ? anaAsked.text : '',
-    `By text, signing up: ${SAY}`,
+    `By text, signing up from ${ANA}: ${SAY}`,
   )
   assertEquals(firstText, [{
     from: FREE,

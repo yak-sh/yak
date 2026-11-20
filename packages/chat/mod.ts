@@ -332,13 +332,39 @@ export let within = async (
   return where
 }
 
+/** Where a message was said: the platform's ids for its room and for it,
+ * and for the message it replies to, if any, which is what a reply to it
+ * names; the room's name there, or that it is a direct room. */
+export type Place = {
+  room: string
+  name?: string
+  direct?: boolean
+  message: string
+  reply_to?: string
+}
+
 /** How a message heard on a platform is said before its words to whoever
- * answers it: where it came from, who wrote it, and how it was said to the
- * bot, which is what the listener decides whether to answer by. */
+ * answers it: where it came from (`at`), who wrote it, and how it was said
+ * to the bot, which is what the listener decides whether to answer by. */
 export let framing = (
   platform: Pick<Platform, 'title'>,
-  said: { name: string; addressed?: Addressed },
-) => `On ${platform.title}, ${HOW[said.addressed ?? 'heard']} ${said.name}: `
+  said: { name: string; addressed?: Addressed; at?: Place },
+): string =>
+  said.at
+    ? `On ${platform.title} ${placed(said.at)}, ${
+      said.addressed
+        ? HOW[said.addressed]
+        : 'which you hear but were not addressed in, from'
+    } ${said.name}: `
+    : `On ${platform.title}, ${HOW[said.addressed ?? 'heard']} ${said.name}: `
+
+// A message's place, as `framing` says it.
+let placed = ({ room, name, direct, message, reply_to }: Place) =>
+  `in ${
+    direct ? 'direct messages' : name ? `#${name}` : 'a room'
+  } (room ${room}, message ${message}${
+    reply_to ? `, replying to ${reply_to}` : ''
+  })`
 
 let HOW: Record<Addressed | 'heard', string> = {
   direct: 'directly, from',

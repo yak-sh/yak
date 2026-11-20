@@ -139,6 +139,21 @@ test('framing says the platform, how it was said to the bot, and who wrote it', 
       'On Discord, in a room you hear but were not addressed in, from Ann: ',
     ],
   )
+  assertEquals(
+    framing({ title: 'Discord' }, {
+      name: 'Ann',
+      addressed: 'reply',
+      at: { room: '7', name: 'general', message: '42', reply_to: '41' },
+    }),
+    'On Discord in #general (room 7, message 42, replying to 41), replying to you, from Ann: ',
+  )
+  assertEquals(
+    framing({ title: 'Discord' }, {
+      name: 'Ann',
+      at: { room: '7', direct: true, message: '42' },
+    }),
+    'On Discord in direct messages (room 7, message 42), which you hear but were not addressed in, from Ann: ',
+  )
 })
 
 test('pieces cut at a paragraph, a line, a space, or hard', () => {

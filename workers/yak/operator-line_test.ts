@@ -197,7 +197,7 @@ let service = operatorService(
           name: 'Dr Alvarez',
           text: 'Does Tuesday at 3 work for his checkup?',
         })
-      : said(req, /By text: Is the hall free/)
+      : said(req, /By text from [^:]*: Is the hall free/)
       ? (memberOffered = req.tools, reply('The hall is free Sunday.'))
       : said(req, /By text, signing up for a form:/)
       ? (signupOffered = req.tools,

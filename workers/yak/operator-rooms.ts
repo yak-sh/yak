@@ -10,10 +10,12 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { line } from '@yaks/query'
+import { derivedEid } from '@yaks/graph/identity'
 import {
   chain,
   kept,
   type Page,
+  pieces,
   recounted,
   roomEid,
   type Said,
@@ -269,6 +271,26 @@ export let roomsOf = async ({ g }: Store, at: string) => {
   })
 }
 
+/** The room `named` of `rooms`, by its eid here or the platform's id for
+ * it, else the newest; refused, naming each room it could be. */
+export let roomAt = <R extends { eid: string; room: string }>(
+  rooms: R[],
+  named?: unknown,
+): R => {
+  let at = named
+    ? rooms.find((r) => r.eid == named || r.room == named)
+    : rooms[0]
+  if (at) return at
+  throw refuse(
+    'missing',
+    rooms.length
+      ? `You were not addressed in room ${named} in this conversation; you were in ${
+        rooms.map((r) => `${r.room} (${r.eid})`).join(', ')
+      }.`
+      : 'Nobody addressed you in a chat room in this conversation.',
+  )
+}
+
 /** `room`, a `chat_room` row about to be kept, with the name its platform
  * calls it where the store holds none yet: read once, by the bot of
  * `connection`. A direct room has no name, and a room that could not be
@@ -436,7 +458,7 @@ export let chatRead = (
       room: {
         type: 'string',
         description:
-          "The room's eid; left out, the room you were last addressed in.",
+          "The room: the platform's id for it, as its messages' framing gives it, or its eid; left out, the room you were last addressed in.",
       },
       before: {
         type: 'string',
@@ -455,18 +477,10 @@ export let chatRead = (
     },
   },
   run: async (args, context) => {
-    let rooms = context?.session ? await roomsOf(store, context.session) : []
-    let at = args.room ? rooms.find((r) => r.eid == args.room) : rooms[0]
-    if (!at) {
-      throw refuse(
-        'missing',
-        rooms.length
-          ? `You were not addressed in room ${args.room} in this conversation; you were in ${
-            rooms.map((r) => r.eid).join(', ')
-          }.`
-          : 'Nobody addressed you in a chat room in this conversation.',
-      )
-    }
+    let at = roomAt(
+      context?.session ? await roomsOf(store, context.session) : [],
+      args.room,
+    )
     if (args.message) {
       return {
         text: await one(env, store, at, String(args.message), speakers),
@@ -487,6 +501,85 @@ export let chatRead = (
       )}\n\nThe oldest is message ${said[0].id}.`
       : 'Nothing was said there before it.'
     return { text, with: { heard: {} } }
+  },
+})
+
+/** A chat answer: a message in the room `item` was said in
+ * (`chat_message{room}`), replying to it where it names its message, posted
+ * by the bot of its connection (@yaks/chat `chat_post`), cut to the
+ * platform's limit, one message a piece. */
+export let chatRows = (
+  via: string,
+  item: Bundle,
+  reply: { eid: string; text: string },
+): Bundle[] => {
+  let heard = item.chat_message as Comp | undefined
+  let platform = PLATFORMS.get(via)
+  if (!platform || !heard?.room || !heard.connection) return []
+  return pieces(reply.text, platform.limit).map((body, i) => ({
+    entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
+    chat_message: {
+      via,
+      connection: heard.connection,
+      ...heard.message_id && !i ? { reply_to: heard.message_id } : {},
+    },
+    doc: { body },
+    deliver: { to: heard.room },
+  }))
+}
+
+/** The Operator's `chat_send`: a message in a chat room it was addressed in
+ * during this conversation, replying to one of its messages, from any turn:
+ * how a request said there is answered there when this turn came from
+ * somewhere else. */
+export let chatSend = (store: Store): Tool => ({
+  name: 'chat_send',
+  title: 'Write in a chat room',
+  step: { doing: 'Writing in the room…', done: 'Wrote in the room' },
+  description:
+    'Write in a chat room (a Discord channel) you were addressed in during this conversation, as a reply to one of its messages. Use it to answer a request where it was asked when this turn came from somewhere else, such as the person asking you here about something said in Discord: name the room and message its framing gave (room …, message …). A turn that came from the room is answered there already, so never send its answer with this too. Then tell the person here in one line that you did.',
+  parameters: {
+    type: 'object',
+    properties: {
+      room: {
+        type: 'string',
+        description:
+          "The room: the platform's id for it, as its messages' framing gives it, or its eid; left out, the room you were last addressed in.",
+      },
+      message: {
+        type: 'string',
+        description:
+          "The platform's id for the message to reply to; left out, a message of its own in the room.",
+      },
+      text: { type: 'string', description: 'What to say there.' },
+    },
+    required: ['text'],
+  },
+  run: async (args, context) => {
+    let text = String(args.text ?? '').trim()
+    if (!text) throw refuse('arguments', 'Say what to write.')
+    let at = roomAt(
+      context?.session ? await roomsOf(store, context.session) : [],
+      args.room,
+    )
+    let message = args.message ? String(args.message) : undefined
+    let eid = crypto.randomUUID()
+    await store.g.apply(
+      chatRows(at.via, {
+        entity: { eid },
+        chat_message: {
+          room: at.eid,
+          connection: at.connection,
+          ...message ? { message_id: message } : {},
+        },
+      }, { eid, text }),
+      { trusted: true },
+    )
+    return JSON.stringify({
+      sent: eid,
+      room: at.eid,
+      reply_to: message ?? null,
+    })
   },
 })
 
@@ -551,17 +644,11 @@ export let roomApi = async (
   if (method != 'GET') {
     throw refuse(
       'arguments',
-      'A chat platform is only read here, with GET. What you say in the room is your answer.',
+      'A chat platform is only read here, with GET. Write in a room with chat_send.',
     )
   }
   let rooms = session ? await roomsOf(store, session) : []
-  let at = args.room ? rooms.find((r) => r.eid == args.room) : rooms[0]
-  if (!at) {
-    throw refuse(
-      'missing',
-      'Nobody addressed you in a chat room in this conversation.',
-    )
-  }
+  let at = roomAt(rooms, args.room)
   let { status, body } = await apiRead(env, at.via, {
     connection: at.connection,
     rooms: rooms.filter((r) => r.connection == at.connection).map((r) =>

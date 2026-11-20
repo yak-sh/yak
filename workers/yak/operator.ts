@@ -148,7 +148,7 @@ import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
-import { chatRead, roomsOf } from './operator-rooms.ts'
+import { chatRead, chatSend, roomsOf } from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -1969,8 +1969,11 @@ export let operating = (
       id: 'stopped|' + r.entity.eid,
     })]
   }
-  let answered = async (session: string) => {
+  // `carrying`: a reply said while newer words wait, whose turn goes on to
+  // them; only the words it answers hear from it now.
+  let answered = async (session: string, carrying = false) => {
     let [row] = await g.get([session], ['spawned', 'occurrence'])
+    if (carrying && row?.occurrence) return
     let reply = await answerOf(g, session, NAMING)
     if (row?.occurrence) {
       await workFinished(store, row, reply.text, reply.fault)
@@ -2201,9 +2204,10 @@ export let operating = (
       roomsOf(store, session),
     ])
     // Addressed in a chat room, it reads back what was said there, and
-    // anything else a member there could see.
+    // anything else a member there could see, and from any turn writes
+    // there, to answer a request where it was asked.
     let chat = rooms.length
-      ? [chatRead(env, store, speakersOf(env, space))]
+      ? [chatRead(env, store, speakersOf(env, space)), chatSend(store)]
       : []
     // Any service's API: a room's platform on any turn there, the person's
     // connections on their own (operator-integrations.ts).
@@ -2585,6 +2589,9 @@ export let operating = (
       await answered(session)
       options.tell?.(session)
     },
+    // A reply said while newer words wait goes back now, the way the words
+    // it answers came: the turn carrying on answers the newer ones.
+    replied: (session) => answered(session, true),
     waiting: AWAY / 2,
     answers: async (using, session) =>
       (await runner.answers?.(using, session) ?? true) &&

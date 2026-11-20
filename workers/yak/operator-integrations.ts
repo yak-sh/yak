@@ -249,7 +249,7 @@ export let apiCall = (
       room: {
         type: 'string',
         description:
-          'On a chat platform: the eid of the room whose bot reads it; left out, the room you were last addressed in.',
+          "On a chat platform: the room whose bot reads it, by the platform's id for it or its eid; left out, the room you were last addressed in.",
       },
     },
     required: ['integration', 'path'],
