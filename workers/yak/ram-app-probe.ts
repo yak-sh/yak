@@ -1,6 +1,7 @@
 // App declaration transitions over independent RAM rows. A trial gets a copy
 // of the serving rows, so rolling it back leaves the serving graph untouched.
 import { type Graph, graph } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 import { aliases } from '@yaks/alias'
 import { keys } from '@yaks/key'
 import { personal } from '@yaks/member'
@@ -19,8 +20,13 @@ export let ramApp = () => {
     let rows = ram(vocab)
     let held = !reset && previous && stores.get(previous)
     if (held) {
+      // A grave is read as a tombstone and laid again as one: patched, it
+      // would come back a bare identity, which is nobody's row.
       let saved = held.read('.entity&*', { graves: true })
-      rows.tx((tx) => tx.patch(saved))
+      rows.tx((tx) => {
+        tx.patch(saved.map((b) => dead(b) ? { entity: b.entity } : b))
+        tx.remove(saved.filter(dead).map((b) => b.entity))
+      })
     }
     let g = graph({
       vocab,

@@ -60,15 +60,21 @@ export let redeclared = (
   return grew(was, next, rows)
 }
 
-/** A fixed seed row already present, including a tombstone, stays its owner's. */
+/** A fixed seed row already present, including a tombstone, stays its owner's.
+ * A bare spine holds nothing and is nobody's: it is what main keeps of an
+ * entity a draft preview's branch made (@yaks/sqlite branches), and the seed
+ * the preview wrote there is the same row the release now seeds live. */
 export let unseeded = (graph: Graph, bundles: Bundle[]): Bundle[] => {
   let ids = bundles.map((b) => b.entity?.eid)
     .filter((id) => typeof id == 'string' && !id.startsWith('$'))
-  let rows = graph.get(ids, ['entity'])
+  let rows = graph.get(ids)
   if (rows instanceof Promise) {
     throw new Error('a staged seed must read synchronously')
   }
-  let held = new Set(rows.map((b) => b.entity.eid))
+  let held = new Set(
+    rows.filter((b) => Object.keys(b).some((c) => c != 'entity'))
+      .map((b) => b.entity.eid),
+  )
   return bundles.filter((b) => !held.has(b.entity?.eid))
 }
 
