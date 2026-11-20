@@ -22,6 +22,11 @@ reply with the REST API. `discord` is the `Platform` both make.
 - **A reply** answers the message it names, when there still is one, and pings
   nobody. A 429 or 5xx is `Unsent`, tried again after what Discord says.
 
+- **Working on an answer** shows as typing (`typing(token, room)`, POST
+  `/channels/{id}/typing`), which Discord keeps for ten seconds or until the
+  bot's next message there, so it is `working` every 8 s. It needs no intent. A
+  bot shows online on its own while its Gateway socket is open.
+
 Messages in rooms the bot was not named in carry their words only with the
 Message Content intent, which Discord reviews for a bot in over 100 servers.
 

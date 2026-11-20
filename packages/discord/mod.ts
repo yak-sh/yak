@@ -229,6 +229,31 @@ export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
   return { id: body.id }
 }
 
+/** Show the room `room` that the bot with `token` is typing, which Discord
+ * shows for ten seconds or until the bot's next message there
+ * (POST /channels/{id}/typing). A 429 or a 5xx is {@link Unsent}, shown
+ * again at the next beat. */
+export let typing = async (
+  token: string,
+  room: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> => {
+  let res = await fetcher(`${API}/channels/${room}/typing`, {
+    method: 'POST',
+    headers: { authorization: `Bot ${token}` },
+  })
+  let body = await res.json().catch(() => ({})) as { message?: string }
+  if (res.status == 429 || res.status >= 500) {
+    throw new Unsent(`Discord did not show typing: ${res.status}`)
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Discord refused to show typing: ${res.status} ${body.message ?? ''}`
+        .trim(),
+    )
+  }
+}
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -237,4 +262,5 @@ export let discord: Platform = {
   user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,
+  working: { every: 8000, show: typing },
 }

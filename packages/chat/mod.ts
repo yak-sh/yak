@@ -6,6 +6,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { Unsent } from '@yaks/host/senders'
 
 /** A message as a platform's plugin reads it: where it was said, by whom, in
  * which words, and whether it was said to the bot that heard it. */
@@ -87,6 +88,44 @@ export type Platform = {
     reply: Reply,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Posted>
+  /** how a bot shows a room it is working on an answer, where the platform
+   * can: `show` once lasts `every` milliseconds ({@link Working}) */
+  working?: Working<
+    (
+      credential: string,
+      room: string,
+      fetch?: typeof globalThis.fetch,
+    ) => Promise<void>
+  >
+}
+
+/** Showing a room that an answer is being worked on, as a platform's typing
+ * indicator does: `show` once lasts `every` milliseconds, so it is shown
+ * again that often while the work goes on. */
+export type Working<F> = { every: number; show: F }
+
+/**
+ * Show that an answer is being worked on: `show` at once, and again every
+ * `every` milliseconds for as long as `still()` says the work goes on, and
+ * never past `most`. A show refused for now ({@link Unsent}, a rate limit)
+ * waits for the next; any other refusal ends it, thrown.
+ */
+export let showing = async (
+  working: Working<() => Promise<void>>,
+  still: () => Promise<boolean>,
+  o: { most?: number; wait?: (ms: number) => Promise<void> } = {},
+): Promise<void> => {
+  let {
+    most = 10 * 60_000,
+    wait = (ms) => new Promise((r) => setTimeout(r, ms)),
+  } = o
+  for (let spent = 0; spent < most; spent += working.every) {
+    if (!await still()) return
+    await working.show().catch((e) => {
+      if (!(e instanceof Unsent)) throw e
+    })
+    await wait(working.every)
+  }
 }
 
 /** Platforms by name, as a host lists the ones it loads. */

@@ -336,6 +336,8 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     fx: host.fx,
     meaning: host.meaning,
     vocab: host.vocab,
+    /** the chatters lent it, by platform (chat.ts `chatters`) */
+    chatters: host.chatters,
     known,
     // A tool's answer as its reader reads it (@yaks/tools `drawing`).
     readable: drawing(host.vocab, known),

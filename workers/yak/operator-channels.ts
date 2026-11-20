@@ -17,7 +17,12 @@ import { attachmentRows } from '@yaks/blob/attachment'
 import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
-import type { Told, Tool, ToolContext } from '@yaks/session'
+import {
+  currentStatus,
+  type Told,
+  type Tool,
+  type ToolContext,
+} from '@yaks/session'
 import { sendable, Unsent } from '@yaks/mail'
 import { Blocked, Denied } from '@yaks/phone'
 import { appStore } from './directory.ts'
@@ -41,7 +46,14 @@ import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 import { PLATFORMS } from './chat.ts'
-import { framing, kept, messageEid, pieces, type Said } from '@yaks/chat'
+import {
+  framing,
+  kept,
+  messageEid,
+  pieces,
+  type Said,
+  showing,
+} from '@yaks/chat'
 import { cue, passes } from '@yaks/session/turn'
 
 /** What a person reads when the Operator could not start on their request
@@ -325,7 +337,7 @@ export let hear = async (
   request: Request,
   text: string,
   item: Bundle,
-): Promise<{ fresh: boolean }> => {
+): Promise<{ fresh: boolean; session?: string }> => {
   let { g } = operator.store
   let id = item.entity.eid
   let files = request.files ?? []
@@ -369,7 +381,7 @@ export let hear = async (
       { trusted: true },
     )
     open.told()
-    return { fresh }
+    return { fresh, session: open.session }
   } catch (error) {
     if ((error as { retry?: unknown })?.retry) throw error
     caught(error, { request: 'operator intake', channel, space: space.slug })
@@ -409,7 +421,9 @@ let chatFraming = (request: Request, item: Bundle) => {
  * `arrived`, build.ts `/operator/chat`) as the words of `person`: a person
  * here whose account there is linked, or a guest. Its room and writer are
  * kept, then the message itself is taken in ({@link hear}), naming the
- * connection whose bot heard it, which answers it in the same room.
+ * connection whose bot heard it, which answers it in the same room. While
+ * its turn works on the answer, the room is shown so, where the platform's
+ * chatter can (@yaks/chat `showing`).
  */
 export let chatHeard = async (
   operator: Pick<Operator, 'store' | 'listening'>,
@@ -424,7 +438,7 @@ export let chatHeard = async (
   }
   let [room, author, message] = kept(via, said)
   await operator.store.g.apply([room, author], { trusted: true })
-  let { fresh } = await hear(
+  let { fresh, session } = await hear(
     operator,
     env,
     space,
@@ -441,10 +455,24 @@ export let chatHeard = async (
       chat_message: { ...message.chat_message as Comp, connection },
     },
   )
+  let working = operator.store.chatters?.[via]?.working
+  if (fresh && session && working) {
+    let { g } = operator.store
+    void showing(
+      {
+        every: working.every,
+        show: () => working.show({ connection, room: said.room }),
+      },
+      async () => BUSY.has(await currentStatus(g, session)),
+    ).catch((e) => caught(e, { request: `${via} working`, space: space.slug }))
+  }
   return Response.json({ request: messageEid(via, said.id) }, {
     status: fresh ? 202 : 200,
   })
 }
+
+// A conversation whose turn is still working on its words.
+let BUSY = new Set(['pending', 'running'])
 
 /** A channel's door as the Operator's object serves it (build.ts
  * `#operate`): the words it brings and how they came, as `/operator/receive`

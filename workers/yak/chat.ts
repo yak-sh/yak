@@ -47,21 +47,38 @@ export type Chats = {
 
 /** The chatters the Operator's store posts its answers through, one per
  * platform: each posts with the bot that speaks for the answer's connection
- * (@yaks/connections `botOf`). */
+ * (@yaks/connections `botOf`), and shows a room it is working on an answer
+ * where its platform can. */
 export let chatters = (env: Env): Record<string, Chatter> =>
   Object.fromEntries(
-    [...PLATFORMS.values()].map((p) => [p.name, {
-      post: async (chat) => {
+    [...PLATFORMS.values()].map((p) => {
+      let bot = async (connection: string) => {
         let { botOf, ctxOf } = await need()
-        let bot = await botOf(ctxOf(env), chat.connection)
-        if (!bot) {
+        let token = await botOf(ctxOf(env), connection)
+        if (!token) {
           throw new Error(
             `No ${p.title} bot speaks for this connection now: connect ${p.title} again.`,
           )
         }
-        return p.send(bot, chat)
-      },
-    }]),
+        return token
+      }
+      let { working } = p
+      return [
+        p.name,
+        {
+          post: async (chat) => p.send(await bot(chat.connection), chat),
+          ...working
+            ? {
+              working: {
+                every: working.every,
+                show: async (at) =>
+                  working.show(await bot(at.connection), at.room),
+              },
+            }
+            : {},
+        } satisfies Chatter,
+      ]
+    }),
   )
 
 let read = async (env: Env, q: string) =>

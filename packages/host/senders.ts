@@ -128,6 +128,13 @@ export type Chat = {
  * credential posts it is the host's to know from the connection. */
 export type Chatter = {
   post: (chat: Chat) => Promise<{ id?: string }>
+  /** Show a room that the connection's bot is working on an answer, where
+   * its platform can: a show lasts `every` milliseconds (@yaks/chat
+   * `showing`). */
+  working?: {
+    every: number
+    show: (at: Pick<Chat, 'connection' | 'room'>) => Promise<void>
+  }
   /** Why it cannot post yet; absent or empty, it can. */
   waiting?: () => string | undefined
 }

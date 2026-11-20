@@ -194,3 +194,28 @@ test('a rate limit is tried again after what Discord says; a refusal is thrown',
     'Discord refused the reply: 403 Missing Access',
   )
 })
+
+test('typing shows the room the bot is working; a rate limit waits, a refusal is thrown', async () => {
+  let { f, seen } = rest(200, {})
+  await discord.working!.show('T0K', 'room', f)
+  assertEquals(seen[0].url, 'https://discord.com/api/v10/channels/room/typing')
+  assertEquals(seen[0].init.method, 'POST')
+  assertEquals(
+    (seen[0].init.headers as Record<string, string>).authorization,
+    'Bot T0K',
+  )
+  await assertRejects(
+    () => discord.working!.show('T', 'r', rest(429, {}).f),
+    Unsent,
+  )
+  await assertRejects(
+    () =>
+      discord.working!.show(
+        'T',
+        'r',
+        rest(403, { message: 'Missing Access' }).f,
+      ),
+    Error,
+    'Discord refused to show typing: 403 Missing Access',
+  )
+})

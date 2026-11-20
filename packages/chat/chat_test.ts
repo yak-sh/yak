@@ -2,7 +2,7 @@
 // keep it, how it is said to whoever answers, and an answer cut to fit.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { effects as registry } from '@yaks/effects'
 import { ram } from '@yaks/ram'
@@ -21,6 +21,7 @@ import {
   pieces,
   roomEid,
   type Said,
+  showing,
 } from './mod.ts'
 
 let said: Said = {
@@ -153,5 +154,37 @@ test('chat_post: with nothing lent for its platform, a reply waits and says why'
   assertEquals(
     (await one(g, eid)).deliver.waiting,
     'waiting for a chatter: nothing lends discord',
+  )
+})
+
+test('showing: shown at once and each beat while the work goes on, never past most', async () => {
+  let run = async (
+    beats: boolean[],
+    show = () => Promise.resolve(),
+    most?: number,
+  ) => {
+    let shown = 0, waited: number[] = []
+    await showing(
+      { every: 8000, show: () => (shown++, show()) },
+      () => Promise.resolve(beats.shift() ?? false),
+      { most, wait: (ms) => (waited.push(ms), Promise.resolve()) },
+    )
+    return { shown, waited }
+  }
+  assertEquals(await run([true, true, false]), {
+    shown: 2,
+    waited: [8000, 8000],
+  })
+  assertEquals(await run([false]), { shown: 0, waited: [] })
+  assertEquals((await run([true, true, true], undefined, 16000)).shown, 2)
+  assertEquals(
+    (await run([true, true, false], () => Promise.reject(new Unsent('busy'))))
+      .shown,
+    2,
+  )
+  await assertRejects(
+    () => run([true, true], () => Promise.reject(new Error('Missing Access'))),
+    Error,
+    'Missing Access',
   )
 })

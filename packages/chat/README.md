@@ -36,6 +36,7 @@ type Platform = {
   limit: number // the most characters one message carries
   socket?: (credential: string) => Socket<unknown>
   send: (credential: string, reply: Reply, fetch?) => Promise<Posted>
+  working?: { every: number; show: (credential, room, fetch?) => Promise<void> }
 }
 ```
 
@@ -48,6 +49,12 @@ gives that the way @yaks/phone's providers do; none does yet.
 
 `send` posts a reply with a bot's credential. A refusal that never took it (a
 rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.
+
+`working` is how a bot shows a room it is working on an answer, where the
+platform can (Discord's typing indicator): one show lasts `every` milliseconds.
+`showing(working, still)` shows at once and again each `every` while `still()`
+says the work goes on, for at most ten minutes; a show refused for now
+(`Unsent`) waits for the next beat.
 
 `framing(platform, {name, addressed})` is how a message is said before its words
 to whoever answers it ("On Discord, naming you, from Ann: ").
