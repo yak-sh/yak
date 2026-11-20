@@ -294,7 +294,11 @@ export let snapshot = (
       await prune(kept)
       return layers
     },
-    // The commit is the store's, so the workspace and the layers agree.
+    // The commit is the store's, so the workspace and the layers agree. A
+    // preparation cut off partway (its host process ended) leaves no `ready`
+    // mark, and the next request prepares the same workspace again, over the
+    // files the first already wrote: so each step runs as well a second time,
+    // the checkout overwriting what it finds.
     prepare: async (_from: string, machine: Workspace): Promise<void> => {
       await run(
         machine,
@@ -305,7 +309,7 @@ export let snapshot = (
           `echo ${STORE}/objects > .git/objects/info/alternates`,
           'echo "$at" > .git/shallow',
           `${git} read-tree "$at"`,
-          `${git} checkout-index -a -u`,
+          `${git} checkout-index -a -u -f`,
           `${git} update-ref HEAD "$at"`,
         ].join('\n'),
       )
