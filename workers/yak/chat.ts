@@ -42,6 +42,7 @@ import type { Chatter } from '@yaks/host/senders'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
+import type { chatRows } from './connections.ts'
 
 // What answering and hearing need, loaded when they first run: the
 // Operator's channels import the platform list alone.
@@ -266,19 +267,6 @@ let serving = (env: Env, via: string, server: string) =>
 let held = (env: Env, via: string, space: string) =>
   through(env, via, line`.${CONNECTION}.owner=${space}`)
 
-// The connected connections of the bots `space` brought to `via`.
-let brought = async (env: Env, via: string, space: string) => {
-  let { ctxOf, installed, keyed } = await need()
-  let names = new Set(
-    (await installed(ctxOf(env).graph.read))
-      .filter((i) => i.chat == via && keyed(i)).map((i) => i.name),
-  )
-  return (await read(
-    env,
-    line`.${CONNECTION}.owner=${space}&.${CONNECTION}.status=connected&*`,
-  )).filter((b) => names.has(String(comp(b, CONNECTION).integration)))
-}
-
 /** The person here whose `platform.user` account is `id`, if one linked it:
  * a connection they hold, or one a space holds, which stands for its owner
  * as the Operator's own Google does (connections.ts `ownConnection`) when it
@@ -306,21 +294,28 @@ export let linked = async (env: Env, platform: Platform, id: string) => {
  * whether yaks.app keeps its bot, without which there is nothing to add;
  * and each of the space's connections there, with the rooms it may hear in
  * full ({@link servers}). */
-export let offers = async (env: Env, space: string) => {
-  let { keyed, seeds } = await need()
+export let offers = async (
+  env: Env,
+  space: string,
+  rows?: Awaited<ReturnType<typeof chatRows>>,
+) => {
+  let { chatRows, directoryOf, keyed, seeds } = await need()
   let all = seeds()
-  let each = await Promise.all(
-    [...PLATFORMS.values()].map(async (platform) => ({
-      platform,
-      bot: all.find((i) => i.chat == platform.name && !keyed(i))!,
-      user: all.find((i) => i.name == platform.user),
-      kept: !!await platformBot(env, platform.name),
-    })),
-  )
+  let [connections, each] = await Promise.all([
+    rows ?? chatRows(directoryOf(env.STORE), space),
+    Promise.all(
+      [...PLATFORMS.values()].map(async (platform) => ({
+        platform,
+        bot: all.find((i) => i.chat == platform.name && !keyed(i))!,
+        user: all.find((i) => i.name == platform.user),
+        kept: !!await platformBot(env, platform.name),
+      })),
+    ),
+  ])
   return await Promise.all(
     each.filter((o) => o.bot).map(async (o) => ({
       ...o,
-      servers: await servers(env, o.platform, space),
+      servers: await servers(env, o.platform, connections),
     })),
   ).then((all) => all.filter((o) => o.kept || o.servers.length))
 }
@@ -342,37 +337,38 @@ export type Server = {
 let servers = async (
   env: Env,
   platform: Platform,
-  space: string,
+  connections: Awaited<ReturnType<typeof chatRows>>,
 ): Promise<Server[]> => {
   let { rooms } = platform
   if (!rooms) return []
-  let { botOf, caught, ctxOf } = await need()
-  let [ours, own] = await Promise.all([
-    held(env, platform.name, space),
-    brought(env, platform.name, space),
-  ])
+  let { botFrom, caught, ctxOf, keyed } = await need()
+  let ctx = ctxOf(env)
   return await Promise.all(
-    [...ours, ...own].map(async (c) => {
-      let token = await botOf(ctxOf(env), c.entity.eid)
-      let listed = token
-        ? await Promise.all(serves(c).map((id) => rooms(token, id)))
-          .then((each) => each.flat())
-          .catch((e) => {
-            caught(e, { request: `${platform.name} rooms` })
-            return null
-          })
-        : null
-      let hears = comp(c, HEARS).room
-      return {
-        connection: c.entity.eid,
-        rooms: listed?.map((r) => ({
-          ...r,
-          eid: roomEid(platform.name, r.id),
-        })) ?? null,
-        ...hears ? { hears: String(hears) } : {},
-        ...own.includes(c) ? { own: true } : {},
-      }
-    }),
+    connections.filter(({ integration }) => integration.chat == platform.name)
+      .sort((a, b) =>
+        Number(keyed(a.integration)) - Number(keyed(b.integration))
+      )
+      .map(async ({ row: c, integration }) => {
+        let token = await botFrom(ctx, c, integration)
+        let listed = token
+          ? await Promise.all(serves(c).map((id) => rooms(token, id)))
+            .then((each) => each.flat())
+            .catch((e) => {
+              caught(e, { request: `${platform.name} rooms` })
+              return null
+            })
+          : null
+        let hears = comp(c, HEARS).room
+        return {
+          connection: c.entity.eid,
+          rooms: listed?.map((r) => ({
+            ...r,
+            eid: roomEid(platform.name, r.id),
+          })) ?? null,
+          ...hears ? { hears: String(hears) } : {},
+          ...keyed(integration) ? { own: true } : {},
+        }
+      }),
   )
 }
 

@@ -31,6 +31,7 @@ import {
 } from './billing.ts'
 import { payments, plans } from './payments.ts'
 import {
+  chatRows,
   connecting,
   connectionsAsked,
   connectionsOf,
@@ -476,6 +477,7 @@ let rowsAhead = (
   if (view == 'operator') {
     return [
       reachOf(dir, walk, person),
+      chatRows(dir, walk),
       dir.texting(person),
       dir.alerts(person),
       dir.emailAt(person),
@@ -714,7 +716,7 @@ let desk = async (
     pickable(dir, owner),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
-        part.operatorBody(env, space, who)
+        part.operatorBody(env, space, who, dir)
       )
       : undefined,
     // Whom the payment provider bills, for the Billing page (T-131895). A

@@ -118,6 +118,24 @@ export let specimens = (): Specimen[] => [
       ),
     ),
   ],
+  [
+    'Body-flow',
+    h(
+      Body,
+      { mod: 'flow' },
+      h(Body.Heading, { as: 'h4', mod: '4' }, 'Packing list'),
+      h(Body.Paragraph, {}, 'Bring these supplies.'),
+      h(Body.Unordered, {}, h(Body.Item, {}, 'Water')),
+      h(Body.Ordered, {}, h(Body.Item, {}, 'Check the weather.')),
+      h(
+        Body.Table,
+        {},
+        h(Body.Head, {}, h(Body.Row, {}, h(Body.HeadingCell, {}, 'Quantity'))),
+        h(Body.Rows, {}, h(Body.Row, {}, h(Body.Cell, {}, '1 bottle'))),
+      ),
+      h(Body.Source, { mod: 'detail' }, 'water: 1 bottle'),
+    ),
+  ],
 ]
 
 /** The same interface on a native host. */

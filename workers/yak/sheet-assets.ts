@@ -74,6 +74,9 @@ let worn: Composition = {
   skin: pencil,
 }
 
+/** The site's kit stylesheets, by part. */
+export let kitSheets = () => sheets(worn)
+
 /** The layer of yaks.app's each piece of the kit's sheet sits in: the theme
  * its tokens, the document its base, every part a component. */
 let layer = (piece: string) =>
@@ -88,7 +91,7 @@ let FILED = /url\("(file:\/\/[^"#]+)(#[^"]*)?"\)/g
  * outranks a rule of the site's, and the files it points at, by address. */
 export let kit = async (): Promise<Asset[]> => {
   let pointed = new Map<string, URL>()
-  let pieces = (await sheets(worn)).map(([piece, css]) =>
+  let pieces = (await kitSheets()).map(([piece, css]) =>
     `@layer ${layer(piece)} {\n${css}\n}`
   )
   let css = pieces.join('\n').replace(FILED, (_, file, fragment = '') => {

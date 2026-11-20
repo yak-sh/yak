@@ -48,6 +48,7 @@ import {
   brokerOf,
   carry,
   catalogued,
+  chatConnections,
   connect,
   connectable,
   CONNECTION,
@@ -625,6 +626,12 @@ let readOn = (dir: ReturnType<typeof dirOf>): Read => (said) => {
   let q = said as Taken
   return typeof q == 'string' ? dir.read(q) : []
 }
+
+/** The settings page's connected bots on its request's directory. */
+export let chatRows = (
+  dir: ReturnType<typeof dirOf>,
+  owner: string | Path,
+) => chatConnections(readOn(dir), owner)
 
 // The space's apps, connections and the links out of its apps, by its eid
 // or the walk to it.

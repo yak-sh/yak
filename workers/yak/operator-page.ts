@@ -18,6 +18,7 @@ import {
 import type { Env } from './env.ts'
 import type { Server } from './chat.ts'
 import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
+import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
 import { caught } from './defects.ts'
 import {
@@ -1302,9 +1303,13 @@ export let conversationOf = async (
 // The Operator's settings, which the dashboard draws beside its side like
 // every other page (pages.ts `desk`): what it does and where, a link to its
 // conversations in the chat app (`chatPage`), and the texts it may send.
-export let operatorBody = async (env: Env, seen: Space, who: Who) => {
+export let operatorBody = async (
+  env: Env,
+  seen: Space,
+  who: Who,
+  dir = directoryOf(env.STORE),
+) => {
   let at = managePath('operator', seen.slug)
-  let dir = directoryOf(env.STORE)
   let [
     space,
     consent,
@@ -1327,7 +1332,10 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
       dir.pushes(who.person ?? ''),
       // A chat platform that cannot be offered leaves the rest of the page.
       who.role == 'owner'
-        ? import('./chat.ts').then((c) => c.offers(env, seen.eid)).catch(
+        ? Promise.all([
+          import('./chat.ts'),
+          chatRows(dir, walkTo(seen.slug, seen.eid)),
+        ]).then(([c, rows]) => c.offers(env, seen.eid, rows)).catch(
           (e) => {
             caught(e, { request: 'operator settings chat' })
             return []

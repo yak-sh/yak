@@ -13,6 +13,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { test } from '@yaks/testing'
@@ -109,12 +110,22 @@ test('the served client: a page saves, lists and watches', async () => {
     assertEquals(await store.query('.doc&.count'), { count: 1 })
 
     // A subscription's first rows do not wait for its socket: they come from a
-    // query on the connection the page already has. No socket opens here at
-    // all, and the page is still drawn.
-    let painted = await new Promise((done) => {
-      let stop = store.subscribe('.doc', (rows: Row[]) => (stop(), done(rows)))
-    })
-    assertEquals(painted, await store.query('.doc'))
+    // query on the connection the page already has. Keep the socket in its
+    // connecting state in process so only HTTP can supply those first rows.
+    {
+      using _socket = stub(globalThis, 'WebSocket', function () {
+        return { readyState: 0, close() {} }
+      })
+      let painted: Row[] | undefined
+      let stop = store.subscribe('.doc', (rows: Row[]) => painted = rows)
+      try {
+        let first = await stop.ready
+        assertEquals(first, await store.query('.doc'))
+        assertEquals(painted, first)
+      } finally {
+        stop()
+      }
+    }
 
     // A second component on the same entity, and the filter that reads it.
     await store.apply({
@@ -301,20 +312,15 @@ test('the client at a pretty path, and a sibling app by path', async () => {
     assertStringIncludes(await deep.text(), '/reading/api/client.js')
     // What the page asks for is there; what a relative path would have asked
     // for from that address is not.
-    assertEquals(
-      (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js')).status,
-      200,
-    )
+    let served = await k.at(`${nora8}.yaks.app`, '/reading/api/client.js')
+    assertEquals(served.status, 200)
     let missed = await k.at(`${nora8}.yaks.app`, '/reading/loans/api/client.js')
     assertEquals(missed.status, 404)
     await missed.body?.cancel()
 
     // The module as that page holds it: a page has an origin, which is what
     // an address that is a path resolves against.
-    let source =
-      await (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js'))
-        .text()
-    Deno.writeTextFileSync(`${dir}/client.js`, source)
+    Deno.writeTextFileSync(`${dir}/client.js`, await served.text())
     let mod = await import(`file://${dir}/client.js`)
     let held = Object.getOwnPropertyDescriptor(globalThis, 'location')
     Object.defineProperty(globalThis, 'location', {

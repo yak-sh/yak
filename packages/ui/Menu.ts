@@ -7,7 +7,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { h, type JSX } from 'preact'
 import { Surface } from './Surface.ts'
 import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
@@ -76,6 +76,19 @@ export let specimens = (): Specimen[] => [
         h(Item, { type: 'button' }, 'Open'),
         h(Rule, {}),
         h(Menu.Footer, {}, h(Item, { type: 'button' }, 'New')),
+      ),
+    ),
+  ],
+  [
+    'Menu-below',
+    h(
+      'div',
+      { style: 'padding-bottom:4rem' } as JSX.HTMLAttributes<HTMLDivElement>,
+      h(
+        Menu.Fold,
+        { open: true },
+        h(Menu.Summary, {}, 'Actions'),
+        h(Menu, { mod: 'below' }, h(Item, { type: 'button' }, 'Copy link')),
       ),
     ),
   ],

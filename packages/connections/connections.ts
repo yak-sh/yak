@@ -85,6 +85,7 @@ import {
   connectable,
   type Field,
   fieldsOf,
+  installed,
   type Integration,
   keyed,
   known,
@@ -722,6 +723,32 @@ export let attach = async (
  * may reach more than one owner: only the eid's are kept. */
 export type Path = { path: Built; eid: Promise<Eid> }
 
+/** An owner's connected chat integrations and their connection rows. A
+ * {@link Path} lets both reads start while the owner is still being read. */
+export let chatConnections = async (
+  read: Read,
+  owner: Eid | Path,
+): Promise<{ row: Bundle; integration: Integration }[]> => {
+  let at = typeof owner == 'string' ? line`=${owner}` : owner.path
+  let [rows, integrations, eid] = await Promise.all([
+    read(
+      line`.${CONNECTION}.owner${sub(at)}&.${CONNECTION}.status=connected${
+        sub(ALL)
+      }`,
+    ),
+    installed(read),
+    typeof owner == 'string' ? owner : owner.eid,
+  ])
+  let byName = new Map(
+    integrations.filter((i) => i.chat).map((i) => [i.name, i]),
+  )
+  return rows.flatMap((row) => {
+    let connection = comp(row, CONNECTION)
+    let integration = byName.get(String(connection.integration))
+    return connection.owner == eid && integration ? [{ row, integration }] : []
+  })
+}
+
 /** A space's or a person's connections, the `uses` links from the apps that
  * use them, and the integrations they go through. Each is asked by the owner,
  * so all three are asked at once, and a host whose reads asked together
@@ -1290,9 +1317,30 @@ export let botOf = async (
   )
   if (comp(b, CONNECTION).status != 'connected') return undefined
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
-  if (!i?.chat) return undefined
-  if (keyed(i)) return credential(c, connection)
+  return botFrom(c, b, i)
+}
+
+/** The bot token for a connection and integration already read together. */
+export let botFrom = async (
+  c: Ctx,
+  b: Bundle,
+  i: Integration | undefined,
+): Promise<string | undefined> => {
+  if (comp(b, CONNECTION).status != 'connected' || !i?.chat) return undefined
+  if (keyed(i)) return keyOf(c, b, i)
   return (await clientOf(c.vault, c.graph.read, i))?.bot
+}
+
+let keyOf = async (c: Ctx, b: Bundle, i: Integration, field?: string) => {
+  let fields = fieldsOf(i)
+  let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
+  if (fields.length == 1) {
+    return field == null || field == fields[0].name ? raw : undefined
+  }
+  if (field == null) {
+    throw new Error(`${i.name} is kept as several fields; read one by name`)
+  }
+  return raw ? (await fieldsKept(c, b, fields, raw))[field] : undefined
 }
 
 export let credential = async (
@@ -1301,19 +1349,9 @@ export let credential = async (
   field?: string,
 ): Promise<string | undefined> => {
   let b = await held(c.graph.read, connection)
-  let name = String(comp(b, CONNECTION).integration)
-  let i = await known(c.graph.read, name)
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (i && keyed(i)) return keyOf(c, b, i, field)
   let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
-  if (i && keyed(i)) {
-    let fields = fieldsOf(i)
-    if (fields.length == 1) {
-      return field == null || field == fields[0].name ? raw : undefined
-    }
-    if (field == null) {
-      throw new Error(`${name} is kept as several fields; read one by name`)
-    }
-    return raw ? (await fieldsKept(c, b, fields, raw))[field] : undefined
-  }
   if (field != null && field != fieldsOf()[0].name) return undefined
   if (comp(b, CONNECTION).broker) {
     return marking(c, connection, () => brokered(c, b))

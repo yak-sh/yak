@@ -119,7 +119,12 @@ let person = (name: string, meta: string, ...actions: string[]) =>
   h(
     Item,
     { key: name },
-    h(Rows.Main, {}, h(Rows.Name, {}, name), h(Rows.Meta, {}, meta)),
+    h(
+      Rows.Main,
+      {},
+      h(Rows.Name, { mod: 'line' }, name),
+      h(Rows.Meta, { mod: 'line' }, meta),
+    ),
     actions.length > 0 &&
       h(
         Rows.Actions,
@@ -194,6 +199,15 @@ export let specimens = (): Specimen[] => [
       ),
       h(Item, { draggable: true, mod: 'before' }, line('▸', 'M-2', 'the map')),
       h(Item, { draggable: true }, line('▸', 'M-3', 'the one idea')),
+    ),
+  ],
+  [
+    'Rows-ordered, Item-after',
+    h(
+      Rows,
+      { mod: 'ordered' },
+      h(Item, { draggable: true }, 'First row'),
+      h(Item, { draggable: true, mod: 'after' }, 'Last row'),
     ),
   ],
   [

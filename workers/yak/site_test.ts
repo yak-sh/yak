@@ -38,8 +38,7 @@ import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
 import { AWAKE } from './sandbox.ts'
 import { sheeted } from './sheets.ts'
-import { WORN } from './sheet-assets.ts'
-import { kit, pencil } from '@yaks/ui'
+import { kitSheets, WORN } from './sheet-assets.ts'
 import { CAP } from './invite.ts'
 import { CODE_NOTE } from './signin.ts'
 import { START } from './newcomer.ts'
@@ -263,26 +262,22 @@ test('every jump names a section on its own page', () => {
 // site's own stylesheet. The guide shows the kit's parts by their own
 // specimens (@yaks/ui `Worn`), so a variant pencil draws and no specimen
 // shows is the kit's to add.
-let drawn = async (name: string) => {
-  let { css, over } = pencil[name] ?? { css: kit[name].css }
-  let urls = [css, ...[over ?? []].flat()].flatMap((at) => at ? [at()] : [])
-  let sheets = await Promise.all(
-    urls.map(async (url) => (await fetch(url)).text()),
+let classes = (css: string) =>
+  [...css.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1])
+
+let drawn = async () =>
+  (await kitSheets()).flatMap(([name, css]) =>
+    name != 'base' && WORN.includes(name)
+      ? classes(css).filter((c) =>
+        c == name || c.startsWith(`${name}_`) || c.startsWith(`${name}-`)
+      )
+      : []
   )
-  return [...sheets.join('\n').matchAll(/\.([A-Z][\w-]*)/g)]
-    .map((m) => m[1])
-    .filter((c) =>
-      c == name || c.startsWith(`${name}_`) || c.startsWith(`${name}-`)
-    )
-}
 
 test('the style guide demonstrates every shared component', async () => {
   let own = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '')
     .split('@layer components {')[1].split('@layer sections {')[0]
-  let components = new Set([
-    ...[...own.matchAll(/\.([A-Z][\w-]*)/g)].map((m) => m[1]),
-    ...(await Promise.all(WORN.filter((n) => n != 'base').map(drawn))).flat(),
-  ])
+  let components = new Set([...classes(own), ...await drawn()])
   let examples = new Set(
     [...read('style-guide.html').matchAll(/class="([^"]+)"/g)]
       .flatMap((m) => m[1].split(/\s+/)),
