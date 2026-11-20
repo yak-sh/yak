@@ -2717,9 +2717,9 @@ document.addEventListener('keydown', (e) => {
 setInterval(() => (dates(document), lengthy()), 1000)
 // The yak beside the box shows what the Operator is doing, and once the
 // conversation rests, what its helpers are (operator-aside.ts \`showing\`,
-// over the helpers the aside lists): a loop over and over while it lasts
-// (mascot.ts \`MOVES\`), one played once as the work ends, and his waiting
-// otherwise (idle.js).
+// over the helpers the aside lists): a pose he holds while it lasts (mascot.ts
+// \`MOVES\`), a loop played once as the work ends, and his waiting otherwise
+// (idle.js).
 let moves = ${JSON.stringify(MOVES)}
 let yak = form?.querySelector('[data-idle]')
 let talking = 'idle', last = 'idle'
@@ -2728,8 +2728,8 @@ let show = () => {
   if (!yak || now == last) return
   last = now
   let move = moves[now]
-  if (move && !move.once) return void (yak.dataset.doing = move.loop)
-  delete yak.dataset.doing
+  if (move?.pose) return void (yak.dataset.pose = move.pose)
+  delete yak.dataset.pose
   if (move) yak.dispatchEvent(new CustomEvent('idle', { detail: move.loop }))
 }
 let doing = (now = 'idle') => {

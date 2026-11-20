@@ -24,6 +24,7 @@ import {
   conversingOf,
   TAKE,
 } from '@yaks/ux/conversation'
+import { State } from '@yaks/ui/parts'
 import { drawLines, type Lines, put } from './operator-draw.ts'
 
 /** A line as the page holds it: the entries it reads once a step has sent
@@ -79,9 +80,10 @@ export type TalkProps = {
 /** The page entity holding where `task`'s reader is. */
 export let readerAt = (task: string): string => conversationAt('operator', task)
 
-/** The conversation: its lines, and under them what it is doing now, which
- * a screen reader hears; the yak beside the box shows it. How many lines
- * came before those drawn is said on it (`data-earlier`), for the page. */
+/** The conversation: its lines, and under them what it is doing now, in the
+ * words and breathing dot the aside's Now says it with (operator-aside.ts
+ * `TurnNow`); the yak beside the box shows it too. How many lines came
+ * before those drawn is said on it (`data-earlier`), for the page. */
 export let Talk = (
   { task, lines, now, pending, doing, from, earlier = 0, ...rest }: TalkProps,
 ) => {
@@ -91,7 +93,13 @@ export let Talk = (
     ...rest,
     lines,
     earlier,
-    now: h('span', { 'data-now': '' }, now),
+    now: now
+      ? h(
+        State,
+        pending ? { mod: ['pulse', 'active'] } : {},
+        h('span', { 'data-now': '' }, now),
+      )
+      : undefined,
     'data-task': task,
     'data-from': from,
     'data-pending': pending ? '' : undefined,

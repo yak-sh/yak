@@ -47,7 +47,7 @@ export let sheet = (c: Colors): Sheet => ({
   Transcript_Bubble: { fg: c.text, bg: c.surface, wrap: true },
   Transcript_Meta: { fg: c.muted, row: true },
   Transcript_Reply: { wrap: true },
-  Transcript_Status: { hidden: true },
+  Transcript_Status: { fg: c.muted },
 })
 /** A complete example. */
 export let specimens = (): Specimen[] => [

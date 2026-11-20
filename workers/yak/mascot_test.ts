@@ -37,7 +37,7 @@ let served = async (path: string) => {
   assert(info.isFile, name)
 }
 
-test('what the Operator is doing is words a screen reader hears, and the yak beside the box shows it', () => {
+test('what the Operator is doing is a line under the conversation, and the yak beside the box shows it', () => {
   let task = { entity: { eid: 't' } } as Bundle
   let answered = [...asked, entry('out', 3, { output: { source: 'ask' } })]
   let crashed = [...asked, entry('x', 3, { exception: { message: 'down' } })]
@@ -56,9 +56,12 @@ test('what the Operator is doing is words a screen reader hears, and the yak bes
     assertEquals(
       [
         thread.getAttribute('data-doing'),
-        thread.querySelector('[data-now]')!.textContent,
+        thread.querySelector('[data-now]')?.textContent ?? '',
+        // the words under the conversation breathe while it works, as the
+        // aside's Now does (operator-aside.ts `TurnNow`)
+        !!thread.querySelector('.Transcript_Status .State-pulse'),
       ],
-      [words ? doing : null, words],
+      [words ? doing : null, words, !!words],
     )
     assertEquals(thread.querySelector('img'), null)
     let { operator } = frame('t', entries, names, 0)
@@ -66,8 +69,15 @@ test('what the Operator is doing is words a screen reader hears, and the yak bes
   }
 })
 
-test("each thing the Operator does is one of the waiting yak's loops", () => {
-  for (let { loop } of Object.values(MOVES)) assert(loop in IDLE, loop)
+test("each thing the Operator does is one of the yak's poses, or one of his loops", async () => {
+  for (let move of Object.values(MOVES)) {
+    if ('loop' in move) assert(move.loop in IDLE, move.loop)
+    else {
+      for (let f of ['-1x', '', '-3x', '-still-1x', '-still', '-still-3x']) {
+        await served(`/mascot/${move.pose}${f}.webp`)
+      }
+    }
+  }
 })
 
 test('the waiting yak is drawn at the size it shows, at every density', async () => {
@@ -150,13 +160,13 @@ let waiting = (
   let shown = () => [img.getAttribute('src'), img.getAttribute('srcset')]
   let ask = (loop: string) =>
     img.dispatchEvent(new CustomEvent('idle', { detail: loop }))
-  let doing = (loop?: string) =>
-    loop
-      ? img.setAttribute('data-doing', loop)
-      : img.removeAttribute('data-doing')
+  let posing = (pose?: string) =>
+    pose
+      ? img.setAttribute('data-pose', pose)
+      : img.removeAttribute('data-pose')
   // a change to what he is doing is heard once the observer runs
   let settled = () => new Promise((r) => setTimeout(r, 0))
-  return { step, shown, fetched, ask, doing, settled, rest: shown() }
+  return { step, shown, fetched, ask, posing, settled, timers, rest: shown() }
 }
 
 let code = await Deno.readTextFile(
@@ -198,25 +208,38 @@ test('asked for a loop, he plays it at once, or as the one playing ends, then wa
   assert(rested >= 5000 && rested <= 9000, `${rested}`)
 })
 
-test('while a page says what he is doing, he plays that loop over and over, then waits again', async () => {
+let pose = (name: string) => [
+  `/mascot/${name}.webp`,
+  ['-1x', '', '-3x'].map((f, i) => `/mascot/${name}${f}.webp ${i + 1}x`)
+    .join(', '),
+]
+
+test('while a page names a pose, he holds it at once, cutting a loop short, then waits again', async () => {
   let yak = waiting()
-  yak.doing('glance')
+  yak.ask('lick')
+  await yak.step()
+  yak.posing('thinking')
   await yak.settled()
-  for (let i = 0; i < 3; i++) {
-    assertEquals(await yak.step(), 0)
-    assertEquals(yak.shown(), ['blob:/mascot/idle-glance-128.webp', null])
-    assertEquals(await yak.step(), IDLE.glance)
-  }
-  yak.doing('ears')
+  assertEquals(yak.shown(), pose('thinking'))
+  assertEquals(yak.timers.size, 1, "only the cut loop's end")
+  await yak.step()
+  assertEquals(yak.shown(), pose('thinking'), 'the loop ending leaves the pose')
+  assertEquals(yak.timers.size, 0)
+  yak.posing('checking')
   await yak.settled()
-  assertEquals(await yak.step(), 0)
-  assertEquals(yak.shown(), ['blob:/mascot/idle-ears-128.webp', null])
-  yak.doing(undefined)
+  assertEquals(yak.shown(), pose('checking'))
+  yak.posing(undefined)
   await yak.settled()
-  assertEquals(await yak.step(), IDLE.ears, 'the loop playing ends first')
   assertEquals(yak.shown(), yak.rest)
   let rested = await yak.step()
   assert(rested >= 5000 && rested <= 9000, `${rested}`)
+})
+
+test('with less motion asked for, a pose is its still frame', async () => {
+  let yak = waiting(true)
+  yak.posing('thinking')
+  await yak.settled()
+  assertEquals(yak.shown(), pose('thinking-still'))
 })
 
 test('a loop the browser will not decode ahead still plays once it loads', async () => {
@@ -232,20 +255,10 @@ test('a loop the browser will not load, he leaves out and rests where he would p
     () => Promise.reject(new Error('Loading error.')),
     (url) => !url.includes('-tail-'),
   )
-  yak.doing('tail')
-  await yak.settled()
+  yak.ask('tail')
   await yak.step()
   assertEquals(yak.shown(), yak.rest)
   let played = new Set<string>()
-  for (let i = 0; i < 12; i++) {
-    let rested = await yak.step()
-    assert(rested >= 5000 && rested <= 9000, `${rested}`)
-    played.add(yak.shown()[0]!)
-  }
-  assertEquals(played, new Set([yak.rest[0]]), 'still, while it is asked for')
-  yak.doing(undefined)
-  await yak.settled()
-  played.clear()
   for (let i = 0; i < 20; i++) {
     await yak.step()
     played.add(yak.shown()[0]!)

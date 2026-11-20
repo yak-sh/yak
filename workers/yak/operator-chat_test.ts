@@ -716,7 +716,7 @@ test('a conversation the provider refused reads as ended: no Stop, nothing under
   let thread = crashed.querySelector('[data-task]')!
   assertEquals(thread.getAttribute('data-task'), task)
   assertEquals(thread.hasAttribute('data-pending'), false)
-  assertEquals(crashed.querySelector('[data-now]')?.textContent, '')
+  assertEquals(crashed.querySelector('.Transcript_Status'), null)
   let last = (s: string) => [...crashed.querySelectorAll(s)].at(-1)
   assertEquals(
     last('.Transcript_Error > p')?.textContent,

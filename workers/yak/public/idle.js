@@ -2,9 +2,11 @@
 // on his rest frame, and every 5 to 9 seconds plays one of his loops, in a
 // shuffled order that plays each before any comes again. Every loop starts
 // and ends on the rest frame, so going into one and back is seamless. While
-// a page names one of his loops in his `data-doing` (the Operator's chat,
-// for what it is doing, T-144829), he plays that one over and over instead.
-// A person who asks for less motion keeps him at rest.
+// a page names one of his poses in his `data-pose` (the Operator's chat, for
+// what it is doing: mascot.ts `MOVES`), he holds that pose, thinking with his
+// light bulb or checking his list, its own loop playing over and over, and
+// takes up his waiting again once it is gone. A person who asks for less
+// motion keeps him at rest, or in the pose's still frame.
 //
 // Each loop is fetched once, just before it first plays, at the density the
 // browser chose for the rest frame, and shown through its own object URL each
@@ -72,25 +74,44 @@
       }
       return blobs.get(name)
     }
-    let coming = next(), timer, playing = false, asked
-    let doing = () => {
-      let name = img.getAttribute('data-doing')
-      return loops.has(name) ? name : undefined
+    let coming = next(), timer, playing = false, asked, posed = false
+    let pose = () => img.getAttribute('data-pose') || undefined
+    // his rest frame's files, with `name` in place of the rest's
+    let as = (name) => ({
+      src: rest.src.replace('/idle-rest-128', `/${name}`),
+      srcset: rest.srcset?.replaceAll('/idle-rest-128', `/${name}`),
+    })
+    let put = ({ src, srcset }) => {
+      img.src = src
+      if (srcset) img.srcset = srcset
+      else img.removeAttribute('srcset')
     }
-    // a loop asked for, or the one the page says he is doing, comes at once;
-    // else he rests 5 to 9 seconds
-    let wait = (soon = !still.matches && !!(asked ?? doing())) => {
+    // the pose the page names, held, or once it is gone, his waiting again
+    let posing = () => {
+      let name = pose()
+      if (name) {
+        clearTimeout(timer)
+        posed = true
+        return put(as(still.matches ? `${name}-still` : name))
+      }
+      if (!posed) return playing || wait()
+      posed = false
+      if (!playing) put(rest), wait()
+    }
+    // a loop asked for comes at once; else he rests 5 to 9 seconds
+    let wait = (soon = !still.matches && !!asked) => {
       clearTimeout(timer)
+      if (pose()) return
       timer = setTimeout(play, soon ? 0 : 5000 + Math.random() * 4000)
-      let name = asked ?? doing() ?? coming
+      let name = asked ?? coming
       // fetched ahead; a failure is fetched and reported again when it plays
       if (!still.matches && name && !gone.has(name)) {
         fetched(name).catch(() => blobs.delete(name))
       }
     }
     let play = async () => {
-      if (!img.isConnected) return
-      let name = asked ?? doing()
+      if (!img.isConnected || pose()) return
+      let name = asked
       asked = undefined
       if (!name) name = coming, coming = next()
       // with less motion asked for, while he is out of sight (wander.js
@@ -120,13 +141,13 @@
         playing = false
         return wait(false)
       }
-      img.removeAttribute('srcset')
-      img.src = url
+      if (pose()) return URL.revokeObjectURL(url), playing = false
+      put({ src: url })
       setTimeout(() => {
-        img.src = rest.src
-        img.srcset = rest.srcset
         URL.revokeObjectURL(url)
         playing = false
+        if (pose()) return
+        put(rest)
         wait()
       }, +loops.get(name))
     }
@@ -137,12 +158,12 @@
       asked = e.detail
       if (!playing) wait()
     })
-    // what he is doing changed: he takes it up as the loop playing ends
-    new MutationObserver(() => playing || wait()).observe(img, {
-      attributeFilter: ['data-doing'],
+    // what he is doing changed: a pose comes at once, cutting a loop short
+    new MutationObserver(posing).observe(img, {
+      attributeFilter: ['data-pose'],
     })
     // once the rest frame is in, so the loops are fetched at its density
-    if (img.complete) wait()
-    else img.addEventListener('load', () => wait(), { once: true })
+    if (img.complete) posing()
+    else img.addEventListener('load', posing, { once: true })
   }
 }

@@ -66,12 +66,12 @@
   margin-bottom: 0;
 }
 .Transcript_Status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  margin: .5rem 0 0;
+  color: var(--muted);
+  font-size: .875rem;
+}
+.Transcript_Status:empty {
+  display: none;
 }
 .Transcript_Error {
   display: grid;

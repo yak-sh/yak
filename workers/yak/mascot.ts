@@ -79,24 +79,25 @@ export let IDLE = {
 /** What the Operator can be doing, as the waiting yak shows it. */
 export type Doing = 'idle' | 'thinking' | 'tool' | 'writing' | 'done' | 'failed'
 
-/** The loop the yak plays for what the Operator is doing: over and over while
- * it thinks (a glance around), calls a tool (his ears, listening) or writes
- * (a tail swish), and once as it finishes (a stretch) or fails (his head
- * droops, dozing). Idle, he waits as anywhere else. */
-export let MOVES: Record<Exclude<Doing, 'idle'>, {
-  loop: keyof typeof IDLE
-  once?: boolean
-}> = {
-  thinking: { loop: 'glance' },
-  tool: { loop: 'ears' },
-  writing: { loop: 'tail' },
-  done: { loop: 'stretch', once: true },
-  failed: { loop: 'doze', once: true },
+/** What the yak beside the Operator's box does for what it is doing: the
+ * pose he holds while it thinks (his light bulb), calls a tool (checking his
+ * list) or writes (typing), and the loop he plays once as it finishes (a
+ * stretch) or fails (his head droops, dozing). Idle, he waits as anywhere
+ * else. */
+export let MOVES: Record<
+  Exclude<Doing, 'idle'>,
+  { pose: Pose } | { loop: keyof typeof IDLE }
+> = {
+  thinking: { pose: 'thinking' },
+  tool: { pose: 'checking' },
+  writing: { pose: 'typing' },
+  done: { loop: 'stretch' },
+  failed: { loop: 'doze' },
 }
 
 /** The yak waiting, `size` px across, with `className`: at rest, and with
- * public/idle.js every several seconds one of his loops (`IDLE`), or the one
- * a page names in his `data-doing` over and over. He is yaks.app's mark
+ * public/idle.js every several seconds one of his loops (`IDLE`), or while a
+ * page names one in his `data-pose`, that pose. He is yaks.app's mark
  * wherever a page shows it (T-144354). */
 export let Idle = ({ class: className, base = '', size = 128 }: {
   class?: string
