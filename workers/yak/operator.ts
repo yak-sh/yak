@@ -423,6 +423,7 @@ let OWN_ONLY = 'This reads your own store: your conversations and their ' +
 let mine = new Set([
   'memory_save',
   'memory_recall',
+  'memory_forget',
   'memory_around',
   skillRead.name,
   // A space improves its skills by trials there (operator-trials.ts).
@@ -612,6 +613,7 @@ let OWN_WORDS = new Set([
   'store_builder_supply',
   'store_builder_choose',
   'store_memory_save',
+  'store_memory_forget',
   'store_connection_need',
   'store_connection_list',
   'store_mail_send',
@@ -621,6 +623,7 @@ let OWN_WORDS = new Set([
   // the Operator's own work
   'memory_save',
   'memory_recall',
+  'memory_forget',
   'memory_around',
   'trial_pass',
   'trial_hold',

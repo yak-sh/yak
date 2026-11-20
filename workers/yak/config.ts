@@ -105,7 +105,8 @@ export let directoryConfig: Config = {
       // The directory shares spaces. Only the space-bound memory loop belongs
       // here; transcript walks and globally identified topics need an app store.
       words: Object.entries(memoryDoc.$defs ?? {}).filter(([name, entry]) =>
-        entry.tool !== true || ['memory_save', 'memory_recall'].includes(name)
+        entry.tool !== true ||
+        ['memory_save', 'memory_recall', 'memory_forget'].includes(name)
       ).map(([name]) => name),
     },
     { use: '@yaks/topic', facets: ['vocab', 'graph'], words: ['topic'] },

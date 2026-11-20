@@ -336,6 +336,25 @@ test('a memory this graph does not hold is said so', async () => {
   )
 })
 
+test('forgetting a memory deletes its own words, and only the mark on an entry', async () => {
+  let g = fresh()
+  await writers(g)
+  await write(g, [said('s1', 1, 'use grams, never cups')], jeff)
+  await save({ on: 's1.1' }, g)
+  let [own] = await save({ said: 'always commit your changes' }, g)
+  let forget = async (id: string) =>
+    await write(g, await ask('memory_forget', { id }, g))
+  await forget(own.entity.eid)
+  await forget('s1.1')
+  assertEquals(await marks(g), [])
+  assertEquals(part(await read(g, own.entity.eid), 'doc'), undefined)
+  assertEquals(
+    part(await read(g, 's1.1'), 'content').body,
+    'use grams, never cups',
+  )
+  await assertRejects(() => forget('s1.1'), Refused, 'no memory: s1.1')
+})
+
 // Two memories, the older a correction, saved once at load: a recall only
 // reads.
 let recalled = await (async () => {
@@ -512,6 +531,16 @@ test('a host refuses edits and marks outside its memory space', async () => {
   }
   assertEquals(part(await read(g, b), 'memory').context, undefined)
   assertEquals(part(await read(g, 's1.1'), 'memory'), undefined)
+})
+
+test('a host forgets only memories in its space', async () => {
+  let { g, b, ask } = bounded
+  await assertRejects(
+    () => ask('memory_forget', { id: b }),
+    Refused,
+    'no memory:',
+  )
+  assert(await read(g, b))
 })
 
 test('a host edits memories in its space', async () => {

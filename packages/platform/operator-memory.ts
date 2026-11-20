@@ -11,11 +11,13 @@ export let MEMORY_OWNERS = 'operator:memory-owners'
 let ref = (row: Bundle | undefined, name: string, field: string) =>
   (row?.[name] as Comp | undefined)?.[field] as string | undefined
 
-/** Bind the Operator's save to the person whose conversation is running. */
+/** Bind the Operator's save to the person whose conversation is running: a
+ * new memory is theirs unless shared is true, and a save naming an id moves
+ * it between them and the space only when shared is given. */
 export let memoryAudience = (tool: NamedTool, person: string): NamedTool => ({
   ...tool,
   description: tool.description +
-    ' Each save is private to the person in this conversation unless shared is true.',
+    ' Each new save is private to the person in this conversation unless shared is true. With id, shared true or false moves that memory to the space or back to this person; leaving shared out keeps whom it is for.',
   inputSchema: {
     ...tool.inputSchema,
     properties: {
@@ -28,7 +30,8 @@ export let memoryAudience = (tool: NamedTool, person: string): NamedTool => ({
     },
   },
   run: async (call, graph) => {
-    let shared = argsOf(call).shared === true
+    let asked = argsOf(call).shared
+    let shared = asked === true
     let patches = await tool.run(call, graph)
     return await Promise.all(patches.map(async (patch) => {
       let eid = patch.entity.eid
@@ -39,6 +42,9 @@ export let memoryAudience = (tool: NamedTool, person: string): NamedTool => ({
           'Use said to save the shared words separately from their private source.',
         )
       }
+      // A memory already kept for someone stays theirs or the space's when
+      // the save leaves shared out: a patch of its context is no move.
+      if (asked == null && row?.operator_memory) return patch
       return {
         ...patch,
         operator_memory: shared

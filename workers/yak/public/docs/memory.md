@@ -105,6 +105,17 @@ seconds later. With no `said` at all you get the newest.
 Each memory is returned whole, the sentence and its context, never as a snippet,
 because half of what somebody said is worse than none of it.
 
+## Forgetting a memory
+
+When they ask you to forget something, or a memory was saved by mistake, pass
+its id to `store_memory_forget`:
+
+    store_memory_forget { id: 'M-12' }
+
+It goes to the space's trash, where it can be restored, and nobody recalls it
+again. A memory that marks words where they were said, such as a comment, loses
+only the mark: the comment stays.
+
 ## Memories in `about`
 
 `about` returns the newest few memories under a heading of their own, beside the

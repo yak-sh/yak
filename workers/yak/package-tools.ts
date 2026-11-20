@@ -87,11 +87,14 @@ let declarations = once(() =>
   ].filter(({ definition: d }) => !d.surfaces || d.surfaces.includes('mcp'))
     .map((d) => ({ ...d, name: d.definition.name! }))
 )
-// These names keep their published argument and answer forms. The package's
-// unambiguous name is prefixed at the transport boundary until that listing goes.
+// These names keep their published argument and answer forms, and
+// memory_forget sits beside its two siblings. The package's unambiguous name
+// is prefixed at the transport boundary until that listing goes; the
+// Operator holds its own memories under the bare names (operator.ts `mine`).
 let published = new Set([
   'memory_save',
   'memory_recall',
+  'memory_forget',
   'connection_need',
   'connection_list',
   'builder_build',

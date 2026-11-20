@@ -220,6 +220,21 @@ export let runs = (
       : await read(asked)
   },
 
+  // A memory made to hold words is trashed whole; a mark leaves the words
+  // where they were said and takes only itself away. Both leave by the
+  // store's trash, so nothing forgotten is erased.
+  memory_forget: async (call, graph): Promise<Bundle[]> => {
+    let named = str(argsOf(call).id)
+    let was = await held(graph, named, space)
+    if (!was) throw new Refused(`no memory: ${named}`)
+    let entity = { eid: was.entity.eid }
+    return [
+      graph.vocab.kindOf(was) == MEMORY
+        ? { entity, $delete: true }
+        : { entity, [MEMORY]: null, [FEEDBACK]: null },
+    ]
+  },
+
   memory_source: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let said = str(args.said)

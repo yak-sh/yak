@@ -300,6 +300,7 @@ export let BUILDING = new Set([
   'store_effect_retry',
   'store_inspect',
   'store_load',
+  'store_memory_forget',
   'store_memory_recall',
   'store_memory_save',
   'store_restore',

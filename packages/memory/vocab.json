@@ -222,6 +222,27 @@
         "said"
       ]
     },
+    "memory_forget": {
+      "tool": true,
+      "destructive": true,
+      "noun": "memory",
+      "verb": "forget",
+      "title": "Forget a memory",
+      "description": "Forget one memory by id. A memory holding its own words goes to the trash whole; a mark on an entry, comment or doc is removed and the words stay where they were said. Either comes back from the trash. Returns the applied bundle.",
+      "input": {
+        "id": {
+          "type": "string",
+          "ref": "memory",
+          "description": "Memory id or name."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "positional": [
+        "id"
+      ]
+    },
     "memory_source": {
       "tool": true,
       "noun": "memory",
