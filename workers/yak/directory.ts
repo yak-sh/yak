@@ -860,13 +860,19 @@ export type Row = MeteredRow & {
   }
   visitor_build?: { at?: string }
   // An outreach trial (outreach.ts) and the letters it wrote.
-  outreach_trial?: { changelog?: string; model?: string }
-  outreach_batch?: { id?: string; at?: string; spaces?: number }
+  outreach_trial?: { changelog?: string; provider?: string; model?: string }
+  outreach_batch?: {
+    id?: string
+    at?: string
+    spaces?: number
+    shared?: string
+  }
   outreach_written?: { at?: string; letters?: number; dollars?: number }
   outreach_letter?: {
     trial?: string
     space?: string
     stage?: string
+    brief?: string
     dollars?: number
   }
   preview?: { site?: string | null; at?: string | null }

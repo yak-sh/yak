@@ -91,20 +91,25 @@ component.
 
 ## Batches
 
-`@yaks/anthropic/batches` sends many Messages requests as one Message Batch,
-answered within a day at half the price. `submit` sends the requests, each a
-request body named by a `custom_id`; `read` says how the batch stands; and
-`results` reads every result once it has `ended`, in any order, so each is found
-by its `custom_id`. A prefix every request marks with `cache_control` is written
-to the cache once and read by the requests after it.
+`@yaks/anthropic/batches` is `@yaks/model/batch`'s `Batches` over Anthropic's
+Message Batches: many Messages requests sent as one, answered within a day at
+half the price. `submit` sends them and answers the batch's id; `ended` says
+whether it has finished; `results` reads every answer, in any order, each found
+by the `id` it was asked with. Each request's system text is marked with
+`cache_control`, so a prefix every request shares is written to the cache once
+and read by the requests after it. `entryOf` and `answerOf` turn one request and
+one result between the neutral shapes and the API's.
 
 ```ts ignore
 import { batches } from '@yaks/anthropic/batches'
 
 let api = batches({ key: () => myPrivateKey })
-let { id } = await api.submit([{
-  custom_id: 'a',
-  params: { model: 'claude-opus-5-5', max_tokens: 1000, messages },
+let id = await api.submit([{
+  id: 'a',
+  model: 'claude-opus-5-5',
+  system: shared,
+  text: 'Write to Ada.',
+  max: 16_000,
 }])
-if ((await api.read(id)).processing_status == 'ended') await api.results(id)
+if (await api.ended(id)) await api.results(id)
 ```

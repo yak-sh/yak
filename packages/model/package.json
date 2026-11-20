@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./batch": "./batch.ts",
     "./graph": "./graph.ts",
     "./sse": "./sse.ts",
     "./stall": "./stall.ts",

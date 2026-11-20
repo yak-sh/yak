@@ -27,6 +27,13 @@ application.
   Exhausted transient failures remain retryable `ModelError`s; authentication,
   validation, and spent quota fail fast. A supplied Codex refresh runs once on
   401. Catalog error messages never repeat the provider's response body.
+- `@yaks/openai/batches` is `@yaks/model/batch`'s `Batches` over OpenAI's Batch
+  API: the requests are uploaded as one JSON-lines file of Responses requests
+  (their system text as `instructions`) and run at half the price within a day;
+  `results` reads the output and error files back as answers. Requests naming
+  the same `cache` are sent with it as `prompt_cache_key`, so the prefix they
+  share is read from OpenAI's cache. `lineOf` and `answerOf` turn one request
+  and one line between the neutral shapes and the API's.
 - `openaiDoc` and `OPENAI_COMP` describe the `openai{response_id}` component.
 - `./provider` is the plugin a config names (@yaks/model `ProviderFacet`): it
   serves `openai`, signed in with its own `key`, `OPENAI_API_KEY` or the

@@ -309,15 +309,19 @@
       "noun": "admin",
       "verb": "letters",
       "title": "Try what every Operator would email its people",
-      "description": "Starts a trial of the Operators writing to their people between visits: each space's Operator writes the one email it would send today, from its people, its apps and their use, and from `changelog`, what yaks.app can do now. Test spaces and the platform's own are left out; pilots are in. The letters are written in one Anthropic batch whose requests share a cached prefix (the Operator's persona and the changelog), at batch prices paid by the platform, and appear within the hour on the admin's Letters page (/admin/letters), one per space. Nothing is sent to anyone. The selected account must have the platform role.\n\n  yak admin letters @changelog.md --as admin@bot.yak.sh",
+      "description": "Starts a trial of the Operators writing to their people between visits: each space's Operator writes the one email it would send today, from its people, its apps and their use, and from `changelog`, what yaks.app can do now. Test spaces and the platform's own are left out; pilots are in. The letters are written by the Operator's own model (the one its base persona names) in one batch whose requests share a cached prefix (the Operator's persona and the changelog), at batch prices paid by the platform, and appear within the day on the admin's Letters page (/admin/letters), one per space beside what its Operator was told. Nothing is sent to anyone. The selected account must have the platform role.\n\n  yak admin letters @changelog.md --as admin@bot.yak.sh",
       "input": {
         "changelog": {
           "type": "string",
           "description": "what yaks.app can do now that it could not lately; @path reads a file"
         },
+        "provider": {
+          "type": "string",
+          "description": "the provider of `model`, anthropic or openai; give both or neither"
+        },
         "model": {
           "type": "string",
-          "description": "the Anthropic model that writes the letters (claude-opus-5-5 when absent)"
+          "description": "the model that writes the letters, instead of the Operator's own"
         },
         "as": {
           "type": "string",

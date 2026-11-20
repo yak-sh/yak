@@ -7,7 +7,6 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { mint } from '@yaks/graph'
-import { MODEL } from '@yaks/platform/outreach'
 import type { Runs } from '@yaks/graph/tools'
 import { reveal, sealed, type Vault } from '@yaks/secrets'
 import { CallError } from '@yaks/tools/errors'
@@ -497,18 +496,26 @@ export let runs = (
       return [said(call, [t.text, t.link])]
     }),
 
-    // A trial of every Operator's email between visits (workers/yak
-    // outreach.ts): one directory row, which the directory sends as a batch
-    // and reads back onto its Letters page. Nothing is sent to anyone.
+    // A trial of every Operator's email between visits
+    // (@yaks/platform/outreach-trial): one directory row, which the directory
+    // sends as a batch and reads back onto its Letters page. Nothing is sent
+    // to anyone.
     admin_letters: verb(async (call) => {
       let a = argsOf(call)
       let changelog = word(a, 'changelog')?.trim()
       if (!changelog) throw new CallError('changelog', 'say what changed')
+      let [provider, model] = [word(a, 'provider'), word(a, 'model')]
+      if (!provider != !model) {
+        throw new CallError('model', 'name both provider and model, or neither')
+      }
       let at = await acting(a)
       let eid = mint()
       await storeApply(at.bearer, PLATFORM_STORE, [{
         entity: { eid },
-        outreach_trial: { changelog, model: word(a, 'model') ?? MODEL },
+        outreach_trial: {
+          changelog,
+          ...model ? { provider, model } : {},
+        },
       }])
       return [
         said(

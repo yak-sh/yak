@@ -41,6 +41,7 @@
     "./attribution-vocab": "./attribution-vocab.ts",
     "./refusals-vocab": "./refusals-vocab.ts",
     "./outreach": "./outreach.ts",
+    "./outreach-trial": "./outreach-trial.ts",
     "./outreach-vocab": "./outreach-vocab.ts",
     "./lower-graph": "./lower-graph.ts",
     "./config": "./config.ts",
@@ -125,8 +126,7 @@
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "@yaks/yaml": "0.2.24",
-    "uqr": "0.1.3",
-    "@yaks/anthropic": "0.2.30"
+    "uqr": "0.1.3"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

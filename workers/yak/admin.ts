@@ -12,8 +12,9 @@ import { Head } from '@yaks/ui/parts'
 // page says how many builds the home page's box opened today against the
 // day's cap, what each spent against its budget and which were kept by
 // signing up (newcomer.ts, D-146737).
-// The Letters page lists the outreach trials (outreach.ts): what every
-// space's Operator would email its people, one letter a space, never sent.
+// The Letters page lists the outreach trials (@yaks/platform/outreach-trial):
+// what every space's Operator would email its people, one letter a space
+// beside what it was told, never sent.
 //
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
@@ -88,7 +89,6 @@ import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
 import { reconciled, type Spending } from './operator-spending.ts'
 import { receiptEid } from './model-spend.ts'
-import { MODEL } from '@yaks/platform/outreach'
 
 export let PATH = ADMIN
 
@@ -465,9 +465,9 @@ let buildsPage = (d: Reading, today: number) => {
   )
 }
 
-// Outreach trials (outreach.ts): what every space's Operator would email its
-// people, given what yaks.app can do now. Started with `yak admin letters`;
-// nothing here is ever sent.
+// Outreach trials (@yaks/platform/outreach-trial): what every space's
+// Operator would email its people, given what yaks.app can do now. Started
+// with `yak admin letters`; nothing here is ever sent.
 let trialState = (r: Row) =>
   r.outreach_written
     ? `${plural(Number(r.outreach_written.letters ?? 0), 'letter')}, ${
@@ -483,6 +483,14 @@ let firstLine = (text: unknown) =>
   String(text ?? '').trim().split('\n')[0].slice(0, 120)
 let paragraphs = (text: unknown) =>
   String(text ?? '').split(/\n\s*\n/).map((p) => h('p', null, p.trim()))
+// What a model was told, folded away under its summary, as it was sent.
+let told = (summary: string, text: unknown) =>
+  h(
+    'details',
+    null,
+    h('summary', null, summary),
+    h('pre', { style: 'white-space: pre-wrap' }, String(text ?? '')),
+  )
 
 let lettersPage = (d: Reading, trials: Row[]) =>
   desk(
@@ -549,10 +557,25 @@ let trialPage = (d: Reading, trial: Row | undefined, letters: Row[]) => {
       null,
       facts([
         ['State', trialState(trial)],
-        ['Model', String(trial.outreach_trial?.model || MODEL)],
+        [
+          'Model',
+          trial.outreach_trial?.model
+            ? `${trial.outreach_trial.provider} ${trial.outreach_trial.model}`
+            : "The Operator's own, once sent",
+        ],
       ]),
       h(Group, null, 'Changelog'),
       h(Card, { as: 'div' }, paragraphs(trial.outreach_trial?.changelog)),
+      trial.outreach_batch?.shared
+        ? h(
+          Card,
+          { as: 'div' },
+          told(
+            'What every Operator was told first',
+            trial.outreach_batch.shared,
+          ),
+        )
+        : null,
       h(Group, null, 'Letters'),
       sorted.length
         ? sorted.map((r) =>
@@ -567,8 +590,15 @@ let trialPage = (d: Reading, trial: Row | undefined, letters: Row[]) => {
                 dollars(Number(r.outreach_letter?.dollars ?? 0))
               }`,
             ),
-            h('p', null, h('b', null, String(r.doc?.title ?? ''))),
-            paragraphs(r.doc?.body),
+            r.doc
+              ? [
+                h('p', null, h('b', null, String(r.doc.title ?? ''))),
+                paragraphs(r.doc.body),
+              ]
+              : h('p', null, 'Being written'),
+            r.outreach_letter?.brief
+              ? told('What its Operator was told', r.outreach_letter.brief)
+              : null,
           )
         )
         : empty(

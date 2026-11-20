@@ -1,4 +1,4 @@
-// The directory's outreach trials (./outreach.ts): what every space's Operator
+// The directory's outreach trials (./outreach.ts, ./outreach-trial.ts): what every space's Operator
 // would write its people, given what changed lately, kept as rows for the
 // platform admin to read and never sent.
 import type { VocabDoc } from '@yaks/vocab'
@@ -21,9 +21,14 @@ export let docs: VocabDoc[] = [{
           description:
             'what yaks.app can do now that it could not lately, in the words the admin gave',
         },
+        provider: {
+          type: 'string',
+          description:
+            "the provider of the model each letter is written by: the admin's, else the one the Operator's base persona names, kept once the batch is sent",
+        },
         model: {
           type: 'string',
-          description: 'the Anthropic model each letter is written by',
+          description: 'the model each letter is written by, as `provider` is',
         },
       },
       description:
@@ -37,6 +42,11 @@ export let docs: VocabDoc[] = [{
         id: { type: 'string', description: "the provider's batch id" },
         at: at('when the batch was sent'),
         spaces: { type: 'number', description: 'how many spaces it asks for' },
+        shared: {
+          type: 'string',
+          description:
+            "the prefix every request began with: the Operator's base persona, how these emails are written and the changelog",
+        },
       },
       description:
         "a trial's batch, sent to the model's provider; its wake reads it until it has ended",
@@ -78,13 +88,18 @@ export let docs: VocabDoc[] = [{
           description:
             'where the space stood: nothing built, quiet, building, in use',
         },
+        brief: {
+          type: 'string',
+          description:
+            'what its Operator was told of the space after the shared prefix: its people, its apps and their use',
+        },
         dollars: {
           type: 'number',
           description: 'what writing it cost, at batch prices',
         },
       },
       description:
-        "what a space's Operator would email its people in a trial, its subject and words in `doc{title, body}`; never sent",
+        "what a space's Operator would email its people in a trial, its subject and words in `doc{title, body}` once written; never sent",
     },
     outreach_write: {
       effect: true,

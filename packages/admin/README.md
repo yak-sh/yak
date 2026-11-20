@@ -71,9 +71,10 @@ yak admin errors --since 14d --resolved --as admin
 ```
 
 `yak admin letters @changelog.md --as admin` starts a trial of every Operator's
-email between visits (workers/yak outreach.ts): one directory row, which the
-directory writes as one Anthropic batch and reads back onto the admin's Letters
-page, one letter a space. Nothing is sent.
+email between visits (@yaks/platform/outreach-trial): one directory row, which
+the directory writes as one batch on the Operator's own model and reads back
+onto the admin's Letters page, one letter a space beside what its Operator was
+told. Nothing is sent.
 
 ## Keeping the platform admin private
 

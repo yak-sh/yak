@@ -525,16 +525,26 @@ test("an inviter's page lists whom they invited", () => {
   assertEquals(jeffs.invited.map(([, name]) => name), ['Bo', 'Ana'])
 })
 
-test('the Letters page lists each trial, and a trial its letters, one a space', async () => {
+test('the Letters page lists each trial, and a trial its letters beside what each Operator was told', async () => {
   let trial = {
     entity: { eid: 't1' },
-    outreach_trial: { changelog: 'I can text you now.\nMore.', model: 'm' },
+    outreach_trial: {
+      changelog: 'I can text you now.\nMore.',
+      provider: 'openai',
+      model: 'm',
+    },
+    outreach_batch: { shared: 'I am the Operator.' },
     outreach_written: { at: on('08'), letters: 1, dollars: 0.01 },
     created: { at: on('08') },
   } as Row
   let letter = {
     entity: { eid: 'l1' },
-    outreach_letter: { trial: 't1', space: 'jhome', stage: 'in use' },
+    outreach_letter: {
+      trial: 't1',
+      space: 'jhome',
+      stage: 'in use',
+      brief: 'Apps: Roster',
+    },
     doc: { title: 'Roster can be searched', body: 'Hi,\n\nI drafted it.' },
   } as Row
   let lettered = {
@@ -557,7 +567,15 @@ test('the Letters page lists each trial, and a trial its letters, one a space', 
   assertStringIncludes(open.parentElement!.textContent!, '1 letter, $0.01')
   let one = (await read('/admin/letters/t1')).body.textContent!
   for (
-    let said of ['jeff · in use', 'Roster can be searched', 'I drafted it.']
+    let said of [
+      'openai m',
+      'I am the Operator.',
+      'jeff · in use',
+      'Roster can be searched',
+      'I drafted it.',
+      'What its Operator was told',
+      'Apps: Roster',
+    ]
   ) {
     assertStringIncludes(one, said)
   }

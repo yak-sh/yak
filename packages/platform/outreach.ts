@@ -10,19 +10,14 @@
  * is the Operator's to judge for that person.
  *
  * This is the pure part: a space's stage, the prefix, a space's part, the
- * batch request for it, and the letters its results make. Reading the
- * directory, sending the batch and keeping the rows are the host's.
+ * batch request for it, and the letters its answers make. Sending the batch
+ * and keeping the rows are ./outreach-trial.ts's; reading the directory is the
+ * host's.
  */
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { dollars, listPrice } from '@yaks/model'
-import type { Entry, Result } from '@yaks/anthropic/batches'
-
-/** The model a trial is written by when it names none. */
-export let MODEL = 'claude-opus-5-5'
-
-/** What a batch costs against the same requests sent one by one. */
-export let BATCH = 0.5
+import { type Price, weigh } from '@yaks/model'
+import { type Answered, type Asked, BATCH } from '@yaks/model/batch'
 
 let DAY = 86_400_000
 
@@ -160,24 +155,21 @@ export let brief = (f: Facts, now: number): string => {
   ].join('\n\n')
 }
 
-/** One space's request in a trial's batch, named by the space. */
-export let entry = (
+/** One space's request in a trial's batch, named by the space: the shared
+ * prefix, then what its Operator is told of it. */
+export let asked = (
   model: string,
   shared: string,
   f: Facts,
   now: number,
-): Entry => ({
-  custom_id: f.space,
-  params: {
-    model,
-    max_tokens: 8000,
-    system: [{
-      type: 'text',
-      text: shared,
-      cache_control: { type: 'ephemeral' },
-    }],
-    messages: [{ role: 'user', content: brief(f, now) }],
-  },
+  cache?: string,
+): Asked => ({
+  id: f.space,
+  model,
+  system: shared,
+  text: brief(f, now),
+  max: 16_000,
+  ...cache ? { cache } : {},
 })
 
 /**
@@ -206,54 +198,42 @@ export let read = (text: string): { title: string; body: string } => {
 export let letterOf = (trial: string, space: string) =>
   derivedEid(`outreach_letter ${trial} ${space}`)
 
-/** What one result cost at batch prices, by the model's list price; 0 for a
- * model without one. */
-export let costOf = (model: string, r: Result) => {
-  let price = listPrice(model)
-  if (!price || r.result.type != 'succeeded') return 0
-  let u = r.result.message.usage
-  return BATCH * dollars(price, [
-    u.cache_read_input_tokens ?? 0,
-    u.cache_creation_input_tokens ?? 0,
-    u.input_tokens,
-    u.output_tokens,
-  ])
-}
+/** The letters a trial asks for as it is sent, before any is written: each
+ * space's stage and what its Operator was told of it. */
+export let asking = (
+  trial: string,
+  sent: Asked[],
+  stages: Map<string, Stage>,
+) =>
+  sent.map((a): Bundle => ({
+    entity: { eid: letterOf(trial, a.id) },
+    outreach_letter: {
+      trial,
+      space: a.id,
+      stage: stages.get(a.id) ?? '',
+      brief: a.text,
+    },
+  }))
 
-/** A trial's letters from its batch's results, one row per space it asked
- * for, and what the whole batch cost. A request that failed is kept as a
- * letter saying so. */
+/** What one answer cost at batch prices; 0 without a price, or without an
+ * answer. */
+export let costOf = (price: Price | undefined, a: Answered): number =>
+  price && 'usage' in a ? BATCH * weigh(price, a.usage) : 0
+
+/** A trial's letters from its batch's answers, and what the whole batch
+ * cost. A request that failed is kept as a letter saying so. */
 export let letters = (
   trial: string,
-  model: string,
-  results: Result[],
-  stages: Map<string, Stage>,
+  price: Price | undefined,
+  answers: Answered[],
 ): { rows: Bundle[]; dollars: number } => {
-  let rows = results.map((r): Bundle => {
-    let ok = r.result.type == 'succeeded'
-    let text = r.result.type == 'succeeded'
-      ? r.result.message.content.filter((b) => b.type == 'text')
-        .map((b) => b.text ?? '').join('')
-      : ''
-    return {
-      entity: { eid: letterOf(trial, r.custom_id) },
-      outreach_letter: {
-        trial,
-        space: r.custom_id,
-        stage: stages.get(r.custom_id) ?? '',
-        dollars: costOf(model, r),
-      },
-      doc: ok ? read(text) : {
-        title: `(not written: ${r.result.type})`,
-        body: JSON.stringify((r.result as { error?: unknown }).error ?? ''),
-      },
-    }
-  })
+  let rows = answers.map((a): Bundle => ({
+    entity: { eid: letterOf(trial, a.id) },
+    outreach_letter: { trial, space: a.id, dollars: costOf(price, a) },
+    doc: 'text' in a ? read(a.text) : { title: '(not written)', body: a.error },
+  }))
   return {
     rows,
-    dollars: rows.reduce(
-      (n, b) => n + Number((b.outreach_letter as { dollars: number }).dollars),
-      0,
-    ),
+    dollars: answers.reduce((n, a) => n + costOf(price, a), 0),
   }
 }
