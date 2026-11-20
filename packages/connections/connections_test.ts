@@ -22,7 +22,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { platformDoc } from '@yaks/platform/vocab'
 import { provisionalDoc } from '@yaks/effects'
-import { edgeDoc, edgeEid, edgeKeywords, edges } from '@yaks/edge'
+import { edgeDoc, edgeEid, edgeKeywords, edges, link } from '@yaks/edge'
 import {
   ramVault,
   reveal,
@@ -394,6 +394,44 @@ test(
     }])
     await g.apply(again)
     assertEquals((await g.read('.connection')).length, 1)
+  },
+)
+
+test(
+  'one ask per service: asked again by any app, or by none, it is the standing ask, and connecting answers every other',
+  async () => {
+    let { g, c, needs } = await setup()
+    let texts = { integration: 'texts' }
+    let eid = await needs(texts)
+    for (let app of ['other', undefined]) {
+      assertEquals(await needs({ ...texts, app }), eid)
+    }
+    assertEquals((await g.read('.connection')).length, 1)
+    // An ask for other scopes stands apart.
+    let scoped = (s: string) => needs({ app: undefined, scopes: [s] })
+    assert(await scoped('a') != await scoped('b'))
+    // One asked twice before there was one ask per service.
+    let name = 'connection:stray'
+    let stray = secretEid(name)
+    await g.apply([
+      {
+        entity: { eid: stray },
+        connection: { integration: 'texts', owner: 'space', status: 'needed' },
+        secret: { name },
+      },
+      { ...link('other', 'uses', stray), uses: { binding: 'SMS' } },
+      { ...link('other', 'uses', eid), tombstone: {} },
+    ])
+    await connect(c, eid, { key: 'k' })
+    assertEquals(await at(g, stray), undefined)
+    assertEquals(
+      of(await at(g, edgeEid('other', 'uses', eid)), 'uses').binding,
+      'SMS',
+    )
+    assertEquals(
+      (await resolve(c, 'other', 'texts'))?.connection.entity.eid,
+      eid,
+    )
   },
 )
 

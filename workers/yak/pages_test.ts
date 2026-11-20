@@ -226,6 +226,8 @@ test('connections: first a grid of cards, theirs on their own space and then the
           ...own ? [shown('Mail', true)] : [],
           shown('Weather'),
           shown('Maps', false, 'needed'),
+          // Begun on this page and not finished: nobody's ask.
+          { ...shown('Discord', false, 'needed'), apps: [] },
         ],
         services: [],
         built: [{ name: 'openrouter', keyed: true, face: named('OpenRouter') }],

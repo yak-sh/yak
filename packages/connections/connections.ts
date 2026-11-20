@@ -305,6 +305,56 @@ let linked = (
   },
 })
 
+// The asks `owner` has standing through an integration for these scopes:
+// connections needing a credential, but for one where each person connects
+// their own, which is only the space's side of everyone's.
+let asksOf = async (
+  read: Read,
+  owner: Eid,
+  integration: string,
+  scopes: string[],
+): Promise<Bundle[]> => {
+  let needed = (await read(
+    line`.${CONNECTION}.owner=${owner}&.${CONNECTION}.status=${'needed'}${
+      sub(ALL)
+    }`,
+  )).filter((b) => {
+    let c = comp(b, CONNECTION)
+    return c.integration == integration && same(strs(c.scopes), scopes)
+  })
+  if (!needed.length) return []
+  let each = new Set(
+    (await links(read, 'to', needed.map((b) => b.entity.eid)))
+      .filter((l) => comp(l, USES).each)
+      .map((l) => String(comp(l, EDGE).to)),
+  )
+  return needed.filter((b) => !each.has(b.entity.eid))
+}
+
+// What connecting `b` answers: every other ask its owner has standing through
+// the same integration and scopes closes, and each app it served is linked to
+// `to`, the connection now connected, as it was to the ask.
+let answered = async (read: Read, b: Bundle, to: Eid): Promise<Bundle[]> => {
+  let c = comp(b, CONNECTION)
+  let asks = (await asksOf(
+    read,
+    String(c.owner),
+    String(c.integration),
+    strs(c.scopes),
+  )).filter((o) => o.entity.eid != b.entity.eid && o.entity.eid != to)
+  if (!asks.length) return []
+  let served = await links(read, 'to', asks.map((o) => o.entity.eid))
+  return [
+    ...asks.map((o) => ({ entity: { eid: o.entity.eid }, tombstone: {} })),
+    ...served.flatMap((
+      l,
+    ) => [{ entity: { eid: l.entity.eid }, tombstone: {} }, {
+      ...link(far(l, 'to'), USES, to),
+      [USES]: comp(l, USES),
+    }]),
+  ]
+}
+
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs — made only
  * where no integration holds the name, so it never writes over one, and owned
@@ -313,7 +363,9 @@ let linked = (
  * they never change. What is said about it (`About`) is written with it, or
  * changed by its owner asking again. An app that already uses a connection
  * through that integration is answered with it: with `each`, the one the
- * owner holds. The connection comes first. */
+ * owner holds. An ask the owner already has standing through that integration
+ * for the same scopes is the one answered, with the app linked to it: one ask
+ * per service. The connection comes first. */
 export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let hosts = a.hosts ?? []
   let fields = a.fields?.length ? fielded(a.fields) : []
@@ -422,6 +474,21 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
         }]
         : [],
       ...retold,
+    ]
+  }
+  // One ask per service: an ask its owner already has standing for it, for
+  // the same scopes, is the one asked again.
+  let standing = a.each
+    ? undefined
+    : (await asksOf(read, a.owner, name, a.scopes ?? []))[0]
+  if (standing) {
+    return [
+      {
+        entity: { eid: standing.entity.eid },
+        [CONNECTION]: { integration: name },
+      },
+      ...retold,
+      ...a.app ? [linked(a.app, standing.entity.eid, u)] : [],
     ]
   }
   let made = fresh(a.owner, name, a.scopes ?? [])
@@ -1141,7 +1208,7 @@ export let connect = async (
       entity: { eid: connection },
       [SECRET]: { name: nameOf(b), value: keptOf(name, fieldsOf(i), given) },
       [CONNECTION]: now,
-    }])
+    }, ...await answered(c.graph.read, b, connection)])
   }
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   let tokens: Tokens & Kept = {}
@@ -1208,6 +1275,7 @@ export let connect = async (
       [USES]: comp(l, USES),
     }]),
     ...transient ? [{ entity: { eid: connection }, tombstone: {} }] : [],
+    ...await answered(c.graph.read, b, target.entity.eid),
   ])
 }
 

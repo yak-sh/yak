@@ -170,7 +170,9 @@ caller to apply in its own name:
   links an app to a connection that holds a credential: giving an app a person's
   account is the person's act. With `each`, the owner is the space asking each
   person, or a person making their own, and an app is answered with the one that
-  owner holds. The connection comes first in what it returns.
+  owner holds. An ask the owner already has standing through that integration
+  for the same scopes is answered instead of a new one, with the app linked to
+  it: one ask per service. The connection comes first in what it returns.
 - `list(read, owner)` returns the owner's connections, the `uses` links to them,
   and the integrations they go through.
 
@@ -257,7 +259,9 @@ its vault, and the redirect):
   goes from here straight to the vault. An OAuth sign-in names its account from
   the exchanged `id_token` email or `integration.userinfo`, or by the field
   `integration.account` names. Another account makes another connection; the
-  same account renews behind its held handle.
+  same account renews behind its held handle. Connecting answers the owner's
+  other asks through the same integration and scopes: each closes, and the apps
+  it served are linked to the connection now connected.
 - `disconnect(ctx, connection)` trashes the connection and retains its
   credential in the vault’s trash for restoration. Each app that shared it is
   linked to a new `needed` connection in the same batch, by the same name, as

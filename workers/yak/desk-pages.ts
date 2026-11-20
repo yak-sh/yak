@@ -1968,11 +1968,12 @@ let connections = (at: DeskPage, env: Host) => {
       one.status == 'connected' && !one.failed && !one.each
     )
   // What agents asked for and nobody connected: an app's ask, never the
-  // space's side of an ask each person answers with their own.
-  let asks = c.list.filter((one) =>
-    one.status == 'needed' && !one.own && !one.each
-  )
-  let rest = c.list.filter((one) => !asks.includes(one))
+  // space's side of an ask each person answers with their own. A service the
+  // space began connecting and did not finish, which no app asks for, is
+  // nobody's ask, and its card in All services connects it.
+  let started = (one: Shown) => one.status == 'needed' && !one.own && !one.each
+  let asks = c.list.filter((one) => started(one) && one.apps.length)
+  let rest = c.list.filter((one) => !started(one))
   // The one the page was opened on, drawn whole: a connection, a loan, or a
   // service to add.
   let open = c.open
@@ -2273,14 +2274,16 @@ let connections = (at: DeskPage, env: Host) => {
       group('Yours', grid(yours)),
       c.mcp ? mcpServers(c.mcp, c.on, action) : null,
       group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),
-      c.list.length || c.services.length || c.borrowed.length ? null : empty(
-        'No connections yet',
-        h(
-          'p',
-          null,
-          'Connect a service below, or ask an agent to build an app that uses one: what it asks for shows up here.',
+      asks.length || rest.length || c.services.length || c.borrowed.length
+        ? null
+        : empty(
+          'No connections yet',
+          h(
+            'p',
+            null,
+            'Connect a service below, or ask an agent to build an app that uses one: what it asks for shows up here.',
+          ),
         ),
-      ),
       h(Group, { id: 'find' }, 'All services'),
       finding,
       found,
