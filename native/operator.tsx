@@ -61,6 +61,11 @@ let Talk = ({ space }: { space: Space }) => {
   let [typing, setTyping] = useHeld('')
   let [words, setWords] = useHeld('')
   let [trouble, setTrouble] = useHeld('')
+  // A conversation that would not read or draw is said here, and reported.
+  let fail = (e: Error) => {
+    report(e)
+    setTrouble(e.message)
+  }
   // The person's one conversation, read whole.
   let read = async () => {
     let r = await fetch(`${at}?talk=&lines=1`)
@@ -78,7 +83,7 @@ let Talk = ({ space }: { space: Space }) => {
     let down = 0, tries = 0, told = false
     let hear = (frame: Frame) => {
       let o = frame.operator
-      if (o?.refresh) return void read().catch((e) => setTrouble(e.message))
+      if (o?.refresh) return void read().catch(fail)
       if (!o || (mine && o.task != mine)) return
       if (o.typing) return void setTyping((was) => was + o.typing)
       setTyping('')
@@ -92,7 +97,7 @@ let Talk = ({ space }: { space: Space }) => {
       socket.onopen = () => {
         down = tries = 0
         told = false
-        read().then((t) => void (mine = t), (e) => setTrouble(e.message))
+        read().then((t) => void (mine = t), fail)
       }
       socket.onmessage = (e) => hear(JSON.parse(String(e.data)))
       socket.onclose = (e) => {
