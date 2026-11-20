@@ -367,18 +367,20 @@ among them: a caller meets it when its call is cut off, and an instance whose
 own storage lost its connection refuses every statement in it.
 `replaced(ctx.storage)` says whether this instance is the one that was moved: a
 reset instance still answers a read but refuses every write, so it asks through
-a transaction. `vacating(run, ctx.storage)` is `run`'s answer, or those words as
-soon as `replaced` turns true while `run` still waits, asked every `LOOK` ms: a
-request its instance was reset under can wait on what never settles, and its
-caller sends it again to the live instance. `evicted(error)` is a reset a caller
-should send again for, and `killed(error)` a kill for the CPU or memory limit,
-which no code of the object sees. `opaque(error)` is the runtime's own internal
-error, which names only a reference: the work is tried again, and reported if it
-keeps failing. `retried(send, replayable, retry, wait)` sends a call again while
-it fails in words `retry` knows (`evicted` by default), pausing before each
-resend as `backoff` says; `wait` waits a pause out, `jittered(clock)` by default
-(half of it or more, on the runtime's clock unless given one), and a test hands
-its own.
+a transaction, and one whose storage lost its connection answers a statement
+that opens no table, so the read opens the database.
+`vacating(run, ctx.storage)` is `run`'s answer, or those words as soon as
+`replaced` turns true while `run` still waits, asked every `LOOK` ms: a request
+its instance was reset under can wait on what never settles, and its caller
+sends it again to the live instance. `evicted(error)` is a reset a caller should
+send again for, and `killed(error)` a kill for the CPU or memory limit, which no
+code of the object sees. `opaque(error)` is the runtime's own internal error,
+which names only a reference: the work is tried again, and reported if it keeps
+failing. `retried(send, replayable, retry, wait)` sends a call again while it
+fails in words `retry` knows (`evicted` by default), pausing before each resend
+as `backoff` says; `wait` waits a pause out, `jittered(clock)` by default (half
+of it or more, on the runtime's clock unless given one), and a test hands its
+own.
 
 ```ts
 import { assertEquals } from '@std/assert'

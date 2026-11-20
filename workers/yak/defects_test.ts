@@ -221,7 +221,10 @@ let refuse = (words: string) => {
     throw error
   }
 }
-let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
+let storage = (
+  write = () => {},
+  read: (query: string) => Iterable<unknown> = () => [],
+): Own => ({
   sql: { exec: read },
   transactionSync: (body) => (write(), body()),
 })
@@ -241,6 +244,11 @@ let resetCases: [string, Own | undefined, boolean[]][] = [
   [
     'an instance whose storage connection was lost reports none of its resets',
     storage(undefined, refuse(LOST)),
+    [true, true, true, false],
+  ],
+  [
+    'an instance whose storage lost its connection to its tables reports none of its resets',
+    storage(undefined, (query) => / from /i.test(query) ? refuse(LOST)() : []),
     [true, true, true, false],
   ],
   ['a live instance reports each reset', storage(), [
