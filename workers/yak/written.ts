@@ -39,7 +39,14 @@ import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
 import { GRACE, LANES, type Pinner, waiting } from './versions.ts'
-import { addressed, type Files, KEEP, same, SHA } from '@yaks/platform/versions'
+import {
+  addressed,
+  type Files,
+  KEEP,
+  own,
+  same,
+  SHA,
+} from '@yaks/platform/versions'
 import { linkFor } from '@yaks/platform/preview'
 
 /** One file written into an app (the directory's `written` row): the sha it
@@ -768,10 +775,20 @@ export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) =>
       : [{ entity: { eid: d.eid }, $delete: true }],
   }, vouched(who))
 
-/** The refusal for a path an app keeps no file at, with where to look. */
-export let noFile = (path: string, app?: string) =>
-  `no file ${path}${app ? ` in ${app}` : ''} — app_files(op: 'list') says ` +
-  'what is there'
+/** The refusal for a path an app keeps no file at, naming the paths it does
+ * keep (`there`) where the caller has them, so the next call reads one of
+ * those rather than guessing another name. */
+export let noFile = (path: string, there?: string[], app?: string) => {
+  let missed = `no file ${path}${app ? ` in ${app}` : ''}`
+  if (!there) return `${missed} — app_files(op: 'list') says what is there`
+  if (!there.length) return `${missed}: the app holds no files yet`
+  let some = [...there].sort().slice(0, SHOWN_PATHS)
+  let more = there.length - some.length
+  return `${missed}; it holds ${some.join(', ')}` +
+    (more ? `, and ${more} more that app_files(op: 'list') names` : '')
+}
+// How many of an app's paths a refusal names before it points at the list.
+let SHOWN_PATHS = 40
 
 /** A delete sent again is already done if this draft records its deletion,
  * or if a competing writer deleted it while the caller retried. */
@@ -780,7 +797,7 @@ export let deleting = (draft: Draft, path: string, attempt = 0) => {
   if (attempt || draft.rows.some((w) => w.path == path && !w.sha)) {
     return { changes: [], value: false }
   }
-  throw refuse('missing', noFile(path))
+  throw refuse('missing', noFile(path, own(Object.keys(draft.files))))
 }
 
 /** The sha a restore selects: an explicit sha the path held, its value at a

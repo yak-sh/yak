@@ -583,7 +583,9 @@ let FILES_INPUT: Shape = {
         "call works in this conversation's own draft: a read sees it " +
         'over the live files, and the first write opens it. Of several, ' +
         'the one last written; write, fetch, delete and restore name ' +
-        'one. With drafts, the draft they start from. For discard, ' +
+        'one. With drafts, the draft they start from, whose files each ' +
+        "holds; left out, this conversation's own; new starts every one " +
+        'from the live files. For discard, ' +
         'the draft to close unreleased',
     ),
     path: str(
@@ -657,10 +659,12 @@ let FILES_INPUT: Shape = {
         },
         required: ['files'],
       },
-      description: 'for a write: two to four drafts in one call, each ' +
-        'its own files over what files shares, all over what the ' +
-        'draft held. The first lands in the draft, each other opens one ' +
-        'beside it, and the answer lists their ids',
+      description: 'for a write of several versions to compare: two to ' +
+        'four drafts in one call, each entry {files: [{path, content}, …]} ' +
+        'holding only the files that differ, laid over what files shares. ' +
+        'The first lands in the draft the draft argument picks, each ' +
+        'other opens one beside it, and the answer lists their ids. One ' +
+        'version is files alone, not drafts',
     },
   },
   required: ['app'],
@@ -677,6 +681,23 @@ let opless = (args: Args) => {
     '; a write may leave op out' +
     (stray.length ? `. app_files takes no ${stray.join(', ')}` : '')
 }
+
+// An app_files refusal of an argument ends with the whole shape its op takes
+// (T-1031): a write refused for its path learns what else a write may send.
+let shaped = <T extends Pick<Tool, 'run'>>(tool: T): T => ({
+  ...tool,
+  run: async (ctx, args) => {
+    try {
+      return await tool.run(ctx, args)
+    } catch (e) {
+      let batch = [args.files, args.drafts].some(Array.isArray) ? 1 : 0
+      let op = opOf(args, batch)
+      if (!(e instanceof CallError) || e.code != 'arguments') throw e
+      if (!OPS.includes(op) || e.message.includes(TAKES[op])) throw e
+      throw refuse('arguments', `${e.message} — ${op} takes ${TAKES[op]}`)
+    }
+  },
+})
 
 // The ops that need a writer, which is every one that changes a byte.
 let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore', 'discard']
@@ -3195,12 +3216,16 @@ export let edits = (args: Record<string, unknown>): Edit[] => {
  * Edits to one file see the ones before them. Each answers the line its
  * replacement starts on, the place to read back.
  */
-export let patching = (texts: Record<string, string>, list: Edit[]) => {
+export let patching = (
+  texts: Record<string, string>,
+  list: Edit[],
+  there?: string[],
+) => {
   let now = { ...texts }
   let lines = list.map(({ path, find, replace }, i) => {
     let was = now[path]
     let at = list.length > 1 ? `${path} (edits[${i}])` : path
-    if (was == null) throw refuse('missing', noFile(at))
+    if (was == null) throw refuse('missing', noFile(at, there))
     now[path] = patched(was, find, replace, at)
     return was.slice(0, was.indexOf(find)).split('\n').length
   })
@@ -4113,7 +4138,7 @@ let OURS: Row[] = [
       }
     },
   },
-  {
+  shaped({
     name: 'app_files',
     destructive: false,
     openWorld: true,
@@ -4125,13 +4150,6 @@ let OURS: Row[] = [
       if (!OPS.includes(op)) throw refuse('arguments', opless(args))
       if (fan.length && op != 'write') {
         throw refuse('arguments', `drafts: for a write, not op: ${op}`)
-      }
-      if (fan.length && args.draft == NEW) {
-        throw refuse(
-          'arguments',
-          'drafts opens a draft per entry itself: leave draft out, or name ' +
-            "the draft they start from as draft: '<id>'",
-        )
       }
       let c = ctx.clock ?? clock()
       // Reading is the platform admin's in every space, the way the graph
@@ -4344,7 +4362,12 @@ let OURS: Row[] = [
         let d = await draft()
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
-        if (!bytes) throw refuse('missing', noFile(String(args.path)))
+        if (!bytes) {
+          throw refuse(
+            'missing',
+            noFile(String(args.path), own(Object.keys(d.files))),
+          )
+        }
         let { text: said, value, images } = await glance(path, bytes)
         return {
           text: said,
@@ -4585,7 +4608,7 @@ let OURS: Row[] = [
           let was = await d.view.read(at(d, p))
           if (was) texts[p] = decoded(was)
         }))
-        let done = patching(texts, list)
+        let done = patching(texts, list, own(Object.keys(d.files)))
         let sent = paths.map((path) => ({
           path,
           bytes: new TextEncoder().encode(done.texts[path]),
@@ -4689,31 +4712,32 @@ let OURS: Row[] = [
       )
       let where = placing(ctx, space, app, config)
       return {
-        text:
-          (paths.length == 1
-            ? `${there.size ? 'already had' : 'wrote'} ${paths[0]} → ${
-              where(paths[0])
-            } — ${each[0]}; staged for app_deploy`
-            : `wrote ${
-              there.size ? `${paths.length - there.size} of ` : ''
-            }${paths.length} files → ${url(space, app, ctx.env)}` +
-              (there.size
-                ? ` (the draft already held ${there.size} of them as sent)`
-                : '') +
-              ':\n' +
-              paths.map((p, i) =>
-                `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
-              ).join('\n') +
-              '\nStaged for app_deploy.') + landedIn(app, who, into, open),
+        text: (paths.length == 1
+          ? `${there.size ? 'already had' : 'wrote'} ${paths[0]} → ${
+            where(paths[0])
+          } — ${each[0]}; staged for app_deploy`
+          : `wrote ${
+            there.size ? `${paths.length - there.size} of ` : ''
+          }${paths.length} files → ${url(space, app, ctx.env)}` +
+            (there.size
+              ? ` (the draft already held ${there.size} of them as sent)`
+              : '') +
+            ':\n' +
+            paths.map((p, i) =>
+              `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
+            ).join('\n') +
+            '\nStaged for app_deploy.') + landedIn(app, who, into, open),
         space,
         value: {
-          wrote: paths.filter((p) => !there.has(p)),
+          wrote: paths.filter((p) =>
+            !there.has(p)
+          ),
           already,
           draft: into,
         },
       }
     },
-  },
+  }),
   // The workbench (sandbox.ts, T-34264): the machine tools, and shipping
   // what they built. They are here rather than in a tier of their own because
   // they are the platform's verbs like the rest: an owner or editor of the
@@ -5079,7 +5103,10 @@ let OURS: Row[] = [
         own(Object.keys(draft.files)).filter((p) => asked(path, p)),
       )
       if (!files.length) {
-        throw refuse('missing', noFile(path, app.slug))
+        throw refuse(
+          'missing',
+          noFile(path, own(Object.keys(draft.files)), app.slug),
+        )
       }
       let cut = parts(loaded(
         files,

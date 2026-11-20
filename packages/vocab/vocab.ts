@@ -710,6 +710,8 @@ export let nearest = (word: string, names: string[], most = 3): string[] => {
 // The words a write says beside its components, which a read never selects:
 // what each is, and what a query reads instead.
 let WRITTEN: Record<string, string> = {
+  where:
+    'a query is its own where: write each clause as .component.property=value, joined with & or |',
   $was:
     "$was guards a write with the hash of a value as it was read, and no row holds one; a query reads a row's history as .updated.at and .created.at",
 }

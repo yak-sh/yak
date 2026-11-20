@@ -227,3 +227,13 @@ test('reference arrays preserve null entries and the caller’s input', async ()
   })
   equal(args, { group: { members: ['Ada', null] } })
 })
+
+test('a reference to a kind the store keeps none of says so, not an unknown component', async () => {
+  let ask = await named(1, 'absent', false, 'project')
+  await assertRejects(
+    () => ask('Ada'),
+    CallError,
+    "who takes a project's id or name: Ada names no project: this store " +
+      'keeps no project, so leave it out',
+  )
+})

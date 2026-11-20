@@ -382,6 +382,14 @@ let SELF = {
   description:
     'Use your own store instead of the apps: your conversations and every entry in them, your forks and helpers, your memories, your persona, your app and space topics, and your tasks and requests.',
 }
+// What a refusal of an id that names nothing adds, where the id may be one
+// of the other store's: the Operator reads two, and an id names an entity in
+// one of them only.
+let IN_OWN = 'With self: true it reads your own store, where your ' +
+  'conversations and their entries, your helpers, memories and tasks are'
+let IN_APPS = "Without self it reads the apps' and the space's own store"
+let OWN_ONLY = 'This reads your own store: your conversations and their ' +
+  "entries, memories and tasks; an app's rows are read with graph_show"
 // Its memories, and the skills the space keeps beside them, are its own
 // store's alone (@yaks/harness `skillRead`).
 let mine = new Set([
@@ -533,6 +541,7 @@ export let operatorRoster = async (
     host: Graph,
     target: Graph,
     from: 'own' | 'apps' | 'remote',
+    elsewhere?: string,
   ): Tool['run'] =>
   async (args, context) => {
     let call = context!.call
@@ -566,9 +575,12 @@ export let operatorRoster = async (
     )
     let refusal = out.find((b) => b.refusal)
     if (refusal && !refusal.heard) {
+      let body = String(comp(refusal, 'content')?.body)
       throw new CallError(
         String(comp(refusal, 'refusal')?.code),
-        String(comp(refusal, 'content')?.body),
+        elsewhere && body.includes(' names nothing')
+          ? `${body}. ${elsewhere}`
+          : body,
       )
     }
     if (fault) throw fault
@@ -629,9 +641,9 @@ export let operatorRoster = async (
       : [],
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
-      let there = run(t, g, landing, 'apps')
+      let there = run(t, g, landing, 'apps', ours && IN_OWN)
       if (!ours) return { ...shaped(t), run: there }
-      let here = run(ours, self, self, 'own')
+      let here = run(ours, self, self, 'own', IN_APPS)
       let tool = shaped(t)
       return {
         ...tool,
@@ -653,7 +665,7 @@ export let operatorRoster = async (
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
-        let tool = { ...shaped(t), run: run(t, self, self, 'own') }
+        let tool = { ...shaped(t), run: run(t, self, self, 'own', OWN_ONLY) }
         if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }

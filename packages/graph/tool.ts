@@ -142,6 +142,13 @@ export let referenced = (
         eids,
         (out, { said, i }) => {
           if (!words.includes(eids[i]) || alive(held.get(eids[i]))) return out
+          // A store that keeps no such kind has none for a name to name.
+          if (kind != 'entity' && !graph.vocab.comp(kind)) {
+            throw new Refused(
+              `${said} names no ${kind}: this store keeps no ${kind}, so ` +
+                'leave it out',
+            )
+          }
           let matches = graph.vocab.prop('doc', 'title')
             ? graph.read(and(
               eq('doc.title', said),

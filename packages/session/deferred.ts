@@ -42,6 +42,27 @@ export let named = (name: string, known: Set<string>): string | undefined => {
   }
 }
 
+/**
+ * The refusal of names no tool has, with the tools that share a word with
+ * each, so the next call names one that is there.
+ *
+ * ```ts
+ * unknown(['notification_send'], ['mail_send', 'search', 'notify_me'])
+ * // 'There is no tool called notification_send; nearest: mail_send. Load one by a name tool_load lists.'
+ * ```
+ */
+export let unknown = (missing: string[], names: string[]) => {
+  let words = (n: string) => n.split('__').at(-1)!.split('_')
+  let near = (n: string) =>
+    names.filter((k) => words(k).some((w) => words(n).includes(w))).sort()
+      .slice(0, 5)
+  return missing.map((n) => {
+    let some = near(n)
+    return `There is no tool called ${n}` +
+      (some.length ? `; nearest: ${some.join(', ')}` : '')
+  }).join('. ') + `. Load one by a name ${LOAD} lists.`
+}
+
 // What `tool_load` takes: the names of the tools to load.
 let parameters = {
   type: 'object',
@@ -83,6 +104,7 @@ export let loading = (tools: Tool[]): Tool[] => {
   let later = tools.filter((t) => t.deferred)
   if (!later.length || tools.some((t) => t.name == LOAD)) return tools
   let known = new Set(later.map((t) => t.name))
+  let sent = new Set(tools.filter((t) => !t.deferred).map((t) => t.name))
   let load: Tool = {
     name: LOAD,
     title: 'Load tools',
@@ -93,18 +115,17 @@ export let loading = (tools: Tool[]): Tool[] => {
     readOnly: true,
     run: (args) => {
       let names = (args.names ?? []) as string[]
-      let missing = names.filter((n) => !named(n, known))
+      let held = names.flatMap((n) => named(n, sent) ?? [])
+      let missing = names.filter((n) => !named(n, known) && !named(n, sent))
       if (missing.length) {
-        throw new CallError(
-          'tool',
-          `There is no tool to load called ${
-            missing.join(', ')
-          }. Load one by a name ${LOAD} lists.`,
-        )
+        throw new CallError('tool', unknown(missing, [...known, ...sent]))
       }
-      return `Loaded ${
-        names.map((n) => named(n, known)).join(', ')
-      }. Call them directly.`
+      let loaded = names.flatMap((n) => named(n, known) ?? [])
+      return [
+        ...loaded.length ? [`Loaded ${loaded.join(', ')}.`] : [],
+        ...held.length ? [`${held.join(', ')} you hold already.`] : [],
+        'Call them directly.',
+      ].join(' ')
     },
   }
   return [...tools, load]

@@ -204,7 +204,7 @@
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "Only this project id/name.",
+          "description": "Only memories scoped to this project id/name, in a store that keeps projects; leave it out to recall from all.",
           "short": "s"
         },
         "feedback": {

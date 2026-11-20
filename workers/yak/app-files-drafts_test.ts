@@ -124,9 +124,24 @@ test('the call sent again after it was cut off, and again after it landed, lands
   }
 })
 
-test('drafts with draft new, or beside another op, is refused as the caller mistake', async () => {
+test('drafts with draft new start every draft from the live files, beside the one the conversation holds', async () => {
+  let app = await made('anew')
+  let live = { 'index.html': '<h1>live</h1>' }
+  await run('app_files', { app, files: sent(live) })
+  await run('app_deploy', { app })
+  let mine = (await run('app_files', { app, files: sent({ 'a.txt': 'a' }) }))
+    .value!.draft as string
+  let ids = (await fanned(app, { draft: 'new' })).value!.drafts as string[]
+  equal(ids.length, 3)
+  equal(await open(app), [mine, ...ids].sort())
+  for (let [i, id] of ids.entries()) {
+    equal(await held(app, id), await shas({ ...live, ...SHARED, ...OWN[i] }))
+  }
+  await run('app_delete', { app })
+})
+
+test('drafts beside another op, or of one entry, is refused as the caller mistake', async () => {
   let app = 'refused'
-  await throws(() => fanned(app, { draft: 'new' }), 'leave draft out')
   await throws(() => fanned(app, { op: 'patch' }), 'drafts: for a write')
   await throws(
     () => run('app_files', { app, drafts: [{ files: sent(OWN[0]) }] }),
@@ -140,4 +155,14 @@ test('a plain write answers as it did, in the one draft it opened', async () => 
   equal(Object.keys(out.value!).sort(), ['already', 'draft', 'wrote'])
   equal(await open(app), [out.value!.draft])
   ok(out.text.includes(`In draft ${out.value!.draft}`), out.text)
+  // A read of a file it lacks names the ones it holds, for the next read.
+  await throws(
+    () => run('app_files', { app, op: 'read', path: 'index.html' }),
+    'no file index.html; it holds copy.json, seed.json',
+  )
+  // A refused argument ends with the whole shape its op takes.
+  await throws(
+    () => run('app_files', { app, content: 'x' }),
+    'path is required — write takes path and content',
+  )
 })
