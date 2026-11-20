@@ -1258,6 +1258,15 @@ export let confirmOf = (
     ? request.address
     : undefined
 
+/** The number that alone says who sent a request's words, which anyone can
+ * show: a turn's own ({@link confirmOf}), or RCS's. Its words keep it as
+ * `unverified{number}` in the conversation. */
+export let unverifiedOf = (
+  request: Pick<Request, 'channel' | 'address' | 'attested'>,
+) =>
+  confirmOf(request) ??
+    (UNPROVEN.has(request.channel) ? request.address : undefined)
+
 /** The channels answered by a text to the number the words came to. */
 let TEXTED = new Set(['text', 'rcs', 'texted', 'signup', 'group'])
 
@@ -1394,6 +1403,9 @@ export let handleChannels = (
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},
             ...confirmOf(request) ? { confirm: confirmOf(request) } : {},
+            ...unverifiedOf(request)
+              ? { unverified: unverifiedOf(request) }
+              : {},
             framing,
             from: FROM[request.channel]?.(request),
             ...request.call ? { call: request.call } : {},

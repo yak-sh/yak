@@ -50,6 +50,14 @@ export let operatorDoc: VocabDoc = {
         expires: { type: 'string', format: 'date-time' },
       },
     },
+    unverified: {
+      component: true,
+      description:
+        "On a person's input: words that came where only the number they came from says who sent them (an SMS, RCS, or a call the carriers did not vouch for), which anyone can show. The model reads them marked unverified, and for a day a privileged act a later turn of the conversation does waits for a tap on a link texted to that number, unless that turn's own words ask for it (yaks.app's operator-approvals.ts).",
+      properties: {
+        number: { type: 'string', description: 'The number they came from.' },
+      },
+    },
     operator_contact: {
       component: true,
       description:

@@ -141,6 +141,7 @@ import {
   approvals,
   asker,
   confirming,
+  DRAWN,
   ESCALATING,
   type Standing,
 } from './operator-approvals.ts'
@@ -1181,6 +1182,30 @@ let requestAt = async (store: Store, session: string) => {
     at: String(comp(row, 'created')?.at ?? ''),
   }
 }
+// Words in a session's conversation that only a number vouches for
+// (`unverified`), come within `DRAWN`: the newest one's number, and the words
+// this turn acts on where the person's own came by a proven channel. A
+// privileged act of the turn waits for a tap on a link texted to that number,
+// unless those words ask for it (operator-approvals.ts `confirming`).
+let drawnFrom = async ({ g }: Store, session: string, now = Date.now()) => {
+  let top = await topOf(g, session)
+  let [[mark], [words]] = await Promise.all([
+    g.read(
+      q`.entry.session=${top} .unverified .order=-created.at .limit=1 .fields=unverified.number,created.at`,
+    ),
+    g.read(
+      q`.entry.session=${top} .intake !system .order=-created.at .limit=1 .fields=content.body,unverified.number`,
+    ),
+  ])
+  let at = Date.parse(String(comp(mark, 'created')?.at ?? ''))
+  if (!mark || !(now - at < DRAWN)) return undefined
+  return {
+    number: String(comp(mark, 'unverified')!.number),
+    said: words && !words.unverified
+      ? String(comp(words, 'content')?.body ?? '')
+      : '',
+  }
+}
 // Whether words someone outside the space wrote (`heard`) came into this
 // session with or since the person's newest words in its conversation, which
 // give the turn after them every tool again: a tool's answer, or what was
@@ -2094,10 +2119,11 @@ export let operating = (
   // to someone who writes in it and to nobody else (D-151808).
   // `confirm` names the number its privileged acts are confirmed at, or null
   // for none (an act a tap approved, a call the carriers vouched for); left
-  // out, the session's own words say (`confirmAt`).
+  // out, the session's own words say (`confirmAt`). An act a tap `approved`
+  // asks nothing again.
   let roster = async (
     session: string,
-    o: { confirm?: string | null } = {},
+    o: { confirm?: string | null; approved?: boolean } = {},
   ): Promise<Tool[]> => {
     reached('tools', null)
     // A step its person's machine answers reaches for the machine now, beside
@@ -2158,6 +2184,11 @@ export let operating = (
     let texted = member && UNPROVEN.has(channel)
     heard ||= texted
     let acts = member && !heard
+    // A turn of theirs after words a number alone vouched for confirms the
+    // privileged acts it draws from them at that number (`drawnFrom`).
+    let drawn = member && !confirm && !heard && !o.approved
+      ? await drawnFrom(store, session)
+      : undefined
     // A reply on a writer's thread goes back to them, and only there.
     let onThread = (
       t: NonNullable<Awaited<ReturnType<typeof threadOf>>>,
@@ -2188,7 +2219,9 @@ export let operating = (
         remote,
         trials,
         // A tap confirms an escalating call only when it is called direct.
-        ...confirm ? { unscripted: new Set(Object.keys(ESCALATING)) } : {},
+        ...confirm || drawn
+          ? { unscripted: new Set(Object.keys(ESCALATING)) }
+          : {},
       })
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
@@ -2225,19 +2258,22 @@ export let operating = (
     let ruled = new Set(roster.map((t) => t.name))
     let listened = (tools: Tool[]) =>
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
-    // A member's privileged acts, where their words came by a number alone,
-    // wait for a tap on a link texted to it (operator-approvals.ts).
+    // A member's privileged acts, where their words came by a number alone
+    // or draw on words that did, wait for a tap on a link texted to it
+    // (operator-approvals.ts).
+    let number = confirm ?? drawn?.number
     let confirmed = (tools: Tool[]) =>
-      member && confirm
+      member && number
         ? deferred(confirming(
           tools,
           asker(
             env,
             store,
             space,
-            { person: ctx.person!, session, number: confirm },
+            { person: ctx.person!, session, number },
             (to, words) => textPerson(env, space, to, words),
           ),
+          confirm ? undefined : drawn?.said,
         ))
         : tools
     if (heard) {
@@ -2625,7 +2661,10 @@ export let operating = (
     // its conversations raised, is its own words, not the person's it is
     // said for (unseen.ts).
     system: OWN.has(o.channel ?? ''),
-    ...o.call ? { with: { operator_call: { call: o.call, asked: true } } } : {},
+    with: {
+      ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
+      ...o.unverified ? { unverified: { number: o.unverified } } : {},
+    },
   })
   // What the person said before on the subject of the words they now give
   // their conversation, as a note beside those words: what its model no
@@ -3066,7 +3105,9 @@ export let operating = (
   // it, through the person's tools as they stand now and asking nothing
   // again (operator-approvals.ts).
   let approve = approvals(store, async (a) => {
-    let tool = offerable(await roster(a.session, { confirm: null }))
+    let tool = offerable(
+      await roster(a.session, { confirm: null, approved: true }),
+    )
       .find((t) => t.name == a.tool)
     if (!tool) {
       throw new CallError('tool', `${a.tool} is not theirs to use any more.`)
@@ -3146,6 +3187,9 @@ export type Asking = {
   // their turn's privileged acts wait for a tap on a link texted to it
   // (operator-approvals.ts).
   confirm?: string
+  // The number that alone vouches for the words, kept on them
+  // (operator-channels.ts `unverifiedOf`).
+  unverified?: string
   framing?: string
   /** Writer of injected words, independent of the person whose access applies. */
   from?: string

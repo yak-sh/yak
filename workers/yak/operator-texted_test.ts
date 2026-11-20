@@ -45,8 +45,11 @@ Object.assign(env, {
 
 // The tools each turn held, deferred ones by their line in tool_load's list,
 // and what the call it made answered, by the turn's channel. Words naming a
-// tool call it with the arguments after its name; the rest load mail_send.
+// tool call it with the arguments after its name, or "as texted" with those
+// of the words that named it before; the rest load mail_send. What each
+// channel's turn read of the words before it is kept too.
 let held = new Map<string, string[]>()
+let read = new Map<string, string[]>()
 let answered = new Map<string, string>()
 let operator = operating(
   store,
@@ -55,8 +58,13 @@ let operator = operating(
     let said = req.items.findLast((i) => i.kind == 'user')
     let words = said?.kind == 'user' ? said.text : ''
     let channel = words.match(/by (\w+)$/m)?.[1] ?? ''
-    let [, name, args] = words.match(/Call (\w+) (\{.*\})/) ??
+    let users = req.items.flatMap((i) => i.kind == 'user' ? [i.text] : [])
+    let again = words.match(/Call (\w+) as texted/)?.[1]
+    let [, name, args] = (again
+      ? users.findLast((u) => u.includes(`Call ${again} {`))
+      : words)?.match(/Call (\w+) (\{.*\})/) ??
       [, 'tool_load', '{"names":["mail_send"]}']
+    read.set(channel, users)
     let last = req.items.at(-1)
     if (last?.kind == 'result') answered.set(channel, last.output)
     else {
@@ -115,7 +123,17 @@ test('an SMS turn, or a call the carriers did not vouch for, asks for a tap by a
   let asks = ['chat', 'text', 'texted', 'rcs', 'voice', 'vouched'].map((c) =>
     held.get(c)!.includes('approval_request')
   )
-  equal(asks, [false, true, true, false, true, false])
+  equal(asks, [false, true, true, false, true, true])
+})
+
+test('words that came by a number alone read as unverified to every later turn', () => {
+  let earlier = read.get('vouched')!
+  let marked = (by: string) =>
+    earlier.find((u) => u.includes(`by ${by}`))!.includes('[Unverified')
+  equal(
+    ['chat', 'text', 'texted', 'rcs', 'voice'].map(marked),
+    [false, true, true, true, true],
+  )
 })
 
 test("a member's rcs holds reads and their own alerts, never a door that sends or writes", () => {
@@ -150,4 +168,19 @@ test('a member added by text waits for the tap on the link texted to that number
   equal(await invited(), 1)
   equal((await tap(true)).state, 'used')
   equal(await invited(), 1)
+})
+
+test("a chat turn acting on a text's ask waits for a tap at that number, unless its own words ask", async () => {
+  let invited = async () => (await ctx.dir.read('.invite')).length
+  let before = await invited(), links = texted.length
+  await asked('chat', 'Call member_add as texted\nby chat')
+  equal(answered.get('chat')!.includes('Nothing has happened yet'), true)
+  equal(await invited(), before)
+  equal([texted.length, texted.at(-1)!.to], [links + 1, NUMBER])
+  await asked(
+    'chat',
+    'Call member_add {"email":"ann@bot.yak.sh","role":"editor"}\nby chat',
+  )
+  equal(answered.get('chat')!.includes('Nothing has happened yet'), false)
+  equal(await invited(), before + 1)
 })

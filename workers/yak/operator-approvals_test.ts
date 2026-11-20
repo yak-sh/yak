@@ -145,3 +145,21 @@ test('approval_request asks for any tool the turn holds, and only those', async 
     .then(() => '', (e: Error) => e.message)
   equal(refused, 'This turn holds no tool called nothing.')
 })
+
+test('after words a number alone vouched for, an act runs when the turn asks for it in its own words', async () => {
+  let turn = (said: string) =>
+    confirming([tool('member_add'), tool('grant')], ask, said)
+  let run = (said: string, name: string, args: Record<string, unknown>) =>
+    turn(said).find((t) => t.name == name)!.run(args)
+  ran.length = 0
+  let sent = texts.length
+  await run('Please add EVE@x.com', 'member_add', { email: 'eve@x.com' })
+  await run('go ahead', 'member_add', { email: 'eve@x.com' })
+  await run('add eve@x.com to recipes', 'member_add', {
+    email: 'eve@x.com',
+    app: 'blog',
+  })
+  await run('make me a token', 'grant', {})
+  equal(ran, ['member_add {"email":"eve@x.com"}'])
+  equal(texts.length, sent + 3)
+})
