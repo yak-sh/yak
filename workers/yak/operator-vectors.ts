@@ -9,7 +9,7 @@
 import type { Embedder } from '@yaks/embedding'
 import type { Env } from './env.ts'
 import { embedder, withheld } from './embedding.ts'
-import { metered } from './metered.ts'
+import { embeddings } from './metered.ts'
 import { spaceOf } from './operator-root.ts'
 import type { OperatorStore, Vectors } from './operator-store.ts'
 import { caught } from './defects.ts'
@@ -32,7 +32,7 @@ export let operatorVectors = (
   let lend = (eid: string) =>
     embedder({
       ...env,
-      AI: withheld(metered(env, async (dir) => await dir.at(eid) ?? null)),
+      AI: withheld(embeddings(env, async (dir) => await dir.at(eid) ?? null)),
     })
   let model = (): Embedder | null => {
     if (made || !env.AI) return made

@@ -244,6 +244,77 @@ export let reserved = async <T extends { dollars: number }>(
   }
 }
 
+/** How much a space's tab ({@link tabbed}) runs up before it is written. */
+export let TAB = 0.001
+
+// The tabs this isolate runs, by space, month, kind and source: measured
+// dollars not yet in the directory.
+let tabs = new Map<string, number>()
+
+/**
+ * A hold for calls whose cost is a sliver of a cent (an embedding costs about
+ * a ten-millionth of a dollar), which {@link reserved} would hold, settle and
+ * keep a receipt for in two directory writes that cost more than the call.
+ * The quote is checked against what the space has left less what this
+ * isolate's tab owes, and nothing is written: each settlement runs up the
+ * space's tab, written as one `spend` once it reaches {@link TAB}. A quote
+ * past what is left, or a visitor's call, takes {@link reserved}'s path,
+ * which re-reads, refuses and counts. Calls made at once are not held
+ * against each other, so a space at its ceiling may pass it by what they cost
+ * together, and an isolate that ends before its tab is written leaves it
+ * unwritten: both are less than {@link TAB} a call.
+ */
+export let tabbed = async <T extends { dollars: number }>(
+  env: Env,
+  space: Space,
+  quote: (remaining: number) => T | null,
+  call = mint(),
+  paying: Paying = {},
+): Promise<
+  {
+    value: T
+    settle(dollars: number, reported?: boolean): Promise<boolean>
+    release(): Promise<boolean>
+  }
+> => {
+  let { what = 'models', source, visitor, now = new Date() } = paying
+  let month = monthOf(now)
+  let key = [space.eid, month, what, source ?? ''].join('|')
+  let owed = tabs.get(key) ?? 0
+  let value = visitor ? null : quote(left(space, now) - owed)
+  if (
+    !value || !Number.isFinite(value.dollars) || value.dollars < 0 ||
+    unaffordable(space, what, value.dollars + owed, now)
+  ) return await reserved(env, space, quote, call, paying)
+  return {
+    value,
+    settle: async (dollars) => {
+      if (!Number.isFinite(dollars) || dollars < 0) {
+        throw new Error('Invalid model cost')
+      }
+      let due = (tabs.get(key) ?? 0) + dollars
+      if (due < TAB) {
+        tabs.set(key, due)
+        return true
+      }
+      tabs.delete(key)
+      try {
+        await stamp(env, {
+          entities: [{
+            entity: { eid: space.eid },
+            spend: { month, [what]: due, ...source ? { source } : {} },
+          }],
+        })
+      } catch (error) {
+        tabs.set(key, (tabs.get(key) ?? 0) + due)
+        throw error
+      }
+      return true
+    },
+    release: () => Promise.resolve(true),
+  }
+}
+
 /** `work`, run on a hold of the most it can cost, and charged what it says it
  * spent (`spent`), failing or not: whether it may go ahead at all is decided
  * in the directory's own transaction (`reserved`), never on a reading of the

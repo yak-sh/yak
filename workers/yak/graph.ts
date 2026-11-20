@@ -87,7 +87,7 @@ import type { Context as Reported } from '@yaks/tracker/report'
 import { planting, recovering } from './models.ts'
 import { bookmarks, RESTORING } from './bookmarks.ts'
 import { hits as documentHits } from './document-search.ts'
-import { metered as meteredModel } from './metered.ts'
+import { embeddings } from './metered.ts'
 import { attributed } from './attribution.ts'
 import { backed as journalBacked, type Choice, merge } from '@yaks/journal'
 import { Stale } from '@yaks/graph/errors'
@@ -4221,7 +4221,7 @@ export class Store extends Durable {
       ...bind,
       AI: bind.AI && withheld(
         bind.STORE && app
-          ? meteredModel(
+          ? embeddings(
             bind,
             async (dir) => (await dir.appAt(app))?.space ?? null,
           )

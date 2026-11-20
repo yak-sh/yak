@@ -9,7 +9,7 @@ import type { Env } from './env.ts'
 import { mailedTo, outgoing } from './post.ts'
 import { usedMail } from './space-mail.ts'
 import { defect } from './defects.ts'
-import { reserved } from './model-spend.ts'
+import { reserved, tabbed } from './model-spend.ts'
 import { counted } from './meter.ts'
 import { refusedSpend } from '@yaks/platform/standing'
 
@@ -110,6 +110,8 @@ export let operatorPost = (
  * account's own credit spent, a model it prices nothing for) is reported.
  * A `visitor`'s calls, named by who they are, are held to their share of
  * the budget and to the calls one visitor may ask for in a day as well.
+ * Calls that cost a sliver of a cent, such as {@link embeddings}', `hold` on
+ * the space's tab (model-spend.ts `tabbed`) instead.
  */
 export let metered = (
   bind: Partial<Env> & { STORE?: Namespace } & Host,
@@ -119,6 +121,7 @@ export let metered = (
     answered(provider: string, name: string, info: Listed): Promise<void>
   },
   visitor?: string,
+  hold: typeof reserved = reserved,
 ): Native => ({
   run: async (model, input, options) => {
     let ns = bind.STORE
@@ -129,7 +132,7 @@ export let metered = (
     let door = ns && space
       ? native(bind, platform(bind as Env), {
         hold: (quote) =>
-          reserved({ STORE: ns }, space, quote, undefined, {
+          hold({ STORE: ns }, space, quote, undefined, {
             visitor,
             source: provider,
           }),
@@ -154,3 +157,11 @@ export let metered = (
     return await door.run(model, input, options)
   },
 })
+
+/** The {@link metered} door a store's embedder is lent: each vector costs
+ * about a ten-millionth of a dollar, so its spend runs up the space's tab
+ * rather than a hold and a receipt in the directory per call. */
+export let embeddings = (
+  bind: Partial<Env> & { STORE?: Namespace } & Host,
+  spaceOf: (dir: Directory) => Promise<Space | null>,
+): Native => metered(bind, spaceOf, undefined, undefined, tabbed)

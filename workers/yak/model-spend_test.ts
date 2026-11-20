@@ -11,7 +11,7 @@ import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from '@yaks/platform/meter'
 import { plans } from '@yaks/platform/standing'
-import { reserved, settled } from './model-spend.ts'
+import { reserved, settled, TAB, tabbed } from './model-spend.ts'
 import { accounted } from './meter.ts'
 import { type Tally, tallying } from './lib/hops.ts'
 
@@ -50,6 +50,8 @@ let counted = await fixture(0, {
   budget: { dollars: 100 },
   visitor_share: { percent: 100, calls: 2 },
 })
+let tab = await fixture()
+let full = await fixture(0.2)
 let price = { input: 0.15, output: 0.5 }
 
 test('the pilot last answered call fits the remaining space budget', async () => {
@@ -117,6 +119,22 @@ test('settlement releases unused dollars and a replay never debits twice', async
     ModelError,
     'already holds',
   )
+})
+
+// An embedding costs a sliver of a cent: its calls write the directory only
+// once their tab reaches TAB, and a space with nothing left is refused.
+test('calls on a tab write the directory once it runs up', async () => {
+  let tally: Tally = new Map()
+  let quote = () => ({ dollars: TAB / 4 })
+  await tallying(tally, async () => {
+    for (let i = 0; i < 3; i++) {
+      await (await tabbed(p.env, tab.space, quote)).settle(TAB / 4)
+    }
+  })
+  assertEquals([tally.get('hops') ?? 0, await tab.used()], [0, 0])
+  await (await tabbed(p.env, tab.space, quote)).settle(TAB / 4)
+  assertAlmostEquals(await tab.used(), TAB)
+  await assertRejects(() => tabbed(p.env, full.space, quote), ModelError)
 })
 
 test('a released call is held again, and a completed zero-cost call is final', async () => {
