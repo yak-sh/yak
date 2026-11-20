@@ -2266,15 +2266,15 @@ export let operating = (
   })
   // What the person said before on the subject of the words they now give
   // their conversation, as a note beside those words: what its model no
-  // longer has in front of it (@yaks/session `recall`). A recall slower than
-  // RECALL or one that fails is reported or left out, and the words go on
-  // alone.
+  // longer has in front of it (@yaks/session `recall`). The hosted embedder
+  // reserves and settles spend around an inference call. Give that path
+  // more time than the box's deadline, while bounding how long intake waits.
   let recalling = recall({
     graph: g,
     meaning: store.meaning,
     floors: FLOORS,
     report: (e) => void caught(e, { request: 'operator recall' }),
-  })
+  }, 2_500)
   let before = async (
     session: string,
     text: string,
