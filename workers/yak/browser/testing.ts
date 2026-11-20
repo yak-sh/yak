@@ -24,10 +24,9 @@ export let actions = (did: (line: string) => void = () => {}): Actions => {
       tap: () => done(`tap ${s}`),
       hover: () => done(`hover ${s}`),
       focus: () => done(`focus ${s}`),
-      type: (text) => done(`type ${text} into ${s}`),
     }),
     keyboard: {
-      type: (text) => done(`type ${text}`),
+      sendCharacter: (text) => done(`type ${text}`),
       press: (key) => done(`press ${key}`),
       down: (key) => done(`down ${key}`),
       up: (key) => done(`up ${key}`),

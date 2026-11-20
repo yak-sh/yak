@@ -120,7 +120,11 @@ export type Page = {
   browserContext(): {
     overridePermissions(origin: string, permissions: string[]): Promise<void>
   }
-  screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
+  screenshot(options: {
+    type: 'png'
+    encoding: 'base64'
+    optimizeForSpeed?: boolean
+  }): Promise<string>
   mainFrame(): unknown
   bringToFront(): Promise<void>
   waitForSelector(
@@ -128,7 +132,7 @@ export type Page = {
     options: { timeout: number; visible: true; signal?: AbortSignal },
   ): Promise<Element | null>
   keyboard: {
-    type(text: string): Promise<void>
+    sendCharacter(text: string): Promise<void>
     press(key: string): Promise<void>
     down(key: string): Promise<void>
     up(key: string): Promise<void>
@@ -148,7 +152,6 @@ export type Element = {
   tap(): Promise<void>
   hover(): Promise<void>
   focus(): Promise<void>
-  type(text: string): Promise<void>
 }
 export type Session = {
   // deno-lint-ignore no-explicit-any
@@ -308,10 +311,15 @@ let taken = async (
     return view.touch ? el.tap() : click(page, el, signal)
   }
   if ('type' in step) {
-    if (!step.into) return page.keyboard.type(step.type)
-    let el = await find(step.into, 'typing into')
-    signal.throwIfAborted()
-    return el.type(step.type)
+    if (step.into) {
+      let el = await find(step.into, 'typing into')
+      signal.throwIfAborted()
+      await el.focus()
+      signal.throwIfAborted()
+    }
+    // Insert text in one browser command. Individual keys use the press step.
+    if (step.type) await page.keyboard.sendCharacter(step.type)
+    return
   }
   if ('clear' in step) {
     let el = await find(step.clear, 'clearing')
@@ -546,7 +554,12 @@ let loaded = async (
         )
       }
       let shots: Rendered['shots'] = []
-      let shoot = () => page.screenshot({ type: 'png', encoding: 'base64' })
+      let shoot = () =>
+        page.screenshot({
+          type: 'png',
+          encoding: 'base64',
+          optimizeForSpeed: audit === false,
+        })
       for (let [i, step] of steps.entries()) {
         signal.throwIfAborted()
         if (!('wait' in step)) await ready()

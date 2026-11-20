@@ -15,15 +15,19 @@ let MIRROR =
 
 // A door over a kept list naming `hub`, whose addresses answer as `answers`
 // says (a page where it says nothing), and what it asked and reported.
-let door = async (answers: Record<string, string> = {}) => {
+let door = async (
+  answers: Record<string, string> = {},
+  at = Date.now(),
+) => {
   let reports: Bundle[] = [], asked: string[] = []
+  let retained: Promise<void>[] = []
   let { env } = platform({
     ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
   })
   await env.BLOBS.put(
     'platform/catalog/nango.json',
     JSON.stringify({
-      at: Date.now(),
+      at,
       closed: [],
       listings: [{
         name: 'hub',
@@ -46,15 +50,21 @@ let door = async (answers: Record<string, string> = {}) => {
     )
   }) as typeof fetch
   let get = (name = 'hub') =>
-    within(env, {}, async () => {
-      let res = (await logoDoor(env, `/connections/logo/${name}`, fetcher))!
-      return {
-        status: res.status,
-        body: await res.text(),
-        cache: res.headers.get('cache-control'),
-      }
-    })
-  return { get, asked, reports }
+    within(
+      env,
+      {},
+      async () => {
+        let res = (await logoDoor(env, `/connections/logo/${name}`, fetcher))!
+        return {
+          status: res.status,
+          body: await res.text(),
+          cache: res.headers.get('cache-control'),
+        }
+      },
+      undefined,
+      { retain: (work) => retained.push(work) },
+    )
+  return { get, asked, reports, retained }
 }
 
 let WEEK = 'public, max-age=604800'
@@ -64,6 +74,14 @@ test('a logo is served as its address answers it, and kept', async () => {
   equal(await d.get(), { status: 200, body: SVG, cache: WEEK })
   equal(await d.get(), { status: 200, body: SVG, cache: WEEK })
   equal(d.asked, [OWN])
+})
+
+test('a logo still reads an expired catalog without asking its broker', async () => {
+  let d = await door({ [OWN]: SVG }, 0)
+  equal(await d.get(), { status: 200, body: SVG, cache: WEEK })
+  await Promise.all(d.retained)
+  // There is no broker vault in this fixture, so asking it reports a failure.
+  equal(d.reports, [])
 })
 
 test("a logo too big for an integration's row is still served", async () => {

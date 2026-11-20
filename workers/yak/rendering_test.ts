@@ -219,6 +219,7 @@ test('a page opens with the cookies it was sent and answers its visible text', a
 
 test('a visit takes its steps in order on a phone, and keeps each named screenshot', async () => {
   let p = page()
+  let text = 'A whole draft\nincluding accents and emoji. Café 🌱'
   let result = await capture(p.browsing, {
     url: 'https://checks.yaks.app/',
     view: { ...view, touch: true },
@@ -226,7 +227,7 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
       { tap: 'textarea' },
       { keyboard: 336 },
       { clear: 'textarea' },
-      { type: 'hello', into: 'textarea' },
+      { type: text, into: 'textarea' },
       { shot: 'typed' },
       { press: 'Enter' },
       { swipe: [10, 400, 300, 400] },
@@ -245,7 +246,8 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
     'up Control',
     'press Backspace',
     'find textarea',
-    'type hello into textarea',
+    'focus textarea',
+    `type ${text}`,
     'press Enter',
     'touch 10,400',
     'lift',

@@ -35,6 +35,7 @@ import {
   logoSources,
   type Offer,
 } from '@yaks/connections'
+import { patient } from '@yaks/blob'
 import { background, caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { refuse } from './tool.ts'
@@ -65,26 +66,31 @@ let held = new WeakMap<object, Kept>()
 let reading = new WeakMap<object, Promise<Kept | undefined>>()
 
 let keep = async (env: Env, kept: Kept) => {
-  await env.BLOBS.put(KEPT, JSON.stringify(kept))
+  let text = JSON.stringify(kept)
+  await patient(() => env.BLOBS.put(KEPT, text))
   held.set(env.BLOBS, kept)
   return kept
 }
 
 // The list asked of the broker and kept, or none while its key is not.
-let asked = async (env: Env): Promise<Kept | undefined> => {
+let asked = async (env: Env, previous?: Kept): Promise<Kept | undefined> => {
   let broker = await brokerOf(vaultOf(env), BROKER)
   if (!broker) return undefined
   let listings = await broker.catalog()
-  let closed = held.get(env.BLOBS)?.closed ?? []
+  let latest = await stored(env)
+  if (latest && fresh(latest)) return latest
+  let closed = latest?.closed ?? previous?.closed ?? []
   return keep(env, { at: Date.now(), listings, closed })
 }
 
 let stored = async (env: Env): Promise<Kept | undefined> => {
-  let b = await env.BLOBS.get(KEPT)
+  let b = await patient(() => env.BLOBS.get(KEPT))
   return b
     ? JSON.parse(new TextDecoder().decode(await b.arrayBuffer())) as Kept
     : undefined
 }
+
+let fresh = (kept: Kept | undefined) => !!kept && Date.now() - kept.at <= DAY
 
 // One read at a time in an isolate: a page drawn while it is under way waits
 // on the same one, so the request that began it holds it to its end
@@ -92,11 +98,16 @@ let stored = async (env: Env): Promise<Kept | undefined> => {
 let once = (env: Env, read: () => Promise<Kept | undefined>) => {
   let under = reading.get(env.BLOBS)
   if (under) return under
-  let now = read().finally(() => reading.delete(env.BLOBS))
+  let now = read().then((kept) => {
+    if (kept) held.set(env.BLOBS, kept)
+    return kept
+  }).finally(() => reading.delete(env.BLOBS))
   reading.set(env.BLOBS, now)
   background(now.then(() => {}, () => {}))
   return now
 }
+
+let readKept = (env: Env) => once(env, () => stored(env))
 
 /** The broker's list: this isolate's copy, else the one kept, else asked of
  * the broker; none where its key is not kept or nothing could be read, which
@@ -104,19 +115,20 @@ let once = (env: Env, read: () => Promise<Kept | undefined>) => {
 export let listingsOf = async (env: Env): Promise<Kept | undefined> => {
   if (!held.has(env.BLOBS)) {
     try {
-      let kept = await once(
-        env,
-        async () => await stored(env) ?? await asked(env),
-      )
-      if (kept) held.set(env.BLOBS, kept)
+      if (!await readKept(env)) await once(env, () => asked(env))
     } catch (e) {
       caught(e, { request: 'catalog' })
     }
   }
   let kept = held.get(env.BLOBS)
-  if (kept && Date.now() - kept.at > DAY && !reading.has(env.BLOBS)) {
+  if (kept && !fresh(kept) && !reading.has(env.BLOBS)) {
     background(
-      once(env, () => asked(env)).then(
+      once(env, async () => {
+        let latest = await stored(env)
+        return latest && fresh(latest)
+          ? latest
+          : await asked(env, latest ?? kept)
+      }).then(
         () => {},
         (e) => caught(e, { request: 'catalog' }),
       ),
@@ -182,7 +194,7 @@ export let logoOf = async (
   if (!l.logo) return undefined
   let key = LOGOS_KEPT + encodeURIComponent(l.name)
   try {
-    let kept = await env.BLOBS.get(key)
+    let kept = await patient(() => env.BLOBS.get(key))
     if (kept) return new TextDecoder().decode(await kept.arrayBuffer())
   } catch (e) {
     caught(e, { request: 'catalog logo' })
@@ -197,7 +209,7 @@ export let logoOf = async (
     return undefined
   }
   try {
-    await env.BLOBS.put(key, svg)
+    await patient(() => env.BLOBS.put(key, svg))
   } catch (e) {
     caught(e, { request: 'catalog logo' })
   }
@@ -255,7 +267,17 @@ export let logoDoor = async (
 ) => {
   if (!path.startsWith(LOGOS)) return null
   let name = decodeURIComponent(path.slice(LOGOS.length))
-  let l = (await listingsOf(env))?.listings.find((l) => l.name == name)
+  let l: Listing | undefined
+  try {
+    let known = held.get(env.BLOBS)
+    l = known?.listings.find((l) => l.name == name)
+    // The page refreshes the catalog. Its fan-out of images only reads it.
+    if (!known || !l && !fresh(known)) {
+      l = (await readKept(env))?.listings.find((l) => l.name == name)
+    }
+  } catch (e) {
+    caught(e, { request: 'catalog logo', service: name })
+  }
   if (!l) return new Response(null, { status: 404 })
   let svg = await logoOf(env, l, fetcher)
   return new Response(svg ?? initialLogo(l.title), {
