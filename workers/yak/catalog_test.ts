@@ -125,3 +125,10 @@ test('a name the list does not hold is not found', async () => {
   equal((await d.get('nope')).status, 404)
   equal(d.asked, [])
 })
+
+test("a built integration's logo is served from its row's address", async () => {
+  let gmail = 'https://app.nango.dev/images/template-logos/google-mail.svg'
+  let d = await door({ [gmail]: SVG })
+  equal(await d.get('gmail'), { status: 200, body: SVG, cache: WEEK })
+  equal(d.asked, [gmail])
+})

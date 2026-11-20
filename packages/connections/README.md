@@ -90,26 +90,28 @@ is made by `need`, only where no integration holds the name yet, so no verb a
 space can reach writes over a built integration or changes where its tokens are
 sent, and only the host can mark one `built`. Each logo is the service's mark
 from [Simple Icons](https://simpleicons.org) (CC0, simple-icons 16.32.0), in its
-brand colour. `anthropic` is built: a pasted API key, sent to
-`api.anthropic.com` alone, with no logo yet. `voipms` is built: a person's own
-phone number at voip.ms, its fields the account's sign-in email (`username`) and
-API password (`password`), sent to `voip.ms` alone, with no logo yet. A voip.ms
-key kept before it named fields, the two joined by a colon, is read as them the
-first time it is used and kept as them. `openrouter` is built: its sign-in needs
-no registered client, and its exchange answers an API key (`answers: 'key'`,
-@yaks/oauth), kept as the connection's grant. `google-calendar` is built: it
-asks for `calendar.events` and `calendar.calendarlist.readonly` unless an app
-needs narrower, asks Google for offline access so the grant can be refreshed,
-and sends its token to `www.googleapis.com` alone. It is `testing: true` while
-Google's app is in testing mode, where only the people Google lists may sign in,
-so yaks.app offers it only on a connections page opened with
-`?enable=google-calendar`. `gmail` is brokered by Nango's CASA-verified Google
-app (`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant
-is the whole mailbox (`https://mail.google.com/`, the fixed scope of Nango's
-app), and it sends its token to `gmail.googleapis.com` alone. It stands in for
-Nango's own listing of Gmail (`standIn`): the catalog, the integration directory
-and a connections page opened at `#google-mail` all offer `gmail` instead. A
-gmail connection made earlier, directly as the `google` client asking for
+brand colour; voip.ms's is its own site's mark. Gmail keeps no SVG: its `image`
+is Nango's google-mail logo, which yaks.app fetches once and serves itself.
+`anthropic` is built: a pasted API key, sent to `api.anthropic.com` alone, with
+no logo yet. `voipms` is built: a person's own phone number at voip.ms, its
+fields the account's sign-in email (`username`) and API password (`password`),
+sent to `voip.ms` alone. A voip.ms key kept before it named fields, the two
+joined by a colon, is read as them the first time it is used and kept as them.
+`openrouter` is built: its sign-in needs no registered client, and its exchange
+answers an API key (`answers: 'key'`, @yaks/oauth), kept as the connection's
+grant. `google-calendar` is built: it asks for `calendar.events` and
+`calendar.calendarlist.readonly` unless an app needs narrower, asks Google for
+offline access so the grant can be refreshed, and sends its token to
+`www.googleapis.com` alone. It is `testing: true` while Google's app is in
+testing mode, where only the people Google lists may sign in, so yaks.app offers
+it only on a connections page opened with `?enable=google-calendar`. `gmail` is
+brokered by Nango's CASA-verified Google app
+(`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant is
+the whole mailbox (`https://mail.google.com/`, the fixed scope of Nango's app),
+and it sends its token to `gmail.googleapis.com` alone. It stands in for Nango's
+own listing of Gmail (`standIn`): the catalog, the integration directory and a
+connections page opened at `#google-mail` all offer `gmail` instead. A gmail
+connection made earlier, directly as the `google` client asking for
 `gmail.send`, keeps signing in that way. `google-search-console` is built on the
 same `google` client: it asks for `webmasters`, which reads a site's search
 numbers and submits its sitemaps, asks for offline access, sends its token to

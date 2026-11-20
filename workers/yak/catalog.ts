@@ -35,6 +35,7 @@ import {
   type Listing,
   logoSources,
   type Offer,
+  seeds,
 } from '@yaks/connections'
 import { patient } from '@yaks/blob'
 import { background, caught } from './defects.ts'
@@ -286,7 +287,14 @@ export let adopting = async (
   return i
 }
 
-/** A card's logo, as the broker's list names it, or the service's initial
+// A built integration whose row names its logo's address (`image`), such as
+// Gmail's, Nango's mark: served through the door like a listing's.
+let imaged = (name: string) => {
+  let i = seeds().find((i) => i.name == name && i.image)
+  return i && { name, title: i.title || name, logo: i.image! }
+}
+
+/** A card's logo, as a built integration's row or the broker's list names it, or the service's initial
  * where no address answers one: drawn as an image that runs nothing, and kept
  * by the browser for a week, the initial only for an hour. A 404 for a name
  * the list doesn't hold; null for any other path. */
@@ -297,16 +305,18 @@ export let logoDoor = async (
 ) => {
   if (!path.startsWith(LOGOS)) return null
   let name = decodeURIComponent(path.slice(LOGOS.length))
-  let l: Listing | undefined
-  try {
-    let known = held.get(env.BLOBS)
-    l = known?.listings.find((l) => l.name == name)
-    // The page refreshes the catalog. Its fan-out of images only reads it.
-    if (!known || !l && !fresh(known)) {
-      l = (await readKept(env))?.listings.find((l) => l.name == name)
+  let l: Pick<Listing, 'name' | 'title' | 'logo'> | undefined = imaged(name)
+  if (!l) {
+    try {
+      let known = held.get(env.BLOBS)
+      l = known?.listings.find((l) => l.name == name)
+      // The page refreshes the catalog. Its fan-out of images only reads it.
+      if (!known || !l && !fresh(known)) {
+        l = (await readKept(env))?.listings.find((l) => l.name == name)
+      }
+    } catch (e) {
+      caught(e, { request: 'catalog logo', service: name })
     }
-  } catch (e) {
-    caught(e, { request: 'catalog logo', service: name })
   }
   if (!l) return new Response(null, { status: 404 })
   let svg = await logoOf(env, l, fetcher)
