@@ -132,3 +132,25 @@ test("what a file kept outlives it until the runtime releases it, and a failed r
   equal(released.map((o) => [o.test.name, o.ok]), [['b.ts releases', false]])
   equal(await release(1_000), [])
 })
+
+test('a global a kept fixture holds stands past its file until it is released; the others are put back', async () => {
+  let g = globalThis as Record<string, unknown>
+  let seen: unknown[] = []
+  let body = () => {
+    g.zzHeld = 'routed'
+    g.zzLoose = 'stubbed'
+    kept(() => void delete g.zzHeld, ['zzHeld'])
+  }
+  let declared = (file: string, run: () => void): Test[] => [
+    { file, name: file, tags: [], skip: false, body: run },
+  ]
+  await drive(['a.ts', 'b.ts'], (path) =>
+    Promise.resolve(
+      path == 'a.ts'
+        ? declared(path, body)
+        : declared(path, () => void seen.push(g.zzHeld, g.zzLoose)),
+    ))
+  equal(seen, ['routed', undefined])
+  await release(1_000)
+  equal('zzHeld' in g, false)
+})
