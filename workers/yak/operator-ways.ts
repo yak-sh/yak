@@ -64,6 +64,7 @@ export let waysOf = async (
 type Press = {
   href: string
   label: string
+  title?: string
   icon?: IconName
   logo?: string
   external?: boolean
@@ -88,14 +89,16 @@ let press = (p: Press) => {
       {
         as: 'a',
         href: p.href,
-        key: p.label,
+        key: p.href,
+        title: p.title,
         ...p.external ? { target: '_blank', rel: 'noopener' } : {},
       },
       face,
     )
 }
 
-// Where the Operator is on a chat platform, said as what its button opens.
+// Where the Operator is on a chat platform, said as what its button opens:
+// its title, under the platform's name.
 let opening = (p: Place) => {
   let at = p.room ? `#${p.room}` : p.server
   return at ? `Open ${at} in ${p.platform}` : `Open ${p.platform}`
@@ -124,7 +127,8 @@ let lines = (space: Space, ways: Ways, here: string) => {
     ...ways.places.map((p): Press => ({
       href: p.href,
       logo: p.logo,
-      label: opening(p),
+      label: p.platform,
+      title: opening(p),
       external: true,
     })),
     ...ways.unset.map((u): Press => ({

@@ -425,13 +425,14 @@ test('the page lists every way to reach the Operator below its helpers, each one
     [...section.querySelectorAll('a')].map((a) => [
       a.textContent!.trim(),
       a.getAttribute('href'),
+      a.getAttribute('title'),
     ]),
     [
-      ['Email', 'mailto:clerk@yaks.app'],
-      ['Call', 'tel:+15550100'],
-      ['Text', 'sms:+15550100'],
-      ['Open #general in Chat', 'https://chat.example/g1/c1'],
-      ['Open Chat', 'https://chat.example/g2'],
+      ['Email', 'mailto:clerk@yaks.app', null],
+      ['Call', 'tel:+15550100', null],
+      ['Text', 'sms:+15550100', null],
+      ['Chat', 'https://chat.example/g1/c1', 'Open #general in Chat'],
+      ['Chat', 'https://chat.example/g2', 'Open Chat'],
     ],
   )
   // The address and the one number, each selectable with a copy button.
