@@ -3,6 +3,7 @@
 // (operator.ts), with the pages watching it on WebSockets. The class keeps
 // its first name, Builder, which the Worker's binding and every object
 // already made are known by.
+import type { OperatorStore } from './operator-store.ts'
 import type { Bundle } from '@yaks/graph'
 import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
@@ -549,12 +550,25 @@ export class Builder extends Durable {
           )
         }
         let { operatorPost } = await import('./metered.ts')
-        let store = await operatorStore(this.#ctx.storage, {
-          version: this.#env.CF_VERSION_METADATA?.id,
-          report: (e, where) =>
-            caught(e, { request: 'operator effects', handler: where.handler }),
-          nudge,
-        }, { operator: operatorPost(this.#env) })
+        let { operatorVectors } = await import('./operator-vectors.ts')
+        let store: OperatorStore = await operatorStore(
+          this.#ctx.storage,
+          {
+            version: this.#env.CF_VERSION_METADATA?.id,
+            report: (e, where) =>
+              caught(e, {
+                request: 'operator effects',
+                handler: where.handler,
+              }),
+            nudge,
+          },
+          { operator: operatorPost(this.#env) },
+          operatorVectors(this.#env, {
+            space: () => store,
+            arm: (at) => this.clock.arm(at),
+            hold: (work) => this.#ctx.waitUntil?.(work),
+          }),
+        )
         this.#fx = store.fx
         owing(store.fx, () => this.#work())
         // What a person is called, as the Operator asks it (operator.ts
@@ -733,6 +747,12 @@ export class Builder extends Durable {
           instructions: async () => {
             let { toldBackfill } = await import('./instructions-move.ts')
             return backfill(toldBackfill(store))
+          },
+          // The vectors its recall ranks by meaning, drained behind the
+          // object's own work (@yaks/embedding `sleeper`).
+          vectors: () => {
+            store.vectors?.run()
+            return store.vectors?.retry() ?? null
           },
           drain: async (until) => {
             let { drain } = await import('./operator-store.ts')

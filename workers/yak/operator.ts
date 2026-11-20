@@ -2270,6 +2270,7 @@ export let operating = (
   // alone.
   let recalling = recall({
     graph: g,
+    meaning: store.meaning,
     report: (e) => void caught(e, { request: 'operator recall' }),
   })
   let before = async (

@@ -238,19 +238,11 @@ import { type Field, fields, find, search, sources, worded } from '@yaks/fts'
 import { lexemes } from '@yaks/fts/lexicon'
 import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
 import {
-  BATCH as EMBED_BATCH,
-  drain,
-  drained,
-  due as unembedded,
-  failed,
   type Field as Text,
-  type Outage,
-  Overdue,
-  owing as owesEmbedding,
-  queues,
   remodel,
-  type Ride,
   semantic,
+  type Sleeper,
+  sleeper,
   watch as watchEmbedding,
 } from '@yaks/embedding'
 import { after, type Clock, isPromise, system } from '@yaks/fp'
@@ -722,7 +714,7 @@ type Word =
   | Mark
   // The bytes it last told the directory it holds (`#tell`).
   | 'weighed'
-  // The embedding outage its drains are riding out (`#ride`).
+  // The embedding outage its drains are riding out (`#vectors`).
   | 'embedding-outage'
   // The searchable fields its whole lexicon was last read under (`#lexing`).
   | 'lexicon'
@@ -1020,14 +1012,13 @@ export class Store extends Durable {
   #effectWork: Promise<void> | null = null
   #effectAgain = false
   // The text this object embeds, over the storage it was built on, how the
-  // store narrows a search by a filter line, and the drain of its queue in
-  // progress (`#embedding`).
+  // store narrows a search by a filter line, and the drains of its queue
+  // (`#vectors`).
   #texts!: {
     statements: Statements
     fields: Text[]
     screen: (line: string, opts?: ReadOpts) => Raw | null
   }
-  #vectorWork: Promise<void> | null = null
   // What this app store's lexicon is read under and off (lexicon.ts): its
   // searchable fields, as fields and as one word, the text each index is
   // kept from, and the entries this incarnation has told the Lexicon. None
@@ -1038,11 +1029,6 @@ export class Store extends Durable {
     sources: () => Stmt[]
     told: Set<string>
   } | null = null
-  #vectorAgain = false
-  // When a failed drain's retry is due: until then a write or a sooner alarm
-  // leaves the model alone and keeps the retry armed, so one failure is one
-  // report.
-  #vectorRetry = 0
   // The planner statistics a deployment pass owed (@yaks/sqlite `analyze`),
   // a table at a time, answering how many stay owed; and whether any do, once
   // asked this incarnation (`#analyzing`).
@@ -2776,8 +2762,7 @@ export class Store extends Durable {
       // Its triggers queued the text in the write's own statement, so finding
       // whether anything is owed is a single-row seek, asked only of a write
       // that names what a trigger watches.
-      if (this.#texts && queues(this.#texts.fields, bundles)) this.#embedding()
-      return bundles
+      return this.#vectors.wrote(bundles)
     },
     ...(this.#lexis ? { tell: this.#telling } : {}),
     log: this.#log.plugin,
@@ -3367,8 +3352,8 @@ export class Store extends Durable {
     }),
     // An alarm sooner than a failed drain's retry leaves it armed.
     vectors: this.#own(() => {
-      this.#embedding()
-      return this.#vectorRetry > this.#now() ? this.#vectorRetry : null
+      this.#vectors.run()
+      return this.#vectors.retry()
     }),
     moves: this.#own(() => this.#moving(), () => true),
     lexicon: this.#own(async () => {
@@ -3391,7 +3376,7 @@ export class Store extends Durable {
   // try again, still asleep.
   async #expiring(expires: Expiry) {
     await this.#sleep()
-    await Promise.all([this.#effectWork, this.#vectorWork])
+    await Promise.all([this.#effectWork, this.#vectors.work()])
     let leave = await this.#enter(true)
     try {
       await expired(this.#ctx.storage, expires)
@@ -3462,7 +3447,7 @@ export class Store extends Durable {
     this.#unanalyzed = null
     await watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made
-    // by another, every text owes its vector again (`#embedding` below).
+    // by another, every text owes its vector again (`#vectors` below).
     let model = this.#embedder()
     if (model) {
       await remodel(this.#texts.statements, this.#texts.fields, model.model)
@@ -3527,7 +3512,7 @@ export class Store extends Durable {
     // The pass starts as many start-up runs as the pool has slots; the rest
     // are pending, and run when due rather than at the next write.
     await this.#armPending()
-    this.#embedding()
+    this.#vectors.run()
     this.#put(
       'deployed',
       (ownStore(this.#name() ?? '') ? this.#version() : null) ??
@@ -4237,108 +4222,34 @@ export class Store extends Durable {
   //
   // A vector beside each text the vocabulary marks searched, made by the model
   // embedding.ts names and kept in this object's own SQLite, and held in its
-  // memory once a search asks, which is what `.near` ranks; each drain pass
-  // folds what it wrote into that copy. Triggers queue a text in the write's
-  // own statement; this drains the queue once a write has committed and from
-  // the alarm, a batch at a time, waiting on the model between batches, so
-  // requests interleave and none waits on it. It drains for a slice and comes
-  // back on the alarm for the rest: the first wake after this shipped, every
-  // store owes a vector for each text it holds, and it catches up behind its
-  // own traffic.
-  // The embedder asks again through a passing failure of the model's own
-  // (@yaks/embedding `retrying`). A drain that fails even so comes back a
-  // minute later, and nothing else starts one meanwhile; `.near` ranks
-  // whatever is stored. A model that did not answer is an outage the drains
-  // ride out, logged, until its texts have waited OVERDUE, which goes to the
-  // tracker once; any other failure goes at once (`#ride`).
-  static EMBED = 10_000
-
-  // What a drain's outcome makes of the outage it met (@yaks/embedding
-  // `drained`, `failed`), kept in the object's own memory so that a wait
-  // outlives the incarnations its retries wake.
-  #ride = (store: string | null, ride: Ride) => {
-    let was: Outage | null = JSON.parse(
-      this.#get('embedding-outage') ?? 'null',
-    )
-    let { outage, report, log } = ride(was, this.#now())
-    if (outage != was) this.#put('embedding-outage', JSON.stringify(outage))
-    if (log) console.warn('yak store embedding', store, log)
-    if (report) {
-      // What varies across one outage (the model, how many texts, how many
-      // tries, how long they waited) is the occurrence's, not the bug's.
-      let context = report instanceof Overdue ? report.context : {}
-      defect(report, { request: 'embedding', store, ...context })
-    }
-  }
-
-  // Whether a text is owed its vector, which seeks one queued row. An object whose
-  // schema is not standing yet owes nothing: it has no table to owe it in.
-  #owes = () =>
-    !!this.#texts && !!this.#get('schema') &&
-    owesEmbedding(this.#texts.statements)
-
-  #embedding = () => {
-    if (this.#dormant) return
-    let model = this.#embedder()
-    if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
-    // Until a failed drain's retry, the alarm the failure armed stands
-    // (`#works`).
-    if (this.#now() < this.#vectorRetry) return
-    if (this.#vectorWork) {
-      if (this.#owes()) this.#vectorAgain = true
-      return
-    }
-    // Keep the batch that proves work is owed; the sweep need not read it
-    // again. Queue generations still protect writes made while the model runs.
-    let queued: ReturnType<typeof unembedded> | undefined = unembedded(
-      this.#texts.statements,
-      EMBED_BATCH,
-    )
-    let name = this.#name()
-    // Nothing owed waits on the model, whether or not it answers.
-    if (!queued.length && !this.#owes()) return this.#ride(name, drained)
-    this.#vectorWork = (async () => {
-      do {
-        this.#vectorAgain = false
-        let { statements: db, fields } = this.#texts
-        // The model's deadline is on the Store's clock.
-        let deadline = new AbortController()
-        let cancel = clockOf(this.#time).after(
-          Store.EMBED,
-          () => deadline.abort(new DOMException('timed out', 'TimeoutError')),
-        )
-        let done = await drain(db, fields, model, {
-          signal: deadline.signal,
-          queued,
-        }).finally(cancel)
-        queued = undefined
-        if (this.#dormant) return
-        // A text the model will not take is the text's, not the store's: it
-        // has no vector, and ranks by its words alone.
-        for (let r of done.refused) {
-          console.log(
-            'yak store embed refused',
-            name,
-            r.entity,
-            r.error.message,
-          )
-        }
-      } while (this.#vectorAgain)
-      this.#ride(name, drained)
-      if (this.#owes()) {
-        await this.#arm(this.#soon(), 'embedding continuation')
-      }
-    })().catch(async (error) => {
-      this.#ride(name, failed(error))
-      this.#vectorRetry = this.#now() + resting(error, Store.RETRY)
-      await this.#arm(this.#vectorRetry, 'embedding retry')
-        .catch((e) => defect(e, { request: 'embedding retry', store: name }))
-    }).finally(() => {
-      this.#vectorWork = null
-      if (this.#vectorAgain) this.#embedding()
-    })
-    this.#ctx.waitUntil?.(this.#vectorWork)
-  }
+  // memory once a search asks, which is what `.near` ranks; each drain folds
+  // what it wrote into that copy. Triggers queue a text in the write's own
+  // statement; @yaks/embedding `sleeper` drains the queue once a write has
+  // committed and from the alarm. An object whose schema is not standing yet,
+  // or that sleeps for good, drains nothing.
+  #vectors: Sleeper = sleeper({
+    texts: () =>
+      this.#texts && this.#get('schema') && !this.#refused && !this.#dormant
+        ? this.#texts
+        : null,
+    model: () => this.#embedder(),
+    arm: (at, why) => this.#arm(at, why),
+    hold: (work) => this.#ctx.waitUntil?.(work),
+    outage: {
+      get: () => JSON.parse(this.#get('embedding-outage') ?? 'null'),
+      set: (o) => this.#put('embedding-outage', JSON.stringify(o)),
+    },
+    report: (error, context) =>
+      defect(error, { request: 'embedding', store: this.#name(), ...context }),
+    log: (line, ...detail) =>
+      console.warn(`yak store ${line}`, this.#name(), ...detail),
+    clock: {
+      now: () => this.#now(),
+      after: (ms, fn) => clockOf(this.#time).after(ms, fn),
+    },
+    retry: (error) => resting(error, Store.RETRY),
+    soon: () => this.#soon(),
+  })
 
   // ---- its lexicon (lexicon.ts, T-133890) ----------------------------------
   //

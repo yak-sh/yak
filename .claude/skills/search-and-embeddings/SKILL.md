@@ -123,6 +123,13 @@ these are the words for it:
   drains ride out, logged, with the texts still owed; only texts waiting past
   `OVERDUE` (15 minutes) report, once (packages/embedding/outage.ts). The
   store itself is `yaks-app`'s.
+- A sleeping host's drains are @yaks/embedding `sleeper` (sleeper.ts): an
+  app's store (graph.ts `#vectors`) and the Operator's own store
+  (operator-store.ts `Vectors`, lent by operator-vectors.ts) run the same one,
+  and each lends its host the ranking as `host.meaning`. The Operator's recall
+  before each turn passes it to @yaks/session `recall`, as the box does. Its
+  floors (`FLOOR` .75, words .65 in packages/memory/earlier.ts) were measured
+  on granite, not Qwen3.
 
 ## Words ranked by meaning
 

@@ -37,6 +37,17 @@ import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf, sole } from '@yaks/sqlite'
+import {
+  type Embedder,
+  schema as vectorSchema,
+  type Sleeper,
+  sleeper,
+  triggers as queueTriggers,
+  watch as watchEmbedding,
+} from '@yaks/embedding'
+import { graph } from '@yaks/graph'
+import type { Meaning } from '@yaks/host'
+import { ranking, texts } from './embedding-read.ts'
 import { operatorConfig } from './config.ts'
 import { load, vocabFacets } from './operator-load.ts'
 import { vocabsOf } from './vocabs.ts'
@@ -66,23 +77,30 @@ export let FITTED = 'operator:fitted'
 
 // What the store reads a stored value through (each package's `derived`: a
 // blob's text, a session's status), and what the Operator finds what was said
-// in its own work by: an entry's text, a doc's title and body, a memory
-// (@yaks/fts). Pure in the vocabulary, so made once an isolate, and with them
-// the schema's print (`operatorStore`).
+// in its own work by: an entry's text, a doc's title and body, a memory, by
+// its words (@yaks/fts) and by its meaning (@yaks/embedding). Pure in the
+// vocabulary, so made once an isolate, and with them the schema's print
+// (`operatorStore`).
 let derived = words.derived
 let text = indexed(operatorVocab)
-// The search indexes and their triggers, kept over component tables: each is
-// made with the last table it rests on, by the write that first names that
-// component (@yaks/sqlite `over`), as an app's store makes its own. A store
-// fitted before any entry was written holds no `entry` table to index then.
-let searching = ftsSchema(text, derived)
-let beside = () => blobSchema()
+let meant = texts(operatorVocab, derived)
+// The search indexes and the embedding queue's triggers, kept over component
+// tables: each is made with the last table it rests on, by the write that
+// first names that component (@yaks/sqlite `over`), as an app's store makes
+// its own. A store fitted before any entry was written holds no `entry` table
+// to index then.
+let searching = [...ftsSchema(text, derived), ...queueTriggers(meant)]
+let beside = () => [...blobSchema(), ...vectorSchema()]
 let print: string | undefined
 
 /** The revision of how the file is fitted, part of its print: a file fitted
  * when its search indexes were made only by the fitting holds no index over a
  * table a later write made, so this code fits it again and makes them. */
-let FITTING = 2
+let FITTING = 3
+
+/** Where the file keeps the embedding outage its drains are riding out
+ * (@yaks/embedding `sleeper`). */
+export let OUTAGE = 'operator:embedding-outage'
 
 // What it serves: its graph, and the effects of the one package whose config
 // names that facet, @yaks/mail's sending of its letters. The rest are the
@@ -102,6 +120,16 @@ export let memoryPlan = plan({
   ),
 })
 
+/** What the object lends its store's vectors: the embedder, and how it holds
+ * a drain past a request and comes back for the rest (@yaks/embedding
+ * `Sleeping`). Without one the store keeps no vectors, and its recall ranks
+ * by words alone. */
+export type Vectors = {
+  model: () => Embedder | null
+  arm: (at: number) => Promise<void>
+  hold?: (work: Promise<unknown>) => void
+}
+
 /**
  * The Operator's store over its object's storage. Its schema is the code's,
  * so it is fitted once a schema: a wake whose print (the storage's own, which
@@ -116,13 +144,37 @@ export let operatorStore = async (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
   senders: Bound['senders'] = {},
+  vectors?: Vectors,
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
   let sql = driver(durable)
-  let stood = false
+  let stood = false, fitted = false
   let store!: ReturnType<typeof storage>
   let marks = meta(sql)
+  let held = () => ({ statements: statements(sql), fields: meant })
+  // Its vectors, drained once a write that queued a text has committed and
+  // from the object's alarm (build.ts `#alarm`), the way an app's store
+  // drains its own (graph.ts `#vectors`).
+  let swept = vectors && sleeper({
+    texts: () => fitted ? held() : null,
+    model: vectors.model,
+    arm: (at) => vectors.arm(at),
+    hold: vectors.hold,
+    outage: {
+      get: () => JSON.parse(marks.get(OUTAGE) ?? 'null'),
+      set: (o) => marks.set(OUTAGE, JSON.stringify(o)),
+    },
+    report: (error, context) =>
+      caught(error, { request: 'operator embedding', ...context }),
+    log: (line, ...detail) => console.warn(`yak operator ${line}`, ...detail),
+  })
   let graphed = operatorGraph(plan, {
+    vectors: swept,
+    meaning: vectors &&
+      ranking(vectors.model, {
+        ...held(),
+        screen: (line) => store.screen(line),
+      }),
     blobs: sqliteBlobs(statements(sql)),
     storage: (extend) =>
       store = storage(durable, operatorVocab, {
@@ -143,10 +195,14 @@ export let operatorStore = async (
       ])
       let born = installed(sql) == null
       stood = !born && marks.get(FITTED) == print
+      fitted = true
       if (stood) return
       for (let stmt of beside()) sql.query(stmt)
       let left = store.install()
       adopt(sql, text, derived, { heal: false })
+      // Tables standing before the queue's triggers were part of the schema
+      // get them now, and every text they hold is owed its vector once.
+      void watchEmbedding(statements(sql), meant)
       if (!left.length) marks.set(FITTED, print)
       // A new file holds nothing written before the rule that keeps owners,
       // nor any wake in the Operator's old words.
@@ -176,6 +232,7 @@ export let operatorStore = async (
   })
   return {
     ...graphed,
+    ...swept ? { vectors: swept } : {},
     marks,
     upkeep: store.upkeep,
     lettered: () => !sole(sql),
@@ -194,6 +251,8 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
   lettered?: () => boolean
   /** Background passes share half the object's windows with schema upkeep. */
   waiting?: () => number
+  /** its vectors' drains, where the object lends an embedder */
+  vectors?: Sleeper
 }
 
 /** What a composition of the Operator's store is bound to: its storage, given
@@ -208,6 +267,10 @@ export type Bound = {
   senders?: Host['senders']
   fit?: () => void
   effects?: Parameters<typeof effects>[1]
+  /** the drains of its vectors, which a committed write starts */
+  vectors?: Sleeper
+  /** words ranked by meaning among its texts (@yaks/host `meaning`) */
+  meaning?: Meaning
 }
 
 /** The Operator's work graph, independent of its durable storage boundary:
@@ -219,7 +282,21 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     host: {
       ...lent('operator', bound.blobs ?? memoryBlobs()),
       senders: bound.senders ?? {},
+      ...bound.meaning ? { meaning: bound.meaning } : {},
     },
+    // A text a write changed is embedded once it has committed.
+    ...bound.vectors
+      ? {
+        graph: (options: Parameters<typeof graph>[0]) =>
+          graph({
+            ...options,
+            plugins: [
+              ...options.plugins ?? [],
+              { name: 'yak/embed', hooks: { effect: bound.vectors!.wrote } },
+            ],
+          }),
+      }
+      : {},
     storage: (_host, extend) => bound.storage(extend),
     extend: () => bound.extend ?? [],
     schema: () => bound.fit?.(),
@@ -244,6 +321,7 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
   return {
     g: host.graph,
     fx: host.fx,
+    meaning: host.meaning,
     vocab: host.vocab,
     known,
     // A tool's answer as its reader reads it (@yaks/tools `drawing`).
