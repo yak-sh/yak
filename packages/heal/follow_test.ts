@@ -413,6 +413,21 @@ test('a tracker regression starts its new fixer once', async () => {
   restarted.close()
 })
 
+// A close that restores the completion a reopening undid, as an older
+// resolution told after the regression does, names the same opening.
+let restored = await regression()
+await restored.replay()
+await put(restored.g, [{
+  entity: { eid: taskEid(bug) },
+  completed: { at: '2026-10-02T00:00:02Z' },
+}])
+test('a reopening closed again with the completion it undid reopens without knocking twice', async () => {
+  await restored.replay()
+  ok(!(await restored.g.get([taskEid(bug)]))[0].completed)
+  equal(await count(restored.g, 'knock'), 2)
+  restored.close()
+})
+
 let done = await fixture({ cooldown: 0 })
 await done.run()
 await put(done.g, [{

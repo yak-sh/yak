@@ -247,11 +247,22 @@ export let follow = (
         : `${kind}: ${
           what.length > 240 ? `${what.slice(0, 240)}…` : what
         } (${where})`
+      // An opening already told is not told again: a close that restored
+      // the completion this reopening undid (a tracker answering with an
+      // older resolution) names the same opening, and its knock's guard
+      // would refuse the reopening with it.
+      let knocks = knock(g, owner.session ?? project, bug, body, undid)
+      let told = new Set(
+        knocks.length
+          ? (await g.get(knocks.map((k) => k.entity.eid), ['knock']))
+            .filter((row) => row.knock).map((row) => row.entity.eid)
+          : [],
+      )
       return {
         project,
         where,
         title,
-        knocks: knock(g, owner.session ?? project, bug, body, undid),
+        knocks: knocks.filter((k) => !told.has(k.entity.eid)),
       }
     }
     // Whether the decision wrote the box.
