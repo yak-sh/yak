@@ -236,3 +236,35 @@ test('restoring large archive bytes uses the file API and a bounded command', as
   equal(calls.length, 1)
   equal(calls[0].length < 8_192, true)
 })
+
+test('a snapshot skips entries it cannot read instead of failing', async () => {
+  let root = await Deno.makeTempDir()
+  try {
+    await Deno.writeTextFile(`${root}/notes`, 'kept')
+    await Deno.mkdir(`${root}/sealed`, { mode: 0o000 })
+    let fs = filesystem(
+      {
+        getState: () => Promise.resolve({ status: 'running' }),
+        exec: async (command) => {
+          let out = await new Deno.Command('sh', { args: ['-c', command] })
+            .output()
+          let text = new TextDecoder()
+          return {
+            exitCode: out.code,
+            stdout: text.decode(out.stdout),
+            stderr: text.decode(out.stderr),
+          }
+        },
+        writeFile: () => undefined,
+      },
+      async function* () {},
+      root,
+    )
+    equal(await fs.run('fresh'), 'fresh')
+    await Deno.writeTextFile(`${root}/notes`, 'edited')
+    equal(Number(await fs.run('save')) > 0, true)
+  } finally {
+    await Deno.chmod(`${root}/sealed`, 0o700)
+    await Deno.remove(root, { recursive: true })
+  }
+})

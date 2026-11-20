@@ -9,23 +9,51 @@ baseline = os.path.join(held, 'baseline.json')
 archive = os.path.join(held, 'snapshot.tar.gz')
 ready = os.path.join(held, 'ready')
 excluded = {'.yak-recovery', 'proc', 'sys', 'dev'}
+# Kernel views, wherever they are mounted (a runtime may mount procfs under
+# /run), hold no workbench bytes and refuse some reads with EINVAL.
+virtual = {'proc', 'sysfs', 'devtmpfs', 'devpts', 'cgroup', 'cgroup2',
+           'mqueue', 'debugfs', 'tracefs', 'securityfs', 'pstore', 'bpf',
+           'configfs', 'fusectl', 'binfmt_misc', 'hugetlbfs', 'autofs',
+           'nsfs', 'rpc_pipefs'}
+
+def mounts():
+    try:
+        with open('/proc/mounts') as source:
+            lines = source.read().splitlines()
+    except OSError:
+        return set()
+    found = set()
+    for line in lines:
+        fields = line.split()
+        if len(fields) > 2 and fields[2] in virtual:
+            point = fields[1].encode().decode('unicode_escape')
+            found.add(os.path.normpath(point))
+    return found
 
 def path(name):
     return os.path.join(root, name)
 
 def scan():
     found = {}
+    skipped = mounts()
     def walk(name):
+        if os.path.normpath(path(name)) in skipped:
+            return
         try:
             entry = os.lstat(path(name))
-        except FileNotFoundError:
+        except OSError:
             return
         if stat.S_ISSOCK(entry.st_mode):
             return
+        if stat.S_ISDIR(entry.st_mode):
+            try:
+                children = os.listdir(path(name))
+            except OSError:
+                return
         found[name] = [entry.st_mode, entry.st_size, entry.st_mtime_ns,
                        entry.st_ctime_ns, entry.st_uid, entry.st_gid]
         if stat.S_ISDIR(entry.st_mode):
-            for child in os.listdir(path(name)):
+            for child in children:
                 walk(os.path.join(name, child))
     for name in os.listdir(root):
         if name not in excluded:
