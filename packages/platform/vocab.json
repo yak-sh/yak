@@ -1013,6 +1013,7 @@
       "component": true,
       "type": "object",
       "wire": false,
+      "index": [["at"], ["app", "at"], ["by", "at"], ["draft", "at"]],
       "description": "One file written into an app's draft: its path, the SHA-256 naming the bytes the write left there (stored once, under that address), or none where the write deleted it, the SHA-256 of what it replaced, and who wrote it when. A draft (app_draft) is the newest of these per path among the rows naming it, over the live release, and every row for a path is that path's history.",
       "properties": {
         "app": {
