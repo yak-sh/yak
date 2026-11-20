@@ -1559,8 +1559,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
           s.id,
           press(
             s.everyone ? 'mcp-mine' : 'mcp-everyone',
-            s.everyone ? 'Only me' : 'Everyone',
-            false,
+            s.everyone ? 'Keep it to me' : 'Share with everyone',
           ),
           { class: 'Card_Form' },
         ),
