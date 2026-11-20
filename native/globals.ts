@@ -1,8 +1,12 @@
 // What the packages reach for that a browser and Deno have and React Native's
-// Hermes may not: @yaks/tui's in-memory DOM's `Event` and a window to bubble
-// events to, and ES2023's array methods (@yaks/vocab sorts with `toSorted`).
+// Hermes may not: a URL that resolves an address against another as the WHATWG
+// says (React Native's own mangles `?query` against a page), @yaks/tui's
+// in-memory DOM's `Event` and a window to bubble events to, and ES2023's array
+// methods (@yaks/vocab sorts with `toSorted`).
 // Imported before anything else (index.ts), so a kit-built app's view, loaded
 // later, finds them too.
+import 'react-native-url-polyfill/auto'
+
 let g = globalThis as Record<string, unknown>
 
 // A global `dispatchEvent` takes only its own kind of event, so where the

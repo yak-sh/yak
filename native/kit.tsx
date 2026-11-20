@@ -94,7 +94,9 @@ let looks = look(colors)
 
 /** What a drawing knows of the page it is on: the address its relative
  * links and pictures are read against, and how to open it on the web. */
-let Host = createContext<{ base: string; web?: (url: string) => void }>({
+export let Host = createContext<
+  { base: string; web?: (url: string) => void }
+>({
   base: '',
 })
 

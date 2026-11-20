@@ -14,7 +14,7 @@ import {
   type Lines,
   look as talkLook,
 } from '../workers/yak/operator-draw.ts'
-import { colors, Draw } from './kit.tsx'
+import { colors, Draw, Host } from './kit.tsx'
 import { report } from './report.ts'
 import { APEX, type Space } from './yaks.ts'
 
@@ -52,10 +52,14 @@ type Frame = {
   }
 }
 
+// The space's chat page, which answers the conversation and the files its
+// lines link to (`?attachment=`).
+let chatOf = (space: Space) => `${APEX}/manage/${space.slug}/operator`
+
 // The conversation, its lines kept current by the socket, with the box to
 // write in under it.
 let Talk = ({ space }: { space: Space }) => {
-  let at = `${APEX}/manage/${space.slug}/operator`
+  let at = chatOf(space)
   let [lines, setLines] = useHeld<Drawn>(new Map())
   let [now, setNow] = useHeld('')
   let [typing, setTyping] = useHeld('')
@@ -198,7 +202,9 @@ export let Operator = ({ space }: { space: Space }) => {
         onContentSizeChange={() =>
           scroll.current?.scrollToEnd({ animated: false })}
       >
-        {node ? <Draw node={node} /> : null}
+        <Host.Provider value={{ base: chatOf(space) }}>
+          {node ? <Draw node={node} /> : null}
+        </Host.Provider>
       </ScrollView>
     </KeyboardAvoidingView>
   )

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Pressable,
   StyleSheet,
@@ -347,8 +348,14 @@ export default function App() {
         )
         : all == 'out'
         ? (
-          <SafeAreaView style={[styles.page, styles.center]}>
-            <SignIn done={load} />
+          <SafeAreaView style={styles.page}>
+            {/* The card rises above the keyboard, its button in reach. */}
+            <KeyboardAvoidingView
+              style={[styles.page, styles.center]}
+              behavior='padding'
+            >
+              <SignIn done={load} />
+            </KeyboardAvoidingView>
           </SafeAreaView>
         )
         : all.length

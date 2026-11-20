@@ -36,9 +36,17 @@ appId: host.exp.Exponent
 - extendedWaitUntil:
     visible: Send me a code
     timeout: 30000
-- takeScreenshot: 1-sign-in
 - tapOn: you@example.com
 - inputText: checks@bot.yak.sh
+# The simulator's keyboard shows its swipe-typing tip once.
+- runFlow:
+    when:
+      visible: Speed up your typing.*
+    commands:
+      - tapOn:
+          text: Continue
+          optional: true
+- takeScreenshot: 1-sign-in
 - tapOn: Send me a code
 - extendedWaitUntil:
     visible: Use another address
