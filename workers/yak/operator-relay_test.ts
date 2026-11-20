@@ -185,6 +185,31 @@ test('a message that picks a listed choice answers the decision as the person, a
   assertEquals(await comments(decision), [['Friday is fine.', person, box.me]])
 })
 
+test('a message that answers a decision in their own words is its answer, as the person', async () => {
+  let own = mint()
+  await box.graph.apply([{
+    entity: { eid: own },
+    task: {},
+    doc: { title: 'Which day?' },
+    decision: {
+      question: 'Which day does it ship?',
+      choices: [
+        { label: 'Friday', description: 'This week.' },
+        { label: 'Monday', description: 'After the weekend.' },
+      ],
+      recommended: 'Friday',
+    },
+  }], { trusted: true })
+  await run('box__message_relay', {
+    entity: own,
+    entry: lines[0].entity.eid,
+    answered: true,
+  })
+  let [answered] = await box.graph.get([own], ['decided'])
+  let { choice, by } = answered.decided as Comp
+  assertEquals([choice, by], [FIRST, person])
+})
+
 test("the Operator's own answer to a decision is the persona's, whoever it says the answer is by", async () => {
   await run('box__decision_answer', {
     decision: second,

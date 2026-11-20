@@ -12,7 +12,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { type ComponentChildren as Node, h } from 'preact'
-import { Badge, Button, Card, Empty, More, Rows } from '@yaks/ui/parts'
+import { Badge, Button, Card, Empty, Field, More, Rows } from '@yaks/ui/parts'
 import { runConnectedCommands } from './connected-mcp.ts'
 import type { Asked } from '@yaks/connections/mcp'
 import { caught } from './defects.ts'
@@ -320,10 +320,28 @@ export let answered = (
   choice: string,
 ) => answerAsTheirs(theirs(env, person), space, server, ask, choice)
 
-// One row: what it is and what it asks, each a line, then its choices and a
-// way to answer in their own words, which fills the message box. A choice
-// comes back to `back`, the page it was pressed on. A row that waits on the
-// person is where an alert about it opens.
+// A form that answers `a` as the person, coming back to `back`.
+let answering = (
+  a: Ask,
+  action: string,
+  server: string,
+  back: string,
+  ...body: Node[]
+) =>
+  h(
+    Rows.Form,
+    { method: 'post', action },
+    h('input', { type: 'hidden', name: 'server', value: server }),
+    h('input', { type: 'hidden', name: 'ask', value: a.eid }),
+    h('input', { type: 'hidden', name: 'back', value: back }),
+    ...body,
+  )
+
+// One row: what it is and what it asks, each a line, then its choices,
+// "Other", a box whose words answer it as theirs, and a way to write about
+// it, which fills the message box. A choice comes back to `back`, the page it
+// was pressed on. A row that waits on the person is where an alert about it
+// opens.
 let row = (
   a: Ask,
   action: string,
@@ -352,12 +370,11 @@ let row = (
       Rows.Actions,
       null,
       a.choices.length
-        ? h(
-          Rows.Form,
-          { method: 'post', action },
-          h('input', { type: 'hidden', name: 'server', value: server }),
-          h('input', { type: 'hidden', name: 'ask', value: a.eid }),
-          h('input', { type: 'hidden', name: 'back', value: back }),
+        ? answering(
+          a,
+          action,
+          server,
+          back,
           a.choices.map((c, i) =>
             h(Button, {
               mod: !i && 'go',
@@ -365,6 +382,31 @@ let row = (
               value: c.label,
               title: c.description || undefined,
             }, c.label)
+          ),
+        )
+        : null,
+      a.choices.length
+        ? h(
+          More,
+          { class: 'Asks_Other' },
+          h(More.Summary, {}, 'Other'),
+          h(
+            More.Body,
+            {},
+            answering(
+              a,
+              action,
+              server,
+              back,
+              h(Field, {
+                class: 'Asks_Input',
+                lines: true,
+                name: 'choice',
+                required: true,
+                'aria-label': 'Your own answer',
+              }),
+              h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
+            ),
           ),
         )
         : null,

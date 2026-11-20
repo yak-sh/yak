@@ -18,7 +18,12 @@ import {
 } from './operator-lists.ts'
 import { operatorContext } from './operator.ts'
 import { chatPage, operatorAnswer, updatesPage } from './operator-page.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import {
+  operatorMemory,
+  operatorModel,
+  operatorService,
+} from './operator-testing.ts'
+import { waitingOn } from './operator-relay.ts'
 
 let { box, env, dir, space, ada, bob, person } = await machineOf(
   'operator-lists',
@@ -89,6 +94,11 @@ let drawn = (listed: Listed) => {
     title: document.querySelector('.Card_Title')?.textContent,
     badge: document.querySelector('.Card_Head .Badge')?.textContent,
     ids: [...document.querySelectorAll('.Asks_Item')].map((r) => r.id),
+    // Each "Other": the row it answers, and whether it has a box for words.
+    others: [...document.querySelectorAll('.Asks_Other')].map((o) => [
+      o.querySelector('[name=ask]')?.getAttribute('value'),
+      !!o.querySelector('textarea[name=choice][required]'),
+    ]),
     text: document.querySelector('div')!.textContent ?? '',
   }
 }
@@ -109,7 +119,7 @@ test('the list is what the server answers, in its order, the first ten shown and
     ),
     'Which day?',
   ])
-  let { rows, ids, text, count, back, title, badge } = drawn(list)
+  let { rows, ids, text, count, back, title, badge, others } = drawn(list)
   assertEquals([title, badge], ['What needs you', '13'])
   assertEquals(rows[0], ['Ask 00', 'Do it.', 'Reply'])
   assertEquals([rows.length, count], [13, 13])
@@ -123,8 +133,11 @@ test('the list is what the server answers, in its order, the first ten shown and
     'Which day does it ship?',
     'Monday',
     'Friday',
+    'Answer',
     'Reply',
   ])
+  // Only a decision offers "Other", a box for an answer of their own.
+  assertEquals(others, [[decision, true]])
 })
 
 test('a choice pressed beside a decision is the person’s own answer on their machine', async () => {
@@ -133,6 +146,34 @@ test('a choice pressed beside a decision is the person’s own answer on their m
   let [it] = await box.graph.get([decision], ['decided'])
   let { choice, by, via } = it.decided as Comp
   assertEquals([choice, by, via], ['Friday', person, box.me])
+})
+
+test('their own words under “Other” are their answer on their machine, and a decision there rides beside their words to the Operator', async () => {
+  let own = mint()
+  await box.graph.apply([{
+    entity: { eid: own },
+    task: {},
+    doc: { title: 'Which colour?' },
+    decision: {
+      question: 'Which colour is the cover?',
+      choices: [
+        { label: 'Red', description: 'Warm.' },
+        { label: 'Grey', description: 'Calm.' },
+      ],
+      recommended: 'Grey',
+    },
+  }], { trusted: true })
+  let list = await one()
+  assertEquals(
+    (await waitingOn(operatorMemory(), ada, [list])).includes(
+      `- ${own}: Which colour is the cover? "Grey", "Red"`,
+    ),
+    true,
+  )
+  await answered(env, ada, space.eid, list.server, own, 'Blue, like the sea')
+  let [it] = await box.graph.get([own], ['decided'])
+  let { choice, by } = it.decided as Comp
+  assertEquals([choice, by], ['Blue, like the sea', person])
 })
 
 test('a person who does not own the machine’s space reaches nothing, and a machine that is off is said to be', async () => {

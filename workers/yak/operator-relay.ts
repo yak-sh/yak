@@ -29,6 +29,7 @@ import { nameOf } from '@yaks/mcp-client'
 import { kindOf, textOf, type Tool } from '@yaks/session'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { runConnectedCommand } from './connected-mcp.ts'
+import type { Listed } from './operator-lists.ts'
 import { spoken } from './operator-draw.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { type Ctx, refuse } from './tool.ts'
@@ -183,7 +184,7 @@ export let relayTools = (
             'arguments',
             `${decision} lists no choice "${said}". Its choices are: ${
               choices.map((c) => JSON.stringify(c.label)).join(', ')
-            }. For an answer in their own words, leave choice out: their message is then their comment on the decision.`,
+            }. For an answer in their own words, leave choice out and send answered: true.`,
           )
         }
         return label
@@ -201,7 +202,7 @@ export let relayTools = (
             nameOf(namespace, COMMENT)
           } is for words of your own.` +
           (decides
-            ? " When their message picks one of a decision's listed choices, name that choice and the decision is answered as them."
+            ? ' When their message answers a decision, it is answered as them and closes: name the listed choice it picks, or send answered: true when it answers in their own words, none of the choices, and those words are the answer.'
             : ''),
         parameters: {
           type: 'object',
@@ -222,6 +223,11 @@ export let relayTools = (
                   type: 'string',
                   description:
                     'For a decision: the label of the listed choice their message picks. Omit when they answered in their own words.',
+                },
+                answered: {
+                  type: 'boolean',
+                  description:
+                    'For a decision their message answers in their own words, none of its choices: true, and their words are the answer.',
                 },
               }
               : {},
@@ -250,8 +256,12 @@ export let relayTools = (
             )
           }
           let choice = String(args.choice ?? '').trim()
-          let answered = choice && decides
+          let answered = !decides
+            ? undefined
+            : choice
             ? await listed(entity, choice)
+            : args.answered === true
+            ? words
             : undefined
           // The answer first: it closes the decision, so the comment beside
           // it reaches whoever waits on it and starts nobody on a closed task.
@@ -266,7 +276,9 @@ export let relayTools = (
             text: `Recorded as their own comment on ${entity}${
               made ? ` (${made.eid})` : ''
             }${
-              answered ? `, and answered it as them: "${answered}"` : ''
+              answered
+                ? `, and answered it as them: "${opening(answered)}"`
+                : ''
             }. Their words: "${opening(words)}"`,
             with: {
               output: {
@@ -287,17 +299,39 @@ export let relayTools = (
 
 /**
  * The decisions waiting on the person, as a note beside their words: each
- * one their Operator asked them (operator.ts `ASKING`), so a message of
- * theirs that answers one is read as its answer (`decisionRelay`). None
- * where nothing waits.
+ * one their Operator asked them (operator.ts `ASKING`), and each one the
+ * lists their machine offers hold (operator-lists.ts), so a message of theirs
+ * that answers one is read as its answer (`decisionRelay`, or the machine's
+ * `message_relay`). None where nothing waits.
  */
-export let waitingOn = async (work: Store, person: string) => {
+export let waitingOn = async (
+  work: Store,
+  person: string,
+  lists: Listed[] = [],
+) => {
   let rows = await work.g.read(line`${sub(waiting(person))}&*`)
-  if (!rows.length) return ''
-  let id = await work.known(rows.map((b) => b.entity.eid))
-  return `The decisions waiting on the person, which their words may answer (record it with decision_relay):\n${
-    asked(rows, id)
-  }`
+  let there = [
+    ...new Map(
+      lists.flatMap((l) => l.asks).filter((a) => a.choices.length)
+        .map((a) => [a.eid, a]),
+    ).values(),
+  ]
+  return [
+    rows.length
+      ? `The decisions waiting on the person, which their words may answer (record it with decision_relay):\n${
+        asked(rows, await work.known(rows.map((b) => b.entity.eid)))
+      }`
+      : '',
+    there.length
+      ? `The decisions waiting on the person on their machine, which their words may answer (record it with that machine's message_relay, naming the choice their message picks, or with answered: true when it answers in their own words):\n${
+        there.map((a) =>
+          `- ${a.eid}: ${a.ask || a.title} ${
+            a.choices.map((c) => JSON.stringify(c.label)).join(', ')
+          }`
+        ).join('\n')
+      }`
+      : '',
+  ].filter(Boolean).join('\n\n')
 }
 
 /**

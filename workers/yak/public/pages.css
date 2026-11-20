@@ -675,6 +675,18 @@
   .Asks .Rows_Actions {
     flex-wrap: wrap;
   }
+  /* "Other", opened: the box for their own answer takes the row's width. */
+  .Asks_Other[open] {
+    flex-basis: 100%;
+  }
+  .Asks_Other .Rows_Form {
+    display: grid;
+    gap: .5rem;
+    justify-items: end;
+  }
+  .Asks_Input {
+    width: 100%;
+  }
   /* The row an alert was about, which pressing the alert opens at
      (operator-alerts.ts `openAt`); where the column is one press away, it
      opens with it. */

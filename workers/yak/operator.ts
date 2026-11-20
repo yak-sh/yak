@@ -88,6 +88,7 @@ import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
 import { connectedInstructions, connectedTools } from './connected-mcp.ts'
 import { decisionRelay, relayTools, waitingOn } from './operator-relay.ts'
+import { listsOf } from './operator-lists.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
 import type { Caller } from './session.ts'
@@ -2375,7 +2376,10 @@ export let operating = (
     held: Asker,
     space: Space,
   ): Promise<Bundle[]> => {
-    let body = await waitingOn(store, held.person)
+    // What their machine's lists hold, read as the page reads them; one that
+    // is off holds nothing here.
+    let { lists } = await listsOf(env, held.person, space.eid)
+    let body = await waitingOn(store, held.person, lists)
     return body
       ? [{
         entity: { eid: crypto.randomUUID() },
