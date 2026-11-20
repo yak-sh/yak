@@ -89,16 +89,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
   let view = { ...PHONE, ...asked.view }
-  let { render } = await import('./browser.ts')
+  let { seen } = await import('./browser.ts')
   try {
     return Response.json(
-      await render(
+      await seen(
         env,
         {
           url,
           view,
           cookies: held(token, env),
           steps: Array.isArray(asked.steps) ? asked.steps : [],
+          // What a check looks at is the page and what it does; axe-core
+          // over a long live page outlasts its deadline, and the audit is
+          // app_preview's.
+          audit: false,
         },
         undefined,
         { request: `POST ${PATH}` },

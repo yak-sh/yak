@@ -80,6 +80,8 @@ test('a test account opens a page of ours signed in as itself, on a phone unless
     ],
   )
   equal(did.slice(-2), ['find textarea', 'tap textarea'])
+  // A check looks at the page; axe-core's audit is app_preview's.
+  equal(visit.audit, false)
 })
 
 test('the platform owner may browse, and a window named is the one opened', async () => {

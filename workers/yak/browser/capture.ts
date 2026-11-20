@@ -34,8 +34,12 @@ export type Cookie = {
 /**
  * One thing a person does on the page, in order after it loads:
  *
- *   tap       press the element a selector names (a touch on a phone's view)
- *   type      type text, into the element a selector names or what has focus
+ *   tap       press the first element a selector names that shows (a touch
+ *             on a phone's view)
+ *   type      type text, into the first shown element a selector names or
+ *             what has focus
+ *   clear     empty the first shown field a selector names, as a person
+ *             selecting all of it and deleting does
  *   press     press one key, such as `Enter`
  *   swipe     drag a finger from one point to another, [x1, y1, x2, y2]
  *   keyboard  a phone's on-screen keyboard opens over this many pixels: the
@@ -47,6 +51,7 @@ export type Cookie = {
 export type Step =
   | { tap: string }
   | { type: string; into?: string }
+  | { clear: string }
   | { press: string }
   | { swipe: [number, number, number, number] }
   | { keyboard: number }
@@ -58,6 +63,8 @@ export type Visit = {
   view: View
   cookies?: Cookie[]
   steps?: Step[]
+  /** Whether axe-core checks the page's accessibility (default true). */
+  audit?: boolean
 }
 export type Message = { type(): string; text(): string }
 type Events = { console: Message; pageerror: unknown; error: Error }
@@ -81,20 +88,26 @@ export type Page = {
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
   waitForSelector(
     selector: string,
-    options: { timeout: number },
-  ): Promise<unknown>
-  tap(selector: string): Promise<void>
-  click(selector: string): Promise<void>
-  type(selector: string, text: string): Promise<void>
+    options: { timeout: number; visible: true },
+  ): Promise<Element | null>
   keyboard: {
     type(text: string): Promise<void>
     press(key: string): Promise<void>
+    down(key: string): Promise<void>
+    up(key: string): Promise<void>
   }
   touchscreen: {
     touchStart(x: number, y: number): Promise<void>
     touchMove(x: number, y: number): Promise<void>
     touchEnd(): Promise<void>
   }
+}
+/** An element a step found on the page. */
+export type Element = {
+  tap(): Promise<void>
+  click(): Promise<void>
+  focus(): Promise<void>
+  type(text: string): Promise<void>
 }
 export type Session = {
   // deno-lint-ignore no-explicit-any
@@ -124,7 +137,8 @@ export type Rendered = {
   console: { type: string; text: string }[]
   errors: string[]
   status: number
-  accessibility: Checked
+  /** The accessibility check, unless the visit asked for none. */
+  accessibility?: Checked
   duration: number
 }
 /** A render that failed, and the browser time it held all the same. */
@@ -240,13 +254,19 @@ let said = (step: Step) => JSON.stringify(step).slice(0, 200)
 // stages so a page's touchmove handlers see it travel.
 let taken = async (page: Page, view: View, step: Step, time: Clock) => {
   if ('tap' in step) {
-    await page.waitForSelector(step.tap, { timeout: FIND })
-    return view.touch ? page.tap(step.tap) : page.click(step.tap)
+    let el = await shown(page, step.tap)
+    return view.touch ? el.tap() : el.click()
   }
   if ('type' in step) {
     if (!step.into) return page.keyboard.type(step.type)
-    await page.waitForSelector(step.into, { timeout: FIND })
-    return page.type(step.into, step.type)
+    return (await shown(page, step.into)).type(step.type)
+  }
+  if ('clear' in step) {
+    await (await shown(page, step.clear)).focus()
+    await page.keyboard.down('Control')
+    await page.keyboard.press('a')
+    await page.keyboard.up('Control')
+    return page.keyboard.press('Backspace')
   }
   if ('press' in step) return page.keyboard.press(step.press)
   if ('swipe' in step) {
@@ -265,6 +285,17 @@ let taken = async (page: Page, view: View, step: Step, time: Clock) => {
   throw new Error(`no such step: ${said(step)}`)
 }
 
+// The first element a selector names that shows: what a person sees to tap,
+// where a hidden one earlier in the page would take the press.
+let shown = async (page: Page, selector: string) => {
+  let el = await page.waitForSelector(selector, {
+    timeout: FIND,
+    visible: true,
+  })
+  if (!el) throw new Error(`nothing shown matches ${selector}`)
+  return el
+}
+
 let viewport = (view: View, keyboard = 0) => ({
   width: view.width,
   height: Math.max(1, view.height - Math.max(0, keyboard)),
@@ -275,21 +306,24 @@ let viewport = (view: View, keyboard = 0) => ({
 export let TEXT = 6000
 
 // The preview keeps its screenshot, console and errors if the check cannot
-// finish. Read visible text in the same isolated world as the audit.
+// finish. Read visible text in the same isolated world as the audit; a visit
+// that asks for no audit reads only its text.
 let checked = async (
   page: Page,
-  axe: Axe,
+  axe: Axe | null,
   time: Clock,
-): Promise<{ accessibility: Checked; text: string }> => {
+): Promise<{ accessibility?: Checked; text: string }> => {
   let { bounded, cancel } = deadline(
     time,
     CHECK,
-    `Accessibility check timed out after ${CHECK / 1000} seconds`,
+    axe
+      ? `Accessibility check timed out after ${CHECK / 1000} seconds`
+      : `Reading the page's text timed out after ${CHECK / 1000} seconds`,
   )
   try {
     return await bounded(
       isolated(page).then(async (world) => ({
-        accessibility: await audit(world, axe),
+        ...axe ? { accessibility: await audit(world, axe) } : {},
         text: String(
           await world.evaluate(
             `(document.body?.innerText ?? '').slice(0, ${TEXT})`,
@@ -299,10 +333,10 @@ let checked = async (
     )
   } catch (e) {
     let interrupted = interruption(e)
-    return {
-      accessibility: interrupted ? { interrupted } : { failed: message(e) },
-      text: '',
-    }
+    let accessibility: Checked = interrupted
+      ? { interrupted }
+      : { failed: message(e) }
+    return { ...axe ? { accessibility } : {}, text: '' }
   } finally {
     cancel()
   }
@@ -310,7 +344,7 @@ let checked = async (
 
 export let capture = async (
   browsing: Browsing,
-  { url, view, cookies = [], steps = [] }: Visit,
+  { url, view, cookies = [], steps = [], audit = true }: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   time: Clock = system,
 ): Promise<Rendered> => {
@@ -369,7 +403,10 @@ export let capture = async (
     })())
     cancel()
     let { page, ...rest } = loaded
-    result = { ...rest, ...await checked(page, browsing.axe, time) }
+    result = {
+      ...rest,
+      ...await checked(page, audit ? browsing.axe : null, time),
+    }
   } finally {
     cancel()
     try {

@@ -275,6 +275,7 @@ export let linkFor = (session: string, days?: number): Promise<Link> =>
 export type Step =
   | { tap: string }
   | { type: string; into?: string }
+  | { clear: string }
   | { press: string }
   | { swipe: [number, number, number, number] }
   | { keyboard: number }
@@ -296,7 +297,6 @@ export type Browsed = {
   console: { type: string; text: string }[]
   errors: string[]
   status: number
-  accessibility: { problems?: { rule: string; help: string }[] }
   duration: number
 }
 

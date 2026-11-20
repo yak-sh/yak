@@ -4,7 +4,8 @@ description: >
   Use when checking a change by hand, against live or copied data, in a
   browser/terminal or at a phone's width, taking screenshots or proving UI,
   query, write and migration behavior. Proof runs in your process with
-  compose(), kernel(), linkedom or TUI lay; no probe servers or Chrome.
+  compose(), kernel(), linkedom or TUI lay; no probe servers or Chrome. A
+  live yaks.app page is driven in Cloudflare's browser with yak admin browse.
   Automated tests are testing.
 ---
 
@@ -31,7 +32,9 @@ i'm talking about. never do that!"
 
 There is no Chrome or Chromium on this box and there are no browser tests,
 locally or in CI. Check page behavior with linkedom in Deno and terminal
-behavior with @yaks/tui's `lay`, in process.
+behavior with @yaks/tui's `lay`, in process. Once a change is live, a page of
+yaks.app is seen and driven in Cloudflare's browser, off the box ("A live page
+in a browser" below).
 
 He would rather recover than gate (M-37965). Run the tests of what changed, in
 seconds, then land with `yak land`. Main's CI runs after the push and files a
@@ -79,8 +82,9 @@ don't land, and either way it runs in one process and leaves nothing running.
 ## What no longer runs here
 
 - **Chrome.** A screen's behavior is checked on its document, as above. How it
-  reads, its spacing and colour and weight, the owner sees on the live page once
-  it lands, and his review arrives as comments on the task (`ui-building`).
+  lays out, swipes and animates on a phone is seen live with `yak admin
+  browse` once it lands; the owner's review arrives as comments on the task
+  (`ui-building`).
 - **A scratch `yak serve`, `yak work` or units of your own.** Each is a server
   that keeps running beside you, with a worker that outlives it. A change to how
   the box's units start, stop or hand over is checked through
@@ -138,12 +142,9 @@ to measure or exercise it.
 `operator_chat` and `conversation_start`/`conversation_send` speak as an
 outside agent (`entry.from`), in a fork under a task: never the person's own
 words, so they cannot check what the person's own message does (answering a
-decision, a note beside their words). For that, post to checks' own chat as
-checks: `admin_link` with `as: checks` and `days: 1` mints a link; POST its
-`t` to `https://yaks.app/login/link` (form-encoded, `origin` set) for the
-session cookie; POST a form with `say` to `/manage/checks/operator` with that
-cookie. Read the rows with `yak command <tool> --as checks`, then revoke the
-link (`admin_link` `revoke`) and delete what held it.
+decision, a note beside their words). For that, type into checks' own chat
+page in the browser, as a person does (below), and read the rows with
+`yak <tool> --as checks`.
 
 `checks` is kept from the idle sweep, so what a check leaves there lasts, and
 an Operator check that spans several calls (a chat, then `operator_read` until
@@ -190,30 +191,68 @@ admin as an anonymous visitor:
   `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or its
   `yak_came` cookie. Its newcomer is then a test too.
 
-## Seeing a live page at a width
+## A live page in a browser
 
-Whether a landed page fits a phone is a question about layout, and layout
-needs a browser, which this box doesn't have. thum.io renders a public URL in
-its own Chrome and returns the picture, so the box runs nothing:
+`yak admin browse` opens a page of yaks.app in Cloudflare's browser, through
+the yak-browser Worker, signed in as the account you name, and takes the
+steps a person takes. Nothing runs on the box. The window is a phone's,
+390 × 844 with touch, unless you name one. Each screenshot is written to
+`.scratch/browse/<name>.png` in your checkout, the last as `end.png`, and the
+answer gives the HTTP status, the page's errors and its visible text. Read the pictures with the Read tool.
 
+```sh
+yak admin browse /manage/checks/operator --as checks
+yak admin browse /manage/checks/operator --as checks --steps @.scratch/say.json
+yak admin browse https://checks.yaks.app/roster/ --width 1280 --height 800 --touch=false --as checks
 ```
-https://image.thum.io/get/png/viewportWidth/<w>/width/<w>/crop/<h>/wait/<s>/<url>
+
+`--steps` is a JSON array, run in order once the page loads:
+
+| step                    | what a person does                                      |
+| ----------------------- | ------------------------------------------------------- |
+| `{"tap": "<selector>"}` | taps the first one shown (a click when the window has no touch) |
+| `{"type": "hi", "into": "<selector>"}` | types, into that element or whatever has focus |
+| `{"clear": "<selector>"}` | selects all of a field and deletes it                 |
+| `{"press": "Enter"}`    | presses one key                                         |
+| `{"swipe": [x1, y1, x2, y2]}` | drags a finger                                    |
+| `{"keyboard": 336}`     | opens a phone's keyboard that many pixels tall; `0` closes it |
+| `{"wait": 2000}`        | waits, in milliseconds                                  |
+| `{"shot": "typed"}`     | takes a screenshot named `typed`                        |
+
+A step that fails stops the rest and is listed among the errors; the page is
+still pictured. A headless browser has no on-screen keyboard, so `keyboard`
+shrinks the window by its height, which is what a phone does for our pages:
+they ask for `interactive-widget=resizes-content` (workers/yak/pages.ts).
+
+Saying something in checks' own chat (`/manage/checks`), as the person, with
+the keyboard open. A draft is kept across visits, so clear the field first:
+
+```json
+[
+  { "tap": "textarea" },
+  { "keyboard": 336 },
+  { "clear": "textarea" },
+  { "type": "A check from T-1637: hello", "into": "textarea" },
+  { "shot": "typed" },
+  { "tap": ".Composer button[type=submit]" },
+  { "wait": 8000 },
+  { "shot": "sent" }
+]
 ```
 
-Its window is never narrower than 500px. Ask for 390 or 320 and it lays the
-page out at 500, then crops the picture to the width you asked for. The page
-looks as if it runs off the right edge, and the nav and headings come out cut
-short. That picture once filed a phone overflow on yaks.app's home page that
-didn't exist.
+The sign-in needs nothing from you. The checks connection on this box keeps a
+website session in its vault record beside its OAuth grant; the platform
+slides it forward as it is used, and once it is missing or has expired the
+next `admin browse`, `admin link` or other website act signs checks in again
+from the code mailed to this graph (packages/admin/account.ts). The door
+(workers/yak/browse.ts) takes only that session cookie, serves only the
+platform's `@bot.yak.sh` test accounts and its owners, and opens only
+yaks.app's own hosts. For a page off yaks.app, thum.io renders a public URL
+(`https://image.thum.io/get/png/width/<w>/<url>`), but never narrower than
+500px.
 
-To see a narrower width, frame the page: a 500px page holding an `<iframe>`
-that is exactly 390 or 320px wide, since an iframe is a window of its own.
-Measure rather than squint. A script in the framed copy that compares
-`document.documentElement.scrollWidth` with `clientWidth`, and lists any
-element whose right edge passes the window, answers "does it overflow?"
-outright. A copy is the live page's HTML with `<base href="https://yaks.app/">`
-in its head and the script before `</body>`. thum.io can only fetch it from
-the open internet, so publish the copy and its frame on public.yak.sh
-(`sharing`) and delete them when you're done.
+The iOS shell's CI check (.github/workflows/ios-shell.yml) signs in with a
+year-long checks link kept as a repository secret; its header says how to mint
+the next one, and a wake on the project comes back a month before it expires.
 
 When this skill is wrong or missing something, fix it in the same change.

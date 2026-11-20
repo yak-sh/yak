@@ -362,7 +362,6 @@ export let runs = (
         )
         files.push(file)
       }
-      let problems = got.accessibility.problems ?? []
       return [
         said(call, [
           `${url} as ${at.address}: HTTP ${got.status}, ${
@@ -372,7 +371,6 @@ export let runs = (
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
           ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')
             .map((m) => `console   ${m.type}: ${m.text}`),
-          ...problems.map((p) => `a11y      ${p.rule}: ${p.help}`),
           '',
           got.text,
         ]),

@@ -4,6 +4,7 @@
 import { system } from '@yaks/fp'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
+import type { Checked } from '@yaks/platform/preview-audit'
 import type { Failed, Rendered, Visit } from './browser/capture.ts'
 
 // A failure yak-browser answered, raised here with the stack it had there.
@@ -18,12 +19,12 @@ let answered = async (r: Response) => {
 }
 
 /**
- * What yak-browser rendered of a visit, charged through `used` the browser time
- * it held, failing or not; the time this waited when it could not say. A check
- * that failed stays the preview's own result and is reported here, for the
- * tracker to hear, tagged with `where` the preview was of.
+ * What yak-browser saw of a visit, charged through `used` the browser time it
+ * held, failing or not; the time this waited when it could not say. An
+ * accessibility check that failed stays the visit's own result and is reported
+ * here, for the tracker to hear, tagged with `where` the visit was of.
  */
-export let render = async (
+export let seen = async (
   env: Pick<Env, 'BROWSER' | 'CLOCK'>,
   visit: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
@@ -48,11 +49,25 @@ export let render = async (
     await used(said?.duration ?? Math.max(0, time.now() - start))
   }
   if ('failed' in said) throw relayed(said)
-  if ('failed' in said.accessibility) {
+  if (said.accessibility && 'failed' in said.accessibility) {
     caught(new Error(said.accessibility.failed), {
       request: 'app_preview accessibility',
       ...where,
     })
   }
   return said
+}
+
+/** A render for app_preview: what {@link seen} answers, its accessibility
+ * always checked. */
+export let render = async (
+  env: Pick<Env, 'BROWSER' | 'CLOCK'>,
+  visit: Visit,
+  used?: (duration: number) => Promise<void>,
+  where?: Record<string, string>,
+): Promise<Rendered & { accessibility: Checked }> => {
+  let said = await seen(env, { ...visit, audit: true }, used, where)
+  let { accessibility } = said
+  if (!accessibility) throw new Error('yak-browser ran no accessibility check')
+  return { ...said, accessibility }
 }

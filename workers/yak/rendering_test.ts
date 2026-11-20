@@ -202,6 +202,7 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
     steps: [
       { tap: 'textarea' },
       { keyboard: 336 },
+      { clear: 'textarea' },
       { type: 'hello', into: 'textarea' },
       { shot: 'typed' },
       { press: 'Enter' },
@@ -215,6 +216,12 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
     'tap textarea',
     'view 390x508 touch',
     'find textarea',
+    'focus textarea',
+    'down Control',
+    'press a',
+    'up Control',
+    'press Backspace',
+    'find textarea',
     'type hello into textarea',
     'press Enter',
     'touch 10,400',
@@ -223,7 +230,19 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
   ])
   assertEquals(p.log.filter((l) => l.startsWith('move')).at(-1), 'move 300,400')
   assertEquals(result.shots, [{ name: 'typed', image: 'png-bytes' }])
+  assertEquals(result.accessibility != null, true)
   assertEquals(result.image, 'png-2')
+})
+
+test('a visit that asks for no audit reads its text and runs no check', async () => {
+  let p = page()
+  let result = await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view,
+    audit: false,
+  })
+  assertEquals(result.accessibility, undefined)
+  assertEquals(result.text, 'Meetings\nAgenda')
 })
 
 test("a step that fails ends the steps, is the visit's error, and the page is still pictured", async () => {
@@ -374,7 +393,7 @@ test('a check that stalls keeps the preview and fails at its own deadline', asyn
   let result = await running
   assertEquals(result.image, 'png-bytes')
   assertStringIncludes(
-    report(result.accessibility),
+    report(result.accessibility!),
     'Accessibility check timed out after 10 seconds',
   )
   assertEquals(time.pending(), 0)

@@ -221,12 +221,12 @@ form.
 `browse` opens a page of yaks.app in Cloudflare's browser
 (workers/yak/browse.ts, through the yak-browser Worker), signed in with the
 selected account's website session, and takes the steps a person would: tap,
-type, press a key, swipe, open a phone's keyboard, wait, take a screenshot. Each
-screenshot is written to `--to` (default `.scratch/browse`), the last as
-`end.png`; the answer says the status, the page's errors, its accessibility
-problems and its text. The window is a phone's, 390 × 844 with touch, unless
-named. Only the platform's test accounts and owners may use it, and only on
-yaks.app's own hosts.
+type, press a key, swipe, open a phone's keyboard, clear a field, wait, take a
+screenshot. Each screenshot is written to `--to` (default `.scratch/browse`),
+the last as `end.png`; the answer says the status, the page's errors and its
+text; the accessibility audit is app_preview's. The window is a phone's, 390 ×
+844 with touch, unless named. Only the platform's test accounts and owners may
+use it, and only on yaks.app's own hosts.
 
 ```sh
 yak admin browse /manage/checks/operator --as checks

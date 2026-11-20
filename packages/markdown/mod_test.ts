@@ -165,7 +165,7 @@ test('an eid in prose is drawn as the id its host has at hand, or its handle', (
   ) assertEquals(seen(source, { refs: opens, ids }), want, source)
 })
 
-test('prose drawn as text holds no whole uuid outside code', () => {
+test('prose drawn as text holds no whole uuid outside code and paths', () => {
   for (
     let [source, want] of [
       ['no ids, T-12 as typed', 'no ids, T-12 as typed'],
@@ -184,6 +184,10 @@ test('prose drawn as text holds no whole uuid outside code', () => {
       ],
       [`> **${PROJECT}**, | ${TASK} |`, '> **P-1**, | #0e513227de |'],
       [`x${PROJECT} ${PROJECT}y`, `x${PROJECT} ${PROJECT}y`],
+      [
+        `shot /w/${PROJECT}/end.png of ${PROJECT}`,
+        `shot /w/${PROJECT}/end.png of P-1`,
+      ],
     ]
   ) assertEquals(drawn(source, ids), want, source)
 })

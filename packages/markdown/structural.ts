@@ -26,10 +26,11 @@ export type Ids = (eid: string) => string | undefined
 
 // An id is a word of its own: a T-123 at a boundary, whatever its letter (the
 // number names the entity), a #hex short id, a UUID or a whole SHA. UTF-8 and
-// SHA-256 stay words because their letters sit mid-word.
+// SHA-256 stay words because their letters sit mid-word, and one after a slash
+// is a segment of a path or an address, which drawn would lead nowhere.
 let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 let ID = `${WRITTEN}|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{64}|[0-9a-f]{40}`
-let START = new RegExp(`(?<![\\w#-])(?:${ID})(?![\\w-])`)
+let START = new RegExp(`(?<![\\w#/-])(?:${ID})(?![\\w-])`)
 let REF = new RegExp(`^(?:${ID})(?![\\w-])`)
 let NAMED = new RegExp(
   `^(?:#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{40}|[0-9a-f]{64})$`,
