@@ -52,21 +52,23 @@ export let schedules: Wake[] = [{
   sweep: { kind: 'wrap' },
 }]
 
+/** The directory's own decisions over its store's graph, as its door answers
+ * them, for a handler that runs inside it. */
+export let inStore = (at: Options['store']) =>
+  directoryRows({
+    query: async (q) =>
+      (await at.graph.read(q) as Row[]).map((row) => ({
+        ...row,
+        policy: { revision: 0 },
+      })),
+    apply: async (entities) =>
+      await at.graph.apply(entities, { trusted: true }),
+  })
+
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
   if (!at.meta) return {}
-  // The directory's own decisions over this store's graph, as its door
-  // answers them, for a handler that runs inside it.
-  let dir = () =>
-    directoryRows({
-      query: async (q) =>
-        (await at.graph.read(q) as Row[]).map((row) => ({
-          ...row,
-          policy: { revision: 0 },
-        })),
-      apply: async (entities) =>
-        await at.graph.apply(entities, { trusted: true }),
-    })
+  let dir = () => inStore(at)
   return {
     delete_retired_files: async (event, _tx, _write, attempt) => {
       if (!at.env.BLOBS) return

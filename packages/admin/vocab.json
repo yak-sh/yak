@@ -303,6 +303,35 @@
         "since"
       ]
     },
+    "admin_letters": {
+      "tool": true,
+      "destructive": false,
+      "noun": "admin",
+      "verb": "letters",
+      "title": "Try what every Operator would email its people",
+      "description": "Starts a trial of the Operators writing to their people between visits: each space's Operator writes the one email it would send today, from its people, its apps and their use, and from `changelog`, what yaks.app can do now. Test spaces and the platform's own are left out; pilots are in. The letters are written in one Anthropic batch whose requests share a cached prefix (the Operator's persona and the changelog), at batch prices paid by the platform, and appear within the hour on the admin's Letters page (/admin/letters), one per space. Nothing is sent to anyone. The selected account must have the platform role.\n\n  yak admin letters @changelog.md --as admin@bot.yak.sh",
+      "input": {
+        "changelog": {
+          "type": "string",
+          "description": "what yaks.app can do now that it could not lately; @path reads a file"
+        },
+        "model": {
+          "type": "string",
+          "description": "the Anthropic model that writes the letters (claude-opus-5-5 when absent)"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "changelog"
+      ],
+      "required": [
+        "changelog"
+      ]
+    },
     "admin_move": {
       "tool": true,
       "noun": "admin",

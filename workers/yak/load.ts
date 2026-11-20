@@ -83,8 +83,9 @@ import * as eager0_78 from '@yaks/platform/directory-vocab'
 import * as eager0_79 from './facets/git-vocab.ts'
 import * as eager0_80 from '@yaks/platform/meter-vocab'
 import * as eager0_81 from '@yaks/platform/models-vocab'
-import * as eager0_82 from '@yaks/platform/refusals-vocab'
-import * as eager0_83 from '@yaks/platform/trash-vocab'
+import * as eager0_82 from '@yaks/platform/outreach-vocab'
+import * as eager0_83 from '@yaks/platform/refusals-vocab'
+import * as eager0_84 from '@yaks/platform/trash-vocab'
 import * as eager1_0 from '@yaks/anthropic/provider'
 import * as eager1_1 from '@yaks/openai/provider'
 import * as eager1_2 from '@yaks/openrouter/provider'
@@ -174,8 +175,9 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/git': eager0_79,
   'yak/meter': eager0_80,
   'yak/models': eager0_81,
-  'yak/refusals': eager0_82,
-  'yak/trash': eager0_83,
+  'yak/outreach': eager0_82,
+  'yak/refusals': eager0_83,
+  'yak/trash': eager0_84,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {
@@ -246,6 +248,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/lower/graph': () => import('@yaks/platform/lower-graph'),
   'yak/meter/graph': () => import('@yaks/platform/meter-graph'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),
+  'yak/outreach/effects': () => import('./facets/outreach-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
   'yak/publishing/graph': () => import('@yaks/platform/publishing-graph'),
   'yak/refusals/effects': () => import('./facets/refusals-effects.ts'),

@@ -12,6 +12,8 @@ import { Head } from '@yaks/ui/parts'
 // page says how many builds the home page's box opened today against the
 // day's cap, what each spent against its budget and which were kept by
 // signing up (newcomer.ts, D-146737).
+// The Letters page lists the outreach trials (outreach.ts): what every
+// space's Operator would email its people, one letter a space, never sent.
 //
 // Only an owner of the `yak` space sees it, signed in by the platform's
 // session cookie (`staff`); anybody else is told nothing is here, and an
@@ -86,6 +88,7 @@ import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
 import { reconciled, type Spending } from './operator-spending.ts'
 import { receiptEid } from './model-spend.ts'
+import { MODEL } from '@yaks/platform/outreach'
 
 export let PATH = ADMIN
 
@@ -462,6 +465,120 @@ let buildsPage = (d: Reading, today: number) => {
   )
 }
 
+// Outreach trials (outreach.ts): what every space's Operator would email its
+// people, given what yaks.app can do now. Started with `yak admin letters`;
+// nothing here is ever sent.
+let trialState = (r: Row) =>
+  r.outreach_written
+    ? `${r.outreach_written.letters} letters, ${
+      dollars(Number(r.outreach_written.dollars ?? 0))
+    }`
+    : r.outreach_batch
+    ? `Writing ${r.outreach_batch.spaces} letters since ${
+      day(String(r.outreach_batch.at))
+    }`
+    : 'Waiting to be sent'
+let firstLine = (text: unknown) =>
+  String(text ?? '').trim().split('\n')[0].slice(0, 120)
+let paragraphs = (text: unknown) =>
+  String(text ?? '').split(/\n\s*\n/).map((p) => h('p', null, p.trim()))
+
+let lettersPage = (d: Reading, trials: Row[]) =>
+  desk(
+    d,
+    'Letters',
+    'letters',
+    h(
+      Fragment,
+      null,
+      facts([
+        [
+          'What',
+          "Each space's Operator writes the email it would send its people, from their apps and the changelog. Nothing is sent.",
+        ],
+        ['Start one', 'yak admin letters @changelog.md --as admin'],
+      ]),
+      h(Group, null, 'Trials'),
+      trials.length
+        ? h(
+          Card,
+          { as: 'ul', class: 'Directory' },
+          trials.map((r) =>
+            h(
+              'li',
+              { class: 'Directory_Item' },
+              h(
+                'a',
+                { href: `${PATH}/letters/${r.entity.eid}` },
+                `${day(String(r.created?.at ?? ''))}: ${
+                  firstLine(r.outreach_trial?.changelog)
+                }`,
+              ),
+              h('div', null, trialState(r)),
+            )
+          ),
+        )
+        : empty('No trial has been run yet'),
+    ),
+  )
+
+let trialPage = (d: Reading, trial: Row | undefined, letters: Row[]) => {
+  if (!trial) {
+    return desk(
+      d,
+      'Letters',
+      'letters',
+      empty('No trial has that id'),
+      null,
+      404,
+    )
+  }
+  let slugOf = (eid: unknown) => d.spaces.get(String(eid))?.slug ?? String(eid)
+  let sorted = [...letters].sort((a, b) =>
+    slugOf(a.outreach_letter?.space).localeCompare(
+      slugOf(b.outreach_letter?.space),
+    )
+  )
+  return desk(
+    d,
+    `Letters of ${day(String(trial.created?.at ?? ''))}`,
+    'letters',
+    h(
+      Fragment,
+      null,
+      facts([
+        ['State', trialState(trial)],
+        ['Model', String(trial.outreach_trial?.model || MODEL)],
+      ]),
+      h(Group, null, 'Changelog'),
+      h(Card, { as: 'div' }, paragraphs(trial.outreach_trial?.changelog)),
+      h(Group, null, 'Letters'),
+      sorted.length
+        ? sorted.map((r) =>
+          h(
+            Card,
+            { as: 'article' },
+            h(
+              'p',
+              null,
+              h('b', null, slugOf(r.outreach_letter?.space)),
+              ` · ${r.outreach_letter?.stage} · ${
+                dollars(Number(r.outreach_letter?.dollars ?? 0))
+              }`,
+            ),
+            h('p', null, h('b', null, String(r.doc?.title ?? ''))),
+            paragraphs(r.doc?.body),
+          )
+        )
+        : empty(
+          trial.outreach_written
+            ? 'The batch wrote no letters'
+            : 'The letters are still being written',
+        ),
+    ),
+  )
+}
+
 // Who invited whom and the month each first app gave, then everybody given
 // the starter. Inviting yourself and making accounts for the starter are
 // against the terms, and are watched here rather than refused anywhere
@@ -505,6 +622,7 @@ let desk = (
     | 'funnel'
     | 'invites'
     | 'builds'
+    | 'letters'
     | null,
   body: ComponentChildren,
   kicker: ComponentChildren = null,
@@ -560,6 +678,7 @@ let desk = (
       'Visitor builds',
       builds(d).length,
     ),
+    link('letters', `${PATH}/letters`, 'mail', 'Letters'),
   ]
   return shell(
     d.env,
@@ -1147,6 +1266,12 @@ export let answer = async (
   if (rest == 'builds') return buildsPage(d, await opened(dir))
   if (rest == 'sessions') return await sessionsPage(d, env, who)
   if (rest == 'spending') return await spendingPage(d, env, who)
+  if (rest == 'letters') return lettersPage(d, await dir.trials())
+  if (rest.startsWith('letters/')) {
+    let trial = rest.slice('letters/'.length)
+    let [row] = (await dir.trials()).filter((r) => r.entity.eid == trial)
+    return trialPage(d, row, row ? await dir.letters(trial) : [])
+  }
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
     let f = await funnel(env, days).catch((e) => {

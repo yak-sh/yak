@@ -21,6 +21,7 @@ export let facets: Record<string, Specifiers> = {
   'yak/trash': { vocab: at('trash-vocab'), graph: at('trash-graph') },
   'yak/meter': { vocab: at('meter-vocab'), graph: at('meter-graph') },
   'yak/refusals': { vocab: at('refusals-vocab') },
+  'yak/outreach': { vocab: at('outreach-vocab') },
   'yak/lenses': { graph: at('lenses-graph') },
   'yak/lower': { graph: at('lower-graph') },
   'yak/describe': { graph: at('describe-graph') },

@@ -88,3 +88,23 @@ the price `@yaks/model`'s `listPrice` has for the name (the API publishes none);
 writes `anthropic{response_id, cache_expires_at}`, the expiry being the
 request's start plus the documented five minutes. `anthropicDoc` declares the
 component.
+
+## Batches
+
+`@yaks/anthropic/batches` sends many Messages requests as one Message Batch,
+answered within a day at half the price. `submit` sends the requests, each a
+request body named by a `custom_id`; `read` says how the batch stands; and
+`results` reads every result once it has `ended`, in any order, so each is found
+by its `custom_id`. A prefix every request marks with `cache_control` is written
+to the cache once and read by the requests after it.
+
+```ts ignore
+import { batches } from '@yaks/anthropic/batches'
+
+let api = batches({ key: () => myPrivateKey })
+let { id } = await api.submit([{
+  custom_id: 'a',
+  params: { model: 'claude-opus-5-5', max_tokens: 1000, messages },
+}])
+if ((await api.read(id)).processing_status == 'ended') await api.results(id)
+```

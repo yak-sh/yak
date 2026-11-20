@@ -7,7 +7,8 @@
     "./vocab": "./vocab.ts",
     "./mark": "./mark.ts",
     "./reads": "./reads.ts",
-    "./provider": "./provider.ts"
+    "./provider": "./provider.ts",
+    "./batches": "./batches.ts"
   },
   "license": "Apache-2.0",
   "description": "Implements the model interface over Anthropic's Messages API, spoken over fetch: streamed text, tool use, automatic prompt caching and cancellation, with usage that names what the cache read and wrote.",

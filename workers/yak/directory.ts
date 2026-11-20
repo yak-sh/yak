@@ -859,6 +859,16 @@ export type Row = MeteredRow & {
     inviter?: Id | null
   }
   visitor_build?: { at?: string }
+  // An outreach trial (outreach.ts) and the letters it wrote.
+  outreach_trial?: { changelog?: string; model?: string }
+  outreach_batch?: { id?: string; at?: string; spaces?: number }
+  outreach_written?: { at?: string; letters?: number; dollars?: number }
+  outreach_letter?: {
+    trial?: string
+    space?: string
+    stage?: string
+    dollars?: number
+  }
   preview?: { site?: string | null; at?: string | null }
   created?: { at?: string; by?: Id | null }
   last_deploy?: { at?: string; by?: Id | null; via?: Id | null }
@@ -3782,6 +3792,16 @@ export let directoryRows = (rows: {
         ])
       return { people, spaces, apps, seats, deploys, referrals, agents }
     },
+    // The outreach trials (outreach.ts), newest first, and the letters one
+    // wrote: the admin's Letters page, and nothing else, asks these.
+    trials: async () =>
+      (await query(
+        line`.outreach_trial&?outreach_batch&?outreach_written&?created`,
+      )).sort((a, b) =>
+        (b.created?.at ?? '').localeCompare(a.created?.at ?? '')
+      ),
+    letters: async (trial: string) =>
+      await query(line`.outreach_letter.trial=${trial}&?doc`),
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.

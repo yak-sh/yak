@@ -3832,6 +3832,9 @@ importers:
 
   packages/platform:
     dependencies:
+      '@yaks/anthropic':
+        specifier: 0.2.30
+        version: link:../anthropic
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
