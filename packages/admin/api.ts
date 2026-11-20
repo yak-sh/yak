@@ -803,8 +803,23 @@ export let valueOf = (out: Reply): Record<string, unknown> | undefined => {
   return Array.isArray(result) ? valueIn(result) : undefined
 }
 
+// A connection that drops while its answer streams back (the platform's
+// request ended, or the network between) leaves no body to read; the answer
+// says which door and status it came from, so the caller can ask again.
 let bodyOf = async (r: Response) => {
-  let text = await r.text()
+  let text
+  try {
+    text = await r.text()
+  } catch (e) {
+    throw new Error(
+      `${
+        new URL(r.url).pathname
+      } said ${r.status}, but its connection closed before its answer arrived (${
+        (e as Error).message
+      }); ask again${traced(r)}`,
+      { cause: e },
+    )
+  }
   return parsed(text)
 }
 

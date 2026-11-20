@@ -518,6 +518,23 @@ test('a copy page the platform failed or cut short is asked again, and a failure
     cut.done()
     Object.assign(reconnect, was)
   }
+  let dropped = answers([() =>
+    new Response(
+      new ReadableStream({
+        start: (c) =>
+          c.error(new TypeError('error reading a body from connection')),
+      }),
+      { headers: { 'x-request-id': 'req-3' } },
+    )])
+  try {
+    await assertRejects(
+      () => feeNow(through),
+      Error,
+      '/api/fee said 200, but its connection closed before its answer arrived (error reading a body from connection); ask again (request req-3)',
+    )
+  } finally {
+    dropped.done()
+  }
 })
 
 test('an expired MCP session is a refusal, not a defect', async () => {
