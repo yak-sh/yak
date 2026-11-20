@@ -9,7 +9,7 @@ import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docs as uxDocs } from '@yaks/ux/vocab'
-import { conversed, conversingOf, TAKE } from '@yaks/ux/conversation'
+import { conversed, conversingOf, disclosed, TAKE } from '@yaks/ux/conversation'
 import { opening } from '@yaks/session/conversation'
 import { drawLines, type Lines } from './operator-draw.ts'
 import {
@@ -71,7 +71,10 @@ export type Talking = ReturnType<typeof mountTalk>
  * written (`typed`), a whole read (`read`, the `?talk=` answer's HTML) and
  * Stop pressed (`stopped`). Where its reader is goes to `onAway`, and
  * `newest` takes them back; `older` is asked for a read of `take` lines when
- * the reader asks for lines the page does not hold.
+ * the reader asks for lines the page does not hold. A fold drawn closed and
+ * empty (@yaks/ux `Disclosure` `lazy`) in a line held as the server drew it
+ * opens once `unfold` has fetched that line's entries, from which it is drawn
+ * here from then on; a failure goes to `onError`.
  */
 export let mountTalk = (
   {
@@ -81,6 +84,8 @@ export let mountTalk = (
     pane,
     onAway = () => {},
     older = () => {},
+    unfold,
+    onError = (e) => globalThis.reportError?.(e),
     clock = () => new Date().toISOString(),
   }: {
     box: HTMLElement
@@ -89,6 +94,8 @@ export let mountTalk = (
     pane?: () => HTMLElement | null
     onAway?: (away: boolean) => void
     older?: (take: number) => void
+    unfold?: (line: string) => Promise<Lines | null>
+    onError?: (error: Error) => void
     clock?: () => string
   },
 ) => {
@@ -161,6 +168,27 @@ export let mountTalk = (
     ;(box.firstChild ? hydrate : render)(tree(held), box)
   }
   draw()
+  // A lazy fold pressed in a line held as the server drew it: the line's
+  // entries fetched, the line drawn from them as the server drew it (so its
+  // folds keep their places), then the fold opened.
+  box.addEventListener('click', (ev) => {
+    let summary = (ev.target as Element).closest?.('summary')
+    let fold = summary?.parentElement
+    let row = fold?.closest('[id^="row-"]')
+    if (!fold?.hasAttribute('data-lazy') || !row || !held || !unfold) return
+    let id = row.id.slice('row-'.length)
+    if (held.lines.find((l) => l.id == id)?.uses) return
+    ev.preventDefault()
+    let eid = (fold as HTMLElement).dataset.disclosure
+    unfold(id).then((sent) => {
+      if (!held || !sent) return
+      put(sent.entries)
+      held = heard(held, sent)
+      draw()
+      if (eid) put([disclosed({ entity: { eid } }, true)])
+      draw()
+    }).catch(onError)
+  })
   let typing = false
   return {
     /** the task the page shows, once it shows one */

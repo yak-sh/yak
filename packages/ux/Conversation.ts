@@ -166,7 +166,7 @@ export let Fold = (
   props: Omit<DisclosureProps, keyof Disclosed>,
 ): JSX.Element => h(Disclosure, { ...props, ...useFold() })
 
-export { Disclosure, DisclosureMark }
+export { disclosed, Disclosure, DisclosureMark }
 
 // What scrolls the page.
 let paged = (doc: Document): HTMLElement =>

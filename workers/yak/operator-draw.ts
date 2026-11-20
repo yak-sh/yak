@@ -45,6 +45,7 @@ import {
   type Kind,
   kind,
   kinds as conversation,
+  lazyStep,
   margin,
   markdown,
   type Named,
@@ -217,8 +218,12 @@ let helper = (b: Bundle, body: string) => {
 }
 
 // What a model was told before anything was said to it, closed until
-// opened.
-let instructed = (said: string, ...inside: Node[]) => step(said, '', ...inside)
+// opened, and drawn only then where the page can fetch it as it opens (the
+// chat page's script, operator-talk-browser.ts): a conversation's contexts
+// were three quarters of its page's 990 KB (T-2087). A page with no script
+// draws them `whole`.
+let instructing = (whole = false) => (said: string, ...inside: Node[]) =>
+  (whole ? step : lazyStep)(said, '', ...inside)
 
 // What a model was told is Markdown, drawn the way a reply is.
 let written = markdown
@@ -260,15 +265,21 @@ let offered = (tools: Tool[], page: Drawn) => {
 // The tools an ask offered as a layer: one line each, in no order, so what
 // changed is the tools put in, taken out or told differently.
 let toolset = (tools: Tool[]): Layer => {
+  let held = TOOLSETS.get(tools)
+  if (held) return held
   let lines = tools.map((t) => JSON.stringify(t)).sort()
-  return {
+  let layer: Layer = {
     name: `${tools.length} tools`,
     key: 'tools',
     text: lines.join('\n'),
     lines,
     inside: (page) => offered(tools, page),
   }
+  TOOLSETS.set(tools, layer)
+  return layer
 }
+// Each offer's layer, once an offer read: every ask naming it shares it.
+let TOOLSETS = new WeakMap<Tool[], Layer>()
 
 /** A tool as a model was offered it (@yaks/model `Tool`). */
 export type Tool = {
@@ -283,8 +294,14 @@ export type Offers = Map<string, Tool[]>
 /** The instructions asks name (`sending{told}`), by their sha. */
 export type Instructions = Map<string, string>
 
-/** What asks name of what they sent: their tools and their instructions. */
-export type Asked = { offers?: Offers; instructions?: Instructions }
+/** What asks name of what they sent: their tools and their instructions;
+ * and whether what they were told is drawn `whole`, for a page with no
+ * script to fetch it as it opens. */
+export type Asked = {
+  offers?: Offers
+  instructions?: Instructions
+  whole?: boolean
+}
 
 /** A layer of what a model was told: its name, what it holds drawn on a page
  * (once its text is drawn above, that it is the same), what tells a later
@@ -314,8 +331,10 @@ let prose = (name: string, text: string, key = name): Layer => ({
 // What a layer lost and gained since the one before it: whole, when it is
 // new; the lines gone and the lines come, when it changed.
 let change = (now: Layer | undefined, before: Layer | undefined) => {
-  let gone = (a?: Layer, b?: Layer) =>
-    (a?.lines ?? []).filter((l) => !b?.lines.includes(l))
+  let gone = (a?: Layer, b?: Layer) => {
+    let kept = new Set(b?.lines)
+    return (a?.lines ?? []).filter((l) => !kept.has(l))
+  }
   let lines = (said: string, list: string[]) =>
     list.length
       ? [
@@ -341,8 +360,20 @@ let heading = (part: string) => {
 
 // The layers of a system prompt: each document its persona wears, by its
 // title, base first, and what its host added after them (@yaks/persona
-// `PART`). A rule inside a document stays in it.
-let voiced = (said: string): Layer[] =>
+// `PART`). A rule inside a document stays in it. Most asks are told one of
+// a few texts, each tens of kilobytes, so each is read once an isolate
+// (`VOICED`): reading every ask's again was half of drawing a page (T-2087).
+let voiced = (said: string): Layer[] => {
+  let held = VOICED.get(said)
+  if (held) return held
+  let layers = layered(said)
+  if (VOICED.size >= KEPT) VOICED.delete(VOICED.keys().next().value!)
+  VOICED.set(said, layers)
+  return layers
+}
+let VOICED = new Map<string, Layer[]>()
+let KEPT = 16
+let layered = (said: string): Layer[] =>
   said.split(PART).reduce(
     (parts: { name: string; text: string }[], part, i, all) => {
       let head = heading(part)
@@ -389,8 +420,10 @@ let context = (
   layers: Layer[],
   page: Drawn,
   was?: Layers,
-) =>
-  was
+  whole?: boolean,
+) => {
+  let instructed = instructing(whole)
+  return was
     ? instructed(
       `The context ${who} was given changed here`,
       changes(new Map(layers.map((l) => [l.key, l])), was).map((c) =>
@@ -401,6 +434,7 @@ let context = (
       `The context ${who} was given`,
       layers.map((l) => instructed(l.name, l.inside(page))),
     )
+}
 
 /** What a transcript's model was told, from the record: at its first ask, one
  * entry holding each layer of its system prompt (`sending{told}`, or the text
@@ -415,7 +449,7 @@ let context = (
 let briefed = (
   entries: Bundle[],
   who: string,
-  { offers = new Map(), instructions = new Map() }: Asked = {},
+  { offers = new Map(), instructions = new Map(), whole }: Asked = {},
   page: Drawn = new Set(),
   sources = new Map<string, string[]>(),
 ): Told[] => {
@@ -459,7 +493,7 @@ let briefed = (
     let now = new Map(layers.map((l) => [l.key, l]))
     last.set(session, now)
     return layers.length && (!was || changes(now, was).length)
-      ? [{ id, uses, draw: () => context(who, layers, page, was) }]
+      ? [{ id, uses, draw: () => context(who, layers, page, was, whole) }]
       : []
   })
   // Notes no ask has sent yet.
@@ -467,7 +501,7 @@ let briefed = (
     ? [...rows, {
       id: notes[0].id,
       uses: notes.map((n) => n.id),
-      draw: () => context(who, notes, page),
+      draw: () => context(who, notes, page, undefined, whole),
     }]
     : rows
 }
@@ -505,6 +539,9 @@ export type Seen = {
   mentions?: string
   /** each line's files, by its eid */
   files?: Record<string, Kept>
+  /** what models were told drawn whole, for a page with no script to
+   * fetch it as it opens */
+  whole?: boolean
 } & Naming
 
 // What a helper was told, all its asks', in one place.
@@ -691,15 +728,17 @@ let drawing = (
     called = 'the Operator',
     opens,
     files,
+    whole,
   }: Seen = {},
   view: View,
 ) => {
   let page: Drawn = new Set()
   let sources = new Map<string, string[]>()
   let told = new Map(
-    briefed(entries, called, { offers, instructions }, page, sources).map((
-      r,
-    ) => [r.id, r]),
+    briefed(entries, called, { offers, instructions, whole }, page, sources)
+      .map((
+        r,
+      ) => [r.id, r]),
   )
   let beside: Heard = { names, who: 'the Operator', opens, files }
   // The entries each line is framed with, which a run of them is framed with.
@@ -726,7 +765,7 @@ let drawing = (
   // A helper's context, each line of it drawn and framed as the
   // conversation's are.
   let context = (one: Helper) => {
-    let briefs = helped(one, { offers, instructions }, page)
+    let briefs = helped(one, { offers, instructions, whole }, page)
     let byAsk = new Map(briefs.map((r) => [r.id, r]))
     return briefs.flatMap((r) => {
       let b = one.entries.find((b) => b.entity.eid == r.id)
@@ -978,7 +1017,7 @@ let delivered = (b: Bundle, heard: Heard) => {
 let isBrief = (b: Bundle) =>
   comp(b, 'entry')?.from == 'your parent session' && !b.prompt
 let brief = (b: Bundle): Said => ({
-  node: instructed('Brief', written(said(b))),
+  node: step('Brief', '', written(said(b))),
   text: 'Brief',
   is: 'step',
 })

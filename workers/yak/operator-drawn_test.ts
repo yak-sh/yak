@@ -44,9 +44,10 @@ test('a conversation draws a call’s answer without reading its value', () => {
   equal(JSON.stringify(read.lines()).includes('SCREENSHOT'), false)
 })
 
-test('a conversation draws what its helper was told, where it changes', () => {
+test('a conversation reads what its helper was told, where it changes, for a page to draw as it opens', () => {
+  let sent = JSON.stringify(read.lines())
   equal(
-    ['Roll the dice.', 'Roll them again.'].map((s) => read.html.includes(s)),
+    ['Roll the dice.', 'Roll them again.'].map((s) => sent.includes(s)),
     [true, true],
   )
 })

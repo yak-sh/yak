@@ -340,7 +340,8 @@ test('a context that changed draws only its changed layers, each with its change
   ]
   let painted = parseHTML(
     `<div>${
-      rows(entries, namer(seen), { ...seen, helpers: [] }).map((r) => r.html)
+      rows(entries, namer(seen), { ...seen, helpers: [], whole: true })
+        .map((r) => r.html)
         .join('')
     }</div>`,
   ).document
@@ -382,7 +383,8 @@ test('a note stays in what every later ask in its session was given, until a not
   ]
   let doc = parseHTML(
     `<div>${
-      rows(entries, namer(seen), { ...seen, helpers: [] }).map((r) => r.html)
+      rows(entries, namer(seen), { ...seen, helpers: [], whole: true })
+        .map((r) => r.html)
         .join('')
     }</div>`,
   ).document

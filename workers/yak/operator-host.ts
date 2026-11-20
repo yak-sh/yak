@@ -226,15 +226,27 @@ let helpersOf = async (
   store: Store,
   sessions: Bundle[],
   calls?: Set<string>,
-): Promise<Helper[]> =>
-  await Promise.all(
-    (await childrenOf(store, sessions, calls))
-      .filter((b) => comp(b, 'spawned')?.quiet == null).map(async (b) => ({
-        session: b.entity.eid,
-        call: comp(b, 'spawned')?.call as string | undefined,
-        entries: await linesOf(store, b.entity.eid, SHOWN),
-      })),
+): Promise<Helper[]> => {
+  let started = (await childrenOf(store, sessions, calls))
+    .filter((b) => comp(b, 'spawned')?.quiet == null)
+  return await helpedBy(store, started)
+}
+
+// These helper sessions, each with the call that started it and its newest
+// lines, every helper's read together (`filled`).
+let helpedBy = async (store: Store, started: Bundle[]): Promise<Helper[]> => {
+  let slims = await Promise.all(
+    started.map((b) => store.g.read(newestOf(b.entity.eid, SHOWN))),
   )
+  let rows = new Map(
+    (await filled(store, slims.flat())).map((b) => [b.entity.eid, b]),
+  )
+  return started.map((b, i) => ({
+    session: b.entity.eid,
+    call: comp(b, 'spawned')?.call as string | undefined,
+    entries: slims[i].flatMap((s) => rows.get(s.entity.eid) ?? []).reverse(),
+  }))
+}
 
 // The sessions these sessions started, only those started by `calls` when
 // given.
@@ -264,10 +276,9 @@ let linesOf = async (
   most: number,
   from?: number,
 ) => {
-  let newest = (await drawnOf(
-    store,
-    q`.entry.session=${session}&.order=-entry.seq&.limit=${most}`,
-  )).reverse()
+  let newest =
+    (await filled(store, await store.g.read(newestOf(session, most))))
+      .reverse()
   let oldest = Number(comp(newest[0], 'entry')?.seq)
   if (from == null || newest.length < most || !(oldest > from + 1)) {
     return newest
@@ -287,18 +298,34 @@ let linesOf = async (
 // a file); of a line's `sending`, the shas of its tool offer and its
 // instructions (`told`), read once each by `askedOf`. An ask kept before its
 // store's told pass (instructions-move.ts) holds its instructions' text: those are
-// read a few asks at a time, each text held once.
-let drawnOf = async (store: Store, where: Built) => {
-  let [rows, slim] = await Promise.all([
-    store.g.read(q`${sub(where)}&${sub(drawnComps(store.g))}`),
-    store.g.read(q`${sub(where)}&.fields=${SLIM}`),
-  ])
-  let at = new Map(rows.map((b) => [b.entity.eid, b]))
-  for (let s of slim) {
+// read a few asks at a time, each text held once. The rest are read by
+// identity, which reads only the tables each entry's archetype holds: an
+// optional field for every word of the vocabulary was a statement each,
+// about 110 a read and 2,300 a page (T-2087).
+let drawnOf = async (store: Store, where: Built) =>
+  await filled(store, await store.g.read(q`${sub(where)}&.fields=${SLIM}`))
+
+// A session's newest lines, `most` of them, as `filled` starts from.
+let newestOf = (session: string, most: number) =>
+  q`.entry.session=${session}&.order=-entry.seq&.limit=${most}&.fields=${SLIM}`
+
+// Lines read slim (`SLIM`), each filled with what is drawn of it: every
+// session's in one read by identity, which reads each table once.
+let filled = async (store: Store, slim: Bundle[]): Promise<Bundle[]> => {
+  let at = new Map(
+    (await store.g.get(slim.map((b) => b.entity.eid), drawnComps(store.g)))
+      .filter((b) => !b.tombstone).map((b) => [b.entity.eid, b]),
+  )
+  let rows = slim.flatMap((s): Bundle[] => {
     let b = at.get(s.entity.eid)
-    if (b && s.result) b.result = s.result
-    if (b && s.sending) b.sending = s.sending
-  }
+    return b
+      ? [{
+        ...b,
+        ...s.result ? { result: s.result } : {},
+        ...s.sending ? { sending: s.sending } : {},
+      }]
+      : []
+  })
   await instructed(
     store,
     rows.filter((b) => b.ask && !comp(b, 'sending')?.told),
@@ -307,13 +334,11 @@ let drawnOf = async (store: Store, where: Built) => {
 }
 let SLIM = ['entity.eid', 'result.call', 'sending.offer', 'sending.told']
 let BULKY = ['result', 'sending']
-let drawn = new WeakMap<Graph, Built>()
+let drawn = new WeakMap<Graph, string[]>()
 let drawnComps = (g: Graph) => {
   let held = drawn.get(g)
   if (!held) {
-    let names = g.vocab.all.filter((n) => !BULKY.includes(n))
-    held = q`?${names[0]}`
-    for (let n of names.slice(1)) held = q`${sub(held)}&?${n}`
+    held = g.vocab.all.filter((n) => !BULKY.includes(n))
     drawn.set(g, held)
   }
   return held
@@ -341,15 +366,7 @@ let instructed = async (store: Store, asks: Bundle[]) => {
 // The helpers these calls started, each with its own lines.
 let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
   calls.size
-    ? await Promise.all(
-      (await store.g.read(q`.spawned.call=${[...calls]}`)).map(
-        async (b) => ({
-          session: b.entity.eid,
-          call: comp(b, 'spawned')?.call as string | undefined,
-          entries: await linesOf(store, b.entity.eid, SHOWN),
-        }),
-      ),
-    )
+    ? await helpedBy(store, await store.g.read(q`.spawned.call=${[...calls]}`))
     : []
 // Where a helper runs and its model, from its own rows: the machine its run
 // went to (`operator_machine`) and the model asked of it there; else the
@@ -1186,7 +1203,8 @@ export let walkthroughOf = async (
   if (!marked) return null
   let { session, steps } = marked
   let lines = steps.flatMap((s) => s.lines)
-  let seen = await namingOf(store, lines, nameless)
+  // A walkthrough's page has no script to fetch a fold as it opens.
+  let seen = { ...await namingOf(store, lines, nameless), whole: true }
   let names = namer(seen)
   let view = await viewOf(store, lines, false)
   return {
@@ -1204,6 +1222,11 @@ export let walkthroughOf = async (
   }
 }
 
+// The lines drawn, or `only` the one with that id.
+type Drawn = Parameters<typeof wire>[0]
+let picked = (drawn: Drawn, only?: string) =>
+  only == null ? drawn : drawn.filter((l) => l.id == only)
+
 export let conversationOf = async (
   store: Store,
   at: string,
@@ -1220,8 +1243,9 @@ export let conversationOf = async (
   begun: string
   title: string
   html: string
-  // drawn again only for a reader that asks for its lines as data
-  lines: () => Lines | null
+  // drawn again only for a reader that asks for its lines as data: all of
+  // them, or `only` one, which a page asks for as it opens a fold of it
+  lines: (only?: string) => Lines | null
   now?: string
   waiting: Bundle[]
   standing: string
@@ -1242,6 +1266,8 @@ export let conversationOf = async (
       called,
       opens,
       ...mentions ? { mentions } : {},
+      // the admin's page has no script to fetch a fold as it opens
+      ...everyone ? { whole: true } : {},
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
@@ -1275,7 +1301,7 @@ export let conversationOf = async (
         drawn,
         take,
       }),
-      lines: () => wire(drawn, shown, seen),
+      lines: (only?: string) => wire(picked(drawn, only), shown, seen),
       now: now(working, names),
       waiting: [],
       standing: await standingOf(store, [row], entries, seen.helpers),
@@ -1316,6 +1342,8 @@ export let conversationOf = async (
     called,
     opens,
     ...mentions ? { mentions } : {},
+    // the admin's page has no script to fetch a fold as it opens
+    ...everyone ? { whole: true } : {},
     ...await namingOf(store, withHelpers(entries, helped.helpers), named),
   }
   let names = namer(seen)
@@ -1328,7 +1356,7 @@ export let conversationOf = async (
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
     html: talk(held, entries, names, seen, { drawn, take }),
-    lines: () => wire(drawn, entries, seen),
+    lines: (only?: string) => wire(picked(drawn, only), entries, seen),
     now: now(entries, names),
     waiting: [],
     standing: await standingOf(store, sessions, entries, seen.helpers),
@@ -2158,6 +2186,10 @@ export let operatorRequest = async (
       typeof args.mentions == 'string' ? args.mentions : undefined,
       typeof args.take == 'number' && args.take > 0 ? args.take : undefined,
     )
+    // One line as data, for a page opening a fold of it.
+    if (typeof args.line == 'string') {
+      return Response.json({ lines: lines(args.line) })
+    }
     // Its lines as data only for a reader that draws them (the iOS shell).
     return Response.json({
       root,

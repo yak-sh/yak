@@ -318,6 +318,20 @@ export let step = (
   ...inside: Node[]
 ): VNode => h(Fold, { mod: ['quiet', mod], summary: name }, ...inside) as VNode
 
+/** A {@link step} whose inside is drawn only once it is opened (@yaks/ux
+ * `Disclosure` `lazy`): what a model was told, say, which runs to tens of
+ * kilobytes a step and is rarely opened. */
+export let lazyStep = (
+  name: Node,
+  mod: '' | Tone,
+  ...inside: Node[]
+): VNode =>
+  h(
+    Fold,
+    { mod: ['quiet', mod], summary: name, lazy: true },
+    ...inside,
+  ) as VNode
+
 /** A value a tool was given or gave back, the way a person reads it: a list
  * of what it holds under names in words, never its JSON. Bounded in depth,
  * length and count, since a tool can answer with a whole file. */

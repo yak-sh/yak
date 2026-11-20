@@ -102,16 +102,34 @@ test('the Operator hands code to Astra, which works for its space at its own pri
 // on the tools (each with its description and schema), the helper's inside
 // the step that started it. What the page drew above is not drawn again.
 test('the conversation shows the context the Operator and each helper were given, closed until opened', async () => {
-  let { html } = await conversationOf(
-    store,
-    '/manage/claude/operator',
-    out.session,
-    undefined,
-    undefined,
-    space.operator,
-  )
-  let { document } = parseHTML(`<main>${html}</main>`)
+  let page = async (everyone?: () => Promise<null>) =>
+    parseHTML(
+      `<main>${
+        (await conversationOf(
+          store,
+          '/manage/claude/operator',
+          out.session,
+          undefined,
+          everyone,
+          space.operator,
+        )).html
+      }</main>`,
+    ).document
   let named = (d: Element) => d.querySelector(':scope > summary')!.textContent
+  // The person's page draws each closed and empty, for its script to fetch
+  // as it opens (operator-talk-browser.ts); the admin's, with no script,
+  // draws them whole.
+  let contexts = (d: Document) =>
+    [...d.querySelectorAll('.More')].filter((m) =>
+      named(m)!.startsWith('The context')
+    )
+  let lazy = contexts(await page())
+  assertEquals(lazy.length, 2)
+  for (let d of lazy) {
+    assertEquals(d.hasAttribute('data-lazy'), true)
+    assertEquals(d.querySelector(':scope > .More_Body')!.children.length, 0)
+  }
+  let document = await page(() => Promise.resolve(null))
   let layers = (d: Element) => [
     ...d.querySelectorAll(':scope > .More_Body > .More'),
   ]

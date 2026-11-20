@@ -72,6 +72,8 @@ export let Disclosure = (
       class: extra,
       open,
       ...e ? { 'data-disclosure': e.entity.eid } : {},
+      // what a page holding the server's drawing asks for before it opens
+      ...lazy ? { 'data-lazy': '' } : {},
     },
     h(
       More.Summary,

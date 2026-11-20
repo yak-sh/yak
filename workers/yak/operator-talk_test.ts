@@ -12,6 +12,7 @@ import { frame, talk } from './operator-view.ts'
 import { mountTalk, type Talking } from './operator-talk-browser.ts'
 import { operatorVocab } from './operator-store.ts'
 import { pageDocs } from './operator-words.ts'
+import type { Lines } from './operator-draw.ts'
 
 let task = { entity: { eid: 'task-1' } } as Bundle
 let at = '2026-11-13T12:00:00.000Z'
@@ -56,6 +57,7 @@ let page = (
   entries: Bundle[],
   heard: { take?: number }[] = [],
   take?: number,
+  unfold?: (line: string) => Promise<Lines | null>,
 ) => {
   let { document, Event } = parseHTML(
     `<html><body><main id="content"><div data-conversation>${
@@ -73,6 +75,7 @@ let page = (
     box,
     words: docs,
     older: (take) => void heard.push({ take }),
+    unfold,
     clock: () => at,
   })
   return {
@@ -185,4 +188,36 @@ test('a read of the newest lines keeps the earlier ones the page holds, and miss
   equal(p.talk.read(talk(task, words(6), names, {}, { take: 2 })), [])
   equal(p.rows(), rowsOf(talk(task, words(6), names)))
   equal(p.box.querySelector('[data-task] > button'), null)
+})
+
+test('a fold the server drew closed and empty opens on its line, fetched as it is pressed', async () => {
+  let told = entry('told', 1, {
+    ask: {},
+    sending: { instructions: '# Base\nBe kind.' },
+  })
+  let said = entry('said', 2, { content: { body: 'Hello' } })
+  let all = [told, said]
+  let asked: string[] = []
+  using p = page(all, [], undefined, (line) => {
+    asked.push(line)
+    let { lines } = frame('task-1', all, names, 0).operator
+    return Promise.resolve({
+      ...lines,
+      lines: lines.lines.filter((l) => l.id == line),
+    })
+  })
+  let fold = () => p.box.querySelector('#row-told [data-lazy]')!
+  equal(fold().querySelector('.More_Body')!.children.length, 0)
+  fold().querySelector('summary')!.dispatchEvent(
+    new p.Event('click', { bubbles: true, cancelable: true }),
+  )
+  await new Promise((done) => setTimeout(done, 0))
+  equal(asked, ['told'])
+  equal(fold().hasAttribute('open'), true)
+  equal(
+    [...fold().querySelectorAll('.More_Body summary')].map((s) =>
+      s.textContent
+    ),
+    ['Base'],
+  )
 })

@@ -1090,9 +1090,10 @@ test('a helper’s line landing before the socket opens is read, once', async ()
   await settle()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
+  // what it was told closed, its words fetched as it opens
   assertStringIncludes(
     box.innerHTML,
-    'Find the north shelter’s June dates too',
+    'The context the helper was given changed here',
   )
 })
 

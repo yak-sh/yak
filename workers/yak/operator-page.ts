@@ -1080,6 +1080,21 @@ export let operatorAnswer = async (
     }
     return socketTo(env, space, req, who, '/operator/browser')
   }
+  // One line of a conversation as data, for a fold the page opens of a line
+  // it holds as the server drew it (operator-talk-browser.ts `mountTalk`).
+  if (q.has('talk') && q.has('line')) {
+    let { lines } = await operatorDoor(env, space, who, 'conversation', {
+      at,
+      open: q.get('talk')!,
+      line: q.get('line')!,
+    }).catch((e) => {
+      if (e.status != 404) throw e
+      return { lines: null }
+    }) as { lines: Lines | null }
+    return Response.json({ lines }, {
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
   // One conversation read again.
   if (q.has('talk')) {
     let open = q.get('talk')!
@@ -2498,6 +2513,12 @@ let talk = mountTalk({
   pane: () => content,
   onAway: (away) => boxed?.set({ away }),
   older: (take) => { taking = take; read().catch(said) },
+  unfold: async (line) => {
+    let response = await ask('${at}?talk=' + encodeURIComponent(talk.task()) + '&line=' + encodeURIComponent(line))
+    if (!response.ok) throw new Error('That could not be opened. Try again.')
+    return (await response.json()).lines
+  },
+  onError: said,
 })
 let heading = document.querySelector('[data-title]')
 // The app open beside the chat (T-140509) is loaded again when the Operator
