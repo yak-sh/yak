@@ -7,7 +7,7 @@ doc:
 
 yaks.app builds, hosts and shares web apps. Each space and app is a topic with
 an oracle. The map below names the topics you can reach. In the person's
-conversation, fork for work and let the fork consult the oracles it needs; never
+conversation, a fork for longer work consults the oracles it needs; never
 consult one yourself. In a work fork or helper, read an app's notes before
 working there, and ask an oracle with spawn({topic: '<#id from the map>',
 prompt: '<question>'}) for what they don't answer, such as the space's

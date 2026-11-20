@@ -133,8 +133,8 @@ let delegation = (
   name: fork ? 'fork' : 'spawn',
   step: { doing: 'Starting a helper…', done: 'Started a helper' },
   description: fork
-    ? 'Fork your transcript before this tool turn with a prompt OR atomically claimed task (original title/body). Returns the concurrent child session id; completion is delivered automatically.'
-    : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Returns a child ID immediately; a shared worker pool queues excess work durably and delivers completion automatically.',
+    ? 'Fork your transcript before this tool turn with a prompt OR atomically claimed task (original title/body). Returns the concurrent child session id; completion is delivered automatically. For work of many steps or parts that run side by side; do what takes a call or two yourself.'
+    : 'Start a fresh subagent with a prompt OR a task id. A task is claimed atomically and its title/body become the input. Returns a child ID immediately; a shared worker pool queues excess work durably and delivers completion automatically. For work of many steps or that needs a clean start; do what takes a call or two yourself.',
   parameters: {
     type: 'object',
     properties: {
