@@ -12,9 +12,10 @@ import type { Bundle } from '@yaks/graph'
 import { reveal, sealed, type Vault } from '@yaks/secrets'
 import { installed, type Integration, type Read } from './integrations.ts'
 
-/** A client registered with a service: its id, and a confidential client's
- * secret. */
-export type Registered = { id: string; secret?: string }
+/** A client registered with a service: its id, a confidential client's
+ * secret, and the token of the bot its application speaks as on a chat
+ * platform (Discord's), for an integration that `chat`s. */
+export type Registered = { id: string; secret?: string; bot?: string }
 
 // The name a client is kept under among the graph's secrets.
 export let clientSecret = (name: string) => `oauth_client ${name}`
@@ -34,7 +35,8 @@ export let registered = async (
   let c = JSON.parse(text)
   if (
     typeof c?.id != 'string' ||
-    (c.secret != null && typeof c.secret != 'string')
+    (c.secret != null && typeof c.secret != 'string') ||
+    (c.bot != null && typeof c.bot != 'string')
   ) throw new Error(`${name} is not an OAuth client`)
   return c
 }

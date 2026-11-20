@@ -116,6 +116,7 @@ export {
   begin,
   bindingOf,
   borrowed,
+  botOf,
   call,
   carry,
   connect,

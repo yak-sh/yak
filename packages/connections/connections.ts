@@ -1267,6 +1267,25 @@ let fieldsKept = async (
  * several by name, or an access token, refreshed first when it is about to
  * expire. A credential kept as several fields is only ever read one at a
  * time. */
+/**
+ * The bot token that speaks for a chat connection (`integration.chat`): the
+ * pasted key of a bot the space brought, or, for one that added the
+ * platform's own bot to a server, the bot of the OAuth client its
+ * integration signs in as. None for a connection that does not chat, is not
+ * connected, or whose bot is not kept yet.
+ */
+export let botOf = async (
+  c: Ctx,
+  connection: Eid,
+): Promise<string | undefined> => {
+  let b = await held(c.graph.read, connection)
+  if (comp(b, CONNECTION).status != 'connected') return undefined
+  let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
+  if (!i?.chat) return undefined
+  if (keyed(i)) return credential(c, connection)
+  return (await clientOf(c.vault, c.graph.read, i))?.bot
+}
+
 export let credential = async (
   c: Ctx,
   connection: Eid,

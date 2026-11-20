@@ -38,6 +38,7 @@ import {
   attach,
   begin,
   borrowed,
+  botOf,
   call,
   carry,
   clientOf,
@@ -1727,4 +1728,34 @@ test('an app request for a catalog integration prepares its broker at sign-in', 
     'POST /integrations',
     'POST /connect/sessions',
   ])
+})
+
+test("a chat connection's bot: the platform's, added to the server its account names, or the space's own", async () => {
+  let { g, c, needs } = await setup([200, {
+    access_token: 'A1',
+    guild: { id: '81384788765712384', name: 'Yak Barn' },
+  }])
+  await g.apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'PLATFORM BOT' }),
+  ])
+  let ours = await needs({ integration: 'discord' })
+  assertEquals(await botOf(c, ours), undefined)
+  let { attempt } = await begin(c, ours)
+  await connect(c, ours, {
+    attempt: attempt!,
+    callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
+  })
+  assertEquals(
+    of(await at(g, ours), 'connection').account,
+    '81384788765712384',
+  )
+  assertEquals(await botOf(c, ours), 'PLATFORM BOT')
+
+  let theirs = await needs({ integration: 'discord-bot' })
+  await connect(c, theirs, { key: 'THEIR BOT' })
+  assertEquals(await botOf(c, theirs), 'THEIR BOT')
+
+  let texts = await needs({ integration: 'texts' })
+  await connect(c, texts, { key: 'tenant-key' })
+  assertEquals(await botOf(c, texts), undefined)
 })

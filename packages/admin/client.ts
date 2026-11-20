@@ -18,6 +18,7 @@ async (
   let refs = {
     id: String(args.id),
     secret: args.secret as string | undefined,
+    bot: args.bot as string | undefined,
   }
   for (let [arg, ref] of Object.entries(refs)) {
     if (ref != null && !isOpRef(ref)) {
@@ -30,6 +31,7 @@ async (
     await keepClient(at.bearer, name, {
       id: await read(refs.id, signal),
       ...refs.secret ? { secret: await read(refs.secret, signal) } : {},
+      ...refs.bot ? { bot: await read(refs.bot, signal) } : {},
     })
     context.out(`kept the ${name} OAuth client on ${zone()}`)
     return 0

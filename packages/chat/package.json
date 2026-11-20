@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./socket": "./socket.ts",
-    "./effects": "./effects.ts"
+    "./effects": "./effects.ts",
+    "./listen": "./listen.ts"
   },
   "license": "Apache-2.0",
   "description": "Chat platforms as plugins: a message said in a room, who said it, and the reply, for any platform (Discord, Slack, \u2026) that gives itself as data.",

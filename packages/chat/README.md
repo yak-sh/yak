@@ -62,6 +62,14 @@ host does next: beat every `every` milliseconds, or close and connect `again`.
 What the socket remembers survives a reconnect, so a session is resumed. The
 host only connects, keeps time and closes.
 
+`listener(hosting)` (`@yaks/chat/listen`) is the loop a host runs around a
+holder for as long as it lives: given the platform, the bot's credential, how to
+open a socket and where heard messages go, its `alarm` opens the socket when it
+is not open, and the host calls it every `WATCH` (a minute), so a socket dropped
+by a deploy is open again within one. It beats when due, connects again when
+told or dropped, and stops only on a close the platform says is final (`ended`),
+until `close()` forgets the session, as when the credential changes.
+
 Platforms: [@yaks/discord](../discord/README.md).
 
 ## Who answers
