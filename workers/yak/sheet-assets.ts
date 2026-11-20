@@ -45,6 +45,7 @@ export let WORN = [
   'Table',
   'Tabs',
   'Icon',
+  'Logo',
   'Tip',
   'Time',
   'Overlay',
