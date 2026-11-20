@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Said } from '@yaks/chat'
+import type { Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
 import { discord, gateway, INTENTS } from './mod.ts'
@@ -42,8 +42,13 @@ let message = (n: number, d: Record<string, unknown>) => ({
 
 let held = () => {
   let heard: Said[] = []
-  let h = holder(gateway('T0K'), (s) => heard.push(...s))
-  return { h, heard, ...wire() }
+  let seated: Seated[] = []
+  let h = holder(
+    gateway('T0K'),
+    (s) => heard.push(...s),
+    (s) => seated.push(s),
+  )
+  return { h, heard, seated, ...wire() }
 }
 let say = (h: ReturnType<typeof held>['h'], w: Wire, f: unknown) =>
   h.frame(w, JSON.stringify(f))
@@ -99,6 +104,22 @@ test('a mention, a reply, a direct message and a room message are heard as said;
     ],
   )
   assertEquals(heard[0].author, { id: 'ann', name: 'Ann' })
+})
+
+test('the servers the bot is in: all of them when ready, then each it joins or leaves', async () => {
+  let { h, w, seated } = held()
+  let guild = (t: string, d: Record<string, unknown>) =>
+    say(h, w, { op: 0, s: 2, t, d })
+  await say(h, w, {
+    ...ready,
+    d: { ...ready.d, guilds: [{ id: 'barn', unavailable: true }] },
+  })
+  await guild('GUILD_CREATE', { id: 'mill', name: 'Mill' })
+  await guild('GUILD_DELETE', { id: 'barn', unavailable: true })
+  await guild('GUILD_DELETE', { id: 'mill' })
+  assertEquals(seated, [{ all: ['barn'] }, { joined: 'mill' }, {
+    left: 'mill',
+  }])
 })
 
 test('an unanswered beat reconnects, and the new wire resumes where it was', async () => {

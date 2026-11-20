@@ -5,9 +5,10 @@
 // says to, and stops for good only on a close the platform says cannot be
 // tried again with that credential. Its host calls `alarm` every so often
 // (`WATCH`), which opens the socket again if it dropped while nobody was
-// awake: a deploy, an eviction.
+// awake (a deploy, an eviction), and reads the credential again: a new one
+// starts afresh with it, and none closes the socket.
 
-import type { Platform, Said } from './mod.ts'
+import type { Platform, Said, Seated } from './mod.ts'
 import { holder, type Wire } from './socket.ts'
 
 /** The host's open socket, as much of a WebSocket as listening uses. */
@@ -27,6 +28,8 @@ export type Hosting = {
   open: (url: string) => Promise<Socket>
   /** messages heard, to route */
   heard: (said: Said[]) => Promise<void>
+  /** what the platform says of the servers the bot is in, to keep */
+  seated?: (servers: Seated) => Promise<void>
   /** a failure no one asked about, for the host's tracker */
   report: (error: unknown) => void
   /** the host's timers, for a test to drive */
@@ -42,7 +45,8 @@ export type Status =
   | { open: false; waiting?: string; ended?: string }
 
 export type Listener = {
-  /** open the socket now if it is not open; what the host's alarm runs */
+  /** read the credential, and open the socket now if it is not open; what
+   * the host's alarm runs */
   alarm: () => Promise<Status>
   status: () => Status
   /** close it and forget the session, as when its credential changed */
@@ -62,10 +66,15 @@ export let listener = (host: Hosting): Listener => {
   let every = host.every ?? timers.every
   let later = host.later ?? timers.later
   let held: ReturnType<typeof holder> | undefined
+  // the credential the socket opens with, as the last alarm read it
+  let token: string | undefined
   let socket: Socket | undefined
   let stopBeat = () => {}
   let status: Status = { open: false }
   let opening: Promise<Status> | undefined
+  // how many times it was closed: a socket or a reconnect begun before the
+  // last close is not its any more
+  let era = 0
 
   let drop = () => {
     stopBeat()
@@ -85,8 +94,12 @@ export let listener = (host: Hosting): Listener => {
     }
     if (next.again) {
       drop()
-      later(1000, () => void open())
+      again()
     }
+  }
+  let again = () => {
+    let at = era
+    later(1000, () => void (at == era && open()))
   }
   // One opening at a time: an alarm while one is under way joins it.
   let open = (): Promise<Status> =>
@@ -94,15 +107,23 @@ export let listener = (host: Hosting): Listener => {
   let connect = async (): Promise<Status> => {
     try {
       if (socket) return status
-      let token = await host.credential()
       if (!token) {
         return status = {
           open: false,
           waiting: `no ${host.platform.title} bot is kept yet`,
         }
       }
-      held ??= holder(host.platform.socket!(token), host.heard)
+      held ??= holder(
+        host.platform.socket!(token),
+        host.heard,
+        host.seated,
+      )
+      let at = era
       let s = await host.open(held.url())
+      if (at != era) {
+        s.close(4000)
+        return status
+      }
       socket = s
       status = { open: true }
       s.addEventListener('message', (event) => {
@@ -121,7 +142,7 @@ export let listener = (host: Hosting): Listener => {
           )
           return
         }
-        later(1000, () => void open())
+        again()
       })
       return status
     } catch (error) {
@@ -131,13 +152,28 @@ export let listener = (host: Hosting): Listener => {
     }
   }
 
+  let close = () => {
+    era++
+    drop()
+    held = undefined
+  }
+
   return {
-    alarm: () =>
-      'ended' in status && status.ended ? Promise.resolve(status) : open(),
-    status: () => status,
-    close: () => {
-      drop()
-      held = undefined
+    alarm: async () => {
+      let now: string | undefined
+      try {
+        now = await host.credential()
+      } catch (error) {
+        host.report(error)
+        return status
+      }
+      if (now != token) {
+        close()
+        token = now
+      }
+      return 'ended' in status && status.ended ? status : open()
     },
+    status: () => status,
+    close,
   }
 }

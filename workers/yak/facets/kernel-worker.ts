@@ -131,7 +131,7 @@ export let PUBLIC_DIRECTORY = [
 export let PURGER = ['purge', ...DURABLE] as const
 export let OUTLAST = ['call', ...DURABLE] as const
 export let LEXICON = ['admit', 'grow', 'put', 'forget', ...DURABLE] as const
-export let CHATS = ['listen', 'alarm'] as const
+export let CHATS = ['listen', 'stop', 'alarm'] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
@@ -216,8 +216,8 @@ export let classes: Record<string, Deferred> = {
     async (ctx: never, env) =>
       new (await import('../outlast-object.ts')).Outlast(ctx, env),
   ),
-  // A bot listening on a chat platform's socket (chat.ts): yaks.app's own
-  // Discord bot, hearing each server a space added it to.
+  // A bot listening on a chat platform's socket (chat.ts): yaks.app's own,
+  // hearing each server a space added it to, or one a space brought.
   Chats: entered(
     DurableObject,
     CHATS,

@@ -272,8 +272,8 @@ name = "LEXICON"
 class_name = "Lexicon"
 
 # One object per bot listening on a chat platform's socket: yaks.app's own
-# Discord bot, which hears every server a space added it to (chat.ts,
-# index.ts `Chats`, @yaks/chat/listen). Its alarm opens the socket again
+# Discord bot, which hears every server a space added it to, and each bot a
+# space brought (chat.ts, index.ts `Chats`, @yaks/chat/listen). Its alarm opens the socket again
 # after a deploy or an eviction.
 [[durable_objects.bindings]]
 name = "CHATS"

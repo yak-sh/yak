@@ -3,7 +3,7 @@
 // its host opens, so the host (a Durable Object, a process on the box) only
 // connects, keeps time and closes, and knows no platform.
 
-import type { Said, Socket, Step } from './mod.ts'
+import type { Said, Seated, Socket, Step } from './mod.ts'
 
 /** The host's end of an open socket: send a text frame, or close it. */
 export type Wire = {
@@ -27,7 +27,8 @@ export type Holder = {
 }
 
 /**
- * A holder of `socket`, telling `heard` each message it reads. The state a
+ * A holder of `socket`, telling `heard` each message it reads, and `seated`
+ * what the platform says of the servers the bot is in. The state a
  * socket remembers survives a reconnect, so a platform that resumes a session
  * (Discord's) misses nothing between wires. A frame that is not JSON is
  * passed on as the text it is.
@@ -35,6 +36,7 @@ export type Holder = {
 export let holder = <S>(
   socket: Socket<S>,
   heard: (said: Said[]) => unknown,
+  seated?: (servers: Seated) => unknown,
 ): Holder => {
   let state = socket.start
   let run = (wire: Wire, step: Step<S>): Next => {
@@ -56,6 +58,7 @@ export let holder = <S>(
       }
       let step = socket.step(state, frame)
       let next = run(wire, step)
+      if (step.servers) await seated?.(step.servers)
       if (step.heard?.length) await heard(step.heard)
       return next
     },

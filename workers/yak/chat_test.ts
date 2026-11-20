@@ -222,7 +222,7 @@ test('an app that uses the connection hears its server, and answers only into it
       await Promise.all([posted, elsewhere, borrowed].map(outcome)),
       [
         'delivered',
-        "room lobby is not in its connection's server",
+        "room lobby is not in its connection's servers",
         `connection ${another} posts into no server here`,
       ],
     )

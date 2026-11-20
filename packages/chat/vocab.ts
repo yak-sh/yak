@@ -8,7 +8,8 @@ import manifest from './package.json' with { type: 'json' }
 
 /** The chat vocabulary: `chat_message{via, room, author, message_id,
  * reply_to, at, addressed, connection}`, `chat_room{via, id, server, name}`,
- * `chat_account{via, id, name}` and `chat_hears{room}`, in the form `loadVocab`
+ * `chat_account{via, id, name}`, `chat_hears{room}` and
+ * `chat_serves{servers}`, in the form `loadVocab`
  * accepts. */
 export let chatDoc: VocabDoc = doc as VocabDoc
 

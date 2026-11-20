@@ -154,6 +154,7 @@ export let gateway = (token: string): Socket<Session> => ({
             session_id: string
             resume_gateway_url: string
             user: User
+            guilds?: { id: string }[]
           }
           return {
             state: {
@@ -162,7 +163,17 @@ export let gateway = (token: string): Socket<Session> => ({
               resume: d.resume_gateway_url,
               me: d.user.id,
             },
+            servers: { all: (d.guilds ?? []).map((g) => g.id) },
           }
+        }
+        // A server the bot joined, or one it was in that is reachable again;
+        // one it left, unless Discord only lost it for a while.
+        if (f.t == 'GUILD_CREATE') {
+          return { state, servers: { joined: (f.d as { id: string }).id } }
+        }
+        if (f.t == 'GUILD_DELETE') {
+          let d = f.d as { id: string; unavailable?: boolean }
+          return d.unavailable ? { state } : { state, servers: { left: d.id } }
         }
         if (f.t == 'MESSAGE_CREATE') {
           let heard = said(f.d as Message, s.me)

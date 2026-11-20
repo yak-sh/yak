@@ -59,12 +59,13 @@ test('kept: the room, who said it, and the message naming both', () => {
   assertEquals(heard.connection, 'c1')
 })
 
-test('confined: a post goes only into a room of the server its connection serves', async () => {
+test('confined: a post goes only into a room of the servers its connection serves', async () => {
   let posted: string[] = []
   let chatter = confined({
     post: (chat) => (posted.push(chat.room), Promise.resolve({ id: 'r' })),
   }, {
-    serves: (c) => Promise.resolve(c == 'ours' ? 'barn' : undefined),
+    serves: (c) =>
+      Promise.resolve({ ours: ['barn'], own: ['barn', 'mill'] }[c] ?? []),
     server: ({ room }) =>
       Promise.resolve({ general: 'barn', lobby: 'mill' }[room]),
   })
@@ -74,7 +75,8 @@ test('confined: a post goes only into a room of the server its connection serves
   await assertRejects(() => post('ours', 'lobby'), Error, 'not in its')
   await assertRejects(() => post('ours', 'dm'), Error, 'not in its')
   await assertRejects(() => post('theirs', 'general'), Error, 'no server')
-  assertEquals(posted, ['general'])
+  assertEquals(await post('own', 'lobby'), { id: 'r' })
+  assertEquals(posted, ['general', 'lobby'])
 })
 
 test('framing says the platform, how it was said to the bot, and who wrote it', () => {

@@ -1279,13 +1279,15 @@ let fieldsKept = async (
  * pasted key of a bot the space brought, or, for one that added the
  * platform's own bot to a server, the bot of the OAuth client its
  * integration signs in as. None for a connection that does not chat, is not
- * connected, or whose bot is not kept yet.
+ * connected (or not there at all), or whose bot is not kept yet.
  */
 export let botOf = async (
   c: Ctx,
   connection: Eid,
 ): Promise<string | undefined> => {
-  let b = await held(c.graph.read, connection)
+  let [b] = await c.graph.read(
+    line`.entity.eid=${connection}&.${CONNECTION}${sub(ALL)}`,
+  )
   if (comp(b, CONNECTION).status != 'connected') return undefined
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   if (!i?.chat) return undefined

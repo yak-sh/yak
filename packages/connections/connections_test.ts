@@ -1758,6 +1758,9 @@ test("a chat connection's bot: the platform's, added to the server its account n
   let texts = await needs({ integration: 'texts' })
   await connect(c, texts, { key: 'tenant-key' })
   assertEquals(await botOf(c, texts), undefined)
+
+  await disconnect(c, theirs)
+  assertEquals(await botOf(c, theirs), undefined)
 })
 
 test('a Discord account is named by its user id, read from userinfo', async () => {

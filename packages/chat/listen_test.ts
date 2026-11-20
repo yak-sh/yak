@@ -1,6 +1,6 @@
 // Listening on a toy platform's socket over fake sockets and timers: it
-// opens on an alarm, beats when due, reconnects when told or dropped, and
-// stops only on a close its platform says is final.
+// opens on an alarm, beats when due, reconnects when told or dropped, stops
+// on a close its platform says is final, and follows its credential.
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
@@ -40,6 +40,7 @@ let toy: Platform = {
 }
 
 let rig = (token: string | null = 'T') => {
+  let kept = { token }
   let opened: {
     url: string
     sent: unknown[]
@@ -52,7 +53,7 @@ let rig = (token: string | null = 'T') => {
   let reported: string[] = []
   let l = listener({
     platform: toy,
-    credential: () => Promise.resolve(token ?? undefined),
+    credential: () => Promise.resolve(kept.token ?? undefined),
     open: (url) => {
       let o: (typeof opened)[number] = { url, sent: [], fire: {} }
       opened.push(o)
@@ -82,7 +83,7 @@ let rig = (token: string | null = 'T') => {
     for (let fn of soon.splice(0)) fn()
     await new Promise((r) => setTimeout(r, 0))
   }
-  return { l, opened, beats, heard, reported, frame, run }
+  return { l, kept, opened, beats, heard, reported, frame, run }
 }
 
 test('an alarm opens the socket once; what is said is heard, and beats go when due', async () => {
@@ -132,4 +133,29 @@ test('with no bot kept it waits, and says so', async () => {
     waiting: 'no Toy bot is kept yet',
   })
   assertEquals(opened.length, 0)
+})
+
+test('a new credential starts afresh, even after a final close, and none closes the socket', async () => {
+  let { l, kept, opened, frame } = rig()
+  await l.alarm()
+  await frame({ hello: 10 })
+  opened[0].fire.close({ code: 4004 })
+  kept.token = 'U'
+  await l.alarm()
+  assertEquals(opened.map((o) => o.url), ['wss://toy/T/0', 'wss://toy/U/0'])
+  kept.token = null
+  assertEquals(await l.alarm(), {
+    open: false,
+    waiting: 'no Toy bot is kept yet',
+  })
+  assertEquals(opened[1].closed, 4000)
+})
+
+test('closed, it opens nothing it had begun before', async () => {
+  let { l, opened, frame, run } = rig()
+  await l.alarm()
+  await frame({ again: true })
+  l.close()
+  await run()
+  assertEquals([opened.length, l.status()], [1, { open: false }])
 })

@@ -26,6 +26,9 @@ cuts an answer to fit, so a host wires every platform the same way.
 - `chat_hears{room}`, on a chat connection, is the room of its server where its
   owner's listener hears every message, not only those said to its bot: the
   room's eid (`roomEid`), which names it in every store.
+- `chat_serves{servers}`, on the connection of a bot a space brought, is the
+  servers that bot is in, as its platform last said (a socket's step `servers`:
+  all of them, or one joined or left).
 
 Each eid is derived from `via` and the platform's id (`messageEid`, `roomEid`,
 `accountEid`), so a message heard twice writes one row, and two platforms' ids
@@ -63,9 +66,9 @@ rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.
 
 `server` says which server a room belongs to, as the bot sees it, none for a
 direct room. `confined(chatter, {serves, server})` is a chatter that posts only
-into rooms of the server its connection serves and refuses anything else before
+into rooms of the servers its connection serves and refuses anything else before
 the chatter sees it, so a host can lend a bot to whoever writes rows without
-holding it (an app) and still keep its posts in that one server.
+holding it (an app) and still keep its posts in those servers.
 
 `rooms` lists the rooms of a server people write in (`{id, name}`), where the
 platform can, so a space chooses the one it hears in full (`chat_hears`).

@@ -1142,6 +1142,13 @@ export let ownConnection = async (
   return undefined
 }
 
+// A chat integration is heard on as soon as it is connected (chat.ts): by
+// yaks.app's own bot, or by the one the space brought. The connection stands
+// whether or not its bot could start listening.
+let heard = async (env: Env, connection: string) =>
+  await (await import('./chat.ts')).connected(env, connection)
+    .catch((e) => caught(e, { request: 'chat listen', connection }))
+
 // A page, told how a sign-in went.
 let told = (page: string, how: 'connected' | 'refused') => {
   let to = new URL(page)
@@ -1317,6 +1324,7 @@ export let connecting = async (
       }
       await connect(c, own, given as Given)
       await ready(env, own)
+      await heard(env, own)
       await attached(env, who, space, app, own)
       return { say: 'The app uses your own connection now.', no: false }
     }
@@ -1401,7 +1409,15 @@ export let connecting = async (
       }
     }
     if (act == 'disconnect') {
+      let chat = await import('./chat.ts')
+      let bot = await chat.botFor(env, eid)
       await disconnect(ctxOf(env), eid, ownersOf(env))
+      // A bot the space brought stops with it; failing that, its next alarm
+      // finds no token and stops.
+      if (bot) {
+        await chat.quiet(env, bot)
+          .catch((e) => caught(e, { request: 'chat quiet', connection: eid }))
+      }
       await rebound(env, apps)
       return { say: 'Disconnected.', no: false }
     }
@@ -1419,6 +1435,7 @@ export let connecting = async (
         String(comp(now, 'content').body ?? 'The key could not be saved.'),
       )
     }
+    await heard(env, eid)
     // A person's own number is set up once its key is kept, where a phone
     // connects one through this integration (operator-line.ts).
     let { lined } = await import('./operator-line.ts')
@@ -1480,10 +1497,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       throw new Error('The service did not return a connected account.')
     }
     await ready(env, connection)
-    // A chat integration is heard on as soon as it is connected (chat.ts);
-    // the connection stands whether or not its bot could start listening.
-    await (await import('./chat.ts')).connected(env, connection)
-      .catch((e) => caught(e, { request: 'chat listen', connection }))
+    await heard(env, connection)
     if (held.app) await attached(env, who, at, held.app, connection)
     await rebound(env, await usersOf(env, connection))
     return answer(told(back, 'connected'))

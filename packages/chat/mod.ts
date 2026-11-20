@@ -66,9 +66,15 @@ export type Step<S> = {
   /** beat every this many milliseconds from now on */
   every?: number
   heard?: Said[]
+  /** what the platform said of the servers the bot is in */
+  servers?: Seated
   /** close and connect again, at `url(state)` */
   again?: boolean
 }
+
+/** The servers a bot is in, as its platform says them over its socket: all
+ * of them at once, or one it joined or left. */
+export type Seated = { all: string[] } | { joined: string } | { left: string }
 
 /** A chat platform, given as data by its own package. */
 export type Platform = {
@@ -191,17 +197,17 @@ export let kept = (via: string, said: Said, connection?: string): Bundle[] => [
 ]
 
 /**
- * A chatter that posts only into rooms of the server its connection serves:
- * `serves(connection)` names that server, and `server(chat)` the one the
+ * A chatter that posts only into rooms of the servers its connection serves:
+ * `serves(connection)` names those servers, and `server(chat)` the one the
  * room is in. A connection serving none, or a room elsewhere or in none, is
  * refused before `chatter` sees it. So whoever writes a message without
- * holding the bot (an app's row) reaches only the server its connection was
- * made for.
+ * holding the bot (an app's row) reaches only the servers its connection
+ * was made for.
  */
 export let confined = (
   chatter: Chatter,
   where: {
-    serves: (connection: string) => Promise<string | undefined>
+    serves: (connection: string) => Promise<string[]>
     server: (chat: Pick<Chat, 'connection' | 'room'>) => Promise<
       string | undefined
     >
@@ -210,11 +216,12 @@ export let confined = (
   ...chatter.waiting ? { waiting: chatter.waiting } : {},
   post: async (chat) => {
     let serves = await where.serves(chat.connection)
-    if (!serves) {
+    if (!serves.length) {
       throw new Error(`connection ${chat.connection} posts into no server here`)
     }
-    if (await where.server(chat) != serves) {
-      throw new Error(`room ${chat.room} is not in its connection's server`)
+    let server = await where.server(chat)
+    if (!server || !serves.includes(server)) {
+      throw new Error(`room ${chat.room} is not in its connection's servers`)
     }
     return chatter.post(chat)
   },

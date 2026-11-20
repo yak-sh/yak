@@ -257,7 +257,7 @@ export let chatCard = (
   operator: string,
   offers: Awaited<ReturnType<typeof import('./chat.ts').offers>>,
 ) =>
-  offers.map(({ platform, bot, user, servers }) => {
+  offers.map(({ platform, bot, user, kept, servers }) => {
     let hearing = (s: Server, i: number) => {
       let id = `chat-room-${i}`
       return h(
@@ -267,7 +267,9 @@ export let chatCard = (
         s.rooms
           ? field(
             id,
-            `The ${platform.title} channel ${operator} hears in full`,
+            s.own
+              ? `The channel ${operator} hears in full through your own ${platform.title} bot`
+              : `The ${platform.title} channel ${operator} hears in full`,
             h(
               Field,
               { choose: true, id, name: 'room' },
@@ -307,7 +309,7 @@ export let chatCard = (
         null,
         `Add ${operator} to a ${platform.title} server you manage. Mention it there, reply to it, or message it directly, and it answers in the same place.`,
       ),
-      adding(bot, `Add to ${platform.title}`),
+      kept ? adding(bot, `Add to ${platform.title}`) : null,
       servers.length
         ? h(
           'p',
