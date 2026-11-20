@@ -1036,14 +1036,23 @@ let delivered = (b: Bundle, heard: Heard) => {
 }
 
 // What a helper was asked by the session that started it, the first line
-// of its own conversation (@yaks/session `children`): its brief, written
-// for a model, so closed until opened, never a bubble of the person's.
+// of its own conversation (@yaks/session `children`): its brief, drawn open
+// at the top of its page as the words it answers, marked as the
+// conversation's, never folded among its steps.
 let isBrief = (b: Bundle) =>
   comp(b, 'entry')?.from == 'your parent session' && !b.prompt
+let BRIEF = 'What the conversation asked of it'
 let brief = (b: Bundle): Said => ({
-  node: step('Brief', '', written(said(b))),
-  text: 'Brief',
-  is: 'step',
+  node: yours(
+    said(b),
+    h(
+      Transcript.Via,
+      { title: BRIEF, 'aria-label': BRIEF, 'data-brief': '' },
+      h(Icon, { of: icons['message-circle'] }),
+    ),
+  ),
+  text: said(b),
+  is: 'theirs',
 })
 
 /** The kinds of line only the Operator's rows have, ahead of every

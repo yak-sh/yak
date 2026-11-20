@@ -951,10 +951,11 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
     fold.querySelector('[data-runs]')?.textContent,
     'Your machine · Sonnet 5.5',
   )
-  // What it was asked is a closed Brief, not a bubble of the person's.
-  let brief = [...document.querySelectorAll('[data-conversation] details')]
-    .find((d) => d.querySelector('summary')?.textContent?.trim() == 'Brief')!
-  assertEquals(brief.hasAttribute('open'), false)
+  // What it was asked shows open at the top, marked as the conversation's,
+  // never inside a fold of its steps.
+  let brief = document.querySelector('[data-conversation] [data-brief]')!
+    .closest('.Transcript_Bubble')!
+  assertEquals(brief.closest('details'), null)
   assertStringIncludes(brief.textContent!, 'attachment 3f9a')
   // Its row says how it stands, so the aside does not say a turn too.
   assertEquals(aside.querySelector('[data-turn]'), null)
