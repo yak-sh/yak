@@ -1,9 +1,8 @@
 // Sandbox credentials cross only the container and outbound request boundaries.
 import { equal, test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertStringIncludes } from '@std/assert'
 import { machineTools } from '@yaks/harness/machine'
 import { SENTINEL } from '@yaks/secrets'
-import { called, transcribed } from './builder.ts'
 import { ownedBy } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { sandboxes } from '../../packages/sandbox/testing.ts'
@@ -137,36 +136,14 @@ test('a sandbox command holds only its placeholder in its environment and comman
 let shell = machineTools(transcript.machine).find((tool) =>
   tool.name == 'shell'
 )!
-let shellCall = {
-  id: 'sandbox-call',
-  name: 'shell',
-  args: JSON.stringify({ command: 'yak app_list' }),
-}
 let shellOutput = await shell.run({ command: 'yak app_list' })
-let shellRuns = new Map([[
-  shell.name,
-  (args: Record<string, unknown>) => {
-    assertEquals(args, { command: 'yak app_list' })
-    return Promise.resolve([{
-      entity: { eid: '$said' },
-      output: { source: shellCall.id },
-      content: { body: shellOutput },
-    }])
-  },
-]])
-test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
+test('the container holds a placeholder, never the token, and neither reaches what a command answers', () => {
   let box = transcript.box
-  let answer = await called(shellRuns, shellCall)
-  let record = transcribed(shellCall, answer)
-  assertStringIncludes(answer.text, 'ok')
-  assertEquals(record.line.said, 'tool')
-  let said = JSON.stringify(record)
+  let said = JSON.stringify(shellOutput)
+  assertStringIncludes(said, 'ok')
 
   let placeholder = box.env.at(-1)!.YAKS_TOKEN
   assert(placeholder?.startsWith(SENTINEL), 'the command was signed in')
-  assert(
-    !said.includes(placeholder),
-    'no placeholder reaches the transcript',
-  )
-  assert(!said.includes(GRANT), 'no grant token reaches the transcript')
+  assert(!said.includes(placeholder), 'no placeholder reaches the answer')
+  assert(!said.includes(GRANT), 'no grant token reaches the answer')
 })

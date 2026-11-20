@@ -140,89 +140,6 @@
     color: var(--muted);
     font-size: var(--small);
   }
-  /* Each entry wraps within the column at any width: a grid track keeps no
-     wider than its column, and nothing in it holds its line. */
-  .Chat_Said {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: .45rem;
-  }
-  .Chat_Said > * {
-    min-width: 0;
-  }
-  .Chat_Said:empty {
-    display: none;
-  }
-  .Chat_Bubble {
-    max-width: 90%;
-    margin: 0;
-    padding: .55rem .9rem;
-    background: var(--bg);
-    color: var(--text);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .Chat_Bubble-you {
-    justify-self: end;
-    background: var(--accent);
-    color: var(--bg);
-  }
-  .Chat_Link {
-    color: inherit;
-  }
-  .Chat_Tool {
-    display: flex;
-    gap: .4rem;
-    align-items: baseline;
-    margin: 0;
-    padding: 0 .3rem;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Chat_Tool-no {
-    color: var(--negative);
-  }
-  .Chat_Name {
-    font-weight: 700;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .Chat_Of {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .Chat_Note-no {
-    color: var(--negative);
-  }
-  .Chat_Built {
-    --pencil: var(--accent);
-    margin: .4rem 0;
-    padding: 1rem;
-    background: var(--bg);
-    text-align: center;
-  }
-  .Chat_BuiltWords,
-  .Chat_Built .Url {
-    margin: 0 0 .6rem;
-  }
-  .Chat_Note {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fine);
-  }
-  .Chat_Ask {
-    margin: 0;
-  }
-  .Chat_Input {
-    width: 100%;
-    min-height: 4.5rem;
-    resize: vertical;
-  }
-  .Chat_Input:disabled {
-    opacity: .6;
-  }
   .Fields {
     display: grid;
     gap: .55rem;
@@ -494,6 +411,14 @@
     display: grid;
     gap: var(--gap);
     align-items: start;
+  }
+  .Desk_Ask {
+    margin: 0;
+  }
+  .Desk_Words {
+    width: 100%;
+    min-height: 4.5rem;
+    resize: vertical;
   }
   @media (min-width: 1100px) {
     .Desk_Options {

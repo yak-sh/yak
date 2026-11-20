@@ -195,8 +195,7 @@ export let answered = async (
     }),
     riding('ceiling', () => ceiling(ctx.env, space, roster)),
   ])).join('')
-  // A call to say it came from, where there is one: the builder runs these
-  // same tools in its own loop (builder.ts), with nothing to point at.
+  // A call to say it came from, where there is one.
   let output = {
     ...(call ? { source: call } : {}),
     ...(out.value ? { value: out.value } : {}),
@@ -219,11 +218,7 @@ export let answered = async (
 
 /**
  * One of the platform's own tools, called: the tool, then what is unseen in
- * the space it worked in.
- *
- * It is its own export because two doors run these tools — the connector
- * ({@link sugared}) and the builder we run ourselves (builder.ts) — and a
- * second copy of these two lines is a second `app_new`.
+ * the space it worked in, as the connector runs it ({@link sugared}).
  */
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) => {

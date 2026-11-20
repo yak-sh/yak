@@ -1,51 +1,26 @@
 /// <reference lib="deno.ns" />
-// The builder's object (T-34240), on the stand-in: a scripted Workers AI
-// binding instead of a model, and everything else the code that runs in
-// production — the loop, the platform's own tools, the directory, the Store.
-//
-// What is proved here is the wire. A page joins and hears the conversation; a
-// line it sends becomes a build, and the build arrives as frames in the order
-// they happened, ending with the app's address; a page that reloads hears the
-// same sequence again; a second line during a build is kept and answered
-// once it ends; and a socket nobody is on the end of never opens.
-//
-// The one thing the stand-in cannot do is the 101 upgrade — `WebSocketPair`
-// and a 101 `Response` are the runtime's, not the web's — so a socket is
-// driven the way the runtime drives a hibernated one, through `joined` and
-// `webSocketMessage` (graph_test.ts does the same for the Store).
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import type { Wire } from '@yaks/durable-object'
+// A space's Operator's object (build.ts), on the stand-in: its doors, its
+// wake and its wipe, and the old builder door that forwards a line into the
+// person's conversation.
+import { assert, assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
 import { Builder } from './build.ts'
-import {
-  builderOf,
-  type Frame,
-  type Held,
-  NOBODY,
-  NOT_A_WRITER,
-  OWED,
-  saying,
-  seated,
-  STUCK,
-} from './build-door.ts'
-import { transcript } from './pages.ts'
-import { renderToString } from 'preact-render-to-string'
-import { bounded } from '@yaks/durable-object/ceiling'
-import { freely } from '@yaks/durable-object/sql'
-import * as log from '@yaks/api/log'
+import { builderOf, type Held, NOBODY, OWED, seated } from './build-door.ts'
 import { WAKE } from './door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { test, until } from '@yaks/testing'
+import { line } from '@yaks/query'
 import { sign } from './lib/token.ts'
 import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
 import { endpoints } from './endpoints.ts'
-import { draftEid } from '@yaks/draft'
 import { redone } from './defects.ts'
 import { restarting } from './running.ts'
+import { draftEid } from '@yaks/draft'
+import { chatPath } from '@yaks/platform/routes'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -59,37 +34,14 @@ let as = async (person: string) =>
     SECRET,
   )}`
 
-// The three turns that make somebody a recipe box, said the way the Workers AI
-// binding answers them.
-let MAKES_ONE: Turn[] = [
-  {
-    text: 'Making it now.',
-    calls: [{
-      name: 'app_new',
-      arguments: { slug: 'recipes', title: 'Recipes' },
-    }],
-  },
-  {
-    calls: [{
-      name: 'app_files',
-      arguments: {
-        app: 'recipes',
-        files: [{ path: 'index.html', content: '<h1>Lemon cake</h1>' }],
-      },
-    }],
-  },
-  { calls: [{ name: 'app_deploy', arguments: { app: 'recipes' } }] },
-  { text: 'It is ready.' },
-]
-
 let dirOf = (env: Env) =>
   directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 
-// A space with Ada in it, and her builder's object.
+// A space with Ada in it, and her Operator's object, which the kernel reaches
+// as the space's BUILDER.
 let seeded = async (script: Turn[] = []) => {
   let { env, states } = platform(SECRET, {
     AI: ai(script) as Env['AI'],
-    BUILDER_MODEL_FREE: '@cf/test/free',
     MODEL_FETCH: () =>
       Promise.resolve(
         modelPage(0.15, 0.5),
@@ -112,373 +64,30 @@ let seeded = async (script: Turn[] = []) => {
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   let space = (await dir.space('ada'))!
   let ctx = state()
+  let object = new Builder(ctx, env)
   return {
     env,
     space,
     ctx,
     states,
-    object: new Builder(ctx, env),
+    object,
     held: { person: ADA, role: 'owner', space: space.eid } as Held,
-  }
-}
-
-// A hibernatable socket, faked: the frames it was sent, and the attachment
-// that is its only memory across an eviction.
-let wire = () => {
-  let sent: Frame[] = []
-  let held: unknown = null
-  return {
-    sent,
-    readyState: 1,
-    send: (data: string) => void sent.push(JSON.parse(data)),
-    serializeAttachment: (v: unknown) => {
-      held = JSON.parse(JSON.stringify(v))
+    // The kernel's way to the object, for a test that goes through a door.
+    bound: () => {
+      env.BUILDER = {
+        idFromName: (name) => name,
+        get: () => ({ fetch: (req: Request) => object.fetch(req) }),
+      }
     },
-    deserializeAttachment: () => held,
   }
 }
 
-// A socket the object is serving, joined the way the handshake joins one.
-let joined = (
-  o: { object: Builder; ctx: { live: Wire[] }; held: Held },
-) => {
-  let ws = wire()
-  o.ctx.live.push(ws)
-  o.object.joined(ws, o.held)
-  return ws
-}
-
-// The frame kinds in order, so a test says the sequence rather than the shapes.
-let kinds = (sent: Frame[]) =>
-  sent.map((f) =>
-    'said' in f
-      ? `said:${f.said}`
-      : 'tool' in f
-      ? `tool:${f.tool}`
-      : 'ran' in f
-      ? `ran:${f.ran}`
-      : 'built' in f
-      ? 'built'
-      : 'done' in f
-      ? 'done'
-      : 'busy' in f
-      ? 'busy'
-      : 'taken' in f
-      ? 'taken'
-      : 'ready'
-  )
-
-// The page those frames draw (pages.ts `transcript`, which public/build.js
-// draws alike), and how many times it says `text`.
-let drawn = (sent: Frame[]) => renderToString(transcript(sent))
-let times = (sent: Frame[], text: string) => drawn(sent).split(text).length - 1
-
-// A whole build: three tools, a worker upload, and — since T-34950 — the
-// commit a deploy mints in the git object store, which is another object
-// waking up. The budget is only here so a stall fails instead of hanging, so
-// it is wide enough to hold the act on a loaded box rather than tight enough
-// to time it.
-let settled = (ws: { sent: Frame[] }) =>
-  until(() => ws.sent.some((f) => 'done' in f), {
-    timeout: 10_000,
-    label: () => `the build never finished: ${kinds(ws.sent).join(', ')}`,
-  })
-
-test('a page joins, says one line, and watches the build happen', async () => {
-  let o = await seeded(MAKES_ONE)
-  let ws = joined(o)
-  // Nothing has been said here yet: the replay is empty and the page is told
-  // it is up to date.
-  assertEquals(ws.sent, [{ ready: true, building: false }])
-
-  o.object.webSocketMessage(ws, JSON.stringify({ say: 'a recipe box please' }))
-  await settled(ws)
-
-  assertEquals(kinds(ws.sent), [
-    'ready',
-    'said:person',
-    'said:builder',
-    'tool:app_new',
-    'ran:app_new',
-    'tool:app_files',
-    'ran:app_files',
-    'tool:app_deploy',
-    'ran:app_deploy',
-    'built',
-    'said:builder',
-    'done',
-  ])
-  // Each tool said one line about itself, not a paragraph.
-  let ran = ws.sent.filter((f) => 'ran' in f) as { line: string; ok: boolean }[]
-  for (let f of ran) {
-    assert(f.ok && f.line.length > 0 && !f.line.includes('\n'))
-  }
-  // And the address is the one the deploy answered with.
-  let built = ws.sent.find((f) => 'built' in f) as { built: string }
-  assertEquals(built.built, 'https://ada.yaks.app/recipes/')
-  let done = ws.sent.find((f) => 'done' in f) as { done: string }
-  assertEquals(done.done, 'It is ready.')
-
-  // The app the conversation made serves its page at that address.
-  let page = await apps.fetch(new Request(built.built), o.env)
-  assertEquals(page.status, 200)
-  assertStringIncludes(await page.text(), 'Lemon cake')
-})
-
-test('a page that reloads hears the whole conversation again', async () => {
-  let o = await seeded(MAKES_ONE)
-  let first = joined(o)
-  o.object.webSocketMessage(first, JSON.stringify({ say: 'a recipe box' }))
-  await settled(first)
-
-  // The same object, a new socket: everything that was said, in order, then
-  // the mark that the replay is over.
-  let again = joined(o)
-  assertEquals(kinds(again.sent), [
-    'said:person',
-    'said:builder',
-    'tool:app_new',
-    'ran:app_new',
-    'tool:app_files',
-    'ran:app_files',
-    'tool:app_deploy',
-    'ran:app_deploy',
-    'built',
-    'said:builder',
-    'ready',
-  ])
-  assertEquals(again.sent.at(-1), { ready: true, building: false })
-
-  // An evicted object holds the same conversation: it is in its own SQLite,
-  // not its memory.
-  let woken = new Builder(o.ctx, o.env)
-  let third = wire()
-  woken.joined(third, o.held)
-  assertEquals(kinds(third.sent), kinds(again.sent))
-})
-
-test('a second line during a build is kept, and answered once it ends', async () => {
-  let o = await seeded([...MAKES_ONE, { text: 'A garden too.' }])
-  let ws = joined(o)
-  let building = o.object.say(o.held, 'a recipe box')
-  o.object.webSocketMessage(ws, JSON.stringify({ say: 'and a garden one' }))
-  assertEquals(kinds(ws.sent).slice(-2), ['said:person', 'busy'])
-  await building
-  while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
-  let said = o.object.said().map((l) => l.text)
-  assertEquals(said.slice(-2), ['and a garden one', 'A garden too.'])
-  // The page says it once, where it was answered, and its note is gone.
-  assertEquals(
-    [times(ws.sent, 'and a garden one'), drawn(ws.sent).includes('Chat_Note')],
-    [1, false],
-  )
-})
-
-// Ada's object over storage as a new one has it, on a window of a second
-// the case moves, and the rows it may write in it, spent (@yaks/durable-object
-// `bounded`); then an alarm the runtime rings, and what it left running; and
-// the object its storage wakes as next (`woken`).
-let paused = async () => {
-  let o = await seeded([{ text: 'Sure.' }])
-  let ctx = state('', false)
-  let at = { t: 0 }
-  let ceiling = bounded(ctx.storage, {
-    now: () => at.t,
-    refuse: true,
-    windows: [{ ms: 1_000, read: 1e6, written: 10 }],
-  })
-  let stop = () =>
-    ceiling.count({
-      shape: () => 's',
-      rowsRead: 0,
-      rowsWritten: 11,
-      returned: 0,
-    })
-  let p = {
-    ...o,
-    ctx,
-    object: new Builder(ctx, o.env),
-    stop,
-    ring: async (t: number) => {
-      at.t = t
-      await p.object.alarm()
-      while (ctx.pending.size) await Promise.all(ctx.pending)
-    },
-    lines: () => p.object.said().map((l) => l.text),
-    woken: () => void (p.object = new Builder(ctx, o.env)),
-    // How many lines the log still holds.
-    kept: () => log.writes(freely(ctx.storage)).length,
-  }
-  return p
-}
-
-// The directory, out of reach of the object's reads until it is back.
-let unreachable = (o: { env: Env }) => {
-  let { STORE } = o.env
-  o.env.STORE = {
-    ...STORE,
-    get: () => ({ fetch: () => Promise.reject(new Error('unreachable')) }),
-  } as unknown as Env['STORE']
-  return () => void (o.env.STORE = STORE)
-}
-
-let idle = await paused()
-test('an alarm with no line kept takes none up', async () => {
-  await idle.ring(0)
-  assertEquals(idle.lines(), [])
-})
-
-let kept = await paused()
-test('a line said to a stopped Builder is kept, and answered once the window ends', async () => {
-  let o = kept
-  let ws = joined(o)
-  o.stop()
-  o.object.webSocketMessage(ws, JSON.stringify({ say: 'a recipe box' }))
-  assertEquals(kinds(ws.sent), ['ready', 'said:person', 'busy'])
-  await o.ring(500)
-  assertEquals([kinds(ws.sent).length, o.lines()], [3, []])
-  await o.ring(1_000)
-  assertEquals(kinds(ws.sent).slice(3), [
-    'taken',
-    'said:person',
-    'said:builder',
-    'done',
-  ])
-  assertEquals(o.lines(), ['a recipe box', 'Sure.'])
-})
-
-let tipped = await paused()
-test('a line the window stops as it is heard is kept too', async () => {
-  let o = tipped
-  let said = o.object.say(o.held, 'a recipe box')
-  o.stop()
-  assertEquals(kinds(await said), ['said:person', 'busy'])
-  await o.ring(1_000)
-  assertEquals(o.lines(), ['a recipe box', 'Sure.'])
-})
-
-let answered = await paused()
-test('a reply made as the window passes is kept with the line it answers', async () => {
-  let o = answered
-  let model = o.env.AI as unknown as { run: (...a: unknown[]) => unknown }
-  let run = model.run
-  model.run = (...a) => (o.stop(), run(...a))
-  let end = await o.object.say(o.held, 'a recipe box')
-  assertEquals([end, o.lines()], [[{ done: 'Sure.' }], [
-    'a recipe box',
-    'Sure.',
-  ]])
-})
-
-let cut = await paused()
-test('a line a reset cut off before its turn heard it is taken up by the next incarnation', async () => {
-  let o = cut
-  o.stop()
-  await o.object.say(o.held, 'a recipe box')
-  // The replay started it, and the object went away before its turn read
-  // the space.
-  let sql = freely(o.ctx.storage)
-  log.started(sql, log.next(sql)!.seq)
-  o.woken()
-  await o.ring(1_000)
-  assertEquals([o.lines(), o.kept()], [['a recipe box', 'Sure.'], 0])
-})
-
-let broke = await paused()
-test('a kept line whose turn broke before it heard it stays kept, and is taken up at the next alarm', async () => {
-  let o = broke
-  o.stop()
-  await o.object.say(o.held, 'a recipe box')
-  let back = unreachable(o)
-  await o.ring(1_000)
-  assertEquals([o.lines(), o.kept()], [[], 1])
-  back()
-  await o.ring(2_000)
-  assertEquals([o.lines(), o.kept()], [['a recipe box', 'Sure.'], 0])
-})
-
-let stuck = await paused()
-test('a kept line whose turn keeps breaking is said to wait, and why, until it gives way to its answer', async () => {
-  let o = stuck
-  let ws = joined(o)
-  o.stop()
-  o.object.webSocketMessage(ws, JSON.stringify({ say: 'a recipe box' }))
-  let back = unreachable(o)
-  let tries = async (from: number, n: number) => {
-    for (let t = from; t < from + n; t++) await o.ring(t * 1_000)
-  }
-  // A try or two, and it is only taken up in a moment.
-  await tries(1, 2)
-  assertEquals(times(ws.sent, STUCK(2)), 0)
-  // A few, and whoever watches is told, as is a page that joins now.
-  await tries(3, 2)
-  let now = joined(o)
-  assertEquals(
-    [times(ws.sent, STUCK(4)), times(now.sent, STUCK(4))],
-    [1, 1],
-  )
-  assertEquals(
-    [times(now.sent, 'a recipe box'), drawn(now.sent).includes('Chat_Note-no')],
-    [1, true],
-  )
-  // It is never dropped: back, its next try answers it, and the note goes.
-  back()
-  await tries(5, 1)
-  for (let sent of [ws.sent, joined(o).sent]) {
-    assertEquals(
-      [times(sent, 'a recipe box'), times(sent, 'Sure.')],
-      [1, 1],
-    )
-    assert(!drawn(sent).includes('Chat_Note'))
-  }
-})
-
-let formed = await paused()
-test('a form posted to a stopped Builder is answered the line it kept', async () => {
-  let o = formed
-  o.stop()
-  let r = await o.object.fetch(saying(o.held, 'a recipe box'))
-  let { frames } = await r.json() as { frames: Frame[] }
-  assertEquals(r.status, 200)
-  assertEquals(
-    [times(frames, 'a recipe box'), times(frames, 'Building is paused')],
-    [1, 1],
-  )
-})
-
-test('a socket with nobody on it never opens', async () => {
-  let { object } = await seeded()
-  let upgrade = { upgrade: 'websocket', 'x-space-eid': 'a-space' }
-  let refused = async (headers: Record<string, string>) => {
-    let r = await object.fetch(
-      new Request('http://builder/ws', { headers: { ...upgrade, ...headers } }),
-    )
-    let said = await r.json() as { error: string; message: string }
-    return { status: r.status, ...said }
-  }
-
-  // Nobody at all, and somebody who may read this space but not write in it.
-  assertEquals(await refused({}), {
-    status: 401,
-    error: 'Refused',
-    message: NOBODY,
-  })
-  assertEquals(
-    await refused({ 'x-yak-person': ADA, 'x-yak-role': 'viewer' }),
-    { status: 403, error: 'Refused', message: NOT_A_WRITER },
-  )
-  // And a request that is not an upgrade at all is not this door.
-  let plain = await object.fetch(
-    new Request('http://builder/ws', { headers: { 'x-yak-person': ADA } }),
-  )
-  assertEquals(plain.status, 426)
-})
-
-// The page with no script (T-34242): the same conversation, said once. A form
-// POST to the same address waits for the round and is answered a page — the
-// transcript, each tool as a row, and the address the build ended at.
-test('a form posted with no script is answered the conversation', async () => {
-  let { env } = await seeded(MAKES_ONE)
+// A page drawn before the New app screen asked the Operator posts its line
+// to the space's old builder door (M-37853): it is said in Ada's
+// conversation as a request for a new app, and she is sent there.
+test('a line posted to the old builder door goes to the Operator as a new app', async () => {
+  let o = await seeded()
+  o.bound()
   let form = new FormData()
   form.set('say', 'a recipe box please')
   let out = await apps.fetch(
@@ -487,26 +96,20 @@ test('a form posted with no script is answered the conversation', async () => {
       body: form,
       headers: { cookie: await as(ADA) },
     }),
-    env,
+    o.env,
   )
-  assertEquals(out.status, 200)
-  let page = await out.text()
-  // The person's line, the builder's, the tools it ran, and the address —
-  // everything the socket would have streamed, drawn into the page.
-  assertStringIncludes(page, 'a recipe box please')
-  assertStringIncludes(page, 'It is ready.')
-  assertStringIncludes(page, 'app_deploy')
-  assertStringIncludes(page, 'https://ada.yaks.app/recipes/')
-  // And the form again, so the next line goes the same way.
-  assertStringIncludes(page, 'action="/api/build"')
-
-  // The app the posted line made is serving.
-  let live = await apps.fetch(
-    new Request('https://ada.yaks.app/recipes/'),
-    env,
-  )
-  assertEquals(live.status, 200)
-  assertStringIncludes(await live.text(), 'Lemon cake')
+  assertEquals(out.status, 303)
+  let to = new URL(out.headers.get('location')!)
+  let request = to.pathname.split('/').at(-1)!
+  assertEquals(to.pathname, chatPath('ada', request))
+  let store = await operatorStore(o.ctx.storage)
+  let [asked] = await store.g.read(line`.entity.eid=${request}&*`)
+  assertEquals(asked.doc, {
+    title: 'a recipe box please',
+    body: 'a recipe box please',
+  })
+  let { new_app, page } = asked.operator_request as Record<string, unknown>
+  assertEquals([new_app, page], [true, 'https://yaks.app/manage/ada/new'])
 })
 
 test('the inline contact form reaches the Builder’s contact confirmation command', async () => {
@@ -532,10 +135,7 @@ test('the inline contact form reaches the Builder’s contact confirmation comma
       operator_contact: { person: ADA, address: number, source, session },
     },
   ], { trusted: true })
-  o.env.BUILDER = {
-    idFromName: (name) => name,
-    get: () => ({ fetch: (req: Request) => o.object.fetch(req) }),
-  }
+  o.bound()
   let sent: unknown[] = []
   let phone = endpoints(globalThis).open(async (req) => {
     let path = new URL(req.url).pathname
@@ -578,18 +178,23 @@ test('the inline contact form reaches the Builder’s contact confirmation comma
   assertEquals(sent.length, 2)
 })
 
-test('the door refuses a stranger before it reaches the object', async () => {
+test('the old builder door refuses a stranger, and takes only a post', async () => {
   let { env } = await seeded()
   let r = await apps.fetch(
-    new Request('https://ada.yaks.app/api/build', {
-      headers: { upgrade: 'websocket' },
-    }),
+    new Request('https://ada.yaks.app/api/build', { method: 'POST' }),
     env,
   )
   assertEquals(r.status, 401)
   let said = await r.json() as { error: { code: string; message: string } }
   assertEquals(said.error.code, 'not_a_writer')
   assertEquals(said.error.message, NOBODY)
+  let socket = await apps.fetch(
+    new Request('https://ada.yaks.app/api/build', {
+      headers: { upgrade: 'websocket' },
+    }),
+    env,
+  )
+  assertEquals(socket.status, 405)
 })
 
 // An object's directory reads, the `held`th of them kept from answering
@@ -691,7 +296,9 @@ test('a wiped Builder drops its alarm and restarts, and the next incarnation fin
     [await wiped.json(), before, await armed(o), o.ctx.pitr.aborts, failed],
     [{ ok: true }, 0, false, 1, [true]],
   )
-  assertEquals(new Builder(o.ctx, o.env).said(), [])
+  let tables = [...o.ctx.storage.sql.exec('select name from sqlite_master')]
+    .map((r) => String(r.name)).filter((n) => !/^(_cf_|sqlite_)/.test(n))
+  assertEquals(tables, [])
 })
 
 // A space's Operator is put back to a moment as an app's store is

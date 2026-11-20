@@ -46,10 +46,10 @@ export type Page = {
 // a paragraph a page can be written from — because the first ask ("can you
 // make me a recipe box?") is answered before anyone thinks to open a guide,
 // and an agent that has to guess at the data reaches for localStorage.
-// It lives HERE, beside the guide's own pages, because two places read it:
-// the connector (mcp.ts) returns it as the MCP server's instructions, and the
-// builder we run ourselves (builder.ts) reads it as its system prompt. The
-// agent somebody brings and the agent we are must be taught one page.
+// It lives HERE, beside the guide's own pages: the connector (mcp.ts) returns
+// it as the MCP server's instructions, and the Operator's oracles read it
+// (operator-oracles.ts), so the agent somebody brings and the agent we are
+// are taught one page.
 //
 // It opens with the NAME because this text used to print the address a dozen
 // times and the name not once, and an agent reading it told its person the

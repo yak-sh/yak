@@ -102,10 +102,7 @@ export let WIRE = [
   ...DURABLE,
 ] as const
 export let BUILDER = [
-  'said',
   'wipe',
-  'joined',
-  'say',
   'fetch',
   'alarm',
   'webSocketMessage',

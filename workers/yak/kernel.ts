@@ -68,8 +68,9 @@
 //                             updated, by the member who dropped it
 //     /                       the space's front page — its home app, served
 //                             here; "nothing here" if it has none
-//     /api/build              build.ts: the socket the builder talks on, the
-//                             space's own and ahead of every app
+//     POST /api/build         build-door.ts `forwarded`: the old builder
+//                             door's line, said to the person's Operator as
+//                             a request for a new app
 //     /<app>                  302 to /<app>/, or to / when <app> is the front
 //                             page, whose address is the bare hostname
 //     /<app>/api/graph        the store's identity and who is asking, to a reader

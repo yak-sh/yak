@@ -62,8 +62,6 @@ import {
   addressBox,
   billButton,
   billing,
-  chatAsk,
-  chatLive,
   copying,
   type DeskPage,
   dropping,
@@ -87,7 +85,6 @@ import {
   state,
   status,
   tabbing,
-  transcript,
   type Visits,
 } from './pages.ts'
 
@@ -101,16 +98,49 @@ let optional = (label: Kids) => [
   h(Form.Optional, null, '(optional)'),
 ]
 
-// The optional built-in builder, reached from New app: the dashboard's page
-// is at the apex, so its form names the space's door whole, and the script
-// opens its socket wherever the form points.
-let chat = (env: Host, to: string) =>
+// The New app screen's own way to ask: the person's words, sent to their
+// Operator's door as a request for a new app (operator-channels.ts
+// `new_app`), which sends them on to that conversation, where the app opens
+// beside the chat as it is made. The dashboard's page is at the apex, as that
+// door is.
+let asking = (space: string) =>
   h(
     Card,
-    { class: 'Chat' },
-    heading('Build an app here'),
-    transcript([]),
-    chatAsk(env, to),
+    null,
+    heading('Ask your Operator'),
+    h(
+      Card.Sub,
+      null,
+      'Say what the app is for. Your Operator builds it in your conversation.',
+    ),
+    h(
+      'form',
+      {
+        class: 'Desk_Ask Page_Form',
+        method: 'post',
+        action: managePath('operator', space),
+        enctype: 'multipart/form-data',
+      },
+      h('input', {
+        type: 'hidden',
+        name: 'page',
+        value: managePath('new', space),
+      }),
+      h('input', { type: 'hidden', name: 'new_app', value: '1' }),
+      h(
+        'p',
+        null,
+        h(Field, {
+          class: 'Desk_Words',
+          lines: true,
+          name: 'say',
+          rows: 3,
+          required: true,
+          'aria-label': 'What do you want to build?',
+        }),
+      ),
+      h(Button, { mod: 'go', type: 'submit' }, 'Build it'),
+    ),
   )
 
 // Who visited, on the space page (views.ts, T-34497): a block per app, the
@@ -2268,8 +2298,8 @@ export let people = (at: DeskPage) => {
 }
 
 // The dashboard's page for one space, at the apex (apps.ts `manage`). What
-// it aims at the space itself — an app, the drop zone, the builder — it names
-// by the space's own address.
+// it aims at the space itself (an app, the drop zone) it names by the space's
+// own address.
 export let desk = (at: DeskPage, env: Host = {}) => {
   let view = at.view ?? 'apps'
   let site = `https://${spaceHost(env, at.space)}`
@@ -2324,7 +2354,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       h(
         'div',
         { class: 'Desk_Options' },
-        chat(env, `${site}/api/build`),
+        asking(at.space),
         h(
           Card,
           null,
@@ -2332,7 +2362,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
           dropZone(undefined, `${site}/deploy`),
         ),
       ),
-      chatLive('/build.js'),
       dropping(),
     ]
   }
@@ -2501,7 +2530,7 @@ let allowances = (
       gaugeRow(
         'Models and voice',
         `${share(spent, limit)} used`,
-        'The builder’s and your apps’ models and voices, from this space’s budget.',
+        'Your Operator’s and your apps’ models and voices, from this space’s budget.',
         limit ? spent / limit : 0,
       ),
     ),

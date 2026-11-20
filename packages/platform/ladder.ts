@@ -119,8 +119,8 @@ export type Rung<R extends Reading> =
   | ({ to: 'closed' } & At<R>)
   /** the app is in the trash: its owner is told where it went */
   | ({ to: 'binned'; app: App<R> } & At<R>)
-  /** the builder's socket, or its `script` */
-  | ({ to: 'build'; script: boolean } & At<R>)
+  /** the old builder door, forwarded to the Operator */
+  | ({ to: 'build' } & At<R>)
   /** the space's index, at `/` */
   | ({ to: 'index' } & At<R>)
   /** the platform's robots file, at `/robots.txt` */
@@ -137,9 +137,9 @@ export type Rung<R extends Reading> =
     bare: string
   } & At<R>)
 
-/** The builder's door: a space's own address, ahead of every app in it
- * (workers/yak router.ts PLATFORM_PATHS `/api/*`), because a person with no
- * app yet is exactly who the builder is for. */
+/** The old builder door: a space's own address, ahead of every app in it
+ * (workers/yak router.ts PLATFORM_PATHS `/api/*`), which a page drawn before
+ * the New app screen asked the Operator still posts its line to. */
 export let BUILD = '/api/build'
 
 /** What the space says, rather than an app of it, at the addresses where it
@@ -243,11 +243,9 @@ export let rung = async <R extends Reading>(
       ...at,
     }
   }
-  // The builder's socket, and the live half of its chat, served here so a
-  // space's page needs no asset of the apex. Before the home app is looked
-  // for, since a space with none would be a 404 at every path but `/`.
-  if (pathname == `${BUILD}.js`) return { to: 'build', script: true, ...at }
-  if (pathname == BUILD) return { to: 'build', script: false, ...at }
+  // The old builder door, before the home app is looked for, since a space
+  // with none would be a 404 at every path but `/`.
+  if (pathname == BUILD) return { to: 'build', ...at }
   let app = read.app as App<R> | null
   let home = read.home as App<R> | null
   // In the trash: the address is held for it and answers nothing while it

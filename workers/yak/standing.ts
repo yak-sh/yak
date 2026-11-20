@@ -31,8 +31,7 @@
 // halves are served at different moments. The roster — every app, its address,
 // what it holds, its commands — rides on the instructions, where discovery has
 // to be. The NOTES are handed over when something asks for them: `about`
-// (tools.ts), the prompt a person picks by name, and the builder we run
-// ourselves (builder.ts).
+// (tools.ts) and the prompt a person picks by name.
 //
 // Bounded, because the notes are handed to every agent that reaches the app:
 // the file is refused over CAP at the write rather than truncated at the read

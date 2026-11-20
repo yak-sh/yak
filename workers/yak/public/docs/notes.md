@@ -142,7 +142,7 @@ MCP prompt named after the app — `recipes`, or `recipes__notes` where that nam
 is already taken — titled "Recipes: notes", so somebody picking from a menu can
 add the app's rules to a conversation deliberately.
 
-The platform's builder reads an app's notes before it builds on that app.
+The Operator reads an app's notes before it works on that app.
 
 ## Publishing and installing
 

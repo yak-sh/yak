@@ -218,18 +218,11 @@ let builder = () => {
     instance: new Builder(ctx, { CF_VERSION_METADATA: A } as Env),
   }
 }
-let watched = builder(), idle = builder(), operating = builder()
-// A page watching a build, and one watching the Operator (build.ts `#accept`).
+let idle = builder(), operating = builder()
+// A page watching the Operator (build.ts `#accept`).
 let socket = (held: unknown) => ({ deserializeAttachment: () => held })
-watched.sockets.push(socket({ person: 'ada' }))
 operating.sockets.push(socket({ person: 'ada', operator: true }))
 let ask = () => new Request('http://builder/nowhere')
-
-test('a watched Builder keeps its code for a newer caller', async () => {
-  learn(B)
-  assertEquals((await through(watched.instance)(ask)).status, 404)
-  assertEquals(watched.restarts, [])
-})
 
 test('a Builder only the Operator page watches restarts for a newer caller, which the page joins again', async () => {
   learn(B)

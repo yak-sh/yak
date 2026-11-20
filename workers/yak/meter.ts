@@ -85,25 +85,15 @@ export let weighed = async (
   await stamp(env, { entities: [{ entity: { eid: app }, meter: { bytes } }] })
 
 // ---- the builds (T-34241) ---------------------------------------------------
-//
-// A build is counted where it happens, like a letter and for the same reason:
-// nothing in the analytics knows what the builder did. One count per completed
-// build — an `app_deploy` the builder performed — and never per message, so a
-// long conversation that ships one app costs one build.
-//
-// The refusal is a sentence the builder says, not a bounce: the person is
-// talking to it, and a door slamming mid-conversation is not an answer. The
-// builder asks before it starts and repeats what comes back.
 
 /**
  * One completed build and what it cost: the month's builds, model dollars
  * and container seconds, and the space's lifetime builds, each one higher.
  *
- * This is the call the builder's loop makes with what its `build()` spent on
- * its model (T-34239, weighed by models.ts) and the seconds its workbench held
- * (sandbox.ts `released`). A build that was refused never reaches it, so a
- * refusal costs a person nothing — not a build, and not the model call of the
- * sentence that turned it down.
+ * TODO(T-1655): nothing calls this since the builder's own loop was deleted
+ * (T-1647); a new app is the Operator's, whose spending is counted as every
+ * model call is. It stays only while the plans still promise "built-in
+ * builds", which that task takes out with the meter it counts.
  */
 export let countedBuild = (
   env: { STORE: Namespace },
@@ -116,10 +106,10 @@ export let countedBuild = (
 // ---- the workbench (T-34264) ------------------------------------------------
 //
 // Container seconds, counted where they happen like the letters and the
-// builds: nothing in the analytics knows what the builder compiled. The unit
-// is one second of container wall time — what Cloudflare bills on — measured
-// from the first sandbox call in a build to the moment the build lets the
-// container go (sandbox.ts `Spend`), rounded up.
+// builds: nothing in the analytics knows what a sandbox compiled. The unit
+// is one second of container wall time (what Cloudflare bills on), measured
+// from a call's first sandbox command to the moment it lets the container go
+// (sandbox.ts `Spend`), rounded up.
 //
 // Two ceilings hold it: the per-build budget the tools refuse at (sandbox.ts
 // `BUDGET`), and the month's {@link SECONDS}, which is what bounds the lone
@@ -129,11 +119,8 @@ export let countedBuild = (
  * The model dollars and container seconds spent, on the space's month, with
  * no build beside them.
  *
- * The door for a conversation that shipped nothing (builder.ts `end`) — its
- * model calls cost the same whether or not they ended in a deploy — and for a
- * lone sandbox tool call somebody's own agent made over the connector
- * (tools.ts `bench`). Where a build is being counted both go with it
- * ({@link countedBuild}).
+ * The door for a lone sandbox tool call (tools.ts `bench`), and for whatever
+ * else spends model dollars or container seconds with no build beside them.
  */
 export let countedSpend = async (
   env: { STORE: Namespace },

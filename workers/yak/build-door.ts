@@ -1,5 +1,5 @@
-// The kernel's door to a space's Builder: its request protocol and socket
-// frames, independent of the Durable Object that keeps the conversation.
+// The kernel's door to a space's Builder, the object its Operator runs in:
+// its request protocol, independent of the Durable Object itself.
 import { audit } from './admin-action.ts'
 import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
@@ -8,6 +8,8 @@ import type { Space } from './directory.ts'
 import { type Settings, worn } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
+import { url } from '@yaks/platform/host'
+import { chatPath, managePath } from '@yaks/platform/routes'
 import { answered } from './meta.ts'
 import type { Call, Door } from '@yaks/durable-object/door'
 
@@ -62,83 +64,17 @@ export let seatOf = (headers: Headers) => {
 
 /** A request carried on to the object, with none of the words the kernel
  * vouches in left from its caller: the kernel says those itself. */
-export let carried = (url: string, req: Request): Request => {
-  let out = new Request(url, req)
+export let carried = (to: string, req: Request): Request => {
+  let out = new Request(to, req)
   for (let [h] of [...out.headers]) {
     if (h == SPACE || h.startsWith('x-yak-')) out.headers.delete(h)
   }
   return out
 }
 
-/** A line said while a build is running (build.ts `#hold`): kept, and
- * taken up once the build ends, said as the builder says everything: a
- * sentence. */
-export let WAIT =
-  'I am still building the last thing you asked for. I have kept what you ' +
-  'said, and I will take it up as soon as I finish.'
-
-/** A line said while the space's Builder is stopped for the rows it spent,
- * `s` seconds more (build.ts `#hold`): kept, and taken up then. */
-export let HELD = (s: number) =>
-  `Building is paused here for ${s} s. I have kept what you said, and I ` +
-  'will take it up then.'
-
-/** A kept line nothing holds back now (build.ts `#note`): its turn is next,
- * or comes again once a try that broke has waited its minute. */
-export let SOON =
-  'I have kept what you said, and I will take it up in a moment.'
-
-/** A kept line whose turn broke before it could start, `tries` times
- * (build.ts `#note`): still kept, and tried again every minute. */
-export let STUCK = (tries: number) =>
-  `I have tried ${tries} times to start on what you said, and each time I ` +
-  'could not read this space to begin. I have kept it, and I will try ' +
-  'again every minute until it goes through.'
-
-/** A person's line to a space's Builder, as its `/say` door takes it: what
- * the form with no script posts (`posting`), and what the Builder keeps of a
- * line it cannot answer yet (build.ts `#hold`). */
-export let saying = (held: Held, text: string): Request =>
-  new Request('http://builder/say', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      [SPACE]: held.space,
-      'x-yak-person': held.person,
-      'x-yak-role': held.role ?? '',
-    },
-    body: JSON.stringify({ say: text }),
-  })
-
-/** Who said a line `saying` made, as its headers say. */
-export let sayer = (headers: Headers): Held => {
-  let role = headers.get('x-yak-role')
-  return {
-    person: headers.get('x-yak-person') ?? '',
-    role: role ? level(role) : null,
-    space: headers.get(SPACE) ?? '',
-  }
-}
-
 /** Nobody is refused at the handshake rather than mid-conversation. */
 export let NOBODY = 'sign in to build here'
 export let NOT_A_WRITER = 'only a member who writes can build here'
-
-/** A frame, as it goes down the socket. One key names it. A person's line
- * the Builder kept and has not taken up yet is `kept` at its place in the
- * write log, as is the note that says why it waits: a later note for the
- * same place takes the earlier one's, and `stuck` is one whose turn keeps
- * breaking. `taken` is the kept line at that place leaving them both, as it
- * becomes a line of the conversation. */
-export type Frame =
-  | { said: 'person' | 'builder'; text: string; kept?: number }
-  | { tool: string; call: string; line: string }
-  | { ran: string; call: string; line: string; ok: boolean }
-  | { built: string }
-  | { done: string; refused?: string }
-  | { ready: true; building: boolean }
-  | { busy: string; kept?: number; stuck?: true }
-  | { taken: number }
 
 /** The header an answer says its object owes work in: what an incarnation
  * takes up from the one before it (build.ts `#owed`), which the object starts
@@ -190,21 +126,6 @@ export let woken = (
   )
 
 /**
- * The handshake, carried to the object with the kernel's own vouch on it and
- * nothing of the client's. apps.ts is the only caller: `/api/build` on a
- * space's hostname. The upgrade request is the init, which is how the
- * `Upgrade` header reaches the object (door.ts, same reason).
- */
-export let joining = (env: Env, space: string, req: Request, who: Who) =>
-  builderOf(env, space)(() => {
-    let out = carried('http://builder/ws', req)
-    out.headers.set(SPACE, space)
-    if (who.person) out.headers.set('x-yak-person', who.person)
-    if (who.role) out.headers.set('x-yak-role', who.role)
-    return out
-  })
-
-/**
  * A space's conversation, buried (T-34371). erase.ts is the only caller, and
  * it makes this call before the directory tombstone like everything else
  * outside the directory: a wipe that fails leaves the space still named, and
@@ -246,39 +167,40 @@ export let operatorRecovery = (
 })
 
 /**
- * The other door on the same address (T-34242): a plain form POST, from a
- * browser that ran no script. One line, the round waited for, and a page back
- * — the way a drop answers a page rather than a code (drop.ts, same reason).
+ * A line posted to a space's old builder door, `/api/build` (ladder.ts
+ * `BUILD`), by a page drawn before the New app screen sent its words to the
+ * Operator (M-37853): said in the person's conversation as that screen says
+ * it, and the person sent to that conversation.
  *
  * apps.ts is the only caller, and it has already said who is asking.
  */
-export let posting = async (
+export let forwarded = async (
   env: Env,
   space: Space,
   req: Request,
   who: Who,
 ): Promise<Response> => {
-  // The page it answers is the gateway's, loaded there already; the
-  // builder's object, which shares this module's words, never draws one.
-  let { building } = await import('./pages.ts')
   let form = await req.formData()
-  let text = String(form.get('say') ?? '').trim()
-  if (!text) {
-    return building({ space: space.slug, why: 'Say what you want built.' }, env)
+  let say = String(form.get('say') ?? '').trim()
+  let request = crypto.randomUUID()
+  if (say) {
+    await operatorDoor(env, space, who, 'receive', {
+      say,
+      request: {
+        channel: 'chat',
+        files: [],
+        page: url(env, managePath('new', space.slug)),
+        new_app: true,
+      },
+      options: { id: request },
+    })
   }
-  let asked = await builderOf(env, space.eid)(() =>
-    saying({
-      person: who.person ?? '',
-      role: who.role ? level(who.role) : null,
-      space: space.eid,
-    }, text)
-  )
-  if (!asked.ok) {
-    let said = await asked.json() as { message?: string }
-    return building({ space: space.slug, why: said.message ?? NOBODY }, env)
-  }
-  let { frames } = await asked.json() as { frames: Frame[] }
-  return building({ space: space.slug, frames }, env)
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: url(env, chatPath(space.slug, say ? request : undefined)),
+    },
+  })
 }
 
 /** A request to a space's Operator, in its builder object, as `who` in

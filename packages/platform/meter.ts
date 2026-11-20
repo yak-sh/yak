@@ -37,10 +37,11 @@ export type Meter = {
   // Stored R2 bytes, independent of the calendar month; absent before rollout.
   files?: number
   emails: number
-  // Monthly builder usage. `built` keeps a lifetime total for usage reporting;
-  // both plans enforce their build allowance against the monthly `builds`.
+  // Monthly built-in builds. `built` keeps a lifetime total for usage
+  // reporting; both plans enforce their build allowance against the monthly
+  // `builds`. Nothing counts them since the builder was deleted (T-1655).
   builds: number
-  // Dollars spent on models this month: the builder's and the apps' calls,
+  // Dollars spent on models this month: the Operator's and the apps' calls,
   // each weighed by its model's price (models.ts).
   models: number
   // Dollars an app's voices received this month (rtc.ts): Cloudflare
@@ -49,7 +50,7 @@ export type Meter = {
   realtime: number
   // Dollars an app's texts cost this month (app-texts.ts), the same budget.
   texts?: number
-  // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
+  // The seconds the workbench spent awake (sandbox.ts, T-34264).
   // Its own property beside `models` because a model call and a
   // container-second are billed separately, and one number made of both is a
   // number nobody can add up.

@@ -94,9 +94,8 @@ export type Env = {
   // The person's own MCP stream (stream.ts): one object per signed-in
   // person, holding what an open connector is listening to.
   WIRE: Namespace
-  // The builder's conversation (build.ts, T-34240): one object per space,
-  // holding what has been said there and running one build at a time, with
-  // the space's page listening on a socket.
+  // A space's Operator (build.ts): one object per space, holding its store
+  // and running its work, with the space's pages listening on sockets.
   BUILDER: Namespace
   // Cloudflare's per-deploy version id (wrangler.toml [version_metadata]):
   // `id` changes on every `wrangler deploy`, so the stream compares it to know
@@ -271,14 +270,10 @@ export type Env = {
   // Off until the toll-free verification covers it (T-138775). Read per text,
   // so it is one `wrangler secret put` and no deploy, as CIMD is.
   TEXT_SIGNUP?: string
-  // The builder (builder.ts, T-34239): the model that makes somebody their
-  // first app. Both tiers run on Workers AI — `AI` is the binding
-  // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
-  // the workerd probes where the loop says so rather than half-running.
+  // Workers AI (providers.ts): `AI` is the binding (wrangler.toml `[ai]`), no
+  // key of ours and nothing bought, absent under the workerd probes.
   // AI_GATEWAY is the gateway Workers AI calls go through, which nobody has
-  // set. Which provider the builder runs on is config.ts `agents`. BUILDER_MODEL_FREE and
-  // BUILDER_MODEL_PAID are the model ids, so changing either is a `wrangler
-  // secret put` and no deploy of new code.
+  // set.
   AI?: {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
     gateway?(id: string): { getUrl(provider?: string): Promise<string> }
@@ -294,14 +289,12 @@ export type Env = {
   // answer the chat names apps ask ./api/ai/run for (config.ts `answering`).
   OPENAI_MODELS_KEY?: string
   OPENAI_API?: string
-  BUILDER_MODEL_FREE?: string
-  BUILDER_MODEL_PAID?: string
   // Claude for the Operator and builders (providers.ts): the platform's
   // Anthropic key, for product use only. Which model the Operator runs on is
   // a row in the directory (@yaks/platform/operator-model), not a secret.
   ANTHROPIC_API_KEY?: string
-  // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
-  // one build compiles in, bound as yak-sandbox's Durable Object namespace
+  // The workbench (sandbox.ts, T-34264): the Cloudflare Container a person's
+  // sandbox runs in, bound as yak-sandbox's Durable Object namespace
   // (sandbox/wrangler.toml). Absent in a test run and the
   // workerd probes, where the sandbox tools say so rather than half-running,
   // and unanswered under `wrangler dev`, where yak-sandbox is not running.

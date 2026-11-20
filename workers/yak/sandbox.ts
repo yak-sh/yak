@@ -8,9 +8,9 @@
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
 // they could compile rust, etc. if they needed to?"
 //
-// One sandbox per person per space (T-37893), so a person talking to
-// the builder and the same person's own agent over the connector reach one
-// workbench rather than two. It is a Cloudflare Container behind a Durable
+// One sandbox per person per space (T-37893), so a person's Operator and
+// the same person's own agent over the connector reach one workbench rather
+// than two. It is a Cloudflare Container behind a Durable
 // Object (`@cloudflare/sandbox`), which the deploy provisions from
 // the stable sandbox/base/Dockerfile image: Cloudflare's own sandbox image plus pinned
 // Rust, Python, Go and Zig toolchains — `zig cc` is the C and C++ path to
@@ -18,7 +18,7 @@
 // those, because an image is disk, disk is money, and every megabyte of it is
 // pulled before the first command runs; a build that wants something else
 // installs it for the session with apt or a registry, and the container it
-// installed into is stopped at build end after retaining its changed files.
+// installed into keeps it until it sleeps, after retaining its changed files.
 //
 // The binding is typed, never imported, the way every other binding in this
 // kernel is (env.ts). @cloudflare/sandbox is a Worker package: it imports
@@ -40,10 +40,10 @@
 // because a model call and a container-second are billed separately and one
 // number made of both is a number nobody can add up.
 //
-// What keeps it from running forever: the build stops it when it ends, and
-// @yaks/sandbox/cloudflare `SLEEP` is the backstop for a build that never says so — the container
-// sleeps on its own after that long idle, which is where the billing stops.
-// Idle and build shutdown retain changed files in R2; the next call restores them.
+// What keeps it from running forever: @yaks/sandbox/cloudflare `SLEEP`. The
+// container sleeps on its own after that long idle, which is where the
+// billing stops. Shutdown retains changed files in R2; the next call restores
+// them.
 // Processes end at shutdown. Snapshots have no expiry or automatic purge.
 //
 // Its network is the whole internet. It is the person's box: whatever runs in
@@ -77,7 +77,6 @@ import {
   named,
   NAP,
   type Sandboxes,
-  slept,
   TIMEOUT,
 } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
@@ -102,9 +101,9 @@ import { type Meta, meta } from './meta.ts'
  * `since` is null until the first sandbox call: a build that never reaches
  * for the workbench costs nothing and counts nothing.
  *
- * It is a mutable object on purpose — the tools that spend it are rows in the
- * platform table (tools.ts) and the build that pays for it is the loop
- * (builder.ts), and this is the one thing they share.
+ * It is a mutable object on purpose: the tools that spend it are rows in the
+ * platform table (tools.ts), and the call that pays for it (tools.ts `bench`)
+ * reads what they spent.
  */
 export type Spend = {
   since: number | null
@@ -224,19 +223,7 @@ export let awake = async (
   if (!was.held) throw refuse('limit', tooAwake(space, was.awake, env))
 }
 
-/** This person's sandbox in this space, asleep: a build that destroyed its
- * container gives the place back at once rather than when the nap would. */
-export let asleep = async (
-  env: { STORE?: unknown; META?: Meta },
-  space: Space,
-  person: string,
-) => {
-  let store = lendingOf(env)
-  if (store) await slept(store, space.eid, person)
-}
-
-/** Past the budget. It says what is already built is built, the way every
- * other end of a build says it (builder.ts). */
+/** Past the budget. It says what is already built is built. */
 export let overBudget = (spent: number) =>
   `I have had the workbench running for ${spent} seconds, and one build gets ` +
   `${BUDGET}. Whatever is already shipped into the app is shipped — ask me ` +
@@ -472,10 +459,10 @@ export let workbench = async (
  * destroy one through at all.
  *
  * A container that would not die is telemetry, never a failed caller: it
- * sleeps on its own (@yaks/sandbox/cloudflare `SLEEP`) and stops billing there. Both callers want
- * that — a build that has ended ({@link released}) and a space that is being
- * closed (erase.ts, T-34371), where the half-built tree inside it is part of
- * what `/privacy` says goes with the space.
+ * sleeps on its own (@yaks/sandbox/cloudflare `SLEEP`) and stops billing there. Its caller
+ * wants that: a space that is being closed (erase.ts, T-34371), where the
+ * half-built tree inside it is part of what `/privacy` says goes with the
+ * space.
  */
 export let destroyed = async (
   env: Bound,
@@ -494,8 +481,8 @@ export let destroyed = async (
   }
   // And the grant it was wearing goes with it: a token that outlived its
   // container is a bearer nobody is holding. It is read off the ledger rather
-  // than passed in, so erasing a space (erase.ts) revokes the grant a build
-  // minted in some other request just as a build's own end does.
+  // than passed in, so erasing a space (erase.ts) revokes the grant a call
+  // minted in some other request.
   await bared(env, space, idOf(env.WORKBENCH, named(space.eid, person)))
   return true
 }
@@ -541,31 +528,5 @@ export let paid = async (
   if (!spent) return 0
   spend.since = null
   await count(spent)
-  return spent
-}
-
-/**
- * The build is over: the container goes, and the seconds it held come back
- * for the caller to count. A build that never woke one destroys nothing and
- * answers 0.
- *
- * It does not write the meter itself, where {@link paid} does, because the
- * build counts its seconds in the same write as its build (builder.ts `end`,
- * meter.ts `countedBuild`) — two writes derived from one reading of the space
- * would each put the other's properties back.
- */
-export let released = async (
-  env: Bound,
-  space: Space,
-  spend: Spend,
-  now = Date.now,
-) => {
-  let spent = seconds(spend, now())
-  // The seconds are counted whether or not it went; a build that never woke
-  // one has nothing to destroy.
-  if (spend.since != null && spend.person) {
-    await destroyed(env, space, spend.person)
-  }
-  spend.since = null
   return spent
 }

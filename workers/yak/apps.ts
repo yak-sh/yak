@@ -42,7 +42,7 @@ import { previewed } from './preview-html.ts'
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects } from './lib/objects.ts'
 import { logoBytes, logoIcon } from './logo.ts'
-import { joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
+import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
 import { apiOut, assetMaps, assetUrl, linked, LOADS } from './asset_url.ts'
 import { assetPath, releaseId } from '@yaks/platform/versions'
@@ -2231,13 +2231,13 @@ let served = async (
   let keeps = (app: App, path: string) =>
     keepable(app, path) && !(dir.stale && app.access != 'public')
   if (step.to == 'closed') return closed(req, env, dir, space)
+  // The space's old builder door, still posted to by a page drawn before
+  // the New app screen asked the Operator (M-37853): its line is forwarded
+  // into the person's conversation (build-door.ts `forwarded`). Its socket
+  // is gone, so such a page's script falls back to posting the form.
   if (step.to == 'build') {
-    // Nobody's secret: the chat's script is the page's own, and the door it
-    // opens still asks who is asking.
-    if (step.script) return platformFile(req, env, '/build.js')
-    let posts = req.method == 'POST'
-    if (!posts && req.headers.get('upgrade') != 'websocket') {
-      return json(426, 'expected_websocket')
+    if (req.method != 'POST') {
+      return new Response(null, { status: 405, headers: { allow: 'POST' } })
     }
     let who = await c.time(
       'who',
@@ -2247,11 +2247,7 @@ let served = async (
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
     }
     if (!writes(who.role)) return json(403, 'not_a_writer', NOT_A_WRITER)
-    // A form POST is the browser that ran no script (build.ts `posting`): one
-    // line, the round waited for, and a page back.
-    return posts
-      ? posting(env, space, req, who)
-      : joining(env, space.eid, req, who)
+    return forwarded(env, space, req, who)
   }
   // Only the space's own people are told where a trashed app went, since a
   // stranger learning that an app was deleted here learns something that is

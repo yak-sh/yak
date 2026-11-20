@@ -56,6 +56,12 @@ export let onPage = (page: string, app?: string) =>
     app ? `, with the app ${app} open beside it` : ''
   }: `
 
+/** How the words of the New app screen reach the Operator (desk-pages.ts
+ * `asking`), in place of the page they were written on: a request for a new
+ * app, which the person's own words on that screen leave out. */
+export let NEW_APP =
+  'On their New app screen of yaks.app, asking for a new app: '
+
 // What that page shows (operator-page.ts `side`, `canvas`), so the Operator
 // knows what "here" is, is the base persona's plugins/yaks.app/persona/page.md.
 

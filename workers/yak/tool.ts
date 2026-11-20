@@ -56,8 +56,8 @@ export type Ctx = {
   // identity.ts `asking`): the session, a connector's token, or a CLI grant,
   // with what that credential says about itself. `about` reads it to answer
   // who is asking and until when, and `grant` reads it to refuse minting a
-  // grant from a grant. Absent where nobody asked — the builder's own loop
-  // runs these tools for a person it already knows (builder.ts).
+  // grant from a grant. Absent where nobody asked, as when the Operator runs
+  // these tools for a person it already knows.
   who?: Caller
   // Where a caller who has not signed in is calling from (@yaks/workerd/rate `source`),
   // set by the anonymous door (mcp.ts `stranger`) so a tool that holds
@@ -73,11 +73,11 @@ export type Ctx = {
   // client that cached the instructions at connect has no other way to read
   // them fresh.
   standing?: () => Promise<string>
-  // The container time this build has spent (sandbox.ts `Spend`), where a
-  // build is what is running: builder.ts mints one per loop and pays for it
-  // at the end. A connector call arrives without one and gets a fresh one, so
-  // a single tool call is its own budget — which is as much as one call could
-  // spend anyway, since a command is capped at sandbox.ts `TIMEOUT`.
+  // The container time spent so far (sandbox.ts `Spend`), where a caller
+  // holds one across calls and pays for it itself. A call without one gets a
+  // fresh one, so a single tool call is its own budget, which is as much as
+  // one call could spend anyway, since a command is capped at sandbox.ts
+  // `TIMEOUT`.
   spend?: Spend
   // Told when a caller who writes has entered a space (`inSpace`, `inApp`),
   // by a door that will tell them what is unseen there once the write is done

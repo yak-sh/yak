@@ -37,7 +37,6 @@ import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf, sole } from '@yaks/sqlite'
-import { schema as logSchema } from '@yaks/api/log'
 import { operatorConfig } from './config.ts'
 import { load, vocabFacets } from './operator-load.ts'
 import { vocabsOf } from './vocabs.ts'
@@ -77,10 +76,7 @@ let text = indexed(operatorVocab)
 // component (@yaks/sqlite `over`), as an app's store makes its own. A store
 // fitted before any entry was written holds no `entry` table to index then.
 let searching = ftsSchema(text, derived)
-// The write log the object's Builder keeps a person's line in while it is
-// stopped (build.ts `#hold`), fitted with the store, so the alarm that takes
-// the lines up (`#take`) finds the log standing and runs no DDL to look.
-let beside = () => [...blobSchema(), ...logSchema()]
+let beside = () => blobSchema()
 let print: string | undefined
 
 /** The revision of how the file is fitted, part of its print: a file fitted

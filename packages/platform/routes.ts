@@ -704,7 +704,7 @@ let upgrading = (req: Request): boolean =>
 //
 // The apex is no sibling: it is the platform's own pages, with no app's code
 // in them, and the dashboard there aims at a space's doors (pages.ts `desk`:
-// the drop zone, the builder's socket). A page that could forge a request
+// the drop zone). A page that could forge a request
 // from the apex could already consent to an agent or close a space there, so
 // admitting it here gives nothing away.
 export let sameOrigin = (

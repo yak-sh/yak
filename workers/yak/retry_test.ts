@@ -2,7 +2,7 @@
 // before failing, and each new stub permits only one call.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { joining, posting, SPACE, wiped } from './build-door.ts'
+import { wiped } from './build-door.ts'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import type { Namespace } from '@yaks/durable-object/door'
@@ -60,16 +60,6 @@ let settled = async <T>(call: Promise<T>) => {
   return call
 }
 let fails = (errors: Error[]) => sends(errors) == errors.length
-let upgrade = () =>
-  new Request('https://ada.yaks.app/api/build', {
-    headers: {
-      Upgrade: 'websocket',
-      [SPACE]: 'forged-space',
-      'x-yak-person': 'forged-person',
-      'x-yak-role': 'forged-role',
-      'x-yak-kernel': '1',
-    },
-  })
 let callers: Array<{
   path: string
   binding: 'BUILDER' | 'WIRE'
@@ -78,39 +68,11 @@ let callers: Array<{
   run: (env: Env) => Promise<unknown>
 }> = [
   {
-    path: 'http://builder/ws',
-    binding: 'BUILDER',
-    body: '',
-    headers: {
-      upgrade: 'websocket',
-      [SPACE]: space.eid,
-      'x-yak-person': who.person,
-      'x-yak-role': who.role,
-    },
-    run: (env) => joining(env, space.eid, upgrade(), who),
-  },
-  {
     path: 'http://builder/wipe',
     binding: 'BUILDER',
     body: '',
     headers: { 'x-yak-kernel': '1' },
     run: (env) => wiped(env, space.eid),
-  },
-  {
-    path: 'http://builder/say',
-    binding: 'BUILDER',
-    body: JSON.stringify({ say: 'Build a café' }),
-    headers: { [SPACE]: space.eid, 'x-yak-person': who.person },
-    run: (env) =>
-      posting(
-        env,
-        space,
-        new Request('https://ada.yaks.app/api/build', {
-          method: 'POST',
-          body: new URLSearchParams({ say: 'Build a café' }),
-        }),
-        who,
-      ),
   },
   {
     path: 'http://wire/open',
@@ -288,9 +250,6 @@ for (let caller of callers) {
             assertEquals(await req.text(), caller.body)
             for (let [key, value] of Object.entries(caller.headers)) {
               assertEquals(req.headers.get(key), value)
-            }
-            if (caller.path.endsWith('/ws')) {
-              assertEquals(req.headers.has('x-yak-kernel'), false)
             }
             let error = errors[seen.length - 1]
             if (error) throw error

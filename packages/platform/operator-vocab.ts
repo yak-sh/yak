@@ -123,6 +123,11 @@ export let operatorDoc: VocabDoc = {
           description:
             'Begun from a box given the web address of a site, on the chat channel: its words carry what to do with it.',
         },
+        new_app: {
+          type: 'boolean',
+          description:
+            'Asked for on the New app screen, on the chat channel: the words are a request for a new app.',
+        },
         stepped: {
           type: 'object',
           description:

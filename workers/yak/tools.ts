@@ -3288,9 +3288,8 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
  * One turn at the build session's workbench: the container, and the seconds
  * it cost.
  *
- * A build holds its own `spend` and pays for the whole thing when it ends,
- * destroying the container with it (builder.ts). A lone connector call arrives
- * with none, mints one, and pays for its own seconds here — leaving the
+ * A caller that holds its own `spend` pays for it itself. A call that arrives
+ * with none mints one and pays for its own seconds here, leaving the
  * container to sleep on its own (sandbox.ts `SLEEP`), because the person may
  * well call again in a moment and a fresh container is a fresh `cargo build`.
  *
@@ -4750,9 +4749,8 @@ let OURS: Row[] = [
   // The workbench (sandbox.ts, T-34264): the machine tools, and shipping
   // what they built. They are here rather than in a tier of their own because
   // they are the platform's verbs like the rest: an owner or editor of the
-  // space calls them, the builder we run calls them through the same table
-  // (builder.ts `roster`), and a person's own agent calls them over the
-  // connector.
+  // space calls them, the Operator calls them, and a person's own agent calls
+  // them over the connector.
   ...SANDBOX,
   {
     name: 'attachment_read',

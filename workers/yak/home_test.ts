@@ -302,7 +302,7 @@ test('on a phone, Menu opens the same side', async () => {
   )
 })
 
-test('new app exposes separate build and upload forms below the agent route', async () => {
+test('new app exposes separate Operator and upload forms below the agent route', async () => {
   let page = await block({ view: 'new' })
   let { document } = parseHTML(page)
   let build = document.querySelector('textarea')!
@@ -312,10 +312,11 @@ test('new app exposes separate build and upload forms below the agent route', as
     assert(field.hasAttribute('required'))
     assert(field.closest('section')?.querySelector('h2'))
   }
-  assertEquals(
-    build.closest('form')?.getAttribute('action'),
-    'https://dana.yaks.app/api/build',
-  )
+  // The words go to the space's Operator, as a request for a new app.
+  let ask = build.closest('form')!
+  assertEquals(ask.getAttribute('action'), managePath('operator', 'dana'))
+  assertEquals(ask.getAttribute('enctype'), 'multipart/form-data')
+  assert(ask.querySelector('input[name=new_app]'))
   assertEquals(
     upload.closest('form')?.getAttribute('action'),
     'https://dana.yaks.app/deploy',

@@ -13,7 +13,6 @@ import { addressed } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Wire } from '@yaks/durable-object'
-import type { Held } from './build-door.ts'
 import {
   abandoned,
   collected,
@@ -44,11 +43,11 @@ import { MORE } from './wake.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { ai } from './testing.ts'
 import { declared } from './directory-fixture.ts'
 import { sandboxes } from '../../packages/sandbox/testing.ts'
 import { kvStorage } from './binding-probe.ts'
 import { builders } from './builder-probe.ts'
+import { operatorStore } from './operator-store.ts'
 import { durable } from './store-state-probe.ts'
 import { platform as directoryPlatform } from './directory-rows-probe.ts'
 import { platform } from './deploy-probe.ts'
@@ -484,29 +483,18 @@ test('the idle preview ignores platform touches but keeps a space somebody used'
   assertEquals(idlePreview, { before: ['quiet', 'used'], after: ['quiet'] })
 })
 
-// A page's socket, as far as a replay is concerned: what it was sent.
-let wire = () => {
-  let sent: unknown[] = []
-  return {
-    sent,
-    ws: {
-      send: (data: string) => void sent.push(JSON.parse(data)),
-      serializeAttachment: () => {},
-      deserializeAttachment: () => null,
-    } as unknown as Wire,
-  }
-}
-
 // The two things a space keeps outside the graph, and therefore outside the
-// cascade the directory tombstone sets off (T-34371): the builder's
-// conversation, in an object of its own keyed by the eid (build.ts), and the
-// container that conversation compiled in (sandbox.ts, same key). `/privacy`
+// cascade the directory tombstone sets off (T-34371): the Operator's store,
+// in an object of its own keyed by the eid (build.ts), and the workbench
+// (sandbox.ts, same key). `/privacy`
 // says a closed space takes its things with it; this is that sentence held to
 // the code.
 test('a deleted space takes its conversation and its workbench', async () => {
   let box = sandboxes()
+  let stores: ReturnType<typeof durable>[] = []
   let { builder, namespace } = builders(() => env, () => {
     let storage = Object.assign(durable(), kvStorage())
+    stores.push(storage)
     cleanup(() => storage[Symbol.dispose]())
     let live: Wire[] = []
     return {
@@ -517,16 +505,38 @@ test('a deleted space takes its conversation and its workbench', async () => {
   })
   let { env } = directoryPlatform('a probe secret', {
     BUILDER: namespace,
-    AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
     WORKBENCH: box.WORKBENCH as Env['WORKBENCH'],
   })
   let { dir, space } = await owned(env)
   let who: Who = { person: ADA, role: 'owner' }
-  let held: Held = { person: ADA, role: 'owner', space: space.eid }
 
-  // Something said to the builder, and a workbench woken under the same key.
-  await builder(space.eid).say(held, 'a recipe box please')
-  assertEquals(builder(space.eid).said().length, 2)
+  // The space's Operator, read and holding a row, and a workbench woken
+  // under the same key.
+  let read = await builder(space.eid).fetch(
+    new Request('https://builder/operator/conversation', {
+      method: 'POST',
+      headers: { 'x-space-eid': space.eid, 'x-yak-person': ADA },
+      body: '{}',
+    }),
+  )
+  await read.body?.cancel()
+  let operator = await operatorStore(stores[0])
+  await operator.g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    session: {},
+  }], {
+    trusted: true,
+  })
+  // What the Operator's store holds, as entities.
+  let kept = () =>
+    stores.flatMap((st) =>
+      [...st.sql.exec('select name from sqlite_master')].some((r) =>
+          r.name == 'entity'
+        )
+        ? [...st.sql.exec('select eid from entity')]
+        : []
+    ).length
+  assert(kept(), 'the Operator kept nothing')
   let bench = await workbench(env, space, ADA, spending())
   await bench.provider.exec(bench.ref, 'cargo build')
   assertEquals([...box.alive], [named(space.eid, ADA)])
@@ -534,12 +544,9 @@ test('a deleted space takes its conversation and its workbench', async () => {
   await trashSpace(env, dir, space, who)
   await erase(env, dir, await census(dir, (await dir.space(space.slug))!), who)
 
-  // A page joining the object for that space hears what a first visit hears:
-  // nothing but the mark that the replay is over.
-  let page = wire()
-  builder(space.eid).joined(page.ws, held)
-  assertEquals(page.sent, [{ ready: true, building: false }])
-  // And the container is gone rather than left awake on a name nobody owns.
+  // The Operator's store is gone with the space, and the container rather
+  // than left awake on a name nobody owns.
+  assertEquals(kept(), 0)
   assertEquals([...box.alive], [])
 })
 

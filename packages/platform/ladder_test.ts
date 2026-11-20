@@ -116,15 +116,8 @@ test('rung: the old dashboard is sent to its new address', async () => {
   assertEquals(await stop('/_yaks/nowhere'), ['nothing', {}])
 })
 
-test('rung: the builder is the space’s, whatever app is home', async () => {
-  assertEquals(await stop('/api/build.js', { home: site }), [
-    'build',
-    { script: true },
-  ])
-  assertEquals(await stop('/api/build', { home: site }), [
-    'build',
-    { script: false },
-  ])
+test('rung: the old builder door is the space’s, whatever app is home', async () => {
+  assertEquals(await stop('/api/build', { home: site }), ['build', {}])
 })
 
 test('rung: a trashed app is binned, and its doors are nothing', async () => {

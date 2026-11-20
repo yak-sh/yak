@@ -469,9 +469,8 @@ export let erase = async (
   // else's; this is the owner's confirmed permanent purge.
   await swept(env, under(d.space), d.space.eid, true)
   // What the space kept outside the graph, and therefore outside the cascade
-  // below: the builder's conversation, in an object of its own keyed by the
-  // eid (build.ts), and the container that conversation compiled things in
-  // (sandbox.ts, same key). `/privacy` says both go with the space. Before the
+  // below: the Operator's store, in an object of its own keyed by the eid
+  // (build.ts), and each member's workbench (sandbox.ts, same key). `/privacy` says both go with the space. Before the
   // row, like everything else here — a wipe that throws leaves the space still
   // named, and asking again finishes it, where the other order would leave a
   // transcript nothing points at and nobody can ask about again.

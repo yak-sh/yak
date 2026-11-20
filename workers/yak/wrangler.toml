@@ -121,8 +121,6 @@ queue = "yak-builds"
 # app's worker is uploaded into — the same tag as `account_id` above, which the
 # runtime is never handed. Not a secret: it is in this file.
 [vars]
-BUILDER_MODEL_FREE = '@cf/deepseek-ai/deepseek-v4.1-flash-1017'
-BUILDER_MODEL_PAID = '@cf/zai-org/glm-5.3'
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
 APEX = "yaks.app"
 # The REST APIs and app service bindings must name the same resources as the
@@ -229,15 +227,14 @@ class_name = "Store"
 name = "WIRE"
 class_name = "Wire"
 
-# One object per SPACE, holding the builder's conversation and running one
-# build at a time in it (build.ts, T-34240). The page listens on it at
-# <space>.yaks.app/api/build.
+# One object per SPACE, holding its Operator's store and running its work
+# (build.ts). Its class keeps the name it was first deployed under.
 [[durable_objects.bindings]]
 name = "BUILDER"
 class_name = "Builder"
 
-# The builder's workbench (sandbox.ts, T-34264): one Cloudflare Container per
-# build session, holding a Rust toolchain and the wasm target, so the agent can
+# The workbench (sandbox.ts, T-34264): one Cloudflare Container per person
+# per space, holding a Rust toolchain and the wasm target, so the agent can
 # compile the things a browser cannot and ship the artifact into the app. The
 # object and its container are yak-sandbox's (sandbox/), so @cloudflare/sandbox
 # is compiled by the isolates that run one and never by the kernel's. This
@@ -351,14 +348,12 @@ deleted_classes = ["Workspaces"]
 [[send_email]]
 name = "MAIL"
 
-# Workers AI (builder.ts, T-34239): BOTH tiers' models run on this binding,
-# which needs no key — the deploy is the authorization, the way the mail
-# binding is. Owner, 2026-09-05: "can't we use workers AI instead of AI
-# Gateway to start now without purchasing anything? we already have free
-# usage" — so there is no gateway and no AI_GATEWAY here, and the OpenAI path
-# in builder.ts waits behind config nobody has set. Under `wrangler dev` this
-# proxies to the account; in the workerd probes there is no binding at all and
-# the loop says so.
+# Workers AI (providers.ts `workers-ai`): a binding that needs no key, the
+# deploy being the authorization, the way the mail binding is. Owner,
+# 2026-09-05: "can't we use workers AI instead of AI Gateway to start now
+# without purchasing anything? we already have free usage", so there is no
+# gateway and no AI_GATEWAY here. Under `wrangler dev` this proxies to the
+# account; in the workerd probes there is no binding at all.
 [ai]
 binding = "AI"
 
@@ -600,10 +595,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # space's budget on it (config.ts `openai`). OPENAI_OPERATOR_API_KEY is the
 # key the Operator's conversations run on GPT-6.2 Sol with. AI_GATEWAY is
 # unset on purpose: no gateway exists on the account and nothing needs
-# one, since both builder tiers build on the `[ai]` binding above. Point
-# BUILDER_MODEL_PAID at an OpenAI model on a key that may use it, and the paid
-# build speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
-# model ids, unset meaning builder.ts's own defaults.
+# one, since Workers AI is reached through the `[ai]` binding above.
 # TRACKER_SECRET signs tenant-scoped reads at the independent tracker.
 # VAULT_KEY is the key the vault above is encrypted under: 32 random bytes in
 # base64 (`openssl rand -base64 32`). Changing it strands every key already

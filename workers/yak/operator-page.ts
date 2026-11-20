@@ -903,6 +903,8 @@ export let operatorAnswer = async (
         files,
         page: page.href,
         ...SLUG.test(app) ? { app } : {},
+        // Sent from the New app screen (desk-pages.ts `asking`).
+        ...form.has('new_app') ? { new_app: true } : {},
       },
       options: { id: request },
       ...(form.has('draft')

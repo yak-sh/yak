@@ -157,16 +157,13 @@ The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.
 
-The optional built-in builder includes five builds a month on Free and 100 on
-Plus. A build counts when it deploys an app, not per message.
-
-Model use is one allowance for every model call on a space: the builder's, and
+Model use is one allowance for every model call on a space: the Operator's, and
 the ones its apps make. Each call is weighed by its model's price against the
 space's monthly budget, counted whether or not a conversation deploys. Apps
 built or changed through your connected agent do not use it.
 
 Each person has a sandbox in each space: a private Linux container where the
-builder or your agent runs commands and keeps files while it works, to run a
+Operator or your agent runs commands and keeps files while it works, to run a
 script over a file you sent, call an API, or compile Rust to WebAssembly and
 copy the result into your app. The container comes with Rust 1.98.1 (and
 wasm-bindgen 0.2.128, wasm-opt 132), Python 3.13.15 with pip, Go 1.27.1, Zig

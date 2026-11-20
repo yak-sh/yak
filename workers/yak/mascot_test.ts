@@ -6,7 +6,6 @@ import { parseHTML } from 'linkedom'
 import type { Bundle } from '@yaks/graph'
 import { frame, talk } from './operator-view.ts'
 import { shell } from './pages.ts'
-import { desk } from './desk-pages.ts'
 import { IDLE, idle, MOVES } from './mascot.ts'
 
 let env = { APEX: 'yaks.fyi' }
@@ -31,25 +30,6 @@ let srcset = (el: Element) => {
   assertEquals(given.map(([, d]) => d), ['1x', '2x', '3x'])
   return given.map(([f]) => f)
 }
-
-// Each yak on a page: its pose, its words, and the files it names.
-let yaks = (html: string) =>
-  [...parseHTML(`<main>${html}</main>`).document.querySelectorAll('.Loading')]
-    .map((p) => {
-      let pic = p.querySelector('.Loading_Mark')!
-      let img = pic.querySelector('img')!
-      let still = pic.querySelector('source')!
-      assertEquals(img.getAttribute('alt'), '')
-      assertEquals(
-        still.getAttribute('media'),
-        '(prefers-reduced-motion: reduce)',
-      )
-      return {
-        pose: pic.getAttribute('data-pose'),
-        words: p.textContent,
-        files: [img.getAttribute('src')!, ...[img, still].flatMap(srcset)],
-      }
-    })
 
 let served = async (path: string) => {
   let name = new URL(path, 'https://yaks.fyi').pathname
@@ -88,19 +68,6 @@ test('what the Operator is doing is words a screen reader hears, and the yak bes
 
 test("each thing the Operator does is one of the waiting yak's loops", () => {
   for (let { loop } of Object.values(MOVES)) assert(loop in IDLE, loop)
-})
-
-test('the builder waits with the yak at its keyboard', async () => {
-  let page = await desk(
-    { space: 'ada', apps: [], sell: 'none', view: 'new' },
-    env,
-  ).text()
-  let [shown] = yaks(page)
-  assertEquals([shown.pose, shown.words], ['typing', 'Building…'])
-  for (let f of shown.files) {
-    assert(f.startsWith('https://yaks.fyi/mascot/'), f)
-    await served(f)
-  }
 })
 
 test('the waiting yak is drawn at the size it shows, at every density', async () => {

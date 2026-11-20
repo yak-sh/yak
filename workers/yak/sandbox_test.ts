@@ -25,7 +25,6 @@ import {
 } from '@std/assert'
 import { parse } from 'smol-toml'
 import { imaged, pinned as from } from './sandbox/base.ts'
-import { build, fake } from './builder.ts'
 import { directory, spaceOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -35,14 +34,12 @@ import { type Ran, sandboxes } from '../../packages/sandbox/testing.ts'
 import { platform } from './deploy-probe.ts'
 import { held, ledger } from './grants.ts'
 import {
-  asleep,
   awake,
   BUDGET,
   destroyed,
   HOST,
   LIFE,
   NO_BOX,
-  released,
   seconds,
   spending,
   swapped,
@@ -54,7 +51,6 @@ import { doomed, erase } from './erase.ts'
 import { meta } from './meta.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
-import type { Who } from './session.ts'
 import { SECONDS } from '@yaks/platform/plans'
 import { attachmentKey } from './attachments.ts'
 import { digest } from '@yaks/graph/sha256'
@@ -72,7 +68,6 @@ let SECRET = 'a probe secret'
 // whole file binary (bin/check-bytes.ts).
 let WASM = '\0asm\x01\0\0\0'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
-let owner: Who = { person: ADA, role: 'owner' }
 
 let dirOf = (env: Env) =>
   directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
@@ -484,7 +479,7 @@ test('a lend returns a usable machine while the CLI warms', async () => {
     box.ran.filter((cmd) => cmd == 'yak --help >/dev/null').length,
     1,
   )
-  await released(env, space, spend)
+  await destroyed(env, space, ADA)
   assertEquals([...box.alive], [])
 })
 
@@ -528,25 +523,6 @@ test('the budget refuses in a sentence, and only after it is spent', async () =>
   })()
   assertStringIncludes(said.message, `one build gets ${BUDGET}`)
   assertStringIncludes(said.message, 'already shipped into the app is shipped')
-})
-
-test('a release answers the seconds held, and the container goes', async () => {
-  let { box, env, space } = bare()
-  let clock = 0
-  let spend = spending()
-  let bench = await workbench(env, space, ADA, spend, () => clock)
-  await bench.provider.exec(bench.ref, 'sleep 42')
-  assertEquals([...box.alive], [named(space.eid, ADA)])
-  clock = 42_300
-  let spent = await released(env, space, spend, () => clock)
-
-  // Rounded up, the clock started over, and the container gone.
-  assertEquals(spent, 43)
-  assertEquals(spend.since, null)
-  assertEquals([...box.alive], [])
-  // A release of a build that never woke one answers nothing and kills
-  // nothing — which is what makes it safe on every end of the loop.
-  assertEquals(await released(env, space, spending()), 0)
 })
 
 // The sandbox's sign-in (T-34387): every command runs with a placeholder for
@@ -634,9 +610,8 @@ test('destroying the container revokes what it was wearing', async () => {
   let book = ledger(env.OAUTH_KV, dirOf(env))!
   assert(await held(token, SECRET, book), 'live while the container is')
 
-  // Destroy is the one door — a build's own end (`released`) and a space
-  // being erased (erase.ts) both come through it, and neither has to be
-  // holding the grant to end it.
+  // Destroy is the door a space being erased (erase.ts) comes through, and
+  // it need not be holding the grant to end it.
   assertEquals(await destroyed(env, space, ADA), true)
   assertEquals(await held(token, SECRET, book), null)
   assertEquals((await sent(env, mine, `${HOST}/mcp`, placeholder)).status, 403)
@@ -647,80 +622,6 @@ test('destroying the container revokes what it was wearing', async () => {
     .bearer!
   assert(next != token, 'a new grant for a new container')
   assert(await held(next, SECRET, book))
-})
-
-test('a build pays for its workbench and leaves none running', async () => {
-  let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded(
-    { WORKBENCH: box.WORKBENCH } as Partial<Env>,
-  )
-  let model = fake([
-    {
-      calls: [{
-        id: 'c1',
-        name: 'sandbox_shell',
-        args: JSON.stringify({ command: 'rustc --version' }),
-      }],
-    },
-    { text: 'compiled' },
-  ])
-  let out = await build(env, owner, space, [{
-    said: 'person',
-    text: 'a chess engine',
-  }], { model })
-
-  assertEquals(out.refused, undefined)
-  assertEquals(box.ran, [
-    'chmod +x /usr/local/bin/yak',
-    'yak --help >/dev/null',
-    'rustc --version',
-  ])
-  // The loop destroyed what it woke...
-  assertEquals([...box.alive], [])
-  // ...and the seconds are on the space's month. This conversation shipped
-  // nothing, so it is the container alone: no build, and no model use.
-  let after = (await dirOf(env).space('ada'))!
-  assert((after.meter?.seconds ?? 0) >= 1, 'the container was paid for')
-  assertEquals(after.meter?.built, 0)
-})
-
-test('a build that ships pays for both in one write', async () => {
-  let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded(
-    { WORKBENCH: box.WORKBENCH } as Partial<Env>,
-  )
-  let call = (id: string, name: string, args: unknown) => ({
-    id,
-    name,
-    args: JSON.stringify(args),
-  })
-  let model = fake([
-    { calls: [call('c1', 'sandbox_shell', { command: 'cargo build' })] },
-    { calls: [call('c2', 'app_new', { slug: 'chess', title: 'Chess' })] },
-    {
-      calls: [call('c3', 'app_files', {
-        app: 'chess',
-        files: [{ path: 'index.html', content: '<h1>Chess</h1>' }],
-      })],
-    },
-    {
-      calls: [call('c4', 'app_deploy', { app: 'chess' })],
-      usage: { input: 900, output: 40, cached: 0 },
-      cost: 0.01,
-    },
-    { text: 'it is at https://ada.yaks.app/chess/' },
-  ])
-  await build(env, owner, space, [{ said: 'person', text: 'chess' }], {
-    model,
-  })
-
-  // The month with no row before this: one build, what its model cost, and
-  // the container seconds — none of them zeroed by the other.
-  let after = (await dirOf(env).space('ada'))!
-  assertEquals(after.meter?.builds, 1)
-  assertEquals(after.meter?.built, 1)
-  assert((after.meter?.models ?? 0) > 0, 'its model calls were paid for')
-  assert((after.meter?.seconds ?? 0) >= 1, 'and the container it compiled in')
 })
 
 // The deploy's own half, which no test on this box can run: `wrangler deploy`
@@ -946,12 +847,9 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   assertEquals((no as { code?: string }).code, 'limit')
   assertStringIncludes(no.message, 'Putting ada on the Plus plan allows more')
   await tool('sandbox_shell').run(bob, { space: 'ada2', command: 'ls' })
-  // On the Plus plan, two; and once one has slept, another wakes.
+  // On the Plus plan, two; and once a place has lapsed, another wakes.
   let now = Date.now()
   await awake(env, { ...space, tier: 'plus' }, BOB, now)
-  await asleep(env, space, ADA)
-  await awake(env, space, BOB, now)
-  await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
   await awake(env, other, BOB, now)
 

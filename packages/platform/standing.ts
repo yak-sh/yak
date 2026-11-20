@@ -377,16 +377,14 @@ export let atCeiling = (
         count(letters(space.tier))
       } emails a month, and this month's are sent — it can send ` +
       `again on the 1st, and letters written to it still arrive`,
-    // The builder's refusal, which it says in the chat rather than bouncing
-    // (T-34242 renders it): a person asked for an app in words, and a person
-    // asked in words is owed an answer in words. What it leaves them is the
-    // app they already have and the tools to change it themselves.
+    // The month's built-in builds, used (T-1655: nothing counts them since
+    // the builder was deleted).
     builds: () =>
       `${space.slug} is on ${planName(space.tier)}, which is ${
         count(builds(space.tier))
       } built-in builds a month, and this month's are used — it ` +
       `can build again on the 1st, or keep building with a connected agent`,
-    // Every model call on the space stops here, the builder's and its apps'
+    // Every model call on the space stops here, the Operator's and its apps'
     // alike, so it names neither: models answer again on the 1st. Voice
     // spends the same dollars, so each sentence says both.
     models: () =>

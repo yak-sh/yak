@@ -29,7 +29,6 @@ import {
   Empty,
   Field,
   Form,
-  Loading,
   More,
   Notice,
   Rows,
@@ -37,8 +36,6 @@ import {
 } from '@yaks/ui/parts'
 
 import { type ComponentChildren, h } from 'preact'
-
-import type { Frame } from './build-door.ts'
 
 import type { Agent } from './connected.ts'
 
@@ -62,7 +59,7 @@ import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 
 import { versionOf } from './running.ts'
 
-import { Yak, yak } from './mascot.ts'
+import { yak } from './mascot.ts'
 
 import { asset, links } from './sheets.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
@@ -486,114 +483,6 @@ if (deploy) {
 }
 `)
 
-// ---- the builder's chat (T-34242) -------------------------------------------
-//
-// The other door with no assistant in the room, beside the drop zone: a person
-// says what they want and the platform's own builder makes it (build.ts,
-// T-34240). One form, one textarea, and it POSTs to the builder's address the
-// way the drop zone POSTs to `/deploy` — so a browser that ran no script says
-// a line, waits for the round, and reads the whole conversation back as a
-// page. The script beside it (public/build.js) opens the socket instead and
-// draws the same frames as they happen; nothing it does is required.
-//
-// One renderer, drawn twice. The frames below are build.ts's wire, whole, and
-// the rules here are the rules the script keeps: a tool is one row that turns
-// into its own result, the address is a card, `busy` is a line, a kept line
-// and its note are one each at their place, the newest standing, until
-// `taken` clears them, and `done` draws nothing because the sentence it
-// carries is already a line above it.
-
-// A https address inside a sentence the builder said — the app it just made,
-// the pricing page a refusal ends with — as a link. Refused by shape, not by a
-// scheme list (the repo's md.ts rule): `https://`, then nothing that could
-// close the attribute or open a tag, and no trailing punctuation of the
-// sentence it sits in.
-let AT = /https:\/\/[^\s<>"'`]+/g
-
-let linked = (text: string) => {
-  let out: Kids[] = []
-  let from = 0
-  for (let m of text.matchAll(AT)) {
-    let to = m[0].replace(/[.,;:!?)\]]+$/, '')
-    out.push(
-      text.slice(from, m.index),
-      h('a', { class: 'Chat_Link', href: to }, to),
-    )
-    from = m.index + to.length
-  }
-  return [...out, text.slice(from)]
-}
-
-// One tool, as one row: its name, the line it said about itself, and where it
-// got to. `null` is a tool still running — the row a `ran` frame replaces.
-let toolRow = (name: string, line: string, ok: boolean | null) =>
-  h(
-    'p',
-    { class: ok == false ? 'Chat_Tool Chat_Tool-no' : 'Chat_Tool' },
-    h(
-      'span',
-      { class: 'Chat_Name' },
-      `${ok == null ? '…' : ok ? '✓' : '✗'} ${name}`,
-    ),
-    h('span', { class: 'Chat_Of' }, line),
-  )
-
-/** The conversation, as the page draws it. */
-export let transcript = (frames: Frame[]) => {
-  let rows: Kids[] = []
-  let at = new Map<string, number>()
-  // The rows of each line kept in the builder's log, its bubble and its
-  // note, by their place there.
-  let kept = new Map<string, number>()
-  let put = (row: Kids, place?: number, part?: string) => {
-    let was = place == null ? undefined : kept.get(`${place} ${part}`)
-    if (was != null) return void (rows[was] = row)
-    if (place != null) kept.set(`${place} ${part}`, rows.length)
-    rows.push(row)
-  }
-  for (let f of frames) {
-    if ('said' in f) {
-      if (!f.text) continue
-      put(
-        h('p', {
-          class: `Chat_Bubble Chat_Bubble-${
-            f.said == 'person' ? 'you' : 'them'
-          }`,
-        }, linked(f.text)),
-        f.kept,
-        'line',
-      )
-    } else if ('tool' in f) {
-      at.set(f.call, rows.length)
-      rows.push(toolRow(f.tool, f.line, null))
-    } else if ('ran' in f) {
-      let was = at.get(f.call)
-      let row = toolRow(f.ran, f.line, f.ok)
-      if (was == null) rows.push(row)
-      else rows[was] = row
-    } else if ('built' in f) {
-      rows.push(
-        h(
-          Card,
-          { as: 'div', class: 'Chat_Built' },
-          h('p', { class: 'Chat_BuiltWords' }, 'It is live.'),
-          address(f.built),
-        ),
-      )
-    } else if ('busy' in f) {
-      let note = f.stuck ? 'Chat_Note Chat_Note-no' : 'Chat_Note'
-      put(h('p', { class: note }, f.busy), f.kept, 'note')
-    } else if ('taken' in f) {
-      for (let part of ['line', 'note']) {
-        let was = kept.get(`${f.taken} ${part}`)
-        if (was != null) rows[was] = null
-        kept.delete(`${f.taken} ${part}`)
-      }
-    }
-  }
-  return h('div', { class: 'Chat_Said' }, rows)
-}
-
 // An address something is live at, to open or copy.
 export let address = (to: string) =>
   h(
@@ -601,43 +490,6 @@ export let address = (to: string) =>
     { class: 'Url' },
     h('a', { href: to }, h('code', { class: 'Url_Code' }, to)),
   )
-
-// The line a person types. `required` is the browser's own guard; the door
-// keeps the same one, for whoever posts without it. While a build runs, the
-// script shows the yak at its keyboard above the button; its files are the
-// apex's, which a space's page names whole.
-export let chatAsk = (env: Host, to = '/api/build') =>
-  h(
-    'form',
-    { class: 'Chat_Ask Page_Form', method: 'post', action: to },
-    h(
-      'p',
-      null,
-      h(Field, {
-        class: 'Chat_Input',
-        lines: true,
-        name: 'say',
-        rows: 3,
-        required: true,
-        placeholder: 'A recipe box I can share with my sister',
-        'aria-label': 'What do you want to build?',
-      }),
-    ),
-    h(
-      Loading,
-      { as: 'p', class: 'Chat_Note', 'data-wait': '', hidden: true },
-      h(Yak, { pose: 'typing', base: url(env) }),
-      h('span', null, 'Building…'),
-    ),
-    h(Button, { mod: 'go', type: 'submit' }, 'Build it'),
-  )
-
-// The live half (public/build.js), served at the address of the page it is
-// on: the builder's own on a space's hostname (apps.ts serves it there), so a
-// space's page needs no asset of the apex, and the public file at the apex.
-// A module, because it is one, and nothing on the page waits for it.
-export let chatLive = (src = '/api/build.js') =>
-  h('script', { type: 'module', src })
 
 export let back = (env: Host, space: string) =>
   h(
@@ -647,29 +499,6 @@ export let back = (env: Host, space: string) =>
       class: 'Away',
       href: url(env, managePath('apps', space)),
     }, 'Back to your apps'),
-  )
-
-/**
- * What a posted line answers (T-34242), and it is a page for the same reason a
- * drop's is: whoever typed it ran no script, so the conversation has to come
- * back as something to read. The round is over by the time this is written —
- * the frames are the whole of it, ending in the address where one was built.
- */
-export let building = (at: {
-  space: string
-  frames?: Frame[]
-  why?: string
-}, env: Host = {}) =>
-  page(
-    env,
-    {
-      title: at.why ? 'That did not go in' : spaceHost(env, at.space),
-      lead: at.why ?? 'Here is what happened. Say the next thing below.',
-      status: at.why ? 400 : 200,
-    },
-    h(Card, { class: 'Chat' }, transcript(at.frames ?? []), chatAsk(env)),
-    back(env, at.space),
-    chatLive(),
   )
 
 // What a drop answers, either way it went (T-34230), and it is a page because

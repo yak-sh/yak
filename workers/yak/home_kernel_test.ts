@@ -172,8 +172,7 @@ test('a space with no front page lists what you may open', async () => {
   assertEquals((await k.at('nowhere.yaks.app', '/')).status, 404)
 })
 
-// Builder and setup are separate destinations, and the live script is served
-// on the same origin as the optional builder.
+// Asking for a new app and setting up an agent are separate destinations.
 test('management separates app creation from agent setup', async () => {
   let { k, at: { bare: bare22Space }, them: { cookie } } = await world()
   let at = (view: Parameters<typeof managePath>[0]) =>
@@ -181,23 +180,19 @@ test('management separates app creation from agent setup', async () => {
   let library = await (await at('apps')).text()
   assert(!library.includes('<textarea'), library)
   assert(!library.includes('type="file"'), library)
-  // The page is the apex's, and its forms aim at the space's own doors.
+  // The page is the apex's: its words go to the space's Operator there, and
+  // a drop to the space's own door.
   let fresh = await (await at('new')).text()
   assertStringIncludes(
     fresh,
-    `action="https://${bare22Space}.yaks.app/api/build"`,
+    `action="${managePath('operator', bare22Space)}"`,
   )
   assertStringIncludes(
     fresh,
     `action="https://${bare22Space}.yaks.app/deploy"`,
   )
-  assertStringIncludes(fresh, 'src="/build.js"')
+  assert(!fresh.includes('build.js'), fresh)
   assert(!fresh.includes('name="agent"'), fresh)
-  assertEquals((await k.at('yaks.app', '/build.js')).status, 200)
-  assertEquals(
-    (await k.at(`${bare22Space}.yaks.app`, '/api/build.js')).status,
-    200,
-  )
   let setup = await (await at('agents')).text()
   assertEquals(
     parseHTML(setup).document.querySelector('h1')?.textContent,
@@ -206,6 +201,29 @@ test('management separates app creation from agent setup', async () => {
   assertStringIncludes(setup, 'Connect another agent')
   assertStringIncludes(setup, 'name="agent"')
   assert(!setup.includes('<textarea'), setup)
+})
+
+// The New app screen is a shortcut into the person's Operator conversation:
+// its form, posted as the browser posts it, lands there.
+test("the New app screen's words open the person's conversation", async () => {
+  let { k, at: { bare: space }, them: { cookie } } = await world()
+  let page = await (await k.at('yaks.app', managePath('new', space), {
+    headers: { cookie },
+  })).text()
+  let form = parseHTML(page).document.querySelector('form:has(textarea)')!
+  let body = new FormData()
+  for (let input of form.querySelectorAll('input[type=hidden]')) {
+    body.set(input.getAttribute('name')!, input.getAttribute('value')!)
+  }
+  body.set('say', 'a list of the chores')
+  let sent = await k.at('yaks.app', form.getAttribute('action')!, {
+    method: 'POST',
+    body,
+    headers: { cookie, origin: 'https://yaks.app' },
+  })
+  assertEquals(sent.status, 303)
+  let to = sent.headers.get('location')!
+  assertEquals(to, chatPath(space, to.split('/').at(-1)))
 })
 
 test('Settings chooses the homepage the way app_set home does', async () => {

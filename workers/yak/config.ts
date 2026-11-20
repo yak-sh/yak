@@ -194,7 +194,7 @@ export let gitConfig: Config = {
 /**
  * The Operator's store (operator-store.ts): a session's store, the
  * conversations a person has with their Operator and the work it does for
- * them. The Builder object composes it beside its builds, and a person's
+ * them. The Builder object composes it, and a person's
  * session on the box names the same list (T-163657).
  */
 export let operatorConfig: Config = {
@@ -400,20 +400,17 @@ export let providing: Config = supplied('OPENAI_API_KEY')
 export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY')
 
 /** What the platform's own agents run on, each a model of a provider
- * `providing` (the Operator's, `operatorProviders`) names: the builder's
- * provider, whose models `BUILDER_MODEL_FREE` and `BUILDER_MODEL_PAID` name,
- * and the Operator's choices, the first taken whose provider the Worker holds
+ * `providing` (the Operator's, `operatorProviders`) names: the Operator's
+ * choices, the first taken whose provider the Worker holds
  * every credential of, each with the stronger model of its provider it hands
  * coding to. The model the directory's base persona names
  * (@yaks/platform/operator-model) comes first, and these answer where it names
  * none. `machine` is what the Operator of someone whose own machine serves it
  * asks that machine for instead. */
 export let agents: {
-  builder: string
   operator: { provider: string; model: string; delegate?: string }[]
   machine: { model: string; delegate?: string }[]
 } = {
-  builder: 'workers-ai',
   operator: [
     { provider: 'openai', model: 'gpt-6.2-sol', delegate: 'gpt-6.2-astra' },
     { provider: 'anthropic', model: 'claude-opus-5-5' },
