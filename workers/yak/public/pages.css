@@ -368,6 +368,10 @@
       grid-template-columns: minmax(0, 52rem) 13rem;
       column-gap: 2.5rem;
     }
+    .Desk_Head,
+    .Desk_Content {
+      grid-column: 1;
+    }
     .Desk_Contents {
       position: sticky;
       grid-column: 2;
