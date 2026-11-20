@@ -1076,16 +1076,18 @@ export let send = (label: Kids) =>
   h(Button, { mod: 'go', type: 'submit' }, label)
 
 /** The button that begins a sign-in at `face`'s service, sending its form's
- * `do` as `act` where it names one. A sign-in through a broker (Nango) opens
- * in a new tab, since the broker's page never sends the person back here;
- * this page is read again once they come back to it (public/away.js). */
+ * `do` as `act` where it names one, `quiet` where it is not the next step.
+ * A sign-in through a broker (Nango) opens in a new tab, since the broker's
+ * page never sends the person back here; this page is read again once they
+ * come back to it (public/away.js). */
 export let signingIn = (
   face: Pick<Face, 'broker'>,
   label: Kids,
   act?: string,
+  quiet = false,
 ) =>
   h(Button, {
-    mod: 'go',
+    mod: !quiet && 'go',
     type: 'submit',
     ...act ? { name: 'do', value: act } : {},
     ...face.broker ? { formtarget: '_blank' } : {},

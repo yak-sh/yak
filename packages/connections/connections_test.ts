@@ -55,6 +55,7 @@ import {
   type Integration,
   integrationEid,
   known,
+  lacking,
   lend,
   list,
   listing,
@@ -1740,6 +1741,79 @@ test('a brokered sign-in is settled at its broker, and its token is the brokerâ€
   assert((await c.vault.trash()).some((v) => v.eid == eid))
 })
 
+test('signing in again at a broker keeps the row and takes the new grant once it is there', async () => {
+  let { g, c, needs } = await setup()
+  await g.apply([...await install(g.read, [MAIL]), brokerKey('nango', 'nk')], {
+    trusted: true,
+  })
+  let eid = await needs({ integration: 'mail' })
+  let ids = ['n1']
+  let grant = (token: string, scope: string) => (): [number, unknown] => [200, {
+    connection_config: { emailAddress: 'ann@example.com' },
+    credentials: { access_token: token, raw: { scope } },
+  }]
+  let nango = nangoAt({
+    'POST /connect/sessions': () => [201, { data: { connect_link: 'L' } }],
+    'GET /connections?': () => [200, {
+      connections: ids.map((id) => ({
+        connection_id: id,
+        provider_config_key: 'google-mail',
+        tags: { end_user_id: eid },
+        created: id,
+      })),
+    }],
+    'GET /connections/n1': grant('T1', 'read'),
+    'GET /connections/n2': grant('T2', 'read send'),
+    'DELETE /connections/n1': () => [204, {}],
+  })
+  c.fetch = nango.fetch
+  await begin(c, eid)
+  await settle(c, eid)
+  assertEquals(await begin(c, eid, true), { url: 'L' })
+  assert((await at(g, eid))!.reconnecting)
+  // Still the old grant: nothing to take yet, and calls go on through it.
+  assertEquals(await settle(c, eid), [])
+  assertEquals(await credential(c, eid), 'T1')
+  ids = ['n1', 'n2']
+  await settle(c, eid)
+  let b = await at(g, eid)
+  assertEquals(of(b, 'connection').scopes, ['read', 'send'])
+  assertEquals(b!.reconnecting, undefined)
+  assertEquals(await credential(c, eid), 'T2')
+  assert(nango.asked.some((a) => a.startsWith('DELETE /connections/n1')))
+  assertEquals((await g.read('.connection.owner=space')).length, 1)
+})
+
+test('signing in again asks for every scope its integration now asks for, and keeps what was granted', async () => {
+  let { g, c, needs, seen } = await setup(
+    [200, { access_token: 'A', scope: 'events', id_token: identity('a@x.io') }],
+    [200, {
+      access_token: 'B',
+      scope: 'events tasks',
+      id_token: identity('a@x.io'),
+    }],
+  )
+  let eid = await needs({ scopes: ['events'] })
+  let finish = async (again: boolean) => {
+    let { url, attempt } = await begin(c, eid, again)
+    await connect(c, eid, {
+      attempt: attempt!,
+      callback: `${REDIRECT}?state=${attempt!.state}&code=one`,
+    })
+    return new URL(url).searchParams.get('scope')
+  }
+  assertEquals(await finish(false), 'events')
+  let wider = { ...CALENDAR, scopes: ['openid', 'events', 'tasks'] }
+  await g.apply(await install(g.read, [wider]), { trusted: true })
+  assertEquals(lacking(wider, ['events']), ['tasks'])
+  assertEquals(lacking(wider, []), [])
+  assertEquals(await finish(true), 'events openid tasks')
+  assertEquals(of(await at(g, eid), 'connection').scopes, ['events', 'tasks'])
+  assertEquals(await credential(c, eid), 'B')
+  assertEquals(seen.length, 2)
+  assertEquals((await g.read('.connection.owner=space')).length, 1)
+})
+
 test('a connection its broker no longer holds is broken', async () => {
   let { g, c, needs } = await setup()
   await g.apply([...await install(g.read, [MAIL]), brokerKey('nango', 'nk')], {
@@ -1822,10 +1896,8 @@ test("a chat connection's bot: the platform's, added to the server its account n
     attempt: attempt!,
     callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
   })
-  assertEquals(
-    of(await at(g, ours), 'connection').account,
-    '81384788765712384',
-  )
+  let { account, title } = of(await at(g, ours), 'connection')
+  assertEquals([account, title], ['81384788765712384', 'Yak Barn'])
   assertEquals(await botOf(c, ours), 'PLATFORM BOT')
 
   let theirs = await needs({ integration: 'discord-bot' })
@@ -1840,10 +1912,10 @@ test("a chat connection's bot: the platform's, added to the server its account n
   assertEquals(await botOf(c, theirs), undefined)
 })
 
-test('a Discord account is named by its user id, read from userinfo', async () => {
+test('a Discord account is named by its user id, read from userinfo, and called by its name', async () => {
   let { g, c, needs } = await setup(
     [200, { access_token: 'U1' }],
-    [200, { id: '4242', username: 'ann_k' }],
+    [200, { id: '4242', username: 'ann_k', global_name: 'Ann' }],
   )
   await g.apply([registration('discord', { id: 'app', secret: 's' })])
   let link = await needs({ integration: 'discord-account', owner: 'ann' })
@@ -1852,5 +1924,6 @@ test('a Discord account is named by its user id, read from userinfo', async () =
     attempt: attempt!,
     callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
   })
-  assertEquals(of(await at(g, link), 'connection').account, '4242')
+  let { account, title } = of(await at(g, link), 'connection')
+  assertEquals([account, title], ['4242', 'Ann'])
 })

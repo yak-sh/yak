@@ -28,7 +28,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { ctxOf } from './connections.ts'
+import { ctxOf, pageOf } from './connections.ts'
 import { recall } from './lib/hops.ts'
 import { roomApi, roomApis } from './operator-rooms.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -185,7 +185,8 @@ export let connectedFor = (
 // One service as the Operator is told it: what it is, whose account, and
 // where its API and its reference are.
 let told = ({ held, i }: Held) => {
-  let account = str(comp(held, CONNECTION).account)
+  let account = str(comp(held, CONNECTION).title) ||
+    str(comp(held, CONNECTION).account)
   return `- ${i.title || i.name} (${i.name})${
     account ? `, as ${account}` : ''
   }: ${baseOf(i)}${i.api?.docs ? `, reference ${i.api.docs}` : ''}`
@@ -216,6 +217,19 @@ let answer = (status: number, body: string) =>
       : body
   }`
 
+// A refusal for want of access the connection was not granted: Google's
+// insufficient scopes, Discord's missing access or permissions. Signing in
+// again gives it what its integration now asks for.
+let UNGRANTED =
+  /insufficient[ _]?(authentication[ _]?)?scopes?|scope_insufficient|missing (access|permissions)/i
+
+// What the Operator is told beside such a refusal: the link that opens the
+// connection, where the person presses Reconnect.
+let reconnecting = (env: Env, space: Pick<Space, 'slug'>, eid: string) =>
+  `\nThis connection lacks the access this call needs. Signing in again gives it full access: send them ${
+    pageOf(env, space.slug)
+  }#${eid} and ask them to press Reconnect.`
+
 /** Whom an `api_call` reaches: the services connected for the person
  * (`ctx`), on their own turn, and the chat platforms of the rooms the
  * Operator was addressed in (`vias`), read within those rooms. */
@@ -230,7 +244,7 @@ export type Reach = {
  * addressed in. Only reads where it reaches no connection of the person's. */
 export let apiCall = (
   env: Env,
-  space: Pick<Space, 'eid'>,
+  space: Pick<Space, 'eid' | 'slug'>,
   { ctx, store, vias = [] }: Reach,
 ): Tool => ({
   name: 'api_call',
@@ -343,6 +357,9 @@ export let apiCall = (
         ...args.body == null ? {} : { body: args.body },
       },
     })
-    return answer(value.status, value.body)
+    let ungranted = (value.status == 401 || value.status == 403) &&
+      UNGRANTED.test(value.body)
+    return answer(value.status, value.body) +
+      (ungranted ? reconnecting(env, space, one.held.entity.eid) : '')
   },
 })

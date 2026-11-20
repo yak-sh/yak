@@ -119,3 +119,23 @@
   --pad-block: .5rem;
   --pad-inline: .5rem;
 }
+
+/* A pressable card that holds a control of its own is pressed through its
+   title's link, which covers the card; the control sits above it. */
+.Card-button:has(.Card_Link) {
+  position: relative;
+}
+.Card-button .Card_Link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.Card-button .Card_Link:hover {
+  color: inherit;
+  text-decoration: none;
+}
+.Card-button .Card_Form > * {
+  position: relative;
+  z-index: 1;
+}

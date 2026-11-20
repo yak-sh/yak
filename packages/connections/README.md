@@ -48,30 +48,34 @@ them.
   whose owner is gone is nobody's to change. `account` is the field that names a
   connection's account where it is not an email address, as a dotted path: of
   the token endpoint's answer (Discord's `guild.id`, the server its bot was
-  added to), else of `userinfo`'s (a Discord user's `id`). `chat` names the
-  [@yaks/chat](../chat) platform its connections talk through: connecting it is
-  all it takes for a space's Operator and apps to hear and answer there.
-  `api{base, docs, reads}` is its API, for an agent calling it as a connection:
-  the address its paths are under (on one of `hosts`), its reference, and the
-  calls that only read though their method is not GET, each `METHOD /path` with
-  `*` for one segment (Calendar's `POST /freeBusy`). One with none is reached at
-  its first host. Each built integration asks for the broadest `scopes` useful
-  to an assistant: everything it can read, and the writes that matter.
+  added to), else of `userinfo`'s (a Discord user's `id`). `account_title` is
+  the field of the same answer that names that account for people (the server's
+  `guild.name`, a user's `global_name`). `chat` names the [@yaks/chat](../chat)
+  platform its connections talk through: connecting it is all it takes for a
+  space's Operator and apps to hear and answer there. `api{base, docs, reads}`
+  is its API, for an agent calling it as a connection: the address its paths are
+  under (on one of `hosts`), its reference, and the calls that only read though
+  their method is not GET, each `METHOD /path` with `*` for one segment
+  (Calendar's `POST /freeBusy`). One with none is reached at its first host.
+  Each built integration asks for the broadest `scopes` useful to an assistant:
+  everything it can read, and the writes that matter.
 - A custom integration its owner listed in the **integration directory**, which
   anyone may read and add to a space of their own apart from any app, wears
   @yaks/platform's `published{at}`, as anything shared on a platform does;
   taking it off takes it out. Every built integration is in the directory
   without it.
-- `connection{integration, owner, account, scopes, status, broker}` names its
-  integration, the space or person that `owner`s it (and is deleted with them),
-  the outside account, the scopes asked for or granted, and `status`: `needed`
-  (no credential yet), `connected`, or `broken` (the service refused it). The
-  same entity wears `secret{name, value}`: its name is `connection:` and a
-  random id, and the entity id is derived from it. Its value is the handle of a
-  pasted key, of its several fields kept as a JSON object by name, or of the
-  OAuth tokens kept as a JSON record. `broker` names the broker it was made
-  through; its record then holds the broker's id for it, what the broker calls
-  its integration, and the current access token.
+- `connection{integration, owner, account, title, scopes, status, broker}` names
+  its integration, the space or person that `owner`s it (and is deleted with
+  them), the outside account and what people call it where the account is an id,
+  the scopes asked for or granted, and `status`: `needed` (no credential yet),
+  `connected`, or `broken` (the service refused it). The same entity wears
+  `secret{name, value}`: its name is `connection:` and a random id, and the
+  entity id is derived from it. Its value is the handle of a pasted key, of its
+  several fields kept as a JSON object by name, or of the OAuth tokens kept as a
+  JSON record. `broker` names the broker it was made through; its record then
+  holds the broker's id for it, what the broker calls its integration, and the
+  current access token. A connection signed in to again at its broker wears the
+  mark `reconnecting{at, by}` until `settle` takes the new grant.
 - `uses{anyone, each, binding, direct, cap}` is the relation on an
   [@yaks/edge](../edge) link from an app to the connection it calls out through.
   Only a caller holding a level on the app may call out through it, unless
@@ -251,17 +255,23 @@ equal((await pick(read, 'ann', 'calendar', 'work'))?.entity.eid, 'second')
 The rest are for trusted code, and act on the `Ctx` they are given (the graph,
 its vault, and the redirect):
 
-- `begin(ctx, connection)` returns the sign-in link and the attempt to keep
-  until the person returns.
+- `begin(ctx, connection, again?)` returns the sign-in link and the attempt to
+  keep until the person returns. `again` signs a connection in again in place:
+  it asks for every scope its integration now asks for beside those it holds,
+  and the same account renews the same row, keeping the apps that use it.
+  Nothing is disconnected first. `lacking(integration, scopes)` names the scopes
+  a connection lacks that signing in again would give it.
 - `connect(ctx, connection, given, account?)` keeps a pasted key (`{key}`),
   every field its integration names (`{fields}`), and no other, or completes a
   sign-in (`{attempt, callback}`), and marks the connection `connected`. A key
   goes from here straight to the vault. An OAuth sign-in names its account from
   the exchanged `id_token` email or `integration.userinfo`, or by the field
-  `integration.account` names. Another account makes another connection; the
-  same account renews behind its held handle. Connecting answers the owner's
-  other asks through the same integration and scopes: each closes, and the apps
-  it served are linked to the connection now connected.
+  `integration.account` names, keeps what `integration.account_title` names as
+  its `title`, and keeps the scopes the service says it granted. Another account
+  makes another connection; the same account renews behind its held handle.
+  Connecting answers the owner's other asks through the same integration and
+  scopes: each closes, and the apps it served are linked to the connection now
+  connected.
 - `disconnect(ctx, connection)` trashes the connection and retains its
   credential in the vault’s trash for restoration. Each app that shared it is
   linked to a new `needed` connection in the same batch, by the same name, as
@@ -359,8 +369,10 @@ require a Nango webhook URL.
   attempt: the sign-in returns to the broker, not to us.
 - `settle(ctx, connection)` asks the broker whether a sign-in finished for a
   needed connection, found by the connection's eid, and connects it with its
-  account and granted scopes. Whoever reads a person's connections settles them
-  first, so nothing waits on the broker telling us.
+  account and granted scopes. For one marked `reconnecting` it waits for a grant
+  newer than the one kept, takes it in place, and has the broker forget the old
+  one; a mark left over an hour goes. Whoever reads a person's connections
+  settles them first, so nothing waits on the broker telling us.
 - `credential` answers the kept token while it is good for a minute more, and
   otherwise the broker's. `refresh` asks the broker for a new one. A broker that
   says the grant is gone marks the connection `broken`.

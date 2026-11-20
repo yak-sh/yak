@@ -15,6 +15,7 @@
     "permissions": "2832883186527296"
   },
   "account": "guild.id",
+  "account_title": "guild.name",
   "chat": "discord",
   "hosts": [
     "discord.com"

@@ -549,12 +549,21 @@ let ACTS = [
   'own',
   'key',
   'signin',
+  'reconnect',
   'disconnect',
   'about',
   'list',
   'unlist',
 ]
-let KEEPS = ['key', 'signin', 'disconnect', 'about', 'list', 'unlist']
+let KEEPS = [
+  'key',
+  'signin',
+  'reconnect',
+  'disconnect',
+  'about',
+  'list',
+  'unlist',
+]
 let LOAN = { binding: 'SKY', cap: 2, lender: crypto.randomUUID() }
 
 test('each side of a link does only its own part of it', () => {

@@ -130,6 +130,7 @@ export {
   disconnect,
   envOf,
   type Given,
+  lacking,
   lend,
   list,
   namesOf,

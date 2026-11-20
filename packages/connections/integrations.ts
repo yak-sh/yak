@@ -68,6 +68,10 @@ export type Integration = {
    * server its bot was added to; @yaks/oauth `Provider.account`), else of
    * the `userinfo` answer (a Discord user's `id`) */
   account?: string
+  /** the field that names that account for people, as a dotted path of the
+   * same answer: the server's name (`guild.name`), a Discord user's
+   * `global_name` */
+  account_title?: string
   /** the chat platform its connections talk through (@yaks/chat), by name:
    * connecting it is all it takes for the Operator and the space's apps to
    * hear and answer there */
@@ -240,6 +244,7 @@ let CARRIED = {
   token: 1,
   userinfo: 1,
   account: 1,
+  account_title: 1,
   chat: 1,
   scopes: 1,
   params: 1,

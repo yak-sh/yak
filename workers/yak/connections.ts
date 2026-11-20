@@ -70,6 +70,7 @@ import {
   kinds,
   known,
   knownIn,
+  lacking,
   lend,
   list,
   namesOf,
@@ -250,6 +251,8 @@ export type Shown = {
   each: boolean
   status: Status
   account: string
+  /** what people call the account, where `account` is an id */
+  title: string
   /** connected by pasting a key, rather than by signing in */
   keyed: boolean
   /** the hosts its key may be sent to */
@@ -261,6 +264,9 @@ export type Shown = {
    * or built */
   listed: boolean
   scopes: string[]
+  /** the scopes its integration now asks for that it lacks: signing in again
+   * would give it them */
+  lacking: string[]
   /** the apps that call out through it */
   apps: Using[]
   /** the name an app attached to it reads it by, unless the owner names one */
@@ -402,8 +408,9 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
 }
 
 /** Settle each needed connection `owners` hold through a brokered
- * integration (@yaks/connections `settle`), or through `integration` alone:
- * a sign-in that finished at its broker, which never sends the person back to
+ * integration (@yaks/connections `settle`), or through `integration` alone,
+ * and each one they began signing in to again there (`reconnecting`): a
+ * sign-in that finished at its broker, which never sends the person back to
  * us. Whoever reads a person's connections settles theirs first, so nothing
  * waits on the broker telling us. */
 export let settling = async (
@@ -416,12 +423,13 @@ export let settling = async (
   let named = integration
     ? line`&.${CONNECTION}.integration=${integration}`
     : line``
+  let due = (only: Built) =>
+    read(line`.${CONNECTION}.owner=${held}${sub(only)}${sub(named)}&*`)
   let needed = held.length
-    ? await read(
-      line`.${CONNECTION}.owner=${held}&.${CONNECTION}.status=needed${
-        sub(named)
-      }&*`,
-    )
+    ? (await Promise.all([
+      due(line`&.${CONNECTION}.status=needed`),
+      due(line`&.reconnecting`),
+    ])).flat()
     : []
   return await settled(env, needed, (name) => known(read, name))
 }
@@ -439,7 +447,8 @@ let settled = async (
 ): Promise<number> => {
   let c = ctxOf(env)
   let needed = rows.filter((b) =>
-    b[CONNECTION] && comp(b, CONNECTION).status == 'needed'
+    b[CONNECTION] &&
+    (comp(b, CONNECTION).status == 'needed' || b.reconnecting)
   )
   let made = await Promise.all(needed.map(async (b) => {
     let i = await named(integrationOf(b))
@@ -904,6 +913,7 @@ export let connectionsOf = async (
         each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
         account: String(c.account ?? ''),
+        title: String(c.title ?? ''),
         keyed: !i || keyed(i),
         hosts: i?.hosts ?? [],
         about: i && !i.built && i.owner == c.owner
@@ -912,6 +922,7 @@ export let connectionsOf = async (
         listed: !!i?.built ||
           listed.has(integrationEid(String(c.integration))),
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
+        lacking: i && c.status == 'connected' ? lacking(i, strs(c.scopes)) : [],
         apps: to.map(usingOf),
         binding: bindingOf(String(c.integration)),
         available: (c.owner == here.eid ? available : [])
@@ -1270,8 +1281,9 @@ let signingIn = async (
   eid: string,
   back = enabling(pageOf(env, space.slug), enabled(req)),
   app?: string,
+  again = false,
 ): Promise<Response> => {
-  let { url: to, attempt } = await begin(c, eid)
+  let { url: to, attempt } = await begin(c, eid, again)
   // A brokered sign-in returns to its broker, and is settled from there.
   if (!attempt) {
     return new Response(null, { status: 303, headers: { location: to } })
@@ -1532,7 +1544,21 @@ export let connecting = async (
     if (owner == space.eid && await asking(c.graph.read, eid)) {
       return no('Each person connects their own, from the app.')
     }
-    if (act == 'signin') return await signingIn(req, env, c, space, who, eid)
+    if (act == 'signin' || act == 'reconnect') {
+      let back = enabling(pageOf(env, space.slug), enabled(req))
+      let again = act == 'reconnect'
+      return await signingIn(
+        req,
+        env,
+        c,
+        space,
+        who,
+        eid,
+        back,
+        undefined,
+        again,
+      )
+    }
     let given = await pasted(integrationOf(b))
     if (typeof given == 'string') return no(given)
     await connect(c, eid, given)

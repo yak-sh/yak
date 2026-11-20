@@ -99,6 +99,7 @@ import { clientOf } from './clients.ts'
 import { type Broker, BrokerError, brokerOf, type Grant } from './brokers.ts'
 
 let SECRET = 'secret'
+let RECONNECTING = 'reconnecting'
 let EDGE = 'edge'
 
 /** An explicit account name did not select one connection: a refusal of the
@@ -1003,8 +1004,19 @@ export let accountOf = async (
   integration: Integration,
   tokens: Tokens,
   fetcher: typeof fetch = fetch,
-): Promise<string | undefined> => {
-  if (integration.account && tokens.account) return tokens.account
+): Promise<string | undefined> =>
+  (await signedIn(integration, tokens, fetcher)).account
+
+// The account the provider returned, and what people call it where the
+// account is an id (`account_title`).
+let signedIn = async (
+  integration: Integration,
+  tokens: Tokens,
+  fetcher: typeof fetch,
+): Promise<{ account?: string; title?: string }> => {
+  if (integration.account && tokens.account) {
+    return { account: tokens.account, title: tokens.account_title }
+  }
   let body: Record<string, unknown> = {}
   if (tokens.id_token) {
     body = claims(tokens.id_token)
@@ -1025,21 +1037,34 @@ export let accountOf = async (
     }
     body = await res.json()
   }
-  if (integration.account) {
-    let v = integration.account.split('.').reduce<unknown>(
+  let at = (path?: string) => {
+    let v = path?.split('.').reduce<unknown>(
       (at, k) => at && typeof at == 'object' ? (at as Comp)[k] : undefined,
       body,
     )
     return typeof v == 'string' || typeof v == 'number' ? String(v) : undefined
   }
-  return typeof body.email == 'string' && body.email.includes('@')
-    ? body.email.toLowerCase()
-    : undefined
+  if (integration.account) {
+    return {
+      account: at(integration.account),
+      title: at(integration.account_title),
+    }
+  }
+  return {
+    account: typeof body.email == 'string' && body.email.includes('@')
+      ? body.email.toLowerCase()
+      : undefined,
+  }
 }
 
 // The OAuth client for a connection: its integration's endpoints, the scopes
 // it was asked for, and its tokens kept as its own secret.
-let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
+let signIn = async (
+  c: Ctx,
+  b: Bundle,
+  staged?: Tokens,
+  again = false,
+): Promise<Client> => {
   let name = String(comp(b, CONNECTION).integration)
   let i = await known(c.graph.read, name)
   if (!i?.authorize || !i.token) {
@@ -1059,9 +1084,7 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
       ? [
         ...new Set([
           ...scopes,
-          ...(i.scopes ?? []).filter((s) =>
-            ['openid', 'email', 'profile'].includes(s)
-          ),
+          ...(i.scopes ?? []).filter((s) => again || IDENTITY.has(s)),
         ]),
       ]
       : i.scopes,
@@ -1073,6 +1096,7 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
     resource: i.resource,
     issuer: i.issuer,
     account: i.account,
+    account_title: i.account_title,
   }, {
     store: staged
       ? {
@@ -1087,11 +1111,28 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
   })
 }
 
+// The scopes that only say who signed in, which a provider may name its own
+// way in what it grants.
+let IDENTITY = new Set(['openid', 'email', 'profile'])
+
+/** The scopes `i` now asks for that a connection holding `scopes` lacks, so
+ * signing in again would give it more; none when what it holds is unknown. */
+export let lacking = (i: Integration, scopes: string[]): string[] => {
+  let held = new Set(scopes)
+  return scopes.length
+    ? (i.scopes ?? []).filter((s) => !IDENTITY.has(s) && !held.has(s))
+    : []
+}
+
 /** The link to send a person to, to connect by signing in, and the attempt to
- * hold until they return. */
+ * hold until they return. `again` signs a connection in again in place,
+ * asking for every scope its integration now asks for: the same row, the
+ * apps using it and its account, with a new grant. A brokered one is marked
+ * `reconnecting` until `settle` finds the new grant at the broker. */
 export let begin = async (
   c: Ctx,
   connection: Eid,
+  again = false,
 ): Promise<{ url: string; attempt?: Attempt & { verifier: string } }> => {
   let b = await held(c.graph.read, connection)
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
@@ -1102,10 +1143,14 @@ export let begin = async (
     if (!i.built && !i.owner && Array.isArray(i.categories)) {
       await broker.enable(i.broker.integration, i.connects ?? 'signin')
     }
-    return { url: await broker.begin(i.broker.integration, connection) }
+    let url = await broker.begin(i.broker.integration, connection)
+    if (again) {
+      await c.graph.apply([{ entity: { eid: connection }, [RECONNECTING]: {} }])
+    }
+    return { url }
   }
   if (!c.redirect) throw new Error('signing in needs a redirect')
-  return (await signIn(c, b)).begin()
+  return (await signIn(c, b, undefined, again)).begin()
 }
 
 // The last two labels of a host: canva.com for mcp.canva.com.
@@ -1177,13 +1222,33 @@ export let settle = async (
   connection: Eid,
 ): Promise<Bundle[]> => {
   let b = await held(c.graph.read, connection)
-  if (comp(b, CONNECTION).status == 'connected') return []
+  let again = b[RECONNECTING] as Comp | undefined
+  if (comp(b, CONNECTION).status == 'connected' && !again) return []
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   if (!i?.broker) return []
   let broker = await brokerOf(c.vault, i.broker.name, c.fetch)
   let id = await broker?.found(i.broker.integration, connection)
-  return id ? connect(c, connection, { brokered: id }) : []
+  if (!again) return id ? connect(c, connection, { brokered: id }) : []
+  // Signing in again leaves a new grant at the broker beside the one kept,
+  // which goes once the connection holds the new one.
+  let keeps = records<Kept>(c.graph, c.vault, '')
+  let kept = await keeps.read(nameOf(b))
+  if (!id || id == kept?.id) {
+    let stale = (c.now ?? Date.now)() - Date.parse(String(again.at)) > HOUR
+    return stale
+      ? c.graph.apply([{ entity: { eid: connection }, [RECONNECTING]: null }])
+      : []
+  }
+  let out = await connect(c, connection, { brokered: id })
+  let now = await keeps.read(nameOf(b))
+  if (now?.id == id && kept?.id && kept.broker && kept.integration) {
+    await (await brokering(c, kept.broker)).forget(kept.integration, kept.id)
+      .catch(c.report ?? (() => {}))
+  }
+  return out
 }
+
+let HOUR = 3_600_000
 
 /** Keep a connection's credential — a pasted key, or the grant a finished
  * sign-in returns — and mark it connected. */
@@ -1227,9 +1292,12 @@ export let connect = async (
     if (given.session) {
       Object.assign(tokens, { website_session: given.session })
     }
-    account = i
-      ? await accountOf(i, tokens, c.fetch ?? fetch) ?? account
-      : account
+    let who = i ? await signedIn(i, tokens, c.fetch ?? fetch) : {}
+    account = who.account ?? account
+    made = {
+      ...tokens.scope ? { scopes: tokens.scope.split(/\s+/) } : {},
+      ...who.title ? { title: who.title } : {},
+    }
   }
   let grant = comp(b, CONNECTION)
   let existing = account
@@ -1267,6 +1335,7 @@ export let connect = async (
         status: 'connected',
         ...account ? { account } : {},
       },
+      ...target[RECONNECTING] ? { [RECONNECTING]: null } : {},
     },
     ...out.flatMap((
       l,
@@ -1274,7 +1343,11 @@ export let connect = async (
       ...link(far(l, 'to'), USES, target.entity.eid),
       [USES]: comp(l, USES),
     }]),
-    ...transient ? [{ entity: { eid: connection }, tombstone: {} }] : [],
+    ...transient
+      ? [{ entity: { eid: connection }, tombstone: {} }]
+      : b[RECONNECTING] && target.entity.eid != connection
+      ? [{ entity: { eid: connection }, [RECONNECTING]: null }]
+      : [],
     ...await answered(c.graph.read, b, target.entity.eid),
   ])
 }

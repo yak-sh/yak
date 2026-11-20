@@ -38,7 +38,7 @@ import type {
 } from './connections.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import type { Grantee, McpPage } from './connected-mcp.ts'
-import { detail } from './integration-detail.ts'
+import { about, connects, detail, links } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icons } from './icons.ts'
 import { day, fileDrop, raw } from './html.ts'
@@ -937,6 +937,26 @@ let dotted = (parts: Kids[]) =>
 // The kids given, or nothing where none of them is anything.
 let any = (...kids: Kids[]) => kids.some(Boolean) ? kids : null
 
+// What a connection lacking scopes its integration now asks for says.
+let FULLER = 'Reconnect to give it full access.'
+
+// A connection signed in to, rather than given a key, that is connected or
+// was refused, signs in again in place: the same connection, the apps using
+// it, and a new grant.
+let reconnects = (c: Shown) =>
+  !c.keyed && !c.failed && !(c.each && !c.own) &&
+  (c.status == 'connected' || c.status == 'broken')
+
+// The button that signs a connection in again, the card's next step when
+// it lacks scopes or was refused.
+let reconnect = (c: Shown) =>
+  signingIn(
+    c.face,
+    'Reconnect',
+    'reconnect',
+    !c.lacking.length && c.status == 'connected',
+  )
+
 // One connection, as a card: its head says what it is and how it stands and
 // holds what acts on all of it (connecting, disconnecting); under it the key
 // it still wants, how to get one, the apps using it and the copies borrowing
@@ -978,22 +998,26 @@ let connection = (
   // for an app that asks each person, is theirs to remove.
   let waiting = c.status == 'needed' && c.apps.length && !c.each
   let actions = any(
-    !ask && !c.keyed && open
+    !ask && !c.keyed && open && !reconnects(c)
       ? form(signingIn(c.face, 'Connect', 'signin'), { class: 'Card_Form' })
       : null,
+    reconnects(c) ? form(reconnect(c), { class: 'Card_Form' }) : null,
     ask || waiting ? null : form(
       press('disconnect', c.status == 'needed' ? 'Remove' : 'Disconnect'),
       { class: 'Card_Form' },
     ),
+    ...links(c.face),
   )
   let stands = ask ? status('Each person connects their own') : status(
-    `${STATUS[c.status]}${c.account ? ` as ${c.account}` : ''}`,
+    STATUS[c.status],
     c.status == 'connected' ? 'positive' : 'negative',
   )
   let notice = c.failed
     ? said(sentence(c.failed), true)
     : c.saving
     ? said(sentence(c.saving))
+    : c.lacking.length && reconnects(c)
+    ? said(FULLER)
     : null
   let paste = keying && open
     ? editing(
@@ -1125,16 +1149,8 @@ let connection = (
     )
     : null
   // Where a key nobody pastes here goes, and what a sign-in granted.
-  let reached = !keying && (c.hosts.length || c.scopes.length)
-    ? h(
-      Form.Hint,
-      null,
-      c.hosts.length
-        ? ['Its key is only ever sent to ', codes(c.hosts), '.']
-        : null,
-      c.hosts.length && c.scopes.length ? ' ' : null,
-      c.scopes.length ? `Granted: ${c.scopes.join(', ')}.` : null,
-    )
+  let reached = !keying && c.hosts.length
+    ? h(Form.Hint, null, 'Its key is only ever sent to ', codes(c.hosts), '.')
     : null
   // Whether a service this space added is in the integration directory, for
   // anyone to add with their own key: its owner lists it or takes it out.
@@ -1262,30 +1278,64 @@ let connection = (
   let lent = lendable
     ? c.apps.filter((a) => a.borrower == null && !a.direct).map(lend)
     : []
-  let folded = any(...lent, named, replace, reached, listing, told)
+  let folded = any(
+    h(Form.Hint, null, connects(c.face, c.keyed)),
+    ...lent,
+    named,
+    replace,
+    reached,
+    listing,
+    told,
+  )
+  let as = c.title || c.account
+  // What this connection is here: whom it is for, the account it signed in
+  // as, what uses it and what it may do; then, quieter, the service itself.
+  let here = h(
+    'section',
+    { class: 'Connection_Here', 'aria-labelledby': id('here') },
+    h('h3', { id: id('here') }, 'This connection'),
+    context,
+    as && c.status == 'connected'
+      ? h(Card.Sub, null, 'Connected as ', h('strong', null, as))
+      : null,
+    howTo(c.face, open && !ask),
+    paste,
+    apps,
+    attach,
+    c.scopes.length && !c.keyed
+      ? h(Card.Sub, null, `May use: ${c.scopes.join(', ')}.`)
+      : null,
+  )
+  let service = about(c.face)
   return h(
     Modal.Body,
     { 'data-connection': c.eid },
     heading(c.face.title, {
       mark: logo(c.face, env),
       status: stands,
-      actions: [actions, close],
+      actions: close,
     }),
-    context,
-    detail(c.face, c.keyed),
-    notice,
-    howTo(c.face, open && !ask),
-    paste,
-    apps,
-    attach,
-    folded
-      ? h(
+    h(
+      Modal.Main,
+      null,
+      actions ? h(Modal.Actions, { 'aria-label': 'Actions' }, actions) : null,
+      notice,
+      here,
+      service.length
+        ? h(
+          'section',
+          { class: 'Connection_About', 'aria-labelledby': id('about') },
+          h('h3', { id: id('about') }, `About ${c.face.title}`),
+          service,
+        )
+        : null,
+      h(
         More,
         null,
-        h(More.Summary, null, 'Advanced options'),
+        h(More.Summary, null, 'Advanced'),
         h(More.Body, null, folded),
-      )
-      : null,
+      ),
+    ),
   )
 }
 
@@ -1391,22 +1441,32 @@ let borrowing = (
   )
 }
 
-// One navigable card, its mark above its name and one short line.
+// One navigable card, its mark above its name and one short line. A card
+// holding a control of its own, `act`, is navigated by its title's link,
+// which covers the card, so the control stays its own button.
 let card = (
   env: Host,
   face: Face,
   line: Kids,
   href?: string,
   stands: Kids = null,
+  act: Kids = null,
 ) =>
   h(
     Card,
-    { mod: href ? 'button' : undefined, href },
+    act
+      ? { mod: href && 'button' }
+      : { mod: href ? 'button' : undefined, href },
     logo(face, env),
-    h(Card.Title, null, face.title),
+    h(
+      Card.Title,
+      null,
+      act && href ? h(Card.Link, { href }, face.title) : face.title,
+    ),
     face.tagline ? h(Card.Sub, null, face.tagline) : null,
     line && line != face.tagline ? h(Card.Sub, null, line) : null,
     stands,
+    act,
   )
 
 // The link a card's button follows: this page, opened on one thing.
@@ -1993,6 +2053,8 @@ let connections = (at: DeskPage, env: Host) => {
         ? `Each person connects their own, from ${
           one.apps.map((a) => a.title).join(', ') || 'the app'
         }.`
+        : one.lacking.length && reconnects(one)
+        ? FULLER
         : one.apps.length
         ? `For ${one.apps.map((a) => a.title).join(', ')}`
         : one.face.tagline,
@@ -2001,6 +2063,14 @@ let connections = (at: DeskPage, env: Host) => {
         one.failed ? 'Not saved' : STATUS[one.status],
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
       ),
+      c.on && reconnects(one)
+        ? h(
+          'form',
+          { method: 'post', action, class: 'Card_Form' },
+          held('connection', one.eid),
+          reconnect(one),
+        )
+        : null,
     )
   let grid = (cards: Kids[], props: Record<string, string> | null = null) =>
     cards.length ? h(Cards, props, cards) : null

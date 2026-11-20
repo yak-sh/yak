@@ -195,6 +195,11 @@
           "description": "the field of the token endpoint's answer naming the account, as a dotted path, where it is not an email address",
           "examples": ["guild.id"]
         },
+        "account_title": {
+          "type": "string",
+          "description": "the field of the same answer naming that account for people, as a dotted path, where `account` is an id",
+          "examples": ["guild.name"]
+        },
         "chat": {
           "type": "string",
           "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",
@@ -280,6 +285,10 @@
           "type": "string",
           "description": "which account at the outside service, as the person would recognize it"
         },
+        "title": {
+          "type": "string",
+          "description": "what people call that account, where `account` is an id: a Discord server's name"
+        },
         "scopes": {
           "type": "array",
           "items": {
@@ -299,6 +308,26 @@
         "broker": {
           "type": "string",
           "description": "the broker it was made through, by name; none is made directly. It keeps working through it whatever its integration names later"
+        }
+      }
+    },
+    "reconnecting": {
+      "component": true,
+      "type": "object",
+      "description": "a mark on a connection a person began signing in to again at its broker, which never sends them back: whoever reads the connection settles it once the broker holds the new grant, and the mark goes. One left over an hour is dropped",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the sign-in again began"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who began it"
         }
       }
     },

@@ -105,6 +105,8 @@ let connectionPage = (open?: string) =>
         each: false,
         status: 'connected',
         account: '',
+        title: '',
+        lacking: [],
         keyed: true,
         hosts: ['api.weather.test'],
         face: {

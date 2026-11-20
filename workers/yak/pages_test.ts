@@ -144,6 +144,8 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           each: true,
           status: 'needed',
           account: '',
+          title: '',
+          lacking: [],
           keyed: true,
           hosts: [],
           about: null,
@@ -203,6 +205,8 @@ test('connections: first a grid of cards, theirs on their own space and then the
     each: false,
     status: status as Status,
     account: '',
+    title: '',
+    lacking: [],
     keyed: true,
     hosts: [],
     about: null,
@@ -323,6 +327,8 @@ let added = (status: 'needed' | 'connected', listed = false) => ({
   each: false,
   status,
   account: '',
+  title: '',
+  lacking: [],
   keyed: true,
   hosts: ['api.weather.test'],
   about: {
@@ -479,31 +485,21 @@ let buttons = async (
       ...connections,
     },
   }, env).text()
-  let from = html.lastIndexOf('<section', html.indexOf(at))
-  let card = html.slice(from, html.indexOf('</section>', from))
-  let forms = [...card.matchAll(/<form([^>]*)>(.*?)<\/form>/gs)]
-  let attr = (tag: string, name: string) =>
-    tag.match(new RegExp(` ${name}="([^"]*)"`))?.[1]
-  let field = (form: string, name: string) =>
-    form.match(new RegExp(`name="${name}"[^>]* value="([^"]*)"`))?.[1]
+  let { document } = parseHTML(html)
+  let card = document.querySelector(`[${at}"${open}"]`)!
+  let value = (el: Element | null) => el?.getAttribute('value') ?? undefined
   return {
-    text: card.replace(/<[^>]*>/g, ''),
-    pressed: forms.flatMap(([, , inner]) =>
-      [...inner.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map(
-        ([, tag, label]) => {
-          let named = attr(tag, 'form')
-          let form = named
-            ? forms.find(([, head]) => attr(head, 'id') == named)![2]
-            : inner
-          return [
-            label,
-            attr(tag, 'value'),
-            field(form, 'app'),
-            field(form, 'cap'),
-          ]
-        },
-      )
-    ),
+    text: card.textContent ?? '',
+    pressed: [...card.querySelectorAll('form button')].map((b) => {
+      let named = b.getAttribute('form')
+      let form = named ? document.getElementById(named)! : b.closest('form')!
+      return [
+        b.textContent,
+        value(b),
+        value(form.querySelector('[name="app"]')),
+        value(form.querySelector('[name="cap"]')),
+      ]
+    }),
   }
 }
 
@@ -594,7 +590,7 @@ test('connections: a borrowed connection says whose it is, and gives way to a ke
   ])
 })
 
-test('connection dialogs have one card, with their title and controls in its head', async () => {
+test('connection dialogs have one card: its title and close in its head, what acts on the connection in a card at the top of its main pane', async () => {
   let cases: Partial<Connections>[] = [
     ...(['connected', 'needed'] as const).map((status) => ({
       list: [{ ...added(status), face: CAL }],
@@ -642,7 +638,9 @@ test('connection dialogs have one card, with their title and controls in its hea
     assert(head.querySelector('.Card_Mark'))
     if (!over.asked) assert(head.querySelector('.State'))
     if (over.list?.[0].status == 'connected') {
-      assertEquals(pressed(head, 'disconnect'), 'Disconnect')
+      let acts = body.querySelector('.Modal_Main > .Modal_Actions')!
+      assertEquals(pressed(acts, 'disconnect'), 'Disconnect')
+      assertEquals(pressed(head, 'disconnect'), undefined)
     }
     let close = head.querySelector('.Card_Actions [data-modal-close]')!
     assert(close.querySelector('svg.Icon'))
@@ -651,6 +649,66 @@ test('connection dialogs have one card, with their title and controls in its hea
     assertEquals(close.getAttribute('aria-label'), 'Close connection details')
     assertEquals(close.getAttribute('href'), '/manage/ada/connections#')
   }
+})
+
+test('a connection signed in to reconnects in place, from its card and its dialog, and says when it lacks access', async () => {
+  let drawn = async (over: Partial<Shown>) => {
+    let one = {
+      ...added('connected'),
+      keyed: false,
+      account: '81384788765712384',
+      title: 'Yak Barn',
+      scopes: ['bot'],
+      ...over,
+    } as Shown
+    let html = await desk({
+      ...page,
+      view: 'connections',
+      connections: {
+        on: true,
+        borrowed: [],
+        list: [one],
+        services: [],
+        built: [],
+        open: 'w',
+      },
+    }, env).text()
+    let { document } = parseHTML(html)
+    let dialog = document.querySelector('[data-connection="w"]')!
+    let tile = document.querySelector('.Cards .Card')!
+    let button = (at: Element) => at.querySelector('button[value="reconnect"]')
+    return { dialog, tile, button }
+  }
+  let full = await drawn({})
+  let acts = full.dialog.querySelector('.Modal_Actions')!
+  assertEquals(full.button(acts)?.textContent, 'Reconnect')
+  assert(!full.button(acts)!.className.includes('go'))
+  assertEquals(full.button(full.tile)?.textContent, 'Reconnect')
+  assert(full.tile.querySelector('.Card_Link[href$="#Weather"]'))
+  assertStringIncludes(full.dialog.textContent!, 'Connected as Yak Barn')
+  assert(!full.dialog.textContent!.includes('81384788765712384'))
+  assert(!full.dialog.textContent!.includes('Reconnect to give it full access'))
+
+  let short = await drawn({ lacking: ['identify'] })
+  assertStringIncludes(
+    short.dialog.textContent!,
+    'Reconnect to give it full access.',
+  )
+  assertStringIncludes(
+    short.tile.textContent!,
+    'Reconnect to give it full access.',
+  )
+  assert(short.button(short.dialog)!.className.includes('go'))
+
+  // A refused one signs in again the same way, in place of Connect.
+  let broken = await drawn({ status: 'broken' })
+  assert(broken.button(broken.dialog))
+  assertEquals(broken.dialog.querySelector('button[value="signin"]'), null)
+
+  // A key is replaced, not signed in to again.
+  let keyed = await drawn({ keyed: true })
+  assertEquals(keyed.button(keyed.dialog), null)
+  assertEquals(keyed.button(keyed.tile), null)
 })
 
 test('askConnect: how to get the key, above the box it is pasted in', async () => {

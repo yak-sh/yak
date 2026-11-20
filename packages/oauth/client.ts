@@ -46,6 +46,10 @@ export type Provider = {
    * grant is for, as a dotted path, where the answer says it: Discord's
    * `guild.id`, the server a bot was added to. It is kept as `account`. */
   account?: string
+  /** The field of the token endpoint's answer that names that account for
+   * people, as a dotted path: Discord's `guild.name`. It is kept as
+   * `account_title`. */
+  account_title?: string
 }
 
 /** One grant, as the store keeps it. `expires_at` is epoch milliseconds. */
@@ -59,6 +63,9 @@ export type Tokens = {
   scope?: string
   /** What the provider's `account` field said, retained across refresh. */
   account?: string
+  /** What the provider's `account_title` field said, retained across
+   * refresh. */
+  account_title?: string
 }
 
 /** The provider's refusal, carrying its error code: `invalid_grant` is a grant
@@ -213,6 +220,7 @@ export let client = (provider: Provider, o: Options): Client => {
         : undefined,
       scope: str(body.scope) ?? was.scope,
       account: named(body, provider.account) ?? was.account,
+      account_title: named(body, provider.account_title) ?? was.account_title,
     }
   }
 

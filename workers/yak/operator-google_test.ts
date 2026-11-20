@@ -152,6 +152,15 @@ globalThis.fetch = (input, init) => {
       },
     }))
   }
+  if (url.pathname.endsWith('/acl')) {
+    return Promise.resolve(Response.json({
+      error: {
+        code: 403,
+        message: 'Request had insufficient authentication scopes.',
+        status: 'PERMISSION_DENIED',
+      },
+    }, { status: 403 }))
+  }
   if (url.pathname.endsWith('/calendarList/primary')) {
     return Promise.resolve(Response.json({ timeZone: 'America/Detroit' }))
   }
@@ -430,6 +439,20 @@ test('an unusual read with no tool of its own, free/busy, is one api_call, and o
     await waits({ method: 'DELETE', path: '/calendars/primary/events/e1' }),
     'Send DELETE /calendars/primary/events/e1 to your google-calendar',
   )
+})
+
+test('a call refused for want of a scope it was not granted says where to reconnect', async () => {
+  let ctx = await operatorContext(env, { person }, space)
+  let call = (path: string) =>
+    apiCall(env, space, { ctx }).run({
+      integration: 'google-calendar',
+      path,
+    }, {} as never)
+  let said = String(await call('/calendars/primary/acl'))
+  assertStringIncludes(said, '403\n')
+  assertStringIncludes(said, '/manage/jeff/connections#')
+  assertStringIncludes(said, 'press Reconnect')
+  assert(!String(await call('/users/me/settings')).includes('Reconnect'))
 })
 
 test('api_call names what is connected when asked for what is not', async () => {

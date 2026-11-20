@@ -17,6 +17,7 @@ let open = () =>
       '@yaks/edge',
       '@yaks/effects',
       '@yaks/secrets',
+      '@yaks/edge',
       '@yaks/connections',
     ],
   }, ['graph'])

@@ -35,3 +35,43 @@
   width: min(100%, 42rem);
   margin-block: auto;
 }
+/* The pane under the card's head flows, so the small card of actions floats
+   at its top right and what the dialog says wraps beside and under it. */
+.Modal_Main {
+  display: flow-root;
+}
+.Modal_Main > * {
+  margin: 0;
+}
+.Modal_Main > * + * {
+  margin-top: var(--card-gap);
+}
+.Modal_Actions {
+  float: right;
+  display: grid;
+  gap: var(--half-gap);
+  justify-items: stretch;
+  width: min(100%, 12rem);
+  box-sizing: border-box;
+  margin: 0 0 var(--half-gap) var(--gap);
+  padding: var(--half-gap);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font-size: var(--small);
+}
+.Modal_Main > .Modal_Actions + * {
+  margin-top: 0;
+}
+.Modal_Actions .Button {
+  justify-content: center;
+}
+@media (max-width: 40rem) {
+  .Modal_Actions {
+    float: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: auto;
+    margin: 0 0 var(--card-gap);
+  }
+}
