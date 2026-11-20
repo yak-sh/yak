@@ -49,6 +49,7 @@ import {
   borrowed,
   brokerOf,
   carry,
+  catalogHeld,
   catalogued,
   chatConnections,
   connect,
@@ -694,6 +695,16 @@ let ownedBy = (dir: ReturnType<typeof dirOf>, owner: string | Path) =>
     ),
   ])
 
+// The host catalog this isolate holds, by the directory it was read from,
+// read again only once it changed (@yaks/connections `catalogHeld`).
+let catalogs = new WeakMap<object, ReturnType<typeof catalogHeld>>()
+let catalogOf = (env: Env) => {
+  let key = env.DIRECTORY ?? env
+  let held = catalogs.get(key)
+  if (!held) catalogs.set(key, held = catalogHeld())
+  return held
+}
+
 /** What a connections page is drawn from (`connectionsOf`), asked by the
  * space and the person all at once, so it travels as one trip
  * (directory-copy.ts `gathered`). A page asks it ahead of learning its space
@@ -714,7 +725,7 @@ export let connectionsAsked = async (
       ownedBy(dir, by ? { path: by, eid } : await eid),
       read(line`.${PUBLISHED}&.${INTEGRATION}`),
       own ? list(read, person) : [],
-      catalogued(read),
+      catalogOf(env)(read),
       add ? known(read, add) : undefined,
       own ?? false,
       // The MCP servers the person keeps, of which the page shows those in

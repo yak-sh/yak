@@ -57,6 +57,7 @@ export { connectionsDoc } from './vocab.ts'
 export {
   ABOUT,
   type About,
+  catalogHeld,
   catalogued,
   connectable,
   FEATURED,

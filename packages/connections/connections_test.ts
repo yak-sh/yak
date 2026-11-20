@@ -41,6 +41,7 @@ import {
   botOf,
   call,
   carry,
+  catalogHeld,
   clientOf,
   connect,
   connectionsDoc,
@@ -102,7 +103,12 @@ let vocab = loadVocab(
     edgeDoc,
     secretsDoc,
     provisionalDoc,
-    { $defs: { published: platformDoc.$defs!.published } },
+    {
+      $defs: {
+        published: platformDoc.$defs!.published,
+        featured: platformDoc.$defs!.featured,
+      },
+    },
     connectionsDoc,
   ],
   [edgeKeywords],
@@ -544,6 +550,36 @@ await orphaned.g.apply([
   { entity: { eid: integrationEid('esv') }, integration: { owner: null } },
 ])
 let names = (all: Integration[]) => all.map((i) => i.title || i.name)
+
+test('the catalog is read whole once, and again only once it changed', async () => {
+  let { g, needs } = await setup()
+  let lines: string[] = []
+  let read: Read = (q) => (lines.push(String(q)), g.read(q as Taken))
+  let catalog = catalogHeld()
+  // How many whole reads a view made, and the catalog it was given.
+  let view = async () => {
+    lines.length = 0
+    let rows = await catalog(read)
+    return [lines.filter((l) => l.includes('.built=true')).length, rows]
+  }
+  let [first, rows] = await view()
+  assertEquals([first, await view()], [1, [0, rows]])
+  let eid = integrationEid('calendar')
+  for (
+    let change of [
+      [{ entity: { eid }, integration: { title: 'Calendar' } }],
+      [{ entity: { eid }, featured: {} }],
+      [{ entity: { eid }, featured: null }],
+      await install(g.read, [{ name: 'notes', hosts: ['api.notes.example'] }]),
+    ] as Bundle[][]
+  ) {
+    await g.apply(change, { trusted: true })
+    assertEquals([(await view())[0], (await view())[0]], [1, 0])
+  }
+  // A space's own integration is no catalog's.
+  await needs(ESV)
+  assertEquals((await view())[0], 0)
+})
 
 test('the integration directory: every built one but those in testing, and each custom one its owner listed', async () => {
   let { g } = lists

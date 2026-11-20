@@ -400,6 +400,11 @@ left out.
   `catalogued` and `listing` read beside the row. `find(offers, words)` ranks a
   title starting with each word first, then a word of the title, then its name
   or kinds, then featured. `kinds` lists the kinds by how many hold them.
+- `catalogHeld()` holds what `catalogued` read and reads it again only once the
+  catalog changed: each call reads a stamp of a few rows (the newest
+  integration, the newest edit, which are featured), and the whole only when it
+  moved. A page holds one for its isolate, so a view reads the 1,000-odd
+  integrations only after one is adopted, edited or featured.
 - `Broker.enable(integration, connects)` makes the broker ready to sign people
   in to one service: for Nango, an integration made once, through its own app
   for a sign-in.

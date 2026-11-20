@@ -16,7 +16,7 @@
 // where no integration holds the name yet — so no verb a space can reach
 // writes over a built integration, or changes where its tokens are sent.
 
-import { line } from '@yaks/query'
+import { line, sub } from '@yaks/query'
 import { after, cmp } from '@yaks/fp'
 import type { Bundle, Eid, Reads } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -276,6 +276,38 @@ export let catalogued = async (read: Read): Promise<Marked[]> => {
   return [...whole, ...rest.filter((b) => !built.has(b.entity.eid))]
     .map(marked)
     .filter((i) => !i.owner && (i.built || Array.isArray(i.categories)))
+}
+
+// What moves whenever the catalog does: its newest integration, its newest
+// edit, and which ones are featured, a few dozen rows. A custom integration
+// is its owner's and no catalog's, and nothing deletes one (an owner's death
+// detaches it), so these see every change the catalog makes, while the rest
+// of the store moves none of them.
+let SHOWN = line`.${INTEGRATION}&!${INTEGRATION}.owner`
+let STAMP = [
+  line`${sub(SHOWN)}&.order=-created.at&.limit=1&.fields=created.at`,
+  line`${sub(SHOWN)}&.order=-updated.at&.limit=1&.fields=updated.at`,
+  line`${sub(SHOWN)}&.${FEATURED}&.fields=${FEATURED}.at`,
+]
+
+/** The host catalog (`catalogued`), read again only once it changed: each
+ * call reads a stamp of a few rows beside the rest of its moment, and the
+ * whole only when the stamp moved, or beside the stamp when none is held yet.
+ * The rows are shared by every caller, so none changes them. */
+export let catalogHeld = (): (read: Read) => Promise<Marked[]> => {
+  type Held = { stamp: Promise<string>; rows: Promise<Marked[]> }
+  let held: Held | undefined
+  return async (read: Read): Promise<Marked[]> => {
+    let stamp = Promise.all(STAMP.map((q) => read(q))).then(JSON.stringify)
+    let hold = () => {
+      let now: Held = held = { stamp, rows: catalogued(read) }
+      Promise.all([now.stamp, now.rows])
+        .catch(() => held == now && (held = undefined))
+      return now
+    }
+    let was = held ?? hold()
+    return await (await was.stamp == await stamp ? was : hold()).rows
+  }
 }
 
 /** What a person reads about an integration, which its owner may change:
