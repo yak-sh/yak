@@ -1142,13 +1142,16 @@ let holds = (driver: Driver, name: string) =>
  * 15,108 while the store as a whole grew less than tenfold, made a lookup of
  * 29 receipts read 437,077 rows (bug b5285b5d). So these are remembered, and
  * each is owed an analysis once it holds a second row, which a probe of two
- * rows finds.
+ * rows finds. The engine's own tables are left out: a Durable Object's
+ * statistics list `_cf_KV` and `_cf_METADATA`, which its authorizer refuses
+ * to any statement of the object's (bug c95c5a57).
  */
 export let few = (stats: readonly Row[]): string[] => {
   let most = new Map<string, number>()
   for (let r of stats) {
     let tbl = String(r.tbl), n = Number(String(r.stat ?? '').split(' ')[0])
-    if (Number.isFinite(n)) most.set(tbl, Math.max(most.get(tbl) ?? 0, n))
+    if (foreign(tbl) || !Number.isFinite(n)) continue
+    most.set(tbl, Math.max(most.get(tbl) ?? 0, n))
   }
   return [...most].filter(([, n]) => n <= 1).map(([tbl]) => tbl)
 }

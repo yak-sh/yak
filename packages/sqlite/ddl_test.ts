@@ -1081,3 +1081,31 @@ test('statistics owe a table analyzed at one row once it holds more', () => {
     owed: ['one'],
   })
 })
+
+// A Durable Object's statistics list Cloudflare's own tables, and its
+// authorizer refuses any statement naming one, so the decision never probes
+// them (bug c95c5a57).
+test("statistics never probe the engine's own tables", () => {
+  let d = mem()
+  for (let name of ['one', '_cf_KV']) {
+    d.query({
+      t: 'create table',
+      name,
+      cols: [{ name: 'id', type: 'integer', pk: true }],
+    })
+    d.query(insert(name, { id: 1 }))
+  }
+  d.query({ t: 'analyze' })
+  let refusing = Object.assign(Object.create(d), {
+    statistics: { bytes: () => 1 },
+    query: (s: Parameters<typeof d.query>[0]) => {
+      if (JSON.stringify(s).includes('_cf_')) throw new Error('SQLITE_AUTH')
+      return d.query(s)
+    },
+  })
+  let previous = { bytes: 1, empty: [], owed: [] }
+  assertEquals(analyzed(refusing, previous, true), {
+    ...previous,
+    few: ['one'],
+  })
+})
