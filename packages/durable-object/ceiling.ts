@@ -163,8 +163,8 @@ export type Options = {
   /** What an earlier instance of the object kept, asked at its first
    * statement. */
   kept?: () => Spent[] | undefined
-  /** Keep what the windows spent past this instance: asked as a window's
-   * rows pass half of what it may, and as they pass it. */
+  /** Keep what the windows spent past this instance: at half and all of
+   * the object's allowance, and after a lane spends rows. */
   keep?: (spent: Spent[]) => void
 }
 
@@ -195,9 +195,8 @@ export type Ceiling = {
    * a `lane`, the share is of what that lane's own work spent ({@link lane}),
    * so one lane's backlog never spends another's allowance. */
   under: (share: number, written?: number, lane?: string) => number
-  /** Run `body` as a lane's work: its statements, across the awaits of an
-   * asynchronous body until it settles, count toward the lane's spend as
-   * well as the object's. */
+  /** Run `body` as a lane's work, across awaits until it settles. The lane
+   * counts ordinary and free statements and keeps its spend when it ends. */
   lane: <T>(name: string, body: () => T) => T
   /** Run statements a stopped object must still take: `body`'s own, and
    * those of the work it awaits until it settles. What they cost is told,
@@ -333,7 +332,11 @@ export let ceiling = (
   let freed = () => open > 0 && freeing.getStore()?.open == true
   let taken = () => freed() && freeing.getStore()?.taken == true
   // The lane whose work is running, as `free` knows its own.
-  let laning = new AsyncLocalStorage<{ name: string; open: boolean }>()
+  let laning = new AsyncLocalStorage<{
+    name: string
+    open: boolean
+    spent: boolean
+  }>()
   // Runs `run` and closes `work` once it settles, across its awaits.
   let settled = <T>(
     work: { open: boolean },
@@ -403,6 +406,18 @@ export let ceiling = (
     }
     return until - at
   }
+  let windowAt = (windows: Span[], i: number, at: number): Span => {
+    let s = windows[i]
+    return at - s.since >= s.ms ? windows[i] = turned(s, at) : s
+  }
+  let remember = () => {
+    try {
+      keep?.(snapshot())
+    } catch (e) {
+      console.error('storage ceiling keep failed', e)
+      broken = true
+    }
+  }
   let count = (
     { shape, rowsRead, rowsWritten, returned, matched }: Counted,
   ) => {
@@ -412,16 +427,20 @@ export let ceiling = (
     let tell: [Scan | Runaway, Told][] = []
     let charged = !freed(), moved = false
     let list = charged ? live() : taken() ? [] : loose
-    let lane = charged ? laning.getStore() : undefined
-    for (let i = 0; i < list.length; i++) {
-      let s = list[i]
-      if (at - s.since >= s.ms) s = list[i] = turned(s, at)
-      if (lane?.open) {
+    let lane = taken() ? undefined : laning.getStore()
+    if (lane?.open && (rowsRead || rowsWritten)) {
+      let spans = live()
+      for (let i = 0; i < spans.length; i++) {
+        let s = windowAt(spans, i, at)
         let of = s.lanes.get(lane.name) ?? { read: 0, written: 0 }
         of.read += rowsRead
         of.written += rowsWritten
         s.lanes.set(lane.name, of)
       }
+      lane.spent = true
+    }
+    for (let i = 0; i < list.length; i++) {
+      let s = windowAt(list, i, at)
       if (named) tally(s.all, { shape: named, rowsRead, rowsWritten }, 16)
       else {
         for (let to of [s.all.total, s.all.other]) {
@@ -502,15 +521,7 @@ export let ceiling = (
         ])
       }
     }
-    if (charged && moved) {
-      try {
-        keep?.(snapshot())
-      } catch (e) {
-        // Keeping fails as reporting does: the windows still stand here.
-        if (!broken) console.error('storage ceiling keep failed', e)
-        broken = true
-      }
-    }
+    if (charged && moved) remember()
     // Told once the tallies stand: a reporter may run statements of its own.
     for (let [error, told] of tell) say(error, told)
   }
@@ -546,8 +557,10 @@ export let ceiling = (
     free: (body) => unstopped(body, false),
     take: (body) => unstopped(body, true),
     lane: (name, body) => {
-      let work = { name, open: true }
-      return settled(work, () => laning.run(work, body))
+      let work = { name, open: true, spent: false }
+      return settled(work, () => laning.run(work, body), () => {
+        if (work.spent) remember()
+      })
     },
     spare: () => {
       refuse = false

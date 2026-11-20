@@ -306,8 +306,25 @@ test('an object stopped before its instance ended is stopped after it', async ()
 test("a restarted object's lanes go on where they stood", async () => {
   let { instance } = lasting()
   let { c, ran } = instance()
-  c.lane('drain', () => ran(0, 6))
+  c.lane('intake', () => ran(0, 3))
   await null
+  equal(instance().c.under(0.25, 0, 'intake'), 60_000)
+})
+
+test("finishing a run spends its lane's share even when its write must proceed", async () => {
+  let { instance } = lasting()
+  let { c, ran } = instance()
+  await c.lane('drain', async () => {
+    ran(0, 2)
+    await c.free(async () => {
+      await null
+      c.admit(true)
+      ran(0, 3)
+    })
+  })
+  equal(c.under(0.5, 0, 'drain'), 60_000)
+  equal(c.stopped(), 0)
+  equal(c.spent()[0].written, 2)
   equal(instance().c.under(0.5, 0, 'drain'), 60_000)
 })
 

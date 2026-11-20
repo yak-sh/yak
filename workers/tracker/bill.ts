@@ -9,7 +9,7 @@ import type { Observe } from '@yaks/durable-object'
 export type Cost = { calls: number; rowsRead: number; rowsWritten: number }
 export type Bill = Cost & {
   kind: string
-  /** The costliest statement shapes, with no values. */
+  /** The costliest reads and writes, with no values. */
   statements: (Cost & { shape: string })[]
 }
 
@@ -24,6 +24,20 @@ export type Bill = Cost & {
  * await run('GET /bugs', async () => observe({ shape: 'select', rowsRead: 12, rowsWritten: 0 }))
  * await run('alarm', async () => observe({ shape: 'select', rowsRead: 3, rowsWritten: 0 }))
  * equal(said, ['GET /bugs 12'])
+ * ```
+ *
+ * ```ts
+ * import { billing, type Bill } from './bill.ts'
+ * import { equal } from '@yaks/testing'
+ * let said: Bill[] = []
+ * let { observe, run } = billing((b) => said.push(b))
+ * await run('alarm', async () => {
+ *   for (let i = 0; i < 6; i++) {
+ *     observe({ shape: `select ${i}`, rowsRead: 100, rowsWritten: 0 })
+ *   }
+ *   observe({ shape: 'update effect', rowsRead: 0, rowsWritten: 1 })
+ * })
+ * equal(said[0].statements.filter((s) => s.rowsWritten).map((s) => s.shape), ['update effect'])
  * ```
  */
 export let billing = (say: (bill: Bill) => void, heavy = 500) => {
@@ -53,9 +67,13 @@ export let billing = (say: (bill: Bill) => void, heavy = 500) => {
         rowsWritten: total('rowsWritten'),
       }
       if (weight(bill) >= heavy) {
+        let reads = all.filter((s) => s.rowsRead)
+          .sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 5)
+        let writes = all.filter((s) => s.rowsWritten)
+          .sort((a, b) => b.rowsWritten - a.rowsWritten).slice(0, 5)
         say({
           ...bill,
-          statements: all.sort((a, b) => weight(b) - weight(a)).slice(0, 5)
+          statements: [...new Set([...reads, ...writes])]
             .map((s) => ({ ...s, shape: s.shape.slice(0, 240) })),
         })
       }

@@ -75,10 +75,11 @@ scan, never as a runaway. Work that can wait asks
 `under(share, written?, lane?)` how long until the object has spent under that
 share of every window. Run as a lane's work (`lane(name, body)`, across awaits
 like `free`), the share is of that lane's own rows, so two kinds of background
-work each keep an allowance the other's backlog cannot spend; their rows still
-count toward the object's windows and its stop. Lane tallies are the instance's:
-a new instance starts them at nothing, its totals where they stood. An object
-whose stopping costs more than its rows is `spare()`d: told, never refused.
+work each keep an allowance the other's backlog cannot spend. A lane includes
+its free statements, such as an effect's completion write, and saves its tally
+after it spends rows so the next instance resumes with the same share remaining.
+An object whose stopping costs more than its rows is `spare()`d: told, never
+refused.
 
 The tallies outlive the instance, so an object evicted or restarted mid-window
 goes on where it stood. `bounded` keeps them in one row of the object's
