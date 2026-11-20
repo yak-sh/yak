@@ -212,9 +212,17 @@ export let detached = (
 }
 
 // A failure that happened to a session's run, told where it is seen (M-37965).
-let failure = (o: Opts, session: string, step: string, message: string) =>
+// Its message keys the bug it is filed under, so what varies run to run, such
+// as the line a killed run happened to print last, goes in its `cause`.
+let failure = (
+  o: Opts,
+  session: string,
+  step: string,
+  message: string,
+  cause?: string,
+) =>
   void Promise.resolve(
-    told(o)(new Error(message), {
+    told(o)(new Error(message, cause ? { cause } : undefined), {
       tags: { package: '@yaks/spawn', step },
       during: { session },
     }),
@@ -1135,16 +1143,16 @@ let ended = async (
   // started that ends the same way is the failure.
   let again = !stopped && no == DECLINED.server_error &&
     !await retried(g, request)
-  let why = code === 0
-    ? ''
+  let end = code === 0
+    ? undefined
     : no
-    ? `${no.why}: ${said!.body}`
-    : `${stopped ? 'asked to stop, ' : ''}${await cause(
-      session,
-      row,
-      o,
-      said?.body,
-    )}`
+    ? { how: no.why, last: said!.body, own: true }
+    : await cause(session, row, o, said?.body)
+  let why = end
+    ? `${stopped ? 'asked to stop, ' : ''}${end.how}${
+      end.last ? `: ${end.last}` : ''
+    }`
+    : ''
   await g.apply([{
     entity: {
       eid: (o.mint ?? (() =>
@@ -1176,7 +1184,14 @@ let ended = async (
     (!no || no == DECLINED.server_error) &&
     !(await asked(g, session).catch(() => null))?.recorded
   ) {
-    failure(o, session, 'run ended', `a spawned run ended: ${why}`)
+    let { how, last, own } = end!
+    failure(
+      o,
+      session,
+      'run ended',
+      `a spawned run ended: ${own ? why : how}`,
+      own ? undefined : last,
+    )
   }
   return stopped
     ? undefined
@@ -1278,13 +1293,17 @@ let capped = (oom: number) =>
 // wrote, the signal that code names and whether the memory cap sent it, or
 // why there is none; then the last line it printed on stderr, which is where a
 // provider says what went wrong, unless it said why in its transcript
-// (`said`, a refusal's text), which comes first.
+// (`said`, a refusal's text), which comes first. That line is the run's `own`
+// reason when the provider exited by itself; when something killed it, the
+// line is only what it happened to be printing.
+type End = { how: string; last?: string; own: boolean }
+
 let cause = async (
   session: string,
   row: Bundle | undefined,
   o: Opts,
   said?: string,
-): Promise<string> => {
+): Promise<End> => {
   let exit = comp(row, EXIT) as Exit | undefined
   let code = exit?.code
   let signal = code != null && code > 128 ? SIGNALS[code - 128] : undefined
@@ -1301,7 +1320,11 @@ let cause = async (
     : 'the provider never started: its wrapper reported no pid'
   let last = said ?? (await text(f.err).catch(() => undefined))
     ?.split('\n').map((l) => l.trim()).filter(Boolean).at(-1)
-  return last ? `${how}: ${last.slice(0, 300)}` : how
+  return {
+    how,
+    ...last ? { last: last.slice(0, 300) } : {},
+    own: said != null || (code != null && !signal),
+  }
 }
 
 // A run's checkout, taken back now that the run is over — its row brought up

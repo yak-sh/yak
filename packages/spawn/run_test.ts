@@ -26,7 +26,7 @@ import {
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
-let logged = async (lines: unknown[], code = 0) => {
+let logged = async (lines: unknown[], code: number | null = 0) => {
   let { g } = tracked()
   let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
   await g.apply(asking('S1', 'E1', 'do it'))
@@ -292,7 +292,7 @@ test('a run whose provider could not be reached is retried once, and the retry e
       dir,
       poll: 5,
       launch: (store, spec, o) => (runs++, playing(store, spec, o)),
-      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
+      report: heard(told),
     })
     await until(
       async () =>
@@ -452,10 +452,20 @@ test('a checkout whose removal was cut off is finished, not read as one', async 
   }
 })
 
+// A report that keeps each failure as its step, its error and, after a
+// slash, the cause it carries apart from the message its bug is keyed by.
+let heard =
+  (told: string[]) => (e: unknown, c?: { tags?: Record<string, string> }) =>
+    void told.push(
+      [`${c?.tags?.step}: ${e}`, (e as Error).cause].filter(Boolean).join(
+        ' / ',
+      ),
+    )
+
 // How a run that ended `code`, having printed `err` on stderr, reads at its
 // end, and the failures told of it; `asked` when somebody stopped it.
 let ending = async (
-  code: number,
+  code: number | null,
   err: string,
   asked = false,
   lines: unknown[] = [],
@@ -465,15 +475,21 @@ let ending = async (
   if (asked) await g.apply([{ entity: { eid: 'S1' }, stop: {} }])
   let told: string[] = []
   try {
-    await follow(g, 'S1', claude.read, {
-      dir,
-      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
-    })
+    await follow(g, 'S1', claude.read, { dir, report: heard(told) })
     return [comp((await entries(g)).at(-1), 'content').body, told]
   } finally {
     close()
   }
 }
+
+test('runs killed with no exit code are told alike, whatever each last printed', async () => {
+  let killed =
+    'the provider and its wrapper were killed, so no exit code was written'
+  assertEquals(await ending(null, 'Exit code 2 ls: a.ts'), [
+    `${killed}: Exit code 2 ls: a.ts`,
+    [`run ended: Error: a spawned run ended: ${killed} / Exit code 2 ls: a.ts`],
+  ])
+})
 
 test('a run somebody stopped says how it ended, and is not told', async () => {
   assertEquals(await ending(143, '', true), [
@@ -508,7 +524,7 @@ let standin = async (ending: string, recorded = false) => {
       dir,
       poll: 5,
       launch: playing,
-      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
+      report: heard(told),
     })
     // A finished run's log is cleaned last, after its ending is written.
     await until(
@@ -573,12 +589,12 @@ test('a refused run names the refusal, not the last line of stderr', async () =>
   ])
 })
 
-test('a crashed run names its signal and what it last said on stderr', async () => {
-  let ended = 'the provider was ended by SIGKILL (exit 137): out of memory'
+test("a crashed run names its signal, and what it last said on stderr is its bug's cause, not its message", async () => {
+  let how = 'the provider was ended by SIGKILL (exit 137)'
   assertEquals(await standin('crash'), [
     'Provider exited 137',
-    ended,
-    [`run ended: Error: a spawned run ended: ${ended}`],
+    `${how}: out of memory`,
+    [`run ended: Error: a spawned run ended: ${how} / out of memory`],
     [],
   ])
 })
