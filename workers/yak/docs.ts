@@ -26,7 +26,7 @@
 // already in the world and the resource list a connector cached.
 import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
-import { Body, SideNav } from '@yaks/ui/parts'
+import { Body, contents, SideNav } from '@yaks/ui/parts'
 import { type ComponentChildren, h } from 'preact'
 import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
@@ -34,6 +34,7 @@ import { type Page, PAGES } from './guide.ts'
 import { type Host, hosted, url } from '@yaks/platform/host'
 import { publicPage } from '@yaks/platform/kept'
 import { drawn, head } from './shell.ts'
+import { asset } from './sheets.ts'
 
 export let PATH = '/docs'
 
@@ -156,7 +157,7 @@ let said = (md: Md, tokens: Token[]) =>
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
 // page is the reader this whole guide was written for.
-let contents = () =>
+let map = () =>
   h(
     'nav',
     { class: 'Docs_Pages', 'aria-label': 'Contents' },
@@ -214,31 +215,21 @@ let side = (slug: string) => {
   )
 }
 
+// What lights the section being read in the contents list.
+let lights = (env: Host) =>
+  `\n<script type="module" src="${asset(env, '_contents.js')}"></script>`
+
 // What is on THIS page: its own sections, so a long subject can be crossed
-// without scrolling it. The ids are the renderer's (@yaks/markdown
-// `headings`), which is why nothing here has to slugify anything itself. A
-// page with one section is a page that needs no contents list.
+// without scrolling it, the one being read lit (@yaks/ui `Contents`). The ids
+// are the renderer's (@yaks/markdown `headings`), which is why nothing here
+// has to slugify anything itself. A page with one section is a page that
+// needs no contents list.
 let onPage = (md: Md, tokens: Token[]) => {
   let rows = md.headings(tokens).filter((v) => v.depth == 2 || v.depth == 3)
-  return rows.length < 2 ? null : h(
-    'nav',
-    { class: 'Page_Aside Docs_Contents', 'aria-label': 'On this page' },
-    h('p', { class: 'Docs_Label' }, 'On this page'),
-    h(
-      'ul',
-      { class: 'Docs_ContentsList' },
-      rows.map((v) =>
-        h(
-          'li',
-          {
-            key: v.id,
-            class: v.depth == 3 ? 'Docs_Jump Docs_Jump-sub' : 'Docs_Jump',
-          },
-          h('a', { class: 'Docs_JumpLink', href: `#${v.id}` }, v.text),
-        )
-      ),
-    ),
-  )
+  return rows.length < 2 ? null : contents({
+    class: 'Page_Aside Docs_Contents',
+    entries: rows.map((v) => ({ id: v.id, label: v.text, sub: v.depth == 3 })),
+  })
 }
 
 // One documentation page, drawn. `lead` is the document's own heading, kept
@@ -256,13 +247,14 @@ let page = (
   slug?: string,
 ) => {
   let lead = tokens.findIndex((t) => t.type == 'heading' && t.depth == 1)
+  let listed = onPage(md, tokens)
   return drawn(
-    head(env, title, description, at),
+    head(env, title, description, at) + (listed ? lights(env) : ''),
     h(
       'main',
       { class: 'Page' },
       slug == null ? null : side(slug),
-      onPage(md, tokens),
+      listed,
       h(
         'article',
         { class: 'Page_Body Prose' },
@@ -321,7 +313,7 @@ export let answer = async (
         DOCS.title,
         DOCS.description,
         tokens,
-        contents(),
+        map(),
         '',
       )
     })

@@ -71,6 +71,7 @@ import * as save from './Save.ts'
 import * as section from './Section.ts'
 import * as shell from './Shell.ts'
 import * as sideNav from './SideNav.ts'
+import * as contents from './Contents.ts'
 import * as spark from './Spark.ts'
 import * as stamp from './Stamp.ts'
 import * as badge from './Badge.ts'
@@ -146,7 +147,13 @@ let modules = {
     Menu: menu,
     Prop: prop,
   },
-  Navigation: { Tabs: tabs, SideNav: sideNav, Index: index, Pager: pager },
+  Navigation: {
+    Tabs: tabs,
+    SideNav: sideNav,
+    Contents: contents,
+    Index: index,
+    Pager: pager,
+  },
   Lists: {
     Tile: tile,
     Rows: rows,

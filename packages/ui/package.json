@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./routes": "./routes.ts",
+    "./contents": "./contents-browser.ts",
     "./cli": "./cli.ts",
     "./ui": "./ui.ts",
     "./chart": "./chart-marks.ts",

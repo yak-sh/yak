@@ -10,7 +10,8 @@
   },
   "entries": [
     ".",
-    "./ui"
+    "./ui",
+    "./contents"
   ],
   "resources": [
     "**/*.css"

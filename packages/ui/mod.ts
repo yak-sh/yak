@@ -13,7 +13,7 @@
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Chips`, `Address`, `Icon`, `Copy`, `Card`, `Report`, `Group`, `Empty`,
  *   `State`, `Loading`, `Sparkline`, `Columns`,
- *   `Say`, `Index`, `SideNav`, `Catalog`, `Gallery`, `Cards`: the parts (`TabSet`
+ *   `Say`, `Index`, `SideNav`, `Contents`, `Catalog`, `Gallery`, `Cards`: the parts (`TabSet`
  *   is `Tabs` holding their panels); `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
  * - `Float`, `place`, `placeAt`, `usePlaceAt`, `tips`: what floats above a

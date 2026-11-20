@@ -146,17 +146,17 @@ let sourceOf = (path: string) => front(fileAt(path), path).body
 test('a page lists its own sections, and every one of them is there', async () => {
   for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
-    let toc = html.split('<nav class="Page_Aside')[1].split('</nav>')[0]
+    let { document } = parseHTML(html)
+    let toc = document.querySelector('nav[aria-label="On this page"] ul')!
     let inside = headings(parse(sourceOf(`/docs/${p.slug}.md`)))
       .filter((v) => v.depth == 2 || v.depth == 3)
     assert(inside.length > 1, p.slug)
     assertEquals(
-      [...toc.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]),
-      inside.map((v) => v.id),
+      [...toc.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+      inside.map((v) => `#${v.id}`),
       p.slug,
     )
     // And the headings themselves wear those ids.
-    let { document } = parseHTML(html)
     for (let v of inside) {
       assert(document.querySelector(`h${v.depth}[id="${v.id}"]`))
     }

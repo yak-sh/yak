@@ -215,6 +215,10 @@ ${links(env, 'pages.css', undefined, assets)}${
       ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''
   }${
+    main.includes('data-contents')
+      ? `<script type="module" src="${file('_contents.js')}"></script>`
+      : ''
+  }${
     main.includes('data-menu')
       ? `<script src="${file('menu.js')}" defer></script>`
       : ''

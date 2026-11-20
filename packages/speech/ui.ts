@@ -3,7 +3,7 @@
 // offers is its host's, which knows the providers it has keys for, and so is
 // where its fields and its samples are sent.
 import { h, type JSX } from 'preact'
-import { Button, Card, Check, Form, Icon, Rows } from '@yaks/ui/parts'
+import { Button, Card, Check, Form, Icon, More, Rows } from '@yaks/ui/parts'
 // @ts-types="@yaks/ui/lucide"
 import Play from 'lucide/dist/esm/icons/play.mjs'
 import type { Voice } from './mod.ts'
@@ -67,8 +67,8 @@ let choices = (
   )
 
 /** Where the people of `name` pick its voice from those offered, each played
- * from `sample(id)`, how fast it speaks, and how its calls are answered. It
- * posts `voice`, `voice_speed`, `voice_model` and `voice_backend`; each voice
+ * from `sample(id)`, and, folded under one line, how fast it speaks and how
+ * its calls are answered. It posts `voice`, `voice_speed`, `voice_model` and `voice_backend`; each voice
  * names in `data-ways` the ways that speak in it, so its host's script can
  * grey the rest. */
 export let VoiceCard = (
@@ -114,19 +114,28 @@ export let VoiceCard = (
         )
       ),
     ),
-    choices('voice-speed', 'Speed', 'voice_speed', paces, setup.pace),
-    choices(
-      'voice-answers',
-      'Answers',
-      'voice_model',
-      ways.map((w) => ({ id: w.model, name: w.name, about: w.about })),
-      setup.model,
-    ),
-    choices(
-      'voice-backend',
-      'Hard requests',
-      'voice_backend',
-      backends,
-      setup.backend,
+    h(
+      More,
+      null,
+      h(More.Summary, null, 'Speed, answers and hard requests'),
+      h(
+        More.Body,
+        null,
+        choices('voice-speed', 'Speed', 'voice_speed', paces, setup.pace),
+        choices(
+          'voice-answers',
+          'Answers',
+          'voice_model',
+          ways.map((w) => ({ id: w.model, name: w.name, about: w.about })),
+          setup.model,
+        ),
+        choices(
+          'voice-backend',
+          'Hard requests',
+          'voice_backend',
+          backends,
+          setup.backend,
+        ),
+      ),
     ),
   )

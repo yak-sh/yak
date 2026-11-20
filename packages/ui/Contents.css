@@ -1,0 +1,85 @@
+/* What is on this page. Beside the page, a column that stays in sight as the
+   page scrolls under it: its label, then a link a line, quiet until it is the
+   section in view, which a bar beside it marks. On a phone, one "On this
+   page" line that opens the same list. Which of the two shows is the width
+   the contents itself has: the container it sits in is the page's to size. */
+.Contents {
+  container-type: inline-size;
+  position: sticky;
+  top: var(--gap);
+  align-self: start;
+  font-size: var(--small);
+}
+.Contents[hidden] {
+  display: none;
+}
+.Contents_Label {
+  margin: 0 0 var(--half-gap);
+  font-weight: 700;
+}
+.Contents_List {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.Contents_Item-sub {
+  padding-inline-start: var(--gap);
+}
+.Contents_Link {
+  display: block;
+  padding: 3px 0 3px var(--half-gap);
+  border-inline-start: 2px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+}
+.Contents_Link:hover {
+  color: var(--text);
+}
+.Contents_Link-on {
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+.Contents_Menu {
+  display: none;
+}
+.Contents_Summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-height: var(--tap);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.Contents_Summary::-webkit-details-marker {
+  display: none;
+}
+.Contents_Summary::after {
+  content: '';
+  width: .4em;
+  height: .4em;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  transition: transform .15s;
+}
+.Contents_Menu[open] > .Contents_Summary::after {
+  transform: rotate(225deg);
+}
+.Contents_Menu > .Contents_List {
+  margin-top: var(--half-gap);
+}
+/* Wider than a column: the contents is across the top of the page, a phone's
+   menu. */
+@container (min-width: 20rem) {
+  .Contents_Label,
+  .Contents > .Contents_List {
+    display: none;
+  }
+  .Contents_Menu {
+    display: block;
+  }
+}

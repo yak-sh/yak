@@ -1,4 +1,4 @@
-import { Shell } from '@yaks/ui/parts'
+import { contents, Shell } from '@yaks/ui/parts'
 import { Head } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
@@ -238,7 +238,14 @@ let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 // A dashboard page in the frame (frame.ts), as every one is drawn (`desk`,
 // and the platform's admin directory, admin.ts `desk`): a sheet under the
 // head that names it, the side beside it, and on a phone the frame's bar
-// naming it too, whose Menu opens the side over the whole screen.
+// naming it too, whose Menu opens the side over the whole screen. A page of
+// more than a few sections wears what is on it beside it, or at its top on a
+// phone (@yaks/ui `Contents`): made in the browser from the page's own
+// section headings, a card's title or a group's, but not those of the cards
+// in a grid, which are the things a section lists.
+let SECTIONS =
+  '.Desk_Content :is(.Card_Title, .Group):not(:is(.Cards, .Modal) *)'
+
 export let deskFrame = (
   at: {
     sidebar: Kids
@@ -258,8 +265,9 @@ export let deskFrame = (
     sheet: true,
     content: h(
       'div',
-      { class: 'Desk_Body' },
+      { class: 'Desk_Body', 'data-contents-root': '' },
       h('header', { class: 'Desk_Head' }, at.head),
+      contents({ class: 'Desk_Contents', from: SECTIONS }),
       h(Shell.Content, {
         class: ['Desk_Content', at.class].filter(Boolean).join(' '),
         'data-save-person': at.person,

@@ -345,11 +345,35 @@
     flex: 1;
     min-width: 12rem;
   }
-  /* The sheet fills the frame's body, to the window's foot. */
+  /* The sheet fills the frame's body, to the window's foot. Its contents
+     list (@yaks/ui `Contents`) is the menu under its head, or, where the
+     body has room, a column beside it that stays in sight as it scrolls. */
   .Desk_Body {
     flex: 1 0 auto;
     min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 52rem);
+    align-content: start;
     padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
+  }
+  .Desk_Contents {
+    position: static;
+    margin-bottom: var(--gap);
+  }
+  .Frame_Body:has(> .Desk_Body) {
+    container-type: inline-size;
+  }
+  @container (min-width: 64rem) {
+    .Desk_Body:has(> .Desk_Contents:not([hidden])) {
+      grid-template-columns: minmax(0, 52rem) 13rem;
+      column-gap: 2.5rem;
+    }
+    .Desk_Contents {
+      position: sticky;
+      grid-column: 2;
+      grid-row: 2;
+      margin: 0;
+    }
   }
   .Desk_Head {
     display: flex;

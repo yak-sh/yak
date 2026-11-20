@@ -1888,48 +1888,11 @@
     --nav-tip: var(--radius);
   }
 
-  .Docs_Contents {
-    display: grid;
-    gap: var(--half-gap);
-    position: sticky;
-    top: var(--gap);
-  }
-
-  .Docs_Label {
-    color: var(--text);
-    font-weight: 800;
-  }
-
-  .Docs_ContentsList {
-    display: grid;
-    gap: 0.35rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .Docs_JumpLink {
-    color: var(--muted);
-    text-decoration: none;
-  }
-
-  .Docs_JumpLink:hover {
-    color: var(--text);
-    text-decoration: underline;
-  }
-
-  .Docs_Jump-sub {
-    padding-inline-start: var(--half-gap);
-  }
-
+  /* Above the document, the contents list is the menu a phone opens, and
+     scrolls away with the page rather than standing over it. */
   @media (max-width: 1000px) {
-    /* Above the document, a contents list reads as a row of places. */
     .Docs_Contents {
       position: static;
-    }
-
-    .Docs_ContentsList {
-      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
     }
   }
 

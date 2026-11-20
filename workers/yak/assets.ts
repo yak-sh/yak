@@ -42,6 +42,7 @@ export let ASSETS: Asset[] = [
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   { name: '_sort.js', bundle: here('./sort.ts') },
+  { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   ...['style.css', 'pages.css'].map((name) => ({ name, named: true })),
   ...[
     'report.js',

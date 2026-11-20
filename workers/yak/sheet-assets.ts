@@ -49,6 +49,7 @@ export let WORN = [
   'Time',
   'Overlay',
   'SideNav',
+  'Contents',
   'Check',
   'Catalog',
   'Gallery',
