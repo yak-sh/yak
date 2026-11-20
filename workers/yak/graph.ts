@@ -4552,8 +4552,7 @@ export class Store extends Durable {
 
   /** The answer, unless it refuses a caller on a later deploy than this
    * object runs (running.ts `skewed`): then a failure the caller's door sends
-   * again, and the caller judges by the newer code's answer whether it was
-   * skew (running.ts `skew`). */
+   * again until newer code answers it (running.ts `settled`). */
   async #unskewed(request: Request, answer: Response): Promise<Response> {
     let e = await skewed(
       request.headers,

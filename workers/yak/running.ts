@@ -19,11 +19,12 @@
 // (T-150897). The Wire and the Builder restart before anything, when they are
 // idle (@yaks/durable-object `Durable`'s `behind`, given `owed`). A store
 // still behind its caller after its restart answers a refusal as a
-// failure the caller sends again (`skewed`, T-140262). Only the caller can
-// say whether it was skew, by what the newer code answers (`skew`): a store
-// cannot tell a word its code lacks from a word nobody declares. A store
-// still behind after every resend has its refusal answered as a refusal and
-// reported (`settled`, door.ts `storeOf`).
+// failure the caller sends again (`skewed`, T-140262): a store cannot tell a
+// word its code lacks from a word nobody declares, and the newer code's
+// answer is the one the call gets. A resend the newer code answers is the
+// recovery working and reports nothing (T-2141). A store still behind after
+// every resend has its refusal answered as a refusal and reported under the
+// word it refused (`settled`, `behind`, door.ts `storeOf`).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -224,33 +225,6 @@ export let restart = (ctx: Restartable, reason: string): void => {
 export let refused = (answer: Response): boolean =>
   answer.status >= 400 && answer.status < 500 && answer.status != 429
 
-/**
- * The skew a call met, as its caller judges it once the call is answered
- * again (@yaks/durable-object `resending`'s `recovered`): an older store's
- * refusal (`skewed`) that the newer code answered with anything but a
- * refusal of its own. A refusal both deploys give is the caller's mistake,
- * a bad query and no skew; a store still behind after every resend fails
- * the call, and its caller reports that. Null when there was no skew.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
- * let newer = new Headers({ [WORKER_VERSION]: 'b', [WORKER_VERSION_AT]: '2026-10-12T16:30:00Z' })
- * let no = Response.json({ message: 'unknown component release_remake' }, { status: 400 })
- * // What the caller's door holds of the store's answer: its words.
- * let was = new Error((await skewed(newer, mine, no))!.message)
- * assertEquals(skew(was, new Response('ok'))?.name, 'Skewed')
- * assertEquals(skew(was, { rows: [] })?.message, was.message)
- * assertEquals(skew(was, no), null)
- * assertEquals(skew(new Error('Network connection lost.'), new Response('ok')), null)
- * ```
- */
-export let skew = (failure: unknown, answer: unknown): Error | null =>
-  failure instanceof Error && failure.message.startsWith(SKEWED) &&
-    !(answer instanceof Response && refused(answer))
-    ? Object.assign(new Error(failure.message), { name: 'Skewed' })
-    : null
-
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime
  * sends an answer on in turns of its own event loop, and what runs meanwhile
@@ -326,7 +300,7 @@ let SKEWED =
  * only what its code does not know yet, a row or a door the caller's deploy
  * added. The caller sends it again, retryable, until newer code answers;
  * the store reports nothing, since a refusal the newer code repeats was the
- * caller's own mistake (`skew` judges it). Any other answer is null.
+ * caller's own mistake. Any other answer is null.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -411,4 +385,30 @@ export let settled = (failure: unknown): Response | null => {
       ? status
       : 400,
   })
+}
+
+// The word a refusal of a name the vocabulary does not know quotes
+// (@yaks/vocab `unknownName`, `unknownWord`).
+let UNKNOWN = /\bunknown (?:prop: \.|component:? )([\w$-]+)/
+
+/**
+ * The fault a store still behind its caller is reported under: the path,
+ * and the word its older code refused, so each new word a deploy brings is
+ * its own bug and none is buried under another's.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let failure = (why: string) => new Error(`Durable Object on an older deploy refused a caller on a newer one: ${why}`)
+ * assertEquals(
+ *   behind(failure('unknown prop: .reconnecting (closest declared: .connection)'), '/query?q=1'),
+ *   'behind:/query .reconnecting',
+ * )
+ * assertEquals(behind(failure('unknown component: release_remake — the app has not been deployed'), '/apply'), 'behind:/apply .release_remake')
+ * assertEquals(behind(failure('no such door'), '/apply'), 'behind:/apply')
+ * ```
+ */
+export let behind = (failure: unknown, path: string): string => {
+  let at = path.split('?')[0]
+  let word = failure instanceof Error && failure.message.match(UNKNOWN)?.[1]
+  return word ? `behind:${at} .${word}` : `behind:${at}`
 }

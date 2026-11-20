@@ -16,7 +16,7 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { settled, skew, stamp } from './running.ts'
+import { behind, settled, stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { retried } from '@yaks/durable-object/resets'
 import {
@@ -367,26 +367,22 @@ export let storeOf = (
   resending(doorOf((req) => placed(ns, name).fetch(req), name, app), {
     report: (e, path) =>
       defect(e, { request: `store ${path.split('?')[0]}`, store: name }),
-    // An older store's refusal that the newer code did not repeat was skew
-    // (running.ts `skew`); one it repeats was the caller's own mistake.
-    recovered: (failure, answer, path) => {
-      let e = skew(failure, answer), at = path.split('?')[0]
-      if (e) {
-        defect(e, { request: `store ${at}`, store: name }, {
-          fault: `skew:${at}`,
-        })
-      }
-    },
     // A store still behind after every resend: its refusal, as a refusal,
-    // and reported, since the newer code may well have taken the call.
-    // Under a deferred deploy only the runtime moves a store onto new code,
-    // when it hibernates or its update's delay runs out (wrangler.toml).
+    // and reported under the word it refused, since the newer code may well
+    // have taken the call. A resend the newer code answered reports nothing:
+    // that is the recovery working. Under a deferred deploy only the runtime
+    // moves a store onto new code, when it hibernates or its update's delay
+    // runs out (wrangler.toml).
     settled: (failure, path) => {
-      let answer = settled(failure), at = path.split('?')[0]
+      let answer = settled(failure)
       if (answer) {
-        defect(failure, { request: `store ${at}`, store: name }, {
-          fault: `behind:${at}`,
-        })
+        defect(
+          failure,
+          { request: `store ${path.split('?')[0]}`, store: name },
+          {
+            fault: behind(failure, path),
+          },
+        )
       }
       return answer
     },

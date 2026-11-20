@@ -283,10 +283,9 @@ let behind = async (next?: Response) => {
   }
 }
 
-test('a refusal from a store behind its caller is sent again, and reported as skew when the newer code takes it', async () => {
+test('a refusal from a store behind its caller is sent again, and reports nothing when the newer code takes it', async () => {
   let { status, reports } = await behind(Response.json({ ok: true }))
-  assertEquals(status, 200)
-  assertMatch(reports, /older deploy refused a caller on a newer one/)
+  assertEquals([status, reports], [200, '[]'])
 })
 
 test("a refusal the newer code repeats is the caller's own, answered plainly and reported as nothing", async () => {
@@ -298,9 +297,9 @@ test("a refusal the newer code repeats is the caller's own, answered plainly and
   assertEquals([status, reports], [400, '[]'])
 })
 
-test('a store still behind after every resend answers its refusal as a refusal, and reports it', async () => {
+test('a store still behind after every resend answers its refusal as a refusal, and reports it under the word it refused', async () => {
   let { status, said, reports } = await behind()
   assertEquals(status, 400)
-  assertMatch(reports, /"fault":"behind:\/apply"/)
+  assertMatch(reports, /"fault":"behind:\/apply \.release_remake"/)
   assertMatch(said, /release_remake/)
 })
