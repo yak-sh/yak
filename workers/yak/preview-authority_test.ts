@@ -3,7 +3,6 @@ import { cleanup, equal, test } from '@yaks/testing'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
 import { handler } from './kernel.ts'
-import { sealedAt } from './preview-probe.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import { ADA, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -63,7 +62,7 @@ await tool('app_files', {
   content: '<html><body>A private draft</body></html>',
 })
 let preview = await tool('app_preview', { app: 'authority', screenshot: false })
-let url = await sealedAt(ctx, preview)
+let url = String(preview.value!.url)
 let request = (path: string, init?: RequestInit) =>
   handler.fetch(new Request(new URL(path, url), init), p.env)
 let read = await request('api/query?q=.doc')

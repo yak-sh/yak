@@ -1,19 +1,20 @@
 /**
  * `@yaks/platform/preview` — a draft's private preview link, as rules a host
- * serves it by. A link is a sealed ticket mounted under its app,
- * `/<app>/_preview/<ticket>/…`, and shows one of the app's drafts as it
+ * serves it by. A link is a short random code mounted under its app,
+ * `/<app>/~<code>/…`, naming a stored, revocable `preview_link` row, or, made
+ * before those, a sealed ticket at `/<app>/_preview/<ticket>/…`; either
+ * reads as a {@link Ticket}. It shows one of the app's drafts as it
  * stands at each request, or once a release takes the draft, what was
  * released. Each state of the draft is served as a release of its own, named
  * for the files it holds, so whichever process built it, the next request
  * finds it.
  *
- * Its host does the reading and the building: yaks.app opens the ticket,
+ * Its host does the reading and the building: yaks.app reads the link,
  * reads the directory and the draft's rows, keeps each state in R2 and runs a
  * state's worker in its dispatch namespace (workers/yak preview.ts). This
  * module says what those readings make: where a link is mounted (`mountOf`,
- * `aimed`), a draft's short link, which a signed-in writer opens as a ticket
- * sealed for them (`shortOf`, `shortened`, `shortMount`), whom a ticket still
- * admits, until when and as whom (`admits`,
+ * `aimed`), a stored link's code and address (`codeOf`, `linkMount`), whom
+ * a ticket still admits, until when and as whom (`admits`,
  * `until`, `reading`, `viewer`), which
  * draft and link it shows (`shows`, `linkFor`), which of the link's doors a
  * request goes to (`door`), where a state is kept and what building it sets
@@ -48,21 +49,62 @@ import { BUILT, type Files } from './versions.ts'
 export let mountOf = (app: string, ticket: string): string =>
   `/${app}/${PREVIEW}/${ticket}/`
 
-/** A link's address as a request names it: its app's slug, its ticket, where
- * it is mounted, and the path under that from the app's root. */
-export type Aimed = { app: string; ticket: string; mount: string; path: string }
+/** How many characters a link's code has: from {@link ALPHABET}, about 62
+ * bits, so nobody finds a link by guessing. */
+export let CODE = 12
+let ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
+
+/** A link's code from `random` bytes, one character a byte. */
+/// codeOf(new Uint8Array(12)) -> 'aaaaaaaaaaaa'
+/// codeOf(new Uint8Array([1, 37, 255, 3, 4, 5, 6, 7, 8, 9, 10, 11])) -> 'bbddefghijkl'
+export let codeOf = (random: Uint8Array): string =>
+  [...random.slice(0, CODE)].map((b) => ALPHABET[b % ALPHABET.length]).join('')
+
+/** Where a stored link's pages are mounted: under its app, at its code. */
+/// linkMount('cookbook', 'k3f9x2ab7q1z') -> '/cookbook/~k3f9x2ab7q1z/'
+export let linkMount = (app: string, code: string): string =>
+  `/${app}/~${code}/`
+
+/** A link's address as a request names it: its app's slug, the credential
+ * it carries (a sealed ticket, or a stored link's `code`), where it is
+ * mounted, and the path under that from the app's root. */
+export type Aimed = {
+  app: string
+  ticket?: string
+  code?: string
+  mount: string
+  path: string
+}
 
 let ADDRESS = new RegExp(`^/([^/]+)/${PREVIEW}/([^/]+)/(.*)$`)
+let CODED = new RegExp(`^/([^/]+)/~([a-z0-9]{${CODE}})(?:/(.*))?$`)
 
 /** The link `pathname` is under, or null where it names none. */
 /// aimed('/cookbook/_preview/t/about/') -> { app: 'cookbook', ticket: 't', mount: '/cookbook/_preview/t/', path: '/about/' }
 /// aimed('/cookbook/_preview/t/') -> { app: 'cookbook', ticket: 't', mount: '/cookbook/_preview/t/', path: '/' }
+/// aimed('/cookbook/~k3f9x2ab7q1z/about/') -> { app: 'cookbook', code: 'k3f9x2ab7q1z', mount: '/cookbook/~k3f9x2ab7q1z/', path: '/about/' }
+/// aimed('/cookbook/~k3f9x2ab7q1z') -> { app: 'cookbook', code: 'k3f9x2ab7q1z', mount: '/cookbook/~k3f9x2ab7q1z/', path: '/' }
 /// aimed('/cookbook/_preview/t') -> null
+/// aimed('/cookbook/~abc.def/') -> null
 /// aimed('/cookbook/about') -> null
 export let aimed = (pathname: string): Aimed | null => {
   let m = ADDRESS.exec(pathname)
-  return m &&
-    { app: m[1], ticket: m[2], mount: mountOf(m[1], m[2]), path: `/${m[3]}` }
+  if (m) {
+    return {
+      app: m[1],
+      ticket: m[2],
+      mount: mountOf(m[1], m[2]),
+      path: `/${m[3]}`,
+    }
+  }
+  let c = CODED.exec(pathname)
+  return c &&
+    {
+      app: c[1],
+      code: c[2],
+      mount: linkMount(c[1], c[2]),
+      path: `/${c[3] ?? ''}`,
+    }
 }
 
 /** The page `value` names within an app, as a link's address ends: its path,
@@ -81,33 +123,6 @@ export let within = (value: unknown): string | null => {
   ) return null
   return parsed.pathname.slice(1) + parsed.search + parsed.hash
 }
-
-/** A draft's short id: the first eight hex digits of its eid, unique among
- * an app's open drafts and no credential: its short link opens only for
- * someone signed in who writes in the space. */
-/// shortOf('ae67727c-8f09-8461-8f21-484e8f767ad0') -> 'ae67727c'
-export let shortOf = (draft: string): string =>
-  draft.replace(/-/g, '').slice(0, 8)
-
-/** A draft's short link as a request names it, `/<app>/~<id>/…`: its app's
- * slug, the draft's short id, and the path under it from the app's root. */
-export type Shortened = { app: string; id: string; path: string }
-
-let SHORT = /^\/([^/]+)\/~([0-9a-f]{8})(\/.*)?$/
-
-/** The short link `pathname` is under, or null where it names none. */
-/// shortened('/cookbook/~ae67727c/about/') -> { app: 'cookbook', id: 'ae67727c', path: '/about/' }
-/// shortened('/cookbook/~ae67727c') -> { app: 'cookbook', id: 'ae67727c', path: '/' }
-/// shortened('/cookbook/~abc.def/') -> null
-export let shortened = (pathname: string): Shortened | null => {
-  let m = SHORT.exec(pathname)
-  return m && { app: m[1], id: m[2], path: m[3] ?? '/' }
-}
-
-/** Where a draft's short link is mounted: under its app, at its short id. */
-/// shortMount('cookbook', 'ae67727c-8f09-8461-8f21-484e8f767ad0') -> '/cookbook/~ae67727c/'
-export let shortMount = (app: string, draft: string): string =>
-  `/${app}/~${shortOf(draft)}/`
 
 /** What a link's ticket names: the draft it shows (`of`), as whom, and the
  * unix second it stops opening at (`exp`). A ticket for a paired TV names its

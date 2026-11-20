@@ -100,7 +100,6 @@ import {
   aim,
   collapsed,
   cors,
-  drafted,
   foreign,
   handedOff,
   hostOf,
@@ -139,7 +138,7 @@ export let atSpace = (req: Request, env: Env) => {
 // A space's hostname: its previews, its drops, its hooks and its apps.
 let inSpace = async (req: Request, env: Env, space: string) => {
   let asked = new URL(req.url).pathname
-  if (previews(asked) || drafted(asked)) {
+  if (previews(asked)) {
     return (await import('./preview.ts')).fetch(req, env)
   }
   // The one path on a space's hostname the kernel answers itself (drop.ts,

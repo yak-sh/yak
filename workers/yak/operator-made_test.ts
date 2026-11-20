@@ -5,7 +5,7 @@
 // they give their address, an app opens by itself only when their Operator
 // starts it in that chat.
 
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import type { Item } from '@yaks/model'
 import { directoryOf } from './directory.ts'
@@ -156,9 +156,11 @@ test('beside a newcomer’s chat, what their app keeps and can do as their Opera
 
 test('its screens open once the first is drawn: the draft, following each write', () => {
   equal(drawn.open, 'screens')
-  equal(
-    String(drawn.screens).startsWith('https://plum.yaks.app/recipes/_preview/'),
-    true,
+  ok(
+    /^https:\/\/plum\.yaks\.app\/recipes\/~[a-z0-9]{12}\/$/.test(
+      String(drawn.screens),
+    ),
+    String(drawn.screens),
   )
   // What it can do names the page, which its draft shows.
   equal(drawn.does.at(-1), 'Recipes')
@@ -177,11 +179,11 @@ test('while a live app has changes not yet released, its screens show the draft,
   equal(changing.switch, [['Draft', true], ['Live', false]])
   equal(changing.notes, ['draft', 'live'])
   equal(Object.keys(changing.frames), ['draft', 'live'])
-  equal(
-    changing.frames.draft?.startsWith(
-      'https://plum.yaks.app/recipes/_preview/',
+  ok(
+    /^https:\/\/plum\.yaks\.app\/recipes\/~[a-z0-9]{12}\/$/.test(
+      String(changing.frames.draft),
     ),
-    true,
+    String(changing.frames.draft),
   )
   equal(changing.frames.live, 'https://plum.yaks.app/recipes/')
   // Released, they are the app itself again.

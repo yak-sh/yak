@@ -876,6 +876,15 @@ export type Row = MeteredRow & {
   inviting?: { hour?: string | null; sent?: number | null }
   referral_code?: { code: string }
   referral?: { inviter: Id; invitee: Id }
+  preview_link?: {
+    code: string
+    app: Id
+    space: Id
+    person: Id
+    draft: string
+    until: string
+    screen?: string | null
+  }
   rewarded?: {
     at: string
     space: Id
@@ -1410,6 +1419,35 @@ let lineOf = (r: Row): PhoneLine => {
     verification: l.verification ?? null,
     trashed: trashedOf(r),
   }
+}
+
+/** A draft's stored preview link, the directory's `preview_link` row: the
+ * code its address carries, what it shows, as whom and until when. */
+export type PreviewLink = {
+  eid: string
+  code: string
+  app: string
+  space: string
+  person: string
+  draft: string
+  until: string
+  screen: string | null
+}
+
+let linkOf = (r: Row | null | undefined): PreviewLink | null => {
+  let l = r?.preview_link
+  return l && r
+    ? {
+      eid: r.entity.eid,
+      code: l.code,
+      app: idOf(l.app),
+      space: idOf(l.space),
+      person: idOf(l.person),
+      draft: l.draft,
+      until: l.until,
+      screen: l.screen ?? null,
+    }
+    : null
 }
 
 /** One person who signed up through another's invite (referral.ts): who
@@ -3542,6 +3580,17 @@ export let directoryRows = (rows: {
         line`.written.app=${app.eid}&.order=-written.at&.limit=1&.written.at`,
       ))[0]?.entity.eid ?? null,
     // One open draft by its eid, with its app's; none once it is closed.
+    // A draft's stored preview link by the code its address carries
+    // (preview.ts `issued`), or null for none: revoked, or never made.
+    previewLink: async (code: string) =>
+      linkOf(
+        await one(line`.preview_link.code=${code}`),
+      ),
+    // The preview links that show a draft, by its eid: few, one a person, a
+    // screen and a window.
+    previewLinks: async (draft: string) =>
+      (await query(line`.preview_link.draft=${draft}`)).map(linkOf)
+        .filter((l): l is PreviewLink => !!l),
     draftAt: async (eid: string) => {
       let row = await one(line`.entity.eid=${eid}&.app_draft`)
       return row?.app_draft

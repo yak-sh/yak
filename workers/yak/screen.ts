@@ -28,7 +28,7 @@ import { writes } from '@yaks/member'
 import { type Directory, directory, idOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { linkOf, sealed } from './preview.ts'
+import { issued, linkOf } from './preview.ts'
 import { draftsOf } from './written.ts'
 import { opened, seal } from './lib/token.ts'
 import { sessionAt } from './session.ts'
@@ -264,7 +264,7 @@ export let showing = async (
     : undefined
   let { at } = open
     ? await linkOf(ctx, found.space, found.app, who, open, s.eid)
-    : await sealed(
+    : await issued(
       ctx,
       found.space,
       found.app,

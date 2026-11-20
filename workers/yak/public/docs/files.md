@@ -117,15 +117,15 @@ shows up to 30 problems and five review items, with remaining counts. Findings
 never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
-The URL is the draft's short link, `https://<space>.yaks.app/<app>/~<id>/`:
-`draft` names it, else this conversation's own, else your one open draft. It
-carries no credential: it opens for someone signed in who writes in the space,
-as themselves, and sends anyone else to sign in. Once the draft is released or
-discarded it leads to the app's own address. Each draft has a link and a branch
-of the app's store of its own, so several drafts preview side by side. The
-preview reads the app's live rows as they stood when the draft was first
-previewed, in the draft's vocabulary, and what its pages write stays on the
-draft's branch.
+The URL is the draft's short link, `https://<space>.yaks.app/<app>/~<code>/`:
+`draft` names it, else this conversation's own, else your one open draft. Anyone
+holding it opens the preview with no sign-in, on a TV or another device, until
+it expires, 12 to 24 hours after it was made; keep it to whom it is for. Once
+the draft is released it shows what was released, read-only. Each draft has a
+link and a branch of the app's store of its own, so several drafts preview side
+by side. The preview reads the app's live rows as they stood when the draft was
+first previewed, in the draft's vocabulary, and what its pages write stays on
+the draft's branch.
 
 Releasing the draft releases its files, vocabulary and worker; the rows its
 pages wrote stay on the branch, out of the live app, and the answer says how

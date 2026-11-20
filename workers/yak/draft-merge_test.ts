@@ -16,7 +16,6 @@ import { handler } from './kernel.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { KERNEL } from './meta.ts'
 import { asked, type Asking, DRAFT, settled } from './draft-merge.ts'
-import { sealedAt } from './preview-probe.ts'
 
 // What the space's Operator was asked (build.ts `/operator/ask`); the rest
 // of the builder is the platform's own.
@@ -88,7 +87,7 @@ let drafted = async (word: string, bundles: Bundle[]) => {
   })
   let out = await tools[0].run(ctx, { app: 'notes', screenshot: false })
   let res = await handler.fetch(
-    new Request(new URL('api/apply', await sealedAt(ctx, out)), {
+    new Request(new URL('api/apply', String(out.value!.url)), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ entities: bundles }),

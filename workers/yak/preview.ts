@@ -24,18 +24,12 @@
 import { stated } from './vocab.ts'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
-import {
-  copyFor,
-  redirect,
-  storeApi,
-  storing,
-  unwritten,
-  woven,
-} from './apps.ts'
+import { copyFor, storeApi, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
   appStore,
   directory,
+  type PreviewLink,
   releaseOf,
   type Space,
   url as appUrl,
@@ -61,24 +55,24 @@ import { configured } from './deploy_worker.ts'
 import { baseOf } from '@yaks/platform/woven'
 import { fileBytes, prefixOf } from './files.ts'
 import { spaceHost } from '@yaks/platform/host'
-import { route, signInAt } from '@yaks/platform/routes'
-import { writes } from '@yaks/member'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { COOKIE, opened, seal, sign } from './lib/token.ts'
+import { COOKIE, opened, sign } from './lib/token.ts'
 import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
 import { system } from '@yaks/fp'
+import { mint } from '@yaks/graph/identity'
 import { filesIn, staged } from './release.ts'
 import { loaded, pinned } from './seed.ts'
 import {
   admits,
   aimed,
   type Built,
+  codeOf,
   door,
   entered,
   LASTS,
   linkFor,
-  mountOf,
+  linkMount,
   outside,
   PRIVATE,
   reading,
@@ -86,9 +80,6 @@ import {
   resets,
   scriptOf,
   seeding,
-  shortened,
-  shortMount,
-  shortOf,
   shows,
   starting,
   stateOf,
@@ -98,7 +89,7 @@ import {
   viewer,
   within,
 } from '@yaks/platform/preview'
-import { vouched, type Who, whoIs } from './session.ts'
+import { vouched, type Who } from './session.ts'
 import { clock, headed } from './timing.ts'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
@@ -520,35 +511,48 @@ export let linkOf = async (
   return {
     draft,
     link: linkFor(app, draft),
-    ...await sealed(ctx, space, app, draft.eid, screen),
-    short: `https://${spaceHost(ctx.env, space.slug)}${
-      shortMount(app.slug, draft.eid)
-    }`,
+    ...await issued(ctx, space, app, draft.eid, screen),
   }
 }
 
 /** The link to a draft by its id alone, marking nothing: a draft no longer
- * open shows what was released (`target`). */
-export let sealed = async (
-  ctx: Pick<Ctx, 'env' | 'person'>,
+ * open shows what was released (`target`). It is a stored `preview_link`
+ * whose random code its address carries, for the caller (`ctx.person`) and
+ * the screen it is for, until the end of the window after this one
+ * (`until`): one already standing for them in that window is the same link,
+ * which a TV following it does not reload for, and a new one is written. */
+export let issued = async (
+  ctx: Pick<Ctx, 'env' | 'dir' | 'person'>,
   space: Space,
   app: App,
   of: string,
   screen?: string,
 ) => {
-  let ticket = await seal(
-    'preview',
-    {
-      app: app.eid,
-      space: space.eid,
-      person: ctx.person,
-      of,
-      exp: until((ctx.env.CLOCK ?? system).now()),
-      ...screen ? { screen } : {},
-    } satisfies Ticket,
-    ctx.env.SESSION_SECRET!,
+  let exp = until((ctx.env.CLOCK ?? system).now())
+  let at = new Date(exp * 1000).toISOString()
+  let held = (await ctx.dir.previewLinks(of)).find((l) =>
+    l.app == app.eid && l.person == ctx.person &&
+    l.screen == (screen ?? null) && Date.parse(l.until) == exp * 1000
   )
-  let mount = mountOf(app.slug, ticket)
+  let code = held?.code
+  if (!code) {
+    code = codeOf(crypto.getRandomValues(new Uint8Array(12)))
+    await ctx.dir.stamp({
+      entities: [{
+        entity: { eid: mint() },
+        preview_link: {
+          code,
+          app: app.eid,
+          space: space.eid,
+          person: ctx.person,
+          draft: of,
+          until: at,
+          ...screen ? { screen } : {},
+        },
+      }],
+    }, vouched({ person: ctx.person, role: null }))
+  }
+  let mount = linkMount(app.slug, code)
   return {
     mount,
     at: `https://${spaceHost(ctx.env, space.slug)}${mount}`,
@@ -760,18 +764,9 @@ export let preview = async (ctx: Ctx, args: Args) => {
     throw refuse('arguments', "draft: the id of one of the app's drafts")
   }
   let of = await shownDraft(ctx, space, app, who, args.draft as string)
-  let { draft, link, mount, at, short } = await linkOf(
-    ctx,
-    space,
-    app,
-    who,
-    of,
-  )
+  let { draft, link, mount, at } = await linkOf(ctx, space, app, who, of)
   await following(ctx, space, app, draft, link, mount, who)
-  // The person is handed the short link; the browser, signed in as nobody,
-  // opens the sealed one.
-  let url = short + path
-  let ticketed = at + path
+  let url = at + path
   let value: Record<string, unknown> = {
     url,
     draft: draft.eid,
@@ -787,9 +782,9 @@ export let preview = async (ctx: Ctx, args: Args) => {
       appUrl(space, app, ctx.env)
     }, the address to hand the person, not this draft's link.`
   let follows =
-    `The link opens for whoever writes in ${space.slug}, signed in. It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released, read-only. The link opens for at least ${
+    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released, read-only. The link opens for at least ${
       LASTS / 3600
-    } hours once opened. Each draft of the app has its own link and branch; discarding the draft drops its branch.${first}`
+    } hours; app_preview again gives a new one once it has expired, and anyone holding it can open it, so hand it only to whom it is for. Each draft of the app has its own link and branch; discarding the draft drops its branch.${first}`
   if (!screenshot) {
     return {
       text:
@@ -798,7 +793,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
       value,
     }
   }
-  let shot = await rendering(ctx, space, app, { url: ticketed, view })
+  let shot = await rendering(ctx, space, app, { url, view })
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
   return {
     text: shot.said(
@@ -816,48 +811,27 @@ let directoryAt = (env: Env) =>
     time: env.CLOCK,
   })
 
-// A draft's short link, `/<app>/~<id>/…` (T-1641). No credential rides in
-// it, so the visitor's own sign-in opens it, for someone who writes in the
-// space, as a link sealed for them now: its pages are served at that link's
-// mount, so their own requests, which a walled page sends with no cookie,
-// carry it. A draft no longer open sends them to the app's own address.
-let short = async (req: Request, env: Env): Promise<Response> => {
-  let url = new URL(req.url)
-  let at = shortened(url.pathname)
-  let { space: slug } = route(url.hostname, url.pathname, env)
-  if (!at || !slug || !env.SESSION_SECRET) return no()
-  let dir = directoryAt(env)
-  let space = await dir.space(slug)
-  if (!space || space.trashed) return no()
-  let [who, app] = await Promise.all([
-    whoIs(req, env, (person) => dir.role(space, person), space.eid, dir),
-    dir.app(space, at.app),
-  ])
-  if (!who.person) return redirect(signInAt(req.url, env), 303)
-  if (!app || app.trashed || !writes(who.role)) return no()
-  let of = (await draftsOf(dir, app)).find((d) => shortOf(d.eid) == at.id)
-  if (!of) {
-    return redirect(appUrl(space, app, env) + at.path.slice(1) + url.search)
+// What a stored link opens, read as a ticket would be (`admits`): none for
+// one revoked.
+let ticketOf = (l: PreviewLink | null): Ticket | null =>
+  l && {
+    app: l.app,
+    space: l.space,
+    person: l.person,
+    of: l.draft,
+    exp: Date.parse(l.until) / 1000,
+    ...l.screen ? { screen: l.screen } : {},
   }
-  let { mount } = await sealed(
-    { env, person: who.person },
-    space,
-    app,
-    of.eid,
-  )
-  return fetch(
-    new Request(new URL(mount + at.path.slice(1) + url.search, url), req),
-    env,
-  )
-}
 
 let target = async (req: Request, env: Env) => {
   let url = new URL(req.url)
   let aim = aimed(url.pathname)
   if (!aim || !env.SESSION_SECRET) return null
-  let ticket = await opened<Ticket>('preview', aim.ticket, env.SESSION_SECRET)
-  if (!ticket) return null
   let dir = directoryAt(env)
+  let ticket = aim.code
+    ? ticketOf(await dir.previewLink(aim.code))
+    : await opened<Ticket>('preview', aim.ticket!, env.SESSION_SECRET)
+  if (!ticket) return null
   let [found, paired, rows] = await Promise.all([
     dir.target(ticket.space, ticket.person, ticket.app),
     ticket.screen ? screenAt(dir, ticket.screen) : null,
@@ -921,7 +895,6 @@ let target = async (req: Request, env: Env) => {
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  if (shortened(new URL(req.url).pathname)) return short(req, env)
   let found = await target(req, env)
   if (!found) return no()
   let { dir, space, who, path, mount } = found

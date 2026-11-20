@@ -852,8 +852,36 @@ export let referralDoc: VocabDoc = {
     },
   },
 }
+// A draft's preview link (@yaks/platform/preview, workers/yak preview.ts):
+// the short random code its address carries, `/<app>/~<code>/`, and what the
+// link opens, as whom and until when. The code is the credential; deleting
+// the row revokes the link.
+export let previewDoc: VocabDoc = {
+  title: 'directory-preview',
+  reserved: false,
+  $defs: {
+    preview_link: {
+      description:
+        "A draft's preview link: the random code its address carries, the draft it shows, as whom, and until when. Deleting it revokes the link.",
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      properties: {
+        code: owned(unique(text)),
+        app: owned(ref('cascade')),
+        space: owned(ref('cascade')),
+        person: owned(ref('cascade')),
+        draft: owned({ ...text, index: true }),
+        until: owned(time),
+        screen: owned(text),
+      },
+    },
+  },
+}
 export let docs: VocabDoc[] = [
   directoryDoc,
+  previewDoc,
   referralDoc,
   sweepDoc,
   useDoc,

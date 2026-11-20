@@ -788,7 +788,7 @@ test("a newcomer's chat opens the app their Operator is making beside it, then i
   assertEquals(made(document).open.at(-1), 'screens')
   assertStringIncludes(
     document.querySelector('[data-frame]')!.getAttribute('src')!,
-    'https://clerk.yaks.app/recipes/_preview/',
+    'https://clerk.yaks.app/recipes/~',
   )
   page.leave()
 })

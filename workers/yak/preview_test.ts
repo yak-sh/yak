@@ -3,12 +3,11 @@ import { appStore, releaseOf, storeName } from './directory.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
-import { sealedAt as linked } from './preview-probe.ts'
-import { opened, seal } from './lib/token.ts'
-import { LASTS, type Ticket } from '@yaks/platform/preview'
+import { seal } from './lib/token.ts'
+import { LASTS, mountOf, type Ticket, until } from '@yaks/platform/preview'
 import { system } from '@yaks/fp'
 import { tools } from './preview-tools.ts'
-import { ADA, ADA_OWNS, as, SECRET, seeded } from './serving-data-probe.ts'
+import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -72,11 +71,9 @@ await run('app_files', {
     },
   ],
 })
-let sealedAt = (out: { value?: Record<string, unknown> }) => linked(ctx, out)
 let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-let url = await sealedAt(out)
-let mount = url.slice(0, url.indexOf('/_preview/') + '/_preview/'.length)
-let token = url.slice(mount.length).split('/')[0]
+let url = String(out.value!.url)
+let code = new URL(url).pathname.split('/')[2].slice(1)
 let app = (await dir.app(space, 'draft'))!
 let request = (path = '', init: RequestInit = {}) =>
   kernel(new Request(new URL(path, url), init), env)
@@ -214,55 +211,56 @@ test('a preview ticket never exposes server source or another app', async () => 
       .status,
     404,
   )
-  let tampered = token.slice(0, -1) + (token.endsWith('x') ? 'y' : 'x')
+  let tampered = code.slice(0, -1) + (code.endsWith('x') ? 'y' : 'x')
   equal(
-    (await kernel(new Request(url.replace(token, tampered)), env)).status,
+    (await kernel(new Request(url.replace(code, tampered)), env)).status,
     404,
   )
 })
 
-test('a link opens nothing once it expires, nor one sealed with no expiry', async () => {
+// The link is a short random code naming a stored row, opened with no
+// sign-in (a TV's, another device's); deleting the row revokes it.
+test('a link is a short code that opens with no sign-in until it expires, and opens nothing once its row is deleted', async () => {
+  ok(/^https:\/\/ada\.yaks\.app\/draft\/~[a-z0-9]{12}\/$/.test(url), url)
   let later = (ms: number) => ({ ...system, now: () => Date.now() + ms })
   let at = (CLOCK = system) => kernel(new Request(url), { ...env, CLOCK })
   equal((await at(later(LASTS * 1000 - 60_000))).status, 200)
   equal((await at(later(2 * LASTS * 1000))).status, 404)
-  let held = await opened<Ticket>('preview', token, SECRET)
-  let { exp: _, ...forever } = held!
-  let old = await seal('preview', forever, SECRET)
-  equal((await kernel(new Request(url.replace(token, old)), env)).status, 404)
+  let again = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  equal(again.value!.url, url)
+  let row = (await dir.previewLink(code))!
+  await dir.stamp({ entities: [{ entity: { eid: row.eid }, $delete: true }] })
+  equal((await at()).status, 404)
+  let next = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  ok(String(next.value!.url) != url)
+  url = String(next.value!.url)
+  code = new URL(url).pathname.split('/')[2].slice(1)
 })
 
-// A draft's short link carries no credential: the visitor's own sign-in
-// opens it, for someone who writes in the space, as the link sealed for them.
-test("a draft's short link opens for a signed-in writer, sends anyone signed out to sign in, and opens for nobody else", async () => {
-  let short = String(out.value!.url)
-  ok(/^https:\/\/ada\.yaks\.app\/draft\/~[0-9a-f]{8}\/$/.test(short), short)
-  let at = async (cookie: string | null, path = '') =>
-    await kernel(
-      new Request(new URL(path, short), cookie ? { headers: { cookie } } : {}),
-      env,
-    )
-  let page = await at(await as(ADA))
-  equal(page.status, 200)
-  let html = await page.text()
-  ok(html.includes('Private draft'), html)
-  ok(html.includes(`<base href="${new URL(url).pathname}">`), html)
-  equal(page.headers.get('cache-control'), 'private, no-store')
-  equal(
-    await (await at(await as(ADA), 'style.css')).text(),
-    'body { color: teal }',
+// A link made before links were stored: a sealed ticket in the address.
+test('a sealed ticket link still opens until it expires, and one sealed with no expiry opens nothing', async () => {
+  let ticket: Ticket = {
+    app: app.eid,
+    space: space.eid,
+    person: ADA,
+    of: String(out.value!.draft),
+    exp: until(Date.now()),
+  }
+  let sealed = await seal('preview', ticket, SECRET)
+  let res = await kernel(
+    new Request(`https://ada.yaks.app${mountOf('draft', sealed)}`),
+    env,
   )
-  let signedOut = await at(null)
-  equal(signedOut.status, 303)
-  ok(signedOut.headers.get('location')!.includes('login'))
-  let eli = 'e0000000-0000-4000-8000-000000000001'
-  await dir.apply(
-    { entities: [{ entity: { eid: eli }, person: {} }] },
-    ADA_OWNS,
+  equal(res.status, 200)
+  ok((await res.text()).includes('Private draft'))
+  let { exp: _, ...forever } = ticket
+  let old = await seal('preview', forever, SECRET)
+  let none = await kernel(
+    new Request(`https://ada.yaks.app${mountOf('draft', old)}`),
+    env,
   )
-  let stranger = await at(await as(eli))
-  equal(stranger.status, 404)
-  await stranger.body?.cancel()
+  equal(none.status, 404)
+  await none.body?.cancel()
 })
 
 test('a walled preview page gets the platform localStorage, kept in the preview store', async () => {
@@ -336,7 +334,7 @@ test('the link follows the draft: each write is told to its pages and served on 
   await run('app_deploy', { app: 'draft' })
   await write('style.css', 'body { color: plum }')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = await sealedAt(out)
+  let link = String(out.value!.url)
   let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   let page = await (await at()).text()
@@ -372,7 +370,7 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
     `render: (b, h) => h('p', null, '${word} ' + b.entity.eid) }])`
   await write('views.js', views('Soup'))
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = await sealedAt(out)
+  let link = String(out.value!.url)
   let sent = await heard(String(out.value!.draft))
   let { root, document, free } = stage()
   Object.defineProperty(document, 'baseURI', {
@@ -465,7 +463,7 @@ test("an app no release has seeded takes its draft's seed on the branch, and an 
   })
   await seed('seeded privately')
   let out = await tools[0].run(ctx, { app: 'sown', screenshot: false })
-  let link = await sealedAt(out)
+  let link = String(out.value!.url)
   let notes = async () =>
     (await (await kernel(
       new Request(new URL('api/query?q=.draft_note', link)),
@@ -481,7 +479,7 @@ test("an app no release has seeded takes its draft's seed on the branch, and an 
 test("an open link rides through its draft's release: its pages hear it and see what was released, and the next draft has a link of its own", async () => {
   await write('index.html', '<html><head></head><body>Before</body></html>')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
-  let link = await sealedAt(out)
+  let link = String(out.value!.url)
   let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   ok((await (await at()).text()).includes('Before'))
@@ -496,15 +494,6 @@ test("an open link rides through its draft's release: its pages hear it and see 
   let page = await at()
   equal(page.status, 200)
   ok((await page.text()).includes('Before'))
-  // Its short link, the draft closed, is the app's own address.
-  let gone = await kernel(
-    new Request(String(out.value!.url) + 'about/', {
-      headers: { cookie: await as(ADA) },
-    }),
-    env,
-  )
-  equal(gone.status, 302)
-  equal(gone.headers.get('location'), 'https://ada.yaks.app/draft/about/')
   // Released, the link reads the live rows and never writes them.
   equal((await at('api/query?q=.doc')).status, 200)
   let wrote = await kernel(
@@ -526,9 +515,9 @@ test("an open link rides through its draft's release: its pages hear it and see 
   ok((await (await at()).text()).includes('Before'))
   let then = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   equal(then.value!.draft, next[0])
-  ok(await sealedAt(then) != link)
+  ok(String(then.value!.url) != link)
   ok(
-    (await (await kernel(new Request(await sealedAt(then)), env)).text())
+    (await (await kernel(new Request(String(then.value!.url)), env)).text())
       .includes('After'),
   )
 })
@@ -552,8 +541,8 @@ test('two drafts of one app preview side by side, each at its own link on its ow
       screenshot: false,
     })
     return {
-      url: await sealedAt(out),
-      text: await (await kernel(new Request(await sealedAt(out)), env))
+      url: String(out.value!.url),
+      text: await (await kernel(new Request(String(out.value!.url)), env))
         .text(),
     }
   }
@@ -595,7 +584,7 @@ test('a draft keeps a platform word its app held before the platform declared it
   let shown = async (slug: string) => {
     await run('app_files', { app: slug, files: [vocab] })
     let out = await tools[0].run(ctx, { app: slug, screenshot: false })
-    return kernel(new Request(await sealedAt(out)), env)
+    return kernel(new Request(String(out.value!.url)), env)
   }
   equal((await shown('held')).status, 200)
   await throws(

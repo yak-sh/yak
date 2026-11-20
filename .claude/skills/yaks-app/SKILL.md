@@ -145,9 +145,11 @@ packages together (M-17).
   kernel, each waking Store included, would compile on start.
 - **Drafts**: a new app is made, not drafted: its first version is released at
   its own address. A draft (a change to a live app, or one of Several
-  directions) is handed as its short link, `/<app>/~<8 hex>/`, which a signed-in
-  writer opens through a ticket sealed for them (preview.ts `short`); an old
-  `_preview/<ticket>` link keeps opening until it expires.
+  directions) is handed as its link, `/<app>/~<code>/`: a random code naming a
+  directory `preview_link{code, app, space, person, draft, until, screen}` row,
+  opened with no sign-in (a TV, another device) until it expires, revoked by
+  deleting the row (preview.ts `issued`). An old `_preview/<ticket>` link keeps
+  opening until it expires.
 - **Previews**: yak-browser (`browser/`), the Worker behind BROWSER, renders a
   draft for app_preview with puppeteer and checks it with axe-core (`browser.ts`
   asks it; `browser/capture.ts` renders). Its own Worker for the same reason as

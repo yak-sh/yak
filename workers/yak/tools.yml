@@ -397,8 +397,9 @@ app_preview:
     previewed, in the draft's vocabulary, on a branch of its own, so preview
     edits never change released app data unless app_deploy merges them
     with rows: all. Each draft has its own short link,
-    <space>.yaks.app/<app>/~<id>/, which opens for whoever writes in the
-    space, signed in, so several drafts preview side by side: a page open
+    <space>.yaks.app/<app>/~<code>/, which opens with no sign-in (on a TV
+    or another device) until it expires, so hand it only to whom it is
+    for; several drafts preview side by side: a page open
     on one shows each file written to that draft, and once app_deploy
     releases it, what was released. A new app's first draft is released
     with app_deploy and its address handed over, not this link. screenshot: false returns only the URL without
