@@ -47,6 +47,7 @@ import { type Param, type Raw, raw, type Stmt } from './ast.ts'
 import {
   type BindOpts,
   type Census,
+  type Counts,
   crowded,
   type Heard,
   type Prepared,
@@ -85,6 +86,7 @@ type Asked =
   | { crowded: string; n: number; answer: boolean | undefined }
   | { numbered: string; answer: boolean | undefined }
   | { rarest: string[]; answer: string | undefined }
+  | { counts: string | undefined }
 type Kept = {
   sql: string
   params: (Param | Bind)[]
@@ -164,7 +166,10 @@ let recorded = (
 let choosing = (
   census: Census | undefined,
   log: Asked[],
-): Pick<Heard, 'walks' | 'sorts' | 'crowded' | 'numbered' | 'rarest'> =>
+): Pick<
+  Heard,
+  'walks' | 'sorts' | 'crowded' | 'numbered' | 'rarest' | 'counts'
+> =>
   census
     ? {
       walks: (comp, page) => {
@@ -190,6 +195,11 @@ let choosing = (
       rarest: (comps) => {
         let answer = rarest(census, comps)
         log.push({ rarest: comps, answer })
+        return answer
+      },
+      counts: () => {
+        let answer = census.counts?.()
+        log.push({ counts: tablesOf(answer) })
         return answer
       },
     }
@@ -223,10 +233,15 @@ let stands = (asked: Asked[], opts: BindOpts): boolean =>
       ? opts.census?.numbered?.(a.numbered) === a.answer
       : 'rarest' in a
       ? rarest(opts.census, a.rarest) === a.answer
+      : 'counts' in a
+      ? tablesOf(opts.census?.counts?.()) === a.counts
       : 'presence' in a
       ? !!opts.archetypes && alike(opts.archetypes(a.presence), a.ids)
       : opts.archetypes?.held === a.held
   )
+
+// The tables a census's counts name, as one comparable answer.
+let tablesOf = (c: Counts | undefined) => c && `${c.population} ${c.membership}`
 
 let agree = (a: Asked[], b: Asked[]) =>
   a.length == b.length && a.every((x, i) => {
@@ -245,6 +260,8 @@ let agree = (a: Asked[], b: Asked[]) =>
       : 'rarest' in x
       ? 'rarest' in y && x.rarest.join() == y.rarest.join() &&
         x.answer === y.answer
+      : 'counts' in x
+      ? 'counts' in y && x.counts === y.counts
       : 'presence' in x
       ? 'presence' in y && alike(x.ids, y.ids) &&
         JSON.stringify(x.presence) == JSON.stringify(y.presence)

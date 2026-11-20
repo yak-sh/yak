@@ -383,6 +383,12 @@ export let census = (driver: Driver): Census => ({
     if (!at.numbered.has(comp)) at.numbered.set(comp, numbering(driver, comp))
     return at.numbered.get(comp)
   },
+  // A count gone stale chooses a road badly and answers nothing.
+  counts: () => {
+    let at = counted(driver)
+    if (!(at.kept ??= kept(driver))) return
+    return { population: POPULATION, membership: MEMBERSHIP }
+  },
 })
 
 /** A presence-only entity policy selects whole buckets. Value-based policies

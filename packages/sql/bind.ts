@@ -90,6 +90,7 @@ import {
   exists,
   type Expr as Cond,
   FALSE,
+  fn,
   type Frag,
   from,
   gt,
@@ -209,6 +210,28 @@ export type BindOpts = {
   stable?: boolean
 }
 
+/** The tables a store keeps its counts in: `population(archetype, n)` and
+ * `membership(component, archetype)`. */
+export type Counts = { population: string; membership: string }
+
+/** How many entities hold `comp`, as a statement reads it: the sum of its
+ * archetypes' counts where the store keeps them, a few rows, and otherwise a
+ * count of its table, which a Durable Object bills a row for each row held. */
+let headcount = (ctx: Ctx, comp: string, stored: string): Select => {
+  let kept = ctx.counts?.()
+  return kept
+    ? select({
+      cols: [fn('coalesce', fn('sum', col('n', 'p')), lit(0))],
+      from: table(kept.membership, 'm'),
+      joins: [{ how: 'cross', src: table(kept.population, 'p') }],
+      where: and(
+        eq(col('component', 'm'), lit(comp)),
+        eq(col('archetype', 'p'), col('archetype', 'm')),
+      ),
+    })
+    : select({ cols: [count()], from: raw(stored) })
+}
+
 /** What a store counts of itself, read only when a plan asks: how many
  * entities hold a component (`undefined` when the store keeps no count), the
  * entity table's largest id, and, for a store that keeps no count, whether a
@@ -220,6 +243,11 @@ export type Census = {
   largest: () => number
   exceeds?: (comp: string, n: number) => boolean
   numbered?: Numbered
+  /** Where the store keeps each archetype's count and which components each
+   * archetype holds, for a statement to read how many entities hold a
+   * component from a few counts rather than counting its table; `undefined`
+   * when it keeps none. */
+  counts?: () => Counts | undefined
 }
 
 /** Whether any entity holding `comp` has a number, as the store tells it:
@@ -426,6 +454,8 @@ type Ctx = {
   archetypes?: ArchetypeSet
   /** whether the statement keeps the deleted too (`BindOpts.graves`) */
   graves?: boolean
+  /** where the store keeps its counts (`Census.counts`) */
+  counts?: () => Counts | undefined
   /** whether a page of a component's owners walks the EID index (`walks`) */
   walks?: Walks
   /** whether a tested page in an indexed order sorts a component's owners
@@ -3669,14 +3699,15 @@ let indexedRelation = (
         ),
       )
       // Compare physical keys before reading content or visibility. The
-      // range stops after the component population plus one; COUNT(*) on
-      // the bare component uses SQLite's B-tree count, with no row decoding.
+      // range stops after the component population plus one, read from the
+      // store's counts: a COUNT(*) of the component walks its whole table,
+      // billed a row for each row in a Durable Object.
       dense = not(exists(select({
         cols: [lit(1)],
         from: raw(src),
         where: range,
         limit: lit(1),
-        offset: sub(select({ cols: [count()], from: raw(stored) })),
+        offset: sub(headcount(ctx, present, stored)),
       })))
     }
     return roads(ctx, s, from, root.comp, page, [
@@ -3855,6 +3886,7 @@ export type Heard = Pick<BindOpts, 'archetypes' | 'extend'> & {
   crowded?: Crowded
   numbered?: Numbered
   rarest?: Rarest
+  counts?: () => Counts | undefined
 }
 
 export let prepared = (
@@ -3962,6 +3994,7 @@ export let prepared = (
     identities: new WeakMap(),
     archetypes: spine ? undefined : heard.archetypes,
     graves: opts.graves,
+    counts: heard.counts ?? opts.census?.counts,
     walks: heard.walks ??
       (opts.census && ((comp, page) => walks(opts.census, comp, page))),
     sorts: heard.sorts ??
@@ -6168,6 +6201,7 @@ let visible = (
       crowded: heard.crowded,
       numbered: heard.numbered,
       rarest: heard.rarest,
+      counts: heard.counts,
     },
     fields,
   )

@@ -13,6 +13,7 @@ export {
   bind,
   type BindOpts,
   type Census,
+  type Counts,
   crowded,
   type Numbered,
   type Rarest,

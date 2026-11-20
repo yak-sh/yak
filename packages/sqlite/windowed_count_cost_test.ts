@@ -40,6 +40,9 @@ for (let i = 0; i < 10; i++) {
   }], { now: hour(i * 5) })
 }
 while (store.analyze(1));
+// A first count of everything has the store keep its populations, which the
+// choice of road reads in place of counting a component's table.
+store.rows('.count')
 
 let cases: [string, number, number][] = [
   [`.ask .created.at>=${hour(1)} .count`, 9, 2_000],
