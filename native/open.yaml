@@ -1,11 +1,16 @@
-# iOS asks before a link opens another app: "Open in “Expo Go”?"
+# iOS asks before a link opens another app: "Open in “Expo Go”?". A tap can
+# land before the ask takes it, or as it goes, so it is pressed until gone.
 appId: host.exp.Exponent
 ---
-- runFlow:
-    when:
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    while:
       visible: Open
+    times: 5
     commands:
-      # The ask can go as the tap lands; the link opened all the same.
       - tapOn:
           text: Open
           optional: true
+      - waitForAnimationToEnd:
+          timeout: 3000
