@@ -183,16 +183,24 @@ export let reserved = once((): string[] =>
 let OWN = 12
 /** Where a word of the caller's own comes from, ending a refusal of one the
  * app's store does not speak. `own` is what the app's vocab.json declares,
- * said when there are few enough to read at a glance. */
-export let teach = (env: Host = {}, own?: string[]) =>
-  " — the app's vocab.json does not declare it" +
-  (own && own.length <= OWN
-    ? own.length
-      ? ` (it declares ${own.map((c) => `.${c}`).join(', ')})`
-      : ' (it declares no components yet)'
-    : '') +
-  `. Declare it there, like ${EXAMPLE}, and deploy the app with app_deploy ` +
-  `to install it · how to declare one: call guide with page components, or ${
+ * said when there are few enough to read at a glance. An app never deployed
+ * (`released` false) holds none of its words yet, whatever its draft
+ * declares: app_deploy installs them. */
+export let teach = (env: Host = {}, own?: string[], released = true) =>
+  (released
+    ? " — the app's vocab.json does not declare it" +
+      (own && own.length <= OWN
+        ? own.length
+          ? ` (it declares ${own.map((c) => `.${c}`).join(', ')})`
+          : ' (it declares no components yet)'
+        : '') +
+      `. Declare it there, like ${EXAMPLE}, and deploy the app with ` +
+      'app_deploy to install it'
+    : ' — the app has not been deployed yet, so none of the words its ' +
+      'vocab.json declares are installed: app_deploy installs them. A word ' +
+      `the draft's vocab.json does not declare yet is declared there first, ` +
+      `like ${EXAMPLE}`) +
+  ` · how to declare one: call guide with page components, or ${
     url(env, '/docs.md')
   }`
 

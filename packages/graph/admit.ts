@@ -167,6 +167,10 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
     return [out]
   })
 
+/** How the refusal of an undeclared component ends: said once, or as each
+ * refusal is made. */
+export type Teach = string | (() => string)
+
 /**
  * The admit phase: every bundle in the batch, reduced to what this caller may
  * write, or refused if it names a component or property this graph's
@@ -182,7 +186,7 @@ export let admit = (
   bundles: Bundle[],
   vocab: Vocab,
   trusted = false,
-  teach?: string,
+  teach?: Teach,
   replica = false,
   restored?: Restored,
 ): Bundle[] => {
@@ -192,7 +196,11 @@ export let admit = (
       if (!reserved(k) && !vocab.comp(k)) alien.add(k)
     }
   }
-  if (alien.size) throw new Misfit(unknownComps([...alien], teach))
+  if (alien.size) {
+    throw new Misfit(
+      unknownComps([...alien], typeof teach == 'function' ? teach() : teach),
+    )
+  }
   if (!trusted) unstamped(bundles, vocab, restored)
   return bundles.flatMap((b) => {
     // The identity's stamps are the store's, and arrive only with an

@@ -93,6 +93,7 @@ import { vouched, type Who } from './session.ts'
 import { clock, headed } from './timing.ts'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
+import { misfit } from '@yaks/graph/errors'
 import { addressed } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 import { unbase64 } from './bytes.ts'
@@ -167,9 +168,45 @@ let page = (value: unknown) => {
   return path
 }
 
+/** Why the preview's store refused what a draft's file `from` gave it: the
+ * store's own message, and, where the refusal is a misfit (@yaks/graph
+ * `Misfit`), that the file names a word the draft's vocabulary does not
+ * declare, or a value of another type than the word's.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   storeSaid('seed.json', '{"error":"Refused","message":"unknown component: note","misfit":true}'),
+ *   'seed.json does not fit the draft’s vocabulary: unknown component: note. ' +
+ *     'A misfit is a component or property the vocab file does not declare, ' +
+ *     'or a value of another type than it declares: declare it there, or ' +
+ *     'change seed.json to the words it declares',
+ * )
+ * assertEquals(
+ *   storeSaid('vocab.yml', '{"error":"Refused","message":"a name is held"}'),
+ *   'vocab.yml was refused: a name is held',
+ * )
+ * assertEquals(storeSaid('vocab.yml', 'gone'), 'vocab.yml was refused: gone')
+ * ```
+ */
+export let storeSaid = (from: string, text: string): string => {
+  let said: { message?: unknown; misfit?: unknown } = {}
+  try {
+    said = JSON.parse(text) ?? {}
+  } catch { /* a body that is not JSON is the message itself */ }
+  let message = typeof said.message == 'string' ? said.message : text
+  return misfit(said)
+    ? `${from} does not fit the draft’s vocabulary: ${message}. A misfit is ` +
+      'a component or property the vocab file does not declare, or a value ' +
+      `of another type than it declares: declare it there, or change ${from} ` +
+      'to the words it declares'
+    : `${from} was refused: ${message}`
+}
+
 let post = (
   store: ReturnType<typeof appStore>,
   path: string,
+  from: string,
   value: unknown,
   who: Who,
   headers: Record<string, string> = {},
@@ -177,12 +214,7 @@ let post = (
   store.consume(
     path,
     async (res) => {
-      if (!res.ok) {
-        throw rejected(
-          res.status,
-          `preview ${path}: ${await res.text()}`,
-        )
-      }
+      if (!res.ok) throw rejected(res.status, storeSaid(from, await res.text()))
       await res.arrayBuffer()
     },
     { method: 'POST', body: JSON.stringify(value) },
@@ -226,9 +258,10 @@ let previewing = (
 
 /** The branches of the app's store a draft's preview is given (written.ts
  * `previewed`). One is made on a draft's first preview (graph.ts
- * `#branching`): the store's first branch turns its versions on, and one
- * still taking its live rows as their first versions makes none yet, which
- * is said for the caller to try again. One another preview of the draft
+ * `#branching`): the store's first branch turns its versions on, and waits
+ * while its live rows become their first versions; one that would wait past
+ * that bound makes none yet, which is said for the caller to try again. One
+ * another preview of the draft
  * stamped first is dropped, and a drop that fails is reported, since the
  * preview already has its branch. */
 export let branches = (env: Env, space: Space, app: App): Branches => ({
@@ -249,8 +282,9 @@ let branching = (env: Env, space: Space, app: App) =>
         await res.body?.cancel()
         throw refuse(
           'unavailable',
-          `${space.slug}/${app.slug} is getting its live rows ready to ` +
-            'preview drafts on; try again in a minute',
+          `${space.slug}/${app.slug} is still keeping its live rows as ` +
+            'versions to preview drafts on, past what one call waits for; ' +
+            'try again in a minute',
         )
       }
       if (!res.ok) throw new Error(`branch: ${res.status} ${await res.text()}`)
@@ -374,7 +408,9 @@ let built = async (
     let held = Object.keys(
       (await declarationOf(ctx.env, space, app)).vocab.$defs ?? {},
     )
-    await post(store, '/vocab', doc, who, { [ACCEPTED]: JSON.stringify(held) })
+    await post(store, '/vocab', vocabFile, doc, who, {
+      [ACCEPTED]: JSON.stringify(held),
+    })
   }
   // The rows a release would seed: only an app no release has seeded yet
   // takes its seed files (tools.ts `willSeed`), and its draft's branch with it.
@@ -386,7 +422,9 @@ let built = async (
         text: decode(await read(path)) ?? '',
       }))),
     )
-    if (seed.length) await post(store, '/apply', pinned(seed, link), who)
+    if (seed.length) {
+      await post(store, '/apply', seeds.join(', '), pinned(seed, link), who)
+    }
   }
   await files.files.put(
     `${source}/${RECORD}`,

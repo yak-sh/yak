@@ -110,6 +110,41 @@ test('a trashed branch is hidden and returns with its writes on restore', () => 
   equal(titles(recovered.body.rows), ['drafted', 'new'])
 })
 
+test('a store with more live rows than one pass takes still makes its first branch in one call', async () => {
+  let big = await ownedBy(dir, 'branch-owner', 'branching-big')
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$app' },
+      app: {
+        slug: 'big',
+        version: 1,
+        space: big.eid,
+        store: 'branching-big/big.123456',
+        access: 'public',
+      },
+      doc: { title: 'Big' },
+    }],
+  })
+  let bigApp = (await dir.app(big, 'big'))!
+  await declared(p.env, big, bigApp)
+  let at = storeOf(p.env.STORE, storeName(big, bigApp), {
+    eid: bigApp.eid,
+    access: 'public',
+  })
+  // More than one pass takes: SEEDS pages of 512 (graph.ts `#seeding`).
+  let rows = Array.from({ length: 4_200 }, (_, n) => ({
+    entity: { eid: crypto.randomUUID() },
+    doc: { title: `row ${n}` },
+  }))
+  let wrote = await at('/apply', {
+    method: 'POST',
+    body: JSON.stringify(rows),
+  }, KERNEL)
+  equal(wrote.status, 200, await wrote.text())
+  let made = await at('/branches', { method: 'POST', body: '{}' }, KERNEL)
+  equal(made.status, 201, await made.text())
+})
+
 test('a branch door is the kernel’s alone', async () => {
   let r = await ask('/branches', {}, {})
   ok(r.status >= 400, String(r.status))

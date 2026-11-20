@@ -105,7 +105,7 @@ import type {
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { deriving, identified } from './identity.ts'
 import { mint as fresh, minted } from './mint.ts'
-import { admit, formed, known, unstamped } from './admit.ts'
+import { admit, formed, known, type Teach, unstamped } from './admit.ts'
 import { knownOptions, Refused, type Where } from './errors.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
@@ -314,8 +314,9 @@ export type Options = {
   /** how a refusal of a component this vocabulary does not declare ends: where
    * a caller's own word would come from, for a graph whose callers declare
    * words of their own (default: that nothing this vocabulary was loaded from
-   * declares it; @yaks/vocab `unknownComps`) */
-  teach?: string
+   * declares it; @yaks/vocab `unknownComps`), or a function saying it as
+   * the refusal is made, for a graph whose callers' words change with it */
+  teach?: Teach
   /** which declared rules run on a batch (default: every one but a page's
    * own, ./declared.ts `own`). A page decides for itself, since it holds only
    * part of the graph (@yaks/client). */

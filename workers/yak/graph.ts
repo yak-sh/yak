@@ -736,6 +736,9 @@ let ANALYSES = 50
 // (`#seeding`): each fits a window's share on its own, and the alarm comes
 // back for the rest.
 let SEEDS = 8
+// The longest a first branch waits on its store's first versions (`#seeded`):
+// a store of tens of thousands of rows, taking pages every PAUSE.
+let SEEDED = 20_000
 
 /// due([], 0) -> null
 /// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:05.000Z' } }], 0) -> 5000
@@ -1865,7 +1868,9 @@ export class Store extends Durable {
           clock: clockOf(this.#time),
           report: (error, { phase, plugin }) =>
             defect(error, { request: `${plugin} ${phase}`, store: name }),
-          ...(own ? {} : { teach: teach(this.#bind) }),
+          ...(own ? {} : {
+            teach: () => teach(this.#bind, undefined, this.#released()),
+          }),
           plugins: [
             ...(meta && this.#bind.SERVING_COPY
               ? [{
@@ -3532,6 +3537,10 @@ export class Store extends Durable {
     )
   }
 
+  // Whether the app this store holds has a release: one never deployed is
+  // told release 0 (directory.ts `releaseOf`), and holds no words of its own.
+  #released = () => (this.#get('release') ?? '0') != '0'
+
   // The Worker version this object runs under, which is a platform store's
   // release (`#select`).
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
@@ -3573,6 +3582,24 @@ export class Store extends Durable {
     return wait && Number.isFinite(wait) ? this.#now() + wait : this.#soon()
   }
 
+  // The live rows all taken as their first versions, for a first branch: the
+  // request takes pages itself (`#seeding`), resting between them as the
+  // alarm would, for up to SEEDED. A store whose pages wait longer, on a
+  // window's rows, is left to its alarm, and the branch refused for now.
+  #seeded = async () => {
+    let until = this.#now() + SEEDED
+    for (let next = await this.#seeding(); next != null;) {
+      if (next > until) {
+        await this.#arm(next, 'versions')
+        throw new Unseeded()
+      }
+      await new Promise<void>((r) =>
+        clockOf(this.#time).after(Math.max(0, next! - this.#now()), r)
+      )
+      next = await this.#seeding()
+    }
+  }
+
   // An app store's branches (@yaks/sqlite `branches`), for the kernel alone:
   // `/branches` lists them (GET, `?trash=true` for trash) and makes one
   // (POST); `/branches/<id>` trashes one (DELETE), `restore` returns it
@@ -3580,8 +3607,9 @@ export class Store extends Durable {
   // fork, `query` (POST `{query}`) reads on it, `apply` (POST `{bundles}`)
   // writes on it, as the kernel's own writes are, and `merge` (POST
   // `{picks}`) writes what it changed to main (`#merging`). A store's
-  // first branch turns its versions on (`#versionsOn`); until its live rows
-  // are all versions it makes none, and answers 503 with `retry-after`.
+  // first branch turns its versions on (`#versionsOn`), and waits while its
+  // live rows become versions (`#seeded`); one that would wait longer makes
+  // none, and answers 503 with `retry-after`.
   #branching = async (request: Request, path: string): Promise<Response> => {
     let missing = () => json({ error: 'NotFound', message: 'no route' }, 404)
     if (storeKind(this.#name() ?? '') != 'app') return missing()
@@ -3600,11 +3628,7 @@ export class Store extends Durable {
         }
         if (method != 'POST') return missing()
         await this.#versionsOn()
-        let left = await this.#seeding()
-        if (left != null) {
-          await this.#arm(left, 'versions')
-          throw new Unseeded()
-        }
+        await this.#seeded()
         return json({ branch: await this.#graph.branches!.make() }, 201)
       }
       let branches = this.#graph.branches
@@ -5867,7 +5891,8 @@ export class Store extends Durable {
         !said.message!.includes(url(this.#bind, '/docs.md'))
       ? Response.json({
         ...said,
-        message: said.message + teach(this.#bind, own),
+        message: said.message +
+          teach(this.#bind, own, this.#released()),
       }, {
         status: answer.status,
         headers: answer.headers,

@@ -679,9 +679,10 @@ let edits = (a: string, b: string): number => {
 
 /**
  * The names closest to a word nothing declares, best first and at most
- * `most`: a slip (within a third of the word in edits) or a name that opens
- * with the other. With `fallback`, return the closest names even when none
- * looks like a slip.
+ * `most`: a slip (within a third of the word in edits), a name that opens
+ * with the other, or one holding the word as a part of its snake_case name,
+ * ranked as a one-letter slip. With `fallback`, return the closest names even
+ * when none looks like a slip.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -692,6 +693,10 @@ let edits = (a: string, b: string): number => {
  * ])
  * assertEquals(nearest('individual', ['individuals', 'doc']), ['individuals'])
  * assertEquals(nearest('sandwich', ['recipe', 'doc']), [])
+ * assertEquals(nearest('letter', ['meter', 'outreach_letter', 'doc']), [
+ *   'outreach_letter',
+ *   'meter',
+ * ])
  * ```
  */
 export let nearest = (
@@ -704,7 +709,8 @@ export let nearest = (
   let opens = (a: string, b: string) => b.length >= 3 && a.startsWith(b)
   let ranked = names.filter((name) => name != word).map((name) => {
     let n = name.toLowerCase()
-    let d = edits(w, n)
+    let part = w.length >= 3 && n.split('_').includes(w)
+    let d = part ? 1 : edits(w, n)
     let near = d <= Math.max(1, Math.floor(w.length / 3)) || opens(w, n) ||
       opens(n, w)
     return { name, d, near }
