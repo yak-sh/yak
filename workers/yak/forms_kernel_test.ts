@@ -34,12 +34,6 @@ await agent.tool('app_files', {
   path: 'index.html',
   content: '<h1>Ordinary page</h1>',
 })
-await agent.tool('app_files', {
-  app,
-  op: 'write',
-  path: 'wrangler.jsonc',
-  content: '{"assets": {"not_found_handling": "single-page-application"}}',
-})
 await agent.tool('app_deploy', { app })
 let form = crypto.randomUUID(), question = crypto.randomUUID()
 let notify = crypto.randomUUID(), member = crypto.randomUUID()
@@ -535,10 +529,6 @@ await agent.tool('app_files', {
   app: gallery,
   files: [
     { path: 'index.html', content: '<h1>Directory</h1>' },
-    {
-      path: 'wrangler.jsonc',
-      content: '{"assets": {"not_found_handling": "single-page-application"}}',
-    },
     {
       path: 'seed.json',
       content: JSON.stringify([{

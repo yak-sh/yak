@@ -27,10 +27,10 @@ export type Serving = { main?: string; assets?: Assets }
 export let WORKER = 'worker.js'
 
 // A path whose last segment names no file type is a page's address, not a
-// file's: `/about` may be about.html, and in an app that declares
-// `single-page-application` a path behind no page at all is a route,
-// `/recipes/42` asking the app's index.html to open at a place. Anything with
-// an extension is a file, and a missing stylesheet must never answer HTML.
+// file's: `/about` may be about.html, and a path behind no page at all is a
+// route (T-32769), `/recipes/42` asking the app's index.html to open at a
+// place. Anything with an extension is a file, and a missing stylesheet must
+// never answer HTML.
 /// pretty('/about') -> true
 /// pretty('/app.css') -> false
 export let pretty = (path: string): boolean =>
@@ -75,11 +75,12 @@ export type Found = { path: string; file: Loaded; status: 200 | 404 }
  * its slash is sent to it (`{to}`), so about/index.html's relative URLs
  * resolve inside about/. A page that is not there follows the app's
  * `assets.not_found_handling`: `single-page-application` answers a route its
- * index.html, unless the path repeats itself (`looped`), `404-page` the
- * nearest 404.html answered 404, `none` a plain 404. Unset, and for a looped
- * route, the root's 404.html answers 404, else a plain 404: an address the
- * app does not serve is not a page, so a crawler following relative links
- * from it stops at its first step. `load` reads a path of the folder.
+ * index.html, `404-page` the nearest 404.html answered 404, `none` a plain
+ * 404. Unset, the root's 404.html answers 404, and without one a route
+ * answers index.html. In every mode a path that repeats itself (`looped`) is
+ * no route: the root's 404.html answers it 404, else a plain 404, so a
+ * crawler following relative links from a route stops at its first loop.
+ * `load` reads a path of the folder.
  */
 export let resolve = async (
   path: string,
@@ -104,11 +105,11 @@ export let resolve = async (
     return { to: `${encodeURIComponent(path.split('/').pop()!)}/` }
   }
   if (notFound == 'none' || !page(path)) return null
-  if (notFound == 'single-page-application' && !looped(path)) {
-    return pretty(path) ? await first(['/index.html']) : null
-  }
   if (notFound == '404-page') return await first(nearest(path), 404)
-  return await first(['/404.html'], 404)
+  let route = async () => pretty(path) ? await first(['/index.html']) : null
+  if (looped(path)) return await first(['/404.html'], 404)
+  if (notFound == 'single-page-application') return await route()
+  return await first(['/404.html'], 404) ?? await route()
 }
 
 // A route that repeats itself, a segment twice in a row or a pair of segments

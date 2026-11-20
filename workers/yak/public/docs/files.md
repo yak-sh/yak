@@ -283,9 +283,11 @@ Every HTML file is a page, at the URL a static host would give it:
     docs/index.html     /<app>/docs/ (and /<app>/docs is sent there)
     404.html            any page that is not there, answered 404
 
-A path with no file behind it is not a page: it answers the root's `404.html`
-with 404, or a plain 404 without one. A page that renders its own routes from
-`location.pathname`, `/<app>/recipes/42`, declares it (below). A missing
+A path with no file behind it and no extension, `/<app>/recipes/42`, is a route:
+without a `404.html` the app's `index.html` answers it, so a page that renders
+its own routes opens at that URL. A path that repeats itself, a segment twice in
+a row or a pair of segments twice (`/recipes/new/recipes/new`), is no route: it
+answers the root's `404.html`, or a plain 404, in every mode. A missing
 stylesheet, script or picture is a 404, never a page.
 
 **Choosing the response for a missing page.** A `wrangler.jsonc` beside
@@ -293,17 +295,15 @@ stylesheet, script or picture is a 404, never a page.
 
     { "assets": { "not_found_handling": "single-page-application" } }
 
-- `"single-page-application"`: a path with no extension and no file answers
-  `index.html` with 200, even when a `404.html` exists. A path that repeats
-  itself, a segment twice in a row or a pair of segments twice
-  (`/recipes/new/recipes/new`), is the default's 404 instead: that is relative
-  links followed from a route, never a place the app means.
+- `"single-page-application"`: a route answers `index.html` with 200, even when
+  a `404.html` exists.
 - `"404-page"`: the nearest `404.html` answers 404, looking in the missing
   page's folder and then each folder above it; with none, a plain 404.
 - `"none"`: a plain 404.
 
-When it is unset, the default above applies: the root's `404.html`, else a
-plain 404. A missing file with an extension is a 404 in every mode.
+When it is unset, the default above applies: the root's `404.html`, else
+`index.html` for a route. A missing file with an extension is a 404 in every
+mode.
 
 **Redirects.** A `_redirects` file beside `index.html`, in Cloudflare's own
 format, sends a page's old address to its new one. Each line is a rule,

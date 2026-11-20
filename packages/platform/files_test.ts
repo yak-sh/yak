@@ -14,22 +14,21 @@ let at = async (mode: NotFound | undefined, path: string, files = all) => {
   return got && 'path' in got ? [got.path, got.status] : got
 }
 
-test('unset answers the root 404.html, else a plain 404', async () => {
+test('unset keeps the root 404.html, then index.html for a route', async () => {
   equal(await at(undefined, '/x/y'), ['404.html', 404])
-  equal(await at(undefined, '/x/y/', ['/index.html']), null)
+  equal(await at(undefined, '/x/y', ['/index.html']), ['index.html', 200])
 })
 
 test('single-page-application answers a route index.html with 200', async () => {
   equal(await at('single-page-application', '/x/y'), ['index.html', 200])
-  equal(await at('single-page-application', '/u/1/f/1/', ['/index.html']), [
-    'index.html',
-    200,
-  ])
 })
 
-test('single-page-application answers a route that repeats itself 404', async () => {
-  equal(await at('single-page-application', '/a/b/c/a/b'), ['404.html', 404])
-  equal(await at('single-page-application', '/a/a/', ['/index.html']), null)
+test('a route that repeats itself answers 404 in every mode', async () => {
+  for (let m of [undefined, 'single-page-application'] as const) {
+    equal(await at(m, '/a/b/c/a/b'), ['404.html', 404])
+    equal(await at(m, '/a/a/', ['/index.html']), null)
+    equal(await at(m, '/u/1/f/1/', ['/index.html']), ['index.html', 200])
+  }
 })
 
 test('404-page answers the nearest 404.html, else a plain 404', async () => {
