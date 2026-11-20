@@ -75,5 +75,8 @@ test('nobody forgets or moves another member’s private memory', async () => {
 test('a member forgets their own memory and a shared one', async () => {
   await ask(ada, 'memory_forget', { id: hive })
   await ask(bea, 'memory_forget', { id: demo })
-  equal((await store.g.read(line`.memory&.entity.eid=${hive},${demo}`)).length, 0)
+  equal(
+    (await store.g.read(line`.memory&.entity.eid=${hive},${demo}`)).length,
+    0,
+  )
 })
