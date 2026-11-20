@@ -495,6 +495,93 @@ let servers = async (
   )
 }
 
+/** Where a space's Operator is reached on a chat platform, as its page's
+ * side shows it (talk-sidebar.ts): a server one of its connections serves
+ * ({@link serves}), by the name the platform gives it where it said one,
+ * the room it hears in full there (`chat_hears`), if that room is in it, and
+ * the address that opens them. */
+export type Place = {
+  platform: string
+  server?: string
+  room?: string
+  href: string
+}
+
+/** A platform yaks.app keeps a bot on that a space has not added it to yet:
+ * `integration` adds it, still in its service's testing mode where
+ * `testing`. */
+export type Unset = { platform: string; integration: string; testing?: boolean }
+
+/** Every place `space`'s Operator is reached on a chat platform, and the
+ * platforms where it is not yet ({@link Place}, {@link Unset}). A server its
+ * bot is no longer in is left out; one the platform could not name now is
+ * shown unnamed. */
+export let reached = async (
+  env: Env,
+  space: string,
+  rows?: Awaited<ReturnType<typeof chatRows>>,
+): Promise<{ places: Place[]; unset: Unset[] }> => {
+  let { botFrom, caught, chatRows, ctxOf, directoryOf, keyed, seeds } =
+    await need()
+  let connections = rows ?? await chatRows(directoryOf(env.STORE), space)
+  let ctx = ctxOf(env)
+  let failed = (request: string) => (e: unknown) => {
+    caught(e, { request })
+    return undefined
+  }
+  let each = await Promise.all([...PLATFORMS.values()].map(async (p) => {
+    let theirs = connections.filter(({ integration }) =>
+      integration.chat == p.name
+    )
+    if (!theirs.length) {
+      let bot = seeds().find((i) => i.chat == p.name && !keyed(i))
+      return bot && await platformBot(env, p.name)
+        ? {
+          places: [],
+          unset: [{
+            platform: p.title,
+            integration: bot.name,
+            ...bot.testing ? { testing: true } : {},
+          }],
+        }
+        : { places: [], unset: [] }
+    }
+    let { link } = p
+    if (!link) return { places: [], unset: [] }
+    let places = await Promise.all(theirs.map(async ({ row, integration }) => {
+      let token = await botFrom(ctx, row, integration)
+        .catch(failed(`${p.name} bot`))
+      let hears = comp(row, HEARS).room
+      return await Promise.all(
+        serves(row).map(async (server) => {
+          let [name, room] = token
+            ? await Promise.all([
+              p.serverName?.(token, server).catch(failed(`${p.name} server`)),
+              hears && p.rooms
+                ? p.rooms(token, server).then((rs) =>
+                  rs?.find((r) => roomEid(p.name, r.id) == hears)
+                ).catch(failed(`${p.name} rooms`))
+                : undefined,
+            ])
+            : []
+          if (name === null) return []
+          return [{
+            platform: p.title,
+            ...name ? { server: name } : {},
+            ...room ? { room: room.name } : {},
+            href: link(server, room?.id),
+          }]
+        }),
+      )
+    }))
+    return { places: places.flat(2), unset: [] }
+  }))
+  return {
+    places: each.flatMap((e) => e.places),
+    unset: each.flatMap((e) => e.unset),
+  }
+}
+
 /** Choose the room of `connection`'s server whose every message the space's
  * Operator hears (`chat_hears`), by its id on the platform; none hears only
  * what is said to the bot. What the Operator's settings save, as `who`; a

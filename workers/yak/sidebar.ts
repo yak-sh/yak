@@ -24,6 +24,8 @@ export type Item = {
   waiting?: number
   more?: boolean
   submit?: boolean
+  /** What a `submit` item's form posts besides its press. */
+  fields?: Record<string, string>
   external?: boolean
 }
 
@@ -126,6 +128,9 @@ let link = (at: Item) => {
     ? h(
       'form',
       { class: 'Sidebar_Form', method: 'post', action: at.href },
+      Object.entries(at.fields ?? {}).map(([name, value]) =>
+        h('input', { type: 'hidden', name, value })
+      ),
       node,
     )
     : node

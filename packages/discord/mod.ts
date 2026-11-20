@@ -337,6 +337,31 @@ export let rooms = async (
     .map(({ id, name }) => ({ id, name }))
 }
 
+/** The name of the server `server`, as the bot with `token` reads it
+ * (GET /guilds/{id}); null where the bot is not in it, or no longer, as
+ * {@link rooms} says. */
+export let serverName = async (
+  token: string,
+  server: string,
+  fetcher: typeof fetch = fetch,
+): Promise<string | null> => {
+  let res = await fetcher(`${API}/guilds/${server}`, { headers: bot(token) })
+  if (res.status == 403 || res.status == 404) {
+    await res.body?.cancel()
+    return null
+  }
+  let { name } = await answer<{ name: string }>(res, {
+    unsent: `Discord did not name server ${server}`,
+    refused: `Discord refused to name server ${server}`,
+  })
+  return name
+}
+
+/** The address that opens the server `server` in Discord, or its channel
+ * `room`, for anyone in it. */
+export let link = (server: string, room?: string) =>
+  `https://discord.com/channels/${server}${room ? `/${room}` : ''}`
+
 /** The server (guild) the room `room` belongs to, as the bot with `token`
  * sees it (GET /channels/{id}), none for a direct one. A 429 or a 5xx is
  * {@link Unsent}; a room the bot cannot see is refused with what Discord
@@ -394,5 +419,7 @@ export let discord: Platform = {
   rooms,
   recent,
   named,
+  link,
+  serverName,
   working: { every: 8000, show: typing },
 }

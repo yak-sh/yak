@@ -29,6 +29,9 @@ import {
   updatesPage,
 } from './operator-page.ts'
 import { NAMES, pick } from '@yaks/persona'
+import { shown } from '@yaks/phone'
+import { mailFrom } from '@yaks/platform/host'
+import { waysOf } from './talk-sidebar.ts'
 import {
   chatPath,
   managed,
@@ -381,6 +384,65 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
   // The platform's admin alone has Admin, after Manage.
   assertEquals(admin.said, [...owner.said, 'Admin'])
   assertEquals(admin.to.Admin, '/admin')
+})
+
+test('the side lists every way to reach the Operator, each one tap, and adds a platform not set up', async () => {
+  let ways = {
+    email: 'clerk@yaks.app',
+    text: '+15550100',
+    call: '+15550100',
+    places: [
+      {
+        platform: 'Chat',
+        server: 'Barn',
+        room: 'general',
+        href: 'https://chat.example/g1/c1',
+      },
+      { platform: 'Chat', href: 'https://chat.example/g2' },
+    ],
+    unset: [{ platform: 'Talk', integration: 'talk-bot', testing: true }],
+  }
+  let { document } = parseHTML(
+    await (await chatPage(p.env, space, who, 'new', { ...beside, ways }))
+      .text(),
+  )
+  let section = document.querySelector('[aria-labelledby="side-reach"]')!
+  assertEquals(
+    document.getElementById('side-reach')?.textContent,
+    `Reach ${space.operator}`,
+  )
+  assertEquals(
+    [...section.querySelectorAll('a')].map((a) => [
+      a.textContent!.trim(),
+      a.getAttribute('href'),
+    ]),
+    [
+      ['clerk@yaks.app', 'mailto:clerk@yaks.app'],
+      [`Call ${shown('+15550100')}`, 'tel:+15550100'],
+      [`Text ${shown('+15550100')}`, 'sms:+15550100'],
+      ['Barn · #general', 'https://chat.example/g1/c1'],
+      ['Chat', 'https://chat.example/g2'],
+    ],
+  )
+  // The one button that adds the platform, back to this page after.
+  let form = section.querySelector('form')!
+  assertEquals(
+    form.getAttribute('action'),
+    `${managePath('connections', 'clerk')}?enable=talk-bot`,
+  )
+  assertEquals(
+    Object.fromEntries(
+      [...form.querySelectorAll('input')].map((i) => [i.name, i.value]),
+    ),
+    { do: 'add', integration: 'talk-bot', back: chatPath('clerk') },
+  )
+  assertEquals(form.querySelector('button')?.textContent?.trim(), 'Add to Talk')
+})
+
+test('a space with no chat connection is reached by its address, and offers no platform to anyone but its owner', async () => {
+  let editor = await waysOf(p.env, space, false)
+  assertEquals(editor.email, mailFrom(space.slug, null, p.env))
+  assertEquals([editor.places, editor.unset], [[], []])
 })
 
 test('a new chat greets the person by name, with ways to start over the box', () => {

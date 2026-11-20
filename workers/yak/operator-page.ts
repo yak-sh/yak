@@ -31,7 +31,7 @@ import {
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
-import { aboutPath, talkSide } from './talk-sidebar.ts'
+import { aboutPath, talkSide, type Ways } from './talk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
@@ -1513,9 +1513,9 @@ for (let form of document.querySelectorAll('#texts-stop')) {
 </script>`
 
 /** What the chat app's side holds beside every page of it, read by its door
- * (apps.ts `beside`): every space the person may open (its selector), the
- * apps of this one they may open, what they are called, and whether they are
- * the platform's admin (tool.ts `admin`). */
+ * (manage.ts `beside`): every space the person may open (its selector), the
+ * apps of this one they may open, what they are called, whether they are
+ * the platform's admin (tool.ts `admin`), and how to reach its Operator. */
 export type Beside = {
   spaces?: Picked[]
   apps?: { eid: string; slug: string; title: string }[]
@@ -1524,6 +1524,8 @@ export type Beside = {
   /** whether the person keeps the side folded to its icons
    * (`desk_sidebar{collapsed}`) */
   collapsed?: boolean
+  /** every way to reach this Operator (talk-sidebar.ts `waysOf`) */
+  ways?: Ways
 }
 
 export { aboutPath }

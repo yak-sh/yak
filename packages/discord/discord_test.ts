@@ -320,6 +320,25 @@ test('rooms is null for a server the bot is not in, or no longer', async () => {
   await assertRejects(() => discord.rooms!('T', 'g1', rest(502, {}).f), Unsent)
 })
 
+test('serverName reads what a server is called, null where the bot is not in it', async () => {
+  let { f, seen } = rest(200, { id: 'g1', name: 'Barn' })
+  assertEquals(await discord.serverName!('T0K', 'g1', f), 'Barn')
+  assertEquals(seen[0].url, 'https://discord.com/api/v10/guilds/g1')
+  assertEquals(
+    await discord.serverName!('T', 'g1', rest(403, { message: 'x' }).f),
+    null,
+  )
+  await assertRejects(
+    () => discord.serverName!('T', 'g1', rest(502, {}).f),
+    Unsent,
+  )
+})
+
+test('link opens a server, or a channel in it', () => {
+  assertEquals(discord.link!('g1'), 'https://discord.com/channels/g1')
+  assertEquals(discord.link!('g1', 'c1'), 'https://discord.com/channels/g1/c1')
+})
+
 test("recent reads a room back oldest first, bots' own included, none addressed", async () => {
   let message = (id: string, author: Record<string, unknown>) => ({
     id,

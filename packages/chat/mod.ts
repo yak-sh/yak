@@ -128,6 +128,16 @@ export type Platform = {
     page: Page,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Said[]>
+  /** the address that opens `server` in the platform's app or site, or its
+   * room `room` there: how a page links to where its Operator is reached */
+  link?: (server: string, room?: string) => string
+  /** what `server` is called, as the bot with `credential` reads it; null
+   * where the bot is not in that server */
+  serverName?: (
+    credential: string,
+    server: string,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<string | null>
   /** give the bot with `credential` the name `name` in `server`, where the
    * platform lets a bot go by its own name in each server: how it goes by
    * the name of the Operator it speaks for */

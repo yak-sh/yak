@@ -340,7 +340,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
       env,
       space,
       who,
-      await beside(dir, space, who),
+      await beside(env, dir, space, who),
       new URL(req.url).searchParams.has('dismissed'),
     )
   }
@@ -352,7 +352,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     let side = await sideAnswer(req, env, space, who)
     if (side) return side
     let { matchesPage } = await import('./operator-page.ts')
-    return matchesPage(req, env, space, who, await beside(dir, space, who))
+    return matchesPage(req, env, space, who, await beside(env, dir, space, who))
   }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
     let { chatPage, operatorAnswer, storeAnswer } = await import(
@@ -366,7 +366,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
           space,
           who,
           at.open,
-          await beside(dir, space, who),
+          await beside(env, dir, space, who),
           url.searchParams.get('app'),
           url.searchParams.has('from')
             ? Number(url.searchParams.get('from'))
@@ -580,19 +580,23 @@ let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
 }
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
-// the spaces its selector offers, the apps here this person may open, and
-// what they are called, and whether they are the platform's admin, which the
-// page's read said (`administrative`).
+// the spaces its selector offers, the apps here this person may open, what
+// they are called, whether they are the platform's admin, which the page's
+// read said (`administrative`), and every way to reach its Operator.
 let beside = async (
+  env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name, collapsed] = await Promise.all([
+  let [spaces, { mine }, name, collapsed, ways] = await Promise.all([
     pickable(dir, who.person),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
     dir.collapsed(who.person),
+    import('./talk-sidebar.ts').then((s) =>
+      s.waysOf(env, space, who.role == 'owner')
+    ),
   ])
   return {
     spaces,
@@ -600,6 +604,7 @@ let beside = async (
     name,
     admin: !!who.administrative,
     collapsed,
+    ways,
   }
 }
 

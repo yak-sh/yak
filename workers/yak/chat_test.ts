@@ -23,6 +23,7 @@ import {
   connected,
   offers,
   PLATFORMS,
+  reached,
   recent,
   renamed,
   type Server,
@@ -160,6 +161,46 @@ test('a server the bot was removed from is offered again, not reported', async (
     assertEquals(servers.map((s) => [s.connection, s.rooms, s.away]), [
       [eid, null, true],
     ])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+test('a space is reached in each server its bot is in, by name, in the room it hears; one with none offers Discord', async () => {
+  let { p, ada, bo, held } = await spaces()
+  let barn = await held(ada, 'barn')
+  await held(ada, 'mill')
+  await meta(p.env).apply([{
+    entity: { eid: barn },
+    chat_hears: { room: roomEid('discord', 'c1') },
+  }], KERNEL)
+  let answers: Record<string, unknown> = {
+    'guilds/barn': { name: 'Barn' },
+    'guilds/barn/channels': [{ id: 'c1', name: 'general', type: 0 }],
+  }
+  let was = globalThis.fetch
+  globalThis.fetch = (input) => {
+    let path = String(input).replace('https://discord.com/api/v10/', '')
+    return Promise.resolve(
+      path in answers
+        ? Response.json(answers[path])
+        : Response.json({ message: 'Missing Access' }, { status: 403 }),
+    )
+  }
+  try {
+    assertEquals(await reached(p.env, ada.eid), {
+      places: [{
+        platform: 'Discord',
+        server: 'Barn',
+        room: 'general',
+        href: 'https://discord.com/channels/barn/c1',
+      }],
+      unset: [],
+    })
+    assertEquals(await reached(p.env, bo.eid), {
+      places: [],
+      unset: [{ platform: 'Discord', integration: 'discord', testing: true }],
+    })
   } finally {
     globalThis.fetch = was
   }

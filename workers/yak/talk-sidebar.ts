@@ -9,7 +9,20 @@ import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { Beside } from './operator-page.ts'
 import { spaceHost, url } from '@yaks/platform/host'
-import { ADMIN, chatPath, logoPath, managePath } from '@yaks/platform/routes'
+import {
+  ADMIN,
+  chatPath,
+  enabling,
+  logoPath,
+  managePath,
+} from '@yaks/platform/routes'
+import { mailFrom } from '@yaks/platform/host'
+import { shown } from '@yaks/phone'
+import { directoryOf, walkTo } from './directory.ts'
+import { chatRows } from './connections.ts'
+import { phoneAt } from './phones.ts'
+import { caught } from './defects.ts'
+import type { Place, Unset } from './chat.ts'
 
 /** An app beside the conversation already open: every app shares the one
  * conversation, so the side keeps it lit and marks the app only Open. */
@@ -17,6 +30,90 @@ export let aboutPath = (space: string, app: string, open = 'new') =>
   `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
 
 let APPS = 4
+
+/** Every way to reach a space's Operator, as its side lists them: its email
+ * address, the number it is texted at and the one it answers calls on, and
+ * where it is on each chat platform (chat.ts `reached`), with the platforms
+ * the space has not added it to yet, offered to its owner alone. */
+export type Ways = {
+  email: string
+  text?: string
+  call?: string
+  places: Place[]
+  unset: Unset[]
+}
+
+/** How `space`'s Operator is reached, read for its side: each number from
+ * configuration (phones.ts `phoneAt`), its chat platforms from its
+ * connections. A platform that cannot be read leaves the rest. */
+export let waysOf = async (
+  env: Env,
+  space: Space,
+  owner: boolean,
+): Promise<Ways> => {
+  let [texts, calls, chat] = await Promise.all([
+    phoneAt(env, space.sender),
+    phoneAt(env),
+    Promise.all([
+      import('./chat.ts'),
+      chatRows(directoryOf(env.STORE), walkTo(space.slug, space.eid)),
+    ]).then(([c, rows]) => c.reached(env, space.eid, rows)).catch((e) => {
+      caught(e, { request: 'operator reach chat' })
+      return { places: [], unset: [] }
+    }),
+  ])
+  let text = texts?.transport().number
+  let call = calls?.caller ? calls.transport().number : undefined
+  return {
+    email: mailFrom(space.slug, null, env),
+    ...text ? { text } : {},
+    ...call ? { call } : {},
+    places: chat.places,
+    unset: owner ? chat.unset : [],
+  }
+}
+
+// The side's links for each way to reach the Operator: each opens the
+// person's mail app, phone or chat app there, and each platform not set up
+// yet is the one button that adds it, which comes back to `here`.
+let reaching = (space: Space, ways: Ways, here: string): Item[] => [
+  { href: `mailto:${ways.email}`, icon: 'mail', label: ways.email },
+  ...ways.call
+    ? [
+      {
+        href: `tel:${ways.call}`,
+        icon: 'phone',
+        label: `Call ${shown(ways.call)}`,
+      } satisfies Item,
+    ]
+    : [],
+  ...ways.text
+    ? [
+      {
+        href: `sms:${ways.text}`,
+        icon: 'message-square',
+        label: `Text ${shown(ways.text)}`,
+      } satisfies Item,
+    ]
+    : [],
+  ...ways.places.map((p): Item => ({
+    href: p.href,
+    icon: 'message-circle',
+    label: [p.server ?? p.platform, p.room && `#${p.room}`].filter(Boolean)
+      .join(' · '),
+    external: true,
+  })),
+  ...ways.unset.map((u): Item => ({
+    href: enabling(
+      managePath('connections', space.slug),
+      u.testing ? [u.integration] : [],
+    ),
+    icon: 'plus',
+    label: `Add to ${u.platform}`,
+    submit: true,
+    fields: { do: 'add', integration: u.integration, back: here },
+  })),
+]
 
 export let talkSide = (
   env: Env,
@@ -85,6 +182,14 @@ export let talkSide = (
           },
         ],
       },
+      ...beside.ways
+        ? [{
+          id: 'side-reach',
+          label: `Reach ${space.operator}`,
+          heading: true,
+          items: reaching(space, beside.ways, at.here),
+        }]
+        : [],
       {
         id: 'side-apps',
         label: 'Your apps',
