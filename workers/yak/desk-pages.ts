@@ -25,6 +25,7 @@ import {
   Notice,
   Report,
   Rows,
+  Section,
   TabSet,
 } from '@yaks/ui/parts'
 import { h, type VNode } from 'preact'
@@ -2268,7 +2269,7 @@ let connections = (at: DeskPage, env: Host) => {
       ),
       h(Group, { id: 'find' }, 'All services'),
       finding,
-      h('div', { 'data-found': '' }, found),
+      h(Section, { 'data-found': '' }, found),
       c.on
         ? h(
           More,

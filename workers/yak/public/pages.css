@@ -373,6 +373,7 @@
   }
   .Desk_Connections {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: .75rem;
   }
 
