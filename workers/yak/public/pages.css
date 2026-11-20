@@ -1360,3 +1360,8 @@
 .Talk_Way > .Toolbar {
   gap: var(--half-gap);
 }
+/* A button that adds the Operator to a platform posts its form, which lays
+   out as the button alone, a row's gap from the rest. */
+.Talk_Way form {
+  display: contents;
+}
