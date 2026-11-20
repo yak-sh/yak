@@ -1463,14 +1463,22 @@ export class Store extends Durable {
   // version, these words, and the stamp it left. A wake that finds all three
   // as they were renders no schema at all, and one that finds any moved (a
   // deploy, a new vocabulary, a rollback's pass) asks the print again.
+  //
+  // The pass is the store's to take whatever it costs, as a deploy's install
+  // is (`#installDeployment`): it runs on whichever request first wakes the
+  // store under a new print, opened `free` (`#start`), and an index it builds
+  // over a populated table writes a row per row, once. Taken, it stops
+  // nothing and is told only as a scan (@yaks/durable-object `take`).
   #schema(shape: Shape, report?: typeof defect): Error[] {
-    return fitSchema(
-      this.#sql,
-      shape,
-      (key) => this.#get(key as Word),
-      (key, value) => this.#put(key as Word, value),
-      () => this.#version(),
-      report,
+    return this.ceiling.take(() =>
+      fitSchema(
+        this.#sql,
+        shape,
+        (key) => this.#get(key as Word),
+        (key, value) => this.#put(key as Word, value),
+        () => this.#version(),
+        report,
+      )
     )
   }
 
@@ -4023,8 +4031,13 @@ export class Store extends Durable {
         }
         let undeclared = paths.filter((path) => !declared(path))
         if (undeclared.length) {
-          contract(this.#sql, undeclared.map((p) => p.split('.', 2).join('.')))
-          let [error] = install(this.#sql, this.#shape())
+          let [error] = this.ceiling.take(() => {
+            contract(
+              this.#sql,
+              undeclared.map((p) => p.split('.', 2).join('.')),
+            )
+            return install(this.#sql, this.#shape())
+          })
           if (error) throw error
         }
         paths = paths.filter(declared)
