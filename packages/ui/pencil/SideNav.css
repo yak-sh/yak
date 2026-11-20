@@ -91,6 +91,13 @@
   background: var(--rule);
   filter: var(--drawn);
 }
+/* A nav beside no panel: no edge, its current link a closed box. */
+.SideNav-alone {
+  --nav-panel: transparent;
+  --nav-edge: transparent;
+  --nav-shut: var(--stroke);
+  --nav-tip: var(--radius);
+}
 @media (max-width: 700px) {
   .SideNav_Edge::after {
     content: none;

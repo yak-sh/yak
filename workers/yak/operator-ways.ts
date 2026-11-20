@@ -150,7 +150,7 @@ export let Ways = (
     ways.places.length || ways.unset.length
       ? h(
         SideNav,
-        { class: 'Talk_Reach', 'aria-labelledby': 'reach' },
+        { mod: 'alone', 'aria-labelledby': 'reach' },
         reaching(space, ways, here).map(link),
       )
       : null,

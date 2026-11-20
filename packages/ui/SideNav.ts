@@ -8,7 +8,8 @@
  * as a `title` too, its tooltip. Where there is no room beside the page (a
  * phone) the column is a row that wraps, its words shown, rail or not.
  * `SideNav.Edge` holds a whole sidebar when its edge must run past the
- * links; its navs share that edge.
+ * links; its navs share that edge. `SideNav-alone` leans against no panel,
+ * such as links in a card: no edge, and its current link a closed box.
  *
  * @module
  */
