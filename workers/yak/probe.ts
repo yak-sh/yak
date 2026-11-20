@@ -757,6 +757,20 @@ export let meta = (k: Kernel, cookie = k.owner.cookie) => {
   }
 }
 
+// The release published as `name` marked as passing yaks.app's code review
+// (gallery.ts `reviewed`), so a copy of it in a stranger's space runs
+// unsandboxed (@yaks/platform/installs `vetted`, T-1857).
+export let reviewed = async (k: Kernel, name: string) => {
+  let { app } = (await k.dir.offered(name))!
+  let release = (await k.dir.deployAt(app, app.published!.version))!
+  await k.dir.stamp({
+    entities: [{
+      entity: { eid: release.eid },
+      code_review: { verdict: 'approve', findings: 'probe' },
+    }],
+  })
+}
+
 // What `commands` and `command` answer as data (tools.ts, declared.ts `ran`),
 // read off the answer: its words are for a model, and carry more.
 

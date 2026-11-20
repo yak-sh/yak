@@ -2,7 +2,7 @@
 // church directory's members sign in with the address it holds for them and
 // press Join; nobody else is offered anything.
 import { equal, ok, test } from '@yaks/testing'
-import { connector, kernel, signIn, unique } from './probe.ts'
+import { connector, kernel, reviewed, signIn, unique } from './probe.ts'
 
 let k = await kernel()
 let owner = await signIn(k)
@@ -122,6 +122,7 @@ test('an address at the domain joins without a row', async () => {
 test('the installer sets the join policy and keeps it through updates', async () => {
   let offer = unique('roster')
   await agent.tool('app_publish', { app, name: offer })
+  await reviewed(k, offer)
   let installer = await signIn(k)
   let theirs = connector(k, installer.cookie)
   let at = `${installer.email.split('@')[0]}.${k.host}`
@@ -156,6 +157,7 @@ test('the installer sets the join policy and keeps it through updates', async ()
   })
   await agent.tool('app_deploy', { app })
   await agent.tool('app_publish', { app, name: offer })
+  await reviewed(k, offer)
   await theirs.tool('app_update', { app })
   ok(!(await contents()).includes('"join"'))
   let outsider = await signIn(k, `${unique('pub')}@${other}`)

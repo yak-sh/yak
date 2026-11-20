@@ -11,6 +11,7 @@ import {
   connector,
   kernel,
   meta,
+  reviewed,
   seed,
   signIn,
   txt,
@@ -103,6 +104,7 @@ test('an app names no app, and the copy works at its own address', async () => {
     // Published under a name that is not its slug, which is what renamed the
     // copy out from under its own code.
     await his.tool('app_publish', { app: 'chores', name: published })
+    await reviewed(k, published)
     // The offer says what it will be called.
     assertStringIncludes(await his.tool('app_published'), 'installs as chores')
 

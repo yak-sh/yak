@@ -2,7 +2,15 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { identityEid } from '@yaks/graph/identity'
 import { modelToolEid } from '@yaks/builders/model'
-import { connector, kernel, signIn, txt, unique, vocabFile } from './probe.ts'
+import {
+  connector,
+  kernel,
+  reviewed,
+  signIn,
+  txt,
+  unique,
+  vocabFile,
+} from './probe.ts'
 
 let k = await kernel()
 let publisher = connector(k, (await signIn(k)).cookie)
@@ -31,6 +39,7 @@ await publisher.tool('app_files', {
 })
 await publisher.tool('app_deploy', { app: 'notes' })
 await publisher.tool('app_publish', { app: 'notes', name })
+await reviewed(k, name)
 let person = await signIn(k)
 let installer = connector(k, person.cookie)
 await installer.tool('app_install', { name })
@@ -109,6 +118,7 @@ await publisher.tool('app_files', {
 let told = await publisher.tool('app_deploy', { app: 'tales' })
   .catch((e: Error) => e.message)
 await publisher.tool('app_publish', { app: 'tales', name: tales })
+await reviewed(k, tales)
 await installer.tool('app_install', { name: tales })
 let builders = (as: typeof publisher) =>
   as.tool('graph_query', { app: 'tales', q: '.builder&.using' })
