@@ -107,6 +107,7 @@ import {
   traced,
 } from './lib/hops.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { FLOORS } from './embedding.ts'
 import {
   ANSWERING,
   HEARSAY,
@@ -2271,6 +2272,7 @@ export let operating = (
   let recalling = recall({
     graph: g,
     meaning: store.meaning,
+    floors: FLOORS,
     report: (e) => void caught(e, { request: 'operator recall' }),
   })
   let before = async (

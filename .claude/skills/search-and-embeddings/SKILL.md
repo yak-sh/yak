@@ -127,9 +127,9 @@ these are the words for it:
   app's store (graph.ts `#vectors`) and the Operator's own store
   (operator-store.ts `Vectors`, lent by operator-vectors.ts) run the same one,
   and each lends its host the ranking as `host.meaning`. The Operator's recall
-  before each turn passes it to @yaks/session `recall`, as the box does. Its
-  floors (`FLOOR` .75, words .65 in packages/memory/earlier.ts) were measured
-  on granite, not Qwen3.
+  before each turn passes it to @yaks/session `recall`, as the box does, with
+  the floors workers/yak/embedding.json gives Qwen3 (memories .60, words .50,
+  where @yaks/memory's own `FLOOR` .75 and `QUOTED` .65 are granite's).
 
 ## Words ranked by meaning
 

@@ -84,6 +84,9 @@ let within = <T>(
   ]).finally(() => clearTimeout(timer))
 }
 
+/** The similarities a recall keeps to, in its meaning's model's space. */
+export type Floors = { floor?: number; quoted?: number }
+
 type Asked = {
   person?: string
   name?: string
@@ -97,6 +100,9 @@ type Asked = {
   /** the similarity a memory or decision must reach to be listed (default
    * {@link FLOOR}) */
   floor?: number
+  /** the similarity one of the person's earlier words must reach to be
+   * quoted (default {@link QUOTED}) */
+  quoted?: number
 }
 
 // The person's name, as their quotations are attributed.
@@ -211,9 +217,7 @@ async function recalled(g: Graph, options: Asked): Promise<string> {
   if (tokens.length < 2) return ''
   // What was kept or settled is ranked beside the words, not after them.
   let held = decided(g, words, before, meaning, options.floor)
-  // Granite 30M: unrelated corpus pairs reached .642; the attachment
-  // paraphrase reached .669 and inspect's two earlier asks .664/.677.
-  let semantic = await nearest(g, meaning, words, own, .65)
+  let semantic = await nearest(g, meaning, words, own, options.quoted ?? QUOTED)
   // A semantic answer needs no second whole-corpus lexical search. The
   // fallback ranks one term at a time, avoiding a 24-way OR whose repeated
   // policy joins held the serving thread for 55 seconds on the live corpus.
@@ -284,6 +288,14 @@ export let titleOf = (b: Bundle): string => {
  * listed 69 memories and 13 decisions, .75 lists 28 and none (T-161252). No
  * floor from .55 to .70 put a case's needed fact in front. */
 export let FLOOR = .75
+
+/** How near in meaning one of the person's earlier words must be to their
+ * words now to be quoted beside them. In granite-embedding-30m-english,
+ * unrelated corpus pairs reached .642; the attachment paraphrase reached .669
+ * and inspect's two earlier asks .664/.677. Like {@link FLOOR}, it is a number
+ * in one model's space: a host whose vectors another model makes passes its
+ * own. */
+export let QUOTED = .65
 
 /** How near in meaning one of the person's earlier words, or an answered
  * decision, must be to what an agent wrote to be set beside it: nothing is,

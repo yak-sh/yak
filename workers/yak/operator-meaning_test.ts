@@ -11,15 +11,19 @@ import { receive } from './operator-channels.ts'
 import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 
-// An embedder that knows one subject by several words, as a model does: a
-// text naming any of them lies on its axis, and every other text off it.
-let SUBJECT = ['tomatoes', 'watering', 'veggies', 'drink', 'garden']
+// An embedder that puts the memory .62 from the person's message, as near as
+// yaks.app's model puts a paraphrase: past its floor for memories (embedding.ts
+// `FLOORS`), short of the floor @yaks/memory measured on the box's model.
 let meaning: Embedder = {
-  model: 'subject-2',
-  embed: (text) => {
-    let on = SUBJECT.some((w) => text.toLowerCase().includes(w))
-    return new Float32Array(on ? [1, 0] : [0, 1])
-  },
+  model: 'subject-3',
+  embed: (text) =>
+    new Float32Array(
+      /tomatoes/.test(text)
+        ? [1, 0, 0]
+        : /veggies/.test(text)
+        ? [.62, Math.sqrt(1 - .62 ** 2), 0]
+        : [0, 0, 1],
+    ),
 }
 
 let { env } = platform('operator-meaning')
@@ -82,7 +86,7 @@ test('a memory worded unlike the message reaches its turn by meaning', () => {
 test('its vectors are kept in the Operator store', async () => {
   equal(store.vectors!.owes(), false)
   equal(
-    (await store.meaning!('veggies', { limit: 1 }))[0]?.entity,
+    (await store.meaning!('tomatoes', { limit: 1 }))[0]?.entity,
     memory.eid,
   )
 })

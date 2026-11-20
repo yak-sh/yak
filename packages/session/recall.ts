@@ -11,6 +11,7 @@ import { line } from '@yaks/query'
 import { earlier } from '@yaks/memory/earlier'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Host, Meaning } from '@yaks/host'
+import type { Floors } from '@yaks/memory/earlier'
 import { words } from './listen.ts'
 
 /** How long words wait for what was said before, before going without it. */
@@ -21,6 +22,9 @@ export type Recalling = {
   graph: Graph
   config?: { person?: string }
   meaning?: Meaning
+  /** how near its meaning's model puts what is recalled, where it is not the
+   * model @yaks/memory's floors were measured on */
+  floors?: Floors
   report?: Host['report']
 }
 
@@ -83,6 +87,7 @@ export let recall = (
         words: text,
         before,
         meaning: host.meaning,
+        ...host.floors,
         wait,
         ...o.session ? { among: await unseen(host.graph, o.session) } : {},
       })
