@@ -61,7 +61,15 @@ export let BEGAN = '2026-11-07T13:23:04Z'
 export let STEPS = [
   { name: 'home', say: 'Home page visits' },
   { name: 'click', say: 'Calls to action clicked', of: 'home' },
-  { name: 'started', say: 'Builds started from the home page', of: 'home' },
+  {
+    name: 'started',
+    say: "Newcomers' builds begun in the home page's box",
+    of: 'home',
+  },
+  {
+    name: 'started_signed_in',
+    say: "Builds begun in the home page's box by somebody signed in",
+  },
   { name: 'code_sent', say: 'Sign-in codes sent', of: 'home' },
   { name: 'signed_in', say: 'Sign-ins finished', of: 'code_sent' },
   { name: 'signup', say: 'First sign-ins', of: 'signed_in' },
@@ -85,7 +93,8 @@ export type { Funnel }
 
 /** A stranger's way, stage by stage, each one step, and the stage it is a
  * share of: a visit to the home page, then by either of two doors, a build
- * begun in the home page's box or a connector's sign-in begun from an
+ * begun in the home page's box by a newcomer, never by somebody signed in
+ * (`started_signed_in`), or a connector's sign-in begun from an
  * assistant, which no visit leads to; a first sign-in, by either door or the
  * sign-in page, so a share of neither; a space's first app, and coming back a
  * day or more later. The steps join nobody to anybody, so a stage counts the
@@ -236,6 +245,13 @@ export let start = (window: number | Date, now = Date.now()) =>
     ),
   ))
 
+let second = (at: Date) =>
+  fn('toDateTime', lit(Math.floor(at.getTime() / 1000)))
+
+// Whether a point is the `step` written at the second `at`.
+let written = (step: string, at: string) =>
+  and(eq(col(SLUG), lit(step)), eq(col('timestamp'), second(new Date(at))))
+
 /** Steps written as a browser's that were an agent's check, each its step
  * and the second it was written at: T-154822's check of the box on /churches,
  * on 2026-11-10, whose visits did not name it (T-1824). A point is never
@@ -248,9 +264,21 @@ export let MISCOUNTED = [
   ['started', '2026-11-10T20:59:36Z'],
 ] as const
 
-let STEP = col(SLUG)
-let second = (at: Date) =>
-  fn('toDateTime', lit(Math.floor(at.getTime() / 1000)))
+/** Builds begun in the box by somebody signed in, written as `started`
+ * before the step said who began it (T-1826), each the second it was written
+ * at: U-334's two of 2026-11-20. A point is never rewritten, so these are read
+ * as `started_signed_in` (`STEP`). Once they are further back than a step is
+ * kept, they go. */
+export let SIGNED_IN = ['2026-11-20T04:54:52Z', '2026-11-20T05:17:59Z'] as const
+
+// Which step a point is: the step it was written as, or `started_signed_in`
+// for one in SIGNED_IN.
+let STEP = fn(
+  'if',
+  or(...SIGNED_IN.map((at) => written('started', at))),
+  lit('started_signed_in'),
+  col(SLUG),
+)
 
 // Who took a step: the client it was written with, or `test` for one whose
 // arrival names an agent's check as its source (@yaks/platform/bots `CHECK`),
@@ -262,9 +290,7 @@ let WHO = fn(
   'if',
   or(
     op('like', col(CAMPAIGN), lit(`${CHECK}/%`)),
-    ...MISCOUNTED.map(([step, at]) =>
-      and(eq(STEP, lit(step)), eq(col('timestamp'), second(new Date(at))))
-    ),
+    ...MISCOUNTED.map(([step, at]) => written(step, at)),
   ),
   lit('test'),
   col(CLIENT),

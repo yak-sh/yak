@@ -115,6 +115,7 @@ import {
   type Directory,
   directory,
   META,
+  newcomerIs,
   RESERVED,
   type Row,
   type Space,
@@ -1126,7 +1127,7 @@ let begun = async (
   // (erase.ts `vacated`): their browser is a stranger again.
   let [known] = person
     ? await meta(env).query(
-      line`.entity.eid=${person}&.person ?email ?newcomer`,
+      line`.entity.eid=${person}&.person ?email ?phone ?newcomer`,
     )
     : []
   if (!known) person = null
@@ -1173,11 +1174,14 @@ let begun = async (
     },
     options: { id: request },
   })
-  // A build by somebody the directory says is nobody's, such as a newcomer
-  // an agent's check opened, counts apart whatever their browser says now.
-  step(env, 'started', req, {
+  // A build by somebody signed in, whose box builds in their own space, is
+  // no stranger's (funnel.ts `STEPS`). One by somebody the directory says is
+  // nobody's, such as a newcomer an agent's check opened, counts apart
+  // whatever their browser says now.
+  let row = known as Row | undefined
+  step(env, row && !newcomerIs(row) ? 'started_signed_in' : 'started', req, {
     who: addressIn(known),
-    test: testIs(known as Row | undefined),
+    test: testIs(row),
   })
   return redirect(chat, set, 303)
 }

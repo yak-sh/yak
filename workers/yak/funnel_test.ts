@@ -131,7 +131,7 @@ test('a home page is visited by a browser asking for it, not a crawler', () => {
 
 test('the funnel reads each step, a share of the one it follows, and where visitors came from', async () => {
   let sql = analytics((q) =>
-    q.includes("blob2 = 'home'")
+    q.includes('AS site')
       ? [{ site: 'news.example.com', n: 3 }]
       : q.includes('blob7 AS key')
       ? [
@@ -251,6 +251,15 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     assertEquals(
       sql.asked.every((q) => q.includes(`${who} IN ('browser', '')`)),
       true,
+    )
+    // Each build begun on 2026-11-20 by somebody signed in, written before
+    // the step said so, is read as theirs.
+    let signed = [1795150492, 1795151879].map((t) =>
+      `blob2 = 'started' AND timestamp = toDateTime(${t})`
+    ).join(' OR ')
+    assertStringIncludes(
+      sql.asked.find((q) => q.includes('GROUP BY step'))!,
+      `if(${signed}, 'started_signed_in', blob2) AS step`,
     )
     assertEquals(
       sql.asked.every((q) =>
@@ -502,7 +511,7 @@ test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's
   assertEquals(stopped(f.stages), { after: f.stages![0], went: 0 })
 })
 
-test("a build begun in the home page's box is a person's only when a person began it", async () => {
+test("a build begun in the home page's box is a stranger's only when a newcomer began it, and a person's only when a person did", async () => {
   let k = await kernel()
   let builds = async (cookie = '') => {
     let before = k.views.points.length
@@ -519,15 +528,24 @@ test("a build begun in the home page's box is a person's only when a person bega
     })
     await r.body?.cancel()
     let [at] = k.views.points.slice(before)
-      .filter((p) => p.indexes?.[0] == FUNNEL && p.blobs![1] == 'started')
+      .filter((p) => p.indexes?.[0] == FUNNEL)
     let session = r.headers.getSetCookie()
       .find((c) => c.startsWith('yak_session='))?.split(';')[0]
     return {
+      step: at?.blobs?.[1],
       client: at?.blobs?.[5],
       session: session ?? cookie,
     }
   }
-  assertEquals((await builds()).client, 'browser')
+  let stranger = await builds()
+  assertEquals([stranger.step, stranger.client], ['started', 'browser'])
+  // A newcomer building again is still a stranger; somebody signed in, whose
+  // box builds in their own space, is not.
+  assertEquals((await builds(stranger.session)).step, 'started')
+  let known = await builds(
+    (await signIn(k, `${unique('ada')}@example.com`)).cookie,
+  )
+  assertEquals([known.step, known.client], ['started_signed_in', 'browser'])
   // An agent's check's newcomer, building again once its link no longer
   // says so, is still nobody's (directory.ts `testIs`).
   let check = await builds(
