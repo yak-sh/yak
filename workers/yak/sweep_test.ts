@@ -3,7 +3,7 @@ import { meta } from './meta.ts'
 // the platform's space lists every store and reaches one at a time; nobody
 // else does, and a name the directory does not hold wakes nothing.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { appStore, directory, stamp } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import * as dirPart from './directory.ts'
@@ -14,6 +14,8 @@ import type { Swept } from '@yaks/platform/mover'
 import { platform } from './testing.ts'
 import { builderOf } from './build-door.ts'
 import { WAKE } from './door.ts'
+import { within } from './defects.ts'
+import * as identity from './identity.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -265,6 +267,49 @@ let accounts = async () => {
   }
   return { scenario, env, dir, ask, PROBE, GUEST }
 }
+
+test('closing and purging an account with an open Builder succeeds without defects', async () => {
+  let { scenario, env, dir, ask, PROBE } = await accounts()
+  await using _ = scenario
+  let space = (await dir.space('probe'))!
+  let opened = await builderOf(env, space.eid)(() =>
+    new Request('https://builder' + WAKE, { headers: KERNEL })
+  )
+  assertEquals(opened.status, 204)
+  await scenario.settled()
+  let ctx = scenario.states.get(`builder ${space.eid}`)!
+  await ctx.storage.setAlarm(Date.now() + 60_000)
+  let reports: unknown[] = []
+  await within(
+    {
+      ERRORS: { send: (rows) => Promise.resolve(void reports.push(rows)) },
+    },
+    { request: 'gateway fetch' },
+    async () => {
+      let closed = await ask(JEFF, 'probe@bot.yak.sh')
+      assertEquals([closed.status, closed.body.trashed], [200, true])
+      let cookie = await sign(
+        { person: JEFF, space: null, exp: Date.now() + 60_000 },
+        SECRET,
+      )
+      let purged = await identity.fetch(
+        new Request(closed.body.purge, {
+          method: 'POST',
+          headers: { cookie: `yak_session=${cookie}` },
+          body: new URLSearchParams({ confirm: PROBE }),
+        }),
+        env,
+      )
+      let page = await purged.text()
+      assertEquals(purged.status, 200, page)
+      assertStringIncludes(page, 'is erased from the trash')
+      assertEquals(await dir.at(space.eid), null)
+      assertEquals(ctx.pitr.aborts, 1)
+      assertEquals(await ctx.storage.getAlarm(), null)
+    },
+  )
+  assertEquals(reports, [])
+})
 
 test('closing a test account keeps its ownership while a number waits in the trash', async () => {
   let { scenario, env, dir, ask, PROBE } = await accounts()
