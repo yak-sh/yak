@@ -3,7 +3,7 @@
 // reads the rows the graph last committed, so a write from the prompt redraws
 // what it changed.
 import { type ComponentChild, type FunctionComponent, h } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { parse } from '@yaks/query/core'
 import { define } from '@yaks/render'
 import { Prose, words } from './prose.ts'
@@ -132,11 +132,15 @@ type Pen = {
   paint?: () => void
 }
 
+let narrow = '(max-width: 899px)'
+let panels = ['Graph', 'Terminal', 'Query'] as const
+
 let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
   ctx,
 ) => {
   let { yak, term, figure, Entity, hero, steps } = ctx
   let pen = useRef<Pen>({ steps: [] }).current
+  let [panel, show] = useState<typeof panels[number]>('Graph')
   let bodies = () =>
     steps.map((eid) => text(yak.row(eid) ?? { entity: { eid } }, 'doc', 'body'))
   // How far the reader has played each command, measured each frame they
@@ -198,9 +202,23 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
     ]),
     h('div', {
       class: 'Plot_Side',
+      'data-panel': panel,
       ref: (el: HTMLElement | null) => void (pen.side = el),
     }, [
-      h(Figure, { ...ctx, pen }),
+      h(
+        'div',
+        { class: 'Plot_Panels', role: 'group', 'aria-label': 'Live demo' },
+        panels.map((name) =>
+          h('button', {
+            class: 'Plot_Panel',
+            type: 'button',
+            'data-panel': name,
+            'aria-pressed': panel == name,
+            onClick: () => show(name),
+          }, name)
+        ),
+      ),
+      h(Figure, { ...ctx, pen, shown: () => show('Graph') }),
       h(Prompt, ctx),
     ]),
   ])
@@ -210,7 +228,7 @@ let Story: FunctionComponent<Ctx & { hero?: string; steps: string[] }> = (
 // over the top of the window, so a command is live below them; side by
 // side, the whole window less its buffer.
 let covered = (side?: HTMLElement | null) => {
-  if (!side || !matchMedia('(max-width: 899px)').matches) return undefined
+  if (!side || !matchMedia(narrow).matches) return undefined
   let below = side.getBoundingClientRect().bottom + innerHeight * BUFFER
   return Math.min(below, innerHeight * .8)
 }
@@ -280,10 +298,23 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
   // being written.
   let back = useRef(0)
   let screen = useRef<HTMLDivElement>(null)
-  useEffect(() => {
+  let follow = useRef(true)
+  let lines = term.lines()
+  let typing = term.typing()
+  useLayoutEffect(() => {
     let el = screen.current
-    if (el) el.scrollTop = el.scrollHeight
-  })
+    if (el && follow.current) el.scrollTop = el.scrollHeight
+  }, [lines.length, typing])
+  useLayoutEffect(() => {
+    let el = screen.current
+    let opened = () => {
+      if (el && follow.current) el.scrollTop = el.scrollHeight
+    }
+    if (!el || typeof ResizeObserver == 'undefined') return
+    let observer = new ResizeObserver(opened)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   let walk = (by: number) => {
     let past = term.history()
     back.current = Math.max(0, Math.min(past.length, back.current + by))
@@ -296,17 +327,24 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
       h('i', { class: 'Prompt_Dot' }),
       h('span', { class: 'Prompt_Title' }, 'yak, in this tab'),
     ]),
-    h('div', { class: 'Prompt_Screen', ref: screen }, [
-      ...term.lines().map((l) =>
+    h('div', {
+      class: 'Prompt_Screen',
+      ref: screen,
+      onScroll: (ev: Event) => {
+        let el = ev.currentTarget as HTMLDivElement
+        follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 4
+      },
+    }, [
+      ...lines.map((l) =>
         h('div', { class: `Prompt_Line is-${l.kind}` }, [
           h('span', { class: 'Prompt_Sign' }, sign[l.kind]),
           ...(l.kind == 'in' ? [l.text] : linked(l.text, ids, open)),
         ])
       ),
-      term.typing()
+      typing
         ? h('div', { class: 'Prompt_Line is-in' }, [
           h('span', { class: 'Prompt_Sign' }, '$ '),
-          term.typing(),
+          typing,
           h('b', { class: 'Caret' }),
         ])
         : null,
@@ -316,6 +354,7 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
       onSubmit: (ev: Event) => {
         ev.preventDefault()
         if (!line.trim()) return
+        follow.current = true
         term.enter(line)
         back.current = term.history().length + 1
         set('')
@@ -326,8 +365,10 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
         class: 'Prompt_Input',
         value: line,
         'aria-label': 'Type a yak command',
-        placeholder: "task new 'Write the launch post'",
+        placeholder: 'Type a command',
         autocomplete: 'off',
+        autocapitalize: 'none',
+        enterKeyHint: 'go',
         spellcheck: false,
         onInput: (ev: Event) =>
           set((ev.currentTarget as HTMLInputElement).value),
@@ -337,6 +378,7 @@ let Prompt: FunctionComponent<Ctx> = (ctx) => {
           walk(ev.key == 'ArrowUp' ? -1 : 1)
         },
       }),
+      h('button', { class: 'Prompt_Run', type: 'submit' }, 'Run'),
     ]),
   ])
 }
@@ -350,29 +392,21 @@ let ending = (el: Element) => {
 }
 
 // The leader: a line from the command whose write the pen is drawing to the
-// pen, across the gutter between them, in the window's own coordinates. Side
-// by side it leaves the end of the command; stacked, with the drawing above,
-// it leaves the command's start and climbs the page's margin.
+// pen, across the gutter between them, in the window's own coordinates.
 let lead = (
   from: Element,
-  step: Element,
   to: { x: number; y: number },
   gutter: number,
 ) => {
-  if (matchMedia('(max-width: 899px)').matches) {
-    let words = from.getBoundingClientRect()
-    let sx = words.left - 6, sy = words.top + Math.min(words.height, 24) / 2
-    let gx = step.getBoundingClientRect().left - 10
-    let mid = Math.max(gutter + 10, Math.min(sy - 12, gutter + 24))
-    return { d: `M${sx},${sy}H${gx}V${mid}H${to.x}V${to.y}`, sx, sy }
-  }
   let end = ending(from)
   let sx = end.right + 8, sy = end.top + end.height / 2
   let gx = Math.max(sx + 8, gutter - 16)
   return { d: `M${sx},${sy}H${gx}V${to.y}H${to.x}`, sx, sy }
 }
 
-let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
+let Figure: FunctionComponent<Ctx & { pen: Pen; shown: () => void }> = (
+  ctx,
+) => {
   let { yak, term, figure, pen } = ctx
   useTold((l) => yak.watch('*', l))
   let sheet = useRef<HTMLDivElement>(null)
@@ -413,17 +447,17 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
         if (lit != said) lit.classList.remove('is-led')
       }
       let words = said?.querySelector('code')
+      if (words) said!.classList.add('is-led')
+      if (globalThis.matchMedia?.(narrow).matches) {
+        return line?.classList.remove('is-on')
+      }
       let m = svg.getScreenCTM?.()
       if (!line || !step || !words || !m || !at) {
         return line?.classList.remove('is-on')
       }
-      said!.classList.add('is-led')
       let to = { x: m.a * at.x + m.e, y: m.d * at.y + m.f }
       let box = svg.getBoundingClientRect()
-      let gutter = matchMedia('(max-width: 899px)').matches
-        ? box.bottom
-        : box.left
-      let { d, sx, sy } = lead(words, step, to, gutter)
+      let { d, sx, sy } = lead(words, to, box.left)
       line.querySelector('path')?.setAttribute('d', d)
       let dot = line.querySelector('circle')
       dot?.setAttribute('cx', String(sx))
@@ -435,6 +469,9 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       graph: yak.graph,
       query: figure.query(),
       ...SHEET,
+      ...globalThis.matchMedia?.(narrow).matches
+        ? { width: 520, height: 260 }
+        : {},
       stage: term.stage,
       title: 'The graph in this tab',
       // The leader follows what the reader zoomed or panned to.
@@ -461,9 +498,10 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
   })
   let ask = (q: string) => {
     setAsked(q)
-    drawing.current?.query(q, figure.ask(q)).then(() => setFault('')).catch((
-      e,
-    ) => setFault(e.message))
+    drawing.current?.query(q, figure.ask(q)).then(() => {
+      setFault('')
+      ctx.shown()
+    }).catch((e) => setFault(e.message))
   }
   return h('figure', { class: 'Figure' }, [
     h('div', { class: 'Figure_Bar' }, [
@@ -485,11 +523,15 @@ let Figure: FunctionComponent<Ctx & { pen: Pen }> = (ctx) => {
       h('input', {
         class: 'Figure_Input',
         value: asked,
+        autocapitalize: 'none',
+        autocomplete: 'off',
+        enterKeyHint: 'go',
         'aria-label': 'The query the drawing shows',
         spellcheck: false,
         onInput: (ev: Event) =>
           setAsked((ev.currentTarget as HTMLInputElement).value),
       }),
+      h('button', { class: 'Figure_Show', type: 'submit' }, 'Show'),
     ]),
     h(
       'p',

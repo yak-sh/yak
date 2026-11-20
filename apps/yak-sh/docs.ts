@@ -14,6 +14,22 @@ type Section = (typeof SECTIONS)[number]
  * page is the one to index, that page's address. */
 export type Doc = { type: string; text: string; canonical?: string }
 
+let escaped = (text: string) =>
+  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+
+/** The source in a legible viewport when a person opens it in a browser. */
+export let reading = (name: string, doc: Doc) =>
+  `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${escaped(name)} · yak.sh</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="gouache.css">
+<link rel="stylesheet" href="style.css"></head>
+<body><main class="Doc"><nav class="Doc_Nav"><a href="./">yak.sh</a>
+<a href="?raw=1">Raw source</a></nav><h1>${escaped(name)}</h1>
+<pre class="Doc_Source">${escaped(doc.text)}</pre></main></body></html>`
+
 // The blocks only the page acts on: what a beat shows, its letters and the
 // session it starts. The commands and calls around them stay.
 const STAGED = /\n*```(declared|outbox|reply|session)\n[\s\S]*?\n```/g

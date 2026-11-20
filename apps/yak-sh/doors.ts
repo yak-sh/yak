@@ -210,11 +210,21 @@ let band = (
     if (door == 'mcp') return opener(ctx)(yak.agent)
     if (door == 'web') return opener(ctx)(SITE)
     if (door != 'sh') return
-    let input = sheet.current?.ownerDocument.querySelector<HTMLInputElement>(
-      '.Prompt_Form input',
+    let doc = sheet.current?.ownerDocument
+    let input = doc?.querySelector<HTMLInputElement>('.Prompt_Input')
+    let tab = doc?.querySelector<HTMLButtonElement>(
+      '.Plot_Panel[data-panel="Terminal"]',
     )
-    input?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-    input?.focus({ preventScroll: true })
+    let focus = () => {
+      input?.scrollIntoView?.({ block: 'center' })
+      input?.focus({ preventScroll: true })
+    }
+    if (!tab?.getClientRects?.().length || input?.getClientRects?.().length) {
+      focus()
+    } else {
+      tab.click()
+      requestAnimationFrame(focus)
+    }
   })
   // A beat that carries on its window, as the outbox's retries do, finds its
   // wire drawn and its window in: only a window's first beat plays them in.

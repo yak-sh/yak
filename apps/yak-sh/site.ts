@@ -541,20 +541,27 @@ let rows = (): Bundle[] => [
 // only fetch its bytes on every visit.
 let image = (path: string) => /\.(png|jpg|webp)$/.test(path)
 
+let file = (path: string) => ({
+  entity: { eid: fileOf(SITE, path) },
+  file: { path, root: SITE },
+})
+
+/** The files can be found before their contents arrive. */
+export let fileList = () => FILES.map(file)
+
+type Source = ReturnType<typeof file> & { content?: { body: string } }
+
 /** The files, read with `fetch` from where the page is served: text keeps
  * its contents as `content{body}`, and an image is listed unread. */
 export let files = async (
   fetch: (path: string) => Promise<Response>,
-): Promise<Bundle[]> =>
+): Promise<Source[]> =>
   await Promise.all(FILES.map(async (path) => {
-    let file = {
-      entity: { eid: fileOf(SITE, path) },
-      file: { path, root: SITE },
-    }
-    if (image(path)) return file
+    let row = file(path)
+    if (image(path)) return row
     let res = await fetch(path).catch(() => null)
-    if (!res?.ok) return file
-    return { ...file, content: { body: await res.text() } }
+    if (!res?.ok) return row
+    return { ...row, content: { body: await res.text() } }
   }))
 
 /** A call as a block writes it: the tool's name, then its arguments as JSON. */

@@ -81,3 +81,13 @@ test('index.md names the page as its canonical address', async () => {
   let res = await worker.fetch(new Request('https://yak.sh/index.md'))
   equal(res.headers.get('link'), '<https://yak.sh/>; rel="canonical"')
 })
+
+test('opening an agent document in a browser wraps its source without changing the raw response', async () => {
+  let url = 'https://yak.sh/sitemap.xml'
+  let browser = { accept: 'text/html', 'sec-fetch-mode': 'navigate' }
+  let shown = await get(url, browser)
+  equal(shown.type, 'text/html; charset=utf-8')
+  match(shown.text, /name="viewport"/)
+  match(shown.text, /&lt;loc&gt;https:\/\/yak\.sh\/&lt;\/loc&gt;/)
+  equal(await get(`${url}?raw=1`, browser), await get(url))
+})

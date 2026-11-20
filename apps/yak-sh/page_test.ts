@@ -22,7 +22,11 @@ let dir = new URL('./', import.meta.url)
 options.requestAnimationFrame = (fn) => setTimeout(fn)
 let tick = () => new Promise((ok) => setTimeout(ok))
 let open = async (
-  more: { post?: typeof fetch; stash?: Stash } = {},
+  more: {
+    fetch?: (path: string) => Promise<Response>
+    post?: typeof fetch
+    stash?: Stash
+  } = {},
 ) => {
   let window = parseHTML(await Deno.readTextFile(new URL('index.html', dir)))
   let { document } = window
@@ -69,6 +73,33 @@ test('the page paints in its drawn layout before its scripts run', async () => {
   let { root, page } = await open()
   let after = new Set(outline(root))
   equal(before.filter((l) => !after.has(l)), [])
+  page.page.close()
+})
+
+test('the terminal is usable while the page source files are still loading', async () => {
+  let reading = Promise.withResolvers<void>()
+  let release = Promise.withResolvers<void>()
+  let opening = open({
+    fetch: async (path) => {
+      reading.resolve()
+      await release.promise
+      return await fetch(new URL(path, dir))
+    },
+  })
+  await reading.promise
+  let input = document.querySelector<HTMLInputElement>('.Prompt_Input')!
+  let E = document.defaultView!.Event
+  try {
+    input.value = 'task list'
+    input.dispatchEvent(new E('input', { bubbles: true }))
+    await tick()
+    input.parentElement!.dispatchEvent(new E('submit', { bubbles: true }))
+  } finally {
+    release.resolve()
+  }
+  let { root, page, settle } = await opening
+  await settle()
+  match(root.querySelector('.Prompt_Screen')!.textContent!, /\$ task list/)
   page.page.close()
 })
 

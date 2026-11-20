@@ -70,7 +70,6 @@ let Field: FunctionComponent<
     class: 'Editor_Field',
     'aria-label': name,
     value: shown,
-    rows: long ? Math.min(12, shown.split('\n').length + 1) : undefined,
     spellcheck: false,
     inputMode: typeof value == 'number' ? 'decimal' : undefined,
     onInput: (ev: Event) => write((ev.currentTarget as HTMLInputElement).value),
