@@ -2,7 +2,7 @@
 // kept as a request names it (operator-root.ts `spacedAt`): a memory kept
 // before anyone has talked with the Operator is embedded too, where a store
 // that knew its space only from a session asked no model and fell behind.
-import { equal, test } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
 import { retries } from '@yaks/embedding'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -30,7 +30,7 @@ await directoryOf(env.STORE).apply({
   entities: [{ entity: { eid }, space: { slug: 'ada', store: 'ada' } }],
 }, { 'x-yak-role': 'owner' })
 
-let kept = async (space?: string) => {
+let kept = async (space: string) => {
   let store: OperatorStore = await operatorStore(
     durable(),
     {},
@@ -38,20 +38,21 @@ let kept = async (space?: string) => {
     operatorVectors(env, {
       space: () => store,
       arm: () => Promise.resolve(),
-      hold: () => {},
+      ready: () => store.vectors?.run(),
     }),
   )
-  if (space) spacedAt(store, space)
+  spacedAt(store, space)
   await store.g.apply([{
     entity: { eid: crypto.randomUUID() },
     memory: {},
     doc: { title: 'Ada waters her tomatoes', body: 'every morning' },
   }], { trusted: true })
   await store.vectors!.work()
-  return store.vectors!.owes()
+  return store
 }
 
 test('a store that keeps its space embeds a memory no session came before', async () => {
-  equal(await kept(eid), false)
+  let store = await kept(eid)
+  await until(() => !store.vectors!.owes(), { label: 'its vectors' })
   equal(asked > 0, true)
 })
