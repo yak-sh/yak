@@ -15,7 +15,8 @@
       ],
       "properties": {
         "slug": {
-          "type": "string"
+          "type": "string",
+          "index": true
         },
         "space": {
           "type": "string",
