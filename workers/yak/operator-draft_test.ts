@@ -805,6 +805,16 @@ test('a signed-in person’s chat opens beside it an app their Operator starts t
   page.leave()
 })
 
+test('an app the Operator started and that has since been deleted opens nothing beside the chat, and is no error', async () => {
+  let page = await load(storage())
+  let gone = { space: '', app: 'deleted-since' }
+  page.hear({ operator: { ...working(gone).operator, started: [gone] } })
+  await settle()
+  assertEquals(page.document.querySelector('[data-app]'), null)
+  assertEquals(page.status(), '')
+  page.leave()
+})
+
 test('words typed on one page show on the person’s other open page as its socket brings them', async () => {
   let here = await load(storage(), false, park),
     there = await load(storage(), false, park)

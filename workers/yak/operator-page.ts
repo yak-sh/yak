@@ -2462,9 +2462,12 @@ document.addEventListener('click', (e) => {
   if (frame) frame.checked = true
   refreshFrames()
 })
-// One read of it at a time; one asked for meanwhile follows it.
-let remaking = false, wanted
+// One read of it at a time; one asked for meanwhile follows it. An app the
+// conversation made may since have been deleted: the door answers it missing,
+// and it is not asked for again.
+let remaking = false, wanted, gone = new Set()
 let remake = async (slug) => {
+  if (gone.has(slug)) return
   wanted = slug
   if (remaking) return
   remaking = true
@@ -2473,6 +2476,11 @@ let remake = async (slug) => {
       let asked = wanted
       wanted = undefined
       let response = await ask('${at}?made=' + encodeURIComponent(asked))
+      if (response.status == 404) {
+        response.body?.cancel()
+        gone.add(asked)
+        continue
+      }
       if (!response.ok) throw new Error('What is being made could not be brought up to date. Reload to try again.')
       put(await response.json())
     }
