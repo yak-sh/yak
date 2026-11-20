@@ -101,8 +101,14 @@ test('within: a room is read only in a server its connection serves', async () =
 })
 
 test("a room read back: what came after the bot's last answer, a line each", () => {
-  let line = (id: string, name: string, text: string): Said => ({
+  let line = (
+    id: string,
+    name: string,
+    text: string,
+    more: Partial<Said> = {},
+  ): Said => ({
     ...said,
+    ...more,
     id,
     author: { id: name, name },
     text,
@@ -110,7 +116,7 @@ test("a room read back: what came after the bot's last answer, a line each", () 
   })
   let room = [
     line('1', 'Ann', 'who brings pie?'),
-    line('2', 'Kit', 'Bo does.'),
+    line('2', 'Kit', 'Bo does.', { reply_to: '1' }),
     line('3', 'Bo', 'and cider'),
   ]
   assertEquals(since(room, '2').map((s) => s.id), ['3'])
@@ -118,12 +124,13 @@ test("a room read back: what came after the bot's last answer, a line each", () 
   assertEquals(since(room).length, 3)
   assertEquals(
     recounted(room, new Set(['2'])),
-    '[2026-11-20 05:41] Ann: who brings pie?\n' +
-      '[2026-11-20 05:42] you: Bo does.\n[2026-11-20 05:43] Bo: and cider',
+    '[2026-11-20 05:41] (message 1) Ann: who brings pie?\n' +
+      '[2026-11-20 05:42] (message 2, replying to 1) you: Bo does.\n' +
+      '[2026-11-20 05:43] (message 3) Bo: and cider',
   )
   assertEquals(
     recounted(room.slice(0, 1), new Set(), new Map([['Ann', 'Ann (owner)']])),
-    '[2026-11-20 05:41] Ann (owner): who brings pie?',
+    '[2026-11-20 05:41] (message 1) Ann (owner): who brings pie?',
   )
 })
 

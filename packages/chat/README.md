@@ -86,7 +86,8 @@ platform can, so a space chooses the one it hears in full (`chat_hears`).
 `recent` reads back a room's messages said before one (`{before, limit}`),
 oldest first, where the platform keeps them: none `addressed`, and a bot's own
 among them. `since(said, last)` is those after the bot's last answer there, and
-`recounted(said, mine)` says them a line each, the bot's own as said by "you".
+`recounted(said, mine)` says them a line each, its ids first as `framing` says
+them (`(message 10, replying to 9)`), the bot's own as said by "you".
 
 `named` gives a bot a name of its own in one server, where the platform lets a
 bot go by one per server (Discord's nickname), so a bot shared by many spaces,

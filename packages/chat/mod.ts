@@ -365,12 +365,15 @@ export let framing = (
     : `On ${platform.title}, ${HOW[said.addressed ?? 'heard']} ${said.name}: `
 
 // A message's place, as `framing` says it.
-let placed = ({ room, name, direct, message, reply_to }: Place) =>
+let placed = ({ room, name, direct, ...said }: Place) =>
   `in ${
     direct ? 'direct messages' : name ? `#${name}` : 'a room'
-  } (room ${room}, message ${message}${
-    reply_to ? `, replying to ${reply_to}` : ''
-  })`
+  } (room ${room}, ${named(said)})`
+
+// A message's ids, as `framing` and `recounted` say them: which reply to it
+// names, and what it replies to.
+let named = ({ message, reply_to }: Pick<Place, 'message' | 'reply_to'>) =>
+  `message ${message}${reply_to ? `, replying to ${reply_to}` : ''}`
 
 let HOW: Record<Addressed | 'heard', string> = {
   direct: 'directly, from',
@@ -381,7 +384,8 @@ let HOW: Record<Addressed | 'heard', string> = {
 
 /**
  * A room's messages read back ({@link Platform.recent}), one line each,
- * oldest first: when and who said it, the bot's own (`mine`, by the
+ * oldest first: when and who said it, the message's id and the one it replies
+ * to (as {@link framing} says them), the bot's own (`mine`, by the
  * platform's ids) as said by `you`, and anyone else as `names` calls their
  * account, by its id on the platform, else by the name they show.
  */
@@ -391,7 +395,9 @@ export let recounted = (
   names: Map<string, string> = new Map(),
 ): string =>
   said.map((s) =>
-    `[${s.at.slice(0, 16).replace('T', ' ')}] ${
+    `[${s.at.slice(0, 16).replace('T', ' ')}] (${
+      named({ message: s.id, reply_to: s.reply_to })
+    }) ${
       mine.has(s.id) ? 'you' : names.get(s.author.id) ?? s.author.name
     }: ${s.text}`
   ).join('\n')
