@@ -141,7 +141,7 @@ test('framing says the platform, how it was said to the bot, and who wrote it', 
     [said('mention'), said('reply'), said('direct'), said()],
     [
       'On Discord, naming you, from Ann: ',
-      'On Discord, replying to you, from Ann: ',
+      'On Discord, replying in a thread with you, from Ann: ',
       'On Discord, directly, from Ann: ',
       'On Discord, in a room you hear but were not addressed in, from Ann: ',
     ],
@@ -152,7 +152,7 @@ test('framing says the platform, how it was said to the bot, and who wrote it', 
       addressed: 'reply',
       at: { room: '7', name: 'general', message: '42', reply_to: '41' },
     }),
-    'On Discord in #general (room 7, message 42, replying to 41), replying to you, from Ann: ',
+    'On Discord in #general (room 7, message 42, replying to 41), replying in a thread with you, from Ann: ',
   )
   assertEquals(
     framing({ title: 'Discord' }, {
