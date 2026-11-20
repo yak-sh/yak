@@ -874,15 +874,15 @@ The complete list of reserved names:
     result retired revision rtc rtc_lapse sale_access sale_artifact
     satisfies screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
-    session_run sessions_ended sfu shared signed_in signin signin_miss skill
-    sms_consent space space_logo speech_hear spend staged standing_link
-    started starter stop stream_item submitted subscribed subscription
-    supersedes supervises support sweep switched task text text_post theme
-    told tool tool_refusal topic trashed tree_entry trend tunnel tunnel_tell
-    tunnel_trashed typed unchecked untrashed updated upstream usage uses
-    using verified visit visitor_build visitor_calls visitor_share volume
-    waitlisted wake wake_run wants watch web withdrawn worked worktree
-    written
+    session_resume session_run sessions_ended sfu shared signed_in signin
+    signin_miss skill sms_consent space space_logo speech_hear spend staged
+    standing_link started starter stop stream_item submitted subscribed
+    subscription supersedes supervises support sweep switched task text
+    text_post theme told tool tool_refusal topic trashed tree_entry trend
+    tunnel tunnel_tell tunnel_trashed typed unchecked untrashed updated
+    upstream usage uses using verified visit visitor_build visitor_calls
+    visitor_share volume waitlisted wake wake_run wants watch web withdrawn
+    worked worktree written
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

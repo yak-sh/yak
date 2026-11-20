@@ -162,6 +162,7 @@ export let appConfig: Config = {
         'dispatch',
         'session_input',
         'session_run',
+        'session_resume',
         'session_result',
       ],
     },
