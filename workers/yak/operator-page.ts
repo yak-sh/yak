@@ -2236,7 +2236,7 @@ export let updatesPage = async (
   let here = managePath('updates', space.slug)
   let at = managePath('operator', space.slug)
   return talkPage(env, space, who, beside, {
-    title: `Updates from ${space.operator}`,
+    title: 'Updates',
     status: 200,
     waiting: news.updates.filter((u) => u.needs).length,
     listed,

@@ -518,7 +518,7 @@ test('Updates from the Operator opens beside the same side', async () => {
   )
   assertEquals(
     document.querySelector('[data-title]')?.textContent,
-    `Updates from ${space.operator}`,
+    'Updates',
   )
   assertEquals(
     document.querySelector('.SideNav [aria-current="page"]')
