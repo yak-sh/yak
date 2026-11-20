@@ -708,8 +708,8 @@ files were written and how many removed.
 A copy running out of the sandbox takes only a release its space has reason to
 trust (see "How an installed app runs, and the sandbox"): the newest reviewed
 one, or the newest one somebody in the space made. A newer release that is
-neither waits until it is reviewed, and the answer says which version waits.
-The space's owners hear of it in their Updates, once per version that waits. A
+neither waits until it is reviewed, and the answer says which version waits. The
+space's owners hear of it in their Updates, once per version that waits. A
 sandboxed copy takes whatever is published.
 
 Four cases where `app_update` does not update:
