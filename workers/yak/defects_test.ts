@@ -211,6 +211,7 @@ let GONE =
   'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.'
 let CODE = 'Durable Object reset because its code was updated.'
 let LOST = 'Network connection lost.'
+let KILL = "Durable Object's isolate exceeded its memory limit and was reset."
 let TIMEOUT =
   'Durable Object storage operation exceeded timeout which caused object to be reset.'
 // An instance's storage. One reset for a deploy refuses writes and still
@@ -221,10 +222,7 @@ let refuse = (words: string) => {
     throw error
   }
 }
-let storage = (
-  write = () => {},
-  read: (query: string) => Iterable<unknown> = () => [],
-): Own => ({
+let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
   sql: { exec: read },
   transactionSync: (body) => (write(), body()),
 })
@@ -247,8 +245,8 @@ let resetCases: [string, Own | undefined, boolean[]][] = [
     [true, true, true, false],
   ],
   [
-    'an instance whose storage lost its connection to its tables reports none of its resets',
-    storage(undefined, (query) => / from /i.test(query) ? refuse(LOST)() : []),
+    'an instance killed for memory reports none of the resets that follow',
+    storage(refuse(KILL), refuse(LOST)),
     [true, true, true, false],
   ],
   ['a live instance reports each reset', storage(), [
@@ -274,6 +272,11 @@ for (let [name, instance, expected] of resetCases) {
     )
   })
 }
+
+test('the kill itself is reported by the instance it killed', () => {
+  let killed = storage(refuse(KILL), refuse(LOST))
+  equal(redone(new Error(KILL), () => replaced(killed)), false)
+})
 
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {
   let { rows, time, env } = recorded()

@@ -59,7 +59,7 @@ export let moved = (e: unknown): boolean => says(e, MOVED)
 
 /** The slice of an object's storage that `replaced` asks. */
 export type Own = {
-  sql: { exec(query: string): Iterable<unknown> }
+  sql: { exec(query: string): unknown }
   transactionSync<T>(body: () => T): T
 }
 
@@ -69,10 +69,10 @@ export type Own = {
  * knows, a lost connection among them, but not all of it: one reset for a
  * deploy still answers a read and refuses every write (workerd's
  * `ActorSqlite::requireNotBroken`). A transaction counts as a write even when
- * its body only reads, so it asks both; the live instance answers. The read
- * reads the database: SQLite answers `SELECT 1` without opening it, and a
- * storage whose connection was lost answers that while refusing every read
- * of a table.
+ * its body only reads, so it asks both; the live instance answers. An
+ * instance the runtime killed for its CPU or memory limit is replaced too:
+ * its transactions say the kill (`killed`), which whoever met it first
+ * reports, and its reads go on failing as a lost connection.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -88,23 +88,22 @@ export type Own = {
  *   throw new Error('Network connection lost.')
  * }
  * assertEquals(replaced({ ...live, sql: { exec: cut } }), true)
- * let tablesCut = (query: string) => / from /i.test(query) ? cut() : []
- * assertEquals(replaced({ ...live, sql: { exec: tablesCut } }), true)
+ * let kill = () => {
+ *   throw new Error("Durable Object's isolate exceeded its memory limit and was reset.")
+ * }
+ * assertEquals(replaced({ sql, transactionSync: kill }), true)
  * ```
  */
 export let replaced = (storage: Own): boolean => vacated(storage) != null
-
-// What `replaced` asks: one row of the schema, which opens the database.
-let PROBE = 'SELECT 1 FROM sqlite_master LIMIT 1'
 
 // The runtime's words for the move, as this instance's storage refuses in
 // them, or null while the instance is the live one.
 let vacated = (storage: Own): Error | null => {
   try {
-    storage.transactionSync(() => [...storage.sql.exec(PROBE)])
+    storage.transactionSync(() => storage.sql.exec('SELECT 1'))
     return null
   } catch (e) {
-    return moved(e) ? e as Error : null
+    return moved(e) || killed(e) ? e as Error : null
   }
 }
 
