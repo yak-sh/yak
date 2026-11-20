@@ -200,8 +200,15 @@ export let CURRENCY: string = 'USD'
 // 2026-10-22: "and yes, one included space." Spaces that were free before
 // the cap stay free; it only stops making or restoring another.
 
-/** The free spaces one person may own. */
+/** The free spaces one person may own, unless their own allowance says
+ * otherwise ({@link freeSpaces}). */
 export let SPACES: number = 1
+
+/** The free spaces this person may own: the `count` of their own
+ * `free_spaces` where an admin set one (admin_spaces), no limit where it was
+ * set without a count, and {@link SPACES} where none was set. */
+export let freeSpaces = (own?: { count?: number | null } | null): number =>
+  own ? own.count ?? Infinity : SPACES
 
 /** The monthly usage counters. Models, realtime and texts spend the same
  * space budget; their separate counters still say what each source cost. */

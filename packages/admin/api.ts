@@ -375,6 +375,22 @@ export let setComp = (
 ): Promise<SpaceComp> =>
   said(posted(apex('/api/comp'), { space, tier, reason }, session))
 
+/** One person's allowance of free spaces (workers/yak free-spaces.ts): a
+ * number, or `unlimited`. Only an owner of the `yak` space is answered. */
+export type FreeSpaces = { person: string; spaces: number | 'unlimited' }
+export let freeSpacesNow = (
+  session: string,
+  person: string,
+): Promise<FreeSpaces> =>
+  said(sent(apex(`/api/spaces?person=${encodeURIComponent(person)}`), session))
+/** Set it: a number, `unlimited`, or `default` for one person's. */
+export let setFreeSpaces = (
+  session: string,
+  person: string,
+  spaces: string,
+): Promise<FreeSpaces> =>
+  said(posted(apex('/api/spaces'), { person, spaces }, session))
+
 /** The support threads people open with feedback (workers/yak
  * support-door.ts), each with `text`, the thread as TaskMaster reads it. Only
  * an owner of the `yak` space is answered. */

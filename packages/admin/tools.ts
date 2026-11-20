@@ -38,6 +38,7 @@ import {
   doomedIn,
   feeNow,
   firstsNow,
+  freeSpacesNow,
   funnelNow,
   gravesIn,
   linkFor,
@@ -52,6 +53,7 @@ import {
   setBudget,
   setComp,
   setFee,
+  setFreeSpaces,
   setTunnel,
   standing,
   storeApply,
@@ -455,6 +457,20 @@ export let runs = (
             ? `comped: ${now.comp.reason} (${now.comp.by})`
             : 'no comp'),
       )]
+    }),
+
+    admin_spaces: verb(async (call) => {
+      let a = argsOf(call)
+      let person = String(a.person)
+      let spaces = word(a, 'spaces')
+      if (spaces != null && !/^(\d+|unlimited|default)$/.test(spaces)) {
+        throw new CallError('spaces', 'say a number, unlimited or default')
+      }
+      let at = await acting(a)
+      let now = spaces == null
+        ? await freeSpacesNow(at.bearer, person)
+        : await setFreeSpaces(at.bearer, person, spaces)
+      return [said(call, `${now.person}: ${now.spaces} free spaces`)]
     }),
 
     // The server answers support threads only to the account's seat in yak.

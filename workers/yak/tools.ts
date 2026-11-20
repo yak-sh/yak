@@ -334,7 +334,7 @@ import {
   standingOf,
   tooManySpaces,
 } from '@yaks/platform/standing'
-import { ceilings, paid as paying, SPACES } from '@yaks/platform/plans'
+import { ceilings, paid as paying } from '@yaks/platform/plans'
 import {
   free,
   monthOf,
@@ -3507,15 +3507,19 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
   },
 })
 
-/** Refused where the caller already owns as many free spaces as one person
- * gets (@yaks/platform/plans `SPACES`, T-131887). A space in the trash is on
+/** Refused where the caller already owns as many free spaces as they get:
+ * their own allowance, else one person's (@yaks/platform/plans `freeSpaces`,
+ * `SPACES`, T-131887). A space in the trash is on
  * its way out, so it does not count; one somebody else made and invited them
  * into is not theirs, and one on the Plus plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {
-  let held = (await ctx.dir.spaces(ctx.person, 'owner'))
-    .filter((s) => free(s) && !s.trashed)
-  if (held.length >= SPACES) {
-    throw refuse('limit', tooManySpaces(held, ctx.env))
+  let [owned, allowed] = await Promise.all([
+    ctx.dir.spaces(ctx.person, 'owner'),
+    ctx.dir.freeSpaces(ctx.person),
+  ])
+  let held = owned.filter((s) => free(s) && !s.trashed)
+  if (held.length >= allowed) {
+    throw refuse('limit', tooManySpaces(held, ctx.env, allowed))
   }
 }
 

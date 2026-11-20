@@ -523,12 +523,19 @@ export let atStored = (
   }. ${plans(space, env)}`
 }
 
-/** The refusal at {@link SPACES}: the free spaces a person owns, and what
- * makes room. Sharing is never what stops them, so it says so. */
-export let tooManySpaces = (held: Metered[], env: Host = {}): string => {
-  let gets = SPACES == 1 ? 'one free space' : `${SPACES} free spaces`
-  let extra = held.length - SPACES + 1
-  return `one person gets ${gets}, and you own ${count(held.length)} ` +
+/** The refusal at a person's allowance (`allowed`, {@link SPACES} unless
+ * theirs was raised): the free spaces they own, and what makes room. Sharing
+ * is never what stops them, so it says so. */
+export let tooManySpaces = (
+  held: Metered[],
+  env: Host = {},
+  allowed: number = SPACES,
+): string => {
+  let gets = allowed == 1 ? 'one free space' : `${allowed} free spaces`
+  let extra = held.length - allowed + 1
+  return `${
+    allowed == SPACES ? 'one person gets' : 'you get'
+  } ${gets}, and you own ${count(held.length)} ` +
     `(${held.map((s) => s.slug).join(', ')}) — put ${
       extra == 1 ? 'one' : extra
     } on the Plus plan or delete ${

@@ -56,7 +56,7 @@ import {
   meterOf,
   topUp,
 } from '@yaks/platform/meter'
-import { SUBSCRIBED, type Tier } from '@yaks/platform/plans'
+import { freeSpaces, SUBSCRIBED, type Tier } from '@yaks/platform/plans'
 import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
@@ -923,6 +923,7 @@ export type Row = MeteredRow & {
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
+  free_spaces?: { count?: number | null }
   push_subscription?: {
     person: Id
     endpoint: string
@@ -4049,6 +4050,10 @@ export let directoryRows = (rows: {
     alertsDeclined: async (person: string): Promise<string | null> =>
       (await one(line`.entity.eid=${person}`))?.operator_alerts?.declined ??
         null,
+    // How many free spaces this person may own (@yaks/platform/plans
+    // `freeSpaces`): their own `free_spaces`, else one person's.
+    freeSpaces: async (person: string): Promise<number> =>
+      freeSpaces((await one(line`.entity.eid=${person}`))?.free_spaces),
     // Whether this person keeps the side of their pages collapsed to icons.
     collapsed: async (person: string): Promise<boolean> =>
       !!(await one(line`.entity.eid=${person}`))?.desk_sidebar?.collapsed,

@@ -88,3 +88,27 @@ test('one free space a person, and each space answers to its own allowances', as
     await k.stop()
   }
 })
+
+test("a person's own allowance of free spaces stands in for one person's", async () => {
+  let k = await kernel()
+  try {
+    let ada = await signIn(k)
+    let hers = connector(k, ada.cookie)
+    let tag = crypto.randomUUID().slice(0, 6)
+    let make = (n: number) =>
+      hers.answer('space_new', { slug: `a${tag}${n}`, title: 'A' })
+        .then(() => '', (e) => String(e))
+    let allow = (free_spaces: { count: number | null } | null) =>
+      meta(k).apply([{ entity: { eid: ada.person }, free_spaces }])
+
+    await allow({ count: 2 })
+    assertEquals(await make(1), '')
+    assertStringIncludes(await make(2), 'you get 2 free spaces, and you own 2')
+    await allow({ count: null })
+    assertEquals(await make(3), '')
+    await allow(null)
+    assertStringIncludes(await make(4), 'one person gets one free space')
+  } finally {
+    await k.stop()
+  }
+})

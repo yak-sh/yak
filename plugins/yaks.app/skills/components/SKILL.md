@@ -842,9 +842,9 @@ The complete list of reserved names:
     document_text draft draft_rows durable_retirement edge effect email
     entity entry error event exception execution failed favorite featured
     fee feed feedback file file_retirement filed finding fired form
-    form_guest form_mail form_phone form_post former gallery gitobj grant
-    grants_listed handoff_spent heard heard_turn hearing held home hook
-    hostname image inference install installed integration
+    form_guest form_mail form_phone form_post former free_spaces gallery
+    gitobj grant grants_listed handoff_spent heard heard_turn hearing held
+    home hook hostname image inference install installed integration
     integration_install interrupted invite inviting key last_deploy lease
     lent lines mail mail_answered mail_dismissed mail_domain mail_post
     mail_task mcp_list mcp_server member memory mentions meter miss model

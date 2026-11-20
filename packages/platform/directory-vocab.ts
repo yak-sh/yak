@@ -230,6 +230,14 @@ export let directoryDoc: VocabDoc = {
         declined: { type: 'string', format: 'date-time' },
       },
     },
+    // How many free spaces this person may own, on their own row, where the
+    // platform raised it for them (admin_spaces, plans.ts `freeSpaces`): a
+    // null `count` is no limit, and a person without one gets `SPACES`.
+    free_spaces: {
+      component: true,
+      type: 'object',
+      properties: { count: { type: 'integer', minimum: 0 } },
+    },
     // How a person keeps the side of their yaks.app pages (desk-pages.ts
     // `deskFrame`, operator-page.ts `side`): collapsed to a rail of icons,
     // or open with each one's name beside it, the way it was without it.
