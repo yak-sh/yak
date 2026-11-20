@@ -361,6 +361,7 @@ let NOTES: Record<string, string> = {
   'harness:fork': 'That it is a fork of the conversation',
   'delegation:instructions': 'The guidance it was started with',
   'operator:earlier': 'What the person said before on this',
+  'operator:decisions': 'The decisions waiting on the person',
 }
 
 // The layers of an ask by key.

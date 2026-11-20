@@ -22,9 +22,10 @@ export let workDocs = [taskDoc, goalDoc]
 
 // A decision is the Operator's question to the person it works for: it asks
 // with decision_new, and the person answers in their Updates, whose answer
-// goes on into their conversation (operator-updates.ts). So the Operator
-// never answers its own, and the connector, whose caller is that person,
-// offers neither half.
+// goes on into their conversation (operator-updates.ts), or in their own
+// words to it, which it records as theirs (operator-relay.ts
+// `decisionRelay`). So the Operator never answers one itself, and the
+// connector, whose caller is that person, offers neither half.
 let asking = new Set(['decision_new', 'decision_answer'])
 
 /** The work tools the Operator holds. */

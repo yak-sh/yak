@@ -51,6 +51,47 @@ export let shows = (
       : []
   )
 
+/** The query for the decisions waiting on `person`: assigned to them, and
+ * neither answered nor cancelled. */
+export let waiting = (person: string): Built =>
+  line`.decision .filed.assignee=${person} !decided !cancelled`
+
+/**
+ * The decisions in `rows` as one line each: its id (`id`, the eid where it
+ * gives none), its question and its choices' labels, the recommended one
+ * marked.
+ *
+ * ```ts
+ * import { asked } from '@yaks/task'
+ * import { equal } from '@yaks/testing'
+ *
+ * let row = {
+ *   entity: { eid: 'e1' },
+ *   decision: {
+ *     question: 'Which cover?',
+ *     choices: [{ label: 'Gothic' }, { label: 'Plain' }],
+ *     recommended: 'Plain',
+ *   },
+ * }
+ * equal(asked([row], () => 'T-4'), '- T-4: Which cover? "Gothic", "Plain" (recommended)')
+ * equal(asked([]), '')
+ * ```
+ */
+export let asked = (
+  rows: Bundle[],
+  id: (eid: string) => string | undefined = () => undefined,
+): string =>
+  rows.map((b) => {
+    let d = b.decision as Decision
+    let labels = d.choices.map((c) =>
+      JSON.stringify(c.label) +
+      (c.label == d.recommended ? ' (recommended)' : '')
+    )
+    return `- ${id(b.entity.eid) ?? b.entity.eid}: ${d.question} ${
+      labels.join(', ')
+    }`
+  }).join('\n')
+
 /** The answer a door writes, optionally recording another person's words. */
 export let answer = (eid: string, choice: string, by?: string): Bundle[] => [{
   entity: { eid },

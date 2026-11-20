@@ -12,8 +12,18 @@
 // `Calling.own`). The machine then writes it by its own person and through no
 // session (@yaks/tunnel `arrived`), which is how everything there tells a
 // person's comment from an agent's.
-import { line } from '@yaks/query'
-import type { Bundle, Comp, Tool as GraphTool } from '@yaks/graph'
+//
+// A decision the Operator asked them itself, kept in its own store, is
+// answered there the same way: their message, read from the conversation,
+// is the answer, theirs, and the source the answer cites (`decisionRelay`).
+import { line, sub } from '@yaks/query'
+import {
+  type Bundle,
+  type Comp,
+  mint,
+  type Tool as GraphTool,
+} from '@yaks/graph'
+import { asked, waiting } from '@yaks/task'
 import { nameOf } from '@yaks/mcp-client'
 import { kindOf, textOf, type Tool } from '@yaks/session'
 import type { Calling } from '@yaks/tunnel/hosted'
@@ -273,3 +283,118 @@ export let relayTools = (
       }
     })
 }
+
+/**
+ * The decisions waiting on the person, as a note beside their words: each
+ * one their Operator asked them (operator.ts `ASKING`), so a message of
+ * theirs that answers one is read as its answer (`decisionRelay`). None
+ * where nothing waits.
+ */
+export let waitingOn = async (work: Store, person: string) => {
+  let rows = await work.g.read(line`${sub(waiting(person))}&*`)
+  if (!rows.length) return ''
+  let id = await work.known(rows.map((b) => b.entity.eid))
+  return `The decisions waiting on the person, which their words may answer (record it with decision_relay):\n${
+    asked(rows, id)
+  }`
+}
+
+/**
+ * The tool that answers one of the person's open decisions with one of their
+ * own messages in this conversation: the answer is theirs, the choice their
+ * message picks or else their words, and it cites that message as its
+ * source. `conversation` names the conversation a session works for.
+ */
+export let decisionRelay = (
+  ctx: Ctx,
+  work: Store,
+  conversation: (session: string) => Promise<string>,
+): Tool => ({
+  name: 'decision_relay',
+  title: 'Record their answer',
+  step: { doing: 'Recording their answer…', done: 'Recorded their answer' },
+  description:
+    'Answer one of the person\'s open decisions with one of their own messages in this conversation, as theirs: use it whenever what they said to you answers a decision waiting on them ("go with the gothic one"), so it closes and leaves their Updates. You choose only which decision, which message and which listed choice it picks, and supply no words. Only their own words answer: never a decision they did not answer, and never your guess at what they want.',
+  parameters: {
+    type: 'object',
+    properties: {
+      decision: {
+        type: 'string',
+        description: 'The decision their message answers, by its id (T-12).',
+      },
+      entry: {
+        type: 'string',
+        description:
+          "Which of their messages: its id, or its Sent time exactly as the message's header shows it. Omit for the newest message they sent.",
+      },
+      choice: {
+        type: 'string',
+        description:
+          'The label of the listed choice their message picks. Omit when they answered in their own words: those words are then the answer.',
+      },
+    },
+    required: ['decision'],
+  },
+  run: async (args, context) => {
+    let named = String(args.decision ?? '').trim()
+    if (!named) throw refuse('arguments', 'name the decision they answered')
+    let eid = (await work.g.address([named])).get(named) ?? named
+    let [row] = await work.g.get([eid])
+    let decision = comp(row, 'decision')
+    if (!decision || comp(row, 'filed')?.assignee != ctx.person) {
+      throw refuse('arguments', `${named} is no decision waiting on them`)
+    }
+    if (row!.decided || row!.cancelled) {
+      throw refuse('arguments', `${named} is already answered or cancelled`)
+    }
+    let said = String(args.entry ?? '').trim()
+    let line = await lineOf(
+      work,
+      await conversation(context!.session),
+      ctx.person,
+      said,
+    )
+    let words = ownWords(line, ctx.person)
+    if (!words) {
+      throw refuse(
+        'arguments',
+        said
+          ? `${said} is not a message the person wrote in this conversation. Only their own words answer a decision.`
+          : 'The person has written no message in this conversation lately; name one by its id or its Sent time.',
+      )
+    }
+    let choices = (decision.choices ?? []) as { label: string }[]
+    let picked = String(args.choice ?? '').trim()
+    let label = picked
+      ? choices.map((c) => c.label)
+        .find((l) => l.trim().toLowerCase() == picked.toLowerCase())
+      : words
+    if (!label) {
+      throw refuse(
+        'arguments',
+        `${named} lists no choice "${picked}". Its choices are: ${
+          choices.map((c) => JSON.stringify(c.label)).join(', ')
+        }. For an answer in their own words, leave choice out.`,
+      )
+    }
+    let actor = { by: ctx.person, via: context!.session }
+    await work.g.apply([
+      { entity: { eid }, decided: { choice: label }, $actor: actor },
+      {
+        entity: { eid: mint() },
+        edge: { from: eid, to: line!.entity.eid },
+        cites: {},
+        $actor: actor,
+      },
+    ])
+    return {
+      text: `Answered ${named} as them: "${opening(label)}"`,
+      with: {
+        output: {
+          source: context!.call.entity.eid,
+          value: { decision: eid, entry: line!.entity.eid, choice: label },
+        },
+      },
+    }
+  },
+})

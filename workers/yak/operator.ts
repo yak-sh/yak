@@ -84,7 +84,7 @@ import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
 import { coded } from './agent-code.ts'
 import { connectedInstructions, connectedTools } from './connected-mcp.ts'
-import { relayTools } from './operator-relay.ts'
+import { decisionRelay, relayTools, waitingOn } from './operator-relay.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
 import type { Caller } from './session.ts'
@@ -440,6 +440,7 @@ let CORE = new Set([
   'store_memory_recall',
   skillRead.name,
   ...workNames,
+  'decision_relay',
   'notification_send',
   'escalate',
 ])
@@ -621,7 +622,10 @@ export let operatorRoster = async (
     // Their own words, sent on to their machine as theirs: only someone who
     // writes in the space, as the rest of what changes anything is.
     ...member
-      ? relayTools(ctx, work, remote, (s) => topOf(work.g, s), asking)
+      ? [
+        ...relayTools(ctx, work, remote, (s) => topOf(work.g, s), asking),
+        decisionRelay(ctx, work, (s) => topOf(work.g, s)),
+      ]
       : [],
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
@@ -2188,6 +2192,25 @@ export let operating = (
       }]
       : []
   }
+  // The decisions waiting on the person, as a note beside their words, so a
+  // message that answers one is recorded as its answer (operator-relay.ts
+  // `decisionRelay`).
+  let waiting = async (
+    session: string,
+    held: Asker,
+    space: Space,
+  ): Promise<Bundle[]> => {
+    let body = await waitingOn(store, held.person)
+    return body
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        prompt: { scope: 'local', source: 'operator:decisions' },
+        content: { body },
+        $actor: { by: space.eid, via: session },
+      }]
+      : []
+  }
   let started = async (session: string, by: string, space: Space) => {
     let own = await current(space.eid)
     return begin(g, undefined, {
@@ -2249,6 +2272,7 @@ export let operating = (
             !o.signup,
           ),
           ...theirs ? await before(session, said, held, space) : [],
+          ...theirs ? await waiting(session, held, space) : [],
         ]
       },
       told: () => options.tell?.(session),

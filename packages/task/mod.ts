@@ -72,9 +72,11 @@ export * from './plugin.ts'
 
 export {
   answer,
+  asked,
   type Choice,
   type Decision,
   showing,
   type Shown,
   shown,
+  waiting,
 } from './decision.ts'
