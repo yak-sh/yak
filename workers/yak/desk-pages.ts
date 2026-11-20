@@ -25,7 +25,6 @@ import {
   Notice,
   Report,
   Rows,
-  Section,
   TabSet,
 } from '@yaks/ui/parts'
 import { h, type VNode } from 'preact'
@@ -1991,7 +1990,9 @@ let connections = (at: DeskPage, env: Host) => {
         one.status == 'connected' && !one.failed ? 'positive' : 'negative',
       ),
     )
-  let grid = (cards: Kids[]) => cards.length ? h(Cards, null, cards) : null
+  let grid = (cards: Kids[], props: Record<string, string> | null = null) =>
+    cards.length ? h(Cards, props, cards) : null
+  let finds = { 'data-found': '' }
   let group = (title: Kids, ...kids: Kids[]) =>
     kids.some(Boolean) ? [h(Group, null, title), kids] : null
   let yours = [
@@ -2082,16 +2083,16 @@ let connections = (at: DeskPage, env: Host) => {
             } “${cat.q}”.`
           : `No service matches “${cat.q}”. Add a key for it below.`,
       ),
-      grid(cat.found.map(tile)),
+      grid(cat.found.map(tile), finds),
     ]
     : cat
     ? [
-      grid(cat.featured.map(tile)),
+      grid(cat.featured.map(tile), finds),
       cat.kinds.length
         ? h(Chips, null, cat.kinds.slice(0, 16).map(browse))
         : null,
     ]
-    : grid(c.built.map(tile))
+    : grid(c.built.map(tile), finds)
   // The selected service says which space it goes to and offers the others.
   let elsewhere = (at.spaces ?? []).filter((s) => s.owner && s.slug != at.space)
   let to = (what: string, other?: (slug: string) => string) => [
@@ -2269,7 +2270,7 @@ let connections = (at: DeskPage, env: Host) => {
       ),
       h(Group, { id: 'find' }, 'All services'),
       finding,
-      h(Section, { 'data-found': '' }, found),
+      found,
       c.on
         ? h(
           More,
