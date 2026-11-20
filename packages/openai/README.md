@@ -86,7 +86,16 @@ the lower-level transport rather than the neutral model item list.
 itself. With `store: true`, `anchor(components)` returns that ID so a session
 can continue from a stored response and send only subsequent context. Without
 storage, `anchor` returns nothing and the caller replays the conversation. The
-Codex backend requires `store: false`.
+Codex backend requires `store: false`. A request whose anchor the API no longer
+holds (past OpenAI's retention, 30 days by default) is refused with a
+`ModelError` coded `UNANCHORED` (@yaks/model), and the caller sends the whole
+conversation again.
+
+The `openai` provider a config names (`./provider`) stores on OpenAI's own API,
+reached on a key (`key`, `OPENAI_API_KEY`) or through the AI Gateway
+(`gateway`), and anchors each request on the reply before it. Through the Codex
+backend a ChatGPT grant reaches, or another endpoint a config names (`base`), it
+stores nothing and replays.
 
 Operational transport failures are mapped to `ModelError`, except a provider
 `invalid_request_error`, which remains a `ResponseError` so callers can inspect

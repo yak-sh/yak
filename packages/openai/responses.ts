@@ -23,10 +23,11 @@ import {
   type Reply,
   type Request,
   submitted,
+  UNANCHORED,
   type Usage,
 } from '@yaks/model'
 import type { Credential } from './credential.ts'
-import { openaiDoc } from './vocab.ts'
+import { openaiDoc, responseAnchor } from './vocab.ts'
 import { planLimits } from './limits.ts'
 import {
   request,
@@ -254,14 +255,10 @@ export let responses = (opts: Options): Model => {
         ...prefixCacheMark(reply, cache),
       },
     }),
-    anchor: (comps: Record<string, unknown>) => {
-      if (!opts.store) return undefined
-      let id = (comps[opts.provider ?? OPENAI_COMP] as
-        | Record<string, unknown>
-        | undefined)
-        ?.response_id
-      return typeof id == 'string' && id ? id : undefined
-    },
+    anchor: (comps: Record<string, unknown>) =>
+      opts.store
+        ? responseAnchor(comps, opts.provider ?? OPENAI_COMP)
+        : undefined,
     recover: (call: string) =>
       recoveredMedia(
         call,
@@ -393,6 +390,11 @@ let ask = (opts: Options) => {
         ...limits.length ? { limits } : {},
       }
     } catch (error) {
+      // A reply the API no longer keeps (past its retention, or deleted) is
+      // no defect: asked again with the whole conversation, it passes.
+      if (req.anchor && unanchored(error)) {
+        throw new ModelError(UNANCHORED, (error as Error).message)
+      }
       // Invalid request history is a caller defect, not an operational refusal.
       // Keep the transport exception (including provider details) healable.
       if (
@@ -414,6 +416,13 @@ let ask = (opts: Options) => {
     }
   }
 }
+
+// The API's refusal of a `previous_response_id` it does not hold.
+let unanchored = (error: unknown) =>
+  error instanceof ResponseError && error.status != null &&
+  error.status < 500 &&
+  (error.code == 'previous_response_not_found' ||
+    /previous[ _]response/i.test(`${error.message} ${error.body ?? ''}`))
 
 let delivered = (receipt: MediaReceipt, opts: Options): Promise<Reply> => {
   let data = receipt.response

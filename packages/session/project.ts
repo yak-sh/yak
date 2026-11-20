@@ -132,9 +132,9 @@ export let replied = (
 /** The model's view of a window of the transcript: inputs as user turns, what
  * the model returned as assistant turns, tool calls and results as the pair a
  * model expects. The full transcript resolves a result's call even when that
- * call is outside the window. Ask entries are our record, not the model's; a
- * tool call the anchored reply itself asked for is already in the provider's
- * state, so only its result travels.
+ * call is outside the window. Ask entries are our record, not the model's;
+ * what the anchored reply itself said and the tool calls it asked for are
+ * already in the provider's state, so only the calls' results travel.
  *
  * Each call's answer (its Pending where a request sent one, else its final)
  * follows the reply's last call, in the order of the calls, whatever order
@@ -304,6 +304,7 @@ export let project = (
         text: typeof input == 'string' ? input : input.text,
       }, (typeof input == 'string' ? undefined : input.from) ?? source(b)))
     } else if (kind == 'output') {
+      if (opts.anchor && comp(b, 'output')?.source == opts.anchor) return
       out.push(
         message(
           { kind: 'assistant', text: textOf(b) },

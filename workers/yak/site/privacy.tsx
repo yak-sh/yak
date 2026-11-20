@@ -60,6 +60,7 @@ export let Privacy = () => (
           telnyx: strong('privacy.shared.telnyx'),
           meta: strong('privacy.shared.meta'),
         },
+        models: { openai: strong('privacy.shared.openai') },
         texts: {},
         others: {},
       }}

@@ -24,6 +24,7 @@ import {
   ModelError,
   type Reply,
   type Request,
+  UNANCHORED,
 } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { CUT, toolEid } from '@yaks/tools'
@@ -39,7 +40,7 @@ import { type Deps, react, recent, ToolError, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
-import { PENDING, TURN } from './project.ts'
+import { PENDING } from './project.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
 // keeps `openai{response_id}`.
@@ -198,6 +199,36 @@ test('an input is asked, a tool call is run, the transcript settles', async () =
     output: 'From the echo tool:\n' +
       took('echo: hi', Number((entries[3].result as Comp).ms)),
   }])
+})
+
+test('an anchor the provider no longer holds is answered by the whole conversation, once', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    calls(['c1', 'hi']),
+    says('r2', 'done'),
+    says('r3', 'again'),
+  ])
+  let refusing: Model = Object.assign((req: Request) => {
+    if (req.anchor == 'r1' && !asked.some((a) => a.anchor == 'r1')) {
+      asked.push(req)
+      return Promise.reject(new ModelError(UNANCHORED, 'gone'))
+    }
+    return model(req)
+  }, model)
+  let deps = { model: refusing, tools: [echo], mint }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  await appendEntry(g, ids.s, 'and again')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(asked.map((a) => [a.anchor, a.items.length]), [
+    [undefined, 1],
+    ['r1', 1],
+    [undefined, 3],
+    ['r2', 1],
+  ])
+  let refused = (await transcript(g, ids.s)).find((b) =>
+    (b.interrupted as Comp | undefined)?.code == UNANCHORED
+  )
+  assertEquals(!!refused?.ask, true)
 })
 
 test('an ask answered by another model than it asked names the one that answered', async () => {
@@ -2469,7 +2500,8 @@ test('a text-only turn never enumerates the graph tool catalog', async () => {
 })
 
 // A final committed while a provider was answering has a lower sequence than
-// the completed ask, but was not part of that ask's frozen input boundary.
+// the completed ask, but was not part of that ask's frozen input boundary. The
+// anchored reply's own words are the provider's already.
 const asyncAnchorRace = world()
 await asyncAnchorRace.apply([{
   entity: { eid: 'async-anchor-origin' },
@@ -2529,11 +2561,6 @@ test('an anchored continuation includes a tool final committed during its preced
       text:
         'From the echo tool:\nThe pending echo call async-c1 {"text":"hi"} finished:\n' +
         'FINAL_DURING_ANCHORED_ASK',
-    },
-    { kind: 'assistant', text: 'held reply' },
-    {
-      kind: 'instruction',
-      text: 'From the system:\n' + TURN,
     },
   ])
 })

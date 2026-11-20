@@ -139,6 +139,10 @@ export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'
 export let RESPONSE = 'response'
+/** The {@link ModelError} code of a request whose {@link Request.anchor} the
+ * provider no longer holds: asked again with the whole conversation, it
+ * passes. */
+export let UNANCHORED = 'unanchored'
 
 /**
  * A provider or a model named where an eid is expected: `gpt-6-astra` in
@@ -256,7 +260,10 @@ export type Request = {
   tokens?: number
   /** an anchor to continue from, in which case `items` holds only what
    * followed it: whatever the same model's {@link Model.anchor} returned for an
-   * earlier reply. Opaque to the caller. */
+   * earlier reply. Opaque to the caller. A provider that no longer holds that
+   * reply (it expired, or was never kept) refuses with a {@link ModelError}
+   * coded {@link UNANCHORED}, and the caller asks again with the whole
+   * conversation. */
   anchor?: string
   /** the conversation this request continues, the same for each of its
    * requests, so a provider that keys its prompt cache by conversation finds

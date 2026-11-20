@@ -144,9 +144,13 @@ oldest lines and keeps the newest that fit half the limit, no more than the
 summarizer's own window can read, and no checkpoint follows another within `GAP`
 asks, so a window set too small summarizes every few steps, never every step.
 The next turn reads that summary and the entries after its boundary. A provider
-anchor before the checkpoint is not reused. Every request names its session as
-`Request.conversation`, so between checkpoints a provider that keys its prompt
-cache by conversation reads the unchanged prefix from it.
+anchor before the checkpoint is not reused. A provider that no longer holds the
+reply an anchor names (it expired) refuses with `UNANCHORED` (@yaks/model): the
+ask ends interrupted with that code, and the next turn sends the whole
+conversation once, so the ask answering it anchors the turns after. Every
+request names its session as `Request.conversation`, so between checkpoints a
+provider that keys its prompt cache by conversation reads the unchanged prefix
+from it.
 
 A session that wears `drops{}`, or whose persona does, shrinks without a
 summary. It leaves out what it has replied past: each of its own calls with its
@@ -577,12 +581,17 @@ newest `using`, `sending` and stop) a graph remembers, and the next reading asks
 only the lines appended since and the ones it found. So it does the lines of a
 window below the newest page: the next reading asks them by name, which the
 store answers from memory, and reads them without an ask's `attempt` or a call's
-`execution`, which nothing decides by there. A pending transcript with neither
-checkpoint nor window is its own context, and its turn reads it all. A runner
-reads a step's transcript once a pass (`reading()`): its checks before the step
-(a stop, a cancelled task, an answered call) judge the reading that `react()`
-then acts on, unless a line has landed since. `usingOf()` and `openOf()` ask for
-the model selection in force and the calls no result answers alone, and so do
+`execution`, which nothing decides by there. Where the model that answered the
+newest ask can continue from it (`Model.anchor`), the turn is sent only the
+lines after that ask, and reads no further back (`{ anchored }`); it reads the
+prose of only the lines it sends. A turn that finds it cannot continue from that
+ask after all (another model, an archive since, a summary due, a refused anchor)
+is read again whole. A pending transcript with no checkpoint, anchor or window
+is its own context, and its turn reads it all. A runner reads a step's
+transcript once a pass (`reading()`): its checks before the step (a stop, a
+cancelled task, an answered call) judge the reading that `react()` then acts on,
+unless a line has landed since. `usingOf()` and `openOf()` ask for the model
+selection in force and the calls no result answers alone, and so do
 `entryStatus()` for the status, `newestOf()` for the newest line, `saidOf()` for
 what a transcript said last, `firstInput()` for what it was first told,
 `firstRequest()` and `latestRequest()` for the line a run was started with and

@@ -4,7 +4,7 @@
 
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { ModelError, type Request } from '@yaks/model'
+import { ModelError, type Request, UNANCHORED } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
 import { tokenUsage } from './responses.ts'
 
@@ -244,7 +244,7 @@ test('a refusal, a failed stream and no credential are errors', async () => {
   let refused = serving(
     400,
     JSON.stringify({
-      error: { code: 'previous_response_not_found', message: 'gone' },
+      error: { code: 'model_not_found', message: 'gone' },
     }),
   )
   let e = await assertRejects(
@@ -252,7 +252,7 @@ test('a refusal, a failed stream and no credential are errors', async () => {
     ModelError,
     'HTTP 400 — gone',
   )
-  assertEquals(e.code, 'previous_response_not_found')
+  assertEquals(e.code, 'model_not_found')
 
   let dead = serving(200, sse({ type: 'response.failed', response: {} }))
   e = await assertRejects(
@@ -347,6 +347,34 @@ test('the Model shares refresh, redacted frame hooks, store, and anchor policy',
   assertEquals(
     responses({ credential: () => codex }).anchor!(model.mark!(reply)),
     undefined,
+  )
+})
+
+test('a reply the API no longer holds refuses its anchor as UNANCHORED', async () => {
+  let refusing = (error: Record<string, unknown>) =>
+    responses({
+      credential: () => ({ token: 'k', base: 'https://api.openai.com/v1' }),
+      store: true,
+      fetch: () => Promise.resolve(Response.json({ error }, { status: 400 })),
+    })
+  let gone = {
+    message: "Previous response with id 'r0' not found.",
+    type: 'invalid_request_error',
+    param: 'previous_response_id',
+    code: 'previous_response_not_found',
+  }
+  let code = (model: ReturnType<typeof refusing>, r: Request) =>
+    model(r).then(() => 'answered', (e) => [e.name, e.code].join(' '))
+  let unanchored = `ModelError ${UNANCHORED}`
+  assertEquals(await code(refusing(gone), req), unanchored)
+  assertEquals(await code(refusing({ ...gone, code: null }), req), unanchored)
+  // Without an anchor the same refusal is the caller's defect.
+  assertEquals(
+    await code(refusing({ ...gone, code: null }), {
+      ...req,
+      anchor: undefined,
+    }),
+    'ResponseError invalid_request_error',
   )
 })
 

@@ -72,6 +72,7 @@ import {
   RESPONSE,
   TOOL,
   type Tool as Declared,
+  UNANCHORED,
   USAGE,
 } from '@yaks/model'
 import {
@@ -156,7 +157,6 @@ let unless = <T>(signal: AbortSignal | undefined, work: Promise<T>) =>
  * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
 export { transcript } from './transcript.ts'
-import { transcript } from './transcript.ts'
 
 import { closed, PENDING, project } from './project.ts'
 export { PENDING, project } from './project.ts'
@@ -434,12 +434,15 @@ export let currentStatus = (
  * turn, never a window it does not send; and whether it was ended from outside
  * (`session.ended`). Prose comes with every entry when the host reads entries
  * of its own (`bodies`), and is loaded for the lines a turn sends alone
- * otherwise. */
+ * otherwise. A model turn whose model continues from the newest answered ask
+ * reads from that ask on (`anchored` names it), and is read whole (`whole`)
+ * where the turn cannot continue from it after all. */
 export type Reading = {
   entries: Bundle[]
   bodies: boolean
   ended: boolean
   session?: Eid
+  anchored?: Eid
 }
 
 /** A step's {@link Reading}, which a runner judges before handing it to
@@ -450,19 +453,77 @@ export let reading = async (
   g: Graph,
   session: Eid,
   deps: Deps,
+  whole = false,
 ): Promise<Reading> => {
-  let bodies = !!(deps.contextItems || deps.requestItems ||
+  let prose = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
   let [row] = await g.rows(
     query`.entity.eid=${session}&.fields=entity.eid,session.ended`,
   )
   session = String(row?.['entity.eid'] ?? session)
-  let read = deps.runCall ? { call: true } : { turn: true }
+  // A turn's prose is loaded once its reading says what the turn sends: only
+  // the lines after its anchor where it has one, every line otherwise.
+  let turn = !deps.runCall && !whole
+  let anchored: Eid | undefined
+  let continues = continuing(g, deps)
+  let entries = await reach(g, session, {
+    ...deps.runCall ? { call: true } : { turn: true },
+    bodies: prose && !turn,
+    ...turn
+      ? {
+        anchored: async (ask: Bundle) => {
+          let yes = await continues(ask)
+          if (yes) anchored = ask.entity.eid
+          return yes
+        },
+      }
+      : {},
+  })
+  if (prose && turn && !anchored) await withProse(g, entries)
   return {
-    entries: await reach(g, session, { ...read, bodies }),
+    entries,
     session,
-    bodies,
+    bodies: prose && !anchored,
     ended: row?.['session.ended'] === true,
+    ...anchored ? { anchored } : {},
+  }
+}
+
+// The prose of each line among `entries` that holds some, read in place.
+let withProse = async (g: Graph, entries: Bundle[]) => {
+  let have = entries.filter((b) => b.content)
+  let loaded = new Map(
+    (await g.get(have.map((b) => b.entity.eid), [CONTENT]))
+      .map((b) => [b.entity.eid, b]),
+  )
+  for (let b of have) {
+    let content = comp(
+      loaded.get(b.entity.eid) ?? { entity: b.entity },
+      CONTENT,
+    )
+    if (content) b.content = content
+    else delete b.content
+  }
+}
+
+// Whether the model that answered an ask can continue from it: the one its
+// own `using` and `ask.to` resolve to, as the turn after it resolves them
+// while they stand. Each ask is resolved once a reading.
+let continuing = (g: Graph, deps: Deps) => {
+  let known = new Map<Eid, Promise<boolean>>()
+  let of = async (ask: Bundle) => {
+    let to = comp(ask, ASK)?.to
+    let [row] = to == null ? [] : await g.get([String(to)])
+    if (!row) return false
+    let { model } = deps.resolveModel
+      ? await deps.resolveModel(comp(ask, USING), row)
+      : { model: deps.model }
+    return !!model.anchor?.(ask)
+  }
+  return (ask: Bundle) => {
+    let held = known.get(ask.entity.eid)
+    if (!held) known.set(ask.entity.eid, held = of(ask))
+    return held
   }
 }
 
@@ -810,9 +871,13 @@ export let react = async (
   session = read?.session ?? session
   let stands = read &&
     !await moved(g, session, ownNewest(read.entries, session))
-  let { entries, bodies, ended, session: receiver } = stands
+  let { entries, bodies, ended, session: receiver, anchored } = stands
     ? read!
     : await reading(g, session, deps)
+  // A turn that reached only from an ask it cannot continue from after all
+  // is taken again on the whole transcript.
+  let whole = async () =>
+    react(g, session, deps, await reading(g, session, deps, true), dropped)
   session = receiver ?? session
   let status = statusOf(entries, { ended })
   let nothing: Step = { did: 'nothing', status, added: [] }
@@ -933,6 +998,14 @@ export let react = async (
       throw e
     }
   }
+  // An ask whose anchor the provider no longer holds ends interrupted, which
+  // leaves the turn owed, and the next is sent the whole conversation.
+  let unanchored = (ask: Bundle, e: ModelError) =>
+    finish(ask, {
+      entity: ask.entity,
+      attempt: { by: null },
+      interrupted: { code: UNANCHORED },
+    }, [line({ notice: {}, [OUTPUT]: { source: ask.entity.eid } }, e.message)])
   let complete = async (
     ask: Bundle,
     reply: Reply,
@@ -1186,6 +1259,9 @@ export let react = async (
       // Executor transport/receipt reads are repeatable; a terminal provider
       // outcome is recorded on this ask and never becomes a new purchase.
       if (!(error instanceof ModelError) || error.retry) throw error
+      if (error.code == UNANCHORED) {
+        return await unanchored(unfinished, error) ?? await current()
+      }
       return await finish(unfinished, {
         entity: unfinished.entity,
         attempt: { by: null },
@@ -1637,10 +1713,6 @@ export let react = async (
   if (
     !unfinished?.inference && executor?.available && !await executor.available()
   ) executor = undefined
-  if (!bodies && providerModel.anchor) {
-    entries = await transcript(g, session)
-    bodies = true
-  }
   // Only completed responses can supply provider continuation state. A partial
   // response remains ordinary visible history after the last completed anchor.
   asked = newestAsk(
@@ -1661,9 +1733,17 @@ export let react = async (
     comp(asked, 'entry')?.session === session &&
     comp(asked, ASK)?.to === modelEid &&
     comp(asked, 'using')?.provider === using?.provider
-  let anchorId = providerModel.anchor && asked && sameModel
+  // A provider that refused the anchor since (`UNANCHORED`) is sent the whole
+  // conversation, once: the ask that answers it anchors the next.
+  let refused = asked &&
+    entries.some((b) =>
+      b.ask && seqOf(b) > seqOf(asked!) &&
+      comp(b, 'interrupted')?.code == UNANCHORED
+    )
+  let anchorId = providerModel.anchor && asked && sameModel && !refused
     ? providerModel.anchor(asked)
     : undefined
+  if (anchored && !anchorId) return whole()
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let asking = askingOf(entries)
@@ -1677,21 +1757,7 @@ export let react = async (
         ['input', 'result'].includes(kindOf(b) ?? '') && !b.notice)
     )
     : recent(said, sending?.window)
-  if (!bodies) {
-    let loaded = new Map(
-      (await g.get(window.map((b) => b.entity.eid), [CONTENT])).map((
-        b,
-      ) => [b.entity.eid, b]),
-    )
-    for (let b of window) {
-      let content = comp(
-        loaded.get(b.entity.eid) ?? { entity: b.entity },
-        CONTENT,
-      )
-      if (content) b.content = content
-      else delete b.content
-    }
-  }
+  if (!bodies) await withProse(g, window)
   let held = checkpoint ? await tasksOf(g, session) : []
   if (checkpoint) {
     let tasks = snapshot(held)
@@ -1842,6 +1908,8 @@ export let react = async (
   let summarizing = cut && sending?.window == null
     ? await compaction(cut)
     : undefined
+  // A summary is of what came before the anchor too.
+  if (summarizing && anchored) return whole()
   // Where a summary is due while the cache is warm, a session that drops
   // does that first and pays one cache write; the summary follows only if
   // what is left still fills the share.
@@ -2134,6 +2202,13 @@ export let react = async (
       await kept(failed)
       return failed ?? await current()
     }
+    // The provider no longer holds the reply the anchor named: the ask ends
+    // interrupted, and the next turn sends the whole conversation.
+    if (e instanceof ModelError && e.code == UNANCHORED && !stream.size) {
+      let failed = await unanchored(ask, e)
+      await kept(failed)
+      return failed ?? await current()
+    }
     let text = e instanceof ModelError
       ? e.message + '\n' + (e.response?.body ?? '')
       : ''
@@ -2156,13 +2231,26 @@ export let react = async (
         }], { trusted: true })
       }
       if (cut && !retrying && !stream.size) {
+        // A summary is of the whole conversation, which a turn read from
+        // its anchor on has not read.
+        if (anchored) {
+          entries = (await reading(g, session, deps, true)).entries
+          cut.entries = entries
+          cut.said = lines(context(entries), askingOf(entries))
+            .filter((b) => !b.prompt)
+        }
         // Without a stated ceiling, cut relative to the refused payload,
         // not an optimistic configured window. Never touch the fixed prefix.
+        // An anchored payload is only its newest lines; the provider held
+        // the rest, so the cut is relative to the window.
         if (!checkpoint) {
           held = await tasksOf(g, session)
           cut.fixed += tokens(JSON.stringify(taskItems(snapshot(held))).length)
         }
-        let smaller = enforced ?? tokens(JSON.stringify(req.items).length) / 2
+        let smaller = enforced ??
+          (anchorId
+            ? cut.window / 2
+            : tokens(JSON.stringify(req.items).length) / 2)
         let forced = await compaction({
           ...cut,
           window: Math.min(cut.window, smaller),

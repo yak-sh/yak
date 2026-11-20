@@ -1090,6 +1090,9 @@ test('the privacy policy names everywhere the code sends something', () => {
   assertStringIncludes(html, 'sandbox')
   // Stripe, who sell the plan and hold the card (billing.ts).
   assertStringIncludes(html, 'stripe')
+  // OpenAI, who answer the Operator and keep each answer it anchors the next
+  // on (config.ts `operatorProviders`, @yaks/openai `store`).
+  assertStringIncludes(html, 'keeps each answer for 30 days')
   // And selling, both ways round (sell.ts, T-34527): what a buyer's order and
   // address do — they go to the seller and to Stripe, and we keep the order —
   // and what a seller hands over, which is nothing but an address, because

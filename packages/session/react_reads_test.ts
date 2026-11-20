@@ -8,9 +8,10 @@ import { mem } from '../sqlite/testing.ts'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
-import { modelDoc, type Request } from '@yaks/model'
+import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { contextDoc } from '@yaks/context'
+import { taskDoc } from '@yaks/task/vocab'
 import { effectDoc } from '@yaks/effects'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
@@ -28,6 +29,18 @@ let vocab = loadVocab([
   kernelDoc,
   provenanceDoc,
   archetypeDoc,
+  taskDoc,
+  // What a fake provider keeps about an ask, as @yaks/openai keeps
+  // `openai{response_id}`.
+  {
+    $defs: {
+      fake: {
+        component: true,
+        type: 'object',
+        properties: { reply: { type: 'string' } },
+      },
+    },
+  },
 ], [kernelKeywords])
 
 for (let fork of [false, true]) {
@@ -423,4 +436,91 @@ for (let fork of [false, true]) {
       assert(rows < 100, `read ${rows} rows of a 135 line transcript`)
     },
   )
+}
+
+// A turn after an ask its model continues from is sent only what followed
+// it, and reads no prose before it, whether or not the host reads prose of
+// its own (`contextItems`), and though a summary came before that ask.
+for (let [bodies, summary] of [[false, false], [true, false], [true, true]]) {
+  test(`an anchored turn reads from its anchor on (bodies: ${bodies}, summary: ${summary})`, async () => {
+    let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+    let g = graph({ vocab, storage: s, plugins: [sessions()] })
+    let m = identityEid('model', ['fake'])
+    await g.apply([
+      { entity: { eid: m }, model: { name: 'fake' } },
+      { entity: { eid: 'parent' }, session: {} },
+      ...oldTurns(m, 'parent', 45),
+      ...summary
+        ? [
+          {
+            entity: { eid: 'summary' },
+            entry: { session: 'parent', seq: 136 },
+            checkpoint: { through: 'out10', seq: 12 },
+            content: { body: 'what came before' },
+            notice: {},
+          },
+          {
+            entity: { eid: 'in137' },
+            entry: { session: 'parent', seq: 137 },
+            content: { body: 'go' },
+          },
+          {
+            entity: { eid: 'ask138' },
+            entry: { session: 'parent', seq: 138 },
+            ask: { to: m, through: 'in137' },
+            attempt: {},
+            fake: { reply: 'r138' },
+          },
+          {
+            entity: { eid: 'out139' },
+            entry: { session: 'parent', seq: 139 },
+            content: { body: 'ok' },
+            output: { source: 'ask138' },
+          },
+        ]
+        : [{ entity: { eid: 'ask133' }, fake: { reply: 'r133' } }],
+      {
+        entity: { eid: 'now' },
+        entry: { session: 'parent', seq: 500 },
+        content: { body: 'now' },
+      },
+    ])
+    let prose = 0, read = g.read.bind(g), get = g.get.bind(g)
+    let count = (rows: Bundle[]) =>
+      prose += rows.filter((b) =>
+        b.content && Object.hasOwn(b.content as object, 'body')
+      ).length
+    g.read = async (q, o) => {
+      let rows = await read(q, o)
+      count(rows)
+      return rows
+    }
+    g.get = async (ids, comps, o) => {
+      let rows = await get(ids, comps, o)
+      count(rows)
+      return rows
+    }
+    let asked: Request[] = []
+    let model: Model = (req) => {
+      asked.push(req)
+      return Promise.resolve({
+        id: 'r501',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'done' }],
+      })
+    }
+    model.mark = (reply) => ({ fake: { reply: reply.id } })
+    model.anchor = (comps) =>
+      (comps.fake as { reply?: string } | undefined)?.reply
+    await react(g, 'parent', {
+      tools: [],
+      model,
+      ...bodies ? { contextItems: () => Promise.resolve(new Map()) } : {},
+    })
+    assertEquals(asked[0].anchor, summary ? 'r138' : 'r133')
+    assertEquals(asked[0].items, [
+      { kind: 'user', text: 'From an unknown sender:\nnow' },
+    ])
+    assert(prose <= 4, `read the prose of ${prose} lines of 136`)
+  })
 }

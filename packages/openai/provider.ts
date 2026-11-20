@@ -28,7 +28,7 @@ import {
 import type { ImageGeneration, Images } from './images.ts'
 import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
-import { openaiDoc } from './vocab.ts'
+import { openaiDoc, responseAnchor } from './vocab.ts'
 import { native as door } from './native.ts'
 import { reads } from './reads.ts'
 
@@ -152,6 +152,16 @@ export let providers = (
     lent.env('HARNESS_IMAGES'),
   )
   let base = aimed(options), token = options.gateway?.token
+  // OpenAI's own API keeps each reply (`store`), so the next request sends
+  // only what followed it and names it (`previous_response_id`): on a key,
+  // or through the AI Gateway to OpenAI. The Codex backend a ChatGPT grant
+  // reaches keeps nothing, and another endpoint (`base`) may not either, so
+  // through those the conversation is sent whole.
+  let store = options.base
+    ? false
+    : base
+    ? true
+    : !!(options.key || fromEnv(lent.env))
   let signing = base
     ? {
       ...opened(lent, base, options.key),
@@ -178,6 +188,7 @@ export let providers = (
           web: options.web ?? lent.env('HARNESS_WEB') != '0',
           receipts: lent.receipts,
           hold: lent.hold,
+          store,
         })
       ),
     {
@@ -185,7 +196,7 @@ export let providers = (
       mark: (reply, cache) => ({
         openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
       }),
-      anchor: () => undefined,
+      anchor: (comps) => store ? responseAnchor(comps) : undefined,
       lateResults: true,
       recover: true,
       info: true,

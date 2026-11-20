@@ -7,7 +7,9 @@
 // any of those decisions still looks at: the newest ask and the boundary it
 // was sent from, the turns a retry counts back through, the last stop, and for
 // a model turn the summary a checkpoint left and everything after the line it
-// replaced, or the lines a finite `sending.window` sends. Beyond that edge it
+// replaced, the lines after the newest answered ask where its model continues
+// from it (`anchored`), or the lines a finite `sending.window` sends. Beyond
+// that edge it
 // adds only the entries those name (a call a result answers, the ask a line
 // came from, the newest `using` and `sending`, the prompts a checkpoint
 // retains), each by one query. A step running one call reads what its tool
@@ -50,9 +52,9 @@
 // from, and what is in force (`aspect`); those are read by name.
 //
 // A fork reads through its segments (./window.ts): the parent up to the
-// anchor, then its own. A pending transcript with no checkpoint and no window
-// is its own context, so its turn reads it all: the model is sent all of it
-// too. Entries without a `seq` belong to the oldest end and are reached when
+// anchor, then its own. A pending transcript with no checkpoint, no anchor and
+// no window is its own context, so its turn reads it all: the model is sent
+// all of it too. Entries without a `seq` belong to the oldest end and are reached when
 // the reading is.
 
 import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
@@ -103,6 +105,10 @@ export type Reach = {
   call?: boolean
   /** the components to read of each entry; every one but prose by default */
   comps?: string[]
+  /** whether the model that answered an ask can continue from it
+   * (@yaks/model `Model.anchor`): a model turn after such an ask is sent only
+   * what followed it, so its reading stops there */
+  anchored?: (ask: Bundle) => boolean | Promise<boolean>
 }
 
 // One reading: the chain of segments and what of each entry it brings.
@@ -654,6 +660,8 @@ let named = async (r: Read, o: Reach): Promise<Bundle[]> => {
   let turn = !!o.turn
   let parts = [
     ...turn && has('checkpoint') ? [line`.checkpoint`] : [],
+    // What a summary's tasks became since (./task-context.ts `admitted`).
+    ...turn && has('task_context') ? [line`.task_context`] : [],
     ...(turn || o.call) && has('prompt') ? [line`.prompt`] : [],
   ]
   let own = r.segs.at(-1)
@@ -688,8 +696,11 @@ type Needs = {
   stop: () => Promise<number | undefined>
   seqAt: (eid: Eid) => Promise<number | undefined>
   mark?: number
+  /** the seq of the newest summary (`checkpoint`) itself */
+  summary?: number
   noAsk?: boolean
   window: (rows: Bundle[]) => Promise<unknown>
+  anchored?: (ask: Bundle) => boolean | Promise<boolean>
 }
 
 let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
@@ -728,7 +739,14 @@ let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
       seqs.push(seqOf(done))
       await sent(done)
     }
-    if (n.mark != null) seqs.push(n.mark)
+    // The provider holds the conversation through an answered ask after the
+    // newest summary, which the turn then follows.
+    if (
+      done && !(seqOf(done) <= (n.summary ?? -Infinity)) &&
+      await n.anchored?.(done)
+    ) {
+      // `done` and the line it was sent through are read already.
+    } else if (n.mark != null) seqs.push(n.mark)
     else {
       let size = Math.floor(Number(await n.window(rows)))
       if (!(size >= 1)) return -Infinity
@@ -786,6 +804,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     },
     window: async (rows) =>
       sendingBefore(await aspect(r, SENDING, rows))?.window,
+    anchored: o.anchored,
   }
   let page = pages(r), size = FIRST, started = false
   // Rows, newest first, down to the oldest seq a decision still reads: a
@@ -876,6 +895,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
         : await n.seqAt(String(through))
       let at = boundary ?? Number(comp(mark, 'checkpoint')?.seq)
       n.mark = Number.isSafeInteger(at) && at >= 1 ? at : -Infinity
+      n.summary = seqOf(mark)
       if (through != null && !find(String(through))) {
         held.push(...await fetch(r, [String(through)]))
       }

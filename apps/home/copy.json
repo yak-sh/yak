@@ -1149,10 +1149,12 @@
     },
     "shared": {
       "title": "Who we share information with",
-      "companies": "Besides Cloudflare, we share information with three other companies. %{stripe} sells the paid plan: we give Stripe your email address so it can bill you, and Stripe tells us whether the plan is active. %{telnyx} carries our text messages: when we text you, Telnyx receives your number and the message so it can deliver it, and nothing else. %{meta} runs our ads on Facebook and Instagram. If you came to yaks.app by clicking one of them, we tell Meta, from our servers, when you open a page of this site and when you sign up: the page's address, the time, the click id Meta put on the link, and your browser's IP address and user agent, which Meta needs to match the event to its ad. We tell Meta nothing about visits its ads didn't bring, and never your name, your email address or anything in your apps.",
+      "companies": "Besides Cloudflare, we share information with four other companies. %{stripe} sells the paid plan: we give Stripe your email address so it can bill you, and Stripe tells us whether the plan is active. %{telnyx} carries our text messages: when we text you, Telnyx receives your number and the message so it can deliver it, and nothing else. %{meta} runs our ads on Facebook and Instagram. If you came to yaks.app by clicking one of them, we tell Meta, from our servers, when you open a page of this site and when you sign up: the page's address, the time, the click id Meta put on the link, and your browser's IP address and user agent, which Meta needs to match the event to its ad. We tell Meta nothing about visits its ads didn't bring, and never your name, your email address or anything in your apps.",
       "stripe": "Stripe",
       "telnyx": "Telnyx",
       "meta": "Meta",
+      "models": "%{openai} answers your Operator when the Operator runs on OpenAI's models. OpenAI receives the conversation and anything you ask the Operator to draw, so its model can answer, and keeps each answer for 30 days, so the next turn of the conversation sends OpenAI only what is new.",
+      "openai": "OpenAI",
       "texts": "We don't share your mobile number or your agreement to receive texts with anyone else, and nobody uses them for marketing, including us.",
       "others": "Apart from telling Meta about the visits its own ads brought, we don't share information with advertisers, data brokers or analytics companies. Feedback you send us reaches us by email, so it passes through the email providers between you and our inbox, as any email does."
     },

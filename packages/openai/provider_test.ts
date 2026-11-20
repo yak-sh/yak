@@ -191,6 +191,51 @@ test('a configured endpoint is opened by its own key, the lent key, or by nothin
   ]])
 })
 
+test('OpenAI keeps replies to anchor on where it is reached on a key, never through Codex or another endpoint', async () => {
+  let mark = { openai: { response_id: 'r1' } }
+  let sent = async (over: Partial<Lent>, options: Options = {}) => {
+    let bodies: Record<string, unknown>[] = []
+    let model = providers(
+      lent({
+        fetch: (_input, init) => {
+          bodies.push(JSON.parse(String(init?.body)))
+          return Promise.resolve(Response.json({}, { status: 400 }))
+        },
+        ...over,
+      }),
+      { images: false, web: false, ...options },
+    ).openai
+    await assertRejects(() =>
+      model({
+        model: 'gpt-x',
+        items: [{ kind: 'user', text: 'hi' }],
+        tools: [],
+        anchor: model.anchor!(mark),
+      })
+    )
+    return [
+      model.anchor!(mark),
+      bodies[0].store,
+      bodies[0].previous_response_id,
+    ]
+  }
+  let keyed = (name: string) => name == 'OPENAI_API_KEY' ? 'sk' : undefined
+  assertEquals(await sent({ env: keyed }), ['r1', true, 'r1'])
+  assertEquals(await sent({}, { key: 'own' }), ['r1', true, 'r1'])
+  assertEquals(
+    await sent({}, { key: 'own', gateway: { account: 'a', id: 'g' } }),
+    ['r1', true, 'r1'],
+  )
+  assertEquals(
+    await sent({ key: () => Promise.resolve(token('acct')) }),
+    [undefined, false, undefined],
+  )
+  assertEquals(
+    await sent({ env: keyed }, { base: 'https://elsewhere.test/v1' }),
+    [undefined, false, undefined],
+  )
+})
+
 test('a credential lent the provider goes only to the endpoint it aims at', () => {
   assertEquals(hosts(), ['api.openai.com'])
   assertEquals(hosts({ base: 'https://gateway.test/openai' }), ['gateway.test'])
