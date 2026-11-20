@@ -8,17 +8,29 @@ import { ledger } from './ledger.ts'
 import { argsOf } from '@yaks/graph'
 import { type Ctx, refuse, SPACE } from './tool.ts'
 import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
-import type { Tool } from '@yaks/graph'
+import type { Graph, NamedTool, Tool } from '@yaks/graph'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
 // A host that narrows a turn once it heard words it cannot vouch for says
 // which nested answers brought them (`hears`), by its direct calls' rule.
 export let coded = <T extends Options>(
-  opts: T & Pick<Coding, 'hears'>,
+  opts: T & Pick<Coding, 'hears'> & {
+    /** The tools this caller keeps in its own graph, under their usual names. */
+    own?: { tools: NamedTool[]; graph: Graph; calls: Graph }
+  },
   ctx: Ctx,
   local?: ResultHost,
   remote: Tool[] | (() => Promise<Tool[]>) = [],
 ) => {
+  let { own } = opts
+  let names = new Set(own?.tools.map((t) => t.name))
+  let appTools = (tools: Tool[]) => tools.filter((t) => !names.has(t.name!))
+  let ownRun = own && runner(own.calls, {
+    tools: own.tools,
+    host: own.graph,
+    report: opts.report,
+    refused: opts.refused,
+  })
   let catalog = registry([{
     name: 'yaks',
     tools: [
@@ -28,7 +40,10 @@ export let coded = <T extends Options>(
   }])
   let remoteTools = typeof remote == 'function' ? [] : remote
   let codeCatalog = registry([
-    { name: 'yaks', tools: catalog.list() },
+    {
+      name: 'yaks',
+      tools: [...appTools(catalog.list()), ...own?.tools ?? []],
+    },
     { name: 'mcp', tools: remoteTools },
   ])
   let run = runner(opts.calls ?? opts.graph, {
@@ -63,16 +78,19 @@ export let coded = <T extends Options>(
           let catalog = registry([{
             name: 'yaks',
             tools: [
-              ...listing({ ...opts, graph, search: searching(now, reach) }),
+              ...appTools(
+                listing({ ...opts, graph, search: searching(now, reach) }),
+              ),
               ...resultTools(now, local),
             ],
           }, { name: 'mcp', tools: remoteTools }])
-          return runner(ledger(graph, opts.calls), {
+          let apps = runner(ledger(graph, opts.calls), {
             tools: catalog,
             host: graph,
             report: opts.report,
             refused: opts.refused,
           })
+          return { admit: (call) => ownRun?.admit(call) ?? apps.admit(call) }
         },
         kept: resultStore(ctx, args, local),
         hears: opts.hears,

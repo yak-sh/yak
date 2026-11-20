@@ -90,7 +90,7 @@ let finished = (
 export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
   /** the runner each nested call reaches, asked anew for every call
    * (default: the execution's `run`) */
-  current?: () => Promise<Runner>
+  current?: () => Promise<Pick<Runner, 'admit'>>
   /** the results the host's harness kept, read by `results.read` */
   kept?: Kept
   /** whether the caller hears in a nested call's answer words it cannot

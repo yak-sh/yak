@@ -729,13 +729,16 @@ export let operatorRoster = async (
   // space's work, none of a stranger's business (D-151808).
   let landing = ledger(g)
   let self = seenBy(work, { person: ctx.person, member })
+  let memories = member
+    ? loadTools([memoryDoc], memoryRuns()).map((t) =>
+      t.name == 'memory_save' ? memoryAudience(t, ctx.person) : t
+    )
+    : []
   let own = new Map(
     member
       ? [
         ...listing({ graph: self, search: textSearch(self) }),
-        ...loadTools([memoryDoc], memoryRuns()).map((t) =>
-          t.name == 'memory_save' ? memoryAudience(t, ctx.person) : t
-        ),
+        ...memories,
         ...loadTools([trialDoc], trialRuns(trials)),
         ...held(),
         skillRead,
@@ -835,13 +838,16 @@ export let operatorRoster = async (
   // the conversation and each of its forks alike: the list heads the request,
   // so one list keeps the conversation's cached prefix for every fork.
   let remote = reached('connected', await connecting)
+  let calls = session ? recorded(work.g, session, space) : work.g
   let apps = listing(coded(
     {
       ...connected(ctx, reach, g),
-      calls: ledger(g, session ? recorded(work.g, session, space) : work.g),
+      calls: ledger(g, calls),
+      ...member ? { own: { tools: memories, graph: self, calls } } : {},
       report: (e) => caught(e, { request: 'operator code mode' }),
       refused: hearing(ctx.env, () => ({ space, session })),
-      hears: (t, out) => hears(t, out),
+      hears: (t, out) =>
+        hears(t, out, memories.some((m) => m.name == t.name) ? 'own' : 'apps'),
     },
     ctx,
     { graph: work.g, person: ctx.person, space },

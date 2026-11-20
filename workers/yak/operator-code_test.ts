@@ -27,11 +27,17 @@ let space = (await dir.at(id))!
 let store = operatorMemory()
 let asked: Request[] = []
 let answers: string[] = []
+let PERSONAL = 'I use rainwater for my kitchen herbs'
 let script = `
   await tools.yaks.app_new({slug:'bulk',title:'Bulk'});
   await tools.yaks.app_files({app:'bulk',files:[{path:'vocab.json',content:JSON.stringify({$defs:{bulk_note:{component:true,type:'object',properties:{body:{type:'string'}}}}})}]});
   await tools.yaks.app_deploy({app:'bulk'});
   await tools.yaks.graph_apply({bundles:[{entity:{eid:'$note'},bulk_note:{body:'written in bulk'}}]});
+  let saved = await tools.yaks.memory_save({said:${JSON.stringify(PERSONAL)}});
+  let recalled = await tools.yaks.memory_recall({ids:[saved.structuredContent.result[0].entity.eid]});
+  if (!JSON.stringify(recalled).includes(${
+  JSON.stringify(PERSONAL)
+})) throw Error('missing memory');
   return await tools.yaks.graph_query({q:'.bulk_note'});
 `
 let call = (name: string, args: object): Item[] => [{
@@ -95,7 +101,7 @@ test('root and fork offer the same code mode; the fork discovers and runs connec
     answers[1].replace(/^From [^\n]+:\n/, '').replace(/\ntook [^\n]*$/, ''),
   )
   equal(out.error, undefined)
-  equal(out.calls.length, 5)
+  equal(out.calls.length, 7)
   match(out.value, {
     structuredContent: {
       result: [{ bulk_note: { body: 'written in bulk' } }],
@@ -104,11 +110,16 @@ test('root and fork offer the same code mode; the fork discovers and runs connec
 })
 
 test('nested Operator calls keep their source and the fork writer', () => {
-  equal(nested.length, 5)
+  equal(nested.length, 7)
   for (let b of nested) {
     equal((b.created as Comp).by, space.eid)
     equal((b.created as Comp).via, fork.entity.eid)
   }
+})
+
+test('a memory saved in code mode belongs to the member whose fork saved it', async () => {
+  let [saved] = await store.g.read('.memory&*')
+  match(saved, { doc: { body: PERSONAL }, owner: { person: owner } })
 })
 
 test('the Operator gives its model row the limits its catalogue lists and uses its output allowance', async () => {
