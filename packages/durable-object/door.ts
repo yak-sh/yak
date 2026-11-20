@@ -356,9 +356,12 @@ let rebuildable = (init: RequestInit | Request) =>
 
 /** What `resending` is told: `report` hears a kill for the object's limits or
  * a refusal for memory, the failures no retry should hide, with the path
- * that met it; `wait` waits out each pause (`retried`). */
+ * that met it; `recovered` hears a call answered after a failure it was sent
+ * again for, with that failure and the answer, so the caller judges what the
+ * answer says of the failure; `wait` waits out each pause (`retried`). */
 export type Resend = {
   report?: (error: unknown, path: string) => void
+  recovered?: (failure: unknown, answer: unknown, path: string) => void
   wait?: (ms: number) => Promise<void>
 }
 
@@ -401,17 +404,22 @@ export let resending = (door: Door, o: Resend = {}): Door => {
     let replayable = rebuildable(init) && options.replayable !== false
     let take = read ??
       ((r: Response) => (replayable ? received(r) : r) as T | Promise<T>)
+    let failure: unknown = undefined
+    let resent = (e: unknown) => evicted(e) || (!!read && safe && opaque(e))
     return retried(
       async () => {
         try {
-          return await take(await thrown(await door(path, init, once)))
+          let answer = await take(await thrown(await door(path, init, once)))
+          if (failure !== undefined) o.recovered?.(failure, answer, path)
+          return answer
         } catch (e) {
           if (killed(e) || starved(e)) o.report?.(e, path)
+          if (resent(e)) failure = e
           throw e
         }
       },
       replayable,
-      (e) => evicted(e) || (!!read && safe && opaque(e)),
+      resent,
       o.wait,
     )
   }

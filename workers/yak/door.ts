@@ -16,7 +16,7 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { stamp } from './running.ts'
+import { skew, stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { retried } from '@yaks/durable-object/resets'
 import {
@@ -367,5 +367,15 @@ export let storeOf = (
   resending(doorOf((req) => placed(ns, name).fetch(req), name, app), {
     report: (e, path) =>
       defect(e, { request: `store ${path.split('?')[0]}`, store: name }),
+    // An older store's refusal that the newer code did not repeat was skew
+    // (running.ts `skew`); one it repeats was the caller's own mistake.
+    recovered: (failure, answer, path) => {
+      let e = skew(failure, answer), at = path.split('?')[0]
+      if (e) {
+        defect(e, { request: `store ${at}`, store: name }, {
+          fault: `skew:${at}`,
+        })
+      }
+    },
     wait,
   })

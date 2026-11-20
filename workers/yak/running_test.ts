@@ -242,18 +242,20 @@ test('an idle Builder restarts for a newer caller', async () => {
 // does not know is no mistake of the caller's: the store reports it and
 // answers a failure the caller's door sends again, which the newer code then
 // takes.
-test('a store behind its caller answers a refusal as a failure its door sends again, and reports it', async () => {
+// A store behind its caller after restarting for it, which refuses a word
+// only the caller's deploy declares; the next incarnation answers `next`.
+// Answers what the caller got, and what the tracker heard.
+let behind = async (next: Response) => {
   learn(B)
   let reports: unknown[] = []
   let o = object()
   let ctx = Object.assign(state(), { abort: o.abort })
   await ctx.storage.put('restarted for', { id: B.id, at: B.timestamp })
   let old = new Store(ctx as never, { CF_VERSION_METADATA: A })
-  let next = { fetch: () => Promise.resolve(Response.json({ ok: true })) }
   let reached = 0
   let ns = {
     idFromName: (name: string) => name,
-    get: () => reached++ ? next : old,
+    get: () => reached++ ? { fetch: () => Promise.resolve(next) } : old,
   }
   let answer = await within(
     {
@@ -272,11 +274,21 @@ test('a store behind its caller answers a refusal as a failure its door sends ag
         }]),
       }),
   )
-  assertEquals(answer.status, 200)
-  assertEquals(reached, 2)
-  assertEquals(o.restarts, [])
-  assertMatch(
-    JSON.stringify(reports),
-    /older deploy refused a caller on a newer one/,
+  assertEquals([reached, o.restarts], [2, []])
+  return { status: answer.status, reports: JSON.stringify(reports) }
+}
+
+test('a refusal from a store behind its caller is sent again, and reported as skew when the newer code takes it', async () => {
+  let { status, reports } = await behind(Response.json({ ok: true }))
+  assertEquals(status, 200)
+  assertMatch(reports, /older deploy refused a caller on a newer one/)
+})
+
+test("a refusal the newer code repeats is the caller's own, answered plainly and reported as nothing", async () => {
+  let { status, reports } = await behind(
+    Response.json({ error: 'Refused', message: 'unknown prop: .zzqx' }, {
+      status: 400,
+    }),
   )
+  assertEquals([status, reports], [400, '[]'])
 })

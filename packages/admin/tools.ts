@@ -59,6 +59,7 @@ import {
   storeApply,
   storePage,
   storeQuery,
+  storeSchema,
   storesNow,
   storeUpload,
   supportAnswer,
@@ -700,6 +701,17 @@ export let runs = (
         (argsOf(call).filters ?? []) as string[],
       )
       return [valued(call, { result: rows })]
+    }),
+
+    admin_schema: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let doc = await storeSchema(
+        at.bearer,
+        String(a.where),
+        (a.component ?? []) as string[],
+      )
+      return [valued(call, { result: doc })]
     }),
 
     admin_apply: verb(async (call) => {

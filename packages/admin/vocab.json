@@ -623,6 +623,51 @@
         "filters..."
       ]
     },
+    "admin_schema": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "admin",
+      "verb": "schema",
+      "title": "Read an app’s vocabulary",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "object",
+            "description": "the vocabulary document graph_schema answers for the app"
+          }
+        }
+      },
+      "description": "The words an app’s store reads its rows in, declared or borrowed, as graph_schema answers them for that app. Read an app’s words here; never query a store for a made-up word to learn them from the refusal, which reaches the person’s tracker.\n\n  yak admin schema jeff/recipes\n  yak admin schema jeff/recipes recipe --as admin",
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "the app, as space/app"
+        },
+        "component": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "component names to read whole"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "where"
+      ],
+      "readOnly": true,
+      "openWorld": true,
+      "positional": [
+        "where",
+        "component..."
+      ]
+    },
     "admin_apply": {
       "tool": true,
       "surfaces": [

@@ -919,6 +919,26 @@ export let storeQuery = async (
   return body
 }
 
+/** The vocabulary the app `space/app` names reads its rows in, as the
+ * connector's `graph_schema` answers it: bare, every word it declares or
+ * borrows; with `component`, those words whole. The read for what an app
+ * declares, so nobody asks a store for a word it lacks to learn its words. */
+export let storeSchema = async (
+  session: string,
+  at: string,
+  component?: string[],
+): Promise<unknown> => {
+  if (where(at).length != 2) {
+    throw new CallError('where', `name an app as space/app, not "${at}"`)
+  }
+  let answer = await rpc(session)('tools/call', {
+    name: 'graph_schema',
+    arguments: { app: at, ...component?.length ? { component } : {} },
+  })
+  saidBy(answer)
+  return answer.structuredContent
+}
+
 /** Bundles applied to the app `space/app` names, as this account: created,
  * patched or deleted through the store's own rules and journal. `check`
  * rehearses it and keeps nothing. Answers the batch as applied. */

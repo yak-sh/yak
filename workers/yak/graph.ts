@@ -4548,7 +4548,8 @@ export class Store extends Durable {
 
   /** The answer, unless it refuses a caller on a later deploy than this
    * object runs (running.ts `skewed`): then a failure the caller's door sends
-   * again, and the tracker hears of it. */
+   * again, and the caller judges by the newer code's answer whether it was
+   * skew (running.ts `skew`). */
   async #unskewed(request: Request, answer: Response): Promise<Response> {
     let e = await skewed(
       request.headers,
@@ -4556,10 +4557,6 @@ export class Store extends Durable {
       answer,
     )
     if (!e) return answer
-    let path = new URL(request.url).pathname
-    defect(e, { request: `store ${path}`, store: this.#name() }, {
-      fault: `skew:${path}`,
-    })
     let { name, message, retryable, running, caller } = e
     return json({ error: name, message, retryable, running, caller }, 503)
   }
