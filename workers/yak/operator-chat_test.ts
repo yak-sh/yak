@@ -155,12 +155,13 @@ let sided = async (
       '.Sidebar :is(.Sidebar_Brand, .Identity b, .SideNav_Link, .Sidebar_Group)',
     ),
   ]
+  // A link says its label; a mark beside it (Open, a count) is not its name.
+  let name = (e: Element) =>
+    (e.querySelector('.SideNav_Label') ?? e).textContent!.trim()
   return {
     document,
-    said: lines.map((e) => e.textContent!.trim()),
-    to: Object.fromEntries(
-      lines.map((e) => [e.textContent!.trim(), e.getAttribute('href')]),
-    ),
+    said: lines.map(name),
+    to: Object.fromEntries(lines.map((e) => [name(e), e.getAttribute('href')])),
   }
 }
 let spaces = [
@@ -364,10 +365,15 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     'All 6 apps': managePath('apps', 'clerk'),
     Manage: managePath('operator', 'clerk'),
   })
-  // The conversation on screen is the side's current tab.
+  // The conversation on screen is the side's current tab, and the apps say
+  // they open beside it.
   assertEquals(
     owner.document.querySelector('.SideNav [aria-current="page"]')?.textContent,
     op,
+  )
+  assertEquals(
+    owner.document.querySelector('.Sidebar_Note')?.textContent,
+    `Each opens beside your one chat with ${op}.`,
   )
   // A member may open none of the settings but the Operator's.
   assertEquals(member.said.includes('All 6 apps'), false)
@@ -431,8 +437,15 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     'https://clerk.yaks.app/app1/',
   )
   assertEquals(app.querySelector('.Identity_Text b')?.textContent, 'Holdfast')
+  // Every app shares the one conversation: it stays the side's current tab,
+  // and the app is only marked open beside it.
   assertEquals(
     document.querySelector('.SideNav [aria-current="page"]')?.textContent,
+    space.operator,
+  )
+  assertEquals(
+    document.querySelector('.SideNav [aria-current="true"] .SideNav_Label')
+      ?.textContent,
     'Holdfast',
   )
   assertEquals(
@@ -981,9 +994,9 @@ test('what needs the person is counted once, in the side the settings pages shar
     assertEquals(document.querySelector(`#u-${needs.eid}`), null)
     // one bell: the side's, and Menu wearing its count on a phone
     assertEquals(
-      [...document.querySelectorAll('.Badge:not([hidden])')].map((b) =>
-        b.closest('.Frame_Menu') ? 'menu' : b.closest('#menu') && 'side'
-      ),
+      [...document.querySelectorAll('.Badge:not([hidden], .Badge-quiet)')].map((
+        b,
+      ) => b.closest('.Frame_Menu') ? 'menu' : b.closest('#menu') && 'side'),
       ['side', 'menu'],
     )
     let menu = document.querySelector('.Frame_Bar .Frame_Menu')!

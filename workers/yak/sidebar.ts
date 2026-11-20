@@ -12,6 +12,10 @@ export type Item = {
   icon: IconName
   image?: string
   current?: boolean
+  /** Open beside the current page rather than the page itself: a quiet
+   * "Open" mark, not the lit tab (talk-sidebar.ts, an app beside the one
+   * conversation). */
+  beside?: boolean
   /** How many there are, a plain number. */
   count?: number
   /** How many are new or wait on the person, on the red badge, which is
@@ -32,6 +36,8 @@ export type Section = {
   id: string
   label: string
   heading?: boolean
+  /** A line under the heading saying what its links open. */
+  note?: string
   items: Item[]
   empty?: string
 }
@@ -93,7 +99,7 @@ let link = (at: Item) => {
       class: at.more ? 'Sidebar_More' : undefined,
       title: at.label,
       mod: at.current && 'on',
-      'aria-current': at.current ? 'page' : undefined,
+      'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
       target: at.external ? '_blank' : undefined,
       rel: at.external ? 'noopener' : undefined,
     },
@@ -108,7 +114,9 @@ let link = (at: Item) => {
       })
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
-    at.waiting != null
+    at.beside
+      ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, 'Open')
+      : at.waiting != null
       ? waitingBadge(at.waiting, 'Sidebar_Count')
       : at.count != null
       ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, at.count)
@@ -129,6 +137,9 @@ let section = (at: Section, collapsed: boolean) =>
     { class: 'Sidebar_Section' },
     at.heading
       ? h('h3', { class: 'Sidebar_Group', id: at.id }, at.label)
+      : null,
+    at.note && at.items.length
+      ? h('p', { class: 'Sidebar_Note' }, at.note)
       : null,
     at.items.length
       ? h(SideNav, {

@@ -11,7 +11,8 @@ import type { Beside } from './operator-page.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import { ADMIN, chatPath, logoPath, managePath } from '@yaks/platform/routes'
 
-/** An app beside the conversation already open. */
+/** An app beside the conversation already open: every app shares the one
+ * conversation, so the side keeps it lit and marks the app only Open. */
 export let aboutPath = (space: string, app: string, open = 'new') =>
   `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
 
@@ -38,7 +39,7 @@ export let talkSide = (
   let open = at.current.find((c) => c && c != 'updates') ?? 'new'
   let items: Item[] = apps.slice(0, APPS).map((a) => ({
     href: aboutPath(space.slug, a.slug, open),
-    current: a.slug == at.app,
+    beside: a.slug == at.app,
     icon: 'layout-grid',
     image: `https://${spaceHost(env, space.slug)}/${a.slug}/icon.png`,
     label: a.title || a.slug,
@@ -70,7 +71,8 @@ export let talkSide = (
         items: [
           {
             href: chatPath(space.slug),
-            current: !at.app && !at.current.includes('updates'),
+            // The conversation stays the page with an app open beside it.
+            current: !at.current.includes('updates'),
             icon: 'message-circle',
             label: space.operator,
           },
@@ -87,6 +89,7 @@ export let talkSide = (
         id: 'side-apps',
         label: 'Your apps',
         heading: true,
+        note: `Each opens beside your one chat with ${space.operator}.`,
         items,
         empty: `None yet. Ask ${space.operator} to make one.`,
       },
