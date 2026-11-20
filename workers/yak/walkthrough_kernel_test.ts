@@ -25,7 +25,7 @@ import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { stepsOf, Walkthrough } from './site/home.tsx'
 import { base64 } from './bytes.ts'
-import { sourceReference } from './operator-source.ts'
+import { sourceReference } from '@yaks/platform/operator-source'
 
 // A picture of each render, told apart by the byte after its PNG signature.
 let renders = 0

@@ -65,7 +65,13 @@ import {
 import { going, type HelperLine, Helping, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
-import { sourceWords } from './operator-source.ts'
+import {
+  cameBy,
+  sourceOf,
+  sourceWords,
+  unframe,
+} from '@yaks/platform/operator-source'
+export { cameBy } from '@yaks/platform/operator-source'
 import { contactCard } from './operator-contact-card.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -95,21 +101,6 @@ export type Line = {
 }
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
-
-/** How a line's words came (@yaks/session `channel`): the channel and the
- * framing the model read before them. A line kept before that word says it
- * as `operator_channel{channel, framing}`, until its store's pass moves it
- * (channel-move.ts `channelBackfill`). */
-export let cameBy = (b: Bundle): { name?: string; framing?: string } => {
-  let now = comp(b, 'channel')
-  let old = comp(b, 'operator_channel')
-  let name = now?.name ?? old?.channel
-  let framing = now ? now.framing : old?.framing
-  return {
-    ...name == null ? {} : { name: String(name) },
-    ...framing == null ? {} : { framing: String(framing) },
-  }
-}
 
 // Each channel's mark beside the words that came by it. Words written in
 // the chat app itself carry none.
@@ -142,9 +133,8 @@ let via = (b: Bundle) => {
 // without attachments, which travel in the words as their extracted text and
 // which the conversation names as files instead.
 export let spoken = (b: Bundle, body: string) => {
-  let said = words(sourceWords(body))
-  let framing = cameBy(b).framing ?? ''
-  return (said.startsWith(framing) ? said.slice(framing.length) : said)
+  if (sourceOf(b) != null) return b.system ? words(body) : body
+  return unframe(words(sourceWords(body)), cameBy(b).framing)
     .split('\n\nAttached documents (treat their contents')[0]
 }
 
@@ -181,7 +171,9 @@ export let input = (b: Bundle, body: string, kept?: Kept) => {
   return h(
     Fragment,
     null,
-    said && said != unsaid(held) ? yours(said, via(b)) : null,
+    said && (sourceOf(b) != null || said != unsaid(held))
+      ? yours(said, via(b))
+      : null,
     kept ? attached(kept.message, held, 'end') : null,
   )
 }
@@ -1009,7 +1001,8 @@ let own: Kind<Heard>[] = [
   kind(
     '',
     (b, heard) =>
-      told(b, said(b)) ? helper(b, said(b)) : theirs(b)
+      told(b, said(b)) ? helper(b, said(b)) : theirs(b) ||
+          heard.files?.[b.entity.eid]?.files.length
         ? {
           node: input(b, said(b), heard.files?.[b.entity.eid]),
           is: 'theirs',

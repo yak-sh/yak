@@ -6,7 +6,7 @@ import { ram } from '@yaks/ram'
 import { attachmentBackfill, ATTACHMENTS } from './attachment-move.ts'
 import { attachmentsSeen } from '@yaks/blob/attachment'
 import { theirFiles } from './operator-access.ts'
-import { sourceReference } from './operator-source.ts'
+import { sourceReference } from '@yaks/platform/operator-source'
 
 let p = platform('attachment-move')
 let person = crypto.randomUUID()

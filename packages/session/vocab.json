@@ -394,18 +394,22 @@
     "intake": {
       "component": true,
       "type": "object",
-      "description": "on an input, the item its words came in: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session/intake `take`), and the files they came with are attached to the item. Kept beside the entry, not in it, so a transcript's hot reads stay as narrow as they were",
+      "description": "on an input, where its words came from: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session/intake `take`), and the files they came with are attached to the item. Kept beside the entry, not in it, so a transcript's hot reads stay as narrow as they were",
       "properties": {
         "item": {
           "type": "string",
           "description": "The item's eid. Not a reference, so `.entries` stays the transcript's reverse name and an item's death keeps its words."
+        },
+        "source": {
+          "type": "string",
+          "description": "The address of the original message text among the input's attachments, or an empty string when the input has no separate source attachment. Where supplied, the input body carries its words apart from channel framing and the source note."
         }
       }
     },
     "channel": {
       "component": true,
       "type": "object",
-      "description": "on an input, how its words came: the channel they came by, and the framing said before them to the model, which the body starts with and a conversation draws as the channel's icon instead",
+      "description": "on an input, how its words came: the channel they came by, and the framing said before them to the model, which a conversation draws as the channel's icon",
       "properties": {
         "name": {
           "type": "string",
@@ -413,7 +417,7 @@
         },
         "framing": {
           "type": "string",
-          "description": "What the model reads before the words, saying how they came; the body starts with it."
+          "description": "What the model reads before the words, saying how they came."
         }
       }
     },

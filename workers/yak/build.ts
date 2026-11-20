@@ -770,6 +770,28 @@ export class Builder extends Durable {
             let { channelBackfill } = await import('./channel-move.ts')
             return backfill(channelBackfill(store))
           },
+          words: async () => {
+            let { wordsBackfill } = await import(
+              '@yaks/platform/operator-words'
+            )
+            let { CHANNELED } = await import('./channel-move.ts')
+            if (!store.marks?.get(CHANNELED)) return waiting()
+            let backup = () =>
+              (this.#ctx.storage as Bookmarked).getCurrentBookmark!()
+            let place: Promise<dirPart.Space | null> | undefined
+            let space = () =>
+              place ??= import('./operator-root.ts')
+                .then(({ spaceOf }) => spaceOf(store))
+                .then((eid) =>
+                  eid ? dirPart.directoryOf(this.#env.STORE).at(eid) : null
+                )
+            let { attached } = await import('./attachments.ts')
+            return backfill(wordsBackfill(store, backup, async (sha) => {
+              let at = await space()
+              let bytes = at && await attached(this.#env, at, sha)
+              return bytes ? new TextDecoder().decode(bytes) : undefined
+            }))
+          },
           // Each line's files found among the attachments, and the words
           // read from them on theirs (files-move.ts).
           files: async () => {

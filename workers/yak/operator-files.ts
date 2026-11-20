@@ -12,7 +12,7 @@ import type { Graph } from '@yaks/graph'
 import { attachmentKey } from './attachments.ts'
 import type { Space } from './directory.ts'
 import type { Kept } from './operator-draw.ts'
-import { sourceId } from './operator-source.ts'
+import { sourceId, sourceOf } from '@yaks/platform/operator-source'
 
 /** Where a store says no line of it names its files on itself any more
  * (files-move.ts `filesBackfill`). */
@@ -119,10 +119,14 @@ export let filesOf = async (
     let message = messages.find((m) => held.has(m))
     // The original words a line refers to (operator-source.ts) are kept
     // beside it too, but are no file it came with.
-    let source = sourceId(str(comp(byEid.get(line), 'content')?.body))
-    let files = message
-      ? held.get(message)!.filter((f) => f.address != source)
-      : []
+    let entry = byEid.get(line)!
+    let source = sourceOf(entry) ?? sourceId(str(comp(entry, 'content')?.body))
+    let found = message ? held.get(message)! : []
+    let at = found.findLastIndex((f) =>
+      f.address == source && f.name == 'message.txt' &&
+      f.media_type == 'text/plain'
+    )
+    let files = found.filter((_, i) => i != at)
     if (files.length) out.set(line, { message: message!, files })
   }
   return out

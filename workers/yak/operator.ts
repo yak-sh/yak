@@ -1,5 +1,6 @@
 import { line as q, whole as wholeLine } from '@yaks/query'
 import { inputSource } from './operator-provenance.ts'
+import { inputBody } from '@yaks/platform/operator-source'
 import { chatFork } from './operator-chat.ts'
 import { questionNotice } from './operator-helpers.ts'
 import {
@@ -113,14 +114,14 @@ import {
   ANSWERING,
   HEARSAY,
   mailSend,
-  messageReference,
+  messageFile,
   OWN,
   replyRows,
   type Request as Requested,
   TAKING,
   UNASKED,
 } from './operator-channels.ts'
-import { attachedOf, type File } from './operator-files.ts'
+import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import {
   escalate,
   escalationAnswer,
@@ -2138,6 +2139,7 @@ export let operating = (
     typed: options.typing,
     context: shown,
     inputSource,
+    inputBody,
     // The conversation forks for its work.
     tools: [],
     // Each ask wears the space's persona on the platform's base, read from
@@ -2321,6 +2323,7 @@ export let operating = (
     ...o.from ? { from: o.from } : {},
     ...o.channel ? { channel: channelOf(o.channel, o.framing) } : {},
     files: [...o.files ?? [], ...kept ? [kept] : []].map(attachedOf),
+    source: kept ? attachmentId(kept) : '',
     using: usingOf(o.model, o.provider, o.effort),
     // An error the platform asks the Operator to fix, or what another of
     // its conversations raised, is its own words, not the person's it is
@@ -2468,7 +2471,9 @@ export let operating = (
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
     let text = typeof args.say == 'string' ? args.say : ''
     let named = typeof args.task == 'string' ? args.task : o.task
-    if (!text.trim()) throw refuse('arguments', 'say what you want done')
+    if (!text.trim() && !o.files?.length) {
+      throw refuse('arguments', 'say what you want done')
+    }
     let by = o.by ?? held.person
     let id = o.request ?? crypto.randomUUID()
     let input = inputOf(id)
@@ -2482,13 +2487,13 @@ export let operating = (
         return { task: '', session, input }
       }
       let open = await listening(held, space, o)
-      let { reference, file: sourceFile } = await messageReference(
+      let sourceFile = await messageFile(
         env,
         space,
-        o.source ?? text,
+        text,
       )
       let given = {
-        ...words(open.session, id, text + reference, by, o, sourceFile),
+        ...words(open.session, id, text, by, o, sourceFile),
         using: open.using,
       }
       await take(
@@ -2501,10 +2506,10 @@ export let operating = (
       return { task: '', session: open.session, input }
     }
     o = { ...o, ...await readying(held, space, o.model, o.provider) }
-    let { reference, file: sourceFile } = await messageReference(
+    let sourceFile = await messageFile(
       env,
       space,
-      o.source ?? String(args.say ?? ''),
+      text,
     )
     let task = named
     let [old] = await g.get([task])
@@ -2537,7 +2542,7 @@ export let operating = (
       words(
         session,
         id,
-        (newest ? text : JSON.stringify({ task: row })) + reference,
+        newest ? text : JSON.stringify({ task: row }),
         by,
         o,
         sourceFile,
@@ -2567,7 +2572,8 @@ export let operating = (
   let note: Operator['note'] = async (held, space, text, o) => {
     let { session, fresh } = await conversing(held, space)
     let line = o.said ? { content: { body: text }, notice: { own: true } } : {
-      content: { body: o.began ? CALLED : HEARD + text },
+      content: { body: o.began ? CALLED : text },
+      intake: { source: '' },
       notice: {},
       channel: channelOf('voice', o.began ? '' : HEARD),
     }
@@ -2691,7 +2697,7 @@ export let operating = (
         )
         // The words as they were sent are kept as a file the model may read
         // or pass on by its reference.
-        let { reference, file } = await messageReference(
+        let file = await messageFile(
           env,
           space,
           words.body,
@@ -2699,7 +2705,7 @@ export let operating = (
         return {
           words: {
             ...words,
-            body: words.body + reference,
+            source: file ? attachmentId(file) : '',
             from: 'an outside agent',
             using: usingOf(selected.model, selected.provider, asked.effort),
             files: [...files, ...file ? [file] : []].map(attachedOf),
@@ -2803,8 +2809,6 @@ export type Asking = {
   by?: string
   // The request the words came in, which makes giving them again a no-op.
   request?: string
-  // Exact original words before channel framing or attachment extraction.
-  source?: string
   // The task the words carry on; without one they go to the person's
   // conversation with the Operator (`rootAt`).
   task?: string

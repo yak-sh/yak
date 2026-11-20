@@ -18,7 +18,7 @@ import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { stepsOf } from './site/home.tsx'
 import { START } from './newcomer.ts'
-import { sourceReference } from './operator-source.ts'
+import { sourceReference } from '@yaks/platform/operator-source'
 
 let REQUESTS = [
   'A guestbook for Mum’s 70th that anyone with the link can sign.',

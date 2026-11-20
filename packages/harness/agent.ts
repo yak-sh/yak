@@ -234,6 +234,8 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   context?: Deps['contextItems']
   /** Dynamic context independent of source-bound image items. */
   inputSource?: (entry: Bundle) => string | undefined
+  /** Render host context around the words when the model reads the input. */
+  inputBody?: (entry: Bundle, body: string) => string
   requestItems?: Deps['requestItems']
   /** defects, apart from refusals (default `console.error`) */
   report?: (error: unknown, where: Where) => void
@@ -595,7 +597,12 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ? { resolveTools: (session) => offeredTo(h.g, session, opts.wear) }
       : {},
     inputText: async (transcript) =>
-      inputText(transcript, await senders(h.g, transcript), opts.inputSource),
+      inputText(
+        transcript,
+        await senders(h.g, transcript),
+        opts.inputSource,
+        opts.inputBody,
+      ),
     contextItems: opts.context,
     requestItems: opts.requestItems,
     resultText: opts.resultText ??

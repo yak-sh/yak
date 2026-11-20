@@ -23,6 +23,7 @@ export let inputText = (
   transcript: Bundle[],
   names = new Map<Eid, string>(),
   inputSource?: (entry: Bundle) => string | undefined,
+  inputBody?: (entry: Bundle, body: string) => string,
 ) => {
   let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
   let replies = transcript.flatMap((b) => {
@@ -36,9 +37,11 @@ export let inputText = (
     let from = typeof explicit == 'string' && explicit.trim()
       ? explicit
       : inputSource?.(entry) ?? source(entry, names)
+    let body = textOf(entry)
+    let text = inputBody ? inputBody(entry, body) : body
     let sent = made(entry).at
     if (entry.notice || typeof sent != 'string') {
-      return { text: textOf(entry), from }
+      return { text, from }
     }
     let previous = replies.findLast((r) => r.through < seqOf(entry))
     let ask = previous?.ask
@@ -50,7 +53,7 @@ export let inputText = (
       text:
         `[Sent ${sent}; previous reply ended ${
           ended ?? (previous ? 'unknown' : 'none')
-        }]\n` + textOf(entry),
+        }]\n` + text,
     }
   }
 }

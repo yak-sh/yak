@@ -15,7 +15,6 @@ import { attachmentKey, attachments } from './attachments.ts'
 import { keep } from '@yaks/blob'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { attachedOf, attachmentId, type File } from './operator-files.ts'
-import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import {
   currentStatus,
@@ -38,7 +37,6 @@ import type { OperatorStore } from './operator-store.ts'
 import { NEW_APP, onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
 import { type Stepped, STEPPING } from './walkthrough.ts'
-import { unsaid } from '@yaks/session/conversation'
 import { inputOf, type Intake, take } from '@yaks/session/intake'
 import { refusedSpend } from '@yaks/platform/standing'
 import { channelOf } from './operator-view.ts'
@@ -193,17 +191,16 @@ let retainFile = async (
   return file
 }
 
-/** A reference to accepted words, shared by channel intake and direct asks. */
-export let messageReference = async (env: Env, space: Space, body: string) => {
-  if (!body) return { reference: '' }
+/** Keep accepted words as a file the model can read or pass by address. */
+export let messageFile = async (env: Env, space: Space, body: string) => {
+  if (!body) return undefined
   let bytes = new TextEncoder().encode(body)
-  let message = await retainFile(
+  return await retainFile(
     env,
     space,
     await fileOf(space, 'message.txt', 'text/plain', bytes),
     bytes,
   )
-  return { reference: sourceReference(attachmentId(message)), file: message }
 }
 
 export let keepFile = async (
@@ -323,8 +320,8 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
 /**
  * Words that came by a channel, taken in at the door they came to. The item
  * they arrived as (`item`, in its own package's words: a @yaks/mail letter)
- * is kept first, so nothing a person sent is lost; then its words, said
- * after how they came (`BY`), are the next input of the person's
+ * is kept first, so nothing a person sent is lost; then its words and how they
+ * came (`BY`) are the next input of the person's
  * conversation (@yaks/session `take`), with the files they came with
  * attached to the item. Given again, they write nothing (`fresh` false).
  * Words that could not be taken in keep why on the item, and their channel
@@ -362,11 +359,12 @@ export let hear = async (
         ...request.provider ? { provider: request.provider } : {},
       },
     )
-    let { reference, file } = await messageReference(env, space, text)
+    let file = await messageFile(env, space, text)
     let from = FROM[channel]?.(request)
     let words: Intake = {
       session: open.session,
-      body: framing + (text.trim() || unsaid(files)) + reference,
+      body: text,
+      source: file ? attachmentId(file) : '',
       by: OWN.has(channel) ? space.eid : request.writer ?? request.person,
       item: id,
       ...from ? { from } : {},
@@ -1223,16 +1221,12 @@ export let handleChannels = (
         let framing = BY[request.channel]?.(request, row.entity.eid, subject) ??
           ''
         let body = String(part<Comp>(row, 'doc')?.body ?? '')
-        let say = framing +
-          (body.trim() ||
-            unsaid(request.files ?? []))
         let given = await operator.ask(
           { person: request.person, administrative: access.administrative },
           space,
-          { say },
+          { say: body },
           {
             request: row.entity.eid,
-            source: body,
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
             files,

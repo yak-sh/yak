@@ -16,6 +16,8 @@ import {
 import { conversation } from '@yaks/anthropic'
 import { READS } from '@yaks/anthropic/reads'
 import { addressOf } from '@yaks/blob'
+import { inputOf } from '@yaks/session/intake'
+import { sourceReference } from '@yaks/platform/operator-source'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
@@ -130,6 +132,26 @@ test('a picture and a PDF sent from the page reach Claude as they are', () => {
     data: btoa(String.fromCharCode(...png)),
   })
   assertEquals(source('document')?.media_type, 'application/pdf')
+})
+
+test('the entry keeps only the words and points to the source the model reads', async () => {
+  let [entry] = await service.store.g.get([inputOf(request)])
+  let text = 'When is the meeting?'
+  let source = await addressOf(new TextEncoder().encode(text))
+  assertEquals(entry.content, { body: text })
+  assertEquals(entry.intake, { item: request, source })
+  assertEquals(entry.channel, {
+    name: 'chat',
+    framing: onPage('https://yaks.app/manage/clerk'),
+  })
+  let prose = ask.items.find((item) =>
+    item.kind == 'user' &&
+    item.text.includes(text)
+  )
+  assertStringIncludes(
+    prose?.kind == 'user' ? prose.text : '',
+    onPage('https://yaks.app/manage/clerk') + text + sourceReference(source),
+  )
 })
 
 let transcript = await (await chatPage(p.env, space, who, request)).text()

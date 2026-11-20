@@ -26,7 +26,7 @@ import { renderToString } from 'preact-render-to-string'
 import { namer } from '@yaks/session/conversation'
 import { HEARD, rows } from './operator-view.ts'
 import { sentRows } from './operator-testing.ts'
-import { sourceReference } from './operator-source.ts'
+import { sourceReference } from '@yaks/platform/operator-source'
 
 let entry = (eid: string, seq: number, comps: object, session = 's') =>
   ({ entity: { eid }, entry: { session, seq }, ...comps }) as Bundle

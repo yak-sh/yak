@@ -9,7 +9,7 @@ import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { attachedOf, type File } from './operator-files.ts'
 import { attachmentOf, attachmentRows } from '@yaks/blob/attachment'
-import { sourceId } from './operator-source.ts'
+import { sourceId } from '@yaks/platform/operator-source'
 import type { OperatorStore } from './operator-store.ts'
 
 export let ATTACHMENTS = 'operator:attachments'

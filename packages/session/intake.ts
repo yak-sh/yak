@@ -16,9 +16,9 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
  * who did (`from`); what names them wherever they are given again (`id`),
  * which is the item they came in (`item`, such as a request) unless the
  * caller names them itself; the channel they came by and the framing said
- * before them, which `body` starts with; the files that came with them; the
- * model chosen to answer them (`using`); and what the host keeps beside them
- * (`with`). Words the platform wrote, never a person's, are `system`. */
+ * before them; the files that came with them and the address of the original
+ * text among those files (`source`); the model chosen to answer them (`using`); and what
+ * the host keeps beside them (`with`). Words the platform wrote, never a person's, are `system`. */
 export type Intake = {
   session: Eid
   body: string
@@ -28,6 +28,7 @@ export type Intake = {
   from?: string
   channel?: { name: string; framing?: string }
   files?: Attached[]
+  source?: string
   using?: Comp
   system?: boolean
   with?: Record<string, Comp>
@@ -43,14 +44,21 @@ export let inputOf = (id: string): Eid => derivedEid('operator-input|' + id)
  * item it came in (`intake{item}`), and each file's attachment to that item, or
  * to the input where no item names them (@yaks/blob/attachment). */
 export let intake = (words: Intake): Bundle[] => {
-  let { session, item, from, channel, using } = words
+  let { session, item, from, channel, using, source } = words
   let named = words.id ?? item
   let eid = named ? inputOf(named) : crypto.randomUUID()
   return [
     {
       entity: { eid },
       entry: { session, ...from ? { from } : {} },
-      ...item ? { intake: { item } } : {},
+      ...item || source != null
+        ? {
+          intake: {
+            ...item ? { item } : {},
+            ...source != null ? { source } : {},
+          },
+        }
+        : {},
       content: { body: words.body },
       ...channel ? { channel } : {},
       ...using ? { using } : {},

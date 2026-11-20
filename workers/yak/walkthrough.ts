@@ -16,12 +16,12 @@
 // served (gallery.ts `made`), each step beside the picture of its release
 // (gallery.ts `shotAt`).
 import type { Bundle, Comp } from '@yaks/graph'
-import { theirs, words } from '@yaks/session/conversation'
+import { theirs } from '@yaks/session/conversation'
 import { toolEid } from '@yaks/tools/result'
 import type { Env } from './env.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { keptValue } from './results.ts'
-import { sourceWords } from './operator-source.ts'
+import { spoken } from './operator-draw.ts'
 
 /** Where the kernel asks a space's object for a walkthrough (build.ts). */
 export let WALKTHROUGH = '/operator/walkthrough'
@@ -95,7 +95,7 @@ let bare = (b: Bundle, body: string, rest: Bundle = {} as Bundle): Bundle => ({
 /**
  * What was said in a step's lines, the only lines of a marked conversation
  * that leave the demo space: the request in the person's exact words, without
- * the note a channel adds to them (operator-source.ts `sourceWords`), and the
+ * the channel context (operator-draw.ts `spoken`), and the
  * Operator's reply to it, its last words in the step, each link in them
  * without its query or fragment (`linksBare`). Not a call, a result,
  * a prompt, a progress line, recalled memories, reasoning or words it wrote
@@ -129,7 +129,7 @@ export let said = (lines: Bundle[]): Bundle[] => {
   )
   return [
     ...asked
-      ? [bare(asked, sourceWords(words(String(comp(asked, 'content')!.body))))]
+      ? [bare(asked, spoken(asked, String(comp(asked, 'content')!.body)))]
       : [],
     ...reply
       ? [bare(reply, String(comp(reply, 'content')!.body), {

@@ -46,7 +46,7 @@ import { parseHTML } from 'linkedom'
 import { operators } from './operator-service-probe.ts'
 import { personaFor } from './operator-persona.ts'
 import { setupOf } from './speech.ts'
-import { sourceWords } from './operator-source.ts'
+import { sourceWords } from '@yaks/platform/operator-source'
 
 let replyText = (words: Words) => typeof words == 'string' ? words : words.text
 let HI = greeting('Ada', 'Jeff')

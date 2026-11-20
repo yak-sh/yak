@@ -10,7 +10,7 @@ import { toolEid } from '@yaks/tools'
 import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
 import { operatorContext, operatorRoster } from './operator.ts'
-import { sourceReference } from './operator-source.ts'
+import { sourceReference } from '@yaks/platform/operator-source'
 import { operatorMemory } from './operator-testing.ts'
 
 let { box, env, dir, space, ada, bob, person, persona } = await machineOf(
