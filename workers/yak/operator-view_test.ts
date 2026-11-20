@@ -1,5 +1,5 @@
-// An error in the Operator's chat reads as words; what it said shows only
-// inside a closed "Details". A conversation says which apps it changed and
+// An error in the Operator's chat reads as words. Tool and helper details
+// are folded away. A conversation says which apps it changed and
 // worked on, for the app beside the chat (T-140509, D-146737).
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -60,39 +60,33 @@ let drawn = () =>
     }</main>`,
   ).document
 
-test('an error reads as words, its detail only inside a closed disclosure', () => {
+test('model and host failures omit raw errors, while tool and helper details stay closed', () => {
   let doc = drawn()
-  let shown = [...doc.querySelectorAll('.Transcript_Error > p')]
-    .map((p) => p.textContent)
+  let main = doc.querySelector('main')!
+  let shown = [...main.querySelectorAll('.Transcript_Error > p')]
   assertEquals(shown.length, 4)
-  for (let said of shown) assert(!/[{}]/.test(said!), said!)
-  let details = [...doc.querySelectorAll('.Transcript_Error > details')]
-  assertEquals(details.length, 4)
+  assertStringIncludes(shown[0].textContent!, 'could not get an answer')
+  assertStringIncludes(shown[2].textContent!, 'Something went wrong')
+  for (let raw of ['invalid_request_error', 'CPU time']) {
+    assert(!main.innerHTML.includes(raw), raw)
+  }
+  let details = [...main.querySelectorAll('.Transcript_Error > details')]
+  assertEquals(details.length, 2)
   for (let d of details) {
     assert(!d.hasAttribute('open'))
     assertEquals(d.querySelector('summary')!.textContent, 'Details')
   }
-  assertStringIncludes(
-    details[0].textContent!,
-    '"type": "invalid_request_error"',
-  )
-  assertStringIncludes(details[2].textContent!, 'CPU time')
-  assertStringIncludes(details[3].textContent!, 'no verified cost bound')
-  for (let p of doc.querySelectorAll('.Transcript_Error > p')) {
+  assertStringIncludes(details[0].textContent!, 'no such app')
+  assertStringIncludes(details[1].textContent!, 'no verified cost bound')
+  for (let p of shown) {
+    assert(!/[{}]/.test(p.textContent!), p.textContent!)
     let text = p.closest('.Transcript_Entry')!
       .querySelector('[data-entry-text]')!.getAttribute('data-entry-text')!
     assertStringIncludes(text, p.textContent!)
   }
   for (let d of details) d.remove()
-  for (
-    let detail of [
-      'invalid_request_error',
-      'no such app',
-      'CPU time',
-      'no verified cost bound',
-    ]
-  ) {
-    assertEquals(doc.querySelector('main')!.innerHTML.includes(detail), false)
+  for (let detail of ['no such app', 'no verified cost bound']) {
+    assert(!main.innerHTML.includes(detail), detail)
   }
   // Nothing of an error is drawn as a reply, or as the person's words.
   assertEquals(doc.querySelectorAll('.Transcript_Reply').length, 0)
