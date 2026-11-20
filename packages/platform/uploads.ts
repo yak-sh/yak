@@ -18,6 +18,12 @@ let comp = (rows: Bundle[], eid: string, name: string) =>
 
 let text = (v: unknown) => typeof v == 'string' ? v : ''
 
+let addresses = (c: unknown, ...props: string[]): string[] =>
+  props.flatMap((p) => {
+    let v = (c as Comp | null | undefined)?.[p]
+    return typeof v == 'string' ? [v] : []
+  })
+
 /** The rows naming an app's uploads, and what they say. Bytes none of
  * `names` answers for are served no more, and retained for recovery from trash. */
 export let uploads: Naming = {
@@ -62,6 +68,10 @@ export let uploads: Naming = {
   },
   // The content row while it carries the bytes (an upload's `blob`, a
   // model's `artifact`), and any attachment pointing at them.
-  names: (sha) =>
-    line`.entity.eid=${sha} .blob|.entity.eid=${sha} .artifact|.attachment.blob=${sha}|.attachment.artifact=${sha}`,
+  names: (shas) =>
+    line`.entity.eid=${shas} .blob|.entity.eid=${shas} .artifact|.attachment.blob=${shas}|.attachment.artifact=${shas}`,
+  named: (row) => [
+    ...row.blob || row.artifact ? [row.entity.eid] : [],
+    ...addresses(row.attachment, 'blob', 'artifact'),
+  ],
 }

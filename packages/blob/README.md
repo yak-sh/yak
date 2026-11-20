@@ -110,7 +110,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `@yaks/blob/store`      | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package                                                                     |
 | `@yaks/blob/serve`      | the HTTP responses above, `matches` among them, without the rest of the package                                                                                                |
 | `@yaks/blob/attachment` | `attachmentRows`, `attachmentOf`, `artifactsOf`, `attachmentsSeen`: a file's artifact and its use beside each message, and a reader shown only the attachments a clause admits |
-| `@yaks/blob/upload`     | `filed`, `described`, `admit`, `Untaken`, `useOf`, `servable`, `Naming`: an upload's write half and the words its rows speak                                                   |
+| `@yaks/blob/upload`     | `filed`, `described`, `admit`, `Untaken`, `useOf`, `servable`, `servables`, `Naming`: an upload's write half and the words its rows speak                                      |
 
 ## Addresses
 

@@ -708,3 +708,45 @@ export let sharing = <K, T>(
   }
   return reading
 }
+
+/**
+ * Asks that travel together: the first goes at once, and those made while a
+ * batch is out go together once it lands, at most `most` to a batch, as one
+ * call of `run`, which answers each ask by its place. What `run` throws, every
+ * ask it held throws.
+ *
+ * A batch is begun by one of its own asks, in that caller's request, never by
+ * the batch before it: a Worker cancels a request's reads when it ends, so a
+ * batch begun on behalf of a request already answered would never land. `hold`
+ * keeps the caller that began a batch alive until it lands, as in
+ * {@link sharing}.
+ */
+export let batching = <K, T>(
+  run: (asks: K[]) => Promise<readonly T[]>,
+  { most = Infinity, hold }: { most?: number; hold?: Hold } = {},
+): (ask: K) => Promise<T> => {
+  type Waiting = Resolvers<T> & { ask: K; taken?: boolean }
+  let waiting: Waiting[] = []
+  let out: Promise<void> | undefined
+  let go = () => {
+    let taken = waiting.splice(0, most)
+    for (let w of taken) w.taken = true
+    let landed = new Promise<readonly T[]>((said) =>
+      said(run(taken.map((w) => w.ask)))
+    ).then(
+      (said) => taken.forEach((w, i) => w.resolve(said[i])),
+      (e) => taken.forEach((w) => w.reject(e)),
+    ).finally(() => {
+      out = undefined
+    })
+    out = landed
+    hold?.(landed)
+  }
+  return async (ask) => {
+    let me: Waiting = { ...resolvers<T>(), ask }
+    waiting.push(me)
+    while (out && !me.taken) await out
+    if (!me.taken) go()
+    return await me.promise
+  }
+}

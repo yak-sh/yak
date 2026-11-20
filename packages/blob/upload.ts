@@ -69,15 +69,24 @@ export type Naming = {
   /** What rows read at the use and the content say of the bytes, or null
    * where none names them. */
   said: (rows: Bundle[], at: { sha: string; use: string }) => Said | null
-  /** The query for the rows still naming the bytes at `sha`. While one
-   * answers, the bytes are served. */
-  names: (sha: string) => Built
+  /** The query for the rows still naming the bytes at any of `shas`. While
+   * one names an address, its bytes are served. */
+  names: (shas: readonly string[]) => Built
+  /** The addresses one of the rows `names` answers with names. */
+  named: (row: Bundle) => string[]
 }
 
 let comp = (rows: Bundle[], eid: string, name: string) =>
   rows.find((r) => r.entity.eid == eid)?.[name] as Comp | undefined
 
 let text = (v: unknown) => typeof v == 'string' ? v : ''
+
+// The addresses a component's `props` hold.
+let addresses = (c: unknown, ...props: string[]): string[] =>
+  props.flatMap((p) => {
+    let v = (c as Comp | null | undefined)?.[p]
+    return typeof v == 'string' ? [v] : []
+  })
 
 /** This package's words: an `artifact` at the address, and an `attachment`
  * naming it. */
@@ -108,8 +117,12 @@ export let artifacts: Naming = {
       }],
     }
   },
-  names: (sha) =>
-    line`.entity.eid=${sha} .artifact|.attachment.artifact=${sha}`,
+  names: (shas) =>
+    line`.entity.eid=${shas} .artifact|.attachment.artifact=${shas}`,
+  named: (row) => [
+    ...row.artifact ? [row.entity.eid] : [],
+    ...addresses(row.attachment, 'artifact'),
+  ],
 }
 
 /** Where bytes are kept and what is taken there. */
@@ -275,26 +288,53 @@ export let filed = async (
   return file
 }
 
+/** One served representation asked for: `eid`, of the bytes at `sha`. */
+export type Asked = { sha: string; eid: string }
+
 /**
- * The representation `eid` of the bytes at `sha`, read off the store in one
- * query, while it is served: none for one of another scope, one that does
- * not address these bytes, or bytes no row names any more. A representation
- * outlives the rows naming its bytes, and a copy of them may be left in a
- * cache or a bucket, so a deleted upload stops here.
+ * The representations `asked` for, each while it is served, read off the store
+ * in one query whatever their number, by place: none for one of another scope,
+ * one that does not address its bytes, or bytes no row names any more. A
+ * representation outlives the rows naming its bytes, and a copy of them may be
+ * left in a cache or a bucket, so a deleted upload stops here.
  */
+export let servables = async (
+  read: Read,
+  at: Pick<Upload, 'scope' | 'naming'>,
+  asked: readonly Asked[],
+): Promise<(Representation | null)[]> => {
+  if (!asked.length) return []
+  let naming = at.naming ?? artifacts
+  let eids = [...new Set(asked.map((a) => a.eid))]
+  let shas = [...new Set(asked.map((a) => a.sha))]
+  let rows = await read(
+    line`.entity.eid=${eids} .representation|${sub(naming.names(shas))}`,
+  )
+  let reps = new Map(
+    rows.flatMap((r) =>
+      r.representation
+        ? [[r.entity.eid, r.representation as Representation]]
+        : []
+    ),
+  )
+  let named = new Set(
+    rows.flatMap((r) => r.representation ? [] : naming.named(r)),
+  )
+  return asked.map(({ sha, eid }) => {
+    let rep = reps.get(eid)
+    return rep && rep.scope == (at.scope ?? SCOPE) && rep.address == sha &&
+        represents(eid, rep) && named.has(sha)
+      ? rep
+      : null
+  })
+}
+
+/** The representation `eid` of the bytes at `sha` while it is served
+ * ({@link servables}). */
 export let servable = async (
   read: Read,
   at: Pick<Upload, 'scope' | 'naming'>,
   sha: string,
   eid: string,
-): Promise<Representation | null> => {
-  let names = (at.naming ?? artifacts).names(sha)
-  let rows = await read(line`.entity.eid=${eid} .representation|${sub(names)}`)
-  let rep = rows.find((r) => r.entity.eid == eid)?.representation as
-    | Representation
-    | undefined
-  return rep && rep.scope == (at.scope ?? SCOPE) && rep.address == sha &&
-      represents(eid, rep) && rows.some((r) => r.entity.eid != eid)
-    ? rep
-    : null
-}
+): Promise<Representation | null> =>
+  (await servables(read, at, [{ sha, eid }]))[0]

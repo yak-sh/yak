@@ -26,7 +26,7 @@ import {
   rangedOpen,
   type Representation,
 } from '@yaks/blob'
-import { servable } from '@yaks/blob/upload'
+import { type Asked, servables } from '@yaks/blob/upload'
 import { uploads } from '@yaks/platform/uploads'
 import {
   inside,
@@ -47,14 +47,14 @@ import { through } from '@yaks/workerd/cache'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { caught, relayed, responding } from './defects.ts'
+import { background, caught, relayed, responding } from './defects.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from '@yaks/platform/versions'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Config, parse } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 import { sharing } from './lib/shared.ts'
-import { system, within } from '@yaks/fp'
+import { batching, system, within } from '@yaks/fp'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
@@ -495,20 +495,50 @@ let SERVED = 'public, max-age=30'
 // no is not kept, and the gateway asks for itself as before. A store that
 // fails is answered with what it threw, never kept, and the gateway reports
 // it.
+//
+// Every half minute a page's pictures are asked again, all at once, and a
+// store answers one read at a time: 204 lookups at 7 ms each held
+// openai-math's store for 1.4 s (T-1600). So the asks an isolate has for one
+// store travel together (`servables`): one read, and those that arrive while
+// it is out go in the next.
 let serves = (req: Request, env: Env, path: string) => {
   let match = /^\/servable\/([^/]+)\/([0-9a-f]{64})\/([0-9a-f-]+)$/.exec(path)
   let store = told(req.headers.get(STORE))
   if (!match || !store) return Promise.resolve(no(400))
-  let [, app, sha, rep] = match
+  let [, app, sha, eid] = match
+  return servedAs(() => sent(env, app, store)({ sha, eid }))
+}
+
+// One store's asks, by the stores they reach, the app whose uploads they are
+// and everything the store is told (`STORE`), since the store learns its app
+// from each request: asks told something newer go apart from those told
+// something older.
+type Sent = (ask: Asked) => Promise<Representation | null>
+let sending = new WeakMap<object, Map<string, Sent>>()
+let TOGETHER = 1024
+let MOST = 100
+let sent = (env: Env, app: string, store: StoreAt): Sent => {
+  let together = sending.get(env.STORE) ?? new Map<string, Sent>()
+  sending.set(env.STORE, together)
+  let key = `${app} ${JSON.stringify(store)}`
+  let had = together.get(key)
+  if (had) return had
   let graph = metaOf(storeOf(env.STORE, store.name, store.app))
-  return servedAs(() =>
-    servable(
-      (q) => graph.query(q as Line),
-      { scope: app, naming: uploads },
-      sha,
-      rep,
-    )
+  let ask = batching(
+    (asked: Asked[]) =>
+      servables(
+        (q) => graph.query(q as Line),
+        { scope: app, naming: uploads },
+        asked,
+      ),
+    { most: MOST, hold: background },
   )
+  together.set(key, ask)
+  for (let old of together.keys()) {
+    if (together.size <= TOGETHER) break
+    together.delete(old)
+  }
+  return ask
 }
 
 let no = (status: number, body: unknown = null) =>
