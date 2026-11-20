@@ -99,3 +99,49 @@ test('OAuth requests offer web tools by default and allow explicit disable', asy
     )
   }
 })
+
+test('a request held to sites searches only their domains', () => {
+  const req = { model: 'test', items: [], tools: [], sites: ['example.com'] }
+  assertEquals(body(req, false, undefined, true).tools, [
+    { type: 'web_search', filters: { allowed_domains: ['example.com'] } },
+  ])
+})
+
+test('each hosted search is counted in the reply usage, a page opened is not', async () => {
+  const output = [
+    { type: 'web_search_call', action: { type: 'search', query: 'q' } },
+    { type: 'web_search_call', action: { type: 'search', query: 'r' } },
+    { type: 'web_search_call', action: { type: 'open_page', url: 'u' } },
+    { type: 'message', content: [{ type: 'output_text', text: 'answer' }] },
+  ]
+  const model = responses({
+    credential: () => ({ token: 'test', base: 'https://api.openai.com/v1' }),
+    web: true,
+    fetch: () =>
+      Promise.resolve(
+        new Response(
+          [
+            ...output.map((item) =>
+              'data: ' +
+              JSON.stringify({ type: 'response.output_item.done', item })
+            ),
+            'data: ' + JSON.stringify({
+              type: 'response.completed',
+              response: {
+                id: 'r1',
+                model: 'test',
+                status: 'completed',
+                output,
+                usage: { input_tokens: 5, output_tokens: 1 },
+              },
+            }),
+            'data: [DONE]',
+          ].join('\n\n') + '\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      ),
+  })
+  const reply = await model({ model: 'test', items: [], tools: [] })
+  assertEquals(reply.usage?.web_searches, 2)
+  assertEquals(reply.usage?.input_tokens, 5)
+})

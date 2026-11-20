@@ -150,6 +150,13 @@ let toolOrder = (a: Frame, b: Frame): number => {
   return x < y ? -1 : x > y ? 1 : 0
 }
 
+// Hosted web search, held to `sites` where a request names them (@yaks/model
+// `Request.sites`): it then reads only those domains.
+let searching = (sites?: string[]) =>
+  sites ? { type: 'web_search', filters: { allowed_domains: sites } } : {
+    type: 'web_search',
+  }
+
 /** The whole request body. */
 export let body = (
   req: Request,
@@ -164,7 +171,7 @@ export let body = (
     tools: [
       ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
       ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
-      ...web ? [{ type: 'web_search' }] : [],
+      ...web ? [searching(req.sites)] : [],
     ].sort(toolOrder).map(canonical),
     ...req.conversation ? { prompt_cache_key: req.conversation } : {},
     ...req.effort ? { reasoning: { effort: req.effort } } : {},
@@ -453,8 +460,22 @@ let delivery = async (
       : {},
     items: items(output),
     ...artifacts.length ? { artifacts } : {},
-    ...tokenUsage(response.usage),
+    ...searched(tokenUsage(response.usage), output),
   }
+}
+
+// What a reply's usage says with the hosted searches it ran, each billed at
+// the model's `web_search` (@yaks/model `Usage.web_searches`): OpenAI counts
+// them only as items of its output.
+let searched = (
+  reply: Pick<Reply, 'usage' | 'cost'>,
+  output: Frame[],
+): Pick<Reply, 'usage' | 'cost'> => {
+  let n = output.filter((o) =>
+    o.type == 'web_search_call' &&
+    (!record(o.action) || o.action.type == 'search')
+  ).length
+  return n ? { ...reply, usage: { ...reply.usage, web_searches: n } } : reply
 }
 
 /** Preserve absence: an unreported cache count is not a cache miss. A

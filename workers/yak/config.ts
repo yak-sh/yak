@@ -381,14 +381,15 @@ let workersAi: Plug = {
 
 // OpenAI, on a key of the platform's: by default the "yaks.app images"
 // project's, which may use only the GPT Image models, so OpenAI answers an
-// app's image asks and refuses the rest. `OPENAI_API` is a probe's door to
-// somewhere other than OpenAI.
-let openai = (key = 'OPENAI_API_KEY'): Plug => ({
+// app's image asks and refuses the rest, and searches nothing. The Operator's
+// key searches the web (`web`). `OPENAI_API` is a probe's door to somewhere
+// other than OpenAI.
+let openai = (key = 'OPENAI_API_KEY', web = false): Plug => ({
   use: '@yaks/openai',
   with: {
     key: { secret: key },
     base: { binding: 'OPENAI_API' },
-    web: false,
+    web,
     images: false,
   },
 })
@@ -397,11 +398,11 @@ let openai = (key = 'OPENAI_API_KEY'): Plug => ({
  * each a plugin exporting `./provider` (@yaks/model `ProviderFacet`), with
  * the options it is given. No layer imports one; it asks for a model by the
  * provider name it serves under. */
-let supplied = (key: string): Config => ({
+let supplied = (key: string, web = false): Config => ({
   plugins: [
     workersAi,
     { use: '@yaks/anthropic', with: { key: { secret: 'ANTHROPIC_API_KEY' } } },
-    openai(key),
+    openai(key, web),
   ],
 })
 
@@ -409,9 +410,9 @@ export let providing: Config = supplied('OPENAI_API_KEY')
 
 /** The providers of Operator conversations: OpenAI on the key of the
  * "yaks.app operator" project, never the images key, so the Operator is on
- * OpenAI only where the Worker holds that key. Image generation and apps keep
- * `providing`'s. */
-export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY')
+ * OpenAI only where the Worker holds that key, searching the web as Claude
+ * does. Image generation and apps keep `providing`'s. */
+export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY', true)
 
 /** What the platform's own agents run on, each a model of a provider
  * `providing` (the Operator's, `operatorProviders`) names: the Operator's
