@@ -5,7 +5,9 @@ let installed = new WeakSet<Document>()
 
 /** Connect `[data-menu-trigger="panel-id"]` buttons to hidden kit menus.
  * Menus escape clipping, close after actions, outside clicks or Escape, and
- * return keyboard focus to their trigger. Native buttons handle Enter/Space. */
+ * return keyboard focus to their trigger. Native buttons handle Enter/Space.
+ * A panel hears `menu-open`, its `detail` the trigger, as it opens, so one
+ * panel can serve many triggers. */
 export let menus = (doc: Document = document): void => {
   if (installed.has(doc)) return
   installed.add(doc)
@@ -32,6 +34,8 @@ export let menus = (doc: Document = document): void => {
     let panel = doc.getElementById(trigger.dataset.menuTrigger!)
     if (!panel?.parentNode) return
     active = { trigger, panel, home: panel.parentNode }
+    let { CustomEvent } = doc.defaultView ?? globalThis
+    panel.dispatchEvent(new CustomEvent('menu-open', { detail: trigger }))
     doc.body.appendChild(panel)
     panel.hidden = false
     trigger.setAttribute('aria-expanded', 'true')

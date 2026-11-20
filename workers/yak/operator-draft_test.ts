@@ -1470,7 +1470,7 @@ test('entry actions copy the source and its link, quote into the existing compos
   let actionMenu = entryActions.document.getElementById(
     actionTrigger.dataset.menuTrigger!,
   )!
-  let copiedText = actionMenu.getAttribute('data-entry-text')!
+  let copiedText = actionTrigger.getAttribute('data-entry-text')!
   entryActions.press(actionTrigger)
   entryActions.press(actionMenu.querySelector('[data-entry-copy]')!)
   await settle()
@@ -1480,6 +1480,17 @@ test('entry actions copy the source and its link, quote into the existing compos
   entryActions.press(actionTrigger)
   entryActions.press(actionMenu.querySelector('[data-entry-quote]')!)
   await settle()
+  // The one menu serves every line: the last one's time fills it with its own.
+  let lastTrigger = [
+    ...entryActions.document.querySelectorAll<HTMLElement>(
+      '[data-menu-trigger]',
+    ),
+  ].at(-1)!
+  entryActions.press(lastTrigger)
+  let archive = actionMenu.querySelector<HTMLElement>('[data-entry-archive]')!
+  let hiding = [archive.hidden, archive.textContent]
+  entryActions.press(actionMenu.querySelector('[data-entry-copy]')!)
+  await settle()
   let quotedDraft = entryActions.say.value
   entryActions.leave()
   let quotedAgain = await load(storage(), false, park)
@@ -1488,6 +1499,14 @@ test('entry actions copy the source and its link, quote into the existing compos
   quotedAgain.leave()
 
   assertEquals(entryActions.copied[0], copiedText)
+  assertEquals(
+    entryActions.copied[2],
+    lastTrigger.getAttribute('data-entry-text'),
+  )
+  assertEquals(hiding, [
+    !lastTrigger.dataset.archiveEntries,
+    lastTrigger.dataset.restore == 'true' ? 'Restore' : 'Hide',
+  ])
   assertStringIncludes(entryActions.copied[1], '/' + park + '#row-')
   let copiedLink = new URL(entryActions.copied[1])
   let linkedPage = parseHTML(

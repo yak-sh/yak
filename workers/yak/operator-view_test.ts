@@ -332,7 +332,7 @@ test('every line is a row under its id with its time and menu, inside a fold as 
     let entry = r.querySelector(':scope > .Transcript_Entry')!
     assert(entry.querySelector(':scope > .Transcript_Meta time[datetime]'))
     assertEquals(
-      entry.querySelector('[data-entry-link]')!.getAttribute('data-entry-link'),
+      entry.querySelector('[data-entry-id]')!.getAttribute('data-entry-id'),
       r.id.slice('row-'.length),
     )
   }

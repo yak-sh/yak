@@ -585,9 +585,9 @@ let rows = (lines: { id: string; node: Node }[]) =>
 
 /** The frame every line is drawn in, wherever it is drawn: what it says,
  * with the margin `view` draws beside it where it loads one, then its time,
- * which opens its menu. Copy, Quote and Copy link need only the line; Hide
- * and Restore need the entries it draws, so a line of none (words no session
- * has taken yet) goes without them. */
+ * which opens the page's one menu (`EntryMenu`) for it. Copy, Quote and Copy
+ * link need only the line; Hide and Restore need the entries it draws, so a
+ * line of none (words no session has taken yet) goes without them. */
 export let framed = (
   line: Line,
   entries: Bundle[],
@@ -605,7 +605,6 @@ export let framed = (
     (entered.length ? entered : used).map((b) =>
       spoken(b, String(comp(b, 'content')?.body ?? ''))
     ).filter(Boolean).join('\n\n')
-  let menu = 'entry-menu-' + line.id
   return {
     ...line,
     node: h(
@@ -619,52 +618,62 @@ export let framed = (
         {},
         h(Menu.Trigger, {
           type: 'button',
-          'data-menu-trigger': menu,
-          'aria-controls': menu,
+          'data-menu-trigger': ENTRY_MENU,
+          'aria-controls': ENTRY_MENU,
           'aria-haspopup': 'menu',
           'aria-expanded': 'false',
           'aria-label': 'Entry actions',
-        }, first ? stamp(first) : 'Actions'),
-        h(
-          Menu,
-          {
-            id: menu,
-            role: 'menu',
-            hidden: true,
-            mod: 'float',
-            'aria-label': 'Entry actions',
-            'data-entry-text': text,
-          },
-          h(Menu.Item, {
-            type: 'button',
-            role: 'menuitem',
-            'data-entry-copy': '',
-          }, 'Copy'),
-          h(Menu.Item, {
-            type: 'button',
-            role: 'menuitem',
-            'data-entry-quote': '',
-            'data-entry-id': line.id,
-          }, 'Quote'),
-          h(Menu.Item, {
-            type: 'button',
-            role: 'menuitem',
-            'data-entry-link': line.id,
-          }, 'Copy link'),
-          entered.length ? h(Menu.Rule, {}) : null,
-          entered.length
-            ? h(Menu.Item, {
-              type: 'button',
-              role: 'menuitem',
+          'data-entry-id': line.id,
+          'data-entry-text': text,
+          ...entered.length
+            ? {
               'data-archive-entries': ids.join(','),
               'data-restore': String(archived.length > 0),
-            }, archived.length ? 'Restore' : 'Hide')
-            : null,
-        ),
+            }
+            : {},
+        }, first ? stamp(first) : 'Actions'),
       ),
     ),
   }
 }
+
+/** The menu every line's time opens (`framed`), drawn once on a page: the
+ * page fills it from the time that opened it, which carries the line's id,
+ * its words and the entries Hide or Restore changes, if any. */
+export let ENTRY_MENU = 'entry-menu'
+export let EntryMenu = () =>
+  h(
+    Menu,
+    {
+      id: ENTRY_MENU,
+      role: 'menu',
+      hidden: true,
+      mod: 'float',
+      'aria-label': 'Entry actions',
+    },
+    h(
+      Menu.Item,
+      { type: 'button', role: 'menuitem', 'data-entry-copy': '' },
+      'Copy',
+    ),
+    h(
+      Menu.Item,
+      { type: 'button', role: 'menuitem', 'data-entry-quote': '' },
+      'Quote',
+    ),
+    h(
+      Menu.Item,
+      { type: 'button', role: 'menuitem', 'data-entry-link': '' },
+      'Copy link',
+    ),
+    h(Menu.Rule, { 'data-entry-hides': '' }),
+    h(Menu.Item, {
+      type: 'button',
+      role: 'menuitem',
+      'data-entry-hides': '',
+      'data-entry-archive': '',
+    }, 'Hide'),
+  )
 
 /** A conversation's lines, each in its frame, drawn by the renderers `view`
  * loads; each run of steps one line that opens on them (`gathered`). */

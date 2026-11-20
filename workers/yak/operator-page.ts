@@ -91,7 +91,14 @@ import {
   type HelperLine,
   Mark,
 } from './operator-aside.ts'
-import { framed, input, type Line, type Lines, row } from './operator-draw.ts'
+import {
+  EntryMenu,
+  framed,
+  input,
+  type Line,
+  type Lines,
+  row,
+} from './operator-draw.ts'
 import { PICTURES, reply, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting, draftsOf, theirs } from './written.ts'
@@ -2262,6 +2269,8 @@ export let chatPage = async (
       // `talk`).
       newcomer ? keepCard(here) : null,
       talked.html ? column(talked.html) : column('', greeting),
+      // the one menu every line's time opens
+      h(EntryMenu, {}),
       fresh && !app
         ? h(
           'div',
@@ -2793,13 +2802,24 @@ document.addEventListener('click', (e) => {
   let start = e.target.closest('[data-say]')
   if (start && boxed) typing(start.dataset.say)
 })
+// The one menu every line's time opens (operator-draw.ts \`EntryMenu\`),
+// filled from the time that opened it: the line's id, its words, and the
+// entries Hide or Restore changes, which a line of none goes without.
+let entry = {}
+let actions = document.getElementById('entry-menu')
+actions?.addEventListener('menu-open', ({ detail }) => {
+  entry = detail.dataset
+  for (let part of actions.querySelectorAll('[data-entry-hides]')) part.hidden = !entry.archiveEntries
+  let archive = actions.querySelector('[data-entry-archive]')
+  archive.disabled = false
+  archive.textContent = entry.restore == 'true' ? 'Restore' : 'Hide'
+})
 document.addEventListener('click', async (e) => {
   let action = e.target.closest?.('[data-entry-copy], [data-entry-quote], [data-entry-link]')
   if (!action) return
-  let text = action.closest('[data-entry-text]').dataset.entryText
-  let id = action.dataset.entryId ?? action.dataset.entryLink
+  let text = entry.entryText ?? ''
   let link = new URL(location.href ?? '${at}', location.origin)
-  if (id) link.hash = 'row-' + id
+  if (entry.entryId) link.hash = 'row-' + entry.entryId
   try {
     if ('entryQuote' in action.dataset && boxed) {
       let quote = '> [Quoted entry](' + link.href + ')\\n' + text.split('\\n').map((line) => '> ' + line).join('\\n')
@@ -2809,12 +2829,12 @@ document.addEventListener('click', async (e) => {
 })
 // Archive and restore change marks, keeping the words on the page and in search.
 document.addEventListener('click', async (e) => {
-  let button = e.target.closest?.('[data-archive-entries]')
-  if (!button) return
+  let button = e.target.closest?.('[data-entry-archive]')
+  if (!button || !entry.archiveEntries) return
   button.disabled = true
   try {
-    let restore = button.dataset.restore == 'true'
-    await store.apply(button.dataset.archiveEntries.split(',').map((eid) => ({ entity: { eid }, archived: restore ? null : {} })))
+    let restore = entry.restore == 'true'
+    await store.apply(entry.archiveEntries.split(',').map((eid) => ({ entity: { eid }, archived: restore ? null : {} })))
       .catch(() => { throw new Error('These entries could not be changed. Try again.') })
     await read()
   } catch (error) { said(error); button.disabled = false }

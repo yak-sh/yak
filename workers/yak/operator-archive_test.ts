@@ -10,6 +10,7 @@ import {
   standingAt,
 } from './operator-host.ts'
 import { rows } from './operator-view.ts'
+import { ENTRY_MENU } from './operator-draw.ts'
 import { namer } from '@yaks/session/conversation'
 import { recentOf } from './operator-glance.ts'
 import { rootOf } from './operator-root.ts'
@@ -88,25 +89,14 @@ test('timestamps offer entry actions, and hiding preserves readable words and re
   equal(restored.every((b) => !b.archived && !!b.content), true)
   equal(restoredDoc.querySelectorAll('.Transcript_Entry-hidden').length, 0)
   for (
-    let [page, label, restore] of [[doc, 'Restore', 'true'], [
-      restoredDoc,
-      'Hide',
-      'false',
-    ]] as const
+    let [page, restore] of [[doc, 'true'], [restoredDoc, 'false']] as const
   ) {
-    let actions = [...page.querySelectorAll('[data-archive-entries]')]
-    equal(actions.length, 2)
-    for (let button of actions) {
-      equal(button.textContent, label)
-      equal(button.getAttribute('data-restore'), restore)
-      let menu = button.closest('[role=menu]')!
-      equal(menu.hasAttribute('hidden'), true)
-      equal(
-        [...menu.querySelectorAll('[role=menuitem]')].map((b) => b.textContent),
-        ['Copy', 'Quote', 'Copy link', label],
-      )
-      let trigger = page.querySelector('[aria-controls="' + menu.id + '"]')!
-      equal(!!trigger.querySelector('time[data-tip][data-relative]'), true)
+    let times = [...page.querySelectorAll('[data-archive-entries]')]
+    equal(times.length, 2)
+    for (let time of times) {
+      equal(time.getAttribute('data-restore'), restore)
+      equal(time.getAttribute('data-menu-trigger'), ENTRY_MENU)
+      equal(!!time.querySelector('time[data-tip][data-relative]'), true)
     }
   }
 })

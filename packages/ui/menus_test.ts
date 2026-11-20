@@ -8,6 +8,7 @@ import { menus } from './menus.ts'
 
 let { document, Event } = parseHTML(`<html><body><div id="home">
   <button data-menu-trigger="actions" aria-expanded="false">a moment ago</button>
+  <button data-menu-trigger="actions" aria-expanded="false">yesterday</button>
   ${
   renderToString(
     h(
@@ -19,7 +20,9 @@ let { document, Event } = parseHTML(`<html><body><div id="home">
   )
 }
   </div><button id="outside">Elsewhere</button></body></html>`)
-let trigger = document.querySelector<HTMLElement>('[data-menu-trigger]')!
+let [trigger, other] = document.querySelectorAll<HTMLElement>(
+  '[data-menu-trigger]',
+)
 let panel = document.getElementById('actions')!
 Object.defineProperties(panel, {
   offsetWidth: { value: 180 },
@@ -30,7 +33,9 @@ let focused = ''
 for (let node of document.querySelectorAll<HTMLElement>('button')) {
   node.focus = () => void (focused = node.textContent!)
 }
-trigger.getBoundingClientRect = () => new DOMRect(260, 520, 60, 20)
+for (let t of [trigger, other]) {
+  t.getBoundingClientRect = () => new DOMRect(260, 520, 60, 20)
+}
 let click = (node: Element) =>
   node.dispatchEvent(new Event('click', { bubbles: true }))
 let key = (node: Element, key: string) =>
@@ -39,7 +44,8 @@ let key = (node: Element, key: string) =>
   )
 menus(document as unknown as Document)
 
-test('a timestamp menu escapes clipping, closes after an action and outside clicks, and returns focus on Escape', () => {
+// A window 320 × 600 wide while `fn` runs.
+let windowed = (fn: () => void) => () => {
   let width = Object.getOwnPropertyDescriptor(globalThis, 'innerWidth')
   let height = Object.getOwnPropertyDescriptor(globalThis, 'innerHeight')
   try {
@@ -47,6 +53,18 @@ test('a timestamp menu escapes clipping, closes after an action and outside clic
       innerWidth: { value: 320, configurable: true },
       innerHeight: { value: 600, configurable: true },
     })
+    fn()
+  } finally {
+    if (width) Object.defineProperty(globalThis, 'innerWidth', width)
+    else Reflect.deleteProperty(globalThis, 'innerWidth')
+    if (height) Object.defineProperty(globalThis, 'innerHeight', height)
+    else Reflect.deleteProperty(globalThis, 'innerHeight')
+  }
+}
+
+test(
+  'a timestamp menu escapes clipping, closes after an action and outside clicks, and returns focus on Escape',
+  windowed(() => {
     click(trigger)
     assertEquals(panel.parentElement, document.body)
     assertEquals([panel.style.left, panel.style.top], ['134px', '356px'])
@@ -66,10 +84,20 @@ test('a timestamp menu escapes clipping, closes after an action and outside clic
     click(choices[0])
     assertEquals(panel.hidden, true)
     assertEquals(trigger.getAttribute('aria-expanded'), 'false')
-  } finally {
-    if (width) Object.defineProperty(globalThis, 'innerWidth', width)
-    else Reflect.deleteProperty(globalThis, 'innerWidth')
-    if (height) Object.defineProperty(globalThis, 'innerHeight', height)
-    else Reflect.deleteProperty(globalThis, 'innerHeight')
-  }
-})
+  }),
+)
+
+test(
+  'a menu shared by several triggers hears which one opened it',
+  windowed(() => {
+    let openers: string[] = []
+    panel.addEventListener('menu-open', (e) => {
+      openers.push((e as CustomEvent<HTMLElement>).detail.textContent!)
+    })
+    click(trigger)
+    click(other)
+    click(other)
+    assertEquals(openers, ['a moment ago', 'yesterday'])
+    assertEquals(panel.hidden, true)
+  }),
+)
