@@ -238,12 +238,12 @@ test(
         `no space ${one}`,
       )
       // Nor reach the rest of the account by a tool that never enters a space
-      // (T-787): the space it would make, a screen following every draft, a
-      // server offered to every connector, and the account's event stream.
+      // (T-787): the space it would make, a screen following every draft,
+      // and the account's event stream; nor connect an MCP server, which only
+      // the person's own door or their Operator does.
       let account = {
         space_new: { slug: 'three38', title: 'three38' },
         screen_pair: { code: 'ABCDEFGH' },
-        mcp_connect: { name: 'mine', url: 'https://remote.invalid/mcp' },
       }
       for (let [name, args] of Object.entries(account)) {
         assertStringIncludes(
@@ -251,6 +251,17 @@ test(
           `${name} acts on the whole account`,
         )
       }
+      assertStringIncludes(
+        (await assertRejects(
+          () =>
+            only.tool('mcp_connect', {
+              name: 'mine',
+              url: 'https://remote.invalid/mcp',
+            }),
+          Error,
+        )).message,
+        'cannot connect personal MCP servers',
+      )
       let stream = await k.at(k.host, '/mcp', {
         headers: {
           authorization: `Bearer ${/^yak login (\S+)$/m.exec(narrow)![1]}`,
