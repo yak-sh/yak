@@ -1552,6 +1552,11 @@ compacted. Other tables, including version metadata, remain intact. A missing
 cache stays absent. Processes with open connections continue using the same
 file. Failures reach the host's telemetry and are retried on the next pass.
 
+A cache is opened through the SQLite built into Deno (`node:sqlite`), never the
+package's own library. Deno keeps its caches open in the trimming process, and
+POSIX locks belong to the process: a second SQLite closing the same file would
+drop the locks Deno's copy holds and could corrupt the cache.
+
 `@yaks/sqlite/cache` exposes `trim(path, cache)` for a single pass, `held(path)`
 for its database and WAL bytes, and `prune(driver, tables, gone?)` for deleting
 missing sources through an existing connection.

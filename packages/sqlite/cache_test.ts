@@ -1,12 +1,16 @@
 // Cache eviction returns disk space through the same inode and connection a
 // running process already owns, while retaining entries it can still reuse.
+// The owner holds its cache through Deno's own SQLite, as Deno holds its
+// caches in this process; a trim that opened it through another copy would
+// not see the owner's locks.
 import * as io from '@yaks/file/io'
-import { col, insert, select, table } from '@yaks/sql'
+import { col, type Driver, insert, select, table } from '@yaks/sql'
 import { equal, ok, test } from '@yaks/testing'
+import { builtin } from './builtin.ts'
 import { held, prune, threaded, trim } from './cache.ts'
 import { open } from './db.ts'
 
-let schema = (db: ReturnType<typeof open>) => {
+let schema = (db: Driver) => {
   db.query({
     t: 'create table',
     name: 'entries',
@@ -15,7 +19,7 @@ let schema = (db: ReturnType<typeof open>) => {
   db.query({ t: 'create table', name: 'info', cols: [{ name: 'version' }] })
   db.query(insert('info', { version: 2 }))
 }
-let rows = (db: ReturnType<typeof open>) =>
+let rows = (db: Driver) =>
   db.query(select({ cols: [col('source')], from: table('entries') }))
 let tables = { entries: 'source' }
 
@@ -47,7 +51,9 @@ test('cache pruning keeps existing files and remote entries', () => {
 let fixture = () => {
   let dir = io.makeTempDirSync()
   let path = dir + '/cache'
-  let db = open(path)
+  io.writeFileSync(path, new Uint8Array())
+  let db = builtin(path)
+  db.query({ t: 'pragma', name: 'journal_mode', value: 'wal' })
   schema(db)
   io.writeTextFileSync(dir + '/kept.ts', '')
   let kept = io.pathToFileURL(dir + '/kept.ts').href
@@ -140,6 +146,7 @@ test('a cache another connection is reading waits for the next pass', async () =
     db.query({ t: 'begin' })
     equal(rows(db).length, 1)
     await trim(path, cache)
+    ok(await held(path) > cache.most)
     db.query({ t: 'commit' })
     equal(rows(db), [])
     await trim(path, cache)

@@ -1,13 +1,14 @@
 // Rebuildable SQLite caches stay at their path and inode: another process may
-// still have them open. Their file-URL columns identify entries nobody can use
+// still have them open. Deno's own caches are open in this one too, through
+// the SQLite built into Deno, so a cache is opened only through that copy
+// (./builtin.ts). Their file-URL columns identify entries nobody can use
 // once the source is gone; deleting and vacuuming returns their pages in place.
 // A trim waits on the disk, on file checks, a vacuum and its lock, so a
 // process runs it on a thread of its own (./cache_worker.ts).
 import * as io from '@yaks/file/io'
 import { col, type Driver, oneOf, select, table } from '@yaks/sql'
+import { builtin } from './builtin.ts'
 import { busy, malformed } from './error.ts'
-import { Database } from './legacy.ts'
-import { driver } from './native.ts'
 import { unit } from './unit.ts'
 
 /** A rebuildable database's byte budget and its tables' file-URL columns.
@@ -86,7 +87,7 @@ let compact = (db: Driver): boolean => {
 }
 
 let shrink = async (path: string, cache: Cache) => {
-  let db = driver(new Database(path, { create: false }))
+  let db = builtin(path)
   try {
     db.query({ t: 'pragma', name: 'busy_timeout', value: 1000 })
     prune(db, cache.tables)
