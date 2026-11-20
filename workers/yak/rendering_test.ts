@@ -879,6 +879,40 @@ test('a named screenshot that stalls reports the failed operation', async () => 
   assertEquals(p.released, ['session'])
 })
 
+test('a planned wait after a slow load leaves time for the screenshot', async () => {
+  let p = page()
+  let time = clock()
+  let waiting = Promise.withResolvers<void>()
+  let clockForVisit = {
+    ...time,
+    after: (ms: number, run: () => void) => {
+      let cancel = time.after(ms, run)
+      if (ms == 12_000) waiting.resolve()
+      return cancel
+    },
+  }
+  p.p.goto = async () => {
+    await time.advance(9_000)
+    return { status: () => 200 }
+  }
+  let visit = capture(
+    p.browsing,
+    {
+      url: 'https://x.invalid/',
+      view,
+      steps: [{ wait: 12_000 }, { shot: 'after' }],
+      audit: false,
+    },
+    undefined,
+    clockForVisit,
+  )
+  await Promise.race([waiting.promise, visit])
+  await time.advance(12_000)
+  let result = await visit
+  assertEquals(result.shots, [{ name: 'after', image: 'png-bytes' }])
+  assertEquals(p.released, ['session'])
+})
+
 test('the visit deadline while waiting for step 7 names the missing element', async () => {
   let p = page()
   let time = clock()

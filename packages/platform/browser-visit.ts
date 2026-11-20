@@ -248,14 +248,19 @@ export let waiting = (
   Math.max(0, view.wait) + steps.reduce((ms, step) => ms + stepWait(step), 0)
 
 /** How long a visit's load, steps and screenshots may take. */
-export let allowed = ({ steps = [] }: Pick<Visit, 'steps'>): number =>
+export let allowed = (
+  { steps = [] }: Pick<Visit, 'steps'>,
+  includeWaits = true,
+): number =>
   Math.min(
     MOST,
-    RENDER + steps.reduce(
-      (ms, s) => ms + STEP + stepWait(s),
-      0,
-    ),
+    RENDER + steps.length * STEP +
+      (includeWaits ? steps.reduce((ms, s) => ms + stepWait(s), 0) : 0),
   )
+
+/** Planned waits get time of their own in an interactive browse visit. */
+export let waitRoom = (visit: Visit): number =>
+  visit.audit === false ? Math.min(MOST, waiting(visit)) : 0
 
 // How long a step waits for the element it names to appear.
 let FIND = 5_000
@@ -618,7 +623,7 @@ export let capture = async (
 ): Promise<Rendered> => {
   let start = time.now()
   let opening = start + OPEN
-  let render = allowed(visit)
+  let render = allowed(visit, visit.audit !== false) + waitRoom(visit)
   let end = opening + render
   let left = () => end - time.now()
   let attempt = (openBy: number) =>

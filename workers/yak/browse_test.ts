@@ -176,17 +176,6 @@ test('a visit whose requested waits exceed its deadline is refused without openi
   equal(visits.length, seen)
 })
 
-test('a wait that cannot fit after page load is refused with its step and duration', async () => {
-  let { status, body, reports } = await reportedBrowse([
-    { shot: 'before' },
-    { wait: 18_000 },
-  ])
-  equal(status, 400)
-  equal(body.error.code, 'browser_wait_expired')
-  equal(body.error.message.startsWith('Step 2 asks to wait 18000 ms'), true)
-  equal(reports, [])
-})
-
 test('a missing visible element is a refusal naming the step and selector', async () => {
   let { status, body, reports } = await reportedBrowse([{
     tap: '[data-not-now]',

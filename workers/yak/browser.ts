@@ -15,6 +15,7 @@ import {
   type Rendered,
   type Reply,
   type Visit,
+  waitRoom,
 } from '@yaks/platform/browser-visit'
 
 // A failure yak-browser answered, raised here with the stack it had there.
@@ -54,7 +55,7 @@ export let seen = async (
     let browser = env.BROWSER
     said = await bounded(
       time,
-      visit.audit === false ? BROWSE_REPLY : PREVIEW_REPLY,
+      visit.audit === false ? BROWSE_REPLY + waitRoom(visit) : PREVIEW_REPLY,
       () => 'Waiting for the browser service to answer',
       async (signal) =>
         answered(

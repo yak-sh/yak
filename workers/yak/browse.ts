@@ -26,9 +26,9 @@ import { caught } from './defects.ts'
 import { system } from '@yaks/fp'
 import { CallError, refused } from '@yaks/tools/errors'
 import {
-  allowed,
   bounded,
   type Cookie,
+  MOST,
   type Step,
   type View,
   waiting,
@@ -121,14 +121,13 @@ let visitOf = async (req: Request, env: Env) => {
     // takes the steps it was asked to take.
     audit: false,
   }
-  let budget = allowed(visit)
-  if (waiting(visit) >= budget) {
+  if (waiting(visit) >= MOST) {
     return json(
       400,
       'browser_wait_too_long',
       `The requested waits use up the visit's ${
-        budget / 1000
-      }-second limit. Shorten the waits or split the visit.`,
+        MOST / 1000
+      }-second wait limit. Shorten the waits or split the visit.`,
     )
   }
   return { visit, person: claims.person }
