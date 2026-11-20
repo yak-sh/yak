@@ -1633,10 +1633,10 @@ test("rung 3: the home app's files answer the bare hostname", async () => {
   await using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/cookbook/photo.png', 'not really a png')
+  k.put('ada/cookbook/about.html', '<!doctype html><body>about us</body>')
   assertEquals(await (await k.at('/photo.png')).text(), 'not really a png')
-  // A path behind no file whose last segment names no file type is a route,
-  // not a miss: the app's own page answers it (files.ts `pretty`).
-  assert((await (await k.at('/about')).text()).includes('cookbook'))
+  // A page answers at its pretty path (files.ts `pretty`).
+  assert((await (await k.at('/about')).text()).includes('about us'))
 })
 
 test("rung 4: the space's index is `/`'s last word", async () => {
@@ -1696,7 +1696,7 @@ let OWNER = { person: ADA, role: 'owner' as const }
 
 let fronted = async (worker: Handler) => {
   let k = await router(worker, ['/garden/*'])
-  k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  k.put('ada/garden/print.html', '<!doctype html><body>garden</body>')
   return k
 }
 
@@ -1811,7 +1811,7 @@ test("rung 1½: the router's own onward request is not intercepted again", async
     return new Response(`behind me: ${await asked.text()}`)
   }, ['/cookbook/print'])
   env = k.env
-  k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
+  k.put('ada/cookbook/print.html', '<!doctype html><body>cookbook</body>')
   assertStringIncludes(
     await (await k.at('/cookbook/print')).text(),
     'cookbook',
@@ -2359,9 +2359,21 @@ test('a file that is not there is no page', async () => {
   ])
 })
 
-test('an app without a 404.html still opens its index at a route', async () => {
+test('an app without a 404.html answers 404 at a path it does not serve', async () => {
   let route = await site({ 'index.html': doc('home') })('/recipes/42')
+  assertEquals([route.status, route.file], [404, null])
+})
+
+test('an app that declares client-side routing opens its index at a route', async () => {
+  let at = site({
+    'wrangler.jsonc':
+      '{ "assets": { "not_found_handling": "single-page-application" } }',
+    'index.html': doc('home'),
+  })
+  let route = await at('/recipes/42')
   assertEquals([route.status, route.file], [200, 'index.html'])
+  let looped = await at('/recipes/new/recipes/new')
+  assertEquals([looped.status, looped.file], [404, null])
 })
 
 let assetsOf = () =>

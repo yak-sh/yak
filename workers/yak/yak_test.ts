@@ -30,6 +30,9 @@ import {
   unique,
 } from './probe.ts'
 
+// What an app that routes on its own path says (files.ts `resolve`).
+let SPA = '{"assets": {"not_found_handling": "single-page-application"}}'
+
 // What the apex says about itself, read from the page the apex serves rather
 // than pinned a second time here (T-34319). A copy of the copy goes red the
 // next time the words are rewritten — 27979054 rewrote the h1 and this test
@@ -129,6 +132,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       (await owner.put('/style.css', 'h1 { color: peru }')).status,
       200,
     )
+    assertEquals((await owner.put('/wrangler.jsonc', SPA)).status, 200)
     await connector(k, cookie).tool('app_deploy', {
       space: jeff69,
       app: 'recipes',
@@ -144,9 +148,10 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     let style = await k.at(`${jeff69}.yaks.app`, '/recipes/style.css')
     assertMatch(style.headers.get('content-type') ?? '', /text\/css/)
     assertEquals(await style.text(), 'h1 { color: peru }')
-    // A place inside the app, named by a path with no file behind it: the
-    // page itself answers, reporter and all, and routes on the pathname
-    // (T-32769). A missing file — it has an extension — is still nothing.
+    // A place inside an app that declares client-side routing, named by a
+    // path with no file behind it: the page itself answers, reporter and
+    // all, and routes on the pathname. A missing file — it has an extension
+    // — is still nothing.
     let deep = await k.at(`${jeff69}.yaks.app`, '/recipes/recipes/42')
     assertEquals(deep.status, 200)
     assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
@@ -488,6 +493,13 @@ test('an app says who may read it and who may write it', async () => {
       op: 'write',
       path: 'index.html',
       content: '<!doctype html><h1>the diary</h1>',
+    })
+    await agent.tool('app_files', {
+      space: club70,
+      app: 'diary',
+      op: 'write',
+      path: 'wrangler.jsonc',
+      content: SPA,
     })
     await agent.tool('app_deploy', { space: club70, app: 'diary' })
     let stranger = await k.at(`${club70}.yaks.app`, '/diary/', {

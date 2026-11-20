@@ -253,6 +253,8 @@ test('the front page is served at the space root', async () => {
   ]
   let files = {
     'index.html': page,
+    'wrangler.jsonc':
+      '{"assets": {"not_found_handling": "single-page-application"}}',
     'photo.svg': photo,
     'style.css': 'h1 { color: peru }',
     'deep/note.txt': 'down a directory',

@@ -92,6 +92,10 @@ test('an app names no app, and the copy works at its own address', async () => {
         '</head><body><h1>Chores</h1></body></html>',
     )
     await write('style.css', 'h1 { color: rebeccapurple }')
+    await write(
+      'wrangler.jsonc',
+      '{"assets": {"not_found_handling": "single-page-application"}}',
+    )
     // A page that answers for its own addresses keeps its own base, and is
     // given no second one — the first in tree order is the document's.
     await write(

@@ -63,11 +63,12 @@ or cannot do at all:
 - **Responses a page cannot produce.** A CSV export of the store, a redirect, a
   `content-type` a page cannot set.
 
-A worker is not needed for routing: a path under the app that names no file and
-has no extension already serves `index.html`, so a page can read
-`location.pathname` and render that route without a server. It is not needed for
-templating either: the store is live, and `subscribe` redraws the page when the
-data changes.
+A worker is not needed for routing: with
+`{"assets": {"not_found_handling": "single-page-application"}}` in a
+`wrangler.jsonc` beside `index.html`, a path under the app that names no file
+and has no extension serves `index.html`, so a page can read `location.pathname`
+and render that route without a server. It is not needed for templating either:
+the store is live, and `subscribe` redraws the page when the data changes.
 
 ## The `worker.js` module
 

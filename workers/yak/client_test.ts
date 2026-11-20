@@ -286,12 +286,17 @@ test('the client at a pretty path, and a sibling app by path', async () => {
   let mine = browser(k, `${nora8}.yaks.app`, them.cookie)
   try {
     // The page imports the client absolutely, by the app's own slug, and is
-    // opened at an address that names no file — served the app's index.html
-    // (T-32769). A relative import would have resolved against that address.
+    // opened at an address that names no file — served the app's index.html,
+    // as its wrangler.jsonc declares. A relative import would have resolved
+    // against that address.
     let page = '<!doctype html><h1>Books</h1><script type="module">' +
       "import { query, store } from '/reading/api/client.js'</script>"
-    await client(k, `${nora8}.yaks.app`, 'reading', them.cookie)
-      .put('/index.html', page)
+    let reading = client(k, `${nora8}.yaks.app`, 'reading', them.cookie)
+    await reading.put('/index.html', page)
+    await reading.put(
+      '/wrangler.jsonc',
+      '{"assets": {"not_found_handling": "single-page-application"}}',
+    )
     await connector(k, them.cookie).tool('app_deploy', {
       space: nora8,
       app: 'reading',
