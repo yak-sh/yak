@@ -30,8 +30,9 @@ import { exposed, isolate, type Isolation, snapshot } from './isolated.ts'
 /** What config says an exposed session's sandbox is (./isolated.ts): a
  * bubblewrap sandbox under `dir` with `limits`, the read-only `binds` and
  * the command `env`, holding the committed HEAD of `source` over what `setup`
- * made of it, shared read-only (kept under `dir`'s `.layers`); and the host
- * `tools` it is offered by name. */
+ * made of it, shared read-only (kept under `dir`'s `.layers`); the host
+ * `tools` it is offered by name; and the tools its lander is offered
+ * (`landing`). */
 export type IsolationConfig = {
   dir?: string
   limits?: { cpuQuota: number; memoryMax: number; tasksMax: number }
@@ -40,16 +41,20 @@ export type IsolationConfig = {
   source?: string
   setup?: string
   tools?: string[]
+  landing?: string[]
 }
 
 // The isolation config names. A sandbox needs a directory, limits and a
 // source; without them an exposed session has its host tools alone.
 let isolation = async (config: IsolationConfig = {}): Promise<Isolation> => {
   let { dir, limits, source } = config
-  if (!dir || !limits || !source) return { tools: config.tools }
+  if (!dir || !limits || !source) {
+    return { tools: config.tools, landing: config.landing }
+  }
   let { sandboxProvider } = await import('@yaks/sandbox/bubblewrap')
   return {
     tools: config.tools,
+    landing: config.landing,
     sandbox: sandboxProvider({
       dir,
       limits,

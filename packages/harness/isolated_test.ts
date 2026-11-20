@@ -150,6 +150,15 @@ test('submit_patch hands the patch and the task’s claim to a lander; a sandbox
     ok(body.includes('> T-1 — Fix the gate'))
     let [fixer] = await o.g.read(line`.entity.eid=asked ?using`)
     equal(first.using, fixer.using)
+    // It lands and answers whatever its persona's own list holds.
+    let [chosen] = await o.g.read(
+      line`.entity.eid=${first.entity.eid} ?sending`,
+    )
+    ok(
+      ['shell', 'land', 'admin_support'].every((t) =>
+        ((chosen.sending as Comp).tools as string[]).includes(t)
+      ),
+    )
     let [task] = await o.g.get(['task'], ['claim'])
     equal((task.claim as Comp).session, lander.entity.eid)
     // The handed sandbox is let go, and so is a run's when it ends; the next

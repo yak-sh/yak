@@ -35,13 +35,43 @@ export let READS = [
   'session_handup',
 ]
 
+/** The tools a lander is offered: what landing a patch and finishing its
+ * work takes, a checkout's machine (cut for the task it holds), the graph,
+ * the task and its answer, whatever its persona's own list holds. A helper's
+ * persona is kept to quick reads, and a lander wearing it could otherwise
+ * neither land nor answer. */
+export let LANDING = [
+  'shell',
+  'wait',
+  'stop',
+  'read',
+  'write',
+  'graph_show',
+  'graph_query',
+  'graph_schema',
+  'graph_apply',
+  'search',
+  'task_update',
+  'task_new',
+  'decision_new',
+  'comment_new',
+  'land',
+  'admin_support',
+  'mail_reply',
+  'bug_show',
+  'bug_resolve',
+  'session_handup',
+]
+
 /** What the host gives an exposed session: a sandbox provider whose
- * `request` makes `from: 'HEAD'` (see {@link snapshot}), and the host tools
- * it is offered by name ({@link READS} where absent). Without a sandbox the
- * session has no machine, only those tools. */
+ * `request` makes `from: 'HEAD'` (see {@link snapshot}), the host tools it is
+ * offered by name ({@link READS} where absent), and those its lander is
+ * offered ({@link LANDING} where absent). Without a sandbox the session has no
+ * machine, only those tools. */
 export type Isolation = {
   sandbox?: SandboxProvider
   tools?: string[]
+  landing?: string[]
 }
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -338,6 +368,7 @@ let filed = async (g: Graph, session: Eid): Promise<Bundle[]> => {
 export let submitPatch = (
   g: Graph,
   box: ReturnType<typeof sandboxed>,
+  landing: string[] = LANDING,
 ): Tool => ({
   name: 'submit_patch',
   description:
@@ -443,6 +474,7 @@ export let submitPatch = (
           ].join('\n\n'),
         },
         ...asked?.using ? { using: asked.using } : {},
+        sending: { tools: landing },
       },
       ...task ? [{ entity: task.entity, claim: { session: lander } }] : [],
     ], { trusted: true })
@@ -482,7 +514,7 @@ export let isolate = (g: Graph, isolation: Isolation = {}) => {
           ...machineTools((ctx) => box.open(ctx?.session ?? session), {
             cwd: () => '/workspace',
           }),
-          submitPatch(g, box),
+          submitPatch(g, box, isolation.landing),
         ]
         : [],
       ...host.values(),
