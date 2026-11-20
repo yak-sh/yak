@@ -870,6 +870,16 @@
   .Talk_Alerts > [data-shows=away] {
     animation-delay: 10s;
   }
+  /* Shown, it leaves room for the yak who stands on the box at a phone's
+     width (Composer.css `Composer_Figure`). */
+  .Talk_Alerts:has(> :not([hidden])) {
+    padding-bottom: 2.5rem;
+  }
+  @container workspace (min-width:54rem) {
+    .Talk_Alerts:has(> :not([hidden])) {
+      padding-bottom: 0;
+    }
+  }
   @keyframes Talk_Fade {
     to {
       opacity: 0;
