@@ -197,30 +197,6 @@ let fileOf = async (
   size: bytes.byteLength,
 })
 
-// Message text belongs to the conversation; upload limits must not prevent
-// its reference from reaching the Operator.
-let retainFile = async (
-  env: Env,
-  space: Space,
-  file: File,
-  bytes: Uint8Array<ArrayBuffer>,
-) => {
-  await keep(attachments(env, space), attachmentId(file), bytes)
-  return file
-}
-
-/** Keep accepted words as a file the model can read or pass by address. */
-export let messageFile = async (env: Env, space: Space, body: string) => {
-  if (!body) return undefined
-  let bytes = new TextEncoder().encode(body)
-  return await retainFile(
-    env,
-    space,
-    await fileOf(space, 'message.txt', 'text/plain', bytes),
-    bytes,
-  )
-}
-
 export let keepFile = async (
   env: Env,
   space: Space,
@@ -240,7 +216,8 @@ export let keepFile = async (
     bytes: bytes.byteLength,
   }])
   if (full) throw refuse('space_full', full)
-  return retainFile(env, space, file, bytes)
+  await keep(attachments(env, space), attachmentId(file), bytes)
+  return file
 }
 
 let UNREAD_PICTURE =
@@ -470,17 +447,16 @@ export let hear = async (
         ...request.provider ? { provider: request.provider } : {},
       },
     )
-    let file = await messageFile(env, space, text)
     let from = FROM[channel]?.(request)
     let words: Intake = {
       session: open.session,
       body: text,
-      source: file ? attachmentId(file) : '',
+      source: '',
       by: OWN.has(channel) ? space.eid : request.writer ?? request.person,
       item: id,
       ...from ? { from } : {},
       channel: channelOf(channel, framing),
-      files: [...files, ...file ? [file] : []].map(attachedOf),
+      files: files.map(attachedOf),
       using: open.using,
       system: OWN.has(channel),
     }

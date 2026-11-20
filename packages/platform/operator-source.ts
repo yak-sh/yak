@@ -1,5 +1,7 @@
-// The original message attachment and channel framing are rendered with the
-// model's input. The transcript holds the words on their own.
+// Channel framing is rendered with the model's input; the transcript holds the
+// words on their own. Older inputs also kept their words a second time, as a
+// `message.txt` attachment named in a note after them: the model reads the
+// words themselves, never that note.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 
 let BEFORE = '\n\nOriginal message text: message.txt (attachment '
@@ -21,8 +23,9 @@ export let sourceId = (body: string) => {
 export let sourceWords = (body: string, source = sourceId(body)) =>
   source ? body.slice(0, -sourceReference(source).length) : body
 
-/** The original message attachment of an input. An empty value records an
- * input composed from its own words without a separate source attachment. */
+/** The `message.txt` attachment an older input kept its words in. An empty
+ * value records an input whose framing is not in its words, as every new one
+ * is. */
 export let sourceOf = (entry: Bundle) =>
   (entry.intake as Comp | undefined)?.source as string | undefined
 
@@ -42,17 +45,15 @@ export let appNotice = (entry: Bundle, body: string) =>
     !!entry.system && body.startsWith("An app's code reported this"))
 
 /** Render transcript input for the model. Legacy inputs already carry their
- * framing and source note in their body. */
+ * framing in their body, and some the note naming their `message.txt`. */
 export let inputBody = (entry: Bundle, body: string) => {
   // A tell stays visible in the person's conversation. The model reads its
   // words on demand through a tool, so the read narrows that turn's roster.
   if (appNotice(entry, body)) {
     return `An app left a notice in Updates. To read it, call graph_show with id ${entry.entity.eid} and self true.`
   }
-  let source = sourceOf(entry)
-  if (source == null) return unverified(entry) + body
-  return unverified(entry) + (cameBy(entry).framing ?? '') + body +
-    (source ? sourceReference(source) : '')
+  if (sourceOf(entry) == null) return unverified(entry) + sourceWords(body)
+  return unverified(entry) + (cameBy(entry).framing ?? '') + body
 }
 
 /** What the model reads before words only a number vouches for

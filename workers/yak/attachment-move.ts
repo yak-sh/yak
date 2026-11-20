@@ -9,7 +9,6 @@ import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { attachedOf, type File } from './operator-files.ts'
 import { attachmentOf, attachmentRows } from '@yaks/blob/attachment'
-import { sourceId } from '@yaks/platform/operator-source'
 import type { OperatorStore } from './operator-store.ts'
 
 export let ATTACHMENTS = 'operator:attachments'
@@ -60,7 +59,7 @@ export let attachmentBackfill = async (
   }
   if (!pass.blobs && pass.sessions == null) {
     let rows = await store.g.read(
-      line`( .operator_request|.operator_files|.operator_session|.entry&.content.body~=${'Original message text: message.txt (attachment '} )${
+      line`( .operator_request|.operator_files|.operator_session )${
         sub(pass.source ? line`&.entity.eid>${pass.source}` : line``)
       }&.order=entity.eid&.limit=50`,
     )
@@ -80,18 +79,10 @@ export let attachmentBackfill = async (
       }
       // A tool's files are attached beside its call (output-move.ts).
       if (row.result) continue
-      let files = (source.files ?? []) as File[]
-      let original = sourceId(
-        String((row.content as Comp | undefined)?.body ?? ''),
+      // A line's words are its own, never a file it came with.
+      let files = await Promise.all(
+        ((source.files ?? []) as File[]).map((file) => sized(env, file)),
       )
-      if (original && pass.space) {
-        files = [...files, {
-          name: 'message.txt',
-          mime: 'text/plain',
-          key: `${pass.space.store}/.operator/${original}`,
-        }]
-      }
-      files = await Promise.all(files.map((file) => sized(env, file)))
       let message = String(source.request ?? row.entity.eid)
       let bundles = attachmentRows(message, files.map(attachedOf))
       if (bundles.length) await store.g.apply(bundles, { trusted: true })

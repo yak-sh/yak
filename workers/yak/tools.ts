@@ -3421,7 +3421,7 @@ let logoSent = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
 let ATTACHMENT = {
   type: 'string',
   description:
-    'an attachment id from the conversation (64 hex characters), naming the original message text or file bytes',
+    'an attachment id from the conversation (64 hex characters), naming the bytes of a file',
 }
 
 // What sandbox_write writes from an attachment, refused where the space keeps

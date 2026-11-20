@@ -336,8 +336,7 @@ sandbox_write:
     sandbox_ship copies files from the sandbox into the app. Waking the
     sandbox is metered by the second, as with sandbox_shell. Pass a sandbox
     path and nonempty text, or in place of the text an attachment id from
-    the conversation (including original message text), which writes its
-    bytes there for a command to read. This overwrites that path without
+    the conversation, which writes its bytes there for a command to read. This overwrites that path without
     file history and returns the path written. Python includes pypdf, pdfplumber,
     python-docx, openpyxl, python-pptx, pandas and Pillow; pandoc and
     poppler-utils and LibreOffice headless are also installed. Use them to read, edit and write

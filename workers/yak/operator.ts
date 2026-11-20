@@ -118,7 +118,6 @@ import {
   confirmOf,
   HEARSAY,
   mailSend,
-  messageFile,
   OWN,
   replyRows,
   type Request as Requested,
@@ -128,7 +127,7 @@ import {
   UNASKED,
   UNPROVEN,
 } from './operator-channels.ts'
-import { attachedOf, attachmentId, type File } from './operator-files.ts'
+import { attachedOf, type File } from './operator-files.ts'
 import {
   escalate,
   escalationAnswer,
@@ -2639,15 +2638,13 @@ export let operating = (
   // The words given, as the session bus takes them in (@yaks/session
   // `take`): named by their request, or by `id` where none brought them, and
   // with the files they came with, each with the words read from it where
-  // the model cannot read it as it is, and the original message's text
-  // beside them (`kept`).
+  // the model cannot read it as it is.
   let words = (
     session: string,
     id: string,
     body: string,
     by: string,
     o: Asking,
-    kept?: File,
   ): Intake => ({
     session,
     body,
@@ -2656,8 +2653,8 @@ export let operating = (
     ...o.request ? { item: o.request } : {},
     ...o.from ? { from: o.from } : {},
     ...o.channel ? { channel: channelOf(o.channel, o.framing) } : {},
-    files: [...o.files ?? [], ...kept ? [kept] : []].map(attachedOf),
-    source: kept ? attachmentId(kept) : '',
+    files: (o.files ?? []).map(attachedOf),
+    source: '',
     using: usingOf(o.model, o.provider, o.effort),
     // An error the platform asks the Operator to fix, or what another of
     // its conversations raised, is its own words, not the person's it is
@@ -2831,13 +2828,8 @@ export let operating = (
         return { task: '', session, input }
       }
       let open = await listening(held, space, o)
-      let sourceFile = await messageFile(
-        env,
-        space,
-        text,
-      )
       let given = {
-        ...words(open.session, id, text, by, o, sourceFile),
+        ...words(open.session, id, text, by, o),
         using: open.using,
       }
       await take(
@@ -2850,11 +2842,6 @@ export let operating = (
       return { task: '', session: open.session, input }
     }
     o = { ...o, ...await readying(held, space, o.model, o.provider) }
-    let sourceFile = await messageFile(
-      env,
-      space,
-      text,
-    )
     let task = named
     let [old] = await g.get([task])
     if (args.task && !old?.task) {
@@ -2889,7 +2876,6 @@ export let operating = (
         newest ? text : JSON.stringify({ task: row }),
         by,
         o,
-        sourceFile,
       ),
       [
         await carrying(session, held, space, o),
@@ -3039,20 +3025,13 @@ export let operating = (
           space,
           words.files?.map((f) => f.address),
         )
-        // The words as they were sent are kept as a file the model may read
-        // or pass on by its reference.
-        let file = await messageFile(
-          env,
-          space,
-          words.body,
-        )
         return {
           words: {
             ...words,
-            source: file ? attachmentId(file) : '',
+            source: '',
             from: 'an outside agent',
             using: usingOf(selected.model, selected.provider, asked.effort),
-            files: [...files, ...file ? [file] : []].map(attachedOf),
+            files: files.map(attachedOf),
           },
           beside: [
             await carrying(words.session, held, space, { files }),

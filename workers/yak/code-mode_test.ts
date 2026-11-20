@@ -396,9 +396,18 @@ let sourceRequest = await receive(service.store, {
   channel: 'chat',
 }, message)
 await service.drain()
-let reference = sourceAsks.join('\n').match(
-  /message\.txt \(attachment ([0-9a-f]{64})\)/,
-)?.[1]
+// The same text attached as a file, which a person meant to attach.
+let csv = new TextEncoder().encode(message)
+let reference = await digest(csv)
+await env!.BLOBS.put(attachmentKey(sourceSpace, reference), csv)
+await service.store.g.apply(
+  attachmentRows(sourceRequest, [{
+    address: reference,
+    name: 'input.csv',
+    media_type: 'text/csv',
+  }]),
+  { trusted: true },
+)
 let directAsks: string[] = []
 let directStore = operatorMemory()
 let direct = operating(
@@ -417,20 +426,19 @@ let directRun = await chatted(direct, { person: k.owner.person }, sourceSpace, {
   say: message,
 })
 
-test('direct Operator runs keep the source task and advertise the same text reference', async () => {
+test('words given the Operator reach its model as themselves, never kept again as an attachment', async () => {
   equal(directRun.status, 'settled')
   match((await directStore.g.get([directRun.task]))[0], {
     doc: { body: message },
   })
-  let id = directAsks.join('\n').match(
-    /message\.txt \(attachment ([0-9a-f]{64})\)/,
-  )?.[1]
-  ok(id)
-  equal(id, reference)
+  for (let asks of [sourceAsks, directAsks]) {
+    ok(asks.join('\n').includes('Zo\u00eb'))
+    ok(!asks.join('\n').includes('message.txt'))
+  }
+  equal(await directStore.g.read('.attachment&*'), [])
 })
 
-test('pasted message text reaches code mode and the sandbox by its advertised reference', async () => {
-  ok(reference)
+test('an attached file reaches code mode and the sandbox by its id', async () => {
   let out = (await agent.call('tools/call', {
     name: 'code_mode',
     arguments: {

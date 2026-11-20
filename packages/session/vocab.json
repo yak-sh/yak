@@ -402,7 +402,7 @@
         },
         "source": {
           "type": "string",
-          "description": "The address of the original message text among the input's attachments, or an empty string when the input has no separate source attachment. Where supplied, the input body carries its words apart from channel framing and the source note."
+          "description": "Supplied (an empty string on every new input) when the input body carries its words apart from channel framing. An older input named here the address of a `message.txt` attachment that kept its words a second time."
         }
       }
     },

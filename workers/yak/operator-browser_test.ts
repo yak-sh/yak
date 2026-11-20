@@ -293,7 +293,7 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
       let { name, media_type } = b.attachment as Record<string, string>
       return `${name} ${media_type}`
     }).sort(),
-    ['message.txt text/plain', 'screenshot.png image/png'],
+    ['screenshot.png image/png'],
   )
 })
 

@@ -91,8 +91,8 @@ let artifacts = await store.g.read('.artifact&*')
 let reads = pages.length
 let repeated = await attachmentBackfill(marked, p.env)
 
-test('legacy attachments backfill across bounded pages and share their immutable bytes', () => {
-  equal(uses.length, 52)
+test("legacy attachments backfill across bounded pages and share their immutable bytes, and a line's own words are no attachment", () => {
+  equal(uses.length, 51)
   equal(artifacts.length, 3)
   equal(
     (artifacts.find((row) => row.entity.eid == sha)!.artifact as {
@@ -104,7 +104,7 @@ test('legacy attachments backfill across bounded pages and share their immutable
     uses.every((row) =>
       source.some((message) =>
         message.entity.eid == (row.attachment as { message: string }).message
-      ) || (row.attachment as { name: string }).name == 'message.txt'
+      )
     ),
     true,
   )
