@@ -116,8 +116,8 @@ test('the conversation shows the context the Operator and each helper were given
       }</main>`,
     ).document
   let named = (d: Element) => d.querySelector(':scope > summary')!.textContent
-  // The person's page draws each closed and empty, for its script to fetch
-  // as it opens (operator-talk-browser.ts); the admin's, with no script,
+  // The person's page draws each closed, holding only Loading, for its
+  // script to fetch as it opens (operator-talk-browser.ts); the admin's, with no script,
   // draws them whole.
   let contexts = (d: Document) =>
     [...d.querySelectorAll('.More')].filter((m) =>
@@ -127,7 +127,10 @@ test('the conversation shows the context the Operator and each helper were given
   assertEquals(lazy.length, 2)
   for (let d of lazy) {
     assertEquals(d.hasAttribute('data-lazy'), true)
-    assertEquals(d.querySelector(':scope > .More_Body')!.children.length, 0)
+    assertEquals(
+      d.querySelector(':scope > .More_Body')!.textContent!.trim(),
+      'Loading…',
+    )
   }
   let document = await page(() => Promise.resolve(null))
   let layers = (d: Element) => [
