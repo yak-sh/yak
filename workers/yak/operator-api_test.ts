@@ -2,8 +2,9 @@
 // share a space read and write it: each reads, and hears on a socket, only
 // what is theirs or nobody's, and writes only their drafts, the archive
 // marks on their own lines and the walkthrough marks on their own
-// conversations.
+// conversations. A socket stands by its person's seat as it is now.
 import { equal, test, until } from '@yaks/testing'
+import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
@@ -34,8 +35,15 @@ let adas = await conversation(ada), beas = await conversation(bea)
 let shared = id()
 await write([{ entity: { eid: shared }, memory: {}, doc: { title: 'Ours' } }])
 
+// Each person's seat in the space, as the directory has it now.
+let seats = new Map<string, Level>([[ada.person, 'owner'], [
+  bea.person,
+  'editor',
+]])
 let ctx = state()
-let door = operatorApi(store, ctx)
+let door = operatorApi(store, ctx, {
+  seat: (person) => Promise.resolve(seats.get(person) ?? null),
+})
 let ask = async (who: Asker, path: string, init?: RequestInit) =>
   await door.answer(new Request('https://builder/api' + path, init), who)
 let read = async (who: Asker, q: string) =>
@@ -93,14 +101,15 @@ test('a person marks their own conversation a walkthrough, and nobody else’s',
   equal((await store.g.get([adas.root]))[0].walkthrough, undefined)
 })
 
-// A hibernatable socket as the runtime hands one over: the frames it was
-// sent, and its attachment.
-let socket = async (who: Asker) => {
+// A hibernatable socket as the runtime hands one over, subscribed to `q`:
+// the frames it was sent, and its attachment.
+let socket = async (who: Asker, q = '.entry&?content') => {
   let sent: Record<string, unknown>[] = []
   let held: unknown = null
   let ws: Wire = {
     readyState: 1,
     send: (data) => void sent.push(JSON.parse(data)),
+    close: () => void (ws.readyState = 3),
     serializeAttachment: (v) => void (held = structuredClone(v)),
     deserializeAttachment: () => held,
   }
@@ -113,12 +122,11 @@ let socket = async (who: Asker) => {
   } finally {
     delete factory.WebSocketPair
   }
-  await door.message(
-    ws,
-    JSON.stringify({ subscribe: '.entry&?content', id: 'lines' }),
-  )
+  let subscribe = (q: string, id = q) =>
+    door.message(ws, JSON.stringify({ subscribe: q, id }))
+  await subscribe(q, 'lines')
   await until(() => sent.length > 0)
-  return sent
+  return Object.assign(sent, { ws, subscribe })
 }
 
 test('a socket hears its person’s lines, and a reply as it is written, and nobody else’s', async () => {
@@ -149,4 +157,29 @@ test('a socket hears its person’s lines, and a reply as it is written, and nob
   })
   equal(carried(overheard), { lines: [beas.line], typed: '' })
   await writer.discard()
+})
+
+test('a person removed from the space hears nothing more, and their socket closes', async () => {
+  let sent = await socket(bea, '.memory')
+  let heard = sent.length
+  seats.delete(bea.person)
+  try {
+    await write([{ entity: { eid: id() }, memory: {}, doc: { title: 'New' } }])
+    await until(() => sent.ws.readyState == 3)
+    equal(sent.length, heard)
+  } finally {
+    seats.set(bea.person, 'editor')
+  }
+})
+
+test('a person made a viewer is answered no new subscription, and their socket closes', async () => {
+  let sent = await socket(bea)
+  let heard = sent.length
+  seats.set(bea.person, 'viewer')
+  try {
+    await sent.subscribe('.memory')
+    equal([sent.ws.readyState, sent.length], [3, heard])
+  } finally {
+    seats.set(bea.person, 'editor')
+  }
 })

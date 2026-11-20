@@ -393,6 +393,13 @@ export class Builder extends Durable {
     return no(404, 'no route')
   }
 
+  // The space `eid` and `person`'s seat in it, as the directory has it now.
+  #seat(eid: string, person: string, administrative: boolean) {
+    return directory({
+      fetch: (req: Request) => dirPart.fetch(req, this.#env),
+    }).seat(eid, person, administrative)
+  }
+
   async #operate(request: Request): Promise<Response> {
     let person = request.headers.get('x-yak-person')
     let spaceId = request.headers.get(SPACE)
@@ -404,9 +411,7 @@ export class Builder extends Durable {
     // request, it was a round trip on each chat page, asked only once a new
     // incarnation had made its Operator: a runtime sends a request when the
     // code before it yields (T-149700).
-    let access = seatOf(request.headers) ?? await directory({
-      fetch: (req: Request) => dirPart.fetch(req, this.#env),
-    }).seat(
+    let access = seatOf(request.headers) ?? await this.#seat(
       spaceId,
       person,
       request.headers.get('x-yak-administrative') == '1',
@@ -421,7 +426,11 @@ export class Builder extends Durable {
     let read = await reading
     if (API.test(new URL(request.url).pathname)) {
       let asker = { person, space: spaceId }
-      let answer = await read.door.answer(request, asker)
+      let answer = await read.door.answer(
+        request,
+        asker,
+        access.administrative,
+      )
       // A page loaded before it read its drafts here hears them on the
       // Operator's frames, as it did when they were written there, until
       // T-165931.
@@ -639,11 +648,19 @@ export class Builder extends Durable {
         // Its pages' reads and writes through @yaks/api, whose sockets the
         // runtime kept while the object was away are watching again.
         let { operatorApi } = await import('./operator-api.ts')
-        let door = operatorApi(
-          store,
-          this.#ctx,
-          (e) => caught(e, { request: 'operator socket' }),
-        )
+        let { spaceOf } = await import('./operator-root.ts')
+        let door = operatorApi(store, this.#ctx, {
+          // A page's socket stands by its person's seat in the space as it is
+          // now, an administrator's read as an owner's, as `#operate` reads it.
+          seat: async (person, administrative) => {
+            let space = await spaceOf(store)
+            if (!space) return null
+            let access = await this.#seat(space, person, administrative)
+            if (!access.space) return null
+            return access.administrative ? 'owner' : access.role ?? null
+          },
+          report: (e) => caught(e, { request: 'operator socket' }),
+        })
         let woke = door.wake()
         if (woke) woke.catch((e) => caught(e, { request: 'operator socket' }))
         // An incarnation takes up what the one before it left: a step a deploy

@@ -79,7 +79,7 @@ let repaired = {
     }) as Graph['get'],
   },
 }
-let door = operatorApi(store, state())
+let door = operatorApi(store, state(), { seat: () => Promise.resolve(null) })
 let read = async (who: string, q: string) => {
   let response = await door.answer(
     new Request('https://builder/api/query?q=' + encodeURIComponent(q)),

@@ -9,9 +9,13 @@
 // from people who write in the space, and only theirs, and the sockets it
 // accepted; its other sockets (a build's page, a lent
 // browser, a page on the Operator's frames from before) are not this door's.
+// A socket outlives the seat it was opened with, so it stands by its person's
+// seat as the directory has it now, on every frame in and every delivery out:
+// once they no longer write in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import type { Graph } from '@yaks/graph'
+import { type Level, writes } from '@yaks/member'
 import { mayWrite, sight } from './operator-access.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { paged } from './build-door.ts'
@@ -20,13 +24,25 @@ import { paged } from './build-door.ts'
  * space (build.ts `#operate`). */
 export type Asker = { person: string; space: string }
 
+/** What the door asks of the object it stands in. */
+export type Seating = {
+  /** `person`'s seat in the space as the directory has it now, an
+   * administrator's (`administrative`, as the kernel vouched at the
+   * handshake) read as theirs: the level it gives, or null for none. */
+  seat: (person: string, administrative: boolean) => Promise<Level | null>
+  report?: (error: Error) => void
+}
+
 /** @yaks/api over `store`, its sockets among the object's (`ctx`). */
 export let operatorApi = (
   store: OperatorStore,
   ctx: Hibernation,
-  report?: (error: Error) => void,
+  { seat, report }: Seating,
 ) => {
   let subs = subscriptions(store.g)
+  // Whether each person holds a seat, as the directory last said for their
+  // socket: what it is read with.
+  let members = new Map<string, boolean>()
   let live = sockets(
     subs,
     {
@@ -37,12 +53,19 @@ export let operatorApi = (
     },
     report,
     {
-      // A socket keeps who opened it, and is read with their sight as it
-      // stands on every wake.
-      read: (read) => ({
-        ...read,
-        ...sight(store, { person: String(read?.person), member: true }),
-      }),
+      // A socket keeps who opened it, and is read with their sight as their
+      // seat stands.
+      read: (read) => {
+        let person = String(read?.person)
+        let member = members.get(person) ?? false
+        return { person, ...sight(store, { person, member }) }
+      },
+      authorize: async (read) => {
+        if (!read?.person) return false
+        let level = await seat(read.person, !!read.administrative)
+        members.set(read.person, level != null)
+        return writes(level)
+      },
     },
   )
   // The store as `who` writes it: what is theirs, or nothing in the batch.
@@ -62,11 +85,15 @@ export let operatorApi = (
     })
   return {
     /** `/api/apply`, `/api/query` or `/api/ws`, asked by `who`. */
-    answer: (request: Request, who: Asker): Response | Promise<Response> => {
+    answer: (
+      request: Request,
+      who: Asker,
+      administrative = false,
+    ): Response | Promise<Response> => {
       let url = new URL(request.url)
       url.pathname = url.pathname.slice('/api'.length)
       return url.pathname == '/ws'
-        ? live.accept(request, { person: who.person })
+        ? live.accept(request, { person: who.person, administrative })
         : as(who)(new Request(url, request))
     },
     /** A frame from one of its sockets: the object's `webSocketMessage`. */

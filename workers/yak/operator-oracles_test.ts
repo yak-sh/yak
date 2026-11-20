@@ -318,7 +318,9 @@ await dir.apply({
 let secondContext = await operatorContext(env, { person: second }, space)
 let secondMap = await oracleMap(secondContext, store.g)
 let secondOracle = await oracleContext(secondContext, store.g, app.eid)
-let projectionDoor = operatorApi(store, state())
+let projectionDoor = operatorApi(store, state(), {
+  seat: () => Promise.resolve(null),
+})
 let projectionRead = async (person: string, q: string) => {
   let response = await projectionDoor.answer(
     new Request('https://builder/api/query?q=' + encodeURIComponent(q)),
