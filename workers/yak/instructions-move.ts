@@ -10,8 +10,9 @@ import type { Meta } from '@yaks/sqlite'
 import { line } from '@yaks/query'
 import { toldRow } from '@yaks/session/told'
 
-/** Where a store says each of its asks names the instructions it sent. */
-export let TOLD = 'operator:told'
+/** Where a store says each of its asks names the instructions it sent.
+ * Not `operator:told`, which T-853's notification pass set in every store. */
+export let TOLD = 'operator:instructions-told'
 
 /** How many asks one batch moves: each holds tens of kilobytes until moved. */
 export let BATCH = 20

@@ -278,7 +278,7 @@ let linesOf = async (
 // call's `result`, the call it answers, never its value (a page's screenshot,
 // a file); of a line's `sending`, the shas of its tool offer and its
 // instructions (`told`), read once each by `askedOf`. An ask kept before its
-// store's told pass (told-move.ts) holds its instructions' text: those are
+// store's told pass (instructions-move.ts) holds its instructions' text: those are
 // read a few asks at a time, each text held once.
 let drawnOf = async (store: Store, where: Built) => {
   let [rows, slim] = await Promise.all([

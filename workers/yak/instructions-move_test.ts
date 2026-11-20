@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import { instructionsOf } from '@yaks/session/told'
-import { BATCH, TOLD, toldBackfill } from './told-move.ts'
+import { BATCH, TOLD, toldBackfill } from './instructions-move.ts'
 import { operatorMemory } from './operator-testing.ts'
 
 // An ask kept holding its instructions' text names them by the told row that
