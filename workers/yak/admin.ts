@@ -470,14 +470,15 @@ let buildsPage = (d: Reading, today: number) => {
 // nothing here is ever sent.
 let trialState = (r: Row) =>
   r.outreach_written
-    ? `${r.outreach_written.letters} letters, ${
+    ? `${plural(Number(r.outreach_written.letters ?? 0), 'letter')}, ${
       dollars(Number(r.outreach_written.dollars ?? 0))
     }`
     : r.outreach_batch
-    ? `Writing ${r.outreach_batch.spaces} letters since ${
-      day(String(r.outreach_batch.at))
-    }`
+    ? `Writing ${
+      plural(Number(r.outreach_batch.spaces ?? 0), 'letter')
+    } since ${day(String(r.outreach_batch.at))}`
     : 'Waiting to be sent'
+let plural = (n: number, word: string) => `${n} ${word}${n == 1 ? '' : 's'}`
 let firstLine = (text: unknown) =>
   String(text ?? '').trim().split('\n')[0].slice(0, 120)
 let paragraphs = (text: unknown) =>

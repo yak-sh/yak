@@ -7,7 +7,8 @@
 // Its `outreach_write` reads the census the admin's directory reads (admin.ts
 // `uses`), so each Operator is told what that page shows of its space: its
 // people, its apps and their use. Test spaces and the platform's own are left
-// out; everyone else is in, pilots included. It sends the batch and wakes the
+// out, and so are the platform's own accounts' (admin, the demo space);
+// everyone else is in, pilots included. It sends the batch and wakes the
 // trial a few minutes on. Each firing reads the batch (`outreach_read`): until
 // it has ended the trial wakes again, and once it has, its results become
 // `outreach_letter` rows and the trial wears `outreach_written`. What it cost
@@ -23,6 +24,7 @@ import {
   stageOf,
 } from '@yaks/platform/outreach'
 import { BASE } from '@yaks/platform/operator-model'
+import { BOT } from '@yaks/platform/bots'
 import { type Census, uses } from './admin.ts'
 import { appAbout, idOf, META, spaceOf } from './directory.ts'
 import { calledOf } from './operator-name.ts'
@@ -47,8 +49,16 @@ export let factsOf = (c: Census, now: Date): Facts[] => {
   let people = new Map(c.people.map((r) => [r.entity.eid, r]))
   return c.spaces.flatMap((r): Facts[] => {
     let space = spaceOf(r)
-    if (space.slug == META.space || used.get(space.eid)?.test) return []
     let seats = c.seats.filter((s) => idOf(s.member!.space) == space.eid)
+    let bots = seats.every((s) =>
+      str(
+        (people.get(idOf(s.member!.person))?.email as Comp | undefined)
+          ?.address,
+      ).endsWith(BOT)
+    )
+    if (space.slug == META.space || used.get(space.eid)?.test || bots) {
+      return []
+    }
     let apps = c.apps.filter((a) =>
       !a.trashed && appAbout(a).space == space.eid
     )

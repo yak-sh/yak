@@ -12,7 +12,8 @@ import { docs } from '@yaks/platform/outreach-vocab'
 import { BASE } from '@yaks/platform/operator-model'
 import { letterOf } from '@yaks/platform/outreach'
 import type { Entry, Result } from '@yaks/anthropic/batches'
-import { AGAIN, type Api, collect, write } from './outreach.ts'
+import { AGAIN, type Api, collect, factsOf, write } from './outreach.ts'
+import type { Census } from './admin.ts'
 
 let vocab = loadVocab(
   [kernelDoc, docDoc, platformDoc, wakeDoc, ...docs],
@@ -138,4 +139,34 @@ test('a trial wakes again until its batch ends, then keeps a letter a space', as
   equal(c(letter, 'outreach_letter').dollars, 0.012)
   equal(c(failed, 'doc').title, '(not written: errored)')
   equal(c(failed, 'outreach_letter').stage, 'nothing built')
+})
+
+test("the platform's own accounts and test accounts get no letter; people do", () => {
+  let person = (eid: string, address: string) => ({
+    entity: { eid },
+    person: {},
+    email: { address },
+  })
+  let home = (eid: string, slug: string) => ({
+    entity: { eid },
+    space: { slug },
+  })
+  let seat = (space: string, person: string) => ({
+    entity: { eid: `${space}-${person}` },
+    member: { space, person, role: 'owner' },
+  })
+  let census = {
+    people: [
+      person('ann', 'ann@x.com'),
+      person('admin', 'admin@bot.yak.sh'),
+      person('probe', 'probe@bot.yak.sh'),
+    ],
+    spaces: [home('a', 'ann'), home('b', 'admin'), home('c', 'probe')],
+    apps: [],
+    seats: [seat('a', 'ann'), seat('b', 'admin'), seat('c', 'probe')],
+    deploys: [],
+    referrals: [],
+    agents: [],
+  } as unknown as Census
+  equal(factsOf(census, new Date(NOW)).map((f) => f.slug), ['ann'])
 })

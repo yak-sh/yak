@@ -524,3 +524,41 @@ test("the admin's Invites page says who was given the starter, when and to which
 test("an inviter's page lists whom they invited", () => {
   assertEquals(jeffs.invited.map(([, name]) => name), ['Bo', 'Ana'])
 })
+
+test('the Letters page lists each trial, and a trial its letters, one a space', async () => {
+  let trial = {
+    entity: { eid: 't1' },
+    outreach_trial: { changelog: 'I can text you now.\nMore.', model: 'm' },
+    outreach_written: { at: on('08'), letters: 1, dollars: 0.01 },
+    created: { at: on('08') },
+  } as Row
+  let letter = {
+    entity: { eid: 'l1' },
+    outreach_letter: { trial: 't1', space: 'jhome', stage: 'in use' },
+    doc: { title: 'Roster can be searched', body: 'Hi,\n\nI drafted it.' },
+  } as Row
+  let lettered = {
+    ...admin,
+    trials: () => Promise.resolve([trial]),
+    letters: (t: string) => Promise.resolve(t == 't1' ? [letter] : []),
+  } as Directory
+  let read = async (path: string) => {
+    let [req, , at] = asking(path, 'root')
+    return parseHTML(await (await answer(req, env, at, lettered))!.text())
+      .document
+  }
+  let list = await read('/admin/letters')
+  assertEquals(
+    list.querySelector('[aria-current="page"]')?.textContent,
+    'Letters',
+  )
+  let open = list.querySelector('a[href="/admin/letters/t1"]')!
+  assertStringIncludes(open.textContent!, 'I can text you now.')
+  assertStringIncludes(open.parentElement!.textContent!, '1 letter, $0.01')
+  let one = (await read('/admin/letters/t1')).body.textContent!
+  for (
+    let said of ['jeff · in use', 'Roster can be searched', 'I drafted it.']
+  ) {
+    assertStringIncludes(one, said)
+  }
+})
