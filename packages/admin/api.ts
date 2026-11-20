@@ -553,6 +553,34 @@ export let relocateIn = (
     { method: 'POST' },
   ))
 
+/** A space's Operator store queried, or bundles applied to it as this
+ * account (workers/yak/sweep.ts `graphing`): its rules, journal and trash
+ * hold. An owner of the `yak` space is answered. */
+export let OPERATOR_GRAPH = '/api/operator-graph'
+
+export let operatorGraph = (
+  session: string,
+  space: string,
+  asked: { q: string } | { bundles: Bundle[]; check?: boolean },
+): Promise<Bundle[]> => {
+  if (space.includes('/')) {
+    throw new CallError(
+      'where',
+      `name a space for its Operator, not "${space}"`,
+    )
+  }
+  return said(sent(
+    apex(`${OPERATOR_GRAPH}?${new URLSearchParams({ space })}`),
+    session,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(asked),
+      rereads: 'q' in asked,
+    },
+  ))
+}
+
 /** A space's Operator store read out a page at a time (workers/yak/sweep.ts
  * `copying`, store-copy.ts): every space there is, and one space's plan or
  * a page of one of its tables. An owner of the `yak` space is answered. */

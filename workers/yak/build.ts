@@ -26,6 +26,7 @@ import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
+import { GRAPH, type Graphed } from './operator-graph.ts'
 import { type Bookmarked, bookmarks, RESTORING } from './bookmarks.ts'
 import {
   type Held,
@@ -242,6 +243,33 @@ export class Builder extends Durable {
       // file as it stands, made by no Operator, counted and never stopped.
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       return copying(freely(this.#ctx.storage), await request.json())
+    }
+    // The platform's admin reading or writing the Operator's store, through
+    // the kernel (sweep.ts `graphing`): a query, or bundles applied as the
+    // admin, through the store's own rules, journal and trash.
+    if (url.pathname == GRAPH) {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let asked = await request.json() as Graphed
+      let { store } = await this.#stored()
+      try {
+        if (asked.bundles) {
+          let by = { by: asked.by }
+          return Response.json(
+            await store.g.apply(
+              asked.bundles.map((b) => ({ ...b, $actor: by })),
+              { check: asked.check },
+            ),
+          )
+        }
+        let { whole } = await import('@yaks/query')
+        return Response.json(await store.g.read(whole(asked.q ?? '')))
+      } catch (error) {
+        if (stopped(error)) throw error
+        return no(
+          refusing(error, { request: 'operator graph' }),
+          error instanceof Error ? error.message : String(error),
+        )
+      }
     }
     // What a published skill's rounds measured, for its public page
     // (skill-page.ts): the kernel's to ask, by no person.

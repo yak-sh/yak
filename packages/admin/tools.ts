@@ -43,6 +43,7 @@ import {
   gravesIn,
   linkFor,
   moveIn,
+  operatorGraph,
   operatorPage,
   operatorSpaces,
   refund,
@@ -695,12 +696,14 @@ export let runs = (
     }),
 
     admin_query: verb(async (call) => {
-      let at = await acting(argsOf(call))
-      let rows = await storeQuery(
-        at.bearer,
-        String(argsOf(call).where),
-        (argsOf(call).filters ?? []) as string[],
-      )
+      let a = argsOf(call)
+      let at = await acting(a)
+      let filters = (a.filters ?? []) as string[]
+      let rows = a.operator === true
+        ? await operatorGraph(at.bearer, String(a.where), {
+          q: filters.join('&'),
+        })
+        : await storeQuery(at.bearer, String(a.where), filters)
       return [valued(call, { result: rows })]
     }),
 
@@ -720,12 +723,17 @@ export let runs = (
     admin_apply: verb(async (call) => {
       let a = argsOf(call)
       let at = await acting(a)
-      let applied = await storeApply(
-        at.bearer,
-        String(a.where),
-        a.bundles as Bundle[],
-        a.check === true,
-      )
+      let applied = a.operator === true
+        ? await operatorGraph(at.bearer, String(a.where), {
+          bundles: a.bundles as Bundle[],
+          check: a.check === true,
+        })
+        : await storeApply(
+          at.bearer,
+          String(a.where),
+          a.bundles as Bundle[],
+          a.check === true,
+        )
       return [valued(call, { result: applied })]
     }),
 

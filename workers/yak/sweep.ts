@@ -20,6 +20,9 @@ import { door as confirmationDoor } from './confirm.ts'
 //   GET  /api/operator-copy                 every space
 //   POST /api/operator-copy?space=<eid>     a page of that space's Operator
 //                                           store (store-copy.ts)
+//   POST /api/operator-graph?space=<slug>  that space's Operator store:
+//                                           {q} queried, or {bundles, check}
+//                                           applied as the admin
 //   GET  /api/store-copy                    every app's store, its sample's
 //                                           and its visitors'
 //   POST /api/store-copy?store=<name>       a page of that store
@@ -54,6 +57,7 @@ import { visits } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 import { builderOf } from './build-door.ts'
 import { type Asked, COPY } from './store-copy.ts'
+import { GRAPH, type Graphed } from './operator-graph.ts'
 import { graves } from '@yaks/platform/graves'
 import { inspect } from './store-inspect.ts'
 
@@ -62,6 +66,7 @@ export let RELOCATE_PATH = '/api/relocate'
 export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
 export let OPERATOR_PATH = '/api/operator-copy'
+export let OPERATOR_GRAPH_PATH = '/api/operator-graph'
 export let STORE_COPY_PATH = '/api/store-copy'
 export let GRAVES_PATH = '/api/graves'
 export let USES_PATH = '/api/uses'
@@ -257,6 +262,36 @@ let copying = async (
   )
 }
 
+// A space's Operator store queried, or written as the admin: its rules,
+// journal and trash hold, and a write is audited.
+let graphing = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+  who: Who,
+): Promise<Response> => {
+  if (req.method != 'POST') {
+    return json(405, 'method_not_allowed', "query or write a space's Operator")
+  }
+  let slug = new URL(req.url).searchParams.get('space') ?? ''
+  let space = slug ? await dir.space(slug) : null
+  if (!space) return json(404, 'no_space', `no space is ${slug || '(nothing)'}`)
+  let asked = await req.json() as Graphed
+  if (asked.bundles && !asked.check) {
+    await audit(env, who, { operation: 'operator_apply', space: space.eid })
+  }
+  let body = JSON.stringify({ ...asked, by: who.person })
+  return await builderOf(env, space.eid)(
+    () =>
+      new Request(`https://builder${GRAPH}`, {
+        method: 'POST',
+        headers: { 'x-yak-kernel': '1', 'content-type': 'application/json' },
+        body,
+      }),
+    { replayable: !asked.bundles },
+  )
+}
+
 // The app whose own store this handle names.
 let appAt = async (dir: ReturnType<typeof dirOf>, store: string) => {
   let spaces = await dir.all()
@@ -422,6 +457,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (new URL(req.url).pathname == OPERATOR_PATH) {
     return copying(req, env, dir, who)
+  }
+  if (new URL(req.url).pathname == OPERATOR_GRAPH_PATH) {
+    return graphing(req, env, dir, who)
   }
   if (new URL(req.url).pathname == STORE_COPY_PATH) {
     return storeCopying(req, env)

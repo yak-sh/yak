@@ -1,3 +1,4 @@
+import type { Bundle } from '@yaks/graph'
 import { meta } from './meta.ts'
 // The mover's sweep door (sweep.ts) over the platform in memory: the owner of
 // the platform's space lists every store and reaches one at a time; nobody
@@ -122,6 +123,36 @@ test('nobody else sweeps', async () => {
     403,
   )
   assertEquals((await door(ADA, '', 'GET', sweep.OPERATOR_PATH)).status, 403)
+  assertEquals(
+    (await door(ADA, '?space=ada', 'POST', sweep.OPERATOR_GRAPH_PATH, {
+      q: '.task',
+    })).status,
+    403,
+  )
+})
+
+test('the platform’s owner queries a space’s Operator store and trashes its rows', async () => {
+  let { scenario, door } = await spaces()
+  await using _ = scenario
+  let ask = (body: unknown, space = 'ada') =>
+    door(JEFF, `?space=${space}`, 'POST', sweep.OPERATOR_GRAPH_PATH, body)
+  let made = await ask({
+    bundles: [{ entity: { eid: '$t' }, task: {}, doc: { title: 'stray' } }],
+  })
+  let eid = made.body[0].entity.eid
+  assertEquals((made.body[0].created as { by: string }).by, JEFF)
+  let found = await ask({ q: '.doc.title=stray' })
+  assertEquals(found.body.map((b: Bundle) => b.entity.eid), [eid])
+  await ask({ bundles: [{ entity: { eid }, $delete: true }] })
+  assertEquals((await ask({ q: '.doc.title=stray' })).body, [])
+  let [action] = await meta(scenario.env).query(
+    '.admin_action.operation=operator_apply&*',
+  )
+  assertEquals((action.created as { by: string }).by, JEFF)
+  assertEquals(
+    (await ask({ q: '.task' }, 'nobody')).body.error.code,
+    'no_space',
+  )
 })
 
 test('the platform’s owner reads a space’s Operator store out, a table at a time', async () => {
