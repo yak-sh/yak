@@ -357,7 +357,9 @@ test('reset groups show their wording and keep the deploy id on the occurrence',
     let words = `Durable Object reset because a newer deploy reached it: ${id}`
     let [row] = capture(Error(words), { sink: () => {}, fault })
     let [sample, bug] = grouped(row, undefined, [])
-    equal(comp(sample, 'exception').value, words)
+    // The patch merges into the stored occurrence, which keeps its words.
+    let kept = { ...comp(row, 'exception'), ...comp(sample, 'exception') }
+    equal(kept.value, words)
     equal(comp(bug, 'doc').title, `Error: ${fault.slice('reset:'.length)}`)
     return bug.entity.eid
   })
@@ -402,4 +404,14 @@ test('a probe is grouped with a receipt and no bug, and clears spent probes', as
   equal([kept.entity.eid, comp(kept, 'probe').grouped], ['2', recent])
   equal([now.entity.eid, comp(now, 'error').bug], ['3', undefined])
   ok(comp(now, 'probe').grouped)
+})
+
+test('grouping an occurrence trims its bug to what it keeps', async () => {
+  let g = fixture({ retain: 2, enrich: (row) => row })
+  for (let i = 1; i <= 4; i++) {
+    await g.apply([occurrence(String(i))], { trusted: true })
+  }
+  let rows = await g.read('.error *')
+  equal(rows.map((b) => b.entity.eid).sort(), ['1', '3', '4'])
+  equal(comp((await bugs(g))[0], 'bug').hits, 4)
 })

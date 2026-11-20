@@ -5,6 +5,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { comp, type Desk, str } from './model.ts'
 import { stablePlace } from './fault.ts'
+import { trim } from './group.ts'
 
 /** Follow a consolidated identity at the same boundary that reads its entity. */
 export let survivor = async (
@@ -98,7 +99,9 @@ export let regroup = async (
       g.read(line`.error.bug=${r.entity.eid} *`)
     ))).flat()
     try {
-      await g.apply(consolidation(rows, errors), { trusted: true })
+      let patch = consolidation(rows, errors)
+      await g.apply(patch, { trusted: true })
+      await trim(g, patch[0].entity.eid)
       bugs++
       merged += rows.length - 1
     } catch (error) {

@@ -129,9 +129,13 @@ export let grouped = (
   }
   return [
     {
-      ...row,
+      // Only what grouping decides: the rest of the occurrence stands as
+      // intake wrote it, so its write owes `error_frames` one run, not one
+      // for each component it rewrote unchanged.
+      entity: row.entity,
       $was: { error: { bug: null } },
       error: { ...e, fault, bug: eid },
+      ...frames.length ? { exception: { frames } } : {},
     },
     {
       entity: { eid },
@@ -277,12 +281,13 @@ let spent = (g: Desk): Bundle[] | Promise<Bundle[]> =>
 
 /** Existing groups can have migrated eids. New groups have deterministic ids;
  * guarded counters serialize competing workers without process-local locks.
- * Contention rebases here, without spending the effect's failure attempts. */
+ * Contention rebases here, without spending the effect's failure attempts.
+ * Answers the bug the occurrence joined, if this call grouped it. */
 export let group = async (
   g: Desk,
   eid: string,
   enrich?: Enrich,
-): Promise<void> => {
+): Promise<string | undefined> => {
   for (;;) {
     let [row] = await g.get([eid], ITS)
     if (
@@ -295,7 +300,7 @@ export let group = async (
     try {
       // Local reads and admission stay in one turn. Other processes still
       // compete through the guards, and a lost claim rereads its receipt too.
-      await after(
+      return await after(
         joined(g, full, fault, app),
         (bug) =>
           after(
@@ -303,14 +308,19 @@ export let group = async (
             (before) =>
               after(
                 row.probe ? spent(g) : [],
-                (gone) =>
-                  g.apply([...grouped(full, bug, before), ...gone], {
-                    trusted: true,
-                  }),
+                (gone) => {
+                  // A probe's receipt is all it writes, so it joins none.
+                  let [mark, joins] = grouped(full, bug, before)
+                  return after(
+                    g.apply([mark, ...joins ? [joins] : [], ...gone], {
+                      trusted: true,
+                    }),
+                    () => joins?.entity.eid,
+                  )
+                },
               ),
           ),
       )
-      return
     } catch (error) {
       if (!(error instanceof Stale)) throw error
     }

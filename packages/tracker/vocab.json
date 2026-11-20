@@ -353,7 +353,7 @@
     },
     "error_group": {
       "effect": true,
-      "description": "Group each ungrouped occurrence, atomically counting and linking it; a probe gets its receipt and no bug.",
+      "description": "Group each ungrouped occurrence, atomically counting and linking it, then trim its bug to the newest hundred occurrences and the first of each commit or version; a probe gets its receipt and no bug.",
       "created": [
         "error"
       ],
@@ -383,14 +383,6 @@
         "resolved"
       ],
       "target": ".bug .resolved"
-    },
-    "error_trim": {
-      "effect": true,
-      "description": "Keep the newest hundred occurrences and the first of each commit or version.",
-      "changed": [
-        "error.bug"
-      ],
-      "target": ".error .error.bug"
     },
     "bug_list": {
       "tool": true,

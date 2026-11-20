@@ -16,7 +16,7 @@ references may name entities in other stores.
 | `./report`     | Capture, transport, `coalesce` and a page's reports                                 |
 | `./instrument` | A class whose construction and every method run inside a given reporting boundary   |
 | `./page`       | Classic browser capture script and twenty breadcrumbs                               |
-| `./effects`    | `error_group`, `error_frames`, `bug_settle`, `error_trim`, `bug_digest`             |
+| `./effects`    | `error_group`, `error_frames`, `bug_settle`, `bug_digest`                           |
 | `./views`      | Bug pages, list rows, error frames and the Bugs destination                         |
 | `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry` |
 | `./service`    | Spool record admission and acknowledgement                                          |

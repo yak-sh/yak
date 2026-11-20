@@ -133,7 +133,13 @@ export let effects = (
 ): Handlers => {
   let enrich = options.enrich ?? enrichFrames()
   return {
-    error_group: (e) => group(host.graph, e.entity.eid),
+    // Grouping trims the bug it grew, which reads one row until the bug
+    // outgrows what it keeps: a run of its own per report cost more rows
+    // than the report.
+    error_group: async (e) => {
+      let bug = await group(host.graph, e.entity.eid)
+      if (bug) await trim(host.graph, bug, options.retain)
+    },
     error_frames: async (e, _tx, _write, attempt) => {
       try {
         await reframe(host.graph, e.entity.eid, enrich)
@@ -156,10 +162,5 @@ export let effects = (
       if (Number.isFinite(at)) await send(host.graph, at, options)
     },
     bug_settle: (e) => settle(host.graph, e.entity.eid, options),
-    error_trim: async (e) => {
-      let [row] = await host.graph.get([e.entity.eid], ['error'])
-      let bug = str(comp(row, 'error').bug)
-      if (bug) await trim(host.graph, bug, options.retain)
-    },
   }
 }
