@@ -480,61 +480,6 @@ export let aloud = (entries: Bundle[], names: Names, from: number) => {
   }).filter(Boolean)
 }
 
-// One app, however each call named its space.
-let same = (a: Changed, b: Changed) =>
-  a.app == b.app && (!a.space || !b.space || a.space == b.space)
-
-/**
- * The app a conversation is making: the one its newest step worked on, of
- * its own lines and its helpers', which do most of its work, and whether
- * the conversation started it.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { toolEid } from '@yaks/tools/result'
- * import { making } from './operator-view.ts'
- * let step = (n: number, app: string) => [
- *   { entity: { eid: `c${n}` }, entry: { session: 's', seq: n },
- *     call: { to: toolEid('app_files'), args: { app } } },
- *   { entity: { eid: `r${n}` }, entry: { session: 's', seq: n + 1 },
- *     created: { at: `2026-11-07T0${n}:00:00Z` }, result: { call: `c${n}` } },
- * ]
- * let begun = [
- *   { entity: { eid: 'n' }, entry: { session: 's', seq: 0 },
- *     call: { to: toolEid('app_new'), args: { slug: 'chores' } } },
- *   { entity: { eid: 'm' }, entry: { session: 's', seq: 0 },
- *     created: { at: '2026-11-07T00:00:00Z' }, result: { call: 'n' } },
- * ]
- * equal(making(step(2, 'recipes'), [{ entries: step(1, 'chores') }]), {
- *   space: '', app: 'recipes', started: false,
- * })
- * equal(making(step(1, 'recipes'), [{ entries: step(2, 'chores') }]), {
- *   space: '', app: 'chores', started: false,
- * })
- * equal(making(begun, [{ entries: step(2, 'chores') }]), {
- *   space: '', app: 'chores', started: true,
- * })
- * equal(making([]), null)
- * ```
- */
-export let making = (
-  entries: Bundle[],
-  helpers: Helper[] = [],
-): Underway | null => {
-  let lines = [entries, ...helpers.map((h) => h.entries)]
-  let newest = lines.flatMap((l) => answered(WORKS, l))
-    .sort((a, b) => a.at.localeCompare(b.at)).at(-1)
-  if (!newest) return null
-  let app = { space: newest.space, app: newest.app }
-  return {
-    ...app,
-    started: lines.some((l) => started(l).some((s) => same(s, app))),
-  }
-}
-
-/** An app underway in a conversation, and whether it started it. */
-export type Underway = Changed & { started: boolean }
-
 /** One task's frame: the lines a step changed, as the entries each draws
  * (operator-draw.ts `Lines`), what it is doing now, the apps it changed,
  * worked on and started, what it says aloud, and for a helper's own

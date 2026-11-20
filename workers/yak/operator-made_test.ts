@@ -1,9 +1,8 @@
-// A newcomer watching their Operator build their app (D-146737): the chat
-// opens the app it is making beside the conversation, with what it keeps,
+// A newcomer watching their Operator build their app (D-146737): the app
+// their address names opens beside the conversation, with what it keeps,
 // what it can do and its screens, each a tab, the newest stage open; its
-// screens are the draft until it is released, then the app itself. Once
-// they give their address, an app opens by itself only when their Operator
-// starts it in that chat.
+// screens are the draft until it is released, then the app itself. An
+// address naming no app opens none, whatever the chat has made.
 
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
@@ -13,7 +12,6 @@ import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { chatPage } from './operator-page.ts'
-import { TOOLS } from './tools.ts'
 
 let p = platform('operator-made')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -61,8 +59,9 @@ let service = operatorService(
 )
 p.env.BUILDER = service.binding
 
-// The newcomer's chat once the Operator has taken `steps`.
-let after = async (...steps: Item[]) => {
+// The newcomer's chat, at an address naming `chosen`, once the Operator has
+// taken `steps`.
+let at = (chosen: string | null) => async (...steps: Item[]) => {
   turns.push(...steps.map((s) => [s]))
   await receive(service.store, { space: eid, person, channel: 'chat' }, 'Go on')
   await service.drain()
@@ -72,7 +71,7 @@ let after = async (...steps: Item[]) => {
     title: a.title,
   }))
   let { document } = parseHTML(
-    await (await chatPage(p.env, space, who, 'new', { apps }))
+    await (await chatPage(p.env, space, who, 'new', { apps }, chosen))
       .text(),
   )
   let part = (id: string) => document.querySelector(`[data-part=${id}]`)
@@ -109,6 +108,8 @@ let after = async (...steps: Item[]) => {
     asks: document.querySelector('#ask [name=app]')?.getAttribute('value'),
   }
 }
+
+let after = at('recipes')
 
 let words = {
   $defs: {
@@ -197,21 +198,10 @@ await dir.apply({
     email: { address: 'kept@example.com' },
   }],
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
-// An app this chat did not start.
-await TOOLS.find((t) => t.name == 'app_new')!.run(
-  { env: p.env, dir, person },
-  { slug: 'chores', title: 'Chores' },
-)
-
-test('a signed-in person’s chat opens beside it an app their Operator started there, and never one that was there before', async () => {
+test('an address naming no app opens none beside the chat, whatever its Operator made there', async () => {
   equal(
-    (await after(call('app_files', { app: 'recipes', op: 'list' }))).app,
-    'recipes',
-  )
-  equal(
-    (await after(call('app_files', { app: 'chores', op: 'list' }))).app,
+    (await at(null)(call('app_files', { app: 'recipes', op: 'list' }))).app,
     undefined,
   )
-  let begun = await after(call('app_new', { slug: 'shelf', title: 'Shelf' }))
-  equal([begun.app, begun.open, begun.keeps], ['shelf', 'keeps', []])
+  equal((await at(null)(call('app_new', { slug: 'shelf' }))).app, undefined)
 })

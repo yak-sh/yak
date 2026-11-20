@@ -309,8 +309,11 @@ let load = async (
   imported(
     ASSETS.flatMap(({ bundle }) => bundle instanceof URL ? [bundle.href] : []),
   )
+  // Where the page went by its address (`location.assign`).
+  let went: string[] = []
   let place = {
     reload: () => void loads.page++,
+    assign: (to: URL | string) => void went.push(String(to)),
     origin: 'https://yaks.app',
     href: base + '/' + open,
   }
@@ -363,6 +366,7 @@ let load = async (
     sockets,
     // What the page says under its box.
     status: () => document.querySelector('#ask .Composer_Status')!.textContent,
+    went,
     failed,
     asked: () => asked,
     // The handshakes its store's sockets made.
@@ -757,61 +761,56 @@ await TOOLS.find((t) => t.name == 'app_new')!.run(
   { slug: 'recipes', title: 'Recipe box' },
 )
 
-test("a newcomer's chat opens the app their Operator is making beside it, then its screens as the first is drawn", async () => {
-  let page = await load(
-    storage(),
-    false,
-    'new',
-    {},
-    undefined,
-    undefined,
-    { person: newcomer, role: 'owner' },
-  )
-  let { document } = page
-  assertEquals(document.querySelector('[data-app]'), null)
+// What is open beside the chat is what its address names, and only that:
+// the page goes to an app the Operator is making by its address, so a
+// reload, Back or a shared link all agree with it.
+test("a newcomer's chat goes to the app their Operator is making, by its address, and draws what it is made of there", async () => {
+  let as = { person: newcomer, role: 'owner' as const }
+  let page = await load(storage(), false, 'new', {}, undefined, undefined, as)
+  assertEquals(page.document.querySelector('[data-app]'), null)
   await files(newcomer, 'recipes', ['vocab.json', {
     $defs: { recipe: { properties: { serves: { type: 'number' } } } },
   }])
   page.hear(working({ space: '', app: 'recipes' }))
-  assert(await until(() => made(document).keeps.length > 0))
+  assert(await until(() => page.went.length > 0))
+  assertEquals(new URL(page.went[0]).searchParams.get('app'), 'recipes')
+  assertEquals(page.document.querySelector('[data-app]'), null)
+  page.leave()
+  let apps = [{ eid: '', slug: 'recipes', title: 'Recipe box' }]
+  let there = await load(
+    storage(),
+    false,
+    'new',
+    { apps },
+    'recipes',
+    undefined,
+    as,
+  )
+  let { document } = there
   assertEquals(made(document), { keeps: ['Recipe'], open: ['keeps'] })
   assert(document.querySelector('.Talk')!.classList.contains('Talk-app'))
-  assertEquals(
-    document.querySelector('.Frame_Bar .Talk_Show')?.textContent,
-    'Recipe box',
-  )
-  assertEquals(document.querySelector('[data-frame]'), null)
   // The first page drawn opens its screens: the draft, as it stands.
   await files(newcomer, 'recipes', ['index.html', '<h1>Recipes</h1>'])
-  page.hear(working({ space: '', app: 'recipes' }))
+  there.hear(working({ space: '', app: 'recipes' }))
   assert(await until(() => !!document.querySelector('[data-frame]')))
   assertEquals(made(document).open.at(-1), 'screens')
   assertStringIncludes(
     document.querySelector('[data-frame]')!.getAttribute('src')!,
     'https://clerk.yaks.app/recipes/~',
   )
-  page.leave()
+  there.leave()
 })
 
-test('a signed-in person’s chat opens beside it an app their Operator starts there, and not one it only works on', async () => {
+test('a signed-in person’s chat goes to an app their Operator starts there, and not one it only works on', async () => {
   let page = await load(storage())
-  let app = () => page.document.querySelector('[data-app]')
   page.hear(working({ space: '', app: 'notes' }))
   await settle()
-  assertEquals(app(), null)
+  assertEquals(page.went, [])
   let recipes = { space: '', app: 'recipes' }
   page.hear({ operator: { ...working(recipes).operator, started: [recipes] } })
-  assert(await until(() => app()?.getAttribute('data-app') == 'recipes'))
-  page.leave()
-})
-
-test('an app the Operator started and that has since been deleted opens nothing beside the chat, and is no error', async () => {
-  let page = await load(storage())
-  let gone = { space: '', app: 'deleted-since' }
-  page.hear({ operator: { ...working(gone).operator, started: [gone] } })
-  await settle()
+  assert(await until(() => page.went.length > 0))
+  assertEquals(new URL(page.went[0]).searchParams.get('app'), 'recipes')
   assertEquals(page.document.querySelector('[data-app]'), null)
-  assertEquals(page.status(), '')
   page.leave()
 })
 

@@ -82,7 +82,7 @@ import {
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
-import { type Changed, talks, type Underway } from './operator-view.ts'
+import { talks } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { outcomeOf } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
@@ -1094,8 +1094,6 @@ export let operatorAnswer = async (
       task: talked.task,
       html: talked.html,
       ...talked.lines ? { lines: talked.lines, now: talked.now } : {},
-      making: ours(space, talked.making),
-      started: !!talked.making?.started,
       standing: talked.standing,
       ...talked.aside ? { aside: talked.aside } : {},
     }, { headers: { 'cache-control': 'private, no-store' } })
@@ -1242,7 +1240,6 @@ export let conversationOf = async (
     html: '',
     lines: null,
     now: '',
-    making: null,
     standing: '',
   }
   // A Builder still on the code before it answers none (a deploy's window),
@@ -1262,7 +1259,6 @@ export let conversationOf = async (
     lines = null,
     now = '',
     waiting,
-    making,
     standing,
     aside,
     helper,
@@ -1295,7 +1291,6 @@ export let conversationOf = async (
     lines?: Lines | null
     now?: string
     waiting: Bundle[]
-    making: Underway | null
     standing: string
     aside?: Asided
     helper?: HelperPage
@@ -1310,7 +1305,6 @@ export let conversationOf = async (
     html: html + conversation(waiting),
     lines,
     now,
-    making,
     standing,
     aside,
     helper,
@@ -1804,22 +1798,15 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
   )
 }
 
-/** Which apps open beside the chat by themselves, with none chosen, as the
- * Operator works (D-146737): for a newcomer any it works on, since their
- * space holds only what it builds them; for anyone else one it started in
- * this conversation (app_new), never one that was there before, which opens
- * only when they choose it (T-140509). Each is a frame's list of them
- * (operator-view.ts `frame`). */
+/** Which apps the page goes to as the Operator works on them, with none
+ * open (D-146737): for a newcomer any it works on, since their space holds
+ * only what it builds them; for anyone else one it starts while they watch
+ * (app_new), never one that was there before (T-140509). Each is a frame's
+ * list of them (operator-view.ts `frame`). The page goes there by its
+ * address (`?app=`), which alone says what is open beside the chat. */
 type Follows = 'worked' | 'started' | null
 let following = (newcomer: boolean, chosen?: string | null): Follows =>
   chosen ? null : newcomer ? 'worked' : 'started'
-// Whether the app a conversation is making opens beside it.
-let opens = (follows: Follows, made: Underway | null) =>
-  !!made && (follows == 'worked' || follows == 'started' && made.started)
-
-// The app a step worked on, when it is this space's.
-let ours = (space: Space, worked: Changed | null) =>
-  worked && (!worked.space || worked.space == space.slug) ? worked.app : null
 
 // The bar's way to the app on a phone, named for it in one line, cut short
 // where the bar is narrow (pages.css).
@@ -2121,8 +2108,9 @@ let reading = (env: Env, space: Space, who: Who) => {
  * offers a few ways to start, the box where it always sits.
  *
  * Beside it, the app the address names (`chosen`, the side's `aboutPath`),
- * of those the person may open, and no other. With none named, the app the
- * conversation is making opens there by itself (`following`). A new chat
+ * of those the person may open, and no other: nothing stored opens one.
+ * With none named, the page goes to the app the Operator starts as they
+ * watch (`following`). A new chat
  * about an app asks what should change in it, and the words sent say which
  * page and app are open (operator-view.ts `onPage`). With `from`, it draws
  * its entries past that seq too, so a link to an old entry (`#row-<entry>`,
@@ -2176,8 +2164,7 @@ export let chatPage = async (
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
   let follows = following(!!newcomer, chosen)
-  let made = opens(follows, talked.making) ? ours(space, talked.making) : null
-  let named = beside.apps?.find((a) => a.slug == (chosen ?? made))
+  let named = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
   let app = named && await makingOf(env, space, who, named.slug) || undefined
   // This page's address, which the words written on it name.
   let shown = open == root ? 'new' : open
@@ -2494,9 +2481,9 @@ let talk = mountTalk({
 let heading = document.querySelector('[data-title]')
 // The app open beside the chat (T-140509) is loaded again when the Operator
 // changes it, and what it is made of drawn again as the Operator works on it
-// (\`canvas\`). With none open, the one the Operator is making opens by
-// itself (D-146737): any it works on for a newcomer, else one it started in
-// this conversation (\`following\`), each a frame's list.
+// (\`canvas\`). With none open, the page goes to the one the Operator is
+// making, by its address (D-146737): any it works on for a newcomer, else
+// one it starts while they watch (\`following\`), each a frame's list.
 let here = ${JSON.stringify(space.slug)}
 let follows = ${JSON.stringify(follows)}
 let canvas = () => document.querySelector('[data-app]')
@@ -2512,7 +2499,11 @@ let changing = (o) => {
   if (shown && ours(o.changed).includes(app.dataset.app)) shown.src = shown.getAttribute('src')
   if (app) return void (ours(o.worked).includes(app.dataset.app) && remake(app.dataset.app))
   let opening = follows ? ours(o[follows]) : []
-  if (opening.length) remake(opening.at(-1))
+  if (opening.length) {
+    let to = new URL(location.href)
+    to.searchParams.set('app', opening.at(-1))
+    location.assign(to)
+  }
 }
 // It comes drawn whole, and only the parts of it that changed are put in
 // place, so the screens load again only when where they are changes; its
@@ -2836,7 +2827,6 @@ let read = async () => {
       from ??= talk.from()
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown(), show()
       if (got.title) heading.textContent = got.title
-      if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       dates(document)
     } while (again)
   })()

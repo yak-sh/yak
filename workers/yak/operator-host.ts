@@ -48,13 +48,11 @@ import {
   frame,
   helperFrame,
   helping,
-  making,
   now,
   type Place,
   standingIn,
   talk,
   turnOf,
-  type Underway,
   type Worked,
 } from './operator-view.ts'
 import {
@@ -996,22 +994,6 @@ export let openedOf = async (
 let callsIn = (entries: Bundle[]) =>
   new Set(entries.flatMap((b) => b.call ? [b.entity.eid] : []))
 
-// The app the conversation `open` is making (operator-view.ts `making`), read
-// as its own page reads it (`conversationOf`), without drawing it.
-let underway = async (store: Store, open: string) => {
-  let { session, task } = await openedOf(store, open)
-  if (session) {
-    let entries = await linesOf(store, session.entity.eid, SHOWN)
-    return making(entries, await helpersOf(store, [session], callsIn(entries)))
-  }
-  if (!task) return null
-  let sessions = await sessionsOf(store, task.entity.eid)
-  return making(
-    await entriesOf(store, sessions),
-    await helpersOf(store, sessions),
-  )
-}
-
 /**
  * One conversation in the Operator's chat app, opened by a person's
  * conversation, a piece of work it started, a task, or a request: its title
@@ -1019,9 +1001,7 @@ let underway = async (store: Store, open: string) => {
  * no session has taken it, for the page to draw as it always has. `task` is
  * what the page keys the conversation by (a task, or the session), and
  * `begun` the request it began with, the same before and after a session
- * takes it up (the key, for one no request began), and `making` the app its
- * newest step worked on and whether it started it (operator-view.ts
- * `making`). `called` is what its Operator is called, and `opens` where a
+ * takes it up (the key, for one no request began). `called` is what its Operator is called, and `opens` where a
  * conversation opens by its id, at the chat app's `at` unless the admin's.
  */
 // A conversation that is not here, or not yet.
@@ -1032,7 +1012,6 @@ const NONE = {
   html: '',
   lines: null,
   waiting: [] as Bundle[],
-  making: null,
   standing: '',
 }
 
@@ -1244,7 +1223,6 @@ export let conversationOf = async (
   lines: () => Lines | null
   now?: string
   waiting: Bundle[]
-  making: Underway | null
   standing: string
   aside?: Aside
   helper?: HelperPage
@@ -1295,7 +1273,6 @@ export let conversationOf = async (
       lines: () => wire(drawn, shown, seen),
       now: now(working, names),
       waiting: [],
-      making: making(entries, seen.helpers),
       standing: await standingOf(store, [row], entries, seen.helpers),
     }
   }
@@ -1307,7 +1284,6 @@ export let conversationOf = async (
       html: '',
       lines: () => null,
       waiting: found.waiting,
-      making: null,
       standing: '',
     }
   }
@@ -1350,7 +1326,6 @@ export let conversationOf = async (
     lines: () => wire(drawn, entries, seen),
     now: now(entries, names),
     waiting: [],
-    making: making(entries, seen.helpers),
     standing: await standingOf(store, sessions, entries, seen.helpers),
   }
 }
@@ -2179,12 +2154,9 @@ export let operatorRequest = async (
       typeof args.take == 'number' && args.take > 0 ? args.take : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
-    // A helper's page is zoomed in on the person's conversation, and the app
-    // that conversation opens beside it opens beside the helper too.
     return Response.json({
       root,
       ...talked,
-      ...talked.helper ? { making: await underway(store, root) } : {},
       ...args.lines ? { lines: lines() } : {},
       ...await news(),
     })
