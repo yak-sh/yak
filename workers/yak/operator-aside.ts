@@ -89,23 +89,17 @@ export let showing = (doing: Doing, helpers: HelperLine[]): Doing =>
     ? 'thinking'
     : doing
 
-let WORD: Record<Standing, [string, string?]> = {
-  running: ['Running', 'active'],
+let WORD: Record<Standing, [string, (string | string[])?]> = {
+  running: ['Running', ['pulse', 'active']],
   waiting: ['Waiting', 'caution'],
   done: ['Done', 'positive'],
   failed: ['Failed', 'negative'],
   stopped: ['Stopped'],
 }
 
-// How each stands as a summary's dot: its word's tone, and what is at work
-// breathes.
-let TONE: Record<Standing, string | string[] | undefined> = {
-  running: ['pulse', 'active'],
-  waiting: WORD.waiting[1],
-  done: WORD.done[1],
-  failed: WORD.failed[1],
-  stopped: WORD.stopped[1],
-}
+// How each stands as a summary's dot: its word's tone, what is at work
+// breathing.
+let TONE = (standing: Standing) => WORD[standing][1]
 
 /** How a piece of work stands, in a word, wherever it is said: on the
  * page, and to a call's voice (operator-glance.ts). */
@@ -119,22 +113,22 @@ export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
     { 'data-turn': '' },
     turn
       ? [
-        h(State, { mod: ['pulse', 'active'] }, turn.what.replace(/…$/, '')),
+        h(State, { mod: TONE('running') }, turn.what.replace(/…$/, '')),
         ' · ',
         h(Popover.Time, { at: turn.since, now, lasting: true }),
       ]
       : h(State, null, 'Nothing running'),
   )
 
-/** How a helper stands, in a word in its tone. */
+/** How a helper stands, in a word in its tone, breathing while it runs. */
 export let Stands = ({ standing }: { standing: Standing }) =>
   h(State, { mod: WORD[standing][1] }, word(standing))
 
 /** A piece of work as a row, wherever it is drawn: its title in a line,
- * linked to its page, its recap on hover, over what `about` says of it
- * first, how it stands and, while it works, its step and how long it has
- * taken, or once it ended, how long ago; then where it runs and its model,
- * where it says, in a line, or with `fold` (the Helpers box) under a `More`
+ * linked to its page, over what `about` says of it first, how it stands
+ * and, while it works, its step and how long it has taken, or once it
+ * ended, how long ago; then what it came to (its recap), where it runs and
+ * its model, in lines, or with `fold` (the Helpers box) under a `More`
  * fold, closed unless `open`. The page puts a newer drawing of a helper in
  * place of each by its session (`[data-help]`). */
 export let Work = (
@@ -146,6 +140,9 @@ export let Work = (
     open?: boolean
   },
 ) => {
+  let recap = x.recap && !going(x)
+    ? h(Rows.Meta, { 'data-recap': '' }, x.recap)
+    : null
   let runs = x.runs || x.model
     ? h(
       Rows.Meta,
@@ -153,6 +150,7 @@ export let Work = (
       [x.runs, x.model].filter(Boolean).join(' · '),
     )
     : null
+  let more = recap || runs ? [recap, runs] : null
   return h(
     Rows.Item,
     { 'data-help': x.session, 'data-going': going(x) ? '' : undefined },
@@ -161,7 +159,7 @@ export let Work = (
       null,
       h(
         Rows.Name,
-        { mod: 'line', title: x.recap ?? x.title },
+        { mod: 'line', title: x.title },
         x.href ? h('a', { href: x.href }, x.title) : x.title,
       ),
       h(
@@ -176,17 +174,25 @@ export let Work = (
             : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
-      runs && fold
+      more && fold
         ? h(
           More,
           { mod: 'quiet', open, 'data-fold': '' },
           h(More.Summary, null, 'More'),
-          h(More.Body, null, runs),
+          h(More.Body, null, more),
         )
-        : runs,
+        : more,
     ),
   )
 }
+
+/** A helper as its conversation shows it, under the newest reply of the
+ * turn that started it: its row on a card of its own, so it reads at a
+ * glance on a phone, breathing while it works and, once it ended, saying
+ * what it came to. The same drawing is the web page's and the iOS app's
+ * (operator-draw.ts `helperRow`). */
+export let Helping = ({ work, now }: { work: HelperLine; now?: number }) =>
+  h(Card, null, h(Rows, null, h(Work, { work, now })))
 
 /** How many dots the summary draws before it says how many more. */
 export let DOTS = 4
@@ -220,8 +226,8 @@ export let DOTS = 4
  */
 export let glanceOf = ({ turn, helpers }: Aside) => {
   let dots = [
-    ...turn ? [TONE.running] : [],
-    ...ordered(helpers, Infinity).map((x) => TONE[x.standing]),
+    ...turn ? [TONE('running')] : [],
+    ...ordered(helpers, Infinity).map((x) => TONE(x.standing)),
   ]
   let counts = new Map<Standing, number>()
   for (let x of helpers) {

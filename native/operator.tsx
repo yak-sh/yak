@@ -13,6 +13,7 @@ import {
   drawLines,
   type Lines,
   look as talkLook,
+  put,
 } from '../workers/yak/operator-draw.ts'
 import { colors, Draw, Host } from './kit.tsx'
 import { report } from './report.ts'
@@ -23,23 +24,24 @@ let looks = (() => {
   return { ...kit, classes: { ...kit.classes, ...talkLook(colors) } }
 })()
 
-// Each line drawn, by the id it is put by, in the order the page shows them.
-type Drawn = Map<string, VNode | string | null>
-let drawnOf = (sent: Lines | null | undefined, into: Drawn = new Map()) => {
-  let next = new Map(into)
-  for (let { id, node, of } of sent ? drawLines(sent) : []) {
-    // A run of steps takes the place of the first step it now draws.
-    let taken = [...next.keys()].filter((k) => k != id && of?.includes(k))
-    if (taken.length && !next.has(id)) {
-      next = new Map(
-        [...next].map(([k, v]) => k == taken[0] ? [id, node as VNode] : [k, v]),
-      )
-    }
-    for (let k of taken) next.delete(k)
-    next.set(id, node as VNode)
-  }
-  return next
-}
+// Each line drawn, by the id it is put by, in the order the page shows them,
+// each put where the web page puts it (operator-draw.ts `put`).
+type Drawn = { id: string; node: VNode; of?: string[]; live?: boolean }[]
+let drawnOf = (sent: Lines | null | undefined, into: Drawn = []) =>
+  (sent ? drawLines(sent) : []).reduce(
+    (held, { id, node, of, live, is }) =>
+      put(
+        held,
+        {
+          id,
+          node: node as VNode,
+          ...of ? { of } : {},
+          ...live ? { live } : {},
+        },
+        is == 'theirs',
+      ),
+    into,
+  )
 
 /** One frame of the page's socket (operator-view.ts `frame`), as read here. */
 type Frame = {
@@ -60,7 +62,7 @@ let chatOf = (space: Space) => `${APEX}/manage/${space.slug}/operator`
 // write in under it.
 let Talk = ({ space }: { space: Space }) => {
   let at = chatOf(space)
-  let [lines, setLines] = useHeld<Drawn>(new Map())
+  let [lines, setLines] = useHeld<Drawn>([])
   let [now, setNow] = useHeld('')
   let [typing, setTyping] = useHeld('')
   let [words, setWords] = useHeld('')
@@ -165,7 +167,7 @@ let Talk = ({ space }: { space: Space }) => {
         }
       },
     },
-    [...lines].map(([id, node]) => h('div', { key: id }, node)),
+    lines.map(({ id, node }) => h('div', { key: id }, node)),
     typing ? h(Transcript.Reply, { as: 'p' }, typing) : null,
     now ? h(Transcript.Status, {}, now) : null,
     trouble ? h(Notice, { mod: 'negative' }, trouble) : null,

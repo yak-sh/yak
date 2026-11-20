@@ -24,7 +24,7 @@ import {
   conversingOf,
   TAKE,
 } from '@yaks/ux/conversation'
-import { drawLines, type Lines } from './operator-draw.ts'
+import { drawLines, type Lines, put } from './operator-draw.ts'
 
 /** A line as the page holds it: the entries it reads once a step has sent
  * it (`uses`), else as the server drew it (`html`); and whether it is the
@@ -36,6 +36,8 @@ export type Kept = {
   of?: string[]
   html?: string
   mine?: boolean
+  /** a helper's row while the helper works (operator-draw.ts `put`) */
+  live?: boolean
 }
 
 /** What its lines are drawn with beside their entries: a frame's `Lines`
@@ -111,24 +113,25 @@ let kept = <K extends 'person' | 'called' | 'opens'>(
   return value == null ? {} : { [key]: value }
 }
 
-/** What the page holds once a frame's lines have come: each line in its
- * place, or in the place of the first line it now draws (a step a run of
- * steps took in), or after the others when new, drawn from its entries from
- * now on, and what they are drawn with gathered. A line of the person's own
- * words stays theirs, however it came. */
+/** What the page holds once a frame's lines have come, each put where it
+ * goes (operator-draw.ts `put`) and drawn from its entries from now on, and
+ * what they are drawn with gathered. A line of the person's own words stays
+ * theirs, however it came. */
 export let heard = (was: Held, sent: Lines): Held => {
   let lines = [...was.lines]
   let theirs = new Set(
     drawLines(sent).flatMap((l) => l.is == 'theirs' ? [l.id] : []),
   )
-  for (let { id, uses, of } of sent.lines) {
-    let taken = (l: Kept) => l.id != id && !!of?.includes(l.id)
-    let at = lines.findIndex((l) => l.id == id || taken(l))
-    let mine = theirs.has(id) || at >= 0 && lines[at].mine ? { mine: true } : {}
-    let line = { id, uses, ...of ? { of } : {}, ...mine }
-    if (at >= 0) lines[at] = line
-    else lines.push(line)
-    lines = lines.filter((l, i) => i == at || !taken(l))
+  for (let { id, uses, of, live } of sent.lines) {
+    let had = lines.find((l) => l.id == id)?.mine || theirs.has(id)
+    let line: Kept = {
+      id,
+      uses,
+      ...of ? { of } : {},
+      ...had ? { mine: true } : {},
+      ...live ? { live } : {},
+    }
+    lines = put(lines, line, theirs.has(id))
   }
   let helpers = new Map(was.beside.helpers.map((h) => [helperKey(h), h]))
   for (let h of sent.helpers ?? []) helpers.set(helperKey(h), h)

@@ -194,8 +194,12 @@ test('the conversation shows the context the Operator and each helper were given
   let top = [...document.querySelectorAll('[id^="row-"]')].find((r) =>
     r.contains(step) && !r.parentElement!.closest('[id^="row-"]')
   )!
-  assertEquals(rows.map((r) => `row-${r.id}`), [top.id])
+  assertEquals(rows[0].id, top.id.slice('row-'.length))
   assertStringIncludes(rows[0].html, 'The context the helper was given')
+  // and its row under the turn, which the page drew there too.
+  assertEquals(rows.length, 2)
+  assert(document.getElementById(`row-${rows[1].id}`))
+  assertStringIncludes(rows[1].html, `data-help="${child.entity.eid}"`)
 })
 
 // A helper's end reaches the conversation as one of the Operator's steps,

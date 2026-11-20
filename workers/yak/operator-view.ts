@@ -24,6 +24,7 @@ import {
   cameBy,
   helped,
   type Helper,
+  helperRow,
   type Line,
   lines,
   type Seen,
@@ -160,7 +161,8 @@ export let wordsOf = (entries: Bundle[]): string[] => {
   })
 }
 
-/** The line a step changed: a new line, or the call a new answer belongs to. */
+/** The line a step changed: a new line, the call a new answer belongs to,
+ * or the row of a helper that call started. */
 export let touched = (
   entries: Bundle[],
   names: Names,
@@ -171,8 +173,9 @@ export let touched = (
     entries.filter((b) => Number(comp(b, 'entry')?.seq ?? 0) > from)
       .map((b) => b.result ? String(comp(b, 'result')!.call) : b.entity.eid),
   )
-  return lines(entries, names, seen)
-    .filter((l) => (l.of ?? [l.id]).some((id) => ids.has(id)))
+  return lines(entries, names, seen).filter((l) =>
+    (l.is == 'helper' ? l.uses : l.of ?? [l.id]).some((id) => ids.has(id))
+  )
 }
 
 // The calls a session made that no result answers yet.
@@ -569,17 +572,22 @@ export let helperFrame = (
       comp(helper.entries.find((b) => b.entity.eid == id), 'entry')?.seq ?? 0,
     )
   let told = helped(helper, seen).filter((r) => seq(r.id) > from)
-  let call = entries.some((b) => b.entity.eid == helper.call)
+  let call = entries.find((b) => b.entity.eid == helper.call)
   let shown = { ...seen, helpers: [helper] }
+  // Its row in the conversation, live while it works, sent with each frame.
+  let row = call && helperRow(helper, call)
   return {
     operator: {
       task,
       lines: wire(
         told.length && call
           ? lines(entries, names, shown).filter((l) =>
-            (l.of ?? [l.id]).includes(helper.call!)
+            (l.is == 'helper' ? l.uses : l.of ?? [l.id]).includes(helper.call!)
           )
-          : told.map((r) => ({ id: r.id, uses: [], node: r.draw() })),
+          : [
+            ...told.map((r) => ({ id: r.id, uses: [], node: r.draw() })),
+            ...row ? [row] : [],
+          ],
         entries,
         shown,
       ),

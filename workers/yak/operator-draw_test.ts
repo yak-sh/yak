@@ -12,6 +12,7 @@ import type { Colors } from '@yaks/ui'
 import {
   CONTEXT,
   drawLines,
+  type Line,
   lines,
   look,
   PERSON,
@@ -396,4 +397,71 @@ test('the lines sent paint natively, each step one line until pressed', async ()
     'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.|Details',
   )
   free()
+})
+
+test('a helper’s row sits under its turn’s newest reply, live while it works, then says what it came to', () => {
+  let work = (standing: 'running' | 'done') => ({
+    session: 'yak',
+    href: '/manage/mill/operator/yak',
+    title: 'Building the yak generator',
+    standing,
+    step: standing == 'running' ? 'Writing files…' : '',
+    since: '2026-11-20T05:00:00.000Z',
+    ...standing == 'done'
+      ? { until: '2026-11-20T05:09:00.000Z', recap: 'The generator is live.' }
+      : {},
+  })
+  let turn = [
+    entry('in', 1, { content: { body: 'Make a yak generator' } }),
+    entry('c2', 2, { call: { to: 'help', args: {} } }),
+    entry('r3', 3, { result: { call: 'c2' }, content: { body: 'yak' } }),
+    entry('a4', 4, { output: {}, content: { body: 'I’ll build it.' } }),
+    entry('in5', 5, { content: { body: 'Thanks' } }),
+  ]
+  let drawing = (standing: 'running' | 'done') => {
+    let at = {
+      ...seen,
+      helpers: [{
+        session: 'yak',
+        call: 'c2',
+        entries: [],
+        line: work(standing),
+      }],
+    }
+    let drawn = lines(turn, namer(at), at)
+    let row = drawn.find((l) => l.is == 'helper')!
+    let html = (l: Line) => renderToString(h(Fragment, null, l.node))
+    return { at, drawn, row, html }
+  }
+  let words = (s: string) =>
+    parseHTML(`<!doctype html><html><body>${s}</body></html>`).document.body
+      .textContent!
+  let { at, drawn, row, html } = drawing('running')
+  assertEquals(drawn.map((l) => l.is == 'helper' ? 'row' : l.id), [
+    'in',
+    'c2',
+    'a4',
+    'row',
+    'in5',
+  ])
+  assertEquals(row.live, true)
+  let text = words(html(row))
+  for (let said of ['Building the yak generator', 'Running', 'Writing files']) {
+    assertStringIncludes(text, said)
+  }
+  assertStringIncludes(html(row), 'href="/manage/mill/operator/yak"')
+  // The step that started it holds the same row, never the helper's id.
+  let step = words(html(drawn[1]))
+  assertStringIncludes(step, 'Building the yak generator')
+  assertEquals(step.includes('What came back'), false)
+  // Sent alone, it draws as the whole conversation draws it.
+  let sent = JSON.parse(JSON.stringify(wire([row], turn, at)))
+  assertEquals(
+    sentRows(sent),
+    rows(turn, namer(at), at).filter((r) => r.id == row.id),
+  )
+  assertEquals(sent.lines[0].live, true)
+  let ended = drawing('done')
+  assertEquals(ended.row.live, undefined)
+  assertStringIncludes(ended.html(ended.row), 'The generator is live.')
 })

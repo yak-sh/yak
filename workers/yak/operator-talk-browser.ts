@@ -40,6 +40,10 @@ export let parsed = (at: ParentNode): Held | null => {
       id: r.id.slice('row-'.length),
       html: r.innerHTML,
       ...r.querySelector('.Transcript_Bubble') ? { mine: true } : {},
+      // a helper's row while the helper works (operator-draw.ts `put`)
+      ...r.querySelector('.Transcript_Entry-helper [data-going]')
+        ? { live: true }
+        : {},
     })),
     beside: { tools: {}, helpers: [], offers: {} },
   }

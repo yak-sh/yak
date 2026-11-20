@@ -207,7 +207,7 @@ let listed = (
 ).aside!
   .helpers
 let done = listed.find((h) => h.session == nativeChild.entity.eid)!
-test('the chat’s aside lists a helper by its title, with its recap and how long ago it ended', () => {
+test('the chat’s aside lists a helper by its title, how long ago it ended and what it came to', () => {
   assertEquals(done.title, 'Friday schedule check')
   assertEquals(done.recap, 'Helper checked the schedule; Tuesday is free.')
   let html = helperHtml(done, Date.parse(done.until!) + 2 * 86_400_000)
@@ -215,7 +215,7 @@ test('the chat’s aside lists a helper by its title, with its recap and how lon
   assertStringIncludes(html, '2 days ago')
   assertStringIncludes(
     html,
-    'title="Helper checked the schedule; Tuesday is free."',
+    '>Helper checked the schedule; Tuesday is free.</',
   )
 })
 

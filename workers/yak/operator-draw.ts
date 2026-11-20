@@ -62,7 +62,7 @@ import {
   words,
   yours,
 } from '@yaks/session/conversation'
-import { type HelperLine, Work } from './operator-aside.ts'
+import { going, type HelperLine, Helping, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
@@ -81,9 +81,12 @@ export type Line = {
   text?: string
   of?: string[]
   uses: string[]
-  /** a step, which flows beside the steps around it while closed, or the
-   * person's own words, which sit on their side */
-  is?: 'step' | 'theirs'
+  /** a step, which flows beside the steps around it while closed, the
+   * person's own words, which sit on their side, or a helper's row */
+  is?: 'step' | 'theirs' | 'helper'
+  /** a helper's row while the helper works: it stays under the newest line
+   * of its turn as more of the turn comes (`put`) */
+  live?: boolean
   /** a step's tone: under way, or failed */
   tone?: Tone
   /** a step that is no work of the model's (words the platform wrote),
@@ -189,6 +192,9 @@ export let input = (b: Bundle, body: string, kept?: Kept) => {
 let LEGACY = /^child [0-9a-f-]{36} (settled|failed|stopped)\n/
 export let told = (b: Bundle, body: string) =>
   !b.result && (b.delivery || LEGACY.test(body))
+// Where a helper's end is told: its report, or its stop.
+let ended = (b: Bundle) =>
+  told(b, String(comp(b, 'content')?.body ?? '')) || !!b.operator_stopped
 let helper = (b: Bundle, body: string) => {
   let outcome = comp(b, 'delivery')?.outcome ?? body.match(LEGACY)?.[1]
   let said = body.replace(/^.*\n/, '')
@@ -511,6 +517,28 @@ export type Seen = {
 export let helped = (h: Helper, sent?: Asked, page?: Drawn) =>
   briefed(h.entries, 'the helper', sent, page)
 
+/** A helper's row in its conversation (operator-aside.ts `Helping`), in the
+ * frame of the call that started it, under an id made from its session: live
+ * while it works, then what it came to. None for a helper with no row yet. */
+export let helperRow = (
+  helper: Helper,
+  call: Bundle,
+  view: View = person,
+  beside: Heard = UNNAMED,
+): Line | undefined => {
+  let work = helper.line
+  if (!work) return
+  let line: Line = {
+    id: derivedEid(['Helper row', work.session].join('|')),
+    uses: [call.entity.eid],
+    node: h(Helping, { work }),
+    text: [work.title, work.recap].filter(Boolean).join('\n\n'),
+    is: 'helper',
+    ...going(work) ? { live: true } : {},
+  }
+  return framed(line, [call], view, beside)
+}
+
 /** A line in its row, under its id, as the conversation and every fold in it
  * put one. */
 export let row = (line: { id: string; node: Node }) =>
@@ -689,13 +717,17 @@ let drawing = (
   // above it: a line drawing what a helper was told reads that ask too, so
   // drawn alone it says the same is above where the page does.
   let before: string[] = []
-  // What each helper a step started was told, under its row, which opens
-  // its own conversation.
-  let under = (call: string) =>
-    helpers.filter((one) => one.call == call).flatMap((one) => [
-      one.line ? h(Rows, null, h(Work, { work: one.line })) : null,
-      rows(context(one)),
-    ])
+  // What came back of a step that started helpers: each one's row, which
+  // opens its own conversation, over what it was told; never its id.
+  let came = (call: string) => {
+    let started = helpers.filter((one) => one.call == call)
+    return started.length
+      ? started.flatMap((one) => [
+        one.line ? h(Rows, null, h(Work, { work: one.line })) : null,
+        rows(context(one)),
+      ])
+      : undefined
+  }
   // A helper's context, each line of it drawn and framed as the
   // conversation's are.
   let context = (one: Helper) => {
@@ -723,7 +755,7 @@ let drawing = (
     let saying = thread ? null : draw(view, b, {
       ...beside,
       result,
-      under: b.call ? under(id) : [],
+      came: b.call ? came(id) : undefined,
       told,
     })
     let unwrapped: Line[] = thread
@@ -767,6 +799,25 @@ let drawing = (
   }
   let gather = (run: Line[]) =>
     gathered(run, frame, (l) => framing.get(l.id) ?? [])
+  // Each helper a step here started, as its row at the end of the turn that
+  // started it: before the next words the turn did not write (the person's,
+  // a call's caller's, a helper's end).
+  let turns = (l: Line | Fold) => {
+    if ('nodes' in l) return true
+    let b = byId.get(l.id)
+    return !!b && (theirs(b) || ended(b))
+  }
+  for (let one of helpers) {
+    let call = byId.get(one.call ?? '')
+    let line = call && helperRow(one, call, view, beside)
+    if (!line) continue
+    let at = drawn.findIndex((l) =>
+      'nodes' in l ? l.of.includes(one.call!) : l.id == one.call
+    )
+    if (at < 0) continue
+    let end = drawn.findIndex((l, i) => i > at && turns(l))
+    drawn.splice(end < 0 ? drawn.length : end, 0, line)
+  }
   return {
     gather,
     drawn: [
@@ -1067,8 +1118,50 @@ let named = (name: string) => (b: Bundle) => {
   return typeof sha == 'string' ? sha : ''
 }
 
-/** A line as {@link Lines} sends it. */
-export type Sending = { id: string; uses: string[]; of?: string[] }
+/** A line as {@link Lines} sends it: a helper's row says whether it is live. */
+export type Sending = {
+  id: string
+  uses: string[]
+  of?: string[]
+  live?: boolean
+}
+
+/**
+ * The lines a page holds once `line` came, by id: in its own place, or in
+ * the place of the first line it now draws (a step a run of steps took in),
+ * else after the others; but a line of the turn (anything but the person's
+ * own words, `theirs`) goes above the live lines that end them, so a
+ * helper's row stays under its turn's newest reply while it works. The web
+ * page (operator-talk.ts `heard`) and the iOS app put lines alike.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { put } from './operator-draw.ts'
+ * type Held = { id: string; of?: string[]; live?: boolean }
+ * let held: Held[] = [{ id: 'ask' }, { id: 'row', live: true }]
+ * let ids = (ls: { id: string }[]) => ls.map((l) => l.id)
+ * equal(ids(put(held, { id: 'reply' })), ['ask', 'reply', 'row'])
+ * equal(ids(put(held, { id: 'you' }, true)), ['ask', 'row', 'you'])
+ * equal(ids(put(held, { id: 'run', of: ['ask'] })), ['run', 'row'])
+ * equal(ids(put<Held>([{ id: 'row' }], { id: 'reply' })), ['row', 'reply'])
+ * ```
+ */
+export let put = <T extends { id: string; of?: string[]; live?: boolean }>(
+  held: T[],
+  line: T,
+  theirs = false,
+): T[] => {
+  let taken = (l: T) => l.id != line.id && !!line.of?.includes(l.id)
+  let at = held.findIndex((l) => l.id == line.id || taken(l))
+  let next = [...held]
+  if (at >= 0) next[at] = line
+  else {
+    at = next.length
+    while (!theirs && !line.live && at > 0 && next[at - 1].live) at--
+    next.splice(at, 0, line)
+  }
+  return next.filter((l, i) => i == at || !taken(l))
+}
 
 /** These lines of `entries`, as {@link Lines}: only what they read. A
  * helper's lines are only what it was told (its asks and notes), all a
@@ -1092,7 +1185,12 @@ export let wire = (
   let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
   let files = Object.entries(seen.files ?? {}).filter(([eid]) => used.has(eid))
   return {
-    lines: drawn.map(({ id, uses, of }) => ({ id, uses, ...of ? { of } : {} })),
+    lines: drawn.map(({ id, uses, of, live }) => ({
+      id,
+      uses,
+      ...of ? { of } : {},
+      ...live ? { live } : {},
+    })),
     entries: read,
     tools: Object.fromEntries(
       Object.entries(seen.tools ?? {}).filter(([eid]) => tools.has(eid)),
@@ -1144,13 +1242,14 @@ export let drawLines = (
     let line = drawn.find((l) => l.id == id) ??
       (of.length ? gather(drawn.filter((l) => of.includes(l.id))) : undefined)
     if (!line || line.id != id) return []
-    let { is } = line
+    let { is, live } = line
     return [{
       id,
       uses,
       node: called(sent.ids, line.node),
       ...is ? { is } : {},
       ...line.of ? { of: line.of } : {},
+      ...live ? { live } : {},
     }]
   })
 }

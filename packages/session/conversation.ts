@@ -98,12 +98,15 @@ export let namer = ({ tools = {}, person }: Naming): Names => (tool, args) =>
 
 /** What a line is drawn with beside its entry: the result that answered it
  * when it is a call (`joined`), how calls read, what a call's step holds
- * after what it asked for (`under`), and who works the conversation, as a
- * sentence names them partway through (`who`, "the Operator"). */
+ * after what it asked for (`under`), what came back of it drawn in place of
+ * its result's own words (`came`: the helper a call started, not its id),
+ * and who works the conversation, as a sentence names them partway through
+ * (`who`, "the Operator"). */
 export type Beside = {
   result?: Bundle
   names: Names
   under?: Node[]
+  came?: Node[]
   who?: string
 }
 
@@ -372,7 +375,7 @@ let tried = (doing: string) =>
 // A tool call and, once it came back, its answer, which takes the call's
 // place: what it asked for, what came back, and what `under` adds between.
 let tool = (call: Bundle, beside: Beside): Said => {
-  let { result, names, under = [] } = beside
+  let { result, names, under = [], came } = beside
   let c = comp(call, 'call')!
   let said = names(String(c.to), c.args as Record<string, unknown>)
   let ok = result ? !comp(result, 'refusal') && !result.exception : null
@@ -385,8 +388,8 @@ let tool = (call: Bundle, beside: Beside): Said => {
       h(More.Label, {}, 'What it asked for'),
       readable(c.args ?? {}),
       ...under,
-      ok == null ? null : ok
-        ? [
+      ok == null ? came ?? null : ok
+        ? came ?? [
           h(More.Label, {}, 'What came back'),
           readable(body(result)),
         ]
