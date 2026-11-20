@@ -4363,9 +4363,18 @@ let OURS: Row[] = [
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
         if (!bytes) {
+          let create = {
+            space: space.slug,
+            app: app.slug,
+            ...d.of ? { draft: d.of.eid } : {},
+            op: 'write',
+            path,
+            content: '<file text>',
+          }
           throw refuse(
             'missing',
-            noFile(String(args.path), own(Object.keys(d.files))),
+            `${noFile(path, own(Object.keys(d.files)))}. To create it, call ` +
+              `app_files with ${JSON.stringify(create)}.`,
           )
         }
         let { text: said, value, images } = await glance(path, bytes)

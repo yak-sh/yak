@@ -1088,6 +1088,7 @@ test('an unknown property is refused with what its component holds', () => {
         },
       },
     },
+    kinds: { alias: { with: { book: true } } },
   })
   assertEquals(
     unknownProps(w, 'book', ['name']),
@@ -1099,6 +1100,7 @@ test('an unknown property is refused with what its component holds', () => {
     'unknown property: alias.name — alias has no properties, so it is ' +
       'present (.alias) or absent (!alias); alias: a stable name for an entity',
   )
+  assertThrows(() => w.aim('alias.title'), Unknown, 'title is book.title')
   // a slip is told the name it was closest to, and the spine's id is its eid
   assertEquals(
     unknownProps(w, 'book', ['titles']),

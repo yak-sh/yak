@@ -324,13 +324,15 @@ export let manifest = (source: unknown, file = 'vocab.json'): VocabDoc => {
     ),
   )
   let keys = Object.keys(body)
-  if (keys.length && !keys.some((k) => k.startsWith('$'))) {
+  if (
+    ('components' in body && !('$defs' in body)) ||
+    (keys.length && !keys.some((k) => k.startsWith('$')))
+  ) {
     throw refuse(
       'arguments',
-      `${file}: ${keys.join(', ')} — a manifest is a JSON Schema document, ` +
-        `one $defs entry per component and one properties entry per property: ` +
-        `${EXAMPLE}; the whole of it is in the guide under ` +
-        `"Declaring components in vocab.json" (${GUIDE})`,
+      `${file}: ${'components' in body ? 'components' : keys.join(', ')} — ` +
+        `a manifest is a JSON Schema document. Declare components under $defs.` +
+        `\n${EXAMPLE}\nSee "Declaring components in vocab.json" in the guide (${GUIDE}).`,
     )
   }
   let doc = body as VocabDoc

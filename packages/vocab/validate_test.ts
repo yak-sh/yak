@@ -72,6 +72,7 @@ test('storable refuses what a table cannot lower', () => {
         nested: { properties: { deep: { type: 'string' } } },
         linked: { $ref: '#/$defs/recipe' },
         eid: { type: 'string' },
+        bellTwo: { type: 'string' },
         aim: { type: 'string', ref: 'entity' },
         dead: { type: 'string', ref: 'entity', death: 'explode' },
         numbered: { type: 'number', enum: ['1'] },
@@ -86,6 +87,8 @@ test('storable refuses what a table cannot lower', () => {
   assert(said.includes('recipe.nested declares no type'))
   assert(said.includes('recipe.linked uses $ref'))
   assert(said.includes('recipe."eid" is not a property name'))
+  assert(said.includes('starting with a lowercase letter'))
+  assert(said.includes('Name it "bell_two".'))
   assert(said.includes('recipe.aim is a reference without a death word'))
   assert(said.includes('recipe.dead is a reference without a death word'))
   assert(

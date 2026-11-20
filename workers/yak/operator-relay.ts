@@ -21,6 +21,7 @@ import {
   type Bundle,
   type Comp,
   mint,
+  Stale,
   type Tool as GraphTool,
 } from '@yaks/graph'
 import { asked, waiting } from '@yaks/task'
@@ -344,9 +345,28 @@ export let decisionRelay = (
     if (!decision || comp(row, 'filed')?.assignee != ctx.person) {
       throw refuse('arguments', `${named} is no decision waiting on them`)
     }
-    if (row!.decided || row!.cancelled) {
-      throw refuse('arguments', `${named} is already answered or cancelled`)
+    let closed = (row: Bundle | undefined) => {
+      let decided = comp(row, 'decided')
+      if (decided) {
+        let { choice, at } = decided
+        return {
+          text: `${named} was already answered with ${
+            JSON.stringify(choice)
+          } at ${at}.`,
+          with: {
+            output: {
+              source: context!.call.entity.eid,
+              value: { decision: eid, choice, at },
+            },
+          },
+        }
+      }
+      if (row?.cancelled) {
+        throw refuse('arguments', `${named} was cancelled`)
+      }
     }
+    let previous = closed(row)
+    if (previous) return previous
     let said = String(args.entry ?? '').trim()
     let line = await lineOf(
       work,
@@ -378,15 +398,29 @@ export let decisionRelay = (
       )
     }
     let actor = { by: ctx.person, via: context!.session }
-    await work.g.apply([
-      { entity: { eid }, decided: { choice: label }, $actor: actor },
-      {
-        entity: { eid: mint() },
-        edge: { from: eid, to: line!.entity.eid },
-        cites: {},
-        $actor: actor,
-      },
-    ])
+    try {
+      await work.g.apply([
+        {
+          entity: { eid },
+          decided: { choice: label },
+          $was: { decided: { '': null }, cancelled: { '': null } },
+          $actor: actor,
+        },
+        {
+          entity: { eid: mint() },
+          edge: { from: eid, to: line!.entity.eid },
+          cites: {},
+          $actor: actor,
+        },
+      ])
+    } catch (e) {
+      if (e instanceof Stale && e.eid == eid) {
+        let [current] = await work.g.get([eid])
+        let previous = closed(current)
+        if (previous) return previous
+      }
+      throw e
+    }
     return {
       text: `Answered ${named} as them: "${opening(label)}"`,
       with: {

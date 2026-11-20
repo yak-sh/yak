@@ -160,6 +160,17 @@ test('a plain write answers as it did, in the one draft it opened', async () => 
     () => run('app_files', { app, op: 'read', path: 'index.html' }),
     'no file index.html; it holds copy.json, seed.json',
   )
+  let missing = await throws(
+    () => run('app_files', { app, op: 'read', path: 'NOTES.md' }),
+    'To create it, call app_files with',
+  )
+  let create = JSON.parse((missing as Error).message.match(/\{.*\}/)![0])
+  equal([create.app, create.draft, create.op, create.path], [
+    app,
+    out.value!.draft,
+    'write',
+    'NOTES.md',
+  ])
   // A refused argument ends with the whole shape its op takes.
   await throws(
     () => run('app_files', { app, content: 'x' }),

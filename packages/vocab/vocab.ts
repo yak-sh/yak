@@ -680,7 +680,8 @@ let edits = (a: string, b: string): number => {
 /**
  * The names closest to a word nothing declares, best first and at most
  * `most`: a slip (within a third of the word in edits) or a name that opens
- * with the other. A name far from every one is no slip, and has none.
+ * with the other. With `fallback`, return the closest names even when none
+ * looks like a slip.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -693,18 +694,25 @@ let edits = (a: string, b: string): number => {
  * assertEquals(nearest('sandwich', ['recipe', 'doc']), [])
  * ```
  */
-export let nearest = (word: string, names: string[], most = 3): string[] => {
+export let nearest = (
+  word: string,
+  names: string[],
+  most = 3,
+  { fallback = false } = {},
+): string[] => {
   let w = word.toLowerCase()
   let opens = (a: string, b: string) => b.length >= 3 && a.startsWith(b)
-  return names.map((name) => {
+  let ranked = names.filter((name) => name != word).map((name) => {
     let n = name.toLowerCase()
     let d = edits(w, n)
     let near = d <= Math.max(1, Math.floor(w.length / 3)) || opens(w, n) ||
       opens(n, w)
     return { name, d, near }
-  }).filter((c) => c.near && c.name != word)
-    .sort((a, b) => a.d - b.d || a.name.localeCompare(b.name))
-    .slice(0, most).map((c) => c.name)
+  })
+  let close = ranked.filter((c) => c.near)
+  return (fallback && !close.length ? ranked : close)
+    .sort((a, b) => a.d - b.d || a.name.localeCompare(b.name)).slice(0, most)
+    .map((c) => c.name)
 }
 
 // The words a write says beside its components, which a read never selects:
@@ -822,7 +830,16 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     let f = first(p)
     return f ? [`.${comp}&.${p}.${f}=…`] : []
   })
-  let about = near.length || through.length || worn.length
+  let kind = v.kind(comp)
+  let companions = kind?.is.includes(comp)
+    ? [...new Set([...kind.is, ...Object.keys(kind.with)])]
+      .filter((c) => c != comp)
+    : []
+  let named = props.flatMap((p) => {
+    let paths = companions.filter((c) => v.prop(c, p)).map((c) => `${c}.${p}`)
+    return paths.length ? [`${p} is ${paths.join(' or ')}`] : []
+  })
+  let about = near.length || through.length || worn.length || named.length
     ? ''
     : v.comp(comp)?.description
   return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
@@ -831,7 +848,9 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     near.length
       ? ` (closest declared: ${near.map((p) => `${comp}.${p}`).join(', ')})`
       : ''
-  } — ${through.map((t) => `${t}; `).join('')}${
+  } — ${named.map((t) => `${t}. `).join('')}${
+    through.map((t) => `${t}; `).join('')
+  }${
     worn.length
       ? `a component is no property of another, so an entity wearing both ` +
         `is ${worn.join(' or ')}; `

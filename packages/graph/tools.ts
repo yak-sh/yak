@@ -483,12 +483,20 @@ export let runs = (seams: Seams = {}): Runs => {
       let unknown = [...named, ...(kind && !v.kind(kind) ? [kind] : [])]
         .filter((name) => !v.comp(name))
       if (unknown.length) {
-        let near = nearest(unknown[0], [...new Set([...v.all, ...v.kinds])])
+        let names = named.length == 1 && !kind
+          ? [...new Set([...v.all, ...v.kinds])]
+          : v.all
+        let missing = unknown.map((name) => {
+          let near = nearest(name, name == kind ? v.kinds : names, 3, {
+            fallback: true,
+          })
+          return `'${name}'${
+            near.length ? ` (closest: ${near.join(', ')})` : ''
+          }`
+        })
         throw new Refused(
-          `no component ${unknown.map((n) => `'${n}'`).join(', ')}${
-            unknown.length == 1 && near.length
-              ? ` (closest: ${near.join(', ')})`
-              : ''
+          `no component ${
+            missing.join(', ')
           } — call graph_schema with no arguments for the index of every ` +
             `word this graph knows`,
         )

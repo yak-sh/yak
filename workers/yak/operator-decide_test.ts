@@ -109,6 +109,37 @@ test('an answer in their own words is the answer', async () => {
   assertEquals((row.decided as Comp).choice, 'something rounder')
 })
 
+test('relaying another answer returns the recorded answer and adds no citation', async () => {
+  let question = 'Which badge?'
+  let { row } = await ask(question, 'go with the plain one', {
+    choice: 'Plain',
+  })
+  let original = row.decided as Comp
+  let citations = () =>
+    store.g.read(line`.cites .edge.from=${row.entity.eid}&*`)
+  let before = await citations()
+  let returned = ''
+  replies.push(
+    () =>
+      call('decision_relay', {
+        decision: row.entity.eid,
+        choice: 'Gothic',
+        entry: 'ignored on retry',
+      }),
+    (sent) => {
+      returned = sent
+      return said('Kept the answer.')
+    },
+  )
+  await say('go with gothic')
+  assertStringIncludes(
+    returned,
+    `was already answered with \\"Plain\\" at ${original.at}`,
+  )
+  assertEquals((await decision(question)).decided, original)
+  assertEquals(await citations(), before)
+})
+
 test('with nothing waiting on them, their words carry no note', async () => {
   let notes = () =>
     store.g.read(

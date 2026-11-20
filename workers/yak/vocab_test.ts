@@ -189,10 +189,26 @@ test('a manifest that is not a document is refused', () => {
   assertStringIncludes(why, 'vocab.json: recipe — a manifest is a JSON Schema')
   assertStringIncludes(why, '"$defs"')
   assertStringIncludes(why, 'guide')
+  let legacy = assertThrows(
+    () =>
+      appDoc({
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        components: { recipe: {} },
+      }),
+    Error,
+  ).message
+  let example = legacy.match(/(\{"\$defs".*\})/)?.[1]
+  assert(example)
+  assertEquals(appDoc(example).$defs?.recipe.properties?.serves.type, 'number')
   // Nothing declared is not a refusal: an app may have no words of its own.
   assertEquals(Object.keys(appDoc('').$defs ?? {}), [])
   assertEquals(Object.keys(appDoc('{}').$defs ?? {}), [])
   assertEquals(Object.keys(appDoc(undefined).$defs ?? {}), [])
+})
+
+test('an app with the task vocabulary points task.title at doc.title', () => {
+  let words = appVocab({ packages: ['@yaks/task'] })
+  assertThrows(() => words.aim('task.title'), Error, 'title is doc.title')
 })
 
 // Which files an app takes is said about the app, beside `$defs`, and kept on

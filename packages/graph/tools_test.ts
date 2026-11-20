@@ -111,13 +111,14 @@ test('graph_schema reads several components however the names are sent', () => {
   assertThrows(
     () => read(['bok', 'book', 'shelv']),
     Refused,
-    "no component 'bok', 'shelv' — call graph_schema with no arguments",
+    "no component 'bok' (closest: book), 'shelv' (closest: shelf) — call graph_schema",
   )
   assertThrows(
     () => read('shelv'),
     Refused,
     "no component 'shelv' (closest: shelf) — call graph_schema",
   )
+  assertThrows(() => read('training_entry'), Refused, '(closest: library')
   // a kind's name, as the kinds index lists it, is the kind
   assertEquals(read('library'), ['shelf', 'book'])
 })

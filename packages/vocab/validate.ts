@@ -26,6 +26,20 @@ let UX = /^[A-Z][A-Za-z0-9]{0,39}$/
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
+let propertyName = (name: string) => NAME.test(name) && name != 'eid'
+
+let badProperty = (comp: string, prop: string, props: object) => {
+  let fixed = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2').toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
+  let rename = propertyName(fixed) && !Object.hasOwn(props, fixed)
+    ? ` Name it ${JSON.stringify(fixed)}.`
+    : ''
+  return `${comp}.${JSON.stringify(prop)} is not a property name. Use 1–40 ` +
+    `characters, starting with a lowercase letter (a–z), followed by ` +
+    `lowercase letters, digits or underscores. The name "eid" is reserved.${rename}`
+}
+
 // One property schema is storable when it names a scalar, a reference, a
 // closed set, or a JSON value — an object, an array, or a union of types,
 // which a table holds in one column as binary JSON. Every property says its
@@ -251,9 +265,10 @@ export let storable = (doc: VocabDoc): string[] => {
         ),
       )
     }
-    for (let [prop, s] of Object.entries(schema.properties ?? {})) {
-      if (!NAME.test(prop) || prop == 'eid') {
-        errs.push(`${comp}.${JSON.stringify(prop)} is not a property name`)
+    let props = schema.properties ?? {}
+    for (let [prop, s] of Object.entries(props)) {
+      if (!propertyName(prop)) {
+        errs.push(badProperty(comp, prop, props))
       }
       errs.push(...storableProp(comp, prop, s))
       if (object(s)) errs.push(...storableDefault(comp, prop, s))
