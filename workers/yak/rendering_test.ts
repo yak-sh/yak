@@ -731,12 +731,77 @@ test('a long visit stops at its deadline without taking the remaining steps', as
     undefined,
     time,
   )
-  let failed = assertRejects(() => running, Error, 'taking step 1 timed out')
-  await time.advance(MOST)
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'Step 1 asks to wait 60000 ms',
+  )
   await failed
   assertEquals(p.log.filter((line) => line == 'press Enter'), [])
   assertEquals(p.released, ['session'])
   assertEquals(time.pending(), 0)
+})
+
+test('a named screenshot that stalls reports the failed operation', async () => {
+  let p = page()
+  let time = clock()
+  p.p.screenshot = () => new Promise(() => {})
+  let running = capture(
+    p.browsing,
+    {
+      url: 'https://x.invalid/',
+      view,
+      steps: [{ shot: 'opened' }],
+      audit: false,
+    },
+    undefined,
+    time,
+  )
+  let failed = assertRejects(
+    () => running,
+    Error,
+    'taking step 1 (taking a screenshot) timed out',
+  )
+  await time.advance(MOST)
+  await failed
+  assertEquals(p.released, ['session'])
+})
+
+test('the visit deadline while waiting for step 7 names the missing element', async () => {
+  let p = page()
+  let time = clock()
+  let waiting: AbortSignal | undefined
+  p.p.setViewport = () => time.advance(MOST - 1_000)
+  p.p.waitForSelector = (_, options) => {
+    waiting = options.signal
+    return time.advance(options.timeout).then(() => null)
+  }
+  let response = await answer(p.browsing, time)(
+    new Request('https://x.invalid/', {
+      method: 'POST',
+      body: JSON.stringify({
+        url: 'https://x.invalid/',
+        view,
+        audit: false,
+        steps: [
+          ...Array.from({ length: 6 }, () => ({ shot: 'before' })),
+          { tap: '[data-not-now]' },
+          { press: 'Enter' },
+        ],
+      }),
+    }),
+  )
+  assertEquals(response.status, 400)
+  let body = await response.json()
+  assertEquals(body.refusal, 'browser_wait_expired')
+  assertEquals(
+    body.failed,
+    'Step 7 waited for a visible element matching [data-not-now].',
+  )
+  assertEquals(body.faults, undefined)
+  assertEquals(p.log.includes('press Enter'), false)
+  assertEquals(p.released, ['session'])
+  assertEquals(waiting?.aborted, true)
 })
 
 test('the kernel bounds even a browser binding that never replies', async () => {

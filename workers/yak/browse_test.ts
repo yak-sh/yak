@@ -1,25 +1,41 @@
 // The browse door (browse.ts): a page of ours opened in the browser signed in
 // as its caller, for the platform's test accounts and owners alone.
-import { cleanup, equal, test } from '@yaks/testing'
+import { cleanup, clock, equal, test } from '@yaks/testing'
 import { answer, type Browsing, type Visit } from '@yaks/platform/browser-visit'
 import { actions } from './browser/testing.ts'
 import { fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
+import { within } from './defects.ts'
+import type { Bundle } from '@yaks/graph'
 
+let time = clock()
 let visits: Visit[] = []
 let did: string[] = []
+let controls = actions((line) => did.push(line))
 let browsing: Browsing = {
   acquire: () => Promise.resolve('session'),
   connect: () =>
     Promise.resolve({
       newPage: () =>
         Promise.resolve({
-          ...actions((line) => did.push(line)),
+          ...controls,
+          waitForSelector: async (selector, options) => {
+            if (selector == '[data-not-now]') {
+              await time.advance(options.timeout)
+              throw new Error(
+                `Waiting for selector \`${selector}\` failed: Waiting failed: ${options.timeout}ms exceeded`,
+              )
+            }
+            return controls.waitForSelector(selector, options)
+          },
           on: () => {},
           setViewport: () => Promise.resolve(),
           setCookie: () => Promise.resolve(),
-          goto: () => Promise.resolve({ status: () => 200 }),
+          goto: async (url) => {
+            if (new URL(url).searchParams.has('slow')) await time.advance(3_000)
+            return { status: () => 200 }
+          },
           createCDPSession: () =>
             Promise.resolve({
               send: (method: string) =>
@@ -38,10 +54,13 @@ let browsing: Browsing = {
   axe: { source: '', version: 'test' },
 }
 let rendering = answer(browsing)
+let slow = answer(browsing, time)
 let k: Kernel = await fresh({}, (env) => {
   env.BROWSER = {
     fetch: async (req: Request) => {
-      visits.push(await req.clone().json())
+      let visit: Visit = await req.clone().json()
+      visits.push(visit)
+      if (new URL(visit.url).searchParams.has('slow')) return slow(req)
       return rendering(req)
     },
   } as unknown as typeof env.BROWSER
@@ -63,6 +82,19 @@ let browse = (body: unknown, headers: Record<string, string>) =>
     body: JSON.stringify(body),
   })
 let manage = { url: `https://${k.host}/manage`, steps: [{ tap: 'textarea' }] }
+
+let reportedBrowse = async (steps: Visit['steps']) => {
+  let reports: Bundle[] = []
+  let r = await within(
+    { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
+    { request: 'POST /api/browse' },
+    () =>
+      browse({ url: `${manage.url}?slow`, view: { wait: 0 }, steps }, {
+        cookie: checks.cookie,
+      }),
+  )
+  return { status: r.status, body: await r.json(), reports }
+}
 
 test('a test account opens a page of ours signed in as itself, on a phone unless it names a window', async () => {
   let r = await browse(manage, { cookie: checks.cookie })
@@ -130,4 +162,28 @@ test('a visit whose requested waits exceed its deadline is refused without openi
   equal(r.status, 400)
   equal((await r.json()).error.code, 'browser_wait_too_long')
   equal(visits.length, seen)
+})
+
+test('a wait that cannot fit after page load is refused with its step and duration', async () => {
+  let { status, body, reports } = await reportedBrowse([
+    { shot: 'before' },
+    { wait: 18_000 },
+  ])
+  equal(status, 400)
+  equal(body.error.code, 'browser_wait_expired')
+  equal(body.error.message.startsWith('Step 2 asks to wait 18000 ms'), true)
+  equal(reports, [])
+})
+
+test('a missing visible element is a refusal naming the step and selector', async () => {
+  let { status, body, reports } = await reportedBrowse([{
+    tap: '[data-not-now]',
+  }])
+  equal(status, 400)
+  equal(body.error.code, 'browser_wait_expired')
+  equal(
+    body.error.message,
+    'Step 1 waited for a visible element matching [data-not-now].',
+  )
+  equal(reports, [])
 })

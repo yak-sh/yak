@@ -5,6 +5,7 @@
 // session interface lets the load, steps, diagnostics and cleanup run in
 // process without a local browser.
 import { type Clock, type Hold, sleep, system } from '@yaks/fp'
+import { CallError } from '@yaks/tools/errors'
 import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
 
@@ -103,7 +104,7 @@ export type Page = {
   screenshot(options: { type: 'png'; encoding: 'base64' }): Promise<string>
   waitForSelector(
     selector: string,
-    options: { timeout: number; visible: true },
+    options: { timeout: number; visible: true; signal?: AbortSignal },
   ): Promise<Element | null>
   keyboard: {
     type(text: string): Promise<void>
@@ -153,7 +154,7 @@ export type Rendered = {
 }
 /** A render that failed, and the browser time it held all the same. */
 export type Fault = { failed: string; stack?: string; timeout?: boolean }
-export type Failed = Fault & { duration: number }
+export type Failed = Fault & { duration: number; refusal?: string }
 export type Reply = (Rendered | Failed) & { faults?: Fault[] }
 
 let failure = (e: unknown): Fault => ({
@@ -227,6 +228,25 @@ export let allowed = ({ steps = [] }: Pick<Visit, 'steps'>): number =>
 
 // How long a step waits for the element it names to appear.
 let FIND = 5_000
+let LOAD = 10_000
+
+let waitExpired = (message: string) =>
+  new CallError('browser_wait_expired', message)
+
+let pause = (
+  ms: number,
+  stage: string,
+  left: number,
+  signal: AbortSignal,
+  time: Clock,
+) => {
+  if (ms >= left) {
+    throw waitExpired(
+      `${stage} asks to wait ${ms} ms, which exceeds the remaining browser visit time. Shorten the wait or split the visit.`,
+    )
+  }
+  return sleep(ms, signal, time)
+}
 
 let said = (step: Step) => JSON.stringify(step).slice(0, 200)
 
@@ -236,22 +256,22 @@ let taken = async (
   page: Page,
   view: View,
   step: Step,
-  time: Clock,
+  find: (selector: string) => Promise<Element>,
   signal: AbortSignal,
 ) => {
   if ('tap' in step) {
-    let el = await shown(page, step.tap)
+    let el = await find(step.tap)
     signal.throwIfAborted()
     return view.touch ? el.tap() : el.click()
   }
   if ('type' in step) {
     if (!step.into) return page.keyboard.type(step.type)
-    let el = await shown(page, step.into)
+    let el = await find(step.into)
     signal.throwIfAborted()
     return el.type(step.type)
   }
   if ('clear' in step) {
-    let el = await shown(page, step.clear)
+    let el = await find(step.clear)
     signal.throwIfAborted()
     await el.focus()
     signal.throwIfAborted()
@@ -278,19 +298,38 @@ let taken = async (
     return page.touchscreen.touchEnd()
   }
   if ('keyboard' in step) return page.setViewport(viewport(view, step.keyboard))
-  if ('wait' in step) return sleep(step.wait, signal, time)
   throw new Error(`no such step: ${said(step)}`)
 }
 
 // The first element a selector names that shows: what a person sees to tap,
 // where a hidden one earlier in the page would take the press.
-let shown = async (page: Page, selector: string) => {
-  let el = await page.waitForSelector(selector, {
-    timeout: FIND,
-    visible: true,
-  })
-  if (!el) throw new Error(`nothing shown matches ${selector}`)
-  return el
+let missing = (step: string, selector: string) =>
+  waitExpired(`${step} waited for a visible element matching ${selector}.`)
+
+let shown = async (
+  page: Page,
+  selector: string,
+  step: string,
+  signal: AbortSignal,
+) => {
+  try {
+    let el = await page.waitForSelector(selector, {
+      timeout: FIND,
+      visible: true,
+      signal,
+    })
+    if (!el) throw missing(step, selector)
+    return el
+  } catch (e) {
+    // Puppeteer's WaitTask deadline, which waitForSelector wraps with context.
+    if (
+      e instanceof Error &&
+      e.message.includes(`Waiting failed: ${FIND}ms exceeded`)
+    ) {
+      throw missing(step, selector)
+    }
+    throw e
+  }
 }
 
 let viewport = (view: View, keyboard = 0) => ({
@@ -356,11 +395,13 @@ let closed = (e: unknown) => interruption(e) == 'target'
 
 let loaded = async (
   browser: Browser,
-  { url, view, cookies = [], steps = [], allow = [] }: Visit,
+  { url, view, cookies = [], steps = [], allow = [], audit }: Visit,
   ms: number,
   time: Clock,
 ): Promise<Loaded> => {
   let stage = 'opening the page'
+  let finding: { step: string; selector: string } | undefined
+  let deadline = time.now() + ms
   let loading = bounded(
     time,
     ms,
@@ -396,28 +437,61 @@ let loaded = async (
       try {
         status = (await page.goto(url, {
           waitUntil: 'domcontentloaded',
-          timeout: 10_000,
+          timeout: LOAD,
         }))?.status() ?? 0
       } catch (e) {
         if (closed(e)) throw e
+        if (
+          audit === false && e instanceof Error &&
+          e.message === `Navigation timeout of ${LOAD} ms exceeded`
+        ) {
+          throw waitExpired(
+            `The page did not reach DOMContentLoaded within ${
+              LOAD / 1000
+            } seconds.`,
+          )
+        }
         error(e)
       }
       signal.throwIfAborted()
       if (view.wait) {
         stage = 'waiting after the page loaded'
-        await sleep(view.wait, signal, time)
+        await pause(
+          view.wait,
+          'The post-load wait',
+          deadline - time.now(),
+          signal,
+          time,
+        )
       }
       let shots: Rendered['shots'] = []
       let shoot = () => page.screenshot({ type: 'png', encoding: 'base64' })
       for (let [i, step] of steps.entries()) {
         signal.throwIfAborted()
+        let at = `Step ${i + 1}`
         stage = `taking step ${i + 1}`
+        if ('wait' in step) {
+          stage += ` (waiting ${step.wait} ms)`
+          await pause(step.wait, at, deadline - time.now(), signal, time)
+          continue
+        }
+        if ('shot' in step) {
+          stage += ' (taking a screenshot)'
+          shots.push({ name: step.shot, image: await shoot() })
+          continue
+        }
         try {
-          if ('shot' in step) {
-            shots.push({ name: step.shot, image: await shoot() })
-          } else await taken(page, view, step, time, signal)
+          await taken(page, view, step, async (selector) => {
+            stage = `taking step ${i + 1} (waiting for a visible element)`
+            finding = { step: at, selector }
+            let el = await shown(page, selector, at, signal)
+            finding = undefined
+            stage = `taking step ${i + 1} (acting on the element)`
+            return el
+          }, signal)
         } catch (e) {
-          if (closed(e)) throw e
+          if (!signal.aborted) finding = undefined
+          if (e instanceof CallError || closed(e)) throw e
           error(new Error(`step ${i + 1} ${said(step)}: ${message(e)}`))
           break
         }
@@ -431,6 +505,9 @@ let loaded = async (
   try {
     return await loading
   } catch (e) {
+    if (finding && e instanceof BrowserTimeout) {
+      throw missing(finding.step, finding.selector)
+    }
     throw closed(e) ? new BrowserClosed(stage, e) : e
   }
 }
@@ -512,8 +589,13 @@ async (req: Request): Promise<Response> => {
       { hold, report },
     )
   } catch (e) {
-    result = { ...failure(e), duration }
-    status = result.timeout ? 504 : 500
+    if (e instanceof CallError) {
+      result = { failed: e.message, refusal: e.code, duration }
+      status = 400
+    } else {
+      result = { ...failure(e), duration }
+      status = result.timeout ? 504 : 500
+    }
   }
   return Response.json({ ...result, ...faults.length ? { faults } : {} }, {
     status,

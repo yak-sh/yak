@@ -24,6 +24,7 @@ import { sessionAt } from './session.ts'
 import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
 import { caught } from './defects.ts'
 import { system } from '@yaks/fp'
+import { CallError, refused } from '@yaks/tools/errors'
 import {
   allowed,
   bounded,
@@ -142,6 +143,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     if (visit instanceof Response) return visit
     return Response.json(await seen(env, visit, undefined, where))
   } catch (e) {
+    if (e instanceof CallError) return refused(e)
     caught(e, where)
     if (timedOut(e)) return json(504, 'browser_timeout', (e as Error).message)
     return json(502, 'browser_failed', (e as Error).message)

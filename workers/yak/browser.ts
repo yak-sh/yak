@@ -2,6 +2,7 @@
 // the Worker behind the BROWSER binding, so puppeteer and axe-core are never
 // in this Worker's script: every isolate compiles that, a page view's included.
 import { system } from '@yaks/fp'
+import { CallError } from '@yaks/tools/errors'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 import type { Checked } from '@yaks/platform/preview-audit'
@@ -71,7 +72,10 @@ export let seen = async (
   }
   let { faults = [], ...reply } = said
   for (let fault of faults) caught(relayed(fault), where)
-  if ('failed' in reply) throw relayed(reply)
+  if ('failed' in reply) {
+    if (reply.refusal) throw new CallError(reply.refusal, reply.failed)
+    throw relayed(reply)
+  }
   if (reply.accessibility && 'failed' in reply.accessibility) {
     caught(new Error(reply.accessibility.failed), {
       request: 'app_preview accessibility',
