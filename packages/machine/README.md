@@ -120,9 +120,10 @@ equal(await workspace.receipt!(mint()), undefined)
 ## Room
 
 `@yaks/machine/room` says whether a machine has room for one more run.
-`room(transport)` reads `/proc/meminfo` and `/proc/pressure/memory` in one
-control script, the same way on every computer, and `roomOf` turns that into the
-bytes available and the memory pressure (PSI `some avg10`).
+`room(transport)` reads memory pressure (PSI `some avg10`) from the cgroup mount
+root or `/proc/pressure/memory`, and available bytes from `/proc/meminfo`.
+Without `MemAvailable`, `roomOf` estimates from free memory and cache, or from
+the cgroup limit and usage when meminfo reports only the total.
 `admitter(read, need)` answers, one call at a time, whether a run may start now:
 while the pressure is under `need.pressure` and the memory available, less what
 runs admitted in the last `need.settle` ms were reserved, covers `need.memory`.

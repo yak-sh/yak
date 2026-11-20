@@ -7,8 +7,8 @@
 import type { ComputerTransport } from './workspace.ts'
 import { localConnector } from './connectors.ts'
 
-/** What a machine has room for: the bytes it could give without swapping
- * (`MemAvailable`), and the share of the last ten seconds some task waited
+/** What a machine has room for: the bytes it could give without swapping,
+ * and the share of the last ten seconds some task waited
  * for memory (PSI `some avg10`, a percentage). */
 export type Room = { available: number; pressure: number }
 
@@ -27,18 +27,49 @@ export type Need = {
  * (T-1463): its test run, not its agent. It reaches that within minutes. */
 export let NEED: Need = { memory: 4 * 1024 ** 3, pressure: 10, settle: 300_000 }
 
-/** The control script a {@link room} runs. Linux only: both files are the
- * container's own under lxcfs and a cgroup namespace. */
-export let SCRIPT = 'cat /proc/meminfo /proc/pressure/memory'
+/** Read the machine's pressure, then its memory, in one control call. In a
+ * container the cgroup mount root covers the machine's work, including runs
+ * outside the caller's own service cgroup. */
+export let SCRIPT = `cgroup=/sys/fs/cgroup
+pressure=$(cat "$cgroup/memory.pressure" 2>/dev/null) || pressure=''
+case "$pressure" in
+  'some avg10='*) printf '%s\\n' "$pressure" ;;
+  *) cat /proc/pressure/memory || exit ;;
+esac
+if read -r limit 2>/dev/null <"$cgroup/memory.max" &&
+   read -r current 2>/dev/null <"$cgroup/memory.current"; then
+  printf 'CgroupMemory: %s %s\\n' "$limit" "$current"
+fi
+cat /proc/meminfo || exit`
+
+let mem = (text: string, field: string): number | undefined => {
+  let kb = text.match(new RegExp(`^${field}:[ \\t]+(\\d+) kB$`, 'm'))
+  if (kb) return Number(kb[1]) * 1024
+}
+
+let available = (text: string): number => {
+  let reported = mem(text, 'MemAvailable')
+  if (reported != null) return reported
+  let free = mem(text, 'MemFree')
+  if (free != null) {
+    let cache = (mem(text, 'Buffers') ?? 0) + (mem(text, 'Cached') ?? 0)
+    return free + Math.max(0, cache - (mem(text, 'Shmem') ?? 0))
+  }
+  let group = text.match(/^CgroupMemory: (max|\d+) (\d+)$/m)
+  let total = mem(text, 'MemTotal')
+  let limit = group && group[1] != 'max' ? Number(group[1]) : total
+  if (group && limit != null) return Math.max(0, limit - Number(group[2]))
+  if (total != null) return 0
+  throw new Error('Machine memory reading is missing')
+}
 
 /** Read a machine's room from what {@link SCRIPT} prints. */
 export let roomOf = (text: string): Room => {
-  let kb = text.match(/^MemAvailable:\s+(\d+) kB/m)
-  let some = text.match(/^some avg10=([\d.]+)/m)
-  if (!kb || !some) {
-    throw new Error(`no memory reading in: ${text.slice(0, 200)}`)
+  let some = text.match(/^some[ \t]+avg10=(\d+(?:\.\d+)?)(?:[ \t]|$)/m)
+  if (!some) {
+    throw new Error('Machine memory pressure (PSI some avg10) is missing')
   }
-  return { available: Number(kb[1]) * 1024, pressure: Number(some[1]) }
+  return { available: available(text), pressure: Number(some[1]) }
 }
 
 /** Read a computer's room through its transport. */
