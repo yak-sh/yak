@@ -147,11 +147,21 @@ bin/workspace-dependencies > "$run/dependencies.log" 2>&1 ||
 printf '%s' "$run"`
 
 /** The control script removing run `id` and its worktree, in the background:
- * a run's tree is hundreds of megabytes, and its caller need not wait. */
+ * a run's tree is hundreds of megabytes, and its caller need not wait. Deno
+ * keys its caches by a module's path, and every run's path is new, so the
+ * entries under it go too: its emitted files and its rows in the code and
+ * analysis caches, whose freed pages the next runs reuse. */
 export let tidy = (id: string) =>
   `${place(id)}
-setsid bash -c 'rm -rf -- "$1"; git -C "$2" worktree prune' tidy "$run" "$repo" \
-  </dev/null >/dev/null 2>&1 &`
+setsid bash -c '
+rm -rf -- "$1"; git -C "$2" worktree prune
+for dir in "$HOME"/.cache/deno*/; do
+  rm -rf -- "$dir/gen/file$1"
+  for db in v8_code_cache_v2:codecache dep_analysis_cache_v2:moduleinfocache; do
+    test -f "$dir/\${db%%:*}" && sqlite3 -cmd ".timeout 60000" "$dir/\${db%%:*}" \\
+      "DELETE FROM \${db#*:} WHERE specifier LIKE '"'"'file://$1/%'"'"'"
+  done
+done' tidy "$run" "$repo" </dev/null >/dev/null 2>&1 &`
 
 /// command(['deno', 'task', 'test', 'a b'], { A: '1' }) -> "A='1' exec 'deno' 'task' 'test' 'a b'"
 /** `argv` as one command line, with `env` set for it. */
