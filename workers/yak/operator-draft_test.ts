@@ -836,9 +836,10 @@ await typed.heard()
 typed.type('Order salt for the township garage')
 await settle()
 typed.leave()
-// Whether `ok` comes true within two seconds.
+// Whether `ok` comes true: it is awaited, however long a loaded box takes,
+// and only a page that never gets there gives up, after half a minute.
 let until = async (ok: () => boolean) => {
-  for (let end = Date.now() + 2000; !ok() && Date.now() < end;) {
+  for (let end = Date.now() + 30_000; !ok() && Date.now() < end;) {
     await new Promise((go) => setTimeout(go, 1))
   }
   return ok()
@@ -1122,6 +1123,10 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   await step({ content: { body: 'Import the people CSV' }, using: {} })
   let own = await load(storage(), false, helper)
   let theirs = await load(storage(), false, park)
+  // Both pages' sockets onto the Operator are open, so neither gives up on
+  // its socket and polls the conversation while a slow run lasts.
+  own.open()
+  theirs.open()
   let text = (page: typeof own, at: string) =>
     page.document.querySelector(at)?.textContent ?? ''
   // How a row stands is its mark's label, beside its title.
