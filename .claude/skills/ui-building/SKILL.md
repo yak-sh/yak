@@ -302,6 +302,22 @@ whose JSON carries the PNG in base64 (the plain output leaves the image out).
 The preview's sandbox answers no app door, so a screen that reads its rows
 through one shows empty there.
 
+## What a person reads and presses
+
+Jeff reviewed the Operator's pages on 2026-11-20 and asked, "please ensure these
+UX things are considered from now on" (M-28). Each rule carries what he said.
+
+1. **Links:** a link has short link text, never a bare URL, and an external one opens in a new tab. "why is he just pasting in the full url without any markdown link text? a mess."
+2. **Staying put:** an action never navigates away from where the person works; it acts in place, or in a modal or new tab, and shows its outcome there. "why would the approve link link me away from the conversation? it should be a modal or a new tab"
+3. **Plain words:** a confirmation, approval or result says in plain words what happens, to whom and where, never an HTTP method, path or raw id; every approval has Approve and Decline, and every failure says why and links back. "approvals should render as a button", "oh and it gets better i clicked approve and this"
+4. **Names over ids:** show the account's or person's name, never a raw id; Jeff flagged raw ids in his screenshots of the approval and connection pages.
+5. **Logos:** an integration is shown with its logo (M-23). "integrations should almost always show their logo"
+6. **Buttons:** a button looks like a button and says what it does in a word or two. "is this a button? what does it do?", "button is too wordy"
+7. **Folds:** a fold opens and closes, shows loading while it loads, and is never empty. "i can't collapse this and it looks oddly empty"
+8. **Work over workers:** show the work being done, live, in plain words; helpers and other internals are details you can open, never headline cards. "i want to see what's happening, i care less about *who* is doing it", "they are implementation details, not some huge event to highlight"
+9. **Labelled prose:** text about the thing in front of you (this connection, this request) is labelled apart from general text about a service. "it should be clear which prose is about the connect request and which is about discord"
+10. **Modal actions:** a modal's actions go in a small card at the top-right of the main pane, not in the title bar. "add a little floated top-right action-card: Disconnect, Reconnect, the two links from the bottom, etc"
+
 ## Looking at it
 
 A screen is done when it reads well to someone using it. There is no Chrome or
