@@ -12,6 +12,8 @@ import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
 import { listCommands, runCommand } from './declared.ts'
+import { apiCall, integrationOf } from './operator-integrations.ts'
+import { ESCALATING } from './operator-approvals.ts'
 import {
   eventBody,
   googleTools,
@@ -127,6 +129,18 @@ globalThis.fetch = (input, init) => {
         ],
       },
     ))
+  }
+  if (url.pathname.endsWith('/freeBusy')) {
+    return Promise.resolve(Response.json({
+      calendars: {
+        primary: {
+          busy: [{
+            start: '2026-11-10T14:00:00Z',
+            end: '2026-11-10T14:15:00Z',
+          }],
+        },
+      },
+    }))
   }
   if (url.pathname.endsWith('/calendarList/primary')) {
     return Promise.resolve(Response.json({ timeZone: 'America/Detroit' }))
@@ -261,8 +275,13 @@ test('connected from the page, each names its account, and the Operator uses bot
   )!
   assertStringIncludes(
     fork.instructions!,
-    '- Gmail: connected as jeff@example.com',
+    '- Gmail (gmail), as jeff@example.com: https://gmail.googleapis.com/gmail/v1, reference https://developers.google.com/workspace/gmail/api/reference/rest',
   )
+  assertStringIncludes(
+    fork.instructions!,
+    '- Google Calendar (google-calendar)',
+  )
+  assert(!fork.instructions!.includes('Gmail: not connected'))
   assertEquals(
     ['calendar_events', 'calendar_add', 'gmail_send', 'gmail_read'].map((n) =>
       names(fork).includes(n)
@@ -370,6 +389,47 @@ test('the same Google tools are in the pool of tools, at the connection that off
   })
   assertStringIncludes(out.text, 'Standup')
   assertEquals(out.heard, true)
+})
+
+test('an unusual read with no tool of its own, free/busy, is one api_call, and only writes wait for a tap', async () => {
+  let ctx = await operatorContext(env, { person }, space)
+  asked.length = 0
+  let said = await apiCall(env, ctx, space).run({
+    integration: 'google-calendar',
+    method: 'POST',
+    path: '/freeBusy',
+    body: {
+      timeMin: '2026-11-10T00:00:00Z',
+      timeMax: '2026-11-11T00:00:00Z',
+      items: [{ id: 'primary' }],
+    },
+  }, {} as never)
+  assertStringIncludes(String(said), '200\n{"calendars":{"primary":{"busy"')
+  let [busy] = to('/calendar/v3/freeBusy')
+  assertEquals(busy.headers.get('authorization'), 'Bearer A1')
+  assertEquals((await busy.json()).items, [{ id: 'primary' }])
+  let turn = {
+    known: () => Promise.resolve(false),
+    integration: integrationOf(env),
+  }
+  let waits = (args: Record<string, unknown>) =>
+    ESCALATING.api_call({ integration: 'google-calendar', ...args }, turn)
+  assertEquals(await waits({ method: 'POST', path: '/freeBusy' }), undefined)
+  assertEquals(await waits({ path: '/users/me/settings' }), undefined)
+  assertEquals(
+    await waits({ method: 'DELETE', path: '/calendars/primary/events/e1' }),
+    'Send DELETE /calendars/primary/events/e1 to your google-calendar',
+  )
+})
+
+test('api_call names what is connected when asked for what is not', async () => {
+  let ctx = await operatorContext(env, { person }, space)
+  let refused = await Promise.resolve(
+    apiCall(env, ctx, space).run({ integration: 'canva', path: '/designs' }),
+  ).then(() => '', (e: Error) => e.message)
+  assertStringIncludes(refused, 'canva is not connected for them.')
+  assertStringIncludes(refused, 'google-calendar')
+  assertStringIncludes(refused, 'gmail')
 })
 
 test('what Google is asked: an all-day event ends the next day, and a subject beyond ASCII is encoded', () => {

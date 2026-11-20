@@ -30,6 +30,7 @@ import discord from './discord.json' with { type: 'json' }
 import discordAccount from './discord-account.json' with { type: 'json' }
 import discordBot from './discord-bot.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
+import googleDrive from './google-drive.json' with { type: 'json' }
 import googleSearchConsole from './google-search-console.json' with {
   type: 'json',
 }
@@ -95,6 +96,10 @@ export type Integration = {
   broker?: { name: string; integration: string }
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
+  /** its API: the address its paths are under, its reference, and the calls
+   * that only read though their method is not GET (`POST /freeBusy`, `*` for
+   * one segment); none is reached at its first host */
+  api?: { base: string; docs?: string; reads?: string[] }
   /** what a person gives to connect a pasted-key one, when it is more than
    * one key; none is one key */
   fields?: Field[]
@@ -139,6 +144,7 @@ let SEEDS: Integration[] = [
   discordBot,
   gmail,
   googleCalendar,
+  googleDrive,
   googleSearchConsole,
   { ...openai, refresh_encoding: 'json' },
   { ...openrouter, answers: 'key' },

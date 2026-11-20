@@ -117,6 +117,32 @@
           },
           "description": "the API hosts a connection's credential may be sent to, and no others. None is sent nowhere: a custom key kept before anyone uses it, whose owner names its hosts once"
         },
+        "api": {
+          "type": "object",
+          "required": [
+            "base"
+          ],
+          "properties": {
+            "base": {
+              "type": "string",
+              "format": "uri",
+              "description": "the address its API's paths are under, on one of `hosts`: Google Calendar's https://www.googleapis.com/calendar/v3"
+            },
+            "docs": {
+              "type": "string",
+              "format": "uri",
+              "description": "the API's reference, which says every endpoint under `base`"
+            },
+            "reads": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the calls that only read though their method is not GET, each `METHOD /path` under `base`, `*` standing for one segment of the path: Calendar's `POST /freeBusy`. An agent makes these, and every GET, without a person's tap"
+            }
+          },
+          "description": "its API, for an agent calling it as a connection: where its paths are and where they are documented. None is reached at its first host"
+        },
         "fields": {
           "type": "array",
           "items": {

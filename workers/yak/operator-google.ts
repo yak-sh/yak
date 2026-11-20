@@ -5,8 +5,9 @@
 // address, for them. It calls Google itself, through the connection
 // (@yaks/connections `call`), never handing the token on.
 //
-// Each tool is offered only while its connection is connected. What is
-// connected, and where the person connects what is not, is said to the
+// Each tool is offered only while its connection is connected. Where the
+// person connects what is not (Drive too, which has no tool of its own and is
+// reached through `api_call`, operator-integrations.ts) is said to the
 // Operator on every ask (`googleTold`), so it offers to connect one when a
 // request needs it. Reading mail is offered only once the connection was
 // granted a scope that reads it (`READS`), or, for one that does not say, its
@@ -32,9 +33,10 @@ import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { caught } from './defects.ts'
 
-/** The integrations a person's calendar and mail connect through. */
+/** The integrations a person's calendar, mail and files connect through. */
 export let CALENDAR = 'google-calendar'
 export let GMAIL = 'gmail'
+export let DRIVE = 'google-drive'
 
 /** The Gmail scopes that change mail, drafting and labelling it; any one in
  * gmail's `scopes` offers `gmail_draft` and `gmail_label`. */
@@ -272,7 +274,7 @@ export let googleAccounts = (
     PLATFORM_STORE,
     `operator google ${ctx.person} ${space.eid}`,
     () =>
-      Promise.all([CALENDAR, GMAIL].map(async (name) => {
+      Promise.all([CALENDAR, GMAIL, DRIVE].map(async (name) => {
         // A sign-in finished at a broker is theirs from this ask on: the
         // connection is read beside it, and again only once one settled.
         let { read } = ctxOf(env).graph
@@ -361,9 +363,10 @@ export let connectionTools = async (
     ),
   )
 
-/** What the Operator is told of the person's Google accounts: each one
- * connected, and where they connect each that this deploy can connect and
- * they have not. */
+/** What the Operator is told of the person's Google accounts they have not
+ * connected: where they connect each this deploy can connect. Each one
+ * connected is said with every other service (operator-integrations.ts
+ * `integrationsTold`). */
 export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
   let accounts = await googleAccounts(env, ctx, space)
   let available = vaulted(env)
@@ -373,12 +376,7 @@ export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
     )
     : new Set<string>()
   let lines = accounts.flatMap(({ i, held }) => {
-    if (!i) return []
-    if (held) {
-      let account = str(comp(held, CONNECTION).account)
-      return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
-    }
-    if (!available.has(i.name)) return []
+    if (!i || held || !available.has(i.name)) return []
     return [
       `- ${titled(i)}: not connected. They connect it at ${
         addingAt(env, space.slug, i)
@@ -390,7 +388,7 @@ export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
     ]
   })
   return lines.length
-    ? `The person's own Google accounts, which you use for them as their assistant:\n${
+    ? `The person's own Google accounts they have not connected, which you would use for them as their assistant:\n${
       lines.join('\n')
     }\nWhen they ask for something one that is not connected would do, give them its link and say what it lets you do.`
     : ''

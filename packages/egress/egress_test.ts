@@ -20,6 +20,7 @@ import {
   need,
   registration,
   resolve,
+  seeds,
   USES,
 } from '@yaks/connections'
 import {
@@ -441,8 +442,7 @@ test(
         'https://accounts.google.com/o/oauth2/v2/auth',
         'yaks-google',
         'https://yaks.app/connections/callback',
-        'openid email https://www.googleapis.com/auth/calendar.events ' +
-        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+        seeds().find((i) => i.name == 'google-calendar')!.scopes!.join(' '),
         'offline',
         'consent',
         'S256',

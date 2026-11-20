@@ -4,7 +4,9 @@
   "tagline": "Your Canva designs: found, made, filled in and exported.",
   "site": "https://www.canva.com",
   "image": "https://app.nango.dev/images/template-logos/canva.svg",
-  "categories": ["design"],
+  "categories": [
+    "design"
+  ],
   "authorize": "https://www.canva.com/api/oauth/authorize",
   "token": "https://api.canva.com/rest/v1/oauth/token",
   "client": "canva",
@@ -17,7 +19,13 @@
     "brandtemplate:content:read",
     "asset:read"
   ],
-  "hosts": ["api.canva.com"],
+  "hosts": [
+    "api.canva.com"
+  ],
+  "api": {
+    "base": "https://api.canva.com/rest/v1",
+    "docs": "https://www.canva.dev/docs/connect/api-reference/"
+  },
   "userinfo": "https://api.canva.com/rest/v1/users/me/profile",
   "account": "profile.display_name"
 }

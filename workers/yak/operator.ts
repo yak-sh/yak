@@ -154,6 +154,11 @@ import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
+import {
+  apiCall,
+  integrationOf,
+  integrationsTold,
+} from './operator-integrations.ts'
 import { notification } from './operator-updates.ts'
 import {
   type Lending,
@@ -2220,6 +2225,7 @@ export let operating = (
       ...wakeTools(store),
       ...subscriptionTools(store, watching),
       escalationAnswer(store, ctx, space),
+      apiCall(env, ctx, space),
     ]
     // Any turn may report an odd request for a guest-tooled helper to look
     // into, but that helper itself.
@@ -2250,6 +2256,7 @@ export let operating = (
               return [...people.values()].map((k) => k.email)
             }),
             texted: !!confirm,
+            integration: integrationOf(env),
           },
         ))
         : tools
@@ -2540,15 +2547,17 @@ export let operating = (
             .join('\n\n'),
         )
       }
-      let [map, accounts, said] = await Promise.all([
+      let [map, connected, accounts, said] = await Promise.all([
         topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
+        integrationsTold(env, here, space),
         googleTold(env, here, space),
         servers,
       ])
       return reached(
         'instructions',
-        [map, told(ctx, space), self, accounts, said].filter(Boolean)
-          .join('\n\n'),
+        [map, told(ctx, space), self, connected, accounts, said].filter(
+          Boolean,
+        ).join('\n\n'),
       )
     },
     each: (_, session) => void (session && options.tell?.(session)),

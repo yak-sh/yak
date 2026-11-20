@@ -10,8 +10,7 @@
   "scopes": [
     "openid",
     "email",
-    "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+    "https://www.googleapis.com/auth/calendar"
   ],
   "params": {
     "access_type": "offline",
@@ -20,6 +19,13 @@
   "hosts": [
     "www.googleapis.com"
   ],
+  "api": {
+    "base": "https://www.googleapis.com/calendar/v3",
+    "docs": "https://developers.google.com/workspace/calendar/api/v3/reference",
+    "reads": [
+      "POST /freeBusy"
+    ]
+  },
   "testing": true,
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

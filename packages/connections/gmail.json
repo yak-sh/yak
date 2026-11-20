@@ -21,5 +21,9 @@
   "hosts": [
     "gmail.googleapis.com"
   ],
+  "api": {
+    "base": "https://gmail.googleapis.com/gmail/v1",
+    "docs": "https://developers.google.com/workspace/gmail/api/reference/rest"
+  },
   "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
 }

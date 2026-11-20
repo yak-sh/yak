@@ -1,0 +1,28 @@
+{
+  "name": "google-drive",
+  "title": "Google Drive",
+  "tagline": "Your Google Drive: its files and folders found, read, made and shared.",
+  "site": "https://drive.google.com",
+  "image": "https://app.nango.dev/images/template-logos/google-drive.svg",
+  "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
+  "token": "https://oauth2.googleapis.com/token",
+  "client": "google",
+  "scopes": [
+    "openid",
+    "email",
+    "https://www.googleapis.com/auth/drive"
+  ],
+  "params": {
+    "access_type": "offline",
+    "prompt": "consent"
+  },
+  "hosts": [
+    "www.googleapis.com"
+  ],
+  "api": {
+    "base": "https://www.googleapis.com/drive/v3",
+    "docs": "https://developers.google.com/workspace/drive/api/reference/rest/v3"
+  },
+  "testing": true,
+  "userinfo": "https://openidconnect.googleapis.com/v1/userinfo"
+}

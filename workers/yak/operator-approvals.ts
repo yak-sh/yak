@@ -2,8 +2,8 @@
 // every channel and whatever the turn has read. The turn keeps every tool.
 // A call of one that escalates (`ESCALATING`: mail to someone new, adding a
 // member or changing a role, granting access, connecting a service,
-// changing who the Operator answers to) writes the act as an
-// `operator_approval` row and asks "Do X?" with a link instead of running;
+// changing who the Operator answers to, a write through a service's API)
+// writes the act as an `operator_approval` row and asks "Do X?" with a link instead of running;
 // `approval_request` does the same for any act the Operator finds odd for
 // that person.
 //
@@ -44,6 +44,8 @@ import { opened, seal } from './lib/token.ts'
 import { refuse } from './tool.ts'
 import { held, home, page, send } from './pages.ts'
 import { sessionAt } from './session.ts'
+import { READING, reads } from './operator-integrations.ts'
+import type { Integration } from '@yaks/connections'
 
 /** How long a link to approve an act lives: a tap while the person is
  * still at their phone. */
@@ -59,9 +61,14 @@ let roleOf = (a: Args) => String(a.role ?? 'editor')
 export type Known = (address: string) => Promise<boolean>
 
 /** What a call's escalation turns on beside its arguments: the addresses
- * the Operator knows, and whether the turn's words came by a number alone
- * (`texted`), which anyone can show. */
-export type Turn = { known: Known; texted?: boolean }
+ * the Operator knows, whether the turn's words came by a number alone
+ * (`texted`), which anyone can show, and an integration by name, as the
+ * graph holds it. */
+export type Turn = {
+  known: Known
+  texted?: boolean
+  integration?: (name: string) => Promise<Integration | undefined>
+}
 
 /** What the Operator of a space knows: its members' addresses, and every one
  * it wrote to before, which a known address or a tap let through. */
@@ -106,6 +113,16 @@ export let ESCALATING: Record<
   gmail_send: async (a, { known }) => {
     let to = await strangers(known, a.to, a.cc)
     return to.length ? `Email ${to.join(', ')} from your Gmail` : undefined
+  },
+  // A call of a service's API that writes: what it does can't be told from
+  // its path, so every one waits (operator-integrations.ts `reads`).
+  api_call: async (a, { integration }) => {
+    let method = String(a.method ?? 'GET').toUpperCase()
+    let i = await integration?.(String(a.integration ?? ''))
+    let read = i ? reads(i, method, String(a.path ?? '')) : READING.has(method)
+    return read
+      ? undefined
+      : `Send ${method} ${a.path} to your ${a.integration}`
   },
   member_add: (a) =>
     `Add ${a.email} to ${a.app ? `the app ${a.app}` : 'the space'} as ${
