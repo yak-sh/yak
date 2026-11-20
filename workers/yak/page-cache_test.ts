@@ -4,7 +4,7 @@
 // tags a page carries, and the writes that owe them a purge
 // (facets/pages-graph.ts `owed`). The address Site serves from is apps.ts
 // `edged`; the booted kernel is not needed to decide what is kept.
-import { test } from '@yaks/testing'
+import { clock as testClock, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
@@ -152,7 +152,8 @@ test('a page the gateway answers from the edge starts its store', async () => {
         { ...app, store: 'ada/cookbook.abc123' },
       ),
   )
-  Object.assign(g.env, { STORE })
+  let time = testClock()
+  Object.assign(g.env, { STORE, CLOCK: time })
   let get = async (url?: string, init?: RequestInit) => {
     let held: Promise<void>[] = []
     await within(g.env, {}, () => g.get(url, init), undefined, {
@@ -164,6 +165,9 @@ test('a page the gateway answers from the edge starts its store', async () => {
   }
   let first = await get()
   assertEquals(first, [`ada/cookbook.abc123 ${WAKE}`])
+  // A store woken a moment ago is up: the next view wakes it no more.
+  assertEquals(await get(), [])
+  await time.advance(10_000)
   assertEquals(
     await get(undefined, { headers: { 'if-none-match': '"one"' } }),
     first,
