@@ -954,6 +954,32 @@ export let storeSchema = async (
   )
 }
 
+/** The words the app `space/app` borrows from its siblings (workers/yak/sweep.ts
+ * `using`): each to the slug of the app that homes it, with the app's access
+ * and each home's, whether it has a worker, and how many people hold a grant
+ * on it without a seat in its space. Read from the directory and the store's
+ * `uses`: no row, and no home's word list. An owner of the `yak` space is
+ * answered. */
+export let USES = '/api/uses'
+
+export type Uses = {
+  app: string
+  access: string
+  worker: boolean | null
+  grantees: number
+  uses: Record<string, string>
+  homes: Record<string, string | null>
+}
+
+export let usesIn = (session: string, at: string): Promise<Uses> => {
+  if (where(at).length != 2) {
+    throw new CallError('where', `name an app as space/app, not "${at}"`)
+  }
+  return said(
+    sent(apex(`${USES}?${new URLSearchParams({ app: at })}`), session),
+  )
+}
+
 /** Bundles applied to the app `space/app` names, as this account: created,
  * patched or deleted through the store's own rules and journal. `check`
  * rehearses it and keeps nothing. Answers the batch as applied. */

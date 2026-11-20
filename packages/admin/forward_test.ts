@@ -125,3 +125,8 @@ test('forwarding allows the directory graves door', async () => {
   let graves = request('https://yaks.app/api/graves?since=2026-10-20')
   equal((await handler(graves)).status, 200)
 })
+
+test("forwarding allows the door reading an app's uses", async () => {
+  let uses = request('https://yaks.app/api/uses?app=jeff%2Frecipes')
+  equal((await handler(uses)).status, 200)
+})

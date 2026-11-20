@@ -660,6 +660,66 @@
         "where"
       ]
     },
+    "admin_uses": {
+      "tool": true,
+      "surfaces": [
+        "cli"
+      ],
+      "noun": "admin",
+      "verb": "uses",
+      "title": "Read which words an app borrows, and from which sibling",
+      "description": "The words an app borrows from the apps beside it in its space, each to the slug of the app that homes it, with the app's access mode and each home's, whether its release built a worker (null where none recorded it), and how many people hold a grant on it without a seat in its space. Read from the directory and the store's declared uses: no row, and no home's word list. Read what an app borrows here; never query a store for a word to learn it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin uses jeff/recipes --as admin",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "description": "the app, as space/app"
+          },
+          "access": {
+            "type": "string",
+            "description": "the app's access mode: public, open or private"
+          },
+          "worker": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "whether its release built a worker; null where none recorded it"
+          },
+          "grantees": {
+            "type": "number",
+            "description": "how many people hold a grant on it without a seat in its space"
+          },
+          "uses": {
+            "type": "object",
+            "description": "each borrowed word, to the slug of the app that homes it"
+          },
+          "homes": {
+            "type": "object",
+            "description": "each home's slug, to its access mode (null where no such app stands)"
+          }
+        }
+      },
+      "input": {
+        "where": {
+          "type": "string",
+          "description": "the app, as space/app"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "where"
+      ],
+      "readOnly": true,
+      "openWorld": true,
+      "positional": [
+        "where"
+      ]
+    },
     "admin_apply": {
       "tool": true,
       "surfaces": [

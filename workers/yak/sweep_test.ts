@@ -519,3 +519,48 @@ test('the platform’s owner reads the directory’s graves, and what still tell
     403,
   )
 })
+
+test('the platform’s owner reads which words an app borrows, and from whom, and nobody else does', async () => {
+  let { scenario, door, dir } = await spaces()
+  await using _ = scenario
+  let { env } = scenario
+  let BO = 'a0000000-0000-4000-8000-0000000000b0'
+  let space = (await dir.space('ada'))!
+  await stamp(env, {
+    entities: [
+      { entity: { eid: BO }, person: {} },
+      {
+        entity: { eid: '$board' },
+        doc: { title: 'board' },
+        app: {
+          slug: 'board',
+          space: space.eid,
+          store: 'ada/board.abc123',
+          access: 'public',
+          worker: 'app-board',
+        },
+      },
+      { entity: { eid: '$bo' }, grant: { app: '$board', person: BO } },
+      { entity: { eid: '$ada' }, grant: { app: '$board', person: ADA } },
+    ],
+  })
+  let board = (await dir.app(space, 'board'))!
+  await appStore(env.STORE, space, board, env)('/uses', {
+    method: 'POST',
+    body: JSON.stringify({ note: 'notes' }),
+  }, KERNEL)
+  let ask = (who: string, app: string) =>
+    door(who, `?app=${app}`, 'GET', sweep.USES_PATH)
+  assertEquals((await ask(JEFF, 'ada/board')).body, {
+    app: 'ada/board',
+    access: 'public',
+    worker: true,
+    grantees: 1,
+    uses: { note: 'notes' },
+    homes: { notes: 'private' },
+  })
+  let notes = (await ask(JEFF, 'ada/notes')).body
+  assertEquals([notes.access, notes.uses, notes.homes], ['private', {}, {}])
+  assertEquals((await ask(JEFF, 'ada/nothing')).body.error.code, 'no_app')
+  assertEquals((await ask(ADA, 'ada/board')).status, 403)
+})

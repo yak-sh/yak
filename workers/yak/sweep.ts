@@ -27,6 +27,9 @@ import { door as confirmationDoor } from './confirm.ts'
 //                                           tombstones, each with what still
 //                                           tells of it (@yaks/platform/graves);
 //                                           `after` continues
+//   GET  /api/uses?app=<space>/<app>        the words that app borrows, each
+//                                           to the slug of its home, with
+//                                           its own and each home's access
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -37,7 +40,8 @@ import { door as confirmationDoor } from './confirm.ts'
 // page goes straight to the object, which answers only a
 // table its file holds.
 import * as dirPart from './directory.ts'
-import { directory, storeName } from './directory.ts'
+import { appStore, directory, storeName } from './directory.ts'
+import { mode } from '@yaks/member'
 import { GIT_STORE, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Swept } from '@yaks/platform/mover'
@@ -60,6 +64,7 @@ export let ACCOUNT_PATH = '/api/account'
 export let OPERATOR_PATH = '/api/operator-copy'
 export let STORE_COPY_PATH = '/api/store-copy'
 export let GRAVES_PATH = '/api/graves'
+export let USES_PATH = '/api/uses'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -328,6 +333,63 @@ let buried = async (req: Request, env: Env, who: Who): Promise<Response> => {
   }
 }
 
+// One app's wiring to its siblings: its store's `uses` slot, every word it
+// borrows to the slug of the app that homes it, beside its own access and
+// each home's, whether its release built a worker (null where none recorded
+// it), and how many people hold a grant on it without a seat in its space.
+// The directory and the declaration slot answer it, so no store is queried
+// for a word, and no row and no home's own words leave it.
+let using = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof dirOf>,
+  who: Who,
+): Promise<Response> => {
+  if (req.method != 'GET') {
+    return json(405, 'method_not_allowed', "read an app's uses")
+  }
+  let at = new URL(req.url).searchParams.get('app') ?? ''
+  let [s, a, ...rest] = at.split('/')
+  let space = s && a && !rest.length ? await dir.space(s) : null
+  let app = space ? await dir.app(space, a) : null
+  if (!space || !app) {
+    return json(404, 'no_app', `no app is ${at || '(nothing)'}`)
+  }
+  await audit(env, who, {
+    operation: 'uses',
+    space: space.eid,
+    target: app.eid,
+  })
+  let r = await appStore(env.STORE, space, app, env)('/uses', {}, KERNEL)
+  if (!r.ok) throw new Error(`${at} /uses: ${await r.text()}`)
+  let uses = await r.json() as Record<string, string>
+  let homes = Object.fromEntries(
+    await Promise.all(
+      [...new Set(Object.values(uses))].map(async (slug) => {
+        let home = await dir.app(space, slug)
+        return [slug, home ? mode(home.access) : null] as const
+      }),
+    ),
+  )
+  let { held } = await dir.people([space.eid])
+  let seated = new Set(
+    held.filter((h) => h.held == 'seat').map((h) => h.person),
+  )
+  let grantees = new Set(
+    held.filter((h) =>
+      h.held == 'grant' && h.on == app.eid && !seated.has(h.person)
+    ).map((h) => h.person),
+  ).size
+  return Response.json({
+    app: at,
+    access: mode(app.access),
+    worker: app.worker == null ? null : !!app.worker,
+    grantees,
+    uses,
+    homes,
+  }, { headers: { 'cache-control': 'private, no-store' } })
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
@@ -366,6 +428,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (new URL(req.url).pathname == GRAVES_PATH) {
     return buried(req, env, who)
+  }
+  if (new URL(req.url).pathname == USES_PATH) {
+    return using(req, env, dir, who)
   }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)

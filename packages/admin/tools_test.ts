@@ -377,6 +377,39 @@ test("an app's vocabulary is read from its store's vocab door, never probed for"
   }
 })
 
+test("what an app borrows is read from the platform's uses door", async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    let said = {
+      app: 'jeff/board',
+      access: 'public',
+      worker: false,
+      grantees: 0,
+      uses: { recipe: 'recipes' },
+      homes: { recipes: 'private' },
+    }
+    let urls: string[] = []
+    await answering(
+      (url) => (urls.push(String(url)), Response.json(said)),
+      async () => {
+        let read = readable(host.vocab)(
+          await ask('admin_uses', { where: 'jeff/board' }),
+        )
+        equal(structured(adminDoc.$defs!.admin_uses as Comp, read), said)
+        await assertRejects(
+          () => ask('admin_uses', { where: 'jeff' }),
+          CallError,
+          'name an app as space/app',
+        )
+      },
+    )
+    equal(urls, ['https://yaks.app/api/uses?app=jeff%2Fboard'])
+  } finally {
+    await host.close()
+  }
+})
+
 test('an unknown --as account is a refusal, not an exception', async () => {
   let { host, ask } = await box()
   try {

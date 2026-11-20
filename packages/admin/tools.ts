@@ -67,6 +67,7 @@ import {
   supportWaiting,
   tunnelNow,
   unlink,
+  usesIn,
   zone,
 } from './api.ts'
 import { deploys, git, type Login, rollback, table } from './deploys.ts'
@@ -708,6 +709,12 @@ export let runs = (
       let at = await acting(a)
       let doc = await storeSchema(at.bearer, String(a.where))
       return [valued(call, { result: doc })]
+    }),
+
+    admin_uses: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      return [valued(call, await usesIn(at.bearer, String(a.where)))]
     }),
 
     admin_apply: verb(async (call) => {
