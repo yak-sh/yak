@@ -148,11 +148,10 @@ export let renamed = async (k: Kernel) => {
     desk.headers.get('location'),
     `https://yaks.app/manage/${adacooks46}/settings?q=soup`,
   )
-  // An assistant still naming the space the old way is told where it went.
-  await assertRejects(
-    () => agent.tool('app_list', { space: ada46 }),
-    Error,
-    `moved to ${adacooks46}`,
+  // An assistant still naming the space the old way reaches it there.
+  assertStringIncludes(
+    await agent.tool('app_list', { space: ada46 }),
+    'garden',
   )
   // A letter to the old address still arrives, in the app's own store, and
   // a clone of the old remote finds the same repository.
@@ -272,6 +271,12 @@ export let renamed = async (k: Kernel) => {
     await titles(`${adakitchen46}.yaks.app`, them.cookie),
     ['Still'],
   )
+  // The name is his for a call too: hers no longer reaches her space.
+  assertStringIncludes(
+    await theirs.tool('app_list', { space: ada46 }),
+    'cookbook',
+  )
+  await assertRejects(() => agent.tool('app_list', { space: ada46 }))
   // Her history no longer holds the name, so no later move hands it back.
   assertEquals((await row(adakitchen46)).former?.slug ?? null, null)
   await assertRejects(
