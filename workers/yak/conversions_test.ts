@@ -5,7 +5,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { kernel, mailed, toldMeta, unique } from './probe.ts'
 import { conversionOf, COOKIE } from './arrival.ts'
 
-let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
+let BROWSER =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15'
 
 type Event = {
   event_name: string

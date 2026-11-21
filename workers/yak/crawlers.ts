@@ -21,6 +21,17 @@ let AGENTS =
 let BOTS =
   /bot|spider|crawler|crawl|slurp|curl|wget|python-requests|go-http-client|okhttp|libwww|httpclient|monitor|uptime|headlesschrome|phantomjs|scrapy|feedfetcher|preview|facebookexternalhit|embedly|pingdom|^deno\/|^node$|^bun\/|undici|node-fetch|axios/i
 
+// The shape every browser's user agent has: `Mozilla/5.0`, its platform in
+// parentheses, then its engine and the engine's version (Chrome, Edge, Safari
+// and every in-app browser say `AppleWebKit/…`, Firefox `Gecko/…`). A scanner
+// that borrows a browser's words seldom borrows the shape: `Mozilla/5.0
+// (compatible; …)`, `Mozilla/5.0 (l9scan/…; +https://leakix.net)`, a bare
+// `Mozilla/5.0`, `Mozilla/5.0 (Macintosh) AppleWebKit Safari` or a greeting.
+// Over yaks.app's home page visits from 2026-11-07 to 11-21 every one without
+// it that BOTS let through, 187 of 871, was one Cloudflare rates automated,
+// and no request it rates a likely human lacked it (T-2299).
+let BROWSER = /^Mozilla\/5\.0 \([^)]+\) (AppleWebKit|Gecko)\/\d/
+
 // Networks whose every request is a machine's, whatever browser it names: an
 // ad network fetching and rendering an ad's landing page to review it, minutes
 // after the ad is made and before anyone has seen it, says it is Chrome. By
@@ -41,8 +52,9 @@ let crawls = (cf: Visited['cf']) =>
 
 /**
  * What kind of client asked, in one word: `browser`, `agent` or `bot` — the
- * only thing kept of its user-agent string and its network. An absent UA is a
- * script rather than a person: every browser sends one.
+ * only thing kept of its user-agent string and its network. An absent UA, or
+ * one without a browser's shape, is a script or a scanner rather than a
+ * person: every browser sends one, and alike.
  */
 export let classed = (req: Request): string => {
   let ua = req.headers.get('user-agent')
@@ -50,7 +62,7 @@ export let classed = (req: Request): string => {
     ? 'bot'
     : AGENTS.test(ua)
     ? 'agent'
-    : BOTS.test(ua) || crawls((req as Visited).cf)
+    : BOTS.test(ua) || !BROWSER.test(ua) || crawls((req as Visited).cf)
     ? 'bot'
     : 'browser'
 }

@@ -441,7 +441,10 @@ test("a stranger's sign-in card comes from Site and keeps the ad's arrival", asy
     })
   )
   let res = await f.go('https://yaks.app/login?utm_source=meta&fbclid=Ab1', {
-    headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit Safari' },
+    headers: {
+      'user-agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+    },
   })
   assertEquals(await res.text(), 'card')
   assertEquals(f.asked, ['https://site.invalid/yaks.app/login'])
@@ -457,7 +460,10 @@ test("a listing an ad's click opened keeps its arrival and hands the kernel the 
   let home = () =>
     new Response('home', { headers: { 'content-type': 'text/html' } })
   let f = front(home)
-  let ua = { 'user-agent': 'Mozilla/5.0 (Macintosh) AppleWebKit Safari' }
+  let ua = {
+    'user-agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+  }
   let res = await f.go('https://yaks.app/?fbclid=Ab1&utm_source=meta', {
     headers: ua,
   })

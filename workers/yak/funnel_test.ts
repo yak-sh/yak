@@ -20,7 +20,8 @@ import type { Env } from './env.ts'
 import { connector, kernel, mailed, signIn, unique } from './probe.ts'
 import { ADMIN, DEMO } from '@yaks/platform/bots'
 
-let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
+let BROWSER =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15'
 let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
   Object.assign(
     new Request(`https://yaks.app${path}`, {

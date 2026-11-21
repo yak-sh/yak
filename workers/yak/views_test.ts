@@ -82,6 +82,19 @@ test('classed: an assistant, a crawler, a person, a script', () => {
       'Deno/2.5.6',
       'node',
       'Bun/1.3.1',
+      // What the funnel counted as people's until T-2299: scanners and the
+      // fleet's own checks, in words a browser uses but not in its shape.
+      'Mozilla/5.0 (compatible; CMS-Checker/1.0; +https://example.com)',
+      'Mozilla/5.0 (l9scan/2.0.039313e213e26323e2430313; +https://leakix.net)',
+      'Hello from Palo Alto Networks, find out more about our scans in ' +
+      'https://docs-cortex.paloaltonetworks.com/r/1/Cortex-Xpanse/Scanning-activity',
+      'Mozilla/5.0 (compatible)',
+      'Mozilla/5.0',
+      'Mozilla/5.0 (Macintosh) AppleWebKit Safari',
+      'Mozilla/5.0 agent-check',
+      'yaks-agent-check/1.0 (T-154822)',
+      'site-check',
+      'Google-Lens',
     ]
   ) assertEquals(classed(asked(ua)), 'bot', ua)
 
@@ -91,6 +104,10 @@ test('classed: an assistant, a crawler, a person, a script', () => {
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 ' +
       '(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
       'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 27_2_1 like Mac OS X) AppleWebKit/605.1.15 ' +
+      '(KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/530.0.0.0]',
+      'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36',
     ]
   ) assertEquals(classed(asked(ua)), 'browser', ua)
 
