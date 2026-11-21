@@ -34,7 +34,8 @@
 // then, with the button beside him.
 {
   let slot = document.querySelector('.Hello_Yak')
-  let after = document.querySelector('.Yours')
+  let after = document.querySelector('.Sky_End, .Yours')
+  let moonAt = document.querySelector('[data-moon-at]')
   let sky = document.querySelector('.Sky')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let dark = matchMedia('(prefers-color-scheme: dark)')
@@ -48,6 +49,8 @@
 
   let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])]
   let deep = sky?.querySelector('.Sky_Deep')
+  let luna = sky?.querySelector('.Sky_Luna')
+  let halo = sky?.querySelector('.Sky_Halo')
   let u = 1, feet = 1
   // how far the layer `el` is in has sunk, in his units
   let sunk = (el) =>
@@ -64,7 +67,19 @@
     u = r.width / 128
     feet = Math.max(1, r.top + scrollY + r.height * .89 - sink * u)
     set('--u', u)
-    set('--x', r.left + scrollX + r.width * .52)
+    let x = r.left + scrollX + r.width * .52
+    set('--x', x)
+    if (luna && moonAt) {
+      let a = moonAt.getBoundingClientRect()
+      let cx = Number(halo.getAttribute('cx')),
+        cy = Number(halo.getAttribute('cy'))
+      luna.setAttribute(
+        'transform',
+        `translate(${n1((a.right + scrollX - x) / u - cx)} ${
+          n1((a.top + scrollY + a.height / 2 - feet) / u - cy)
+        })`,
+      )
+    }
     set('--feet', feet)
     set('--rule', n.top + scrollY + 1)
     set('--rule2', n.bottom + scrollY - .5)
@@ -276,8 +291,12 @@
   // touch within a finger's width of either counts
   let sun = sky?.querySelector('.Sky_Sun')
   let moon = sky?.querySelector('.Sky_Moon')
-  let halo = sky?.querySelector('.Sky_Halo')
   let near = (el, r, px, py) => {
+    if (el === halo && moonAt) {
+      let a = moonAt.getBoundingClientRect()
+      return Math.hypot(px - a.right, py - a.top - a.height / 2) <=
+        Math.max(r * u * 1.4, 22)
+    }
     let [x, y, k] = circle(el)
     return Math.hypot(px - x, py - y) <= Math.max(r * k * 1.4, 22)
   }

@@ -64,11 +64,9 @@ let NAMING = /\b(src|href)=(["'])\/?([\w.-]+)\2/g
  * reporter already (`links`). */
 export let sheeted = (html: string, env: Host, names = NAMES) =>
   html.replace(
-    /<link rel="stylesheet" href="style\.css"\s*\/?>/,
-    () =>
-      `${
-        links(env, 'style.css', names, undefined, WOVEN.test(html))
-      }\n${island}`,
+    /<link rel="stylesheet" href="([\w-]+\.css)"\s*\/?>/,
+    (_, sheet: string) =>
+      `${links(env, sheet, names, undefined, WOVEN.test(html))}\n${island}`,
   ).replace(
     /<a class="[^"]*\bNav_SignIn\b[^"]*"[^>]*>Sign in<\/a>/,
     (a) => a + signedIn,

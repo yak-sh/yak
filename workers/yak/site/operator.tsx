@@ -15,7 +15,7 @@ import { attr, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 import { Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
-import { Sky, Walk } from './sky.tsx'
+import { Sky, Walk } from '@yaks/platform/home/sky'
 import type { VNode } from 'preact'
 
 type By = 'text' | 'email'

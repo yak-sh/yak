@@ -49,10 +49,11 @@ let words = (field: string, page: string, value: string) =>
     : { content: value }
 
 let Head = (
-  { page, path, robots, children }: {
+  { page, path, robots, sheet = 'style.css', children }: {
     page: string
     path: string
     robots?: string
+    sheet?: string
     children?: ComponentChildren
   },
 ) => (
@@ -74,7 +75,7 @@ let Head = (
     <meta property='og:locale' content='en_US' />
     <meta name='twitter:image:alt' {...attr('content', 'frame.alt')} />
     <link rel='apple-touch-icon' href='apple-touch-icon.png' />
-    <link rel='stylesheet' href='style.css' />
+    <link rel='stylesheet' href={sheet} />
     <script src='idle.js' defer />
     <script src='away.js' defer />
     {children}
@@ -165,27 +166,31 @@ export let Page = (
     head,
     before,
     after,
+    foot,
+    sheet,
     children,
   }: {
     copy: string
     path: string
     kind?: string
     robots?: string
+    sheet?: string
     head?: ComponentChildren
     before?: ComponentChildren
     after?: ComponentChildren
+    foot?: ComponentChildren
     children: ComponentChildren
   },
 ) => (
   <html lang='en'>
-    <Head page={copy} path={path} robots={robots}>
+    <Head page={copy} path={path} robots={robots} sheet={sheet}>
       {head}
     </Head>
     <body class={kind}>
       {before}
       <Top path={path} />
       <main class={kind ? 'Page' : 'Page Prose'}>{children}</main>
-      <Foot />
+      {foot ?? <Foot />}
       <script type='module' src='_dates.js' />
       {after}
     </body>

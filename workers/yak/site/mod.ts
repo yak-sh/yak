@@ -20,7 +20,7 @@ import { AcceptableUse } from './acceptable-use.tsx'
 import { Churches } from './churches.tsx'
 import { Cookies } from './cookies.tsx'
 import { Help } from './help.tsx'
-import { ASK, DESCRIBE, Home } from './home.tsx'
+import { DESCRIBE, Home, StoryHome } from './home.tsx'
 import { Operator } from './operator.tsx'
 import { Organizations } from './organizations.tsx'
 import { Pricing } from './pricing.tsx'
@@ -31,7 +31,7 @@ import { Townships } from './townships.tsx'
 
 /** Each page by the file it is served from. */
 export let PAGES: Record<string, FunctionComponent> = {
-  'index.html': () => h(Home, { pitch: ASK }),
+  'index.html': StoryHome,
   // The Operator's home page, asking for a number or, until one can be
   // texted, an email (site.ts `drawn`).
   'operator.html': () => h(Operator, { by: 'text' }),

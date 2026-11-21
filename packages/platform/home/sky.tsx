@@ -140,6 +140,41 @@ export const HILLS = [
   ['Near', roll({ seed: 57, base: -27, amp: 13, lens: [1500, 700] })],
 ] as const
 
+let LANDSCAPE = [
+  [
+    'Farthest',
+    roll({ seed: 51, base: -166, amp: 48, lens: [2300, 1200, 550] }),
+  ],
+  ['Farther', roll({ seed: 53, base: -106, amp: 37, lens: [1980, 960, 520] })],
+  ['Near', roll({ seed: 57, base: -48, amp: 22, lens: [1720, 800] })],
+] as const
+
+let Luna = () => (
+  <>
+    <circle
+      class='Sky_Halo'
+      fill='url(#Sky-halo)'
+      cx={MOON.x}
+      cy={MOON.y}
+      r='80'
+    />
+    <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
+      <path class='Sky_Moon' d={moon(PHASES[0])} />
+    </g>
+  </>
+)
+
+let HillPaints = () => (
+  <>
+    {LANDSCAPE.map(([name]) => (
+      <linearGradient id={`Sky-hill-${name}`} x2='0' y2='1'>
+        <stop class={`Sky_${name}Top`} />
+        <stop offset='1' class={`Sky_${name}Foot`} />
+      </linearGradient>
+    ))}
+  </>
+)
+
 // the night's stars, a few of them blinking, and its fireflies along the line
 let night = () => {
   let r = rand(404)
@@ -190,12 +225,14 @@ export let Walk = () => (
 
 /** The sky, laid behind the page from its top to the pencil line under the
  * hero. It is drawing only, so a screen reader passes over it. */
-export let Sky = () => {
+export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
   let { stars, flies } = night()
   let ground = under(G, 240)
+  let hills = landscape ? LANDSCAPE : HILLS
   return (
     <div
       class='Sky'
+      data-landscape={landscape ? '' : undefined}
       aria-hidden='true'
       data-sink={SINK}
       data-birds={BIRDS}
@@ -205,6 +242,7 @@ export let Sky = () => {
       <div class='Sky_Air' data-depth={DEPTH.dusk} />
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
+          {landscape && <HillPaints />}
           <radialGradient id='Sky-glow'>
             <stop offset='0' class='Sky_Glow0' />
             <stop offset='.35' class='Sky_Glow1' />
@@ -243,22 +281,19 @@ export let Sky = () => {
         </g>
         <g class='Sky_Night Sky_Deep' data-depth={DEPTH.night}>
           <g class='Sky_Stars'>{stars}</g>
-          <circle
-            class='Sky_Halo'
-            fill='url(#Sky-halo)'
-            cx={MOON.x}
-            cy={MOON.y}
-            r='80'
-          />
-          <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
-            <path class='Sky_Moon' d={moon(PHASES[0])} />
-          </g>
+          {!landscape && <Luna />}
         </g>
+        {landscape && (
+          <g class='Sky_Night Sky_Luna'>
+            <Luna />
+          </g>
+        )}
         <g class='Sky_Hills'>
-          {HILLS.map(([name, f]) => (
+          {hills.map(([name, f]) => (
             <path
               class={`Sky_${name}`}
               data-depth={DEPTH[name]}
+              style={landscape ? { fill: `url(#Sky-hill-${name})` } : undefined}
               d={under(f, 60)}
             />
           ))}

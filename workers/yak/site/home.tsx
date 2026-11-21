@@ -2,11 +2,12 @@
 import { keys, read } from '@yaks/copy'
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
+import { Story, StoryFooter } from '@yaks/platform/home'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
-import { Sky, Walk } from './sky.tsx'
+import { Sky, Walk } from '@yaks/platform/home/sky'
 import { BUILD, DEMO_AT, type Example, HOME } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
@@ -370,14 +371,6 @@ export type Pitch = {
   steps: string[]
 }
 
-/** The home page that asks what a visitor needs (variant.ts `ask`). */
-export let ASK: Pitch = {
-  copy: 'home',
-  apps: HOME,
-  does: ['build', 'online', 'share'],
-  steps: ['say', 'open', 'keep'],
-}
-
 /** The home page that leads with the app a visitor gets, and names the
  * Operator only once the app is in hand (variant.ts `describe`). */
 export let DESCRIBE: Pitch = {
@@ -396,6 +389,39 @@ let MADE = ['us', 'fixed', 'yours']
 // page's.
 let worded = ({ copy }: Pitch) => (rest: string) =>
   read(COPY, `${copy}.${rest}`) == null ? `home.${rest}` : `${copy}.${rest}`
+
+let yak = () => (
+  <div class='Hello_Yak' data-wander=''>
+    <Idle class='Wander_Image' base='.' />
+  </div>
+)
+
+/** The homepage keeps the shared frame, copy and plan cards. */
+export let StoryHome = () => (
+  <Page
+    copy='home'
+    path='/'
+    kind='Home Story_Page'
+    sheet='_home.css'
+    head={
+      <>
+        <script type='module' src='_home.js' />
+        <Walk />
+        <script src='cta.js' defer />
+        <Data of={data()} />
+      </>
+    }
+    before={<Sky landscape />}
+    foot={
+      <StoryFooter
+        copy={{ attr, text }}
+        yak={<Idle class='Yak Yak-small' base='.' />}
+      />
+    }
+  >
+    <Story copy={{ attr, text }} action={START} yak={yak()} plans={<Cost />} />
+  </Page>
+)
 
 export let Home = ({ pitch }: { pitch: Pitch }) => {
   let key = worded(pitch), yours = { yours: <Yours /> }
@@ -416,9 +442,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
     >
       <section class='Hello' aria-labelledby='hello'>
         <div class='Hello_Copy'>
-          <div class='Hello_Yak' data-wander=''>
-            <Idle class='Wander_Image' base='.' />
-          </div>
+          {yak()}
           <p class='Hello_Kicker' {...text(key('hello.kicker'))} />
           <h1 class='Title Title-hero' id='hello'>
             <label for='say' {...text(key('hello.title'))} />

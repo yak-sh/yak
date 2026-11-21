@@ -322,7 +322,7 @@ test('the frame is asked for on the body, above what it frames', () => {
     // A page that names a kind on its body is framed by that kind; one that
     // names none is prose in the reading column. .Prose is a voice, not a
     // frame, so it stays on what it dresses.
-    let kind = /<body class="(\w+)">/.exec(html)?.[1]
+    let kind = /<body class="([^"]+)">/.exec(html)?.[1]
     assertEquals(
       [...html.matchAll(/<main class="([^"]*)">/g)].map((m) => m[1]),
       [kind ? 'Page' : 'Page Prose'],
@@ -481,7 +481,25 @@ test('every footer link names a page that is there', () => {
     let foot = parsed(page).querySelector('body > footer')
       ?.outerHTML ?? ''
     assert(foot, `${page} has no footer`)
-    assertEquals(links(foot), FOOT, page)
+    if (page == 'index.html') {
+      assertEquals(links(foot), [
+        '/integrations',
+        '/gallery',
+        '/pricing',
+        '/login',
+        '/churches',
+        '/organizations',
+        '/townships',
+        '/help',
+        '/docs',
+        '/agent',
+        '/operator',
+        '/terms',
+        '/privacy',
+        '/acceptable-use',
+        '/cookies',
+      ])
+    } else assertEquals(links(foot), FOOT, page)
   }
 })
 
@@ -677,7 +695,6 @@ test('every public page hands a stranger sign-in, never /connect', () => {
     '/login',
     GET_PLAN,
     GET_PLAN,
-    '#say',
   ], 'a home-page door misses sign-in')
 })
 

@@ -20,6 +20,7 @@
 // keeps answering at its own address too, as pages already shipped name it.
 import { type Asset, plan, reading, write } from '@yaks/web/assets'
 import { halved } from '@yaks/ui'
+import { homeScript, homeStyle, skyScript } from '@yaks/platform/home/assets'
 import { kit } from './sheet-assets.ts'
 import { pageDocs } from './operator-words.ts'
 
@@ -43,6 +44,9 @@ export let ASSETS: Asset[] = [
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   { name: '_sort.js', bundle: here('./sort.ts') },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
+  { name: '_home.css', file: homeStyle, named: true },
+  { name: '_home.js', file: homeScript, named: true },
+  { name: 'sky.js', file: skyScript, named: true },
   ...['style.css', 'pages.css'].map((name) => ({ name, named: true })),
   ...[
     'report.js',
@@ -61,7 +65,6 @@ export let ASSETS: Asset[] = [
     'carousel.js',
     'walk.js',
     'wander.js',
-    'sky.js',
     'favicon-32.png',
     'apple-touch-icon.png',
   ].map((name) => ({ name, named: true })),

@@ -1,0 +1,673 @@
+@import url('style.css');
+
+.Story_Page {
+  --measure: 45rem;
+  --phone-width: 22rem;
+  --phone-height: clamp(15rem, calc(100svh - 18.5rem), 45rem);
+  --story-gap: clamp(2rem, 5vw, 7rem);
+  --sky-ink: light-dark(#374450, #e0e6f2);
+  --sky-accent: light-dark(#315342, #b8dbad);
+}
+
+.Story_Page .Top {
+  position: relative;
+  z-index: 2;
+}
+
+.Story_Page .Page {
+  padding-block-start: 0;
+}
+
+.Home_Story [hidden] {
+  display: none !important;
+}
+
+.Home_MoonSpace {
+  height: 3.6rem;
+  margin-inline-end: 2.1rem;
+}
+
+.Home_Desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.Home_Reading {
+  display: contents;
+}
+
+.Home_Story .Story_Hero {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+  color: var(--sky-ink);
+  text-align: start;
+}
+
+.Home_Story .Home_Words {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(1rem, 1.8vw, 1.65rem);
+  max-width: 42rem;
+}
+
+.Home_Story .Home_Words > * {
+  grid-column: 1;
+}
+
+.Home_Story .Title-hero {
+  --title-size: clamp(2.35rem, 3.9vw, 4.4rem);
+  text-wrap: balance;
+  color: light-dark(#293843, #f1f1f8);
+}
+
+.Home_Story .Hello_Kicker,
+.Home_Story .Home_Lead a,
+.Home_Works a {
+  color: var(--sky-accent);
+}
+
+.Home_Lead {
+  max-width: 34rem;
+  color: inherit;
+}
+
+.Home_Ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+  align-items: start;
+}
+
+.Home_Ask-hero {
+  max-width: 35rem;
+  align-items: end;
+}
+
+.Home_Field {
+  width: 100%;
+  --well: light-dark(#fafbff, #222e40);
+  --hollow: inset 0 1px 3px light-dark(#34446325, #0e152164);
+  --radius: .95rem;
+}
+
+.Home_Field::placeholder {
+  color: light-dark(#546176, #b2bece);
+}
+
+.Home_Build {
+  --radius: 1.5rem;
+  --control-pad-inline: 1rem;
+}
+
+.Home_Works {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem .7rem;
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.Home_Services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.Home_Services-short {
+  gap: .35rem;
+}
+
+.Home_Service {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: var(--small);
+  font-weight: 700;
+}
+
+.Home_Logo {
+  flex: none;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: .2rem;
+  border-radius: .5rem;
+  background: #fcfcff;
+  object-fit: contain;
+}
+
+.Home_Connection {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.Home_Connection .Home_Service {
+  padding: .25rem .6rem .25rem .25rem;
+  border: 1px solid var(--border);
+  border-radius: .65rem;
+}
+
+.Story_Hero .Hello_Yak {
+  justify-self: start;
+  margin: 0 0 -1.4rem -.5rem;
+}
+
+.Sky_End {
+  min-height: 2.2rem;
+}
+
+.Story_Page .Sky_FarthestTop {
+  stop-color: light-dark(#bbadba, #4d566f);
+}
+.Story_Page .Sky_FarthestFoot {
+  stop-color: light-dark(#9a8483, #4b3b49);
+}
+.Story_Page .Sky_FartherTop {
+  stop-color: light-dark(#a9b28a, #577057);
+}
+.Story_Page .Sky_FartherFoot {
+  stop-color: light-dark(#a38667, #544637);
+}
+.Story_Page .Sky_NearTop {
+  stop-color: light-dark(#9bb477, #465f3e);
+}
+.Story_Page .Sky_NearFoot {
+  stop-color: light-dark(#b79167, #574538);
+}
+.Story_Page .Sky_Turf0 {
+  stop-color: light-dark(#a8b878, #435c3d);
+}
+.Story_Page .Sky_Turf1 {
+  stop-color: light-dark(#bc9670, #624b37);
+  stop-opacity: 1;
+}
+.Story_Page .Sky_Ground {
+  opacity: .88;
+}
+
+.Story_Page .Sky_Grass {
+  mask-image: linear-gradient(#000 48%, transparent 100%);
+}
+
+.Story_Page .Home_Demo {
+  display: grid;
+  grid-row: 2;
+  grid-template-rows: auto 20rem auto auto;
+  align-content: start;
+  gap: .65rem;
+  width: min(100%, var(--phone-width));
+  justify-self: center;
+  margin-block: 1rem 2rem;
+  min-width: 0;
+}
+
+.Home_Demo .Home_Ask {
+  grid-row: 4;
+}
+
+.Home_DemoTitle {
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 800;
+  text-align: center;
+}
+
+.Story_Page .Home_Phone {
+  --radius: 2rem;
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: .8rem;
+  height: 20rem;
+  padding: 1.15rem .9rem 1rem;
+  border-radius: var(--radius);
+  background: light-dark(#f9f9ff, #262b37);
+}
+
+.Home_Phone::before {
+  content: '';
+  justify-self: center;
+  width: 4.7rem;
+  height: .32rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.Home_Log {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.Home_Track {
+  height: 100%;
+  overflow-y: auto;
+  overflow-anchor: none;
+}
+
+.Home_Messages {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: .65rem;
+  min-height: 100%;
+  margin: 0;
+  padding: .3rem .25rem .55rem;
+  list-style: none;
+}
+
+.Home_Track[aria-hidden='true'] {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: light-dark(#f9f9ff, #262b37);
+  pointer-events: none;
+}
+
+.Home_Message {
+  flex: none;
+  filter: saturate(var(--sat, 1));
+}
+
+.Home_Message .Chat_Bubble {
+  --mine: light-dark(#f6e2d3, #4b393b);
+  --theirs: light-dark(#e6eef8, #344257);
+  padding: .55rem .8rem;
+  font-size: var(--fine);
+  line-height: 1.48;
+  overflow-wrap: anywhere;
+}
+
+.Home_Shot {
+  display: block;
+  margin-block: .5rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: .6rem;
+}
+
+.Home_Image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.Home_Picks {
+  grid-row: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: .2rem;
+}
+
+.Story_Page .Home_Pick {
+  box-sizing: border-box;
+  min-height: 1.9rem;
+  padding: .15rem .48rem;
+  border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
+  border-radius: 1rem;
+  background: var(--card);
+  color: var(--muted);
+  font: 800 .79rem/1.15 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.Story_Page .Home_Pick:hover,
+.Story_Page .Home_Pick[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.Story_Page .Home_Pick[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+}
+
+.Story_Page .Home_Pause {
+  --control-height: 1.9rem;
+  min-width: 1.9rem;
+  text-decoration: none;
+}
+
+.Home_Contents {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  min-width: 0;
+  margin-inline: -.25rem;
+  padding: .6rem .25rem 1.35rem;
+  background: var(--bg);
+  mask-image: linear-gradient(#000 calc(100% - 1rem), transparent);
+}
+
+.Home_Jumps {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .25rem .25rem .45rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.Home_Jump {
+  flex: none;
+}
+
+.Home_JumpLink {
+  display: flex;
+  align-items: center;
+  gap: .38rem;
+  padding: .32rem .65rem;
+  border-radius: 2rem;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.Home_JumpLink:hover,
+.Home_JumpLink[aria-current='location'] {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.Home_Feature {
+  display: grid;
+  gap: 1.65rem;
+  min-height: clamp(24rem, 72svh, 41rem);
+  align-content: center;
+  padding-block: 2.5rem;
+  scroll-margin-top: 4rem;
+}
+
+.Home_FeatureWords,
+.Home_Detail,
+.Home_Details {
+  display: grid;
+  align-content: start;
+  gap: .8rem;
+}
+
+.Home_FeatureTitle {
+  display: flex;
+  align-items: start;
+  gap: .75rem;
+  font-size: clamp(1.5rem, 1rem + 1.2vw, 2.15rem);
+  line-height: 1.2;
+}
+
+.Home_Icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  margin-block-start: calc((1lh - 2.2rem) / 2);
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--card));
+}
+
+.Home_Icon .Icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.Home_FeatureList {
+  display: grid;
+  gap: .3rem;
+  list-style: disc;
+  padding-inline-start: 1.25rem;
+  color: var(--muted);
+  font-size: var(--fine);
+}
+
+.Home_Scene {
+  min-width: 0;
+}
+
+.Home_Mail,
+.Home_Payment {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid light-dark(#ced6e5, #4e596e);
+  border-radius: .9rem;
+  background: light-dark(#fbfcff, #282e3b);
+  font: .86rem/1.55 system-ui, sans-serif;
+  color: light-dark(#263249, #e6eaf3);
+}
+
+.Home_WindowBar {
+  padding: .65rem 1rem;
+  background: light-dark(#edf1f9, #384153);
+  font-weight: 750;
+}
+
+.Home_MailBody,
+.Home_Helper {
+  display: grid;
+  gap: .5rem;
+  padding: .85rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+.Home_MailFrom {
+  color: var(--muted);
+  font-size: var(--fine);
+}
+
+.Home_Attachment {
+  justify-self: start;
+  border-radius: .35rem;
+  background: light-dark(#e6ebf9, #3f4558);
+  padding: .18rem .45rem;
+}
+
+.Home_Checkout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: .65rem;
+}
+
+.Home_PaymentAction {
+  background: light-dark(#4e40cf, #a5a1fd);
+  color: light-dark(#fff, #17152a);
+  padding: .28rem .6rem;
+  border-radius: .35rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.Home_Order {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: .45rem;
+  padding-block: .25rem;
+}
+
+.Home_Address {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem .65rem;
+  overflow-wrap: anywhere;
+}
+
+.Home_Details {
+  gap: clamp(2.5rem, 5vw, 5rem);
+  padding-block: 3rem 1rem;
+}
+
+.Home_Question {
+  padding: .65rem 1rem;
+}
+
+.Home_Summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.Home_Question .Note {
+  margin-block-start: .45rem;
+}
+
+.Story_Page .Home_Join {
+  margin-block: 0;
+  text-align: start;
+}
+
+.Home_Foot {
+  padding: 2.5rem 0;
+  border-top: 1px solid var(--border);
+  text-align: start;
+}
+
+.Home_FootLinks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: 1.2rem 2rem;
+}
+
+.Home_FootTitle {
+  font-size: var(--fine);
+  margin-block-end: .45rem;
+}
+
+.Home_FootList {
+  display: grid;
+  gap: .4rem;
+}
+
+.Home_FootBy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  margin-block-start: 2rem;
+}
+
+.Home_FootBy .Yak {
+  margin: 0;
+}
+
+@media (min-width: 60rem) {
+  .Story_Page {
+    --measure: min(94rem, 78vw);
+    --phone-width: clamp(18rem, 25vw, 23rem);
+  }
+
+  .Home_Desk {
+    grid-template-columns: minmax(0, 1fr) var(--phone-width);
+    column-gap: var(--story-gap);
+  }
+
+  .Home_Reading {
+    display: grid;
+    min-width: 0;
+  }
+
+  .Home_MoonSpace {
+    margin-inline-end: max(-3.75rem, calc(2.65rem - 11vw));
+  }
+
+  .Home_Story .Home_Words {
+    padding-block-start: clamp(.5rem, 2vh, 1.6rem);
+    padding-block-end: clamp(3.5rem, 8vh, 6rem);
+  }
+
+  .Story_Hero .Hello_Yak {
+    position: absolute;
+    right: calc(100% + .85rem);
+    bottom: 1.3rem;
+    width: clamp(5.5rem, 9vw, 8rem);
+    margin: 0;
+  }
+
+  .Home_Story .Sky_End {
+    position: absolute;
+    inset: auto 0 0;
+    min-height: 0;
+  }
+
+  .Story_Page .Home_Demo {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-rows: auto var(--phone-height) auto auto;
+    position: sticky;
+    z-index: 1;
+    top: 1rem;
+    margin: 0;
+  }
+
+  .Story_Page .Home_Phone {
+    height: var(--phone-height);
+  }
+
+  .Home_Feature:has(.Home_Scene, .Home_Connection) {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    align-items: center;
+  }
+
+  .Home_Feature .Cost {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 59.99rem) {
+  .Home_Features,
+  .Home_Details {
+    min-width: 0;
+  }
+
+  .Home_Demo[data-mini] .Home_Phone {
+    position: fixed;
+    z-index: 3;
+    inset: auto 0 max(.5rem, env(safe-area-inset-bottom));
+    width: min(calc(100% - 1rem), 27rem);
+    height: auto;
+    max-height: min(9.5rem, 28svh);
+    margin-inline: auto;
+    padding: .45rem .6rem;
+    grid-template-rows: minmax(0, 1fr);
+    border-radius: 1.4rem;
+    box-shadow: 0 -.25rem 1.3rem #151b2832;
+  }
+
+  .Home_Demo[data-mini] .Home_Phone::before,
+  .Home_Demo[data-mini] .Home_Shot,
+  .Home_Demo[data-mini] .Home_Message:not([data-recent]) {
+    display: none;
+  }
+
+  .Home_Demo[data-mini] .Home_Track {
+    max-height: min(8.5rem, 24svh);
+  }
+
+  .Home_Demo[data-mini] .Home_Messages {
+    gap: .45rem;
+  }
+
+  .Home_Feature {
+    padding-block-end: clamp(3rem, 25svh, 10rem);
+  }
+}
+
+@media (max-width: 30rem) {
+  .Home_Ask-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .Home_Ask-hero .Home_Build {
+    justify-self: end;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .Home_Message {
+    transition: filter .45s ease;
+  }
+}

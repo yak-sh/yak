@@ -98,6 +98,9 @@ node_modules
 
 # The contents list of long pages, generated from @yaks/ui/contents.
 /workers/yak/public/_contents.js
+/workers/yak/public/_home.css
+/workers/yak/public/_home.js
+/workers/yak/public/sky.js
 
 /workers/yak/public/data.js
 /workers/yak/public/chart.js

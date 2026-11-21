@@ -385,7 +385,8 @@ export let READIES = [
  * as this version of it last passed, or has no reads kept of this version: a
  * test added to a file may read what its last version did not. Bundling them
  * is seconds a run whose files never read them need not wait. */
-export let MADE = /^workers\/yak\/public\/(?:_(?!headers$)|[^/]+\.html$)/
+export let MADE =
+  /^workers\/yak\/public\/(?:_(?!headers$)|sky\.js$|[^/]+\.html$)/
 
 /** The generated modules a source imports (check-types.ts `MADE`): a run
  * whose files import one, as the public client imports its parts, makes the

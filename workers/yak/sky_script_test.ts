@@ -7,13 +7,22 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { skyScript } from '@yaks/platform/home/assets'
 import { page as home } from './site/mod.ts'
-import { DEPTH, HILLS, MOON, moon, PHASES, SINK, SUN } from './site/sky.tsx'
+import {
+  DEPTH,
+  HILLS,
+  MOON,
+  moon,
+  PHASES,
+  SINK,
+  SUN,
+} from '@yaks/platform/home/sky'
 
 // The page Site keeps a home page's path in (site.ts `HOME`).
 let file = (path: string) =>
   path == '/' ? 'index.html' : `${path.slice(1)}.html`
-let code = await Deno.readTextFile(new URL('./public/sky.js', import.meta.url))
+let code = await Deno.readTextFile(skyScript)
 
 let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let { document, window } = parseHTML(home(file(path)))
@@ -34,6 +43,16 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     top: 0,
     width: 6000,
   })
+  let anchor = document.querySelector('[data-moon-at]')
+  let moonX = 1260, moonY = 105
+  if (anchor) {
+    anchor.getBoundingClientRect = () =>
+      ({
+        right: moonX,
+        top: moonY - 30 - scope.scrollY,
+        height: 60,
+      }) as DOMRect
+  }
   // the Start Free button is 97px across, and 46px with its words stacked
   Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
     get(this: HTMLElement) {
@@ -76,6 +95,10 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   // a touch at a point in his units, landing on `on` (the hero, by default)
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
+  let touchMoon = (target?: Element) =>
+    anchor
+      ? touch(moonX - 3000, moonY - 800 - scope.scrollY, target)
+      : touch(MOON.x, MOON.y + (calm ? 0 : scope.scrollY * DEPTH.night), target)
   // the wandering yak, sat down out in the margin at `left`, 72px across,
   // with the words beginning at `words`
   let sat = (left: number, words = 1440) => {
@@ -84,7 +107,7 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     on.sat({ target: yak, detail: words })
     return yak.querySelector('.Sign') as HTMLElement
   }
-  return { el, all, touch, moved, wait, watch, sat, on, scope }
+  return { el, all, touch, touchMoon, moved, wait, watch, sat, on, scope }
 }
 
 test('the line he sits on is set where his tail touches it', () => {
@@ -104,19 +127,19 @@ test('the home page and the describe page stand under the same sky', () => {
 })
 
 test('a touch on the moon turns it through its phases and back', () => {
-  let { el, touch } = sky({ dark: true })
+  let { el, touchMoon } = sky({ dark: true })
   let shapes = []
   for (let i = 0; i <= PHASES.length; i++) {
     shapes.push(el('.Sky_Moon').getAttribute('d'))
-    touch(MOON.x + 10, MOON.y)
+    touchMoon()
   }
   assertEquals(shapes, [...PHASES, PHASES[0]].map(moon))
 })
 
 test('a touch on words or a control is the page’s, not the sky’s', () => {
-  let { el, touch } = sky({ dark: true })
-  touch(MOON.x, MOON.y, el('.Hello_Kicker'))
-  touch(MOON.x, MOON.y, el('.Hello_Ask button'))
+  let { el, touchMoon } = sky({ dark: true })
+  touchMoon(el('.Hello_Kicker'))
+  touchMoon(el('.Hello form button'))
   assertEquals(el('.Sky_Moon').getAttribute('d'), moon(PHASES[0]))
 })
 
@@ -230,11 +253,13 @@ test('the sun and the moon answer a touch where they now show', () => {
   day.on.scroll({})
   day.touch(SUN.x, SUN.y + 100 * DEPTH.dusk)
   assertEquals(day.moved, ['Sky_Sun', 'Sky_Glow'])
-  let night = sky({ dark: true })
-  night.scope.scrollY = 300
-  night.on.scroll({})
-  night.touch(MOON.x, MOON.y + 300 * DEPTH.night)
-  assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+  for (let path of ['/', '/build']) {
+    let night = sky({ dark: true, path })
+    night.scope.scrollY = 300
+    night.on.scroll({})
+    night.touchMoon()
+    assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+  }
 })
 
 test('for less motion no layer sinks as the page scrolls', () => {
@@ -248,7 +273,7 @@ test('for less motion nothing in the sky moves, and the moon still turns', () =>
   day.watch()
   let night = sky({ dark: true, calm: true })
   night.touch(-200, -400)
-  night.touch(MOON.x, MOON.y)
+  night.touchMoon()
   night.wait()
   night.watch()
   assertEquals([...day.moved, ...night.moved], [])

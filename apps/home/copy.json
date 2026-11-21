@@ -32,9 +32,9 @@
     "hello": {
       "kicker": "Build, host and share web apps",
       "title": "Build your ideas by asking.",
-      "hint": "Type what you need, like “a potluck sign-up sheet”",
+      "hint": "Type what you need, like “Make me a menu for my market stall”",
       "go": "Build it",
-      "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 apps are free, and %{price} covers as many as you like. %{examples}",
+      "note": "Free to start, with no card. Your first 5 apps are free, and %{price} covers as many as you like. %{examples}.",
       "price": "$12 a month",
       "examples": "See examples"
     },
@@ -224,6 +224,139 @@
       "pro": {
         "name": "Pro",
         "offer": "For one space: twice the Plus plan's AI use, unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, email support, unlimited visitors, 50 GB of app data, 250 GB of photos and files, 10,000 emails a month, and a custom domain. Or $490 a year. A first subscription adds $100 of building credit."
+      }
+    },
+    "story": {
+      "lead": "Describe the app you need. An AI assistant builds it and puts it online. You can also build from Claude or ChatGPT.",
+      "prompt": "Make me an app that…",
+      "ask": "The app you would like",
+      "example": "Example conversation",
+      "works": "Works with",
+      "more": "See integrations",
+      "connections": "Browse all integrations",
+      "features": "Features on this page",
+      "assistant": {
+        "title": "Build from the assistant you already use.",
+        "body": "Paste %{agent} into Claude or ChatGPT to build, change and publish the same apps you use on yaks.app.",
+        "more": "Set up Claude or ChatGPT"
+      },
+      "faq": {
+        "title": "Common questions, answered.",
+        "code": {
+          "question": "Do I need to know how to code?",
+          "answer": "You describe what you need in your own words. The assistant writes the code and puts your app online. If you write code, you can read and change every file."
+        },
+        "access": {
+          "question": "Who can see what is in my app?",
+          "answer": "Choose who can open an app and who can change it. People you invite to a private app sign in with a code sent to their email."
+        },
+        "limits": {
+          "question": "What happens when I reach a limit?",
+          "answer": "Your apps and data stay. You may have to wait for room to add something, such as a new app or another email. Visitors can still open the apps you share."
+        },
+        "leave": {
+          "question": "What happens if I stop paying?",
+          "answer": "Your paid plan runs to the end of the period you paid for. Then your space returns to the free plan’s limits, and your apps and data stay."
+        },
+        "data": {
+          "question": "Can I take my data with me?",
+          "answer": "Ask for the data in an app as a spreadsheet, or delete the app whenever you like."
+        }
+      },
+      "footer": {
+        "label": "More from yaks.app",
+        "product": "yaks.app",
+        "audience": "Made for",
+        "help": "Help",
+        "company": "Company",
+        "links": {
+          "features": "Features",
+          "integrations": "Integrations",
+          "gallery": "Gallery",
+          "pricing": "Pricing",
+          "sign-in": "Sign in",
+          "churches": "Churches",
+          "organizations": "Organizations",
+          "townships": "Townships",
+          "help": "Help",
+          "docs": "Documentation",
+          "agent": "Claude and ChatGPT",
+          "operator": "Your assistant by text",
+          "terms": "Terms",
+          "privacy": "Privacy",
+          "acceptable-use": "Acceptable use",
+          "cookies": "Cookies"
+        }
+      },
+      "turn": {
+        "build": {
+          "short": "Build",
+          "heading": "Say what you need, and your app is built.",
+          "body": "Describe your app in plain words. An AI assistant builds your app while you watch and puts your app online at a web address of its own."
+        },
+        "change": {
+          "short": "Change",
+          "heading": "Change anything by asking.",
+          "body": "Ask for a new field, a photo on every item or another page. Your assistant makes the change, checks the result and puts the new version online.",
+          "point1": "Ask in chat, by email, or by text from your phone",
+          "point2": "Photos and files, up to 50 GB on the Plus plan",
+          "point3": "Earlier versions are kept, and going back never touches your data"
+        },
+        "connect": {
+          "short": "Integrations",
+          "heading": "Connect the services you already use.",
+          "body": "Apps can use Google Calendar, Google Sheets, Slack, Notion, QuickBooks and more. You sign in to the service once. yaks.app keeps the connection for the app.",
+          "point1": "Sign in on the service’s own page, with nothing to copy or paste",
+          "point2": "Each visitor can connect an account of their own",
+          "point3": "Remove a connection at any time, and your app stops using the service"
+        },
+        "send": {
+          "short": "Email out",
+          "heading": "Send email to your app’s users.",
+          "body": "Thank-yous, reminders, receipts and news go out from your app’s own address. Visitors can sign up for notices with only an email address, and every notice carries a one-click unsubscribe link.",
+          "point1": "Reminders on a schedule, like every Monday at 7 am",
+          "point2": "Notices to everyone who asked, like “Back in stock”",
+          "point3": "See pricing for the email allowance on each plan"
+        },
+        "receive": {
+          "short": "Email in",
+          "body": "Forward the bulletin, a booking or the week’s specials. An app can file the message with its attachments and show the news on its page.",
+          "point1": "An address like yourname.menu@yaks.app on every plan",
+          "point2": "Mail to your apps always arrives, even past the month’s email limit",
+          "point3": "Only you and your editors can read the mail",
+          "heading": "Every app has an email address."
+        },
+        "sell": {
+          "short": "Payments",
+          "heading": "Take payments with Stripe.",
+          "body": "On the Plus plan, your app can sell through Stripe, the payment company: orders, tickets, deposits and gifts, paid by card on Stripe’s own checkout page. The money goes to your Stripe account, and each buyer gets a receipt by email from your app.",
+          "point1": "Every order listed in your app, for you and your editors",
+          "point2": "Refunds and payouts handled in your own Stripe account",
+          "point3": "Buyers pay on Stripe’s checkout page"
+        },
+        "helper": {
+          "short": "AI helpers",
+          "heading": "An AI helper that answers your visitors.",
+          "body": "Give your app a helper that answers the questions visitors ask: the allergens on a menu, parking at the church, what’s on for Tuesday of the trip. The helper answers from what your app keeps.",
+          "point1": "AI use is included on every plan",
+          "point2": "You choose how much of your monthly AI budget visitors may spend",
+          "point3": "Each visitor has a daily limit, so no stranger spends the whole budget"
+        },
+        "team": {
+          "short": "People",
+          "heading": "Invite your app’s users, free.",
+          "body": "Members, editors and visitors cost nothing on any plan. Members of a private app sign in with a code sent to their email, so nobody makes or forgets a password, and everything a sign-up sheet, a shop or a directory needs is already built.",
+          "point1": "Invite members to one app or the whole space",
+          "point2": "Choose who can view and who can edit",
+          "point3": "Members use a sign-in code sent by email"
+        },
+        "domain": {
+          "short": "Plans",
+          "heading": "Your own domain, on the Plus plan.",
+          "body": "Your apps start at an address like yourname.yaks.app. The Plus and Pro plans let you use a domain you own for one app or for the whole space.",
+          "point1": "Add two settings at the company you bought the domain from, and yaks.app does the rest",
+          "point2": "Every app keeps the yourname.yaks.app address too"
+        }
       }
     }
   },
