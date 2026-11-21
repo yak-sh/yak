@@ -156,7 +156,7 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'An edge is an entity too',
     body: [
-      'An **edge** is an entity that ties one entity to another. It carries `edge{from, to}`, and a second component beside it says what the tie means. In the example, some work only a person can do, such as signing up with a payment processor, so that task is assigned to you. `--requires` writes an edge with `requires{}`: the checkout requires the sign-up.',
+      "An **edge** is an entity that ties one entity to another. It carries `edge{from, to}`, and a second component beside it says what the tie means. In the example, some work only a person can do, such as signing up with a payment processor, so that task is assigned to you, the graph's first person, U-1. `--requires` writes an edge with `requires{}`: the checkout requires the sign-up.",
       sh(
         '# A task only you can do, assigned to you',
         "yak task new 'Sign up for payments' --assignee U-1",
@@ -238,7 +238,7 @@ export let SECTIONS: Section[] = [
       'The checkout no longer waits on anything, so your agent finishes it.',
       mcp('task_update {"task": "T-3", "status": "done"}'),
       '### In a terminal',
-      'The tests fail on main, so you file the fix and give it to your agent.',
+      'The tests fail on main, so you file the fix and give it to your agent, which wears the persona N-1 (personas come two sections on).',
       sh("yak task new 'Fix the failing build' --assignee N-1"),
     ].join('\n\n'),
   },
@@ -317,7 +317,7 @@ export let SECTIONS: Section[] = [
         '- **No server needed.** A command opens the graph in its own process, runs one tool and exits.',
         '- **Every call is recorded.** A call from you and a call from an agent go through the same checks, rules and effects, and each is kept in the graph.',
         '- **`yak serve` answers HTTP.** The browse app at `/`, the tools for agents at `/mcp`, and `/query` and `/apply` for programs, on this machine only.',
-        '- **Your agents join it.** `yak hooks install` makes each Claude Code session an entity in the graph, told its claims when it starts. Any MCP client can call the tools at `/mcp`.',
+        '- **Your agents join it.** `yak hooks install` makes each Claude Code session an entity in the graph, told the tasks it holds when it starts. Any MCP client can call the tools at `/mcp`.',
         '- **Other graphs too.** `--config` opens the graph another config names, and `--host` calls the graph on another machine.',
       ].join('\n'),
     ),
@@ -344,7 +344,7 @@ export let SECTIONS: Section[] = [
     view: 'Setup',
     title: 'Get set up on yaks.app',
     body: part(
-      "Type your email address, and yaks.app's Operator writes to you. Its letter has a code and a link that signs you in. Reply to it, and the Operator sets you up: `yak` installed and signed in, yaks.app added to Claude or ChatGPT, and your first app online.",
+      "Type your email address, and the Operator, yaks.app's assistant, writes to you. Its letter has a code and a link that signs you in. Reply to it, and the Operator sets you up: `yak` installed and signed in, yaks.app added to Claude or ChatGPT, and your first app online.",
       "This is the one thing on this page that leaves the tab. What you type becomes a bundle in the graph here and goes through `apply()` like everything above; its effect then posts your address to the same sign-in yaks.app's own page uses. Nothing more is sent until you reply.",
     ),
   },
