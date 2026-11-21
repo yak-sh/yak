@@ -11,7 +11,7 @@
 // shooting stars, moves each layer up the window by less the farther back it
 // is as the page scrolls (DEPTH), and answers a touch on the sun, the moon
 // and the stars.
-import type { JSX } from 'preact'
+import type { ComponentChildren, JSX } from 'preact'
 
 /** How far the line he sits on is above the bottom of his hooves, in his
  * units: far enough that the tip of his tail touches it. */
@@ -149,6 +149,32 @@ let LANDSCAPE = [
   ['Near', roll({ seed: 57, base: -48, amp: 22, lens: [1720, 800] })],
 ] as const
 
+let Sol = (
+  { overHero, children }: { overHero?: boolean; children?: ComponentChildren },
+) => (
+  <>
+    <circle
+      class='Sky_Glow'
+      fill='url(#Sky-glow)'
+      cx={SUN.x}
+      cy={overHero ? SUN.y : 0}
+      r={overHero ? 84 : 230}
+    />
+    {children}
+    <circle class='Sky_Sun' cx={SUN.x} cy={SUN.y} r={overHero ? 27 : SUN.r} />
+  </>
+)
+
+let Drift = () => (
+  <g class='Sky_Drift'>
+    {wisp(-330, -214, 300, 11, true)}
+    {wisp(250, -128, 330, 12)}
+    {wisp(840, -186, 460, 15, true)}
+    {wisp(1160, -112, 380, 11)}
+    {wisp(-900, -150, 420, 13)}
+  </g>
+)
+
 let Luna = () => (
   <>
     <circle
@@ -263,22 +289,17 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
           </radialGradient>
         </defs>
         <g class='Sky_Day' data-depth={DEPTH.dusk}>
-          <circle
-            class='Sky_Glow'
-            fill='url(#Sky-glow)'
-            cx={SUN.x}
-            cy='0'
-            r='230'
-          />
-          <g class='Sky_Drift'>
-            {wisp(-330, -214, 300, 11, true)}
-            {wisp(250, -128, 330, 12)}
-            {wisp(840, -186, 460, 15, true)}
-            {wisp(1160, -112, 380, 11)}
-            {wisp(-900, -150, 420, 13)}
-          </g>
-          <circle class='Sky_Sun' cx={SUN.x} cy={SUN.y} r={SUN.r} />
+          {landscape ? <Drift /> : (
+            <Sol>
+              <Drift />
+            </Sol>
+          )}
         </g>
+        {landscape && (
+          <g class='Sky_Day Sky_Sol'>
+            <Sol overHero />
+          </g>
+        )}
         <g class='Sky_Night Sky_Deep' data-depth={DEPTH.night}>
           <g class='Sky_Stars'>{stars}</g>
           {!landscape && <Luna />}
@@ -310,7 +331,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
               x1='0'
               y1='-10'
               x2='0'
-              y2='190'
+              y2={landscape ? 80 : 190}
             >
               <stop offset='0' class='Sky_Turf0' />
               <stop offset='1' class='Sky_Turf1' />

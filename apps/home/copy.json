@@ -234,7 +234,35 @@
       "works": "Works with",
       "more": "See integrations",
       "connections": "Browse all integrations",
+      "change": {
+        "chat": {
+          "name": "In chat",
+          "note": "Ask here, in Claude or in ChatGPT."
+        },
+        "mail": {
+          "name": "By email",
+          "note": "Send your assistant the change and any files."
+        },
+        "text": {
+          "name": "By text",
+          "note": "Ask for a change from your phone."
+        }
+      },
+      "people": {
+        "roles": "Access to an app",
+        "owner": {
+          "name": "Owner",
+          "note": "Manage the app and who can open it."
+        },
+        "editor": { "name": "Editor", "note": "Change what the app keeps." },
+        "viewer": {
+          "name": "Viewer",
+          "note": "Open the app and see what’s shared."
+        }
+      },
       "features": "Features on this page",
+      "earlier": "Earlier features",
+      "later": "More features",
       "assistant": {
         "title": "Build from the assistant you already use.",
         "body": "Paste %{agent} into Claude or ChatGPT to build, change and publish the same apps you use on yaks.app.",
@@ -298,7 +326,6 @@
           "short": "Change",
           "heading": "Change anything by asking.",
           "body": "Ask for a new field, a photo on every item or another page. Your assistant makes the change, checks the result and puts the new version online.",
-          "point1": "Ask in chat, by email, or by text from your phone",
           "point2": "Photos and files, up to 50 GB on the Plus plan",
           "point3": "Earlier versions are kept, and going back never touches your data"
         },
@@ -347,7 +374,6 @@
           "heading": "Invite your app’s users, free.",
           "body": "Members, editors and visitors cost nothing on any plan. Members of a private app sign in with a code sent to their email, so nobody makes or forgets a password, and everything a sign-up sheet, a shop or a directory needs is already built.",
           "point1": "Invite members to one app or the whole space",
-          "point2": "Choose who can view and who can edit",
           "point3": "Members use a sign-in code sent by email"
         },
         "domain": {

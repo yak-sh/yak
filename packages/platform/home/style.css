@@ -7,6 +7,8 @@
   --story-gap: clamp(2rem, 5vw, 7rem);
   --sky-ink: light-dark(#374450, #e0e6f2);
   --sky-accent: light-dark(#315342, #b8dbad);
+  --hill-green: light-dark(#a0ac73, #566d47);
+  --hill-earth: light-dark(#d6c1ac, #544138);
 }
 
 .Story_Page .Top {
@@ -22,9 +24,23 @@
   display: none !important;
 }
 
-.Home_MoonSpace {
+.Home_SkySpace {
+  position: relative;
   height: 3.6rem;
-  margin-inline-end: 2.1rem;
+}
+
+.Home_MoonSlot,
+.Home_SunSlot {
+  position: absolute;
+  inset-block: 0;
+}
+
+.Home_MoonSlot {
+  inset-inline-end: 2.1rem;
+}
+
+.Home_SunSlot {
+  inset-inline-start: 54%;
 }
 
 .Home_Desk {
@@ -158,32 +174,36 @@
 }
 
 .Story_Page .Sky_FarthestTop {
-  stop-color: light-dark(#bbadba, #4d566f);
+  stop-color: light-dark(#c9b5cf, #4b526f);
 }
-.Story_Page .Sky_FarthestFoot {
-  stop-color: light-dark(#9a8483, #4b3b49);
-}
-.Story_Page .Sky_FartherTop {
-  stop-color: light-dark(#a9b28a, #577057);
-}
-.Story_Page .Sky_FartherFoot {
-  stop-color: light-dark(#a38667, #544637);
-}
-.Story_Page .Sky_NearTop {
-  stop-color: light-dark(#9bb477, #465f3e);
-}
-.Story_Page .Sky_NearFoot {
-  stop-color: light-dark(#b79167, #574538);
-}
-.Story_Page .Sky_Turf0 {
-  stop-color: light-dark(#a8b878, #435c3d);
-}
+
+.Story_Page .Sky_FarthestFoot,
 .Story_Page .Sky_Turf1 {
-  stop-color: light-dark(#bc9670, #624b37);
-  stop-opacity: 1;
+  stop-color: var(--bg);
 }
-.Story_Page .Sky_Ground {
-  opacity: .88;
+
+.Story_Page .Sky_FartherTop {
+  stop-color: color-mix(in srgb, var(--hill-green) 14%, var(--hill-earth));
+}
+
+.Story_Page .Sky_FartherFoot {
+  stop-color: var(--hill-earth);
+}
+
+.Story_Page .Sky_NearTop {
+  stop-color: color-mix(in srgb, var(--hill-green) 57%, var(--hill-earth));
+}
+
+.Story_Page .Sky_NearFoot {
+  stop-color: color-mix(in srgb, var(--hill-green) 28%, var(--hill-earth));
+}
+
+.Story_Page .Sky_Turf0 {
+  stop-color: var(--hill-green);
+}
+
+.Story_Page .Sky_Turf1 {
+  stop-opacity: 1;
 }
 
 .Story_Page .Sky_Far {
@@ -197,6 +217,7 @@
 .Story_Page .Home_Demo {
   display: grid;
   grid-area: demo;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 20rem auto auto;
   align-content: start;
   gap: .65rem;
@@ -341,13 +362,26 @@
   z-index: 2;
   top: 0;
   min-width: 0;
-  margin-inline: -.25rem;
-  padding: .6rem .25rem 1.35rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .3rem;
+  padding-block: .45rem .65rem;
   background: var(--bg);
-  mask-image: linear-gradient(#000 calc(100% - 1rem), transparent);
+}
+
+.Home_Contents::after {
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: .65rem;
+  background: linear-gradient(var(--bg), transparent);
+  pointer-events: none;
 }
 
 .Home_Jumps {
+  --earlier: 0px;
+  --later: 0px;
   position: relative;
   display: flex;
   align-items: center;
@@ -355,6 +389,31 @@
   padding: .25rem .25rem .45rem;
   overflow-x: auto;
   scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+  mask-image: linear-gradient(to right, transparent, #000 var(--earlier), #000
+    calc(100% - var(--later)), transparent);
+}
+
+.Home_Jumps[data-earlier] {
+  --earlier: .6rem;
+}
+
+.Home_Jumps[data-later] {
+  --later: .6rem;
+}
+
+.Home_NavControls {
+  display: flex;
+  gap: .15rem;
+  padding-inline-start: .28rem;
+  border-inline-start: 1px solid var(--border);
+}
+
+.Story_Page .Home_NavButton {
+  --control-height: 2rem;
+  min-width: 1.55rem;
+  font-size: 1.45rem;
+  text-decoration: none;
 }
 
 .Home_Jump {
@@ -381,15 +440,22 @@
 
 .Home_Features {
   grid-area: features;
+  display: grid;
+  gap: clamp(2.35rem, 4vw, 4.5rem);
+  padding-block-start: clamp(1.5rem, 3vw, 2.75rem);
+  container-type: inline-size;
 }
 
 .Home_Feature {
   display: grid;
-  gap: 1.65rem;
-  min-height: clamp(24rem, 72svh, 41rem);
-  align-content: center;
-  padding-block: 2.5rem;
-  scroll-margin-top: 4rem;
+  gap: .9rem clamp(1rem, 2.1vw, 2rem);
+  align-items: start;
+  scroll-margin-top: 5rem;
+}
+
+.Home_Feature + .Home_Feature {
+  padding-block-start: clamp(1.75rem, 3vw, 3rem);
+  border-block-start: 1px solid var(--border);
 }
 
 .Home_FeatureWords,
@@ -401,6 +467,7 @@
 }
 
 .Home_FeatureTitle {
+  grid-column: 1 / -1;
   display: flex;
   align-items: start;
   gap: .75rem;
@@ -432,6 +499,30 @@
   padding-inline-start: 1.25rem;
   color: var(--muted);
   font-size: var(--fine);
+}
+
+.Home_Illustration {
+  display: grid;
+  gap: .55rem;
+}
+
+.Home_IllustrationRows {
+  display: grid;
+  gap: .55rem;
+}
+
+.Home_IllustrationRow {
+  display: flex;
+  align-items: start;
+  gap: .65rem;
+}
+
+.Home_IllustrationRow .Icon {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-block-start: .2rem;
+  color: var(--accent);
 }
 
 .Home_Scene {
@@ -575,8 +666,8 @@
     column-gap: var(--story-gap);
   }
 
-  .Home_MoonSpace {
-    margin-inline-end: max(-3.75rem, calc(2.65rem - 11vw));
+  .Home_MoonSlot {
+    inset-inline-end: max(-3.75rem, calc(2.65rem - 11vw));
   }
 
   .Home_Story .Home_Words {
@@ -609,10 +700,11 @@
   .Story_Page .Home_Phone {
     height: var(--phone-height);
   }
+}
 
-  .Home_Feature:has(.Home_Scene, .Home_Connection) {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-    align-items: center;
+@container (min-width: 33rem) {
+  .Home_Feature {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 
   .Home_Feature .Cost {
@@ -652,10 +744,6 @@
 
   .Home_Demo[data-mini] .Home_Messages {
     gap: .45rem;
-  }
-
-  .Home_Feature {
-    padding-block-end: clamp(3rem, 25svh, 10rem);
   }
 }
 

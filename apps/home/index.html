@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="61e77cf506">
+    <meta name="yak-drawing" content="c547162024">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -185,8 +185,6 @@
           </radialGradient>
         </defs>
         <g class="Sky_Day" data-depth="0.5">
-          <circle class="Sky_Glow" fill="url(#Sky-glow)" cx="455" cy="0"
-            r="230"></circle>
           <g class="Sky_Drift">
             <path class="Sky_Wisp Sky_Wisp-far"
               d="M-480 -214Q-380 -225 -180 -216.2Q-292.5 -208.5 -480 -214Z"></path>
@@ -199,7 +197,11 @@
             <path class="Sky_Wisp"
               d="M-1110 -150Q-970 -163 -690 -152.6Q-847.5 -143.5 -1110 -150Z"></path>
           </g>
-          <circle class="Sky_Sun" cx="455" cy="-100" r="42"></circle>
+        </g>
+        <g class="Sky_Day Sky_Sol">
+          <circle class="Sky_Glow" fill="url(#Sky-glow)" cx="455" cy="-100"
+            r="84"></circle>
+          <circle class="Sky_Sun" cx="455" cy="-100" r="27"></circle>
         </g>
         <g class="Sky_Night Sky_Deep" data-depth="0.95">
           <g class="Sky_Stars">
@@ -740,7 +742,7 @@
         <svg class="Sky_Turf" viewBox="-3000 -60 6000 300" focusable="false">
           <defs>
             <linearGradient id="Sky-turf" gradientUnits="userSpaceOnUse" x1="0"
-              y1="-10" x2="0" y2="190">
+              y1="-10" x2="0" y2="80">
               <stop offset="0" class="Sky_Turf0"></stop>
               <stop offset="1" class="Sky_Turf1"></stop>
             </linearGradient>
@@ -758,7 +760,8 @@
       class="Top"><a class="Top_Name" href="/" aria-current="page" aria-label="yaks.app, home" data-copy-aria-label="frame.top.home"><span data-copy="frame.top.name">yaks.app</span></a><nav class="Nav" aria-label="Site" data-copy-aria-label="frame.nav.label"><a class="Nav_Link" href="/#how" data-copy="frame.nav.how-home">How yaks.app works</a><a class="Nav_Link" href="/gallery" data-copy="frame.nav.gallery">Gallery</a><a class="Nav_Link" href="/pricing" data-copy="frame.nav.pricing">Pricing</a><a class="Nav_Link" href="/docs" data-copy="frame.nav.docs">Documentation</a><a class="Nav_SignIn Nav_Link" href="/login" data-copy="frame.nav.sign-in">Sign in</a></nav></header>
     <main class="Page">
       <div class="Home_Story" data-story>
-        <div class="Home_MoonSpace" data-moon-at aria-hidden="true"></div>
+        <div class="Home_SkySpace"
+          aria-hidden="true"><span class="Home_SunSlot" data-sun-at></span><span class="Home_MoonSlot" data-moon-at></span></div>
         <div class="Home_Desk" data-story-desk>
           <section class="Hello Story_Hero" aria-labelledby="hello"
             data-story-step="0">
@@ -1425,7 +1428,7 @@
           </aside>
           <nav class="Home_Contents" aria-label="Features on this page"
             data-copy-aria-label="home.story.features">
-            <ul class="Home_Jumps" data-feature-nav>
+            <ul class="Home_Jumps" id="feature-nav" data-feature-nav>
               <li
                 class="Home_Jump"><a class="Home_JumpLink" href="#hello" data-feature-link="0"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path><path d="M20 2v4"></path><path d="M22 4h-4"></path><circle cx="4" cy="20" r="2"></circle></svg><span data-copy="home.story.turn.build.short">Build</span></a></li>
               <li
@@ -1445,30 +1448,67 @@
               <li
                 class="Home_Jump"><a class="Home_JumpLink" href="#domains" data-feature-link="8"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg><span data-copy="home.story.turn.domain.short">Plans</span></a></li>
             </ul>
+            <div class="Home_NavControls" data-feature-controls
+              hidden><button type="button" data-feature-scroll="-1" aria-label="Earlier features" data-copy-aria-label="home.story.earlier" aria-controls="feature-nav" class="Surface_Press Button Button-quiet Home_NavButton">‹</button><button type="button" data-feature-scroll="1" aria-label="More features" data-copy-aria-label="home.story.later" aria-controls="feature-nav" class="Surface_Press Button Button-quiet Home_NavButton">›</button></div>
           </nav>
           <div class="Home_Features">
             <section class="Home_Feature" id="how"
               aria-labelledby="title-change" data-story-step="1">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-change"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></span><span data-copy="home.story.turn.change.heading">Change anything by asking.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-change"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></span><span data-copy="home.story.turn.change.heading">Change anything by asking.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.change.body">Ask for a new field, a photo on every item or another page. Your assistant makes the change, checks the result and puts the new version online.</p>
                 <ul class="Home_FeatureList">
-                  <li
-                    data-copy="home.story.turn.change.point1">Ask in chat, by email, or by text from your phone</li>
                   <li
                     data-copy="home.story.turn.change.point2">Photos and files, up to 50 GB on the Plus plan</li>
                   <li
                     data-copy="home.story.turn.change.point3">Earlier versions are kept, and going back never touches your data</li>
                 </ul>
               </div>
+              <section class="Surface Card Home_Illustration">
+                <ul class="Home_IllustrationRows">
+                  <li class="Home_IllustrationRow">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.chat.name">In chat</b><p class="Note Note-small" data-copy="home.story.change.chat.note">Ask here, in Claude or in ChatGPT.</p></div>
+                  </li>
+                  <li class="Home_IllustrationRow">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <polyline
+                        points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+                      <path
+                        d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.mail.name">By email</b><p class="Note Note-small" data-copy="home.story.change.mail.note">Send your assistant the change and any files.</p></div>
+                  </li>
+                  <li class="Home_IllustrationRow">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                      focusable="false" class="Icon">
+                      <path
+                        d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path>
+                      <path d="m15 5 4 4"></path>
+                    </svg>
+                    <div
+                      class="Home_IllustrationCopy"><b data-copy="home.story.change.text.name">By text</b><p class="Note Note-small" data-copy="home.story.change.text.note">Ask for a change from your phone.</p></div>
+                  </li>
+                </ul>
+              </section>
             </section>
             <section class="Home_Feature" id="integrations"
               aria-labelledby="title-connect" data-story-step="2">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-connect"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 22v-5"></path><path d="M15 8V2"></path><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"></path><path d="M9 8V2"></path></svg></span><span data-copy="home.story.turn.connect.heading">Connect the services you already use.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-connect"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 22v-5"></path><path d="M15 8V2"></path><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"></path><path d="M9 8V2"></path></svg></span><span data-copy="home.story.turn.connect.heading">Connect the services you already use.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.connect.body">Apps can use Google Calendar, Google Sheets, Slack, Notion, QuickBooks and more. You sign in to the service once. yaks.app keeps the connection for the app.</p>
                 <ul class="Home_FeatureList">
@@ -1485,9 +1525,9 @@
             </section>
             <section class="Home_Feature" id="work" aria-labelledby="title-send"
               data-story-step="3">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-send"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg></span><span data-copy="home.story.turn.send.heading">Send email to your app’s users.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-send"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg></span><span data-copy="home.story.turn.send.heading">Send email to your app’s users.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.send.body">Thank-yous, reminders, receipts and news go out from your app’s own address. Visitors can sign up for notices with only an email address, and every notice carries a one-click unsubscribe link.</p>
                 <ul class="Home_FeatureList">
@@ -1546,9 +1586,9 @@
             </section>
             <section class="Home_Feature" id="email-in"
               aria-labelledby="title-receive" data-story-step="4">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-receive"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></span><span data-copy="home.story.turn.receive.heading">Every app has an email address.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-receive"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></span><span data-copy="home.story.turn.receive.heading">Every app has an email address.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.receive.body">Forward the bulletin, a booking or the week’s specials. An app can file the message with its attachments and show the news on its page.</p>
               </div>
@@ -1599,9 +1639,9 @@
             </section>
             <section class="Home_Feature" id="payments"
               aria-labelledby="title-sell" data-story-step="5">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-sell"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg></span><span data-copy="home.story.turn.sell.heading">Take payments with Stripe.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-sell"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg></span><span data-copy="home.story.turn.sell.heading">Take payments with Stripe.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.sell.body">On the Plus plan, your app can sell through Stripe, the payment company: orders, tickets, deposits and gifts, paid by card on Stripe’s own checkout page. The money goes to your Stripe account, and each buyer gets a receipt by email from your app.</p>
                 <ul class="Home_FeatureList">
@@ -1744,9 +1784,9 @@
             </section>
             <section class="Home_Feature" id="helpers"
               aria-labelledby="title-helper" data-story-step="6">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-helper"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></span><span data-copy="home.story.turn.helper.heading">An AI helper that answers your visitors.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-helper"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></span><span data-copy="home.story.turn.helper.heading">An AI helper that answers your visitors.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.helper.body">Give your app a helper that answers the questions visitors ask: the allergens on a menu, parking at the church, what’s on for Tuesday of the trip. The helper answers from what your app keeps.</p>
                 <ul class="Home_FeatureList">
@@ -1811,26 +1851,26 @@
             </section>
             <section class="Home_Feature" id="people"
               aria-labelledby="title-team" data-story-step="7">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-team"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span><span data-copy="home.story.turn.team.heading">Invite your app’s users, free.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-team"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg></span><span data-copy="home.story.turn.team.heading">Invite your app’s users, free.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.team.body">Members, editors and visitors cost nothing on any plan. Members of a private app sign in with a code sent to their email, so nobody makes or forgets a password, and everything a sign-up sheet, a shop or a directory needs is already built.</p>
                 <ul class="Home_FeatureList">
                   <li
                     data-copy="home.story.turn.team.point1">Invite members to one app or the whole space</li>
                   <li
-                    data-copy="home.story.turn.team.point2">Choose who can view and who can edit</li>
-                  <li
                     data-copy="home.story.turn.team.point3">Members use a sign-in code sent by email</li>
                 </ul>
               </div>
+              <section
+                class="Surface Card Home_Illustration"><b data-copy="home.story.people.roles">Access to an app</b><ul class="Home_IllustrationRows"><li class="Home_IllustrationRow"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg><div class="Home_IllustrationCopy"><b data-copy="home.story.people.owner.name">Owner</b><p class="Note Note-small" data-copy="home.story.people.owner.note">Manage the app and who can open it.</p></div></li><li class="Home_IllustrationRow"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg><div class="Home_IllustrationCopy"><b data-copy="home.story.people.editor.name">Editor</b><p class="Note Note-small" data-copy="home.story.people.editor.note">Change what the app keeps.</p></div></li><li class="Home_IllustrationRow"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><path d="M16 3.128a4 4 0 0 1 0 7.744"></path><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><circle cx="9" cy="7" r="4"></circle></svg><div class="Home_IllustrationCopy"><b data-copy="home.story.people.viewer.name">Viewer</b><p class="Note Note-small" data-copy="home.story.people.viewer.note">Open the app and see what’s shared.</p></div></li></ul></section>
             </section>
             <section class="Home_Feature" id="domains"
               aria-labelledby="title-domain" data-story-step="8">
+              <h2 class="Title Home_FeatureTitle"
+                id="title-domain"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span><span data-copy="home.story.turn.domain.heading">Your own domain, on the Plus plan.</span></h2>
               <div class="Home_FeatureWords">
-                <h2 class="Title Home_FeatureTitle"
-                  id="title-domain"><span class="Home_Icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="Icon"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg></span><span data-copy="home.story.turn.domain.heading">Your own domain, on the Plus plan.</span></h2>
                 <p class="Note"
                   data-copy="home.story.turn.domain.body">Your apps start at an address like yourname.yaks.app. The Plus and Pro plans let you use a domain you own for one app or for the whole space.</p>
               </div>

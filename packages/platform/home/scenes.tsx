@@ -1,8 +1,10 @@
 /** @jsxImportSource preact */
-import { Card } from '@yaks/ui'
+import { Card, Icon } from '@yaks/ui'
 import type { ComponentChildren } from 'preact'
 import { LOGOS } from '../routes.ts'
 import { DEMOS, SCENES } from './demos.ts'
+import { ICONS } from './icons.ts'
+import type { Copy } from './words.ts'
 
 let SERVICES = [
   ['google-sheet', 'Google Sheets'],
@@ -33,6 +35,51 @@ export let Services = ({ short = false }: { short?: boolean }) => (
       </li>
     ))}
   </ul>
+)
+
+let CHANNELS = [
+  ['chat', ICONS.build],
+  ['mail', ICONS.receive],
+  ['text', ICONS.change],
+] as const
+
+export let Change = ({ copy }: { copy: Copy }) => (
+  <Card class='Home_Illustration'>
+    <ul class='Home_IllustrationRows'>
+      {CHANNELS.map(([channel, icon]) => (
+        <li class='Home_IllustrationRow'>
+          <Icon of={icon} />
+          <div class='Home_IllustrationCopy'>
+            <b {...copy.text(`home.story.change.${channel}.name`)} />
+            <p
+              class='Note Note-small'
+              {...copy.text(`home.story.change.${channel}.note`)}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  </Card>
+)
+
+export let People = ({ copy }: { copy: Copy }) => (
+  <Card class='Home_Illustration'>
+    <b {...copy.text('home.story.people.roles')} />
+    <ul class='Home_IllustrationRows'>
+      {['owner', 'editor', 'viewer'].map((role) => (
+        <li class='Home_IllustrationRow'>
+          <Icon of={ICONS.team} />
+          <div class='Home_IllustrationCopy'>
+            <b {...copy.text(`home.story.people.${role}.name`)} />
+            <p
+              class='Note Note-small'
+              {...copy.text(`home.story.people.${role}.note`)}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  </Card>
 )
 
 let Envelope = ({ box, subject, children }: {

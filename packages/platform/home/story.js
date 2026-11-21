@@ -58,6 +58,35 @@ let swipe = (old, log, backwards) => {
   log.animate([{ translate: x }, { translate: '0' }], timing)
 }
 
+let navigation = (track, calm) => {
+  let controls = track.parentElement.querySelector('[data-feature-controls]')
+  let [back, forward] = controls.querySelectorAll('[data-feature-scroll]')
+  let edges = () => {
+    controls.hidden = track.scrollWidth <= track.parentElement.clientWidth + 1
+    back.disabled = track.scrollLeft <= 1
+    forward.disabled =
+      track.scrollLeft + track.clientWidth >= track.scrollWidth - 1
+    track.toggleAttribute('data-earlier', !back.disabled)
+    track.toggleAttribute('data-later', !forward.disabled)
+  }
+  for (let button of [back, forward]) {
+    button.addEventListener('click', () =>
+      track.scrollBy({
+        left: Number(button.dataset.featureScroll) *
+          Math.max(80, track.clientWidth - 48),
+        behavior: calm.matches ? 'instant' : 'smooth',
+      }))
+  }
+  track.addEventListener('scroll', edges, { passive: true })
+  new ResizeObserver(edges).observe(track.parentElement)
+  edges()
+  return (link) => {
+    track.scrollLeft = link.offsetLeft -
+      (track.clientWidth - link.offsetWidth) / 2
+    edges()
+  }
+}
+
 let copyLinks = (root) => {
   for (let button of root.querySelectorAll('[data-copy-link]')) {
     let box = button.closest('.Copy')
@@ -92,9 +121,10 @@ let mount = (root) => {
   let narrow = matchMedia('(max-width: 59.99rem)')
   let i = 0, active = -1, frame = 0, timer = 0
   let playing = !calm.matches
+  let highlight = navigation(nav, calm)
 
   let draw = (motion = !calm.matches) => {
-    let line = innerHeight * .53,
+    let line = Math.min(innerHeight * .45, 250),
       rects = steps.map((el) => el.getBoundingClientRect())
     let at = reading(rects, line)
     let last = rects.at(-1)
@@ -105,7 +135,7 @@ let mount = (root) => {
     if (active >= 0) jumps[active].removeAttribute('aria-current')
     let link = jumps[active = at.step]
     link.setAttribute('aria-current', 'location')
-    nav.scrollLeft = link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2
+    highlight(link)
     if (active > 0) hold()
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))

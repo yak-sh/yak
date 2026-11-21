@@ -4,7 +4,7 @@ import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
 import { TURNS } from './demos.ts'
 import { ICONS } from './icons.ts'
 import { Phone, Picks } from './phone.tsx'
-import { Scene, Services } from './scenes.tsx'
+import { Change, People, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
 
 let IDS = [
@@ -18,7 +18,14 @@ let IDS = [
   'people',
   'domains',
 ]
-let LISTS = new Set(['change', 'connect', 'send', 'sell', 'helper', 'team'])
+let POINTS = {
+  change: [2, 3],
+  connect: [1, 2, 3],
+  send: [1, 2, 3],
+  sell: [1, 2, 3],
+  helper: [1, 2, 3],
+  team: [1, 3],
+} as const
 let SCENES = {
   send: 'send',
   receive: 'receive',
@@ -106,7 +113,7 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
     class='Home_Contents'
     {...copy.attr('aria-label', 'home.story.features')}
   >
-    <ul class='Home_Jumps' data-feature-nav=''>
+    <ul class='Home_Jumps' id='feature-nav' data-feature-nav=''>
       {TURNS.map((turn, i) => (
         <li class='Home_Jump'>
           <a class='Home_JumpLink' href={`#${IDS[i]}`} data-feature-link={i}>
@@ -116,6 +123,28 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
         </li>
       ))}
     </ul>
+    <div class='Home_NavControls' data-feature-controls='' hidden>
+      <Button
+        class='Home_NavButton'
+        mod='quiet'
+        type='button'
+        data-feature-scroll='-1'
+        {...copy.attr('aria-label', 'home.story.earlier')}
+        aria-controls='feature-nav'
+      >
+        ‹
+      </Button>
+      <Button
+        class='Home_NavButton'
+        mod='quiet'
+        type='button'
+        data-feature-scroll='1'
+        {...copy.attr('aria-label', 'home.story.later')}
+        aria-controls='feature-nav'
+      >
+        ›
+      </Button>
+    </div>
   </nav>
 )
 
@@ -124,6 +153,7 @@ let Features = ({ copy, plans }: { copy: Copy; plans: ComponentChildren }) => (
     {TURNS.slice(1).map((turn, j) => {
       let i = j + 1, key = `home.story.turn.${turn}`
       let scene = SCENES[turn as keyof typeof SCENES]
+      let points = POINTS[turn as keyof typeof POINTS]
       return (
         <section
           class='Home_Feature'
@@ -131,22 +161,24 @@ let Features = ({ copy, plans }: { copy: Copy; plans: ComponentChildren }) => (
           aria-labelledby={`title-${turn}`}
           data-story-step={i}
         >
+          <h2 class='Title Home_FeatureTitle' id={`title-${turn}`}>
+            <span class='Home_Icon'>
+              <Icon of={ICONS[turn]} />
+            </span>
+            <span {...copy.text(`${key}.heading`)} />
+          </h2>
           <div class='Home_FeatureWords'>
-            <h2 class='Title Home_FeatureTitle' id={`title-${turn}`}>
-              <span class='Home_Icon'>
-                <Icon of={ICONS[turn]} />
-              </span>
-              <span {...copy.text(`${key}.heading`)} />
-            </h2>
             <p class='Note' {...copy.text(`${key}.body`)} />
-            {LISTS.has(turn) && (
+            {points && (
               <ul class='Home_FeatureList'>
-                {[1, 2, 3].map((n) => (
-                  <li {...copy.text(`${key}.point${n}`)} />
+                {points.map((n) => (
+                  <li key={n} {...copy.text(`${key}.point${n}`)} />
                 ))}
               </ul>
             )}
           </div>
+          {turn == 'change' && <Change copy={copy} />}
+          {turn == 'team' && <People copy={copy} />}
           {turn == 'connect' && (
             <div class='Home_Connection'>
               <Services />
@@ -226,7 +258,10 @@ export let Story = (
   },
 ) => (
   <div class='Home_Story' data-story=''>
-    <div class='Home_MoonSpace' data-moon-at='' aria-hidden='true' />
+    <div class='Home_SkySpace' aria-hidden='true'>
+      <span class='Home_SunSlot' data-sun-at='' />
+      <span class='Home_MoonSlot' data-moon-at='' />
+    </div>
     <div class='Home_Desk' data-story-desk=''>
       <Hero copy={copy} action={action} yak={yak} />
       <aside

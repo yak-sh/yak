@@ -43,16 +43,22 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     top: 0,
     width: 6000,
   })
-  let anchor = document.querySelector('[data-moon-at]')
-  let moonX = 1260, moonY = 105
-  if (anchor) {
-    anchor.getBoundingClientRect = () =>
-      ({
-        right: moonX,
-        top: moonY - 30 - scope.scrollY,
-        height: 60,
-      }) as DOMRect
+  let moonX = 1260, sunX = 720, lightY = 105
+  let anchor = (name: string, x: number) => {
+    let marker = document.querySelector(`[data-${name}-at]`)
+    if (marker) {
+      marker.getBoundingClientRect = () =>
+        ({
+          left: x,
+          width: 0,
+          top: lightY - 30 - scope.scrollY,
+          height: 60,
+        }) as DOMRect
+    }
+    return marker
   }
+  let moonAt = anchor('moon', moonX)
+  let sunAt = anchor('sun', sunX)
   // the Start Free button is 97px across, and 46px with its words stacked
   Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
     get(this: HTMLElement) {
@@ -96,9 +102,13 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
   let touchMoon = (target?: Element) =>
-    anchor
-      ? touch(moonX - 3000, moonY - 800 - scope.scrollY, target)
+    moonAt
+      ? touch(moonX - 3000, lightY - 800 - scope.scrollY, target)
       : touch(MOON.x, MOON.y + (calm ? 0 : scope.scrollY * DEPTH.night), target)
+  let touchSun = () =>
+    sunAt
+      ? touch(sunX - 3000, lightY - 800 - scope.scrollY)
+      : touch(SUN.x, SUN.y + (calm ? 0 : scope.scrollY * DEPTH.dusk))
   // the wandering yak, sat down out in the margin at `left`, 72px across,
   // with the words beginning at `words`
   let sat = (left: number, words = 1440) => {
@@ -107,7 +117,19 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     on.sat({ target: yak, detail: words })
     return yak.querySelector('.Sign') as HTMLElement
   }
-  return { el, all, touch, touchMoon, moved, wait, watch, sat, on, scope }
+  return {
+    el,
+    all,
+    touch,
+    touchMoon,
+    touchSun,
+    moved,
+    wait,
+    watch,
+    sat,
+    on,
+    scope,
+  }
 }
 
 test('the line he sits on is set where his tail touches it', () => {
@@ -144,8 +166,8 @@ test('a touch on words or a control is the page’s, not the sky’s', () => {
 })
 
 test('a touch on the sun sets it', () => {
-  let { touch, moved } = sky()
-  touch(SUN.x, SUN.y)
+  let { touchSun, moved } = sky()
+  touchSun()
   assertEquals(moved, ['Sky_Sun', 'Sky_Glow'])
 })
 
@@ -189,8 +211,8 @@ test('birds cross the dusk now and then, and a shooting star the night', () => {
 
 // How far each layer has sunk after a scroll of `y`, in his units (one to a
 // pixel here), by its class.
-let sinks = (y: number, calm = false) => {
-  let { all, on, scope } = sky({ calm })
+let sinks = (y: number, calm = false, path = '/') => {
+  let { all, on, scope } = sky({ calm, path })
   scope.scrollY = y
   on.scroll({})
   return Object.fromEntries(
@@ -223,10 +245,10 @@ test('as the page scrolls every layer goes up, the farther back the less', () =>
   }
 })
 
-test('the hills rise over the sun as the page scrolls', () => {
+test('the hills on the build page rise over the sun as the page scrolls', () => {
   let hill = HILLS[0][1](SUN.x)
   let shows = (y: number) => {
-    let s = sinks(y)
+    let s = sinks(y, false, '/build')
     let top = SUN.y - SUN.r + s.Sky_Day, over = hill + s.Sky_Farthest
     return Math.max(0, Math.min(2 * SUN.r, over - top)) / (2 * SUN.r)
   }
@@ -251,7 +273,7 @@ test('the sun and the moon answer a touch where they now show', () => {
   let day = sky()
   day.scope.scrollY = 100
   day.on.scroll({})
-  day.touch(SUN.x, SUN.y + 100 * DEPTH.dusk)
+  day.touchSun()
   assertEquals(day.moved, ['Sky_Sun', 'Sky_Glow'])
   for (let path of ['/', '/build']) {
     let night = sky({ dark: true, path })
@@ -268,7 +290,7 @@ test('for less motion no layer sinks as the page scrolls', () => {
 
 test('for less motion nothing in the sky moves, and the moon still turns', () => {
   let day = sky({ calm: true })
-  day.touch(SUN.x, SUN.y)
+  day.touchSun()
   day.wait()
   day.watch()
   let night = sky({ dark: true, calm: true })

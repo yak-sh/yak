@@ -35,7 +35,6 @@
 {
   let slot = document.querySelector('.Hello_Yak')
   let after = document.querySelector('.Sky_End, .Yours')
-  let moonAt = document.querySelector('[data-moon-at]')
   let sky = document.querySelector('.Sky')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let dark = matchMedia('(prefers-color-scheme: dark)')
@@ -49,8 +48,18 @@
 
   let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])]
   let deep = sky?.querySelector('.Sky_Deep')
-  let luna = sky?.querySelector('.Sky_Luna')
+  let sun = sky?.querySelector('.Sky_Sun')
   let halo = sky?.querySelector('.Sky_Halo')
+  let sunAt = document.querySelector('[data-sun-at]')
+  let moonAt = document.querySelector('[data-moon-at]')
+  let lights = [
+    [sunAt, sky?.querySelector('.Sky_Sol'), sun],
+    [moonAt, sky?.querySelector('.Sky_Luna'), halo],
+  ]
+  let center = (slot) => {
+    let { left, width, top, height } = slot.getBoundingClientRect()
+    return [left + width / 2, top + height / 2]
+  }
   let u = 1, feet = 1
   // how far the layer `el` is in has sunk, in his units
   let sunk = (el) =>
@@ -69,14 +78,15 @@
     set('--u', u)
     let x = r.left + scrollX + r.width * .52
     set('--x', x)
-    if (luna && moonAt) {
-      let a = moonAt.getBoundingClientRect()
-      let cx = Number(halo.getAttribute('cx')),
-        cy = Number(halo.getAttribute('cy'))
-      luna.setAttribute(
+    for (let [slot, group, disk] of lights) {
+      if (!slot || !group || !disk) continue
+      let [px, py] = center(slot)
+      let cx = Number(disk.getAttribute('cx')),
+        cy = Number(disk.getAttribute('cy'))
+      group.setAttribute(
         'transform',
-        `translate(${n1((a.right + scrollX - x) / u - cx)} ${
-          n1((a.top + scrollY + a.height / 2 - feet) / u - cy)
+        `translate(${n1((px + scrollX - x) / u - cx)} ${
+          n1((py + scrollY - feet) / u - cy)
         })`,
       )
     }
@@ -289,21 +299,16 @@
 
   // what a touch at (px, py) lands on: the sun, the moon, or the sky; a
   // touch within a finger's width of either counts
-  let sun = sky?.querySelector('.Sky_Sun')
   let moon = sky?.querySelector('.Sky_Moon')
   let near = (el, r, px, py) => {
-    if (el === halo && moonAt) {
-      let a = moonAt.getBoundingClientRect()
-      return Math.hypot(px - a.right, py - a.top - a.height / 2) <=
-        Math.max(r * u * 1.4, 22)
-    }
-    let [x, y, k] = circle(el)
+    let slot = el === halo ? moonAt : sunAt
+    let [x, y, k] = slot ? [...center(slot), u] : circle(el)
     return Math.hypot(px - x, py - y) <= Math.max(r * k * 1.4, 22)
   }
   let over = (px, py) =>
     dark.matches
       ? near(halo, 24, px, py) && 'moon'
-      : near(sun, 42, px, py) && 'sun'
+      : near(sun, Number(sun.getAttribute('r')), px, py) && 'sun'
 
   // a touch is the sky's when it lands on nothing of the page's: no control,
   // and no words of an element's own
@@ -341,10 +346,11 @@
   let set = () => {
     if (setting) return
     let ease = { duration: 7000, easing: 'ease-in-out' }
+    let down = sunAt ? '0 22px' : '0 94px'
     setting = sun.animate([
       { translate: '0 0' },
-      { translate: '0 94px', offset: .4 },
-      { translate: '0 94px', offset: .55 },
+      { translate: down, offset: .4 },
+      { translate: down, offset: .55 },
       { translate: '0 0' },
     ], ease)
     sky.querySelector('.Sky_Glow').animate([
