@@ -8,7 +8,7 @@ import type { Press } from './operator-approvals.ts'
 import type { Bundle } from '@yaks/graph'
 import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
-import { type DurableStorage, freely } from '@yaks/durable-object/sql'
+import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
 import type { Alarms } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
 import { type Level, writes } from '@yaks/member'
@@ -27,6 +27,7 @@ import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { type Tab, tabsState } from '@yaks/notify/presence'
 import { WALKTHROUGH } from './walkthrough.ts'
+import { finishedJobs, JOBS } from '../../packages/platform/finished-jobs.ts'
 import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
 import { type Bookmarked, bookmarks, RESTORING } from './bookmarks.ts'
@@ -250,6 +251,16 @@ export class Builder extends Durable {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       restart(this.#ctx, RESTORING)
       return Response.json({ ok: true })
+    }
+    if (url.pathname == JOBS && request.method == 'POST') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let page = await request.json()
+      let sql = driver(this.#ctx.storage)
+      let { store } = await this.#stored()
+      return Response.json({
+        ...await finishedJobs(sql, store.g.storage, page),
+        bytes: this.#ctx.storage.sql.databaseSize,
+      })
     }
     if (url.pathname == COPY) {
       // The platform's admin's, through the kernel (sweep.ts): a read of the

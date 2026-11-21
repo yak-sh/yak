@@ -346,6 +346,7 @@ import { meet } from '@yaks/host/config'
 import { worker } from './config.ts'
 import { appVersionsConfig, versions } from '@yaks/platform/config'
 import { privacyRules } from './privacy-move.ts'
+import { finishedJobs, JOBS } from '../../packages/platform/finished-jobs.ts'
 import { COPY as READ_OUT, copying } from './store-copy.ts'
 import { freely } from '@yaks/durable-object/sql'
 import { load } from './load.ts'
@@ -4696,7 +4697,9 @@ export class Store extends Durable {
           throw e
         }
       }
-      if (kernel && path == '/move' && request.method == 'POST') {
+      if (
+        kernel && [JOBS, '/move'].includes(path) && request.method == 'POST'
+      ) {
         await this.#ensureStarted(request)
         if (this.#refused) return this.#stalled()
         let leave = await this.#enter(false)
@@ -5149,6 +5152,13 @@ export class Store extends Durable {
     let kernel = request.headers.get('x-yak-kernel') == '1'
     // Brought up for the request behind it (door.ts `WAKE`), and nothing more.
     if (path == WAKE && kernel) return new Response(null, { status: 204 })
+    if (path == JOBS && kernel && request.method == 'POST') {
+      let page = await request.json()
+      return json({
+        ...await finishedJobs(this.#sql, this.#graph.storage, page),
+        bytes: this.#ctx.storage.sql.databaseSize,
+      })
+    }
     let branch = request.headers.get(BRANCH)
     if (branch != null && !path.startsWith('/branches')) {
       if (!/^\d+$/.test(branch)) throw new Refused(`no branch ${branch}`)

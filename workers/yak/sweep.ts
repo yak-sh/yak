@@ -58,6 +58,7 @@ import { ledgerOf } from './visit.ts'
 import { builderOf } from './build-door.ts'
 import { type Asked, COPY } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
+import { type JobPage, JOBS } from '../../packages/platform/finished-jobs.ts'
 import { graves } from '@yaks/platform/graves'
 import { inspect } from './store-inspect.ts'
 
@@ -470,15 +471,52 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (new URL(req.url).pathname == USES_PATH) {
     return using(req, env, dir, who)
   }
+  let url = new URL(req.url)
+  if (req.method == 'POST' && url.searchParams.has('operator_jobs')) {
+    let space = url.searchParams.get('operator_jobs')!
+    if (!(await dir.all()).some((row) => row.eid == space)) {
+      return json(404, 'no_space', 'no such Operator store')
+    }
+    let page = await req.json() as JobPage | null
+    if (page?.erase && !page.after) {
+      await audit(env, who, {
+        operation: 'erase_finished_jobs',
+        space,
+      })
+    }
+    let body = JSON.stringify(page)
+    return await builderOf(env, space)(
+      () =>
+        new Request(`https://builder${JOBS}`, {
+          method: 'POST',
+          headers: { 'x-yak-kernel': '1', 'content-type': 'application/json' },
+          body,
+        }),
+      { replayable: false },
+    )
+  }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)
   if (req.method != 'POST') {
     return json(405, 'method_not_allowed', 'list the stores, or post to one')
   }
-  let url = new URL(req.url)
   let name = url.searchParams.get('store') ?? ''
   if (!all.some((s) => s.store == name)) {
     return json(404, 'no_store', `no store is named ${name || '(nothing)'}`)
+  }
+  if (url.searchParams.has('jobs')) {
+    let page = await req.json() as JobPage | null
+    if (page?.erase && !page.after) {
+      await audit(env, who, {
+        operation: 'erase_finished_jobs',
+        store: name,
+      })
+    }
+    return await storeOf(env.STORE, name)(JOBS, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(page),
+    }, KERNEL)
   }
   let rehearse = url.searchParams.get('rehearse') == '1'
   await audit(env, who, { operation: 'move', store: name, rehearse })
