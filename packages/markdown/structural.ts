@@ -133,11 +133,13 @@ let lexer = new Marked({
     start: next,
     // `start` is asked about the text after a line's first character, so it
     // cannot see that character: the token before says what the id follows,
-    // and one glued to a word (`xT-12`) is no id.
+    // and one glued to a word (`xT-12`) is no id. It is read only where an id
+    // starts: marked tries this at every step and joins adjacent text into one
+    // token, so reading it each time copied the paragraph so far every step.
     tokenizer: (src: string, before: Token[]) => {
-      if (/[\w#-]$/.test(before.at(-1)?.raw ?? '')) return undefined
       let m = REF.exec(src)
-      return m ? { type: 'ref', raw: m[0], text: m[0], id: m[0] } : undefined
+      if (!m || /[\w#-]/.test(before.at(-1)?.raw.at(-1) ?? '')) return undefined
+      return { type: 'ref', raw: m[0], text: m[0], id: m[0] }
     },
   }],
 })

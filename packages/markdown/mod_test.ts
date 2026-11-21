@@ -252,6 +252,16 @@ test('a long text has every id in it found, wherever it falls', () => {
   ) assertEquals(typed(source), want)
 })
 
+test('a megabyte of text has its eid found', () => {
+  // A tool's stored answer: lines of paths and no id until the last, which
+  // took 8 s while each step of the lexer read all the text before it.
+  let eid = '0e513227-de00-4000-8000-000000000001'
+  let source = `${
+    '.claude/skills/yaks_app/SKILL.md exists\n'.repeat(25000)
+  }${eid}`
+  assertEquals(held(source), [eid])
+})
+
 test('a long text with no id in it is read as marked reads it', () => {
   let plain = new Marked({ gfm: true })
   for (
