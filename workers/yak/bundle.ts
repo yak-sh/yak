@@ -8,7 +8,7 @@ import * as system from '@yaks/process/system'
 import { build, type BuildOptions, type Metafile, stop } from 'esbuild'
 import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
-import { isBuiltin } from 'node:module'
+import { builtinModules } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { planned } from './assets.ts'
 
@@ -53,6 +53,12 @@ export let lacking = (meta: Metafile): Record<string, string[]> => {
   return failing
 }
 
+// Prefixed imports are already external. Let esbuild match bare builtins
+// itself so ordinary package and relative imports never cross the plugin bridge.
+let bareBuiltin = new RegExp(
+  `^(${builtinModules.filter((name) => !name.startsWith('node:')).join('|')})$`,
+)
+
 let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
@@ -76,16 +82,10 @@ export let options = (
   plugins: [{
     name: 'builtins',
     setup(build) {
-      build.onResolve(
-        { filter: /.*/ },
-        ({ path }) =>
-          isBuiltin(path)
-            ? {
-              path: path.startsWith('node:') ? path : `node:${path}`,
-              external: true,
-            }
-            : undefined,
-      )
+      build.onResolve({ filter: bareBuiltin }, ({ path }) => ({
+        path: `node:${path}`,
+        external: true,
+      }))
     },
   }],
   minify: true,

@@ -892,8 +892,16 @@ test('a space past its budget is told so, and the transcript rests', async () =>
   assertEquals(v.asked.length, 0)
 })
 
+// These cases ask the model or its HTTP door directly. A transcript uses
+// the stored provider identities, while these calls resolve providers from
+// the bindings and need no app deploy.
+let direct = (
+  answer: Parameters<typeof vale>[0],
+  options?: Parameters<typeof vale>[1],
+) => vale(answer, { deploy: false, ...options })
+
 test('./api/ai/run bounds the final answered call and concurrent spend to the space cap', async () => {
-  let v = await vale(({ input }) => ({
+  let v = await direct(({ input }) => ({
     response: 'affordable',
     usage: { input_tokens: 100, output_tokens: Number(input.max_tokens) },
   }), {
@@ -921,7 +929,7 @@ test('./api/ai/run bounds the final answered call and concurrent spend to the sp
 
 test('./api/ai/run answers what the model said, and the space pays for it', async () => {
   let usage = { prompt_tokens: 2_000, completion_tokens: 50 }
-  let v = await vale(() => ({ response: 'Welcome.', usage }))
+  let v = await direct(() => ({ response: 'Welcome.', usage }))
   let input = { messages: [{ role: 'user', content: 'hello' }] }
   assertEquals(await v.run({ model: FLASH, input }), {
     status: 200,
@@ -951,7 +959,7 @@ test('./api/ai/run answers a chat name apps already use from OpenAI, at its rate
     choices: [{ message: { role: 'assistant', content: 'Welcome.' } }],
     usage: { prompt_tokens: 2_000, completion_tokens: 50 },
   }
-  let v = await vale(() => ({ response: 'from Workers AI' }), {
+  let v = await direct(() => ({ response: 'from Workers AI' }), {
     env: {
       OPENAI_MODELS_KEY: 'models-key',
       MODEL_FETCH: (input, init) => {
@@ -1007,7 +1015,7 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
     data: [[0.1, 0.2, 0.3]],
     usage: { prompt_tokens: 3 },
   }
-  let v = await vale(() => answer, {
+  let v = await direct(() => answer, {
     env: {
       MODEL_FETCH: () =>
         Promise.resolve(
@@ -1033,7 +1041,7 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
 
 for (let priced of [false, true]) {
   test(`./api/ai/run checks pricing before inference (${priced ? 'fetch failed' : 'no price'})`, async () => {
-    let v = await vale(() => ({ response: 'must not run' }), {
+    let v = await direct(() => ({ response: 'must not run' }), {
       env: {
         MODEL_FETCH: () =>
           priced
@@ -1053,7 +1061,7 @@ for (let priced of [false, true]) {
 
 test('./api/ai/run shares one price lookup across concurrent and repeated calls', async () => {
   let reads = 0
-  let v = await vale(() => {
+  let v = await direct(() => {
     assertEquals(reads, 1)
     return {
       response: 'hello',
@@ -1085,7 +1093,7 @@ test('./api/ai/run waits for current pricing before reserving and purchasing inf
   let reads = 0
   let finish!: (response: Response) => void
   let page = new Promise<Response>((resolve) => finish = resolve)
-  let v = await vale(() => ({
+  let v = await direct(() => ({
     response: 'hello',
     usage: { input_tokens: 1000, output_tokens: 100 },
   }), { env: { MODEL_FETCH: () => (reads++, page) } })
@@ -1120,7 +1128,7 @@ test('./api/ai/run waits for current pricing before reserving and purchasing inf
 
 test('./api/ai/run refuses unavailable current pricing before purchasing inference', async () => {
   let reports: Bundle[] = []
-  let v = await vale(() => ({ response: 'must not run' }), {
+  let v = await direct(() => ({ response: 'must not run' }), {
     env: {
       MODEL_FETCH: () => Promise.reject(new Error('Price refresh unavailable')),
       ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
@@ -1149,7 +1157,7 @@ test('./api/ai/run refuses unavailable current pricing before purchasing inferen
 
 test('./api/ai/run reports an unpriced model once and never purchases inference', async () => {
   let reports: Bundle[] = []
-  let v = await vale(() => ({ response: 'must not run' }), {
+  let v = await direct(() => ({ response: 'must not run' }), {
     env: {
       MODEL_FETCH: () => Promise.resolve(new Response('No published price')),
       ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) },
@@ -1177,7 +1185,7 @@ test('./api/ai/run reports an unpriced model once and never purchases inference'
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {
   let body = { model: JEV, input: { prompt: 'hi' } }
   let answer = () => ({ response: 'hello' })
-  let shut = await vale(answer, { access: 'open' })
+  let shut = await direct(answer, { access: 'open' })
   await shut.dir.stamp({ entities: [{ entity: { eid: BOB }, person: {} }] })
   assertEquals((await shut.run(body, null)).status, 401)
   assertEquals((await shut.run(body, BOB)).status, 403)
@@ -1199,7 +1207,7 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
 })
 
 test('./api/ai/run carries affinity through its metered binding', async () => {
-  let p = await vale(() => ({
+  let p = await direct(() => ({
     response: 'ok',
     usage: {
       input_tokens: 1000,
@@ -1232,7 +1240,7 @@ test('./api/ai/run carries affinity through its metered binding', async () => {
 })
 
 test('raw Workers AI audio debits its tariff once and refuses at the space limit', async () => {
-  let v = await vale(() => ({ audio: 'https://media.example/song.mp3' }), {
+  let v = await direct(() => ({ audio: 'https://media.example/song.mp3' }), {
     models: MONTH - 0.15,
   })
   let raw = workersAi(v.env.AI!, {
@@ -1267,7 +1275,7 @@ test('raw Workers AI audio debits its tariff once and refuses at the space limit
 })
 
 test('accounting preserves provider continuation metadata and passes requests whole', async () => {
-  let v = await vale(() => ({}))
+  let v = await direct(() => ({}))
   let raw: Model = Object.assign((req: Parameters<Model>[0]) => {
     assertEquals(req.anchor, 'prior')
     req.onText?.({ index: 0, text: 'hello' })
@@ -1304,7 +1312,7 @@ test('accounting preserves provider continuation metadata and passes requests wh
 })
 
 test('raw partner calls carry configured gateway and affinity through the meter', async () => {
-  let p = await vale(() => ({
+  let p = await direct(() => ({
     response: 'ok',
     usage: { prompt_tokens: 10, completion_tokens: 1 },
   }), { env: { AI_GATEWAY: 'music' } })
@@ -1318,7 +1326,7 @@ test('raw partner calls carry configured gateway and affinity through the meter'
 // Recovery accounts an already generated recording, including one attached
 // locally after a download failure. It never asks a provider to generate.
 test('original media debit is atomic once across concurrent and repeated recovery', async () => {
-  let v = await vale(() => {
+  let v = await direct(() => {
     throw new Error('No paid calls')
   })
   let space = (await v.dir.space('ada'))!
@@ -1460,7 +1468,7 @@ test('recovery door accounts an existing attachment without download or generati
 })
 
 test('accounted recovery preserves cost and never debits a second time', async () => {
-  let v = await vale(() => {
+  let v = await direct(() => {
     throw new Error('No generation')
   })
   let call = crypto.randomUUID()

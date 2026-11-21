@@ -162,11 +162,11 @@ let starting = (path: string, request: string) =>
 }
 
 // A store woken a moment ago is still up. A burst of views (a crawler
-// walking an app's pages) sends its store one wake per isolate per `AWAKE`,
+// walking an app's pages) sends its store one wake per binding per `AWAKE`,
 // not one per view queued behind the reads the views make (T-1112).
 let AWAKE = 10_000
 let WOKEN = 1024
-let woken = new Map<string, number>()
+let woken = new WeakMap<Namespace, Map<string, number>>()
 let waking = starting(WAKE, 'store wake')
 
 /** Boot the store `store` names (door.ts `WAKE`) for a page's scripts, whose
@@ -177,14 +177,15 @@ export let wake = (
   store: string,
   retain?: (work: Promise<void>) => void,
 ): void => {
+  let ns = env.STORE
+  if (!ns) return
+  let held = woken.get(ns)
+  if (!held) woken.set(ns, held = new Map())
   let now = (env.CLOCK ?? system).now()
-  if (now - (woken.get(store) ?? -Infinity) < AWAKE) return
-  woken.delete(store)
-  woken.set(store, now)
-  for (let old of woken.keys()) {
-    if (woken.size <= WOKEN) break
-    woken.delete(old)
-  }
+  if (now - (held.get(store) ?? -Infinity) < AWAKE) return
+  held.delete(store)
+  held.set(store, now)
+  if (held.size > WOKEN) held.delete(held.keys().next().value!)
   waking(env, store, retain)
 }
 

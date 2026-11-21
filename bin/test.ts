@@ -52,12 +52,21 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   if (!Deno.args.some((a) => a.startsWith('--from='))) {
     let { elsewhere } = await import('./elsewhere.ts')
     let { base, changes } = await import('./test-changes.ts')
+    let { NEED } = await import('@yaks/machine/room')
     let at: Promise<string> | undefined
     let from = () => at ??= base()
     let code = await elsewhere(['deno', 'task', 'test', ...Deno.args], {
       from,
       // The transferred patch is applied to a detached worktree at its base.
-      env: { TASKS_TEST_BASE: 'HEAD', YAK_MACHINE: '' },
+      env: {
+        TASKS_TEST_BASE: 'HEAD',
+        YAK_MACHINE: '',
+        // The test VM admits this run against NEED. Reserve the rest for
+        // the coordinator and, on a change run, the concurrent source checks.
+        TASKS_TEST_RUNTIME_BYTES: String(
+          NEED.memory * (Deno.args.includes('--all') ? 0.75 : 0.5),
+        ),
+      },
       before: async () => {
         if (Deno.args.includes('--all')) return
         let { format } = await import('./test-checks.ts')
@@ -615,8 +624,12 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       files,
     }))
   })
+  let shares = Math.max(1, runs.length)
+  let reserved = Number(
+    Deno.env.get('TASKS_TEST_RUNTIME_BYTES') ?? shares * 1024 ** 3,
+  )
   let full = Math.floor(
-    Deno.systemMemoryInfo().available * 0.7 / Math.max(1, runs.length),
+    Math.min(reserved, Deno.systemMemoryInfo().available * 0.7) / shares,
   )
   // Each platform's runtimes after its first write their times as parts.
   let parts = new Map<string, number>()

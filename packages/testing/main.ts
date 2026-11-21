@@ -69,20 +69,17 @@ let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
-// The resident memory past which a runtime lets go of what it kept across
-// files and, with `--rest`, hands on its files. At most 1 GiB: thirteen runs at
-// once, each judging itself by the box's free memory as it started, took 2 GB a
-// runtime and the box down (T-1463). Forty workers/yak files peak at 0.9 GB
-// under it in 85 s; at 512 MiB they took 159 s.
-let FULL = Math.min(1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
+// The coordinator divides the run's memory among its runtimes. A runner
+// started on its own uses the local default.
+let FULL = Number(flag('full').at(-1) ?? 1024 ** 3)
 // Most of a runtime past FULL is what it no longer needs or holds: what files
 // kept for those after them (./suite.ts `kept`, a kernel and its stores, say),
 // V8's heap grown while memory was free, a database's pages, freed only once
 // its object is collected, and freed memory, resident until given back. So a
 // runtime past FULL first ends what it kept, collects (with `--expose-gc`),
 // lets the finalizers that queued run, and gives back what it freed
-// (@yaks/process `trim`). It hands on its files only when what remains is
-// past three quarters of FULL, so it runs a few files before it judges again.
+// (@yaks/process `trim`). It hands on its files only when what remains
+// exceeds its share.
 let sweep = (globalThis as { gc?: () => void }).gc
 let releases: Outcome[] = []
 let full = async () => {
@@ -92,7 +89,7 @@ let full = async () => {
   sweep?.()
   await tick()
   system.trim()
-  return system.memoryUsage().rss > FULL * 0.75
+  return system.memoryUsage().rss > FULL
 }
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href

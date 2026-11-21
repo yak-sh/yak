@@ -173,6 +173,10 @@ test('a page the gateway answers from the edge starts its store', async () => {
     first,
   )
   assertEquals(await get('https://ada.yaks.app/cookbook/api/client.js'), [])
+  // Another binding can hold a different store of the same name.
+  Object.assign(g.env, { STORE: { ...STORE } })
+  assertEquals(await get(), first)
+  assertEquals(await get(), [])
 })
 
 // A write, and the rows it leaves (the released app `a` of space `s`, and the

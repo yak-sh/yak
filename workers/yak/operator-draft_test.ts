@@ -4,7 +4,7 @@
 // app beside the chat, drawn again as the Operator works on it, which a
 // page opens as their Operator starts making it.
 
-import { test } from '@yaks/testing'
+import { cleanup, test, tick, until } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Stash } from '@yaks/draft'
@@ -122,6 +122,19 @@ let storage = (): Stash => {
 // store's socket, and gives the page a clock the test holds: its time passes
 // only by `pass`. Under the others, the page's waits run a thousand times
 // faster.
+let scripts = new Map<string, Promise<string>>()
+let scriptAt = (url: string) => {
+  let read = scripts.get(url)
+  if (!read) {
+    read = p.env.ASSETS.fetch(new Request(url)).then((response) => {
+      if (!response.ok) throw new Error(`${url}: ${response.status}`)
+      return response.text()
+    })
+    scripts.set(url, read)
+  }
+  return read
+}
+
 let load = async (
   stash: Stash,
   cut = false,
@@ -187,7 +200,7 @@ let load = async (
   let pass = async (ms: number, done = () => false) => {
     let end = now + ms
     for (;;) {
-      await new Promise((go) => setTimeout(go))
+      await tick()
       if (done()) return true
       let [id, wait] = [...waits].sort(([, a], [, b]) => a.at - b.at)[0] ?? []
       if (!wait || wait.at > end) break
@@ -204,7 +217,16 @@ let load = async (
   let down = network == 'down'
   let failed = new Set<string>()
   // Each read of the conversation.
-  let talks = 0
+  let talks = 0, received = 0
+  let conversation = (answer: Response) => {
+    let json = answer.json.bind(answer)
+    answer.json = async () => {
+      let value = await json()
+      received++
+      return value
+    }
+    return answer
+  }
   let fetch = async (input: string | URL | Request, init?: RequestInit) => {
     let url = input instanceof Request ? input.url : String(input)
     if (input instanceof Request) init ??= input
@@ -216,7 +238,7 @@ let load = async (
       talks++
       await slow
       if (left) return new Promise<Response>(() => {})
-      return answer
+      return conversation(answer)
     }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
     if (init?.method == 'POST') posted.push(url)
@@ -231,7 +253,7 @@ let load = async (
     }
     let answer = await serve(url, init, as)
     if (left) return new Promise<Response>(() => {})
-    return answer
+    return url.includes('?talk=') ? conversation(answer) : answer
   }
   // linkedom keeps no focus or selection: the box records being given it.
   let say = document.querySelector('[name=say]') as HTMLTextAreaElement
@@ -322,11 +344,7 @@ let load = async (
   // imported modules: storage, speech, timers and the page's socket.
   await pageModule(source, {
     at: base,
-    read: async (url) => {
-      let response = await p.env.ASSETS.fetch(new Request(url))
-      if (!response.ok) throw new Error(`${url}: ${response.status}`)
-      return response.text()
-    },
+    read: scriptAt,
     globals: {
       document,
       fetch,
@@ -357,6 +375,13 @@ let load = async (
       WebSocket: Page,
     },
   })
+  let leave = () => {
+    left = true
+    for (let t of timers) clearTimeout(t)
+    waits.clear()
+    for (let server of servers.splice(0)) shut(server)
+  }
+  cleanup(leave)
   return {
     say,
     focused,
@@ -379,6 +404,10 @@ let load = async (
     },
     pass,
     talks: () => talks,
+    received: async () => {
+      await until(() => received == talks)
+      await tick()
+    },
     // The Operator's socket opening, as after a deploy restarted it.
     open: () => (sockets[0] as { onopen: () => void }).onopen(),
     // The page's newest socket upgraded through the Builder object, which
@@ -414,8 +443,7 @@ let load = async (
     read: () => reads > 0,
     // Once the page has heard the store's drafts.
     heard: async () => {
-      while (!reads) await new Promise((ok) => setTimeout(ok, 1))
-      await settle()
+      await until(() => reads, { label: 'the store’s draft' })
     },
     type: (text: string) => {
       say.value = text
@@ -425,12 +453,7 @@ let load = async (
       let form = document.querySelector('#ask')!
       form.dispatchEvent(new Event('submit', { cancelable: true }))
     },
-    leave: () => {
-      left = true
-      for (let t of timers) clearTimeout(t)
-      waits.clear()
-      for (let server of servers) shut(server)
-    },
+    leave,
   }
 }
 // The runtime's socket factory, one upgrade at a time: the Builder's half of
@@ -467,9 +490,6 @@ let shut = (server: Wire) => {
   server.readyState = 3
   p.builder(eid).webSocketClose(server)
 }
-let settle = async () => {
-  for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
-}
 // While set, a read of the conversation is answered as the store stood when
 // it was asked, but reaches the page only once this settles.
 let slow: Promise<void> | undefined
@@ -494,32 +514,36 @@ let starting = await load(storage(), false, 'new', apps)
 
 let stash = storage()
 let first = await load(stash, true)
-await settle()
+await first.heard()
 first.type('Post the road millage notice')
-await settle()
 let unsaved = await stored()
 first.leave()
 
 let second = await load(stash)
-await settle()
+await second.heard()
 let shown = second.say.value
-let saved = await stored()
+let saved = await until(async () => await stored() || undefined)
 second.type('Post the road millage notice by Friday')
-await settle()
+await until(async () =>
+  await stored() == 'Post the road millage notice by Friday'
+)
 second.leave()
 
 let third = await load(stash, true)
-await settle()
+await third.heard()
 third.type('Post the road millage notice by Friday, with the agenda')
 third.send()
-await settle()
+await until(() => third.say.value == '')
 let sending = third.say.value
 third.leave()
 
 let fourth = await load(stash)
-await settle()
+await fourth.heard()
 let resent = fourth.say.value
-let afterSend = await stored()
+let afterSend = await until(async () => {
+  let text = await stored()
+  return text == resent && text
+})
 fourth.leave()
 
 test("words typed in the Operator's chat app are kept when it is left mid save", () => {
@@ -538,6 +562,24 @@ test("a message sent as the Operator's chat app is left comes back as its draft"
     afterSend,
     'Post the road millage notice by Friday, with the agenda',
   )
+})
+
+// A store's socket and an Operator's socket the network never answers are
+// given up and opened again, so the draft still arrives and the Operator's
+// socket opens anew.
+let hold = storage()
+let typed = await load(hold)
+await typed.heard()
+typed.type('Order salt for the township garage')
+await until(async () => await stored() == 'Order salt for the township garage')
+typed.leave()
+let waited = await load(storage(), false, 'new', {}, undefined, 'held')
+await until(waited.read)
+await until(() => waited.sockets.length > 1)
+waited.leave()
+
+test("the Operator's chat app reads its draft again when its socket is never answered", () => {
+  assertEquals(waited.say.value, 'Order salt for the township garage')
 })
 
 // Two conversations, each begun by a message sent without the page's script
@@ -559,14 +601,18 @@ let onRoad = await load(stash, false, road)
 await onRoad.heard()
 let roadFocused = onRoad.focused
 onRoad.type('Add the hearing date')
-await settle()
+await until(async () =>
+  await stored('operator:' + road) == 'Add the hearing date'
+)
 onRoad.leave()
 
 let onPark = await load(stash, false, park)
 await onPark.heard()
 let parkShown = onPark.say.value
 onPark.type('Ask for the north shelter')
-await settle()
+await until(async () =>
+  await stored('operator:' + park) == 'Ask for the north shelter'
+)
 onPark.leave()
 
 let backOnRoad = await load(stash, false, road)
@@ -610,7 +656,7 @@ test('words the door does not take stay in the box, and it says so', async () =>
   refused = true
   try {
     page.send()
-    await settle()
+    await until(() => page.status().includes('Your words are kept'))
   } finally {
     refused = false
   }
@@ -624,7 +670,7 @@ test('Stop in the box stops the conversation it shows', async () => {
   await page.heard()
   posted.length = 0
   page.press(page.document.querySelector('#ask .Composer_Stop')!)
-  await settle()
+  await until(() => posted.length)
   assertEquals(posted, [new URL(base).pathname + '?stop=1'])
   page.leave()
 })
@@ -711,11 +757,11 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
   address.setAttribute('href', navigated)
   address.textContent = navigated
   await wrote({ posted: { type: 'string' }, title: { type: 'string' } })
-  assert(
-    await until(() =>
+  await until(
+    () =>
       document.querySelector('[data-part=keeps] .Rows_Meta')?.textContent ==
-        'Posted and title'
-    ),
+        'Posted and title',
+    { timeout: 10_000, label: 'the app’s updated fields' },
   )
   assert(document.querySelector('[data-frame]') === screens)
   assertEquals(document.querySelector('[data-address=draft]'), address)
@@ -804,7 +850,7 @@ test("a newcomer's chat goes to the app their Operator is making, by its address
 test('a signed-in person’s chat goes to an app their Operator starts there, and not one it only works on', async () => {
   let page = await load(storage())
   page.hear(working({ space: '', app: 'notes' }))
-  await settle()
+  await tick()
   assertEquals(page.went, [])
   let recipes = { space: '', app: 'recipes' }
   page.hear({ operator: { ...working(recipes).operator, started: [recipes] } })
@@ -827,34 +873,6 @@ test('words typed on one page show on the person’s other open page as its sock
   assertEquals(shown, true)
 })
 
-// A store's socket and an Operator's socket the network never answers are
-// given up and opened again, so the draft still arrives and the Operator's
-// socket opens anew.
-let hold = storage()
-let typed = await load(hold)
-await typed.heard()
-typed.type('Order salt for the township garage')
-await settle()
-typed.leave()
-// Whether `ok` comes true: it is awaited, however long a loaded box takes,
-// and only a page that never gets there gives up, after half a minute.
-let until = async (ok: () => boolean) => {
-  for (let end = Date.now() + 30_000; !ok() && Date.now() < end;) {
-    await new Promise((go) => setTimeout(go, 1))
-  }
-  return ok()
-}
-let waited = await load(storage(), false, 'new', {}, undefined, 'held')
-let reread = await until(waited.read)
-await settle()
-let reopened = await until(() => waited.sockets.length > 1)
-waited.leave()
-
-test("the Operator's chat app reads its draft again when its socket is never answered", () => {
-  assertEquals([reread, reopened], [true, true])
-  assertEquals(waited.say.value, 'Order salt for the township garage')
-})
-
 test('a page whose reads meet a deploy’s 502 reads again and catches up quietly', async () => {
   let page = await load(storage(), false, park, {}, undefined, 'deploying')
   let box = page.document.querySelector('[data-conversation]')!
@@ -862,8 +880,7 @@ test('a page whose reads meet a deploy’s 502 reads again and catches up quietl
   // where the conversation stands, moved by a line the page has not drawn
   page.hear({ ready: true, standing: 'moved' })
   await page.heard()
-  for (let i = 0; i < 200 && page.talks() < 2; i++) await settle()
-  await settle()
+  await until(() => page.talks() >= 2 && box.querySelector('[data-task]'))
   assertEquals(page.failed.size, 2, 'the draft and the conversation met it')
   assertEquals(page.talks(), 2, 'the conversation is read again')
   assertEquals(!!box.querySelector('[data-task]'), true)
@@ -876,15 +893,14 @@ test('a page whose reads meet a deploy’s 502 reads again and catches up quietl
 test('opening the chat app reads the conversation once, with the page', async () => {
   let page = await load(storage(), false, park)
   await page.connect()
-  await settle()
+  await tick()
   let still = page.talks()
   page.leave()
   let landed = await load(storage(), false, park)
   let box = landed.document.querySelector('[data-conversation]')!
   await begun('Ask for the north shelter as well')
   await landed.connect()
-  for (let i = 0; i < 100 && !landed.talks(); i++) await settle()
-  await settle()
+  await until(() => box.innerHTML.includes('Ask for the north shelter as well'))
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
@@ -905,10 +921,9 @@ test('archive and restore while disconnected refresh the conversation once on re
       await page.connect()
       let button = () =>
         page.document.querySelector(`[data-archive-entries="${id}"]`)
-      for (let i = 0; i < 200; i++) {
-        if (button()?.getAttribute('data-restore') == String(archived)) break
-        await settle()
-      }
+      await until(() =>
+        button()?.getAttribute('data-restore') == String(archived)
+      )
       assertEquals(page.talks(), 1)
       assertEquals(button()?.getAttribute('data-restore'), String(archived))
     } finally {
@@ -965,19 +980,20 @@ test('words sent are drawn before the Operator takes them in, then once as its l
 test('a line heard while the page reads the conversation stays on it', async () => {
   let page = await load(storage(), false, park)
   await page.connect()
-  await settle()
+  await tick()
   let box = page.document.querySelector('[data-conversation]')!
   let release = () => {}
   slow = new Promise((ok) => release = ok)
   page.hear({ ready: true, standing: 'moved' })
-  while (!page.talks()) await settle()
+  await until(page.talks)
   slow = undefined
   await begun('Ask for the lakeside shelter too')
-  await settle()
-  let heard = box.innerHTML.includes('Ask for the lakeside shelter too')
+  let heard = await until(() =>
+    box.innerHTML.includes('Ask for the lakeside shelter too')
+  )
   release()
-  for (let i = 0; i < 100 && page.talks() < 2; i++) await settle()
-  await settle()
+  await until(() => page.talks() >= 2)
+  await page.received()
   page.leave()
   assertEquals(
     [heard, box.innerHTML.includes('Ask for the lakeside shelter too')],
@@ -993,7 +1009,7 @@ test(
   async () => {
     let page = await load(storage(), false, park)
     await page.connect()
-    await settle()
+    await tick()
     let card = page.document.querySelector('[data-task]') as HTMLElement
     let ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
     let words = ['Keep my first words', 'Keep my next words', 'Gone words']
@@ -1031,7 +1047,7 @@ test(
     try {
       page.hear({ ready: true, standing: 'moved' })
       await until(() => reported.length == 2)
-      await settle()
+      await tick()
       assertEquals(
         [...page.document.querySelectorAll('.Transcript_Bubble')]
           .map((r) => r.textContent).filter((t) => words.includes(t!)),
@@ -1077,7 +1093,7 @@ test('a helper’s line landing before the socket opens is read, once', async ()
   ], { trusted: true })
   let page = await load(storage(), false, park)
   await page.connect()
-  await settle()
+  await tick()
   let still = page.talks()
   page.leave()
   let landed = await load(storage(), false, park)
@@ -1086,8 +1102,8 @@ test('a helper’s line landing before the socket opens is read, once', async ()
     trusted: true,
   })
   await landed.connect()
-  for (let i = 0; i < 100 && !landed.talks(); i++) await settle()
-  await settle()
+  await until(landed.talks)
+  await landed.received()
   landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   // what it was told closed, its words fetched as it opens
@@ -1345,13 +1361,15 @@ test('words said to the chat are its draft as they are heard, and once sent, wha
   page.press(mic)
   // what is heard follows what the box held
   t.says('and the agenda')
-  await settle()
+  await until(async () =>
+    await stored('operator:' + road) == 'Add the hearing date and the agenda'
+  )
   assertEquals(
     await stored('operator:' + road),
     'Add the hearing date and the agenda',
   )
   t.stops()
-  await settle()
+  await tick()
   page.hear({
     operator: {
       task,
@@ -1381,10 +1399,7 @@ await growingStore.g.apply([
     session: {},
     operator_session: { space: eid, person },
   },
-  ...Array.from(
-    { length: 5 },
-    (_, i) => growingEntry(`Earlier step ${i}`, true),
-  ),
+  growingEntry('An earlier step', true),
   ...oldWords.map((text) => growingEntry(text)),
   ...Array.from({ length: 298 }, (_, i) => growingEntry(`Step ${i}`, true)),
 ], { trusted: true })
@@ -1404,22 +1419,20 @@ test(
     let earlier = () =>
       page.document.querySelector('[data-task] > button') as Element | null
     let all = async () => {
-      for (let i = 0; i < 20 && earlier(); i++) {
-        page.press(earlier()!)
-        await until(() =>
-          !earlier() || !earlier()!.textContent!.includes(String(i))
-        )
-        await settle()
+      for (let button; (button = earlier());) {
+        let hidden = button.textContent
+        page.press(button)
+        await until(() => earlier()?.textContent != hidden, {
+          label: 'earlier lines becoming visible',
+        })
+        await page.received()
       }
     }
     try {
       await all()
       assertEquals(words(), oldWords)
       await growingStore.g.apply([
-        ...Array.from(
-          { length: 20 },
-          (_, i) => growingEntry(`Later step ${i}`, true),
-        ),
+        growingEntry('A later step', true),
         growingEntry('The newest request'),
       ], { trusted: true })
       page.hear({ ready: true, standing: 'changed' })
@@ -1428,8 +1441,8 @@ test(
       assertEquals(words(), [...oldWords, 'The newest request'])
       let talks = page.talks()
       page.hear({ ready: true, standing: 'reconnected' })
-      await until(() => page.talks() == talks + 1)
-      await settle()
+      await until(() => page.talks() > talks)
+      await page.received()
       await all()
       assertEquals(words(), [...oldWords, 'The newest request'])
       assertEquals(reported, [])
@@ -1454,13 +1467,16 @@ test('entry actions copy the source and its link, quote into the existing compos
   let copiedText = actionTrigger.getAttribute('data-entry-text')!
   entryActions.press(actionTrigger)
   entryActions.press(actionMenu.querySelector('[data-entry-copy]')!)
-  await settle()
+  await until(() => entryActions.copied.length)
   entryActions.press(actionTrigger)
   entryActions.press(actionMenu.querySelector('[data-entry-link]')!)
-  await settle()
+  await until(() => entryActions.copied.length == 2)
   entryActions.press(actionTrigger)
   entryActions.press(actionMenu.querySelector('[data-entry-quote]')!)
-  await settle()
+  await until(async () => {
+    let draft = await stored('operator:' + park)
+    return draft.includes('Keep this draft') && draft.includes(copiedText)
+  })
   // The one menu serves every line: the last one's time fills it with its own.
   let lastTrigger = [
     ...entryActions.document.querySelectorAll<HTMLElement>(
@@ -1471,7 +1487,7 @@ test('entry actions copy the source and its link, quote into the existing compos
   let archive = actionMenu.querySelector<HTMLElement>('[data-entry-archive]')!
   let hiding = [archive.hidden, archive.textContent]
   entryActions.press(actionMenu.querySelector('[data-entry-copy]')!)
-  await settle()
+  await until(() => entryActions.copied.length == 3)
   let quotedDraft = entryActions.say.value
   entryActions.leave()
   let quotedAgain = await load(storage(), false, park)

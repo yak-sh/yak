@@ -1,6 +1,10 @@
 import { listing, type Options } from '@yaks/mcp'
 import { registry, runner } from '@yaks/tools'
-import { type Options as Coding, tool as codeMode } from '@yaks/code-mode'
+import {
+  definition,
+  type Options as Coding,
+  tool as codeMode,
+} from '@yaks/code-mode'
 import { reaching, searching } from './agent.ts'
 import { inReach } from './declared.ts'
 import { stripping } from './esbuild.ts'
@@ -33,46 +37,32 @@ export let coded = <T extends Options>(
     tools.filter((t) =>
       !names.has(t.name!) && !opts.unscripted?.has(toolName(t))
     )
-  let ownRun = own && runner(own.calls, {
-    tools: own.tools,
-    host: own.graph,
-    report: opts.report,
-    refused: opts.refused,
-  })
-  let catalog = registry([{
-    name: 'yaks',
-    tools: [
-      ...listing(opts),
-      ...resultTools(ctx, local),
-    ],
-  }])
+  let tools = [...listing(opts), ...resultTools(ctx, local)]
   let remoteTools = typeof remote == 'function' ? [] : remote
-  let codeCatalog = registry([
-    {
-      name: 'yaks',
-      tools: [...appTools(catalog.list()), ...own?.tools ?? []],
-    },
-    { name: 'mcp', tools: remoteTools },
-  ])
-  let run = runner(opts.calls ?? opts.graph, {
-    tools: catalog,
-    host: opts.graph,
-    report: opts.report,
-    refused: opts.refused,
-  })
-  let codeRun = runner(opts.calls ?? opts.graph, {
-    tools: codeCatalog,
-    host: opts.graph,
-    report: opts.report,
-    refused: opts.refused,
-  })
+  let codeCatalog: ReturnType<typeof registry> | undefined
+  let codeRun: ReturnType<typeof runner> | undefined
+  let ownRun: ReturnType<typeof runner> | undefined
+  let ownRunner = () =>
+    own && (ownRun ??= runner(own.calls, {
+      tools: own.tools,
+      host: own.graph,
+      report: opts.report,
+      refused: opts.refused,
+    }))
+  let scriptRunner = () =>
+    codeRun ??= runner(opts.calls ?? opts.graph, {
+      tools: scripts(),
+      host: opts.graph,
+      report: opts.report,
+      refused: opts.refused,
+    })
   let unavailable = () => {
     throw refuse('unavailable', 'code mode is unavailable on this kernel')
   }
   let offered = (args = {}) =>
     codeMode(
-      codeCatalog,
-      codeRun,
+      scripts(),
+      scriptRunner(),
       ctx.env.CODE_MODE ?? unavailable,
       ctx.env.ESBUILD ? stripping(ctx.env) : unavailable,
       {
@@ -98,35 +88,49 @@ export let coded = <T extends Options>(
             report: opts.report,
             refused: opts.refused,
           })
-          return { admit: (call) => ownRun?.admit(call) ?? apps.admit(call) }
+          return {
+            admit: (call) => ownRunner()?.admit(call) ?? apps.admit(call),
+          }
         },
         kept: resultStore(ctx, args, local),
         hears: opts.hears,
       },
     )
-  let base = offered()
-  let code = {
-    ...base,
+  let yaks = { name: 'yaks', tools: [...appTools(tools), ...own?.tools ?? []] }
+  let described = definition([yaks, { name: 'mcp', tools: remoteTools }])
+  let code: Tool = {
+    ...described,
     inputSchema: {
-      ...base.inputSchema,
+      ...described.inputSchema,
       properties: {
-        ...(base.inputSchema as { properties: Record<string, unknown> })
-          .properties,
+        ...described.inputSchema.properties,
         space: SPACE,
       },
     },
-    run: async (
-      call: Parameters<typeof base.run>[0],
-      graph: Parameters<typeof base.run>[1],
-    ) => {
+    run: async (call, graph) => {
       if (typeof remote == 'function') {
+        let catalog = scripts()
         remoteTools = await remote()
-        codeCatalog.replace('mcp', remoteTools)
+        catalog.replace('mcp', remoteTools)
       }
       return offered(argsOf(call)).run(call, graph)
     },
   }
-  catalog.replace('code', [code])
-  codeCatalog.replace('code', [code])
+  let scripts = () =>
+    codeCatalog ??= registry([
+      yaks,
+      { name: 'mcp', tools: remoteTools },
+      { name: 'code', tools: [code] },
+    ])
+  let catalog = registry([
+    { name: 'yaks', tools },
+    { name: 'code', tools: [code] },
+  ])
+  let run = runner(opts.calls ?? opts.graph, {
+    tools: catalog,
+    host: opts.graph,
+    report: opts.report,
+    refused: opts.refused,
+  })
   return { ...opts, registry: catalog, runner: run }
 }

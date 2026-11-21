@@ -2,6 +2,7 @@
  * supplies an evaluator and reads a script's TypeScript as JavaScript; this
  * package owns discovery, limits and the bridge. */
 import { argsOf, type Bundle, mint, type Tool, who } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import { system } from '@yaks/fp'
 import {
   answerOf,
@@ -9,6 +10,7 @@ import {
   faulted,
   heard,
   type Opts,
+  type Provider,
   refusalOf,
   type Registry,
   type Runner,
@@ -285,38 +287,22 @@ export let execute = async (
   }
 }
 
-/** How a script names a tool, by the sets it will see, such as
- * `tools.yaks.<name>(args)`: a model left to guess a set's name guesses its
- * own convention (`tools.functions`). */
-export let sets = (registry: Registry): string => {
-  let names = [
-    ...new Set(
-      catalog(registry).filter((e) => e.name != 'code_mode').map((e) =>
-        e.provider
-      ),
-    ),
-  ]
+let pathsOf = (providers: readonly Provider[]): string => {
+  let names = providers.filter(({ tools }) =>
+    tools.some((t) => toolName(t) != 'code_mode')
+  ).map(({ name }) => name)
   return names.length
     ? names.map((n) => `tools.${n}.<name>(args)`).join(' or ') +
       ' (the set each tool is in, never another name)'
     : 'tools[set][name](args)'
 }
 
-/** One connector tool: omit script to discover generated declarations; supply
- * a JS/TS function body to execute it with the same tool objects. */
-export let tool = (
-  registry: Registry,
-  run: Runner,
-  evaluate: Evaluate,
-  strip: Strip,
-  opts: Options = {},
-): Tool => ({
+/** How a script names a tool, by the sets it will see. */
+export let sets = (registry: Registry): string => pathsOf(registry.providers())
+
+let fields = {
   name: 'code_mode',
   title: 'Run code',
-  description:
-    'Use this for bulk reads, imports, reconciles and writes: keep source data and whole tool results inside a short JS/TS function body with return and await. ' +
-    sets(registry) +
-    ' calls the same scoped tools, returning MCP content and structuredContent. Read schemas and rows, parse input, join, compare, build bundles and write them inside the script. Check isError before using a result. The answer is your return value plus a receipt per call (its id and path, and the error words of a call that failed). Large return values and tool results are kept in the graph; the answer gives their id, size, shape and preview. Use await results.read(id) inside a script to load a kept result, then filter or summarize it before returning. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script and arguments. Tool results over the 4MiB execution read budget and return values over 256KiB are kept; accidental results over 32MiB are refused for system safety. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -342,6 +328,34 @@ export let tool = (
   applied: true,
   destructive: true,
   openWorld: true,
+}
+
+type Definition = Omit<Tool, 'run' | 'inputSchema'> & {
+  inputSchema: NonNullable<Tool['inputSchema']> & {
+    properties: Record<string, unknown>
+  }
+}
+
+/** The code tool's public declaration from its providers, without building
+ * their registry or publishing any of the nested tools' schemas. */
+export let definition = (providers: readonly Provider[]): Definition => ({
+  ...fields,
+  description:
+    'Use this for bulk reads, imports, reconciles and writes: keep source data and whole tool results inside a short JS/TS function body with return and await. ' +
+    pathsOf(providers) +
+    ' calls the same scoped tools, returning MCP content and structuredContent. Read schemas and rows, parse input, join, compare, build bundles and write them inside the script. Check isError before using a result. The answer is your return value plus a receipt per call (its id and path, and the error words of a call that failed). Large return values and tool results are kept in the graph; the answer gives their id, size, shape and preview. Use await results.read(id) inside a script to load a kept result, then filter or summarize it before returning. Omit script to read generated TypeScript declarations; search narrows discovery by tool name/description; offset/limit page it (at most 20). No ambient network, secrets or other bindings. 30s wall, 100ms CPU, 128MiB isolate, 16 calls, 64KiB script and arguments. Tool results over the 4MiB execution read budget and return values over 256KiB are kept; accidental results over 32MiB are refused for system safety. Started writes may complete after a script fails or times out; pending receipts mean the outcome is still unknown. Durable workflows and human waits are separate.',
+})
+
+/** One connector tool: omit script to discover generated declarations; supply
+ * a JS/TS function body to execute it with the same tool objects. */
+export let tool = (
+  registry: Registry,
+  run: Runner,
+  evaluate: Evaluate,
+  strip: Strip,
+  opts: Options = {},
+): Tool => ({
+  ...definition(registry.providers()),
   run: async (asked) => {
     let { script, search, offset = 0, limit = 20 } = argsOf(asked)
     let matches = catalog(registry).filter((e) =>

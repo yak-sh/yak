@@ -252,12 +252,10 @@ let boot = async (
       { retain },
     )
   )
-  let ticking = setInterval(p.ring, 10)
   // Once, however many ask: a test's `stop`, and its scope after it.
   let closed: Promise<void> | undefined
   let close = () =>
     closed ??= (async () => {
-      clearInterval(ticking)
       await service.stop()
       await p[Symbol.asyncDispose]()
       await cf.stop()

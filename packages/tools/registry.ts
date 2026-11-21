@@ -2,7 +2,7 @@
 import type { NamedTool, Tool } from '@yaks/graph'
 import { namedTool } from '@yaks/graph/call'
 import { minted } from '@yaks/graph/identity'
-import { toolEid } from './result.ts'
+import { toolEid, toolNameAt } from './result.ts'
 import { answerSchema, inputSchemaOf } from './schema.ts'
 
 /** One runtime source's complete catalog, with names unchanged. */
@@ -56,17 +56,14 @@ let indexed = (sources: ReturnType<typeof snapshot>[]) => {
       names.set(tool.name, { provider: source.name, tool })
     }
   }
-  let eids = new Map<string, NamedTool>()
   let unhashed = names.values()
   let identified = (eid: string): NamedTool | undefined => {
-    let found = eids.get(eid)
-    for (let next; !found && !(next = unhashed.next()).done;) {
+    let name = toolNameAt(eid)
+    if (name !== undefined) return names.get(name)?.tool
+    for (let next; !(next = unhashed.next()).done;) {
       let { tool } = next.value
-      let id = toolEid(tool.name)
-      eids.set(id, tool)
-      if (id == eid) found = tool
+      if (toolEid(tool.name) == eid) return tool
     }
-    return found
   }
   return { names, identified }
 }

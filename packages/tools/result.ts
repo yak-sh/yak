@@ -38,15 +38,22 @@ export let WOKEN = 'call_woken'
 // Each name's id, derived once: it is a hash, and a server that builds a
 // runner per request names every tool it has each time.
 let eids = new Map<string, Eid>()
+let names = new Map<Eid, string>()
 
 /** The entity id a call points at for a tool of this name: the id the
  * vocabulary's `identity` on `tool.name` derives, so a graph's tool rows are
  * the same rows every time a runner is built. */
 export let toolEid = (name: string): Eid => {
   let eid = eids.get(name)
-  if (!eid) eids.set(name, eid = identityEid('tool', [name]))
+  if (!eid) {
+    eids.set(name, eid = identityEid('tool', [name]))
+    names.set(eid, name)
+  }
   return eid
 }
+
+// An id already derived in this process needs no walk through a catalog.
+export let toolNameAt = (eid: Eid): string | undefined => names.get(eid)
 
 /** The row a registered tool advertises to stored calls and builders. */
 export let toolRow = (tool: Tool): Bundle => {
