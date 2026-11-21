@@ -510,3 +510,56 @@ test("a reply's thinking blocks are its thought, as they streamed", () => {
   equal(thought(m.content), 'Matt asked for a guide.')
   equal(thought(m.content.slice(1)), undefined)
 })
+
+test('shared instructions keep an hour while the rolling breakpoint excludes turn context', async () => {
+  let { sent, fetch } = api(() => sse(reply()))
+  let shared = 'Platform.'
+  let request = ask({
+    instructions: shared + ' Ada.',
+    cachePrefix: { key: 'operator', length: shared.length, retention: 3600 },
+    items: [{ kind: 'user', text: 'Find the yak.' }],
+    turnContext: [{ kind: 'instruction', text: 'Here now.' }],
+  })
+  let before = Date.now()
+  let out = await messages({ key: () => 'k', fetch })(request)
+  let body = sent[0].body
+  equal(body.cache_control, undefined)
+  equal(body.system, [
+    {
+      type: 'text',
+      text: shared,
+      cache_control: { type: 'ephemeral', ttl: '1h' },
+    },
+    { type: 'text', text: ' Ada.' },
+  ])
+  equal(body.messages, [{
+    role: 'user',
+    content: [
+      {
+        type: 'text',
+        text: 'Find the yak.',
+        cache_control: { type: 'ephemeral' },
+      },
+      { type: 'text', text: 'Here now.' },
+    ],
+  }])
+  ok(Date.parse(out.cacheExpiresAt!) - before < 305_000)
+})
+
+test('scoped Claude tools are introduced after the shared system prefix', async () => {
+  let { sent, fetch } = api(() => sse(reply()))
+  await messages({ key: () => 'k', fetch })(ask({
+    cachePrefix: {
+      key: 'operator',
+      length: 9,
+      retention: 3600,
+      tools: ['find'],
+    },
+    items: [{ kind: 'user', text: 'Find the yak.' }],
+    turnContext: [{ kind: 'instruction', text: 'Here now.' }],
+  }))
+  let body = sent[0].body
+  equal(body.tools.map((t: { name: string }) => t.name), ['find'])
+  equal(body.messages[1].content[0].tool.definition.name, 'zap')
+  equal(body.messages.at(-1).content.at(-1).text, 'Here now.')
+})

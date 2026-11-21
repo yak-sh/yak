@@ -70,15 +70,24 @@ let BYTES = 4
  * ```
  */
 export let likely = (
-  req: Pick<Request, 'instructions' | 'tools' | 'questions' | 'input'> & {
-    items: unknown[]
-  },
+  req:
+    & Pick<
+      Request,
+      'instructions' | 'tools' | 'questions' | 'input'
+    >
+    & { items: unknown[]; turnContext?: unknown[] },
   price: Price,
   most: number,
   output = 0,
 ): number => {
   let input = Math.ceil(
-    (size([req.instructions, req.items, req.questions, req.input]) +
+    (size([
+      req.instructions,
+      req.items,
+      req.turnContext,
+      req.questions,
+      req.input,
+    ]) +
       size(req.tools)) / BYTES,
   )
   let dollars = upward((input * price.input + output * price.output) / 1e6)
@@ -89,12 +98,19 @@ export let likely = (
  * holds, whose earlier turns this side cannot measure. */
 export let requestBound = (
   req:
-    & Pick<Request, 'anchor' | 'instructions' | 'tools' | 'questions' | 'input'>
-    & { items: unknown[] },
+    & Pick<
+      Request,
+      | 'anchor'
+      | 'instructions'
+      | 'tools'
+      | 'questions'
+      | 'input'
+    >
+    & { items: unknown[]; turnContext?: unknown[] },
   context: number,
 ): number =>
   req.anchor ? context : promptBound(
-    [req.instructions, req.items, req.questions, req.input],
+    [req.instructions, req.items, req.turnContext, req.questions, req.input],
     context,
     req.tools,
   )
@@ -103,8 +119,11 @@ export let requestBound = (
  * lifetime it offers that is not over what the request asks
  * (`Request.cacheRetention`), or its default, so only a request asking an
  * hour can write to the hour's cache at its dearer tariff. */
-export let retained = (price: Price, seconds = 0): Price =>
-  seconds >= HOUR ? price : { ...price, cache_write_1h: undefined }
+export let retained = (price: Price, seconds = 0, shared = 0): Price => ({
+  ...price,
+  ...Math.max(seconds, shared) >= HOUR ? {} : { cache_write_1h: undefined },
+  ...shared >= 43_200 ? {} : { cache_write_12h: undefined },
+})
 let HOUR = 3600
 
 let valid = (n: number) => Number.isFinite(n) && n >= 0
@@ -126,6 +145,7 @@ export let affordable = (
     price.cached ?? price.input,
     price.cache_write ?? price.input,
     price.cache_write_1h ?? price.cache_write ?? price.input,
+    price.cache_write_12h ?? price.cache_write ?? price.input,
   ]
   if (
     !rates.every(valid) || !valid(price.output) || !valid(input) ||
@@ -182,6 +202,7 @@ export let measured = (
     price.cached ?? price.input,
     price.cache_write ?? price.input,
     price.cache_write_1h ?? price.cache_write ?? price.input,
+    price.cache_write_12h ?? price.cache_write ?? price.input,
   )
   return { dollars: weigh({ ...price, input }, n), reported: false }
 }

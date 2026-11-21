@@ -322,6 +322,7 @@
       "output": 1.2,
       "cached": 0.02,
       "cache_write": 0.25,
+      "cache_write_12h": 0.5,
       "web_search": 0.01
     },
     "gpt-5.6-luna-pro": {
@@ -329,6 +330,7 @@
       "output": 1.2,
       "cached": 0.02,
       "cache_write": 0.25,
+      "cache_write_12h": 0.5,
       "web_search": 0.01
     },
     "gpt-5.6-sol": {
@@ -336,6 +338,7 @@
       "output": 20,
       "cached": 0.4,
       "cache_write": 5,
+      "cache_write_12h": 10,
       "web_search": 0.01
     },
     "gpt-5.6-sol-pro": {
@@ -343,6 +346,7 @@
       "output": 20,
       "cached": 0.4,
       "cache_write": 5,
+      "cache_write_12h": 10,
       "web_search": 0.01
     },
     "gpt-5.6-terra": {
@@ -350,6 +354,7 @@
       "output": 12,
       "cached": 0.2,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-5.6-terra-pro": {
@@ -357,6 +362,7 @@
       "output": 12,
       "cached": 0.2,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6-astra": {
@@ -364,6 +370,7 @@
       "output": 50,
       "cached": 1,
       "cache_write": 12.5,
+      "cache_write_12h": 25,
       "web_search": 0.01
     },
     "gpt-6-astra-pro": {
@@ -371,6 +378,7 @@
       "output": 50,
       "cached": 1,
       "cache_write": 12.5,
+      "cache_write_12h": 25,
       "web_search": 0.01
     },
     "gpt-6-luna": {
@@ -378,6 +386,7 @@
       "output": 0.5,
       "cached": 0.01,
       "cache_write": 0.125,
+      "cache_write_12h": 0.25,
       "web_search": 0.01
     },
     "gpt-6-luna-pro": {
@@ -385,6 +394,7 @@
       "output": 0.5,
       "cached": 0.01,
       "cache_write": 0.125,
+      "cache_write_12h": 0.25,
       "web_search": 0.01
     },
     "gpt-6-sol": {
@@ -392,6 +402,7 @@
       "output": 10,
       "cached": 0.2,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6-sol-pro": {
@@ -399,6 +410,7 @@
       "output": 10,
       "cached": 0.2,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6.1-sol": {
@@ -406,6 +418,7 @@
       "output": 10,
       "cached": 0.1,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6.1-sol-pro": {
@@ -413,6 +426,7 @@
       "output": 10,
       "cached": 0.1,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6.1-terra": {
@@ -420,6 +434,7 @@
       "output": 5,
       "cached": 0.05,
       "cache_write": 1.25,
+      "cache_write_12h": 2.5,
       "web_search": 0.01
     },
     "gpt-6.1-terra-pro": {
@@ -427,6 +442,7 @@
       "output": 5,
       "cached": 0.05,
       "cache_write": 1.25,
+      "cache_write_12h": 2.5,
       "web_search": 0.01
     },
     "gpt-6.2-astra": {
@@ -434,6 +450,7 @@
       "output": 40,
       "cached": 0.4,
       "cache_write": 10,
+      "cache_write_12h": 20,
       "web_search": 0.01
     },
     "gpt-6.2-astra-pro": {
@@ -441,6 +458,7 @@
       "output": 40,
       "cached": 0.4,
       "cache_write": 10,
+      "cache_write_12h": 20,
       "web_search": 0.01
     },
     "gpt-6.2-sol": {
@@ -448,6 +466,7 @@
       "output": 10,
       "cached": 0.1,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-6.2-sol-pro": {
@@ -455,6 +474,7 @@
       "output": 10,
       "cached": 0.1,
       "cache_write": 2.5,
+      "cache_write_12h": 5,
       "web_search": 0.01
     },
     "gpt-audio": {

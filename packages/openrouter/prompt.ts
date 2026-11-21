@@ -168,7 +168,8 @@ export let responseBody = (req: Request, body: ResponseRequest) => {
       ? { ...raw, output: parts }
       : { ...raw, content: parts }
   })
-  let { instructions: _instructions, ...rest } = body
+  let { instructions: _instructions, prompt_cache_options: _cache, ...rest } =
+    body
   return {
     ...rest,
     input: projected,

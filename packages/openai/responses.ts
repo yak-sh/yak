@@ -167,23 +167,74 @@ let REASONS = /^(?:o\d|gpt-(?:[5-9]|\d{2,})|codex)/
  * `Reply.thought`). */
 export let reasons = (model: string): boolean => REASONS.test(model)
 
+// Models with explicit Responses API cache breakpoints.
+let explicitCache = (model: string): boolean =>
+  /^gpt-(?:5\.[6-9]|[6-9])(?:[.-]|$)/.test(model)
+
+let prompt = (req: Request, scoped: Frame[]) => {
+  let prefix = req.cachePrefix
+  if (!prefix || !req.instructions || req.anchor) {
+    return {
+      ...req.instructions ? { instructions: req.instructions } : {},
+      input: input([...req.items, ...req.turnContext ?? []]),
+    }
+  }
+  let explicit = explicitCache(req.model)
+  let shared = req.instructions.slice(0, prefix.length)
+  let local = req.instructions.slice(prefix.length)
+  return {
+    input: [
+      {
+        role: 'developer',
+        content: [{
+          type: 'input_text',
+          text: shared,
+          ...explicit
+            ? {
+              prompt_cache_breakpoint: {
+                mode: 'explicit',
+                ...prefix.retention >= 43_200 ? { ttl: '12h' } : {},
+              },
+            }
+            : {},
+        }],
+      },
+      ...local ? input([{ kind: 'instruction', text: local }]) : [],
+      ...scoped.length
+        ? [{ type: 'additional_tools', role: 'developer', tools: scoped }]
+        : [],
+      ...input([...req.items, ...req.turnContext ?? []]),
+    ],
+    ...explicit
+      ? { prompt_cache_options: { mode: 'implicit', ttl: '30m' } }
+      : {},
+  }
+}
+
 /** The whole request body. */
 export let body = (
   req: Request,
   store = false,
   images?: Images,
   web = false,
-): ResponseRequest =>
-  request({
+): ResponseRequest => {
+  let tools = [
+    ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
+    ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
+    ...web ? [searching(req.sites)] : [],
+  ].sort(toolOrder)
+  let inline = req.cachePrefix?.tools && req.instructions && !req.anchor &&
+    /^gpt-6(?:[.-]|$)/.test(req.model) && !req.sites
+  let shared = new Set(req.cachePrefix?.tools)
+  let scoped = (t: Frame) =>
+    inline && t.type == 'function' && !shared.has(String(t.name))
+  return request({
     model: req.model,
-    ...req.instructions ? { instructions: req.instructions } : {},
-    input: input(req.items),
-    tools: [
-      ...req.tools.map((t) => ({ type: 'function', strict: false, ...t })),
-      ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
-      ...web ? [searching(req.sites)] : [],
-    ].sort(toolOrder).map(canonical),
-    ...req.conversation ? { prompt_cache_key: req.conversation } : {},
+    ...prompt(req, tools.filter(scoped).map((t) => canonical(t) as Frame)),
+    tools: tools.filter((t) => !scoped(t)).map(canonical),
+    ...req.cachePrefix || req.conversation
+      ? { prompt_cache_key: req.cachePrefix?.key ?? req.conversation }
+      : {},
     ...req.effort || reasons(req.model)
       ? {
         reasoning: {
@@ -195,6 +246,7 @@ export let body = (
     ...req.tokens ? { max_output_tokens: req.tokens } : {},
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
+}
 
 /** Keep provider citations as clickable Markdown in the stored final text:
  * each page cited that the text does not link yet, once, by its title or else
@@ -318,6 +370,7 @@ let ask = (opts: Options) => {
     try {
       // The endpoint decides support, including OAuth and custom deployments.
       // Never retry without the tool based on an ambiguous provider error.
+      let started = Date.now()
       let selected = opts.images
       const textIndexes = new Map<string, number>()
       let responseId = ''
@@ -420,6 +473,10 @@ let ask = (opts: Options) => {
       let limits = planLimits(out.limits, opts.account)
       return {
         ...reply,
+        ...req.cachePrefix && explicitCache(req.model) &&
+            reply.cacheExpiresAt === undefined
+          ? { cacheExpiresAt: new Date(started + 1_800_000).toISOString() }
+          : {},
         ...out.cut ? { cut: true } : {},
         ...limits.length ? { limits } : {},
       }
@@ -523,6 +580,7 @@ export let tokenUsage = (raw: unknown): Pick<Reply, 'usage' | 'cost'> => {
       ? (value as Record<string, unknown>)[field]
       : undefined
   }
+  let writes = detail('input_tokens_details', 'cache_write_tokens_details')
   let usage = Object.fromEntries(
     Object.entries({
       input_tokens: u.input_tokens,
@@ -530,6 +588,9 @@ export let tokenUsage = (raw: unknown): Pick<Reply, 'usage' | 'cost'> => {
       total_tokens: u.total_tokens,
       cached_tokens: detail('input_tokens_details', 'cached_tokens'),
       cache_write_tokens: detail('input_tokens_details', 'cache_write_tokens'),
+      cache_write_12h_tokens: record(writes)
+        ? writes.ttl_12h_tokens
+        : undefined,
       reasoning_tokens: detail('output_tokens_details', 'reasoning_tokens'),
     }).filter(([, n]) =>
       typeof n == 'number' && Number.isSafeInteger(n) && n >= 0

@@ -75,9 +75,14 @@ export let chatted = (
     ]).finally(() => cancel())
   })
 
-export let callable = (req: Pick<Ask, 'tools'>): string[] => [
+export let callable = (req: Pick<Ask, 'tools' | 'turnContext'>): string[] => [
   ...req.tools.map((t) => t.name),
-  ...(req.tools.find((t) => t.name == 'tool_load')?.description ?? '')
+  ...[
+    req.tools.find((t) => t.name == 'tool_load')?.description,
+    ...req.turnContext?.flatMap((i) =>
+      i.kind == 'instruction' ? [i.text] : []
+    ) ?? [],
+  ].filter(Boolean).join('\n')
     .matchAll(/^- (\w+):/gm).map((m) => m[1]),
 ]
 

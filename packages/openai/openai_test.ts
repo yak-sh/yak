@@ -6,7 +6,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ModelError, type Request, UNANCHORED } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
-import { thought } from './responses.ts'
+import { input, thought } from './responses.ts'
 import { tokenUsage } from './responses.ts'
 
 let req: Request = {
@@ -517,4 +517,47 @@ test('prefix expiry is explicit metadata, not stored response lifetime or cached
         : '2026-10-03T10:05:00.000Z',
     )
   }
+})
+
+test('Responses caches the shared developer message before space and turn context', () => {
+  let shared = 'Platform.'
+  let ask: Request = {
+    ...req,
+    model: 'gpt-6.2-sol',
+    anchor: undefined,
+    instructions: shared + ' Ada.',
+    conversation: 'ada-chat',
+    cachePrefix: {
+      key: 'operator',
+      length: shared.length,
+      retention: 43_200,
+      tools: [],
+    },
+    items: [{ kind: 'user', text: 'Find the yak.' }],
+    turnContext: [{ kind: 'instruction', text: 'Here now.' }],
+  }
+  let sent = body(ask)
+  assertEquals(sent.tools, [])
+  assertEquals(sent.prompt_cache_key, 'operator')
+  assertEquals(sent.prompt_cache_options, { mode: 'implicit', ttl: '30m' })
+  assertEquals(sent.input, [
+    {
+      role: 'developer',
+      content: [{
+        type: 'input_text',
+        text: shared,
+        prompt_cache_breakpoint: { mode: 'explicit', ttl: '12h' },
+      }],
+    },
+    ...input([{ kind: 'instruction', text: ' Ada.' }]),
+    {
+      type: 'additional_tools',
+      role: 'developer',
+      tools: [{ type: 'function', strict: false, ...req.tools[0] }],
+    },
+    ...input([
+      { kind: 'user', text: 'Find the yak.' },
+      { kind: 'instruction', text: 'Here now.' },
+    ]),
+  ])
 })

@@ -67,6 +67,26 @@ await meta(env).apply([
   link(BASE, 'contains', retired, 99),
 ], KERNEL)
 let first = await said('Hi')
+let otherId = await dir.mint(owner, 'other', 'Other', {
+  'x-yak-person': owner,
+  'x-yak-role': 'owner',
+})
+let other = (await dir.at(otherId))!
+let otherStore = operatorMemory()
+let otherOperator = operating(otherStore, env, {
+  ...operatorModel((req) => {
+    asked.push(req)
+    return Promise.resolve({
+      id: 'other',
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'Hello.' }],
+    })
+  }),
+  name: 'claude-sonnet-5-5',
+})
+await otherOperator.ask(held, other, { say: 'Hi' }, {})
+await drain(otherStore)
+let otherAsk = asked.at(-1)!
 await meta(env).apply([{
   entity: { eid: BASE },
   doc: { body: 'Speak plainly, and keep every answer short.' },
@@ -97,7 +117,9 @@ test('the base comes first, then the space persona worn on it, then where it is'
 })
 
 test('what only some turns need is named under Reads, by id and when to open it, not said', () => {
-  let reads = String(first.instructions).split('## Reads')[1]
+  let reads = String(first.instructions).split('## Reads').slice(1).join(
+    '## Reads',
+  )
   for (
     let title of [
       'Working in the apps: open before',
@@ -205,8 +227,29 @@ test('separating a space topic from its Operator persona preserves authored text
 })
 
 test('it is told its session and the model its using names, never another assistant', () => {
-  let text = String(first.instructions)
+  let text =
+    first.turnContext?.flatMap((item) =>
+      item.kind == 'instruction' ? [item.text] : []
+    ).join('\n') ?? ''
   assertStringIncludes(text, `your session ${short(first.conversation!)}`)
   assertStringIncludes(text, `answered by the model ${first.model}`)
   assertStringIncludes(text, 'never ChatGPT, Claude')
+})
+
+test('Operator spaces with the same tools share the base prefix and keep local context after it', () => {
+  let prefix = (ask: Request) =>
+    ask.instructions!.slice(0, ask.cachePrefix!.length)
+  assertEquals(first.cachePrefix, otherAsk.cachePrefix)
+  assertEquals(prefix(first), prefix(otherAsk))
+  let sharedTools = (ask: Request) =>
+    ask.tools.filter((t) => ask.cachePrefix?.tools?.includes(t.name))
+  assertEquals(sharedTools(first), sharedTools(otherAsk))
+  assert(first.instructions != otherAsk.instructions)
+  assert(!prefix(first).includes('the Operator of home'))
+  assert(
+    first.turnContext?.some((item) =>
+      item.kind == 'instruction' &&
+      item.text.includes(short(first.conversation!))
+    ),
+  )
 })

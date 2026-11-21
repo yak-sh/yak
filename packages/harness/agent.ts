@@ -41,6 +41,7 @@ import {
   type Model,
   ModelError,
   PROVIDER,
+  type Request,
   TOOL,
 } from '@yaks/model'
 import { resultTool } from './results.ts'
@@ -87,7 +88,7 @@ import {
 } from './model_selection.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
-import { offeredTo, type Wear, wornBy } from './worn.ts'
+import { offeredTo, type Wear, wornBy, wornLayers } from './worn.ts'
 import { PART } from '@yaks/persona'
 import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 
@@ -203,6 +204,10 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   instructions?: string | ((session: Eid) => Promise<string>)
   /** Changing this scope refreshes instructions even with a warm prefix cache. */
   instructionScope?: Deps['instructionScope']
+  /** The persona base shared by this application's transcripts. */
+  cachePrefix?: Omit<NonNullable<Request['cachePrefix']>, 'length'> & {
+    persona: Eid
+  }
   /** What every system prompt this agent composes opens with, ahead of the
    * persona and `instructions`: the same for every transcript and every ask,
    * so it stays in a provider's cached prefix (the box's kinds index, @yaks/vocab
@@ -575,6 +580,22 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ? opened(opts.instructions)
       : undefined,
     instructionScope: opts.instructionScope,
+    requestInstructions: opts.cachePrefix && (async (session) => {
+      let { persona, ...cache } = opts.cachePrefix!
+      let [layers, added] = await Promise.all([
+        wornLayers(h.g, session, opts.wear ?? {}, persona),
+        typeof opts.instructions == 'function'
+          ? opts.instructions(session)
+          : opts.instructions,
+      ])
+      let lead = [opts.opens, layers.shared].filter(Boolean).join(PART)
+      return {
+        instructions: [lead, layers.local, added].filter(Boolean).join(PART),
+        ...layers.shared
+          ? { cachePrefix: { ...cache, length: lead.length } }
+          : {},
+      }
+    }),
     resolveInstructions: async (inherited, session) => {
       if (!opts.wear) {
         return typeof opts.instructions == 'function'

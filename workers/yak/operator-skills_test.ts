@@ -74,7 +74,8 @@ await receive(store, {
   address: '+12695550143',
 }, 'Write the pitch.')
 await drain(store)
-let said = (req: Ask) => JSON.stringify(req.items)
+let said = (req: Ask) =>
+  JSON.stringify([...req.items, ...req.turnContext ?? []])
 
 test('the Operator is offered the skills its space keeps, by description', () => {
   let [first] = asked

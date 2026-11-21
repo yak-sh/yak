@@ -67,8 +67,12 @@ test('the Operator is sent tools it loads with the next ask, and lists the rest'
     ok(!names(first).includes(name))
     ok(names(next).includes(name))
   }
-  let load = first.tools.find((t) => t.name == 'tool_load')!
-  ok(load.description.includes('- number_find: Find a phone number'))
+  ok(
+    first.turnContext?.some((item) =>
+      item.kind == 'instruction' &&
+      item.text.includes('- number_find: Find a phone number')
+    ),
+  )
   equal(
     names(next).filter((n) => !names(first).includes(n)),
     ['app_files', 'number_find'],

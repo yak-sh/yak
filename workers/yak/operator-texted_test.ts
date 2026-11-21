@@ -8,7 +8,12 @@ import type { Request as Ask } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { owned } from './directory-fixture.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory, operatorModel, sentRows } from './operator-testing.ts'
+import {
+  callable,
+  operatorMemory,
+  operatorModel,
+  sentRows,
+} from './operator-testing.ts'
 import { frameOf } from './operator-host.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
@@ -70,15 +75,7 @@ let operator = operating(
     read.set(channel, users)
     let last = req.items.at(-1)
     if (last?.kind == 'result') answered.set(channel, last.output)
-    else {
-      held.set(
-        channel,
-        req.tools.flatMap((t) => [
-          t.name,
-          ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
-        ]),
-      )
-    }
+    else held.set(channel, callable(req))
     return Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,

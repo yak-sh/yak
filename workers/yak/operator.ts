@@ -42,6 +42,7 @@ import { fetchable } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
 import {
   type Listed,
+  listPrice,
   type Model,
   ModelError,
   modelReads,
@@ -363,11 +364,8 @@ let told = (
     }. Name the space, or the app as space/app, to work in one of them.`
     : ''
 
-// What the Operator is told of itself each turn: its conversation, whose
-// session row a fork shares with it, so the two keep one cached prefix, and
-// the model and provider this session's using{provider, model} names, the
-// rows the turn is answered by, so it says so when asked and stays true when
-// the model changes.
+// The conversation and model serving this turn are known only after routing.
+// They follow the transcript with the other turn context.
 let serving = (conversation: string, model?: Bundle, provider?: Bundle) => {
   let name = comp(model, 'model')?.name
   let by = comp(provider, 'provider')?.name
@@ -1539,7 +1537,13 @@ export let operating = (
   // and longest reply), the platform's one catalogue
   // (@yaks/platform/operator-model); what its provider lists where the row
   // is silent.
-  let catalogued = (model: string) => listingOf(bases(env), model)
+  let catalogued = async (model: string) => {
+    let row = await listingOf(bases(env), model)
+    let long = listPrice(model)?.cache_write_12h
+    return row?.price && long != null && row.price.cache_write_12h == null
+      ? { ...row, price: { ...row.price, cache_write_12h: long } }
+      : row
+  }
   let priced = async (model: string, from = provider) =>
     options.price && from == provider
       ? options.price
@@ -1703,6 +1707,14 @@ export let operating = (
         )
         let reply = await charged({
           ...req,
+          ...!options.model && from != 'openai' && from != 'anthropic' &&
+              req.turnContext?.length
+            ? {
+              items: [...req.items, ...req.turnContext],
+              turnContext: undefined,
+              cachePrefix: undefined,
+            }
+            : {},
           ...kept ? { cacheRetention: kept } : {},
           ...sites ? { sites } : {},
           onSubmit: async () => {
@@ -2408,9 +2420,28 @@ export let operating = (
     // Each ask wears the space's persona on the platform's base, read from
     // the directory (operator-persona.ts).
     wear: { bases: bases(env) },
+    cachePrefix: {
+      persona: BASE,
+      key: 'yaks.app/operator',
+      retention: 43_200,
+      tools: ['tool_load'],
+    },
     // The skills the space keeps, by title and description, for a session
     // offered skill_read: the same rule as the box's (@yaks/harness).
-    requestItems: (_, __, current) => skillItems(g, current),
+    requestItems: async (_, __, current) => {
+      let [skills, served, conversation] = await Promise.all([
+        skillItems(g, current),
+        servedIn(g, current.session),
+        topOf(store.g, current.session),
+      ])
+      return [
+        ...skills ?? [],
+        {
+          kind: 'instruction',
+          text: serving(conversation, served.model, served.provider),
+        },
+      ]
+    },
     // Where the person of the conversation is now, for them alone, sent
     // after the conversation and never kept in it (presence.ts).
     turnItems: async (_, __, { session }) => {
@@ -2459,37 +2490,14 @@ export let operating = (
         (value, source) => keepResult(g, value, source, work.person),
       )
     },
-    instructionScope: async (session) => {
-      let [work, served] = await Promise.all([
-        workingOf(store, session),
-        servedIn(g, session),
-      ])
-      return JSON.stringify([
-        // Rebuild any provider context that included passive app notice text.
-        'app notices through tools',
-        served.model?.entity.eid,
-        served.provider?.entity.eid,
-        work?.person,
-        work?.administrative,
-        work?.signup,
-        proven(await channelAt(store, session, work)),
-      ])
-    },
     // The conversation and its work forks share a short topic map. Only a
     // session opened on a topic carries that topic's compiled context.
     instructions: async (session) => {
       reached('instructing', null)
-      let [{ eid, space: at, here, ctx: context }, [row], served] =
-        await Promise.all([
-          working(env, store, session, options.directory),
-          g.read(q`.entity.eid=${session}&.fields=session.topic`),
-          servedIn(g, session),
-        ])
-      let self = serving(
-        await topOf(store.g, session),
-        served.model,
-        served.provider,
-      )
+      let [{ eid, space: at, here, ctx: context }, [row]] = await Promise.all([
+        working(env, store, session, options.directory),
+        g.read(q`.entity.eid=${session}&.fields=session.topic`),
+      ])
       // Reply channels carry no personal server instructions.
       let work = await workingOf(store, session)
       let servers =
@@ -2505,7 +2513,7 @@ export let operating = (
       if (!writes(ctx.role)) {
         return reached(
           'instructions',
-          [outside(space, ctx.role), self, await servers].filter(Boolean)
+          [outside(space, ctx.role), await servers].filter(Boolean)
             .join('\n\n'),
         )
       }
@@ -2517,7 +2525,7 @@ export let operating = (
       ])
       return reached(
         'instructions',
-        [map, told(ctx, space), self, connected, accounts, said].filter(
+        [map, told(ctx, space), connected, accounts, said].filter(
           Boolean,
         ).join('\n\n'),
       )

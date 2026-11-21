@@ -142,24 +142,36 @@ export let wear = (
   vocab: Vocab,
   bases: Reads = storage,
 ): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {
+  let layers = wearLayers(storage, vocab, bases)
+  return (eid) =>
+    after(layers(eid), ([base, ...more]) => base && fold(base, ...more))
+}
+
+/** The same persona in base-first order, preserving the boundary between
+ * layers for consumers that send them at different cache lifetimes. */
+export let wearLayers = (
+  storage: Reads,
+  vocab: Vocab,
+  bases: Reads = storage,
+): (eid: Eid) => Worn[] | Promise<Worn[]> => {
   let alone = gathered(storage, vocab)
   let below = gathered(bases, vocab)
-  // Down a persona's bases, each read where bases are kept, then said base
-  // first. A base missing, or one already worn, ends the stack where it is.
   let on = (
     worn: Worn | undefined,
     seen: Set<Eid>,
-  ): Worn | undefined | Promise<Worn | undefined> => {
-    let base = (worn?.persona[PERSONA] as { base?: unknown } | undefined)?.base
-    if (!worn || typeof base != 'string' || seen.has(base)) return worn
-    if (seen.size >= DEPTH) return worn
-    return after(below(base), (under) =>
-      after(
-        on(under, new Set([...seen, base])),
-        (stack) => stack ? fold(stack, worn) : worn,
-      ))
+  ): Worn[] | Promise<Worn[]> => {
+    if (!worn) return []
+    let base = (worn.persona[PERSONA] as { base?: unknown } | undefined)?.base
+    if (typeof base != 'string' || seen.has(base) || seen.size >= DEPTH) {
+      return [worn]
+    }
+    return after(
+      below(base),
+      (under) =>
+        after(on(under, new Set([...seen, base])), (stack) => [...stack, worn]),
+    )
   }
-  return (eid) => after(alone(eid), (worn) => on(worn, new Set([eid])))
+  return (eid: Eid) => after(alone(eid), (worn) => on(worn, new Set([eid])))
 }
 
 // One persona and what its edges reach, its base left aside.

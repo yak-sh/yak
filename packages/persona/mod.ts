@@ -36,6 +36,7 @@
 export { PERSON, PERSONA, personaDoc, SKILL } from './comp.ts'
 export { NAMED, PART, voice, type Worn } from './voice.ts'
 export {
+  beside,
   CONTAINS,
   fold,
   offer,
@@ -45,6 +46,7 @@ export {
   served,
   TOOL,
   wear,
+  wearLayers,
 } from './worn.ts'
 export { christened, given, LONGEST, NAMES, pick } from './name.ts'
 export {

@@ -191,6 +191,8 @@ export let project = (
     /** The model takes one output per tool call (@yaks/model `lateResults`
      * unset): a later update is told as user text. */
     resultUpdatesAsUser?: boolean
+    /** Collect transient prompt entries at the request tail. */
+    turnItems?: Item[]
   } = {},
 ): Item[] => {
   let out: Item[] = []
@@ -296,7 +298,10 @@ export let project = (
           ),
         )
       }
-      out.push(message({ kind: 'instruction', text: textOf(b) }, source(b)))
+      let items = comp(b, 'prompt')?.scope == 'turn' && opts.turnItems
+        ? opts.turnItems
+        : out
+      items.push(message({ kind: 'instruction', text: textOf(b) }, source(b)))
     } else if (kind == 'input') {
       let input = opts.inputText?.(b) ?? textOf(b)
       out.push(message({

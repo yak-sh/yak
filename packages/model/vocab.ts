@@ -38,6 +38,7 @@ export type Usage = {
   cached_tokens?: number
   cache_write_tokens?: number
   cache_write_1h_tokens?: number
+  cache_write_12h_tokens?: number
   reasoning_tokens?: number
   /** web searches a provider ran for the request, each billed at
    * {@link Price} `web_search` */
@@ -55,6 +56,7 @@ export type Price = {
   cached?: number
   cache_write?: number
   cache_write_1h?: number
+  cache_write_12h?: number
   web_search?: number
 }
 
@@ -96,6 +98,9 @@ export let weigh = (price: Price, n: Usage): number => {
     price,
     [cached, written, input - cached - written, n.output_tokens ?? 0],
     hourly(n),
+    n.cache_write_tokens
+      ? Math.min(1, (n.cache_write_12h_tokens ?? 0) / n.cache_write_tokens)
+      : 0,
   ) + (n.web_searches ?? 0) * (price.web_search ?? 0)
 }
 
@@ -121,9 +126,14 @@ export let dollars = (
   price: Price,
   [read, write, fresh, output]: Paid,
   hour = 0,
+  halfDay = 0,
 ): number => {
   let w = price.cache_write ?? price.input
   return (read * (price.cached ?? price.input) +
-    write * ((1 - hour) * w + hour * (price.cache_write_1h ?? w)) +
+    write * (
+        (1 - hour - halfDay) * w +
+        hour * (price.cache_write_1h ?? w) +
+        halfDay * (price.cache_write_12h ?? w)
+      ) +
     fresh * price.input + output * price.output) / 1e6
 }

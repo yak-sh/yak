@@ -20,6 +20,12 @@ export type Executor = {
 
 // The items that carry bytes, frozen as arrays of numbers.
 type Media = 'image' | 'document'
+type FrozenItem = Exclude<Request['items'][number], { kind: Media }> | {
+  kind: Media
+  bytes: number[]
+  mediaType: string
+  label: string
+}
 
 /** JSON input to an executor. Functions and process-local cancellation never
  * enter the private frozen object. */
@@ -38,15 +44,16 @@ export type FrozenModelRequest =
     | 'anchor'
     | 'conversation'
     | 'sites'
+    | 'cachePrefix'
+    | 'cacheRetention'
   >
-  & {
-    items: (Exclude<Request['items'][number], { kind: Media }> | {
-      kind: Media
-      bytes: number[]
-      mediaType: string
-      label: string
-    })[]
-  }
+  & { items: FrozenItem[]; turnContext?: FrozenItem[] }
+
+let freeze = (item: Request['items'][number]): FrozenItem =>
+  'bytes' in item ? { ...item, bytes: [...item.bytes] } : item
+
+let thaw = (item: FrozenItem): Request['items'][number] =>
+  'bytes' in item ? { ...item, bytes: Uint8Array.from(item.bytes) } : item
 
 export let frozenRequest = (req: Request): FrozenModelRequest => {
   let {
@@ -62,6 +69,9 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
     anchor,
     conversation,
     sites,
+    cachePrefix,
+    cacheRetention,
+    turnContext,
   } = req
   return JSON.parse(JSON.stringify({
     call,
@@ -76,17 +86,17 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
     anchor,
     conversation,
     sites,
-    items: req.items.map((item) =>
-      'bytes' in item ? { ...item, bytes: [...item.bytes] } : item
-    ),
+    cachePrefix,
+    cacheRetention,
+    ...turnContext ? { turnContext: turnContext.map(freeze) } : {},
+    items: req.items.map(freeze),
   }))
 }
 
 export let thawedRequest = (req: FrozenModelRequest): Request => ({
   ...req,
-  items: req.items.map((item) =>
-    'bytes' in item ? { ...item, bytes: Uint8Array.from(item.bytes) } : item
-  ),
+  turnContext: req.turnContext?.map(thaw),
+  items: req.items.map(thaw),
 })
 
 /** The ask's pinned executor and private object references. */

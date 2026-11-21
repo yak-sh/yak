@@ -52,7 +52,7 @@ let answering = (provider: string): Model =>
         id: mint(),
         model: req.model,
         items: [{ kind: 'assistant' as const, text: 'Hello.' }],
-        usage: { input_tokens: read, output_tokens: 0 },
+        usage: { input_tokens: read, output_tokens: 0, cache_write_tokens: 0 },
       })
     },
     { info: (name: string) => Promise.resolve({ name }) },

@@ -279,6 +279,17 @@ export type Request = {
    * it caches; a provider offers a few lifetimes and keeps the longest one
    * not over this, or its default where none fits or this is absent */
   cacheRetention?: number
+  /** The leading characters of instructions shared by this application's
+   * requests, its cache key, and their independent retention preference. */
+  cachePrefix?: {
+    length: number
+    key: string
+    retention: number
+    /** Tool declarations shared by all requests using this prefix. */
+    tools?: string[]
+  }
+  /** Context supplied for this request only, after the transcript. */
+  turnContext?: Item[]
   /** how long, in seconds, the reply's stream may go without progress (the
    * connection, its first byte, any gap after) before the request fails as
    * `stalled`; `@yaks/model/stall` `STALL_TIMEOUT` where absent, 0 for no

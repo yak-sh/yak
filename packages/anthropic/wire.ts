@@ -12,19 +12,32 @@ let BASE = 'https://api.anthropic.com'
 type Base64 = { type: 'base64'; media_type: string; data: string }
 
 /** A block of a message sent. */
+export type CacheControl = { type: 'ephemeral'; ttl?: '1h' }
+
 export type Block =
-  | { type: 'text'; text: string }
-  | { type: 'image'; source: Base64 }
-  | {
-    type: 'document'
-    source: Base64 | { type: 'text'; media_type: 'text/plain'; data: string }
-    title?: string
-  }
-  | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: string }
+  & (
+    | { type: 'text'; text: string }
+    | { type: 'image'; source: Base64 }
+    | {
+      type: 'document'
+      source: Base64 | { type: 'text'; media_type: 'text/plain'; data: string }
+      title?: string
+    }
+    | { type: 'tool_use'; id: string; name: string; input: unknown }
+    | { type: 'tool_result'; tool_use_id: string; content: string }
+  )
+  & { cache_control?: CacheControl }
 
 /** A message sent: one role's turn. */
 export type Param = { role: 'user' | 'assistant'; content: Block[] }
+
+export type ToolSystem = {
+  role: 'system'
+  content: {
+    type: 'tool_addition'
+    tool: { type: 'tool_definition'; definition: ToolParam }
+  }[]
+}
 
 export type ToolParam = {
   name: string
@@ -173,6 +186,7 @@ export let send = async (
 ): Promise<Response> => {
   init.signal?.throwIfAborted()
   let headers = {
+    ...Object.fromEntries(new Headers(init.headers)),
     accept: 'application/json',
     authorization: `Bearer ${key}`,
     'anthropic-version': VERSION,

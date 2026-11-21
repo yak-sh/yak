@@ -47,16 +47,19 @@ import {
   type ApiUsage,
   type Block,
   built,
+  type CacheControl,
   type Citation,
   type Content,
   events,
   failure,
+  type HostedParam,
   type Message,
   type ModelInfo,
   type Page,
   type Param,
   send,
   type ToolParam,
+  type ToolSystem,
 } from './wire.ts'
 
 export { anthropicDoc, failure, mark, READS }
@@ -155,9 +158,16 @@ let blocks = (i: Item): ['user' | 'assistant', Block[]] | undefined => {
  * message, so a turn's tool results answer together. The API takes a
  * message's tool results before anything else in it, so a result placed after
  * an image shown beside an earlier one joins the results ahead of it. */
-export let conversation = (req: Request): Param[] => {
+export let conversation = (req: Request, rolling?: CacheControl): Param[] => {
   let out: Param[] = []
-  for (let i of req.items.slice(leadOf(req))) {
+  let items = [...req.items, ...req.turnContext ?? []]
+  let boundary = req.items.length
+  for (let at = leadOf(req); at < items.length; at++) {
+    if (rolling && at == boundary) {
+      let last = out.at(-1)?.content.at(-1)
+      if (last) last.cache_control = rolling
+    }
+    let i = items[at]
     let b = blocks(i)
     if (!b) continue
     let [role, content] = b
@@ -178,6 +188,41 @@ export let conversation = (req: Request): Param[] => {
 /** Whether a request keeps its cached prefix the hour Anthropic offers
  * beside its default five minutes, at a dearer write. */
 let hour = (req: Request) => (req.cacheRetention ?? 0) >= 3600
+
+let caching = (req: Request) => {
+  let rolling: CacheControl = {
+    type: 'ephemeral',
+    ...hour(req) ? { ttl: '1h' } : {},
+  }
+  let prefix = req.cachePrefix
+  if (!prefix || !req.instructions) {
+    return {
+      cache_control: rolling,
+      system: system(req),
+      messages: conversation(req),
+    }
+  }
+  let shared: CacheControl = {
+    type: 'ephemeral',
+    ...prefix.retention >= 3600 || hour(req) ? { ttl: '1h' } : {},
+  }
+  let rest = system({
+    ...req,
+    instructions: req.instructions.slice(prefix.length),
+  })
+  return {
+    ...req.turnContext?.length ? {} : { cache_control: rolling },
+    system: [
+      {
+        type: 'text',
+        text: req.instructions.slice(0, prefix.length),
+        cache_control: shared,
+      },
+      ...rest ? [{ type: 'text', text: rest }] : [],
+    ],
+    messages: conversation(req, rolling),
+  }
+}
 
 /** Tools in name order, so the cached prefix is the same each request. */
 export let tools = (list: Tool[]): ToolParam[] =>
@@ -360,17 +405,39 @@ export let messages = (options: Options): Model => {
     let effort = req.effort && EFFORTS.includes(req.effort)
       ? req.effort
       : undefined
-    let offered = [
-      ...tools(req.tools),
+    let cached = caching(req)
+    let offered = tools(req.tools)
+    let shared = new Set(req.cachePrefix?.tools)
+    // Models that accept the inline-tools beta on the direct Claude API.
+    let inline = req.cachePrefix?.tools && !req.sites &&
+      /^claude-(?:opus-(?:4-8|5)|sonnet-5-5|haiku-5-5|fable-5|mythos-5)(?:-|$)/
+        .test(req.model)
+    let scoped = inline ? offered.filter((t) => !shared.has(t.name)) : []
+    let visible: (ToolParam | HostedParam)[] = [
+      ...inline ? offered.filter((t) => shared.has(t.name)) : offered,
       ...options.web ? web(req.model, req.sites) : [],
     ]
+    let additions: ToolSystem = {
+      role: 'system',
+      content: scoped.map((definition) => ({
+        type: 'tool_addition',
+        tool: { type: 'tool_definition', definition },
+      })),
+    }
     let body = {
       model: req.model,
       max_tokens: req.tokens ?? TOKENS,
-      cache_control: { type: 'ephemeral', ...hour(req) ? { ttl: '1h' } : {} },
-      system: system(req),
-      messages: conversation(req),
-      ...offered.length ? { tools: offered } : {},
+      ...cached,
+      ...scoped.length
+        ? {
+          messages: [
+            { role: 'user', content: [{ type: 'text', text: OPENER }] },
+            additions,
+            ...cached.messages,
+          ],
+        }
+        : {},
+      ...visible.length ? { tools: visible } : {},
       ...effort ? { output_config: { effort } } : {},
       stream: true,
     }
@@ -383,6 +450,9 @@ export let messages = (options: Options): Model => {
     }
     let message = await send(watching, key, '/v1/messages', {
       method: 'POST',
+      ...scoped.length
+        ? { headers: { 'anthropic-beta': 'inline-tools-2026-09-15' } }
+        : {},
       body: JSON.stringify(body),
       signal: req.signal,
     }).then((r) => read(req, r)).catch((e) => {

@@ -233,6 +233,10 @@
           "type": "integer",
           "description": "of the cache writes, those kept an hour rather than minutes, which a provider can price higher"
         },
+        "cache_write_12h_tokens": {
+          "type": "integer",
+          "description": "of the cache writes, those billed at a 12-hour lifetime"
+        },
         "reasoning_tokens": {
           "type": "integer",
           "description": "reasoning tokens within output tokens"
@@ -267,6 +271,10 @@
         "cache_write_1h": {
           "type": "number",
           "description": "dollars per million input tokens written to the cache for an hour; the cache_write price where absent"
+        },
+        "cache_write_12h": {
+          "type": "number",
+          "description": "dollars per million input tokens written to the cache for 12 hours; the cache_write price where absent"
         },
         "web_search": {
           "type": "number",

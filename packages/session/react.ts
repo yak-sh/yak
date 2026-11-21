@@ -1,5 +1,5 @@
 import { compactAsk } from './compact_ask.ts'
-import { loading, schemas } from './deferred.ts'
+import { catalog, loading, schemas } from './deferred.ts'
 import {
   answered,
   checkpointOf,
@@ -328,6 +328,10 @@ export type Deps = {
    * step in flight is let finish */
   stopping?: AbortSignal
   instructions?: string
+  /** Resolve instruction layers with an explicit shared prefix. */
+  requestInstructions?: (
+    session: Eid,
+  ) => Promise<Pick<Request, 'instructions' | 'cachePrefix'>>
   /** The host authority or context whose cached instructions may be reused. */
   instructionScope?: (session: Eid) => string | Promise<string>
   /** Resolve inherited base instructions for future asks without rewriting
@@ -1428,12 +1432,13 @@ export let react = async (
   // instructions this session's newest ask sent stand while its cached prefix
   // lasts. Once it has expired they are read again, and the conversation is
   // replayed on whatever they now say.
-  const scope = !deps.runCall && deps.instructionScope
-    ? await deps.instructionScope(session)
-    : undefined
+  const scope =
+    !deps.runCall && !deps.requestInstructions && deps.instructionScope
+      ? await deps.instructionScope(session)
+      : undefined
   const sameScope = scope == null ||
     comp(newestAsk(entries) ?? {} as Bundle, 'sending')?.scope === scope
-  const cached = deps.runCall || !sameScope
+  const cached = deps.runCall || deps.requestInstructions || !sameScope
     ? undefined
     : await instructionsOf(g, cachedSending(entries, session))
   // The instructions in force: an input's text, or the row an ask names.
@@ -1442,7 +1447,9 @@ export let react = async (
   const inheritedOf = () => inherited ??= instructionsOf(g, sending)
   // A step that will ask the model reads its instructions while its tools are
   // found: neither waits on the other, and each may be round trips away.
-  const resolve = cached == null ? deps.resolveInstructions : undefined
+  const resolve = cached == null && !deps.requestInstructions
+    ? deps.resolveInstructions
+    : undefined
   const instructed = !deps.runCall && !open.length && resolve
     ? inheritedOf().then((said) => resolve(said, session))
     : undefined
@@ -1494,6 +1501,7 @@ export let react = async (
   }
   const tools = loading(
     offered(assembled, deps.named ?? (() => []), sending?.tools),
+    !!deps.requestInstructions,
   )
   // Legacy synchronous calls are run here. Native async calls are owned by
   // their separate session_tool effect; only that effect enters this branch
@@ -1893,6 +1901,31 @@ export let react = async (
       { error, phase: 'context' },
     )
   }
+  let turnItems: Request['turnContext'] = deps.requestInstructions
+    ? []
+    : undefined
+  let transcriptItems = project(entries, window, toolEntities, {
+    anchor: anchorId ? asked!.entity.eid : undefined,
+    results,
+    media,
+    session,
+    inputText: inputs,
+    resultUpdatesAsUser: !providerModel.lateResults,
+    turnItems,
+  })
+  if (turnItems) {
+    let available = catalog(tools)
+    if (available) {
+      turnItems.push(message({
+        kind: 'instruction',
+        text: 'Tools you can load with tool_load:\n' + available,
+      }, 'the system'))
+    }
+    turnItems.push(
+      ...dynamic.map((item) => message(item, item.from ?? 'the system')),
+      ...moment,
+    )
+  }
   let req: Request = {
     signal: deps.signal,
     model: spelled,
@@ -1903,32 +1936,26 @@ export let react = async (
     ...questions ? { questions } : {},
     ...sending?.tokens ? { tokens: Number(sending.tokens) } : {},
     effort: effort == null ? undefined : String(effort),
-    instructions: cached ??
-      (instructed
-        ? await instructed
-        : deps.resolveInstructions
-        ? await deps.resolveInstructions(await inheritedOf(), session)
-        : await inheritedOf() ?? deps.instructions),
+    ...deps.requestInstructions ? await deps.requestInstructions(session) : {
+      instructions: cached ??
+        (instructed
+          ? await instructed
+          : deps.resolveInstructions
+          ? await deps.resolveInstructions(await inheritedOf(), session)
+          : await inheritedOf() ?? deps.instructions),
+    },
     // A turn: what the model answers, never words of its own to finish.
-    items: closed([
-      ...dynamic.map((item) => message(item, item.from ?? 'the system')),
-      ...beforeNewest(
-        project(
-          entries,
-          window,
-          toolEntities,
-          {
-            anchor: anchorId ? asked!.entity.eid : undefined,
-            results,
-            media,
-            session,
-            inputText: inputs,
-            resultUpdatesAsUser: !providerModel.lateResults,
-          },
-        ),
-        moment,
-      ),
-    ]),
+    ...turnItems
+      ? {
+        items: closed(transcriptItems),
+        turnContext: turnItems,
+      }
+      : {
+        items: closed([
+          ...dynamic.map((item) => message(item, item.from ?? 'the system')),
+          ...beforeNewest(transcriptItems, moment),
+        ]),
+      },
     tools: schemas(tools, entries, await sentBefore(g, entries, tools)).map((
       { name, description, parameters },
     ) => ({ name, description, parameters })),
@@ -1960,8 +1987,7 @@ export let react = async (
       ),
       fixed: tokens(
         String(req.instructions ?? '').length +
-          JSON.stringify(dynamic).length +
-          JSON.stringify(moment).length +
+          JSON.stringify(turnItems ?? [...dynamic, ...moment]).length +
           JSON.stringify(req.tools).length +
           JSON.stringify(
             project(entries, retained(entries), toolEntities, {
@@ -2061,8 +2087,12 @@ export let react = async (
     fixed: [
       ...req.tools.map(toolPart),
       ...instructionParts(String(req.instructions ?? ''), 'system'),
-      ...itemLines(dynamic).map(([, n]): Part => ['skills', n]),
-      ...itemLines(moment).map(([, n]): Part => ['turn', n]),
+      ...!turnItems
+        ? [
+          ...itemLines(dynamic).map(([, n]): Part => ['skills', n]),
+          ...itemLines(moment).map(([, n]): Part => ['turn', n]),
+        ]
+        : [],
     ],
     lines: itemLines(
       anchorId
@@ -2072,6 +2102,8 @@ export let react = async (
           session,
           inputText: inputs,
         })
+        : turnItems
+        ? [...req.items, ...turnItems]
         : req.items.slice(dynamic.length).filter((i) => !moment.includes(i)),
     ),
   }

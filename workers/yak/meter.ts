@@ -283,7 +283,8 @@ export let accounted = (
       let info = own ? undefined : await model.info?.(req.model)
       let listed = reached('priced', info?.price ?? await price?.(req.model))
       // Held and charged at what the request can be billed.
-      let tariff = listed && retained(listed, req.cacheRetention)
+      let tariff = listed &&
+        retained(listed, req.cacheRetention, req.cachePrefix?.retention)
       let window = info?.context ??
         (tariff && Object.values(tariff).every((p) => p == 0) ? 0 : undefined)
       let unbounded = !own && unboundable(req, tariff, window)

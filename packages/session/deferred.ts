@@ -26,6 +26,10 @@ export let LOAD = 'tool_load'
 let line = (t: Tool) =>
   `- ${t.name}: ${t.title ?? t.description.split(/(?<=\.)\s/)[0].slice(0, 120)}`
 
+/** The turn's available deferred tools, independent of the loader schema. */
+export let catalog = (tools: Tool[]): string =>
+  tools.filter((t) => t.deferred && !t.withheld).map(line).sort().join('\n')
+
 /**
  * The tool among `known` a loaded name means: the name itself, or the name
  * without the `<server>__` prefixes a caller wrote before it.
@@ -115,21 +119,25 @@ let namesOf = (call: Bundle): string[] => {
  * // ['search', 'buy', 'tool_load']
  * ```
  */
-export let loading = (offered: Tool[]): Tool[] => {
+export let loading = (offered: Tool[], separate = false): Tool[] => {
   let withheld = new Map(
     offered.flatMap((t) => t.withheld ? [[t.name, t.withheld]] : []),
   )
   let tools = offered.filter((t) => !t.withheld)
   let later = tools.filter((t) => t.deferred)
-  if (!later.length || tools.some((t) => t.name == LOAD)) return tools
+  if (!later.length || tools.some((t) => t.name == LOAD)) {
+    return tools
+  }
   let known = new Set(later.map((t) => t.name))
   let sent = new Set(tools.filter((t) => !t.deferred).map((t) => t.name))
   let load: Tool = {
     name: LOAD,
     title: 'Load tools',
     description:
-      'Load tools you are not sent yet, by name, so you can call them: their schemas are sent with your next turn. Load every one a task needs in one call. These are the tools you can load:\n' +
-      later.map(line).join('\n'),
+      'Load tools you are not sent yet by name. Their schemas are sent with your next turn. Load every one a task needs in one call.' +
+      (separate
+        ? ' The current context lists the tools you can load.'
+        : ' These are the tools you can load:\n' + later.map(line).join('\n')),
     parameters,
     readOnly: true,
     run: (args) => {

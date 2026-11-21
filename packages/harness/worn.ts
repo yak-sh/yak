@@ -7,7 +7,17 @@ import { argsOf, who } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { human, short } from '@yaks/id'
 import { type Built, line } from '@yaks/query'
-import { offer, PART, type Reads, voice, wear, wearing } from '@yaks/persona'
+import {
+  beside,
+  fold,
+  offer,
+  PART,
+  type Reads,
+  voice,
+  wear,
+  wearing,
+  wearLayers,
+} from '@yaks/persona'
 import { compile, gather } from '@yaks/topic'
 
 // How far up its starters what a transcript is opened as is looked for: a
@@ -104,6 +114,30 @@ export let wornBy = async (
     persona && voice(g.vocab)(persona).trimEnd(),
     topic && compile(g.vocab)(topic),
   ].filter(Boolean).join(PART) || undefined
+}
+
+/** The shared base and what this session wears over it, in prompt order.
+ * Only the configured base can start the shared prefix. */
+export let wornLayers = async (
+  g: Graph,
+  session: Eid,
+  how: Wear,
+  shared: Eid,
+): Promise<{ shared?: string; local?: string }> => {
+  let { persona } = await openedAs(g, session)
+  if (!persona) return {}
+  let layers = await wearLayers(g.storage, g.vocab, how.bases)(persona)
+  let render = voice(g.vocab)
+  let [head, ...tail] = layers
+  if (!head) return {}
+  if (head.persona.entity.eid != shared) {
+    return { local: render(fold(head, ...tail)).trimEnd() }
+  }
+  let [own, ...more] = tail
+  return {
+    shared: render(head).trimEnd(),
+    local: own ? render(beside(fold(own, ...more), head)).trimEnd() : undefined,
+  }
 }
 
 /** The names of the tools a transcript is offered by the persona it wears

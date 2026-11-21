@@ -11,7 +11,7 @@ import { appDoc, appVocab } from './vocab.ts'
 import { TOOLS } from './tools.ts'
 import { reaching } from './agent.ts'
 import { inReach } from './declared.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorContext } from './operator.ts'
 
@@ -94,14 +94,7 @@ let service = operatorService(env, held, {
     let said = req.items.findLast((i) => i.kind == 'user')
     let words = said?.kind == 'user' ? said.text : ''
     let planned = Object.entries(script).find(([w]) => words.includes(w))?.[1]
-    // Those deferred are named in tool_load's list.
-    offered.set(
-      words,
-      (req.tools ?? []).flatMap((t) => [
-        t.name,
-        ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
-      ]),
-    )
+    offered.set(words, callable(req))
     let cancel = words.match(/Cancel (\S+)/)?.[1]
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
