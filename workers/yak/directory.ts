@@ -2829,6 +2829,14 @@ export let directoryRows = (rows: {
           : null,
       }
     },
+    // The accounts a person connected as themselves (chat.ts `ownLinks`),
+    // which Profile names beside its other reads.
+    ownConnections: async (person: string): Promise<Bundle[]> =>
+      unnamed(
+        (await query(
+          line`.connection.owner=${person}&.connection.status=connected&*`,
+        )).map(({ policy: _, ...row }) => row),
+      ).map((row) => row as Bundle),
     browserSessions: async (person: string): Promise<BrowserSession[]> =>
       (await query(
         line`.browser_session.person=${person}&!cancelled&.browser_session.until>now&?created`,

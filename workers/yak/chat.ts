@@ -655,12 +655,9 @@ let present = async (env: Env, platform: Platform, all: Present[]) => {
  * Profile shows them (desk-pages.ts `profile`): the platform, the
  * integration a person links their account there with, and the names of
  * those they linked, which tell every space's Operator it is them
- * ({@link linked}). */
-export let ownLinks = async (env: Env, person: string) => {
-  let rows = await read(
-    env,
-    line`.${CONNECTION}.owner=${person}&.${CONNECTION}.status=connected&*`,
-  )
+ * ({@link linked}). `rows` are the connections the person connected as
+ * themselves (directory.ts `ownConnections`). */
+export let ownLinks = async (env: Env, rows: Bundle[]) => {
   let all = await Promise.all(
     [...PLATFORMS.values()].map(async (p) =>
       p.user && await platformBot(env, p.name)

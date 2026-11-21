@@ -584,7 +584,12 @@ test('Profile offers each person their own Discord link, and names the accounts 
     VAULT_KEY: KEY,
   })
   let ann = crypto.randomUUID(), bob = crypto.randomUUID()
-  assertEquals(await ownLinks(p.env, ann), [])
+  let links = async (person: string) =>
+    ownLinks(
+      p.env,
+      await directory({ fetch: over(meta(p.env)) }).ownConnections(person),
+    )
+  assertEquals(await links(ann), [])
   await meta(p.env).apply([
     registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
     {
@@ -599,6 +604,6 @@ test('Profile offers each person their own Discord link, and names the accounts 
     },
   ], KERNEL)
   let offer = { platform: 'Discord', integration: 'discord-account' }
-  assertEquals(await ownLinks(p.env, ann), [{ ...offer, accounts: ['Ann'] }])
-  assertEquals(await ownLinks(p.env, bob), [{ ...offer, accounts: [] }])
+  assertEquals(await links(ann), [{ ...offer, accounts: ['Ann'] }])
+  assertEquals(await links(bob), [{ ...offer, accounts: [] }])
 })

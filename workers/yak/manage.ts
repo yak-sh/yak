@@ -449,6 +449,7 @@ let foresee = (
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
+    ...view == 'profile' ? [dir.ownConnections(person)] : [],
     // The chat draws the lists their servers offer (operator-lists.ts), once
     // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
@@ -915,7 +916,8 @@ let mine = async (
     view == 'profile' ? browsers(env, person) : [],
     payments(env),
     view == 'profile'
-      ? import('./chat.ts').then((c) => c.ownLinks(env, person))
+      ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
+        .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
   ])
   let chosen = q.get('space') ?? inOf(req)
@@ -992,7 +994,9 @@ let account = async (
   if (linking) {
     let { ownLinks } = await import('./chat.ts')
     if (
-      !(await ownLinks(env, who.person)).some((l) => l.integration == linking)
+      !(await ownLinks(env, await dir.ownConnections(who.person))).some((l) =>
+        l.integration == linking
+      )
     ) {
       return nothingHere(env)
     }
