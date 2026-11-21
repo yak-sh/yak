@@ -102,7 +102,7 @@ let done = (sql: Driver, after: number, limit: number) =>
  * between the two. A mixed archive remains recoverable. */
 export let finishedJobs = (
   sql: Driver,
-  store: Storage,
+  storage: Storage | (() => Storage | Promise<Storage>),
   value: unknown,
   limit = 25,
 ) => {
@@ -121,66 +121,72 @@ export let finishedJobs = (
   }
   let empty = { cursor, ended: true, copies: 0, jobs: 0, spared: 0 }
   if (!holds(sql, phase == 'trash' ? trash : 'effect')) return empty
-  return store.tx((tx) => {
-    if (phase == 'trash') {
-      let { cursor: next, ended, copies, spared, targets } = kept(
-        sql,
-        cursor,
-        limit,
-      )
-      if (page.erase && targets.length && !store.purgeTrash) {
-        throw Error('Store has no trash purge')
-      }
-      return after(
-        page.erase && targets.length ? store.purgeTrash!(targets) : undefined,
-        () => ({ cursor: next, ended, copies, jobs: 0, spared }),
-      )
-    }
-    let rows = done(sql, cursor, limit)
-    return after(tx.get(rows.map((row) => String(row.eid))), (live) => {
-      let safe = live.filter((row) =>
-        job(row) && (row.effect as Comp).state == 'done'
-      )
-        .map((row) => row.entity)
-      // A standing run may have before-images of a different shape. An
-      // erase is safe only if all of those images are bookkeeping too.
-      let archived = safe.length && holds(sql, trash)
-        ? sql.query(select({
-          cols: [col('eid', 'e'), col('body', 't')],
-          from: table('entity', 'e'),
-          joins: [
-            join(table(trash, 't'), eq(col('id', 'e'), col('entity', 't'))),
-          ],
-          where: among(
-            col('eid', 'e'),
-            array(safe.map((entity) => entity.eid)),
-          ),
-        }))
-        : []
-      let snapshots = Map.groupBy(archived, (row) => String(row.eid))
-      let targets = safe.filter((entity) =>
-        (snapshots.get(entity.eid) ?? []).every((row) =>
-          job(JSON.parse(String(row.body)))
-        )
-      )
-      let copies = targets.reduce(
-        (n, entity) => n + (snapshots.get(entity.eid)?.length ?? 0),
-        0,
-      )
-      if (page.erase && targets.length && !tx.discard) {
-        throw Error('Store has no bookkeeping erase')
-      }
-      return after(
-        page.erase && targets.length ? tx.discard!(targets) : undefined,
-        () => ({
-          ...empty,
-          cursor: Number(rows.at(-1)?.entity ?? cursor),
-          ended: rows.length < limit,
-          jobs: targets.length,
-          copies,
-          spared: rows.length - targets.length,
-        }),
-      )
-    })
-  })
+  return after(
+    typeof storage == 'function' ? storage() : storage,
+    (store) =>
+      store.tx((tx) => {
+        if (phase == 'trash') {
+          let { cursor: next, ended, copies, spared, targets } = kept(
+            sql,
+            cursor,
+            limit,
+          )
+          if (page.erase && targets.length && !store.purgeTrash) {
+            throw Error('Store has no trash purge')
+          }
+          return after(
+            page.erase && targets.length
+              ? store.purgeTrash!(targets)
+              : undefined,
+            () => ({ cursor: next, ended, copies, jobs: 0, spared }),
+          )
+        }
+        let rows = done(sql, cursor, limit)
+        return after(tx.get(rows.map((row) => String(row.eid))), (live) => {
+          let safe = live.filter((row) =>
+            job(row) && (row.effect as Comp).state == 'done'
+          )
+            .map((row) => row.entity)
+          // A standing run may have before-images of a different shape. An
+          // erase is safe only if all of those images are bookkeeping too.
+          let archived = safe.length && holds(sql, trash)
+            ? sql.query(select({
+              cols: [col('eid', 'e'), col('body', 't')],
+              from: table('entity', 'e'),
+              joins: [
+                join(table(trash, 't'), eq(col('id', 'e'), col('entity', 't'))),
+              ],
+              where: among(
+                col('eid', 'e'),
+                array(safe.map((entity) => entity.eid)),
+              ),
+            }))
+            : []
+          let snapshots = Map.groupBy(archived, (row) => String(row.eid))
+          let targets = safe.filter((entity) =>
+            (snapshots.get(entity.eid) ?? []).every((row) =>
+              job(JSON.parse(String(row.body)))
+            )
+          )
+          let copies = targets.reduce(
+            (n, entity) => n + (snapshots.get(entity.eid)?.length ?? 0),
+            0,
+          )
+          if (page.erase && targets.length && !tx.discard) {
+            throw Error('Store has no bookkeeping erase')
+          }
+          return after(
+            page.erase && targets.length ? tx.discard!(targets) : undefined,
+            () => ({
+              ...empty,
+              cursor: Number(rows.at(-1)?.entity ?? cursor),
+              ended: rows.length < limit,
+              jobs: targets.length,
+              copies,
+              spared: rows.length - targets.length,
+            }),
+          )
+        })
+      }),
+  )
 }

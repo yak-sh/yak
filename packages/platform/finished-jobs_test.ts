@@ -41,3 +41,13 @@ test('finished job cleanup preserves mixed trash and standing work', async () =>
   equal((await g.get([pending])).length, 1)
   equal((await finishedJobs(sql, db, { erase: true })).copies, 0)
 })
+
+test('an empty database does not open a graph for cleanup', async () => {
+  let raw = open(':memory:')
+  using _empty = { [Symbol.dispose]: () => raw.close() }
+  let next = await finishedJobs(raw, () => {
+    throw Error('opened an empty graph')
+  }, { erase: true })
+  equal(next.copies, 0)
+  equal(next.ended, true)
+})

@@ -256,9 +256,12 @@ export class Builder extends Durable {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       let page = await request.json()
       let sql = driver(this.#ctx.storage)
-      let { store } = await this.#stored()
       return Response.json({
-        ...await finishedJobs(sql, store.g.storage, page),
+        ...await finishedJobs(
+          sql,
+          async () => (await this.#stored()).store.g.storage,
+          page,
+        ),
         bytes: this.#ctx.storage.sql.databaseSize,
       })
     }
