@@ -14,7 +14,6 @@ test("an app's open pages keep where their person is, across their tabs", async 
   await using _ = runtime
   let { env } = runtime
   let { space, app } = await seeded(env, 'private')
-  let object = runtime.object(storeName(space, app))
   let cookie = await as(ADA)
   let page = async () => {
     let undo = installPair()
@@ -33,14 +32,14 @@ test("an app's open pages keep where their person is, across their tabs", async 
     }
   }
   let tab = (ws: Awaited<ReturnType<typeof page>>, focused: boolean) =>
-    object.webSocketMessage(
+    runtime.object(storeName(space, app)).webSocketMessage(
       ws,
       JSON.stringify({ tab: { visible: true, focused } }),
     )
   // Gone as the runtime lets a socket go: closed, then the object told.
   let close = (ws: Awaited<ReturnType<typeof page>>) => {
     ws.readyState = 3
-    return object.webSocketClose(ws)
+    return runtime.object(storeName(space, app)).webSocketClose(ws)
   }
   let where = async () => {
     await runtime.settled()
@@ -56,6 +55,10 @@ test("an app's open pages keep where their person is, across their tabs", async 
   await tab(back, false)
   equal(await where(), [['apps', app.eid, 'here']])
   equal([front.sent, back.sent], [[], []]) // nothing to answer
+  // A tab said on a hibernated socket can be what wakes the store.
+  runtime.evict(storeName(space, app))
+  await tab(front, false)
+  equal(await where(), [['apps', app.eid, 'background']])
   await close(front)
   equal(await where(), [['apps', app.eid, 'background']])
   // A page that never said its tab (an older client) counts for nothing.

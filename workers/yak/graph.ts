@@ -3332,13 +3332,17 @@ export class Store extends Durable {
   // Where a socket's person is on this store's pages, across those of their
   // sockets that said their tab (all but `ws` when it is `closing`), kept as
   // their whereabouts (whereabouts.ts): on an app's pages, the app is where.
+  // A hibernated socket's frame can be the one that wakes the store, so the
+  // store starts before its words are read.
   #whereabouts = async (ws: Wire, closing = false) => {
     let held = ws.deserializeAttachment() as Paging | null
-    let person = held?.read?.person, app = this.#get('app')
+    let person = held?.read?.person
     if (
-      !held?.tab || !person || held.read?.administrative || person == app ||
-      !this.#bind.STORE
+      !held?.tab || !person || held.read?.administrative || !this.#bind.STORE
     ) return
+    await this.#ensureStarted()
+    let app = this.#get('app')
+    if (person == app) return
     let tabs = this.#ctx.getWebSockets().flatMap((w) => {
       let h = w.deserializeAttachment() as Paging | null
       return h?.tab && h.read?.person == person && !h.read.administrative &&

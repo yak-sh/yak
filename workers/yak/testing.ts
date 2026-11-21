@@ -328,9 +328,8 @@ export let lasting = (
     make: () => Store,
   ) => {
     if (!stores.includes(ctx)) stores.push(ctx)
-    let store: Store
-    alarmed(name, ctx, () => store.alarm())
-    store = make()
+    alarmed(name, ctx, () => objects.get(name)!.alarm())
+    let store = make()
     sockets.set(name, ctx.live)
     recovery.set(name, ctx.pitr)
     objects.set(name, store)
@@ -352,6 +351,13 @@ export let lasting = (
       )
     }
     return held
+  }
+  // The object evicted, as the runtime may at any moment: its storage and its
+  // hibernated sockets stay, and what reaches it next reaches a new instance.
+  let evict = (name: string) => {
+    let store = new Store(states.get(name)!, env, undefined, undefined, load)
+    objects.set(name, store)
+    return store
   }
   // The builder's object, one per space (build.ts). Made on demand like a
   // store, and kept, so a second connection reaches the conversation the first
@@ -504,6 +510,7 @@ export let lasting = (
     env,
     files,
     object,
+    evict,
     register,
     states,
     sockets,
