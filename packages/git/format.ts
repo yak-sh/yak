@@ -13,11 +13,17 @@ let paths = (value: unknown): string[] =>
     ? value.filter((path): path is string => typeof path == 'string')
     : []
 
-export let formatting = (files: string[], config: unknown): string[] => {
+export let formatting = (
+  files: string[],
+  config: unknown,
+  file = 'deno.json',
+): string[] => {
   let root = object(config) ? config : {}
   let fmt = object(root.fmt) ? root.fmt : {}
   return [
     'fmt',
+    '--config',
+    file,
     '--permit-no-files',
     ...[...new Set([...paths(root.exclude), ...paths(fmt.exclude)])]
       .map((path) => '--ignore=' + path),
@@ -35,9 +41,9 @@ let read = (path: string) =>
 export let formatConfig = async (
   cwd: string,
   source: (path: string) => Promise<string | undefined> = read,
-): Promise<unknown> => {
-  for (let name of ['deno.json', 'deno.jsonc']) {
-    let text = await source(disk.join(cwd, name))
-    if (text != null) return parse(text) ?? {}
+): Promise<{ file: string; config: unknown } | undefined> => {
+  for (let file of ['deno.json', 'deno.jsonc']) {
+    let text = await source(disk.join(cwd, file))
+    if (text != null) return { file, config: parse(text) ?? {} }
   }
 }

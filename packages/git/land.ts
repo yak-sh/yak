@@ -127,9 +127,13 @@ export let run: Run = (args, cwd) => execute('git', args, cwd)
 
 let format: Run = async (files, cwd) => {
   try {
-    let config = await formatConfig(cwd)
-    if (config === undefined) return { ok: true, code: 0, out: '', err: '' }
-    return execute(system.execPath(), formatting(files, config), cwd)
+    let found = await formatConfig(cwd)
+    if (!found) return { ok: true, code: 0, out: '', err: '' }
+    return execute(
+      system.execPath(),
+      formatting(files, found.config, found.file),
+      cwd,
+    )
   } catch (e) {
     return { ok: false, code: 1, out: '', err: String(e) }
   }

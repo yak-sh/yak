@@ -62,12 +62,7 @@ export let checks = (changed: string[]): Check[] => {
     ...fmt.length
       ? [{
         name: 'format',
-        args: [
-          ...formatting([], config),
-          '--config',
-          'deno.json',
-          ...fmt,
-        ],
+        args: formatting(fmt, config),
       }]
       : [],
     ...lint.length

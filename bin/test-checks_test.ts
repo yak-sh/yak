@@ -13,8 +13,6 @@ test('source checks format, lint and byte-check the change', () => {
       name: 'format',
       args: [
         ...formatting([], config),
-        '--config',
-        'deno.json',
         'a.ts',
         'doc.md',
         'data.json',
