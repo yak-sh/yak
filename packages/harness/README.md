@@ -1161,7 +1161,12 @@ Importing the facets does not run a session, open a database, or start a server.
 `session_new` and `session_send` are offered through MCP and the command line.
 Pass `wait: false` to either tool to return the session immediately; the runner
 continues independently. For example, `session_new` with
-`{ "prompt": "Reply with ok", "wait": false }` returns the new session id.
+`{ "prompt": "Reply with ok", "wait": false }` returns the new session id. What
+`session_send` says to a session holding one task (or to the `task` it names) is
+also a comment on that task: for a running outside session the one row is both
+the knock and the comment, and for a run it starts again the comment is marked
+said. The task keeps every ask in order, and a run that later starts, resumes or
+compacts on it reads them all with its brief (@yaks/session `asks.ts`).
 `model_list` is offered on a command line only (`surfaces`), because it reads
 that machine's model credentials; `model_pin` is offered on both. `session_list`
 is offered everywhere. With no arguments it answers the 20 newest live sessions

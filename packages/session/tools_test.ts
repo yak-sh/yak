@@ -12,6 +12,8 @@ import { hooked, type Options, runs } from './tools.ts'
 import { sessionEid } from './who.ts'
 import { fleet, said as personas } from '../persona/testing.ts'
 import { edgeKeywords } from '@yaks/edge'
+import { kernelDoc } from '@yaks/kernel'
+import { notifyDoc } from '@yaks/notify'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 
@@ -313,6 +315,49 @@ test('a session that exists is handed back what it was in the middle of', async 
   assertEquals(
     comp(said[1], 'content').body,
     ['## claimed', '- T-7 — ship it'].join('\n'),
+  )
+})
+
+test('a held task is said with every ask made of its work, oldest first', async () => {
+  let rows = [
+    row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),
+    row({
+      entity: { eid: 't1', prefix: 'T', num: 7 },
+      task: {},
+      doc: { title: 'ship it' },
+      claim: { session: 's1' },
+    }, 'claim.session'),
+    // Read by eid alone: no query names it.
+    row({ entity: { eid: 'p9' }, doc: { title: 'Jeff' } }, 'by eid'),
+    ...['keep the gradient', 'and the mascot\nper section'].map((body, i) =>
+      row({
+        entity: { eid: `k${i}`, prefix: 'C', num: i + 1 },
+        doc: { body },
+        comment: { target: 't1' },
+        knock: { target: 's1', from: 'p9' },
+      }, 'comment.target')
+    ),
+  ]
+  // Asks are comments that knocked: words the kernel and @yaks/notify say.
+  let [call, g] = asked({ session: 'abc' }, rows)
+  let words = loadVocab(
+    [kernelDoc, docDoc, taskDoc, sessionDoc, notifyDoc],
+    [idKeywords],
+  )
+  let said = await tools.session_context!(
+    call,
+    { ...g, vocab: words } as Graph,
+  ) as Bundle[]
+  assertEquals(
+    comp(said[1], 'content').body,
+    [
+      '## claimed',
+      '- T-7 — ship it',
+      '  asked so far, oldest first:',
+      '  - C-1 from Jeff: keep the gradient',
+      '  - C-2 from Jeff: and the mascot',
+      '    per section',
+    ].join('\n'),
   )
 })
 

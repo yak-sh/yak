@@ -30,6 +30,8 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { EXIT, PROCESS } from '@yaks/process'
 import {
+  asksOn,
+  asksSaid,
   carrying,
   CONTENT,
   ENTRY,
@@ -332,12 +334,20 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)
       let owner = parent ? await one(graph, parent) : undefined
       // Snapshot the task body into the request: the task is the brief, even
-      // for a provider that has no graph tools in its own context.
+      // for a provider that has no graph tools in its own context. Every ask
+      // already made of its work comes with it (@yaks/session ./asks.ts), so
+      // a new run does not undo what an earlier one was told.
+      let asks = (await asksOn(graph, [task])).get(task) ?? []
       let instruction = [
         `Work ${name} in your own checkout. You already hold its claim under this session.`,
         `The task is your spec; read \`yak graph show ${name} --json\` for its current body.`,
         str(comp(on, 'doc')?.title),
         str(comp(on, 'doc')?.body),
+        asks.length &&
+        [
+          'Asked of this work so far, oldest first; all of it still stands unless a later ask changed it:',
+          ...await asksSaid(graph, asks),
+        ].join('\n'),
         str(args.instruction),
       ].filter(Boolean).join('\n\n')
       // The request, plus the lease recording who is doing the work. The

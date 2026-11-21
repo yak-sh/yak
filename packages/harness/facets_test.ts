@@ -237,6 +237,37 @@ test('a send to a session running outside the graph knocks and returns at once',
   }
 })
 
+test('words sent to a run about the task it holds are kept on the task', async () => {
+  let h = await harness()
+  let s = mint()
+  let task = mint()
+  let jeff = mint()
+  let claude = identityEid(PROVIDER, ['claude'])
+  try {
+    await h.g.apply([
+      { entity: { eid: claude }, provider: { name: 'claude' } },
+      {
+        entity: { eid: s },
+        session: { id: s },
+        using: { provider: claude },
+        process: { pid: 1, command: 'claude' },
+      },
+      { entity: { eid: task }, task: {}, claim: { session: s } },
+    ], { trusted: true })
+    let [knock] = await runs().session_send!({
+      entity: { eid: mint() },
+      call: { args: { session: s, text: 'keep the gradient' } },
+      $actor: { by: jeff, via: mint() },
+    }, h.g)
+    // One row: the knock that reaches the run, and the comment on its task.
+    assertEquals(knock.knock, { target: s, from: jeff })
+    assertEquals(knock.comment, { target: task })
+    assertEquals((knock.doc as { body?: string }).body, 'keep the gradient')
+  } finally {
+    await h.close()
+  }
+})
+
 // A spawned claude session whose run is over: claude serves opus, and so does
 // a provider this host answers.
 let finished = async () => {
@@ -291,6 +322,27 @@ test('a follow-up to a finished spawned session goes on with its provider and mo
     assertEquals(await send({}), kept)
     assertEquals(await send({ provider: 'claude' }), kept)
     assertEquals(await send({ model: 'opus' }), kept)
+  } finally {
+    await h.close()
+  }
+})
+
+test('a follow-up to a finished run on a task is kept on the task, already said', async () => {
+  let { h, s, send } = await finished()
+  try {
+    let task = mint()
+    await h.g.apply([{
+      entity: { eid: task },
+      task: {},
+      claim: { session: s },
+    }], {
+      trusted: true,
+    })
+    await send({ text: 'and the mascot' })
+    let [kept] = await h.g.read(line`.comment.target=${task}&*`)
+    assertEquals((kept.doc as Comp).body, 'and the mascot')
+    // The request says it, so no listener says it again.
+    assertEquals(!!kept.notified, !!h.g.vocab.comp('notified'))
   } finally {
     await h.close()
   }

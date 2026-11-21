@@ -111,7 +111,7 @@
       "verb": "send",
       "applied": true,
       "title": "Say more to a session here",
-      "description": "Send a session more input. A session running outside the graph (a spawned agent, a Claude Code session) hears it at its next tool call, and the call returns at once with the knock that carries it; one whose run has ended runs again, and the call returns the session once that run has started; for any other, waits for the reply unless wait:false.",
+      "description": "Send a session more input; words about the task it holds are kept on that task as a comment, so its next run reads every ask. A session running outside the graph (a spawned agent, a Claude Code session) hears it at its next tool call, and the call returns at once with the knock that carries it; one whose run has ended runs again, and the call returns the session once that run has started; for any other, waits for the reply unless wait:false.",
       "input": {
         "wait": {
           "type": "boolean",
@@ -125,6 +125,11 @@
         "text": {
           "type": "string",
           "description": "what to say"
+        },
+        "task": {
+          "type": "string",
+          "ref": "task",
+          "description": "the task the words are about, kept on it as a comment (otherwise the one task the session holds)"
         },
         "model": {
           "type": "string",

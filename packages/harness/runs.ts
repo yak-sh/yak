@@ -26,7 +26,7 @@ import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
 import { and, conjoin, line, parse, stringify, sub } from '@yaks/query'
-import { newestOf, usingOf } from '@yaks/session'
+import { ask, askedOf, newestOf, usingOf } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing, pin, routing } from './default.ts'
@@ -336,13 +336,19 @@ export let runs = (host?: Host): Runs => ({
     // eid, `S-81`, a run's own id) and refused one that names no session.
     let s = String(args.session)
     let prior = await usingOf(graph, s) ?? await selectedUsing(graph, s)
-    // A knock needs no model: the run going on chose its own.
+    // Words about a task's work are kept on the task as well (@yaks/session
+    // ./asks.ts), so its next run starts from every ask, not the newest.
     let actor = who(call)
+    let body = String(args.text)
+    let about = await askedOf(graph, s, word(args, 'task'))
+    // A knock needs no model: the run going on chose its own.
     if (await outside(graph, s, prior)) {
       return await graph.apply([{
-        entity: { eid: crypto.randomUUID() },
-        doc: { body: String(args.text) },
-        knock: { target: s },
+        ...about ? ask(s, about, body, actor?.by) : {
+          entity: { eid: crypto.randomUUID() },
+          doc: { body },
+          knock: { target: s, ...actor?.by ? { from: actor.by } : {} },
+        },
         ...actor ? { $actor: actor } : {},
       }])
     }
@@ -355,13 +361,24 @@ export let runs = (host?: Host): Runs => ({
         ...await following(graph, prior, provider, model),
       }
     }
-    await graph.apply([{
-      entity: { eid: crypto.randomUUID() },
-      entry: { session: s },
-      content: { body: String(args.text) },
-      ...using ? { using } : {},
-      $actor: through(s, caller(call)),
-    }])
+    await graph.apply([
+      {
+        entity: { eid: crypto.randomUUID() },
+        entry: { session: s },
+        content: { body },
+        ...using ? { using } : {},
+        $actor: through(s, caller(call)),
+      },
+      // The request says it to the session, so its copy on the task is
+      // marked said: nothing hears it a second time.
+      ...about
+        ? [{
+          ...ask(s, about, body, actor?.by),
+          ...graph.vocab.comp('notified') ? { notified: {} } : {},
+          ...actor ? { $actor: actor } : {},
+        }]
+        : [],
+    ])
     if (args.wait === false) return await graph.get([s])
     return await commanded(graph, using)
       ? await begun(graph, s, host?.stopping)

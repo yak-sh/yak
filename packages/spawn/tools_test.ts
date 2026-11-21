@@ -19,6 +19,8 @@ import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
+import { notifyDoc } from '@yaks/notify'
+import { provenanceDoc } from '@yaks/provenance'
 import { modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
 import {
@@ -67,6 +69,8 @@ let host = () => {
       taskDoc,
       spawnDoc,
       edgeDoc,
+      notifyDoc,
+      provenanceDoc,
     ],
     [kernelKeywords, idKeywords, nameKeywords, edgeKeywords],
   )
@@ -212,6 +216,33 @@ test('an added instruction keeps the task body as the spec', async () => {
   let instruction = String(comp(entry, 'content')?.body)
   assertStringIncludes(instruction, 'Keep the owner’s exact requirement.')
   assertStringIncludes(instruction, 'Check the edge case too.')
+})
+
+test('a new run on a task reads every ask its earlier runs were sent, oldest first', async () => {
+  let { g } = host()
+  let jeff = mint()
+  let ask = (text: string, at: string, from?: string) => ({
+    entity: { eid: mint() },
+    doc: { body: text },
+    comment: { target: 'the-task' },
+    created: { at },
+    ...from ? { knock: { target: mint(), from } } : {},
+  })
+  await g.apply([
+    ...shelf,
+    { entity: { eid: jeff }, doc: { title: 'Jeff' } },
+    ask('Keep the hill gradient.', '2026-11-20T01:00:00Z', jeff),
+    ask('A run’s own report.', '2026-11-20T02:00:00Z'),
+    ask('Animate the mascot per section.', '2026-11-20T03:00:00Z', jeff),
+  ], { trusted: true })
+  await tools.session_spawn!(...asked(g, { task: 'the-task', provider: P }))
+  let [entry] = await g.read('.using&*')
+  let said = String(comp(entry, 'content')?.body).split('\n')
+    .filter((l) => l.startsWith('- '))
+  assertEquals(said.map((l) => l.replace(/^- \S+ /, '')), [
+    'from Jeff: Keep the hill gradient.',
+    'from Jeff: Animate the mascot per section.',
+  ])
 })
 
 let delegated = await (async () => {

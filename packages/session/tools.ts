@@ -68,6 +68,7 @@ import { entryStatus, newestOf } from './reach.ts'
 import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
 import { listen, QUIET } from './listen.ts'
+import { asksOn, asksSaid } from './asks.ts'
 
 /** What a config file can set for this package: the checks' patience, and how
  * the duty reads transcripts (./service.ts). */
@@ -150,11 +151,38 @@ export let line = (vocab: Vocab, b: Bundle): string => {
     .join(' — ')
 }
 
-/** One heading over the rows under it, each a {@link line}. */
-let section = (vocab: Vocab, title: string, rows: Bundle[]): string[] => [
+/** One heading over the rows under it, each a {@link line} with the lines
+ * `under` keeps for it beneath. */
+let section = (
+  vocab: Vocab,
+  title: string,
+  rows: Bundle[],
+  under = new Map<string, string[]>(),
+): string[] => [
   `## ${title}`,
-  ...rows.length ? rows.map((b) => `- ${line(vocab, b)}`) : ['nothing'],
+  ...rows.length
+    ? rows.flatMap((b) => [
+      `- ${line(vocab, b)}`,
+      ...under.get(b.entity.eid) ?? [],
+    ])
+    : ['nothing'],
 ]
+
+// Under each held task, every ask on it so far (./asks.ts): a run resumed or
+// compacted on it reads them again, not only the newest it heard.
+let asksUnder = async (graph: Graph, held: Bundle[]) => {
+  let on = await asksOn(graph, held.map((b) => b.entity.eid))
+  return new Map(
+    await Promise.all(
+      [...on].map(async ([task, rows]) =>
+        [task, [
+          '  asked so far, oldest first:',
+          ...await asksSaid(graph, rows, '  '),
+        ]] as [string, string[]]
+      ),
+    ),
+  )
+}
 
 /**
  * The saved queries a session is told the rows of, each as its title and its
@@ -404,7 +432,12 @@ export let runs = (
         entity: { eid: '$said' },
         content: {
           body: [
-            ...section(host.vocab, 'claimed', held),
+            ...section(
+              host.vocab,
+              'claimed',
+              held,
+              await asksUnder(graph, held),
+            ),
             ...told.flatMap(([title, rows]) => [
               '',
               ...section(host.vocab, title, rows),
