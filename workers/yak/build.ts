@@ -1053,6 +1053,12 @@ export class Builder extends Durable {
             let { toldBackfill } = await import('./instructions-move.ts')
             return backfill(toldBackfill(store))
           },
+          // Recall and decision notes kept before they were turn notes,
+          // made turn notes (@yaks/platform/operator-notes).
+          notes: async () => {
+            let { noteBackfill } = await import('@yaks/platform/operator-notes')
+            return backfill(noteBackfill(store))
+          },
           // The vectors its recall ranks by meaning, drained behind the
           // object's own work (@yaks/embedding `sleeper`).
           vectors: () => {
