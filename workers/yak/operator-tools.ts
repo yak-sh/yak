@@ -1,5 +1,7 @@
 import type { Bundle } from '@yaks/graph'
 import type { Args, Ctx, Tool } from './tool.ts'
+import type { Space } from './directory.ts'
+import type { Who } from './session.ts'
 import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
 import { operatorDoor } from './build-door.ts'
 import { writes } from '@yaks/member'
@@ -20,15 +22,17 @@ let ask = async (
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }
-  // The Operator's refusal of the caller's arguments stays a refusal.
-  let value = await operatorDoor(
-    ctx.env,
-    space,
-    who,
-    path.slice('/operator/'.length),
-    args,
-  ).catch((error) => {
+  let door = (space: Space, who: Who) =>
+    operatorDoor(ctx.env, space, who, path.slice('/operator/'.length), args)
+  // The Operator's refusal of the caller's arguments stays a refusal. A
+  // read naming a task and no space means the one of the caller's spaces
+  // whose Operator holds it, when the space it defaulted to does not.
+  let value = await door(space, who).catch(async (error) => {
     let { status = 500, message } = error as Error & { status?: number }
+    if (status == 404 && !write && args.space == null && args.task) {
+      let found = await elsewhere(ctx, args, space, door)
+      if (found) return ({ space } = found).value
+    }
     throw status < 500 ? rejected(status, message) : error
   }) as Record<string, unknown>
   // A request's answer is words, said once beside the rest of its value; a
@@ -37,6 +41,38 @@ let ask = async (
   return typeof text == 'string'
     ? { space, text, value: rest }
     : { space, text: '', value }
+}
+
+// The caller's other spaces whose Operator answers `door`, asked at once: the
+// one that does, or none. Two answering is a question only the caller can
+// settle, so the refusal names them.
+let elsewhere = async (
+  ctx: Ctx,
+  args: Args,
+  tried: Space,
+  door: (space: Space, who: Who) => Promise<unknown>,
+) => {
+  let seats = (await ctx.dir.seats(ctx.person))
+    .filter((s) => s.space.eid != tried.eid && writes(s.role))
+  let found = (await Promise.all(
+    seats.map(async ({ space }) => {
+      let { who } = await inSpace(
+        ctx,
+        { ...args, space: space.slug },
+        false,
+        true,
+      )
+      return { space, value: await door(space, who) }
+    }).map((p) => p.catch(() => null)),
+  )).filter((f) => f != null)
+  if (found.length > 1) {
+    throw refuse(
+      'arguments',
+      `space: name one of ${found.map((f) => f.space.slug).join(', ')} — ` +
+        `each has ${args.task}`,
+    )
+  }
+  return found[0]
 }
 
 /** A tool on the space's tasks and goals, run in its Operator's store

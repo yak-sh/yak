@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { CallError } from '@yaks/tools'
-import { type Ctx, ownSpace, rejected, seatIn } from './tool.ts'
+import { apart, type Ctx, ownSpace, rejected, seatIn } from './tool.ts'
 import type { Directory, Space } from './directory.ts'
 import { narrowed } from './grants.ts'
 
@@ -32,21 +32,25 @@ test("a door's 4xx is a refusal with its code, and a 5xx a defect", () => {
 })
 
 // The space a call means when it names none (tool.ts `ownSpace`): the one
-// holding the app, else an Operator's own, else the person's only one.
-test('a call naming no space means the app’s, the Operator’s, the only one', async () => {
+// holding the app, else an Operator's own, else the person's own one.
+test('a call naming no space means the app’s, the Operator’s, the person’s own', async () => {
   let [jeff, work, other] = ['jeff', 'work', 'other'].map((slug) => ({
     eid: `e-${slug}`,
     slug,
   })) as unknown as Space[]
   let all = [jeff, work, other]
-  let mine = (owned: Space[]) =>
+  let mine = (owned: Space[], own?: Space) =>
     ({
       at: (eid: string) => Promise.resolve(all.find((s) => s.eid == eid)),
       space: (slug: string) => Promise.resolve(all.find((s) => s.slug == slug)),
       spaces: (_: string, role?: string) => Promise.resolve(role ? owned : all),
       seats: (_: string, role?: string) =>
         Promise.resolve(
-          (role ? owned : all).map((space) => ({ space, role: 'owner' })),
+          (role ? owned : all).map((space) => ({
+            space,
+            role: 'owner',
+            own: space == own,
+          })),
         ),
       app: (space: Space, slug: string) =>
         Promise.resolve(space == other && slug == 'garden' ? {} : null),
@@ -72,6 +76,7 @@ test('a call naming no space means the app’s, the Operator’s, the only one',
       means(operator, 'garden'),
       means(operator, 'nope'),
       means(mine([jeff, work])),
+      means(mine([jeff, work], work)),
       means(mine([work])),
       means(mine([jeff, work]), 'garden'),
     ]),
@@ -84,13 +89,14 @@ test('a call naming no space means the app’s, the Operator’s, the only one',
       "'<one of your spaces>'; naming the app alone is enough where only " +
       'one of them holds it.',
       'work',
+      'work',
       'other',
     ],
   )
 })
 
 // A space named wrong is often a guess at the caller's own, so its refusal
-// names theirs; one that moved names where it went (tool.ts `named`).
+// names theirs; one that moved is the space it moved to (tool.ts `named`).
 test('a space that is not there is refused with the spaces the caller has', async () => {
   let spaces = ['peterson', 'nottawatownship'].map((slug) => ({
     eid: `e-${slug}`,
@@ -102,10 +108,11 @@ test('a space that is not there is refused with the spaces the caller has', asyn
       formerly: (slug: string) =>
         Promise.resolve(slug == 'old' ? spaces[0] : null),
       seats: () => Promise.resolve(seated.map((space) => ({ space }))),
+      role: () => Promise.resolve('owner'),
     }) as unknown as Directory
   let said = (d: Directory, slug: string) =>
     seatIn({ dir: d, person: 'p' } as unknown as Ctx, slug).then(
-      () => '',
+      ([seat]) => seat.space.slug,
       (e) => e.message,
     )
   assertEquals(
@@ -117,7 +124,7 @@ test('a space that is not there is refused with the spaces the caller has', asyn
     [
       "no space nottawa — your spaces are nottawatownship, peterson. Send space: '<one of your spaces>'; app_list() lists their apps.",
       "no space nottawa — you are a member of no space yet. Get one by signing up at https://yaks.app, or by accepting an invitation to someone's space.",
-      "no space old — it moved to peterson; send space: 'peterson'",
+      'peterson',
     ],
   )
 })
@@ -145,4 +152,32 @@ test('a space named by its id is the space with that id', async () => {
     'peterson',
     `no space ${id} — you are a member of no space yet. Get one by signing up at https://yaks.app, or by accepting an invitation to someone's space.`,
   ])
+})
+
+// An app named with its space, as its address reads, names both.
+test('an app named <space>/<app> names its space and the app', () => {
+  let said = (args: Record<string, unknown>) => {
+    try {
+      apart(args)
+      return args
+    } catch (e) {
+      return (e as Error).message
+    }
+  }
+  assertEquals(
+    [
+      { app: 'jeff/hollow-dice' },
+      { app: 'jeff/hollow-dice', space: 'jeff' },
+      { app: 'jeff/hollow-dice', space: 'work' },
+      { app: 'hollow-dice' },
+      { app: '/hollow-dice' },
+    ].map(said),
+    [
+      { app: 'hollow-dice', space: 'jeff' },
+      { app: 'hollow-dice', space: 'jeff' },
+      'app jeff/hollow-dice names space jeff, and space names work',
+      { app: 'hollow-dice' },
+      { app: '/hollow-dice' },
+    ],
+  )
 })

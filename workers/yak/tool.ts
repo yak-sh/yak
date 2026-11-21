@@ -313,10 +313,9 @@ export let str = (description: string) => ({ type: 'string', description })
 // per tool on every listing.
 export let SPACE = str(
   'the space slug, as in <space>.yaks.app: one of the spaces you own or ' +
-    'hold a seat in, as app_list names them. Required when you own more ' +
-    'than one space, unless the app you name is in only one of them. ' +
-    'Otherwise, if omitted: the space holding the app, else an ' +
-    "Operator's own space, else your only space",
+    'hold a seat in, as app_list names them, or an address it moved from. ' +
+    'If omitted: the space holding the app (app may also be ' +
+    "'<space>/<app>'), else an Operator's own space, else your own space",
 )
 
 export let APP = str('the app slug, as in <space>.yaks.app/<app>/')
@@ -414,6 +413,10 @@ let ownSeat = async (
   let narrow = await ctx.dir.narrowedTo()
   if (narrow) return { space: narrow }
   let owned = await ctx.dir.seats(ctx.person, 'owner')
+  // A person who owns several spaces means their own one, the space whose
+  // seat says so (directory.ts `own`), as an Operator means its own.
+  let mine = owned.length > 1 ? owned.find((s) => s.own) : undefined
+  if (mine) return { space: mine.space, role: mine.role }
   if (owned.length > 1) {
     throw refuse(
       'arguments',
@@ -521,9 +524,7 @@ export let EID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // The space a call names by its address. An assistant remembers a space by
-// the name it last used, and where that space went is what its old
-// hostname's redirect says to anybody, so the refusal says it too and the
-// next call names the space where it lives (D-131924). A name that never
+// the name it last used, and the space answers there still (D-131924). A name that never
 // was one is often a guess at the caller's own (`nottawa` for
 // `nottawatownship`), so the refusal names theirs, as `notMember` does.
 // It names it by its slug, or by its id as conversation_projects lists it;
@@ -533,13 +534,10 @@ let named = async (ctx: Ctx, slug: string) => {
     EID.test(slug) ? (await ctx.dir.at(slug))?.slug ?? slug : slug,
   )
   if (space) return space
+  // An address the space left still names it, as its old hostname still
+  // redirects there.
   let moved = await ctx.dir.formerly(slug)
-  if (moved) {
-    throw refuse(
-      'missing',
-      `no space ${slug} — it moved to ${moved.slug}; send space: '${moved.slug}'`,
-    )
-  }
+  if (moved) return moved
   throw refuse(
     'missing',
     `no space ${slug} — ${await yours(ctx)}`,
@@ -596,6 +594,23 @@ let awake = (space: Space, app?: App) => {
   }
 }
 
+// An app named with its space, `jeff/hollow-dice`, as its address reads:
+// the call's arguments say both apart from here on, for the tool after
+// admission too. A space named twice and differently is the caller's own
+// contradiction.
+export let apart = (args: Args) => {
+  let at = typeof args.app == 'string' ? args.app.split('/') : []
+  if (at.length != 2 || !at[0] || !at[1]) return
+  if (args.space != null && args.space != at[0]) {
+    throw refuse(
+      'arguments',
+      `app ${args.app} names space ${at[0]}, and space names ${args.space}`,
+    )
+  }
+  args.space = at[0]
+  args.app = at[1]
+}
+
 let seated = async (
   ctx: Ctx,
   args: Args,
@@ -603,6 +618,7 @@ let seated = async (
   over: boolean,
   trash: boolean,
 ) => {
+  apart(args)
   let selected: Space | undefined
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
@@ -742,6 +758,7 @@ let reached = async (
 ) => {
   let selectedSpace: Space | undefined
   let selectedApp: App | undefined
+  apart(args)
   let slug = text(args.app, 'app')
   for (let attempt = 0;; attempt++) {
     let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
