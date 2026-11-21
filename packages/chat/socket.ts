@@ -3,7 +3,7 @@
 // its host opens, so the host (a Durable Object, a process on the box) only
 // connects, keeps time and closes, and knows no platform.
 
-import type { Present, Said, Seated, Socket, Step } from './mod.ts'
+import type { Present, Press, Said, Seated, Socket, Step } from './mod.ts'
 
 /** The host's end of an open socket: send a text frame, or close it. */
 export type Wire = {
@@ -27,20 +27,24 @@ export type Holder = {
   ended: (code: number) => string | undefined
 }
 
+/** What a holder tells of what its socket read: each message `heard`, what
+ * the platform says of the servers the bot is in (`seated`), who it says is
+ * about (`present`), and the controls pressed on the bot's messages
+ * (`pressed`). */
+export type Telling = {
+  heard: (said: Said[]) => unknown
+  seated?: (servers: Seated) => unknown
+  present?: (present: Present[]) => unknown
+  pressed?: (pressed: Press[]) => unknown
+}
+
 /**
- * A holder of `socket`, telling `heard` each message it reads, `seated`
- * what the platform says of the servers the bot is in, and `present` who
- * it says is about. The state a
- * socket remembers survives a reconnect, so a platform that resumes a session
+ * A holder of `socket`, telling `tell` what it reads. The state a socket
+ * remembers survives a reconnect, so a platform that resumes a session
  * (Discord's) misses nothing between wires. A frame that is not JSON is
  * passed on as the text it is.
  */
-export let holder = <S>(
-  socket: Socket<S>,
-  heard: (said: Said[]) => unknown,
-  seated?: (servers: Seated) => unknown,
-  present?: (present: Present[]) => unknown,
-): Holder => {
+export let holder = <S>(socket: Socket<S>, tell: Telling): Holder => {
   let state = socket.start
   let run = (wire: Wire, step: Step<S>): Next => {
     state = step.state
@@ -61,9 +65,11 @@ export let holder = <S>(
       }
       let step = socket.step(state, frame)
       let next = run(wire, step)
-      if (step.servers) await seated?.(step.servers)
-      if (step.present?.length) await present?.(step.present)
-      if (step.heard?.length) await heard(step.heard)
+      // A press is answered within moments, so it is told first.
+      if (step.pressed?.length) await tell.pressed?.(step.pressed)
+      if (step.servers) await tell.seated?.(step.servers)
+      if (step.present?.length) await tell.present?.(step.present)
+      if (step.heard?.length) await tell.heard(step.heard)
       return next
     },
     beat: (wire) => run(wire, socket.beat(state)),

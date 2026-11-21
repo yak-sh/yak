@@ -26,7 +26,17 @@ reply with the REST API. `discord` is the `Platform` both make.
   a disallowed intent) are said by `ends(code)` in words for whoever holds the
   bot.
 - **A reply** answers the message it names, when there still is one, and pings
-  nobody. A 429 or 5xx is `Unsent`, tried again after what Discord says.
+  nobody but the one account it names (`ping`), with its buttons (`controls`) as
+  secondary buttons, five to an action row. A 429 or 5xx is `Unsent`, tried
+  again after what Discord says.
+- **A press** of a button is an `INTERACTION_CREATE` of type 3 (a message
+  component), which Discord sends over the Gateway to a bot with no interactions
+  endpoint set, whatever its intents (`pressed`). `presses.hold` answers it at
+  once, within Discord's three seconds, as a deferred ephemeral message
+  (callback type 5, flag 64) that only the presser sees; `presses.answer` writes
+  that message (PATCH `/webhooks/{app}/{token}/messages/@original`) within the
+  fifteen minutes its token lasts. An ephemeral message is the only way a bot
+  says something in a room to one person, and only in answer to an interaction.
 
 - **A direct message** (`direct(token, user, text)`) opens the person's direct
   room (POST `/users/@me/channels`) and posts to it, pinging nobody. Discord

@@ -21,6 +21,7 @@ import {
   kept,
   linked,
   messageEid,
+  notice,
   pieces,
   reading,
   recounted,
@@ -258,6 +259,35 @@ test('chat_post: a reply is posted in its room by its connection, once', async (
   let row = await one(g, eid)
   assertEquals(row.chat_message.message_id, 'r1')
   assertEquals(!!row.delivered, true)
+})
+
+test('chat_post: a private message posts a notice pinging its one reader, never its words; buttons go with a public one', async () => {
+  let posted: Record<string, unknown>[] = []
+  let g = rig({
+    post: (chat) => {
+      posted.push(chat)
+      return Promise.resolve({ id: 'r1' })
+    },
+  })
+  let secret = crypto.randomUUID(), open = crypto.randomUUID()
+  let controls = [{ id: 'approve:a', label: 'Approve' }]
+  await g.apply([conn, room, {
+    ...reply(secret, { controls }),
+    chat_private: { to: 'ann' },
+  }, reply(open, { controls })])
+  assertEquals(posted, [{
+    connection: CONN,
+    room: 'general',
+    ...notice(secret, 'ann'),
+    reply_to: 'm1',
+  }, {
+    connection: CONN,
+    room: 'general',
+    text: 'Done.',
+    controls,
+    reply_to: 'm1',
+  }])
+  assertEquals(JSON.stringify(posted[0]).includes('Done.'), false)
 })
 
 test('chat_post: a refusal bounces with its reason; a platform that never took it is tried again', async () => {

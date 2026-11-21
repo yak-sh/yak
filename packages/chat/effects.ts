@@ -5,6 +5,10 @@
 // (`Host.chatters`, by `chat_message.via`), and writes the outcome back as
 // `delivered` or `bounced`, the words a letter's and a text's outcome use.
 //
+// A private message (`chat_private{to}`) is never posted as its words: its
+// room gets a line naming the one it is for, with a button that shows them
+// its words alone (@yaks/chat `notice`).
+//
 // Posting is at most once, as sending a text is (@yaks/phone): `deliver.tried`
 // is claimed before the message reaches the chatter, and only a chatter's
 // `Unsent` gives the claim back, to be tried again.
@@ -14,7 +18,8 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
-import { type Chatter, Unsent } from '@yaks/host/senders'
+import { type Chatter, type Control, Unsent } from '@yaks/host/senders'
+import { notice } from './mod.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -76,12 +81,17 @@ async (event, tx, write, attempt) => {
     if (error instanceof Stale && error.eid == entity.eid) return
     throw error
   }
+  let alone = comp(message, 'chat_private')?.to
+  let controls = said.controls as Control[] | undefined
   let posted
   try {
     posted = await chatter!.post({
       connection,
       room: String(room),
-      text: String(comp(message, 'doc')?.body ?? ''),
+      ...alone ? notice(entity.eid, String(alone)) : {
+        text: String(comp(message, 'doc')?.body ?? ''),
+        ...controls?.length ? { controls } : {},
+      },
       ...said.reply_to ? { reply_to: String(said.reply_to) } : {},
     })
   } catch (error) {

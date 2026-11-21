@@ -15,7 +15,11 @@ cuts an answer to fit, so a host wires every platform the same way.
   to the bot, or `direct`), and the connection whose bot heard it. With
   @yaks/mail's `deliver{to}` naming a room, it asks to be posted there by that
   bot: the `chat_post` effect hands it to the poster its host lends for the
-  platform (`Host.chatters`) and writes `delivered` or `bounced`.
+  platform (`Host.chatters`) and writes `delivered` or `bounced`. A message to
+  post may carry buttons (`chat_message{controls}`, each `{id, label}`). One
+  wearing `chat_private{to}` is for that one account alone: its words are never
+  posted, only `notice(eid, to)`, a line pinging them alone with a Show me
+  button whose id is `PRIVATE` and the row's eid.
 - `chat_room{via, id, server, name}` is a place messages are said: a channel, a
   direct conversation, a chat. `server` is the server or workspace it belongs
   to, none for a direct one.
@@ -120,20 +124,33 @@ fits.
 
 ## Holding a socket
 
-`holder(socket, heard)` (`@yaks/chat/socket`) runs a platform's steps over a
-`Wire` its host opens: `url()` to connect to, `frame(wire, text)` for each
-frame, `beat(wire)` when one is due, and `ended(code)`. Each answers what the
-host does next: beat every `every` milliseconds, or close and connect `again`.
-What the socket remembers survives a reconnect, so a session is resumed. The
-host only connects, keeps time and closes.
+`holder(socket, {heard, seated, present, pressed})` (`@yaks/chat/socket`) runs a
+platform's steps over a `Wire` its host opens: `url()` to connect to,
+`frame(wire, text)` for each frame, `beat(wire)` when one is due, and
+`ended(code)`. Each answers what the host does next: beat every `every`
+milliseconds, or close and connect `again`. What the socket remembers survives a
+reconnect, so a session is resumed. The host only connects, keeps time and
+closes.
 
 `listener(hosting)` (`@yaks/chat/listen`) is the loop a host runs around a
 holder for as long as it lives: given the platform, the bot's credential, how to
-open a socket and where heard messages go, its `alarm` opens the socket when it
-is not open, and the host calls it every `WATCH` (a minute), so a socket dropped
-by a deploy is open again within one. It beats when due, connects again when
-told or dropped, and stops only on a close the platform says is final (`ended`),
-until `close()` forgets the session, as when the credential changes.
+open a socket, where heard messages go, and where presses go with the credential
+to answer them, its `alarm` opens the socket when it is not open, and the host
+calls it every `WATCH` (a minute), so a socket dropped by a deploy is open again
+within one. It beats when due, connects again when told or dropped, and stops
+only on a close the platform says is final (`ended`), until `close()` forgets
+the session, as when the credential changes.
+
+## Presses
+
+A button on a bot's message (a `Reply`'s `controls`) that someone presses
+arrives as a step's `pressed`: a `Press` naming the control's id, who pressed
+it, the room and message, and what answering takes. A platform that answers a
+press for its presser alone gives `presses` (`Presses`): `hold` takes it at
+once, as the platform waits only moments, and `answer` says the `Answer`, words
+and buttons, in its place. That is how something in a room reaches one person
+alone (Discord's ephemeral messages, which a bot can send only in answer to a
+press or a command).
 
 Platforms: [@yaks/discord](../discord/README.md).
 

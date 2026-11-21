@@ -13,6 +13,7 @@ import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import {
   chain,
+  type Control,
   kept,
   linked,
   messageEid,
@@ -522,9 +523,10 @@ let roomOf = async (g: Store['g'], eid: string): Promise<Room | undefined> => {
       body: body(b),
       at: String(comp(b, 'chat_message').at ?? ''),
     })),
+    // A private one is drawn as the room saw it, its words its reader's.
     ...answers.map((b) => ({
       who: '',
-      body: body(b),
+      body: b.chat_private ? 'Something for one person here alone.' : body(b),
       at: String(comp(b, 'delivered').at ?? ''),
       ours: true,
     })),
@@ -654,25 +656,30 @@ export let chatRead = (
  * (`chat_message{room}`), replying to it where it names its message, posted
  * by the bot of its connection (@yaks/chat `chat_post`), its links written
  * as the platform writes them (@yaks/chat `linked`), cut to the platform's
- * limit, one message a piece. */
+ * limit, one message a piece. One `to` an account alone (`chat_private`) is
+ * one message, never cut, as a press answers it whole; `controls` go with
+ * its last piece. */
 export let chatRows = (
   via: string,
   item: Bundle,
-  reply: { eid: string; text: string },
+  reply: { eid: string; text: string; to?: string; controls?: Control[] },
 ): Bundle[] => {
   let heard = item.chat_message as Comp | undefined
   let platform = PLATFORMS.get(via)
   if (!platform || !heard?.room || !heard.connection) return []
-  return pieces(linked(reply.text, platform.links), platform.limit).map((
-    body,
-    i,
-  ) => ({
+  let text = linked(reply.text, platform.links)
+  let all = reply.to ? [text] : pieces(text, platform.limit)
+  return all.map((body, i) => ({
     entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
     chat_message: {
       via,
       connection: heard.connection,
       ...heard.message_id && !i ? { reply_to: heard.message_id } : {},
+      ...reply.controls?.length && i == all.length - 1
+        ? { controls: reply.controls }
+        : {},
     },
+    ...reply.to ? { chat_private: { to: reply.to } } : {},
     doc: { body },
     deliver: { to: heard.room },
   }))
@@ -689,7 +696,7 @@ export let chatSend = (store: Store, space = false): Tool => ({
   description:
     `Write in a chat room (a Discord channel) you were addressed in ${
       space ? 'in this space' : 'during this conversation'
-    }, as a reply to one of its messages. Use it to answer a request where it was asked when this turn came from somewhere else, such as the person asking you here about something said in Discord: name the room and message its framing gave (room …, message …). A turn that came from the room is answered there already, so never send its answer with this too. Then tell the person here in one line that you did.`,
+    }, as a reply to one of its messages. Use it to answer a request where it was asked when this turn came from somewhere else, such as the person asking you here about something said in Discord: name the room and message its framing gave (room …, message …). A turn that came from the room is answered there already, so never send its answer with this too. Then tell the person here in one line that you did. With \`to\`, the words are for one person in the room alone, from any turn: the room sees only a line naming them with a Show me button, which shows them alone the words. Use it for anything private to one person there: their details, a link of theirs, what others should not read.`,
   parameters: {
     type: 'object',
     properties: {
@@ -704,6 +711,11 @@ export let chatSend = (store: Store, space = false): Tool => ({
           "The platform's id for the message to reply to; left out, a message of its own in the room.",
       },
       text: { type: 'string', description: 'What to say there.' },
+      to: {
+        type: 'string',
+        description:
+          "The platform's id for the one person in the room the words are for alone, as their messages' framing gives it; left out, everyone there reads them. In a direct room they are alone already.",
+      },
     },
     required: ['text'],
   },
@@ -725,6 +737,8 @@ export let chatSend = (store: Store, space = false): Tool => ({
       space ? 'in this space' : 'in this conversation',
     )
     let message = args.message ? String(args.message) : undefined
+    // A direct room is one person's already.
+    let to = args.to && at.server ? String(args.to) : undefined
     let eid = crypto.randomUUID()
     await store.g.apply(
       chatRows(at.via, {
@@ -734,13 +748,14 @@ export let chatSend = (store: Store, space = false): Tool => ({
           connection: at.connection,
           ...message ? { message_id: message } : {},
         },
-      }, { eid, text }),
+      }, { eid, text, ...to ? { to } : {} }),
       { trusted: true },
     )
     return JSON.stringify({
       sent: eid,
       room: at.eid,
       reply_to: message ?? null,
+      ...to ? { to } : {},
     })
   },
 })

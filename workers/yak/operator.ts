@@ -2396,6 +2396,8 @@ export let operating = (
               number: confirm,
               chat: channel == 'chat',
               private: closed,
+              // A turn from a chat room asks there, privately.
+              ...PLATFORMS.has(channel) && rooms[0] ? { room: rooms[0] } : {},
             },
             (to, words) => textPerson(env, space, to, words),
             Date.now,

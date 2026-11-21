@@ -16,8 +16,12 @@
 // (operator-channels.ts `confirmOf`) it is texted to their number: anyone
 // can show a member's number, but only the member's phone reads what is
 // texted to it, so the tap is theirs. In their chat on yaks.app the card is
-// all they need, and the Operator writes no link. Anywhere else (a Discord
-// room, a letter) the Operator gives the link in its answer, as a Markdown
+// all they need, and the Operator writes no link. In a chat room, to a
+// person whose account there is linked to them, it is a message only they
+// see (`chat_private`), with Approve and Decline (`ROOM`): a press is
+// answered as the person the presser's account is linked to, so only theirs
+// counts (operator-private.ts). Anywhere else (a room they are not linked
+// in, a letter) the Operator gives the link in its answer, as a Markdown
 // link with words, and only a browser signed in as the person opens it, so
 // nobody else in a room can press it.
 //
@@ -186,7 +190,9 @@ export type Ask = (act: { tool: string; args: Args; say: string }) => Promise<
 
 /** Where a turn's person reads its answer, which says how they approve:
  * `number`, a link texted there; `chat`, the card in their conversation on
- * yaks.app; neither, a link in the answer. */
+ * yaks.app; `room`, the chat room the turn came from, a message there only
+ * they see where their account there is linked to them; else a link in the
+ * answer. */
 export type At = {
   person: string
   session: string
@@ -195,6 +201,65 @@ export type At = {
   /** asked in a private room (`chat_room{private}`), where anyone whose
    * role allows the act may vouch for them */
   private?: boolean
+  room?: Room
+}
+
+/** A chat room a turn came from (operator-rooms.ts `roomsOf`): its
+ * platform, the connection whose bot speaks there, the platform's id for it
+ * and its eid here, its server (none for a direct room), and the message
+ * the turn answers. */
+export type Room = {
+  via: string
+  connection: string
+  room: string
+  eid: string
+  server?: string
+  message: string
+}
+
+/** The controls an approval sent to a chat room is posted with, by what a
+ * press of each does: the prefix of its id, before the approval's eid
+ * (operator-private.ts). */
+export let ROOM = { approve: 'approve:', decline: 'decline:' } as const
+
+// Send the approval `eid` that asks `say` to `at.room`, to the person's own
+// account there alone, with Approve and Decline: whether it was sent, which
+// it is not where they have no account there linked to them.
+let toRoom = async (
+  env: Env,
+  store: Store,
+  space: Space,
+  at: At,
+  eid: string,
+  say: string,
+) => {
+  let room = at.room
+  if (!room) return false
+  let { directTo } = await import('./chat.ts')
+  let { chatRows } = await import('./operator-rooms.ts')
+  let mine = await directTo(env, room.via, space.eid, at.person)
+  if (!mine) return false
+  let id = crypto.randomUUID()
+  let rows = chatRows(room.via, {
+    entity: { eid: id },
+    chat_message: {
+      room: room.eid,
+      connection: room.connection,
+      message_id: room.message,
+    },
+  }, {
+    eid: id,
+    text: `${say}?`,
+    // A direct room is theirs alone already.
+    ...room.server ? { to: mine.account } : {},
+    controls: [
+      { id: ROOM.approve + eid, label: 'Approve' },
+      { id: ROOM.decline + eid, label: 'Decline' },
+    ],
+  })
+  if (!rows.length) return false
+  await store.g.apply(rows, { trusted: true })
+  return true
 }
 
 /** Who else may answer what a turn asks (operator-route.ts): the space's
@@ -310,6 +375,13 @@ async ({ tool, args, say }) => {
   let link = `https://${apex(env)}${APPROVE}?t=${t}`
   let only = 'Nothing else carries it out: not a later message asking for ' +
     'it, in any channel, nor another call of this tool.'
+  if (!at.chat && !at.number && await toRoom(env, store, space, at, eid, say)) {
+    return `Nothing has happened yet. It waits for them to approve it ` +
+      `("${say}"): a message in the room that only they can open, with ` +
+      `Approve and Decline, is there now. Tell them in a line to press Show ` +
+      `me on it, then Approve, within ${lasting}. Write no link to approve ` +
+      `it.${vouched} ${only}`
+  }
   if (at.chat && !at.number) {
     return `Nothing has happened yet. It waits for them to approve it ` +
       `("${say}"): a card with Approve and Decline is in their ` +
@@ -419,14 +491,18 @@ export type Standing = {
 
 /** What is done with an approval: opened (neither), Approve (`press`) or
  * Decline (`decline`), by `who` signed in, or nobody; `own` where it is
- * pressed on its card in the person's conversation or their Updates
- * (`updates`) rather than on a link. */
+ * pressed on its card in the person's conversation, their Updates
+ * (`updates`) or its message in a chat room (`room`) rather than on a
+ * link. */
 export type Press = {
   press?: boolean
   decline?: boolean
   who?: string | null
   own?: boolean
   updates?: boolean
+  /** pressed on its message in a chat room, as the person the presser's
+   * account there is linked to (`who`) */
+  room?: boolean
 }
 
 /** An Operator's side of its links and cards: what one's approval says, and
@@ -465,13 +541,19 @@ export let approvals = (
   return async (
     eid: string,
     digest: string,
-    { press = false, decline = false, who = null, own = false, updates }:
-      Press = {},
+    {
+      press = false,
+      decline = false,
+      who = null,
+      own = false,
+      updates,
+      room,
+    }: Press = {},
   ): Promise<Standing> => {
     let [row] = await store.g.get([eid])
     let a = row?.operator_approval as Approval | undefined
     if (!a || digestOf(a) != digest) return { state: 'gone' }
-    own ||= !!updates
+    own ||= !!updates || !!room
     // A texted link is the person's, whoever holds the phone; anything
     // else opens for whoever may answer it (operator-route.ts).
     let may = approversOf(a)
@@ -492,7 +574,13 @@ export let approvals = (
           $actor: { by: who ?? a.person },
           $was: { decided: { '': null }, cancelled: { '': null } },
         }))
-    let where: Where = updates ? 'updates' : own ? 'card' : 'link'
+    let where: Where = updates
+      ? 'updates'
+      : room
+      ? 'room'
+      : own
+      ? 'card'
+      : 'link'
     let integration = integrationNamed(a.args)
     let about = {
       say: a.say,
@@ -586,8 +674,8 @@ export let answered = async (
 }
 
 /** Where an approval was answered: its card in the conversation, their
- * Updates, or a link. */
-type Where = 'card' | 'updates' | 'link'
+ * Updates, its message in a chat room, or a link. */
+type Where = 'card' | 'updates' | 'room' | 'link'
 
 // What the Operator reads before continuing, after the approved call returns.
 let outcome = (
@@ -600,6 +688,8 @@ let outcome = (
     ? 'its card in the conversation'
     : where == 'updates'
     ? 'it in their Updates'
+    : where == 'room'
+    ? 'the message only they saw in the chat room'
     : a.number
     ? `the link texted to ${a.number}`
     : 'your link'

@@ -29,6 +29,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import {
+  type Answer,
   type Basics,
   confined,
   kept,
@@ -36,6 +37,7 @@ import {
   type Platform,
   platforms,
   type Present,
+  type Press,
   reading,
   type Room,
   roomEid,
@@ -1048,6 +1050,87 @@ export let arrived = async (
   await response.body?.cancel()
 }
 
+/**
+ * A button pressed on a message of `bot`'s on `platform`, answered for its
+ * presser alone ({@link Platform.presses}): held at once, as the platform
+ * waits only moments, then answered by the Operator of the space the press
+ * was in, as {@link arrived} finds it, given who the presser's account is
+ * linked to here (operator-private.ts `pressAnswer`). A press the Operator
+ * could not answer is reported and told so, so the presser never waits on
+ * nothing.
+ */
+export let pressedOn = async (
+  env: Env,
+  platform: Platform,
+  press: Press,
+  credential: string,
+  bot: Bot = { via: platform.name },
+) => {
+  let { presses } = platform
+  if (!presses) return
+  await presses.hold(credential, press)
+  let answer: Answer
+  try {
+    answer = await answerOf(env, platform, press, bot)
+  } catch (error) {
+    ;(await need()).caught(error, {
+      request: `${platform.name} press`,
+      server: press.server ?? '',
+      ...bot.connection ? { connection: bot.connection } : {},
+    })
+    answer = { text: 'That did not go through. Try again in a moment.' }
+  }
+  await presses.answer(credential, press, answer)
+}
+
+// What the Operator of the space `press` was in answers it: the space of
+// the connection that heard its server, or for a direct room, the
+// presser's own.
+let answerOf = async (
+  env: Env,
+  platform: Platform,
+  press: Press,
+  bot: Bot,
+): Promise<Answer> => {
+  let { directoryOf, KERNEL } = await need()
+  let dir = directoryOf(env.STORE)
+  let who = await linked(env, platform, press.author.id)
+  let space: Space | null = null
+  if (bot.connection || press.server) {
+    let [c] = bot.connection
+      ? await read(
+        env,
+        line`.entity.eid=${bot.connection}&.${CONNECTION}.status=connected&*`,
+      )
+      : await serving(env, platform.name, press.server!)
+    space = c ? await dir.at(String(comp(c, CONNECTION).owner)) : null
+  } else if (who) {
+    let { spaceFor } = await import('./operator-texts.ts')
+    space = await spaceFor(env, who)
+  }
+  if (!space || space.trashed) {
+    return { text: 'This is not for anyone here any more.' }
+  }
+  let { builderOf, SPACE } = await import('./build-door.ts')
+  let response = await builderOf(env, space.eid)(() =>
+    new Request('https://builder/operator/press', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...KERNEL,
+        [SPACE]: space!.eid,
+      },
+      body: JSON.stringify({ via: platform.name, press, who: who ?? null }),
+    })
+  )
+  if (!response.ok) {
+    throw new Error(
+      `${platform.title} press failed: ${await response.text()}`,
+    )
+  }
+  return await response.json() as Answer
+}
+
 /** What a Workers runtime gives an object, as much as listening uses. */
 type State = {
   storage: {
@@ -1144,6 +1227,21 @@ export class Listening {
           ),
         }
         : {},
+      // A button pressed on one of its messages, answered to its presser
+      // alone, each press on its own: none waits for another.
+      pressed: bound(async (pressed: Press[], credential: string) => {
+        await Promise.all(
+          pressed.map((p) =>
+            pressedOn(env, platform, p, credential, bot).catch((e) =>
+              caught(e, {
+                request: `${via} press`,
+                server: p.server ?? '',
+                ...tags,
+              })
+            )
+          ),
+        )
+      }),
       // Who is about, kept for each person here it is (whereabouts.ts).
       present: bound((p: Present[]) =>
         present(env, platform, p).catch((e) =>

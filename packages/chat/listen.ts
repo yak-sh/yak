@@ -8,7 +8,7 @@
 // awake (a deploy, an eviction), and reads the credential again: a new one
 // starts afresh with it, and none closes the socket.
 
-import type { Platform, Present, Said, Seated } from './mod.ts'
+import type { Platform, Present, Press, Said, Seated } from './mod.ts'
 import { holder, type Wire } from './socket.ts'
 
 /** The host's open socket, as much of a WebSocket as listening uses. */
@@ -32,6 +32,9 @@ export type Hosting = {
   seated?: (servers: Seated) => Promise<void>
   /** who the platform says is about, to keep */
   present?: (present: Present[]) => Promise<void>
+  /** controls pressed on the bot's messages, to answer with `credential`,
+   * the one the socket is open with */
+  pressed?: (pressed: Press[], credential: string) => Promise<void>
   /** a failure no one asked about, for the host's tracker */
   report: (error: unknown) => void
   /** the host's timers, for a test to drive */
@@ -115,12 +118,14 @@ export let listener = (host: Hosting): Listener => {
           waiting: `no ${host.platform.title} bot is kept yet`,
         }
       }
-      held ??= holder(
-        host.platform.socket!(token),
-        host.heard,
-        host.seated,
-        host.present,
-      )
+      let credential = token
+      let { pressed } = host
+      held ??= holder(host.platform.socket!(token), {
+        heard: host.heard,
+        seated: host.seated,
+        present: host.present,
+        ...pressed ? { pressed: (p: Press[]) => pressed(p, credential) } : {},
+      })
       let at = era
       let s = await host.open(held.url())
       if (at != era) {

@@ -121,7 +121,16 @@ export type Chat = {
   text: string
   /** the platform's id for the message it answers */
   reply_to?: string
+  /** the platform's id for the one account it names, which alone is
+   * pinged */
+  ping?: string
+  /** the buttons posted with it */
+  controls?: Control[]
 }
+
+/** A button posted with a chat message: its label, and the id a press of it
+ * names (@yaks/chat `Press`). */
+export type Control = { id: string; label: string }
 
 /** A chatter posts a message for one chat platform, resolving with the
  * platform's id for it and rejecting as a {@link Texter} does. Which bot's

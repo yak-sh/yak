@@ -71,6 +71,23 @@
           ],
           "description": "how it was said to the bot that heard it, where it was: naming it, replying to it, or to it alone. Whether a message is answered is the listener's to decide, from this and its words"
         },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "what a press of it names, which its listener answers"
+              },
+              "label": {
+                "type": "string",
+                "description": "the words on it"
+              }
+            }
+          },
+          "description": "the buttons posted with it, or, on a private one (`chat_private`), with its words to the one it is for"
+        },
         "connection": {
           "type": "string",
           "description": "the eid of the connection whose bot heard it, or speaks it (@yaks/connections): yaks.app's own bot added to a server, or a bot a space brought. Kept as an id, not a reference: the connection lives in its owner's directory, not beside the message"
@@ -120,6 +137,17 @@
         "name": {
           "type": "string",
           "description": "the name they go by there"
+        }
+      }
+    },
+    "chat_private": {
+      "component": true,
+      "type": "object",
+      "description": "on a `chat_message` to post, that its words are for one account in its room alone: the room gets a line naming them, pinging them alone, with a Show me button, and a press of it by them answers the words to them alone (Discord's ephemeral messages). Anyone else who presses it is told it is not theirs",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "the platform's id for the one account it is for"
         }
       }
     },

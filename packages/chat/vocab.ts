@@ -7,9 +7,9 @@ import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
 /** The chat vocabulary: `chat_message{via, room, author, message_id,
- * reply_to, at, addressed, connection}`, `chat_room{via, id, server, name}`,
- * `chat_account{via, id, name}`, `chat_hears{room}` and
- * `chat_serves{servers}`, in the form `loadVocab`
+ * reply_to, at, addressed, controls, connection}`, `chat_room{via, id,
+ * server, name}`, `chat_account{via, id, name}`, `chat_private{to}`,
+ * `chat_hears{room}` and `chat_serves{servers}`, in the form `loadVocab`
  * accepts. */
 export let chatDoc: VocabDoc = doc as VocabDoc
 

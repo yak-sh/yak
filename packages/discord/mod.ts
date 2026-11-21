@@ -6,13 +6,18 @@
 
 import type {
   Addressed,
+  Answer,
   Api,
   Basics,
+  Control,
   Linker,
   Page,
   Platform,
   Posted,
   Present,
+  Press,
+  Presses,
+  Reply,
   Room,
   Said,
   Server,
@@ -133,6 +138,40 @@ export let said = (m: Message, me?: string): Said | undefined => {
     ? m.content.replaceAll(`<@${me}>`, '').replaceAll(`<@!${me}>`, '')
     : m.content
   return { ...read({ ...m, content: text }), ...addressed ? { addressed } : {} }
+}
+
+type Interaction = {
+  id: string
+  application_id: string
+  type: number
+  token: string
+  data?: { custom_id?: string }
+  guild_id?: string
+  channel_id?: string
+  member?: { user?: User; nick?: string | null }
+  user?: User
+  message?: { id: string }
+}
+
+// A press of a button (an interaction of type 3, MESSAGE_COMPONENT), as
+// @yaks/chat reads one; none for any other interaction.
+export let pressed = (i: Interaction): Press | undefined => {
+  let user = i.member?.user ?? i.user
+  let control = i.data?.custom_id
+  if (i.type != 3 || !user || !control || !i.channel_id) return
+  return {
+    id: i.id,
+    token: i.token,
+    app: i.application_id,
+    control,
+    room: i.channel_id,
+    ...i.guild_id ? { server: i.guild_id } : {},
+    ...i.message ? { message: i.message.id } : {},
+    author: {
+      id: user.id,
+      name: i.member?.nick || user.global_name || user.username,
+    },
+  }
 }
 
 // A message as it was said, whoever said it.
@@ -261,6 +300,13 @@ export let gateway = (token: string): Socket<Session> => ({
           let d = f.d as { id: string; unavailable?: boolean }
           return d.unavailable ? { state } : { state, servers: { left: d.id } }
         }
+        // A button pressed on one of the bot's messages, which Discord sends
+        // over the Gateway to a bot with no interactions endpoint, whatever
+        // its intents.
+        if (f.t == 'INTERACTION_CREATE') {
+          let press = pressed(f.d as Interaction)
+          return { state, ...press ? { pressed: [press] } : {} }
+        }
         if (f.t == 'MESSAGE_CREATE') {
           let heard = said(f.d as Message, s.me)
           return { state, ...heard ? { heard: [heard] } : {} }
@@ -341,8 +387,77 @@ let answer = async <T>(
 
 let bot = (token: string) => ({ authorization: `Bot ${token}` })
 
+// Buttons as Discord posts them: up to five to a row (components/reference,
+// "Action Row"), each a secondary button (style 2) whose `custom_id` is the
+// control's id, at most 100 characters.
+let rows = (controls: Control[]) => {
+  let all = []
+  for (let i = 0; i < controls.length; i += 5) {
+    all.push({
+      type: 1,
+      components: controls.slice(i, i + 5).map((c) => ({
+        type: 2,
+        style: 2,
+        label: c.label.slice(0, 80),
+        custom_id: c.id.slice(0, 100),
+      })),
+    })
+  }
+  return all
+}
+
+// A message's content, mentions and buttons: `ping` named before the words,
+// and pinged alone.
+let body = (m: Omit<Reply, 'room'>) => ({
+  content: m.ping ? `<@${m.ping}> ${m.text}` : m.text,
+  allowed_mentions: m.ping ? { parse: [], users: [m.ping] } : { parse: [] },
+  ...m.controls?.length ? { components: rows(m.controls) } : {},
+})
+
+/** How a press is answered for its presser alone (receiving-and-responding):
+ * held at once, within the three seconds Discord waits, as a deferred
+ * ephemeral answer (callback type 5 with flag 64, EPHEMERAL), which shows
+ * them alone that the bot is thinking; then that answer is written in its
+ * place (PATCH `/webhooks/{app}/{token}/messages/@original`), within the
+ * fifteen minutes its token lasts. A 429 or a 5xx is {@link Unsent}. */
+export let presses: Presses = {
+  hold: async (token, press, fetcher = fetch) => {
+    await answer(
+      await fetcher(`${API}/interactions/${press.id}/${press.token}/callback`, {
+        method: 'POST',
+        headers: { ...bot(token), 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 5, data: { flags: 64 } }),
+      }),
+      {
+        unsent: 'Discord did not take the press',
+        refused: 'Discord refused to hold the press',
+      },
+    )
+  },
+  answer: async (token, press, said: Answer, fetcher = fetch) => {
+    let text = said.text.length > 2000
+      ? said.text.slice(0, 1999) + '…'
+      : said.text
+    await answer(
+      await fetcher(
+        `${API}/webhooks/${press.app}/${press.token}/messages/@original`,
+        {
+          method: 'PATCH',
+          headers: { ...bot(token), 'content-type': 'application/json' },
+          body: JSON.stringify(body({ ...said, text })),
+        },
+      ),
+      {
+        unsent: 'Discord did not take the answer to the press',
+        refused: 'Discord refused the answer to the press',
+      },
+    )
+  },
+}
+
 /** Post `reply` as the bot with `token`, answering the message it names
- * when there still is one, and pinging nobody. A 429 or a 5xx never took it,
+ * when there still is one, pinging only the account it names (`ping`), with
+ * its buttons (`controls`). A 429 or a 5xx never took it,
  * so it is {@link Unsent} and tried again; any other refusal is thrown with
  * what Discord said. */
 export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
@@ -350,8 +465,7 @@ export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
     method: 'POST',
     headers: { ...bot(token), 'content-type': 'application/json' },
     body: JSON.stringify({
-      content: reply.text,
-      allowed_mentions: { parse: [] },
+      ...body(reply),
       ...reply.reply_to
         ? {
           message_reference: {
@@ -779,4 +893,5 @@ export let discord: Platform = {
   open,
   basics,
   working: { every: 8000, show: typing },
+  presses,
 }

@@ -352,6 +352,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
+          url.pathname == '/operator/press' ||
           url.pathname == '/operator/handoff' ||
           url.pathname == '/operator/approval' ||
           url.pathname == WALKTHROUGH
@@ -428,6 +429,20 @@ export class Builder extends Durable {
             )
             await this.#arming
             return answer
+          }
+          // A button pressed on one of the Operator's messages in a chat
+          // room, by the person whose account pressed it, if any, answered
+          // for the presser alone (chat.ts `pressedOn`).
+          if (url.pathname == '/operator/press') {
+            let { pressAnswer } = await import('./operator-private.ts')
+            let operator = await this.#work()
+            let answer = await pressAnswer(
+              operator.store,
+              operator.approve,
+              await request.json(),
+            )
+            await this.#arming
+            return Response.json(answer)
           }
           // A link approving one act, opened or pressed, and who is signed
           // in (operator-approvals.ts `approvalDoor`).

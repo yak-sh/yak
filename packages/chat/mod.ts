@@ -6,7 +6,14 @@
 
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { type Chat, type Chatter, Unsent } from '@yaks/host/senders'
+import {
+  type Chat,
+  type Chatter,
+  type Control,
+  Unsent,
+} from '@yaks/host/senders'
+
+export type { Control }
 
 /** A message as a platform's plugin reads it: where it was said, by whom, in
  * which words, and whether it was said to the bot that heard it. */
@@ -38,8 +45,64 @@ export type Said = {
  * alone. */
 export type Addressed = 'mention' | 'reply' | 'direct'
 
-/** A reply to post into a room, answering a message where it names one. */
-export type Reply = { room: string; text: string; reply_to?: string }
+/** A reply to post into a room, answering a message where it names one,
+ * naming and pinging the one account `ping` where it names one, with
+ * buttons where it has `controls`. */
+export type Reply = Omit<Chat, 'connection'>
+
+/** A control (a button) someone pressed on a bot's message, as its platform
+ * gives it: which control (`control`, its {@link Control} id), who pressed
+ * it, where, and what answering it takes (`id`, `token`, and the bot's
+ * application `app` where the platform needs it). A platform that waits only
+ * moments for an answer is held at once ({@link Presses}) and answered
+ * after. */
+export type Press = {
+  id: string
+  token: string
+  app?: string
+  control: string
+  room: string
+  server?: string
+  /** the platform's id for the message the control is on */
+  message?: string
+  author: { id: string; name: string }
+}
+
+/** What a press is answered with, for its presser alone: words, and buttons
+ * where it has `controls`. */
+export type Answer = { text: string; controls?: Control[] }
+
+/** How a platform answers a press for its presser alone (Discord's
+ * ephemeral messages, the only way a bot says something in a room that one
+ * person sees): `hold` takes it at once, showing the presser it is being
+ * worked on, and `answer` says the answer in its place. */
+export type Presses = {
+  hold: (
+    credential: string,
+    press: Press,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<void>
+  answer: (
+    credential: string,
+    press: Press,
+    answer: Answer,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<void>
+}
+
+/** The control a private message is posted with in its room, in place of
+ * its words: a press of it by the one account it is for answers them its
+ * words alone ({@link Presses}). */
+export let PRIVATE = 'private:'
+
+/** What a private message posts in its room, `eid` its row: a line naming
+ * the one it is for, pinging them alone, and the button that shows them its
+ * words. Its words are never posted. */
+export let notice = (eid: string, to: string): Omit<Reply, 'room'> => ({
+  text: 'This one is for you alone.',
+  ping: to,
+  controls: [{ id: PRIVATE + eid, label: 'Show me' }],
+})
 
 /** A refusal that knows the bot may not write to that person directly: they
  * take no direct messages from it, or share no server with it. It says
@@ -116,6 +179,8 @@ export type Step<S> = {
   servers?: Seated
   /** whether people the bot can see are about, as the platform said */
   present?: Present[]
+  /** controls pressed on the bot's messages */
+  pressed?: Press[]
   /** close and connect again, at `url(state)` */
   again?: boolean
 }
@@ -240,6 +305,9 @@ export type Platform = {
     people: string[],
     fetch?: typeof globalThis.fetch,
   ) => Promise<Basics>
+  /** how a press of a control on the bot's message is answered for its
+   * presser alone, where the platform can ({@link Presses}) */
+  presses?: Presses
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<

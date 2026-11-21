@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Present, Said, Seated } from '@yaks/chat'
+import type { Present, Press, Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
 import { linked, Unreachable } from '@yaks/chat'
@@ -45,13 +45,14 @@ let held = () => {
   let heard: Said[] = []
   let seated: Seated[] = []
   let present: Present[] = []
-  let h = holder(
-    gateway('T0K'),
-    (s) => heard.push(...s),
-    (s) => seated.push(s),
-    (p) => present.push(...p),
-  )
-  return { h, heard, seated, present, ...wire() }
+  let pressed: Press[] = []
+  let h = holder(gateway('T0K'), {
+    heard: (s) => heard.push(...s),
+    seated: (s) => seated.push(s),
+    present: (p) => present.push(...p),
+    pressed: (p) => pressed.push(...p),
+  })
+  return { h, heard, seated, present, pressed, ...wire() }
 }
 let say = (h: ReturnType<typeof held>['h'], w: Wire, f: unknown) =>
   h.frame(w, JSON.stringify(f))
@@ -269,6 +270,95 @@ test('send posts the reply as the bot, answering the message, pinging nobody', a
     allowed_mentions: { parse: [] },
     message_reference: { message_id: 'm2', fail_if_not_exists: false },
   })
+})
+
+test('a button pressed is a press, by its member, on its message; any other interaction is not', async () => {
+  let { h, w, pressed } = held()
+  await say(h, w, ready)
+  let interaction = (n: number, d: Record<string, unknown>) => ({
+    op: 0,
+    s: n,
+    t: 'INTERACTION_CREATE',
+    d: {
+      id: `i${n}`,
+      application_id: 'app',
+      type: 3,
+      token: 'tok',
+      data: { custom_id: 'private:row', component_type: 2 },
+      guild_id: 'barn',
+      channel_id: 'room',
+      member: { user: { id: 'ann', username: 'ann_k' }, nick: 'Annie' },
+      message: { id: 'm9' },
+      ...d,
+    },
+  })
+  await say(h, w, interaction(2, {}))
+  await say(h, w, interaction(3, { type: 2 }))
+  assertEquals(pressed, [{
+    id: 'i2',
+    token: 'tok',
+    app: 'app',
+    control: 'private:row',
+    room: 'room',
+    server: 'barn',
+    message: 'm9',
+    author: { id: 'ann', name: 'Annie' },
+  }])
+})
+
+test('a private notice names and pings its one reader alone, with its buttons', async () => {
+  let { f, seen } = rest(200, { id: 'r1' })
+  await discord.send('T0K', {
+    room: 'room',
+    text: 'For you alone.',
+    ping: 'ann',
+    controls: [{ id: 'private:row', label: 'Show me' }],
+  }, f)
+  assertEquals(JSON.parse(String(seen[0].init.body)), {
+    content: '<@ann> For you alone.',
+    allowed_mentions: { parse: [], users: ['ann'] },
+    components: [{
+      type: 1,
+      components: [{
+        type: 2,
+        style: 2,
+        label: 'Show me',
+        custom_id: 'private:row',
+      }],
+    }],
+  })
+})
+
+test('a press is held as an ephemeral answer at once, then answered in its place', async () => {
+  let { f, seen } = rest(200, {})
+  let press = {
+    id: 'i2',
+    token: 'tok',
+    app: 'app',
+    control: 'x',
+    room: 'room',
+    author: { id: 'ann', name: 'Ann' },
+  }
+  await discord.presses!.hold('T0K', press, f)
+  await discord.presses!.answer('T0K', press, {
+    text: 'Add bo?',
+    controls: [{ id: 'approve:a', label: 'Approve' }],
+  }, f)
+  assertEquals(seen.map((s) => [s.init.method, s.url]), [
+    ['POST', 'https://discord.com/api/v10/interactions/i2/tok/callback'],
+    [
+      'PATCH',
+      'https://discord.com/api/v10/webhooks/app/tok/messages/@original',
+    ],
+  ])
+  assertEquals(JSON.parse(String(seen[0].init.body)), {
+    type: 5,
+    data: { flags: 64 },
+  })
+  assertEquals(
+    JSON.parse(String(seen[1].init.body)).components[0].components[0].custom_id,
+    'approve:a',
+  )
 })
 
 test('a rate limit is tried again after what Discord says; a refusal is thrown', async () => {
