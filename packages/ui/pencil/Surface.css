@@ -1,7 +1,8 @@
 /* Pencil paint for every surface, independent of the parts a page wears. */
 :root {
+  /* The tile carries its own opacity so it can also paint scroll backgrounds. */
   --grain: url(paper.webp);
-  --grain-opacity: .07;
+  --grain-opacity: 1;
   --drawn: url(pencil.svg#line);
   --surface-outline: '';
   --surface-border: transparent;

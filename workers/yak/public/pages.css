@@ -291,6 +291,17 @@
     height: var(--viewport-height, 100dvh);
     overflow: hidden;
   }
+  /* Each pane paints its tile in its own scrolling content. */
+  html:has(.Framed)::after {
+    content: none;
+  }
+  .Frame_Body,
+  .Frame_Aside,
+  .Sidebar_Scroll {
+    background-image: var(--grain);
+    background-size: 256px;
+    background-attachment: local;
+  }
   .Framed_Main {
     max-width: none;
     padding: 0;
@@ -694,15 +705,6 @@
      box to write in held at the foot of the window, and at its right the
      person's lists that do not wait on them (talk-beside.ts). Each pane scrolls within the
      window; the whole side scrolls together (`.Sidebar_Scroll`). */
-  /* The app is a window onto another site. Keep the page's grain below
-     its column, including when that column fills the screen on a phone,
-     and over everything else: the side and the frame's bar (z-index 1,
-     before the grain in the page) and the current tab where it reaches
-     across onto the page. */
-  html:has(.Talk_App)::after {
-    z-index: 1;
-  }
-
   .Talk_Back,
   .Talk_Show {
     display: none;
