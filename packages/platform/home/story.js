@@ -186,6 +186,7 @@ let mount = (root) => {
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let narrow = matchMedia('(max-width: 59.99rem)')
   let i = 0, active = -1, frame = 0, timer = 0
+  let fullDemoHeight = 0
   let playing = !calm.matches
   let highlight = navigation(nav, calm)
   let pose = mascot(root, calm, narrow)
@@ -196,11 +197,15 @@ let mount = (root) => {
     let at = reading(rects, line)
     let last = rects.at(-1)
     let past = last.bottom <= line
+    let bounds = desk.getBoundingClientRect()
+    let docked = !narrow.matches && !past && bounds.top < 16
+    let room = bounds.bottom - 24
+    if (!demo.hasAttribute('data-compact')) fullDemoHeight = demo.offsetHeight
+    let compact = docked && room < fullDemoHeight
     demo.toggleAttribute('data-mini', narrow.matches && at.step > 0 && !past)
-    demo.toggleAttribute(
-      'data-docked',
-      !narrow.matches && !past && desk.getBoundingClientRect().top < 16,
-    )
+    demo.toggleAttribute('data-docked', docked)
+    demo.toggleAttribute('data-compact', compact)
+    if (compact) demo.style.setProperty('--dock-room', `${room}px`)
     demo.toggleAttribute('data-finished', !narrow.matches && past)
     reveal(logs[i], at, motion)
     if (active == at.step) return

@@ -838,6 +838,19 @@
   .Story_Page .Home_Phone {
     height: var(--phone-height);
   }
+
+  .Story_Page .Home_Demo[data-compact] {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .Story_Page .Home_Demo[data-compact] .Home_Phone {
+    height: min(var(--phone-height), calc(var(--dock-room) - 2rem));
+  }
+
+  .Home_Demo[data-compact] :is(.Home_Picks, .Home_Ask, .Home_Shot),
+  .Home_Demo[data-compact] .Home_Message:not([data-recent]) {
+    display: none;
+  }
 }
 
 @container (min-width: 33rem) {
