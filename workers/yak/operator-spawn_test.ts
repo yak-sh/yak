@@ -152,11 +152,10 @@ test('the conversation shows the context the Operator and each helper were given
   for (let [d, m] of [[operator, SOL], [helper, OTHER]] as const) {
     let all = layers(d)
     assertEquals(
-      [all[0], ...all.slice(-3)].map(named),
+      [all[0], ...all.slice(-2)].map(named),
       [
         'yaks.app Operator',
         'Reads',
-        'Oracles',
         `${first(m).tools.length} tools`,
       ],
     )

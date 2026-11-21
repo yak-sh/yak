@@ -9,7 +9,7 @@ import { short } from '@yaks/id'
 import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { directoryOf, stamp } from './directory.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { operatorMemory, operatorModel, promptOf } from './operator-testing.ts'
 import { operating, operatorContext } from './operator.ts'
 import { drain } from './operator-store.ts'
 import {
@@ -183,14 +183,16 @@ let drawn = await conversationOf(store, '/at', started.session)
 
 test('a conversation stays small while its fork obtains an answer from the app oracle', () => {
   assertStringIncludes(
-    String(rootAsk.instructions),
+    rootAsk.turnContext?.flatMap((i) => i.kind == 'instruction' ? [i.text] : [])
+      .join('\n') ?? '',
     `${
       short(oracleOf(owner, app.eid))
     } app home/recipes: Recipe box, holds recipes; does recipes; its notes say how
     - kind recipe: recipe{serves}`,
   )
-  assertEquals(String(rootAsk.instructions).includes('Use grams.'), false)
+  assertEquals(promptOf(rootAsk).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)
+  assertStringIncludes(promptOf(forkAsk), 'app home/recipes: Recipe box')
   assertEquals(
     rootAsk.tools.map((t) => t.name),
     forkAsk.tools.map((t) => t.name),
@@ -267,11 +269,18 @@ let sent = String(
   await instructionsOf(store.g, kept.find((b) => b.ask)?.sending as Comp),
 )
 test('the system prompt saved beside the conversation is the one the model received', () => {
-  assertStringIncludes(
-    sent,
-    `${short(oracleOf(owner, app.eid))} app home/recipes`,
-  )
-  assertEquals(sent.includes('connector guide'), false)
+  assertEquals(sent, rootAsk.instructions)
+})
+
+test('an app title change reaches the Operator in turn context', async () => {
+  await stamp(env, {
+    entities: [{ entity: { eid }, doc: { title: 'Family recipes' } }],
+  })
+  await operator.ask({ person: owner }, space, { say: 'Thanks.' })
+  await drain(store)
+  let after = asked.filter((r) => r.conversation == root).at(-1)!
+  assertEquals(after.instructions, rootAsk.instructions)
+  assertStringIncludes(promptOf(after), 'app home/recipes: Family recipes')
 })
 
 // Every entity the context names is named by its short id, which the tools
@@ -280,7 +289,7 @@ let UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 test('the context names entities by short id, never a full uuid', () => {
   let said = [rootAsk, forkAsk, oracleAsk].flatMap((r) => [
     ...String(r.instructions).split('\n'),
-    ...r.items.map((i) => JSON.stringify(i)),
+    promptOf(r),
   ])
   assertEquals(said.filter((l) => UUID.test(l)), [])
 })

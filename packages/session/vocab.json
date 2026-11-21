@@ -1297,7 +1297,7 @@
           "items": {
             "type": "string"
           },
-          "description": "on an ask, the turn context its provider holds for the conversation, each item by the first 16 hex of its sha256: what it sent, and what its anchor held where it continued one. An anchored turn sends only the items its anchor's lacks"
+          "description": "on an ask, context its provider holds, by the first 16 hex of each item's sha256. Hashes prefixed with turn: describe the current context at this ask. Other hashes include context sent anywhere in the anchor chain"
         }
       }
     },

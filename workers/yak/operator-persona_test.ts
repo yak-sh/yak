@@ -7,10 +7,15 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
+import {
+  callable,
+  operatorMemory,
+  operatorModel,
+  promptOf,
+} from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { BASE, bases, introduced, personaFor } from './operator-persona.ts'
+import { BASE, bases, personaFor } from './operator-persona.ts'
 import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
@@ -144,13 +149,20 @@ test("the base's files say the platform's own numbers", async () => {
   assert(!String(first.instructions).includes('{{'))
 })
 
-test('the Operator is told the plan its space is on and what it allows', () => {
+test('a plan change reaches the Operator in turn context', async () => {
   assertStringIncludes(
-    String(first.instructions),
+    promptOf(first),
     'home is on the free plan: 5 apps, 100 emails',
   )
+  let before = await said('Hi')
+  await meta(env).apply([{
+    entity: { eid: space.eid },
+    plan: { tier: 'plus' },
+  }], KERNEL)
+  let after = await said('Hi')
+  assertEquals(after.instructions, before.instructions)
   assertStringIncludes(
-    introduced({ ...space, tier: 'plus' }),
+    promptOf(after),
     'home is on the Plus plan: as many apps as it likes, 2,500 emails',
   )
 })

@@ -81,6 +81,7 @@ let call = (name: string, args: unknown): Item[] => [{
   args: JSON.stringify(args),
 }]
 let results: string[] = []
+let subject = 'Notices: a budget hearing was added'
 // The tools each turn was offered, by the words that began it.
 let offered = new Map<string, string[]>()
 let script: Record<string, [string, unknown]> = {
@@ -135,7 +136,7 @@ let service = operatorService(env, held, {
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Tell them which meetings changed.')
       ? call('notification_send', {
-        subject: 'Notices: a budget hearing was added',
+        subject,
         text: 'The budget hearing is new.',
       })
       : cancel
@@ -176,7 +177,9 @@ let hearing = await meeting('Budget hearing: Monday at 6')
 await meeting('Road millage: Thursday at 8', road)
 await look()
 let [request] = await fired()
-let [told] = await store.g.read(line`.notification.to=${person}&*`)
+let [told] = await store.g.read(
+  line`.notification.to=${person}&.doc.title=${subject}&*`,
+)
 // The change is now what it saw, so the next look is quiet again.
 await look()
 let after = (await fired()).length

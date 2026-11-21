@@ -377,10 +377,9 @@ export type Deps = {
     entries: Bundle[],
     current: { session: Eid; tools: readonly Tool[] },
   ) => Promise<Item[]>
-  /** Context about this moment, read again for each request and sent just
-   * before the newest words said, never kept in the transcript: what changes from one turn to the next
-   * (where the person is now) without breaking the cached prefix, and with
-   * nothing for a compaction to carry. */
+  /** Current context, read again for each request and kept beside the
+   * transcript, so changes reach the model without breaking the cached prefix.
+   * An anchored request compares these items with the preceding ask. */
   turnItems?: (
     window: Bundle[],
     entries: Bundle[],
@@ -1826,7 +1825,7 @@ export let react = async (
     await drop(g, session, entries)
   ) return react(g, session, deps, undefined, true)
   let checkpoint = checkpointOf(entries)
-  const sameModel = asked && sameScope && !coldTurn &&
+  const sameModel = asked && !coldTurn &&
     comp(asked, ASK)?.pruning === pruning(entries) &&
     Number(comp(asked, ASK)?.elided_before ?? 0) === elision &&
     (!checkpoint || seqOf(asked) > seqOf(checkpoint)) &&
@@ -1843,14 +1842,20 @@ export let react = async (
   // A host's own instructions (`requestInstructions`) are read every ask and
   // travel in the conversation, where a provider keeps them for its cache:
   // the conversation continues only while they read as its anchor sent them.
-  let requested = deps.requestInstructions
-    ? await deps.requestInstructions(session)
-    : undefined
+  let [requested, authority] = deps.requestInstructions
+    ? await Promise.all([
+      deps.requestInstructions(session),
+      deps.instructionScope?.(session),
+    ])
+    : [undefined, scope]
+  let sameAuthority = authority == null ||
+    comp(asked ?? {} as Bundle, 'sending')?.scope === authority
   let sameTold = !requested?.instructions ||
     comp(asked ?? {} as Bundle, 'sending')?.told ==
       sha256(requested.instructions)
   let anchorId =
-    providerModel.anchor && asked && sameModel && sameTold && !refused
+    providerModel.anchor && asked && sameModel && sameAuthority && sameTold &&
+      !refused
       ? providerModel.anchor(asked)
       : undefined
   if (anchored && !anchorId) return whole()
@@ -1954,21 +1959,31 @@ export let react = async (
     }
     turnItems.push(
       ...dynamic.map((item) => message(item, item.from ?? 'the system')),
-      ...moment,
     )
   }
-  // Turn context travels after the conversation and is never kept in the
-  // transcript, but a provider holding an anchored conversation keeps every
-  // request's: an anchored turn leaves out what its conversation already
-  // holds, each item known by its hash (`sending.context`).
+  // The provider keeps every request's context. Current context compares with
+  // the anchor's own reading so a value that returns after an edit travels
+  // again. Other context can be reused from any earlier ask in the chain.
   let holds: string[] | undefined
   if (turnItems) {
     let held = new Set(
       anchorId ? strings(comp(asked!, 'sending')?.context) : [],
     )
+    let current = moment.map((item) => `turn:${itemHash(item)}`)
     let fresh = turnItems.filter((i) => !held.has(itemHash(i)))
-    turnItems.splice(0, turnItems.length, ...fresh)
-    holds = [...new Set([...held, ...fresh.map(itemHash)])]
+    turnItems.splice(
+      0,
+      turnItems.length,
+      ...fresh,
+      ...moment.filter((_, i) => !held.has(current[i])),
+    )
+    holds = [
+      ...new Set([
+        ...[...held].filter((key) => !key.startsWith('turn:')),
+        ...fresh.map(itemHash),
+        ...current,
+      ]),
+    ]
   }
   let req: Request = {
     signal: deps.signal,
@@ -2177,7 +2192,7 @@ export let react = async (
           ...sending,
           instructions: null,
           told: told?.entity.eid ?? null,
-          ...scope == null ? {} : { scope },
+          ...authority == null ? {} : { scope: authority },
           // What it was offered, deferred tools too: a resumed ask sends
           // again what these entries loaded of them.
           ...executor ? { tools: tools.map((tool) => tool.name) } : {},

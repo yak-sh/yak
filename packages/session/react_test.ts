@@ -259,15 +259,21 @@ test('an anchored turn sends only what its conversation lacks, and continues onl
     says('r2', 'done'),
     says('r3', 'again'),
     says('r4', 'and again'),
+    says('r5', 'new reader'),
+    says('r6', 'new instructions'),
   ])
   let told = 'Be brief.'
   let here = 'Ada is home.'
+  let reader = 'Ada'
   let deps: Deps = {
     model,
     tools: [echo],
     mint,
     requestInstructions: () => Promise.resolve({ instructions: told }),
-    requestItems: () => Promise.resolve([{ kind: 'instruction', text: here }]),
+    instructionScope: () => reader,
+    requestItems: () =>
+      Promise.resolve([{ kind: 'instruction', text: 'Help' }]),
+    turnItems: () => Promise.resolve([{ kind: 'instruction', text: here }]),
   }
   let sent = () =>
     asked.map((a) => [
@@ -280,19 +286,28 @@ test('an anchored turn sends only what its conversation lacks, and continues onl
   assertEquals(await rest(g, ids.s, deps), 'settled')
   // The anchored turn's conversation holds the tools and the context.
   assertEquals(sent(), [
-    [undefined, undefined, [here]],
+    [undefined, undefined, ['Help', here]],
     ['r1', ['echo'], []],
   ])
-  // Changed context travels again; changed instructions start over.
+  // Current context travels whenever it changes, including a return to a
+  // value sent before. A new reader or different instructions starts over.
   here = 'Ada is out.'
   await appendEntry(g, ids.s, 'where is she?')
   assertEquals(await rest(g, ids.s, deps), 'settled')
-  told = 'Be thorough.'
+  here = 'Ada is home.'
   await appendEntry(g, ids.s, 'and now?')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  reader = 'Bea'
+  await appendEntry(g, ids.s, 'Bea asks too')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  told = 'Be thorough.'
+  await appendEntry(g, ids.s, 'how about now?')
   assertEquals(await rest(g, ids.s, deps), 'settled')
   assertEquals(sent().slice(2), [
     ['r2', ['echo'], ['Ada is out.']],
-    [undefined, undefined, ['Ada is out.']],
+    ['r3', ['echo'], ['Ada is home.']],
+    [undefined, undefined, ['Help', 'Ada is home.']],
+    [undefined, undefined, ['Help', 'Ada is home.']],
   ])
 })
 

@@ -1,5 +1,7 @@
 import { url as hostUrl } from '@yaks/platform/host'
 import { chatPath } from '@yaks/platform/routes'
+import { PLATFORM_STORE } from '@yaks/platform/names'
+import { planned } from '@yaks/platform/standing'
 import { line as q, whole as wholeLine } from '@yaks/query'
 import { inputSource } from './operator-provenance.ts'
 import { inputBody } from '@yaks/platform/operator-source'
@@ -118,6 +120,7 @@ import {
   ambient,
   counts,
   reached,
+  recall as recallHop,
   since,
   spansOf,
   type Tally,
@@ -1489,7 +1492,7 @@ let working = async (
   for (let asked of [reach, apps, platform, space, ctx, google]) {
     asked.catch(() => {})
   }
-  return { eid: o.space, space, here, ctx, files: o.files ?? [] }
+  return { eid: o.space, space, here, ctx, files: o.files ?? [], held }
 }
 
 // Each step of an Operator session is counted and remembered as a request
@@ -1693,6 +1696,12 @@ export let operating = (
 ): Operator => {
   let { g, fx, vocab } = store
   let dir = () => options.directory?.() ?? directoryOf(env.STORE)
+  let workFor = (session: string) =>
+    recallHop(
+      PLATFORM_STORE,
+      `operator work ${session}`,
+      () => working(env, store, session, options.directory),
+    )
   // What a subscription watches, read as the person its wake is set for:
   // over the space through their reach, as their graph_query reads it, or
   // over this store (operator-schedules.ts).
@@ -2473,17 +2482,19 @@ export let operating = (
         return machineAt(session)
       }
     }).catch(() => {})
-    let [{ eid, space: at, here, ctx: context, files }, task, [row]] =
-      await Promise.all([
-        working(env, store, session, options.directory),
-        taskOf(store, session),
-        g.read(
-          q`.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
-        ),
-      ])
+    let [
+      { eid, space: at, here, ctx: context, files, held: work },
+      task,
+      [row],
+    ] = await Promise.all([
+      workFor(session),
+      taskOf(store, session),
+      g.read(
+        q`.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
+      ),
+    ])
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
-    let work = await workingOf(store, session)
     let channel = await channelAt(store, session, work)
     let confirm = o.confirm ?? await confirmAt(store, session, work)
     // A turn started by words nobody in the space wrote (operator-channels.ts
@@ -2899,11 +2910,13 @@ export let operating = (
     // needs none of it: one that can't be read is reported, and the turn goes
     // on without it (M-37965). A directory a deploy reached before this object
     // refuses a word it no longer speaks, so even its refusal is ours.
-    // So are its other threads in the rooms the conversation was addressed
-    // in, read as the person may read them (operator-threads.ts).
+    // The turn also reads the latest plan, the writer's app map and the
+    // other threads in its rooms (operator-threads.ts).
     turnItems: async (_, __, { session }) => {
-      let o = await workingOf(store, session)
-      if (!o?.person || !o.space) return []
+      let [{ space, ctx, held: o }, [row]] = await Promise.all([
+        workFor(session),
+        g.read(q`.entity.eid=${session}&.fields=session.topic`),
+      ])
       let failed = (request: string) => (e: unknown) => {
         defect(e, { request, session, space: o.space })
         return undefined
@@ -2918,6 +2931,14 @@ export let operating = (
         return !!seat.administrative || writes(seat.role ?? null)
       }
       let texts = await Promise.all([
+        space.then((s) =>
+          `${
+            planned(s)
+          } Use the latest plan and its figures when describing what ${s.slug} allows.`
+        ),
+        o.signup || topicOf(row)
+          ? undefined
+          : ctx.then((c) => writes(c.role) ? oracleMap(c, g) : undefined),
         whereaboutsItem(env, o.person, o.space).catch(
           failed('operator whereabouts'),
         ),
@@ -2968,16 +2989,20 @@ export let operating = (
         (value, source) => keepResult(g, value, source, work.person),
       )
     },
-    // The conversation and its work forks share a short topic map. Only a
-    // session opened on a topic carries that topic's compiled context.
+    // A room can change whose authority it acts with between turns.
+    instructionScope: async (session) => {
+      let ctx = await (await workFor(session)).ctx
+      return JSON.stringify([ctx.person, ctx.role])
+    },
+    // Only a session opened on a topic carries its compiled instructions.
     instructions: async (session) => {
       reached('instructing', null)
-      let [{ eid, space: at, here, ctx: context }, [row]] = await Promise.all([
-        working(env, store, session, options.directory),
-        g.read(q`.entity.eid=${session}&.fields=session.topic`),
-      ])
+      let [{ eid, space: at, here, ctx: context, held: work }, [row]] =
+        await Promise.all([
+          workFor(session),
+          g.read(q`.entity.eid=${session}&.fields=session.topic`),
+        ])
       // Reply channels carry no personal server instructions.
-      let work = await workingOf(store, session)
       let servers =
         work?.signup || !proven(await channelAt(store, session, work))
           ? Promise.resolve('')
@@ -2996,7 +3021,7 @@ export let operating = (
         )
       }
       let [map, connected, accounts, said] = await Promise.all([
-        topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
+        topic ? oracleContext(ctx, g, topic) : '',
         integrationsTold(env, here, space),
         googleTold(env, here, space),
         servers,

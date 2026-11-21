@@ -119,6 +119,7 @@ export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
   ])
   return [
     '## Oracles',
+    'Use the latest map for the current spaces and apps in reach.',
     ...all.spaces.flatMap((s) => [
       `- ${short(oracleOf(ctx.person, s.eid))} space ${safe(s.slug)}: ${
         safe(s.title)
