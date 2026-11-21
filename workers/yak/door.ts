@@ -16,9 +16,9 @@
 import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
-import { behind, settled, stamp } from './running.ts'
+import { behind, settled, stamp, unserved } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { retried } from '@yaks/durable-object/resets'
+import { evicted, retried } from '@yaks/durable-object/resets'
 import {
   type Call,
   type Door,
@@ -297,7 +297,9 @@ export let doorOf = (
  * answer reports (`metered`). Finite read answers are received inside the
  * retry; a POST that reads or is idempotent opts in with `replayable: true`.
  * Other POST bodies stay with their caller, since receiving their headers
- * already says their work may have applied. */
+ * already says their work may have applied, and are sent again only when the
+ * object restarted for this deploy before serving them (running.ts
+ * `unserved`): a deploy's restart never reaches a person as a failure. */
 export let fetchOf = (
   ns: Namespace,
   name: string,
@@ -315,8 +317,8 @@ export let fetchOf = (
           ? received(await thrown(answer))
           : answer
       },
-      options.replayable !== false,
-      undefined,
+      true,
+      options.replayable === false ? unserved : evicted,
       wait,
     )
   return as ? metered(as, send) : send()

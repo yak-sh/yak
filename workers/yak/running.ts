@@ -133,6 +133,26 @@ export let restarting = (state: object): boolean => retiring.has(state)
 // so every caller's retry already knows them (@yaks/durable-object `evicted`).
 let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
+/**
+ * The object restarted for its caller's newer deploy before serving the call,
+ * so the call never ran and may be sent again, a write as safely as a read.
+ * That holds for an object on @yaks/durable-object `Durable` (the Builder, the
+ * Wire), whose `behind` restarts it only while idle and before the call
+ * enters. A store restarts after answering a refusal and cuts whatever else
+ * it has in flight, so its doors do not lean on this.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(unserved(new Error(
+ *   'Durable Object reset because a newer deploy reached it: 35b89b78',
+ * )), true)
+ * assertEquals(unserved(new Error('Durable Object reset because its code was updated.')), false)
+ * assertEquals(unserved(null), false)
+ * ```
+ */
+export let unserved = (e: unknown): boolean =>
+  e instanceof Error && e.message.includes(BEHIND)
+
 /** The deploy this object last restarted for, as `owed` keeps it. A record
  * in any other shape says nothing. */
 export let restartedFor = async (
