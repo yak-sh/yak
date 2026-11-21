@@ -10,9 +10,9 @@
  * Operator asks them, a @yaks/task decision assigned to them (operator.ts
  * gives every session `decision_new`). How a task stands and what a run
  * reported stay in the chat it was done in, which each Update links to: the
- * conversation it came from, its `created.via`. A choice, or words sent from
- * their Updates, go into their conversation on the `update` channel
- * (operator-channels.ts `BY`), which is the chat about it. A notice they
+ * conversation it came from, its `created.via`. An answer continues that
+ * conversation. Words about an update go to the Operator on the `update`
+ * channel (operator-channels.ts `BY`). A notice they
  * dismiss is archived (@yaks/inbox), and comes back when something happens
  * on it.
  */
@@ -23,7 +23,6 @@ import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import { type Choice, showing, shown as shownBy } from '@yaks/task'
-import { topOf } from '@yaks/session'
 import { refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
@@ -418,8 +417,7 @@ let opening = async (store: Store, person: string, eid: string) =>
  * dismissed), reads one (`{open}`), dismisses a notice (`{dismiss}`), reads
  * a file one of their questions shows (`{shown, eid}`: its address and
  * media type), answers a question with a choice (`{choose, choice}`), or
- * sends words about one (`{reply, say}`). A choice or words go into their
- * conversation with the Operator, as request `id`, which opens the chat.
+ * sends words about one (`{reply, say}`), which opens the chat.
  */
 export let updating = async (
   store: Store,
@@ -477,28 +475,17 @@ export let updating = async (
     if (!say) throw refuse('arguments', 'Choose one.')
   }
   if (!say) throw refuse('arguments', 'Say something about it.')
-  await store.g.apply([
-    ...await opening(store, person, about),
-    ...str('choose')
-      ? [{
+  let opened = await opening(store, person, about)
+  if (str('choose')) {
+    await store.g.apply([
+      ...opened,
+      {
         entity: { eid: about },
         decided: { choice: say },
         $actor: { by: person },
-      }]
-      : [],
-  ])
-  // An approval's own Approve or Decline is its act's answer, carried out
-  // by `operator_approval_answer`; only words of their own reach the
-  // conversation too.
-  let [row] = str('choose') ? await store.g.get([about]) : []
-  let approval = comp(row, 'operator_approval')
-  let listed = (comp(row, 'decision')?.choices as Choice[] | undefined)
-    ?.some((c) => c.label == say)
-  if (approval && listed) {
-    return {
-      answered: about,
-      chat: await topOf(store.g, String(approval.session)),
-    }
+      },
+    ])
+    return { answered: about }
   }
   // The channels load with the words a person sends, not with every read.
   let { receive } = await import('./operator-channels.ts')
@@ -512,7 +499,7 @@ export let updating = async (
       ...held.administrative ? { administrative: true } : {},
     },
     say,
-    { id: str('id') || undefined },
+    { id: str('id') || undefined, also: opened },
   )
   return { request }
 }

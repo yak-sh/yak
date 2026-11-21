@@ -86,7 +86,9 @@ let service = operatorService(
     asked.push(req)
     let { words, since } = turn(req)
     let forked = JSON.stringify(req.items).includes('fork of the')
-    let items = forked
+    let items = /They tapped Approve/.test(words)
+      ? reply('I sent Dr Alvarez the email and will tell you what she says.')
+      : forked
       ? since ? reply('Asked Dr Alvarez about Tuesday.') : call('mail_send', {
         to: 'alvarez@clinic.example',
         name: 'Dr Alvarez',

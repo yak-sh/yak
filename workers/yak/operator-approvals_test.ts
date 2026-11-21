@@ -4,6 +4,7 @@
 // bound to the one act and its arguments.
 import { equal, test } from '@yaks/testing'
 import { line } from '@yaks/query'
+import { decisionRequestId } from '@yaks/platform/operator-decisions'
 import type { Tool } from '@yaks/session'
 import { operatorMemory } from './operator-testing.ts'
 import { opened } from './lib/token.ts'
@@ -124,11 +125,9 @@ test('opening spends nothing; the press runs it once; a second press runs nothin
   equal([one.state, two.state].sort(), ['done', 'used'])
   equal((await press(approval, digest, { press: true })).state, 'used')
   equal(ran, ['app_files {"member_add":{"email":"eve@x.com","role":"owner"}}'])
-  let [note] = await store.g.read(
-    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
-  )
+  let [note] = await store.g.get([decisionRequestId(approval)])
   equal(
-    String((note.content as { body: string }).body).includes('eve@x.com'),
+    String((note.doc as { body: string }).body).includes('eve@x.com'),
     true,
   )
 })
@@ -140,13 +139,11 @@ test('Decline spends the link and runs nothing, and the conversation hears it', 
   equal((await press(approval, digest, { decline: true })).state, 'declined')
   equal((await press(approval, digest, { press: true })).state, 'used')
   equal(ran, [])
-  let notes = await store.g.read(
-    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
-  )
+  let notes = await store.g.get([decisionRequestId(approval)])
   equal(
     notes.some((n) =>
       /Decline .*zed@x\.com.* was not done/.test(
-        String((n.content as { body: string }).body),
+        String((n.doc as { body: string }).body),
       )
     ),
     true,
@@ -332,13 +329,11 @@ test("a card pressed in a texted approval's conversation is still theirs alone",
     'theirs',
   )
   equal((await press(approval, digest, { ...own, who: person })).state, 'done')
-  let notes = await store.g.read(
-    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
-  )
+  let notes = await store.g.get([decisionRequestId(approval)])
   equal(
     notes.some((n) =>
       /Approve on its card .*lu@x\.com/.test(
-        String((n.content as { body: string }).body),
+        String((n.doc as { body: string }).body),
       )
     ),
     true,
@@ -367,20 +362,18 @@ test('an approval waits in their Updates, is answered there, and shows answered 
     choose: row.entity.eid,
     choice: 'Approve',
   })
-  equal(did, { answered: row.entity.eid, chat: session })
+  equal(did, { answered: row.entity.eid })
   equal((await needing()).includes(say), false)
   await answered(store, press, row.entity.eid)
   await answered(store, press, row.entity.eid)
   equal(ran, ['app_files {"member_add":{"email":"ivy@x.com"}}'])
   ;[row] = await store.g.get([row.entity.eid])
   equal(renderToString(approvalCard(row, clock)).includes('Approved.'), true)
-  let notes = await store.g.read(
-    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
-  )
+  let notes = await store.g.get([decisionRequestId(row.entity.eid)])
   equal(
     notes.some((n) =>
       /Approve on it in their Updates.*ivy@x\.com/.test(
-        String((n.content as { body: string }).body),
+        String((n.doc as { body: string }).body),
       )
     ),
     true,

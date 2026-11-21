@@ -1425,6 +1425,7 @@ let UNWATCHED: Record<string, (app: string) => string> = {
   wake: () => 'doing something you set me to do later',
   subscription: () => 'looking into a change I watch for you',
   escalated: () => 'handling a reply someone sent you',
+  decision: () => 'following up on your answer',
 }
 let SPENT = 60 * 60_000
 
@@ -2111,6 +2112,10 @@ export let operating = (
     let reran = requests.filter((r) =>
       comp(r, 'operator_request')?.channel == 'fixed'
     )
+    let continued = !reply.broke && !passes(reply.text) && reply.text.trim() &&
+        space
+      ? requests.find((r) => comp(r, 'operator_request')?.channel == 'decision')
+      : undefined
     let handoffs = space
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == HANDOFF)
       : []
@@ -2125,6 +2130,16 @@ export let operating = (
           `Replied to ${request.address}'s Operator.\n\n${reply.text}`,
         )
       })),
+      ...continued
+        ? [notification({
+          to: String(comp(continued, 'operator_request')!.person),
+          subject: 'Follow-up to your answer',
+          words: reply.text,
+          by: space,
+          via: session,
+          id: 'decision-follow-up|' + mark.entity.eid,
+        })]
+        : [],
       ...reran.map((r) => {
         let asked = comp(r, 'operator_request')!
         return notification({
@@ -2864,9 +2879,10 @@ export let operating = (
   // what is written beside them.
   let listening: Operator['listening'] = async (held, space, o = {}) => {
     let selected = await readying(held, space, o.model, o.provider)
-    let session = o.signup
-      ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
-      : await rootAt(store, space.eid, held.person)
+    let session = o.resume ??
+      (o.signup
+        ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
+        : await rootAt(store, space.eid, held.person))
     if (!await conversed(store, session)) {
       await started(session, held.person, space)
     }
@@ -2882,7 +2898,7 @@ export let operating = (
             held,
             space,
             { files, channel, ...o.signup ? { signup: o.signup } : {} },
-            !o.signup,
+            !o.signup && !o.resume,
           ),
           ...theirs ? await before(session, said, held, space) : [],
           ...theirs ? await waiting(session, held, space) : [],
@@ -2921,12 +2937,9 @@ export let operating = (
     // A person's words with no task are the next input of their one
     // conversation with the Operator.
     if (!named) {
-      if ((await g.get([input]))[0]) {
-        let session = o.signup
-          ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
-          : await rootAt(store, space.eid, held.person)
-        return { task: '', session, input }
-      }
+      let [kept] = await g.get([input], ['entry'])
+      let session = comp(kept, 'entry')?.session
+      if (typeof session == 'string') return { task: '', session, input }
       let open = await listening(held, space, o)
       let given = {
         ...words(open.session, id, text, by, o),
@@ -3277,6 +3290,8 @@ export type Asking = {
   task?: string
   // The session a new task starts, for a replay to find.
   session?: string
+  // The existing conversation whose work an answer continues.
+  resume?: string
   files?: File[]
   // The channel the words came by, and what the model is told before them
   // of how they came (operator-channels.ts `BY`), which the conversation
@@ -3334,7 +3349,7 @@ export type Operator = {
   listening: (
     held: Asker,
     space: Space,
-    o?: { model?: string; provider?: string; effort?: string; signup?: string },
+    o?: Pick<Asking, 'model' | 'provider' | 'effort' | 'signup' | 'resume'>,
   ) => Promise<Listening>
   /** `held`'s one conversation in `space` (operator-root.ts `rootAt`)
    * begun with another transcript's lines (@yaks/session `grafted`): a

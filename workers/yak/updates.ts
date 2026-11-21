@@ -86,8 +86,7 @@ let opening = (env: Env, space: Space, app: Apps[number]) =>
     rel: 'noopener',
   }, `Open ${app.title || app.slug}`)
 
-// Every form here goes to the Updates page as a new request to the
-// Operator, whose id it carries so sending twice sends once.
+// A reply carries a request id so sending it twice sends it once.
 let form = (
   space: Space,
   fields: [string, string][],
@@ -477,10 +476,7 @@ export let updates = (
   )
 }
 
-/** What a person sends from their Updates: a choice, or words about one,
- * either of which goes into their conversation with the Operator, and the
- * chat it went to opens; or a notice dismissed, which leaves them on their
- * Updates without it. */
+/** A choice or dismissal stays in Updates. A message opens its chat. */
 export let updatesAnswer = async (
   req: Request,
   env: Env,
@@ -498,20 +494,22 @@ export let updatesAnswer = async (
       headers: { location: managePath('updates', space.slug) },
     })
   }
-  // Words open the chat they went to; an approval's answer, the chat it
-  // was asked in, where its card shows it answered.
-  let { request, chat } = await operatorDoor(
+  let { request } = await operatorDoor(
     env,
     space,
     who,
     'updates',
     form.has('choose')
-      ? { choose: field('choose'), choice: field('choice'), id: field('id') }
+      ? { choose: field('choose'), choice: field('choice') }
       : { reply: field('reply'), say: field('say'), id: field('id') },
-  ) as { request?: string; chat?: string }
+  ) as { request?: string }
   return new Response(null, {
     status: 303,
-    headers: { location: chatPath(space.slug, request ?? chat) },
+    headers: {
+      location: request
+        ? chatPath(space.slug, request)
+        : managePath('updates', space.slug),
+    },
   })
 }
 

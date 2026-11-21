@@ -2,6 +2,9 @@ import { line } from '@yaks/query'
 import { HANDOFF, handoffTask } from '@yaks/platform/operator-handoff'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
+import { decisionRequest } from '@yaks/platform/operator-decisions'
+import { topOf } from '@yaks/session'
+import { owns } from './operator-access.ts'
 import type { Choice } from '@yaks/task'
 import { cancel } from '@yaks/wake'
 import { base64 } from './bytes.ts'
@@ -296,6 +299,7 @@ export let TAKING = new Set(['email', ...PLATFORMS.keys()])
  * for (@yaks/session `Intake.from`). */
 let FROM: Record<string, (request: Request) => string | undefined> = {
   [HANDOFF]: (r) => `${r.address}'s Operator`,
+  decision: () => 'the system',
   wake: () => 'the system (your wake-up)',
   subscription: () => 'the system (your subscription)',
   error: () => 'the system',
@@ -975,6 +979,11 @@ let BY: Record<
   [HANDOFF]: (r) =>
     `Handed off by ${r.address}'s Operator for the same person you work for. Do the work in this space with their permissions. Your reply goes back to the Operator that asked. Give the outcome, including anything still open. If you delegate to a helper, wait for the result before reporting completion.\n\n`,
   fixed: () => FIXED,
+  decision: (_, __, about) =>
+    `The person answered your question “${
+      part<Comp>(about, 'decision')?.question ??
+        part<Comp>(about, 'operator_approval')?.say ?? ''
+    }”. Continue the work that was waiting. For an approval, the outcome below is already recorded: do not repeat the approved action or do anything they declined. Give a short, standalone report in your final reply so it can reach them in Updates. Answer: `,
   update: (_, __, about) => {
     let decision = part<Comp>(about, 'decision')
     let asked = decision?.question
@@ -1102,6 +1111,7 @@ export let channels = (env: Env): Record<string, Channel> => {
     chat: () => Promise.resolve({}),
     // Words sent from their Updates are answered in the chat they open.
     update: () => Promise.resolve({}),
+    decision: () => Promise.resolve({}),
     // A break's request is answered beside the break, on the dashboard.
     error: () => Promise.resolve({}),
     // A wake-up's stays in its chat: the run tells the person what it means
@@ -1357,6 +1367,7 @@ export let OWN = new Set([
   'app',
   'fixed',
   HANDOFF,
+  'decision',
 ])
 
 /** The channels whose words bring routine news nobody asked for at that
@@ -1451,6 +1462,29 @@ export let handleChannels = (
       if (!line?.connection) return
       let { pointed } = await import('./operator-line.ts')
       await pointed(env, g, line.connection, row ? undefined : line.number)
+    },
+    operator_decision_answer: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      let person = part<Comp>(row, 'filed')?.assignee
+      let answer = part<Comp>(row, 'decided')
+      if (!row?.decision || !person || answer?.by != person || !answer.choice) {
+        return
+      }
+      // A reply that the Operator relayed from chat is already in a turn.
+      let [cited] = await g.read(
+        line`.cites .edge.from=${row.entity.eid} .limit=1`,
+      )
+      if (cited) return
+      let space = await spaceOf(operator.store)
+      if (!space) return
+      await g.apply([
+        decisionRequest(
+          row.entity.eid,
+          space,
+          String(person),
+          String(answer.choice),
+        ),
+      ], { trusted: true })
     },
     // An approval answered from the person's Updates or an alert is
     // pressed as theirs (operator-approvals.ts `answered`).
@@ -1565,6 +1599,11 @@ export let handleChannels = (
           BY[request.channel]?.(request, row.entity.eid, subject) ?? '',
         )
         let body = String(part<Comp>(row, 'doc')?.body ?? '')
+        let origin = request.channel == 'decision'
+          ? part<Comp>(subject, 'operator_approval')?.session ??
+            part<Comp>(subject, 'created')?.via
+          : undefined
+        let resume = typeof origin == 'string' ? await topOf(g, origin) : ''
         let given = await operator.ask(
           { person: request.person, administrative: access.administrative },
           space,
@@ -1576,6 +1615,9 @@ export let handleChannels = (
             request: row.entity.eid,
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
+            ...resume && await owns(operator.store, resume, request)
+              ? { resume }
+              : {},
             files,
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},

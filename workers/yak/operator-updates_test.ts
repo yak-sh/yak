@@ -4,6 +4,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Item } from '@yaks/model'
+import { answer } from '@yaks/task'
+import { decisionRequestId } from '@yaks/platform/operator-decisions'
+import { inputOf } from '@yaks/session/intake'
+import type { Comp } from '@yaks/graph'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { callable, operatorModel, operatorService } from './operator-testing.ts'
@@ -15,7 +19,7 @@ import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
 import { attachmentKey } from './attachments.ts'
-import { chatPath, managed, managePath } from '@yaks/platform/routes'
+import { managed, managePath } from '@yaks/platform/routes'
 
 let p = platform('operator-updates')
 let [ada, bo, eid] = [0, 1, 2].map(() => crypto.randomUUID())
@@ -81,6 +85,8 @@ let read = async (person: string) =>
     updates: Update[]
     waiting: number
   }
+let decide = (eid: string, choice: string) =>
+  store.g.apply(answer(eid, choice).map((b) => ({ ...b, $actor: { by: ada } })))
 let words = async (person: string) =>
   (await read(person)).updates.map((u) => [u.needs, u.words, u.unread])
 
@@ -127,26 +133,31 @@ test('reading one counts it read, and nobody reads another’s', async () => {
   )
 })
 
-test('a choice answers the question and goes on in the conversation', async () => {
+test('a generic answer to a question goes on in the conversation', async () => {
   let [question] = (await read(ada)).updates
-  let { request } = await updating(store, as(ada), {
-    choose: question.eid,
-    choice: 'Allow',
-  }) as { request: string }
+  script.push(said('I set up the reminders.'))
+  await decide(question.eid, 'Allow')
   await service.drain()
   let [row] = await store.g.get([question.eid])
   assertEquals((row.decided as { choice: string }).choice, 'Allow')
-  assertEquals((await words(ada)).map(([needs]) => needs), [false])
+  assertEquals((await read(ada)).updates.some((u) => u.needs), false)
   assertStringIncludes(
     asked.at(-1)!,
-    'In their Updates, choosing on your question “Text reminders for Book club?”',
+    'The person answered your question “Text reminders for Book club?”',
   )
+  let request = decisionRequestId(question.eid)
   let [kept] = await store.g.get([request])
-  assertEquals((kept.operator_request as { about: string }).about, question.eid)
+  assertEquals((kept.operator_request as Comp).about, question.eid)
+  let follow = (await read(ada)).updates.find((u) =>
+    u.words == 'I set up the reminders.'
+  )!
+  assertEquals(follow.from?.chat, rootOf(eid, ada))
 })
 
 test('words sent about an update reach the Operator with it', async () => {
-  let [joined] = (await read(ada)).updates
+  let joined = (await read(ada)).updates.find((u) =>
+    u.words == 'Bo joined Book club.'
+  )!
   await updating(store, as(ada), { reply: joined.eid, say: 'Welcome Bo!' })
   await service.drain()
   assertStringIncludes(
@@ -209,7 +220,7 @@ test('a fixed break tells its person only what the Operator wrote them, linked t
   assertEquals(await words(bo), [[false, 'Just for Bo.', true]])
 })
 
-test('the Updates page shows what needs the person, a new chat counts it in the side, and a button opens the chat', async () => {
+test('the Updates page shows what needs the person, counts it in the side, and answers in place', async () => {
   await store.g.apply([{
     entity: { eid: 'ask' },
     task: {},
@@ -256,8 +267,10 @@ test('the Updates page shows what needs the person, a new chat counts it in the 
     who,
   )
   assertEquals(sent.status, 303)
-  assertEquals(sent.headers.get('location'), chatPath('club', 'r1'))
+  assertEquals(sent.headers.get('location'), managePath('updates', 'club'))
   assertEquals(buttons(await page(updatesPage(p.env, space, who))), [])
+  script.push(said('The invitations are sent.'))
+  await service.drain()
 })
 
 test('"Other" answers a question in the person\'s own words, which the Operator reads as the answer', async () => {
@@ -299,17 +312,18 @@ test('"Other" answers a question in the person\'s own words, which the Operator 
     who,
   )
   assertEquals(sent.status, 303)
+  script.push(said('We will meet on Sundays.'))
   await service.drain()
   let [row] = await store.g.get(['when'])
   assertEquals((row.decided as { choice: string }).choice, 'Only on Sundays')
   assertEquals((row.decided as { by: string }).by, ada)
   assertStringIncludes(
     asked.at(-1)!,
-    'answering your question “When should it meet?”',
+    'The person answered your question “When should it meet?”',
   )
   assertStringIncludes(
     asked.at(-1)!,
-    'in their own words, none of your choices: Only on Sundays',
+    'Answer: Only on Sundays',
   )
 })
 
@@ -585,4 +599,34 @@ test('a run nobody watches that fails on yaks.app tells its person so, plainly, 
   assertEquals(stopped.length, 1)
   assertStringIncludes(stopped[0].words, "on yaks.app's side")
   assertEquals(await lands(stopped[0]), true)
+})
+
+test('a generic answer to an approval resumes once, after its approved call', async () => {
+  let title = 'Report back about the lamps'
+  script.push(
+    call('approval_request', { tool: 'task_new', args: { title }, say: title }),
+    said('Please approve this.'),
+  )
+  await receive(store, { space: eid, person: ada, channel: 'chat' }, 'Lamps')
+  await service.drain()
+  let approval = (await read(ada)).updates.find((u) => u.words == title + '?')!
+  let before = asked.length
+  script.push(said('I created the task about the lamps.'))
+  await decide(approval.eid, 'Approve')
+  await service.drain()
+  let request = decisionRequestId(approval.eid)
+  let [input] = await store.g.get([inputOf(request)])
+  assertEquals((input?.entry as Comp | undefined)?.session, rootOf(eid, ada))
+  assertStringIncludes(asked.at(-1)!, 'was carried out with task_new')
+  assertEquals(asked.length, before + 1)
+  assertEquals((await store.g.read(line`.doc.title=${title} .task`)).length, 1)
+  let updates = await read(ada)
+  assertEquals(
+    updates.updates.filter((u) =>
+      u.words == 'I created the task about the lamps.'
+    ).length,
+    1,
+  )
+  await service.drain()
+  assertEquals(asked.length, before + 1)
 })

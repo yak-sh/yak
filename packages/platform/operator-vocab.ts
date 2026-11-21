@@ -700,6 +700,14 @@ export let operatorDoc: VocabDoc = {
       description:
         'Tell the person what the Operator tells or asks them, the way they chose to be alerted: a notification it wrote them, or a decision assigned to them, an approval among them (operator-alerts.ts).',
     },
+    operator_decision_answer: {
+      effect: true,
+      target: '.decision !operator_approval',
+      created: ['decided'],
+      tries: 3,
+      description:
+        "Continue the Operator's work when its person answers a question.",
+    },
     operator_approval_answer: {
       effect: true,
       target: '.operator_approval',

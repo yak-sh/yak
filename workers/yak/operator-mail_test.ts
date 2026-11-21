@@ -80,7 +80,9 @@ let service = operatorService(
     asked.push(req)
     let forked = JSON.stringify(req.items).includes('fork of the')
     let last = req.items.at(-1)
-    let items = forked
+    let items = said(req, /They tapped Approve/)
+      ? reply('I sent Dr Alvarez the email and will tell you what they say.')
+      : forked
       ? last?.kind == 'result'
         ? reply('Asked Dr Alvarez about Tuesday at 3.')
         : call('mail_send', {
@@ -230,15 +232,20 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   )
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
-  // Jeff's alert of the tap the letter waited for, the letter, its reply,
-  // the answer, and his alert of the reply.
+  // The approval alert, the letter, the approval follow-up, the reply,
+  // its answer, and Jeff's alert about the reply.
+  let followedApproval = letters.find((l) =>
+    l.to == 'jeff@example.com' && l.subject == 'Follow-up to your answer'
+  )
+  assert(followedApproval)
+  assertStringIncludes(followedApproval.text!, 'I sent Dr Alvarez the email')
   let alert = letters.find((l) =>
     l.to == 'jeff@example.com' &&
     l.subject == 'alvarez@clinic.example replied to the letter you sent them'
   )
   assert(alert)
   assertStringIncludes(alert.text!, 'Tuesday at 3 works for us.')
-  assertEquals(meter, 5)
+  assertEquals(meter, 6)
 })
 
 test('a letter answering the reply threads on it and keeps its subject', () => {

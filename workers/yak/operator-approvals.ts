@@ -37,7 +37,11 @@
 // Not a kind of confirm.ts: that is an owner signed in on the web, mailed a
 // link for an act the kernel does; this is whoever holds the phone, and the
 // act is a call of the Operator's own tools, run in its object.
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { decisionRequest } from '@yaks/platform/operator-decisions'
+import { caught } from './defects.ts'
+import { CallError } from '@yaks/tools/errors'
 import { line } from '@yaks/query'
 import { type Tool, topOf } from '@yaks/session'
 import { integrationNamed } from '@yaks/session/conversation'
@@ -356,6 +360,7 @@ export let approvals = (
       entity: { eid },
       decided: { choice },
       $actor: { by: a.person },
+      $was: { decided: { '': null }, cancelled: { '': null } },
     })
     let where: Where = updates ? 'updates' : own ? 'card' : 'link'
     let named = integrationNamed(a.args)
@@ -369,39 +374,53 @@ export let approvals = (
       return { state: 'used', ...about }
     }
     if (Date.parse(a.expires) < now()) return { state: 'expired', ...about }
-    if (decline) {
-      let came: Standing = { state: 'declined', ...about }
-      await store.g.apply([
-        { entity: { eid }, declined: {} },
-        ...row.decided ? [] : [answered(CHOICE.decline)],
-        pressed(a, await topOf(store.g, a.session), came, where),
-      ], { trusted: true })
-      return came
-    }
-    if (!press) return { state: 'waiting', ...about }
+    if (!press && !decline) return { state: 'waiting', ...about }
+    // The first answer owns the approval, including one whose effect
+    // has not picked up the work yet.
+    if (row.decided && !updates) return { state: 'used', ...about }
     pressing.add(eid)
-    let came: Standing
     try {
       await store.g.apply([
-        { entity: { eid }, verified: {} },
-        ...row.decided ? [] : [answered(CHOICE.approve)],
+        decline ? { entity: { eid }, declined: {} } : {
+          entity: { eid },
+          verified: {},
+        },
+        ...row.decision && !row.decided
+          ? [answered(decline ? CHOICE.decline : CHOICE.approve)]
+          : [],
       ], { trusted: true })
-      came = { state: 'done', ...about, said: await run(a) }
-    } catch (error) {
-      came = {
-        ...about,
-        state: 'failed',
-        said: error instanceof Error ? error.message : String(error),
+      let came: Standing
+      try {
+        came = decline
+          ? { state: 'declined', ...about }
+          : { state: 'done', ...about, said: await run(a) }
+      } catch (error) {
+        if (!(error instanceof CallError)) {
+          caught(error, { request: 'operator approved call', tool: a.tool })
+        }
+        came = {
+          ...about,
+          state: 'failed',
+          said: error instanceof Error ? error.message : String(error),
+        }
       }
+      let space = (row.filed as Comp | undefined)?.project ??
+        (row.created as Comp | undefined)?.by
+      let body = outcome(a, came, where)
+      if (typeof space == 'string') {
+        await store.g.apply([decisionRequest(eid, space, a.person, body)], {
+          trusted: true,
+        })
+      }
+      return came
+    } catch (error) {
+      if (error instanceof Stale && error.eid == eid) {
+        return { state: 'used', ...about }
+      }
+      throw error
     } finally {
       pressing.delete(eid)
     }
-    await store.g.apply([
-      pressed(a, await topOf(store.g, a.session), came, where),
-    ], {
-      trusted: true,
-    })
-    return came
   }
 }
 
@@ -431,13 +450,8 @@ export let answered = async (
  * Updates, or a link. */
 type Where = 'card' | 'updates' | 'link'
 
-/** The line a conversation keeps of a press, starting no turn. */
-export let pressed = (
-  a: Approval,
-  session: string,
-  standing: Standing,
-  where: Where = 'link',
-): Bundle => {
+// What the Operator reads before continuing, after the approved call returns.
+let outcome = (a: Approval, standing: Standing, where: Where) => {
   let link = where == 'card'
     ? 'its card in the conversation'
     : where == 'updates'
@@ -445,19 +459,11 @@ export let pressed = (
     : a.number
     ? `the link texted to ${a.number}`
     : 'your link'
-  return {
-    entity: { eid: crypto.randomUUID() },
-    entry: { session, from: 'the system' },
-    content: {
-      body: standing.state == 'done'
-        ? `They tapped Approve on ${link}, so "${a.say}" was carried out with ${a.tool}: ${standing.said}`
-        : standing.state == 'declined'
-        ? `They tapped Decline on ${link}, so "${a.say}" was not done, and won't be unless they ask again.`
-        : `They tapped Approve on ${link}, but "${a.say}" could not be carried out: ${standing.said}`,
-    },
-    notice: {},
-    $actor: { by: a.person, via: session },
-  }
+  return standing.state == 'done'
+    ? `They tapped Approve on ${link}, so "${a.say}" was carried out with ${a.tool}: ${standing.said}`
+    : standing.state == 'declined'
+    ? `They tapped Decline on ${link}, so "${a.say}" was not done, and won't be unless they ask again.`
+    : `They tapped Approve on ${link}, but "${a.say}" could not be carried out: ${standing.said}`
 }
 
 // Whose a link is, as its page names them: the space and what its Operator
