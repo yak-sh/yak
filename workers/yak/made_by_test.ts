@@ -54,41 +54,20 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     assertEquals(row.doc?.title, 'probe')
     assertEquals(idOf(row.acts_for?.person), owner.person)
 
-    // Both say so where people see their apps, and in /admin.
+    // The Apps page says when each changed; /admin says who.
     let page = async (path: string, cookie: string) => {
       let r = await k.at(k.host, path, { headers: { cookie } })
       assertEquals(r.status, 200)
       return (await r.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
     }
     let today = relative(String(mine.created?.at))
-    let dashboard = await page(managePath('apps', owner.name), owner.cookie)
-    assertStringIncludes(
-      dashboard,
-      `Made ${today} by ${owner.name} · Deployed ${today} by ${owner.name}`,
-    )
-    assertStringIncludes(
-      dashboard,
-      `Made ${today} by probe for ${owner.name} · Deployed ${today} by probe for ${owner.name}`,
-    )
-    // An app last deployed before `last_deploy` was kept says its newest
-    // release's.
-    await meta(k).apply([{
-      entity: { eid: mine.entity.eid },
-      last_deploy: null,
-    }])
     assertStringIncludes(
       await page(managePath('apps', owner.name), owner.cookie),
-      `Made ${today} by ${owner.name} · Deployed ${today} by ${owner.name}`,
+      `changed ${today}`,
     )
     let admin = await page(`/admin/${theirs.entity.eid}`, k.owner.cookie)
-    assertStringIncludes(
-      admin,
-      `the last ${today} by probe for ${owner.name}`,
-    )
-    assertStringIncludes(
-      admin,
-      `Made ${today} by probe for ${owner.name}`,
-    )
+    assertStringIncludes(admin, `the last ${today} by probe for ${owner.name}`)
+    assertStringIncludes(admin, `Made ${today} by probe for ${owner.name}`)
   } finally {
     await k.stop()
   }
