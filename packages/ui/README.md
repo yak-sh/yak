@@ -326,6 +326,16 @@ The CSS custom properties use the same names as `Colors`:
   separator). A theme's colours are its palette's own; `--text` and `--muted`
   come from the palette's darker greys so they read on the three floors, and the
   hues are as the palette gives them.
+- Fills: `--bg-fill`, `--surface-fill`, `--card-fill`, and a Shell's
+  `--floor-fill` for the paper its page lies on. Each is its colour under the
+  skin's `--texture`, as one `background`. A surface paints its fill, never its
+  colour alone, and whatever opens into a surface (a sidebar's current tab, a
+  lit tab) paints that surface's fill, so the two cannot differ in tone. Pencil
+  sets `--texture` to its grain inside a Shell, where panes scroll apart and the
+  grain cannot lie over the whole page; each fill is attached to what it paints
+  (`local`), so it scrolls with that pane. Two panes' tiles then do not line up
+  where they meet, which the grain's noise hides; a flat colour beside a grained
+  one does not hide, which is what this rule prevents.
 - Selection and the primary action: `--accent`; links: `--link`; section titles:
   `--heading`, the text's own ink in both themes: a heading is set apart by size
   and weight, never a hue.

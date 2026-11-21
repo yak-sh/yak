@@ -13,7 +13,7 @@
   max-height: min(34rem, 70vh);
   padding: .35rem 0;
   border-radius: inherit;
-  background: var(--card);
+  background: var(--card-fill, var(--card));
   overflow-y: auto;
 }
 .Menu_Item {
@@ -69,7 +69,7 @@
   padding: var(--half-gap) var(--gap);
   border: 1px solid var(--surface-border, var(--border2));
   border-radius: var(--radius);
-  background: var(--card);
+  background: var(--card-fill, var(--card));
   color: var(--text);
   font: inherit;
   cursor: pointer;

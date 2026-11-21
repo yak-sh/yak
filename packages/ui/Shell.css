@@ -7,13 +7,15 @@
    Narrower than a tablet, the sidebar folds away behind the bar's menu and
    slides over the page when opened, a shade behind it.
    --floor is the paper the page lies on, the floor itself or, in
-   Shell-sheet, a sheet on it. The frame paints it, and a sidebar's tab that
-   opens into the page fills with it, so the two are the one paper.
+   Shell-sheet, a sheet on it. --floor-fill is that colour under the skin's
+   --texture: the body and the aside paint it, and a sidebar's tab that opens
+   into the page fills with it, so the two are the one paper.
    It is as tall as what a person sees, --viewport-height where a page
    holds it (@yaks/ux's Conversation does), so a phone's keyboard shortens
    it and its body rather than scrolling the page. */
 .Shell {
   --floor: var(--bg);
+  --floor-fill: var(--texture, none), var(--floor);
   display: flex;
   height: var(--viewport-height, 100dvh);
   min-height: 0;
@@ -21,6 +23,7 @@
 }
 .Shell-sheet {
   --floor: var(--card);
+  --floor-fill: var(--texture, none), var(--floor);
 }
 
 .Shell_Side {
@@ -154,6 +157,7 @@
   flex-direction: column; /* a page that fills the floor takes flex: 1 */
   overflow: auto;
   overscroll-behavior: contain;
+  background: var(--floor-fill);
 }
 .Shell_Shade {
   display: none;
@@ -216,7 +220,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border-left: 1px solid var(--border);
-  background: var(--floor);
+  background: var(--floor-fill);
 }
 .Shell_Aside[hidden],
 .Shell-shut .Shell_Aside {

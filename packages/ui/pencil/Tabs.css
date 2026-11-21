@@ -44,7 +44,7 @@
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--surface);
+  background: var(--surface-fill);
   color: var(--muted);
   font: inherit; /* a button's, as a label's is */
   font-size: .85rem;
@@ -89,7 +89,7 @@
 .Tabs_Input:checked ~ .Tabs_Tab {
   margin-top: 0;
   padding-top: .9rem;
-  background: var(--card);
+  background: var(--card-fill);
   color: var(--text);
   z-index: 2;
 }
@@ -102,7 +102,7 @@
   position: absolute;
   inset: auto 2px calc(-1.5 * var(--room));
   height: calc(3 * var(--room));
-  background: var(--card);
+  background: var(--card-fill);
 }
 /* Only the checked radio's panel shows. Hiding the rest outranks a card's
    own display, wherever the card's rule comes. */

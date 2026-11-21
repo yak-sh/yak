@@ -3,6 +3,17 @@
   /* The tile carries its own opacity so it can also paint scroll backgrounds. */
   --grain: url(paper.webp);
   --grain-opacity: 1;
+  /* A surface's fill: its colour with the paper's texture over it, as one
+     background. Every surface fills with one of these, and whatever opens
+     into a surface (a sidebar's current tab, a lit tab, a gap in an edge)
+     fills with that surface's, so the two cannot differ. A part never pairs
+     a colour with the grain itself. --texture is none where the grain lies
+     over the whole page, and the grain where each pane paints its own. */
+  --texture: none;
+  --bg-fill: var(--texture), var(--bg);
+  --surface-fill: var(--texture), var(--surface);
+  --card-fill: var(--texture), var(--card);
+  --popover-background: var(--bg-fill);
   --drawn: url(pencil.svg#line);
   --surface-outline: '';
   --surface-border: transparent;
@@ -44,4 +55,16 @@
   /* How tall a press or a field stands; a part that holds a row of them
      smaller re-points it. */
   --control-height: 2.25rem;
+}
+
+/* In a Shell the panes scroll apart, so the grain cannot lie over the page:
+   each surface paints it, scrolling with what it holds (`local`). Panes beside
+   each other then meet in two tiles that do not line up, which noise hides,
+   but never in two tones, which it does not: a tab opening into a pane is
+   attached to itself, so it keeps the pane's fill however either scrolls. */
+:root:has(.Shell) {
+  --texture: var(--grain) 0 0 / 256px local;
+}
+:root:has(.Shell)::after {
+  content: none;
 }

@@ -1,13 +1,13 @@
 /* Pencil's side navigation: a column of links beside an edge, the edge
    between this nav and the panel it leans against. The current link is a
-   tab drawn in pencil and filled with the panel, and it covers the edge, so
+   tab drawn in pencil and filled with the panel's fill (Surface.css), and it covers the edge, so
    it opens into the panel, which is what makes it read as the page you are
    on. A nav with no panel beside it points --nav-edge and --nav-panel at
    nothing, and --nav-shut at --stroke to close the tab's open side, so its
    current link is a pencil box (every nav on a phone, and any page's that
    says so). */
 .SideNav {
-  --nav-panel: var(--card);
+  --nav-panel: var(--card-fill);
   --nav-edge: var(--graphite);
   --nav-shut: 0;
   --nav-tip: 0;

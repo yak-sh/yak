@@ -12,7 +12,7 @@
   padding: var(--card-pad);
   border: 1px solid transparent;
   border-radius: var(--radius);
-  background: var(--card);
+  background: var(--card-fill, var(--card));
   overflow-wrap: break-word;
 }
 .Card > * {

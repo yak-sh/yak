@@ -291,17 +291,6 @@
     height: var(--viewport-height, 100dvh);
     overflow: hidden;
   }
-  /* Each pane paints its tile in its own scrolling content. */
-  html:has(.Framed)::after {
-    content: none;
-  }
-  .Frame_Body,
-  .Frame_Aside,
-  .Sidebar_Scroll {
-    background-image: var(--grain);
-    background-size: 256px;
-    background-attachment: local;
-  }
   .Framed_Main {
     max-width: none;
     padding: 0;
@@ -1111,6 +1100,9 @@
       var(--reach) var(--reach);
     overflow: hidden auto;
     overscroll-behavior: contain;
+    /* The side's paper is .Sidebar's; this reaches past it, so it adds only
+       the texture, which scrolls with the links. */
+    background: var(--texture);
   }
   .Sidebar_Nav {
     flex: none;
@@ -1219,9 +1211,9 @@
       width: 15rem;
     }
     /* The current tab opens into the page beside the side, so it is
-       filled with the paper the frame lays the page on (Shell.css). */
+       filled with the frame's own fill for the page (Shell.css). */
     .Sidebar_Nav {
-      --nav-panel: var(--floor);
+      --nav-panel: var(--floor-fill);
     }
     .Sidebar-rail {
       --sidebar-padding: .5rem;

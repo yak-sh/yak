@@ -34,7 +34,7 @@
 }
 .More_Body > .Body .Body_Source {
   padding: .6rem .8rem;
-  background: var(--card);
+  background: var(--card-fill);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
