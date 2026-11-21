@@ -85,7 +85,7 @@ import { queryRefusal, scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from '@yaks/platform/host'
 import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
-import { NARROW, pageFor, UNDO } from './guide.ts'
+import { AIM, NARROW, pageFor, UNDO } from './guide.ts'
 import { caught } from './defects.ts'
 import { outlasted } from './outlast.ts'
 import { attachmentCore } from './attachment-core.ts'
@@ -677,6 +677,7 @@ export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
     vocab: graph.vocab,
     search: searching(ctx, reach),
     guide: (comp) => pageFor(comp, ctx.env),
+    aim: AIM,
     undo: UNDO,
     narrow: NARROW,
   }),

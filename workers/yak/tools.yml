@@ -191,7 +191,9 @@ app_files:
           done: 'Restored %{path}'
   description: >-
     Write, read and change the app's files (index.html and any css, js or
-    images beside it). op is one of:
+    images beside it). Every call names its op, except a write, which may
+    leave it out; to see what an app holds, call it with op: list first.
+    op is one of:
     write (or op left out): path and content write one file, path and
     base64 one that is not text, and files: [{path, content}, …] several,
     the whole app in one call;

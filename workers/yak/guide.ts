@@ -479,6 +479,13 @@ export let INSTRUCTIONS = instructions()
  * whether to risk a delete, which is the moment it is reading that tool's
  * description and not this guide.
  */
+// Where a write goes, said on graph_apply: the platform's `$app`, which rides
+// on each bundle beside its entity (agent.ts `aimed`), never around them.
+export let AIM =
+  'A write names its app with $app on each bundle, beside its entity: ' +
+  "{entity: {eid: '$r'}, $app: 'recipes', recipe: {...}}. Every bundle " +
+  'carries entity; there is no wrapper holding entities.'
+
 export let UNDO =
   'Nothing deleted here is lost by a simple mistake. To undo: ' +
   'store_restore puts everything this store holds back to a moment after its ' +
@@ -492,7 +499,8 @@ export let NARROW =
   'Signed in, a read answers every app you can reach at once. To read one ' +
   "app, add .in=<app> to the query ('.recipe&.in=recipes'), or " +
   '.in=<space>/<app> where two of your spaces have an app by that name. ' +
-  "App trash is listed by app_list(space: '<space slug>'), including ids " +
+  '.in says only which app: the query still names a component the app ' +
+  "declares, never .in alone. App trash is listed by app_list(space: '<space slug>'), including ids " +
   'for app_restore. Platform admins can query the directory with ' +
   "'.app .trashed ?doc ?former .in=yak/platform'; trashed{at, by} is a " +
   'separate component, not app.trashed or .tombstone. To check a deleted ' +

@@ -51,6 +51,10 @@ export type CoreOpts = {
    * `graph_apply` is listed as not destructive. Left out where there is no way
    * back, since a promise nobody can keep is worse than silence. */
   undo?: string
+  /** how a write here says where it goes, in this server's own words,
+   * appended to `graph_apply`'s description before `undo` — yaks.app names
+   * the app with `$app` on each bundle. */
+  aim?: string
   /** how a read here is narrowed to one part of this graph, in its own words,
    * appended to `graph_query`'s description — yaks.app reads every app in a
    * person's reach at once, and `.in=<app>` on the query line reads one. A
@@ -171,7 +175,7 @@ export let core = (opts: CoreOpts): Tool[] =>
       let added = t.name == 'graph_query'
         ? opts.narrow
         : t.name == 'graph_apply'
-        ? opts.undo
+        ? [opts.aim, opts.undo].filter(Boolean).join(' ')
         : undefined
       return {
         ...t,

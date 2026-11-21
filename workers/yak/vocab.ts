@@ -234,6 +234,10 @@ export let ELSEWHERE: Record<string, string> = {
  *   inAppWords('.note is a property, not a component — name it .wake.note', ['item'], props),
  *   'unknown prop: .note — no component is named note, and none has a property of that name',
  * )
+ * assertEquals(
+ *   inAppWords('unknown prop: .entity', ['recipe'], props),
+ *   'unknown prop: .entity — every row is an entity, so none is named by it: name the components its rows carry (.recipe), or read one by id with graph_show',
+ * )
  * ```
  */
 export let inAppWords = (
@@ -244,6 +248,12 @@ export let inAppWords = (
   let word = /^unknown prop: \.(\w+)/.exec(message)?.[1]
   if (word && ELSEWHERE[word]) {
     return `unknown prop: .${word} — ${ELSEWHERE[word]}`
+  }
+  if (word == 'entity') {
+    return 'unknown prop: .entity — every row is an entity, so none is ' +
+      `named by it: name the components its rows carry (${
+        own.map((c) => `.${c}`).join(', ') || 'none declared yet'
+      }), or read one by id with graph_show`
   }
   let alone = /^\.(\w+) is a property, not a component/.exec(message)?.[1]
   if (!alone) return message
