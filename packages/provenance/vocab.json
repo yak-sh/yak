@@ -7,6 +7,7 @@
     "created": {
       "component": true,
       "type": "object",
+      "index": [["by", "at"]],
       "journal": false,
       "properties": {
         "by": {
@@ -33,6 +34,7 @@
     "updated": {
       "component": true,
       "type": "object",
+      "index": [["by", "at"]],
       "journal": false,
       "properties": {
         "by": {
