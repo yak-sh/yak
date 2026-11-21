@@ -41,6 +41,7 @@ export let seedTallies = (d: Driver, size = 256) => {
       { name: 'id', type: 'integer', pk: true },
       { name: 'eid', type: 'text', unique: true },
       { name: 'num', type: 'integer' },
+      { name: 'prefix', type: 'text' },
       { name: 'archetype', type: 'integer' },
     ],
   })

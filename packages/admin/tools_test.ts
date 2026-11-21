@@ -189,7 +189,7 @@ test("funnel reads the platform's counts from a time or a duration back", async 
           '  Home page visits: 40',
           '  First sign-ins: 2 (50% of signed_in)',
           'By campaign:',
-          '  meta//pilot: 9 visits · 4 clicks · 0 builds begun · 2 sign-ups · 0 checkouts',
+          "  meta//pilot: 9 visits (0 by the page's script) · 4 clicks · 0 builds begun · 2 sign-ups · 0 checkouts",
           'Not people, counted apart:',
           '  test signup: 2',
         ].join('\n'),
