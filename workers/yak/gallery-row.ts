@@ -92,4 +92,8 @@ export let standing = (shared: Pick<Shared, 'gallery'>): Standing =>
 // The word the space page's pill wears, which is the same three states said
 // short enough to sit beside an app's name.
 export let pilled = (at: Standing) =>
-  at == 'listed' ? 'in the gallery' : at == 'asked' ? 'gallery: waiting' : ''
+  at == 'listed'
+    ? 'in the gallery'
+    : at == 'asked'
+    ? 'waiting for the gallery'
+    : ''

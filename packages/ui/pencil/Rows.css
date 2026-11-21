@@ -41,3 +41,8 @@
 .Rows_Actions .Button {
   font-size: var(--fine, var(--small));
 }
+/* A row that opens its thing is lit edge to edge, so its first and last
+   rows keep their room above and below. */
+.Rows_Item:has(.Rows_Open) {
+  padding-block: 0.6rem;
+}

@@ -2,7 +2,8 @@
  * How many wait on the person, as a number on a pill: `<Badge>3</Badge>`
  * beside a link, a button or a heading. It is in the negative role's colour,
  * the colour of what needs them, so it is kept for what is new, an alert or
- * a notice. `Badge-quiet` is a plain count, how many there are: the number
+ * a notice; its words may say what the number counts (`2 errors`). Given as
+ * a button or a link, it opens what waits. `Badge-quiet` is a plain count, how many there are: the number
  * alone, muted, with no pill. Whether to draw one at all (none for nothing)
  * is the caller's.
  *
@@ -33,4 +34,5 @@ export let specimens = (): Specimen[] => [
   ['Badge', h(Badge, {}, '3')],
   ['Badge, many', h(Badge, {}, '128')],
   ['Badge-quiet', h(Badge, { mod: 'quiet' }, '24')],
+  ['Badge as a button', h(Badge, { as: 'button', type: 'button' }, '2 errors')],
 ]

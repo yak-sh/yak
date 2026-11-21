@@ -113,3 +113,37 @@
 .Menu_Fold[open] .Identity_Action {
   color: var(--muted);
 }
+/* A menu opened from a trigger at the far side of what it acts on runs back
+   from that side, so it stays on the page. */
+.Menu-end {
+  left: auto;
+  right: 0;
+  min-width: 12rem;
+}
+/* A trigger that is a glyph alone (⋯): quiet and square, with no outline or
+   hatch, washed when the pointer finds it or its menu is open. */
+.Menu_Summary.Menu_Summary-icon {
+  display: grid;
+  place-items: center;
+  width: var(--control-height, 2rem);
+  height: var(--control-height, 2rem);
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  transform: none;
+}
+.Menu_Summary.Menu_Summary-icon::before,
+.Menu_Summary.Menu_Summary-icon::after {
+  content: none;
+}
+.Menu_Fold > .Menu_Summary.Menu_Summary-icon:hover,
+.Menu_Fold[open] > .Menu_Summary.Menu_Summary-icon {
+  background: var(--hover, var(--soft));
+  color: var(--text);
+  transform: none;
+}
+.Menu_Summary.Menu_Summary-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

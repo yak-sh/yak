@@ -16,7 +16,7 @@ import { Time } from '@yaks/ui/parts'
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
-import type { Stamp, Writers } from './stamps.ts'
+import type { Stamp } from './stamps.ts'
 import { type Field as Fielded, KEY } from '@yaks/connections'
 
 import {
@@ -29,12 +29,16 @@ import {
   Empty,
   Field,
   Form,
+  Icon,
   Logo,
+  Modal,
   More,
   Notice,
   Rows,
   State,
 } from '@yaks/ui/parts'
+import { icons } from './icons.ts'
+import { fixId } from './render/app.ts'
 
 import { type ComponentChildren, h } from 'preact'
 
@@ -247,6 +251,10 @@ ${links(env, 'pages.css', undefined, assets)}${
   }${
     main.includes('data-find')
       ? `<script src="${file('find.js')}" defer></script>`
+      : ''
+  }${
+    main.includes('data-sift')
+      ? `<script src="${file('sift.js')}" defer></script>`
       : ''
   }${
     main.includes('data-save=')
@@ -672,8 +680,9 @@ export type DeskPage = {
     made?: Stamp | null
     deployed?: Stamp | null
   })[]
-  /** what each writer those stamps name is called (stamps.ts `writers`) */
-  writers?: Writers
+  /** what the apps page was asked to find and how to order it (desk-pages.ts
+   * `sifted`) */
+  sift?: { q: string; sort: string }
   trash?: { eid: string; slug: string; title: string; days: number }[]
   numbers?: { eid: string; number: string; monthly: string; days: number }[]
   name?: string
@@ -740,9 +749,6 @@ export type DeskPage = {
   panes?: Panes
 }
 
-// What broke in an app, for its owner: each break as its line says it to their
-// assistant, how often and when last, and the one thing to do, which is to
-// ask that assistant. The app's mark on its tile links here.
 let SHOWN = 5
 
 // What the space's Operator made of one break, with the way to its
@@ -763,54 +769,88 @@ export let operated = (e: Plain, space: string) => {
   )
 }
 
+// What broke in an app, for its owner: each break as its line says it to their
+// assistant, how often and when last, and the one thing to do, which is to
+// ask that assistant. It is a dialog over the apps page, opened by the error
+// badge on the app's row (render/app.ts) with no script: a popover, which the
+// backdrop, the close button and Escape put away.
 export let fixing = (a: DeskPage['apps'][number], space: string) => {
   let errors = a.errors ?? []
   let n = errors.length
   let title = a.title || a.slug
+  let id = fixId(a.slug)
+  let shut = { popovertarget: id, popovertargetaction: 'hide', type: 'button' }
   return h(
-    Card,
-    { class: 'Fix', id: `fix-${a.slug}` },
-    heading(title, {
-      status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
+    Modal,
+    {
+      as: 'div',
+      popover: '',
+      id,
+      role: 'dialog',
+      'aria-label': `What broke in ${title}`,
+    },
+    h(Modal.Backdrop, {
+      as: 'button',
+      ...shut,
+      tabIndex: -1,
+      'aria-label': 'Close',
     }),
     h(
-      Rows,
-      { as: 'ul' },
-      errors.slice(0, SHOWN).map((e) =>
-        h(
-          Rows.Item,
-          { as: 'li' },
-          h(
-            Rows.Main,
-            null,
-            h('span', { class: 'Fix_Said' }, e.said || 'No message'),
-            h(
-              Rows.Meta,
-              null,
-              `${e.where ? `${e.where} · ` : ''}${
-                e.times == 1 ? 'once' : `${e.times} times`
-              }`,
-              e.at
-                ? [`, ${e.times == 1 ? '' : 'last '}`, h(Time, { at: e.at })]
-                : null,
-            ),
-            operated(e, space),
-          ),
-        )
-      ),
-    ),
-    n > SHOWN ? h(Rows.Meta, { as: 'p' }, `And ${n - SHOWN} more.`) : null,
-    h(
-      Form.Field,
-      null,
+      Modal.Body,
+      { class: 'Fix' },
+      heading(title, {
+        status: status(n == 1 ? '1 error' : `${n} errors`, 'negative'),
+        actions: h(
+          Button,
+          {
+            ...shut,
+            mod: 'quiet',
+            'aria-label': 'Close',
+            'data-tip': 'Close',
+            autofocus: true,
+          },
+          h(Icon, { of: icons.x }),
+        ),
+      }),
       h(
-        Form.Label,
-        { as: 'p' },
-        `Ask your assistant to fix ${n == 1 ? 'it' : 'them'}`,
+        Rows,
+        { as: 'ul' },
+        errors.slice(0, SHOWN).map((e) =>
+          h(
+            Rows.Item,
+            { as: 'li' },
+            h(
+              Rows.Main,
+              null,
+              h('span', { class: 'Fix_Said' }, e.said || 'No message'),
+              h(
+                Rows.Meta,
+                null,
+                `${e.where ? `${e.where} · ` : ''}${
+                  e.times == 1 ? 'once' : `${e.times} times`
+                }`,
+                e.at
+                  ? [`, ${e.times == 1 ? '' : 'last '}`, h(Time, { at: e.at })]
+                  : null,
+              ),
+              operated(e, space),
+            ),
+          )
+        ),
       ),
-      copyable(
-        `Fix the errors in my ${title} app on yaks.app`,
-        `the request to fix ${title}`,
+      n > SHOWN ? h(Rows.Meta, { as: 'p' }, `And ${n - SHOWN} more.`) : null,
+      h(
+        Form.Field,
+        null,
+        h(
+          Form.Label,
+          { as: 'p' },
+          `Ask your assistant to fix ${n == 1 ? 'it' : 'them'}`,
+        ),
+        copyable(
+          `Fix the errors in my ${title} app on yaks.app`,
+          `the request to fix ${title}`,
+        ),
       ),
     ),
   )

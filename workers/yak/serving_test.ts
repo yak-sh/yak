@@ -519,13 +519,10 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
 
-  // Lists wear a transparent display mark; installers keep the opaque tile.
+  // Lists wear the app's own letter; installers keep the opaque tile.
   let mark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
-  assertEquals(mark.headers.get('content-type'), 'image/webp')
-  assertEquals(
-    new Uint8Array(await mark.arrayBuffer()),
-    await Deno.readFile(new URL('./public/yak.webp', import.meta.url)),
-  )
+  assertEquals(mark.headers.get('content-type'), 'image/svg+xml')
+  assertStringIncludes(await mark.text(), '>C</text>')
   let installed = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(new Uint8Array(await installed.arrayBuffer()), tile)
 
@@ -565,37 +562,34 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   assertEquals(await theirs.json(), { name: 'Ours' })
 })
 
-test('a display mark uses the space logo before its opaque installer drawing', async () => {
-  let original = new Uint8Array([1, 2, 3])
-  let drawn = new Uint8Array([4, 5, 6])
+test("a display mark is the app's letter, and an installer's icon the space logo drawn", async () => {
   let blobs = bucket()
-  blobs.held.set('space/.logo/sha', original)
-  blobs.held.set('space/.logo/sha.icon.png', drawn)
+  blobs.held.set('space/.logo/sha', new Uint8Array([1, 2, 3]))
+  blobs.held.set('space/.logo/sha.icon.png', new Uint8Array([4, 5, 6]))
   let env = { BLOBS: blobs.r2 } as unknown as Env
   let space = {
     store: 'space',
     logo: { sha: 'sha', type: 'image/webp' },
   } as Space
-  for (let display of [false, true, false]) {
-    let response = (await apps.unwritten(
-      new Request(
-        `https://ada.yaks.app/notes/icon.png${display ? '?display' : ''}`,
-      ),
+  let app = { eid: 'a1', slug: 'notes', title: 'notes', access: 'public' }
+  let icon = (query: string) =>
+    apps.unwritten(
+      new Request(`https://ada.yaks.app/notes/icon.png${query}`),
       env,
       space,
-      { access: 'public' } as App,
+      app as App,
       '/icon.png',
       '/notes/',
-    ))!
-    assertEquals(
-      response.headers.get('content-type'),
-      display ? 'image/webp' : 'image/png',
-    )
-    assertEquals(
-      new Uint8Array(await response.arrayBuffer()),
-      display ? original : drawn,
-    )
-  }
+    ).then((r) => r!)
+  let mark = await icon('?display')
+  assertEquals(mark.headers.get('content-type'), 'image/svg+xml')
+  assertStringIncludes(await mark.text(), '>N</text>')
+  let installed = await icon('')
+  assertEquals(installed.headers.get('content-type'), 'image/png')
+  assertEquals(
+    new Uint8Array(await installed.arrayBuffer()),
+    new Uint8Array([4, 5, 6]),
+  )
 })
 
 test('an app that wrote an icon.svg and no icon.png is served the svg drawn', async () => {

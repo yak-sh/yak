@@ -1,7 +1,9 @@
 /**
  * A menu: `Menu.Item`s, one to a row, and a `Menu.Rule` between groups. The
  * items are buttons; what each does is the caller's, and so is where the
- * menu floats.
+ * menu floats. `Menu-below` opens under its summary, and `Menu-end` with it
+ * runs back from the summary's right edge, for a trigger at the far side of a
+ * row. `Menu_Summary-icon` is a summary that is a glyph alone, such as ⋯.
  *
  * @module
  */
@@ -89,6 +91,26 @@ export let specimens = (): Specimen[] => [
         { open: true },
         h(Menu.Summary, {}, 'Actions'),
         h(Menu, { mod: 'below' }, h(Item, { type: 'button' }, 'Copy link')),
+      ),
+    ),
+  ],
+  [
+    'Menu-below Menu-end, Summary-icon',
+    h(
+      'div',
+      {
+        style: 'display:flex;justify-content:flex-end;padding-bottom:6rem',
+      } as JSX.HTMLAttributes<HTMLDivElement>,
+      h(
+        Menu.Fold,
+        { open: true },
+        h(Menu.Summary, { mod: 'icon', 'aria-label': 'Actions' }, '⋯'),
+        h(
+          Menu,
+          { mod: ['below', 'end'] },
+          h(Item, { type: 'button' }, 'Edit data'),
+          h(Item, { type: 'button' }, 'Visits'),
+        ),
       ),
     ),
   ],

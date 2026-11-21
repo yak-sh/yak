@@ -807,7 +807,7 @@ let desk = async (
       made: made?.of.get(a.eid)?.made,
       deployed: made?.of.get(a.eid)?.deployed,
     })),
-    writers: made?.writers,
+    sift: { q: q.get('q') ?? '', sort: q.get('sort') ?? '' },
     trash: here.filter((a) => a.trashed).map((a) => ({
       eid: a.eid,
       slug: a.slug,

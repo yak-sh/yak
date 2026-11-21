@@ -6,11 +6,11 @@
 import {
   Button,
   Card,
-  Cards,
   Field,
   Form,
   Group,
   More,
+  Rows,
   TabSet,
 } from '@yaks/ui/parts'
 import { h } from 'preact'
@@ -540,13 +540,17 @@ export let invited = (o: Offer, env: Host = {}) => {
     },
     o.app
       ? h(
-        Cards,
+        Card,
         { class: 'Identity_Cards' },
-        tile(o.app, {
-          at: `https://${host}`,
-          host,
-          icon: o.app.open ? undefined : url(env, '/connector-512.png'),
-        }),
+        h(
+          Rows,
+          { as: 'ul' },
+          tile(o.app, {
+            at: `https://${host}`,
+            host,
+            icon: o.app.open ? undefined : url(env, '/connector-512.png'),
+          }),
+        ),
       )
       : null,
     o.signs ? pressed(o, env) : h(

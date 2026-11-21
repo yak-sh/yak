@@ -35,6 +35,12 @@ import Eye from 'lucide/dist/esm/icons/eye.mjs'
 // @ts-types="@yaks/ui/lucide"
 import EyeOff from 'lucide/dist/esm/icons/eye-off.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Ellipsis from 'lucide/dist/esm/icons/ellipsis.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Lock from 'lucide/dist/esm/icons/lock.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Pencil from 'lucide/dist/esm/icons/pencil.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Globe from 'lucide/dist/esm/icons/globe.mjs'
 // @ts-types="@yaks/ui/lucide"
 import House from 'lucide/dist/esm/icons/house.mjs'
@@ -101,6 +107,9 @@ export let icons = {
   house: House,
   'layout-grid': LayoutGrid,
   globe: Globe,
+  lock: Lock,
+  pencil: Pencil,
+  ellipsis: Ellipsis,
   bot: Bot,
   bell: Bell,
   'sliders-horizontal': SlidersHorizontal,

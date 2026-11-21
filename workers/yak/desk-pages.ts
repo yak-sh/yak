@@ -306,12 +306,16 @@ let empty = (title: string, ...says: Kids[]) =>
 let sharedWith = (at: DeskPage, env: Host) =>
   at.shared?.length
     ? h(
-      Cards,
+      Card,
       null,
-      at.shared.map((a) => {
-        let host = spaceHost(env, a.space)
-        return tile(a, { at: `https://${host}`, host, editor: true })
-      }),
+      h(
+        Rows,
+        { as: 'ul' },
+        at.shared.map((a) => {
+          let host = spaceHost(env, a.space)
+          return tile(a, { at: `https://${host}`, host, editor: true })
+        }),
+      ),
     )
     : empty(
       'Nothing shared with you yet',
@@ -322,34 +326,99 @@ let sharedWith = (at: DeskPage, env: Host) =>
       ),
     )
 
-/** The apps view: the space's apps, each marked where it broke with what to
- * ask about it, and with none, the way to make one. */
+type Listed = DeskPage['apps'][number]
+// When an app last changed: its last deploy, or else when it was made.
+let changed = (a: Listed) => (a.deployed ?? a.made)?.at ?? ''
+// The orders the apps page offers, the first the one it opens in.
+let ORDERS = [
+  ['changed', 'Recently changed'],
+  ['name', 'Name'],
+] as const
+
+/** The apps whose name or address holds every word of `q`, newest change
+ * first, or with `sort` 'name', by name. public/sift.js does the same in the
+ * page as a person types. */
+/// sifted([], 'x', 'name') -> []
+export let sifted = (apps: Listed[], q = '', sort = '') => {
+  let words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  return apps
+    .filter((a) =>
+      words.every((w) => `${a.title} ${a.slug}`.toLowerCase().includes(w))
+    )
+    .toSorted(
+      sort == 'name'
+        ? (a, b) => named(a).localeCompare(named(b))
+        : (a, b) => changed(b).localeCompare(changed(a)),
+    )
+}
+
+// More apps than this and the list can be searched and sorted.
+let LONG = 8
+
+// The search and the order above a long list, in its card's head: sent, the
+// page answers sifted; with script, the list narrows as a person types.
+let finding = (at: DeskPage) =>
+  h(
+    Card.Form,
+    { method: 'get', role: 'search', 'data-sift': 'apps' },
+    h(Field, {
+      type: 'search',
+      name: 'q',
+      value: at.sift?.q ?? '',
+      placeholder: 'Find an app',
+      'aria-label': 'Find an app',
+    }),
+    h(
+      Field,
+      { choose: true, name: 'sort', 'aria-label': 'Order' },
+      ORDERS.map(([value, label]) =>
+        option(value, label, (at.sift?.sort || 'changed') == value)
+      ),
+    ),
+  )
+
+/** The apps view: the space's apps, one row each, every row opening its app
+ * and the errors it has opening over the page; with none, the way to make
+ * one. */
 export let library = (at: DeskPage, env: Host) => {
-  let broken = at.apps.filter((a) => a.errors?.length)
+  let host = spaceHost(env, at.space)
+  let long = at.apps.length > LONG
+  let shown = sifted(at.apps, at.sift?.q, at.sift?.sort)
+  let n = at.apps.length
   return [
     connectCard(at, env),
-    at.apps.length
+    n
       ? [
         h(
-          Cards,
+          Card,
           null,
-          at.apps.map((a) =>
-            tile(a, {
-              at: `https://${spaceHost(env, at.space)}`,
-              errors: a.errors?.length,
-              editor: true,
-              made: a.made,
-              deployed: a.deployed,
-              writers: at.writers,
-            })
+          heading(n == 1 ? '1 app' : `${n} apps`, {
+            actions: long ? finding(at) : null,
+          }),
+          h(
+            Rows,
+            { as: 'ul', id: 'apps' },
+            shown.map((a) =>
+              tile(a, {
+                at: `https://${host}`,
+                host,
+                errors: a.errors?.length,
+                editor: true,
+                visits: `${managePath('visits', at.space)}#visits-${a.slug}`,
+                made: a.made,
+                deployed: a.deployed,
+              })
+            ),
           ),
+          long
+            ? h(
+              Rows.Note,
+              { hidden: shown.length > 0, 'data-none': '' },
+              'No app here has that in its name or address.',
+            )
+            : null,
         ),
-        broken.length
-          ? [
-            h(Group, null, 'Needs fixing'),
-            broken.map((a) => fixing(a, at.space)),
-          ]
-          : null,
+        at.apps.filter((a) => a.errors?.length).map((a) => fixing(a, at.space)),
       ]
       : empty(
         'Your apps will live here',

@@ -17,7 +17,8 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.Modal[open] {
+.Modal[open],
+.Modal:popover-open {
   display: grid;
   align-items: start;
   justify-items: center;
@@ -28,6 +29,10 @@
 .Modal_Backdrop {
   position: fixed;
   inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 .Modal_Body {
   position: relative;

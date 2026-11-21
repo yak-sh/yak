@@ -13,6 +13,20 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+/* Pressed, it opens what waits. */
+:is(button, a).Badge {
+  border: 0;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+:is(button, a).Badge:hover {
+  background: color-mix(in srgb, var(--negative), var(--text) 18%);
+}
+:is(button, a).Badge:focus-visible {
+  outline: 2px solid var(--negative);
+  outline-offset: 2px;
+}
 .Badge[hidden] {
   display: none;
 }

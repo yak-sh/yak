@@ -202,3 +202,44 @@
   font-size: inherit;
   font-weight: normal;
 }
+
+/* A row that opens its thing: its picture before its name, and its name a
+   link whose target is the whole row, lit under the pointer. What acts on it
+   sits above that target, so each action is pressed on its own. */
+.Rows_Item:has(.Rows_Open) {
+  position: relative;
+  flex-wrap: nowrap;
+}
+.Rows_Item:has(.Rows_Open):hover {
+  background: var(--hover, var(--soft));
+}
+.Rows_Open {
+  color: inherit;
+  text-decoration: none;
+}
+.Rows_Open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.Rows_Open:focus-visible {
+  outline: none;
+}
+.Rows_Open:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.Rows_Item:has(.Rows_Open) .Rows_Actions {
+  position: relative;
+  flex-wrap: nowrap;
+}
+.Rows_Mark {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: calc(var(--radius) + 2px);
+  object-fit: cover;
+}
+.Rows_Item[hidden] {
+  display: none;
+}

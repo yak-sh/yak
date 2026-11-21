@@ -1,84 +1,147 @@
-// The app library's Tile, drawn from the kit's card and its parts.
-// Gallery wording is page context because its visibility depends on the viewer,
-// and so is `at`, the space's own address, on a page that is not there,
-// `host`, the space's own host, said before the app's path on a page that is
-// not about that one space, `errors`, the count of open ones its owner's
-// dashboard marks, and `icon`, the picture to wear instead of the app's own,
-// for a viewer the app's own would be refused to (a private app, before they
-// are in).
+// The app library's Tile: one row of the kit's Rows, pressed anywhere to open
+// the app in a new tab. Its mark is the app's own icon, or its first letter
+// where it drew none (apps.ts `unwritten`); under its name, one quiet line
+// says where it lives and when it last changed. At the far side sit its open
+// errors, as a badge that opens them, a glyph for whether it is the space's
+// homepage and one for who may use it, each named in a tooltip, and the menu
+// of what else can be done with it.
 //
-// The title opens the app; the error mark links to what broke. `editor`
-// asks for one more, to the app's data editor, on a page for who may open it.
-// `made` and `deployed` are when it was made and last deployed and by whom,
-// said as one muted line with the names `writers` gives (stamps.ts).
+// Page context: `at`, the space's own address, on a page that is not there;
+// `host`, the space's own host, said before the app's path; `errors`, the
+// count of open ones its owner's dashboard shows, opened in the dialog
+// `fix-<slug>` beside the list (desk-pages.ts `library`); `icon`, the picture
+// to wear instead of the app's own, for a viewer the app's own would be
+// refused to (a private app, before they are in); `editor`, a menu for
+// someone who may open its data editor; `visits`, where its visits are
+// counted; `made` and `deployed`, when it was made and last deployed; and
+// `gallery`, how it stands with the gallery, said only to its owner.
 
 import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
-import { Button, Card, Chip, Chips, State } from '@yaks/ui/parts'
+import { Badge, Icon, Menu, Rows, Time } from '@yaks/ui/parts'
 import { h } from 'preact'
-import { type Stamp, stamped, type Writers } from '../stamps.ts'
+import type { Stamp } from '../stamps.ts'
+import { icons } from '../icons.ts'
+
+// Who may use an app, as a glyph and the words its tooltip says.
+let ACCESS = {
+  public: [
+    icons.globe,
+    'Public: anyone can open it, and its members change its data',
+  ],
+  open: [
+    icons.pencil,
+    'Open: anyone with the link can open it and change its data',
+  ],
+  private: [icons.lock, 'Private: only people let in can open it'],
+} as const
+
+// A glyph that stands for a word: said to a screen reader and in a tooltip.
+let glyph = (of: (typeof icons)[keyof typeof icons], words: string) =>
+  h(
+    Rows.Meta,
+    { role: 'img', 'aria-label': words, 'data-tip': words },
+    h(Icon, { of }),
+  )
+
+/** The id of the dialog showing what broke in the app at `slug`. */
+export let fixId = (slug: string) => `fix-${slug}`
 
 export let app: ComponentRenderer = {
   view: 'Tile',
   match: parse('.app'),
   Render: ({ e: b, ...ctx }) => {
     let a = b.app as { slug: string; access?: string | null }
-    let doc = b.doc as { title?: string } | undefined
+    let title = (b.doc as { title?: string } | undefined)?.title || a.slug
+    let at = `${ctx.at ?? ''}/${a.slug}`
     let errors = Number(ctx.errors ?? 0)
-    let tags = [b.home ? 'Homepage' : null, a.access, ctx.gallery].filter(
-      Boolean,
-    )
-    let names = (ctx.writers ?? new Map()) as Writers
-    let stamp = (what: string, s: unknown) =>
-      s ? [what, ' ', stamped(h, s as Stamp, names)] : null
-    let made = [stamp('Made', ctx.made), stamp('Deployed', ctx.deployed)]
-      .filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part])
+    let broke = errors ? `${errors} ${errors == 1 ? 'error' : 'errors'}` : ''
+    let changed = (ctx.deployed ?? ctx.made) as Stamp | null | undefined
+    let access = ACCESS[a.access as keyof typeof ACCESS]
+    let fix = { popovertarget: fixId(a.slug), type: 'button' }
+    // What public/sift.js finds and orders the row by.
+    let sift = {
+      'data-words': `${title} ${a.slug}`.toLowerCase(),
+      'data-name': title,
+      'data-changed': changed?.at ?? '',
+    }
     return h(
-      Card,
-      null,
+      Rows.Item,
+      { as: 'li', ...sift },
+      h(Rows.Mark, {
+        src: ctx.icon ?? `${at}/icon.png?display`,
+        width: 32,
+        height: 32,
+        alt: '',
+        loading: 'lazy',
+      }),
       h(
-        Card.Head,
+        Rows.Main,
         null,
-        h(Card.Mark, {
-          as: 'img',
-          src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png?display`,
-          width: 24,
-          height: 24,
-          alt: '',
-        }),
         h(
-          Card.Title,
-          null,
-          h('a', {
-            href: `${ctx.at ?? ''}/${a.slug}/`,
-            target: '_blank',
-            rel: 'noopener',
-          }, doc?.title || a.slug),
+          Rows.Name,
+          { mod: 'line' },
+          h(
+            Rows.Open,
+            { href: `${at}/`, target: '_blank', rel: 'noopener' },
+            title,
+          ),
         ),
-        errors
+        h(
+          Rows.Meta,
+          { mod: 'line' },
+          `${ctx.host ?? ''}/${a.slug}`,
+          changed ? [' · changed ', h(Time, { at: changed.at })] : null,
+          ctx.gallery ? ` · ${ctx.gallery}` : null,
+        ),
+      ),
+      h(
+        Rows.Actions,
+        null,
+        broke
           ? h(
-            State,
-            { mod: 'negative', href: `#fix-${a.slug}` },
-            `${errors} ${errors == 1 ? 'error' : 'errors'}`,
+            Badge,
+            { as: 'button', ...fix, 'data-tip': 'See what broke' },
+            broke,
           )
           : null,
+        b.home
+          ? glyph(
+            icons.house,
+            `The homepage: it opens at ${ctx.host || 'the space’s address'}`,
+          )
+          : null,
+        access ? glyph(access[0], access[1]) : null,
         ctx.editor
           ? h(
-            Card.Actions,
-            null,
-            h(Button, {
-              href: `${ctx.at ?? ''}/${a.slug}/_web/data`,
-              target: '_blank',
-              rel: 'noopener',
-            }, 'Edit data'),
+            Menu.Fold,
+            { 'data-menu': '' },
+            h(
+              Menu.Summary,
+              {
+                mod: 'icon',
+                'aria-label': `More for ${title}`,
+                'data-tip': 'More',
+              },
+              h(Icon, { of: icons.ellipsis }),
+            ),
+            h(
+              Menu,
+              { mod: ['below', 'end'] },
+              h(Menu.Item, {
+                as: 'a',
+                href: `${at}/_web/data`,
+                target: '_blank',
+                rel: 'noopener',
+              }, 'Edit data'),
+              ctx.visits
+                ? h(Menu.Item, { as: 'a', href: String(ctx.visits) }, 'Visits')
+                : null,
+              broke ? h(Menu.Item, fix, `See ${broke}`) : null,
+            ),
           )
           : null,
       ),
-      h(Card.Sub, null, `${ctx.host ?? ''}/${a.slug}`),
-      made.length ? h(Card.Sub, null, made) : null,
-      tags.length
-        ? h(Chips, null, tags.map((t) => h(Chip, null, String(t))))
-        : null,
     )
   },
 }

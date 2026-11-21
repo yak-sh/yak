@@ -14,6 +14,11 @@
  * `Rows.Toggle` (a glyph, pressed to open and close it) beside what it says,
  * then, while open, a `Rows.Detail` beneath it.
  *
+ * A row that opens its thing leads with the thing's `Rows.Mark` (its
+ * picture) and names it with a `Rows.Open` inside its `Rows.Name`: the link's
+ * target is the whole row, lit under the pointer, while what sits in its
+ * `Rows.Actions` stays pressable on its own.
+ *
  * `Item-split` puts an action beside the row's content; `Detail-inset`
  * spans both columns on a padded background. `Rows.Note` is a full-size
  * line below the rows, whether none are present or more were left out.
@@ -28,6 +33,13 @@ import type { Colors, Specimen } from './theme.ts'
 import { Dot } from './Dot.ts'
 import { Tile } from './Tile.ts'
 import { Button } from './Button.ts'
+import { Badge } from './Badge.ts'
+import { Icon } from './Icon.ts'
+import { Menu } from './Menu.ts'
+// @ts-types="./lucide.d.ts"
+import lock from 'lucide/dist/esm/icons/lock.mjs'
+// @ts-types="./lucide.d.ts"
+import ellipsis from 'lucide/dist/esm/icons/ellipsis.mjs'
 
 /** A list of rows. */
 export let Rows:
@@ -45,6 +57,8 @@ export let Rows:
     | 'Name'
     | 'Meta'
     | 'Actions'
+    | 'Mark'
+    | 'Open'
     | 'Form',
     Part
   > = block(
@@ -63,6 +77,8 @@ export let Rows:
       Name: 'strong',
       Meta: 'span',
       Actions: 'div',
+      Mark: 'img',
+      Open: 'a',
       Form: 'form',
     },
   )
@@ -84,6 +100,7 @@ export let sheet = (c: Colors): Sheet => ({
   Rows_Main: { spaced: true },
   Rows_Meta: { fg: c.muted },
   Rows_Actions: { spaced: true },
+  Rows_Mark: { hidden: true },
 })
 
 let { Item, More } = Rows
@@ -135,6 +152,50 @@ let person = (name: string, meta: string, ...actions: string[]) =>
       ),
   )
 
+// A thing's picture, as a square drawn from its first letter.
+let picture = (letter: string, fill: string) =>
+  'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${fill}"/><text x="32" y="43" font-family="system-ui,sans-serif" font-size="30" font-weight="700" fill="#fff" text-anchor="middle">${letter}</text></svg>`,
+  )
+let opens = (name: string, meta: string, fill: string, errors = 0) =>
+  h(
+    Item,
+    { key: name },
+    h(Rows.Mark, { src: picture(name[0], fill), alt: '' }),
+    h(
+      Rows.Main,
+      {},
+      h(Rows.Name, { mod: 'line' }, h(Rows.Open, { href: '#' }, name)),
+      h(Rows.Meta, { mod: 'line' }, meta),
+    ),
+    h(
+      Rows.Actions,
+      {},
+      errors
+        ? h(Badge, { as: 'button', type: 'button' }, `${errors} errors`)
+        : null,
+      h(
+        Rows.Meta,
+        { role: 'img', 'aria-label': 'Private', 'data-tip': 'Private' },
+        h(Icon, { of: lock }),
+      ),
+      h(
+        Menu.Fold,
+        {},
+        h(
+          Menu.Summary,
+          { mod: 'icon', 'aria-label': `More for ${name}` },
+          h(Icon, { of: ellipsis }),
+        ),
+        h(
+          Menu,
+          { mod: ['below', 'end'] },
+          h(Menu.Item, { as: 'a', href: '#' }, 'Edit data'),
+        ),
+      ),
+    ),
+  )
+
 /** A list, one of people, one nested under it, and tiles to pick from. */
 export let specimens = (): Specimen[] => [
   [
@@ -150,6 +211,20 @@ export let specimens = (): Specimen[] => [
         h(Rows.Detail, { mod: 'inset' }, 'More about this item.'),
       ),
       h(Rows.Note, {}, '2 more'),
+    ),
+  ],
+  [
+    'Rows, Item, Mark, Name, Open, Meta, Actions',
+    h(
+      Rows,
+      {},
+      opens('Recipes', 'ada.yaks.app/recipes · changed 2 days ago', '#4f7a5a'),
+      opens(
+        'Book club',
+        'ada.yaks.app/books · changed 1 hour ago',
+        '#3f6b8a',
+        2,
+      ),
     ),
   ],
   [

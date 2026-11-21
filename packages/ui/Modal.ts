@@ -10,7 +10,12 @@ import type { Colors, Specimen } from './theme.ts'
  * card's head, its `Main` pane holds what the dialog says, and `Actions`, a
  * small card floated at the pane's top right, what acts on all of it: the
  * head keeps only the title and what closes it. On a phone the actions run
- * across the top of the pane instead. */
+ * across the top of the pane instead.
+ *
+ * A page with no script of its own opens one as a popover: the frame given
+ * `as: 'div'` and `popover`, a button naming it in `popovertarget` opens it,
+ * and its backdrop and close are buttons naming it with
+ * `popovertargetaction: 'hide'`. Escape closes it as well. */
 export let Modal:
   & Part
   & Record<'Body' | 'Backdrop' | 'Main' | 'Actions', Part> = block(

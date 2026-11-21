@@ -751,8 +751,9 @@ declares the same name, which is covered on the next page, Cross-App Data
 Every app has a data editor at `<app>/_web/data`, generated from its
 `vocab.json`, so nobody has to build an admin page to change rows. Point people
 at it when they want to post a notice, fix a row or attach a PDF: anyone holding
-a level on the app opens it from their dashboard ("Edit data" on the app), an
-owner or editor lists, adds, edits and removes rows, and a viewer reads them.
+a level on the app opens it from their dashboard (Edit data in the app's ⋯
+menu), an owner or editor lists, adds, edits and removes rows, and a viewer
+reads them.
 
 It lists each component the app declares, and rows that are only a `doc`. It
 leaves out edges, `personal` components and components that are not kept (`sync`

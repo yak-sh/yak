@@ -38,14 +38,12 @@ let errors = folds(reports).map(plain)
 page([])
 test('an app that throws is marked on the dashboard, with what to ask', () => {
   let { document } = parseHTML(page(errors))
-  let marks = [...document.querySelectorAll('a[href^="#fix-"]')]
-  assertEquals(marks.length, 1)
-  assertEquals(marks[0].textContent, '1 error')
-  assertEquals(marks[0].getAttribute('href'), '#fix-chores')
-  assertEquals(
-    marks[0].closest('.Card')?.querySelector('h2')?.textContent,
-    'chores',
-  )
+  let marks = [...document.querySelectorAll('.Badge[popovertarget]')]
+  assertEquals(marks.map((m) => m.textContent), ['1 error'])
+  let fix = document.getElementById(marks[0].getAttribute('popovertarget')!)
+  assert(fix?.hasAttribute('popover'))
+  assertEquals(fix?.querySelector('h2')?.textContent, 'chores')
+  assertStringIncludes(fix!.textContent!, 'Fix the errors in my chores app')
 })
 
 test('a dashboard error names the break, its recurrence and what to ask', () => {
@@ -61,7 +59,7 @@ test('a dashboard error names the break, its recurrence and what to ask', () => 
 })
 
 test('a fixed app has no dashboard error mark or repair request', () => {
-  assert(!/href="#fix-|id="fix-/.test(page([])))
+  assert(!/popovertarget="fix-|id="fix-/.test(page([])))
 })
 
 // What the space's Operator made of a break stands beside it (T-136297):

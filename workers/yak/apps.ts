@@ -41,7 +41,8 @@ import { previewed } from './preview-html.ts'
 // signed-out visitor sent to sign in is the platform working.
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects } from './lib/objects.ts'
-import { logoBytes, logoIcon } from './logo.ts'
+import { logoIcon } from './logo.ts'
+import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
 import { apiOut, assetMaps, assetUrl, linked, LOADS } from './asset_url.ts'
@@ -658,12 +659,15 @@ let media = async (
 // the files door had nothing.
 //
 // The icon is its space's logo, drawn square (logo.ts `logoIcon`, T-151744),
-// so a church's or a shop's apps wear its picture; or, in a space without
-// one, the platform's connector tile — opaque, square, 512 (site_test) — so
-// an app on a home screen wears the platform's face rather than the browser's
-// blank sheet. iOS fills a transparent icon with black, which is why the tile
-// that carries its own ground is the right one to fall back to. A display
-// mark (?display) keeps the original logo's alpha, or the transparent yak.
+// so a church's or a shop's apps wear its picture on a home screen; or, in a
+// space without one, the platform's connector tile — opaque, square, 512
+// (site_test) — so an app on a home screen wears the platform's face rather
+// than the browser's blank sheet. iOS fills a transparent icon with black,
+// which is why the tile that carries its own ground is the right one to fall
+// back to. A display mark (?display), what a list of apps shows beside each
+// name, is the app's own first letter instead (@yaks/platform/monogram): a
+// list of a space's apps all wearing its logo, often its owner's photo, tells
+// none of them apart (T-2259).
 export let unwritten = async (
   req: Request,
   env: Env,
@@ -673,29 +677,26 @@ export let unwritten = async (
   at: string,
 ) => {
   if (path == '/icon.png') {
-    let display = new URL(req.url).searchParams.has('display')
-    let bytes = display && space.logo
-      ? await logoBytes(env, space, space.logo.sha)
-      : null
-    let logo = display
-      ? bytes ? { bytes, type: space.logo!.type } : null
-      : await logoIcon(env, space, app.eid)
+    if (new URL(req.url).searchParams.has('display')) {
+      return new Response(monogram(app.title || app.slug, app.eid), {
+        headers: {
+          'content-type': 'image/svg+xml',
+          'cache-control': keeping(app),
+        },
+      })
+    }
+    let logo = await logoIcon(env, space, app.eid)
     if (logo) {
       return new Response(logo.bytes as Uint8Array<ArrayBuffer>, {
         headers: { 'content-type': logo.type, 'cache-control': keeping(app) },
       })
     }
     let tile = await env.ASSETS.fetch(
-      new Request(
-        new URL(display ? '/yak.webp' : '/connector-512.png', req.url),
-      ),
+      new Request(new URL('/connector-512.png', req.url)),
     )
     if (!tile.ok) return null
     return new Response(tile.body, {
-      headers: {
-        'content-type': display ? 'image/webp' : 'image/png',
-        'cache-control': keeping(app),
-      },
+      headers: { 'content-type': 'image/png', 'cache-control': keeping(app) },
     })
   }
   if (path != `/${MANIFEST}`) return null

@@ -58,6 +58,7 @@ export let ASSETS: Asset[] = [
     'side.js',
     'pane.js',
     'find.js',
+    'sift.js',
     'modal.js',
     'cta.js',
     'saving.js',
