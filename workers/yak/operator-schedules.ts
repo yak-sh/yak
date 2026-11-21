@@ -7,10 +7,14 @@
 // runs with no model turn (@yaks/wake/run), and a brief starts a fresh helper
 // given the call's outcome. A subscription is a wake that watches a query
 // (`watch`): it fires only when the query's rows changed, and its note comes
-// with what changed. The tools are the Operator's published ones; their names
-// and schemas are kept (M-37853).
+// with what changed. It keeps no cadence: each commit to what it reads stirs
+// it (@yaks/wake `stir`), the space's apps telling the Operator of theirs
+// (graph.ts `#herald`, build.ts `HEARD`) and this store hearing its own
+// (`ownCommits`), so it looks a beat later and rests until the next. The
+// tools are the Operator's published ones; their names and schemas are kept
+// (M-37853).
 import { line } from '@yaks/query'
-import { type Bundle, derivedEid } from '@yaks/graph'
+import { type Bundle, derivedEid, type Plugin } from '@yaks/graph'
 import { short } from '@yaks/id'
 import type { Tool } from '@yaks/session'
 import {
@@ -18,7 +22,7 @@ import {
   held,
   look,
   next,
-  span,
+  stir,
   theirs,
   type Wake,
   type Watch,
@@ -42,9 +46,6 @@ let wakeOf = (b: Bundle) => b.wake as Wake
  * store. */
 export type Watching = (wake: Bundle, watch: Watch) => Promise<Bundle[]>
 
-/** The least time between two looks. */
-let SOONEST = 60_000
-let EVERY = '1m'
 /** The most rows a subscription watches (@yaks/wake `ROWS`). */
 let ROWS = 200
 
@@ -88,7 +89,6 @@ let shownWatch = (b: Bundle) => {
     subscription: short(b.entity.eid),
     query: watch.query,
     ...watch.local ? { mine: true } : {},
-    every: wakeOf(b).every,
     say: wakeOf(b).note ?? '',
     rows: Object.keys(watch.seen ?? {}).length,
     ...b.fired ? { looked: (b.fired as { at: string }).at } : {},
@@ -234,7 +234,7 @@ export let subscriptionTools = (
     title: 'Be told when something changes: watch a query',
     step: { doing: 'Subscribing…', done: 'Subscribed' },
     description:
-      `Be woken when something changes for the person you work for: a query you watch, read again every so often, and each time its rows change (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). It looks again on every and costs nothing while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
+      `Be woken when something changes for the person you work for: a query you watch live, and within seconds of each commit that changes its rows (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). Writes close together make one turn, and nothing is spent while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
     parameters: {
       type: 'object',
       properties: {
@@ -253,37 +253,22 @@ export let subscriptionTools = (
           description:
             'Read the query over your own store (your sessions, helpers and requests) rather than the space.',
         },
-        every: {
-          type: 'string',
-          description:
-            `How often to look again: a duration of a minute or more (5m, 1h), five cron fields with the person's IANA time zone after them, or @hourly, @daily. Left out, ${EVERY}.`,
-        },
       },
       required: ['say', 'query'],
     },
     run: async (args, context) => {
       let say = String(args.say ?? '').trim()
       let query = String(args.query ?? '').trim()
-      let every = String(args.every ?? '').trim() || EVERY
       let local = args.mine === true
       if (!say) throw refuse('arguments', 'Say what to do when it changes.')
       if (!query) throw refuse('arguments', 'Give the query to watch.')
-      let now = Date.now()
-      let gap = span(every)
-      let at = gap == null
-        ? next(every, now)
-        : new Date(now + gap).toISOString()
-      if (!at) {
-        throw refuse('arguments', `${every} is not a cadence that ever comes.`)
-      }
-      if (gap != null && gap < SOONEST) {
-        throw refuse('arguments', 'Look again a minute apart or more.')
-      }
       let { person } = await whoseOf(store, context)
-      let wake = { at, every, for: person, note: say }
+      let wake = { for: person, note: say }
       let watch = { query, ...local ? { local } : {} }
       // What it answers now is what a change is measured from, and a query
-      // it cannot read is refused here rather than at every look.
+      // it cannot read is refused here rather than at every look. Reading it
+      // over the space asks each app it reads to tell this store of its
+      // commits.
       let entity = { eid: crypto.randomUUID() }
       let { seen } = await look(
         {},
@@ -299,12 +284,14 @@ export let subscriptionTools = (
     title: 'List subscriptions',
     step: { doing: 'Reading subscriptions…', done: 'Read subscriptions' },
     description:
-      'What you are subscribed to for the person you work for: each subscription’s id, its query, how often it looks, its words, how many rows it watches and when it last looked.',
+      'What you are subscribed to for the person you work for: each subscription’s id, its query, its words, how many rows it watches and when it last looked.',
     readOnly: true,
     parameters: { type: 'object', properties: {} },
     run: async (_, context) => {
       let { person } = await whoseOf(store, context)
-      let rows = (await held(store.g, person)).filter((b) => b.watch)
+      let rows = await store.g.read(
+        line`.wake.for=${person}&.watch&.order=entity.eid&*`,
+      )
       return JSON.stringify(rows.map(shownWatch))
     },
   },
@@ -336,6 +323,56 @@ export let subscriptionTools = (
     },
   },
 ]
+
+/** Something the subscriptions of this store read committed: over the space
+ * (an app told the Operator, build.ts `HEARD`), or with `mine` over this store
+ * itself (`ownCommits`). Each such subscription looks again a beat later
+ * (@yaks/wake `stir`). Answers when the soonest looks, in epoch ms, or null
+ * when none watches there. */
+export let heard = (store: Store, mine: boolean, now = Date.now()) =>
+  stir(
+    {
+      read: (q, o) => store.g.read(q, o),
+      apply: (b, o) => store.g.apply(b, { ...o, trusted: true }),
+    },
+    now,
+    { which: (b) => !!watchOf(b)?.local == mine },
+  )
+
+/** What tells the Operator's store of its own commits, for the
+ * subscriptions over it: `stirred` after each commit beyond the scheduler's
+ * own (one of wakes alone, as a look that rests writes), so a look never
+ * stirs another. */
+export let ownCommits = (stirred: () => void): Plugin => ({
+  name: 'yak/subscriptions',
+  hooks: {
+    effect: (bundles) => {
+      if (bundles.some((b) => !b.wake)) stirred()
+      return bundles
+    },
+  },
+})
+
+/** How many subscriptions one batch of `uncadenced` moves. */
+let BATCH = 50
+
+/** One batch of the pass that takes each subscription kept on a cadence
+ * (`wake.every`, before they were live) off it, due now: its next look asks
+ * each app it reads to tell this store of its commits, and it rests after.
+ * Answers whether another batch has work; one run twice finds none. */
+export let uncadenced = async (store: Store): Promise<boolean> => {
+  let rows = await store.g.read(
+    line`.watch&.wake.every&.limit=${BATCH}&.fields=entity.eid`,
+  )
+  let at = new Date().toISOString()
+  if (rows.length) {
+    await store.g.apply(
+      rows.map((b) => ({ entity: b.entity, wake: { every: null, at } })),
+      { trusted: true },
+    )
+  }
+  return rows.length == BATCH
+}
 
 /** The input a scheduled helper is given in an occurrence's session. */
 export let helperInput = (occurrence: string) =>

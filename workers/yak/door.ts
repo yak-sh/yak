@@ -145,6 +145,10 @@ export let ACROSS = 'x-yak-across'
 /** The header a store's read of a home's words names itself with, while its
  * pages watch them: the home tells it of each commit (graph.ts `#heed`). */
 export let HEED = 'x-yak-heed'
+/** The header a space's Operator's read of an app names its space with,
+ * while a subscription of its watches the app: the app tells it of each
+ * commit (graph.ts `#heed`, build.ts `HEARD`). */
+export let HEED_OPERATOR = 'x-yak-heed-operator'
 /** The store path a home tells a store that borrows from it of a commit at,
  * kernel only: 204 while its pages watch, 410 once none does. */
 export let HEARD = '/heard'
@@ -179,6 +183,7 @@ let VOUCH = [
   IDEMPOTENCY,
   ACROSS,
   HEED,
+  HEED_OPERATOR,
   ACCEPTED,
   STATIC_QUERY,
   'x-store',

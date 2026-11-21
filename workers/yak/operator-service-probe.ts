@@ -1,13 +1,22 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 
+/** The spaces whose Operators an app told of a commit (`/heard`), and
+ * what each answers: 204 while it watches, 410 once it does not. */
+export let heard = { spaces: [] as string[], status: 204 }
+
 // Reporting a break hands work to the Operator; its execution belongs to
 // operator_test.ts. These routes retain only that service boundary.
 export let operators: Env['BUILDER'] = {
   idFromName: (name) => name,
-  get: () => ({
+  get: (space) => ({
     fetch: (req: Request) => {
       let path = new URL(req.url).pathname
+      if (req.method == 'POST' && path == '/heard') {
+        assertEquals(req.headers.get('x-yak-kernel'), '1')
+        heard.spaces.push(String(space))
+        return Promise.resolve(new Response(null, { status: heard.status }))
+      }
       if (req.method == 'POST' && path == '/wipe') {
         assertEquals(req.headers.get('x-yak-kernel'), '1')
         return Promise.resolve(Response.json({ ok: true }))

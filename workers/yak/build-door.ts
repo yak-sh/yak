@@ -3,7 +3,7 @@
 import { audit } from './admin-action.ts'
 import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
-import { ahead, fetchOf, WAKE } from './door.ts'
+import { ahead, fetchOf, HEARD, WAKE } from './door.ts'
 import type { Space } from './directory.ts'
 import { type Settings, worn } from './operator-persona.ts'
 import type { Env } from './env.ts'
@@ -128,6 +128,11 @@ export let woken = (
     { request: 'operator wake', space },
     retain,
   )
+
+/** An app the space's Operator watches committed (graph.ts `#herald`): its
+ * subscriptions over the space look again a beat later (build.ts `HEARD`).
+ * 204 while one watches the space, 410 once none does. */
+export let heard = (env: Wiring, space: string) => signal(env, space, HEARD)
 
 /** A restored space's pending Operator work is due again. */
 export let reviveBuilder = async (env: Wiring, space: string) => {

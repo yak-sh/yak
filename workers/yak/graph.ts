@@ -367,6 +367,7 @@ import {
   GIT_STORE,
   HEARD,
   HEED,
+  HEED_OPERATOR,
   placed,
   STATIC_QUERY,
   storeOf,
@@ -688,6 +689,9 @@ let clockOf = ({ now, timer }: Time): Clock => ({
 // One row per word — the object's SQLite is the only memory that survives an
 // eviction, and this is smaller than asking @yaks/graph to hold configuration
 // as data.
+// Who a commit here is told to (`#herald`).
+type Listening = 'borrowers' | 'operators'
+
 type Word =
   | 'directory-revision'
   // The serving copy the directory fences (directory-copy.ts `handover`).
@@ -738,6 +742,9 @@ type Word =
   // The stores whose pages watch the words this app homes (`#heed`), told
   // of each commit here (`#herald`).
   | 'borrowers'
+  // The spaces whose Operators hold a subscription reading this app
+  // (`#heed`), told of each commit here (`#herald`).
+  | 'operators'
   // One person's localStorage in a walled page (page-storage.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -2161,7 +2168,9 @@ export class Store extends Durable {
       reading: this.#reading,
       afar: this.#afar,
     } = this.#pages(g, subs, own, this.#socketsOn(null), this.#applying))
-    if (this.#borrowers().length) this.#feed()
+    if (this.#told('borrowers').length || this.#told('operators').length) {
+      this.#feed()
+    }
     // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
@@ -5080,53 +5089,74 @@ export class Store extends Durable {
     }
   }
 
-  // The stores to tell of a commit here (`#herald`), as this store keeps them.
-  #borrowers = (): string[] => JSON.parse(this.#get('borrowers') ?? '[]')
+  // Who is told of a commit here (`#herald`), as this store keeps them: the
+  // stores borrowing its words, by name, and the Operators subscribed to it,
+  // by space.
+  #told = (list: Listening): string[] => JSON.parse(this.#get(list) ?? '[]')
 
-  // Which store was heard asking for whom when (a count, not a clock, which
-  // stands still in an object), so a store that answered nobody watches is
-  // forgotten only if it asked nothing since it was told.
+  // Who was heard asking when (a count, not a clock, which stands still in
+  // an object), so one that answered nobody watches is forgotten only if it
+  // asked nothing since it was told.
   #heeded = new Map<string, number>()
   #heeds = 0
 
-  // A store whose pages watch words this app homes asked a read of them:
-  // it is told of the next commit here.
-  #heed(name: string) {
-    this.#heeded.set(name, ++this.#heeds)
-    let held = this.#borrowers()
-    if (!held.includes(name)) {
-      this.#put('borrowers', JSON.stringify([...held, name].sort()))
+  // A store whose pages watch words this app homes asked a read of them, or
+  // an Operator whose subscription watches this app read it: it is told of
+  // the next commit here.
+  #heed(list: Listening, id: string) {
+    this.#heeded.set(`${list} ${id}`, ++this.#heeds)
+    let held = this.#told(list)
+    if (!held.includes(id)) {
+      this.#put(list, JSON.stringify([...held, id].sort()))
     }
     this.#feed()
   }
 
-  // A commit here, told to each store that borrows from it a beat later, so
-  // a burst of commits is told once and the write that made it never waits
-  // on the telling (running.ts `BEAT`). A store that answers nobody watches
-  // any more, or that is gone, is forgotten (`#heed`).
+  // A commit here, told to each store that borrows from it and each
+  // Operator watching it a beat later, so a burst of commits is told once
+  // and the write that made it never waits on the telling (running.ts
+  // `BEAT`). One that answers nobody watches any more, or that is gone, is
+  // forgotten (`#heed`).
   #heralding = false
   #herald() {
     let ns = this.#bind.STORE
-    if (this.#heralding || !ns || !this.#borrowers().length) return
+    let bind = this.#bind
+    let tells: [Listening, (id: string) => Promise<Response>][] = []
+    if (ns) {
+      tells.push([
+        'borrowers',
+        (name) => storeOf(ns, name)(HEARD, { method: 'POST' }, KERNEL),
+      ])
+    }
+    if (bind.BUILDER) {
+      tells.push([
+        'operators',
+        async (space) =>
+          (await import('./build-door.ts')).heard(bind as Env, space),
+      ])
+    }
+    if (this.#heralding || !tells.some(([l]) => this.#told(l).length)) return
     this.#heralding = true
     let told = new Promise<void>((done) =>
       clockOf(this.#time).after(BEAT, () => {
         this.#heralding = false
-        let names = this.#borrowers()
-        Promise.all(names.map(async (name) => {
-          let asked = this.#heeded.get(name)
-          let r = await storeOf(ns, name)(HEARD, { method: 'POST' }, KERNEL)
-          await r.body?.cancel()
-          return [410, 404].includes(r.status) &&
-              this.#heeded.get(name) == asked
-            ? name
-            : null
-        })).then((gone) => {
-          let left = this.#borrowers().filter((n) => !gone.includes(n))
-          if (left.length < this.#borrowers().length) {
-            this.#put('borrowers', JSON.stringify(left))
+        Promise.all(tells.map(async ([list, tell]) => {
+          let gone = await Promise.all(
+            this.#told(list).map(async (id) => {
+              let asked = this.#heeded.get(`${list} ${id}`)
+              let r = await tell(id)
+              await r.body?.cancel()
+              return [410, 404].includes(r.status) &&
+                  this.#heeded.get(`${list} ${id}`) == asked
+                ? id
+                : null
+            }),
+          )
+          let left = this.#told(list).filter((id) => !gone.includes(id))
+          if (left.length < this.#told(list).length) {
+            this.#put(list, JSON.stringify(left))
           }
-        }).catch((e) =>
+        })).catch((e) =>
           defect(e, { request: 'tell borrowers', store: this.#name() })
         ).finally(done)
       })
@@ -5796,8 +5826,12 @@ export class Store extends Durable {
       return this.#live.accept(request, read, { actor, speaks: read.speaks })
     }
     if (path == '/query') {
-      let heed = request.headers.get(HEED)
-      if (heed && storeKind(this.#get('name') ?? '') == 'app') this.#heed(heed)
+      if (storeKind(this.#get('name') ?? '') == 'app') {
+        let heed = request.headers.get(HEED)
+        if (heed) this.#heed('borrowers', heed)
+        let operator = request.headers.get(HEED_OPERATOR)
+        if (operator) this.#heed('operators', operator)
+      }
       return await this.#asked(request)
     }
     if (path == READS && this.#get('name') == PLATFORM_STORE) {

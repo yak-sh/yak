@@ -5,7 +5,7 @@ import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { HOUR, store, T0, woken } from './testing.ts'
 import { tick } from './tick.ts'
-import { look } from './watch.ts'
+import { look, SOON, stir } from './watch.ts'
 
 let iso = (t: number) => new Date(t).toISOString()
 let g = woken(store())
@@ -62,4 +62,31 @@ test('a host reads what a wake watches its own way', async () => {
     watching: (_, w) => (asked.push(w.query), [{ entity: { eid: 'far' } }]),
   })
   equal([asked, fired.length], [['.elsewhere'], 1])
+})
+
+test('a commit stirs a resting watch to look a beat later, once a burst', async () => {
+  let h = woken(store())
+  await h.apply([
+    {
+      entity: { eid: 'mine' },
+      wake: {},
+      watch: { query: '.plant', local: true },
+    },
+    { entity: { eid: 'far' }, wake: {}, watch: { query: '.plant' } },
+  ])
+  let at = async () =>
+    (await h.get(['mine', 'far'])).map((b) =>
+      (b.wake as { at?: string }).at ?? null
+    )
+  let near = (w: Bundle) => !(w.watch as { local?: boolean } | undefined)?.local
+  let first = await stir(h, T0, { which: near })
+  let again = await stir(h, T0 + 1000, { which: near })
+  equal([first, again, await at()], [
+    T0 + SOON,
+    T0 + SOON,
+    [null, iso(T0 + SOON)],
+  ])
+  // It looks, finds nothing new, and rests again with no `at`.
+  await tick(h, T0 + SOON)
+  equal(await at(), [null, null])
 })

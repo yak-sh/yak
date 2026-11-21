@@ -102,6 +102,12 @@ otherwise: `tick(graph, now, { watching })` reads a wake's query the host's way,
 as yaks.app reads one that is not `local` over everything the wake's person
 reaches.
 
+A watch needs no cadence. Its host hears each commit to what the query reads and
+calls `stir(graph, now, { which })`: each watching wake `which` picks comes due
+`SOON` (two seconds) later unless it is due sooner, so a burst of commits is one
+look. A look that finds nothing new leaves a wake with no `every` resting, with
+no `at`, until the next stir.
+
 ## Running a tool call at each firing
 
 A wake that carries a `call{to, args}` ([@yaks/tools](../tools)) is a schedule

@@ -5,13 +5,20 @@
 // that finds nothing new moves `at` on and fires nothing, so rules matching
 // `*fired` (a knock, a turn of a model) run only for a change.
 //
+// A watch needs no cadence: its host hears each commit to what it reads, and
+// `stir` brings the wake due a beat later (`SOON`), so a burst of commits is
+// one look. Between commits it rests with no `at`.
+//
 // What a row "is" for the comparison is its content in a fixed order, its
 // read-time marks ($was, $actor) left out, so the same row digests the same
 // however it was read. A watch keeps at most ROWS rows, so a broad query
 // watches its first ROWS.
 
-import type { Bundle } from '@yaks/graph'
-import { WATCH, type Watch } from './comp.ts'
+import type { Bundle, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
+import { line } from '@yaks/query'
+import { WAKE, WATCH, type Watch } from './comp.ts'
 
 /** The most rows a watch keeps track of. */
 export let ROWS = 200
@@ -102,4 +109,71 @@ export let look = async (
       ...more > 0 ? [`and ${more} more`] : [],
     ].join('\n'),
   }
+}
+
+/** How long after a commit a stirred wake looks: commits inside it are one
+ * look, and one firing. */
+export let SOON = 2_000
+
+// How many times a wake another writer keeps moving is read before it is
+// left as that writer put it.
+let TRIES = 3
+
+let iso = (t: number) => new Date(t).toISOString()
+
+/**
+ * Something the watching wakes of `graph` read committed: each one `which`
+ * picks comes due `soon` after `now` (unless it is due sooner already), so
+ * the host's next `tick` reads its query again and fires it if its rows
+ * changed. Answers the soonest instant a stirred wake is due, in epoch ms,
+ * or null when `which` picks none.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { stir } from './watch.ts'
+ * import { store, T0, woken } from './testing.ts'
+ *
+ * let g = woken(store())
+ * await g.apply([{ entity: { eid: 'w' }, wake: {}, watch: { query: '.plant' } }])
+ * assertEquals(await stir(g, T0), T0 + 2_000)
+ * ```
+ */
+export let stir = async (
+  graph: Pick<Graph, 'read' | 'apply'>,
+  now: number,
+  opts: { which?: (wake: Bundle) => boolean; soon?: number } = {},
+): Promise<number | null> => {
+  let by = now + (opts.soon ?? SOON)
+  let soonest: number | null = null
+  let watching = await graph.read(
+    '.watch&.wake&.fields=entity.eid,wake.at,watch.local',
+  )
+  for (let wake of watching) {
+    if (opts.which && !opts.which(wake)) continue
+    for (let tries = 1;; tries++) {
+      let at = (wake[WAKE] as { at?: string | null } | undefined)?.at
+      let due = at ? Date.parse(at) : NaN
+      if (due <= by) {
+        soonest = Math.min(soonest ?? due, due)
+        break
+      }
+      try {
+        await graph.apply([{
+          entity: wake.entity,
+          [WAKE]: { at: iso(by) },
+          $was: { [WAKE]: { at: token(at) } },
+        }], { now: iso(now) })
+        soonest = Math.min(soonest ?? by, by)
+        break
+      } catch (error) {
+        if (!(error instanceof Stale) || tries == TRIES) throw error
+      }
+      let [fresh] = await graph.read(
+        line`.entity.eid=${wake.entity.eid}&.fields=entity.eid,wake.at`,
+      )
+      if (!fresh) break
+      wake = fresh
+    }
+  }
+  return soonest
 }

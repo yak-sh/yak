@@ -25,7 +25,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Handoff } from '@yaks/platform/operator-handoff'
-import { WAKE } from './door.ts'
+import { HEARD, WAKE } from './door.ts'
 import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
@@ -205,6 +205,17 @@ export class Builder extends Durable {
       // wake.
       if (this.#asked == 1) this.#resume()
       return new Response(null, { status: 204 })
+    }
+    // An app a subscription watches committed (graph.ts `#herald`): each
+    // subscription over the space looks again a beat later. Nobody watching
+    // the space is said with 410, so the app stops telling.
+    if (url.pathname == HEARD && request.method == 'POST') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let { store } = await this.#stored()
+      let { heard } = await import('./operator-schedules.ts')
+      let at = await heard(store, false)
+      if (at != null) await this.clock.arm(at)
+      return new Response(null, { status: at == null ? 410 : 204 })
     }
     if (url.pathname == '/revive') {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
@@ -774,6 +785,20 @@ export class Builder extends Durable {
           return logosOf(ctxOf(this.#env).graph.read, this.#env, named)
         }
         owing(store.fx, () => this.#work())
+        // A commit here stirs the subscriptions over this store, one stir at
+        // a time: one under way already looks after the commit.
+        let { heard, ownCommits } = await import('./operator-schedules.ts')
+        let stirring = false
+        store.g.use(ownCommits(() => {
+          if (stirring) return
+          stirring = true
+          this.#ctx.waitUntil?.(
+            heard(store, true)
+              .then((at) => at == null ? undefined : this.clock.arm(at))
+              .catch((e) => caught(e, { request: 'operator subscriptions' }))
+              .finally(() => stirring = false),
+          )
+        }))
         // What a person is called, as the Operator asks it (operator.ts
         // `named`).
         let named = (person: string) =>
@@ -993,6 +1018,13 @@ export class Builder extends Durable {
           wakes: async () => {
             let { wakeBackfill } = await import('./wake-move.ts')
             return backfill(wakeBackfill(store))
+          },
+          // Subscriptions kept before they were live, given up their
+          // cadence and read once, so each app they read tells them of its
+          // commits from then on (operator-schedules.ts).
+          subscriptions: async () => {
+            let { uncadenced } = await import('./operator-schedules.ts')
+            return backfill(uncadenced(store))
           },
           // Each ask's instructions kept once per text
           // (instructions-move.ts).

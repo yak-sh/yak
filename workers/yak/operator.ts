@@ -106,6 +106,7 @@ import { adminTools } from './operator-admin.ts'
 import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
+import { HEED_OPERATOR } from './door.ts'
 import { accounted, resultOf } from './meter.ts'
 import { caught, defect, filed } from './defects.ts'
 import { hearing } from './refusals.ts'
@@ -1504,9 +1505,15 @@ export let operating = (
       return await seenBy(store, { person, member: writes(ctx.role) })
         .read(wholeLine(query))
     }
-    return await (await reaching(ctx, await inReach(ctx))).read(
-      wholeLine(query),
-    )
+    // Each app it reads is asked to tell this store of its commits, so the
+    // subscription looks again at once rather than on a clock (graph.ts
+    // `#heed`).
+    let heed = { [HEED_OPERATOR]: space.eid }
+    let reach = (await inReach(ctx)).map((r) => ({
+      ...r,
+      headers: { ...r.headers, ...heed },
+    }))
+    return await (await reaching(ctx, reach)).read(wholeLine(query))
   }
   // What it answers with where the directory names nothing (`current`).
   let choice = operatorChoice(env)

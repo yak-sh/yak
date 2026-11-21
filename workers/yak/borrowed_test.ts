@@ -9,7 +9,7 @@ import type { Frame } from '@yaks/api'
 import type { VocabDoc } from '@yaks/vocab'
 import { installPair, made } from '../../packages/workerd/testing.ts'
 import { call, type Ctx } from './tools.ts'
-import { operators } from './operator-service-probe.ts'
+import { heard as told, operators } from './operator-service-probe.ts'
 import { platform } from './testing.ts'
 import {
   ADA,
@@ -20,7 +20,7 @@ import {
   visit,
 } from './serving-data-probe.ts'
 import { type App, appStore, storeName } from './directory.ts'
-import { ACROSS } from './door.ts'
+import { ACROSS, HEED_OPERATOR } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { homesOf } from './homes.ts'
 import { fetch as serve } from './apps.ts'
@@ -284,4 +284,21 @@ test("a read of a word borrowed from a home made private says it can't be read n
   await access('shelf', 'private')
   let { error, message } = await read()
   equal([error, message], ['Denied', UNLENT])
+})
+
+test('an app tells the Operator whose subscription read it of each commit, until it watches no more', async () => {
+  await appStore(env.STORE, space, shelf, env).consume(
+    '/query?q=.book',
+    (r) => r.json(),
+    {},
+    { ...ADA_OWNS, [HEED_OPERATOR]: space.eid },
+  )
+  await shelved('Middlemarch')
+  await until(() => told.spaces.length == 1)
+  told.status = 410
+  await shelved('Ivanhoe')
+  await until(() => told.spaces.length == 2)
+  await shelved('Rebecca')
+  await new Promise((done) => setTimeout(done, 300))
+  equal(told.spaces, [space.eid, space.eid])
 })

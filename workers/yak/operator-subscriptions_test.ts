@@ -3,7 +3,6 @@ import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item } from '@yaks/model'
-import type { Bundle } from '@yaks/graph'
 import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { stores } from './app-store-probe.ts'
@@ -13,13 +12,17 @@ import { reaching } from './agent.ts'
 import { inReach } from './declared.ts'
 import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
+import { heard, ownCommits, uncadenced } from './operator-schedules.ts'
+import { SOON } from '@yaks/wake'
 import { operatorContext } from './operator.ts'
 
 // A person asks their Operator to tell them when something in the space
 // changes: it subscribes to a query, a wake that watches it (@yaks/wake
-// `watch`), each look that finds the rows changed is one turn in their
-// conversation with what changed, and a look that finds nothing new is no
-// turn at all (T-145073, T-164109).
+// `watch`) with no cadence. A commit it reads stirs it (`heard`), each look
+// that finds the rows changed is one turn in their conversation with what
+// changed, and a look that finds nothing new is no turn at all (T-145073,
+// T-164109, T-2346). That an app tells the Operator of its commits is
+// borrowed_test.ts's.
 let p = platform('operator-subscriptions')
 let { dir, env } = p
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -77,12 +80,6 @@ let script: Record<string, [string, unknown]> = {
     say: 'Note what they said.',
     query: '.operator_request.channel=chat',
     mine: true,
-    every: '1h',
-  }],
-  'Watch every few seconds': ['subscription_set', {
-    say: 'Look.',
-    query: '.meeting',
-    every: '10s',
   }],
   'What am I subscribed to?': ['subscription_list', {}],
   'What wake-ups do I have?': ['wake_list', {}],
@@ -123,12 +120,10 @@ let ask = async (say: string) => {
   await service.drain()
 }
 let fired = () => store.g.read('.operator_request.channel=subscription&*')
-// The store's alarm comes to a subscription when its wake is due.
-let look = async (sub: Bundle) => {
-  await store.g.apply([{
-    entity: sub.entity,
-    wake: { at: new Date().toISOString() },
-  }], { trusted: true })
+// An app told the Operator of a commit (build.ts `HEARD`), a beat ago, so
+// the store's alarm comes to each subscription over the space now.
+let look = async () => {
+  await heard(store, false, Date.now() - SOON)
   await service.drain()
 }
 
@@ -136,32 +131,43 @@ await ask('Tell me about meetings')
 let [sub] = await store.g.read('.watch.query=".meeting&*" &*')
 let first = (sub.watch as { seen: Record<string, string> }).seen
 // Nothing changed since it subscribed: a look is no turn.
-await look(sub)
+await look()
 let quiet = (await fired()).length
 // A meeting arrives and another changes: one turn says both.
 let hearing = await meeting('Budget hearing: Monday at 6')
 await meeting('Road millage: Thursday at 8', road)
-await look(sub)
+await look()
 let [request] = await fired()
 let [told] = await store.g.read(line`.notification.to=${person}&*`)
 // The change is now what it saw, so the next look is quiet again.
-await look(sub)
+await look()
 let after = (await fired()).length
+let [rested] = await store.g.get([sub.entity.eid])
 
 await ask('Watch my chats')
-await ask('Watch every few seconds')
-let refused = results.at(-1)!
+// The store's own commits stir the subscriptions over it, and a write of
+// wakes alone, as a look writes, stirs none.
+let stirs = 0
+store.g.use(ownCommits(() => stirs++))
+let [mine] = await store.g.read('.watch.local=true')
+await store.g.apply([{ entity: sub.entity, wake: { at: null } }], {
+  trusted: true,
+})
+let wakesAlone = stirs
+await receive(store, { space: eid, person, channel: 'chat' }, 'Hi')
+let chatted = stirs
+let stirredAt = await heard(store, true)
+let [stirred] = await store.g.get([mine.entity.eid])
 await ask('What am I subscribed to?')
 let listed = JSON.parse(results.at(-1)!.split('\n')[1])
 await ask('What wake-ups do I have?')
 let wakes = JSON.parse(results.at(-1)!.split('\n')[1])
-let [mine] = await store.g.read('.watch.local=true')
 await ask(`Cancel ${short(mine.entity.eid)}`)
 let gone = await store.g.get([mine.entity.eid])
 
 test('subscription_set reads the query as the person, and what it answers now is no change', () => {
   assertEquals(Object.keys(first), [road])
-  assertEquals((sub.wake as { every: string }).every, '1m')
+  assertEquals((sub.wake as { every?: string }).every, undefined)
   let { for: by, note } = sub.wake as { for: string; note: string }
   assertEquals([by, note], [person, 'Tell them which meetings changed.'])
   assertEquals(quiet, 0)
@@ -181,6 +187,32 @@ test("a change in the query's rows is one turn with what changed, which tells th
     'The budget hearing is new.',
   )
   assertEquals(after, 1)
+  assertEquals((rested.wake as { at?: string }).at ?? null, null)
+})
+
+test("a commit in the Operator's own store stirs its subscriptions over it, a look's own write none", () => {
+  assertEquals([wakesAlone, chatted > 0], [0, true])
+  assertEquals(
+    (stirred.wake as { at: string }).at,
+    new Date(stirredAt!).toISOString(),
+  )
+})
+
+test('a subscription kept on a cadence is taken off it and looks now', async () => {
+  let entity = { eid: crypto.randomUUID() }
+  let later = new Date(Date.now() + 3_600_000).toISOString()
+  await store.g.apply([{
+    entity,
+    wake: { for: person, at: later, every: '1m' },
+    watch: { query: '.meeting' },
+  }], { trusted: true })
+  assertEquals(await uncadenced(store), false)
+  let [moved] = await store.g.get([entity.eid])
+  let wake = moved.wake as { every?: string; at: string }
+  assertEquals([wake.every ?? null, Date.parse(wake.at) <= Date.now()], [
+    null,
+    true,
+  ])
 })
 
 test("a subscription's turn holds its reads and the person's own alerts, never a door that takes the rows past them", () => {
@@ -210,10 +242,8 @@ test("a subscription's turn holds its reads and the person's own alerts, never a
 })
 
 test('subscription_list shows each subscription, wake_list leaves them out, and subscription_cancel ends one', () => {
-  assertStringIncludes(refused, 'a minute apart')
   assertEquals(listed.length, 2)
   let chats = listed.find((s: { mine?: boolean }) => s.mine)
-  assertEquals(chats.every, '1h')
   assertEquals(chats.query, '.operator_request.channel=chat')
   assertEquals(chats.rows > 0, true)
   assertEquals(wakes, [])
