@@ -619,7 +619,7 @@ export let chatHeard = async (
   await g.apply([await named(env, g, room, connection), author], {
     trusted: true,
   })
-  let at = { via, connection, speakers: speakersOf(env, space) }
+  let at = { via, connection, speakers: speakersOf(env, space), person }
   // Words said to it open with the room's basics, an entry of their own,
   // then the chain they reply to and what was said since its last answer.
   let leads: Lead[] = []

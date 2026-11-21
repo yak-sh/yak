@@ -419,18 +419,36 @@ let HOW: Record<Addressed | 'heard', string> = {
  * oldest first: when and who said it, the message's id and the one it replies
  * to (as {@link framing} says them), the bot's own (`mine`, by the
  * platform's ids) as said by `you`, and anyone else as `names` calls their
- * account, by its id on the platform, else by the name they show.
+ * account, by its id on the platform, else by the name they show. A message
+ * `marks` names (by the platform's id) says it after its speaker, such as
+ * the conversation it belongs to.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { recounted } from '@yaks/chat'
+ * let at = '2026-11-21T18:03:00Z', author = { id: '7', name: 'Matt' }
+ * equal(
+ *   recounted(
+ *     [{ id: '1', room: 'r', author, text: 'hi', at }],
+ *     new Set(),
+ *     new Map(),
+ *     new Map([['1', "Matt's thread"]]),
+ *   ),
+ *   "[2026-11-21 18:03] (message 1) Matt [Matt's thread]: hi",
+ * )
+ * ```
  */
 export let recounted = (
   said: Said[],
   mine: Set<string> = new Set(),
   names: Map<string, string> = new Map(),
+  marks: Map<string, string> = new Map(),
 ): string =>
   said.map((s) =>
     `[${s.at.slice(0, 16).replace('T', ' ')}] (${
       named({ message: s.id, reply_to: s.reply_to })
-    }) ${
-      mine.has(s.id) ? 'you' : names.get(s.author.id) ?? s.author.name
+    }) ${mine.has(s.id) ? 'you' : names.get(s.author.id) ?? s.author.name}${
+      marks.has(s.id) ? ` [${marks.get(s.id)}]` : ''
     }: ${s.text}`
   ).join('\n')
 

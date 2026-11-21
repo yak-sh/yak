@@ -2,7 +2,12 @@
 // A space's Operator's object (build.ts), on the stand-in: its doors, its
 // wake and its wipe, and the old builder door that forwards a line into the
 // person's conversation.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import * as apps from './apps.ts'
 import { Builder } from './build.ts'
 import { builderOf, type Held, NOBODY, OWED, seated } from './build-door.ts'
@@ -693,7 +698,13 @@ let PLACE: Record<string, unknown> = {
 }
 let roomed = async (
   o: Awaited<ReturnType<typeof seeded>>,
-  room: { id: string; name: string; content: string; reply_to?: string }[],
+  room: {
+    id: string
+    name: string
+    content: string
+    reply_to?: string
+    at?: string
+  }[],
 ) => {
   let connection = crypto.randomUUID()
   await meta(o.env).apply([
@@ -710,13 +721,13 @@ let roomed = async (
   ], KERNEL)
   let store = await operatorStore(o.ctx.storage)
   let messages = () =>
-    room.map(({ id, name, content, reply_to }) => ({
+    room.map(({ id, name, content, reply_to, at }) => ({
       id,
       ...reply_to ? { message_reference: { message_id: reply_to } } : {},
       channel_id: BARN,
       author: { id: name, username: name },
       content,
-      timestamp: `2026-11-20T05:3${id}:00.000Z`,
+      timestamp: at ?? `2026-11-20T05:3${id}:00.000Z`,
     }))
   let asked: string[] = []
   let was = globalThis.fetch
@@ -857,6 +868,71 @@ test('named in a room, the Operator reads what was said there since its last ans
       .sort(),
     ['10', '7', '9'],
   )
+})
+
+// Two people talk with one Operator in a room, each in their own thread
+// (T-2356): Matt's thread promised to tell him when the explainer's owner
+// changes, and Ada's turn, asked to change it, is told so, both in its line
+// of other threads and in the room's messages, each marked with its thread.
+test("a turn in a room knows the room's other threads and what they promised", async () => {
+  let o = await seeded([
+    {
+      calls: [{
+        name: 'subscription_set',
+        arguments: {
+          query: '.task',
+          mine: true,
+          say: "Tell Matt when the explainer's owner changes.",
+        },
+      }],
+    },
+    { text: "I'll tell you when its owner changes." },
+    { text: 'Done.' },
+    { text: 'Hello.' },
+  ], VAULTED)
+  let MATT = 'a0000000-0000-4000-8000-00000000a77e'
+  await dirOf(o.env).apply({
+    entities: [
+      { entity: { eid: MATT }, person: {} },
+      {
+        entity: { eid: '$seat' },
+        member: { space: o.space.eid, person: MATT, role: 'editor' },
+      },
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  let ask = "tell me when the explainer's owner changes"
+  let now = new Date().toISOString()
+  let r = await roomed(o, [{ id: '1', name: 'Matt', content: ask, at: now }])
+  try {
+    await r.says('1', ask, MATT, undefined, {
+      author: { id: 'Matt', name: 'Matt' },
+      at: now,
+    })
+    await r.says('2', 'make Bo the owner of the explainer', ADA, undefined, {
+      author: { id: 'Ada', name: 'Ada' },
+      at: now,
+    })
+    await r.says('3', 'hello?', undefined, undefined, {
+      author: { id: 'Kit', name: 'Kit' },
+      at: now,
+    })
+  } finally {
+    r.restore()
+  }
+  let [, , ada, kit] = r.model()
+  assertStringIncludes(
+    ada,
+    `- Matt's thread: last said ${
+      now.slice(0, 16).replace('T', ' ')
+    } “tell me when the explainer's owner changes”; you answered “I'll tell you when its owner changes.”; open: subscribed: Tell Matt when the explainer's owner changes.`,
+  )
+  assertMatch(ada, /\(message 1\) Matt \([^)]*\) \[Matt's thread\]: tell me/)
+  // Matt's own turn came before Ada said anything: it has no other thread.
+  assert(!r.model()[0].includes("'s thread"))
+  // A stranger is told what was said in the room, never what Matt's thread
+  // set for him.
+  assertMatch(kit, /- Matt's thread: .*; you answered “I'll tell you/)
+  assert(!kit.includes('open: subscribed'))
 })
 
 // An edit is taken only where it is said to the Operator, and a message is

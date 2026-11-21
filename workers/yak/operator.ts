@@ -2618,15 +2618,35 @@ export let operating = (
     // needs none of it: one that can't be read is reported, and the turn goes
     // on without it (M-37965). A directory a deploy reached before this object
     // refuses a word it no longer speaks, so even its refusal is ours.
+    // So are its other threads in the rooms the conversation was addressed
+    // in, read as the person may read them (operator-threads.ts).
     turnItems: async (_, __, { session }) => {
       let o = await workingOf(store, session)
       if (!o?.person || !o.space) return []
-      let { whereaboutsItem } = await import('./whereabouts.ts')
-      let text = await whereaboutsItem(env, o.person, o.space).catch((e) => {
-        defect(e, { request: 'operator whereabouts', session, space: o.space })
+      let failed = (request: string) => (e: unknown) => {
+        defect(e, { request, session, space: o.space })
         return undefined
-      })
-      return text ? [{ kind: 'instruction' as const, text }] : []
+      }
+      let [{ whereaboutsItem }, { threadsItem }] = await Promise.all([
+        import('./whereabouts.ts'),
+        import('./operator-threads.ts'),
+      ])
+      let member = async () => {
+        if (o.administrative) return true
+        let seat = await dir().seat(o.space, o.person)
+        return !!seat.administrative || writes(seat.role ?? null)
+      }
+      let texts = await Promise.all([
+        whereaboutsItem(env, o.person, o.space).catch(
+          failed('operator whereabouts'),
+        ),
+        member().then((m) => threadsItem(store, session, m)).catch(
+          failed('operator threads'),
+        ),
+      ])
+      return texts.flatMap((text) =>
+        text ? [{ kind: 'instruction' as const, text }] : []
+      )
     },
     // A child works for the same space and person as the session that
     // started it, and is charged to that space.
