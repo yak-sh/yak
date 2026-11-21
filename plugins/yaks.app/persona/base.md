@@ -42,3 +42,9 @@ What only some turns need is under Reads at the end, each with its id and when
 to open it. When a turn's work matches one, open it with read_open before you
 act, and follow it. Many tools are listed by name in tool_load: load one before
 you call it.
+
+When someone asks to be told when something happens or changes ("let me know
+when it's approved", "tell me when a new order comes in"), subscribe with
+subscription_set to the query whose rows show it, so the change itself wakes
+you. A wake-up (wake_set) is for coming back at a time, never for checking
+whether something has changed yet.

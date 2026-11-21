@@ -99,7 +99,7 @@ let shownWatch = (b: Bundle) => {
 export let wakeTools = (store: Store): Tool[] => [
   {
     name: 'wake_set',
-    title: 'Set a wake-up',
+    title: 'Come back at a time, once or on a cadence',
     step: { doing: 'Setting a wake-up…', done: 'Set a wake-up' },
     description:
       'Come back later, once or on a cadence, with the current permissions of the person you work for. Give say to wake your conversation; give tool and args to schedule the same tool call you would make now, without a model turn (for a script: tool code_mode, args {script: code}). Give helper for a fresh helper each run, after the call if supplied, with its outcome included for checking; its report stays with the run, and it tells them with notification_send only when they should hear. You may also give say after a tool call. Each run and its outcome is kept; failures reach your conversation and the tracker. Give at, every, or both. Model work spends from the space’s budget.',
@@ -231,7 +231,7 @@ export let subscriptionTools = (
 ): Tool[] => [
   {
     name: 'subscription_set',
-    title: 'Subscribe to a query',
+    title: 'Be told when something changes: watch a query',
     step: { doing: 'Subscribing…', done: 'Subscribed' },
     description:
       `Be woken when something changes for the person you work for: a query you watch, read again every so often, and each time its rows change (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). It looks again on every and costs nothing while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
