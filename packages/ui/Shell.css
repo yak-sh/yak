@@ -208,8 +208,7 @@
    target, over the page from the right with the page shaded behind it;
    a shut one opened so stands the same. */
 .Shell_Aside {
-  --aside-width: var(--aside, 20rem);
-  flex: 0 0 var(--aside-width);
+  flex: 0 0 var(--shell-aside, 20rem);
   display: flex;
   flex-direction: column;
   min-width: 0;
