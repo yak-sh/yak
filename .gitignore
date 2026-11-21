@@ -107,3 +107,10 @@ node_modules
 /workers/yak/public/data.js
 /workers/yak/public/chart.js
 .claude/agents/
+
+# The modules the kernel Worker imports that workers/yak/gen.ts writes from
+# their sources wherever the Worker is built or tested (bin/workspace-dependencies).
+/workers/yak/content.ts
+/workers/yak/load.ts
+/workers/yak/operator-load.ts
+/workers/yak/worker-facets.ts

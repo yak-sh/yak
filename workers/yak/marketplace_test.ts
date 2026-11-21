@@ -5,8 +5,9 @@
 // yak-sh/yak`, or a workspace importing the same repository — with no
 // submission portal in the way.
 //
-// `deno task content --check` already refuses a stale package. What it cannot
-// see is whether the package is coherent, and three facts hold it together:
+// gen.ts draws the package's skills and assets from the guide, and the
+// pre-commit hook stages them with the change they follow from. Whether the
+// package is coherent is another matter, and three facts hold it together:
 //
 //   - the plugin's name, its folder name and the marketplace entry's name are
 //     one name. Codex resolves a local `source.path` against the repo root

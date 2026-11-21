@@ -14,4 +14,20 @@ git diff --cached --name-only --diff-filter=ACMR -z |
     deno fmt --config deno.json --quiet -- "$file" 2>/dev/null &&
       git add -- "$file"
   done
+
+# Then draw what yaks.app's readers take from git (workers/yak/gen.ts): the
+# home app's pages, the plugin package and the reserved words on the
+# components page, from the tree as the commit leaves it. Each file it
+# rewrote is staged, so a commit carries them with the change they follow
+# from. Like the formatting above, a file with unstaged changes is left
+# alone, and a generator that fails refuses nothing.
+
+dirty=$(git diff --name-only)
+deno run -q --allow-read --allow-write --allow-env --allow-run=deno \
+  workers/yak/gen.ts 2>/dev/null |
+  while IFS= read -r path
+  do
+    printf '%s\n' "$dirty" | grep -qxF -- "$path" && continue
+    git add -A -- "$path"
+  done
 exit 0

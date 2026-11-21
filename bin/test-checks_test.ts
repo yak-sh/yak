@@ -1,7 +1,5 @@
 import { equal, test } from '@yaks/testing'
-import type { Survey } from '@yaks/testing/deps'
-import { type Check, check, checks, format, kept } from './test-checks.ts'
-import { OBSERVED } from './test-observe.ts'
+import { type Check, check, checks, format } from './test-checks.ts'
 import config from '../deno.json' with { type: 'json' }
 import { formatting } from '@yaks/git/land'
 
@@ -36,26 +34,6 @@ test('source checks format, lint and byte-check the change', () => {
     },
   ])
   equal(checks([]), [])
-})
-
-test("a change to a source of the Worker's generated content checks it is fresh", () => {
-  let content = (path: string) =>
-    checks([path]).some((c) => c.name == 'content')
-  equal(
-    [
-      'workers/yak/prompts/make.md',
-      'workers/yak/public/docs/a.md',
-      'workers/yak/tools.yml',
-      'workers/yak/content.ts',
-      'plugins/yaks.app/skills/a/SKILL.md',
-      'packages/a/deno.json',
-      'packages/a/package.json',
-      'packages/a/vocab.json',
-      'deno.json',
-    ].map(content),
-    Array(9).fill(true),
-  )
-  equal(['packages/a/a.ts', 'plugins/other/a.md'].map(content), [false, false])
 })
 
 test('a change dry-runs the publish of each package it is in', () => {
@@ -125,24 +103,4 @@ test('source type preparation receives the outputs readiness completed', async (
     ready,
   )
   equal(received, ready)
-})
-
-test('a kept check runs again only once what it read or loaded holds something else', async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'test-kept-' })
-  let stores = { passes: `${dir}/passed.log`, reads: `${dir}/reads.json` }
-  let held: Record<string, string> = { 'a.md': '1', 'b.md': '1' }
-  let s = { bytes: (p: string) => Promise.resolve(held[p] ?? p) } as Survey
-  let ran = 0
-  let gen = checks(['workers/yak/a.ts']).find((c) => c.name == 'content')!
-  let run = async (c: Check) => {
-    ran++
-    await Deno.writeTextFile(c.env![OBSERVED], JSON.stringify(['a.md']))
-    return true
-  }
-  let again = () => kept(gen, run, Promise.resolve(s), stores)
-  for (let change of [{}, {}, { 'b.md': '2' }, { 'a.md': '2' }, {}]) {
-    Object.assign(held, change)
-    equal(await again(), true)
-  }
-  equal(ran, 2)
 })

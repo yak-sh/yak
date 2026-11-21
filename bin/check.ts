@@ -54,7 +54,7 @@ export let cut = (text: string, task: string, head = 20, tail = 40) => {
 let took = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 
 /// closing([], 9, 52500) -> 'ok | 9 passed | 0 failed (52.5s)'
-/// closing(['check:content'], 9, 3100) -> 'FAILED | 8 passed | 1 failed: check:content (3.1s)'
+/// closing(['check:lint'], 9, 3100) -> 'FAILED | 8 passed | 1 failed: check:lint (3.1s)'
 /** The run's last line, as the test runner closes its own. */
 export let closing = (failed: string[], total: number, ms: number) =>
   `${failed.length ? 'FAILED' : 'ok'} | ${total - failed.length} passed | ${

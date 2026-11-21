@@ -128,16 +128,16 @@ instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
-| setting                 | value                                                                                                                                                                                                                                                                                                |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                                                                                                                                                 |
-| Production branch       | `main`                                                                                                                                                                                                                                                                                               |
-| Root directory          | `workers/yak`                                                                                                                                                                                                                                                                                        |
-| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                                                                                                                                                          |
-| Build command           | `../../bin/build-yak install`                                                                                                                                                                                                                                                                        |
-| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                                                                                                                                                         |
-| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `apps/home/copy.json`, `deno.json`, `deno.lock`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `bin/build-yak`, `bin/build-tools`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
-| Non-production branches | build only; previews off for now (below)                                                                                                                                                                                                                                                             |
+| setting                 | value                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                                                                                                                                                                                      |
+| Production branch       | `main`                                                                                                                                                                                                                                                                                                                                    |
+| Root directory          | `workers/yak`                                                                                                                                                                                                                                                                                                                             |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                                                                                                                                                                                               |
+| Build command           | `../../bin/build-yak install`                                                                                                                                                                                                                                                                                                             |
+| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                                                                                                                                                                                              |
+| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `apps/home/copy.json`, `plugins/yaks.app/persona/**`, `deno.json`, `deno.lock`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `bin/build-yak`, `bin/build-tools`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (@yaks/admin/watched `WATCHED`) |
+| Non-production branches | build only; previews off for now (below)                                                                                                                                                                                                                                                                                                  |
 
 Worker Previews give a branch its own URL, and since Cloudflare's 2026-09-22
 launch each preview gets its own Durable Object namespace
@@ -975,14 +975,17 @@ Worker's host hooks, commands and effect registrations in `anatomy.ts`.
 `config.ts` `worker.stores` selects the directory, app and git stores' plugins,
 facets and words, one config for each kind the Store object serves. `gen.ts`
 writes `load.ts` from those configs and package exports, using literal imports
-for bundled graph, effects and tool facets. The connector lists the configured
-package tools with `space` and, for app stores, `app`; `package-tools.ts`
-forwards their calls to the selected Store's `/call` ledger and runner as the
-caller. Published names whose contracts differ remain translations in
-`published.ts`; their package contracts use a `store_` prefix. The shared
-directory selects the space-bound memory save/recall loop, with space supplied
-by its host, and connections validate the selected owner and app. The Worker's
-own store facets live under `facets/`.
+for bundled graph, effects and tool facets. `load.ts`, `operator-load.ts`,
+`worker-facets.ts` and `content.ts` (the guide rows, prompts, tool words and the
+Operator's base persona) are never committed: bin/workspace-dependencies writes
+them wherever the Worker is checked out, built, type-checked or tested. The
+connector lists the configured package tools with `space` and, for app stores,
+`app`; `package-tools.ts` forwards their calls to the selected Store's `/call`
+ledger and runner as the caller. Published names whose contracts differ remain
+translations in `published.ts`; their package contracts use a `store_` prefix.
+The shared directory selects the space-bound memory save/recall loop, with space
+supplied by its host, and connections validate the selected owner and app. The
+Worker's own store facets live under `facets/`.
 
 `mcp_connect` configures a person's remote MCP server in a space, in the
 directory as

@@ -579,9 +579,10 @@ supplies the connector's title, brief and description. A title is the subject's
 standard technical name (Frontend Data, Backend Code, Performance), and the page
 is explicit, technical reference (`writing-documentation`). Link each offered
 page from `workers/yak/public/docs.md` and add its slug to `PAGES` in
-`workers/yak/guide.ts`. After editing a page, run `deno task content` to
-regenerate `workers/yak/content.ts` and the connector skills under
-`plugins/yaks.app/`; don't edit those projections by hand. Examples and claims
+`workers/yak/guide.ts`. The pre-commit hook redraws the connector skills under
+`plugins/yaks.app/` from the page and stages them, and `workers/yak/content.ts`
+is written wherever the Worker is built or tested (`gen.ts`); don't edit those
+projections by hand. Examples and claims
 must be checked against the implementing packages and working apps, not just
 against other prose.
 

@@ -27,7 +27,6 @@
         "!**/.env*"
       ]
     },
-    "check:content": "deno task content --check",
     "content": "deno run --allow-read --allow-write --allow-env --allow-run=deno workers/yak/gen.ts",
     "dev": "deno run -A --unstable-no-legacy-abort --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
     "dev:yak": "deno run --allow-read --allow-write --allow-sys=uid --allow-run=deno,node,pnpm,pgrep,kill,env workers/yak/wrangler.ts dev --var LOCAL_DEV:1",
@@ -51,7 +50,6 @@
         "check:bytes",
         "check:types",
         "check:raycast",
-        "check:content",
         "check:publish"
       ]
     },

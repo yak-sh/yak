@@ -8,6 +8,8 @@ export let WATCHED = [
   'src',
   // The site's words, which the Worker bundles (workers/yak/site/copy.ts).
   'apps/home/copy.json',
+  // The Operator's base persona, which the Worker bundles (content.ts).
+  'plugins/yaks.app/persona',
   'deno.json',
   'deno.lock',
   'package.json',

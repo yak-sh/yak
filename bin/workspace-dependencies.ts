@@ -4,6 +4,11 @@
 // time it takes to read the two: `deno task test` and the type checks ask
 // first, since Deno settles where a workspace package resolves as it starts,
 // and in a checkout with none of its own that is the checkout around it.
+//
+// Then the modules the kernel Worker imports are written from their sources
+// (workers/yak/gen.ts `--modules`): they are never committed, so every place
+// that checks out, builds, type-checks or tests the Worker comes through here
+// first, and an edit to their sources reaches them on that next step.
 import { fileURLToPath } from 'node:url'
 import { current, differs, wanted } from '../packages/cli/lockfile.ts'
 let root = new URL('../', import.meta.url)
@@ -80,4 +85,23 @@ if (!agreed) {
   } finally {
     await Deno.remove(config)
   }
+}
+if (import.meta.main && !Deno.exitCode) {
+  let { code } = await new Deno.Command(Deno.execPath(), {
+    args: [
+      'run',
+      '-q',
+      '--allow-read',
+      '--allow-write',
+      '--allow-env',
+      '--config',
+      fileURLToPath(new URL('deno.json', root)),
+      fileURLToPath(new URL('workers/yak/gen.ts', root)),
+      '--modules',
+    ],
+    stdin: 'null',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).spawn().status
+  Deno.exitCode = code
 }

@@ -1,34 +1,36 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=deno
-// The Worker's words, out of the files they are written in and into the one
-// module it imports (T-34606, M-34605): `content.ts`, which nobody edits.
+// The Worker's words and wiring, out of the files they are written in and into
+// what reads them (T-34606, M-34605).
 //
-//   deno task content            rewrite content.ts
-//   deno task content --check    fail (exit 1) if it is stale
+//   deno task content          write everything below
+//   gen.ts --modules           write only the modules the Worker imports
 //
-// Why A step at all. A Worker has no filesystem: a page, a prompt and a tool's
+// Why a step at all. A Worker has no filesystem: a page, a prompt and a tool's
 // description have to be in the bundle by the time the isolate starts, and the
 // roster is assembled at module load. So the files are read here, where there
-// is a Deno, and what the runtime sees is a projection of them — the same deal
-// src/vocab/gen.ts makes with the fleet's vocabulary, and the reason
-// `deno task check` refuses a stale one.
+// is a Deno, and what the runtime sees is a projection of them.
 //
-// The guide pages are the exception that proves it: their bytes already ship,
-// under public/, and are served at the address the guide tool reads them back
-// from. What is projected here is only the row — the slug, title, description
-// and brief the connector lists a page by — which is what guide.ts held as a
-// literal until the page itself could say it.
+// Two kinds of output, by who reads them.
 //
-// The same step also fills the PLUGIN package (T-34666) — `plugins/yaks.app/`,
-// which `.agents/plugins/marketplace.json` offers — because a plugin is a
-// directory of files on somebody else's disk: the guide has to travel as bytes
-// there too, one skill per page, and the icon with it. Same deal, same refusal.
-// It also projects the Worker's store configs (config.ts `worker.stores`), the kernel's own and the
-// packages' exports into load.ts:
-// literal facet imports that esbuild can bundle without runtime discovery,
-// and every package's `./vocab`, which an app may name as a dependency. And it
-// prints the reserved words (vocab.ts `reserved`) into the components page,
-// which a manifest is refused against, and draws yaks.app's own pages into
-// the home app's directory (site/mod.ts).
+// 1. The modules the Worker imports are made, never kept: content.ts (the
+//    words), load.ts and operator-load.ts (the stores' facets, as literal
+//    imports esbuild can bundle) and worker-facets.ts (the Worker's own).
+//    They are gitignored, and bin/workspace-dependencies writes them
+//    (`--modules`) wherever the Worker is checked out, built, type-checked or
+//    tested: the checkout hooks, `deno task test`, `deno task check:types`, CI
+//    and Workers Builds. An edit to a page, a prompt, tools.yml, a persona
+//    file or a manifest reaches them on the next build, and nothing can be
+//    stale.
+// 2. What a reader takes from git is committed: the home app's pages, released
+//    at a commit (packages/admin service.ts `RELEASED`, site/mod.ts); the
+//    plugin package `.agents/plugins/marketplace.json` offers; and the
+//    reserved words printed into public/docs/components.md. The pre-commit
+//    hook (.githooks/pre-commit) runs this whole and stages them, so they go
+//    with the commit that changed what they are drawn from.
+//
+// The guide pages' bytes already ship, under public/, and are served at the
+// address the guide tool reads them back from. What is projected is only the
+// row: the slug, title, description and brief the connector lists a page by.
 import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 import { command as spawnCommand } from '@yaks/process/command'
@@ -215,9 +217,8 @@ let persona = () => {
 let HEAD = `// Generated — do not edit. The words live in the files:
 // public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's),
 // tools.yml (what each tool says about itself), and the Operator's base
-// persona in plugins/yaks.app/persona/*.md. Change one of those and run
-// \`deno task content\`; \`deno task content --check\` refuses this file when it
-// has fallen behind (gen.ts, T-34606).
+// persona in plugins/yaks.app/persona/*.md. gen.ts writes this file wherever
+// the Worker is built or tested; it is never committed.
 //
 // A Worker has no filesystem, so this is how words written in files reach an
 // isolate: as a module it imports like any other. The types are the
@@ -248,11 +249,11 @@ let body = () =>
     }\n`,
   ].join('\n')
 
-// The emitted text as it will be committed — deno fmt is the last word on it,
-// so the stale check compares like with like. It formats through stdin from
-// inside the project, where it resolves this repo's config, and so never
-// writes a file into the tree another check may be reading.
-let formatted = async (text: string, ext = 'ts') => {
+// A committed page as deno fmt would leave it, so a regeneration that changed
+// nothing writes nothing. It formats through stdin from inside the project,
+// where it resolves this repo's config, and so never writes a file into the
+// tree another process may be reading.
+let formatted = async (text: string, ext: string) => {
   let child = spawnCommand('deno', {
     args: ['fmt', '-q', `--ext=${ext}`, '-'],
     cwd: HERE,
@@ -289,7 +290,7 @@ let bytes = new TextEncoder()
 
 // The skills as they will be committed. deno fmt formats markdown and its
 // frontmatter, and this repo's config is the last word on a quote, so the
-// stale check has to compare what fmt would leave behind rather than what this
+// package is compared with what fmt would leave behind rather than what this
 // file happened to emit. One subprocess for the whole tree; the temp directory
 // lives inside the project, where the fmt subprocess resolves this repo's
 // config.
@@ -338,8 +339,8 @@ let packaged = async (): Promise<Record<string, Uint8Array>> => {
   return out
 }
 
-// Every file under a directory, by path relative to it — absent is empty, so
-// a package that was never generated reads as one that is stale.
+// Every file under a directory, by path relative to it: absent is empty, so
+// a package that was never generated reads as one that has changed.
 let under = (dir: URL, at = ''): string[] => {
   let held: io.DirEntry[] = []
   try {
@@ -357,7 +358,7 @@ let under = (dir: URL, at = ''): string[] => {
 let same = (a: Uint8Array, b: Uint8Array) =>
   a.length == b.length && a.every((x, i) => x == b[i])
 
-// The package is a directory, so the stale check is the whole tree: a guide
+// The package is a directory, so the comparison is the whole tree: a guide
 // page that went away has to take its skill with it, and a set that still
 // matches path for path can still differ byte for byte.
 let stale = (files: Record<string, Uint8Array>) => {
@@ -387,6 +388,22 @@ let pack = (files: Record<string, Uint8Array>) => {
   }
 }
 
+/** Write `text` to `at` unless it already holds it, so a build that changed
+ * nothing leaves every file, and its time, as it was. Answers whether it
+ * wrote. */
+let put = async (at: URL, text: string) => {
+  if (await io.readTextFile(at).catch(() => undefined) == text) return false
+  await io.writeTextFile(at, text)
+  return true
+}
+
+/** A committed file this run rewrote, printed by its path in the repository
+ * for the pre-commit hook to stage. */
+let rewrote = (at: URL) =>
+  console.log(fileURLToPath(at).slice(fileURLToPath(root).length))
+
+// ---- the modules the Worker imports ---------------------------------------
+//
 // Workspace manifests are the export authority. Reading them here keeps the
 // runtime free of filesystem discovery and every generated import literal.
 let root = new URL('../../', HERE)
@@ -406,7 +423,8 @@ manifests.push(
     ),
   })),
 )
-let loaded = await formatted(
+await put(
+  LOAD,
   loader(
     [
       ...new Set([
@@ -446,10 +464,9 @@ let loaded = await formatted(
 )
 // The Operator's store loads only its own config's facets (operator-store.ts),
 // not load.ts's every vocabulary: a chat page's first visit wakes it.
-let operated = await formatted(
-  loader(imports([operatorConfig], manifests), local),
-)
-let composed = await formatted(
+await put(OPERATED, loader(imports([operatorConfig], manifests), local))
+await put(
+  WORKER,
   written(
     worker,
     Object.fromEntries(
@@ -459,103 +476,57 @@ let composed = await formatted(
     ),
   ),
 )
-let checking = system.args.includes('--check')
-for (
-  let [at, text] of [
-    [LOAD, loaded],
-    [OPERATED, operated],
-    [WORKER, composed],
-  ] as const
-) {
-  if (!checking) await io.writeTextFile(at, text)
-  else if (await io.readTextFile(at).catch(() => '') != text) {
-    refuse(
-      `workers/yak/${
-        at.pathname.split('/').pop()
-      } is stale — run \`deno task content\` and commit it`,
-    )
-  }
-}
-
-// ---- the home app's pages ------------------------------------------------
-//
-// yaks.app's own pages are the files of the home app (site/mod.ts), drawn from
-// site/*.tsx and kept in apps/home beside its copy.json, which `yak admin
-// push` releases. Formatted as committed, as content.ts is.
-let site = await import('./site/mod.ts')
-let homePages = await Promise.all(
-  Object.entries(site.drawn()).map(async ([name, text]) =>
-    [new URL(name, site.HOME), await formatted(text, 'html')] as const
-  ),
-)
-let stalePages: string[] = []
-for (let [at, text] of homePages) {
-  if (!checking) await io.writeTextFile(at, text)
-  else if (await io.readTextFile(at).catch(() => '') != text) {
-    stalePages.push(at.pathname.split('/').pop()!)
-  }
-}
-if (stalePages.length) {
-  refuse(
-    `apps/home/${
-      stalePages.join(', ')
-    } stale — run \`deno task content\` and commit it`,
-  )
-}
-
-// ---- the reserved words ---------------------------------------------------
-//
-// The components page prints every word a manifest may not declare, under
-// RESERVED. The list is the code's (vocab.ts `reserved`), read once load.ts
-// is current, since it names the vocab facets reserved() reads.
-let RESERVED = 'The complete list of reserved names:\n\n'
-let COMPONENTS = new URL('public/docs/components.md', HERE)
-
-/** The words, four spaces in, wrapped to `width`. */
-let listed = (words: string[], width = 76) =>
-  words.reduce((lines, w) => {
-    let last = lines.at(-1)
-    if (last && last.length + 1 + w.length <= width) {
-      lines[lines.length - 1] = `${last} ${w}`
-    } else lines.push(`    ${w}`)
-    return lines
-  }, [] as string[]).map((l) => `${l}\n`).join('')
-
-/** The page with its indented block under RESERVED replaced by `words`. */
-let reserving = (page: string, words: string[]) => {
-  let at = page.indexOf(RESERVED)
-  if (at < 0) return refuse(`public/docs/components.md has no "${RESERVED}"`)
-  let from = at + RESERVED.length
-  let block = page.slice(from).match(/^(?: {4}.*\n)*/)![0]
-  return page.slice(0, from) + listed(words) + page.slice(from + block.length)
-}
-
-let { reserved } = await import('./vocab.ts')
-let page = io.readTextFileSync(COMPONENTS)
-let printed = reserving(page, reserved())
-if (checking && printed != page) {
-  refuse(
-    'workers/yak/public/docs/components.md is stale — run `deno task content` and commit it',
-  )
-}
-if (!checking) io.writeTextFileSync(COMPONENTS, printed)
 GUIDES = guides()
+await put(TARGET, body())
 
-let fresh = await formatted(body())
-let files = await packaged()
-if (checking) {
-  let held = await io.readTextFile(TARGET).catch(() => '')
-  if (held != fresh) {
-    refuse(
-      'workers/yak/content.ts is stale — run `deno task content` and commit it',
-    )
+if (!system.args.includes('--modules')) {
+  // ---- the home app's pages ----------------------------------------------
+  //
+  // yaks.app's own pages are the files of the home app (site/mod.ts), drawn
+  // from site/*.tsx and kept in apps/home beside its copy.json, which
+  // `yak admin push` releases.
+  let site = await import('./site/mod.ts')
+  for (let [name, text] of Object.entries(site.drawn())) {
+    let at = new URL(name, site.HOME)
+    if (await put(at, await formatted(text, 'html'))) rewrote(at)
   }
+
+  // ---- the reserved words -------------------------------------------------
+  //
+  // The components page prints every word a manifest may not declare, under
+  // RESERVED. The list is the code's (vocab.ts `reserved`), read once load.ts
+  // is current, since it names the vocab facets reserved() reads.
+  let RESERVED = 'The complete list of reserved names:\n\n'
+  let COMPONENTS = new URL('public/docs/components.md', HERE)
+
+  /** The words, four spaces in, wrapped to `width`. */
+  let listed = (words: string[], width = 76) =>
+    words.reduce((lines, w) => {
+      let last = lines.at(-1)
+      if (last && last.length + 1 + w.length <= width) {
+        lines[lines.length - 1] = `${last} ${w}`
+      } else lines.push(`    ${w}`)
+      return lines
+    }, [] as string[]).map((l) => `${l}\n`).join('')
+
+  /** The page with its indented block under RESERVED replaced by `words`. */
+  let reserving = (page: string, words: string[]) => {
+    let at = page.indexOf(RESERVED)
+    if (at < 0) return refuse(`public/docs/components.md has no "${RESERVED}"`)
+    let from = at + RESERVED.length
+    let block = page.slice(from).match(/^(?: {4}.*\n)*/)![0]
+    return page.slice(0, from) + listed(words) + page.slice(from + block.length)
+  }
+
+  let { reserved } = await import('./vocab.ts')
+  let page = reserving(io.readTextFileSync(COMPONENTS), reserved())
+  if (await put(COMPONENTS, page)) rewrote(COMPONENTS)
+
+  // ---- the plugin package -------------------------------------------------
+  GUIDES = guides()
+  let files = await packaged()
   if (stale(files)) {
-    refuse(
-      'plugins/yaks.app is stale — run `deno task content` and commit it',
-    )
+    pack(files)
+    for (let d of OWNED) rewrote(new URL(`${d}/`, PLUGIN))
   }
-} else {
-  await io.writeTextFile(TARGET, fresh)
-  pack(files)
 }

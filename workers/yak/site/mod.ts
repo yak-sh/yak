@@ -3,8 +3,8 @@
 // the site's (frame.tsx).
 //
 // They are the files of the home app (apps/home, workers/yak site.ts `HOME`),
-// which answers them at the apex: `deno task content` writes them there
-// (`drawn`, gen.ts), they are committed with the change that drew them, and
+// which answers them at the apex: gen.ts writes them there (`drawn`), the
+// pre-commit hook stages them with the change that drew them, and
 // the box's deploy catch-up releases them once main's head is live
 // (packages/admin service.ts `RELEASED`). The deploy's build (../assets.ts)
 // writes every page into public/ too, with the style guide, which is no page
