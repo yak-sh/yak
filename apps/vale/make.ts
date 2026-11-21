@@ -96,6 +96,7 @@ export let fields = (look: Look): JSX.Element[] => [
     'Your name',
     h(Field, {
       name: 'name',
+      placeholder: 'Wanderer',
       maxLength: LONGEST,
       autocomplete: 'off',
       value: look.name,

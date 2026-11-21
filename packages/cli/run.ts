@@ -1,5 +1,5 @@
-import * as system from '@yaks/process/system'
-import * as files from '@yaks/file/io'
+import * as system from "@yaks/process/system";
+import * as files from "@yaks/file/io";
 // One command line, run. `cli(commands, opts)` is the whole interface: hand
 // it the commands and it reads the command line — the subcommand, either order
 // of a two-word tool, the arguments through that tool's own input schema —
@@ -28,73 +28,79 @@ import * as files from '@yaks/file/io'
 // commands, and only something that knows about apps can recognize that, so it
 // is asked last and only when nothing else matched.
 
-import type { Tool, ToolId } from '@yaks/graph'
-import { argsFor, commandFor, type Grammar, type Reads, Usage } from './args.ts'
-import { lineOf, safe, sketch, toolHelp } from './show.ts'
-import { commandOf, titleOf } from './tool.ts'
-import { timed } from '@yaks/api/timing'
-import { doorUrl, type Rpc, rpc, Unauthorized } from './rpc.ts'
-import { configPath } from './config.ts'
-import type { Tty } from './answer.ts'
-import { type Env, stateDir, tokenFor } from './store.ts'
+import type { Tool, ToolId } from "@yaks/graph";
+import {
+  argsFor,
+  commandFor,
+  type Grammar,
+  type Reads,
+  Usage,
+} from "./args.ts";
+import { lineOf, safe, sketch, toolHelp } from "./show.ts";
+import { commandOf, titleOf } from "./tool.ts";
+import { timed } from "@yaks/api/timing";
+import { doorUrl, type Rpc, rpc, Unauthorized } from "./rpc.ts";
+import { configPath } from "./config.ts";
+import type { Tty } from "./answer.ts";
+import { type Env, stateDir, tokenFor } from "./store.ts";
 
 // This process's environment: what every `env` seam here defaults to.
-let own: Env = (name) => system.env.get(name)
+let own: Env = (name) => system.env.get(name);
 
 /** What a command is handed: where it runs, where to print, and the global
  * flags. */
 export type Ctx = {
   /** The MCP server this command talks to, where it talks to one — and the
    * name its bearer token is stored under either way. */
-  host: string
+  host: string;
   /** Optional account name; absent uses the computed default. */
-  as?: string
+  as?: string;
   /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
-  config?: string
+  config?: string;
   /** Whether this command may run duties if it explicitly starts them —
    * false under `--no-duties`: no inline duties; web still restores external workers. */
-  duties: boolean
-  json: boolean
+  duties: boolean;
+  json: boolean;
   /** Whether an answer is held in the terminal (@yaks/tui) rather than
    * printed — `--tui`. */
-  tui: boolean
+  tui: boolean;
   /** Where an answer is painted rather than printed: present when stdout is
    * a terminal (and `NO_COLOR` is unset), with its width and a writer that
    * keeps the painter's escapes — the painter strips content's own. */
-  tty?: Tty
-  help: boolean
+  tty?: Tty;
+  help: boolean;
   /** The session this command line speaks for ({@link via}), named the same
    * way to a host over HTTP and to a graph this process opened. */
-  via?: string
+  via?: string;
   /** The directory this machine keeps its token and tool lists in
    * (./store.ts): its own, unless a test hands in a scratch one. */
-  state?: string
-  ask: Rpc
-  reads: Reads
-  out: (line: string) => void
-  note: (line: string) => void
+  state?: string;
+  ask: Rpc;
+  reads: Reads;
+  out: (line: string) => void;
+  note: (line: string) => void;
   /** Every command this run can reach, including the ones that cost a
    * composition or a round trip. Gathered once; a list that cannot be fetched
    * is left out. */
-  all: () => Promise<Command[]>
+  all: () => Promise<Command[]>;
   /** The usage page — every tool one line each, and why a list is missing. */
-  page: () => Promise<string>
-}
+  page: () => Promise<string>;
+};
 
 /** A terminal an answer is painted on: how wide it is, and where its bytes go. */
-export type { Tty } from './answer.ts'
+export type { Tty } from "./answer.ts";
 
 // This process's stdout, where it is a terminal a person reads in color. A
 // terminal that reports no size (`script` run without one) is the usual 80
 // wide, rather than a width nothing fits in.
 let terminal = (env: Env): Tty | undefined =>
-  system.stdout.isTerminal() && !env('NO_COLOR')
+  system.stdout.isTerminal() && !env("NO_COLOR")
     ? {
       columns: system.consoleSize().columns || 80,
       write: (t) => console.log(t),
     }
-    : undefined
+    : undefined;
 
 /**
  * One command this program can run: a tool's declaration — its name, its
@@ -108,71 +114,71 @@ let terminal = (env: Env): Tty | undefined =>
  * wrapping a call — local.ts writes one against the graph this command opened,
  * platform.ts sends one to the MCP server it named.
  */
-export type Command = Omit<Tool<number>, 'run'> & {
+export type Command = Omit<Tool, "run" | "recover"> & {
   /** Global flags explicitly bound to this command's input properties. */
-  globals?: readonly GlobalFlag[]
+  globals?: readonly GlobalFlag[];
   /** Whether the usage page lists it here: a command for something this
    * line's graph does not have (a box's process plan) is still run when
    * typed and still has its own page, but is not offered. */
-  offered?: (c: Ctx) => boolean
+  offered?: (c: Ctx) => boolean;
   run: (
     args: Record<string, unknown>,
     c: Ctx,
-  ) => number | Promise<number>
-}
+  ) => number | Promise<number>;
+};
 
 export type GlobalFlag =
-  | 'as'
-  | 'host'
-  | 'config'
-  | 'duties'
-  | 'json'
-  | 'tui'
-  | 'help'
-  | 'timing'
+  | "as"
+  | "host"
+  | "config"
+  | "duties"
+  | "json"
+  | "tui"
+  | "help"
+  | "timing";
 
 /** What a program brings besides its tools. */
 export type Opts = {
   /** The words to read. Defaults to `system.args`. */
-  argv?: string[]
+  argv?: string[];
   /** What the program calls itself, in its usage and its help pages. */
-  name?: string
+  name?: string;
   /** The line the usage page opens with. */
-  about?: string
+  about?: string;
   /** The release this program is, which `--version` prints. */
-  version?: string
+  version?: string;
   /** The notes it closes with. */
-  notes?: string
+  notes?: string;
   /** Global flags reserved by the program; tool inputs use name=value. */
-  globalFlags?: readonly string[]
+  globalFlags?: readonly string[];
   /** The MCP server a command talks to where it names neither a config nor a
    * host. */
-  host?: string
+  host?: string;
   /** More commands, where gathering them costs a composition or a round
    * trip. `fresh` asks past any cache the list is kept in. */
-  more?: (c: Ctx, o?: { fresh?: boolean }) => Command[] | Promise<Command[]>
+  more?: (c: Ctx, o?: { fresh?: boolean }) => Command[] | Promise<Command[]>;
   /** What to say where a line named no place and this machine keeps no graph,
    * and the host it fell to would not answer it (`aimed`'s `unplaced`). */
-  nowhere?: string
+  nowhere?: string;
   /** A command for a first word nothing else claimed. */
   stray?: (
     word: string,
     args: string[],
     c: Ctx,
-  ) => Command | undefined | Promise<Command | undefined>
+  ) => Command | undefined | Promise<Command | undefined>;
   /** How a JSON-RPC request is sent, where a program has a caller of its own
    * — a test passes a function that records what it was asked. */
-  ask?: Rpc
+  ask?: Rpc;
   /** The session this command line speaks for. Defaults to {@link via}. */
-  via?: string
+  via?: string;
   /** Where the environment is read from: this process's by default. A test
    * passes a function, so it never sets a variable every other test shares. */
-  env?: Env
+  env?: Env;
   /** Where a value written `@path` or `-` is read from. */
-  reads?: Reads
-  out?: (line: string) => void
-  note?: (line: string) => void
-}
+  reads?: Reads;
+  out?: (line: string) => void;
+  note?: (line: string) => void;
+};
 
 /**
  * The tools, refused where two of them answer to one command line. A two-word
@@ -185,19 +191,19 @@ export type Opts = {
  * runs this over its own list, where two tools of one name are a mistake.
  */
 export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
-  let said = new Set<string>()
+  let said = new Set<string>();
   for (let t of tools) {
     let words = t.noun && t.verb
       ? [`${t.noun} ${t.verb}`, `${t.verb} ${t.noun}`]
-      : [commandOf(t)]
-    if (!words[0]) throw new Error('a tool needs a name, or a noun and a verb')
+      : [commandOf(t)];
+    if (!words[0]) throw new Error("a tool needs a name, or a noun and a verb");
     for (let w of new Set(words)) {
-      if (said.has(w)) throw new Error(`two tools answer to: ${w}`)
-      said.add(w)
+      if (said.has(w)) throw new Error(`two tools answer to: ${w}`);
+      said.add(w);
     }
   }
-  return tools
-}
+  return tools;
+};
 
 /**
  * The tool a command line names, and the words left for its schema. A two-word
@@ -208,18 +214,18 @@ export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
  *   ['list', 'session', '--all'])?.args // ['--all']
  * ```
  */
-export { commandFor } from './args.ts'
+export { commandFor } from "./args.ts";
 
 // One column across the page, so it reads as one page. Capped: a long
 // argument sketch pushes its own line out rather than every other line.
-let WIDE = 30
+let WIDE = 30;
 
 /** One tool per listed name, in the order they were given: where two answer
  * to one command line, the first one wins. */
 let once = <T extends Grammar>(tools: readonly T[]): T[] => {
-  let seen = new Set<string>()
-  return tools.filter((t) => !seen.has(commandOf(t)) && seen.add(commandOf(t)))
-}
+  let seen = new Set<string>();
+  return tools.filter((t) => !seen.has(commandOf(t)) && seen.add(commandOf(t)));
+};
 
 /**
  * The tools grouped under the noun each is typed with: `graph` holds `apply`,
@@ -236,28 +242,28 @@ let once = <T extends Grammar>(tools: readonly T[]): T[] => {
 export let nouns = <T extends Grammar>(
   tools: readonly T[],
 ): [string, T[]][] => {
-  let by = new Map<string, T[]>([['', []]])
+  let by = new Map<string, T[]>([["", []]]);
   for (let t of once(tools)) {
-    let noun = t.noun && t.verb ? t.noun : ''
-    let said = by.get(noun) ?? []
-    by.set(noun, said)
-    said.push(t)
+    let noun = t.noun && t.verb ? t.noun : "";
+    let said = by.get(noun) ?? [];
+    by.set(noun, said);
+    said.push(t);
   }
-  return [...by].filter(([, said]) => said.length)
-}
+  return [...by].filter(([, said]) => said.length);
+};
 
 type Listed = Grammar & {
-  title?: string
-  description?: string
-  globals?: Command['globals']
-}
+  title?: string;
+  description?: string;
+  globals?: Command["globals"];
+};
 
 // The line to type, with the heading's own word left out: under `graph`, a
 // tool is its verb and its arguments.
 let lineIn = (noun: string, t: Listed, omit: readonly string[]): string =>
   noun
     ? `${t.verb} ${sketch(t, t.globals, omit)}`.trimEnd()
-    : lineOf(t, t.globals, omit)
+    : lineOf(t, t.globals, omit);
 
 let helpFor = (t: Command, opts: Opts): string =>
   toolHelp(
@@ -266,9 +272,9 @@ let helpFor = (t: Command, opts: Opts): string =>
     (opts.globalFlags ?? []).filter((n) =>
       !t.globals?.includes(n as GlobalFlag)
     ),
-  )
+  );
 
-type Line = { text: string; title: string }
+type Line = { text: string; title: string };
 let lines = (
   noun: string,
   said: Listed[],
@@ -277,14 +283,14 @@ let lines = (
   said.map((t) => ({
     text: lineIn(noun, t, omit),
     title: titleOf(t),
-  }))
+  }));
 
 let block = (noun: string, said: Line[], wide: number): string[] => [
-  ...(noun ? ['', noun] : []),
+  ...(noun ? ["", noun] : []),
   ...said.map(({ text, title }) =>
     `  ${text.padEnd(wide)}  ${title}`.trimEnd()
   ),
-]
+];
 
 // Measure the same lines that are printed, without sketching their arguments
 // again: a help page renders every tool's schema only once.
@@ -295,7 +301,7 @@ let column = (groups: [string, Line[]][]): number =>
       0,
       ...groups.flatMap(([, said]) => said.map((l) => l.text.length)),
     ),
-  )
+  );
 
 /** Every tool, one line each, its verbs grouped under their noun. */
 export let usage = (
@@ -304,14 +310,14 @@ export let usage = (
 ): string => {
   let groups: [string, Line[]][] = nouns(tools).map((
     [noun, said],
-  ) => [noun, lines(noun, said, opts.globalFlags ?? [])])
-  let wide = column(groups)
+  ) => [noun, lines(noun, said, opts.globalFlags ?? [])]);
+  let wide = column(groups);
   return [
-    ...(opts.about ? [opts.about, ''] : []),
+    ...(opts.about ? [opts.about, ""] : []),
     ...groups.flatMap(([noun, said]) => block(noun, said, wide)),
-    ...(opts.notes ? ['', opts.notes] : []),
-  ].join('\n')
-}
+    ...(opts.notes ? ["", opts.notes] : []),
+  ].join("\n");
+};
 
 /** One noun's own page: its verbs, one line each, under the word itself —
  * what `yak graph` and `yak graph --help` print. Nothing where no tool here is
@@ -321,12 +327,12 @@ export let nounUsage = (
   word: string,
   reserved: readonly string[] = [],
 ): string | undefined => {
-  let said = nouns(tools).find(([noun]) => noun && noun == word)
-  if (!said) return undefined
-  let group: [string, Line[]] = [said[0], lines(said[0], said[1], reserved)]
+  let said = nouns(tools).find(([noun]) => noun && noun == word);
+  if (!said) return undefined;
+  let group: [string, Line[]] = [said[0], lines(said[0], said[1], reserved)];
   return block(group[0], group[1], column([group])).slice(1)
-    .join('\n')
-}
+    .join("\n");
+};
 
 /** The flags a program keeps for itself, lifted off the command line before a
  * command ever sees it. `host` and `config` are what the command line gave and
@@ -336,51 +342,51 @@ export let globals = (
   argv: readonly string[],
   env: Env = own,
 ): {
-  host?: string
-  config?: string
-  as?: string
-  duties: boolean
-  json: boolean
-  tui: boolean
-  help: boolean
-  version: boolean
-  timing: boolean
-  rest: string[]
+  host?: string;
+  config?: string;
+  as?: string;
+  duties: boolean;
+  json: boolean;
+  tui: boolean;
+  help: boolean;
+  version: boolean;
+  timing: boolean;
+  rest: string[];
 } => {
-  let host: string | undefined
-  let json = false
-  let tui = false
-  let duties = true
-  let help = false
-  let version = false
-  let config: string | undefined
+  let host: string | undefined;
+  let json = false;
+  let tui = false;
+  let duties = true;
+  let help = false;
+  let version = false;
+  let config: string | undefined;
   // A whole process tree runs as one account with YAK_AS (`yak admin
   // throwaway`); one command asks with the flag.
-  let as = env('YAK_AS') || undefined
+  let as = env("YAK_AS") || undefined;
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
-  let timing = env('YAKS_TIMING') == '1'
-  let rest: string[] = []
+  let timing = env("YAKS_TIMING") == "1";
+  let rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    let a = argv[i]
-    if (a == '--json') json = true
-    else if (a == '--tui') tui = true
-    else if (a == '--no-duties') duties = false
-    else if (a == '--help' || a == '-h') help = true
+    let a = argv[i];
+    if (a == "--json") json = true;
+    else if (a == "--tui") tui = true;
+    else if (a == "--no-duties") duties = false;
+    else if (a == "--help" || a == "-h") help = true;
     // After a command's name, --version is one of its arguments
     // (`app_rollback --version 3`), not a question about this program.
-    else if (a == '--version' && !rest.length) version = true
-    else if (a == '--timing') timing = true
-    else if (a == '--as') as = argv[++i] ?? as
-    else if (a.startsWith('--as=')) as = a.slice(5)
-    else if (a == '--host') host = argv[++i] ?? host
-    else if (a.startsWith('--host=')) host = a.slice(7)
-    else if (a == '--config') config = argv[++i] ?? config
-    else if (a.startsWith('--config=')) config = a.slice(9)
-    else rest.push(a)
+    else if (a == "--version" && !rest.length) version = true;
+    else if (a == "--timing") timing = true;
+    else if (a == "--as") as = argv[++i] ?? as;
+    else if (a.startsWith("--as=")) as = a.slice(5);
+    else if (a == "--host") host = argv[++i] ?? host;
+    else if (a.startsWith("--host=")) host = a.slice(7);
+    else if (a == "--config") config = argv[++i] ?? config;
+    else if (a.startsWith("--config=")) config = a.slice(9);
+    else rest.push(a);
   }
-  return { host, config, as, duties, json, tui, help, version, timing, rest }
-}
+  return { host, config, as, duties, json, tui, help, version, timing, rest };
+};
 
 /**
  * Where this command runs what it was asked: the graph a config file names,
@@ -415,20 +421,20 @@ export let globals = (
  */
 export let aimed = (
   said: { host?: string; config?: string },
-  dflt = 'yaks.app',
+  dflt = "yaks.app",
   env: Env = own,
 ): { config?: string; host: string; onward?: boolean; unplaced?: boolean } => {
   if (said.host && said.config) {
-    throw new Usage('--host and --config name two places — a line names one')
+    throw new Usage("--host and --config name two places — a line names one");
   }
-  if (said.config) return { config: said.config, host: dflt }
-  let door = said.host ?? env('YAKS_HOST')
-  if (door) return { host: door }
-  let path = configPath(undefined, env)
+  if (said.config) return { config: said.config, host: dflt };
+  let door = said.host ?? env("YAKS_HOST");
+  if (door) return { host: door };
+  let path = configPath(undefined, env);
   return path
     ? { config: path, host: dflt, onward: true }
-    : { host: dflt, unplaced: true }
-}
+    : { host: dflt, unplaced: true };
+};
 
 /** Claude Code keeps its session beside the process that starts an MCP
  * client. Reading that parent's record preserves identity over stdio. */
@@ -437,16 +443,16 @@ export let parentVia = (
   parent = system.ppid,
   read: (path: string) => string = files.readTextFileSync,
 ): string | undefined => {
-  let directory = env('CLAUDE_CONFIG_DIR') ||
-    (env('HOME') ? `${env('HOME')}/.claude` : undefined)
-  if (!directory) return
+  let directory = env("CLAUDE_CONFIG_DIR") ||
+    (env("HOME") ? `${env("HOME")}/.claude` : undefined);
+  if (!directory) return;
   try {
-    let session = JSON.parse(read(`${directory}/sessions/${parent}.json`))
-    return typeof session.sessionId == 'string' ? session.sessionId : undefined
+    let session = JSON.parse(read(`${directory}/sessions/${parent}.json`));
+    return typeof session.sessionId == "string" ? session.sessionId : undefined;
   } catch {
-    return undefined
+    return undefined;
   }
-}
+};
 
 /**
  * The run this command line is part of, as the environment names it: a harness
@@ -471,31 +477,31 @@ export let via = (
   cwd = here(),
   parent: () => string | undefined = () => parentVia(env),
 ): string | undefined => {
-  let claude = env('CLAUDE_CODE_SESSION_ID')
-  let agent = claude && env('AI_AGENT')?.endsWith('_agent')
+  let claude = env("CLAUDE_CODE_SESSION_ID");
+  let agent = claude && env("AI_AGENT")?.endsWith("_agent")
     ? cwd.match(WORKTREE)?.[1]
-    : undefined
-  return agent ?? claude ?? env('TASKS_SESSION') ?? env('CODEX_THREAD_ID') ??
-    parent()
-}
+    : undefined;
+  return agent ?? claude ?? env("TASKS_SESSION") ?? env("CODEX_THREAD_ID") ??
+    parent();
+};
 
 // The worktree Claude Code makes for a subagent, named by the subagent's id.
-let WORKTREE = /\/\.claude\/worktrees\/agent-([0-9a-f]+)(?:\/|$)/
+let WORKTREE = /\/\.claude\/worktrees\/agent-([0-9a-f]+)(?:\/|$)/;
 
 // This process's directory, or none where it was removed under it.
 let here = (): string => {
   try {
-    return system.cwd()
+    return system.cwd();
   } catch {
-    return ''
+    return "";
   }
-}
+};
 
 let disk: Reads = {
   cwd: system.cwd,
   file: (path) => files.readTextFile(path),
   stdin: () => new Response(system.stdin.readable).text(),
-}
+};
 
 /**
  * Run one command line. Returns the exit code a script reads: 0 succeeded, 1
@@ -505,50 +511,50 @@ export let cli = async (
   tools: readonly Command[],
   opts: Opts = {},
 ): Promise<number> => {
-  let out = opts.out ?? ((line: string) => console.log(safe(line)))
-  let note = opts.note ?? ((line: string) => console.error(safe(line)))
-  let env = opts.env ?? own
-  let said = globals(opts.argv ?? system.args, env)
-  let { duties, json, tui, help, timing, rest, as } = said
+  let out = opts.out ?? ((line: string) => console.log(safe(line)));
+  let note = opts.note ?? ((line: string) => console.error(safe(line)));
+  let env = opts.env ?? own;
+  let said = globals(opts.argv ?? system.args, env);
+  let { duties, json, tui, help, timing, rest, as } = said;
   // Like the usage page, the version needs no graph, no network and nobody
   // signed in.
   if (said.version && opts.version) {
-    out(opts.version)
-    return 0
+    out(opts.version);
+    return 0;
   }
   // Where nothing placed this line, the host's refusal is not the answer: the
   // program's own word for a machine with no graph is.
-  let lost = (why: string) => why
+  let lost = (why: string) => why;
   try {
     // Where this command runs: a file it opens, or an MCP server it calls. A
     // command line naming both is refused here, like any other that means two
     // things.
     let { config, host, onward, unplaced } = aimed(
       said,
-      opts.host ?? 'yaks.app',
+      opts.host ?? "yaks.app",
       env,
-    )
-    lost = (why: string) => unplaced && opts.nowhere ? opts.nowhere : why
-    let state = stateDir(env)
+    );
+    lost = (why: string) => unplaced && opts.nowhere ? opts.nowhere : why;
+    let state = stateDir(env);
     // A list that cannot be fetched is a reason printed on the page, not a
     // page nobody gets: `yak` with no argument is what a person types when
     // nothing works.
-    let extra: Command[] | undefined
-    let why: string | undefined
-    let asked = false
+    let extra: Command[] | undefined;
+    let why: string | undefined;
+    let asked = false;
     let fetched = async (fresh = false): Promise<Command[]> => {
-      if (!opts.more || (extra && (!fresh || asked))) return extra ?? []
-      asked ||= fresh
+      if (!opts.more || (extra && (!fresh || asked))) return extra ?? [];
+      asked ||= fresh;
       try {
-        extra = [...await opts.more(c, { fresh })]
-        why = undefined
+        extra = [...await opts.more(c, { fresh })];
+        why = undefined;
       } catch (e) {
-        extra = []
-        why = (e as Error).message
+        extra = [];
+        why = (e as Error).message;
       }
-      return extra
-    }
-    let speaks = opts.via ?? via(env)
+      return extra;
+    };
+    let speaks = opts.via ?? via(env);
     let c: Ctx = {
       host,
       config,
@@ -574,57 +580,57 @@ export let cli = async (
       all: async () => [...tools, ...await fetched()],
       page: async () =>
         usage((await c.all()).filter((t) => t.offered?.(c) ?? true), opts) +
-        (why ? `\n\n  (${lost(why)})` : ''),
-    }
+        (why ? `\n\n  (${lost(why)})` : ""),
+    };
     // The one thing that must work with no network and nobody signed in.
     if (!rest.length) {
-      out(await c.page())
-      return 0
+      out(await c.page());
+      return 0;
     }
     // A stray is asked of the host, so a line that named a graph of its own
     // has none: it names that graph, and a word the graph lacks is a word
     // the graph lacks, not an app somewhere else. A graph the line did not
     // name was only first in the order (`aimed`), so a word it lacks is
     // asked of the host, exactly as a line aimed there would ask it.
-    let far: Ctx = { ...c, config: undefined }
-    let at = c
+    let far: Ctx = { ...c, config: undefined };
+    let at = c;
     // A held list is trusted for what it holds, never for what it lacks: a
     // word it lacks is asked of its source again at once, and a line the
     // schema it holds refuses (an argument added since) is read against the
     // source's list once more before it is refused (`again`).
     let lookup = async (list: (fresh: boolean) => Promise<Command[]>) => {
-      let held = await list(false)
-      let found = commandFor(held, rest)
+      let held = await list(false);
+      let found = commandFor(held, rest);
       if (found) {
-        let again = async () => commandFor(await list(true), rest)
-        return { found, list: held, again }
+        let again = async () => commandFor(await list(true), rest);
+        return { found, list: held, again };
       }
-      let now = await list(true)
-      return { found: commandFor(now, rest), list: now, again: undefined }
-    }
-    let found = commandFor(tools, rest)
-    let again: (() => Promise<typeof found>) | undefined
-    if (!found) ({ found, again } = await lookup(fetched))
+      let now = await list(true);
+      return { found: commandFor(now, rest), list: now, again: undefined };
+    };
+    let found = commandFor(tools, rest);
+    let again: (() => Promise<typeof found>) | undefined;
+    if (!found) ({ found, again } = await lookup(fetched));
     let page = !found
       ? nounUsage(await c.all(), rest[0], opts.globalFlags)
-      : undefined
+      : undefined;
     if (!found && !page) {
       // A host whose list never came is the answer: past this point a line
       // it would have understood reads as an app's stray, and its words as
       // that app's arguments.
-      if (why) throw new Error(lost(why))
+      if (why) throw new Error(lost(why));
       let stray = config
         ? undefined
-        : await opts.stray?.(rest[0], rest.slice(1), c)
-      if (stray) found = { verb: stray, args: rest.slice(1) }
+        : await opts.stray?.(rest[0], rest.slice(1), c);
+      if (stray) found = { verb: stray, args: rest.slice(1) };
       else if (onward && opts.more) {
-        let more = opts.more
-        let theirs: Awaited<ReturnType<typeof lookup>>
+        let more = opts.more;
+        let theirs: Awaited<ReturnType<typeof lookup>>;
         try {
           // The host's list is a cache too.
           theirs = await lookup(async (fresh) => [
             ...await more(far, { fresh }),
-          ])
+          ]);
         } catch (e) {
           // Most often a typo, and the host only a second place to look: say
           // where the commands are listed, then what asking the host needs.
@@ -634,17 +640,17 @@ export let cli = async (
               (e instanceof Unauthorized
                 ? `sign in to it with \`yak auth ${host}\``
                 : (e as Error).message),
-          )
+          );
         }
-        ;({ found, again } = theirs)
+        ({ found, again } = theirs);
         page = !found
           ? nounUsage([...tools, ...theirs.list], rest[0], opts.globalFlags)
-          : undefined
+          : undefined;
         if (!found && !page) {
-          let stray = await opts.stray?.(rest[0], rest.slice(1), far)
-          if (stray) found = { verb: stray, args: rest.slice(1) }
+          let stray = await opts.stray?.(rest[0], rest.slice(1), far);
+          if (stray) found = { verb: stray, args: rest.slice(1) };
         }
-        if (found) at = far
+        if (found) at = far;
       }
     }
     if (!found) {
@@ -653,31 +659,31 @@ export let cli = async (
       // lifted off) asks what that word can do, and the answer is its verbs.
       if (page) {
         if (rest.length > 1) {
-          throw new Usage(`Unknown command: ${rest[1]}\n\n${page}`)
+          throw new Usage(`Unknown command: ${rest[1]}\n\n${page}`);
         }
-        out(page)
-        return 0
+        out(page);
+        return 0;
       }
       let where = onward && opts.more
         ? `neither ${config} nor ${host} has anything`
-        : `${config ?? host} has nothing`
+        : `${config ?? host} has nothing`;
       throw new Usage(
-        `${where} called ${rest[0]} — try \`${opts.name ?? 'yak'} help\``,
-      )
+        `${where} called ${rest[0]} — try \`${opts.name ?? "yak"} help\``,
+      );
     }
     if (help) {
-      out(helpFor(found.verb, opts))
-      return 0
+      out(helpFor(found.verb, opts));
+      return 0;
     }
     try {
       let given = await argsFor(found.verb, found.args, c.reads).catch(
         async (e) => {
-          let now = e instanceof Usage && await again?.()
-          if (!now) throw e
-          found = now
-          return await argsFor(now.verb, now.args, c.reads)
+          let now = e instanceof Usage && await again?.();
+          if (!now) throw e;
+          found = now;
+          return await argsFor(now.verb, now.args, c.reads);
         },
-      )
+      );
       return await found.verb.run(
         {
           ...given,
@@ -688,53 +694,53 @@ export let cli = async (
           ),
         },
         at,
-      )
+      );
     } catch (e) {
-      if (!(e instanceof Usage)) throw e
+      if (!(e instanceof Usage)) throw e;
       note(
-        `${opts.name ?? 'yak'}: ${e.message}\n\n${helpFor(found.verb, opts)}`,
-      )
-      return 2
+        `${opts.name ?? "yak"}: ${e.message}\n\n${helpFor(found.verb, opts)}`,
+      );
+      return 2;
     }
   } catch (e) {
-    let message = (e as Error).message
+    let message = (e as Error).message;
     note(
-      `${opts.name ?? 'yak'}: ${
+      `${opts.name ?? "yak"}: ${
         e instanceof Unauthorized ? lost(message) : message
       }`,
-    )
-    return e instanceof Usage ? 2 : 1
+    );
+    return e instanceof Usage ? 2 : 1;
   }
-}
+};
 
 /** The `help` command every program here carries: the whole usage page, or
  * one subcommand's own. */
 export let helpTool = (opts: Opts = {}): Command => ({
-  name: 'help',
-  description: 'every command, one line each — or one command’s own page',
+  name: "help",
+  description: "every command, one line each — or one command’s own page",
   inputSchema: {
-    type: 'object',
+    type: "object",
     additionalProperties: false,
-    properties: { words: { type: 'array', items: { type: 'string' } } },
+    properties: { words: { type: "array", items: { type: "string" } } },
   },
-  positional: ['words...'],
+  positional: ["words..."],
   readOnly: true,
   run: async (args, c) => {
-    let words = (args.words ?? []) as string[]
+    let words = (args.words ?? []) as string[];
     if (!words.length) {
-      c.out(await c.page())
-      return 0
+      c.out(await c.page());
+      return 0;
     }
-    let found = commandFor(await c.all(), words)
+    let found = commandFor(await c.all(), words);
     if (found) {
-      c.out(helpFor(found.verb, opts))
-      return 0
+      c.out(helpFor(found.verb, opts));
+      return 0;
     }
     // `yak help graph` is the same question `yak graph` asks: the verbs that
     // word holds.
-    let page = nounUsage(await c.all(), words[0], opts.globalFlags)
-    if (!page) throw new Usage(`nothing here is called ${words[0]}`)
-    c.out(page)
-    return 0
+    let page = nounUsage(await c.all(), words[0], opts.globalFlags);
+    if (!page) throw new Usage(`nothing here is called ${words[0]}`);
+    c.out(page);
+    return 0;
   },
-})
+});
