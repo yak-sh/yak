@@ -86,6 +86,10 @@ export let callable = (req: Pick<Ask, 'tools' | 'turnContext'>): string[] => [
     .matchAll(/^- (\w+):/gm).map((m) => m[1]),
 ]
 
+/** What the model sees for a turn, including context sent beside the transcript. */
+export let promptOf = ({ items, turnContext }: Ask): string =>
+  JSON.stringify([...items, ...turnContext ?? []])
+
 /** Make `model`, priced at `price` with a window of `context` tokens, the
  * one every Operator runs on, served by `provider`: the rows `yak admin model`
  * writes in the directory. */

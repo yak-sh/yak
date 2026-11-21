@@ -93,9 +93,11 @@ export let frozenRequest = (req: Request): FrozenModelRequest => {
   }))
 }
 
-export let thawedRequest = (req: FrozenModelRequest): Request => ({
+export let thawedRequest = (
+  { turnContext, ...req }: FrozenModelRequest,
+): Request => ({
   ...req,
-  turnContext: req.turnContext?.map(thaw),
+  ...turnContext ? { turnContext: turnContext.map(thaw) } : {},
   items: req.items.map(thaw),
 })
 

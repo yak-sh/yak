@@ -9,7 +9,7 @@ import type { Item } from '@yaks/model'
 import { line } from '@yaks/query'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { operatorModel, operatorService, promptOf } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 
 let p = platform('operator-decide')
@@ -48,7 +48,7 @@ let service = operatorService(
   p.env,
   { person: ada, role: 'owner', space: eid },
   operatorModel((req) => {
-    let sent = JSON.stringify(req.items)
+    let sent = promptOf(req)
     let next = replies.shift()
     return Promise.resolve({
       id: crypto.randomUUID(),

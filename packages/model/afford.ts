@@ -50,6 +50,19 @@ export let promptBound = (
  * {@link promptBound} takes one byte a token to bound it. */
 let BYTES = 4
 
+type Prompt = Pick<Request, 'instructions' | 'questions' | 'input'> & {
+  items: unknown[]
+  turnContext?: unknown[]
+}
+
+let promptOf = (req: Prompt): unknown[] => [
+  req.instructions,
+  req.items,
+  ...req.turnContext?.length ? [req.turnContext] : [],
+  req.questions,
+  req.input,
+]
+
 /**
  * What a request that failed with nothing measured most likely cost, never
  * above `most`, its hold: the text it sent at the input tariff, its anchored
@@ -70,25 +83,13 @@ let BYTES = 4
  * ```
  */
 export let likely = (
-  req:
-    & Pick<
-      Request,
-      'instructions' | 'tools' | 'questions' | 'input'
-    >
-    & { items: unknown[]; turnContext?: unknown[] },
+  req: Prompt & Pick<Request, 'tools'>,
   price: Price,
   most: number,
   output = 0,
 ): number => {
   let input = Math.ceil(
-    (size([
-      req.instructions,
-      req.items,
-      req.turnContext,
-      req.questions,
-      req.input,
-    ]) +
-      size(req.tools)) / BYTES,
+    (size(promptOf(req)) + size(req.tools)) / BYTES,
   )
   let dollars = upward((input * price.input + output * price.output) / 1e6)
   return Math.min(most, dollars)
@@ -97,20 +98,11 @@ export let likely = (
 /** A request's input bound. An anchor continues a conversation the provider
  * holds, whose earlier turns this side cannot measure. */
 export let requestBound = (
-  req:
-    & Pick<
-      Request,
-      | 'anchor'
-      | 'instructions'
-      | 'tools'
-      | 'questions'
-      | 'input'
-    >
-    & { items: unknown[]; turnContext?: unknown[] },
+  req: Prompt & Pick<Request, 'anchor' | 'tools'>,
   context: number,
 ): number =>
   req.anchor ? context : promptBound(
-    [req.instructions, req.items, req.turnContext, req.questions, req.input],
+    promptOf(req),
     context,
     req.tools,
   )

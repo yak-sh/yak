@@ -18,6 +18,7 @@ import {
   ModelError,
   type Native,
   promptBound,
+  retained,
   type Spending,
   type Usage,
 } from '@yaks/model'
@@ -169,11 +170,12 @@ export let native = (lent: Lent, door: Door, spending: Spending): Native => {
       if (!info.price || !info.context) {
         throw new ModelError('model', `No published price for ${model}`)
       }
+      let price = retained(info.price)
       let sent = Object(input) as Body
       let { tools, ...prompt } = sent
       let hold = await spending.hold((remaining) =>
         affordable(
-          info.price!,
+          price,
           promptBound(prompt, info.context!, tools),
           remaining,
           Number(sent.max_completion_tokens ?? sent.max_tokens ?? 4096),
@@ -211,7 +213,7 @@ export let native = (lent: Lent, door: Door, spending: Spending): Native => {
       }
       let out = await res.json() as Body
       await spending.answered?.(model, info)
-      let cost = charged({ usage: usage(out) }, info.price, hold.value.dollars)
+      let cost = charged({ usage: usage(out) }, price, hold.value.dollars)
       await hold.settle(cost.dollars, false)
       return answer(out)
     },

@@ -5,7 +5,7 @@ import { equal, test } from '@yaks/testing'
 import type { Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { operatorModel, operatorService, promptOf } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
@@ -54,7 +54,7 @@ await store.g.apply([
 let ask = async (say: string) => {
   await receive(store, { space: eid, person, channel: 'chat' }, say)
   await service.drain()
-  return JSON.stringify(asked.at(-1)!.items)
+  return promptOf(asked.at(-1)!)
 }
 let first = await ask('Should the recipe attachments stay immutable?')
 let second = await ask('And should recipe attachments stay immutable there?')

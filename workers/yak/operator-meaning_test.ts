@@ -7,7 +7,7 @@ import type { Embedder } from '@yaks/embedding'
 import type { Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { operatorModel, operatorService, promptOf } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { type OperatorStore, operatorStore } from './operator-store.ts'
 import { operatorVectors } from './operator-vectors.ts'
@@ -122,10 +122,8 @@ await chat(bea, 'Remember these facts.')
 await store.vectors!.work()
 
 let question = 'How often should my backyard veggies get a drink?'
-let prompt = ({ items, turnContext }: Request) =>
-  JSON.stringify([...items, ...turnContext ?? []])
 await chat(person, question)
-let turn = prompt(asked.at(-1)!)
+let turn = promptOf(asked.at(-1)!)
 await chat(bea, question)
 let ownRecall = (await store.g.read('.prompt.source="operator:earlier"&*'))
   .filter((row) => JSON.stringify(row.content).includes(PERSONAL))
@@ -141,7 +139,7 @@ await receive(
   'How often should my backyard veggies get a drink?',
 )
 await service.drain()
-let replied = prompt(asked.at(-1)!)
+let replied = promptOf(asked.at(-1)!)
 
 test('a memory worded unlike the message reaches its turn by meaning', () => {
   equal(turn.includes('Nearest memories and decisions'), true)
