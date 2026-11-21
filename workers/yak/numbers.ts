@@ -33,7 +33,6 @@ import {
   type Ctx,
   inSpace,
   noApp,
-  owns,
   refuse,
   SPACE,
   str,
@@ -250,6 +249,7 @@ export let numberTools: Row[] = [
   },
   {
     name: 'number_buy',
+    role: 'owner',
     destructive: false,
     openWorld: true,
     input: {
@@ -258,7 +258,7 @@ export let numberTools: Row[] = [
       required: ['number'],
     },
     run: async (ctx, args) => {
-      let { space } = await owns(ctx, args)
+      let { space } = await inSpace(ctx, args, true)
       let number = text(args.number, 'number')
       let { numbers, via } = await numbersOf(ctx.env, space.sender)
       let [offer] = await numbers.find({ number, tollFree: free(number) })
@@ -331,6 +331,7 @@ export let numberTools: Row[] = [
   },
   {
     name: 'number_assign',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     input: {
@@ -339,7 +340,7 @@ export let numberTools: Row[] = [
       required: ['number'],
     },
     run: async (ctx, args) => {
-      let { space } = await owns(ctx, args)
+      let { space } = await inSpace(ctx, args, true)
       let line = await heldBy(ctx, space, args)
       let app = null
       if (args.app != null) {
@@ -370,6 +371,7 @@ export let numberTools: Row[] = [
   {
     // Reversible release first; only a person's confirmation returns it early.
     name: 'number_release',
+    role: 'owner',
     destructive: false,
     input: {
       type: 'object',
@@ -377,7 +379,7 @@ export let numberTools: Row[] = [
       required: ['number'],
     },
     run: async (ctx, args) => {
-      let { space, who } = await owns(ctx, args)
+      let { space, who } = await inSpace(ctx, args, true)
       let line = await heldBy(ctx, space, args, true)
       return {
         text: line.trashed
@@ -397,6 +399,7 @@ export let numberTools: Row[] = [
   },
   {
     name: 'number_verify',
+    role: 'owner',
     destructive: false,
     openWorld: true,
     input: {
@@ -477,7 +480,7 @@ export let numberTools: Row[] = [
       ],
     },
     run: async (ctx, args) => {
-      let { space } = await owns(ctx, args)
+      let { space } = await inSpace(ctx, args, true)
       let line = await heldBy(ctx, space, args)
       if (!free(line.number)) {
         throw refuse('arguments', `${line.number} is not toll-free`)

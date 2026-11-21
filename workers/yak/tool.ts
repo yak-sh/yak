@@ -35,6 +35,7 @@ import type { Spend } from './sandbox.ts'
 import { type Caller, titling, vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
 import { wrote } from './lib/hops.ts'
+import { allows, type Need } from './operator-route.ts'
 
 export type Ctx = {
   env: Env
@@ -99,6 +100,10 @@ export type Ctx = {
   // (mcp.ts): a tool that `outlasts` runs in an object that finishes it after
   // this call has answered (outlast.ts).
   outlast?: true
+  // The least role the tool being run declares (`Tool.role`), set by the
+  // roster for the length of its call (tools.ts `TOOLS`): admitting the
+  // caller to a space refuses a seat below it (`callerIn`).
+  need?: Need
 }
 
 /** Where a call was admitted, as {@link Ctx} `entered` keeps it. */
@@ -180,6 +185,14 @@ export type Tool = {
   // space-scoped tool meets in the directory never reaches it. A credential
   // narrowed to one space is refused it (`accounted`).
   account?: boolean
+  // The least role in its space a call needs: `owner`, `editor`, `viewer`;
+  // or `self`, what only the person may do, for themselves (mail as them, a
+  // terminal signed in as them). Admitting the caller refuses a seat below it
+  // (`callerIn`), and the Operator routes a call of it by it: one whose role
+  // does not allow it goes to those whose role does (operator-route.ts).
+  // Unsaid, a write needs an editor's and a read a viewer's, by its own
+  // admission.
+  role?: Need
   input: Shape
   // A tool that may take longer than a client waits for a call names what a
   // call is about (`space/app` for a release): a door that lets calls outlast
@@ -570,11 +583,22 @@ let callerIn = async (
   )
   if (administrative ?? (over && await admin(ctx))) who.administrative = true
   if (!who.role) throw await notMember(ctx, space)
-  if (write && !writes(who.role)) {
-    throw refuse('access', `not a writer of ${space.slug}`)
+  if (write && !writes(who.role)) throw below(space, 'editor')
+  if (ctx.need && ctx.need != 'self' && !allows(who.role, ctx.need)) {
+    throw below(space, ctx.need)
   }
   return who
 }
+
+// The refusal of a seat below what a call needs.
+let below = (space: Space, need: Role) =>
+  refuse(
+    'access',
+    need == 'owner'
+      ? `not the owner of ${space.slug} — connect with that space owner's ` +
+        `account and retry with space: '${space.slug}'`
+      : `not a writer of ${space.slug}`,
+  )
 
 // Something in the trash (erase.ts) is asleep: its store answers nothing
 // (graph.ts `#sleep`) and its addresses serve nothing, so a door that names
@@ -702,13 +726,7 @@ export let inSpace = (ctx: Ctx, args: Args, write = false, over = false) =>
 
 /** The caller, refused unless they own the space. */
 export let owner = <T extends { space: Space; who: Who }>(it: T) => {
-  if (it.who.role != 'owner') {
-    throw refuse(
-      'access',
-      `not the owner of ${it.space.slug} — connect with that space owner's ` +
-        `account and retry with space: '${it.space.slug}'`,
-    )
-  }
+  if (it.who.role != 'owner') throw below(it.space, 'owner')
   return it
 }
 

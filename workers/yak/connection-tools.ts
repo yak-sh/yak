@@ -39,6 +39,7 @@ import {
 let CONNECTIONS: Row[] = [
   {
     name: 'connection_attach',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     input: {
@@ -59,12 +60,6 @@ let CONNECTIONS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args)
-      if (who.role != 'owner') {
-        throw refuse(
-          'access',
-          `only the owner of ${space.slug} may attach its connection`,
-        )
-      }
       let connection = text(args.connection, 'connection')
       let c = ctxOf(ctx.env, who)
       let [b] = EID.test(connection)
@@ -100,6 +95,7 @@ let CONNECTIONS: Row[] = [
   },
   {
     name: 'connection_lend',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     input: {
@@ -121,12 +117,6 @@ let CONNECTIONS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args)
-      if (who.role != 'owner') {
-        throw refuse(
-          'access',
-          `only the owner of ${space.slug} may lend its connection`,
-        )
-      }
       let integration = text(args.integration, 'integration')
       let c = ctxOf(ctx.env)
       // An app with none to lend is told so by `lend`.
@@ -152,6 +142,7 @@ let CONNECTIONS: Row[] = [
   },
   {
     name: 'service_connect',
+    role: 'viewer',
     destructive: false,
     idempotent: true,
     input: {

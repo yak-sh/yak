@@ -406,9 +406,13 @@ test('an approval answered on its card or link leaves their Updates; one that la
 // not allow, or vouch for them in a private room (operator-route.ts).
 let jeff = crypto.randomUUID(), matt = crypto.randomUUID()
 let NAMES: Record<string, string> = { [jeff]: 'Jeff', [matt]: 'Matt' }
-let room = (role: 'editor' | 'owner', at: Partial<At> = {}) =>
+let room = (
+  role: 'editor' | 'owner',
+  at: Partial<At> = {},
+  t: Tool = tool('member_add'),
+) =>
   confirming(
-    [tool('member_add')],
+    [t],
     asker(
       env,
       store,
@@ -501,4 +505,17 @@ test('in a private room anyone whose role allows an act may vouch for the person
   ;[row] = await store.g.get([row.entity.eid])
   equal((row.decided as { choice: string }).choice, 'Approve')
   equal(await waits(matt), [])
+})
+
+test('an act needs what its tool declares: one only the person may do is theirs to confirm, even in a private room', async () => {
+  let own = { ...tool('phone_numbers'), role: 'self' as const }
+  let said = String(
+    await room('owner', { private: true }, own).run({
+      number: NUMBER,
+      inbound: true,
+    }),
+  )
+  equal(said.includes('may approve it for them'), false)
+  let a = (await newest()).operator_approval as Approval
+  equal(a.approvers?.some((p) => p != person) ?? false, false)
 })

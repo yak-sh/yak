@@ -66,6 +66,7 @@ import {
   showing,
 } from '@yaks/chat'
 import { cue, passes } from '@yaks/session/turn'
+import type { Routed } from './operator-route.ts'
 
 /** What a person reads when the Operator could not start on their request
  * for a reason that is not theirs to fix. */
@@ -1229,8 +1230,9 @@ export let mailSend = (
   ctx: Ctx,
   space: Space,
   store: Store,
-): Tool => ({
+): Tool & Routed => ({
   name: 'mail_send',
+  role: 'self',
   title: 'Send an email',
   step: { doing: 'Emailing %{name}…', done: 'Emailed %{name}' },
   description:

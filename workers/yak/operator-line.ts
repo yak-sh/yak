@@ -58,6 +58,7 @@ import { apex } from '@yaks/platform/host'
 import { opened, seal } from './lib/token.ts'
 import { meta } from './meta.ts'
 import type { OperatorStore } from './operator-store.ts'
+import type { Routed } from './operator-route.ts'
 
 type Store = OperatorStore
 
@@ -521,8 +522,9 @@ export let phoneNumbers = (
   ctx: Ctx,
   space: Space,
   store: Store,
-): Tool => ({
+): Tool & Routed => ({
   name: 'phone_numbers',
+  role: 'self',
   title: 'Their phone numbers',
   step: { doing: 'Reading their numbers…', done: 'Read their numbers' },
   description:

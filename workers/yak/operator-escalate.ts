@@ -39,6 +39,7 @@ import {
   route,
 } from './operator-route.ts'
 import { type Ctx, refuse } from './tool.ts'
+import { needed } from './tools.ts'
 import type { Directory } from './directory.ts'
 
 type Store = OperatorStore
@@ -466,7 +467,7 @@ export let oddReport = (
     let { person } = await whoseOf(store, context)
     let deciders = holders(
       await ctx.dir.roles(space),
-      args.tool == null ? undefined : String(args.tool),
+      args.tool == null ? undefined : needed(String(args.tool)),
     )
     let parents = (await Promise.all(
       deciders.filter((p) => p != person).map(async (p) => {

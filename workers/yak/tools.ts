@@ -439,6 +439,7 @@ import {
   type Tool,
 } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
+import type { Need } from './operator-route.ts'
 import { read } from '@yaks/yaml'
 import { viewsTools } from './views-tools.ts'
 import { carried, rebind } from './connections.ts'
@@ -3805,6 +3806,7 @@ let OURS: Row[] = [
   },
   {
     name: 'space_set',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     input: {
@@ -3842,7 +3844,7 @@ let OURS: Row[] = [
       },
     },
     run: async (ctx, args) => {
-      let { space, who } = await owns(ctx, args)
+      let { space, who } = await inSpace(ctx, args, true)
       let logo = await logoSent(ctx, space, args, who)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let title = args.title == null ? null : titled(args.title)
@@ -4070,6 +4072,7 @@ let OURS: Row[] = [
   },
   {
     name: 'space_sell',
+    role: 'owner',
     destructive: false,
     // Asked again, it converges on the same connected account (sell.ts).
     idempotent: true,
@@ -4088,7 +4091,7 @@ let OURS: Row[] = [
       },
     },
     run: async (ctx, args) => {
-      let { space } = await owns(ctx, args)
+      let { space } = await inSpace(ctx, args, true)
       let { name, shops } = await payments(ctx.env)
       if (args.disconnect != null && flag(args.disconnect, 'disconnect')) {
         if (!space.seller?.account) {
@@ -6825,6 +6828,7 @@ let OURS: Row[] = [
   },
   {
     name: 'domain_detach',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     openWorld: true,
@@ -6843,7 +6847,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let host = hostname(args.hostname)
-      let { space, who } = await owns(ctx, args)
+      let { space, who } = await inSpace(ctx, args, true)
       let row = (await ctx.dir.hosts(space)).find((h) => h.name == host)
       if (!row) {
         throw refuse(
@@ -7573,6 +7577,7 @@ let OURS: Row[] = [
   },
   {
     name: 'member_add',
+    role: 'owner',
     // The seat is additive and member_remove takes it back; the letter is
     // what leaves, and asking twice mails twice — so not idempotent either.
     destructive: false,
@@ -7623,7 +7628,7 @@ let OURS: Row[] = [
       // their address (T-34236).
       let [owned, named] = await c.time('owns', () =>
         Promise.allSettled([
-          owns(ctx, args),
+          inSpace(ctx, args, true),
           (async () => {
             let email = address(args.email)
             let name = args.name == null
@@ -7769,6 +7774,7 @@ let OURS: Row[] = [
   },
   {
     name: 'member_remove',
+    role: 'owner',
     destructive: false,
     idempotent: true,
     input: {
@@ -7785,7 +7791,7 @@ let OURS: Row[] = [
       required: ['email'],
     },
     run: async (ctx, args) => {
-      let { space, who } = await owns(ctx, args)
+      let { space, who } = await inSpace(ctx, args, true)
       let email = address(args.email)
       let person = await ctx.dir.personAt(email)
       // The other rung, taken back (T-37615): a guest of one app holds a
@@ -7861,6 +7867,7 @@ let OURS: Row[] = [
   // with it in one line and what it is worth in the next.
   {
     name: 'grant',
+    role: 'self',
     // It mints; the undo of a mint is the revoke that is also here, and a
     // revoke ends a token that was going to end anyway.
     destructive: false,
@@ -8558,6 +8565,22 @@ export let TOOLS: Tool[] = [
   ...tool,
   run: async (ctx, args) => {
     await permit(ctx, tool.name)
-    return tool.run(ctx, args)
+    // The call's ctx is its own (agent.ts `running`); its role holds for
+    // this call alone, whatever else it calls.
+    let was = ctx.need
+    ctx.need = tool.role
+    try {
+      return await tool.run(ctx, args)
+    } finally {
+      ctx.need = was
+    }
   },
 }))
+
+let declared = new Map(
+  TOOLS.flatMap((t) => t.role ? [[t.name, t.role] as const] : []),
+)
+
+/** What a call of the platform tool `name` needs, as it declares it
+ * (`Tool.role`). */
+export let needed = (name: string): Need | undefined => declared.get(name)

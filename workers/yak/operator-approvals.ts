@@ -63,11 +63,18 @@ import {
   digestOf,
   LIFE,
 } from './operator-approval-card.ts'
-import { allows, type Member, NEEDS, route } from './operator-route.ts'
+import {
+  allows,
+  type Member,
+  type Need,
+  route,
+  type Routed,
+} from './operator-route.ts'
 import { directoryOf, type Role, type Space } from './directory.ts'
 import type { OperatorStore as Store } from './operator-store.ts'
 import { opened, seal } from './lib/token.ts'
 import { refuse } from './tool.ts'
+import { needed } from './tools.ts'
 import { held, home, page } from './pages.ts'
 import { sessionAt } from './session.ts'
 
@@ -184,9 +191,9 @@ let secretOf = (env: Env) => {
 /** What a turn asks for when an act waits for a tap: its row written and
  * its link texted or handed over, answering what the Operator tells the
  * person. */
-export type Ask = (act: { tool: string; args: Args; say: string }) => Promise<
-  string
->
+export type Ask = (
+  act: { tool: string; args: Args; say: string; need?: Need },
+) => Promise<string>
 
 /** Where a turn's person reads its answer, which says how they approve:
  * `number`, a link texted there; `chat`, the card in their conversation on
@@ -319,13 +326,13 @@ export let asker = (
   now = Date.now,
   others?: Others,
 ): Ask =>
-async ({ tool, args, say }) => {
+async ({ tool, args, say, need }) => {
   // Who answers it, by the one rule (operator-route.ts): where the person's
   // role does not allow it and nothing proved who asked, the person first
   // confirms it is theirs, then those whose role allows it are asked.
   let { why, approvers } = others
     ? route({
-      act: tool,
+      need,
       person: at.person,
       seats: await others.seats(),
       private: at.private,
@@ -423,10 +430,13 @@ export let confirming = (
   turn: Turn,
 ): Tool[] => {
   let named = new Map(tools.map((t) => [t.name, t]))
+  // What a call of a tool needs, as the tool declares it: the Operator's own
+  // on itself, a platform tool's on its row.
+  let needOf = (t: Tool) => (t as Tool & Routed).role ?? needed(t.name)
   return [
     ...tools.map((t) => {
       let says = ESCALATING[t.name]
-      let need = NEEDS[t.name]
+      let need = needOf(t)
       // An act the person's role does not allow waits for someone's whose
       // does, rather than being refused.
       let beyond = !!turn.role && !!need && need != 'self' &&
@@ -437,7 +447,9 @@ export let confirming = (
           run: async (args: Args, context?: Parameters<Tool['run']>[1]) => {
             let say = await says?.(args, turn) ??
               (beyond ? t.title ?? t.name : undefined)
-            return say ? ask({ tool: t.name, args, say }) : t.run(args, context)
+            return say
+              ? ask({ tool: t.name, args, say, need })
+              : t.run(args, context)
           },
         }
         : t
@@ -468,7 +480,12 @@ export let confirming = (
         }
         let say = String(args.say ?? '').trim().replace(/[.?!]+$/, '')
         if (!say) throw refuse('arguments', 'Say what it does.')
-        return ask({ tool, args: (args.args ?? {}) as Args, say })
+        return ask({
+          tool,
+          args: (args.args ?? {}) as Args,
+          say,
+          need: needOf(named.get(tool)!),
+        })
       },
     },
   ]
