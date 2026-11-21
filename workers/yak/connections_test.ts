@@ -35,7 +35,7 @@ import {
   hook as receiveHook,
   own,
 } from './connections.ts'
-import { connectionTools } from './connection-tools.ts'
+import { TOOLS } from './tools.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { db, named, platform } from './testing.ts'
@@ -509,7 +509,7 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
   })
   let app = await liveApp(s)
   let connection = (await s.shown()).list[0].eid
-  let tool = connectionTools.find((t) => t.name == 'connection_attach')!
+  let tool = TOOLS.find((t) => t.name == 'connection_attach')!
   let editor = crypto.randomUUID()
   await s.at.apply([
     { entity: { eid: editor }, person: {} },
