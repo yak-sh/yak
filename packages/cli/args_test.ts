@@ -479,3 +479,17 @@ test('a checkout tool receives the command directory before validating required 
   await assertRejects(() => argsFor(tool, [], reads), Usage)
   assertEquals(await argsFor({ name: 'bare' }, [], local), {})
 })
+
+test('a name=value the schema lacks is refused, never taken as a positional', async () => {
+  let update = { ...tool, positional: ['app', 'path'] }
+  await assertRejects(
+    () => argsFor(update, ['id=T-1', 'x']),
+    Usage,
+    'Unknown option: id',
+  )
+  assertEquals(await argsFor(update, ['app=a', 'p/q=r']), {
+    app: 'a',
+    path: 'p/q=r',
+  })
+  assertEquals(await argsFor(update, ['--', 'id=T-1']), { app: 'id=T-1' })
+})

@@ -280,6 +280,8 @@ export let commandFor = <T extends Grammar>(
       if (
         (t.noun == word && t.verb == next) || (t.verb == word && t.noun == next)
       ) return { verb: t, args: argv.slice(2) }
+      // The name MCP gives the pair (`task_update`) is the same tool.
+      if (word == `${t.noun}_${t.verb}`) return { verb: t, args: argv.slice(1) }
     } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) }
   }
 }
@@ -446,6 +448,15 @@ export let scanned = (
       continue
     }
     while (at < positional.length && given.has(positional[at])) at++
+    // `id=T-5` names an option this tool does not have; taken as the task
+    // it would run on the wrong thing, or on nothing. `--` passes it as is.
+    if (!literal && at < positional.length && /^[a-z_]\w*=/i.test(word)) {
+      throw new Usage(
+        `Unknown option: ${word.slice(0, eq)} — ${commandOf(tool)} takes ${
+          listed(Object.keys(props))
+        }`,
+      )
+    }
     if (at < positional.length) put(positional[at++], word)
     else if (rest && !given.has(rest)) put(rest, word)
     else if (rest || forward) spare.push(word)

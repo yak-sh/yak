@@ -188,6 +188,7 @@ test('a two-word tool answers to either order, and gives up both words', () => {
   assertEquals(commandFor([t], ['session', 'list', '--all'])?.args, ['--all'])
   assertEquals(commandFor([t], ['list', 'session', '--all'])?.args, ['--all'])
   assertEquals(commandFor([t], ['list']), undefined)
+  assertEquals(commandFor([t], ['session_list', '--all'])?.args, ['--all'])
 })
 
 test('a tool that said one word answers to that word, and eats one', () => {
