@@ -2,10 +2,10 @@
 // registry waking or joining. The same recorded runs retain pool retry behavior.
 import {
   type Access,
+  book,
   type Bundle,
   dead,
   detached,
-  drop,
   guard,
   type Storage,
 } from '@yaks/graph'
@@ -45,7 +45,7 @@ let proc = (opts: Opts, storage: Storage, words: Vocab = vocab) => {
     get: outside.get,
     read: outside.read,
     rows: storage.rows,
-    drop: (bundles) => drop(storage, words, bundles),
+    book: (bundles) => book(storage, words, bundles),
     apply: (bundles) =>
       storage.tx((tx) =>
         after(

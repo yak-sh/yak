@@ -1689,14 +1689,15 @@ receive `ReadTx`; writes belong to `apply()`. Pure bundle helpers, content
 hashes and identity derivation are also available through `./bundle`, `./sha256`
 and `./identity` without loading the write pipeline.
 
-`Access` is the data interface (`vocab`, `read`, `rows`, `get`, `apply`, `drop`,
+`Access` is the data interface (`vocab`, `read`, `rows`, `get`, `apply`, `book`,
 `outside`) for consumers whose graph may be owned by another thread. `outside`
-is a `ReadTx` for committed reads and bindings; writes use `apply`. `drop`
-removes entities that are only their writer's own bookkeeping, such as a
-finished effect's run, each under its `$was`, in one storage transaction and
-past every phase of `apply()`: nothing refers to such a row and nothing derives
-from it. Storage keeps what it keeps of any removal. `WriteOpts` carries write
-data options; trace callbacks and deferred effects stay on the local `Graph`.
+is a `ReadTx` for committed reads and bindings; writes use `apply`. `book`
+writes entities that are only their writer's own bookkeeping, such as an
+effect's run, each under its `$was`, in one storage transaction and past every
+phase of `apply()`: nothing refers to such a row and nothing derives from it. A
+bundle with `$delete` is erased with no copy and no tombstone; any other is
+patched, and nothing is created. `WriteOpts` carries write data options; trace
+callbacks and deferred effects stay on the local `Graph`.
 
 The graph chooses no database, declares no domain components, and implements no
 authentication or authorization. Compose it with:

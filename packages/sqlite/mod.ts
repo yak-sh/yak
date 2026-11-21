@@ -130,6 +130,7 @@ import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import {
   births,
+  erase,
   type Names,
   type Numbering,
   patch,
@@ -283,6 +284,8 @@ export {
 export {
   buried,
   dropSql,
+  erase,
+  eraseSql,
   minted,
   mintSql,
   type Names,
@@ -333,6 +336,9 @@ export type Tx = {
   patch: (bundles: Bundle[]) => Entity[]
   /** remove these entities: rows gone, identity tombstoned */
   remove: (entities: Entity[]) => void
+  /** erase these entities, a writer's own bookkeeping: rows and identity
+   * gone, no tombstone */
+  discard: (entities: Entity[]) => void
   /** Erase identities checked by an explicit orphan repair request. */
   prune: (eids: string[]) => void
   /** bring these tombstoned entities back: tombstone gone, identity kept */
@@ -1135,6 +1141,11 @@ export let storage = (
           ),
       )
     },
+    // Bookkeeping leaves whole: rows, identity and all (./write.ts `erase`).
+    discard: (entities) => {
+      let eids = entities.map((e) => e.eid)
+      memo.writes(() => erase(driver, entities, holding(eids)), () => eids)
+    },
     revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
     prune: (eids) => memo.writes(() => prune(driver, vocab, eids), () => eids),
     buried: (before, page) => graves(before, page),
@@ -1332,6 +1343,15 @@ export let storage = (
               ),
           )
           for (let eid of eids) l.removed(eid)
+        },
+        // Erased, an entity leaves nothing to point: the ledger forgets it.
+        discard: (entities) => {
+          let eids = entities.map((e) => e.eid)
+          memo.writes(
+            () => erase(driver, entities, heldBy(driver, eids, l, mend)),
+            () => eids,
+          )
+          for (let eid of eids) l.pointed(eid)
         },
         revive: (eids) =>
           memo.writes(() => revive(driver, eids, l.moved), () => eids),

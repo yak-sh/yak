@@ -1,10 +1,10 @@
 import {
   type Access,
+  book,
   type Bundle,
   type Comp,
   dead,
   detached,
-  drop,
   guard,
   type Query,
   type ReadOpts,
@@ -69,7 +69,7 @@ let worker = (
     get: storage.get,
     read,
     rows: (q, opts) => read(q, opts),
-    drop: (bs) => drop(storage, words, bs),
+    book: (bs) => book(storage, words, bs),
     apply: (bs) =>
       tx((t) =>
         after(guard(bs, t, words), (ready) => {
@@ -112,7 +112,7 @@ let window = async (w: ReturnType<typeof worker>) => {
     claims: number[] = [],
     observations: unknown[] = [],
     owedCounts: number[] = []
-  let write = w.g.apply, released = Promise.withResolvers<void>()
+  let write = w.g.book, released = Promise.withResolvers<void>()
   let began = Promise.withResolvers<void>()
   let run = async (e: { entity: { eid: string } }) => {
     seen.push(e.entity.eid)
@@ -123,7 +123,7 @@ let window = async (w: ReturnType<typeof worker>) => {
     return released.promise
   }
   w.fx.handle({ alpha: run, beta: run })
-  w.g.apply = async (bs, opts) => {
+  w.g.book = async (bs) => {
     if (bs.some((b) => (b.effect as Comp)?.attempts == 1)) {
       claims.push(bs.length)
       // A concurrent writer must leave new work unclaimed while this pass
@@ -137,7 +137,7 @@ let window = async (w: ReturnType<typeof worker>) => {
       )
       owedCounts.push(owed.length)
     }
-    return write(bs, opts)
+    return write(bs)
   }
   let pass = w.p.work(w.g, undefined, 1)
   await began.promise
@@ -171,8 +171,8 @@ test('a pool commits its fair claim window before handlers and reserves the conc
 let raced = async (w: ReturnType<typeof worker>, removed: boolean) => {
   let seen: string[] = []
   w.fx.handle({ alpha: () => seen.push('a'), beta: () => seen.push('b') })
-  let write = w.g.apply, stolen = false
-  w.g.apply = async (bs, opts) => {
+  let write = w.g.apply, book = w.g.book, stolen = false
+  w.g.book = async (bs) => {
     if (!stolen && bs.some((b) => (b.effect as Comp)?.attempts == 1)) {
       stolen = true
       await write([{
@@ -182,7 +182,7 @@ let raced = async (w: ReturnType<typeof worker>, removed: boolean) => {
         },
       }])
     }
-    return write(bs, opts)
+    return book(bs)
   }
   await w.p.work(w.g, undefined, 1)
   return { seen, errors: w.errors }
@@ -197,7 +197,7 @@ for (let removed of [false, true]) {
 
 let refused = async (w: ReturnType<typeof worker>) => {
   w.fx.handle({ alpha: () => {}, beta: () => {} })
-  w.g.apply = () => Promise.reject(Error('unavailable'))
+  w.g.book = () => Promise.reject(Error('unavailable'))
   let error = await w.p.work(w.g, undefined, 1).then(
     () => null,
     (e) => e.message,

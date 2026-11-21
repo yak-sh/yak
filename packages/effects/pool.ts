@@ -43,8 +43,10 @@
 // them, or starved by a loaded box, comes back late, and the worker takes no
 // more until it catches up. A host that wants a fixed bound still says `max`.
 //
-// Success drops its run under the same claim guard, straight through storage
-// (@yaks/graph `drop`); it leaves no done row.
+// Every write to a run under its claim goes straight through storage
+// (@yaks/graph `book`), past `apply()`'s phases: nothing stamps it or moves it
+// to another archetype. Success erases its run under the same claim guard; it
+// leaves no done row and no tombstone.
 // There are two ways a run does not complete, and they are not the same:
 //
 //   It reported. The handler threw, so the row is marked with the error and
@@ -518,18 +520,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       throw error
     }
   }
+  // A run is the pool's own bookkeeping: nothing refers to it and nothing
+  // derives from it, so it is written through storage alone (@yaks/graph
+  // `book`). Through `apply()` a claim was stamped `created` and moved to
+  // another archetype, eleven rows on the platform tracker where one does.
   let swap = (g: Access, eid: Eid, was: Comp, patch: Comp) =>
     landed(async () =>
-      (await g.apply([changing(eid, was, patch)], {
-        trusted: true,
-      })).some((b) => b.entity.eid == eid)
+      (await g.book([changing(eid, was, patch)])).includes(eid)
     )
-  // A finished run's row leaves under the same guard. Nothing refers to it
-  // and nothing derives from it, so it leaves through storage alone
-  // (@yaks/graph `drop`): through `apply()`, its phases and the host's own
-  // wrapping took a sixth of a yaks.app sign-in.
+  // A finished run's row leaves under the same guard, erased.
   let drop = (g: Access, eid: Eid, was: Comp) =>
-    landed(async () => (await g.drop([guarded(eid, was)])).includes(eid))
+    landed(async () =>
+      (await g.book([{ ...guarded(eid, was), $delete: true }])).includes(eid)
+    )
 
   // One claimed run: the event rebuilt from what the target holds now, the
   // handler, and the outcome written back under the same claim. A run with
@@ -825,9 +828,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       // Reads and owner checks can yield to a writer that fills a slot.
       // Reserve against the current admission count, not the scan's earlier one.
       if (!room()) return
+      // `next` keys three of the run's indexes, so a claim clears it only
+      // where a backoff set it.
       let mine = {
         attempts: cut ? attempts : attempts + 1,
-        next: null,
+        ...row.next ? { next: null } : {},
         ...claim(),
       }
       claims.push({ eid, row, mine })
@@ -891,11 +896,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       } else if (claims.length) {
         let committed: Set<Eid> | undefined
         try {
-          let applied = await g.apply(
-            claims.map(({ eid, row, mine }) => changing(eid, row, mine)),
-            { trusted: true },
+          committed = new Set(
+            await g.book(
+              claims.map(({ eid, row, mine }) => changing(eid, row, mine)),
+            ),
           )
-          committed = new Set(applied.map((b) => b.entity.eid))
         } catch (error) {
           if (!(error instanceof Stale)) throw error
         }

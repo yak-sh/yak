@@ -1159,7 +1159,8 @@ test('an explicit pass runs the retries that are due', async () => {
     // One pass and out: the host works what is owed, then leaves the pool.
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['b1'])
-    assertEquals((await host.storage.get(['r1']))[0].effect, undefined)
+    // Settled, the run is erased: no row, no grave.
+    assertEquals(await host.storage.get(['r1']), [])
   } finally {
     await host.close()
   }

@@ -58,8 +58,8 @@ export let serve = (port: Port, graph: Access): PortLink =>
           return graph.get(...args as [Eid[], string[]?, ReadOpts?])
         case 'apply':
           return graph.apply(...args as [Bundle[], WriteOpts?])
-        case 'drop':
-          return graph.drop(...args as [Bundle[]])
+        case 'book':
+          return graph.book(...args as [Bundle[]])
         case 'outside.read':
           return graph.outside.read(...args as [Taken, ReadOpts?])
         case 'outside.get':
@@ -98,7 +98,7 @@ export let remote = (port: Port, vocab: Vocab): Remote => {
     rows: (...args) => ask('rows', args),
     get: (...args) => ask('get', args),
     apply: (...args) => ask('apply', args),
-    drop: (...args) => ask('drop', args),
+    book: (...args) => ask('book', args),
     outside: {
       read: (...args) => ask('outside.read', args),
       get: (...args) => ask('outside.get', args),

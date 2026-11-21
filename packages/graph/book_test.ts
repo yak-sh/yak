@@ -1,4 +1,4 @@
-// `drop`: bookkeeping removed through storage alone, under its `$was`.
+// `book`: bookkeeping written through storage alone, under its `$was`.
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
@@ -38,36 +38,60 @@ let shelf = (async: boolean) => {
 }
 let pages = (n: number) => ({ book: { pages: token(n) } })
 
+let gone = (was: Bundle['$was']) => ({
+  entity: { eid: row },
+  $was: was,
+  $delete: true,
+})
+
 for (let async of [false, true]) {
   let kind = async ? 'async' : 'sync'
 
-  test(`a drop removes what its $was still names, and no hook hears it (${kind})`, async () => {
+  test(`a book erases what its $was still names, and no hook hears it (${kind})`, async () => {
     let { g, heard, ready } = shelf(async)
     await ready()
-    assertEquals(await g.drop([{ entity: { eid: row }, $was: pages(7) }]), [
-      row,
-    ])
-    let [gone] = await g.get([row])
-    assertEquals(gone.book, undefined)
+    assertEquals(await g.book([gone(pages(7))]), [row])
+    assertEquals(await g.get([row]), [])
     assertEquals(heard, [])
-    assertEquals(await g.drop([{ entity: { eid: row }, $was: pages(7) }]), [])
+    assertEquals(await g.book([gone(pages(7))]), [])
   })
 
-  test(`a drop whose $was moved removes nothing (${kind})`, async () => {
+  test(`a book patches what its $was still names, unstamped and unheard (${kind})`, async () => {
+    let { g, heard, ready } = shelf(async)
+    await ready()
+    let [was] = await g.get([row])
+    let write = { entity: { eid: row }, $was: pages(7), book: { pages: 8 } }
+    assertEquals(await g.book([write]), [row])
+    let [now] = await g.get([row])
+    assertEquals([now.book, now.updated], [{ pages: 8 }, was.updated])
+    assertEquals(heard, [])
+  })
+
+  test(`a book whose $was moved writes nothing (${kind})`, async () => {
     let { g, ready } = shelf(async)
     await ready()
-    let stale = async () =>
-      await g.drop([{ entity: { eid: row }, $was: pages(8) }])
+    let stale = async () => await g.book([gone(pages(8))])
     await assertRejects(stale, Stale)
     let [kept] = await g.get([row])
     assertEquals(kept.book, { pages: 7 })
   })
 }
 
-test('a drop takes an entity and its $was, nothing else', () => {
+test('a book creates nothing', async () => {
+  let { g } = shelf(false)
+  let made = {
+    entity: { eid: row },
+    $was: { book: { pages: token(null) } },
+    book: { pages: 1 },
+  }
+  assertEquals(await g.book([made]), [])
+  assertEquals(await g.get([row]), [])
+})
+
+test('a book writes declared components only', () => {
   let { g } = shelf(false)
   assertThrows(
-    () => g.drop([{ entity: { eid: row }, book: { pages: 1 } }]),
+    () => g.book([{ entity: { eid: row }, shelf: { at: 1 } }]),
     Refused,
   )
 })

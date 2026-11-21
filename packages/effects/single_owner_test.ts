@@ -36,6 +36,13 @@ let proc = (
     writes.push(...result)
     return result
   }
+  // The pool's writes to its runs, past apply (@yaks/graph `book`).
+  let book = g.book
+  g.book = async (b) => {
+    let done = await book(b)
+    writes.push(...b.filter((x) => !x.$delete && done.includes(x.entity.eid)))
+    return done
+  }
   fx.handle({
     post_note: (e) => void ran.push(e.entity.eid),
     post_gone: (e) => void ran.push(`gone ${e.entity.eid}`),
@@ -159,9 +166,12 @@ test('a run whose ending the store refuses waits and runs again, not cut off', a
     backoff: () => 10,
   })
   let refusing = true
-  let drop = a.g.drop
+  let book = a.g.book
   // Every run's ending refused: post_note's and post_swept's.
-  a.g.drop = (b) => refusing ? Promise.reject(Error('no such index')) : drop(b)
+  a.g.book = (b) =>
+    refusing && b.some((x) => x.$delete)
+      ? Promise.reject(Error('no such index'))
+      : book(b)
   await a.g.apply([post('p1')])
   for (let i = 0; i < 3; i++) await a.fx.work(a.g)
   let note = () =>

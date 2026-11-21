@@ -776,9 +776,9 @@ export let reaching = async (
     prose: (texts) => texts,
     apply: writing,
     admit: (bundles, opts) => writing(bundles, { ...opts, check: true }, true),
-    // Each reached store drops its own bookkeeping; none is this one's.
-    drop: () => {
-      throw new Refused('a reach holds no bookkeeping of its own to drop')
+    // Each reached store books its own bookkeeping; none is this one's.
+    book: () => {
+      throw new Refused('a reach holds no bookkeeping of its own to book')
     },
   }
   return self

@@ -104,9 +104,11 @@ for (let [name, make] of Object.entries(makers)) {
   })
   let booked = make(), books = graph({ storage: booked, vocab })
   await books.apply([{ entity: { eid: 'run' }, note: { title: 'Done' } }])
-  test(`${name} a drop removes bookkeeping and keeps no copy of it`, async () => {
-    equal(await books.drop([{ entity: { eid: 'run' } }]), ['run'])
-    equal((await books.get(['run']))[0].note, undefined)
+  test(`${name} a book erases bookkeeping and keeps no copy or grave of it`, async () => {
+    equal(await books.book([{ entity: { eid: 'run' }, $delete: true }]), [
+      'run',
+    ])
+    equal(await books.get(['run']), [])
     equal(await booked.trash!(['run']), [])
   })
   let cleaning = make(), clean = graph({ storage: cleaning, vocab })

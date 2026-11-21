@@ -684,21 +684,38 @@ export let removeSql = (
   tables: string[],
   entities: Entity[],
   at: string,
-): Write[] => {
-  if (!entities.length) return []
-  return [
-    ...tables.toReversed()
-      .filter((comp) => comp != 'entity' && comp != TOMBSTONE)
-      .flatMap((comp) =>
-        entities.map((e): Delete => ({
-          t: 'delete',
-          from: comp,
-          where: eq(col('entity'), owner(e.eid)),
-        }))
-      ),
-    ...entities.map((e) => bury(e.eid, at)),
-  ]
-}
+): Write[] => [
+  ...clearSql(tables, entities),
+  ...entities.map((e) => bury(e.eid, at)),
+]
+
+/**
+ * The statements that erase a set of entities, a writer's own bookkeeping:
+ * their component rows as {@link removeSql} clears them, any before-image the
+ * trash kept of them (a patch that cleared a property keeps one), then their
+ * identity, with no tombstone and no pointer left to rewrite. Nothing else
+ * refers to such an entity, so its spine row goes with it.
+ */
+export let eraseSql = (tables: string[], entities: Entity[]): Write[] => [
+  ...clearSql([TRASH, ...tables], entities),
+  ...entities.map((e): Delete => ({
+    t: 'delete',
+    from: 'entity',
+    where: eq(col('eid'), val(e.eid)),
+  })),
+]
+
+// Each component row a set of entities holds, deleted owner by owner.
+let clearSql = (tables: string[], entities: Entity[]): Delete[] =>
+  tables.toReversed()
+    .filter((comp) => comp != 'entity' && comp != TOMBSTONE)
+    .flatMap((comp) =>
+      entities.map((e): Delete => ({
+        t: 'delete',
+        from: comp,
+        where: eq(col('entity'), owner(e.eid)),
+      }))
+    )
 
 // The tombstone an entity set's removal ends with.
 let bury = (eid: string, at: string): Insert => ({
@@ -1306,4 +1323,14 @@ export let remove = (
   at: string = new Date().toISOString(),
 ): void => {
   for (let s of removeSql(held, entities, at)) write(driver, s)
+}
+
+/** Erase these entities, rows and identity, leaving no tombstone
+ * ({@link eraseSql}). `held` is as {@link remove} takes it. */
+export let erase = (
+  driver: Driver,
+  entities: Entity[],
+  held: string[] = heldBy(driver, entities.map((e) => e.eid)),
+): void => {
+  for (let s of eraseSql(held, entities)) write(driver, s)
 }

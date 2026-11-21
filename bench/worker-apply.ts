@@ -106,12 +106,13 @@ export async function measure(path: string, samples: number, backlog: number) {
         bundles[0]?.entity.eid,
         () => g.apply(bundles, o),
       ) as Promise<Bundle[]>,
-    // A finished run's row leaves through `drop` (@yaks/effects pool.ts).
-    drop: (bundles) =>
+    // A run's claim and its finished row's erasure go through `book`
+    // (@yaks/effects pool.ts).
+    book: (bundles) =>
       timed(
-        'settle',
+        bundles.some((b) => b.$delete) ? 'settle' : kindOf(bundles),
         bundles[0]?.entity.eid,
-        () => g.drop(bundles),
+        () => g.book(bundles),
       ) as Promise<string[]>,
   }
   let settled = 0

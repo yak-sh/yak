@@ -1,9 +1,9 @@
 import {
   type Access,
+  book,
   type Bundle,
   dead,
   detached,
-  drop,
   guard,
 } from '@yaks/graph'
 import { after } from '@yaks/fp'
@@ -52,20 +52,21 @@ let waiting = async (boundary: 'discovery' | 'claim') => {
       return plan(await storage.get(['run']))
     },
     rows: () => [{ eid: 'run' }],
-    drop: (bundles) => drop(storage, vocab, bundles),
-    apply: async (bundles) => {
+    book: async (bundles) => {
       if (boundary == 'claim' && bundles.some((b) => b.$was && !dead(b))) {
         reached.resolve()
         await admitted.promise
       }
-      return storage.tx((tx) =>
+      return book(storage, vocab, bundles)
+    },
+    apply: (bundles) =>
+      storage.tx((tx) =>
         after(guard(bundles, tx, vocab), (ready) => {
           tx.remove(ready.filter(dead).map((b) => b.entity))
           tx.patch(ready.filter((b) => !dead(b)))
           return ready
         })
-      )
-    },
+      ),
   }
   let p = pool({
     slots: fx.slots,

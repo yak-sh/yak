@@ -6,11 +6,11 @@
 import { assert, assertEquals } from '@std/assert'
 import {
   type Access,
+  book,
   type Bundle,
   type Comp,
   dead,
   detached,
-  drop,
   graph,
   guard,
   type Reads,
@@ -119,7 +119,7 @@ let committingGraph: Access = {
   rows: committingStore.rows,
   outside: committingOutside,
   apply: commitWrite,
-  drop: (bundles) => drop(committingStore, committingWords, bundles),
+  book: (bundles) => book(committingStore, committingWords, bundles),
 }
 let committingFx = effects(committingWords, {
   singleOwner: true,
@@ -984,6 +984,8 @@ let bare = (owed: string[], others: string[] = []) => {
       }
       return bundles
     },
+    book: (bundles: Bundle[]) =>
+      (g.apply(bundles) as Bundle[]).map((b) => b.entity.eid),
   } as unknown as Access
   let says = () => new Promise<void>((done) => heard = done)
   return { g, runs, said, says, workers }

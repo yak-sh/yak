@@ -130,6 +130,9 @@ export type Tx = {
   evict: (eids: Eid[]) => void
   /** remove these entities: their components go, their identity is tombstoned */
   remove: (entities: Entity[]) => void
+  /** erase these entities, a writer's own bookkeeping: components and
+   * identity go, with no tombstone */
+  discard: (entities: Entity[]) => void
   /** Erase identities the graph has checked as empty and unreferenced. */
   prune: (eids: Eid[]) => void
   /** bring these tombstoned entities back, with their identity and no
@@ -955,6 +958,13 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         let grave = tombstoned(entity)
         laid.set(grave, new Date().toISOString())
         put(eid, grave)
+      }
+    },
+    discard: (entities) => {
+      for (let { eid } of entities) {
+        save(eid)
+        cold.delete(eid)
+        put(eid, undefined)
       }
     },
     prune: (eids) => {
