@@ -1,5 +1,5 @@
 import { line, line as ql } from '@yaks/query'
-import { ok, test } from '@yaks/testing'
+import { afterAll, ok, test } from '@yaks/testing'
 import { identityEid } from '@yaks/graph'
 import {
   assert,
@@ -116,6 +116,7 @@ let dids = [{
 }] as Record<string, string>[]
 let asked: URLSearchParams[] = []
 let real = globalThis.fetch
+afterAll(() => globalThis.fetch = real)
 globalThis.fetch = (input, init) => {
   let url = new URL(input instanceof Request ? input.url : String(input))
   if (url.host != 'voip.ms') return real(input, init)

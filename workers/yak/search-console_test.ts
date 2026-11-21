@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { afterAll, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { D1Like } from '@yaks/d1'
 import { registration } from '@yaks/connections'
@@ -38,6 +38,7 @@ let space = (await dir.at(eid))!
 
 let asked: Request[] = []
 let real = globalThis.fetch
+afterAll(() => globalThis.fetch = real)
 let id_token = `e30.${
   btoa(JSON.stringify({ email: 'jeff@example.com' })).replace(/=+$/, '')
 }.sig`

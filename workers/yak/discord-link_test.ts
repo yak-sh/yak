@@ -4,7 +4,7 @@
 // fetch it is called through: its token door answers the server the bot was
 // added to, and `/users/@me` the person who signed in.
 
-import { test } from '@yaks/testing'
+import { afterAll, test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { D1Like } from '@yaks/d1'
 import { registration } from '@yaks/connections'
@@ -48,6 +48,7 @@ let space = (await dir.at(barn))!
 let me = { id: '', global_name: '' }
 let scopes: string[] = []
 let real = globalThis.fetch
+afterAll(() => globalThis.fetch = real)
 globalThis.fetch = (input, init) => {
   let r = new Request(input, init)
   let url = new URL(r.url)
