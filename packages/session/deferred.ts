@@ -9,7 +9,8 @@
 // keeps that prefix whatever a turn reads of its transcript (an anchor, a
 // window, a summary). A tool the runner holds but a turn does not is
 // `withheld`: neither listed, sent nor run, and a `tool_load` naming it is told
-// why, so the turn works with what it holds instead of guessing at names.
+// why, so the turn works with what it holds instead of guessing at names. A
+// call naming some it cannot load loads the rest and names those it refused.
 import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { CallError } from '@yaks/tools/errors'
@@ -144,17 +145,16 @@ export let loading = (offered: Tool[], separate = false): Tool[] => {
       let names = (args.names ?? []) as string[]
       let held = names.flatMap((n) => named(n, sent) ?? [])
       let missing = names.filter((n) => !named(n, known) && !named(n, sent))
-      if (missing.length) {
-        throw new CallError(
-          'tool',
-          unknown(missing, [...known, ...sent], withheld),
-        )
-      }
+      let refused = missing.length
+        ? unknown(missing, [...known, ...sent], withheld)
+        : ''
       let loaded = names.flatMap((n) => named(n, known) ?? [])
+      if (!loaded.length && !held.length) throw new CallError('tool', refused)
       return [
         ...loaded.length ? [`Loaded ${loaded.join(', ')}.`] : [],
         ...held.length ? [`${held.join(', ')} you hold already.`] : [],
         'Call them directly.',
+        ...refused ? [refused] : [],
       ].join(' ')
     },
   }
