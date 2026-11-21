@@ -94,7 +94,11 @@ export let effects = (_host: unknown, options: Options): Handlers => {
           try {
             await carry(
               at.env as Env,
-              { query: async (q) => await at.graph.read(q as Taken) },
+              {
+                query: async (q) => await at.graph.read(q as Taken),
+                apply: async (rows) =>
+                  await at.graph.apply(rows, { trusted: true }),
+              },
               event.entity.eid,
             )
           } catch (error) {

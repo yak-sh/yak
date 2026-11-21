@@ -77,6 +77,10 @@ export type Integration = {
    * `identify` granted also links the Discord account of whoever added it
    * (`discord-account`) */
   links?: string
+  /** a person's own account at the service (a Discord user), which says who
+   * they are there: a connection through it is its connector's, never the
+   * space's */
+  personal?: boolean
   /** the chat platform its connections talk through (@yaks/chat), by name:
    * connecting it is all it takes for the Operator and the space's apps to
    * hear and answer there */
@@ -251,6 +255,7 @@ let CARRIED = {
   account: 1,
   account_title: 1,
   links: 1,
+  personal: 1,
   chat: 1,
   scopes: 1,
   params: 1,

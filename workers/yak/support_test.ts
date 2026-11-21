@@ -9,6 +9,7 @@ import {
   opening,
   opens,
   read,
+  relayed,
   saying,
   signer,
   type Thread,
@@ -145,18 +146,45 @@ test('the same call opens the same thread and owes the same letter', () => {
   equal((more[3].mail as { target: string }).target, more[0].entity.eid)
 })
 
-test("a person's letter goes to the public address, a test account's to the box's alone", async () => {
-  let dir = (email: string) => ({
+test("a person's letter goes to the public address, the owner's to TaskMaster, a test account's to the box's alone", async () => {
+  let dir = (email: string, seat: 'owner' | 'editor' | null = null) => ({
     nameAt: () => Promise.resolve('Ann'),
     emailAt: () => Promise.resolve(email),
+    space: () => Promise.resolve({ eid: 'yak' } as never),
+    sitting: () => Promise.resolve(new Map(seat ? [['yak', seat]] : [])),
   })
-  let to = async (email: string) => {
-    let me = await signer(dir(email), 'p')
+  let to = async (email: string, seat?: 'owner' | 'editor') => {
+    let me = await signer(dir(email, seat), 'p')
     let [, address] = opening({}, { words: 'x' }, where, { ...letter, ...me })
     return address.email
   }
   equal(await to('ann@example.com'), { address: 'hello@yaks.app' })
+  equal(await to('ann@example.com', 'editor'), { address: 'hello@yaks.app' })
+  equal(await to('jeff@example.com', 'owner'), { address: 'task@bot.yak.sh' })
+  equal(await to('admin@bot.yak.sh', 'owner'), { address: 'hello@yaks.app' })
   equal(await to('checks@bot.yak.sh'), { address: 'hello@bot.yak.sh' })
+})
+
+test('an answer to the owner is relayed to TaskMaster once, with its words', () => {
+  let t = { ...thread('jeff', 's'), title: 'Subscribe to queries' }
+  let m = said('m', 'platform', '2026-11-21T00:00:00.000Z')
+  let [address, mail] = relayed(
+    {},
+    t,
+    { ...m, words: 'Use subscription_set.' },
+    'm',
+  )
+  equal(address.email, { address: 'task@bot.yak.sh' })
+  equal(relayed({}, t, m, 'm')[1].entity.eid, mail.entity.eid)
+  equal((mail.doc as { title: string }).title, 'answered: Subscribe to queries')
+  assertStringIncludes(
+    String((mail.doc as { body: string }).body),
+    'Use subscription_set.',
+  )
+  equal(
+    (relayed({}, t, undefined, t.eid)[1].doc as { title: string }).title,
+    'completed: Subscribe to queries',
+  )
 })
 
 test("the platform's answer is a message without support, a fix edge and a mark", () => {

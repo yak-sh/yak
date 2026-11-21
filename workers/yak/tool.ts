@@ -456,7 +456,10 @@ let held = async (ctx: Ctx, app: string) => {
 // are asked at once, and the seats are what the rest of a request asks of
 // them too (directory.ts `sitting`).
 export let admin = async (
-  { dir, person }: Pick<Ctx, 'dir' | 'person'>,
+  { dir, person }: {
+    dir: Pick<Ctx['dir'], 'space' | 'sitting'>
+    person: Ctx['person']
+  },
 ): Promise<boolean> => {
   let [meta, seats] = await Promise.all([
     dir.space(META.space),

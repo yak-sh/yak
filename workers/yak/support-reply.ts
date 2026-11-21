@@ -18,14 +18,26 @@
 //     person's Wire holds it for that agent alone, and its next tool result
 //     carries it (stream.ts `Reply`), across reconnects.
 //
+//   - for a thread the platform's owner opened, a letter to TaskMaster
+//     (support.ts `relayed`), as his feedback's own letter went: whichever
+//     session answers or closes it, TaskMaster hears it.
+//
 // A thread said signed out has nobody to carry it to.
 import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Env } from './env.ts'
-import type { Meta } from './meta.ts'
-import { ownOf, type Row, seatsLine } from './directory.ts'
-import { type Message, noted, read, type Thread, told } from './support.ts'
+import { KERNEL, type Meta } from './meta.ts'
+import { directoryOf, ownOf, type Row, seatsLine } from './directory.ts'
+import {
+  type Message,
+  noted,
+  owns,
+  read,
+  relayed,
+  type Thread,
+  told,
+} from './support.ts'
 import type { Telling } from './operator-updates.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { topOf } from '@yaks/session'
@@ -90,7 +102,7 @@ export let carried = (
  */
 export let carry = async (
   env: Env,
-  store: Pick<Meta, 'query'>,
+  store: Pick<Meta, 'query' | 'apply'>,
   eid: string,
 ): Promise<void> => {
   let [row] = await store.query(line`.entity.eid=${eid}&?comment`)
@@ -99,6 +111,10 @@ export let carry = async (
   let what = t && carrying(t, eid)
   if (!t || !what) return
   let c = carried(t, eid, what.m, env)
+  let dir = directoryOf(env.STORE)
+  if (await owns(dir, t.person, await dir.emailAt(t.person!))) {
+    await store.apply(relayed(env, t, what.m, eid), KERNEL)
+  }
   let space = t.space ?? await own(store, c.person)
   let heard = space ? await builder(env, space, c) : null
   if (heard) return

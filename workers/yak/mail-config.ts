@@ -24,6 +24,12 @@ export let REPLY_TO = replyTo()
 // `mail_task`). Internal mail never goes to REPLY_TO.
 export let INTERNAL = 'hello@bot.yak.sh'
 
+// OWNER is where the platform relays its owner's own words (the feedback tool,
+// and its answers to him): TaskMaster's address on the box, the one he writes
+// to himself, so what he says through an Operator reaches TaskMaster as his
+// letters do, and not the support desk everyone else's feedback goes to.
+export let OWNER = 'task@bot.yak.sh'
+
 /** A platform letter's words and envelope: who it reads as from (`name`,
  * else the platform's), where an answer goes (`reply`, else nowhere but the
  * sender), the address it leaves from (`from`, else FROM), when it was written

@@ -198,6 +198,10 @@
           "description": "another integration naming the person who signs in through this one, by name, whose own connection the same sign-in makes",
           "examples": ["discord-account"]
         },
+        "personal": {
+          "type": "boolean",
+          "description": "a person's own account at the service, such as their Discord user, which says who they are there: a connection through it belongs to whoever connects it, never to the space they connect it from"
+        },
         "chat": {
           "type": "string",
           "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",

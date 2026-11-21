@@ -33,9 +33,9 @@ import { type Bundle, mint, minted } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
 import { KERNEL, type Meta } from './meta.ts'
-import { INTERNAL, toPlatform } from './mail-config.ts'
+import { INTERNAL, OWNER, toPlatform } from './mail-config.ts'
 import { type Host, replyTo, url as hostUrl } from '@yaks/platform/host'
-import { isTestAddress } from '@yaks/platform/bots'
+import { isFleetAddress, isTestAddress } from '@yaks/platform/bots'
 import { REPO } from '@yaks/platform/names'
 import { SHORT } from '@yaks/id'
 import type { Directory } from './directory.ts'
@@ -549,6 +549,24 @@ export let told = (t: Thread, m: Message | undefined, env: Host): string =>
     ].join(' '),
   ].join('\n\n')
 
+/** The platform's answer `m` (none: the thread was only marked completed),
+ * or the completion `eid` names, as a letter to TaskMaster for a thread its
+ * owner opened (mail-config.ts `OWNER`): his signal reaches TaskMaster even
+ * when another session answers and closes the thread. Derived from `eid`, so
+ * carrying it again writes the same letter. */
+export let relayed = (
+  env: Host,
+  t: Thread,
+  m: Message | undefined,
+  eid: string,
+): Bundle[] =>
+  toPlatform(OWNER, derived('relayed', eid), {
+    subject: `${m ? 'answered' : 'completed'}: ${t.title}`,
+    body: `${told(t, m, env)}\n\n—\nthread \`${t.eid}\`\n` +
+      `read: \`yak admin support ${t.eid}\``,
+    about: eid,
+  })
+
 /** Who asks to read a thread, as a door that holds the directory asks it:
  * `person` signed in, narrowed to one space or none. */
 export let asking = (
@@ -585,33 +603,49 @@ export let lately = async (store: Meta, person: string): Promise<number> => {
 }
 
 /** Who said it, on the letter, and where the letter goes. A person's goes to
- * the platform's public address, which the box files as work and its owner
- * gets a copy of. A test account's (@yaks/platform/bots) goes to the
- * platform's own address (mail-config.ts `INTERNAL`), which only the box
- * reads: the fleet's own checks reach the agents that act on feedback, and
- * no person's inbox. Nobody signed in is said plainly, so a reader knows
- * there is no address to answer. */
+ * the platform's public address, which the box files as support work. The
+ * platform's owner's goes to TaskMaster ({@link owns}), as his own letters
+ * do. A test account's (@yaks/platform/bots) goes to the platform's own
+ * address (mail-config.ts `INTERNAL`), which only the box reads: the fleet's
+ * own checks reach the agents that act on feedback, and no person's inbox.
+ * Nobody signed in is said plainly, so a reader knows there is no address to
+ * answer. */
 export let signer = async (
-  dir: Pick<Directory, 'nameAt' | 'emailAt'>,
+  dir: Pick<Directory, 'nameAt' | 'emailAt' | 'space' | 'sitting'>,
   person: string | null | undefined,
 ) => {
   let by = person ? await dir.nameAt(person) : null
   let email = person ? await dir.emailAt(person) : null
+  let to = isTestAddress(email ?? '')
+    ? INTERNAL
+    : await owns(dir, person, email)
+    ? OWNER
+    : null
   return {
     email,
-    ...isTestAddress(email ?? '') ? { to: INTERNAL } : {},
+    ...to ? { to } : {},
     from: person
       ? `${by ?? 'someone'}${email ? ` <${email}>` : ''}`
       : 'someone, signed out',
   }
 }
 
+/** Whether `person` is the platform's owner: an owner of its meta space
+ * (tool.ts `admin`) who is a person, not the fleet's own admin account. */
+export let owns = async (
+  dir: Pick<Directory, 'space' | 'sitting'>,
+  person: string | null | undefined,
+  email: string | null,
+) =>
+  !!person && !!email && !isFleetAddress(email) &&
+  await admin({ dir, person })
+
 /** Add a person's words to a thread, as the feedback tool and the thread's
  * page both do, with the letter TaskMaster is owed; the message's eid. */
 export let adding = async (
   store: Meta,
   env: Host,
-  dir: Pick<Directory, 'nameAt' | 'emailAt'>,
+  dir: Pick<Directory, 'nameAt' | 'emailAt' | 'space' | 'sitting'>,
   t: Thread,
   said: Said,
   headers: Record<string, string>,

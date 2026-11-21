@@ -23,6 +23,7 @@ import {
   choose,
   connected,
   directTo,
+  linked,
   offers,
   ownLinks,
   PLATFORMS,
@@ -441,6 +442,39 @@ test("a person is written to directly at the account they linked, by their space
   } finally {
     globalThis.fetch = was
   }
+})
+
+// Whose words a Discord account's are (chat.ts `linked`): the person who
+// linked it, whatever space they linked it from. A space's connection stands
+// for nobody, even its one owner, so a second owner joining changes nothing.
+test('a linked Discord account is its person’s, and a space’s link is nobody’s', async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let ann = crypto.randomUUID(), barn = crypto.randomUUID()
+  let link = (owner: string, account: string) => ({
+    entity: { eid: crypto.randomUUID() },
+    connection: {
+      integration: 'discord-account',
+      owner,
+      account,
+      status: 'connected',
+    },
+  })
+  await meta(p.env).apply([
+    { entity: { eid: ann }, person: {} },
+    { entity: { eid: barn }, space: { slug: 'barn', store: 'barn' } },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: { person: ann, space: barn, role: 'owner' },
+    },
+    link(ann, 'ann-on-discord'),
+    link(barn, 'barn-on-discord'),
+  ], KERNEL)
+  let discord = PLATFORMS.get('discord')!
+  assertEquals(await linked(p.env, discord, 'ann-on-discord'), ann)
+  assertEquals(await linked(p.env, discord, 'barn-on-discord'), undefined)
 })
 
 // What the Operator reads back of a room (chat.ts `recent`): by the bot that

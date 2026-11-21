@@ -1412,9 +1412,12 @@ export let connecting = async (
           name,
         )
       }
+      // A person's own account says who they are, so it is theirs wherever
+      // they connect it: a space's would stand for whichever of its owners
+      // there is, and for nobody once it has two.
       let made = await c.graph.apply(
         await need(c.graph.read, {
-          owner: space.eid,
+          owner: existing?.personal ? who.person! : space.eid,
           integration: name,
           hosts,
           // Said only by whoever makes it; adding a key says nothing of it.

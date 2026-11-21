@@ -13,6 +13,7 @@
   "userinfo": "https://discord.com/api/users/@me",
   "account": "id",
   "account_title": "global_name",
+  "personal": true,
   "hosts": [
     "discord.com"
   ],

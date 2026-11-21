@@ -542,9 +542,9 @@ let held = (env: Env, via: string, space: string) =>
   through(env, via, line`.${CONNECTION}.owner=${space}`)
 
 /** The person here whose `platform.user` account is `id`, if one linked it:
- * a connection they hold, or one a space holds, which stands for its owner
- * as the Operator's own Google does (connections.ts `ownConnection`) when it
- * has exactly one. */
+ * a connection they hold. The account is personal (@yaks/connections
+ * `Integration.personal`), so connecting it from a space's settings makes it
+ * the person's own, never the space's. */
 export let linked = async (env: Env, platform: Platform, id: string) =>
   (await linkedAll(env, platform, [id])).get(id)
 
@@ -559,19 +559,12 @@ export let linkedAll = async (
   if (!platform.user || !ids.length) return found
   let rows = await read(
     env,
-    line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${ids}&.${CONNECTION}.status=connected&*`,
+    line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${ids}&.${CONNECTION}.status=connected&.${CONNECTION}.owner.person&*`,
   )
-  if (!rows.length) return found
-  let { directoryOf } = await need()
-  let dir = directoryOf(env.STORE)
   for (let b of rows) {
     let { owner, account } = comp(b, CONNECTION)
-    if (!owner || found.has(String(account))) continue
-    let space = await dir.at(String(owner))
-    if (!space) found.set(String(account), String(owner))
-    else {
-      let owners = await dir.owners(space)
-      if (owners.length == 1) found.set(String(account), owners[0])
+    if (owner && !found.has(String(account))) {
+      found.set(String(account), String(owner))
     }
   }
   return found
