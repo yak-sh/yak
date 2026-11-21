@@ -3,7 +3,7 @@ import type { Binding } from '@yaks/cloudflare-mail'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
-import { directoryOf, type Space } from './directory.ts'
+import { directoryOf, META, type Space } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
 import { textSigned } from './operator-channels.ts'
@@ -152,7 +152,10 @@ for (
     await dir.personAt(from),
   )
 }
-let operators = services.size
+// The Operators the letters made, beside the platform's own space's, which a
+// seat written there tells (facets/directory-graph.ts `seatsHeard`).
+let platformSpace = (await dir.space(META.space))?.eid
+let operators = [...services.keys()].filter((s) => s != platformSpace).length
 let danaInvited = await dir.referral(person)
 
 test('a letter to the sign-up address makes its sender a person with their own space and its Operator', async () => {

@@ -160,6 +160,10 @@
           "type": "boolean",
           "description": "read over the store the wake is kept in, rather than everything its person reaches (on yaks.app, the space's apps)"
         },
+        "over": {
+          "type": "string",
+          "description": "the graph its host reads the query over, by the host's name for it, where it is neither the store the wake is kept in nor everything its person reaches (on yaks.app, `members`: the space's seats in the directory)"
+        },
         "seen": {
           "type": "object",
           "description": "each row the query answered at the last look, by eid, and a digest of what it held"

@@ -5,7 +5,8 @@
 //                                          when to come back, to what, and for
 //                                          whom
 //   fired{at}                              the last time it fired
-//   watch{query, local, seen, changes}     a query whose change it fires on
+//   watch{query, tool, args, local, over, seen, changes}
+//                                          a query whose change it fires on
 //   occurrence{wake, at, call, error}      one firing that did work
 //
 // One entity, one alarm. `at` is the whole schedule for a one-shot — a
@@ -92,6 +93,9 @@ export type Watch = {
   args?: Record<string, unknown> | null
   /** read over the store the wake is kept in, not all its person reaches */
   local?: boolean | null
+  /** the graph its host reads it over, by the host's name for it, where it
+   * is neither the store the wake is kept in nor all its person reaches */
+  over?: string | null
   /** each row the last look saw, by eid, with a digest of it */
   seen?: Record<string, string> | null
   /** what changed at the look the wake last fired for, in words */

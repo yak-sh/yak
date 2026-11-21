@@ -14,6 +14,8 @@ import {
   walkTo,
 } from './directory.ts'
 import type { Host } from '@yaks/platform/host'
+import type { Bundle } from '@yaks/graph'
+import { conjoin, line, whole } from '@yaks/query'
 import { manageAt } from '@yaks/platform/routes'
 
 /** One person here: where they stand, what to call them, and where
@@ -168,4 +170,41 @@ export let aloud = (
       ]
       : [],
   ]
+}
+
+/**
+ * The space's seats as `person` reads them, narrowed by `narrow` (a line over
+ * `member` rows): every seat for an owner, and anyone else's own alone, as
+ * the People page shows the space's people to its owner only. Each seat's
+ * person is named `{eid, name}`, as a store's door names a person for the
+ * people who read it. What the Operator's member_list answers, and what a
+ * subscription to it watches (operator.ts `watching`).
+ */
+export let seatsAs = async (
+  dir: Pick<Directory, 'read' | 'persons'>,
+  space: Pick<Space, 'eid'>,
+  person: string,
+  role: Role | null,
+  narrow = '',
+): Promise<Bundle[]> => {
+  if (!role) return []
+  let rows = await dir.read(whole(conjoin(
+    narrow,
+    line`.member.space=${space.eid}`,
+    role == 'owner' ? '' : line`.member.person=${person}`,
+  )))
+  let seats = rows.filter((r) => r.member)
+  let seat = (r: Bundle) => r.member as { person: string; role: Role }
+  let names = await dir.persons([...new Set(seats.map((r) => seat(r).person))])
+  return seats.map((r) => ({
+    entity: { eid: r.entity.eid },
+    member: {
+      space: space.eid,
+      person: {
+        eid: seat(r).person,
+        name: names.get(seat(r).person)?.name ?? '',
+      },
+      role: seat(r).role,
+    },
+  }))
 }

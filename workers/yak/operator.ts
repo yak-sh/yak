@@ -66,8 +66,10 @@ import {
   invoke,
   runner as toolRunner,
   unreferenced,
+  type Watch,
   watched,
 } from '@yaks/tools'
+import { seatsAs } from './people.ts'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { trialDoc } from '@yaks/trial/vocab'
@@ -749,16 +751,10 @@ let watchOf = (
   local: boolean,
 ): Tool['watch'] =>
   t.watch &&
-  ((args) => {
-    let said = watched(t.watch!, args)
-    if ('refused' in said) {
-      throw new CallError(
-        'arguments',
-        `A subscription to ${t.name} watches the query it answers, which ${said.refused} plays no part in: leave ${said.refused} out`,
-      )
-    }
-    return { query: said.query, ...local ? { local } : {} }
-  })
+  ((args) => ({
+    query: watchedOr(t.watch!, t.name, args).query,
+    ...local ? { local } : {},
+  }))
 let watchable = (
   tool: Tool,
   t: Pick<NamedTool, 'name' | 'watch'>,
@@ -768,6 +764,74 @@ let watchable = (
   return watch
     ? { ...tool, description: tool.description + SUBSCRIBABLE, watch }
     : tool
+}
+
+// What a watch over the space's seats names the graph it reads (@yaks/wake
+// `over`).
+let MEMBERS = 'members'
+
+// member_list's query, as a reading tool declares one (@yaks/tools `watched`).
+let SEATS = ['.member', '.member.person=%{person}', '.member.role=%{role}']
+
+/** Who is in the space and as what, as `person` reads it (people.ts
+ * `seatsAs`): a subscription to it watches the seats live. */
+export let memberList = (
+  dir: Pick<Directory, 'read' | 'persons'>,
+  space: Space,
+  person: string,
+  role: Role | null,
+): Tool => ({
+  name: 'member_list',
+  title: 'See who is in the space',
+  step: { doing: 'Reading members…', done: 'Read members' },
+  readOnly: true,
+  description:
+    `Who is in ${space.slug} and as what: each member's seat, its person (eid and name) and their role (owner, editor or viewer). An owner reads every seat; anyone else reads their own. Name a person (their eid) or a role to read only those.${SUBSCRIBABLE}`,
+  parameters: {
+    type: 'object',
+    properties: {
+      person: {
+        type: 'string',
+        description: 'Only this person’s seat, by their eid.',
+      },
+      role: {
+        type: 'string',
+        enum: ['owner', 'editor', 'viewer'],
+        description: 'Only seats with this role.',
+      },
+    },
+  },
+  watch: (args) => ({
+    ...watchedOr(SEATS, 'member_list', args),
+    over: MEMBERS,
+  }),
+  run: async (args) =>
+    JSON.stringify(
+      await seatsAs(
+        dir,
+        space,
+        person,
+        role,
+        watchedOr(SEATS, 'member_list', args).query,
+      ),
+    ),
+})
+
+// The query a declaration answers for these arguments, or the refusal of an
+// argument it plays no part in.
+let watchedOr = (
+  watch: Watch,
+  name: string,
+  args: Record<string, unknown>,
+) => {
+  let said = watched(watch, args)
+  if ('refused' in said) {
+    throw new CallError(
+      'arguments',
+      `A subscription to ${name} watches the query it answers, which ${said.refused} plays no part in: leave ${said.refused} out`,
+    )
+  }
+  return said
 }
 
 // Discovery is refreshed before every ask: a deploy may add words and tools.
@@ -1558,7 +1622,7 @@ export let operating = (
   // What a subscription watches, read as the person its wake is set for:
   // over the space through their reach, as their graph_query reads it, or
   // over this store (operator-schedules.ts).
-  let watching: Watching = async (wake, { query, local }) => {
+  let watching: Watching = async (wake, { query, local, over }) => {
     let person = String((wake.wake as { for?: string } | undefined)?.for ?? '')
     if (!person) throw refuse('missing', 'That subscription names nobody.')
     let eid = await spaceOf(store)
@@ -1570,6 +1634,12 @@ export let operating = (
       space,
       options.directory ?? opening(env),
     )
+    // A watch over the space's seats reads the directory as member_list
+    // does; the directory tells this store of each seat written in the space
+    // (facets/directory-graph.ts `seatsHeard`).
+    if (over == MEMBERS) {
+      return await seatsAs(dir(), space, person, ctx.role ?? null, query)
+    }
     // A watch's query is its own, as the subscription wrote it.
     if (local) {
       return await seenBy(store, { person, member: writes(ctx.role) })
@@ -2441,6 +2511,7 @@ export let operating = (
       imageNew(env, space, store),
       ...pickTools(store, ctx.person!),
       ...wakeTools(store),
+      memberList(dir(), space, ctx.person!, ctx.role ?? null),
       ...subscriptionTools(store, watching, hold),
       escalationAnswer(store, ctx, space),
     ]

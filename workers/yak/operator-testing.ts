@@ -190,8 +190,15 @@ export let operatorService = (
   handleChannels(operator, env)
   let fetch = async (req: Request) => {
     assertEquals(req.method, 'POST')
-    assertEquals(req.headers.get('x-space-eid'), held.space)
     let path = new URL(req.url).pathname
+    // What a commit the space's subscriptions read stirs them with, as the
+    // Builder answers it (build.ts `HEARD`).
+    if (path == '/heard' && req.headers.get('x-yak-kernel') == '1') {
+      let { heard } = await import('./operator-schedules.ts')
+      let at = await heard(store, false)
+      return new Response(null, { status: at == null ? 410 : 204 })
+    }
+    assertEquals(req.headers.get('x-space-eid'), held.space)
     // A reply to the Operator's letter, which the kernel brings for its
     // writer.
     if (req.headers.get('x-yak-kernel') == '1') {

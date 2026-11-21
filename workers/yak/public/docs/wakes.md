@@ -313,16 +313,21 @@ query's rows declares that query as `watch` in its vocabulary (`graph_query`,
 `task_list`, `goal_list`), and the subscription watches it over the store the
 tool reads. A tool whose answer comes from anywhere else (an outside API, a
 listing it builds) declares none; it is refused, and never re-asked on a clock.
-Each is a `wake` row in the Operator's own store that also carries the query and
-the rows it saw last. It keeps no cadence: it hears each commit live. An app the
-query read tells the Operator of each commit to it, as an app tells a store that
-borrows its words, and a commit in the Operator's own store is heard there.
-About two seconds later the query is read again as the person who set it, so
-writes close together make one look; when its rows differ (a row arrives,
-changes or leaves the answer), the change is a turn in their conversation with
-what changed after the words, paid from the space's budget, and the Operator
-tells them what they should hear with `notification_send`. A look that finds
-nothing new costs no turn. It watches at most 200 rows.
+
+`member_list` is subscribable too: who is in the space and as what, read from
+the directory as the person reads it (an owner every seat, anyone else their
+own). The directory tells the space's Operator of each seat written or taken
+away, so a subscription to `member_list` with a person's eid hears their role
+change within seconds. Each is a `wake` row in the Operator's own store that
+also carries the query and the rows it saw last. It keeps no cadence: it hears
+each commit live. An app the query read tells the Operator of each commit to it,
+as an app tells a store that borrows its words, and a commit in the Operator's
+own store is heard there. About two seconds later the query is read again as the
+person who set it, so writes close together make one look; when its rows differ
+(a row arrives, changes or leaves the answer), the change is a turn in their
+conversation with what changed after the words, paid from the space's budget,
+and the Operator tells them what they should hear with `notification_send`. A
+look that finds nothing new costs no turn. It watches at most 200 rows.
 
 ## An app telling the Operator
 

@@ -1,5 +1,6 @@
 // Directory reads through its cache and the serving app roster that must be
 // fresh and coherent across apps in one request.
+import type { Options } from './facets/store.ts'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -492,7 +493,7 @@ let held = () => {
     )
   // A request the directory decides inside the write (`$own`) is decided by
   // its own hook, over these rows.
-  let [decides] = plugins()
+  let [decides] = plugins(undefined, { store: {} } as Options)
   let tx = { read: (q: string) => answer(`?q=${encodeURIComponent(q)}`) }
   let apply = async (body: string) => {
     let entities = await decides.authorize!(

@@ -61,7 +61,9 @@ export let rows = (
     let plugin of [
       ...trash(undefined, options),
       ...meter(undefined, options),
-      ...owning(),
+      // The directory's own, which tells a space's Operator of its seats
+      // through whatever BUILDER the env holds when it commits.
+      ...owning(undefined, { store: { meta: true, env } } as Options),
       ...signin(undefined, { store: { now: () => Date.now() } } as Options),
     ]
   ) g.use(plugin)

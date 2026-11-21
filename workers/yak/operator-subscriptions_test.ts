@@ -1,6 +1,6 @@
 import { line } from '@yaks/query'
 import { short } from '@yaks/id'
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
@@ -15,6 +15,7 @@ import { receive } from './operator-channels.ts'
 import { heard, ownCommits, uncadenced } from './operator-schedules.ts'
 import { SOON } from '@yaks/wake'
 import { operatorContext } from './operator.ts'
+import { seatsAs } from './people.ts'
 
 // A person asks their Operator to tell them when something in the space
 // changes: it subscribes to a query, a wake that watches it (@yaks/wake
@@ -34,6 +35,17 @@ await dir.apply({
     {
       entity: { eid: crypto.randomUUID() },
       member: { person, space: eid, role: 'owner' },
+    },
+  ],
+}, owner)
+// Matt, an editor of the space, who asked to hear once his role changes.
+let matt = crypto.randomUUID(), seat = crypto.randomUUID()
+await dir.apply({
+  entities: [
+    { entity: { eid: matt }, person: {}, email: { address: 'matt@x.test' } },
+    {
+      entity: { eid: seat },
+      member: { person: matt, space: eid, role: 'editor' },
     },
   ],
 }, owner)
@@ -100,6 +112,12 @@ let script: Record<string, [string, unknown]> = {
     say: 'The branch moved.',
     tool: 'graph_query',
     args: { q: '.meeting', branch: 2 },
+  }],
+  'Who is in the space?': ['member_list', {}],
+  "Tell me when Matt's role changes": ['subscription_set', {
+    say: "Tell them Matt's role changed.",
+    tool: 'member_list',
+    args: { person: matt },
   }],
   'What am I subscribed to?': ['subscription_list', {}],
   'What wake-ups do I have?': ['wake_list', {}],
@@ -212,6 +230,23 @@ let appsRefused = results.at(-1)!
 await ask('Watch a branch')
 let branchRefused = results.at(-1)!
 
+// The space's seats, read and watched as the person reads them: the
+// directory tells the Operator of each seat written in the space
+// (facets/directory-graph.ts `seatsHeard`).
+await ask('Who is in the space?')
+let members = JSON.parse(results.at(-1)!.split('\n')[1])
+let mattSees = await seatsAs(dir, space, matt, 'editor')
+await ask("Tell me when Matt's role changes")
+let [bySeat] = await store.g.read('.watch.tool=member_list&*')
+await dir.apply({
+  entities: [{ entity: { eid: seat }, member: { role: 'owner' } }],
+}, owner)
+await until(async () =>
+  !!((await store.g.get([bySeat.entity.eid]))[0].wake as { at?: string }).at
+)
+await look()
+let [promoted] = await firedFor(bySeat)
+
 test('subscription_set reads the query as the person, and what it answers now is no change', () => {
   assertEquals(Object.keys(first), [road])
   assertEquals((sub.wake as { every?: string }).every, undefined)
@@ -312,4 +347,18 @@ test("subscription_set watches a reading tool's declared query, over the space o
 test('a tool whose answer is no store query is refused, and so is an argument its query has no part for', () => {
   assertStringIncludes(appsRefused, 'app_list is not subscribable')
   assertStringIncludes(branchRefused, 'branch plays no part in')
+})
+
+test('member_list says who is in the space as the person reads it: an owner every seat, anyone else their own', () => {
+  let seen = (rows: { member: { person: { eid: string }; role: string } }[]) =>
+    rows.map((r) => [r.member.person.eid, r.member.role]).sort()
+  assertEquals(seen(members), [[matt, 'editor'], [person, 'owner']].sort())
+  assertEquals(seen(mattSees as never), [[matt, 'editor']])
+})
+
+test('a subscription to member_list hears a role change in the directory within seconds', () => {
+  assertEquals((bySeat.watch as { over?: string }).over, 'members')
+  let said = JSON.stringify(promoted)
+  assertStringIncludes(said, 'member_list')
+  assertStringIncludes(said, 'owner')
 })
