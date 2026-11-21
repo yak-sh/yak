@@ -252,6 +252,50 @@ test('an anchor the provider no longer holds is answered by the whole conversati
   assertEquals(!!refused?.ask, true)
 })
 
+test('an anchored turn sends only what its conversation lacks, and continues only while the host instructions stand', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    calls(['c1', 'hi']),
+    says('r2', 'done'),
+    says('r3', 'again'),
+    says('r4', 'and again'),
+  ])
+  let told = 'Be brief.'
+  let here = 'Ada is home.'
+  let deps: Deps = {
+    model,
+    tools: [echo],
+    mint,
+    requestInstructions: () => Promise.resolve({ instructions: told }),
+    requestItems: () => Promise.resolve([{ kind: 'instruction', text: here }]),
+  }
+  let sent = () =>
+    asked.map((a) => [
+      a.anchor,
+      a.held,
+      a.turnContext?.map((i) =>
+        i.kind == 'instruction' && i.text.split('\n').at(-1)
+      ),
+    ])
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  // The anchored turn's conversation holds the tools and the context.
+  assertEquals(sent(), [
+    [undefined, undefined, [here]],
+    ['r1', ['echo'], []],
+  ])
+  // Changed context travels again; changed instructions start over.
+  here = 'Ada is out.'
+  await appendEntry(g, ids.s, 'where is she?')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  told = 'Be thorough.'
+  await appendEntry(g, ids.s, 'and now?')
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(sent().slice(2), [
+    ['r2', ['echo'], ['Ada is out.']],
+    [undefined, undefined, ['Ada is out.']],
+  ])
+})
+
 test('an ask answered by another model than it asked names the one that answered', async () => {
   let answered = async (name: string) => {
     let g = world()

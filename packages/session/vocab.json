@@ -1291,6 +1291,13 @@
           "ref": "offer",
           "death": "keep",
           "description": "on an ask, the tools it sent the model, as the offer row named by their sha256"
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "on an ask, the turn context its provider holds for the conversation, each item by the first 16 hex of its sha256: what it sent, and what its anchor held where it continued one. An anchored turn sends only the items its anchor's lacks"
         }
       }
     },

@@ -113,7 +113,7 @@ test('a cold projection keeps the current turn, whole dialog, and open calls', (
   ]
   let original = structuredClone(rows)
   let before = nextElision(rows, 's')
-  equal(ids(elide(rows, 's', before)), [
+  equal(ids(elide(rows, before)), [
     'l1',
     'l4',
     'l7',
@@ -139,7 +139,7 @@ test('current turn notes admitted before the input survive a cold continuation',
     line(5, { ask: {} }),
     line(6, { output: { source: 'l5' }, content: { body: 'partial reply' } }),
   ]
-  equal(ids(elide(rows, 's', nextElision(rows, 's'))), [
+  equal(ids(elide(rows, nextElision(rows, 's'))), [
     'l2',
     'l3',
     'l4',
@@ -405,4 +405,30 @@ test('where a summary is due while the cache is warm, a session that drops does 
   let { dropped, summaries, sent } = await due()
   equal([dropped, summaries], [GONE, 0])
   equal(sent.includes('and once more'), true)
+})
+
+test('a fork that has asked nothing leaves out what its parent stopped sending', () => {
+  let parent = (seq: number, comps: object) => ({
+    ...line(seq, comps),
+    entry: { session: 'p', seq },
+  })
+  let rows = [
+    parent(1, { content: { body: 'look into it' } }),
+    parent(2, { call: {} }),
+    parent(3, { result: { call: 'l2' }, content: { body: 'found' } }),
+    parent(4, { ask: {} }),
+    parent(5, { output: { source: 'l4' }, content: { body: 'fixed' } }),
+    parent(6, { content: { body: 'and now?' } }),
+    parent(7, { ask: { elided_before: 6 } }),
+    line(8, { content: { body: 'from an outside agent' } }),
+  ]
+  equal(elidedBefore(rows, 's'), 6)
+  equal(ids(elide(rows, elidedBefore(rows, 's'))), [
+    'l1',
+    'l4',
+    'l5',
+    'l6',
+    'l7',
+    'l8',
+  ])
 })

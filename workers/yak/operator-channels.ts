@@ -14,7 +14,7 @@ import type { Env } from './env.ts'
 import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
 import { envelope, signed, signedFor } from '@yaks/platform/letters'
-import { digest } from '@yaks/graph/sha256'
+import { digest, sha256 } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
 import { keep } from '@yaks/blob'
 import { attachmentRows } from '@yaks/blob/attachment'
@@ -511,8 +511,11 @@ export let hear = async (
       words,
       [
         ...await open.beside(words, { files, said: text }),
-        ...leads.map((lead, n) =>
-          led(open.session, id, channel, lead, words.by, n)
+        ...await unsaid(
+          g,
+          leads.map((lead, n) =>
+            led(open.session, id, channel, lead, words.by, n)
+          ),
         ),
       ],
       { trusted: true },
@@ -554,7 +557,13 @@ let led = (
 ): Bundle => {
   let room = `the ${PLATFORMS.get(channel)?.title ?? channel} room`
   return {
-    entity: { eid: derivedEid(`operator-lead|${id}${n ? `|${n}` : ''}`) },
+    entity: {
+      eid: derivedEid(
+        lead.place
+          ? `operator-place|${session}|${sha256(lead.body)}`
+          : `operator-lead|${id}${n ? `|${n}` : ''}`,
+      ),
+    },
     entry: {
       session,
       from: lead.heard && !lead.place ? `others in ${room}` : room,
@@ -565,6 +574,18 @@ let led = (
     ...lead.heard ? { heard: {} } : {},
     $actor: { by, via: session },
   }
+}
+
+// The leads a conversation does not hold yet. A room's own basics are one
+// entry a conversation while they read the same (`led`'s eid names the
+// conversation and their text): said before every message, they repeated in
+// each turn's history.
+let unsaid = async (g: OperatorStore['g'], leads: Bundle[]) => {
+  let held = new Set(
+    (await g.get(leads.map((b) => b.entity.eid), ['entry']))
+      .filter((b) => b?.entry).map((b) => b.entity.eid),
+  )
+  return leads.filter((b) => !held.has(b.entity.eid))
 }
 
 // Words' framing (`BY`), after who wrote them ({@link speakerOf}).

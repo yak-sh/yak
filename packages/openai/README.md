@@ -98,6 +98,23 @@ holds (past OpenAI's retention, 30 days by default) is refused with a
 `ModelError` coded `UNANCHORED` (@yaks/model), and the caller sends the whole
 conversation again.
 
+A request with a cache prefix (`Request.cachePrefix`) sends its instructions as
+the conversation's first items, the shared part ending at a 12-hour breakpoint,
+then declares the tools only some requests have in an `additional_tools` item
+after them. An anchored one sends neither again: the conversation OpenAI holds
+already has them. It declares only the tools its anchor's request lacked
+(`Request.held`), so loading a tool mid-conversation keeps the cached prefix,
+and @yaks/session anchors such a request only while its instructions read as the
+anchor's did. Measured on GPT-6.2 Sol (T-2432): a later request with a different
+roster read the shared prefix, and an anchored request that added a tool read
+22,958 of its 24,323 tokens from the cache.
+
+Don't run such requests in background mode (`background`). There OpenAI also
+declares the `additional_tools` ahead of the breakpoint: the same request
+counted 33,328 input tokens against 21,805 in the foreground, nothing after a
+changed roster was read from the cache, and an anchored request that added a
+tool read none of it.
+
 The `openai` provider a config names (`./provider`) stores on OpenAI's own API,
 reached on a key (`key`, `OPENAI_API_KEY`) or through the AI Gateway
 (`gateway`), and anchors each request on the reply before it. Through the Codex

@@ -561,3 +561,48 @@ test('Responses caches the shared developer message before space and turn contex
     ]),
   ])
 })
+
+test('an anchored request keeps the cached prefix: no instructions again, and only the tools its anchor lacked', () => {
+  let tool = (name: string) => ({
+    name,
+    description: name,
+    parameters: { type: 'object' },
+  })
+  let ask: Request = {
+    ...req,
+    model: 'gpt-6.2-sol',
+    anchor: 'resp_1',
+    instructions: 'Platform. Ada.',
+    cachePrefix: {
+      key: 'operator',
+      length: 9,
+      retention: 43_200,
+      tools: ['tool_load'],
+    },
+    tools: ['tool_load', 'echo', 'mail_send'].map(tool),
+    held: ['tool_load', 'echo'],
+    items: [{ kind: 'user', text: 'Mail Ada.' }],
+    turnContext: [],
+  }
+  let sent = body(ask)
+  assertEquals(sent.instructions, undefined)
+  assertEquals(sent.previous_response_id, 'resp_1')
+  assertEquals(sent.tools, [{
+    type: 'function',
+    strict: false,
+    ...tool('tool_load'),
+  }])
+  assertEquals(sent.input, [
+    {
+      type: 'additional_tools',
+      role: 'developer',
+      tools: [{ type: 'function', strict: false, ...tool('mail_send') }],
+    },
+    ...input([{ kind: 'user', text: 'Mail Ada.' }]),
+  ])
+  // Nothing new to declare, nothing declared.
+  assertEquals(
+    body({ ...ask, held: ['tool_load', 'echo', 'mail_send'] }).input,
+    input([{ kind: 'user', text: 'Mail Ada.' }]),
+  )
+})

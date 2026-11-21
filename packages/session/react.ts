@@ -530,16 +530,25 @@ export let reading = async (
 // The names of the tools the newest ask among `entries` sent (its
 // `sending.offer`), read only where some tool waits to be loaded: a turn sends
 // them again (./deferred.ts `schemas`), whatever it reads of its transcript.
-let sentBefore = async (
+let sentBefore = (
   g: Graph,
   entries: Bundle[],
   tools: Tool[],
-): Promise<string[]> => {
-  let offer = comp(newestAsk(entries) ?? {} as Bundle, 'sending')?.offer
-  if (
-    typeof offer != 'string' || !g.vocab.comp('offer') ||
-    !tools.some((t) => t.deferred)
-  ) return []
+): Promise<string[]> =>
+  tools.some((t) => t.deferred)
+    ? toolsSent(g, newestAsk(entries))
+    : Promise.resolve([])
+
+// An item of turn context by what it says: the first 16 of its sha256.
+let itemHash = (item: Item): string => sha256(JSON.stringify(item)).slice(0, 16)
+
+let strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x == 'string') : []
+
+// The names of the tools `ask` sent the model (its `sending.offer`).
+let toolsSent = async (g: Graph, ask?: Bundle): Promise<string[]> => {
+  let offer = comp(ask ?? {} as Bundle, 'sending')?.offer
+  if (typeof offer != 'string' || !g.vocab.comp('offer')) return []
   let [row] = await g.get([offer], ['offer'])
   let sent = comp(row ?? {} as Bundle, 'offer')?.tools
   return Array.isArray(sent)
@@ -1831,14 +1840,24 @@ export let react = async (
       b.ask && seqOf(b) > seqOf(asked!) &&
       comp(b, 'interrupted')?.code == UNANCHORED
     )
-  let anchorId = providerModel.anchor && asked && sameModel && !refused
-    ? providerModel.anchor(asked)
+  // A host's own instructions (`requestInstructions`) are read every ask and
+  // travel in the conversation, where a provider keeps them for its cache:
+  // the conversation continues only while they read as its anchor sent them.
+  let requested = deps.requestInstructions
+    ? await deps.requestInstructions(session)
     : undefined
+  let sameTold = !requested?.instructions ||
+    comp(asked ?? {} as Bundle, 'sending')?.told ==
+      sha256(requested.instructions)
+  let anchorId =
+    providerModel.anchor && asked && sameModel && sameTold && !refused
+      ? providerModel.anchor(asked)
+      : undefined
   if (anchored && !anchorId) return whole()
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let asking = askingOf(entries)
-  let said = lines(elide(context(entries), session, elision), asking)
+  let said = lines(elide(context(entries), elision), asking)
   let window = anchorId
     ? said.filter((b) =>
       seqOf(b) > seqOf(asked!) ||
@@ -1938,6 +1957,19 @@ export let react = async (
       ...moment,
     )
   }
+  // Turn context travels after the conversation and is never kept in the
+  // transcript, but a provider holding an anchored conversation keeps every
+  // request's: an anchored turn leaves out what its conversation already
+  // holds, each item known by its hash (`sending.context`).
+  let holds: string[] | undefined
+  if (turnItems) {
+    let held = new Set(
+      anchorId ? strings(comp(asked!, 'sending')?.context) : [],
+    )
+    let fresh = turnItems.filter((i) => !held.has(itemHash(i)))
+    turnItems.splice(0, turnItems.length, ...fresh)
+    holds = [...new Set([...held, ...fresh.map(itemHash)])]
+  }
   let req: Request = {
     signal: deps.signal,
     model: spelled,
@@ -1948,7 +1980,7 @@ export let react = async (
     ...questions ? { questions } : {},
     ...sending?.tokens ? { tokens: Number(sending.tokens) } : {},
     effort: effort == null ? undefined : String(effort),
-    ...deps.requestInstructions ? await deps.requestInstructions(session) : {
+    ...requested ?? {
       instructions: cached ??
         (instructed
           ? await instructed
@@ -1972,6 +2004,7 @@ export let react = async (
       { name, description, parameters },
     ) => ({ name, description, parameters })),
     anchor: anchorId,
+    ...anchorId ? { held: await toolsSent(g, asked) } : {},
     conversation: session,
   }
   // Compact once the next request would fill `compactAt` of the model's
@@ -2149,6 +2182,7 @@ export let react = async (
           // again what these entries loaded of them.
           ...executor ? { tools: tools.map((tool) => tool.name) } : {},
           ...offer ? { offer } : {},
+          ...holds ? { context: holds.length ? holds : null } : {},
         },
       }
       : {},
@@ -2365,7 +2399,7 @@ export let react = async (
           entries = (await reading(g, session, deps, true)).entries
           cut.entries = entries
           cut.said = lines(
-            elide(context(entries), session, elision),
+            elide(context(entries), elision),
             askingOf(entries),
           )
             .filter((b) => !b.prompt)

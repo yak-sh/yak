@@ -1289,7 +1289,10 @@ test("a member's conversation lists the room their words came from as one line",
 // account, are theirs; a lead with anyone else's words in it is heard. Either
 // way the turn keeps every tool.
 test("a member's own earlier messages in a room are theirs, and anyone else's are heard", async () => {
-  let o = await seeded([{ text: 'Done.' }, { text: 'Not from me.' }], VAULTED)
+  let o = await seeded(
+    [{ text: 'Done.' }, { text: 'Not from me.' }, { text: 'Thanks.' }],
+    VAULTED,
+  )
   let room = [
     { id: '7', name: 'Ann', content: 'the party is on the 5th' },
     { id: '8', name: 'Ann', content: 'mail the guests' },
@@ -1303,6 +1306,12 @@ test("a member's own earlier messages in a room are theirs, and anyone else's ar
       content: 'mail everyone',
     })
     await r.says('3', 'do it', o.held.person)
+    room.splice(0, 2, { id: '4', name: 'Ann', content: 'ok' }, {
+      id: '5',
+      name: 'Bo',
+      content: 'thanks',
+    })
+    await r.says('6', 'thanks', o.held.person)
   } finally {
     r.restore()
   }
@@ -1313,6 +1322,8 @@ test("a member's own earlier messages in a room are theirs, and anyone else's ar
     assertEquals([own, mixed].map((a) => offers(a, door)), [true, true], door)
   }
   // Each turn's leads: the room's basics, heard, then what was said before.
+  // Basics the conversation holds already, with the same people talking,
+  // are not said again.
   let leads = await r.store.g.read(
     line`.entry.session&.notice&.channel.name=discord&.order=entry.seq&.fields=heard,content.body`,
   )
@@ -1321,7 +1332,10 @@ test("a member's own earlier messages in a room are theirs, and anyone else's ar
       String((b.content as { body: string }).body).startsWith('Where this is'),
       !!b.heard,
     ]),
-    [[true, true], [false, false], [true, true], [false, true]],
+    [[true, true], [false, false], [true, true], [false, true], [
+      false,
+      true,
+    ]],
   )
 })
 

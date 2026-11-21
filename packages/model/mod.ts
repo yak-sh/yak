@@ -267,6 +267,12 @@ export type Request = {
    * coded {@link UNANCHORED}, and the caller asks again with the whole
    * conversation. */
   anchor?: string
+  /** with an `anchor`, the tools by name the conversation it continues
+   * already declares: what the anchor's own request was sent. A provider
+   * that keeps declarations in the conversation declares only the others, so
+   * a tool loaded mid-conversation leaves the cached prefix whole. Unknown
+   * where absent. */
+  held?: string[]
   /** the conversation this request continues, the same for each of its
    * requests, so a provider that keys its prompt cache by conversation finds
    * the prefix the last one cached */

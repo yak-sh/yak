@@ -174,15 +174,37 @@ export let reasons = (model: string): boolean => REASONS.test(model)
 let explicitCache = (model: string): boolean =>
   /^gpt-(?:5\.[6-9]|[6-9])(?:[.-]|$)/.test(model)
 
+// A request with a cache prefix sends its instructions as the conversation's
+// first items, the shared part ending at a breakpoint, and the tools only
+// some requests have (`scoped`) after them, so every conversation of an
+// application reads one cached prefix. An anchored request continues a
+// conversation the API holds, instructions and declared tools included: it
+// sends only what followed, declaring the scoped tools the anchor's request
+// was not sent (`Request.held`). The caller anchors only while the
+// instructions are unchanged.
 let prompt = (req: Request, scoped: Frame[]) => {
   let prefix = req.cachePrefix
-  if (!prefix || !req.instructions || req.anchor) {
+  let explicit = explicitCache(req.model)
+  let cache = explicit
+    ? { prompt_cache_options: { mode: 'implicit', ttl: '30m' } }
+    : {}
+  if (prefix && req.instructions && req.anchor) {
+    let held = new Set(req.held)
+    let added = scoped.filter((t) => !held.has(String(t.name)))
+    return {
+      input: [
+        ...added.length ? [declaring(added)] : [],
+        ...input([...req.items, ...req.turnContext ?? []]),
+      ],
+      ...cache,
+    }
+  }
+  if (!prefix || !req.instructions) {
     return {
       ...req.instructions ? { instructions: req.instructions } : {},
       input: input([...req.items, ...req.turnContext ?? []]),
     }
   }
-  let explicit = explicitCache(req.model)
   let shared = req.instructions.slice(0, prefix.length)
   let local = req.instructions.slice(prefix.length)
   return {
@@ -203,16 +225,20 @@ let prompt = (req: Request, scoped: Frame[]) => {
         }],
       },
       ...local ? input([{ kind: 'instruction', text: local }]) : [],
-      ...scoped.length
-        ? [{ type: 'additional_tools', role: 'developer', tools: scoped }]
-        : [],
+      ...scoped.length ? [declaring(scoped)] : [],
       ...input([...req.items, ...req.turnContext ?? []]),
     ],
-    ...explicit
-      ? { prompt_cache_options: { mode: 'implicit', ttl: '30m' } }
-      : {},
+    ...cache,
   }
 }
+
+// Tools declared in the conversation, after the cached prefix rather than in
+// the request's own list ahead of it.
+let declaring = (tools: Frame[]) => ({
+  type: 'additional_tools',
+  role: 'developer',
+  tools,
+})
 
 /** The whole request body. */
 export let body = (
@@ -226,7 +252,7 @@ export let body = (
     ...images ? [{ ...images.tool, type: 'image_generation' }] : [],
     ...web ? [searching(req.sites)] : [],
   ].sort(toolOrder)
-  let inline = req.cachePrefix?.tools && req.instructions && !req.anchor &&
+  let inline = req.cachePrefix?.tools && req.instructions &&
     /^gpt-6(?:[.-]|$)/.test(req.model) && !req.sites
   let shared = new Set(req.cachePrefix?.tools)
   let scoped = (t: Frame) =>

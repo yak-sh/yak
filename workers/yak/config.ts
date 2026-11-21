@@ -388,13 +388,19 @@ let workersAi: Plug = {
 // app's image asks and refuses the rest, and searches nothing. The Operator's
 // key searches the web (`web`). `OPENAI_API` is a probe's door to somewhere
 // other than OpenAI.
+//
+// No request runs in background mode: there OpenAI also declares a
+// conversation's `additional_tools` ahead of its cached prefix, so every
+// request bills them twice and a tool loaded mid-conversation rewrites the
+// whole conversation into the cache (T-2432). A deploy gives a running
+// Operator thirty minutes to finish (wrangler.toml), which is what kept turns
+// from being cut.
 let openai = (key = 'OPENAI_API_KEY', web = false): Plug => ({
   use: '@yaks/openai',
   with: {
     key: { secret: key },
     base: { binding: 'OPENAI_API' },
     web,
-    background: web,
     images: false,
   },
 })

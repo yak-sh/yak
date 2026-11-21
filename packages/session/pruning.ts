@@ -101,14 +101,17 @@ export let answered = (lines: Bundle[], before: number): Bundle[] => {
   )
 }
 
-/** The last elision boundary this conversation sent, including on retries. */
+/** The last elision boundary this conversation sent, including on retries.
+ * A fork that has asked nothing yet inherits the boundary its parent's last
+ * ask sent: what the parent stopped sending, the fork does not send either. */
 export let elidedBefore = (
   entries: Bundle[],
   session: string,
 ): number => {
-  let ask = entries.findLast((b) =>
-    kindOf(b) == 'ask' && (b.entry as Comp | undefined)?.session == session
-  )
+  let asks = entries.filter((b) => kindOf(b) == 'ask')
+  let ask =
+    asks.findLast((b) => (b.entry as Comp | undefined)?.session == session) ??
+      asks.at(-1)
   return Number((ask?.ask as Comp | undefined)?.elided_before ?? 0)
 }
 
@@ -133,18 +136,12 @@ export let nextElision = (entries: Bundle[], session: string): number => {
 }
 
 /** The prompt's view of the conversation after a cold turn. Omit old turn
- * notes and use the same protocol-pair and report selection as a drop. */
-export let elide = (
-  entries: Bundle[],
-  session: string,
-  before: number,
-): Bundle[] => {
+ * notes and use the same protocol-pair and report selection as a drop, over
+ * the whole transcript: a fork's inherited history too. */
+export let elide = (entries: Bundle[], before: number): Bundle[] => {
   if (!before) return entries
-  let own = entries.filter((b) => (b.entry as Comp)?.session == session)
-  let gone = new Set(answered(own, before))
+  let gone = new Set(answered(entries, before))
   return entries.filter((b) =>
-    !gone.has(b) &&
-    !((b.entry as Comp)?.session == session && seqOf(b) < before &&
-      turnNote(b))
+    !gone.has(b) && !(seqOf(b) < before && turnNote(b))
   )
 }
