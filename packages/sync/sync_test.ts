@@ -674,6 +674,28 @@ test('an oversized subscribe refuses once, never reopens, and does not erase pai
   }
 })
 
+test("a page's tab is said now and on each new connection, and refused by no server", async () => {
+  let srv = server()
+  let c = client(srv)
+  let tabs = () => c.socket()!.sent.filter((m) => 'tab' in (m as object))
+  try {
+    c.wire.tab({ visible: true, focused: false }) // no socket yet: none opened
+    assertEquals(srv.sockets.length, 0)
+    c.wire.subscribe('.recipe', 'r')
+    await c.idle()
+    assertEquals(tabs(), [{ tab: { visible: true, focused: false } }])
+    c.wire.tab({ visible: true, focused: true })
+    assertEquals(tabs().length, 2)
+    c.socket()!.close()
+    c.fire()
+    await c.idle()
+    assertEquals(tabs(), [{ tab: { visible: true, focused: true } }])
+    assertEquals(c.trouble, [])
+  } finally {
+    c.wire.close()
+  }
+})
+
 test('a malformed uncorrelated socket request is reported without reconnecting', async () => {
   let srv = server()
   let c = client(srv)

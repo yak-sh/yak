@@ -356,6 +356,7 @@ import { heldBy, mailTags, outgoing, platformPost } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
+import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
 import { conditionalWakes } from './conditional-wakes.ts'
 import { refusals, resumed } from './wake.ts'
 import { ledger } from './ledger.ts'
@@ -599,6 +600,10 @@ type Pages = {
   /** its pages' watches of lines naming a borrowed word (`#afar`) */
   afar: Reached
 }
+
+// What a page's socket holds that its store reads: who opened it (`sockets`'
+// `read`), and what it last said of its tab (`#framed`).
+type Paging = { read?: ReadOpts; tab?: Tab }
 
 // The tag a branch's sockets are held under (`State`), and the word its
 // declaration is kept under (`Word`).
@@ -3258,6 +3263,7 @@ export class Store extends Durable {
         admit: () => this.#awake(),
         live: this.#listening,
         frame: this.#framed,
+        closed: (ws) => this.#whereabouts(ws, true),
       }),
     report: (error, entry) =>
       defect(error, { request: entry, store: this.#name() }),
@@ -3296,15 +3302,21 @@ export class Store extends Durable {
 
   // A frame the sockets took, as this store notes it: a query in a retired
   // spelling (`#spoke`), and an app's page asking or relaying, which is its
-  // use (`#used`).
+  // use (`#used`). A page saying its tab is kept on its socket, for its
+  // person's whereabouts (`#whereabouts`), and asks the sockets nothing.
   #framed = async (
     ws: Wire,
     data: string | ArrayBuffer,
     take: () => Promise<boolean>,
   ) => {
-    if (!await take()) return
     let input = decode(data)
     let message = 'value' in input ? input.value : null
+    let tab = tabSaid(message)
+    if (tab) {
+      ws.serializeAttachment({ ...ws.deserializeAttachment() as object, tab })
+      return await this.#whereabouts(ws)
+    }
+    if (!await take()) return
     if (!message || typeof message != 'object') return
     if ('subscribe' in message) this.#spoke(message.subscribe)
     if ('ask' in message) this.#spoke(message.ask)
@@ -3315,6 +3327,32 @@ export class Store extends Durable {
         ('relay' in message && Array.isArray(message.relay) &&
           message.relay.length))
     if (active && ws.readyState == 1) this.#used()
+  }
+
+  // Where a socket's person is on this store's pages, across those of their
+  // sockets that said their tab (all but `ws` when it is `closing`), kept as
+  // their whereabouts (whereabouts.ts): on an app's pages, the app is where.
+  #whereabouts = async (ws: Wire, closing = false) => {
+    let held = ws.deserializeAttachment() as Paging | null
+    let person = held?.read?.person, app = this.#get('app')
+    if (
+      !held?.tab || !person || held.read?.administrative || person == app ||
+      !this.#bind.STORE
+    ) return
+    let tabs = this.#ctx.getWebSockets().flatMap((w) => {
+      let h = w.deserializeAttachment() as Paging | null
+      return h?.tab && h.read?.person == person && !h.read.administrative &&
+          !(closing && w == ws)
+        ? [h.tab]
+        : []
+    })
+    let { present } = await import('./whereabouts.ts')
+    await present(this.#bind as Env, {
+      person,
+      channel: 'apps',
+      ...app && storeKind(this.#name() ?? '') == 'app' ? { place: app } : {},
+      state: tabsState(tabs),
+    })
   }
 
   // A work of the store's own: worked once it is awake and started, inside

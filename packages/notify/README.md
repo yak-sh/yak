@@ -29,9 +29,9 @@ on that record.
 - `whereabouts{person, channel, place, state, at}` records where a person is
   available on one channel, as it last changed: the Operator's page of the space
   `place` (`here`, focused; `background`, open but hidden or unfocused; `away`),
-  an app's page (`open`, `away`), Discord (`online`, `idle`, `dnd`, `offline`),
-  and a text or an email (`used`). One row per person, channel and place
-  (`whereaboutsEid`).
+  an app's page or another yaks.app page (the same three, `place` the app),
+  Discord (`online`, `idle`, `dnd`, `offline`), and a text or an email (`used`).
+  One row per person, channel and place (`whereaboutsEid`).
 
 ## Whereabouts
 
@@ -39,11 +39,18 @@ on that record.
 channel's say needs: none when nothing changed and the row is still fresh, so a
 page saying "still here" every `BEAT` writes about once in three. A row older
 than its channel's `FADE` says nothing, so a lost close never leaves someone
-here for good. `tabsState(tabs)` is a person's state on an Operator across their
-tabs. `glance(rows, {place, now})` is what one Operator sees,
+here for good. A page says its tab on its socket (`{tab: {visible, focused}}`,
+which `tabSaid` reads), and `tabsState(tabs)` is a person's state on a page
+across their tabs. `glance(rows, {place, now})` is what one Operator sees,
 `whereaboutsLine(name, glance)` says it in one line ("Jeff: here, this tab ·
 Discord online"), and `reachBy(glance)` says where something that needs them
 reaches them: `tab`, `notification`, `discord` or `usual`.
+
+`@yaks/notify/tab` is the page's half: `sayTab(page, say)` says a page's tab at
+once, on each change of visibility or focus, and every `BEAT`, until the
+function it returns is called. `browserPage()` is the browser's window, none on
+any other runtime. @yaks/client says it on its socket by default (its `page`
+option), as yaks.app's app pages' client does.
 
 Both `subscription` and `chat` declare uniqueness for `(actor, target)`.
 Deleting either referenced entity cascades to its subscriptions; deleting a
@@ -88,4 +95,5 @@ finds or creates the actor/target row while preserving its watch/mute mode.
 ## Compatibility
 
 Deno, Node and browsers. The root exports are pure; the `./attention` boundary
-reads a graph and returns patches for its caller to apply.
+reads a graph and returns patches for its caller to apply, and `./tab` listens
+to a page.

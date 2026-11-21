@@ -47,6 +47,7 @@ import { idb, wireIdb } from './idb.ts'
 import { keep, type Vault } from './vault.ts'
 import { type Retained, retention, retentionLimit } from './retention.ts'
 import type { WireVault } from './wire-vault.ts'
+import { browserPage, type Page, sayTab } from '@yaks/notify/tab'
 import {
   type Make,
   type Watch,
@@ -118,6 +119,9 @@ export type ClientOpts = {
   /** how `created` and `updated` are stamped. False leaves provenance entirely
    * to the server while keeping mark stamping. */
   provenance?: StampPolicy | false
+  /** the page whose tab is said on the socket, which is where its person is
+   * (@yaks/notify/tab): a browser's own by default, or `false` for none */
+  page?: Page | false
 }
 
 /** A client: the graph, the pieces around it, and the four calls a page
@@ -287,6 +291,8 @@ export let client = (
       },
     })
     : undefined
+  let page = wire && (opts.page === undefined ? browserPage() : opts.page)
+  let unsay = page ? sayTab(page, wire!.tab) : undefined
 
   let seen = watches(g, { signal: opts.signal })
 
@@ -545,6 +551,7 @@ export let client = (
     close: () => {
       closed = true
       for (let close of handles) close()
+      unsay?.()
       wire?.close()
       cache.close()
       seen.close()

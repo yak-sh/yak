@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./attention": "./attention.ts",
-    "./whereabouts": "./whereabouts.ts"
+    "./whereabouts": "./whereabouts.ts",
+    "./tab": "./tab.ts"
   },
   "license": "Apache-2.0",
   "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, an open conversation, and where they are available right now.",

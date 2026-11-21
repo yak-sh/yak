@@ -1,8 +1,8 @@
 // Where each person is available now (@yaks/notify/whereabouts), kept in the
 // directory as `whereabouts` rows: what each channel last said, written only
 // when it changes or is about to fade. The channels say it here: the
-// Operator's page over its socket (build.ts), an app's page as its socket
-// opens and closes (graph.ts), Discord's gateway (chat.ts), and a text or an
+// Operator's page over its socket (build.ts), an app's page or another
+// yaks.app page over its own (graph.ts), Discord's gateway (chat.ts), and a text or an
 // email reaching the Operator. Only a person's own Operator reads theirs.
 
 import type { Bundle } from '@yaks/graph'

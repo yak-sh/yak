@@ -172,6 +172,9 @@ export type WireOpts = {
   report: (err: unknown) => void
 }
 
+/** One page's tab: whether it is visible and has focus. */
+export type Tab = { visible: boolean; focused: boolean }
+
 /** A live WebSocket with subscriptions held open on it. */
 export type Wire = {
   /** open the socket if it is not already opening or open */
@@ -189,6 +192,10 @@ export type Wire = {
    * the next connection is told what is being said as it stands (`again`).
    */
   relay: (bundles: Bundle[]) => void
+  /** Say whether this page's tab is visible and focused, which is where its
+   * person is (@yaks/notify/whereabouts). Said now when the socket is open,
+   * and again on every connection; it never opens one. */
+  tab: (tab: Tab) => void
   /** Store epoch milliseconds; first use opens the socket. Every open socket
    * calibrates; until the first reply this is the local epoch, and across
    * outages it holds the offset. */
@@ -295,6 +302,7 @@ export let wire = (opts: WireOpts): Wire => {
   let fetch = opts.fetch ?? (globalThis.fetch && ((r) => globalThis.fetch(r)))
 
   let asks = new Map<string, Ask>() // what each subscription asked for
+  let tab: Tab | undefined // what this page last said of its tab
   let refused = new Set<string>() // terminal until explicitly re-pointed
   let members = new Map<string, Set<Eid>>() // who is in each set
   let resetting = new Set<string>() // ids whose next frame is a reset
@@ -560,6 +568,7 @@ export let wire = (opts: WireOpts): Wire => {
       // Said before anything is asked, so no answer hands back an older copy.
       let said = opts.again?.() ?? []
       if (said.length) s.send(stringify({ relay: said }))
+      if (tab) s.send(stringify({ tab }))
       for (let [id, query] of asks) {
         if (refused.has(id)) continue
         resetting.add(id) // its answer will be the whole set, as it now stands
@@ -707,6 +716,10 @@ export let wire = (opts: WireOpts): Wire => {
       resetting.delete(id)
       send({ unsubscribe: id })
       resume()
+    },
+    tab: (now) => {
+      tab = now
+      send({ tab })
     },
     relay: (bundles) => {
       if (!bundles.length || !socket || socket.readyState != OPEN) return

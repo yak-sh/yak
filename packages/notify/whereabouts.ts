@@ -115,10 +115,19 @@ export let noted = (
   }
 }
 
-/** One tab's say: whether its page is visible and has focus. */
+/** One tab's say: whether its page is visible and has focus. A page says it
+ * on its socket as `{tab}` when it changes and every {@link BEAT}. */
 export type Tab = { visible: boolean; focused: boolean }
 
-/** The state of an Operator's page across a person's tabs on it: `here`
+/** The tab a socket's frame says, none for any other frame. */
+export let tabSaid = (frame: unknown): Tab | undefined => {
+  let tab = (frame as { tab?: unknown } | null)?.tab
+  if (!tab || typeof tab != 'object') return
+  let { visible, focused } = tab as Record<string, unknown>
+  return { visible: visible === true, focused: focused === true }
+}
+
+/** The state of a page across a person's tabs on it: `here`
  * when one is visible and focused, `background` when one is open, `away`
  * when none is. */
 export let tabsState = (tabs: Tab[]): State =>

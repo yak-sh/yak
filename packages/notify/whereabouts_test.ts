@@ -6,6 +6,7 @@ import {
   reachBy,
   type Row,
   type State,
+  tabSaid,
   tabsState,
   whereaboutsLine,
 } from './whereabouts.ts'
@@ -46,6 +47,17 @@ test('tabs: one focused is here, any open is background, none is away', () => {
   equal(tabsState([t(false, false), t(true, true)]), 'here')
   equal(tabsState([t(true, false)]), 'background')
   equal(tabsState([]), 'away')
+})
+
+test("a socket's frame says a tab, or nothing", () => {
+  equal(tabSaid({ tab: { visible: true, focused: 1 } }), {
+    visible: true,
+    focused: false,
+  })
+  equal(tabSaid({ tab: {} }), { visible: false, focused: false })
+  for (let frame of [{ subscribe: 'x' }, { tab: 'yes' }, null, 'tab']) {
+    equal(tabSaid(frame), undefined)
+  }
 })
 
 test('the line and the reach, from the rows still standing', () => {

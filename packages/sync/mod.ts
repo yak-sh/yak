@@ -93,6 +93,7 @@ export {
   type Frame,
   type Network,
   type Socket,
+  type Tab,
   type Timer,
   type Wire,
   wire,

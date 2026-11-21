@@ -2,6 +2,7 @@ import { decode, stringify, unpack } from '@yaks/vocab/wire'
 import { browserDrafts, draftEid } from '@yaks/draft/browser'
 import { durableOutbox } from '@yaks/sync/outbox'
 import { system } from '@yaks/fp'
+import { browserPage, sayTab } from '@yaks/notify/tab'
 export { draftEid }
 export { qr } from './qr.ts'
 
@@ -693,6 +694,17 @@ export let store = (base, { clock = system } = {}) => {
   let sock = null
   let tries = 0
   let n = 0
+  // Where this page's person is (@yaks/notify/tab): its tab, said on the
+  // socket as it opens, on each change and every beat, which the store keeps
+  // as their whereabouts. A page with no socket open says nothing.
+  let tab = null
+  let page = browserPage()
+  if (page) {
+    sayTab(page, (now) => {
+      tab = now
+      if (sock?.readyState == 1) sock.send(JSON.stringify({ tab }))
+    })
+  }
   let open = () => {
     if (sock) return sock
     let url = new URL('ws', base)
@@ -705,6 +717,7 @@ export let store = (base, { clock = system } = {}) => {
     // rows it replaces are dropped first.
     s.onopen = () => {
       tries = 0
+      if (tab) s.send(JSON.stringify({ tab }))
       for (let [name, sub] of subs) {
         sub.rows.clear()
         sub.riders = []

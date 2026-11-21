@@ -26,7 +26,7 @@ import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Handoff } from '@yaks/platform/operator-handoff'
 import { WAKE } from './door.ts'
-import { type Tab, tabsState } from '@yaks/notify/whereabouts'
+import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
@@ -65,14 +65,11 @@ export type State = Hibernation & Restartable & {
   waitUntil?(work: Promise<unknown>): void
 }
 
-// What a page watching the Operator says of its tab: `{tab: {visible,
-// focused}}`, anything else none.
+// What a page watching the Operator says of its tab (@yaks/notify
+// `tabSaid`), none for any other frame.
 let tabOf = (data: string | ArrayBuffer): Tab | undefined => {
   try {
-    let t = JSON.parse(String(data))?.tab
-    if (t && typeof t == 'object') {
-      return { visible: t.visible === true, focused: t.focused === true }
-    }
+    return tabSaid(JSON.parse(String(data)))
   } catch { /* not a tab's say */ }
 }
 

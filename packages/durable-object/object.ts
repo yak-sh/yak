@@ -102,6 +102,8 @@ export type Opened = {
     data: string | ArrayBuffer,
     take: () => Promise<boolean>,
   ): unknown
+  /** One of its sockets went away, once its sockets let it go. */
+  closed?(ws: Wire): unknown
 }
 
 /** What makes one kind of object. */
@@ -393,7 +395,9 @@ export class Durable {
     return this.#around('socket close', async () => {
       try {
         let opened = await this.#admitted(ws)
-        if (opened) await (await this.#sockets(opened, ws))?.close(ws)
+        if (!opened) return
+        await (await this.#sockets(opened, ws))?.close(ws)
+        await opened.closed?.(ws)
       } catch (error) {
         await this.spec.report(error, 'webSocketClose')
       }

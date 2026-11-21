@@ -292,8 +292,10 @@ export let sink = (
  * One message from a client, dispatched: `{subscribe, id}` opens a
  * subscription (a query string, or `true` for the raw feed of every committed
  * transaction), `{unsubscribe}` closes one, and `{relay: [...]}` forwards
- * `sync: peers` components to the other subscribers. Anything else is refused
- * under its own id.
+ * `sync: peers` components to the other subscribers. `{tab}` is a page saying
+ * whether it is in view (@yaks/client), for a host that keeps where people are
+ * to read before this; here it is nothing. Anything else is refused under its
+ * own id.
  *
  * A relay is the only write that crosses this connection, and it leaves the
  * connection it arrived on is what holds it. A component declaring `save`
@@ -380,6 +382,7 @@ let dispatch = (
       if (isPromise(out)) return out.catch(fail)
       return
     }
+    if ('tab' in msg) return
     throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
   } catch (err) {
     fail(err)
