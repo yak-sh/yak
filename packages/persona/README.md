@@ -174,15 +174,17 @@ Help.
 ```
 
 `shipped(files, eid)` reads the texts, by file name, into the persona's rows:
-the persona, each document, and a `contains` edge to each in order. `eid` gives
-the row a name stands for, so the files name no entity. A set without exactly
-one persona, a document the persona does not contain, or a name no file holds is
-refused. `kept(storage, rows)` is what a store still needs written to keep them:
-each row it does not already hold as the files say it, and the removal of each
-`contains` edge the persona has there that the files no longer say. It writes
-nothing where the store already agrees. Both take texts rather than a directory,
-so a host without a filesystem is handed them when it is built. yaks.app's
-Operator is worn on one: `plugins/yaks.app/persona/`, kept in its directory.
+the persona, each document, and a `contains` edge to each in order, or a `reads`
+edge to each it lists under `reads`, named by id and title for an agent to open
+(@yaks/harness `readOpen`). `eid` gives the row a name stands for, so the files
+name no entity. A set without exactly one persona, a document the persona does
+not contain, or a name no file holds is refused. `kept(storage, rows)` is what a
+store still needs written to keep them: each row it does not already hold as the
+files say it, and the removal of each `contains` or `reads` edge the persona has
+there that the files no longer say. It writes nothing where the store already
+agrees. Both take texts rather than a directory, so a host without a filesystem
+is handed them when it is built. yaks.app's Operator is worn on one:
+`plugins/yaks.app/persona/`, kept in its directory.
 
 ## Repository skills
 

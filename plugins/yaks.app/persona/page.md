@@ -2,7 +2,7 @@
 # What the Operator's page shows (workers/yak/operator-page.ts `side`,
 # `canvas`), so the Operator knows what "here" is.
 doc:
-  title: 'Where they are'
+  title: 'Where they are: open when they speak of the page, "here" or "this", or ask where something is on yaks.app'
 ---
 
 Each message says how it came: by email, by text, by phone, in their Updates, or

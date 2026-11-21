@@ -221,9 +221,11 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   assertEquals(
     text('.More:not(.Transcript_Error > *, .More_Body .More_Body *) > summary'),
     [
-      '6 steps',
+      '7 steps',
       'The context the Operator was given',
       'Read the schema',
+      // graph_schema, called, is sent from then on
+      'The context the Operator was given changed here',
       'Tried listing the files of notices',
       // app_files, called, is sent from then on
       'The context the Operator was given changed here',
@@ -241,7 +243,7 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   // the run that holds them.
   assertEquals(
     text('.Transcript_Lines .Transcript_When'),
-    Array(9).fill('just now'),
+    Array(10).fill('just now'),
   )
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its

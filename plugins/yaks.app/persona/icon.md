@@ -2,7 +2,7 @@
 # What an app's icon is to the Operator: drawn by workers/yak/files.ts `icon`,
 # else the space's logo or the platform's (apps.ts `unwritten`).
 doc:
-  title: "An app's icon"
+  title: "An app's icon and the space's logo: open when asked for an icon, logo or picture on apps"
 ---
 
 The picture beside an app's name in your page's sidebar, the person's list of

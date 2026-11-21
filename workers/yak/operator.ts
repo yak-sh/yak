@@ -15,6 +15,7 @@ import {
 import { begin, lend, seed } from '@yaks/harness'
 import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
+import { readOpen } from '@yaks/harness/worn'
 import {
   answerOf,
   type ChildLimits,
@@ -112,7 +113,9 @@ import {
   traced,
 } from './lib/hops.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { FLOORS } from './embedding.ts'
+import { embedder, FLOORS, withheld } from './embedding.ts'
+import { embeddings } from './metered.ts'
+import { readsNote } from './operator-reads.ts'
 import {
   ANSWERING,
   confirmOf,
@@ -422,6 +425,8 @@ let mine = new Set([
   'memory_forget',
   'memory_around',
   skillRead.name,
+  // The Reads its persona names, the base's read from the directory.
+  'read_open',
   // A space improves its skills by trials there (operator-trials.ts).
   ...Object.keys(trialRuns()),
 ])
@@ -455,28 +460,14 @@ let CORE = new Set([
   'fork',
   'spawn',
   'search',
-  'guide',
-  'code_mode',
-  'graph_schema',
   'graph_query',
   'graph_show',
   'graph_apply',
-  'app_list',
-  'app_errors',
-  'commands',
-  'command',
-  'attachment_read',
   'memory_save',
   'memory_recall',
-  'memory_around',
-  'store_memory_save',
-  'store_memory_recall',
   skillRead.name,
-  ...workNames,
-  'decision_relay',
-  'notification_send',
+  'read_open',
   'escalate',
-  'odd_report',
 ])
 // What a break's turn changes beyond its reads: the files of the app that
 // broke, checked and released, and its errors archived once the fix is seen
@@ -639,6 +630,7 @@ let OWN_WORDS = new Set([
   'goal_list',
   'goal_update',
   'skill_read',
+  'read_open',
   'fork',
   'spawn',
   // what the person's own doors sent, set and hold
@@ -768,6 +760,7 @@ export let operatorRoster = async (
         ...loadTools([trialDoc], trialRuns(trials)),
         ...held(),
         skillRead,
+        readOpen({ bases: bases(ctx.env) }),
       ].map(namedTool).map((t) => [t.name, t])
       : [],
   )
@@ -2651,7 +2644,45 @@ export let operating = (
       ? [{
         entity: { eid: crypto.randomUUID() },
         entry: { session },
-        prompt: { scope: 'local', source: 'operator:earlier' },
+        prompt: { scope: 'turn', source: 'operator:earlier' },
+        content: { body },
+        $actor: { by: space.eid, via: session },
+      }]
+      : []
+  }
+  // The Reads the person's words open, as a note beside them, held to the
+  // space's budget like recall (operator-reads.ts). A failure to embed opens
+  // none and is reported; the turn goes on, and read_open still opens them.
+  let readsBeside = async (
+    session: string,
+    text: string,
+    space: Space,
+    signup: boolean,
+  ): Promise<Bundle[]> => {
+    let embed = env.AI
+      ? embedder({
+        ...env,
+        AI: withheld(
+          embeddings(env, async (d) => await d.at(space.eid) ?? null),
+        ),
+      })
+      : null
+    let body = await readsNote(
+      store.g,
+      bases(env),
+      session,
+      text,
+      embed,
+      signup,
+    ).catch((e) => {
+      caught(e, { request: 'operator reads' })
+      return undefined
+    })
+    return body
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        prompt: { scope: 'turn', source: 'operator:reads' },
         content: { body },
         $actor: { by: space.eid, via: session },
       }]
@@ -2673,7 +2704,7 @@ export let operating = (
       ? [{
         entity: { eid: crypto.randomUUID() },
         entry: { session },
-        prompt: { scope: 'local', source: 'operator:decisions' },
+        prompt: { scope: 'turn', source: 'operator:decisions' },
         content: { body },
         $actor: { by: space.eid, via: session },
       }]
@@ -2741,6 +2772,9 @@ export let operating = (
           ),
           ...theirs ? await before(session, said, held, space) : [],
           ...theirs ? await waiting(session, held, space) : [],
+          ...theirs || o.signup
+            ? await readsBeside(session, said, space, !!o.signup)
+            : [],
         ]
       },
       told: () => options.tell?.(session),

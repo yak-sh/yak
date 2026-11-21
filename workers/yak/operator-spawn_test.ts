@@ -155,7 +155,7 @@ test('the conversation shows the context the Operator and each helper were given
       [all[0], ...all.slice(-3)].map(named),
       [
         'yaks.app Operator',
-        'Who you are',
+        'Reads',
         'Oracles',
         `${first(m).tools.length} tools`,
       ],

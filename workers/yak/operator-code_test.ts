@@ -7,7 +7,7 @@ import { evaluate } from '../../packages/code-mode/testing.ts'
 import { platform } from './directory-probe.ts'
 import { compiler } from './testing.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating } from './operator.ts'
 import { drain } from './operator-store.ts'
 import { handleChannels, receive } from './operator-channels.ts'
@@ -89,13 +89,15 @@ let bulk = calls.find((b) => ((b.call as Comp).args as Comp)?.script)
 let nested = await store.g.read(line`.call.source=${bulk!.entity.eid} &*`)
 
 test('root and fork offer the same code mode; the fork discovers and runs connector tools in bulk', () => {
-  let atRoot = asked[0].tools.find((t) => t.name == 'code_mode')
-  ok(atRoot)
-  equal(
-    asked.find((r) => JSON.stringify(r.items).includes('fork of the'))!
-      .tools.find((t) => t.name == 'code_mode'),
-    atRoot,
+  let forked = asked.filter((r) =>
+    JSON.stringify(r.items).includes('fork of the')
   )
+  // Both may load it, and the fork starts on the root's tools.
+  ok(callable(asked[0]).includes('code_mode'))
+  ok(callable(forked[0]).includes('code_mode'))
+  equal(forked[0].tools.map((t) => t.name), asked[0].tools.map((t) => t.name))
+  let sent = forked.find((r) => r.tools.some((t) => t.name == 'code_mode'))!
+  ok(sent)
   ok(answers[0]?.includes('"app_new"'))
   let out = JSON.parse(
     answers[1].replace(/^From [^\n]+:\n/, '').replace(/\ntook [^\n]*$/, ''),

@@ -29,28 +29,35 @@ let renamed = space.operator == 'Hazel' ? 'Wren' : 'Hazel'
 let store = operatorMemory()
 let asked: Request[] = []
 let say = (text: string): Item[] => [{ kind: 'assistant', text }]
-// The scripted Operator: asked for a new name and voice, it writes them on
-// its persona, as its instructions say.
+// The scripted Operator: asked for a new name and voice, it opens the Read on
+// its settings, then writes them on its persona, as that Read says.
+let call = (name: string, args: object): Item[] => [{
+  kind: 'call',
+  id: crypto.randomUUID(),
+  name,
+  args: JSON.stringify(args),
+}]
+let opened = ''
 let script = (req: Request): Item[] => {
   let last = req.items.at(-1)!
+  let results = req.items.filter((i) => i.kind == 'result')
+  if (results.length == 1 && last.kind == 'result') {
+    opened = last.output
+    return call('graph_apply', {
+      self: true,
+      bundles: [{
+        entity: { eid: persona },
+        doc: { title: renamed },
+        speech: { voice: 'aura-2-pandora-en' },
+      }],
+    })
+  }
   if (last.kind == 'result') {
     return say(`I am ${renamed} now, speaking as Pandora.`)
   }
   let text = last.kind == 'user' ? last.text : ''
   return text.includes(renamed)
-    ? [{
-      kind: 'call',
-      id: crypto.randomUUID(),
-      name: 'graph_apply',
-      args: JSON.stringify({
-        self: true,
-        bundles: [{
-          entity: { eid: persona },
-          doc: { title: renamed },
-          speech: { voice: 'aura-2-pandora-en' },
-        }],
-      }),
-    }]
+    ? call('read_open', { read: 'Your name and voice' })
     : say('Noted.')
 }
 let operator = operating(
@@ -84,14 +91,19 @@ let chatted = async (words: string) => {
 await chatted(`Call yourself ${renamed}, and speak in Pandora.`)
 let [own] = await store.g.get([persona])
 
-test('asked, the Operator renames itself and changes its voice by writing its own persona', async () => {
+test('asked, the Operator opens its settings Read, then renames itself and changes its voice by writing its own persona', async () => {
+  assertStringIncludes(String(asked[0].instructions), 'Your name and voice: ')
+  assertEquals(
+    String(asked[0].instructions).includes('aura-2-pandora-en'),
+    false,
+  )
   assertStringIncludes(
-    String(asked[0].instructions),
+    opened,
     `on your persona ${
       short(persona)
     } in your own graph: your name is its doc{title}, and how you speak on a call its speech{voice, pace, model, backend}`,
   )
-  assertStringIncludes(String(asked[0].instructions), 'aura-2-pandora-en (')
+  assertStringIncludes(opened, 'aura-2-pandora-en (')
   assertEquals((own.doc as Comp).title, renamed)
   assertEquals((own.speech as Comp).voice, 'aura-2-pandora-en')
   assertEquals(sent.at(-1), `I am ${renamed} now, speaking as Pandora.`)

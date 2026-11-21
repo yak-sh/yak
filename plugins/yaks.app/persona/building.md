@@ -6,7 +6,7 @@
 # GPT-6.2 Sol), against the $5 a newcomer's build may spend (newcomer.ts
 # PER_BUILD).
 doc:
-  title: 'Making a new app'
+  title: 'Making a new app: open before writing a new app or changing what one does'
 ---
 
 A new app is made, not drafted. Once its first draft works (app_preview at phone

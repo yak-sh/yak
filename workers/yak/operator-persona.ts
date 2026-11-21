@@ -82,15 +82,16 @@ export let based = async (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>) => {
   if (writes.length) await meta(env).apply(writes, KERNEL)
 }
 
-// Each doc of `said`, contained by persona `from` in its order.
+// Each doc of `said`, contained by persona `from` in its order, or read
+// where it says so: named by id and title for a turn to open.
 let docs = (
   from: Eid,
-  said: { key: string; title: string; body: string }[],
+  said: { key: string; title: string; body: string; reads?: boolean }[],
   key: (k: string) => Eid,
 ) =>
   said.flatMap((d, i) => [
     { entity: { eid: key(d.key) }, doc: { title: d.title, body: d.body } },
-    link(from, 'contains', key(d.key), i + 1),
+    link(from, d.reads ? 'reads' : 'contains', key(d.key), i + 1),
   ])
 
 /** The Operator's settings, as its page and its door speak them. Its persona
@@ -245,29 +246,28 @@ export let named = (row: Bundle | undefined): Bundle[] => {
   return name && home ? [{ entity: { eid: home }, operator: { name } }] : []
 }
 
-/** Who a space's Operator is, as its instructions say: its name, whose it
- * is, the plan its space is on and what that allows (@yaks/platform/standing
- * `planned`), its page, whose link in a text signs the reader in
- * (operator-texts.ts `signingIn`), and where its settings are, which it
- * changes itself when asked. */
-export let introduced = (space: Space, env?: Speaking) =>
+/** Who a space's Operator is, as its instructions say on every turn: its
+ * name, whose it is, the plan its space is on and what that allows
+ * (@yaks/platform/standing `planned`), its page, and whose link in a text
+ * signs the reader in (operator-texts.ts `signingIn`). */
+export let introduced = (space: Space) =>
   `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. You work for the owner of ${space.slug}. Don't sign your replies; a letter or a text is signed for you. Your page, where they can read your whole conversation, is ${
     url({}, chatPath(space.slug))
   }; a yaks.app link you text them signs them in when they follow it.
 
 ${
     planned(space)
-  } When you speak of what ${space.slug} allows, say these figures and name this plan.
+  } When you speak of what ${space.slug} allows, say these figures and name this plan.`
 
-Your settings are yours to change when the person asks, on your persona ${
-    short(personaFor(space.eid))
-  } in your own graph: your name is its doc{title}, and how you speak on a call its speech{voice, pace, model, backend}. Change one with graph_apply, self true and one bundle naming only the properties asked for, such as {"entity":{"eid":"${
-    short(personaFor(space.eid))
-  }"},"speech":{"voice":"<id>"}} or {"entity":{"eid":"${
-    short(personaFor(space.eid))
-  }"},"doc":{"title":"<name>"}}; null puts a speech property back to the platform's own. A name is up to 40 characters. On a call your next line is said in the voice you set, unless the call says your provider fixes it.${
+/** Where a space's Operator's settings are, which it changes itself when
+ * asked, and the voices, paces and models it may choose on here: a Read,
+ * opened on the turns that ask about them. */
+export let setUp = (space: Space, env?: Speaking) => {
+  let eid = short(personaFor(space.eid))
+  return `Your settings are yours to change when the person asks, on your persona ${eid} in your own graph: your name is its doc{title}, and how you speak on a call its speech{voice, pace, model, backend}. Change one with graph_apply, self true and one bundle naming only the properties asked for, such as {"entity":{"eid":"${eid}"},"speech":{"voice":"<id>"}} or {"entity":{"eid":"${eid}"},"doc":{"title":"<name>"}}; null puts a speech property back to the platform's own. A name is up to 40 characters. On a call your next line is said in the voice you set, unless the call says your provider fixes it.${
     env ? `\n\nThe choices on here, by id:\n${choices(env, space)}` : ''
   }`
+}
 
 /**
  * The space's own persona, worn on the base: what a store whose entities `g`
@@ -298,7 +298,13 @@ export let spaced = async (
     ...docs(eid, [{
       key: 'who',
       title: 'Who you are',
-      body: introduced(space, env),
+      body: introduced(space),
+    }, {
+      key: 'settings',
+      title:
+        'Your name and voice: open when asked what voices, paces or models you can use, or to change your name or how you sound',
+      body: setUp(space, env),
+      reads: true,
     }], (k) => derivedEid(`operator-persona|${k}|${space.eid}`)),
   ]
   return [

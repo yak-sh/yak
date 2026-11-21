@@ -15,7 +15,7 @@ import { operating } from './operator.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import type { Ctx } from './tools.ts'
 
-let CEILING = 20_000
+let CEILING = 10_000
 
 let store = operatorMemory()
 let { env } = platform('operator-request')

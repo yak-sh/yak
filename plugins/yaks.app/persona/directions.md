@@ -5,7 +5,7 @@
 # (@yaks/trial/match, the space's Matches page), one decision whose choices
 # show them (decision_new, `shows`), and a memory of what was chosen.
 doc:
-  title: 'Several directions'
+  title: 'Several directions: open when a request is open-ended, where many answers would do and taste decides'
 ---
 
 When someone asks for something open-ended, where many answers would do and

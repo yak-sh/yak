@@ -48,3 +48,22 @@ test('progress stays paired with its call across windows and checkpoints', () =>
     'e4',
   ])
 })
+
+test('a checkpoint keeps the persona verbatim and drops a note held for its turn, keeping one after it', () => {
+  let note = (seq: number) =>
+    entry(seq, { prompt: { scope: 'turn' }, content: { body: 'opened' } })
+  let entries = [
+    entry(1, { prompt: { scope: 'local' }, content: { body: 'persona' } }),
+    note(2),
+    entry(3, { content: { body: 'their words' } }),
+    entry(4, { content: { body: 'later' } }),
+    note(5),
+    entry(6, { checkpoint: { through: 'e3' }, content: { body: 'summary' } }),
+  ]
+  assertEquals(context(entries).map((b) => b.entity.eid), [
+    'e1',
+    'e6',
+    'e4',
+    'e5',
+  ])
+})

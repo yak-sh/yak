@@ -9,7 +9,7 @@
       "properties": {
         "scope": {
           "type": "string",
-          "description": "shared instructions copied to fresh children, or local instructions for this transcript"
+          "description": "shared instructions copied to fresh children, local instructions for this transcript, or turn: a note held for its turn alone, which a checkpoint drops"
         },
         "source": {
           "type": "string",

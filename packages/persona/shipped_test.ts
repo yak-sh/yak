@@ -11,10 +11,12 @@ import { voice } from './voice.ts'
 import { held, said, world } from './testing.ts'
 
 let file = (meta: string, body: string) => `---\n${meta}\n---\n\n${body}\n`
-let base = (contains: string[], body = 'Help.') =>
+let base = (contains: string[], reads: string[] = []) =>
   file(
-    `persona: {}\ndoc:\n  title: Helper\ncontains: [${contains.join(', ')}]`,
-    body,
+    `persona: {}\ndoc:\n  title: Helper\ncontains: [${
+      contains.join(', ')
+    }]\nreads: [${reads.join(', ')}]`,
+    'Help.',
   )
 let doc = (title: string, body: string) => file(`doc:\n  title: ${title}`, body)
 let rows = (files: Record<string, string>) => shipped(files, (n) => 'h-' + n)
@@ -63,6 +65,16 @@ test('a document the files no longer hold leaves the persona', async () => {
     'tone.md': FILES['tone.md'],
   })
   assertEquals(text.includes('Read first.'), false)
+})
+
+test('a document the persona reads is named under Reads, and moving one there takes it out of the text', async () => {
+  let { text } = await keep(FILES, {
+    ...FILES,
+    'base.md': base(['tone'], ['tools']),
+  })
+  assertEquals(text.includes('Read first.'), false)
+  assertEquals(text.split('## Reads')[1].includes('Tools'), true)
+  assertEquals(text.split('## Reads')[0].includes('Be brief.'), true)
 })
 
 test('files that do not make one persona are refused', () => {

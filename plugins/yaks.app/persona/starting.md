@@ -5,7 +5,7 @@
 # three ways of working. The slots are the platform's numbers
 # (@yaks/platform/plans), which operator-persona.ts fills.
 doc:
-  title: 'Someone signing up'
+  title: 'Someone signing up: open on a message marked as signing up, and in a new person''s first conversation'
 ---
 
 A person signs up for yaks.app by sending one email or text: usually a reply to

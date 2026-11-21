@@ -7,10 +7,10 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { BASE, introduced, personaFor } from './operator-persona.ts'
+import { BASE, bases, introduced, personaFor } from './operator-persona.ts'
 import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
@@ -34,10 +34,20 @@ let asked: Request[] = []
 let operator = operating(store, env, {
   ...operatorModel((req) => {
     asked.push(req)
+    // After its first words it loads two tools, to be sent them whole.
+    let last = req.items.at(-1)
+    let loads = last?.kind == 'user' && last.text != 'Hi'
     return Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
-      items: [{ kind: 'assistant', text: 'Hello.' }],
+      items: loads
+        ? [{
+          kind: 'call',
+          id: crypto.randomUUID(),
+          name: 'tool_load',
+          args: JSON.stringify({ names: ['spawn', 'task_update'] }),
+        }]
+        : [{ kind: 'assistant', text: 'Hello.' }],
     })
   }),
   // A Claude model, so coding goes to a stronger one in a helper.
@@ -75,12 +85,7 @@ test('the base comes first, then the space persona worn on it, then where it is'
     'yaks.app Operator',
     'yaks.app',
     'Your conversations, and the work they fork',
-    'Several directions',
     'What you have done, and finding it again',
-    'Someone signing up',
-    "An app's icon",
-    'Where they are',
-    'Making a new app',
     space.operator,
     'Who you are',
   ])
@@ -91,9 +96,27 @@ test('the base comes first, then the space persona worn on it, then where it is'
   assertEquals(persona.persona, { base: BASE, home: space.eid })
 })
 
-test("the base's files say the platform's own numbers", () => {
+test('what only some turns need is named under Reads, by id and when to open it, not said', () => {
+  let reads = String(first.instructions).split('## Reads')[1]
+  for (
+    let title of [
+      'Working in the apps: open before',
+      'Making a new app: open before',
+      'Several directions: open when',
+      'Someone signing up: open on',
+      'Your name and voice: open when',
+    ]
+  ) assertStringIncludes(reads, title)
+  assert(!String(first.instructions).includes('A new app is made, not drafted'))
+  assert(first.tools.some((t) => t.name == 'read_open'))
+})
+
+test("the base's files say the platform's own numbers", async () => {
+  let [starting] = await bases(env).get([
+    derivedEid('operator-persona|starting'),
+  ])
   assertStringIncludes(
-    String(first.instructions),
+    String((starting.doc as { body: string }).body),
     `$${PRICE.plus} a month`,
   )
   assert(!String(first.instructions).includes('{{'))
@@ -120,20 +143,20 @@ test('the guidance is a doc in the directory: an edit reaches the next turn', ()
   assert(!String(second.instructions).includes("Read the app's schema"))
 })
 
-test("a tool's guidance is where the tool is given", () => {
+test("a tool's guidance is where the tool is given, once it is loaded", () => {
   let spawn = first.tools.find((t) => t.name == 'spawn')!
   assertStringIncludes(spawn.description, 'To consult an app or space oracle')
   assert(
     !String(first.instructions).includes('To consult an app or space oracle'),
   )
-  let update = first.tools.find((t) => t.name == 'task_update')!
+  let update = second.tools.find((t) => t.name == 'task_update')!
   assert(!update.description.includes('carries on that task'))
   let close = tasked.tools.find((t) => t.name == 'task_update')!
   assertStringIncludes(close.description, 'carries on that task')
 })
 
 test("an Operator holds the space's task and goal tools, and leaves answering its questions to the person", () => {
-  let names = first.tools.map((t) => t.name)
+  let names = callable(first)
   let work = ['task_new', 'task_list', 'task_update', 'decision_new']
   assertEquals(
     [...work, 'goal_new', 'goal_list', 'goal_update'].filter((n) =>

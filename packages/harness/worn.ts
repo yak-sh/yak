@@ -2,7 +2,10 @@
 // for each ask (agent.ts `wear`): read through @yaks/persona and @yaks/topic
 // alone, so a host that runs no machine (the yaks.app Worker) loads nothing
 // of the instruction files beside it.
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph, NamedTool } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
+import { human, short } from '@yaks/id'
 import { type Built, line } from '@yaks/query'
 import { offer, PART, type Reads, voice, wear, wearing } from '@yaks/persona'
 import { compile, gather } from '@yaks/topic'
@@ -115,3 +118,74 @@ export let offeredTo = async (
   how: Wear = {},
 ): Promise<string[] | undefined> =>
   offer(await worn(g, await openedAs(g, session), how.bases))
+
+// What a Read is called by: its id as the persona's text draws it, its short
+// handle, its eid, or its title.
+let callsOf = (g: Graph, b: Bundle): string[] =>
+  [
+    human(g.vocab)(b),
+    short(b.entity.eid),
+    b.entity.eid,
+    String((b.doc as Comp | undefined)?.title ?? ''),
+  ].map((s) => s.trim().toLowerCase()).filter(Boolean)
+
+/** The Reads a transcript's persona names ({@link openedAs}): the documents
+ * it, or a base under it, links by `reads`, each read where it is kept. */
+export let readsOf = async (
+  g: Graph,
+  session: Eid,
+  how: Wear = {},
+): Promise<Bundle[]> =>
+  (await worn(g, await openedAs(g, session), how.bases))?.names ?? []
+
+/** A Read as one text: its id and title as a heading, then its body. */
+export let readText = (g: Graph, b: Bundle): string => {
+  let doc = (b.doc ?? b.content ?? {}) as Comp
+  return `# ${human(g.vocab)(b)} ${doc.title ?? ''}`.trim() + '\n\n' +
+    String(doc.body ?? '')
+}
+
+/**
+ * The tool that opens one of the Reads a transcript's persona names (its
+ * `reads` documents, @yaks/persona `voice`'s `## Reads`) in full, by the id
+ * the text gives it or its title, read where it is kept: the transcript's own
+ * graph or `how.bases`. Only the persona's Reads open, so it reaches nothing
+ * else of where the bases are kept.
+ */
+export let readOpen = (how: Wear = {}): NamedTool => ({
+  name: 'read_open',
+  description:
+    'Open one of the Reads your instructions list under "## Reads", in full, ' +
+    'by its id there (or its title). Open one before work it covers.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      read: { type: 'string', description: 'its id from the Reads list' },
+    },
+    required: ['read'],
+    additionalProperties: false,
+  },
+  readOnly: true,
+  run: async (call, g) => {
+    let session = who(call)?.via
+    if (!session) throw new Refused('read_open needs a session')
+    let asked = String(argsOf(call).read ?? '').trim().toLowerCase()
+    let names = await readsOf(g, session, how)
+    let title = (b: Bundle) => callsOf(g, b).at(-1) ?? ''
+    let found = names.find((b) => callsOf(g, b).includes(asked)) ??
+      names.find((b) => callsOf(g, b).some((c) => asked.startsWith(c + ' '))) ??
+      names.find((b) => asked.length > 3 && title(b).startsWith(asked))
+    if (!found) {
+      throw new Refused(
+        `no Read called ${asked || '(nothing)'}; your Reads are ${
+          names.map((b) => human(g.vocab)(b)).join(', ') || 'none'
+        }`,
+      )
+    }
+    return [{
+      entity: { eid: '$read' },
+      content: { body: readText(g, found) },
+      output: { source: call.entity.eid },
+    }]
+  },
+})

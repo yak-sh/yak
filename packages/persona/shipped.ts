@@ -6,8 +6,10 @@
 //
 // Each file is a content file (@yaks/yaml `front`): its frontmatter is the
 // bundle, and the document under it is the `doc` body. One of them carries
-// `persona`, and lists under `contains` the names of the others, in the order
-// it is said in; each other file is a document it contains. A name is a
+// `persona`, and lists under `contains` the names of the documents it says in
+// full, in the order it says them, and under `reads` those it only names, for
+// an agent to open when its work needs one; each other file is one of those
+// documents. A name is a
 // file's name without `.md`, and the caller derives each row's eid from it,
 // so the files name no entity. Reading takes texts, not a directory: a host
 // without a filesystem (a Worker) is handed them at build time.
@@ -18,23 +20,26 @@ import { EDGE, link } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { front } from '@yaks/yaml'
 import { PERSONA } from './comp.ts'
-import { CONTAINS, type Reads } from './worn.ts'
+import { CONTAINS, READS, type Reads } from './worn.ts'
 
 /**
  * The rows a persona's files say, by file name: the persona, each document it
- * contains, and the `contains` edge to each in its order. `eid` gives the row
- * a name stands for. A set with no persona, or two, a document the persona
- * does not contain, or a name it contains that no file holds is refused.
+ * contains or reads, and the `contains` or `reads` edge to each in its order.
+ * `eid` gives the row a name stands for. A set with no persona, or two, a
+ * document the persona neither contains nor reads, or a name it lists that no
+ * file holds is refused.
  *
  * ```ts
  * import { derivedEid } from '@yaks/graph/identity'
  * import { shipped } from '@yaks/persona'
  *
  * let rows = shipped({
- *   'base.md': '---\npersona: {}\ndoc:\n  title: Helper\ncontains: [tone]\n---\n\nHelp.\n',
+ *   'base.md': '---\npersona: {}\ndoc:\n  title: Helper\ncontains: [tone]\nreads: [calls]\n---\n\nHelp.\n',
  *   'tone.md': '---\ndoc:\n  title: Tone\n---\n\nBe brief.\n',
+ *   'calls.md': '---\ndoc:\n  title: Calls\n---\n\nSpeak slowly.\n',
  * }, (name) => derivedEid('helper|' + name))
- * // the persona, the document `tone`, and the edge between them
+ * // the persona, `tone` and the edge containing it, `calls` and the edge
+ * // that reads it
  * ```
  */
 export let shipped = (
@@ -44,10 +49,14 @@ export let shipped = (
   let read = Object.entries(files).map(([file, text]) => {
     let { meta, body } = front(text, file)
     if (meta.entity) throw new Error(`${file} names an entity: its name does`)
-    let { contains, ...row } = meta as Bundle & { contains?: unknown }
+    let { contains, reads, ...row } = meta as Bundle & {
+      contains?: unknown
+      reads?: unknown
+    }
     return {
       name: file.replace(/\.md$/, ''),
       contains,
+      reads,
       row: {
         ...row,
         entity: { eid: eid(file.replace(/\.md$/, '')) },
@@ -65,44 +74,54 @@ export let shipped = (
     )
   }
   let [persona] = personas
-  let names = Array.isArray(persona.contains)
-    ? persona.contains.map(String)
-    : []
+  let listed = (names: unknown) => Array.isArray(names) ? names.map(String) : []
+  let lists: [string, string[]][] = [
+    [CONTAINS, listed(persona.contains)],
+    [READS, listed(persona.reads)],
+  ]
+  let names = lists.flatMap(([, n]) => n)
   let docs = read.filter((f) => f != persona)
   let by = new Map(docs.map((f) => [f.name, f.row]))
   let missing = names.filter((n) => !by.has(n))
   if (missing.length) {
-    throw new Error(`${persona.name} contains ${missing.join(', ')}: no file`)
+    throw new Error(`${persona.name} lists ${missing.join(', ')}: no file`)
   }
   let loose = docs.filter((f) => !names.includes(f.name)).map((f) => f.name)
   if (loose.length) {
-    throw new Error(`${persona.name} does not contain ${loose.join(', ')}`)
+    throw new Error(
+      `${persona.name} neither contains nor reads ${loose.join(', ')}`,
+    )
   }
   let from = persona.row.entity.eid
   return [
     persona.row,
-    ...names.flatMap((n, i) => [
-      by.get(n)!,
-      link(from, CONTAINS, by.get(n)!.entity.eid, i + 1),
-    ]),
+    ...lists.flatMap(([tag, list]) =>
+      list.flatMap((n, i) => [
+        by.get(n)!,
+        link(from, tag, by.get(n)!.entity.eid, i + 1),
+      ])
+    ),
   ]
 }
 
 /**
  * What a store whose entities `storage` reads still needs written to keep a
  * persona as `rows` ({@link shipped}) say: each row it does not already hold
- * as they say it, and the removal of each `contains` edge the persona has
- * there that `rows` does not. Nothing, where the store already keeps it.
+ * as they say it, and the removal of each `contains` or `reads` edge the
+ * persona has there that `rows` does not. Nothing, where the store already
+ * keeps it.
  */
 export let kept = async (storage: Reads, rows: Bundle[]): Promise<Bundle[]> => {
   let persona = rows.find((b) => b[PERSONA])
   if (!persona) return []
-  let [held, links] = await Promise.all([
+  let edges = (tag: string) =>
+    storage.read(and(eq(`${EDGE}.from`, persona.entity.eid), present(tag)))
+  let [held, contained, read] = await Promise.all([
     storage.get(rows.map((b) => b.entity.eid)),
-    storage.read(
-      and(eq(`${EDGE}.from`, persona.entity.eid), present(CONTAINS)),
-    ),
+    edges(CONTAINS),
+    edges(READS),
   ])
+  let links = [...contained, ...read]
   let said = new Set(rows.map((b) => b.entity.eid))
   return [
     ...links.filter((b) => !said.has(b.entity.eid))
