@@ -49,6 +49,18 @@ export default class extends WorkerEntrypoint {
           return bridge.call(set, name, text);
         };
       }
+      // A path outside the catalog says which ones exist, rather than a
+      // TypeError reading a property of undefined.
+      let named = (of, what, list) => new Proxy(of, {
+        get(o, k) {
+          if (typeof k != 'string' || k in o || k == 'then') return o[k];
+          throw new Error(what(k) + list());
+        },
+      });
+      for (let set in tools) {
+        tools[set] = named(tools[set], (k) => \`tools.\${set}.\${k} is not a tool; this set has \`, () => Object.keys(tools[set]).join(', '));
+      }
+      tools = named(tools, (k) => \`tools.\${k} is not a tool set; the sets are \`, () => Object.keys(tools).map((s) => 'tools.' + s).join(', '));
       let work = async () => {
         let {default: execute} = await import('./user.js');
         let value = await execute(tools, {read: (id) => bridge.read(id)});

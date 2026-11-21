@@ -8,6 +8,7 @@ import {
   type Kept,
   LIMITS,
   TOO,
+  tool as codeMode,
 } from '@yaks/code-mode'
 import { source } from '@yaks/code-mode/source'
 import { strip } from '@yaks/esbuild/strip'
@@ -119,6 +120,24 @@ test('code mode compiles TS, preserves identity, records calls and validates eac
   match(bad.value, { isError: true })
   equal(bad.calls.map((c) => [c.isError, typeof c.error]), [[true, 'string']])
   equal(echoed.length, 1)
+})
+
+test('code mode names its tool sets, and a guessed set or name says which exist', async () => {
+  let { catalog, run } = one
+  ok(codeMode(catalog, run, evaluate, strip).description!.includes(
+    'tools.yaks.<name>(args)',
+  ))
+  let wrong = (script: string) =>
+    execute(script, one.catalog, one.run, one.asked, evaluate, strip)
+  equal(
+    (await wrong('return await tools.functions.echo({text: "x"})')).error,
+    'tools.functions is not a tool set; the sets are tools.yaks',
+  )
+  equal(
+    (await wrong('return await tools.yaks.ech({text: "x"})')).error,
+    'tools.yaks.ech is not a tool; this set has echo',
+  )
+  equal((await wrong('return typeof tools.yaks.echo')).value, 'function')
 })
 
 let two = fixture([echo])
