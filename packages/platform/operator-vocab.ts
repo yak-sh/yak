@@ -48,6 +48,32 @@ export let operatorDoc: VocabDoc = {
         },
         number: { type: 'string', description: 'Where the link was texted.' },
         expires: { type: 'string', format: 'date-time' },
+        why: {
+          type: 'string',
+          enum: ['identity', 'authority'],
+          description:
+            "Why it waits (yaks.app's operator-route.ts): identity, the act is within the person's role and only that it is theirs needs confirming; authority, their role does not allow it, and someone whose role does approves it, running it with their own tools. Identity where absent.",
+        },
+        approvers: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Everyone who may answer it, any one for the rest; the person alone where absent.',
+        },
+        then: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            "Where the person's role does not allow it and their words came where nothing proves who sent them: who approves it once the person has confirmed it is theirs, asked anew then.",
+        },
+      },
+    },
+    approval_ask: {
+      component: true,
+      description:
+        "On a decision assigned to someone other than an operator_approval's person, who may answer it too: the approval it asks them about. Answered, it answers the approval as its card or link would, and once the approval is answered anywhere it is answered here too.",
+      properties: {
+        approval: { type: 'string', ref: 'entity', death: 'cascade' },
       },
     },
     declined: {
@@ -164,6 +190,19 @@ export let operatorDoc: VocabDoc = {
           death: 'keep',
           description:
             "What the words are about: in their Updates, the update or question they answer; on the wake channel, the wake-up that fired; on the subscription channel, the subscription whose rows changed; on the letter and texted channels, the Operator's letter or text they reply to; on the escalated channel, that reply.",
+        },
+        raised: {
+          type: 'string',
+          index: true,
+          description:
+            "On the escalated channel, the escalation these words are one copy of: the same on the copy raised with each person who may answer it (yaks.app's operator-route.ts).",
+        },
+        answered_by: {
+          type: 'string',
+          ref: 'person',
+          death: 'keep',
+          description:
+            'On the escalated channel, who of those it was raised with answered it first, on every copy: it is theirs, and the rest answer it no more.',
         },
         from: {
           type: 'string',
@@ -702,11 +741,19 @@ export let operatorDoc: VocabDoc = {
     },
     operator_decision_answer: {
       effect: true,
-      target: '.decision !operator_approval',
+      target: '.decision !operator_approval !approval_ask',
       created: ['decided'],
       tries: 3,
       description:
         "Continue the Operator's work when its person answers a question.",
+    },
+    operator_approval_ask_answer: {
+      effect: true,
+      target: '.approval_ask',
+      created: ['decided'],
+      tries: 3,
+      description:
+        'An approval answered by someone else who may answer it, from their Updates or an alert: as operator_approval_answer, pressed as theirs.',
     },
     operator_approval_answer: {
       effect: true,

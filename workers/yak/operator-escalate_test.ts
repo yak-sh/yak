@@ -29,6 +29,9 @@ import type { Inbound } from './env.ts'
 let { env } = platform('operator-escalate')
 let dir = directoryOf(env.STORE)
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
+// An editor beside Jeff, who may answer what a stranger raises too, and a
+// viewer, who may not (operator-route.ts).
+let ana = crypto.randomUUID(), bo = crypto.randomUUID()
 let owner = { 'x-yak-person': person, 'x-yak-role': 'owner' }
 await dir.apply({
   entities: [
@@ -43,6 +46,20 @@ await dir.apply({
       entity: { eid: crypto.randomUUID() },
       member: { person, space: eid, role: 'owner' },
     },
+    ...[[ana, 'Ana', 'editor'], [bo, 'Bo', 'viewer']].flatMap((
+      [who, name, role],
+    ) => [
+      {
+        entity: { eid: who },
+        person: {},
+        doc: { title: name },
+        email: { address: `${name.toLowerCase()}@example.com` },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        member: { person: who, space: eid, role },
+      },
+    ]),
   ],
 }, owner)
 let space = (await dir.at(eid))!
@@ -313,40 +330,98 @@ test('a conversation raises only on a reply of its own, and answers only what wa
   )
 })
 
-test("a stranger's conversation raises what needs the space's people with its owner, naming who asked, without a reply to name", async () => {
+test("a stranger's conversation raises what needs the space's people with everyone whose role allows it, naming who asked, and the first answer closes it for the rest", async () => {
   let ctx = await operatorContext(env, held, space)
-  let context = {
-    session: theirs,
+  let as = (session: string) => ({
+    session,
     call: { entity: { eid: crypto.randomUUID() } },
     entries: [],
-  }
+  })
   let { escalation } = JSON.parse(
     String(
       await escalate(store, ctx, space).run(
         { say: 'Dr Alvarez asks whether the clinic may text Jeff reminders.' },
-        context,
+        as(theirs),
       ),
     ),
   )
   await service.drain()
-  let [row] = await store.g.get([escalation])
-  let raised = row.operator_request as Record<string, unknown>
-  assertEquals(raised.person, person)
-  assertEquals(raised.from, theirs)
-  assertEquals(raised.about, undefined)
-  assert(String(raised.address).startsWith('alvarez'))
+  let copies = await store.g.read(
+    q`.operator_request.raised=${escalation}&*`,
+  )
+  let of = (b: (typeof copies)[number]) =>
+    b.operator_request as Record<string, unknown>
+  assertEquals(new Set(copies.map((b) => of(b).person)), new Set([person, ana]))
+  for (let b of copies) {
+    assertEquals(of(b).from, theirs)
+    assertEquals(of(b).about, undefined)
+    assert(String(of(b).address).startsWith('alvarez'))
+  }
   let words = asked.map((r) => turn(r).words).find((w) =>
     w.includes('Raised by your guest helper')
   )!
   assert(
     words.includes(
-      `from its conversation with ${raised.address}, who is not a member of this space`,
+      `from its conversation with ${
+        of(copies[0]).address
+      }, who is not a member of this space`,
     ),
   )
   assert(words.includes('notification_send: Dr Alvarez asks whether'))
+  // Jeff answers first: Ana is told, and answers it no more.
+  let jeffs = copies.find((b) => of(b).person == person)!
+  let anas = copies.find((b) => of(b).person == ana)!
+  await escalationAnswer(store, ctx, space).run(
+    { escalation: jeffs.entity.eid, say: 'No texts, thank you.' },
+    as(mine),
+  )
+  let [closed] = await store.g.get([anas.entity.eid])
+  assertEquals(of(closed).answered_by, person)
+  assert(
+    JSON.stringify(await entries(rootOf(eid, ana))).includes(
+      'Jeff Peterson answered what was raised with you',
+    ),
+  )
+  let anaCtx = await operatorContext(
+    env,
+    { person: ana },
+    space,
+  )
+  await assertRejects(
+    async () =>
+      await escalationAnswer(store, anaCtx, space).run(
+        { escalation: anas.entity.eid, say: 'Yes, texts are fine.' },
+        as(rootOf(eid, ana)),
+      ),
+    Error,
+    'answered escalation',
+  )
 })
 
-test("an odd request is looked into by a helper with a guest's tools, whose report reaches the owner's conversation", async () => {
+test('a stranger who says they are a member raises it with that member alone, outside a private room', async () => {
+  let ctx = await operatorContext(env, held, space)
+  let { escalation } = JSON.parse(
+    String(
+      await escalate(store, ctx, space).run(
+        { say: 'Says she is Ana and wants a new app.', claims: 'ana' },
+        {
+          session: theirs,
+          call: { entity: { eid: crypto.randomUUID() } },
+          entries: [],
+        },
+      ),
+    ),
+  )
+  let copies = await store.g.read(
+    q`.operator_request.raised=${escalation}&*`,
+  )
+  assertEquals(
+    copies.map((b) => (b.operator_request as { person: string }).person),
+    [ana],
+  )
+})
+
+test("an odd request is looked into by a helper with a guest's tools, whose report reaches the conversation of each who may decide it", async () => {
   let ctx = await operatorContext(env, held, space)
   let { investigating } = JSON.parse(
     String(
@@ -361,8 +436,15 @@ test("an odd request is looked into by a helper with a guest's tools, whose repo
     ),
   )
   await service.drain()
-  let [helper] = await store.g.get([investigating])
-  assertEquals((helper.spawned as { parent: string }).parent, mine)
+  // Jeff and Ana, an editor, each get one; Bo, a viewer, none.
+  let helpers = await store.g.get(investigating)
+  assertEquals(
+    new Set(helpers.map((h) => (h.spawned as { parent: string }).parent)),
+    new Set([mine, rootOf(eid, ana)]),
+  )
+  let helper = helpers.find((h) =>
+    (h.spawned as { parent: string }).parent == mine
+  )!
   assertEquals(
     (helper.operator_session as { person: string }).person,
     investigatorOf(eid),

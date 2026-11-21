@@ -14,6 +14,7 @@ import {
   type Approval,
   approvals,
   asker,
+  askOf,
   type At,
   confirming,
   digestOf,
@@ -399,4 +400,105 @@ test('an approval answered on its card or link leaves their Updates; one that la
       .updates.some((u) => u.words == waits),
     false,
   )
+})
+
+// Two owners beside the person, who may answer what the person's role does
+// not allow, or vouch for them in a private room (operator-route.ts).
+let jeff = crypto.randomUUID(), matt = crypto.randomUUID()
+let NAMES: Record<string, string> = { [jeff]: 'Jeff', [matt]: 'Matt' }
+let room = (role: 'editor' | 'owner', at: Partial<At> = {}) =>
+  confirming(
+    [tool('member_add')],
+    asker(
+      env,
+      store,
+      { eid: place, slug: 'concept' } as Space,
+      { person, session, chat: true, ...at },
+      () => Promise.reject(new Error('nothing is texted')),
+      () => clock,
+      {
+        seats: () =>
+          Promise.resolve([
+            { person, role },
+            { person: jeff, role: 'owner' as const },
+            { person: matt, role: 'owner' as const },
+          ]),
+        names: (people) =>
+          Promise.resolve(people.map((p) => NAMES[p]).join(' or ')),
+      },
+    ),
+    { known, role },
+  )[0]
+let by: (string | null)[] = []
+let pressAs = approvals(
+  store,
+  (a, { who }) => (by.push(who), Promise.resolve(`added ${a.args.email}`)),
+  () => clock,
+  (p) => Promise.resolve(NAMES[p] ?? 'someone'),
+)
+let waits = async (who: string) =>
+  (await updatesOf(store, who, place)).updates.filter((u) => u.needs)
+    .map((u) => u.words)
+
+test("an act beyond the person's role waits for everyone whose role allows it, and the first to answer decides it for the rest, as themselves", async () => {
+  let said = String(
+    await room('editor').run({ email: 'cy@x.com', role: 'owner' }),
+  )
+  equal(said.includes('waits for Jeff or Matt to approve it'), true)
+  let row = await newest()
+  let a = row.operator_approval as Approval
+  equal([a.why, a.approvers], ['authority', [jeff, matt]])
+  equal(renderToString(approvalCard(row, clock)).includes('data-act'), false)
+  let say = 'Add cy@x.com to the space as an owner?'
+  equal([await waits(jeff), await waits(matt)], [[say], [say]])
+  equal((await needing()).includes(say), false)
+  let digest = digestOf(a)
+  equal(
+    (await pressAs(row.entity.eid, digest, {
+      own: true,
+      press: true,
+      who: person,
+    }))
+      .state,
+    'theirs',
+  )
+  await updating(store, { person: matt, space: place }, {
+    choose: askOf(row.entity.eid, matt),
+    choice: 'Approve',
+  })
+  await answered(store, pressAs, askOf(row.entity.eid, matt))
+  await answered(store, pressAs, askOf(row.entity.eid, jeff))
+  equal(by, [matt])
+  equal([await waits(jeff), await waits(matt)], [[], []])
+  let [note] = await store.g.get([decisionRequestId(row.entity.eid)])
+  equal(
+    /Matt tapped Approve .* as Matt: added cy@x\.com/.test(
+      String((note.doc as { body: string }).body),
+    ),
+    true,
+  )
+})
+
+test('in a private room anyone whose role allows an act may vouch for the person; elsewhere only they confirm it', async () => {
+  by.length = 0
+  let open = String(await room('owner').run({ email: 'di@x.com' }))
+  equal(open.includes('may approve it for them'), false)
+  equal(((await newest()).operator_approval as Approval).approvers, undefined)
+  let said = String(
+    await room('owner', { private: true }).run({ email: 'ed@x.com' }),
+  )
+  equal(said.includes('Jeff or Matt may approve it for them too'), true)
+  let row = await newest()
+  let a = row.operator_approval as Approval
+  equal([a.why, a.approvers], [undefined, [person, jeff, matt]])
+  equal(renderToString(approvalCard(row, clock)).includes('data-act'), true)
+  await updating(store, { person: jeff, space: place }, {
+    choose: askOf(row.entity.eid, jeff),
+    choice: 'Approve',
+  })
+  await answered(store, pressAs, askOf(row.entity.eid, jeff))
+  equal(by, [jeff])
+  ;[row] = await store.g.get([row.entity.eid])
+  equal((row.decided as { choice: string }).choice, 'Approve')
+  equal(await waits(matt), [])
 })

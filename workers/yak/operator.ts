@@ -167,7 +167,14 @@ import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
-import { chatRead, chatSend, roomsOf, spaceRooms } from './operator-rooms.ts'
+import {
+  chatPrivate,
+  chatRead,
+  chatSend,
+  privateIn,
+  roomsOf,
+  spaceRooms,
+} from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -2319,6 +2326,10 @@ export let operating = (
     // every space.
     let chat = [
       ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
+      // An owner says which rooms are private (operator-route.ts).
+      ...rooms.length && acts && ctx.role == 'owner'
+        ? [chatPrivate(store)]
+        : [],
       acts && wide.length
         ? chatSend(store, true)
         : rooms.length
@@ -2366,7 +2377,11 @@ export let operating = (
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
     // A member's privileged acts wait for their tap: on a link texted to
     // their number, on a card in their chat, or on a link given in the answer
-    // (operator-approvals.ts).
+    // (operator-approvals.ts). In a private room, anyone whose role allows
+    // one may vouch for them; one their role does not allow waits for
+    // someone's whose does (operator-route.ts).
+    let closed = asking && PLATFORMS.has(channel) &&
+      await privateIn(store, session)
     let confirmed = (tools: Tool[]) =>
       asking
         ? deferred(confirming(
@@ -2380,10 +2395,20 @@ export let operating = (
               session,
               number: confirm,
               chat: channel == 'chat',
+              private: closed,
             },
             (to, words) => textPerson(env, space, to, words),
+            Date.now,
+            {
+              seats: () => ctx.dir.roles(space),
+              names: async (people) =>
+                (await Promise.all(
+                  people.map(async (p) => await named(p) ?? 'someone'),
+                )).join(' or '),
+            },
           ),
           {
+            role: ctx.role ?? undefined,
             known: acquainted(store, async () => {
               let people = await ctx.dir.persons(await ctx.dir.members(space))
               return [...people.values()].map((k) => k.email)
@@ -3325,23 +3350,40 @@ export let operating = (
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
-  // An act a texted link approved, run as a call of the session that asked
-  // it, through the person's tools as they stand now and asking nothing
-  // again (operator-approvals.ts).
-  let approve = approvals(store, async (a) => {
-    let tool = offerable(await roster(a.session, { approved: true }))
-      .find((t) => t.name == a.tool)
-    if (!tool) {
-      throw new CallError('tool', `${a.tool} is not theirs to use any more.`)
-    }
-    let call = {
-      entity: { eid: crypto.randomUUID() },
-      call: { to: a.tool, args: a.args },
-    }
-    let told = await tool.run(a.args, { session: a.session, call, entries: [] })
-    options.tell?.(await topOf(g, a.session))
-    return typeof told == 'string' ? told : told.text
-  })
+  // An approved act, run as a call of the session that asked it, through
+  // the person's tools as they stand now and asking nothing again; one
+  // their role does not allow, as a call of the conversation of whoever
+  // approved it, through theirs (operator-approvals.ts, operator-route.ts).
+  let approve = approvals(
+    store,
+    async (a, { who, space }) => {
+      let session = a.why == 'authority' && who
+        ? await rootAt(store, space, who)
+        : a.session
+      if (!await workingOf(store, session)) {
+        throw new CallError(
+          'tool',
+          `${await named(
+            String(who),
+          )} has no conversation here to do it from yet.`,
+        )
+      }
+      let tool = offerable(await roster(session, { approved: true }))
+        .find((t) => t.name == a.tool)
+      if (!tool) {
+        throw new CallError('tool', `${a.tool} is not theirs to use any more.`)
+      }
+      let call = {
+        entity: { eid: crypto.randomUUID() },
+        call: { to: a.tool, args: a.args },
+      }
+      let told = await tool.run(a.args, { session, call, entries: [] })
+      options.tell?.(await topOf(g, a.session))
+      return typeof told == 'string' ? told : told.text
+    },
+    Date.now,
+    async (person) => await named(person) ?? 'someone',
+  )
 
   return {
     store,

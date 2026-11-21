@@ -3966,6 +3966,14 @@ export let directoryRows = (rows: {
       (await query(line`.member.space=${space.eid}`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
+    // Everyone in a space with their role: who may answer what an act
+    // needs (operator-route.ts `route`).
+    roles: async (space: Pick<Space, 'eid'>) =>
+      (await query(line`.member.space=${space.eid}`)).flatMap((r) =>
+        r.member && idOf(r.member.person)
+          ? [{ person: idOf(r.member.person)!, role: r.member.role as Role }]
+          : []
+      ),
     // Who owns a space, by person eid: so removing a member can refuse to
     // leave it with none.
     owners: async (space: Space): Promise<string[]> =>

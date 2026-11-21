@@ -139,6 +139,11 @@ export type Request = {
   // The conversation whose words they are, on the `escalated` channel: the
   // one with the reply's writer, which raised them (operator-escalate.ts).
   from?: string
+  // On the `escalated` channel, the escalation these words are one copy of,
+  // raised with each person who may answer it, and who answered it first
+  // (operator-escalate.ts).
+  raised?: string
+  answered_by?: string
   from_space?: string
   // The call whose talking model asked, in its words for the caller rather
   // than the caller's own (operator-calls.ts `talking`).
@@ -1489,6 +1494,11 @@ export let handleChannels = (
     // An approval answered from the person's Updates or an alert is
     // pressed as theirs (operator-approvals.ts `answered`).
     operator_approval_answer: async (event) => {
+      let { answered } = await import('./operator-approvals.ts')
+      await answered(operator.store, operator.approve, event.entity.eid)
+    },
+    // Answered by someone else who may answer it, as theirs.
+    operator_approval_ask_answer: async (event) => {
       let { answered } = await import('./operator-approvals.ts')
       await answered(operator.store, operator.approve, event.entity.eid)
     },

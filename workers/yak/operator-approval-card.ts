@@ -46,7 +46,18 @@ export type Approval = {
    * they, signed in, open */
   number?: string
   expires: string
+  /** why it waits (operator-route.ts); identity where absent */
+  why?: 'identity' | 'authority'
+  /** everyone who may answer it; the person alone where absent */
+  approvers?: string[]
+  /** who approves it once the person confirms it is theirs, where their
+   * role does not allow it and nothing proved who asked */
+  then?: string[]
 }
+
+/** Everyone who may answer an approval. */
+export let approversOf = (a: Pick<Approval, 'person' | 'approvers'>) =>
+  a.approvers ?? [a.person]
 
 // The JSON of `v` with its keys in order, so a row read back from the store
 // digests as it did when written.
@@ -75,6 +86,7 @@ let CARD = {
   approving: 'Approved in your Updates. Carrying it out…',
   declined: 'Declined. Nothing was done.',
   expired: 'This waited too long. Ask again if you still want it.',
+  others: 'Waiting for someone whose role allows it to approve it.',
 }
 
 /** An approval as a line of its person's conversation: a card saying what
@@ -92,7 +104,9 @@ export let approvalCard = (b: Bundle, now = Date.now()) => {
     ? 'approving'
     : Date.parse(a.expires) < now
     ? 'expired'
-    : 'waiting'
+    : approversOf(a).includes(a.person)
+    ? 'waiting'
+    : 'others'
   return h(
     Card,
     {

@@ -353,6 +353,13 @@ export let roomsOf = async ({ g }: Store, at: string) => {
   )
 }
 
+/** Whether the room a conversation was last addressed in is private: one
+ * the space says only its own people talk in (`chat_room{private}`), where
+ * anyone whose role allows an act may vouch for who asked it
+ * (operator-route.ts). */
+export let privateIn = async (store: Store, at: string) =>
+  !!(await roomsOf(store, at))[0]?.private
+
 /** The rooms of the space's chat platforms the Operator heard a message in,
  * in any conversation, newest first: where a member's own turn writes with
  * `chat_send`, as when they ask in their chat about a request said in a
@@ -389,6 +396,7 @@ let roomsIn = async (g: Graph, items: (Bundle | null | undefined)[]) => {
         room: String(c.id),
         eid: r.room,
         ...c.server ? { server: String(c.server) } : {},
+        ...c.private ? { private: true } : {},
       }]
       : []
   })
@@ -854,3 +862,42 @@ export let basics = async (
     caught(error, { request: `${at.via} basics`, connection: at.connection })
   }
 }
+
+/** The Operator's `chat_private`, an owner's: say whether a room it was
+ * addressed in is private (`chat_room{private}`), where anyone whose role
+ * allows an act may vouch for who asked for it (operator-route.ts). */
+export let chatPrivate = (store: Store): Tool => ({
+  name: 'chat_private',
+  title: 'Mark a chat room private',
+  step: { doing: 'Marking the room…', done: 'Marked the room' },
+  description:
+    'Say whether a chat room (a Discord channel) you were addressed in is private: a server or channel the space connected where only its own people talk, not one open to the public. In a private room, anyone whose role allows what someone there asks may approve it for them; elsewhere only the person who asked confirms it is theirs. Only an owner says so.',
+  parameters: {
+    type: 'object',
+    properties: {
+      room: {
+        type: 'string',
+        description:
+          "The room: the platform's id for it, or its eid; left out, the room you were last addressed in.",
+      },
+      private: {
+        type: 'boolean',
+        description: 'Whether it is private; true left out.',
+      },
+    },
+  },
+  run: async (args, context) => {
+    let at = roomAt(
+      context?.session ? await roomsOf(store, context.session) : [],
+      args.room,
+    )
+    let closed = args.private !== false
+    await store.g.apply([{
+      entity: { eid: at.eid },
+      chat_room: { private: closed },
+    }], { trusted: true })
+    return closed
+      ? `The room ${at.room} is private now: anyone whose role allows what someone there asks may approve it.`
+      : `The room ${at.room} is open now: only the person who asked confirms what they ask there.`
+  },
+})
