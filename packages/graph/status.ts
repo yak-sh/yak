@@ -18,6 +18,10 @@ export let STATUS: Record<string, number> = {
   // it, so the fault is the request's.
   Unknown: 400,
   Unauthorized: 401,
+  // @yaks/embedding's: a provider that will not embed for this host until a
+  // ceiling it set lifts, such as a space's spent model budget. The space's
+  // limit answering, not a fault of ours.
+  Withheld: 402,
   // The request is authenticated; the answer is still no. @yaks/member's
   // `Denied` is this, and so is any other policy refusal that uses that name.
   Denied: 403,

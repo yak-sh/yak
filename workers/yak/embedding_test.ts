@@ -9,6 +9,7 @@ import { ModelError } from '@yaks/model'
 import { driver } from '@yaks/durable-object'
 import { col, select, table, val } from '@yaks/sql'
 import { doorOf } from './door.ts'
+import { refused } from './defects.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
@@ -105,7 +106,7 @@ test('deployment of vectors in another space re-embeds them all', async () => {
   assertEquals(spaces(), [{ model: SPACE }])
 })
 
-test("a space's spent budget withholds its vectors, asked once", async () => {
+test("a space's spent budget withholds its vectors, asked once, as a refusal", async () => {
   let asked = 0
   let spent = embedder({
     AI: withheld({
@@ -118,7 +119,12 @@ test("a space's spent budget withholds its vectors, asked once", async () => {
   let error = await Promise.resolve().then(() => spent.embed('a text'))
     .catch((e: Error) => e)
   assertEquals(
-    [error instanceof Withheld, (error as Error).message, asked],
-    [true, 'the budget is spent', 1],
+    [
+      error instanceof Withheld,
+      (error as Error).message,
+      asked,
+      refused(error),
+    ],
+    [true, 'the budget is spent', 1, true],
   )
 })
