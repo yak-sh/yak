@@ -46,7 +46,13 @@ import { h } from 'preact'
 import { apex } from '@yaks/platform/host'
 import { APPROVE } from '@yaks/platform/routes'
 import type { Env } from './env.ts'
-import { type Approval, digestOf, LIFE } from './operator-approval-card.ts'
+import {
+  type Approval,
+  asking,
+  CHOICE,
+  digestOf,
+  LIFE,
+} from './operator-approval-card.ts'
 import { directoryOf, type Space } from './directory.ts'
 import type { OperatorStore as Store } from './operator-store.ts'
 import { opened, seal } from './lib/token.ts'
@@ -57,6 +63,9 @@ import { sessionAt } from './session.ts'
 type Args = Record<string, unknown>
 
 export { type Approval, digestOf, LIFE }
+
+// How long an act waits for its answer, as a person reads it.
+let lasting = `${LIFE / 86_400_000} days`
 
 // A role as a member_add says it, editor where it says none: "an editor".
 let roleOf = (a: Args) => {
@@ -191,13 +200,16 @@ async ({ tool, args, say }) => {
     expires: new Date(now() + LIFE).toISOString(),
   }
   let eid = crypto.randomUUID()
-  let minutes = LIFE / 60_000
   await store.g.apply([{
     entity: { eid },
     operator_approval: row,
+    // What it asks of them, in their Updates and alerted to them wherever
+    // they are (operator-alerts.ts), so it waits for nobody to watch.
+    ...asking(row, space.eid),
     // A line of the conversation the web draws as its card (`approvalCard`),
     // holding no words, so the model hears of it only in the call's answer.
     entry: { session: await topOf(store.g, at.session), from: 'the system' },
+    $actor: { by: space.eid, via: at.session },
   }], { trusted: true })
   let t = await seal(
     'approval',
@@ -210,14 +222,15 @@ async ({ tool, args, say }) => {
   if (at.chat && !at.number) {
     return `Nothing has happened yet. It waits for them to approve it ` +
       `("${say}"): a card with Approve and Decline is in their ` +
-      `conversation now. Tell them in a line to press Approve on it within ` +
-      `${minutes} minutes. Write no link to approve it; any other link they ` +
+      `conversation and their Updates now, and they are alerted to it the ` +
+      `way they chose. Tell them in a line to press Approve on it within ` +
+      `${lasting}. Write no link to approve it; any other link they ` +
       `asked for still goes in your answer. ${only}`
   }
   if (!at.number) {
     return `Nothing has happened yet. It waits for them to approve it ` +
       `("${say}"): give them this Markdown link in your answer, as it is, ` +
-      `and tell them to tap it within ${minutes} minutes: ` +
+      `and tell them to tap it within ${lasting}: ` +
       `[Approve: ${say}](${link})\nIt opens only for them, signed in, so ` +
       `it is safe to show where others read. ${only}`
   }
@@ -228,7 +241,7 @@ async ({ tool, args, say }) => {
   )
   return `Nothing has happened yet. A link to approve it ("${say}") was ` +
     `texted to ${at.number}, and the tap carries it out, within ` +
-    `${minutes} minutes. Tell them to tap it. ${only}`
+    `${lasting}. Tell them to tap it. ${only}`
 }
 
 /** `tools`, where a turn's privileged acts wait for a tap: each escalating
@@ -305,12 +318,14 @@ export type Standing = {
 
 /** What is done with an approval: opened (neither), Approve (`press`) or
  * Decline (`decline`), by `who` signed in, or nobody; `own` where it is
- * pressed on its card in the person's conversation rather than on a link. */
+ * pressed on its card in the person's conversation or their Updates
+ * (`updates`) rather than on a link. */
 export type Press = {
   press?: boolean
   decline?: boolean
   who?: string | null
   own?: boolean
+  updates?: boolean
 }
 
 /** An Operator's side of its links and cards: what one's approval says, and
@@ -328,12 +343,21 @@ export let approvals = (
   return async (
     eid: string,
     digest: string,
-    { press = false, decline = false, who = null, own = false }: Press = {},
+    { press = false, decline = false, who = null, own = false, updates }:
+      Press = {},
   ): Promise<Standing> => {
     let [row] = await store.g.get([eid])
     let a = row?.operator_approval as Approval | undefined
     if (!a || digestOf(a) != digest) return { state: 'gone' }
+    own ||= !!updates
     if ((own || !a.number) && who != a.person) return { state: 'theirs' }
+    // Answered here, so answered in their Updates too: its decision decided.
+    let answered = (choice: string): Bundle => ({
+      entity: { eid },
+      decided: { choice },
+      $actor: { by: a.person },
+    })
+    let where: Where = updates ? 'updates' : own ? 'card' : 'link'
     let named = integrationNamed(a.args)
     let about = {
       say: a.say,
@@ -349,7 +373,8 @@ export let approvals = (
       let came: Standing = { state: 'declined', ...about }
       await store.g.apply([
         { entity: { eid }, declined: {} },
-        pressed(a, await topOf(store.g, a.session), came, own),
+        ...row.decided ? [] : [answered(CHOICE.decline)],
+        pressed(a, await topOf(store.g, a.session), came, where),
       ], { trusted: true })
       return came
     }
@@ -357,9 +382,10 @@ export let approvals = (
     pressing.add(eid)
     let came: Standing
     try {
-      await store.g.apply([{ entity: { eid }, verified: {} }], {
-        trusted: true,
-      })
+      await store.g.apply([
+        { entity: { eid }, verified: {} },
+        ...row.decided ? [] : [answered(CHOICE.approve)],
+      ], { trusted: true })
       came = { state: 'done', ...about, said: await run(a) }
     } catch (error) {
       came = {
@@ -371,7 +397,7 @@ export let approvals = (
       pressing.delete(eid)
     }
     await store.g.apply([
-      pressed(a, await topOf(store.g, a.session), came, own),
+      pressed(a, await topOf(store.g, a.session), came, where),
     ], {
       trusted: true,
     })
@@ -379,15 +405,43 @@ export let approvals = (
   }
 }
 
+/** An approval answered as a decision (the `operator_approval_answer`
+ * effect), from the person's Updates or an alert: pressed as their own,
+ * Approve carrying out its act and any other answer declining it. One its
+ * card or link answered first is spent already, and nothing runs again. */
+export let answered = async (
+  store: Store,
+  press: ReturnType<typeof approvals>,
+  eid: string,
+) => {
+  let [row] = await store.g.get([eid])
+  let a = row?.operator_approval as Approval | undefined
+  let decided = row?.decided as { choice?: string; by?: string } | undefined
+  if (!a || !decided || row.verified || row.declined) return
+  let approve = decided.choice == CHOICE.approve
+  await press(eid, digestOf(a), {
+    press: approve,
+    decline: !approve,
+    who: decided.by ?? null,
+    updates: true,
+  })
+}
+
+/** Where an approval was answered: its card in the conversation, their
+ * Updates, or a link. */
+type Where = 'card' | 'updates' | 'link'
+
 /** The line a conversation keeps of a press, starting no turn. */
 export let pressed = (
   a: Approval,
   session: string,
   standing: Standing,
-  own = false,
+  where: Where = 'link',
 ): Bundle => {
-  let link = own
+  let link = where == 'card'
     ? 'its card in the conversation'
+    : where == 'updates'
+    ? 'it in their Updates'
     : a.number
     ? `the link texted to ${a.number}`
     : 'your link'
@@ -427,9 +481,8 @@ let PAGE = {
   }),
   expired: (say: string, { operator }: Whose) => ({
     title: 'This link has expired',
-    lead: `${say}: it waited ${
-      LIFE / 60_000
-    } minutes. Ask ${operator} again if you still want it.`,
+    lead:
+      `${say}: it waited ${lasting}. Ask ${operator} again if you still want it.`,
   }),
   gone: (_: string, { operator }: Whose) => ({
     title: 'This link opens nothing',

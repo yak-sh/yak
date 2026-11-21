@@ -8,9 +8,29 @@ import { h } from 'preact'
 
 type Args = Record<string, unknown>
 
-/** How long a link to approve an act lives: a tap while the person is
- * still at their phone. */
-export let LIFE = 15 * 60_000
+/** How long an act waits for its person's answer: long enough to be
+ * answered from their Updates or an alert once they are back, not only
+ * while they watch the conversation. */
+export let LIFE = 7 * 24 * 60 * 60_000
+
+/** The choices an approval offers, as a decision's (@yaks/task). */
+export let CHOICE = { approve: 'Approve', decline: 'Decline' }
+
+/** An approval as what it asks of its person, a decision assigned to them
+ * in the space: Needs you in their Updates and alerted the way they chose
+ * (operator-alerts.ts), answered by Approve or Decline from any of them. */
+export let asking = (a: Pick<Approval, 'person' | 'say'>, space: string) => ({
+  task: {},
+  doc: { title: `${a.say}?` },
+  decision: {
+    question: `${a.say}?`,
+    choices: [
+      { label: CHOICE.approve, description: 'Do it now.' },
+      { label: CHOICE.decline, description: "Don't do it." },
+    ],
+  },
+  filed: { assignee: a.person, project: space },
+})
 
 /** An act waiting for a tap, as its row keeps it. */
 export type Approval = {
@@ -50,23 +70,26 @@ export let digestOf = (a: Approval) =>
 
 // How a card's approval stands, in a line under what it would do.
 let CARD = {
-  waiting: `Nothing happens until you approve it, within ${
-    LIFE / 60_000
-  } minutes.`,
+  waiting: 'Nothing happens until you approve it, here or in your Updates.',
   approved: 'Approved.',
+  approving: 'Approved in your Updates. Carrying it out…',
   declined: 'Declined. Nothing was done.',
   expired: 'This waited too long. Ask again if you still want it.',
 }
 
 /** An approval as a line of its person's conversation: a card saying what
  * it would do, with Approve and Decline the page's script presses in place
- * (operator-page.ts), or, once answered or expired, how it stands. */
+ * (operator-page.ts), or, once answered here or anywhere else or expired,
+ * how it stands. */
 export let approvalCard = (b: Bundle, now = Date.now()) => {
   let a = b.operator_approval as Approval
+  let choice = (b.decided as { choice?: string } | undefined)?.choice
   let state: keyof typeof CARD = b.verified
     ? 'approved'
-    : b.declined
+    : b.declined || (choice && choice != CHOICE.approve)
     ? 'declined'
+    : choice
+    ? 'approving'
     : Date.parse(a.expires) < now
     ? 'expired'
     : 'waiting'

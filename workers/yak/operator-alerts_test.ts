@@ -159,6 +159,50 @@ test('what everyone in a space is told, or a person wrote, is sent to nobody', (
   assertEquals(unsent, [[], []])
 })
 
+// What the Operator asks them, a question or an approval, is alerted too,
+// opening at itself in their Updates where it is answered; an answered one
+// is sent to nobody.
+let asking = (question: string, more: Bundle = { entity: { eid: '' } }) => ({
+  ...more,
+  entity: { eid: crypto.randomUUID() },
+  task: {},
+  doc: { title: question },
+  decision: {
+    question,
+    choices: [
+      { label: 'Approve', description: 'Do it now.' },
+      { label: 'Decline', description: "Don't do it." },
+    ],
+  },
+  filed: { assignee: person, project: eid },
+  $actor: { by: eid },
+})
+let question = asking('Email bo@x.com?')
+await store.g.apply([
+  question,
+  asking('Answered already?', {
+    entity: { eid: '' },
+    decided: { choice: 'Approve' },
+  }),
+], { trusted: true })
+await service.drain()
+let asked = take(letters)
+// Answered, so it waits on them no more for the counts below.
+await store.g.apply([{
+  entity: question.entity,
+  decided: { choice: 'Decline' },
+  $actor: { by: person },
+}], { trusted: true })
+await service.drain()
+take(letters)
+test('what the Operator asks a person is alerted, opening at it in their Updates', () => {
+  assertEquals(asked.map((l) => l.subject), ['Email bo@x.com?'])
+  assertStringIncludes(
+    String(asked[0].text),
+    `Answer it in your Updates: https://yaks.app/manage/ana/updates#u-${question.entity.eid}`,
+  )
+})
+
 // Once they agree to texts, an alert is a text, paid from the space's budget.
 // They prove the number with the code texted to it.
 await page('texts', { number: ANA, agreed: 'yes' })

@@ -1440,6 +1440,12 @@ export let handleChannels = (
       let { pointed } = await import('./operator-line.ts')
       await pointed(env, g, line.connection, row ? undefined : line.number)
     },
+    // An approval answered from the person's Updates or an alert is
+    // pressed as theirs (operator-approvals.ts `answered`).
+    operator_approval_answer: async (event) => {
+      let { answered } = await import('./operator-approvals.ts')
+      await answered(operator.store, operator.approve, event.entity.eid)
+    },
     // A question of a released draft's merge answered: once all are, the
     // merge runs with their picks (draft-merge.ts `settled`).
     draft_merge: async (event) => {

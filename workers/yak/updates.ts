@@ -25,6 +25,7 @@ import { attachmentKey } from './attachments.ts'
 import { directoryOf } from './directory.ts'
 import { inApp } from './tool.ts'
 import { linkOf } from './preview.ts'
+import { updateAnchor } from './operator-lists.ts'
 import { draftsOf, theirs } from './written.ts'
 import { CallError } from '@yaks/tools/errors'
 
@@ -206,7 +207,7 @@ let needsCard = (space: Space, u: Update) => {
   if (u.shown?.length) {
     return h(
       Card,
-      { class: 'Update Update-needs', id: `u-${u.eid}` },
+      { class: 'Update Update-needs', id: updateAnchor(u.eid) },
       head,
       words(u.words),
       shownChoices(space, u, choices),
@@ -216,7 +217,7 @@ let needsCard = (space: Space, u: Update) => {
   }
   return h(
     Card,
-    { class: 'Update Update-needs', id: `u-${u.eid}` },
+    { class: 'Update Update-needs', id: updateAnchor(u.eid) },
     head,
     words(u.words),
     choices.length
@@ -317,7 +318,10 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
   let away = u.dismissed ? null : h(Card.Actions, null, dismissing(space, u))
   return h(
     Card,
-    { class: u.unread ? 'Update Update-new' : 'Update', id: `u-${u.eid}` },
+    {
+      class: u.unread ? 'Update Update-new' : 'Update',
+      id: updateAnchor(u.eid),
+    },
     u.subject || away
       ? h(
         Card.Head,
@@ -492,7 +496,9 @@ export let updatesAnswer = async (
       headers: { location: managePath('updates', space.slug) },
     })
   }
-  let { request } = await operatorDoor(
+  // Words open the chat they went to; an approval's answer, the chat it
+  // was asked in, where its card shows it answered.
+  let { request, chat } = await operatorDoor(
     env,
     space,
     who,
@@ -500,10 +506,10 @@ export let updatesAnswer = async (
     form.has('choose')
       ? { choose: field('choose'), choice: field('choice'), id: field('id') }
       : { reply: field('reply'), say: field('say'), id: field('id') },
-  ) as { request: string }
+  ) as { request?: string; chat?: string }
   return new Response(null, {
     status: 303,
-    headers: { location: chatPath(space.slug, request) },
+    headers: { location: chatPath(space.slug, request ?? chat) },
   })
 }
 

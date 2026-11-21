@@ -180,16 +180,29 @@ export let contactCode = (space: Writer, code: string) => ({
 
 /**
  * An alert by email: what the Operator tells the person, an invitation to
- * answer by replying, and where their Updates are.
+ * answer by replying, and where their Updates are; or what it `asks` them,
+ * and where in their Updates its choices answer it in one press.
  *
  * ```ts
  * import { assertStringIncludes } from '@std/assert'
  * import { alerted } from '@yaks/platform/letters'
- * let body = alerted({ slug: 'ada', operator: 'Nova' }, 'Your report is ready.', 'https://yaks.app/manage/ada/updates')
+ * let ada = { slug: 'ada', operator: 'Nova' }
+ * let body = alerted(ada, 'Your report is ready.', 'https://yaks.app/manage/ada/updates')
  * assertStringIncludes(body, 'Reply to this email to answer me')
+ * assertStringIncludes(
+ *   alerted(ada, 'Email bo@x.com?', 'https://yaks.app/manage/ada/updates#u-1', true),
+ *   'Answer it in your Updates: https://yaks.app/manage/ada/updates#u-1',
+ * )
  * ```
  */
-export let alerted = (space: Writer, words: string, updates: string) =>
+export let alerted = (
+  space: Writer,
+  words: string,
+  updates: string,
+  asks = false,
+) =>
   `${words}\n\n` +
-  `Reply to this email to answer me, or open your Updates: ${updates}\n\n` +
+  (asks
+    ? `Answer it in your Updates: ${updates}\n\n`
+    : `Reply to this email to answer me, or open your Updates: ${updates}\n\n`) +
   signed(space)

@@ -23,6 +23,7 @@ import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import { type Choice, showing, shown as shownBy } from '@yaks/task'
+import { topOf } from '@yaks/session'
 import { refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
@@ -344,6 +345,12 @@ let placesOf = (
       : undefined
   }))
 
+// An approval nobody answered before it expired: it asks nothing now.
+let lapsed = (row: Bundle | undefined, now: number) => {
+  let a = comp(row, 'operator_approval')
+  return !!a && !row!.decided && Date.parse(String(a.expires)) < now
+}
+
 /** A person's Updates in a space, newest first with what needs them ahead,
  * at most `most` of them, and how many wait on them: what needs them, and
  * what they have not read. `dismissed` reads the notices they dismissed
@@ -354,13 +361,16 @@ export let updatesOf = async (
   space: string,
   most = 50,
   dismissed = false,
+  now = Date.now(),
 ): Promise<{ updates: Update[]; waiting: number }> => {
   let threads = await threadsOf(store, person, space, dismissed)
   let rows = await store.g.get(threads.map((t) => t.eid))
   let abouts = await aboutsOf(store, rows)
   let reports = await reportsOf(store, rows, abouts)
   let kept = threads.flatMap((t, i) =>
-    reports.has(t.eid) || t.archived != dismissed ? [] : [{ t, row: rows[i] }]
+    reports.has(t.eid) || t.archived != dismissed || lapsed(rows[i], now)
+      ? []
+      : [{ t, row: rows[i] }]
   )
   kept.sort((a, b) =>
     +(b.t.lane == 'Needs you') - +(a.t.lane == 'Needs you') ||
@@ -477,6 +487,19 @@ export let updating = async (
       }]
       : [],
   ])
+  // An approval's own Approve or Decline is its act's answer, carried out
+  // by `operator_approval_answer`; only words of their own reach the
+  // conversation too.
+  let [row] = str('choose') ? await store.g.get([about]) : []
+  let approval = comp(row, 'operator_approval')
+  let listed = (comp(row, 'decision')?.choices as Choice[] | undefined)
+    ?.some((c) => c.label == say)
+  if (approval && listed) {
+    return {
+      answered: about,
+      chat: await topOf(store.g, String(approval.session)),
+    }
+  }
   // The channels load with the words a person sends, not with every read.
   let { receive } = await import('./operator-channels.ts')
   let request = await receive(

@@ -175,11 +175,12 @@ let UNGRANTED =
   /insufficient[ _]?(authentication[ _]?)?scopes?|scope_insufficient|missing (access|permissions)/i
 
 // What the Operator is told beside such a refusal: the link that opens the
-// connection, where the person presses Reconnect.
+// connection, where the person presses Reconnect, given as a link with words
+// and, when they may not be watching, sent where it reaches them.
 let reconnecting = (env: Env, space: Pick<Space, 'slug'>, eid: string) =>
-  `\nThis connection lacks the access this call needs. Signing in again gives it full access: send them ${
+  `\nThis connection lacks the access this call needs. Signing in again gives it full access: ask them to press Reconnect, linking it as [Reconnect](${
     pageOf(env, space.slug)
-  }#${eid} and ask them to press Reconnect.`
+  }#${eid}). If they may not be in this conversation, send it with notification_send too, so it reaches them.`
 
 /** Whom an `api_call` reaches: the services connected for the person
  * (`ctx`), on their own turn, and the chat platforms of the rooms the

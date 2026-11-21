@@ -9,6 +9,7 @@ import { operatorMemory } from './operator-testing.ts'
 import { opened } from './lib/token.ts'
 import {
   acquainted,
+  answered,
   type Approval,
   approvals,
   asker,
@@ -18,12 +19,14 @@ import {
   LIFE,
 } from './operator-approvals.ts'
 import { approvalCard } from './operator-approval-card.ts'
+import { updatesOf, updating } from './operator-updates.ts'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Space } from './directory.ts'
 
 let SECRET = 'secret'
+let place = crypto.randomUUID()
 let env = { SESSION_SECRET: SECRET } as Env
 let store = operatorMemory()
 let person = crypto.randomUUID(), session = crypto.randomUUID()
@@ -237,7 +240,7 @@ let asking = (at: Partial<At>) =>
     asker(
       env,
       store,
-      { eid: crypto.randomUUID() } as Space,
+      { eid: place } as Space,
       { person, session, ...at },
       () => Promise.reject(new Error('nothing is texted')),
       () => clock,
@@ -339,5 +342,68 @@ test("a card pressed in a texted approval's conversation is still theirs alone",
       )
     ),
     true,
+  )
+})
+
+// What waits on the person, in their Updates, by what it asks.
+let needing = async () =>
+  (await updatesOf(store, person, place)).updates.filter((u) => u.needs)
+    .map((u) => u.words)
+// The newest approval asked in their chat.
+let newest = async () =>
+  (await store.g.read(
+    line`.operator_approval .entry.session=${session} .order=-created.at .limit=1`,
+  ))[0]
+
+test('an approval waits in their Updates, is answered there, and shows answered on its card', async () => {
+  await asking({ chat: true }).run({ email: 'ivy@x.com' })
+  let row = await newest()
+  let say = 'Add ivy@x.com to the space as an editor?'
+  equal((await needing()).includes(say), true)
+  let [shown] = (await updatesOf(store, person, place)).updates
+  equal(shown.choices?.map((c) => c.label), ['Approve', 'Decline'])
+  ran.length = 0
+  let did = await updating(store, { person, space: place }, {
+    choose: row.entity.eid,
+    choice: 'Approve',
+  })
+  equal(did, { answered: row.entity.eid, chat: session })
+  equal((await needing()).includes(say), false)
+  await answered(store, press, row.entity.eid)
+  await answered(store, press, row.entity.eid)
+  equal(ran, ['app_files {"member_add":{"email":"ivy@x.com"}}'])
+  ;[row] = await store.g.get([row.entity.eid])
+  equal(renderToString(approvalCard(row, clock)).includes('Approved.'), true)
+  let notes = await store.g.read(
+    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
+  )
+  equal(
+    notes.some((n) =>
+      /Approve on it in their Updates.*ivy@x\.com/.test(
+        String((n.content as { body: string }).body),
+      )
+    ),
+    true,
+  )
+})
+
+test('an approval answered on its card or link leaves their Updates; one that lapsed asks nothing', async () => {
+  await asking({ chat: true }).run({ email: 'jo@x.com' })
+  let row = await newest()
+  let digest = digestOf(row.operator_approval as Approval)
+  await press(row.entity.eid, digest, { own: true, decline: true, who: person })
+  equal(
+    (await needing()).includes('Add jo@x.com to the space as an editor?'),
+    false,
+  )
+  ;[row] = await store.g.get([row.entity.eid])
+  equal((row.decided as { choice: string }).choice, 'Decline')
+  await asking({ chat: true }).run({ email: 'al@x.com' })
+  let waits = 'Add al@x.com to the space as an editor?'
+  equal((await needing()).includes(waits), true)
+  equal(
+    (await updatesOf(store, person, place, 50, false, clock + LIFE + 1))
+      .updates.some((u) => u.words == waits),
+    false,
   )
 })

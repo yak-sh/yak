@@ -31,6 +31,9 @@ export let threadOf = (
       r.comps.comment?.target ?? r.comps.mail?.target ??
         r.comps.knock?.target ?? '',
     )
+  // A question is a thread of its own, even said as a line of a
+  // conversation: it waits on whom it asks, apart from what was said there.
+  if (r.comps.decision) return target || r.eid
   return target || str(r.comps.entry?.session ?? r.comps.commit?.target) ||
     r.eid
 }

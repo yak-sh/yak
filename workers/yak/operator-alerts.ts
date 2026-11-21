@@ -26,7 +26,12 @@ import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { alerted } from '@yaks/platform/letters'
 import { chatPath, managePath } from '@yaks/platform/routes'
-import { askAnchor, listsOf, needCount } from './operator-lists.ts'
+import {
+  askAnchor,
+  listsOf,
+  needCount,
+  updateAnchor,
+} from './operator-lists.ts'
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
@@ -184,10 +189,67 @@ export let openAt = (conversation: string, updates: string, about?: string) =>
 
 let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 
+/** What an alert tells, read off the row it is of: a notification's words
+ * to whom it names, or a decision's question to the person it is assigned
+ * to (`asks`, opened at it in their Updates, where it is answered); nothing
+ * for a decision already answered.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { toldOf } from './operator-alerts.ts'
+ * equal(toldOf({
+ *   entity: { eid: 'n' },
+ *   notification: { to: 'ana', about: 'app' },
+ *   doc: { title: 'Recipes: fixed', body: 'It prints again.' },
+ * }), { to: 'ana', words: 'It prints again.', subject: 'Recipes: fixed', about: 'app' })
+ * let ask = {
+ *   entity: { eid: 'd' },
+ *   task: {},
+ *   doc: { title: 'Email bo@x.com?' },
+ *   decision: { question: 'Email bo@x.com?', choices: [] },
+ *   filed: { assignee: 'ana' },
+ * }
+ * equal(toldOf(ask), { to: 'ana', words: 'Email bo@x.com?', asks: true })
+ * equal(toldOf({ ...ask, decided: { choice: 'Approve' } }), null)
+ * ```
+ */
+export let toldOf = (row: Bundle): Told | null => {
+  let note = part(row, 'notification'), doc = part(row, 'doc')
+  let decision = part(row, 'decision')
+  if (decision) {
+    if (row.decided || row.cancelled || row.completed) return null
+    return {
+      to: String(part(row, 'filed')?.assignee ?? ''),
+      words: String(decision.question ?? '').trim(),
+      asks: true,
+    }
+  }
+  let subject = String(doc?.title ?? '').trim()
+  let about = String(note?.about ?? '')
+  return {
+    to: String(note?.to ?? ''),
+    words: String(doc?.body ?? '').trim(),
+    ...subject ? { subject } : {},
+    ...about ? { about } : {},
+  }
+}
+
+/** What one alert tells `to`: its words, the line naming what happened,
+ * what it tells of, and whether it asks them something to answer. */
+export type Told = {
+  to: string
+  words: string
+  subject?: string
+  about?: string
+  asks?: boolean
+}
+
 /**
- * The `operator_alert` effect: notification `eid`, told to the person it is
- * for the way they chose, when the space's Operator wrote it (its `by` is
- * the space) to someone other than the whole space. Told by a browser or a
+ * The `operator_alert` effect: notification or decision `eid` (`toldOf`),
+ * told to the person it is for the way they chose, when the space's
+ * Operator wrote it (its `by` is the space) to someone other than the whole
+ * space. A decision, an approval among them, opens at itself in their
+ * Updates, where it is answered in place. Told by a browser or a
  * text, it is stamped `delivered`, or `bounced` with why: a carrier's block
  * or a spent budget. Told by email, it is carried by a letter of its own
  * (operator-channels.ts `letterFor`), whose outcome is the letter's to keep.
@@ -209,18 +271,17 @@ export let alert = async (
     if (waiting == 'tool') await defer?.(10)
     return
   }
-  let to = String(part(row, 'notification')?.to ?? '')
+  let told = toldOf(row)
+  if (!told) return
+  let { to, words, subject, asks } = told
   let by = String(part(row, 'created')?.by ?? '')
-  let words = String(part(row, 'doc')?.body ?? '').trim()
   let dir = directoryOf(env.STORE)
   let space = by ? await dir.at(by) : null
   if (!space || space.trashed || !to || to == space.eid || !words) return
   let written = String(part(row, 'created')?.at ?? '') || undefined
   let route = await routeFor(dir, to, written)
   if (!route) return
-  let about = String(part(row, 'notification')?.about ?? '') || undefined
-  let subject = String(part(row, 'doc')?.title ?? '').trim() || undefined
-  let note = { words, subject, id: eid, about, at: written }
+  let note = { words, subject, id: eid, about: told.about, asks, at: written }
   let outcome: Bundle[]
   try {
     let letter = await sent(env, store, dir, space, to, route, note)
@@ -252,6 +313,7 @@ type Note = {
   subject?: string
   id: string
   about?: string
+  asks?: boolean
   at?: string
 }
 
@@ -270,8 +332,11 @@ let sent = async (
 ): Promise<Bundle[] | undefined> => {
   let { words, subject, id } = note
   let updates = url(env, managePath('updates', space.slug))
+  // What asks them opens at itself in their Updates, answered there.
+  let answer = note.asks ? `${updates}#${updateAnchor(id)}` : undefined
   if (route.by == 'push') {
-    let open = openAt(url(env, chatPath(space.slug)), updates, note.about)
+    let open = answer ??
+      openAt(url(env, chatPath(space.slug)), updates, note.about)
     let count = await waitingOn(env, store, person, space.eid)
     let told = { words: subject ?? words, open, id, count }
     let refused: Unpushed | undefined
@@ -288,11 +353,12 @@ let sent = async (
   }
   if (route.by == 'text') {
     let { textPerson } = await import('./operator-texts.ts')
+    let said = subject ? `${subject}\n\n${words}` : words
     await textPerson(
       env,
       space,
       route.to,
-      subject ? `${subject}\n\n${words}` : words,
+      answer ? `${said}\n\nAnswer it here: ${answer}` : said,
     )
     return undefined
   }
@@ -301,7 +367,7 @@ let sent = async (
     eid: letterFor(id),
     to: route.to,
     title: subjectOf(subject ?? words),
-    body: alerted(space, words, updates),
+    body: alerted(space, words, answer ?? updates, note.asks),
     target: id,
   })
   // Written for the person it alerts, so a reply finds it from any address

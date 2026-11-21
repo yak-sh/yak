@@ -661,11 +661,19 @@ export let operatorDoc: VocabDoc = {
     },
     operator_alert: {
       effect: true,
-      created: ['notification'],
+      created: ['notification', 'decision'],
       idempotent: false,
       tries: 3,
       description:
-        'Tell the person a notification the Operator wrote them, the way they chose to be alerted (operator-alerts.ts).',
+        'Tell the person what the Operator tells or asks them, the way they chose to be alerted: a notification it wrote them, or a decision assigned to them, an approval among them (operator-alerts.ts).',
+    },
+    operator_approval_answer: {
+      effect: true,
+      target: '.operator_approval',
+      created: ['decided'],
+      tries: 3,
+      description:
+        "An approval answered as a decision, from the person's Updates or an alert: Approve carries out its act and anything else declines it, as its card or link would (operator-approvals.ts `approvals`).",
     },
   },
 }

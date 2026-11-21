@@ -2146,7 +2146,7 @@ export let operatorRequest = async (
   // Their Updates from the Operator, and what they do there.
   if (path == '/operator/updates') {
     let answer = await updating(store, held, args)
-    if ('request' in answer) await armed()
+    if ('request' in answer || 'answered' in answer) await armed()
     return Response.json(answer)
   }
   // The space's rounds of matches, and a member's picks in them (matches.ts).
