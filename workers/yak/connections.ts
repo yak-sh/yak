@@ -1650,6 +1650,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     let saved = await connect(ctxOf(env, who), held.connection, {
       attempt: held.attempt,
       callback: req.url,
+      person: held.person,
     })
     let connection = saved.find((b) =>
       comp(b, CONNECTION).status == 'connected'
@@ -1666,6 +1667,34 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     caught(e, { request: `GET ${CALLBACK}` })
     return told(back, 'refused')
   }
+}
+
+/** Begin linking the person's own account through `integration` (a chat
+ * platform's user, `discord-account`) from Profile: a connection of theirs,
+ * not a space's, so any member links themselves, and every space's Operator
+ * knows them there (chat.ts `linked`). The sign-in is held under `space`,
+ * their own, and returns to `back`. One they began and never finished is
+ * begun again rather than another made. */
+export let linkOwn = async (
+  req: Request,
+  env: Env,
+  who: Who & { person: string },
+  space: Space,
+  integration: string,
+  back: string,
+): Promise<Response> => {
+  let c = ctxOf(env, who)
+  let [begun] = (await c.graph.read(
+    line`.${CONNECTION}.owner=${who.person}&*`,
+  )).filter((b) =>
+    comp(b, CONNECTION).integration == integration &&
+    comp(b, CONNECTION).status == 'needed'
+  )
+  let eid = begun?.entity.eid ??
+    (await c.graph.apply(
+      await need(c.graph.read, { owner: who.person, integration }),
+    ))[0].entity.eid
+  return await signingIn(req, env, c, space, who, eid, back)
 }
 
 // Where an app sends a person to connect their own account, within its

@@ -176,6 +176,9 @@ export type Given = { key: string } | { fields: Record<string, string> } | {
   callback: string | URL
   /** A website session obtained alongside a bot OAuth sign-in, kept only in the vault. */
   session?: string
+  /** the person who signed in, whose own account the sign-in also names
+   * where its integration `links` one */
+  person?: Eid
 } | {
   /** the broker's own id for a sign-in that finished there (`settle`) */
   brokered: string
@@ -1278,6 +1281,7 @@ export let connect = async (
   let i = await known(c.graph.read, String(comp(b, CONNECTION).integration))
   let tokens: Tokens & Kept = {}
   let made: Comp = {}
+  let linked: Bundle[] = []
   if ('brokered' in given) {
     if (!i?.broker) throw new Error(`${i?.name} is not brokered`)
     let { name, integration } = i.broker
@@ -1297,6 +1301,10 @@ export let connect = async (
     made = {
       ...tokens.scope ? { scopes: tokens.scope.split(/\s+/) } : {},
       ...who.title ? { title: who.title } : {},
+    }
+    if (i?.links && given.person) {
+      linked = await linking(c, i.links, given.person, tokens)
+        .catch((e) => (c.report?.(e), []))
     }
   }
   let grant = comp(b, CONNECTION)
@@ -1349,7 +1357,45 @@ export let connect = async (
       ? [{ entity: { eid: connection }, [RECONNECTING]: null }]
       : [],
     ...await answered(c.graph.read, b, target.entity.eid),
+    ...linked,
   ])
+}
+
+// The person's own connection through `name` that a sign-in through another
+// integration also names (`links`): Discord's bot added with `identify`
+// granted reads who added it at `/users/@me`, with the same token. It keeps
+// that token without its refresh token, so the two never race to rotate one
+// grant. One they already hold to that account is marked connected again; a
+// failure to read who they are leaves the sign-in it rode on standing.
+let linking = async (
+  c: Ctx,
+  name: string,
+  person: Eid,
+  tokens: Tokens,
+): Promise<Bundle[]> => {
+  let i = await known(c.graph.read, name)
+  if (!i) throw new Error(`no integration ${name} to link`)
+  let { refresh_token: _, account: _a, account_title: _t, ...own } = tokens
+  let who = await signedIn(i, own, c.fetch ?? fetch)
+  if (!who.account) throw new Error(`${name} named no account`)
+  let held = (await c.graph.read(
+    line`.${CONNECTION}.owner=${person}${sub(ALL)}`,
+  )).filter((b) => comp(b, CONNECTION).integration == name)
+  let target =
+    held.find((b) =>
+      String(comp(b, CONNECTION).account ?? '') == who.account
+    ) ?? held.find((b) => comp(b, CONNECTION).status != 'connected') ??
+      fresh(person, name, i.scopes ?? [])
+  return [{
+    entity: { eid: target.entity.eid },
+    [SECRET]: { name: nameOf(target), value: JSON.stringify(own) },
+    [CONNECTION]: {
+      ...comp(target, CONNECTION),
+      status: 'connected',
+      account: who.account,
+      ...who.title ? { title: who.title } : {},
+    },
+  }]
 }
 
 // What takes the place of `was`, links to a connection going away or no

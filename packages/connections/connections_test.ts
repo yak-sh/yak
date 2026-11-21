@@ -1927,3 +1927,76 @@ test('a Discord account is named by its user id, read from userinfo, and called 
   let { account, title } = of(await at(g, link), 'connection')
   assertEquals([account, title], ['4242', 'Ann'])
 })
+
+// Adding the platform's Discord bot as `ann`, to the server `guild`, with
+// Discord answering who signed in with `me`: the server's connection, and
+// every Discord account `ann` then holds, as `[account, title, status]`.
+let addBot = async (
+  guild: string,
+  me: [number, unknown],
+  had?: (
+    n: ReturnType<typeof setup> extends Promise<infer S> ? S : never,
+  ) => Promise<unknown>,
+) => {
+  let s = await setup([200, {
+    access_token: 'A1',
+    refresh_token: 'R1',
+    scope: 'bot identify',
+    guild: { id: guild, name: 'Yak Barn' },
+  }], me)
+  let { g, c, needs } = s
+  await g.apply([registration('discord', { id: 'app', secret: 's' })])
+  await had?.(s)
+  let server = await needs({ integration: 'discord' })
+  let { attempt } = await begin(c, server)
+  await connect(c, server, {
+    attempt: attempt!,
+    callback: `${REDIRECT}?code=C&state=${attempt!.state}`,
+    person: 'ann',
+  })
+  let accounts = (await g.read(line`.connection.owner=ann&*`))
+    .filter((b) => of(b, 'connection').integration == 'discord-account')
+    .map((b) => {
+      let { account, title, status } = of(b, 'connection')
+      return [account, title, status]
+    })
+  return { ...s, server: of(await at(g, server), 'connection'), accounts }
+}
+
+test('adding the Discord bot links the Discord account of whoever added it, in the same sign-in', async () => {
+  let { server, accounts, vault } = await addBot(
+    '81384788765712384',
+    [200, { id: '4242', global_name: 'Ann' }],
+  )
+  assertEquals([server.account, server.status], [
+    '81384788765712384',
+    'connected',
+  ])
+  assertEquals(accounts, [['4242', 'Ann', 'connected']])
+  let own = vault.all().map(([, s]) => s.value).find((v) =>
+    v?.includes('A1') && !v.includes('R1')
+  )
+  assertEquals(!!own, true, 'the link keeps the token, not its refresh token')
+})
+
+test('a person who already linked their Discord account keeps the one link', async () => {
+  let { accounts } = await addBot(
+    '1',
+    [200, { id: '4242', global_name: 'Ann K' }],
+    async ({ g }) => {
+      await g.apply(
+        await need(g.read, {
+          owner: 'ann',
+          integration: 'discord-account',
+        }),
+      )
+    },
+  )
+  assertEquals(accounts, [['4242', 'Ann K', 'connected']])
+})
+
+test('a Discord that will not say who added its bot still connects the server', async () => {
+  let { server, accounts } = await addBot('1', [500, {}])
+  assertEquals(server.status, 'connected')
+  assertEquals(accounts, [])
+})

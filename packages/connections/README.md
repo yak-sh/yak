@@ -50,15 +50,19 @@ them.
   the token endpoint's answer (Discord's `guild.id`, the server its bot was
   added to), else of `userinfo`'s (a Discord user's `id`). `account_title` is
   the field of the same answer that names that account for people (the server's
-  `guild.name`, a user's `global_name`). `chat` names the [@yaks/chat](../chat)
-  platform its connections talk through: connecting it is all it takes for a
-  space's Operator and apps to hear and answer there. `api{base, docs, reads}`
-  is its API, for an agent calling it as a connection: the address its paths are
-  under (on one of `hosts`), its reference, and the calls that only read though
-  their method is not GET, each `METHOD /path` with `*` for one segment
-  (Calendar's `POST /freeBusy`). One with none is reached at its first host.
-  Each built integration asks for the broadest `scopes` useful to an assistant:
-  everything it can read, and the writes that matter.
+  `guild.name`, a user's `global_name`). `links` names another integration whose
+  account the same sign-in names for the person who signed in, and connects it
+  as theirs: adding yaks.app's Discord bot with `identify` granted also links
+  the adder's Discord user (`discord-account`), read at its `userinfo` with the
+  same token. `chat` names the [@yaks/chat](../chat) platform its connections
+  talk through: connecting it is all it takes for a space's Operator and apps to
+  hear and answer there. `api{base, docs, reads}` is its API, for an agent
+  calling it as a connection: the address its paths are under (on one of
+  `hosts`), its reference, and the calls that only read though their method is
+  not GET, each `METHOD /path` with `*` for one segment (Calendar's
+  `POST /freeBusy`). One with none is reached at its first host. Each built
+  integration asks for the broadest `scopes` useful to an assistant: everything
+  it can read, and the writes that matter.
 - A custom integration its owner listed in the **integration directory**, which
   anyone may read and add to a space of their own apart from any app, wears
   @yaks/platform's `published{at}`, as anything shared on a platform does;

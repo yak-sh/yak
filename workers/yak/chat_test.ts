@@ -24,6 +24,7 @@ import {
   connected,
   directTo,
   offers,
+  ownLinks,
   PLATFORMS,
   reached,
   recent,
@@ -538,4 +539,32 @@ test("yaks.app's bot goes by its space's Operator's name in the server it was ad
   } finally {
     globalThis.fetch = was
   }
+})
+
+// Profile's Connect Discord (chat.ts `ownLinks`): any member links their own
+// Discord account, offered once yaks.app keeps its bot, and named by what
+// Discord calls them once linked.
+test('Profile offers each person their own Discord link, and names the accounts they linked', async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let ann = crypto.randomUUID(), bob = crypto.randomUUID()
+  assertEquals(await ownLinks(p.env, ann), [])
+  await meta(p.env).apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    {
+      entity: { eid: crypto.randomUUID() },
+      connection: {
+        integration: 'discord-account',
+        owner: ann,
+        account: '4242',
+        title: 'Ann',
+        status: 'connected',
+      },
+    },
+  ], KERNEL)
+  let offer = { platform: 'Discord', integration: 'discord-account' }
+  assertEquals(await ownLinks(p.env, ann), [{ ...offer, accounts: ['Ann'] }])
+  assertEquals(await ownLinks(p.env, bob), [{ ...offer, accounts: [] }])
 })

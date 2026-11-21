@@ -193,6 +193,11 @@
           "description": "the field of the same answer naming that account for people, as a dotted path, where `account` is an id",
           "examples": ["guild.name"]
         },
+        "links": {
+          "type": "string",
+          "description": "another integration naming the person who signs in through this one, by name, whose own connection the same sign-in makes",
+          "examples": ["discord-account"]
+        },
         "chat": {
           "type": "string",
           "description": "the chat platform its connections talk through (@yaks/chat), by name: connecting it lets the Operator and the space's apps hear and answer there",

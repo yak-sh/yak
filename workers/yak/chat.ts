@@ -658,6 +658,34 @@ let present = async (env: Env, platform: Platform, all: Present[]) => {
   }
 }
 
+/** The person's own accounts on each platform whose bot yaks.app keeps, as
+ * Profile shows them (desk-pages.ts `profile`): the platform, the
+ * integration a person links their account there with, and the names of
+ * those they linked, which tell every space's Operator it is them
+ * ({@link linked}). */
+export let ownLinks = async (env: Env, person: string) => {
+  let rows = await read(
+    env,
+    line`.${CONNECTION}.owner=${person}&.${CONNECTION}.status=connected&*`,
+  )
+  let all = await Promise.all(
+    [...PLATFORMS.values()].map(async (p) =>
+      p.user && await platformBot(env, p.name)
+        ? [{
+          platform: p.title,
+          integration: p.user,
+          accounts: rows.filter((b) =>
+            comp(b, CONNECTION).integration == p.user
+          ).map((b) =>
+            String(comp(b, CONNECTION).title ?? comp(b, CONNECTION).account)
+          ),
+        }]
+        : []
+    ),
+  )
+  return all.flat()
+}
+
 /** What a space's Operator settings offer for each platform whose bot
  * yaks.app keeps, or that a bot the space brought is on (operator-page.ts
  * `chatCard`): the integration that adds yaks.app's bot, and the one a

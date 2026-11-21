@@ -902,6 +902,7 @@ let mine = async (
     panes,
     sessions,
     provider,
+    links,
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
@@ -913,6 +914,9 @@ let mine = async (
     dir.panes(person),
     view == 'profile' ? browsers(env, person) : [],
     payments(env),
+    view == 'profile'
+      ? import('./chat.ts').then((c) => c.ownLinks(env, person))
+      : undefined,
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -925,6 +929,7 @@ let mine = async (
     email: email ?? '',
     agents,
     sessions,
+    links,
     session: who.session,
     shared: theirs,
     referral,
@@ -980,6 +985,27 @@ let account = async (
     )
   }
   if (view != 'profile') return nothingHere(env)
+  // Connect Discord: the person links their own account, whatever spaces
+  // they are in, the sign-in held under their own space.
+  // Only a platform's own account integration is linked here.
+  let linking = String(form.get('link') ?? '')
+  if (linking) {
+    let { ownLinks } = await import('./chat.ts')
+    if (
+      !(await ownLinks(env, who.person)).some((l) => l.integration == linking)
+    ) {
+      return nothingHere(env)
+    }
+    let { linkOwn } = await import('./connections.ts')
+    return await linkOwn(
+      req,
+      env,
+      who,
+      await dir.own(who.person),
+      linking,
+      hostUrl(env, managePath('profile')),
+    )
+  }
   if (form.has('session')) {
     let id = String(form.get('session'))
     if (id == 'all') {

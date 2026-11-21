@@ -72,6 +72,11 @@ export type Integration = {
    * same answer: the server's name (`guild.name`), a Discord user's
    * `global_name` */
   account_title?: string
+  /** another integration naming the person who signs in through this one,
+   * whose own connection the same sign-in makes: Discord's bot added with
+   * `identify` granted also links the Discord account of whoever added it
+   * (`discord-account`) */
+  links?: string
   /** the chat platform its connections talk through (@yaks/chat), by name:
    * connecting it is all it takes for the Operator and the space's apps to
    * hear and answer there */
@@ -245,6 +250,7 @@ let CARRIED = {
   userinfo: 1,
   account: 1,
   account_title: 1,
+  links: 1,
   chat: 1,
   scopes: 1,
   params: 1,

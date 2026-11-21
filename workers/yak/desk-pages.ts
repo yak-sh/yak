@@ -523,6 +523,7 @@ let profile = (at: DeskPage, env: Host) => {
         ),
       ),
     ),
+    ...(at.links ?? []).map(linkCard),
     h(
       Card,
       null,
@@ -541,6 +542,36 @@ let profile = (at: DeskPage, env: Host) => {
     ),
   ]
 }
+
+// A chat platform the person links their own account on, so every space's
+// Operator knows it is them there: the accounts they linked, and a button to
+// link one, which adding yaks.app's bot to a server does on its own.
+let linkCard = (l: NonNullable<DeskPage['links']>[number]) =>
+  h(
+    Card,
+    { key: l.integration },
+    heading(l.platform),
+    h(
+      'p',
+      null,
+      l.accounts.length
+        ? `Linked as ${
+          l.accounts.join(', ')
+        }. Your Operator knows it’s you there.`
+        : `Link your ${l.platform} account so your Operator knows it’s you there.`,
+    ),
+    h(
+      Form,
+      {
+        method: 'post',
+        action: `${managePath('profile')}?enable=${l.integration}`,
+      },
+      h(Form.Hidden, { name: 'link', value: l.integration }),
+      send(
+        l.accounts.length ? 'Link another account' : `Connect ${l.platform}`,
+      ),
+    ),
+  )
 
 // The person's browsers, the one asking first, then the newest sign-in.
 let signedIn = (at: DeskPage) =>
