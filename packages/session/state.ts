@@ -141,6 +141,14 @@ export let cold = (
   now: number = Date.now(),
 ): boolean => (expiry(entries, session) ?? Infinity) <= now
 
+// Give provider clocks and retention estimates one extra minute before
+// rewriting a prompt. The recorded expiry is specific to the dispatched ask.
+export let pastCache = (
+  entries: Bundle[],
+  session: string,
+  now: number = Date.now(),
+): boolean => cold(entries, session, now - 60_000)
+
 let sessionOf = (b: Bundle | undefined) =>
   (b?.entry as Comp | undefined)?.session
 

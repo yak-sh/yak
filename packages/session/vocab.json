@@ -74,6 +74,10 @@
         "pruning": {
           "type": "string",
           "description": "archive-mark fingerprint of the context sent or summarized; a changed archive or restore invalidates this snapshot"
+        },
+        "elided_before": {
+          "type": "integer",
+          "description": "transcript position before which this request omitted old turn context and answered calls and reports after the provider cache expired"
         }
       }
     },

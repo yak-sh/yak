@@ -21,8 +21,14 @@ import { attemptComputed } from './attempt.ts'
 import { seedIdentities } from './testing.ts'
 import { settle } from './run.ts'
 import { transcript } from './transcript.ts'
-import { answered, replied } from './pruning.ts'
-import { type Kind, kindOf } from './state.ts'
+import {
+  answered,
+  elide,
+  elidedBefore,
+  nextElision,
+  replied,
+} from './pruning.ts'
+import { type Kind, kindOf, pastCache } from './state.ts'
 
 let line = (seq: number, comps: object): Bundle => ({
   entity: { eid: `l${seq}` },
@@ -88,6 +94,70 @@ test('a session that has said nothing of its own has replied to nothing', () => 
   )
 })
 
+test('a cold projection keeps the current turn, whole dialog, and open calls', () => {
+  let rows = [
+    line(1, { content: { body: 'first person message' } }),
+    line(2, { prompt: { scope: 'turn' }, content: { body: 'old presence' } }),
+    line(3, { prompt: { scope: 'turn' }, content: { body: 'opened Read' } }),
+    line(4, { prompt: {}, content: { body: 'standing instructions' } }),
+    line(5, { call: {} }),
+    line(6, { result: { call: 'l5' }, content: { body: 'tool text' } }),
+    line(7, { call: {} }),
+    line(8, { tool_progress: { call: 'l7' } }),
+    line(9, { ask: {} }),
+    line(10, { output: { source: 'l9' }, content: { body: 'whole reply' } }),
+    line(11, { content: { body: 'current person message' } }),
+    line(12, { prompt: { scope: 'turn' }, content: { body: 'new presence' } }),
+    line(13, { call: {} }),
+    line(14, { result: { call: 'l13' } }),
+  ]
+  let original = structuredClone(rows)
+  let before = nextElision(rows, 's')
+  equal(ids(elide(rows, 's', before)), [
+    'l1',
+    'l4',
+    'l7',
+    'l8',
+    'l9',
+    'l10',
+    'l11',
+    'l12',
+    'l13',
+    'l14',
+  ])
+  equal(rows, original)
+  rows.push(line(15, { ask: { elided_before: before } }))
+  equal(elidedBefore(rows, 's'), before)
+})
+
+test('current turn notes admitted before the input survive a cold continuation', () => {
+  let rows = [
+    line(1, { prompt: { scope: 'turn' }, content: { body: 'earlier Read' } }),
+    line(2, { content: { body: 'earlier input' } }),
+    line(3, { prompt: { scope: 'turn' }, content: { body: 'current Read' } }),
+    line(4, { content: { body: 'current input' } }),
+    line(5, { ask: {} }),
+    line(6, { output: { source: 'l5' }, content: { body: 'partial reply' } }),
+  ]
+  equal(ids(elide(rows, 's', nextElision(rows, 's'))), [
+    'l2',
+    'l3',
+    'l4',
+    'l5',
+    'l6',
+  ])
+})
+
+test('cold elision waits one minute beyond the expiry the provider recorded', () => {
+  let expiry = '2026-11-20T12:00:00.000Z'
+  let rows = [line(1, { ask: {}, fake: { cache_expires_at: expiry } })]
+  let at = Date.parse(expiry) + 60_000
+  equal(pastCache(rows, 's', at - 1), false)
+  equal(pastCache(rows, 's', at), true)
+  equal(pastCache(rows, 'other', at), false)
+  equal(pastCache([line(1, { ask: {} })], 's', at), false)
+})
+
 // What the fake provider keeps about an ask: its reply, and when the prefix
 // that request cached expires.
 let fakeDoc: VocabDoc = {
@@ -137,6 +207,7 @@ let second = async (
   wears: { session?: object; persona?: object } = { session: { drops: {} } },
   deps: object = {},
   context?: number,
+  warmAgain = false,
 ) => {
   let g = graph({
     storage: ram(vocab, {
@@ -197,9 +268,12 @@ let second = async (
     asked.push(req)
     return Promise.resolve(replies.shift()!)
   }
-  model.mark = (reply) => ({
-    fake: { reply: reply.id, ...expires ? { cache_expires_at: expires } : {} },
-  })
+  model.mark = (reply) => {
+    let at = warmAgain && reply.id == 'r3' ? WARM : expires
+    return {
+      fake: { reply: reply.id, ...at ? { cache_expires_at: at } : {} },
+    }
+  }
   let run = () =>
     settle(g, 's', { holder: 'runner', model, tools: [echo], ...deps })
   await run()
@@ -210,6 +284,14 @@ let second = async (
     content: { body: 'and once more' },
   }])
   await run()
+  if (warmAgain) {
+    await g.apply([{
+      entity: { eid: 'warm' },
+      entry: { session: 's' },
+      content: { body: 'a warm follow-up' },
+    }])
+    await run()
+  }
   let entries = await transcript(g, 's')
   let others = await g.get(['theirs', 'answer'], ['archived'])
   return {
@@ -238,6 +320,56 @@ test('a request that starts after the cache has gone cold leaves out the earlier
     String((result.content as { body: string }).body).includes('echo: hi'),
     true,
   )
+})
+
+test('the cold prompt projection survives warm requests and leaves the original rows readable', async () => {
+  let { sent, asks, dropped, entries } = await second(
+    COLD,
+    {},
+    { elideCold: true },
+    undefined,
+    true,
+  )
+  equal(asks, 4)
+  equal(dropped, [])
+  equal(sent.includes('echo: hi') || sent.includes('all green'), false)
+  equal(
+    [
+      'keep it short',
+      'echo hi, then say done',
+      'done',
+      'and once more',
+      'a warm follow-up',
+    ]
+      .every((words) => sent.includes(words)),
+    true,
+  )
+  equal(
+    entries.some((b) =>
+      b.result &&
+      String((b.content as { body: string }).body).includes('echo: hi')
+    ),
+    true,
+  )
+})
+
+test('a cold request elides without calling the summarizer even when a checkpoint is due', async () => {
+  let summaries = 0
+  let summarizer: Model = () => {
+    summaries++
+    return Promise.resolve({
+      id: 'summary',
+      model: 'fake-1',
+      items: [{ kind: 'assistant', text: 'summary' }],
+    })
+  }
+  let { sent } = await second(COLD, {}, {
+    elideCold: true,
+    compactModel: { model: summarizer, name: 'fake-1' },
+  }, 600)
+  equal(summaries, 0)
+  equal(sent.includes('echo: hi'), false)
+  equal(sent.includes('echo hi, then say done'), true)
 })
 
 test('while the cache is warm, or a provider says nothing of it, the result stays', async () => {

@@ -2395,6 +2395,7 @@ export let operating = (
     // Its text is shown as it is written, once it is stored, so a reset
     // under a reply takes back none of what a person saw.
     streaming: true,
+    elideCold: true,
     typed: options.typing,
     context: shown,
     inputSource,

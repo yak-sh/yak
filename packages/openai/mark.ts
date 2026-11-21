@@ -2,9 +2,16 @@
 // model (./responses.ts): ./provider.ts marks its replies before loading it.
 import { type CacheContext, prefixCacheMark, type Reply } from '@yaks/model'
 
-/** The shortest time OpenAI's API documents keeping a cached prefix, in
- * seconds: five minutes for the earlier models, thirty for GPT-5.6 on. */
-export let RETENTION = 300
+// Retention for the default request settings. Earlier models that support
+// extended retention can default to 24h depending on the account's policy.
+// https://developers.openai.com/api/docs/guides/prompt-caching
+let retentionOf = (model: string): number =>
+  /^gpt-(?:[6-9]|[1-9]\d|5\.[6-9]|5\.[1-9]\d)/.test(model)
+    ? 1_800
+    : /^gpt-(?:5(?:\.(?:1|2|4|5)(?=-|$)|(?:-codex)?(?=-\d|$))|4\.1(?=-\d|$))/
+        .test(model)
+    ? 86_400
+    : 3_600
 
 /**
  * The mark of a reply under `name`: `openai{response_id, cache_expires_at}`.
@@ -19,7 +26,10 @@ export let RETENTION = 300
  * // { openai: { response_id: 'resp_1', cache_expires_at: null } }
  * ```
  */
-export let marking = (name: string, retention?: number) =>
+export let marking = (
+  name: string,
+  retention?: number | 'openai-default',
+) =>
 (
   reply: Reply,
   cache?: CacheContext,
@@ -28,7 +38,13 @@ export let marking = (name: string, retention?: number) =>
     response_id: reply.id,
     ...prefixCacheMark(
       reply,
-      cache && { ...cache, retention: cache.retention ?? retention },
+      cache && {
+        ...cache,
+        retention: cache.retention ??
+          (retention == 'openai-default'
+            ? retentionOf(reply.model)
+            : retention),
+      },
     ),
   },
 })

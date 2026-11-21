@@ -28,7 +28,7 @@ import type { ImageGeneration, Images } from './images.ts'
 import { generations, image, imageListed, imageQuote } from './generations.ts'
 import type { TransportCredential } from './transport.ts'
 import { openaiDoc, responseAnchor } from './vocab.ts'
-import { marking, RETENTION } from './mark.ts'
+import { marking } from './mark.ts'
 import { native as door } from './native.ts'
 import { reads } from './reads.ts'
 
@@ -163,10 +163,10 @@ export let providers = (
     ? true
     : !!(options.key || fromEnv(lent.env))
   // OpenAI's own API keeps a cached prefix for at least its documented
-  // minimum, so each reply records when its prefix expires, and a session
+  // model's retention, so each reply records when its prefix expires, and a session
   // sends the instructions it cached until then. Nothing documents a lifetime
   // for the Codex backend or another endpoint: unknown there.
-  let retention = store ? RETENTION : undefined
+  let retention = store ? 'openai-default' as const : undefined
   let signing = base
     ? {
       ...opened(lent, base, options.key),

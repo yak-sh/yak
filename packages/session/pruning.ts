@@ -100,3 +100,51 @@ export let answered = (lines: Bundle[], before: number): Bundle[] => {
       : report(b) && early(b))
   )
 }
+
+/** The last elision boundary this conversation sent, including on retries. */
+export let elidedBefore = (
+  entries: Bundle[],
+  session: string,
+): number => {
+  let ask = entries.findLast((b) =>
+    kindOf(b) == 'ask' && (b.entry as Comp | undefined)?.session == session
+  )
+  return Number((ask?.ask as Comp | undefined)?.elided_before ?? 0)
+}
+
+/** A prompt note admitted for one turn, such as an opened Read. */
+export let turnNote = (b: Bundle): boolean =>
+  (b.prompt as Comp | undefined)?.scope == 'turn'
+
+/** Advance the boundary past what the Operator has answered, stopping at
+ * the current input and any turn notes admitted immediately before it. */
+export let nextElision = (entries: Bundle[], session: string): number => {
+  let own = entries.filter((b) =>
+    (b.entry as Comp | undefined)?.session == session
+  )
+  let from = own.findLastIndex((b) =>
+    kindOf(b) == 'input' && !b.prompt && !b.notice && !report(b)
+  )
+  while (from > 0 && turnNote(own[from - 1])) from--
+  return Math.max(
+    elidedBefore(entries, session),
+    from < 0 ? 0 : Math.min(seqOf(own[from]), replied(entries, session) ?? 0),
+  )
+}
+
+/** The prompt's view of the conversation after a cold turn. Omit old turn
+ * notes and use the same protocol-pair and report selection as a drop. */
+export let elide = (
+  entries: Bundle[],
+  session: string,
+  before: number,
+): Bundle[] => {
+  if (!before) return entries
+  let own = entries.filter((b) => (b.entry as Comp)?.session == session)
+  let gone = new Set(answered(own, before))
+  return entries.filter((b) =>
+    !gone.has(b) &&
+    !((b.entry as Comp)?.session == session && seqOf(b) < before &&
+      turnNote(b))
+  )
+}

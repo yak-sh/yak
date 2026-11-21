@@ -227,6 +227,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   /** the share of its model's context window a transcript fills before it is
    * compacted, for every model (@yaks/session `Deps.compactAt`) */
   compactAt?: number
+  elideCold?: Deps['elideCold']
   /** each step of every transcript, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
   opening?: (persona?: Eid, session?: Eid) => Promise<Opening>
@@ -496,6 +497,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     model,
     resolveModel,
     compactModel: compact,
+    elideCold: opts.elideCold,
     answers: answers(h.g, implementations, opts.model),
     tools,
     named: opts.named,

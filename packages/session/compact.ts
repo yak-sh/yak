@@ -7,7 +7,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { ANSWER, QUESTIONS } from '@yaks/model'
 import { USING } from './native.ts'
 import { kindOf, newestAsk, seqOf } from './state.ts'
-import { checkpointOf, unarchived } from './pruning.ts'
+import { checkpointOf, turnNote, unarchived } from './pruning.ts'
 
 let callOf = (b: Bundle): string | undefined => {
   let call = ((b.result ?? b.tool_progress) as Comp | undefined)?.call
@@ -36,18 +36,11 @@ let paired = (entries: Bundle[], end: number): number => {
 export let suffix = (entries: Bundle[], from: number): Bundle[] =>
   entries.slice(paired(entries, from))
 
-/** Whether a prompt entry is held for its turn alone (`prompt{scope: 'turn'}`):
- * a note beside one turn's words, such as a document opened for them, which a
- * checkpoint drops rather than keeps or summarizes. A later turn that needs it
- * is given it again. */
-export let turned = (b: Bundle): boolean =>
-  (b.prompt as Comp | undefined)?.scope == 'turn'
-
 /** Explicitly admitted context (persona, skills, delegation instructions) is
  * kept verbatim. Ordinary file reads and tool results are history, not a way
  * to admit instructions. */
 export let retained = (entries: Bundle[]): Bundle[] =>
-  entries.filter((b) => b.prompt && !b.archived && !turned(b))
+  entries.filter((b) => b.prompt && !b.archived && !turnNote(b))
 
 export let history = (entries: Bundle[]): Bundle[] =>
   entries.filter((b) => !b.prompt && !b.task_context)
@@ -62,7 +55,7 @@ export let context = (entries: Bundle[]): Bundle[] => {
   if (!Number.isSafeInteger(seq) || seq < 1) {
     throw new Error('Checkpoint has no boundary: ' + through)
   }
-  let rest = entries.filter((b) => (!b.prompt || turned(b)) && b != mark)
+  let rest = entries.filter((b) => (!b.prompt || turnNote(b)) && b != mark)
   let from = rest.findIndex((b) => seqOf(b) > seq)
   return [
     ...retained(entries),

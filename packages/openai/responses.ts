@@ -64,7 +64,7 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   /** How long the endpoint keeps a cached prefix, in seconds: each reply's
    * mark records the request's start plus this as its `cache_expires_at`.
    * Unknown where absent. */
-  retention?: number
+  retention?: number | 'openai-default'
 }
 
 type Frame = Record<string, unknown>

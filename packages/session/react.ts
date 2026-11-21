@@ -1,6 +1,14 @@
 import { compactAsk } from './compact_ask.ts'
 import { loading, schemas } from './deferred.ts'
-import { answered, checkpointOf, pruning, replied } from './pruning.ts'
+import {
+  answered,
+  checkpointOf,
+  elide,
+  elidedBefore,
+  nextElision,
+  pruning,
+  replied,
+} from './pruning.ts'
 import { absent, and, eq, line as query, or, present } from '@yaks/query'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
@@ -92,6 +100,7 @@ import {
   kindOf,
   newestAsk,
   openCalls,
+  pastCache,
   sendingBefore,
   sendingSelected,
   seqOf,
@@ -292,6 +301,8 @@ export type Deps = {
    * Without one, leave the history intact instead of sending a summary to an
    * arbitrary (possibly media-only) model. */
   compactModel?: Served
+  /** Project old turn context out of a cold request without archiving it. */
+  elideCold?: boolean
   model: Model
   /** Hosted execution persists an ask and yields while its receipt is pending. */
   executor?: Executor
@@ -477,7 +488,8 @@ export let reading = async (
     ...turn
       ? {
         anchored: async (ask: Bundle) => {
-          let yes = await continues(ask)
+          let yes = !(deps.elideCold && pastCache([ask], session)) &&
+            await continues(ask)
           if (yes) anchored = ask.entity.eid
           return yes
         },
@@ -1750,17 +1762,23 @@ export let react = async (
   asked = newestAsk(
     entries.filter((b) => attemptState(b) == 'completed'),
   )
+  let previousElision = elidedBefore(entries, session)
+  let coldTurn = deps.elideCold && !(unfinished && executor) &&
+    pastCache(entries, session)
+  let elision = coldTurn ? nextElision(entries, session) : previousElision
   // Once the provider's cache is cold a request pays for its whole context
   // whatever it sends, so a session that drops (`drops`) leaves out what it
   // has replied past at no cost in cache and with no model call. The step is
   // then taken again on what is left.
   if (
-    !dropped && !(unfinished && executor) && cold(entries, session) &&
+    !deps.elideCold && !dropped && !(unfinished && executor) &&
+    cold(entries, session) &&
     await drop(g, session, entries)
   ) return react(g, session, deps, undefined, true)
   let checkpoint = checkpointOf(entries)
-  const sameModel = asked && sameScope &&
+  const sameModel = asked && sameScope && !coldTurn &&
     comp(asked, ASK)?.pruning === pruning(entries) &&
+    Number(comp(asked, ASK)?.elided_before ?? 0) === elision &&
     (!checkpoint || seqOf(asked) > seqOf(checkpoint)) &&
     comp(asked, 'entry')?.session === session &&
     comp(asked, ASK)?.to === modelEid &&
@@ -1779,7 +1797,7 @@ export let react = async (
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let asking = askingOf(entries)
-  let said = lines(context(entries), asking)
+  let said = lines(elide(context(entries), session, elision), asking)
   let window = anchorId
     ? said.filter((b) =>
       seqOf(b) > seqOf(asked!) ||
@@ -1894,7 +1912,7 @@ export let react = async (
   // of the newest request since the last checkpoint, which includes whatever
   // history an anchor kept there, plus the lines since; text estimates it
   // before the first count.
-  let cut = deps.compactModel
+  let cut = deps.compactModel && !coldTurn
     ? {
       g,
       session,
@@ -2035,6 +2053,7 @@ export let react = async (
       to: modelEid,
       through: newest.entity.eid,
       pruning: pruning(entries),
+      ...elision ? { elided_before: elision } : {},
     },
     ...using
       ? {
@@ -2269,7 +2288,10 @@ export let react = async (
         if (anchored) {
           entries = (await reading(g, session, deps, true)).entries
           cut.entries = entries
-          cut.said = lines(context(entries), askingOf(entries))
+          cut.said = lines(
+            elide(context(entries), session, elision),
+            askingOf(entries),
+          )
             .filter((b) => !b.prompt)
         }
         // Without a stated ceiling, cut relative to the refused payload,

@@ -191,12 +191,14 @@ test('a configured endpoint is opened by its own key, the lent key, or by nothin
   ]])
 })
 
-// Where OpenAI's API answers, a reply's prefix stays cached for its documented
-// five minutes at least: the session holds its instructions until then.
 test('OpenAI keeps replies to anchor on, and marks when their prefix expires, where it is reached on a key, never through Codex or another endpoint', async () => {
   let mark = { openai: { response_id: 'r1' } }
   let reply = { id: 'r1', model: 'gpt-x', items: [] }
-  let sent = async (over: Partial<Lent>, options: Options = {}) => {
+  let sent = async (
+    over: Partial<Lent>,
+    options: Options = {},
+    name = 'gpt-x',
+  ) => {
     let bodies: Record<string, unknown>[] = []
     let model = providers(
       lent({
@@ -220,12 +222,25 @@ test('OpenAI keeps replies to anchor on, and marks when their prefix expires, wh
       model.anchor!(mark),
       bodies[0].store,
       bodies[0].previous_response_id,
-      model.mark!(reply, { requestedAt: 0 }).openai.cache_expires_at,
+      model.mark!({ ...reply, model: name }, { requestedAt: 0 }).openai
+        .cache_expires_at,
     ]
   }
-  let expires = '1970-01-01T00:05:00.000Z'
+  let expires = '1970-01-01T01:00:00.000Z'
   let keyed = (name: string) => name == 'OPENAI_API_KEY' ? 'sk' : undefined
   assertEquals(await sent({ env: keyed }), ['r1', true, 'r1', expires])
+  assertEquals(await sent({ env: keyed }, {}, 'gpt-6.2-sol'), [
+    'r1',
+    true,
+    'r1',
+    '1970-01-01T00:30:00.000Z',
+  ])
+  assertEquals(await sent({ env: keyed }, {}, 'gpt-5.5'), [
+    'r1',
+    true,
+    'r1',
+    '1970-01-02T00:00:00.000Z',
+  ])
   assertEquals(await sent({}, { key: 'own' }), ['r1', true, 'r1', expires])
   assertEquals(
     await sent({}, { key: 'own', gateway: { account: 'a', id: 'g' } }),
