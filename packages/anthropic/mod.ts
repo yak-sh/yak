@@ -424,6 +424,17 @@ export let messages = (options: Options): Model => {
         tool: { type: 'tool_definition', definition },
       })),
     }
+    let [first, ...history] = cached.messages
+    let tail: Block[] = []
+    if (
+      scoped.length && !history.length &&
+      req.turnContext?.every((i) => i.kind == 'instruction')
+    ) {
+      let count = req.turnContext.filter((i) => i.text).length
+      if (count && count < first.content.length) {
+        tail = first.content.splice(-count)
+      }
+    }
     let body = {
       model: req.model,
       max_tokens: req.tokens ?? TOKENS,
@@ -431,9 +442,10 @@ export let messages = (options: Options): Model => {
       ...scoped.length
         ? {
           messages: [
-            { role: 'user', content: [{ type: 'text', text: OPENER }] },
+            first,
             additions,
-            ...cached.messages,
+            ...history,
+            ...tail.length ? [{ role: 'system', content: tail }] : [],
           ],
         }
         : {},

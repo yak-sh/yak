@@ -560,6 +560,12 @@ test('scoped Claude tools are introduced after the shared system prefix', async 
   }))
   let body = sent[0].body
   equal(body.tools.map((t: { name: string }) => t.name), ['find'])
+  equal(body.messages.map((m: { role: string }) => m.role), [
+    'user',
+    'system',
+    'system',
+  ])
+  equal(body.messages[0].content.at(-1).text, 'Find the yak.')
   equal(body.messages[1].content[0].tool.definition.name, 'zap')
   equal(body.messages.at(-1).content.at(-1).text, 'Here now.')
 })
