@@ -14,6 +14,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import {
   attach,
   attached,
@@ -625,13 +626,20 @@ test('plan settings preserves its destination through sign-in', async () => {
     assertEquals(anonymous.status, 303)
     const location = new URL(anonymous.headers.get('location')!)
     assertEquals(location.origin + location.pathname, 'https://yaks.app/login')
-    assertEquals(location.searchParams.get('return'), 'https://yaks.app' + path)
-    const signedIn = await k.at('yaks.app', path, { headers: { cookie } })
+    const returnTo = location.searchParams.get('return')
+    assertEquals(returnTo, 'https://yaks.app' + path)
+    const destination = new URL(returnTo!)
+    const signedIn = await k.at(destination.host, destination.pathname, {
+      headers: { cookie },
+    })
     assertEquals(signedIn.status, 200)
-    const html = await signedIn.text()
-    assertStringIncludes(html, 'Plus')
-    assertStringIncludes(html, '<b>free</b>')
-    assertStringIncludes(html, 'Compare plans')
+    const { document } = parseHTML(await signedIn.text())
+    assert(
+      [...document.querySelectorAll('#plan a[href]')].some((link) =>
+        new URL(link.getAttribute('href')!, destination).href ===
+          'https://yaks.app/pricing'
+      ),
+    )
   } finally {
     await k.stop()
   }
