@@ -245,6 +245,9 @@ export let slow = (base: Storage): Storage => ({
         get: (eids, names) => Promise.resolve(tx.get(eids, names)),
         patch: (bundles) => Promise.resolve(tx.patch(bundles)),
         remove: (entities) => Promise.resolve(tx.remove(entities)),
+        ...tx.book && {
+          book: (bundles: Bundle[]) => Promise.resolve(tx.book!(bundles)),
+        },
         ...tx.discard && {
           discard: (entities: Entity[]) =>
             Promise.resolve(tx.discard!(entities)),

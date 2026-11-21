@@ -75,7 +75,8 @@ export let restoreFields = async (
 }
 
 /** Wrap a storage transaction so every data removal keeps its before-image,
- * but a `discard`: a writer's own bookkeeping leaves with no copy kept.
+ * but a `book` or `discard`: a writer's own bookkeeping changes and leaves
+ * with no copy kept.
  * Generated or computed properties are never manufactured into saved rows. */
 export let preserving = <T extends Tx>(
   tx: T,
@@ -137,6 +138,7 @@ export let preserving = <T extends Tx>(
       ),
     remove: (entities) =>
       after(retain(entities.map((e) => e.eid)), () => tx.remove(entities)),
+    book: tx.book ?? tx.patch,
     discard: tx.discard ?? tx.remove,
   } as T
 }

@@ -3,8 +3,9 @@
 // (`Graph.book`). Nothing refers to such a row and nothing derives from it, so
 // none of `apply()`'s phases has anything to say about it, and through them a
 // run's claim was stamped `created` and moved to another archetype, rows its
-// removal then wrote again. No person restores one, so a removal keeps no
-// recoverable copy and leaves no tombstone (`Tx.discard`).
+// removal then wrote again. No person restores one, so a value it clears
+// keeps no recoverable copy (`Tx.book`), and a removal keeps none and leaves
+// no tombstone (`Tx.discard`).
 
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
@@ -46,7 +47,7 @@ export let book = (
       let patched = here.filter((b) => !dead(b) && comps(b).length)
         .map((b) => ({ entity: b.entity, ...Object.fromEntries(comps(b)) }))
       return after(
-        patched.length ? tx.patch(patched) : undefined,
+        patched.length ? (tx.book ?? tx.patch)(patched) : undefined,
         () =>
           after(
             gone.length

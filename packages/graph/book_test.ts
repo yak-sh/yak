@@ -67,6 +67,16 @@ for (let async of [false, true]) {
     assertEquals(heard, [])
   })
 
+  test(`a value a book clears keeps no copy in the trash (${kind})`, async () => {
+    let base = ram(books)
+    let g = graph({ storage: async ? slow(base) : base, vocab: books })
+    await g.apply([{ entity: { eid: row }, book: { pages: 7 } }])
+    let clear = { entity: { eid: row }, $was: pages(7), book: { pages: null } }
+    assertEquals(await g.book([clear]), [row])
+    assertEquals((await g.get([row]))[0].book, {})
+    assertEquals(base.trash(), [])
+  })
+
   test(`a book whose $was moved writes nothing (${kind})`, async () => {
     let { g, ready } = shelf(async)
     await ready()

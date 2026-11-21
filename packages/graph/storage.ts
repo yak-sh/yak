@@ -180,6 +180,11 @@ export type Tx = {
   /** remove these entities: their component rows are deleted, and their
    * identity is tombstoned, keeping its eid and number */
   remove: (entities: Entity[]) => void | Promise<void>
+  /** patch a writer's own bookkeeping, as `patch` does, but a value it clears
+   * keeps no recoverable copy: a run's lease, released at every ending, is
+   * nothing a person restores (./book.ts). A storage that leaves it out
+   * patches with `patch`. */
+  book?: (bundles: Bundle[]) => Entity[] | Promise<Entity[]>
   /** erase these entities: their component rows and their identity, keeping
    * no recoverable copy and no tombstone. They are a writer's own
    * bookkeeping, such as a finished effect's run, that nothing refers to and
