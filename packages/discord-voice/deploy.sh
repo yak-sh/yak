@@ -105,8 +105,8 @@ EOF
 key=$(g compute ssh "$name" --zone "$zone" \
   --command "sudo sed -n 's/^RELAY_KEY=//p' /etc/$name.env")
 cd "$root/workers/yak"
-printf %s "https://$host" | npx wrangler secret put VOICE_RELAY >/dev/null
-printf %s "$key" | npx wrangler secret put VOICE_RELAY_KEY >/dev/null
+printf %s "https://$host" | npx wrangler secret put VOICE_RELAY --env="" >/dev/null
+printf %s "$key" | npx wrangler secret put VOICE_RELAY_KEY --env="" >/dev/null
 
 # Caddy asks for its certificate on the first request: wait for it.
 for i in 1 2 3 4 5 6 7 8 9 10; do
