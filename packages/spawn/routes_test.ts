@@ -17,7 +17,7 @@ import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { runs as taskRuns } from '@yaks/task/tools'
-import { modelDoc } from '@yaks/model'
+import { accountEid, modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -56,7 +56,7 @@ let PERSONA = crypto.randomUUID(), STANDING = crypto.randomUUID()
 
 // A host whose door says every request is `actor`, as a tunnel's says the
 // persona through the session standing for its conversation; or says nobody.
-let hosting = async (first: Actor | null) => {
+let hosting = async (first: Actor | null, offered = true) => {
   let actor = first
   let g: Graph = graph({
     storage: ram(vocab, { number: true }),
@@ -75,6 +75,12 @@ let hosting = async (first: Actor | null) => {
     { ...link(PROVIDER, 'serves', MODEL), serves: { name: 'opus' } },
     { entity: { eid: PERSONA }, persona: {}, doc: { title: 'An Operator' } },
     { entity: { eid: STANDING }, session: { door: 'tunnel' } },
+    ...offered
+      ? [{
+        entity: { eid: accountEid('/u/.claude-teams') },
+        account: { home: '/u/.claude-teams', provider: PROVIDER, offered },
+      }]
+      : [],
   ], { trusted: true })
   let tools = [
     ...loadTools(taskDoc, taskRuns()),
@@ -156,4 +162,15 @@ test('a run is stopped by the conversation that asked for it, and no other', asy
   equal([stranger.status, untouched], [404, {}])
   equal([stopped.status, await stopped.json()], [200, { session }])
   equal(row.stop != null, true)
+})
+
+test('a spawn with no account offered says so and starts nothing', async () => {
+  let { g, ask } = await hosting({ by: PERSONA, via: STANDING }, false)
+  let r = await ask({ brief: 'Go.' })
+  equal(r.status, 422)
+  equal(
+    (await r.json()).error.message.includes('no claude account is offered'),
+    true,
+  )
+  equal(await g.read(line`.session.door=spawn&.fields=entity.eid`), [])
 })

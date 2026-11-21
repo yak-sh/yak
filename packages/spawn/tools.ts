@@ -46,8 +46,8 @@ import {
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
-import { spelling } from './run.ts'
-import { identityEid } from '@yaks/graph/identity'
+import { offeredTo, spelling } from './run.ts'
+import { adapters } from './adapters.ts'
 import * as system from '@yaks/process/system'
 import { reportOf } from './completion.ts'
 import { ENDED, over } from './over.ts'
@@ -217,7 +217,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
   }
 
   // The account a spawn names, by its row, its directory or the directory's
-  // name (`.claude-teams`), which its provider's CLI must keep.
+  // name (`.claude-teams`), which must be one offered to its provider's CLI.
   let named = async (
     graph: Graph,
     said: string,
@@ -225,10 +225,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
   ): Promise<string> => {
     let home = system.env.get('HOME')
     let dir = home ? said.replace(/^~(?=\/|$)/, home) : said
-    let provider = identityEid('provider', [cli])
-    let rows = (await graph.read('.account *')).filter((b) =>
-      str(comp(b, 'account')?.provider) == provider
-    )
+    let rows = await offeredTo(graph, cli)
     let found = rows.find((b) => {
       let at = str(comp(b, 'account')?.home)
       return b.entity.eid == said || at == dir ||
@@ -238,8 +235,8 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     let kept = rows.map((b) => str(comp(b, 'account')?.home)).join(', ')
     throw new CallError(
       'account',
-      `${said} names no account ${cli} keeps` +
-        (kept ? `; it keeps ${kept}` : ''),
+      `${said} names no account offered to ${cli}` +
+        (kept ? `; it is offered ${kept}` : ''),
     )
   }
 
@@ -315,9 +312,22 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         )
       }
       let effort = str(args.effort)
+      let cli = str(served.api ?? served.name)
       let account = args.account == null
         ? undefined
-        : await named(graph, str(args.account), str(served.api ?? served.name))
+        : await named(graph, str(args.account), cli)
+      // A CLI that keeps accounts runs on one offered to it, never on the
+      // box's default login: with none offered, nothing starts.
+      if (
+        !account && adapters[cli]?.account &&
+        !(await offeredTo(graph, cli)).length
+      ) {
+        throw new CallError(
+          'account',
+          `no ${cli} account is offered to spawns, so none starts: offer ` +
+            'one (`account{offered: true}`) first',
+        )
+      }
       let session = uuid()
       let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)
       let owner = parent ? await one(graph, parent) : undefined

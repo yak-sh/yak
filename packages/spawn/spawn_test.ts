@@ -37,6 +37,7 @@ import {
   fake,
   host,
   launching,
+  OFFERED,
   tracked,
   until,
 } from './testing.ts'
@@ -201,6 +202,7 @@ test('a request made beside a server is started by the server, not the command',
     [edgeKeywords],
   )
   let storage = ram(vocab, { number: true })
+  storage.tx((tx) => tx.patch([OFFERED]))
   // One store, two processes: a one-shot command and a server working the
   // effects. Each has its own registry and graph, as it would.
   let process = (me: string) => {

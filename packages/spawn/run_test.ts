@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { accountEid } from '@yaks/model'
 import { identityEid } from '@yaks/graph/identity'
@@ -185,7 +190,7 @@ let started = async (g: Graph, session: string) => {
 }
 
 test('a first run signs in with the offered account further under its weekly pace, kept on its request', async () => {
-  let { g } = tracked()
+  let { g } = tracked(false)
   let { teams } = await accounts(g)
   await g.apply(asking('S1', 'E1', 'fix it'))
   assertEquals((await started(g, 'S1')).CLAUDE_CONFIG_DIR, '/u/.claude-teams')
@@ -198,7 +203,7 @@ test('a first run signs in with the offered account further under its weekly pac
 })
 
 test('a first run passes over an account whose five hours are spent', async () => {
-  let { g } = tracked()
+  let { g } = tracked(false)
   let { teams } = await accounts(g)
   await g.apply([{
     entity: { eid: 'L2' },
@@ -216,7 +221,7 @@ test('a first run passes over an account whose five hours are spent', async () =
 })
 
 test("a run its five hours end carries on in another account with room, its thread and the session's account moved there", async () => {
-  let { g } = tracked()
+  let { g } = tracked(false)
   let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
   let provider = identityEid('provider', ['claude'])
   let [bob, jeff] = ['.claude-teams-bob', '.claude-teams-jeff']
@@ -314,19 +319,22 @@ test('a run whose provider could not be reached is retried once, and the retry e
 })
 
 test('a request naming its account runs on it, and the default account on no variable', async () => {
-  let { g } = tracked()
+  let { g } = tracked(false)
   let { own } = await accounts(g)
   await g.apply(asking('S1', 'E1', 'fix it', { account: own }))
   let env = await started(g, 'S1')
   assertEquals([env.HOME, env.CLAUDE_CONFIG_DIR], ['/u', undefined])
 })
 
-test("a run whose provider offers no account runs on the environment's own", async () => {
-  let { g } = tracked()
+test('a run whose provider offers no account starts nothing, never the default login', async () => {
+  let { g } = tracked(false)
   await g.apply(asking('S1', 'E1', 'fix it'))
-  assertEquals((await started(g, 'S1')).CLAUDE_CONFIG_DIR, '/u/.elsewhere')
-  let [request] = await g.get(['E1'])
-  assertEquals(comp(request, 'using').account, undefined)
+  let refused = await assertRejects(() => started(g, 'S1'))
+  assertStringIncludes(
+    (refused as Error).message,
+    'no claude account is offered',
+  )
+  assertEquals((await g.get(['S1']))[0]?.process, undefined)
 })
 
 test('a provider-only HTTP request belongs to the native runner', async () => {

@@ -166,12 +166,12 @@ test('a spawn lands the session, the request and the lease', async () => {
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
 })
 
-test('a spawn names its account by its directory or its name, and refuses one its CLI keeps not', async () => {
+test('a spawn names its account by its directory or its name, and refuses one not offered', async () => {
   let { g } = host()
   let teams = identityEid('account', ['/u/.fake-teams'])
   await g.apply([...shelf, {
     entity: { eid: teams },
-    account: { home: '/u/.fake-teams', provider: P },
+    account: { home: '/u/.fake-teams', provider: P, offered: true },
   }])
   for (let account of ['.fake-teams', '/u/.fake-teams']) {
     await through(g, 'session_spawn', {
@@ -193,7 +193,10 @@ test('a spawn names its account by its directory or its name, and refuses one it
       account: '.claude-elsewhere',
     })
   )
-  assertStringIncludes((refused as Error).message, 'it keeps /u/.fake-teams')
+  assertStringIncludes(
+    (refused as Error).message,
+    'it is offered /u/.fake-teams',
+  )
 })
 
 let extra = host()

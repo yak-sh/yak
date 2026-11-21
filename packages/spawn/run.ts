@@ -406,18 +406,39 @@ export let asked = async (
   }
 }
 
-// The account a request names, which must still be one.
+// The account a request names, which must still be one offered to runs: the
+// box's default login is never one.
 let accountOf = async (g: Graph, eid: string): Promise<Account> => {
-  let home = comp(await one(g, eid), 'account')?.home
-  if (!home) throw new Error(`${eid} names no account`)
-  return { eid, home: String(home) }
+  let a = comp(await one(g, eid), 'account')
+  if (!a?.home) throw new Error(`${eid} names no account`)
+  if (a.offered !== true) throw new Error(`${a.home} is not offered to runs`)
+  return { eid, home: String(a.home) }
+}
+
+/**
+ * The accounts of a CLI's provider offered to runs (`account{offered}`), the
+ * only ones a spawn signs in with: one never falls back to the box's default
+ * login.
+ *
+ * ```ts
+ * import { offeredTo } from '@yaks/spawn'
+ *
+ * // let rows = await offeredTo(graph, 'claude')
+ * ```
+ */
+export let offeredTo = async (g: Graph, runner: string): Promise<Bundle[]> => {
+  let provider = identityEid('provider', [runner])
+  return (await g.read('.account *')).filter((b) => {
+    let a = comp(b, 'account')
+    return a?.offered === true && a.provider == provider && a.home
+  })
 }
 
 /**
  * The account a first run signs in with: the one its request names, else the
  * offered account (`account{offered}`) of its CLI's provider further under
  * its weekly pace (@yaks/model `freest`), and none where its CLI keeps no
- * account or its provider offers none, which runs on the environment's own.
+ * account or its provider offers none.
  *
  * ```ts
  * import { accountFor } from '@yaks/spawn'
@@ -444,12 +465,7 @@ let offered = async (
   now: number,
   other?: string,
 ): Promise<(Account & { full?: true }) | undefined> => {
-  let provider = identityEid('provider', [runner])
-  let rows = (await g.read('.account *')).filter((b) => {
-    let a = comp(b, 'account')
-    return a?.offered === true && a.provider == provider && a.home &&
-      b.entity.eid != other
-  })
+  let rows = (await offeredTo(g, runner)).filter((b) => b.entity.eid != other)
   let homes = new Map(
     rows.map((b) => [b.entity.eid, String(comp(b, 'account')!.home)]),
   )
@@ -758,11 +774,17 @@ export let start = async (
   if (!job) return null
   let adapter = adapterOf(job, o)
   if (!adapter) return null
-  // A first run is given its account; a later one carries on its thread in
-  // the account that keeps it, the one recorded, else the environment's own.
-  if (!row?.[PROCESS]) {
-    let account = await accountFor(g, adapter, job)
-    if (account) job = { ...job, account }
+  // A run signs in with the account its request records, else is given an
+  // offered one. A CLI that keeps accounts runs on an offered one or not at
+  // all: the box's default login is the owner's own, and no run signs in
+  // with it.
+  let account = await accountFor(g, adapter, job)
+  if (account) job = { ...job, account }
+  if (adapter.account && !job.account) {
+    throw new Error(
+      `no ${adapter.account} account is offered to runs, so ${session} ` +
+        'starts nothing',
+    )
   }
   let selection = {
     entity: { eid: String(job.ask.through) },

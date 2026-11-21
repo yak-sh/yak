@@ -11,7 +11,7 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
-import { modelDoc } from '@yaks/model'
+import { accountEid, modelDoc } from '@yaks/model'
 import { docDoc } from '@yaks/doc'
 import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project'
@@ -53,12 +53,28 @@ export let FAKE = {
   model: identityEid('model', ['fake-1']),
 }
 
-/** A graph over an empty store, with the session and process plugins loaded.
- * `fx` is the effects registry, for a test that needs to add handlers. */
-export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
+/** The Claude account offered to the runs of a {@link tracked} graph: a run
+ * signs in with an offered account or starts nothing. */
+export let OFFERED: Bundle = {
+  entity: { eid: accountEid('/srv/.claude-spawn') },
+  account: {
+    home: '/srv/.claude-spawn',
+    provider: identityEid('provider', ['claude']),
+    offered: true,
+  },
+}
+
+/** A graph over a store holding one offered Claude account ({@link OFFERED}),
+ * or none, with the session and process plugins loaded. `fx` is the effects
+ * registry, for a test that needs to add handlers. */
+export let tracked = (
+  offered = true,
+): { g: Graph; fx: ReturnType<typeof effects> } => {
   let fx = effects(host, { write: (b) => g.apply(b, { trusted: true }) })
+  let storage = ram(host, { number: true })
+  if (offered) storage.tx((tx) => tx.patch([OFFERED]))
   let g = graph({
-    storage: ram(host, { number: true }),
+    storage,
     vocab: host,
     plugins: [sessions(), processes(), fx],
   })
