@@ -7,6 +7,8 @@ import {
   clicked,
   CTAS,
   funnel,
+  LOADED,
+  loaded,
   shaped,
   STAGES,
   step,
@@ -14,6 +16,7 @@ import {
 } from './funnel.ts'
 import { stopped } from '@yaks/platform/funnel'
 import { FUNNEL, isHome, type Visited } from './view-point.ts'
+import { VARIANTS } from './variant.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
 import type { Env } from './env.ts'
@@ -144,6 +147,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       : q.includes('blob9')
       ? [
         { key: 'ask', step: 'home', n: 20 },
+        { key: 'ask', step: 'home_loaded', n: 7 },
         { key: 'operator', step: 'home', n: 18 },
         { key: 'operator', step: 'click', n: 5 },
         { key: 'operator', step: 'signup', n: 3 },
@@ -159,6 +163,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       }]
       : [
         { step: 'home', n: 40 },
+        { step: 'home_loaded', n: 4 },
         { step: 'click', n: 10 },
         { step: 'connector_start', n: 6 },
         { step: 'started', n: 4 },
@@ -189,6 +194,8 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     assertEquals(stopped(f.stages)?.after.name, 'signup')
     let of = Object.fromEntries(f.steps.map((s) => [s.name, s]))
     assertEquals(of.home.n, 40)
+    // The visits the page's script counted, beside those its request did.
+    assertEquals(of.home_loaded.share, 0.1)
     assertEquals(of.click.share, 0.25)
     assertEquals(of.code_sent.share, 0.25)
     assertEquals(of.signed_in.share, 0)
@@ -207,6 +214,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       {
         name: 'meta//pilot',
         home: 9,
+        home_loaded: 0,
         click: 4,
         started: 0,
         signup: 2,
@@ -217,6 +225,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       {
         name: 'ask',
         home: 20,
+        home_loaded: 7,
         click: 0,
         started: 0,
         signup: 0,
@@ -225,6 +234,7 @@ test('the funnel reads each step, a share of the one it follows, and where visit
       {
         name: 'operator',
         home: 18,
+        home_loaded: 0,
         click: 5,
         started: 2,
         signup: 3,
@@ -319,6 +329,94 @@ test('a click on a call to action is counted by its button, campaign and the hom
   assertEquals((await clicked(new Request(beacon('x').url), env)).status, 405)
 })
 
+test("a home page's visit is counted by its own script, by the page it names and its visitor's campaign, and nothing else is", async () => {
+  let views = dataset()
+  let env = { VIEWS: views } as never
+  let post = (body: string, headers: Record<string, string> = {}) =>
+    loaded(
+      new Request(`https://yaks.app${LOADED}`, beacon(body, headers)),
+      env,
+    )
+  assertEquals((await post('/organizations')).status, 204)
+  assertEquals(views.points.map((p) => p.blobs), [
+    [
+      '',
+      'home_loaded',
+      LOADED,
+      '',
+      '',
+      'browser',
+      'meta//pilot',
+      '',
+      'organization',
+    ],
+  ])
+  // A page that is no home page, another site's page, a crawler: answered
+  // alike, counted as nothing.
+  for (
+    let res of [
+      await post('/pricing'),
+      await post('/', { 'sec-fetch-site': 'cross-site' }),
+      await post('/', { 'user-agent': 'Googlebot/2.1' }),
+    ]
+  ) assertEquals(res.status, 204)
+  assertEquals(views.points.length, 1)
+  assertEquals(
+    (await loaded(new Request(`https://yaks.app${LOADED}`), env)).status,
+    405,
+  )
+})
+
+test('every home page, opened and run in a browser, counts its visit twice, by its request and by its script; a fetch that never runs it, once', async () => {
+  let k = await kernel()
+  let code = await Deno.readTextFile(
+    new URL('./public/cta.js', import.meta.url),
+  )
+  let funnelled = (before: number) =>
+    k.views.points.slice(before)
+      .filter((p) => p.indexes?.[0] == FUNNEL)
+      .map((p) => [p.blobs![1], p.blobs![8]])
+  for (let { name, path } of VARIANTS) {
+    let before = k.views.points.length
+    let opened = await k.at(k.host, path, {
+      headers: { 'user-agent': BROWSER },
+    })
+    let { document } = parseHTML(await opened.text())
+    assertEquals(
+      [path, !!document.querySelector('script[src="cta.js"]')],
+      [path, true],
+    )
+    let cookie = opened.headers.get('set-cookie')!.split(';')[0]
+    // What the page's script sends as it runs, sent as a browser sends it.
+    let sent: [string, string][] = []
+    new Function('addEventListener', 'navigator', 'fetch', 'location', code)(
+      () => {},
+      {
+        sendBeacon: (to: string, body: string) => (sent.push([to, body]), true),
+      },
+      () => Promise.resolve(),
+      { pathname: path },
+    )
+    for (let [to, body] of sent) {
+      let r = await k.at(k.host, to, {
+        method: 'POST',
+        body,
+        headers: {
+          'user-agent': BROWSER,
+          'sec-fetch-site': 'same-origin',
+          cookie,
+        },
+      })
+      assertEquals(r.status, 204)
+    }
+    assertEquals(funnelled(before), [['home', name], ['home_loaded', name]])
+  }
+  let before = k.views.points.length
+  let scanned = await k.at(k.host, '/', { headers: { 'user-agent': BROWSER } })
+  await scanned.body?.cancel()
+  assertEquals(funnelled(before), [['home', 'ask']])
+})
+
 test("each of the home page's calls to action sends its name when clicked", async () => {
   let { document } = parseHTML(page('index.html'))
   let named = [...document.querySelectorAll('[data-cta]')]
@@ -335,7 +433,7 @@ test("each of the home page's calls to action sends its name when clicked", asyn
   let clicks = (queues?: boolean) => {
     let on: (e: unknown) => void = () => {}
     let sent: string[][] = []
-    new Function('addEventListener', 'navigator', 'fetch', code)(
+    new Function('addEventListener', 'navigator', 'fetch', 'location', code)(
       (_: string, fn: (e: unknown) => void) => on = fn,
       queues == undefined ? {} : {
         sendBeacon: (to: string, name: string) => (
@@ -346,19 +444,25 @@ test("each of the home page's calls to action sends its name when clicked", asyn
         sent.push([keepalive ? 'keepalive' : 'fetch', to, String(body)])
         return Promise.resolve()
       },
+      { pathname: '/' },
     )
     for (let b of named) on({ target: b.querySelector('*') ?? b })
     on({ target: document.querySelector('h1') })
     return sent
   }
-  let each = (...how: string[]) =>
-    names.flatMap((name) => how.map((h) => [h, '/api/click', name]))
+  // The page's visit is sent once, as it runs, before any click.
+  let each = (...how: string[]) => [
+    ...how.map((h) => [h, LOADED, '/']),
+    ...names.flatMap((name) => how.map((h) => [h, '/api/click', name])),
+  ]
   assertEquals(clicks(true), each('beacon'))
   assertEquals(clicks(false), each('beacon', 'keepalive'))
   assertEquals(clicks(), each('keepalive'))
   let views = dataset()
-  for (let [, , name] of clicks(true)) {
-    await clicked(beacon(name), { VIEWS: views } as never)
+  for (let [, to, name] of clicks(true)) {
+    if (to == '/api/click') {
+      await clicked(beacon(name), { VIEWS: views } as never)
+    }
   }
   assertEquals(views.points.map((p) => p.blobs![7]), names)
 })

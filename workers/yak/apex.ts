@@ -204,6 +204,8 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A click on a home-page call to action (funnel.ts), before the connector
   // for the same reason.
   if (path == funnel.CLICKED) return funnel.clicked(req, env)
+  // A home page's visit, counted by its script (funnel.ts `loaded`).
+  if (path == funnel.LOADED) return funnel.loaded(req, env)
   // The funnel as data for the box's admin_funnel tool (admin.ts
   // `funnelDoor`), the owner's door, before the connector for the same reason.
   if (path == admin.FUNNEL) return admin.funnelDoor(req, env)

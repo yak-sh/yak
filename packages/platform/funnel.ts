@@ -12,12 +12,14 @@ export type FunnelCount = {
   of?: string
 }
 
-/** The home page's visits, clicks, builds begun in its box, sign-ups and
- * checkouts under one campaign or variant. A Worker older than the builds
- * begun has none. */
+/** The home page's visits, those its script counted (`home_loaded`), clicks,
+ * builds begun in its box, sign-ups and checkouts under one campaign or
+ * variant. A Worker older than the builds begun, or the script's count, has
+ * none of them. */
 export type FunnelSplit = {
   name: string
   home: number
+  home_loaded?: number
   click: number
   started?: number
   signup: number
@@ -130,7 +132,8 @@ let pct = (share: number) => `${Math.round(share * 100)}%`
 
 /** What one campaign or variant brought, in a line. */
 export let splitSays = (s: FunnelSplit) =>
-  `${s.home} visits · ${s.click} clicks · ${s.started ?? 0} builds begun · ` +
+  `${s.home} visits (${s.home_loaded ?? 0} by the page's script) · ` +
+  `${s.click} clicks · ${s.started ?? 0} builds begun · ` +
   `${s.signup} sign-ups · ${s.checkout} checkouts`
 
 let split = (s: FunnelSplit) => `  ${s.name}: ${splitSays(s)}`

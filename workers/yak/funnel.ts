@@ -14,6 +14,7 @@ import { fromOurs } from './page-report.ts'
 import { isPerson } from './crawlers.ts'
 import { CHECK, isFleetAddress } from '@yaks/platform/bots'
 import { FUNNEL, stepOf, type Visited } from './view-point.ts'
+import { VARIANTS } from './variant.ts'
 import {
   BUTTON,
   CAMPAIGN,
@@ -60,6 +61,11 @@ export let BEGAN = '2026-11-07T13:23:04Z'
  * the step it is a share of. */
 export let STEPS = [
   { name: 'home', say: 'Home page visits' },
+  {
+    name: 'home_loaded',
+    say: "Home page visits counted by the page's script",
+    of: 'home',
+  },
   { name: 'click', say: 'Calls to action clicked', of: 'home' },
   {
     name: 'started',
@@ -161,11 +167,12 @@ export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  { button, who, campaign, test }: {
+  { button, who, campaign, test, page }: {
     button?: string
     who?: Who
     campaign?: string
     test?: boolean
+    page?: string
   } = {},
 ) => {
   if (!env.VIEWS || (req && !isPerson(req))) return
@@ -175,6 +182,7 @@ export let step = (
         button,
         test: test || tested(who),
         came: campaign,
+        page,
       }),
     )
   } catch (e) {
@@ -210,11 +218,44 @@ export let clicked = async (
   return new Response(null, { status: 204 })
 }
 
+/** Where a home page's script (public/cta.js) posts the page it runs on. */
+export let LOADED = '/api/loaded'
+
+/**
+ * Count a visit to a home page from the page's own script, beside the visit
+ * its request counted (`home`): a browser's post, from a page of ours, of a
+ * home page's path (variant.ts). A fetch that never runs the page never posts,
+ * so a scanner with a browser's user agent, which `home` counts, adds nothing
+ * here. The variant is the path's, the campaign the arrival's, as a click's.
+ * Any other post is answered alike and counts nothing.
+ */
+export let loaded = async (
+  req: Request,
+  env: Pick<Env, 'VIEWS'> & Host,
+): Promise<Response> => {
+  if (req.method != 'POST') {
+    return Response.json({ error: 'method_not_allowed' }, { status: 405 })
+  }
+  let path = (await req.text()).slice(0, 64)
+  let page = VARIANTS.find((v) => v.path == path)
+  if (page && fromOurs(req, env)) {
+    step(env, 'home_loaded', req, { page: page.name })
+  }
+  return new Response(null, { status: 204 })
+}
+
 // The steps counted for each campaign and variant: those a request takes, so
 // its arrival and its variant name them. A plan bought is heard from the
 // payment provider and names neither, and a first app is made by an Operator
 // or an assistant, away from the browser that holds them.
-let PER = ['home', 'click', 'started', 'signup', 'checkout'] as const
+let PER = [
+  'home',
+  'home_loaded',
+  'click',
+  'started',
+  'signup',
+  'checkout',
+] as const
 
 let DAY = 86_400_000
 
