@@ -105,6 +105,7 @@ import {
   chatPath,
   hostOf,
   manageAt,
+  managePath,
   MANIFEST,
   MOUNT,
   paged as pagePath,
@@ -781,7 +782,7 @@ export let wearing = (
   let api = req.headers.get(API_AT)
   return {
     ...badged(space, app, env),
-    edit: editOf(space, app, env, who),
+    ...cornerOf(space, app, env, who),
     ...api ? { api } : {},
     bar: barOf(env, app, who),
   }
@@ -796,6 +797,21 @@ export let editOf = (space: Space, app: App, env: Host, who: Who) =>
       encodeURIComponent(app.slug)
     }`
     : null
+
+/** What the corner of this app's pages offers (public/edit.js): the
+ * Operator's chat for the app, which its pencil's edit mode asks in, and the
+ * note, a page of yaks.app's own (operator-page.ts `notePage`), for whoever
+ * {@link editOf} offers the chat. */
+export let cornerOf = (space: Space, app: App, env: Host, who: Who) => {
+  let edit = editOf(space, app, env, who)
+  return {
+    edit,
+    note: edit &&
+      `${hostUrl(env, managePath('operator', space.slug))}?note=${
+        encodeURIComponent(app.slug)
+      }`,
+  }
+}
 
 /** Whether the person `req`'s session names would wear the pencil on the app
  * at `at` (`editOf`), from one read of the directory, the read a page of it
@@ -2573,7 +2589,7 @@ let served = async (
           early.app.version ?? 0,
           {
             ...badged(space, early.app, env),
-            edit: editOf(space, early.app, env, who),
+            ...cornerOf(space, early.app, env, who),
           },
           appPreview(early.app, '/'),
           req.headers.get(ADDRESS) ?? req.url,

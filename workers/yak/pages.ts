@@ -259,6 +259,10 @@ ${links(env, 'pages.css', undefined, assets)}${
       ? `<script src="${file('find.js')}" defer></script>`
       : ''
   }${
+    main.includes('data-note=')
+      ? `<script src="${file('note.js')}" defer></script>`
+      : ''
+  }${
     main.includes('data-sift')
       ? `<script src="${file('sift.js')}" defer></script>`
       : ''

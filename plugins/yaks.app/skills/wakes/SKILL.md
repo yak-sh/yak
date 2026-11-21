@@ -344,8 +344,9 @@ words to `./api/operator/tell`, through `env.APP`:
   first time, and `200` with the same `request` after.
 - **Only the app's own worker tells it.** A page's request, a visitor's or a
   member's, is refused `403 not_the_app`. A page that should tell the Operator
-  asks a route of the worker, which decides. A reader's own words to the
-  Operator, as them, are `operatorSend` ([Frontend Data](store.md)).
+  asks a route of the worker, which decides. Words a page passes along for its
+  reader are `operatorSend` ([Frontend Data](store.md)); the reader's own, as
+  them, are the note in the corner of every page.
 
 When to tell is the app's to decide, with the scheduling above. A command
 declared `"worker": "/remind"` and a schedule row that calls it each weekday

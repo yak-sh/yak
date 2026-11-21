@@ -213,20 +213,25 @@ ask what the visitor may do. The fields are described below.
       else throw e
     }
 
-Sends the reader's words to the space's Operator, in their own conversation with
-it and as them. It is how a page lets its reader ask about what they are
-reading, critique it, or ask for a change, without copying anything into the
-chat.
+Sends words from the page to the space's Operator, into its signed-in reader's
+own conversation with it. A page uses it to pass along what its reader asked
+about what they are reading, with what the page knows about where they are.
 
-- **`say`** is the reader's words, up to 4,000 characters. Send only what they
-  typed: the Operator reads it as theirs.
+The words arrive as the app's, never as the reader's own: any code on the page
+can call it, including code another editor wrote or a script injected into the
+page, and the reader may never have seen what it sent. So the Operator reads
+them as information from the app, named with the app and whoever last put it
+live, and answers in the reader's conversation, but nothing they ask is done
+with the reader's permissions: a turn they start holds reads and telling the
+reader, as a turn on another thread's note does. When the words ask for a
+change, the Operator waits for the reader to ask for it in their own words.
+
+- **`say`** is the words, up to 4,000 characters.
 - **`context`** is an object of what the page knows about where they are, up to
   4,000 characters as JSON: the passage they selected, the section, the
-  revision, a row's eid. The Operator reads it beside their words, with the
-  page's address and the app's slug.
-- It starts a turn in their conversation, with the reader's own permissions in
-  the space, so the Operator can answer and change the app. The turn is paid
-  from the space's budget.
+  revision, a row's eid. The Operator reads it beside the words, with the page's
+  address and the app's slug.
+- The turn is paid from the space's budget.
 - The space's Operator talks with its owners and editors. Anyone else, a viewer
   or a guest of this one app included, is refused `403 not_a_writer`: call
   `me()` first and offer it where `role` is `owner` or `editor`.
@@ -236,11 +241,13 @@ chat.
   in and come back to the page. Keep what they typed first (`drafts`, or
   `sessionStorage`), so it is still there when they return.
 
-Every app page already offers this to its owners and editors without any code:
-the note button in the bottom-right corner, beside the pencil, quotes the text
-they selected and sends their words with the page, its title, the selection, the
-heading it is under and the release. Call `operatorSend` when the page should
-offer it in its own place, such as a button beside each passage.
+To let the reader speak as themselves, so the Operator can change the app for
+them, every app page already offers its owners and editors the note button in
+the bottom-right corner, beside the pencil. It opens a page of yaks.app's own in
+a window of its own, quoting the text they selected, and sends their words with
+the page, its title, the selection, the heading it is under and the release when
+they press Send there. That window is yaks.app's, so no code on the app's page
+can fill it in or press Send, and the window goes on to their conversation.
 
 ### outbox
 
@@ -726,11 +733,11 @@ directly from `curl`, from another page, or from your own `worker.js` through
        "writes": false, "signIn": "https://yaks.app/login?return=…",
        "invited": false, "visit": null}
 
-    POST ./api/operator/send
+    POST ./api/operator/send               ← the app's words, never the reader's
     content-type: application/json
     {"say": "Is this still true?", "context": {"selection": "Dues are paid in May."}}
     → 202 {"request": "7d1e…",
-           "conversation": "https://yaks.app/manage/operator/clerk/7d1e…"}
+           "conversation": "https://yaks.app/manage/clerk/operator/7d1e…"}
 
     GET ./api/vocab.json
     → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,

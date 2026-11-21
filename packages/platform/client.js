@@ -608,15 +608,17 @@ export let store = (base, { clock = system } = {}) => {
   // after someone has typed.
   let me = () => ask('who')
 
-  // Words from this page's signed-in reader to the space's Operator, in their
-  // own conversation with it and as them: `say` is their words, and `context`
-  // what the page says beside them, such as the passage they selected and the
-  // app's revision. It starts a turn there, with the reader's permissions in
-  // the space, and answers `{request, conversation}`: the request's id and the
-  // address of the conversation, where the Operator answers. The Operator
-  // talks with the space's owners and editors: anyone else is refused
-  // (`not_a_writer`), and a signed-out reader with `signIn`, where they sign
-  // in and come back.
+  // Words from this page to the space's Operator, in its signed-in reader's
+  // own conversation with it: `say` is the words, and `context` what the page
+  // says beside them, such as the passage they selected and the app's
+  // release. Any code on the page can call it, so they are the app's words,
+  // never the reader's: the Operator reads and answers them there, and does
+  // nothing with the reader's permissions because of them. The reader's own
+  // note, as them, is the corner's, a page of yaks.app's own. It answers
+  // `{request, conversation}`: the request's id and the address of the
+  // conversation, where the Operator answers. The Operator talks with the
+  // space's owners and editors: anyone else is refused (`not_a_writer`), and
+  // a signed-out reader with `signIn`, where they sign in and come back.
   let operatorSend = (say, context = {}) =>
     ask('operator/send', {
       method: 'POST',

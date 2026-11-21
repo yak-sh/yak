@@ -12,7 +12,8 @@
 // the pencil's also say where the app's own `api/` is when it is not under
 // the mount (`data-yak-api`). The badge's says what it opens
 // (`data-yak-badge`): the app's own page on yaks.app, or yaks.app itself. The
-// corner's says where the Operator's chat for the app is (`data-yak-edit`).
+// corner's says where the Operator's chat for the app is (`data-yak-edit`)
+// and where its note is (`data-yak-note`), a page of yaks.app's own.
 // The bar's says where keeping it goes and what its button says
 // (`data-yak-keep`, `data-yak-keep-says`).
 //
@@ -45,6 +46,8 @@ export type Scripts = {
   preview?: string | null
   draft?: string
   edit?: string | null
+  /** The corner's note, yaks.app's own page (apps.ts `cornerOf`). */
+  note?: string | null
   /** Where the app's own `api/` is for this browser, where it is not under
    * the mount (@yaks/platform/routes `API_AT`): the release listener's and
    * the pencil's doors. */
@@ -74,7 +77,7 @@ export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  { badge, draft, bar, preview, edit, api }: Scripts,
+  { badge, draft, bar, preview, edit, note, api }: Scripts,
 ) => {
   try {
     let [report, release, badged, barred, location, pencil] = await scripts(
@@ -98,7 +101,13 @@ export let pageScript = async (
         ...preview ? { 'data-yak-preview': preview } : {},
       }])
     }
-    if (edit) worn.push([pencil, { 'data-yak-edit': edit, ...doors }])
+    if (edit) {
+      worn.push([pencil, {
+        'data-yak-edit': edit,
+        ...note ? { 'data-yak-note': note } : {},
+        ...doors,
+      }])
+    }
     if (bar) {
       worn.push([barred, {
         'data-yak-keep': bar.keep,

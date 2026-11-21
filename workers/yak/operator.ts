@@ -519,7 +519,8 @@ let RELEASING = new Set([
 // of the rest (@yaks/session `withheld`).
 let OUTSIDE =
   "this turn answers words that are not the person's own (a break, what " +
-  "visitors wrote, or another thread's note), so it holds reads, telling " +
+  "visitors wrote, another thread's note, or what an app's page sent), so " +
+  'it holds reads, telling ' +
   'the person, and for a break app_files, app_preview, app_deploy and ' +
   "app_errors; do the work with those. The person's own next message gives " +
   'back every tool.'

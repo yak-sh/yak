@@ -1,12 +1,18 @@
 // An app and its space's Operator, at `./api/operator/`.
 //
-// `send`, from a page: a signed-in reader's words into their own
-// conversation with the space's Operator, as them, beside the context the
-// page gives (`{say, context}`). They are the reader's own words on the
-// `chat` channel, said in the Operator's chat beside the app, so the turn
-// holds the reader's permissions in the space and can change the app. The
-// Operator talks with the space's owners and editors, so a reader who is
-// neither is refused, and a signed-out one is answered where to sign in.
+// `send`, from a page's code (the store client's `operatorSend`): words for
+// its signed-in reader's own conversation with the space's Operator, beside
+// the context the page gives (`{say, context}`), on the `page` channel. The
+// page's code chose them, whoever wrote it and whatever was injected into
+// it, so they are the app's words, said with the app and who last put it
+// live: the Operator reads and answers them in the person's chat, and its
+// turn holds only what a turn on words that are not the person's own does
+// (operator-channels.ts `HEARSAY`). The person's own note, which speaks as
+// them, comes from the corner of the page, whose sheet is yaks.app's own
+// page (operator-page.ts `notePage`) that page code can neither fill nor
+// press. The Operator talks with the space's owners and editors, so a reader
+// who is neither is refused, and a signed-out one is answered where to sign
+// in.
 //
 // `tell`: an app telling its space's Operator something: `POST ./api/operator/tell`
 // with `{say, key}`, from the app's own worker (`env.APP`). The words are a
@@ -18,14 +24,14 @@
 // route its schedule calls (public/docs/wakes.md) or one a visitor reaches.
 import { derivedEid } from '@yaks/graph/identity'
 import type { Answer } from './apps.ts'
-import { directory } from './directory.ts'
+import { type App, directory, type Space, walkTo } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { itsApp } from './dispatch.ts'
-import { bound } from './env.ts'
+import { bound, type Env } from './env.ts'
 import { writes } from '@yaks/member'
 import { chatPath } from '@yaks/platform/routes'
 import { url } from '@yaks/platform/host'
-import type { Request as Intake } from './operator-channels.ts'
+import { PAGE, type Request as Intake } from './operator-channels.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { rootAt } from './operator-root.ts'
 import { notification } from './operator-updates.ts'
@@ -111,15 +117,19 @@ export let send: Answer = async (
     )
   }
   let request = crypto.randomUUID()
-  let { operatorDoor } = await import('./build-door.ts')
+  let [{ operatorDoor }, author] = await Promise.all([
+    import('./build-door.ts'),
+    authorOf(env, space, app),
+  ])
   await operatorDoor(env, space, who, 'receive', {
     say,
     request: {
-      channel: 'chat',
+      channel: PAGE,
       files: [],
       app: app.slug,
       page: req.headers.get('referer') || req.url,
       context,
+      ...author ? { author } : {},
     },
     options: { id: request },
   })
@@ -127,6 +137,16 @@ export let send: Answer = async (
     request,
     conversation: url(env, chatPath(space.slug, request)),
   }, { status: 202 })
+}
+
+// What the person who last put an app live is called, else whoever made it:
+// whose code a page's words come from.
+let authorOf = async (env: Env, space: Space, app: App) => {
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let { of, writers } = await dir.provenance(walkTo(space.slug, space.eid))
+  let stamps = of.get(app.eid)
+  let by = stamps?.deployed?.by ?? stamps?.made?.by
+  return by ? writers.get(by) : undefined
 }
 
 export let tell: Answer = async ({ env, req, path, space, app, who, json }) => {

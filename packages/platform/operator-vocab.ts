@@ -241,7 +241,12 @@ export let operatorDoc: VocabDoc = {
         context: {
           type: 'object',
           description:
-            "Sent from an app's page for its signed-in reader, on the chat channel (`./api/operator/send`): what the page said beside the reader's words, such as the passage they selected and the app's revision. The app's own JSON.",
+            "What an app's page gave beside the words: on the page channel, beside the words its code sent (`./api/operator/send`); on the chat channel, beside the person's note from the page's corner. Such as the passage they selected and the app's release. The app's own JSON.",
+        },
+        author: {
+          type: 'string',
+          description:
+            'On the page channel, what the person who last put the app live is called: whose code chose the words.',
         },
         stepped: {
           type: 'object',

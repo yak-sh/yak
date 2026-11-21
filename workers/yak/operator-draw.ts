@@ -122,6 +122,7 @@ export let VIA: Record<string, [IconName, string]> = {
   voice: ['phone', 'By phone'],
   update: ['bell', 'In Updates'],
   error: ['triangle-alert', 'From an error'],
+  page: ['message-circle', "Sent by an app's page"],
   escalated: ['message-circle', 'Raised from another conversation'],
   escalation: ['message-circle', 'From another conversation'],
   'operator-handoff': ['message-circle', 'Between Operators'],

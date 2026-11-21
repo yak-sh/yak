@@ -35,7 +35,7 @@ import {
 } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { esc, type Picked, script, shell } from './pages.ts'
+import { esc, page as drawn, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
@@ -51,6 +51,7 @@ import {
   type StoreDoor,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
+import { CONTEXT } from './app-operator.ts'
 import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
 import { attachmentKey } from './attachments.ts'
@@ -710,6 +711,99 @@ export let conversation = (rows: Bundle[]) =>
     )
   }))
 
+// What an app's page gave for the corner's note (`?about=`, public/edit.js):
+// a JSON object of at most a send's context (app-operator.ts `CONTEXT`), or
+// none.
+let aboutOf = (said: string | null) => {
+  if (!said || said.length > CONTEXT) return undefined
+  try {
+    let about = JSON.parse(said)
+    return about && typeof about == 'object' && !Array.isArray(about)
+      ? about as Record<string, unknown>
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The corner's note (public/edit.js): the page of yaks.app's own that an
+ * app's page opens in a window of its own for a member who writes the app,
+ * quoting the passage they selected there, with a box for their words. Send
+ * is their own press on yaks.app, where the app's code cannot reach, so the
+ * words go as theirs on the `chat` channel (`operatorAnswer`'s POST) with
+ * all their tools, beside what the page gave as its context, and the window
+ * goes on to their conversation. No page frames it. What the app's own code
+ * sends is the app's words (app-operator.ts `send`). */
+export let notePage = (
+  env: Env,
+  space: Space,
+  app: string,
+  about: Record<string, unknown> = {},
+) => {
+  let { page, ...context } = about
+  let on = typeof page == 'string' && /^https:\/\//.test(page) ? page : ''
+  let text = (v: unknown) => typeof v == 'string' ? v : ''
+  let passage = text(context.selection)
+  let title = text(context.title)
+  return drawn(
+    env,
+    {
+      title: 'A note to your Operator',
+      // Never inside the app's page, which could dress it as its own box.
+      headers: {
+        'cache-control': 'no-store',
+        'content-security-policy': "frame-ancestors 'none'",
+      },
+    },
+    h(
+      Card,
+      null,
+      h(Card.Head, null, h(Card.Title, null, 'A note to your Operator')),
+      h(
+        Card.Sub,
+        null,
+        `About ${title || app}${SLUG.test(app) ? ` in ${app}` : ''}.`,
+      ),
+      passage ? h('blockquote', null, passage.slice(0, 600)) : null,
+      h(
+        'form',
+        {
+          class: 'Page_Form',
+          method: 'post',
+          action: managePath('operator', space.slug),
+          enctype: 'multipart/form-data',
+        },
+        h(Form.Hidden, { name: 'request', value: crypto.randomUUID() }),
+        SLUG.test(app) ? h(Form.Hidden, { name: 'app', value: app }) : null,
+        on
+          ? [
+            h(Form.Hidden, { name: 'page', value: on }),
+            h(Form.Hidden, {
+              name: 'context',
+              value: JSON.stringify(context),
+            }),
+          ]
+          : null,
+        h(
+          'p',
+          null,
+          h(Field, {
+            placeholder: 'Ask about this, or say what should change',
+            lines: true,
+            name: 'say',
+            rows: 4,
+            required: true,
+            autofocus: true,
+            'data-note': `${app}|${on}|${passage.slice(0, 200)}`,
+            'aria-label': 'Your note',
+          }),
+        ),
+        h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+      ),
+    ),
+  )
+}
+
 // What the Operator's requests are answered: an attachment, a texts choice,
 // a draft, Stop, a request sent, and its conversations read again. A plain
 // read of its settings is none of these; it is the dashboard's to draw,
@@ -732,6 +826,10 @@ export let operatorAnswer = async (
         location: new URL(chatPath(space.slug, q.get('open')!), url).href,
       },
     })
+  }
+  // The corner's note from an app's page (public/edit.js).
+  if (q.has('note') && (req.method == 'GET' || req.method == 'HEAD')) {
+    return notePage(env, space, q.get('note')!, aboutOf(q.get('about')))
   }
   if (q.has('attachment')) {
     let file = await operatorDoor(env, space, who, 'attachment', {
@@ -1068,9 +1166,14 @@ export let operatorAnswer = async (
     // The app open beside the chat, which the words are about, and the page
     // of yaks.app they were written on, which its box names (operator-box.ts `Ask`).
     let app = String(form.get('app') ?? '')
-    let drawn = String(form.get('page') ?? '')
+    // From the corner's note (`notePage`), what the app's page gave, and
+    // that page, which the words were written beside.
+    let context = aboutOf(String(form.get('context') ?? ''))
+    let said = String(form.get('page') ?? '')
     let page = new URL(
-      drawn.startsWith(MANAGE + '/') ? drawn : chatPath(space.slug),
+      said.startsWith(MANAGE + '/') || context && /^https:\/\//.test(said)
+        ? said
+        : chatPath(space.slug),
       url,
     )
     // Whichever page it is sent from, it goes to the person's conversation.
@@ -1081,6 +1184,7 @@ export let operatorAnswer = async (
         files,
         page: page.href,
         ...SLUG.test(app) ? { app } : {},
+        ...context ? { context } : {},
         // Sent from the New app screen (desk-pages.ts `asking`).
         ...form.has('new_app') ? { new_app: true } : {},
       },

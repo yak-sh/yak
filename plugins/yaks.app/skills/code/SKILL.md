@@ -253,9 +253,9 @@ This has two consequences:
     its speaker at a time ([AI Models](models.md)).
   - `rtc/*`: voice calls between the people in the app
     ([Voice Calls](voice.md)).
-  - `operator/send`: a signed-in reader's words to the space's Operator, in
-    their own conversation with it, sent from a page ([Frontend Data](store.md)
-    `operatorSend`).
+  - `operator/send`: words from a page to the space's Operator, in its signed-in
+    reader's own conversation with it, read as the app's words and never acted
+    on with the reader's permissions ([Frontend Data](store.md) `operatorSend`).
   - `operator/tell`: the app's own worker telling its space's Operator
     something, once a key ([Scheduling](wakes.md)).
   - `stats`: page-view counts, for the app's members

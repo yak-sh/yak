@@ -56,18 +56,19 @@ export let onPage = (page: string, app?: string) =>
     app ? `, with the app ${app} open beside it` : ''
   }: `
 
-/** How a reader's words an app's page sent reach the Operator (app-operator.ts
- * `send`): the page, the app, and what the page said beside them. The context
- * is the app's, and says what the words are about. */
+/** How the person's note from the corner of an app's page reaches the
+ * Operator (operator-page.ts `notePage`): written on yaks.app beside that
+ * page, with what the page gave as its context, which is the app's and says
+ * what the words are about. */
 export let fromApp = (
   page: string,
   app: string | undefined,
   context: Record<string, unknown>,
 ) =>
-  `Sent from the page ${page}${app ? ` of the app ${app}` : ''}, which gave ${
+  `Their note from the page ${page}${app ? ` of the app ${app}` : ''}, ${
     Object.keys(context).length
-      ? `this context with their words: ${JSON.stringify(context)}`
-      : 'no context with their words'
+      ? `which gave this context beside it: ${JSON.stringify(context)}`
+      : 'which gave no context beside it'
   }. Their words: `
 
 /** How the words of the New app screen reach the Operator (desk-pages.ts
