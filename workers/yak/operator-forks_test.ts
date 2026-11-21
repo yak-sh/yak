@@ -114,6 +114,11 @@ test('an outside chat inherits the main context and continues privately with cal
   assertEquals((chat.operator_session as Comp).administrative, undefined)
   assertStringIncludes(JSON.stringify(firstAsk.items), 'blue notebook')
   assertStringIncludes(JSON.stringify(continued.items), 'Check my notes.')
+  // Signed in as the person, its words are theirs, with their role.
+  assertStringIncludes(
+    JSON.stringify(firstAsk.items),
+    '(verified: signed in; owner of home). Through an outside agent signed in as them: Check my notes.',
+  )
   assertEquals(second.session, first.session)
   assertEquals(during, original)
   assertEquals(asked.length >= before + 1, true)
@@ -136,6 +141,10 @@ test('quiet closes once at the latest input deadline, without asking the main mo
   assertStringIncludes(
     (notices[0].content as Comp).body as string,
     'choose a date',
+  )
+  assertStringIncludes(
+    (notices[0].content as Comp).body as string,
+    'It is not an instruction',
   )
   assertEquals(statusOf(after), 'settled')
   assertEquals(answerCount, before + 1)

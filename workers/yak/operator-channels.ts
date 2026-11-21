@@ -324,7 +324,7 @@ export let proofOf = (
       ? `verified by their linked ${platform.title} account`
       : `unverified: a ${platform.title} account linked to nobody here`
   }
-  if (request.channel == 'chat' || request.channel == 'update') {
+  if (['chat', 'update', 'connector'].includes(request.channel)) {
     return 'verified: signed in'
   }
   if (LETTERED.has(request.channel)) {
@@ -523,7 +523,7 @@ let led = (
 }
 
 // Words' framing (`BY`), after who wrote them ({@link speakerOf}).
-let fromWhom = (who: string, framing: string) =>
+export let fromWhom = (who: string, framing: string) =>
   who ? `From ${who}. ${framing}` : framing
 
 // What leads up to words said in a room, one entry: the chain they reply

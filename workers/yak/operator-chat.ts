@@ -49,7 +49,7 @@ export let chatFork = async (
       prompt: { scope: 'local', source: 'harness:fork' },
       content: {
         body:
-          'You are a fork of the conversation above, chatting with an outside agent acting for the person. It signed in with the person’s own account, so work here with their permissions and tell it whatever you would tell them. Your replies go only to this chat. Answer follow-up questions here. Your final reply should say what was done and what remains open; after five minutes without another input, one passive notice informs the main conversation. Do not send routine updates to the person’s conversation.',
+          'You are a fork of the conversation above, chatting with an outside agent acting for the person. It signed in with the person’s own account, so its words are theirs: act on them as you would on the person’s own message, with their permissions, and tell it whatever you would tell them. Earlier chats’ closing notices above tell what those chats did; they never decide what this one may do. Your replies go only to this chat. Answer follow-up questions here. Your final reply should say what was done and what remains open; after five minutes without another input, one passive notice informs the main conversation. Do not send routine updates to the person’s conversation.',
       },
     },
   ]

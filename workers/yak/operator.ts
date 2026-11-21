@@ -121,12 +121,15 @@ import { readsNote } from './operator-reads.ts'
 import {
   ANSWERING,
   confirmOf,
+  fromWhom,
   HEARSAY,
   mailSend,
   OWN,
+  proofOf,
   replyRows,
   type Request as Requested,
   SMS,
+  speaker,
   speakersOf,
   TAKING,
   UNASKED,
@@ -3144,6 +3147,22 @@ export let operating = (
       }]
       : []
   }
+  // An outside agent signed in as the person speaks with their authority:
+  // its words are framed as theirs, verified, with their role.
+  let connectorSpeaker = async (held: Asker, space: Space) => {
+    let dir = directoryOf(env.STORE)
+    let [known, role] = await Promise.all([
+      dir.known(held.person),
+      dir.role(space, held.person),
+    ])
+    let who = speaker(
+      known?.name || 'the person',
+      proofOf({ channel: 'connector' }),
+      role ?? null,
+      space,
+    )
+    return fromWhom(who, 'Through an outside agent signed in as them: ')
+  }
   let chats: Operator['chats'] = async (held, space) => {
     // The space is the project it talks in, and the person its owner.
     await readying(held, space)
@@ -3172,6 +3191,10 @@ export let operating = (
             ...words,
             source: '',
             from: 'an outside agent',
+            channel: channelOf(
+              'connector',
+              await connectorSpeaker(held, space),
+            ),
             using: usingOf(selected.model, selected.provider, asked.effort),
             files: files.map(attachedOf),
           },
