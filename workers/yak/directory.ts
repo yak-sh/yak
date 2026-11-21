@@ -59,6 +59,7 @@ import {
 import {
   type Allowance,
   freeSpaces,
+  PRO_GRANT,
   SUBSCRIBED,
   type Tier,
 } from '@yaks/platform/plans'
@@ -857,6 +858,7 @@ export type Row = MeteredRow & {
   }
   started?: { space?: Id | null }
   subscribed?: { space?: Id | null }
+  pro_grant?: { at?: string | null }
   newcomer?: { at?: string; campaign?: string | null; client?: string | null }
   arrived?: {
     at: string
@@ -3980,29 +3982,37 @@ export let directoryRows = (rows: {
       (await query(line`.member.space=${space.eid}&.member.role=owner`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
-    // The building credit a space's paid plan gives, as the write that gives
-    // it: plans.ts `SUBSCRIBED` on top of what is left of its starter, for
-    // its owners who never subscribed, who wear `subscribed` from now on.
-    // None once every owner has had theirs. Each row is guarded (`$was`), so
-    // two deliveries of the same purchase give it once.
-    subscribing: async (
+    // The building credit a space's plan gives, as the write that gives it,
+    // on top of what is left of its starter: plans.ts `SUBSCRIBED` when it is
+    // `subscribed`, for its owners who never subscribed, who wear
+    // `subscribed` from now on; and plans.ts `PRO_GRANT` when it is on the
+    // Pro plan, paid or comped, once per space, which wears `pro_grant`. None
+    // once each was had. Each row is guarded (`$was`), so two deliveries of
+    // the same purchase give it once.
+    granting: async (
       space: Space,
+      on: { subscribed: boolean; pro: boolean },
       now: Date = new Date(),
     ): Promise<Bundle[]> => {
-      let owners = await self.owners(space)
-      let rows = await Promise.all(
-        owners.map((p) => one(line`.entity.eid=${p}&?subscribed`)),
-      )
+      let owners = on.subscribed ? await self.owners(space) : []
+      let [rows, held] = await Promise.all([
+        Promise.all(owners.map((p) => one(line`.entity.eid=${p}&?subscribed`))),
+        on.pro ? one(line`.entity.eid=${space.eid}&?pro_grant`) : null,
+      ])
       let fresh = owners.filter((_, i) => !rows[i]?.subscribed)
-      if (!fresh.length) return []
+      let pro = on.pro && !!held && !held.pro_grant
+      let dollars = (fresh.length ? SUBSCRIBED : 0) + (pro ? PRO_GRANT : 0)
+      if (!dollars) return []
       return [
         {
           entity: { eid: space.eid },
-          starter: { dollars: topUp(space, SUBSCRIBED, now) },
+          starter: { dollars: topUp(space, dollars, now) },
+          ...(pro ? { pro_grant: { at: now.toISOString() } } : {}),
           $was: {
             starter: {
               dollars: space.starter == null ? null : token(space.starter),
             },
+            ...(pro ? { pro_grant: { at: null } } : {}),
           },
         },
         ...fresh.map((p) => ({

@@ -6,6 +6,7 @@ import { directory, type Space, stamp } from './directory.ts'
 import { tierOf } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './asking.ts'
+import { granted } from './billing.ts'
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
@@ -47,6 +48,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   await stamp(env, { entities: [{ entity: { eid: space.eid }, comp }] }, {
     actor: { by: who.person! },
   })
+  // A space comped onto the Pro plan is given its grant as a paying one is.
+  if (comp?.tier == 'pro') {
+    await granted(env, dir, space, { subscribed: false, pro: true })
+  }
   return shown({
     ...space,
     comp,

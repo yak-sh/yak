@@ -166,7 +166,7 @@
       },
       "pro": {
         "price": "$49 %{per}",
-        "note": "The Pro plan, or $490 a year: twice the Plus plan's AI use and more room for everything. Your staff ask the Operator by email or chat, and it makes the change. Your first subscription adds $100 of building credit.",
+        "note": "The Pro plan, or $490 a year: $100 of AI use a month and more room for everything. Your staff ask the Operator by email or chat, and it makes the change. Taking it adds $200 of building credit, and your first subscription $100 more.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "50 GB of app data, 250 GB of photos and files",
@@ -225,7 +225,7 @@
       },
       "pro": {
         "name": "Pro",
-        "offer": "For one space: twice the Plus plan's AI use, unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, email support, unlimited visitors, 50 GB of app data, 250 GB of photos and files, 10,000 emails a month, and a custom domain. Or $490 a year. A first subscription adds $100 of building credit."
+        "offer": "For one space: $100 of AI use a month, unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, email support, unlimited visitors, 50 GB of app data, 250 GB of photos and files, 10,000 emails a month, and a custom domain. Or $490 a year. Taking it adds $200 of building credit, and a first subscription $100 more."
       }
     },
     "story": {
@@ -277,7 +277,7 @@
           "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe."
         },
         "pro": {
-          "note": "Twice the Plus plan's AI use for your apps and assistant, and more room for data, files and email. $490 a year."
+          "note": "$100 of AI use a month for your apps and assistant, $200 of building credit when you take it, and more room for data, files and email. $490 a year."
         },
         "reward": {
           "title": "A free month when a friend builds their first app.",
@@ -721,7 +721,7 @@
       "asks": "Your office asks by email or chat, and the change is made",
       "people": "No charge per person: staff, members and visitors cost nothing extra",
       "domain": "Your own web address, like %{domain}",
-      "ai": "Twice the Plus plan's AI use, for the assistant's work",
+      "ai": "$100 of AI use a month for the assistant's work, and $200 more when you start",
       "emails": "10,000 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
       "support": "Support from us, by email",
       "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $12 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
@@ -830,7 +830,7 @@
       "title": "Free to start, with your own domain on a plan",
       "space": "Your township's copy lives in a space: its address on yaks.app, like %{yours}, its apps and the people you invite to edit them. The site, the minutes and the reminders work on the free plan. Your own domain, like %{domain}, is on the Plus plan at $12 a month. The Pro plan, at $49 a month or $490 a year, adds a larger AI budget and support.",
       "domain": "yourtownship.org",
-      "meeting": "Recording a two-hour meeting live uses about $1.25 of AI, from the space's monthly AI budget: $20 on the free plan and $60 on the Pro plan. Nothing is charged beyond the plan's price unless the space's owner buys more AI credit on the Pro plan, up to a monthly cap they set.",
+      "meeting": "Recording a two-hour meeting live uses about $1.25 of AI, from the space's monthly AI budget: $20 on the free plan and $100 on the Pro plan. Nothing is charged beyond the plan's price unless the space's owner buys more AI credit on the Pro plan, up to a monthly cap they set.",
       "links": "%{plans}. %{behind}.",
       "behind": "Who is behind yaks.app, and who fixes its mistakes"
     },
@@ -877,7 +877,7 @@
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "pro": {
-        "note": "The Pro plan, or $490 a year: twice the Plus plan's AI use, and more room for data, files and email. Your first subscription adds $100 of building credit.",
+        "note": "The Pro plan, or $490 a year: $100 of AI use a month, and more room for data, files and email. Taking it adds $200 of building credit, and your first subscription $100 more.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "50 GB of app data",
@@ -886,7 +886,7 @@
         "domain": "A custom domain, like %{domain}",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
-        "ai": "Twice the Plus plan's AI use",
+        "ai": "$100 of AI use a month",
         "change": "Your staff ask the Operator by email or chat, and it makes the change"
       }
     },
@@ -976,11 +976,11 @@
         "pro": "10,000"
       },
       "ai": {
-        "name": "AI use %{note}",
+        "name": "AI use a month %{note}",
         "note": "What models and voice cost, in your apps and in the built-in builder.",
         "free": "Included",
         "plus": "Included",
-        "pro": "Twice the Plus plan's"
+        "pro": "$100"
       },
       "builds": {
         "name": "Builds a month %{note}",

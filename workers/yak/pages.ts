@@ -84,7 +84,13 @@ import {
   dollars,
   type Gauge,
 } from '@yaks/platform/standing'
-import { ceilings, PRICE, SUBSCRIBED, YEARLY } from '@yaks/platform/plans'
+import {
+  ceilings,
+  PRICE,
+  PRO_GRANT,
+  SUBSCRIBED,
+  YEARLY,
+} from '@yaks/platform/plans'
 
 import type { Card as Billed, Payer, Want } from './billing.ts'
 
@@ -1576,7 +1582,8 @@ export let plan = (
   let more = tier == 'pro' ? null : h(
     Form.Hint,
     null,
-    `The Pro plan gives ${beyond()}, and email support.`,
+    `The Pro plan gives ${beyond()}, and email support. Taking it adds ` +
+      `$${PRO_GRANT} of building credit once.`,
     tier == 'plus' && y.plan.known ? ' Switch to it from Manage billing.' : '',
   )
   // Where the Pro plan has no price yet, a free space still hears

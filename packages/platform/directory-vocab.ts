@@ -563,6 +563,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { space: owned(ref('keep')) },
     },
+    // When a space first took the Pro plan, paid or comped, and was given
+    // plans.ts `PRO_GRANT` of building credit (billing.ts `granted`): once
+    // per space.
+    pro_grant: {
+      component: true,
+      type: 'object',
+      properties: { at: owned(time) },
+    },
     // When a person came in by the home page's box (newcomer.ts), before they
     // had an address: a newcomer (directory.ts `newcomer`) until they sign in
     // on that browser or their space is erased, when the row goes

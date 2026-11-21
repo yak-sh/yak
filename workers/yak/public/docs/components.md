@@ -867,9 +867,9 @@ The complete list of reserved names:
     openrouter operator operator_alerts operator_reach order output
     output_of outreach_batch outreach_letter outreach_read outreach_trial
     outreach_write outreach_written own_number parent pending person persona
-    phone phone_line plan preview price product project provider provisional
-    public_file published push_subscription quarantined question questions
-    rating reads recalled recipient reconnecting ref referenced
+    phone phone_line plan preview price pro_grant product project provider
+    provisional public_file published push_subscription quarantined question
+    questions rating reads recalled recipient reconnecting ref referenced
     refund_failed refund_request refund_retry refund_sale refund_sent
     refusal refusal_report register_writes registration release_remake
     report report_refusals repository representation requires restored

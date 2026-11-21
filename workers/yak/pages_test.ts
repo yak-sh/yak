@@ -8,7 +8,7 @@ import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 import type { Card } from './billing.ts'
-import { PRICE, YEARLY } from '@yaks/platform/plans'
+import { PRICE, PRO_GRANT, YEARLY } from '@yaks/platform/plans'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -823,7 +823,8 @@ test('the plan card says what the Pro plan gives beyond the Plus plan', async ()
       env,
     )
       .text().then((html) => parseHTML(html).document.body.textContent!)
-  let gives = `The Pro plan gives ${beyond()}, and email support.`
+  let gives = `The Pro plan gives ${beyond()}, and email support. Taking ` +
+    `it adds $${PRO_GRANT} of building credit once.`
   assertStringIncludes(await said('free'), gives)
   assertStringIncludes(
     await said('plus'),

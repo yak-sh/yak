@@ -72,6 +72,7 @@ import { sellerRule } from './seller-move.ts'
 import { describedRule } from './described-move.ts'
 import { proRule } from './pro-move.ts'
 import { starterRule } from './starter-move.ts'
+import { proGrantRule } from './pro-grant-move.ts'
 import { holdExpiryRule } from './hold-expiry-move.ts'
 import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
@@ -219,6 +220,7 @@ export let RULES: Rule[] = [
   checkNewcomerRule,
   starterRule,
   holdExpiryRule,
+  proGrantRule,
 ]
 
 /** The store as the mover reaches it, all of it synchronous: a batch is one

@@ -363,6 +363,9 @@ export let BOUNDARIES = [
   // text, and an Operator's asks kept before are moved to it (instructions-move.ts,
   // T-1617).
   'yak/store/session-told/1',
+  // Every space on the Pro plan before it gave a one-time grant is given it
+  // (pro-grant-move.ts, T-2445).
+  'yak/store/pro-grant/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and

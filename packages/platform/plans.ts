@@ -146,19 +146,23 @@ export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 export let BUDGET: Record<Tier, number> = {
   free: 20,
   plus: 30,
-  pro: 60,
+  pro: 100,
 }
 
-// The building credit a person is given once, spent before a space's monthly
-// budget. Signing up free gives {@link STARTER} on their first space; their
-// first paid subscription adds {@link SUBSCRIBED} to the space it pays for
-// (workers/yak billing.ts `granted`). Jeff, 2026-11-19: "you get $20 building
-// credits for signing up free and $100 when you subscribe to paid plan". Each
-// is once per person: a space minted for someone who already holds one, or
-// who has had theirs, holds no starter (workers/yak directory.ts `mint`,
-// `started`), and a person who subscribed once wears `subscribed`.
+// The building credit given once, spent before a space's monthly budget.
+// Signing up free gives {@link STARTER} on their first space, and their first
+// paid subscription adds {@link SUBSCRIBED} to the space it pays for: each once
+// per person. A space minted for someone who already holds one, or who has had
+// theirs, holds no starter (workers/yak directory.ts `mint`, `started`), and a
+// person who subscribed once wears `subscribed`. A space that first takes the
+// Pro plan, paid or comped, adds {@link PRO_GRANT}, once per space, and wears
+// `pro_grant` (workers/yak billing.ts `granted`). Jeff, 2026-11-19: "you get
+// $20 building credits for signing up free and $100 when you subscribe to paid
+// plan"; 2026-11-21: "put pro at $100/mo and a one-time $200 grant at
+// sign-up".
 export let STARTER: number = 20
 export let SUBSCRIBED: number = 100
+export let PRO_GRANT: number = 200
 
 // Compute seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox

@@ -17,6 +17,7 @@ import {
   type Limited,
   paid,
   PRO,
+  PRO_GRANT,
   SPACES,
   type Spend,
   SUBSCRIBED,
@@ -423,7 +424,7 @@ export let UNKEPT: string =
 
 /**
  * What the Pro plan gives beyond the Plus plan, AI use first, from the
- * numbers each plan holds.
+ * numbers it holds.
  *
  * ```ts
  * import { beyond } from '@yaks/platform/standing'
@@ -431,34 +432,32 @@ export let UNKEPT: string =
  *
  * equal(
  *   beyond(),
- *   "twice the Plus plan's AI use, 50 GB of app data, 250 GB of photos " +
- *     'and files, 10,000 emails and 500 built-in builds a month',
+ *   '$100 of AI use a month, 50 GB of app data, 250 GB of photos and ' +
+ *     'files, 10,000 emails and 500 built-in builds a month',
  * )
  * ```
  */
-export let beyond = (): string => {
-  let times = BUDGET.pro / BUDGET.plus
-  return `${times == 2 ? 'twice' : `${count(times)} times`} the Plus plan's ` +
-    `AI use, ${size(PRO.bytes)} of app data, ${size(PRO.files)} of photos ` +
-    `and files, ${count(letters('pro'))} emails and ${
-      count(builds('pro'))
-    } built-in builds a month`
-}
+export let beyond = (): string =>
+  `$${BUDGET.pro} of AI use a month, ${size(PRO.bytes)} of app data, ` +
+  `${size(PRO.files)} of photos and files, ${count(letters('pro'))} emails ` +
+  `and ${count(builds('pro'))} built-in builds a month`
 
 // Where every refusal ends: the page that describes the plans, after the plan
-// above this one, which allows more of everything, and on a free space the
-// building credit a person's first subscription adds (./plans.ts
-// `SUBSCRIBED`).
+// above this one, which allows more of everything, and the building credit
+// taking it adds: a person's first subscription's (./plans.ts `SUBSCRIBED`)
+// and the Pro plan's (`PRO_GRANT`).
 export let plans = (space: Metered, env: Host): string =>
   `${
     space.tier == 'pro'
       ? `Manage usage and plan settings`
       : paid(space.tier)
-      ? `Putting ${space.slug} on the Pro plan allows more: ${beyond()}. ` +
-        `Manage usage and plan settings`
+      ? `Putting ${space.slug} on the Pro plan allows more: ${beyond()}, ` +
+        `and adds $${PRO_GRANT} of building credit once. Manage usage and ` +
+        `plan settings`
       : `Putting ${space.slug} on the Plus plan allows more, the Pro plan ` +
-        `more again, and your first subscription adds $${SUBSCRIBED} of ` +
-        `building credit. Compare paid plans in its settings`
+        `more again. Your first subscription adds $${SUBSCRIBED} of ` +
+        `building credit, and the Pro plan $${PRO_GRANT} more once. Compare ` +
+        `paid plans in its settings`
   }: ${planSettings(space.slug, env)}`
 
 /** What one app holds, as a person reads it, leaving out what it holds none

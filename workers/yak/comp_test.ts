@@ -2,6 +2,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { connector, fresh, seed } from './probe.ts'
 import { stamp } from './directory.ts'
 import type { Env } from './env.ts'
+import { PRO_GRANT, STARTER } from '@yaks/platform/plans'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)
@@ -41,6 +42,16 @@ test('only the platform can grant a comp, and it records the reason and actor', 
       hostname: 'comp-site.example.com',
     })
     ok(domain.includes('comp-site.example.com'))
+
+    // A space comped onto the Pro plan is given its one-time grant, once.
+    let starter = async () => (await k.dir.at(eid))!.starter ?? STARTER
+    let before = await starter()
+    await post({ tier: 'pro', reason: 'partner' })
+    equal(await starter(), before + PRO_GRANT)
+    await post({ tier: 'plus', reason: 'partner' })
+    await post({ tier: 'pro', reason: 'partner' })
+    equal(await starter(), before + PRO_GRANT)
+    await post({ tier: 'plus', reason: 'partner' })
 
     // A Stripe update keeps the grant; revoking the grant keeps Stripe's plan.
     await stamp(env, { entities: [{ entity: { eid }, plan: { tier: 'pro' } }] })

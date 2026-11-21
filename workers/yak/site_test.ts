@@ -25,6 +25,7 @@ import {
   PLUS,
   PRICE,
   PRO,
+  PRO_GRANT,
   SECONDS,
   STARTER,
   SUBSCRIBED,
@@ -435,9 +436,8 @@ let pricing = () => parseHTML(read('pricing.html')).document
 
 // What a card says of AI use: the Pro plan's is what it gives beyond the
 // Plus plan, said first (standing.ts `beyond`).
-let twice = beyond().split(',')[0]
-let ai = (tier: Tier) =>
-  tier == 'pro' ? twice[0].toUpperCase() + twice.slice(1) : 'AI use included'
+let month = beyond().split(',')[0]
+let ai = (tier: Tier) => tier == 'pro' ? month : 'AI use included'
 
 test('every pricing card lists the same features in the same order', () => {
   let cards = [...pricing().querySelectorAll('.Plan')]
@@ -464,7 +464,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use', (t) => t == 'pro' ? ai(t).replace(' AI use', '') : 'Included'],
+    ['AI use a month', (t) => t == 'pro' ? `$${BUDGET.pro}` : 'Included'],
     ['Builds a month', (t) => String(BUILDS[t])],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
@@ -1236,17 +1236,22 @@ test('the signed-in plan copy derives both tiers from the meter', () => {
 test('every place a person decides names the building credit the code grants', async () => {
   let starter = `$${STARTER} of building credit`
   let subscribed = `$${SUBSCRIBED} of building credit`
+  let pro = `$${PRO_GRANT} of building credit`
+  let more = `subscription $${SUBSCRIBED} more`
   for (
     let [key, said] of [
       ['home.cost.free.note', starter],
       ['home.cost.plus.note', subscribed],
-      ['home.cost.pro.note', subscribed],
+      ['home.cost.pro.note', pro],
+      ['home.cost.pro.note', more],
       ['home.data.free.offer', starter],
       ['home.data.plus.offer', subscribed],
-      ['home.data.pro.offer', subscribed],
+      ['home.data.pro.offer', pro],
+      ['home.data.pro.offer', more],
       ['pricing.plans.free.note', starter],
       ['pricing.plans.plus.note', subscribed],
-      ['pricing.plans.pro.note', subscribed],
+      ['pricing.plans.pro.note', pro],
+      ['pricing.plans.pro.note', more],
     ]
   ) assertStringIncludes(copied(key), said, key)
   assertStringIncludes(await askEmail({}).text(), starter)

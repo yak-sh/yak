@@ -796,17 +796,27 @@ let follow = async (
     step(env, 'paid', undefined, {
       who: await Promise.all(owners.map((p) => dir.emailAt(p))),
     })
-    await granted(env, dir, space)
+  }
+  if (paid(next.tier)) {
+    await granted(env, dir, space, {
+      subscribed: bought(space.plan, next),
+      pro: next.tier == 'pro',
+    })
   }
   return `${space.slug} is ${next.tier}`
 }
 
-// A first paid subscription's building credit (@yaks/platform/plans
-// `SUBSCRIBED`), given to the space it pays for once per person
-// (directory.ts `subscribing`). A delivery that lost the race to another
-// finds its guard moved and gives nothing.
-export let granted = async (env: Env, dir: Dir, space: Space) => {
-  let grant = await dir.subscribing(space)
+// The building credit a plan gives (directory.ts `granting`): a first paid
+// subscription's, given to the space it pays for once per person, and the
+// Pro plan's, once per space, paid (here) or comped (comp.ts). A delivery
+// that lost the race to another finds its guard moved and gives nothing.
+export let granted = async (
+  env: Env,
+  dir: Dir,
+  space: Space,
+  on: { subscribed: boolean; pro: boolean },
+) => {
+  let grant = await dir.granting(space, on)
   if (!grant.length) return
   try {
     await stamp(env, { entities: grant })
