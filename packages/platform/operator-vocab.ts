@@ -172,6 +172,12 @@ export let operatorDoc: VocabDoc = {
           description:
             "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with.",
         },
+        from_space: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description: 'The space whose Operator sent a handoff.',
+        },
         rebuild: {
           type: 'boolean',
           description:
@@ -505,6 +511,19 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_handoff: {
+      component: true,
+      description: 'Work an Operator sent for a person to another space.',
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        space: { type: 'string', ref: 'entity', death: 'keep' },
+        session: { type: 'string', ref: 'session', death: 'keep' },
+        task: { type: 'string', ref: 'entity', death: 'keep' },
+        previous: { type: 'string', ref: 'entity', death: 'keep' },
+        notify: { type: 'boolean' },
+        report: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
     operator_answer: {
       component: true,
       description:
@@ -595,6 +614,20 @@ export let operatorDoc: VocabDoc = {
       created: ['operator_request'],
       tries: 3,
       description: 'Carry out one received request through the space operator.',
+    },
+    operator_handoff_send: {
+      effect: true,
+      created: ['operator_handoff'],
+      tries: 5,
+      description: 'Queue the handoff in the destination Operator store.',
+    },
+    operator_handoff_reply: {
+      effect: true,
+      created: ['operator_answer'],
+      target:
+        '.operator_answer.request.operator_request.channel=operator-handoff',
+      tries: 5,
+      description: 'Deliver a handoff report to the originating Operator.',
     },
     operator_deliver: {
       effect: true,

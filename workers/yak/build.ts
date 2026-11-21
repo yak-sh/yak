@@ -24,6 +24,7 @@ import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
+import type { Handoff } from '@yaks/platform/operator-handoff'
 import { WAKE } from './door.ts'
 import { type Tab, tabsState } from '@yaks/notify/presence'
 import { WALKTHROUGH } from './walkthrough.ts'
@@ -362,12 +363,33 @@ export class Builder extends Durable {
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
+          url.pathname == '/operator/handoff' ||
           url.pathname == '/operator/approval' ||
           url.pathname == WALKTHROUGH
         ) {
           let space = request.headers.get(SPACE)
           if (request.headers.get('x-yak-kernel') != '1' || !space) {
             return no(403, NOBODY)
+          }
+          if (url.pathname == '/operator/handoff') {
+            let { acceptHandoff, acceptHandoffReport } = await import(
+              './operator-handoff.ts'
+            )
+            let { store } = await this.#stored()
+            let { kind, ...message } = await request.json() as Handoff & {
+              kind: string
+            }
+            if (kind == 'request') {
+              let id = await acceptHandoff(this.#env, store, space, message)
+              await this.#arming
+              return Response.json({ request: id }, { status: 202 })
+            }
+            if (kind == 'report') {
+              await acceptHandoffReport(this.#env, store, space, message)
+              await this.#arming
+              return Response.json({ ok: true })
+            }
+            return no(400, 'Choose a handoff request or report.')
           }
           // What happened in the space, for its people's Updates
           // (operator-updates.ts `tell`).

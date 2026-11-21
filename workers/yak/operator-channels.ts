@@ -1,4 +1,5 @@
 import { line } from '@yaks/query'
+import { HANDOFF, handoffTask } from '@yaks/platform/operator-handoff'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import type { Choice } from '@yaks/task'
@@ -135,6 +136,7 @@ export type Request = {
   // The conversation whose words they are, on the `escalated` channel: the
   // one with the reply's writer, which raised them (operator-escalate.ts).
   from?: string
+  from_space?: string
   // The call whose talking model asked, in its words for the caller rather
   // than the caller's own (operator-calls.ts `talking`).
   call?: string
@@ -293,6 +295,7 @@ export let TAKING = new Set(['email', ...PLATFORMS.keys()])
 /** Who wrote words that came by a channel, where not the person they are
  * for (@yaks/session `Intake.from`). */
 let FROM: Record<string, (request: Request) => string | undefined> = {
+  [HANDOFF]: (r) => `${r.address}'s Operator`,
   wake: () => 'the system (your wake-up)',
   subscription: () => 'the system (your subscription)',
   error: () => 'the system',
@@ -969,6 +972,8 @@ let BY: Record<
         ? `, about ${request.about} (its eid there, so the alert opens at its row)`
         : ''
     }; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: `,
+  [HANDOFF]: (r) =>
+    `Handed off by ${r.address}'s Operator for the same person you work for. Do the work in this space with their permissions. Your reply goes back to the Operator that asked. Give the outcome, including anything still open. If you delegate to a helper, wait for the result before reporting completion.\n\n`,
   fixed: () => FIXED,
   update: (_, __, about) => {
     let decision = part<Comp>(about, 'decision')
@@ -1345,7 +1350,14 @@ export let ANSWERING = new Set(['letter', 'texted', 'signup', 'group'])
  * conversation raised (operator.ts `given`), what their machine told
  * (tunnel.ts `tell`), what an app's worker told (app-operator.ts) and a
  * conversation a fixed yaks.app bug had stopped (operator-rerun.ts). */
-export let OWN = new Set(['error', 'escalated', 'machine', 'app', 'fixed'])
+export let OWN = new Set([
+  'error',
+  'escalated',
+  'machine',
+  'app',
+  'fixed',
+  HANDOFF,
+])
 
 /** The channels whose words bring routine news nobody asked for at that
  * moment, so their turn waits for the person's machine: what the machine told,
@@ -1476,8 +1488,19 @@ export let handleChannels = (
       let request = part<Request>(row, 'operator_request')
       let dir = directoryOf(env.STORE)
       let space = await dir.at(request.space)
-      if (!space || space.trashed) {
+      if ((!space || space.trashed) && request.channel != HANDOFF) {
         throw refuse('missing', 'That space is gone.')
+      }
+      if (!space || space.trashed) {
+        await g.apply([{
+          entity: { eid: derivedEid('operator-answer|' + row.entity.eid) },
+          failed: { reason: 'That space is gone.' },
+          operator_answer: {
+            request: row.entity.eid,
+            text: 'That space is gone.',
+          },
+        }], { trusted: true })
+        return
       }
       // A worker's words carry no person's authority, including a request
       // queued by older code. Relay them without reading the owner's context
@@ -1506,8 +1529,13 @@ export let handleChannels = (
         ? derivedEid('operator-task|' + row.entity.eid)
         : request.channel == 'fixed'
         ? request.task
+        : request.channel == HANDOFF
+        ? request.task ?? handoffTask(row.entity.eid)
         : undefined
       try {
+        if (request.channel == HANDOFF && role != 'owner') {
+          throw refuse('access', 'You no longer administer this space.')
+        }
         if (!role && !ANSWERING.has(request.channel)) {
           throw refuse(
             'access',
@@ -1540,7 +1568,10 @@ export let handleChannels = (
         let given = await operator.ask(
           { person: request.person, administrative: access.administrative },
           space,
-          { say: body },
+          {
+            say: body,
+            ...request.channel == HANDOFF && request.task ? { task } : {},
+          },
           {
             request: row.entity.eid,
             task,
@@ -1561,14 +1592,20 @@ export let handleChannels = (
             ...request.writer ? { by: request.writer } : {},
             // Nobody asked for a break's fix, nor raised what another
             // conversation did: the Operator did.
-            ...OWN.has(request.channel) ? { by: space.eid } : {},
+            ...request.channel == HANDOFF
+              ? { by: request.from_space }
+              : OWN.has(request.channel)
+              ? { by: space.eid }
+              : {},
           },
         )
         // Its answers are written as its turns end (operator.ts `answered`).
-        await g.apply([{
-          entity: row.entity,
-          operator_request: { ...request, session: given.session },
-        }], { trusted: true })
+        if (request.channel != HANDOFF) {
+          await g.apply([{
+            entity: row.entity,
+            operator_request: { ...request, session: given.session },
+          }], { trusted: true })
+        }
       } catch (error) {
         if ((error as { retry?: unknown })?.retry) throw error
         caught(error, {
@@ -1613,6 +1650,31 @@ export let handleChannels = (
         (ms) => Promise.resolve(attempt?.defer?.(ms)),
       )
     },
+    operator_handoff_send: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      if (!row?.operator_handoff || row.completed) return
+      let { sendHandoff } = await import('./operator-handoff.ts')
+      await sendHandoff(env, operator.store, row)
+    },
+    operator_handoff_reply: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      if (!row?.operator_answer || row.delivered) return
+      let answer = part<Answer>(row, 'operator_answer')
+      let [asked] = await g.get([answer.request!])
+      let request = part<Request>(asked, 'operator_request')
+      let silent = passes(answer.text)
+      let { sendHandoffReport } = await import('./operator-handoff.ts')
+      await sendHandoffReport(env, request, {
+        id: row.entity.eid,
+        request: answer.request!,
+        text: silent ? 'The Operator gave no reply.' : answer.text,
+        failed: !!(row.failed || asked.failed) || silent,
+      })
+      await g.apply([{
+        entity: row.entity,
+        delivered: { at: new Date().toISOString() },
+      }], { trusted: true })
+    },
     // An answer goes out on its request's channel, unless another answer of
     // its turn carries it (`with`). One kept on the request itself is from
     // before a request could be answered twice.
@@ -1624,6 +1686,7 @@ export let handleChannels = (
       if (answer.with || passes(answer.text)) return
       let [asked] = answer.request ? await g.get([answer.request]) : [row]
       let request = part<Request>(asked, 'operator_request')
+      if (request.channel == HANDOFF) return
       // By email it is a letter in the thread it answers, carrying the
       // answer, which @yaks/mail sends; what became of the letter is what
       // became of the answer (operator-host.ts `answering`).

@@ -1,3 +1,4 @@
+import { chatPath } from '@yaks/platform/routes'
 import { line as q, whole as wholeLine } from '@yaks/query'
 import { inputSource } from './operator-provenance.ts'
 import { inputBody } from '@yaks/platform/operator-source'
@@ -131,6 +132,8 @@ import {
   UNASKED,
   UNPROVEN,
 } from './operator-channels.ts'
+import { HANDOFF, handoffNote } from '@yaks/platform/operator-handoff'
+import { handoffsTool, handoffTool } from './operator-handoff.ts'
 import { attachedOf, type File } from './operator-files.ts'
 import {
   escalate,
@@ -436,16 +439,19 @@ let mine = new Set([
 // for (an app's is store_mail_send), and operator_chat and operator_read reach
 // the Operator itself, whose fork, spawn and reads with self are its own of
 // them.
-let ownNamed = new Set([
-  ...mine,
-  ...workNames,
-  'mail_send',
+let connectorConversations = [
   'operator_chat',
   'operator_run',
   'operator_read',
   'helper_spawn',
   'conversation_start',
   'conversation_send',
+]
+let ownNamed = new Set([
+  ...mine,
+  ...workNames,
+  'mail_send',
+  ...connectorConversations,
 ])
 // Where the Operator finds what it no longer holds in front of it, which
 // `SELF` and the memory loop give it, is the base persona's
@@ -866,7 +872,7 @@ export let operatorRoster = async (
       refused: hearing(ctx.env, () => ({ space, session })),
       hears: (t, out) =>
         hears(t, out, memories.some((m) => m.name == t.name) ? 'own' : 'apps'),
-      unscripted,
+      unscripted: new Set([...connectorConversations, ...unscripted ?? []]),
     },
     ctx,
     { graph: work.g, person: ctx.person, space },
@@ -1228,7 +1234,11 @@ let working = async (
   // answered from these (lib/hops.ts `recall`). What needs only the person
   // and the space's eid is read through `here`; `ctx` waits for the space
   // and the reach.
+  let channel = await channelAt(store, session, o)
   let reach = reachOf(dir, { eid: o.space }, o.person, o.administrative)
+  if (channel == HANDOFF) {
+    reach = reach.then(({ role }) => ({ role, pa: false, beyond: [] }))
+  }
   let apps = dir.reachable(o.person)
   let platform = admin({ dir, person: o.person })
   let space = (open?.() ?? directoryOf(env.STORE)).at(o.space).then((s) => {
@@ -1236,7 +1246,7 @@ let working = async (
     return s
   })
   let openedFor = opened(env, o, o.space, space, reading, reach, session)
-  let remote = !o.signup && proven(await channelAt(store, session, o))
+  let remote = !o.signup && channel != HANDOFF && proven(channel)
   let here = { ...openedFor.here, remote }
   let ctx = openedFor.ctx.then((ctx) => ({ ...ctx, remote }))
   let google = googleAccounts(env, here, { eid: o.space })
@@ -1966,10 +1976,12 @@ export let operating = (
         `operator-answer|${r.entity.eid}|${mark.entity.eid}`,
       )
       let route = routeOf(comp(r, 'operator_request'))
-      let carrier = carriers.get(route)
-      if (!carrier) carriers.set(route, eid)
+      let handoff = comp(r, 'operator_request')?.channel == HANDOFF
+      let carrier = handoff ? undefined : carriers.get(route)
+      if (!carrier && !handoff) carriers.set(route, eid)
       return {
         entity: { eid },
+        ...reply.broke && handoff ? { failed: { reason: reply.text } } : {},
         operator_answer: {
           request: r.entity.eid,
           text: reply.text,
@@ -2040,7 +2052,20 @@ export let operating = (
     let reran = requests.filter((r) =>
       comp(r, 'operator_request')?.channel == 'fixed'
     )
+    let handoffs = space
+      ? requests.filter((r) => comp(r, 'operator_request')?.channel == HANDOFF)
+      : []
     await g.apply([
+      ...await Promise.all(handoffs.map(async (r) => {
+        let request = comp(r, 'operator_request')!
+        let root = await rootAt(store, space!, String(request.person))
+        return handoffNote(
+          root,
+          mark.entity.eid,
+          space!,
+          `Replied to ${request.address}'s Operator.\n\n${reply.text}`,
+        )
+      })),
       ...reran.map((r) => {
         let asked = comp(r, 'operator_request')!
         return notification({
@@ -2112,7 +2137,8 @@ export let operating = (
     // the room, or a tool's answer, is marked `heard` and read as information,
     // never instructions, and takes none of their tools away (T-1902).
     let heard = HEARSAY.has(channel)
-    let remote = !work?.signup && proven(channel) && !heard
+    let remote = !work?.signup && channel != HANDOFF && proven(channel) &&
+      !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))
       : Promise.resolve([])
@@ -2152,7 +2178,8 @@ export let operating = (
       })
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
-      !heard && admin({ dir: whole, person: ctx.person! }),
+      !heard && channel != HANDOFF &&
+      admin({ dir: whole, person: ctx.person! }),
       member ? [] : g.read(
         q`.operator_request.session=${await topOf(
           g,
@@ -2291,6 +2318,13 @@ export let operating = (
         )
         : [],
       ...member ? [...mine(), ...google] : [],
+      ...acts && !work?.signup && proven(channel) && !confirm &&
+          !SMS.has(channel)
+        ? [
+          handoffTool(env, store, space, ctx.person),
+          handoffsTool(store, ctx.person),
+        ]
+        : [],
       ...seated ? [] : [escalate(store, ctx, space)],
       ...chat,
       ...api(member),
@@ -2875,17 +2909,38 @@ export let operating = (
       }])
     }
     let [row] = await g.get([task])
+    let handoff = o.channel == HANDOFF
+    let root = handoff ? await rootAt(store, space.eid, held.person) : ''
+    if (root && !await conversed(store, root)) {
+      await started(root, held.person, space)
+      await g.apply([await carrying(root, held, space, {}, true)], {
+        trusted: true,
+      })
+    }
     await take(
       g,
       words(
         session,
         id,
-        newest ? text : JSON.stringify({ task: row }),
+        newest || handoff ? text : JSON.stringify({ task: row }),
         by,
         o,
       ),
       [
         await carrying(session, held, space, o),
+        ...root
+          ? [
+            { entity: { eid: id }, operator_request: { session } },
+            handoffNote(
+              root,
+              id,
+              by,
+              `[Handoff from ${o.from}](${
+                chatPath(space.slug, task)
+              }).\n\n${text}`,
+            ),
+          ]
+          : [],
         ...old
           ? [{
             entity: { eid: derivedEid('operator-comment|' + input) },

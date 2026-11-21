@@ -34,6 +34,7 @@ export const OWNED: [string, string][] = [
   ['operator_session', 'person'],
   ['operator_oracle', 'person'],
   ['operator_request', 'person'],
+  ['operator_handoff', 'person'],
   ['wake', 'for'],
   // Retired, kept on a wake until contraction (./operator-vocab.ts).
   ['operator_ask', 'person'],
