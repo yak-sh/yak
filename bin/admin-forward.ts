@@ -50,7 +50,7 @@ let handler = forward({
       return Promise.resolve()
     }),
 })
-Deno.serve({
+let server = Deno.serve({
   hostname: '127.0.0.1',
   port: 5176,
   onError: async () => {
@@ -73,3 +73,12 @@ Deno.serve({
     return new Response('Admin forwarding failed', { status: 502 })
   },
 }, handler)
+
+// A service restart lets accepted requests finish before replacing the listener.
+let drain = () => void server.shutdown()
+Deno.addSignalListener('SIGTERM', drain)
+try {
+  await server.finished
+} finally {
+  Deno.removeSignalListener('SIGTERM', drain)
+}

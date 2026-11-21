@@ -112,20 +112,41 @@ export let timing = {
   say: (line: string) => console.error(line),
 }
 
-// A request that failed while connecting never reached the platform: Deno
-// names the phase, `client error (Connect)`, for a reset, a refused
-// connection, a DNS failure and a broken TLS handshake alike. Sending it
-// again can do nothing twice, whatever its method, so it is sent again after
-// each pause, which `sleep` spends. A failure after connecting may have
-// arrived, and is thrown, unless the call only reads (`rereads`): a copy's
-// page, asked again on a pooled connection that broke as it was sent, is the
-// same page. A read the platform failed (a 5xx, as when an object it asked
-// was overloaded), or whose JSON arrived cut short behind its status, is asked
-// again the same way, and the last answer stands.
+// A connection failure occurs before the request can reach the platform.
 export let reconnect = { pauses: [200, 1000, 3000], sleep }
 
-let connecting = (err: unknown) =>
-  /\(Connect\)/.test(String((err as Error)?.message ?? err))
+let phase = (err: unknown, name: string) =>
+  err instanceof Error &&
+  [err, err.cause].some((e) =>
+    e instanceof Error && e.message.includes(`client error (${name})`)
+  )
+
+// The forwarder closes its listener while draining, for up to systemd's
+// 90-second stop timeout. Probe the local door without forwarding a request.
+let forwardReady = async (url: string, cancelled?: AbortSignal | null) => {
+  let timeout = AbortSignal.timeout(95_000)
+  let signal = cancelled ? AbortSignal.any([cancelled, timeout]) : timeout
+  let door = new URL(url)
+  door.searchParams.delete('url')
+  while (!signal.aborted) {
+    await reconnect.sleep(250, signal)
+    if (signal.aborted) break
+    try {
+      let r = await fetch(door.href, {
+        method: 'HEAD',
+        signal,
+        redirect: 'manual',
+      })
+      // A request without a platform URL is answered by the forwarder itself.
+      if (r.status == 400) return true
+    } catch (err) {
+      if (signal.aborted) break
+      if (!phase(err, 'Connect') && !phase(err, 'SendRequest')) throw err
+    }
+  }
+  cancelled?.throwIfAborted()
+  return false
+}
 
 // A read's answer held whole, or null when its JSON did not arrive whole.
 let whole = async (r: Response): Promise<Response | null> => {
@@ -141,7 +162,11 @@ let whole = async (r: Response): Promise<Response | null> => {
   return held
 }
 
-let again = async (go: () => Promise<Response>, rereads = false) => {
+let again = async (
+  go: () => Promise<Response>,
+  rereads = false,
+  restarting?: (err: unknown) => boolean,
+) => {
   for (let pause of reconnect.pauses) {
     try {
       let r = await go()
@@ -151,7 +176,10 @@ let again = async (go: () => Promise<Response>, rereads = false) => {
         if (held) return held
       } else await r.body?.cancel()
     } catch (err) {
-      if (!connecting(err) && !(rereads && err instanceof TypeError)) throw err
+      if (restarting?.(err)) throw err
+      if (!phase(err, 'Connect') && !(rereads && err instanceof TypeError)) {
+        throw err
+      }
     }
     await reconnect.sleep(pause)
   }
@@ -167,17 +195,37 @@ let sent = async (
   init: RequestInit & {
     headers?: Record<string, string>
     rereads?: boolean
+    replay?: boolean
   } = {},
   quiet = false,
   browser = false,
 ) => {
-  let { rereads, ...rest } = init
+  let { rereads, replay, ...rest } = init
   let asked = {
     ...rest,
     headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
   }
   let destination = forwarded(url, session, browser, asked)
-  let go = () => again(() => fetch(destination.url, destination.init), rereads)
+  let through = destination.url != url
+  let restarting = through
+    ? (err: unknown) =>
+      phase(err, 'Connect') ||
+      !!(replay || rereads) && phase(err, 'SendRequest')
+    : undefined
+  let send = () =>
+    again(() => fetch(destination.url, destination.init), rereads, restarting)
+  let go = async () => {
+    try {
+      return await send()
+    } catch (err) {
+      if (
+        !restarting?.(err) || !await forwardReady(destination.url, init.signal)
+      ) {
+        throw err
+      }
+      return send()
+    }
+  }
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
@@ -319,6 +367,9 @@ export let browse = (session: string, asked: Browse): Promise<Browsed> =>
       redirect: 'manual',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(asked),
+      // Interactive steps may already have acted on the page.
+      replay: asked.steps?.every((step) => 'wait' in step || 'shot' in step) ??
+        true,
     },
     false,
     true,
@@ -779,6 +830,12 @@ export { codeFor, codeIn, lettersFor } from '@yaks/connections'
 // The connector, as JSON-RPC over one POST. Stateless: /mcp answers a
 // tools/call with no initialize handshake, which is what makes a CLI call
 // cost one round trip.
+let readsFiles = (method: string, params: unknown) => {
+  let call = params as { name?: string; arguments?: { op?: string } } | null
+  return method == 'tools/call' && call?.name == 'app_files' &&
+    ['list', 'read', 'history'].includes(call.arguments?.op ?? '')
+}
+
 export let rpc = (session: string) => {
   let n = 0
   return async (method: string, params: unknown = {}) => {
@@ -786,6 +843,7 @@ export let rpc = (session: string) => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
+      replay: readsFiles(method, params),
     })
     if (r.status != 200) {
       let text = await r.text()

@@ -20,6 +20,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { FORWARDED } from './forward.ts'
 import {
   acceptInvite,
+  browse,
   claimsOf,
   codeFor,
   codeIn,
@@ -409,7 +410,7 @@ test('a request that never connected is sent again, and nothing else is', async 
     pauses: [1, 2],
     sleep: (ms: number) => Promise.resolve(void paused.push(ms)),
   })
-  let flaky = failing([reset, reset])
+  let flaky = failing([new TypeError('fetch failed', { cause: reset }), reset])
   try {
     assertEquals((await feeNow('a.token')).bps, 250)
     assertEquals([flaky.tries(), paused.splice(0)], [3, [1, 2]])
@@ -446,6 +447,95 @@ test('a request that never connected is sent again, and nothing else is', async 
     Object.assign(reconnect, was)
   }
 })
+
+let lost = (phase: string, message: string) =>
+  new TypeError('fetch failed', {
+    cause: new Error(
+      `error sending request: client error (${phase}): ${message}`,
+    ),
+  })
+
+let refused = lost('Connect', 'tcp connect error: Connection refused')
+let closed = lost('SendRequest', 'connection closed before message completed')
+let through = FORWARDED + 'http://127.0.0.1:5176/'
+
+let releasing = (op: string) =>
+  rpc(through)('tools/call', { name: 'app_files', arguments: { op } })
+let visiting = () => browse(through, { url: 'https://yaks.app/admin' })
+
+for (
+  let [name, call, failure, retry] of [
+    [
+      'release connects after a restart',
+      () => releasing('list'),
+      refused,
+      true,
+    ],
+    [
+      'release reads again after a dropped connection',
+      () => releasing('list'),
+      closed,
+      true,
+    ],
+    ['browse reads again after a dropped connection', visiting, closed, true],
+    [
+      'a release write can retry a refused connection',
+      () => releasing('write'),
+      refused,
+      true,
+    ],
+    [
+      'a release write does not replay after sending',
+      () => releasing('write'),
+      closed,
+      false,
+    ],
+    [
+      'an interactive browse does not replay after sending',
+      () =>
+        browse(through, {
+          url: 'https://yaks.app/admin',
+          steps: [{ tap: 'button' }],
+        }),
+      closed,
+      false,
+    ],
+  ] as const
+) {
+  test(name, async () => {
+    let real = globalThis.fetch
+    let sleep = reconnect.sleep
+    let sent: (BodyInit | null | undefined)[] = []
+    let probes = 0
+    reconnect.sleep = () => Promise.resolve()
+    globalThis.fetch = ((url: string, init: RequestInit) => {
+      if (init.method == 'HEAD') {
+        assertEquals(url, 'http://127.0.0.1:5176/')
+        assertEquals(init.headers, undefined)
+        return ++probes == 1
+          ? Promise.reject(refused)
+          : Promise.resolve(new Response(null, { status: 400 }))
+      }
+      sent.push(init.body)
+      return sent.length == 1
+        ? Promise.reject(failure)
+        : Promise.resolve(Response.json({ result: {}, text: 'ready' }))
+    }) as typeof fetch
+    try {
+      if (retry) {
+        await call()
+        assertEquals([sent.length, probes], [2, 2])
+        assertEquals(sent[1], sent[0])
+      } else {
+        await assertRejects(call, TypeError, 'fetch failed')
+        assertEquals([sent.length, probes], [1, 0])
+      }
+    } finally {
+      reconnect.sleep = sleep
+      globalThis.fetch = real
+    }
+  })
+}
 
 // The platform's own failure page, as kernel.ts answers a defect.
 let oops = () =>
