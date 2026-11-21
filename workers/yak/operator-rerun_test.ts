@@ -12,6 +12,7 @@ import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import { rerun } from './operator-rerun.ts'
+import { conversationOf } from './operator-host.ts'
 import { within } from './defects.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { faultOf } from '@yaks/tracker'
@@ -141,6 +142,9 @@ test("a turn that threw is filed under its conversation, even with a refusal's s
   assertEquals(filed.length, 1)
   let [stall] = await stalled()
   assertEquals(stall.fault, faultOf(filed[0]))
+  let page = await conversationOf(store, '/operator', stall.session)
+  assertStringIncludes(page.html, 'taken up again once the problem is fixed')
+  assertEquals(page.html.includes('Send your message again'), false)
   await run(async () => {
     await rerun(store, space, { faults: [stall.fault], bug: 'b3', said })
     await drain(store)

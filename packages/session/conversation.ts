@@ -124,14 +124,16 @@ export let namer =
  * when it is a call (`joined`), how calls read, what a call's step holds
  * after what it asked for (`under`), what came back of it drawn in place of
  * its result's own words (`came`: the helper a call started, not its id),
- * and who works the conversation, as a sentence names them partway through
- * (`who`, "the Operator"). */
+ * who works the conversation, as a sentence names them partway through
+ * (`who`, "the Operator"), and whether the conversation is `stalled`: a
+ * failure the host files to fix and then takes it up again on its own. */
 export type Beside = {
   result?: Bundle
   names: Names
   under?: Node[]
   came?: Node[]
   who?: string
+  stalled?: boolean
 }
 
 /** A kind of line: a `Conversation.Line` registration and what it draws of an
@@ -489,6 +491,13 @@ let failure = (said: string): Said => ({ node: trouble(said), text: said })
 // is the line's words.
 let LIMIT = 'limit'
 
+// What comes of a stop: the conversation is taken up again once its fault
+// is fixed where it stalled, else the person sends again.
+let after = (beside: Beside) =>
+  beside.stalled
+    ? 'It will be taken up again once the problem is fixed.'
+    : 'Send your message again to try once more.'
+
 // A provider's refusal, or the host's own ceiling in its words.
 let refused = (b: Bundle, beside: Beside) =>
   comp(b, 'refusal')?.code == LIMIT && body(b)
@@ -496,14 +505,16 @@ let refused = (b: Bundle, beside: Beside) =>
     : failure(
       `${
         Who(beside)
-      } could not get an answer from its model, so it stopped before replying. Send your message again to try once more.`,
+      } could not get an answer from its model, so it stopped before replying. ${
+        after(beside)
+      }`,
     )
 
 let failed = (beside: Beside) =>
   failure(
-    `Something went wrong, and ${
-      who(beside)
-    } stopped before it finished. Send your message again to try once more.`,
+    `Something went wrong, and ${who(beside)} stopped before it finished. ${
+      after(beside)
+    }`,
   )
 
 // A model's answer cut off on the way (the provider dropped it, or no longer

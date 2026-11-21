@@ -76,6 +76,21 @@ test('each kind of entry is drawn as the person reads it', () => {
   equal(ended({ refusal: { code: 'busy' }, response: { body: raw } }), refused)
   equal(ended({ exception: {} }), failed.replace('the agent', 'the Operator'))
   equal(ended({ notice: {} }), "The Operator's answer was interrupted.")
+  // A conversation stalled on its fault is taken up again once it is fixed.
+  let later = 'It will be taken up again once the problem is fixed.'
+  let stalled = (comps: object) =>
+    read(e('r', { output: {}, content: { body: raw }, ...comps }), {
+      who: 'the Operator',
+      stalled: true,
+    })?.[1]
+  equal(
+    stalled({ exception: {} }),
+    failed.replace('the agent', 'the Operator').replace(/Send.*/, later),
+  )
+  equal(
+    stalled({ refusal: { code: 'model' } }),
+    refused.replace(/Send.*/, later),
+  )
   equal(read(e('x', { exception: {}, content: { body: 'boom' } })), [
     '',
     failed,

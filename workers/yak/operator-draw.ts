@@ -568,6 +568,9 @@ export type Seen = {
   /** what models were told drawn whole, for a page with no script to
    * fetch it as it opens */
   whole?: boolean
+  /** that a fault stopped it, and its fix takes it up again
+   * (operator-rerun.ts) */
+  stalled?: boolean
 } & Naming
 
 // What a helper was told, all its asks', in one place.
@@ -768,6 +771,7 @@ let drawing = (
     opens,
     files,
     whole,
+    stalled,
   }: Seen = {},
   view: View,
 ) => {
@@ -779,7 +783,14 @@ let drawing = (
         r,
       ) => [r.id, r]),
   )
-  let beside: Heard = { names, who: 'the Operator', opens, files, roomNames }
+  let beside: Heard = {
+    names,
+    who: 'the Operator',
+    opens,
+    files,
+    roomNames,
+    ...stalled ? { stalled } : {},
+  }
   // The entries each line is framed with, which a run of them is framed with.
   let framing = new Map<string, Bundle[]>()
   let frame = (line: Line, rows: Bundle[]) => {
@@ -1277,6 +1288,8 @@ export type Lines = {
   ids?: Record<string, string>
   /** the files of the lines they read, by eid */
   files?: Record<string, Kept>
+  /** that a fault stopped it, and its fix takes it up again */
+  stalled?: boolean
 }
 
 // The sha an ask names of what it sent, under `name`: its tools' (`offer`)
@@ -1384,6 +1397,7 @@ export let wire = (
     ...seen.opens ? { opens: seen.opens } : {},
     ...ids.length ? { ids: Object.fromEntries(ids) } : {},
     ...files.length ? { files: Object.fromEntries(files) } : {},
+    ...seen.stalled ? { stalled: true } : {},
   }
 }
 

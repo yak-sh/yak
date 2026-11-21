@@ -527,6 +527,9 @@ let seenOf = async (
       ...helpers.flatMap((h) => h.entries),
     ]),
     files: await drawnFiles(store, entries),
+    // A fault stopped it, and the fault's fix takes it up again
+    // (operator-rerun.ts).
+    ...sessions.some((b) => b.stalled) ? { stalled: true } : {},
   }
 }
 
