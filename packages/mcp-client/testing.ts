@@ -22,7 +22,8 @@ export const edge = (fetcher: typeof fetch): typeof fetch => {
 }
 
 /** A server answering over `fetcher`, which says at `initialize` the
- * `instructions` it is given, at first or later by `say`. */
+ * `instructions` it is given, at first or later by `say`, and describes its
+ * tool as `describe` last said. */
 export const fixture = (instructions?: string) => {
   const calls: { method: string; params: Record<string, unknown> }[] = []
   const requests: Request[] = []
@@ -74,6 +75,9 @@ export const fixture = (instructions?: string) => {
     },
     say: (text?: string) => {
       instructions = text
+    },
+    describe: (description = 'Publish a mockup', title?: string) => {
+      tools = tools.map((t) => ({ ...t, title, description }))
     },
     fail: () => {
       failCall = true

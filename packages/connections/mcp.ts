@@ -145,18 +145,40 @@ type Reached = GraphServer & { fetch?: typeof fetch }
  * text, which a stranger's server writes, and they are sent with every ask of
  * the Operator they reach. */
 export let SAID = 64_000
+/** How much of what a server says of one tool a model is told, in
+ * characters: the server writes it, and it rides with every turn its tool is
+ * listed in. */
+export let DESCRIBED = 4_000
+/** How much of a tool's own title is kept, in characters: a name, not room
+ * for words to the model. */
+export let TITLED = 80
 /** One ask of a server: a tool of its, and what it is called with. */
 export type Ask = { name: string; args: Record<string, unknown> }
 /** What one ask answered, or why it failed. */
 export type Asked = { out: Out } | { error: unknown }
-/** What one server said to read before its tools, cut at {@link SAID}. */
-export type Told = { label: string; namespace: string; text: string }
-let cut = (text: string) =>
-  text.length > SAID
+/** One server reached, with what it said to read before its tools (`text`,
+ * empty where it said nothing), cut at {@link SAID}: where it is (`url`, a
+ * path on the space's `machine` for one reached through a tunnel) and who
+ * connected it (`by`). */
+export type Told = {
+  label: string
+  namespace: string
+  url: string
+  machine?: string
+  by: string
+  text: string
+}
+let cut = (text: string, most = SAID) =>
+  text.length > most
     ? `${
-      text.slice(0, SAID)
-    }\n\n[Cut at ${SAID} of the ${text.length} characters the server said.]`
+      text.slice(0, most)
+    }\n\n[Cut at ${most} of the ${text.length} characters the server said.]`
     : text
+// A tool's title, as the server's own name for it: one line, cut short.
+let titled = (title: string) => {
+  let line = title.replace(/\s+/g, ' ').trim()
+  return line.length > TITLED ? `${line.slice(0, TITLED)}…` : line
+}
 // A server on a machine that did not answer as one: the machine is off, its
 // tunnel has no gateway, or it opened no such path. Its owner sees that, and
 // it is no fault of the platform's to report.
@@ -220,8 +242,11 @@ let described = (s: GraphServer, tools: Listed): RemoteCommand[] =>
       name: t.name,
       namespace: s.server.namespace!,
       ...s.server.machine ? { machine: s.server.machine } : {},
-      title: `${s.label}: ${t.title ?? t.name}`,
-      description: `[${s.label}] ${t.description ?? t.name}`,
+      title: `${s.label}: ${titled(t.title ?? t.name)}`,
+      description:
+        `[What the MCP server ${s.label} says of its tool, in its own words] ${
+          cut(t.description ?? t.name, DESCRIBED)
+        }`,
       readOnly: t.annotations?.readOnlyHint === true,
       input: foreign(t.inputSchema) as typeof t.inputSchema,
     }
@@ -646,20 +671,23 @@ export let remoteCommands = (
     if ('error' in r) throw r.error
     return r.out
   }
-  // What each server the person reaches says to read before its tools (the
-  // protocol's `instructions`). One that cannot be reached says nothing; its
-  // tools say why where they are listed.
+  // Each server the person reaches, with what it says to read before its
+  // tools (the protocol's `instructions`). One that cannot be reached is not
+  // told of; its tools say why where they are listed.
   let told = async (): Promise<Told[]> =>
     (await Promise.all((await servers()).map(async (s) => {
       try {
-        let text = (await using(s, (c) => c.instructions()))?.trim()
-        return text
-          ? [{
-            label: s.label,
-            namespace: s.server.namespace!,
-            text: cut(text),
-          }]
-          : []
+        let text = (await using(s, (c) => c.instructions()))?.trim() ?? ''
+        return [{
+          label: s.label,
+          namespace: s.server.namespace!,
+          url: s.server.machine
+            ? new URL(s.server.url, MACHINE).pathname
+            : s.server.url,
+          ...s.server.machine ? { machine: s.server.machine } : {},
+          by: whose(s),
+          text: text && cut(text),
+        }]
       } catch (e) {
         if (!challenged(s, e) && !away(s, e)) host.report(e)
         return []
