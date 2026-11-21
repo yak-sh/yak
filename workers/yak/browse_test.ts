@@ -8,7 +8,7 @@ import {
   type Visit,
 } from '@yaks/platform/browser-visit'
 import { actions } from './browser/testing.ts'
-import { fresh, type Kernel, signIn } from './probe.ts'
+import { bearerFor, fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { ADMIN } from '@yaks/platform/bots'
@@ -151,9 +151,10 @@ test('the admin bot visits the directory without giving the browser an account s
   let bot = await signIn(k, ADMIN)
   let page = '/admin/people'
   let asked = { url: `https://${k.host}${page}` }
-  let headers = { cookie: bot.cookie }
+  let headers = { authorization: `Bearer ${await bearerFor(k, bot.cookie)}` }
   let door = '/api/browse/admin'
   equal((await browse(asked, { cookie: checks.cookie }, door)).status, 403)
+  equal((await browse(asked, { cookie: owner.cookie }, door)).status, 403)
   equal((await browse(manage, headers, door)).status, 403)
   equal((await browse(asked, headers, door)).status, 200)
   let [cookie] = visits.at(-1)!.cookies!

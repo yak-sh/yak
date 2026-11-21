@@ -79,7 +79,7 @@ let browse = (url: string, credential = 'session') =>
     body: JSON.stringify({ url }),
   })
 
-test('the private admin only forwards session-authenticated visits to the platform admin pages', async () => {
+test('the private admin forwards only visits to admin pages, using the private OAuth grant', async () => {
   let before = sent.length
   for (
     let denied of [
@@ -95,37 +95,9 @@ test('the private admin only forwards session-authenticated visits to the platfo
   equal(response.status, 200)
   equal(sent.at(-1)?.url, 'https://yaks.app/api/browse/admin')
   equal(await sent.at(-1)?.json(), { url: page })
-  equal(sent.at(-1)?.headers.get('cookie')?.includes(session), true)
+  equal(sent.at(-1)?.headers.get('cookie'), null)
+  equal(sent.at(-1)?.headers.get('authorization'), `Bearer ${bearer}`)
   equal(await response.json(), { bearer: '[redacted]', session: '[redacted]' })
-})
-
-test('a rejected private browser session is renewed inside the forwarder and retried once', async () => {
-  let calls: string[] = []
-  let handler = forward({
-    credential: () => Promise.resolve({ bearer, session }),
-    renewed: () => Promise.resolve(),
-    signIn: (rejected) => {
-      equal(rejected, session)
-      return Promise.resolve('fresh-session')
-    },
-    fetch: (_, init) => {
-      let cookie = new Headers(init?.headers).get('cookie') ?? ''
-      calls.push(cookie)
-      return Promise.resolve(
-        calls.length == 1
-          ? new Response(null, { status: 401 })
-          : Response.json({ cookie }),
-      )
-    },
-  })
-  let response = await handler(browse('https://yaks.app/admin'))
-  equal(calls, [
-    `yak_session=${session}; __Host-yak_session=${session}`,
-    'yak_session=fresh-session; __Host-yak_session=fresh-session',
-  ])
-  equal(await response.json(), {
-    cookie: 'yak_session=[redacted]; __Host-yak_session=[redacted]',
-  })
 })
 
 test('forwarding preserves built-in store calls without returning the bearer', async () => {

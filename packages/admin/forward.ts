@@ -26,7 +26,6 @@ type Credentials = { bearer: string; session?: string }
 export type Forwarding = {
   credential: () => Promise<Credentials>
   renewed: (session: string) => Promise<void>
-  signIn?: (rejected?: string) => Promise<string>
   fetch?: typeof fetch
 }
 
@@ -68,23 +67,18 @@ export let forward = (doors: Forwarding) => async (request: Request) => {
   if (browsing && !adminPage(browsePage(body!))) {
     return new Response('Choose an /admin page on yaks.app', { status: 403 })
   }
-  // Workers that predate scoped admin visits do not serve this route.
-  if (browsing) target.pathname = ADMIN_BROWSE
+  // The admin visit has its own route and uses the private OAuth grant.
+  if (browsing) {
+    target.pathname = ADMIN_BROWSE
+    mode = 'bearer'
+  }
   let credentials = await doors.credential()
   let secret = mode == 'session' ? credentials.session : credentials.bearer
-  if (!secret && browsing && doors.signIn) secret = await doors.signIn()
   if (!secret) {
     return new Response('The account has no website session', { status: 409 })
   }
-  let send = (secret: string) =>
-    sendTo(doors, request, target, mode, secret, body)
-  let response = await send(secret)
-  if (browsing && response.status == 401 && doors.signIn) {
-    await response.body?.cancel()
-    secret = await doors.signIn(secret)
-    response = await send(secret)
-  }
-  return relay(doors, response, credentials, secret)
+  let response = await sendTo(doors, request, target, mode, secret, body)
+  return relay(doors, response, credentials)
 }
 
 let browsePage = (body: ArrayBuffer): unknown => {
@@ -128,17 +122,16 @@ let relay = async (
   doors: Forwarding,
   response: Response,
   credentials: Credentials,
-  secret: string,
 ) => {
   let renewed = new RegExp(`(?:^|,\\s*)${COOKIE}=([^;,\\s]+)`).exec(
     response.headers.get('set-cookie') ?? '',
   )?.[1]
-  if (renewed && renewed != credentials.session && renewed != secret) {
+  if (renewed && renewed != credentials.session) {
     await doors.renewed(renewed)
   }
   let answer = new Headers(response.headers)
   for (let key of ['set-cookie', 'authorization', 'cookie']) answer.delete(key)
-  let secrets = [credentials.bearer, credentials.session, secret, renewed]
+  let secrets = [credentials.bearer, credentials.session, renewed]
     .filter((
       v,
     ): v is string => !!v)

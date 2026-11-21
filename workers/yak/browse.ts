@@ -4,8 +4,9 @@
 // on has none (T-1637). It answers what the browser visit renders: the
 // screenshots, the page's text, console, errors and status.
 //
-// The caller's session cookie authorizes the visit. Test accounts browse
-// with that cookie. The admin bot uses a short-lived directory credential.
+// Test accounts browse with their session cookie. The private admin door
+// accepts the admin bot's OAuth grant and issues a short-lived directory
+// credential for the browser.
 //
 // Only the fleet's test accounts and the platform's owners may ask: the
 // browser time is the platform's, spent checking the platform. Only pages on
@@ -21,11 +22,12 @@ import {
   onZone,
 } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
-import { directory } from './directory.ts'
+import { type Directory, directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { sessionAt } from './session.ts'
 import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
 import { opened, seal } from './lib/token.ts'
+import { adminWho } from './asking.ts'
 import { caught } from './defects.ts'
 import { system } from '@yaks/fp'
 import { CallError, refused } from '@yaks/tools/errors'
@@ -117,8 +119,27 @@ let pageAddress = (url: string) => {
   return (origin + path).slice(0, 250)
 }
 
-let visitOf = async (req: Request, env: Env, path: string) => {
-  let claims = await sessionAt(req, env)
+let adminCaller = async (req: Request, env: Env, dir: Directory) => {
+  let meta = await dir.space(dirPart.META.space)
+  if (!meta || !env.SESSION_SECRET) {
+    return json(
+      503,
+      'no_platform',
+      'admin visits require a configured platform',
+    )
+  }
+  let who = await adminWho(env, req, (person) => dir.role(meta, person))
+  if (
+    !who.person || who.role != 'owner' ||
+    who.person != await dir.personAt(ADMIN_BOT)
+  ) {
+    return json(403, 'admin_account', 'choose the platform admin bot')
+  }
+  return { person: who.person, token: null }
+}
+
+let sessionCaller = async (req: Request, env: Env, dir: Directory) => {
+  let claims = await sessionAt(req, env, null, dir)
   let token = sessionCookie(req, env)
   if (!claims || !token) {
     return json(
@@ -127,12 +148,7 @@ let visitOf = async (req: Request, env: Env, path: string) => {
       'sign in: this door takes a session cookie',
     )
   }
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let known = await dir.known(claims.person)
-  let adminBot = known?.email == ADMIN_BOT
-  if (path == ADMIN_PATH && !adminBot) {
-    return json(403, 'admin_account', 'choose the platform admin bot')
-  }
   let permitted = isTestAddress(known?.email ?? '')
   if (!permitted) {
     let meta = await dir.space(dirPart.META.space)
@@ -145,21 +161,34 @@ let visitOf = async (req: Request, env: Env, path: string) => {
       'the browser is for the platform’s test accounts and owners',
     )
   }
+  return {
+    person: claims.person,
+    token: known?.email == ADMIN_BOT ? null : token,
+  }
+}
+
+let visitOf = async (req: Request, env: Env, path: string) => {
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let caller = await (path == ADMIN_PATH ? adminCaller : sessionCaller)(
+    req,
+    env,
+    dir,
+  )
+  if (caller instanceof Response) return caller
+  let { person, token } = caller
   let asked = await req.json().catch(() => null) as Asked | null
   let url = typeof asked?.url == 'string' && /^https:/.test(asked.url) &&
     onZone(asked.url, env)
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
-  if (adminBot && !adminPage(url, env)) {
+  if (!token && !adminPage(url, env)) {
     return json(403, 'admin_page', `choose an ${ADMIN} page on ${apex(env)}`)
   }
   let visit = {
     url,
     view: { ...PHONE, ...asked.view },
-    cookies: adminBot
-      ? [await adminCookie(env, claims.person)]
-      : held(token, env),
+    cookies: token ? held(token, env) : [await adminCookie(env, person)],
     steps: Array.isArray(asked.steps) ? asked.steps : [],
     allow: Array.isArray(asked.allow)
       ? asked.allow.filter((p) => typeof p == 'string')
@@ -177,7 +206,7 @@ let visitOf = async (req: Request, env: Env, path: string) => {
       }-second wait limit. Shorten the waits or split the visit.`,
     )
   }
-  return { visit, person: claims.person }
+  return { visit, person }
 }
 
 export let fetch = async (

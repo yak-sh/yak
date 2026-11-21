@@ -105,13 +105,13 @@ environment. Rebuilding the service uses
 installing that bundle and restarting the system service.
 
 The forwarding door accepts only HTTPS platform control and built-in store
-paths, including browser visits to `/admin` on the apex. The directory visit
-receives its own short-lived cookie, scoped to `/admin`. The private service
-signs the admin bot in again if its browser session is missing or rejected. It
-never follows redirects, and strips credential headers and plaintext credential
-echoes from responses. Unix ownership isolates the record from the ordinary
-agent user; a user with unrestricted sudo can still read it. Removing that
-host-wide privilege is a separate administrative change.
+paths, including browser visits to `/admin` on the apex. The private service
+authorizes those visits with its OAuth grant. The remote browser receives a
+short-lived cookie scoped to `/admin`. The service never follows redirects and
+strips credential headers and plaintext credential echoes from responses. Unix
+ownership isolates the record from the ordinary agent user; a user with
+unrestricted sudo can still read it. Removing that host-wide privilege is a
+separate administrative change.
 
 ## Space comps
 
@@ -233,14 +233,15 @@ form.
 
 `browse` opens a page of yaks.app in Cloudflare's browser
 (workers/yak/browse.ts, through the yak-browser Worker), signed in with the
-selected account's website session, and takes the steps a person would: tap,
-type, press a key, swipe, open a phone's keyboard, clear a field, wait, take a
-screenshot. Each screenshot is written to `--to` (default `.scratch/browse`),
-the last as `end.png`; the answer says the status, the page's errors and its
-text. The window is a phone's, 390 × 844 with touch, unless named. `browse`
-defaults to `checks@bot.yak.sh`. Use `--as admin` for `/admin` pages. To view an
-app as a member, invite a test bot with the member's role, accept its
-invitation, and select its account with `--as`.
+selected test account's website session, or with a cookie scoped to the admin
+directory. It takes the steps a person would: tap, type, press a key, swipe,
+open a phone's keyboard, clear a field, wait, take a screenshot. Each screenshot
+is written to `--to` (default `.scratch/browse`), the last as `end.png`; the
+answer says the status, the page's errors and its text. The window is a phone's,
+390 × 844 with touch, unless named. `browse` defaults to `checks@bot.yak.sh`.
+Use `--as admin` for `/admin` pages. To view an app as a member, invite a test
+bot with the member's role, accept its invitation, and select its account with
+`--as`.
 
 ```sh
 yak admin browse /manage/checks/operator --as checks

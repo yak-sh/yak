@@ -268,9 +268,9 @@ slides it forward as it is used. A website act signs checks in again when the
 session is missing or expired. `admin browse` also retries a rejected session
 using the code mailed to this graph (packages/admin/account.ts). A browser
 visit defaults to checks. For `/admin` pages, run
-`yak admin browse /admin/spending --as admin`. The private forwarder keeps the
-admin bot's account session and the remote browser receives a short-lived
-cookie for `/admin` pages. To see a page as a member, invite a test bot in
+`yak admin browse /admin/spending --as admin`. The private forwarder uses the
+admin bot's OAuth grant. The remote browser receives a short-lived cookie for
+`/admin` pages. To see a page as a member, invite a test bot in
 the role you're checking, accept the invitation with `yak admin accept`, and
 pass that bot's account to `--as`. Visits can open pages on yaks.app's own
 hosts. For a page off yaks.app, thum.io renders a public URL
