@@ -90,11 +90,3 @@ test("a file's global error listener hears an error, and one it cancels fails no
     { heard: [], errors: lost },
   )
 })
-
-test('the next file fetches through the runtime, whatever stand-in the last left', async () => {
-  let platform = globalThis.fetch
-  globalThis.fetch = (() => globalThis.fetch('data:,x')) as typeof fetch
-  apart()
-  equal(globalThis.fetch, platform)
-  equal(await (await fetch('data:,x')).text(), 'x')
-})

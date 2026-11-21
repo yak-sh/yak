@@ -42,3 +42,22 @@ test('in-process endpoints share their caller transport and restore it after cle
   equal(sent, ['https://external.invalid/'])
   equal(host.fetch, transport)
 })
+
+test('two endpoints over one host never route through each other', async () => {
+  let sent: string[] = []
+  let transport: typeof fetch = (input) => {
+    sent.push(new Request(input).url)
+    return Promise.resolve(reply)
+  }
+  let host = { fetch: transport }
+  let first = endpoints(host), second = endpoints(host)
+  let a = first.open(() => reply)
+  let b = second.open(() => reply)
+  await a.stop()
+  await b.stop()
+  let c = first.open(() => reply)
+  await host.fetch(outside)
+  await c.stop()
+  equal(sent, ['https://external.invalid/'])
+  equal(host.fetch, transport)
+})
