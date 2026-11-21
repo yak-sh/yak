@@ -59,6 +59,7 @@ export type Use =
   | 'notice' // an email subscription's confirmation or unsubscribe link
   | 'tracker' // short-lived authorization for one independent tracker store
   | 'session' // the platform cookie (`sign`, `verify` below)
+  | 'admin-browse' // one browser visit to the platform's admin pages
   | 'browser' // a signed-out browser's instrument, never a person
   | 'instrument' // an MCP session's instrument, bound to its signed-in caller
   | 'visit' // an app's worker acting as its visitor (dispatch.ts)

@@ -36,7 +36,9 @@ import {
 import type { Swept } from '@yaks/platform/mover'
 import type { Asked } from './move.ts'
 import { COOKIE } from '@yaks/platform/cookie'
+import { BROWSE } from '@yaks/platform/routes'
 import { forwarded } from './forward.ts'
+export { BROWSE } from '@yaks/platform/routes'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => systemProcess.env.get('YAKS_ZONE') ?? PLATFORM
@@ -304,8 +306,6 @@ export type Browsed = {
   status: number
   duration: number
 }
-
-export let BROWSE = '/api/browse'
 
 // A page of ours opened in Cloudflare's browser signed in as this account
 // (workers/yak/browse.ts): the website session is the browser's credential,

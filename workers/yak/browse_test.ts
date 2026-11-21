@@ -11,6 +11,7 @@ import { actions } from './browser/testing.ts'
 import { fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
+import { ADMIN } from '@yaks/platform/bots'
 import type { Comp } from '@yaks/graph'
 
 let time = clock()
@@ -84,8 +85,12 @@ let checks = await signIn(
 )
 let stranger = await signIn(k)
 
-let browse = (body: unknown, headers: Record<string, string>) =>
-  k.at(k.host, '/api/browse', {
+let browse = (
+  body: unknown,
+  headers: Record<string, string>,
+  path = '/api/browse',
+) =>
+  k.at(k.host, path, {
     method: 'POST',
     headers: { origin: `https://${k.host}`, ...headers },
     body: JSON.stringify(body),
@@ -140,6 +145,29 @@ test('the platform owner may browse, and a window named is the one opened', asyn
     wait: 1000,
     touch: false,
   })
+})
+
+test('the admin bot visits the directory without giving the browser an account session', async () => {
+  let bot = await signIn(k, ADMIN)
+  let page = '/admin/people'
+  let asked = { url: `https://${k.host}${page}` }
+  let headers = { cookie: bot.cookie }
+  let door = '/api/browse/admin'
+  equal((await browse(asked, { cookie: checks.cookie }, door)).status, 403)
+  equal((await browse(manage, headers, door)).status, 403)
+  equal((await browse(asked, headers, door)).status, 200)
+  let [cookie] = visits.at(-1)!.cookies!
+  equal(visits.at(-1)!.cookies!.length, 1)
+  match(cookie, { path: '/admin', secure: true, httpOnly: true })
+  equal(cookie.domain, undefined)
+  let visit = { cookie: `${cookie.name}=${cookie.value}` }
+  equal((await k.at(k.host, page, { headers: visit })).status, 200)
+  let account = await k.at(k.host, '/manage', {
+    headers: { cookie: `${HOST_COOKIE}=${cookie.value}` },
+    redirect: 'manual',
+  })
+  equal(account.status, 303)
+  equal(new URL(account.headers.get('location')!, asked.url).pathname, '/login')
 })
 
 test('a page opens holding the permissions asked for, as a person who allowed them', async () => {

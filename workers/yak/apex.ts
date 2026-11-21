@@ -173,7 +173,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   if (path == '/api/spaces') return freeSpaces.fetch(req, env)
   // A page of ours in Cloudflare's browser, for the platform's test accounts
   // (browse.ts, T-1637), before the connector for the same reason as the fee's.
-  if (path == browse.PATH) return browse.fetch(req, env)
+  if (path == browse.PATH || path == browse.ADMIN_PATH) {
+    return browse.fetch(req, env, path)
+  }
   // TaskMaster's answers to support threads (support-door.ts), the owner's
   // door, before the connector for the same reason as the fee's.
   if (path == support.PATH) return support.fetch(req, env)

@@ -21,7 +21,7 @@ export type Account = {
   session?: string
   /** The website session for a browser-only door: the one held, or, for a
    * test account whose session is missing or lapsed, a fresh sign-in. */
-  signedIn?: () => Promise<string | undefined>
+  signedIn?: (rejected?: string) => Promise<string | undefined>
 }
 
 export let account = (
@@ -65,8 +65,10 @@ async (as?: string): Promise<Account> => {
   }
   let session = at.session
   if (session) renewing(keep)
-  let signedIn = async () => {
-    if (!isTestAddress(address) || live(session)) return session
+  let signedIn = async (rejected?: string) => {
+    if (!isTestAddress(address) || (session != rejected && live(session))) {
+      return session
+    }
     session = await signIn(host.graph, `https://${zone()}`, address)
     await keep(session)
     renewing(keep)

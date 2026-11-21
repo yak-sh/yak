@@ -1,4 +1,5 @@
 import { COOKIE } from '@yaks/platform/cookie'
+import { ADMIN_BROWSE, adminPage, BROWSE } from '@yaks/platform/routes'
 // Credential forwarding is a transport boundary: callers hold an address;
 // only the process forwarding to the platform holds the account's sign-in.
 export let FORWARDED = 'yak_admin_forward:'
@@ -25,6 +26,7 @@ type Credentials = { bearer: string; session?: string }
 export type Forwarding = {
   credential: () => Promise<Credentials>
   renewed: (session: string) => Promise<void>
+  signIn?: (rejected?: string) => Promise<string>
   fetch?: typeof fetch
 }
 
@@ -52,14 +54,55 @@ export let forward = (doors: Forwarding) => async (request: Request) => {
     return new Response('Choose a platform URL', { status: 400 })
   }
   let mode = request.headers.get('x-yak-credential')
-  if (!allowed(target) || !['bearer', 'session'].includes(mode ?? '')) {
+  let browsing = target.href == `https://yaks.app${BROWSE}`
+  if (
+    browsing
+      ? request.method != 'POST' || mode != 'session'
+      : !allowed(target) || !['bearer', 'session'].includes(mode ?? '')
+  ) {
     return new Response('Choose a platform control door', { status: 403 })
   }
+  let body = ['GET', 'HEAD'].includes(request.method)
+    ? undefined
+    : await request.arrayBuffer()
+  if (browsing && !adminPage(browsePage(body!))) {
+    return new Response('Choose an /admin page on yaks.app', { status: 403 })
+  }
+  // Workers that predate scoped admin visits do not serve this route.
+  if (browsing) target.pathname = ADMIN_BROWSE
   let credentials = await doors.credential()
   let secret = mode == 'session' ? credentials.session : credentials.bearer
+  if (!secret && browsing && doors.signIn) secret = await doors.signIn()
   if (!secret) {
     return new Response('The account has no website session', { status: 409 })
   }
+  let send = (secret: string) =>
+    sendTo(doors, request, target, mode, secret, body)
+  let response = await send(secret)
+  if (browsing && response.status == 401 && doors.signIn) {
+    await response.body?.cancel()
+    secret = await doors.signIn(secret)
+    response = await send(secret)
+  }
+  return relay(doors, response, credentials, secret)
+}
+
+let browsePage = (body: ArrayBuffer): unknown => {
+  try {
+    return JSON.parse(new TextDecoder().decode(body))?.url
+  } catch {
+    return null
+  }
+}
+
+let sendTo = (
+  doors: Forwarding,
+  request: Request,
+  target: URL,
+  mode: string | null,
+  secret: string,
+  body: ArrayBuffer | undefined,
+) => {
   let headers = new Headers(request.headers)
   for (let key of ['authorization', 'cookie', 'host', 'x-yak-credential']) {
     headers.delete(key)
@@ -73,23 +116,32 @@ export let forward = (doors: Forwarding) => async (request: Request) => {
       ? `${COOKIE}=${secret}; __Host-${COOKIE}=${secret}`
       : `Bearer ${secret}`,
   )
-  let response = await (doors.fetch ?? fetch)(target.href, {
+  return (doors.fetch ?? fetch)(target.href, {
     method: request.method,
     headers,
-    body: ['GET', 'HEAD'].includes(request.method)
-      ? undefined
-      : await request.arrayBuffer(),
+    body,
     redirect: 'manual',
   })
+}
+
+let relay = async (
+  doors: Forwarding,
+  response: Response,
+  credentials: Credentials,
+  secret: string,
+) => {
   let renewed = new RegExp(`(?:^|,\\s*)${COOKIE}=([^;,\\s]+)`).exec(
     response.headers.get('set-cookie') ?? '',
   )?.[1]
-  if (renewed && renewed != credentials.session) await doors.renewed(renewed)
+  if (renewed && renewed != credentials.session && renewed != secret) {
+    await doors.renewed(renewed)
+  }
   let answer = new Headers(response.headers)
   for (let key of ['set-cookie', 'authorization', 'cookie']) answer.delete(key)
-  let secrets = [credentials.bearer, credentials.session, renewed].filter((
-    v,
-  ): v is string => !!v)
+  let secrets = [credentials.bearer, credentials.session, secret, renewed]
+    .filter((
+      v,
+    ): v is string => !!v)
   let scrub = (text: string) =>
     secrets.reduce(
       (text, secret) => text.replaceAll(secret, '[redacted]'),

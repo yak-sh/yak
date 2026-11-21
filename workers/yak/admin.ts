@@ -85,6 +85,7 @@ import { column, conversationOf } from './operator-page.ts'
 import { ADMIN, managePath } from '@yaks/platform/routes'
 import { admin } from './tool.ts'
 import { adminWho } from './asking.ts'
+import { browsingAdmin } from './browse.ts'
 import { type Item, Sidebar } from './sidebar.ts'
 import { type Asked, type Counted, spendingBody } from './admin-spending.ts'
 import { reconciled, type Spending } from './operator-spending.ts'
@@ -1272,7 +1273,11 @@ export let answer = async (
   let asked = new URL(req.url)
   // Signed out: sent to sign in and handed back here. Signed in as anybody
   // but the platform's admin: nothing is here, the same as a wrong address.
-  let who = await staff(req, env, dir)
+  let visitor = ['GET', 'HEAD'].includes(req.method) &&
+    await browsingAdmin(req, env)
+  let who = visitor
+    ? await admin({ dir, person: visitor }) ? visitor : ''
+    : await staff(req, env, dir)
   if (who == null) {
     return new Response(null, {
       status: 302,

@@ -1,6 +1,10 @@
 // The admin forwarding service runs under its own Unix identity. Its only
 // private input is its state file; no credential enters an environment or argv.
 import { client, type Provider, type Tokens } from '@yaks/oauth'
+import { botSession } from '@yaks/connections/yaks-app'
+import type { Graph } from '@yaks/graph'
+import { ADMIN } from '@yaks/platform/bots'
+import { stringify } from '@yaks/query'
 import { queue } from '@yaks/secrets'
 import { report } from '@yaks/tracker/report'
 import { forward } from '../packages/admin/forward.ts'
@@ -37,6 +41,18 @@ let oauth = client(state.provider, {
     update: (_, fn) => update(fn),
   },
 })
+let mail: Pick<Graph, 'read'> = {
+  read: async (query) => {
+    let url = new URL('http://127.0.0.1:5173/query')
+    url.searchParams.set('q', stringify(query))
+    let response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error('The graph refused the admin sign-in mail read')
+    }
+    return await response.json()
+  },
+}
 let handler = forward({
   credential: async () => {
     let bearer = await oauth.token()
@@ -48,6 +64,17 @@ let handler = forward({
     update((tokens) => {
       tokens.website_session = session
       return Promise.resolve()
+    }),
+  signIn: (rejected) =>
+    update(async (tokens) => {
+      if (tokens.website_session && tokens.website_session != rejected) {
+        return tokens.website_session
+      }
+      return tokens.website_session = await botSession(
+        mail,
+        'https://yaks.app',
+        ADMIN,
+      )
     }),
 })
 Deno.serve({

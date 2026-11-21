@@ -305,6 +305,16 @@ export let OURS = '/_yaks'
 
 /** The platform admin's directory, on the platform's own host (admin.ts). */
 export let ADMIN = '/admin'
+export let BROWSE = '/api/browse'
+export let ADMIN_BROWSE = `${BROWSE}/admin`
+
+export let adminPage = (href: unknown, env: Host = {}): boolean => {
+  if (typeof href != 'string') return false
+  let url = URL.parse(href)
+  return !!url && url.origin == `https://${apex(env)}` &&
+    !url.username && !url.password &&
+    (url.pathname == ADMIN || url.pathname.startsWith(`${ADMIN}/`))
+}
 
 /** Where signing out is posted (identity.ts). */
 export let LOGOUT = '/logout'

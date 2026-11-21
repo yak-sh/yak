@@ -4,24 +4,28 @@
 // on has none (T-1637). It answers what the browser visit renders: the
 // screenshots, the page's text, console, errors and status.
 //
-// It is the browser's own credential that opens it, the session cookie, and
-// that same cookie is what the page is opened with, so a visit can do nothing
-// its caller could not do in a browser of their own. A bearer opens nothing
-// here, for the reason a standing link takes only a cookie (identity.ts): an
-// agent's API access never becomes a browser session.
+// The caller's session cookie authorizes the visit. Test accounts browse
+// with that cookie. The admin bot uses a short-lived directory credential.
 //
 // Only the fleet's test accounts and the platform's owners may ask: the
 // browser time is the platform's, spent checking the platform. Only pages on
 // our own zone are opened, the hosts the cookie belongs to.
-import { COOKIE } from '@yaks/platform/cookie'
+import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { apex } from '@yaks/platform/host'
-import { isTestAddress } from '@yaks/platform/bots'
-import { onZone } from '@yaks/platform/routes'
+import { ADMIN as ADMIN_BOT, isTestAddress } from '@yaks/platform/bots'
+import {
+  ADMIN,
+  ADMIN_BROWSE,
+  adminPage,
+  BROWSE,
+  onZone,
+} from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { sessionAt } from './session.ts'
 import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
+import { opened, seal } from './lib/token.ts'
 import { caught } from './defects.ts'
 import { system } from '@yaks/fp'
 import { CallError, refused } from '@yaks/tools/errors'
@@ -35,7 +39,8 @@ import {
 } from '@yaks/platform/browser-visit'
 import { seen, timedOut } from './browser.ts'
 
-export let PATH = '/api/browse'
+export let PATH = BROWSE
+export let ADMIN_PATH = ADMIN_BROWSE
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
@@ -73,13 +78,46 @@ let held = (token: string, env: Env): Cookie[] => [
   },
 ]
 
+let ADMIN_COOKIE = '__Secure-yak_admin_browse'
+type AdminVisit = { person: string; until: number }
+
+// The private forwarder authenticates the request. The remote browser only
+// gets a short-lived cookie for reading admin pages, even if a step leaves
+// the directory or follows a link into an app.
+let adminCookie = async (env: Env, person: string): Promise<Cookie> => ({
+  name: ADMIN_COOKIE,
+  value: await seal(
+    'admin-browse',
+    {
+      person,
+      until: Date.now() + 60_000,
+    } satisfies AdminVisit,
+    env.SESSION_SECRET!,
+  ),
+  url: `https://${apex(env)}${ADMIN}`,
+  path: ADMIN,
+  secure: true,
+  httpOnly: true,
+})
+
+export let browsingAdmin = async (req: Request, env: Env) => {
+  let token = cookieValue(req.headers.get('cookie'), ADMIN_COOKIE)
+  if (!token || !env.SESSION_SECRET) return null
+  let visit = await opened<AdminVisit>(
+    'admin-browse',
+    token,
+    env.SESSION_SECRET,
+  )
+  return visit && visit.until > Date.now() ? visit.person : null
+}
+
 let pageAddress = (url: string) => {
   let { origin, pathname } = new URL(url)
   let path = pathname.replace(/\/(?:~[^/]+|_preview\/[^/]+).*$/, '/<preview>')
   return (origin + path).slice(0, 250)
 }
 
-let visitOf = async (req: Request, env: Env) => {
+let visitOf = async (req: Request, env: Env, path: string) => {
   let claims = await sessionAt(req, env)
   let token = sessionCookie(req, env)
   if (!claims || !token) {
@@ -91,6 +129,10 @@ let visitOf = async (req: Request, env: Env) => {
   }
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let known = await dir.known(claims.person)
+  let adminBot = known?.email == ADMIN_BOT
+  if (path == ADMIN_PATH && !adminBot) {
+    return json(403, 'admin_account', 'choose the platform admin bot')
+  }
   let permitted = isTestAddress(known?.email ?? '')
   if (!permitted) {
     let meta = await dir.space(dirPart.META.space)
@@ -109,10 +151,15 @@ let visitOf = async (req: Request, env: Env) => {
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
+  if (adminBot && !adminPage(url, env)) {
+    return json(403, 'admin_page', `choose an ${ADMIN} page on ${apex(env)}`)
+  }
   let visit = {
     url,
     view: { ...PHONE, ...asked.view },
-    cookies: held(token, env),
+    cookies: adminBot
+      ? [await adminCookie(env, claims.person)]
+      : held(token, env),
     steps: Array.isArray(asked.steps) ? asked.steps : [],
     allow: Array.isArray(asked.allow)
       ? asked.allow.filter((p) => typeof p == 'string')
@@ -133,17 +180,21 @@ let visitOf = async (req: Request, env: Env) => {
   return { visit, person: claims.person }
 }
 
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
+export let fetch = async (
+  req: Request,
+  env: Env,
+  path = PATH,
+): Promise<Response> => {
   if (req.method != 'POST') {
     return json(405, 'method_not_allowed', 'post a visit')
   }
-  let where = { request: `POST ${PATH}` }
+  let where = { request: `POST ${path}` }
   try {
     let asked = await bounded(
       env.CLOCK ?? system,
       5_000,
       () => 'Reading and authorizing the browser visit',
-      () => visitOf(req, env),
+      () => visitOf(req, env, path),
     )
     if (asked instanceof Response) return asked
     let { visit, person } = asked

@@ -18,7 +18,7 @@ import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { type Account, account } from './account.ts'
-import { ADMIN } from '@yaks/platform/bots'
+import { ADMIN, isTestAddress } from '@yaks/platform/bots'
 import { budgetLines } from '@yaks/platform/budget'
 import { funnelLines } from '@yaks/platform/funnel'
 import { cameFrom, firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
@@ -156,8 +156,8 @@ let pushNote = (p: PushProgress) => {
 }
 
 // Browser-only acts cannot synthesize a cookie from an OAuth bearer.
-let website = async (at: Account): Promise<string> => {
-  let session = at.signedIn ? await at.signedIn() : at.session
+let website = async (at: Account, rejected?: string): Promise<string> => {
+  let session = at.signedIn ? await at.signedIn(rejected) : at.session
   if (!session) {
     throw new Refused(
       `${at.address} was signed in through a browser and has no website session. ` +
@@ -165,6 +165,18 @@ let website = async (at: Account): Promise<string> => {
     )
   }
   return session
+}
+
+let browserVisit = async (at: Account, asked: Browse) => {
+  let session = await website(at)
+  try {
+    return await browse(session, asked)
+  } catch (e) {
+    if (!(e instanceof CallError && e.code == 'unauthorized' && at.signedIn)) {
+      throw e
+    }
+    return await browse(await website(at, session), asked)
+  }
 }
 
 // A platform verb's exit status, as the call's outcome. An interrupt is an
@@ -364,7 +376,13 @@ export let runs = (
     // steps a person takes on it; its screenshots written beside the caller.
     admin_browse: verb(async (call) => {
       let a = argsOf(call)
-      let at = await acting(a)
+      let at = await account(host)(word(a, 'as') ?? 'checks@bot.yak.sh')
+      if (at.address != ADMIN && !isTestAddress(at.address)) {
+        throw new CallError(
+          'access',
+          'Choose a bot account for a browser visit',
+        )
+      }
       let page = String(a.url ?? '/')
       let url = page.startsWith('/') ? `https://${zone()}${page}` : page
       let steps = typeof a.steps == 'string' ? JSON.parse(a.steps) : a.steps
@@ -375,7 +393,7 @@ export let runs = (
       ) as Browse['view']
       let allow = word(a, 'allow')?.split(',').map((p) => p.trim())
         .filter(Boolean)
-      let got = await browse(await website(at), { url, view, steps, allow })
+      let got = await browserVisit(at, { url, view, steps, allow })
       let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
       await fs.mkdir(to, { recursive: true })
       let files: string[] = []

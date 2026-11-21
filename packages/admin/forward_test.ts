@@ -69,6 +69,65 @@ test('forwarding requires an explicit credential selector', async () => {
   equal((await handler(missing)).status, 403)
 })
 
+let browse = (url: string, credential = 'session') =>
+  new Request(request('https://yaks.app/api/browse').url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-yak-credential': credential,
+    },
+    body: JSON.stringify({ url }),
+  })
+
+test('the private admin only forwards session-authenticated visits to the platform admin pages', async () => {
+  let before = sent.length
+  for (
+    let denied of [
+      browse('https://checks.yaks.app/admin/spending'),
+      browse('https://yaks.app/manage/checks/operator'),
+      browse('https://yaks.app/admin/spending', 'bearer'),
+      request('https://yaks.app/api/browse', 'session'),
+    ]
+  ) equal((await handler(denied)).status, 403)
+  equal(sent.length, before)
+  let page = 'https://yaks.app/admin/spending'
+  let response = await handler(browse(page))
+  equal(response.status, 200)
+  equal(sent.at(-1)?.url, 'https://yaks.app/api/browse/admin')
+  equal(await sent.at(-1)?.json(), { url: page })
+  equal(sent.at(-1)?.headers.get('cookie')?.includes(session), true)
+  equal(await response.json(), { bearer: '[redacted]', session: '[redacted]' })
+})
+
+test('a rejected private browser session is renewed inside the forwarder and retried once', async () => {
+  let calls: string[] = []
+  let handler = forward({
+    credential: () => Promise.resolve({ bearer, session }),
+    renewed: () => Promise.resolve(),
+    signIn: (rejected) => {
+      equal(rejected, session)
+      return Promise.resolve('fresh-session')
+    },
+    fetch: (_, init) => {
+      let cookie = new Headers(init?.headers).get('cookie') ?? ''
+      calls.push(cookie)
+      return Promise.resolve(
+        calls.length == 1
+          ? new Response(null, { status: 401 })
+          : Response.json({ cookie }),
+      )
+    },
+  })
+  let response = await handler(browse('https://yaks.app/admin'))
+  equal(calls, [
+    `yak_session=${session}; __Host-yak_session=${session}`,
+    'yak_session=fresh-session; __Host-yak_session=fresh-session',
+  ])
+  equal(await response.json(), {
+    cookie: 'yak_session=[redacted]; __Host-yak_session=[redacted]',
+  })
+})
+
 test('forwarding preserves built-in store calls without returning the bearer', async () => {
   for (let door of ['query?q=.doc', 'vocab']) {
     let response = await handler(

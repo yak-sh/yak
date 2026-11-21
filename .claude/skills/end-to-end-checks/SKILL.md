@@ -263,13 +263,17 @@ the keyboard open. A draft is kept across visits, so clear the field first:
 ```
 
 The sign-in needs nothing from you. The checks connection on this box keeps a
-website session in its vault record beside its OAuth grant; the platform
-slides it forward as it is used, and once it is missing or has expired the
-next `admin browse`, `admin link` or other website act signs checks in again
-from the code mailed to this graph (packages/admin/account.ts). The door
-(workers/yak/browse.ts) takes only that session cookie, serves only the
-platform's `@bot.yak.sh` test accounts and its owners, and opens only
-yaks.app's own hosts. For a page off yaks.app, thum.io renders a public URL
+website session in its vault record beside its OAuth grant. The platform
+slides it forward as it is used. A website act signs checks in again when the
+session is missing or expired. `admin browse` also retries a rejected session
+using the code mailed to this graph (packages/admin/account.ts). A browser
+visit defaults to checks. For `/admin` pages, run
+`yak admin browse /admin/spending --as admin`. The private forwarder keeps the
+admin bot's account session and the remote browser receives a short-lived
+cookie for `/admin` pages. To see a page as a member, invite a test bot in
+the role you're checking, accept the invitation with `yak admin accept`, and
+pass that bot's account to `--as`. Visits can open pages on yaks.app's own
+hosts. For a page off yaks.app, thum.io renders a public URL
 (`https://image.thum.io/get/png/width/<w>/<url>`), but never narrower than
 500px.
 
