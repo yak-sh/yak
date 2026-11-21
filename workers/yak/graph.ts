@@ -1619,6 +1619,8 @@ export class Store extends Durable {
       depth: 3,
       max: 2,
       nudge: () => this.#owedEffects(),
+      // No request waits on the pool, so none counts its trips (hops.ts).
+      apart,
       report: (error, { handler }) =>
         defect(error, { request: `effect ${handler}`, store: name }),
     })

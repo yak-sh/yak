@@ -297,6 +297,11 @@ export type PoolOpts = {
    * finished and could not say so would run again. Without it the write is
    * made as any other. */
   free?: <T>(write: () => Promise<T>) => Promise<T>
+  /** Run the pool's work apart from whatever started it: a request's ambient
+   * context (a Worker's count of its round trips) does not reach the runs a
+   * write nudged. Every start of the pool goes through it. Without it the
+   * work runs where it was called. */
+  apart?: <T>(work: () => T) => T
 }
 
 /** A run this process claimed as it wrote it, to start after the commit. */
@@ -439,6 +444,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let me = opts.owner ?? crypto.randomUUID()
   let time = opts.clock ?? system
   let clock = () => time.now()
+  let apart = opts.apart ?? (<T>(work: () => T) => work())
   let hold = opts.lease ?? 60_000
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
@@ -1257,77 +1263,81 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       return after(tx.patch(rows), () => mine)
     },
-    start: (owed) => {
-      for (let run of owed) {
-        let cause = peek(graph!) ? parent(graph!, run) : undefined
-        start(graph!, run.eid, run.row, cause)
-        unlink(graph!, run)
-      }
-    },
+    start: (owed) =>
+      apart(() => {
+        for (let run of owed) {
+          let cause = peek(graph!) ? parent(graph!, run) : undefined
+          start(graph!, run.eid, run.row, cause)
+          unlink(graph!, run)
+        }
+      }),
     startup,
     // Without a signal, drain and return. Only a continuing worker needs a
     // signal; constructing an aborted one also constructs its unused error.
-    work: async (g, signal, options = Infinity) => {
-      let requested = typeof options == 'number' ? { passes: options } : options
-      let passes = requested.passes ?? Infinity
-      let until = requested.until ?? Infinity
-      graph = g
-      if (!signal || signal.aborted) {
-        if (
-          !opts.singleOwner &&
-          await working(g, { except: me, now: clock(), gone: opts.gone })
-        ) {
-          if (requested.startup) await startup(g)
+    work: (g, signal, options = Infinity) =>
+      apart(async () => {
+        let requested = typeof options == 'number'
+          ? { passes: options }
+          : options
+        let passes = requested.passes ?? Infinity
+        let until = requested.until ?? Infinity
+        graph = g
+        if (!signal || signal.aborted) {
+          if (
+            !opts.singleOwner &&
+            await working(g, { except: me, now: clock(), gone: opts.gone })
+          ) {
+            if (requested.startup) await startup(g)
+            return
+          }
+          if (requested.while?.() === false) return
+          let opening = await join(g, requested.startup, passes > 0)
+          for (
+            let n = 0;
+            n < passes && clock() < until && requested.while?.() !== false;
+            n++
+          ) {
+            let { started, more } = await pass(
+              g,
+              n ? page : page - opening.length,
+            )
+            if (!n && opening.length) started = [...opening, ...started]
+            if (!started.length && !more && !running.size) break
+            // A drain refills a slot as soon as its run ends, even while a
+            // slower run still holds another. A finite pass settles its batch
+            // and leaves newly owed work for the next wake.
+            let pending = passes == Infinity
+              ? [...started, ...[...running.values()].map((h) => h.run)]
+              : started
+            if (pending.length) {
+              let settled = passes == Infinity
+                ? Promise.race(pending)
+                : Promise.all(pending)
+              if (opts.singleOwner) await settled
+              else while (await still(settled, beat, time)) await renew(g)
+            }
+            // A turn for timers and I/O between passes, never after the last.
+            if (n + 1 < passes && clock() < until) await turn()
+          }
           return
         }
-        if (requested.while?.() === false) return
-        let opening = await join(g, requested.startup, passes > 0)
-        for (
-          let n = 0;
-          n < passes && clock() < until && requested.while?.() !== false;
-          n++
-        ) {
-          let { started, more } = await pass(
-            g,
-            n ? page : page - opening.length,
-          )
-          if (!n && opening.length) started = [...opening, ...started]
-          if (!started.length && !more && !running.size) break
-          // A drain refills a slot as soon as its run ends, even while a
-          // slower run still holds another. A finite pass settles its batch
-          // and leaves newly owed work for the next wake.
-          let pending = passes == Infinity
-            ? [...started, ...[...running.values()].map((h) => h.run)]
-            : started
-          if (pending.length) {
-            let settled = passes == Infinity
-              ? Promise.race(pending)
-              : Promise.all(pending)
-            if (opts.singleOwner) await settled
-            else while (await still(settled, beat, time)) await renew(g)
-          }
-          // A turn for timers and I/O between passes, never after the last.
-          if (n + 1 < passes && clock() < until) await turn()
+        // Leaving is the moment the signal aborts, not the end of the pass in
+        // flight: what this process commits from then on is the others'.
+        if (loop) return await loop.done
+        let done = (async () => {
+          let joining = join(g, requested.startup)
+          signal.addEventListener('abort', () => member = false, { once: true })
+          let opening = await joining
+          await stay(g, signal, page - opening.length)
+        })()
+        let worker = { done, signal }
+        loop = worker
+        try {
+          await done
+        } finally {
+          if (loop === worker) loop = undefined
         }
-        return
-      }
-      // Leaving is the moment the signal aborts, not the end of the pass in
-      // flight: what this process commits from then on is the others'.
-      if (loop) return await loop.done
-      let done = (async () => {
-        let joining = join(g, requested.startup)
-        signal.addEventListener('abort', () => member = false, { once: true })
-        let opening = await joining
-        await stay(g, signal, page - opening.length)
-      })()
-      let worker = { done, signal }
-      loop = worker
-      try {
-        await done
-      } finally {
-        if (loop === worker) loop = undefined
-      }
-    },
+      }),
     wake: () => nap?.abort(),
     idle,
     stop: () => {

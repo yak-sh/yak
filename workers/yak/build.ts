@@ -19,7 +19,7 @@ import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
-import { apart, reported, type Tally, tallying } from './lib/hops.ts'
+import { reported, type Tally, tallying } from './lib/hops.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -684,8 +684,8 @@ export class Builder extends Durable {
         // person's words reach the session they are for at once, within a
         // slice; the alarm is there for what this wake leaves. The work goes on
         // after the write answers, held by the object (`waitUntil`), once the
-        // Operator whose handlers do it is made, apart from the request that
-        // wrote: no request waits on it, so none counts its trips (hops.ts).
+        // Operator whose handlers do it is made. The pool runs apart from the
+        // request that wrote (operator-store.ts `apart`).
         let nudge = () => {
           this.#arming = this.clock.arm(Date.now())
           if (!this.#draining && Date.now() >= this.#until) {
@@ -694,11 +694,10 @@ export class Builder extends Durable {
           if (Date.now() >= this.#until) return
           let until = this.#until
           this.#ctx.waitUntil?.(
-            apart(() =>
-              this.#work().then(() =>
-                store.fx.work(store.g, undefined, { until })
-              )
-            ).catch((e) => caught(e, { request: 'operator effects' })),
+            this.#work().then(() =>
+              store.fx.work(store.g, undefined, { until })
+            )
+              .catch((e) => caught(e, { request: 'operator effects' })),
           )
         }
         let { operatorPost } = await import('./metered.ts')

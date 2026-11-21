@@ -35,6 +35,7 @@ import { WAKES, wakesMoved } from './wake-move.ts'
 import { TOLD } from './instructions-move.ts'
 import { LINES } from './line-move.ts'
 import { caught } from './defects.ts'
+import { apart } from './lib/hops.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { installed, type Meta, meta, printOf, sole } from '@yaks/sqlite'
@@ -332,6 +333,8 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
         max: 8,
         disabled,
         write: (bundles) => host.graph.apply(bundles, { trusted: true }),
+        // No request waits on the pool, so none counts its trips (hops.ts).
+        apart,
         ...bound.effects,
       }),
   })
