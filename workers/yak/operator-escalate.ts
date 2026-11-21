@@ -28,7 +28,9 @@ import type { Role, Space } from './directory.ts'
 import type { Request } from './operator-channels.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { rootAt, whoseOf } from './operator-root.ts'
-import { privateIn } from './operator-rooms.ts'
+import { chatRows, privateIn } from './operator-rooms.ts'
+import { PLATFORMS } from './chat.ts'
+import { managePath } from '@yaks/platform/routes'
 import {
   allows,
   holders,
@@ -145,6 +147,55 @@ let answerers = async (
 }
 
 /**
+ * Where the writer of conversation `from` spoke last from a chat account
+ * linked to nobody here, a message in that room for them alone with a link
+ * that links the account to them (manage.ts `linkFrom`): it opens on the
+ * platform's own confirm step, and once it is theirs, what they asked goes
+ * on as theirs (`linkedTo`). Sent the moment their identity is needed, so
+ * nobody has to go find a setting. The words for the model, or nothing.
+ */
+let verifying = async (
+  store: Store,
+  space: Space,
+  from: string,
+  home: string,
+  id: string,
+) => {
+  let [entry] = await store.g.read(
+    q`.entry.session=${from}&.intake.item&.order=-entry.seq&.limit=1&.fields=intake.item`,
+  )
+  let item = part<Comp | undefined>(entry, 'intake')?.item
+  let [said] = item ? await store.g.get([String(item)]) : []
+  let message = part<Comp | undefined>(said, 'chat_message')
+  let [account] = message?.author
+    ? await store.g.get([String(message.author)])
+    : []
+  let who = part<Comp | undefined>(account, 'chat_account')
+  let platform = PLATFORMS.get(String(message?.via ?? ''))
+  let [room] = message?.room ? await store.g.get([String(message.room)]) : []
+  if (!platform?.user || !who?.id || !message?.room) return ''
+  let link = new URL(managePath('profile'), home)
+  link.searchParams.set('link', platform.user)
+  link.searchParams.set('back', space.slug)
+  // A direct room is one person's already.
+  let to = part<Comp | undefined>(room, 'chat_room')?.server
+    ? String(who.id)
+    : undefined
+  await store.g.apply(
+    chatRows(platform.name, said!, {
+      eid: id,
+      text:
+        `To show it's you, link your ${platform.title} account to yaks.app: [Link my ${platform.title} account](${link.href}). It opens on ${platform.title}'s own confirm step, and then what you asked goes on as yours.`,
+      ...to ? { to } : {},
+    }),
+    { trusted: true },
+  )
+  return ` A link to link their ${platform.title} account to themselves was sent to them${
+    to ? ' privately in the room' : ''
+  }; once they do, what they asked comes back to their own conversation if their role allows it. Tell them in a line to tap it.`
+}
+
+/**
  * The `escalate` tool of a conversation with someone who is not a member of
  * the space: it raises what needs more than their guest's tools, on the
  * `escalated` channel, naming this conversation as the one it came `from`.
@@ -155,6 +206,7 @@ export let escalate = (
   store: Store,
   ctx: Pick<Ctx, 'dir'>,
   space: Space,
+  home = 'https://yaks.app',
 ): Tool => ({
   name: 'escalate',
   title: "Raise it with the space's people",
@@ -220,7 +272,14 @@ export let escalate = (
       }
       let address = await writerOf(store, ctx.dir, person, from)
       await Promise.all(to.map((p) => raise(p, { address })))
-      return JSON.stringify({ escalation: raised })
+      let verify = await verifying(
+        store,
+        space,
+        from,
+        home,
+        derivedEid(`${raised}|verify`),
+      )
+      return JSON.stringify({ escalation: raised }) + verify
     }
     let { row, request } = await named(store, String(args.reply))
     // Only a reply of this conversation's own, to what was sent for someone.

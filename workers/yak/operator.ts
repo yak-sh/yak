@@ -1,3 +1,4 @@
+import { url as hostUrl } from '@yaks/platform/host'
 import { chatPath } from '@yaks/platform/routes'
 import { line as q, whole as wholeLine } from '@yaks/query'
 import { inputSource } from './operator-provenance.ts'
@@ -169,8 +170,8 @@ import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
 import {
-  chatPrivate,
   chatRead,
+  chatRoomSet,
   chatSend,
   privateIn,
   roomsOf,
@@ -2384,7 +2385,7 @@ export let operating = (
       ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
       // An owner says which rooms are private (operator-route.ts).
       ...rooms.length && acts && ctx.role == 'owner'
-        ? [chatPrivate(store)]
+        ? [chatRoomSet(store)]
         : [],
       acts && wide.length
         ? chatSend(store, true)
@@ -2551,7 +2552,7 @@ export let operating = (
           ...ctx.pa ? [spacesTool(env, space, ctx.person, ctx.beyond)] : [],
         ]
         : [],
-      ...seated ? [] : [escalate(store, ctx, space)],
+      ...seated ? [] : [escalate(store, ctx, space, hostUrl(env))],
       ...chat,
       ...api(member),
       ...platform ? adminTools(env, whole) : [],

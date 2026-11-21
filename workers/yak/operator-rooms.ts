@@ -878,11 +878,11 @@ export let basics = async (
   }
 }
 
-/** The Operator's `chat_private`, an owner's: say whether a room it was
+/** The Operator's `chat_room_set`, an owner's: say whether a room it was
  * addressed in is private (`chat_room{private}`), where anyone whose role
  * allows an act may vouch for who asked for it (operator-route.ts). */
-export let chatPrivate = (store: Store): Tool => ({
-  name: 'chat_private',
+export let chatRoomSet = (store: Store): Tool => ({
+  name: 'chat_room_set',
   title: 'Mark a chat room private',
   step: { doing: 'Marking the room…', done: 'Marked the room' },
   description:

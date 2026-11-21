@@ -259,6 +259,20 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     to.hash = url.hash
     return 'first' in at ? redirect(to.href) : moved(req, to.href)
   }
+  // A link the Operator sent to link their chat account: straight on.
+  let link = url.searchParams.get('link')
+  if (
+    'account' in at && at.account == 'profile' && req.method == 'GET' && link
+  ) {
+    return await linkFrom(
+      req,
+      env,
+      dir,
+      { person, role: null, until, session },
+      link,
+      url.searchParams.get('back'),
+    )
+  }
   if ('account' in at) {
     return mine(
       req,
@@ -957,6 +971,41 @@ let mine = async (
 
 // What a page of the person's own posts: Profile's name and the space they
 // open first, and a new space.
+// Linking the person's own account on a chat platform (`link`, one of
+// `ownLinks`' integrations), the sign-in held under their own space: from
+// Profile's Connect Discord, or a link the Operator sent them in a room
+// (operator-escalate.ts `verifying`), which opens straight onto the
+// platform's own confirm step and comes back to `space`'s chat.
+let linkFrom = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  who: Owner,
+  linking: string,
+  space?: string | null,
+) => {
+  let { ownLinks } = await import('./chat.ts')
+  if (
+    !(await ownLinks(env, await dir.ownConnections(who.person))).some((l) =>
+      l.integration == linking
+    )
+  ) {
+    return nothingHere(env)
+  }
+  let { linkOwn } = await import('./connections.ts')
+  return await linkOwn(
+    req,
+    env,
+    who,
+    await dir.own(who.person),
+    linking,
+    hostUrl(
+      env,
+      space && SLUG.test(space) ? chatPath(space) : managePath('profile'),
+    ),
+  )
+}
+
 let account = async (
   req: Request,
   env: Env,
@@ -991,25 +1040,7 @@ let account = async (
   // they are in, the sign-in held under their own space.
   // Only a platform's own account integration is linked here.
   let linking = String(form.get('link') ?? '')
-  if (linking) {
-    let { ownLinks } = await import('./chat.ts')
-    if (
-      !(await ownLinks(env, await dir.ownConnections(who.person))).some((l) =>
-        l.integration == linking
-      )
-    ) {
-      return nothingHere(env)
-    }
-    let { linkOwn } = await import('./connections.ts')
-    return await linkOwn(
-      req,
-      env,
-      who,
-      await dir.own(who.person),
-      linking,
-      hostUrl(env, managePath('profile')),
-    )
-  }
+  if (linking) return await linkFrom(req, env, dir, who, linking)
   if (form.has('session')) {
     let id = String(form.get('session'))
     if (id == 'all') {

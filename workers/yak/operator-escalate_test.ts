@@ -520,3 +520,57 @@ test('a guest who links their account to a member is served within their role, w
     ),
   )
 })
+
+test('a guest speaking from a chat account linked to nobody is sent, privately in the room, a link that links it in one tap', async () => {
+  let guest = crypto.randomUUID(), session = rootOf(eid, guest)
+  let room = crypto.randomUUID(), item = crypto.randomUUID()
+  let account = crypto.randomUUID()
+  await store.g.apply([
+    {
+      entity: { eid: session },
+      session: {},
+      operator_session: { space: eid, person: guest, channel: 'discord' },
+    },
+    {
+      entity: { eid: room },
+      chat_room: { via: 'discord', id: 'r1', server: 's1' },
+    },
+    {
+      entity: { eid: account },
+      chat_account: { via: 'discord', id: 'matt-1', name: 'hittingkeys' },
+    },
+    {
+      entity: { eid: item },
+      chat_message: {
+        via: 'discord',
+        room,
+        connection: 'c1',
+        message_id: 'm9',
+        author: account,
+      },
+      doc: { body: 'make the guide an app' },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session, seq: 1 },
+      intake: { item },
+    },
+  ], { trusted: true })
+  let ctx = await operatorContext(env, held, space)
+  let said = String(
+    await escalate(store, ctx, space, 'https://yaks.example').run(
+      { say: 'hittingkeys wants the illustrated guide made an app.' },
+      { session, call: { entity: { eid: crypto.randomUUID() } }, entries: [] },
+    ),
+  )
+  assert(said.includes('Tell them in a line to tap it'))
+  let [sent] = await store.g.read(q`.chat_private.to=matt-1&*`)
+  let body = String((sent.doc as { body: string }).body)
+  assert(
+    body.includes(
+      'https://yaks.example/manage/account/profile?link=discord-account&back=jeff',
+    ),
+    body,
+  )
+  equal((sent.deliver as { to: string }).to, room)
+})
