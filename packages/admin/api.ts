@@ -553,27 +553,6 @@ export let MOVE = '/api/move'
 export let storesNow = (session: string): Promise<Swept[]> =>
   said(sent(apex(MOVE), session))
 
-// T-2221, one bounded administrative page at a time.
-export let jobStores = (session: string) =>
-  said<{ eid: string; slug: string }[]>(
-    sent(apex('/api/operator-copy'), session),
-  )
-
-export let jobPage = (
-  session: string,
-  target: { store: string } | { operator_jobs: string },
-  page: object,
-) =>
-  sent(
-    apex(`${MOVE}?${new URLSearchParams({ ...target, jobs: '1' })}`),
-    session,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(page),
-    },
-  )
-
 export let moveIn = (
   session: string,
   store: string,

@@ -3926,9 +3926,6 @@ importers:
       '@yaks/session':
         specifier: 0.2.33
         version: link:../session
-      '@yaks/sql':
-        specifier: 0.2.30
-        version: link:../sql
       '@yaks/sync':
         specifier: 0.2.24
         version: link:../sync

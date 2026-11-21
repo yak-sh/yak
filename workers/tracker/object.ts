@@ -1,7 +1,6 @@
 // One Durable Object is one tracker graph. Boot is retried on each wake; a
 // failed installation never leaves a permanently rejected constructor promise.
 
-import { finishedJobs, JOBS } from '../../packages/platform/finished-jobs.ts'
 import {
   driver,
   Durable,
@@ -721,15 +720,6 @@ export class Tracker extends Durable {
           return json({ error: 'platform only' }, 403)
         }
         return json(this.traceBudget())
-      }
-      if (new URL(request.url).pathname == JOBS && request.method == 'POST') {
-        if (!access.admin) return json({ error: 'platform only' }, 403)
-        let page = await request.json()
-        let tracker = await this.boot()
-        return json({
-          ...await finishedJobs(this.#sql(), tracker.graph.storage, page),
-          bytes: this.ctx.storage.sql.databaseSize,
-        })
       }
       let serve = async () => {
         let answer = await (await this.open()).serve!(request)
