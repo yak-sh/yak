@@ -452,9 +452,9 @@ export let reclaim = (
   }
 }
 
-// The first of `daily` that is due, done and put off a day; one that throws
-// is put off an hour.
-let upkeep = (
+/** Do the first of `daily` that is due, and put it off a day; one that throws
+ * is put off an hour. Undefined when none is due. */
+export let upkeep = (
   driver: Driver,
   daily: Daily[],
   now: number,

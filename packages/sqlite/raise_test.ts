@@ -200,6 +200,30 @@ test('a table a first write makes is owed its statistics once it holds rows', ()
   equal([analyzed('tag'), analyzed('doc')], [true, true])
 })
 
+// A Durable Object whose schema stands never installs again, so a deploy
+// that changes how statistics are decided reaches it only through its alarm's
+// analysis, which decides again once a day (bug b5285b5d).
+test('a store that never installs again decides its statistics once a day', () => {
+  let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
+  let s = made(d)
+  s.tx((tx) =>
+    tx.patch(['a', 'b'].map((eid) => ({ entity: { eid }, tag: { name: eid } })))
+  )
+  while (s.analyze(1));
+  // A statistic of one row, as an analysis from before this rule left it.
+  d.query({
+    t: 'update',
+    table: 'sqlite_stat1',
+    set: { stat: lit('1') },
+    where: eq(col('tbl'), lit('tag')),
+  })
+  meta(d).del('daily:statistics')
+  let stat = () => scan(d, 'sqlite_stat1', by({ tbl: 'tag' }), ['stat'])
+  s = storage(d, vocab, { derived, over: () => over, schemaReady: () => true })
+  while (s.analyze(1));
+  equal(stat(), [{ stat: '2 1' }])
+})
+
 test('a look at the raised tables the storage refused is taken again', async () => {
   let d = mem(), s = made(d), refusing = false
   let query = d.query

@@ -125,7 +125,15 @@ import {
   pendingShapes,
 } from './archetype.ts'
 import { componentTables, objects, shape, sole } from './physical.ts'
-import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
+import {
+  analyze,
+  build,
+  forgo,
+  reshape,
+  type Sizes,
+  statistics,
+  upkeep as daily,
+} from './owe.ts'
 import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import {
@@ -416,7 +424,11 @@ export type Store = {
    * {@link install} owes (./ddl.ts `analyzed`), each in its own unit, and
    * answer how many stay owed: a full-analysis engine's install decides what
    * is owed and leaves the reading to whoever calls this, off the request
-   * that installed. Nothing is ever owed on any other driver. */
+   * that installed. The decision is also taken again here once a day
+   * (./owe.ts `statistics`), since an install whose schema stands decides
+   * nothing: a code deploy that changes how statistics are decided reaches
+   * a Durable Object only this way (bug b5285b5d). Nothing is ever owed on
+   * any other driver. */
   analyze: (tables?: number) => number
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
@@ -1551,6 +1563,7 @@ export let storage = (
       return unit(driver, () => raising(comps))
     },
     analyze: (tables = Infinity) => {
+      if (driver.statistics) daily(driver, [statistics], Date.now())
       let left = installation(driver)?.statistics?.owed?.length ?? 0
       for (let n = 0; n < tables && left; n++) left = analyze(driver) ?? 0
       return left
