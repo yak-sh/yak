@@ -77,6 +77,9 @@ export type Adapter = {
   /** the CLI whose sign-in it runs with, which names the account the plan
    * limits it reports are of (@yaks/session `home`) */
   account?: Home['runner']
+  /** it signs in only with an offered account, never the box's default
+   * login, which is the owner's own: with none offered, nothing starts */
+  offeredOnly?: boolean
 }
 
 let servers = (j: Job) => Object.entries(j.mcp ?? {})
@@ -183,6 +186,7 @@ export let claude: Adapter = {
   // that waits on its helpers lives until they report.
   env: { CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: '0' },
   account: 'claude',
+  offeredOnly: true,
 }
 
 // A TOML basic string, which is how `codex -c` reads a value: JSON's string

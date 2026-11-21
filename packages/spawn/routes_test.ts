@@ -50,14 +50,18 @@ let vocab = loadVocab(
   [kernelKeywords, idKeywords, nameKeywords, edgeKeywords],
 )
 
-let PROVIDER = identityEid('provider', ['claude'])
 let MODEL = identityEid('model', ['opus'])
 let PERSONA = crypto.randomUUID(), STANDING = crypto.randomUUID()
 
 // A host whose door says every request is `actor`, as a tunnel's says the
 // persona through the session standing for its conversation; or says nobody.
-let hosting = async (first: Actor | null, offered = true) => {
+let hosting = async (
+  first: Actor | null,
+  offered = true,
+  cli = 'claude',
+) => {
   let actor = first
+  let PROVIDER = identityEid('provider', [cli])
   let g: Graph = graph({
     storage: ram(vocab, { number: true }),
     vocab,
@@ -66,7 +70,7 @@ let hosting = async (first: Actor | null, offered = true) => {
   await g.apply([
     {
       entity: { eid: PROVIDER },
-      provider: { name: 'claude', transport: 'process' },
+      provider: { name: cli, transport: 'process' },
     },
     {
       entity: { eid: MODEL },
@@ -123,7 +127,7 @@ test('a brief becomes a task and a run on it, written as the tunnel’s caller',
   equal(comp(task, 'claim').session, spawned.session)
   equal(comp(session, 'spawned').parent, STANDING)
   equal(comp(session, 'created').by, PERSONA)
-  equal(comp(first, 'using').provider, PROVIDER)
+  equal(comp(first, 'using').provider, identityEid('provider', ['claude']))
   equal(String(comp(first, 'content').body).includes('Fix the parser.'), true)
   equal(spawned.names.task.startsWith('T-'), true)
   equal(spawned.machine, 'workbench')
@@ -173,4 +177,15 @@ test('a spawn with no account offered says so and starts nothing', async () => {
     true,
   )
   equal(await g.read(line`.session.door=spawn&.fields=entity.eid`), [])
+})
+
+test('a codex spawn signs in with its one login when none is offered', async () => {
+  let { g, ask } = await hosting({ by: PERSONA, via: STANDING }, false, 'codex')
+  let r = await ask({ brief: 'Go.' })
+  let { session } = await r.json()
+  let [first] = await g.read(
+    line`.entry.session=${session}&.using&.fields=using`,
+  )
+  equal(r.status, 200)
+  equal(comp(first, 'using').provider, identityEid('provider', ['codex']))
 })

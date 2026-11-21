@@ -775,12 +775,11 @@ export let start = async (
   let adapter = adapterOf(job, o)
   if (!adapter) return null
   // A run signs in with the account its request records, else is given an
-  // offered one. A CLI that keeps accounts runs on an offered one or not at
-  // all: the box's default login is the owner's own, and no run signs in
-  // with it.
+  // offered one. A CLI that runs only on offered accounts (`offeredOnly`)
+  // never signs in with the box's default login, the owner's own.
   let account = await accountFor(g, adapter, job)
   if (account) job = { ...job, account }
-  if (adapter.account && !job.account) {
+  if (adapter.offeredOnly && !job.account) {
     throw new Error(
       `no ${adapter.account} account is offered to runs, so ${session} ` +
         'starts nothing',

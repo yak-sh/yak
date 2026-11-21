@@ -316,10 +316,10 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let account = args.account == null
         ? undefined
         : await named(graph, str(args.account), cli)
-      // A CLI that keeps accounts runs on one offered to it, never on the
+      // A CLI that runs only on an offered account never falls back to the
       // box's default login: with none offered, nothing starts.
       if (
-        !account && adapters[cli]?.account &&
+        !account && adapters[cli]?.offeredOnly &&
         !(await offeredTo(graph, cli)).length
       ) {
         throw new CallError(
