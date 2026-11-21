@@ -56,6 +56,11 @@ env.MAIL = {
   },
 } satisfies Binding
 
+// The id the letter to Dr Alvarez went out with; Jeff's alert of the tap it
+// waited for went out first.
+let asked1 = () =>
+  `sent-${letters.findIndex((l) => /alvarez/i.test(String(l.to))) + 1}`
+
 let asked: Request[] = []
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]
 let call = (name: string, args: unknown): Item[] => [{
@@ -111,11 +116,13 @@ await receive(
 )
 await service.drain()
 // Mail to someone new waits for the person's tap.
-let waited = letters.length
+let waited = letters.filter((l) => l.to != 'jeff@example.com').length
 await service.approve()
 await service.drain()
-let [sent] = letters
-let [kept] = await store.g.read('.operator_letter&*')
+let sent = letters.find((l) => /alvarez/i.test(String(l.to)))!
+let SENT = asked1()
+let kept = (await store.g.read('.operator_letter&*'))
+  .find((l) => /alvarez/i.test(String((l.mail as { to?: string }).to)))!
 let [fork] = await store.g.read(line`.spawned.parent=${rootOf(eid, person)}`)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
@@ -151,7 +158,7 @@ let answer = (
   }
 }
 let request = await arrived(
-  await reading(answer('alvarez-1', 'sent-1'), env),
+  await reading(answer('alvarez-1', SENT), env),
   env,
 )
 await service.drain()
@@ -194,7 +201,7 @@ test("a fork's letter to someone new waits for the person's tap, then goes from 
     to: 'alvarez@clinic.example',
     cc: 'jeff@example.com',
     at: (kept.mail as { at: string }).at,
-    message_id: 'sent-1',
+    message_id: SENT,
   })
   assertEquals((kept.operator_letter as { person: string }).person, person)
   assertStringIncludes(ofFork.html, 'Emailed Dr Alvarez')
@@ -223,14 +230,15 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   )
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
-  // The letter, its reply, the answer, and Jeff's alert of the reply.
+  // Jeff's alert of the tap the letter waited for, the letter, its reply,
+  // the answer, and his alert of the reply.
   let alert = letters.find((l) =>
     l.to == 'jeff@example.com' &&
     l.subject == 'alvarez@clinic.example replied to the letter you sent them'
   )
   assert(alert)
   assertStringIncludes(alert.text!, 'Tuesday at 3 works for us.')
-  assertEquals(meter, 4)
+  assertEquals(meter, 5)
 })
 
 test('a letter answering the reply threads on it and keeps its subject', () => {
@@ -252,29 +260,29 @@ for (
       undefined,
       'alvarez@clinic.example',
       false,
-      'sent-1',
+      SENT,
     ],
-    ['DKIM without DMARC', false, 'alvarez@clinic.example', false, 'sent-1'],
+    ['DKIM without DMARC', false, 'alvarez@clinic.example', false, SENT],
     [
       'another authenticated address',
       true,
       'outsider@example.com',
       false,
-      'sent-1',
+      SENT,
     ],
     [
       'an unauthenticated machine',
       false,
       'alvarez@clinic.example',
       true,
-      'sent-1',
+      SENT,
     ],
     [
       'a machine at another address',
       true,
       'outsider@example.com',
       true,
-      'sent-1',
+      SENT,
     ],
     [
       'a newer letter to another recipient',
@@ -286,13 +294,13 @@ for (
   ] as const
 ) {
   let mail = {
-    ...await reading(answer(crypto.randomUUID(), 'sent-1'), env),
+    ...await reading(answer(crypto.randomUUID(), SENT), env),
     vouched,
   }
   let headers = new Headers({
     From: from,
     'In-Reply-To': `<${thread}>`,
-    References: '<sent-1>',
+    References: `<${SENT}>`,
     ...(bot ? { 'Auto-Submitted': 'auto-replied' } : {}),
   })
   mail.headers = headers
@@ -325,7 +333,7 @@ test('the Operator intake refuses a reply from another letter recipient before r
     eid,
     '/operator/replied',
     {
-      thread: ['sent-1'],
+      thread: [SENT],
       request: { address: 'outsider@example.com' },
       say: 'Forged words',
     },
@@ -341,11 +349,11 @@ test('the Operator intake refuses a reply from another letter recipient before r
 })
 
 let autoReply = {
-  ...await reading(answer('alvarez-auto', 'sent-1'), env),
+  ...await reading(answer('alvarez-auto', SENT), env),
   text: 'The clinic is closed this afternoon.',
   headers: new Headers({
     From: 'alvarez@clinic.example',
-    'In-Reply-To': '<sent-1>',
+    'In-Reply-To': `<${SENT}>`,
     'Auto-Submitted': 'auto-replied',
   }),
 }

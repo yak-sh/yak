@@ -57,6 +57,11 @@ env.MAIL = {
   },
 } satisfies Binding
 
+// The id the letter to Dr Alvarez went out with; Jeff's alert of the tap it
+// waited for went out first.
+let asked1 = () =>
+  `sent-${letters.findIndex((l) => /alvarez/i.test(String(l.to))) + 1}`
+
 let PRIVATE = 'my dentist is Dr Okafor'
 let asked: Request[] = []
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]
@@ -166,7 +171,7 @@ let answer = (id: string, answers: string): Inbound => {
   }
 }
 let reached = await arrived(
-  await reading(answer('alvarez-1', 'sent-1'), env),
+  await reading(answer('alvarez-1', asked1()), env),
   env,
 )
 await service.drain()
