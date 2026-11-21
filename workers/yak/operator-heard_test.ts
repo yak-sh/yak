@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import type { Item } from '@yaks/model'
 import type { Tool } from '@yaks/session'
 import { platform } from './directory-rows-probe.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 
 // A member's own turn reads a letter a stranger wrote, through a tool that
@@ -40,10 +40,7 @@ let call = (name: string): Item[] => [{
 let offered: string[][] = []
 let service = operatorService(env, held, {
   ...operatorModel((req) => {
-    offered.push((req.tools ?? []).flatMap((t) => [
-      t.name,
-      ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
-    ]))
+    offered.push(callable(req))
     let last = req.items.at(-1)
     let items: Item[] = last?.kind == 'user' && /letter/.test(last.text)
       ? call('letter_read')

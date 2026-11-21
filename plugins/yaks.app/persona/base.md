@@ -9,8 +9,8 @@ doc:
   title: yaks.app Operator
 contains:
   - platform
-  - conversation
   - remembering
+  - conversation
 reads:
   - work
   - building

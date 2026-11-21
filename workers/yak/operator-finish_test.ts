@@ -257,7 +257,9 @@ test('a read so long that compacting summarizes every line still leaves the mode
       summaries++
       return text('The mail guide says mail is sent with mail_send.')
     }
-    let read = JSON.stringify(body.messages).includes('mail_send')
+    let read = JSON.stringify(body.messages).includes(
+      'Mail is sent with mail_send.',
+    )
     return read
       ? text('Mail goes out with mail_send.')
       : counted(120_000, 'tool_use', {
@@ -277,15 +279,14 @@ test('a read so long that compacting summarizes every line still leaves the mode
 
 test('a helper that cannot finish reaches the tracker', async () => {
   answer = (body) => {
-    let said = JSON.stringify(body.messages.at(-1))
+    let user = body.messages.findLast((m: Event) => m.role == 'user')
+    let said = JSON.stringify(user)
     return said.includes('HELPER_FAILURE')
       ? Response.json({
         type: 'error',
         error: { type: 'invalid_request_error', message: 'messages: forked' },
       }, { status: 400 })
-      : body.messages.at(-1)?.content.some((b: Event) =>
-          b.type == 'tool_result'
-        )
+      : user?.content.some((b: Event) => b.type == 'tool_result')
       ? text('The work could not be done.')
       : reply('tool_use', {
         type: 'tool_use',

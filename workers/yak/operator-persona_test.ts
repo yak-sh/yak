@@ -104,8 +104,8 @@ test('the base comes first, then the space persona worn on it, then where it is'
   assertEquals(parts(first), [
     'yaks.app Operator',
     'yaks.app',
-    'Your conversations, and the work they fork',
     'What you have done, and finding it again',
+    'Your conversations, and the work they fork',
     space.operator,
     'Who you are',
   ])

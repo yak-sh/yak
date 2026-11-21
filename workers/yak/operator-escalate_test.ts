@@ -6,7 +6,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { receive } from './operator-channels.ts'
 import {
@@ -239,15 +239,8 @@ test("the person's side acts with the person's permissions: it writes back on th
   assertEquals(threaded.cc, 'jeff@example.com')
 })
 
-// Whether a request offered a tool, or named it in tool_load's list.
-let offered = (r: Request) =>
-  (r.tools ?? []).flatMap((t) => [
-    t.name,
-    ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
-  ])
-
 test("the writer's side is a helper with a guest's tools, which raises the rest", () => {
-  let names = offered(hers[0])
+  let names = callable(hers[0])
   for (let kept of ['escalate', 'feedback']) {
     assertEquals(names.includes(kept), true, kept)
   }
@@ -257,7 +250,7 @@ test("the writer's side is a helper with a guest's tools, which raises the rest"
 })
 
 test("the person's side is the Operator's own work, with the person's tools", () => {
-  let names = offered(raisedAsks[0])
+  let names = callable(raisedAsks[0])
   for (
     let kept of ['escalation_answer', 'mail_send', 'notification_send', 'fork']
   ) {
@@ -375,7 +368,7 @@ test("an odd request is looked into by a helper with a guest's tools, whose repo
   let looked = asked.find((r) =>
     /Look into a request reported/.test(turn(r).words)
   )!
-  let names = offered(looked)
+  let names = callable(looked)
   assertEquals(names.includes('feedback'), true)
   for (let door of ['mail_send', 'graph_apply', 'fork', 'odd_report']) {
     assertEquals(names.includes(door), false, door)

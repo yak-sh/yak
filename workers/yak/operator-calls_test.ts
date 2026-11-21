@@ -1116,7 +1116,9 @@ test("a call whose voice spoke after the caller's last words asks the Operator w
   await note('Okay.')
   await note('The request is still in progress, so I can’t', { said: true })
   await drain(store)
-  let said = conversation(asked[0]).flatMap((m) =>
+  let said = conversation({ ...asked[0], turnContext: undefined }).flatMap((
+    m,
+  ) =>
     m.content.flatMap((c) =>
       c.type == 'text'
         ? [

@@ -6,7 +6,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Item } from '@yaks/model'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
-import { operatorModel, operatorService } from './operator-testing.ts'
+import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { line } from '@yaks/query'
@@ -60,10 +60,7 @@ let service = operatorService(
   { person: ada, role: 'owner', space: eid },
   operatorModel((req) => {
     asked.push(JSON.stringify(req.items))
-    tooled.push((req.tools ?? []).flatMap((t) => [
-      t.name,
-      ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
-    ]))
+    tooled.push(callable(req))
     if (failing) {
       failing = false
       return Promise.reject(new Error('provider: 529 overloaded'))
