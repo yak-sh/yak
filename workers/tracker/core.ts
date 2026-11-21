@@ -250,6 +250,13 @@ export let store = (storage: Storage, config: Config) => {
         limit(Math.min(Math.max(count, 1), 100)),
       ),
     )
+  // The effect runs `of` names, settled as effect_retry or effect_drop
+  // settles them in a box graph. How many it wrote.
+  let rewrite = async (act: 'retry' | 'drop', of: string) => {
+    let bundles = await settling(g, vocab, act, of)
+    if (bundles.length) await g.apply(bundles, { trusted: true })
+    return bundles.length
+  }
   // What a mark says beside the bug: a resolution's explanation, an archival's
   // reason, or the task a fixer took it for. A reopening says nothing: it takes
   // a resolution back.
@@ -419,11 +426,10 @@ export let store = (storage: Storage, config: Config) => {
     // Failed runs `of` names (a handler, or one run's id) back to pending with
     // a fresh allowance, once their cause is fixed: the write @yaks/effects'
     // effect_retry applies, for the pool's next pass. How many it put back.
-    retry: async (of: string): Promise<number> => {
-      let bundles = await settling(g, vocab, 'retry', of)
-      if (bundles.length) await g.apply(bundles, { trusted: true })
-      return bundles.length
-    },
+    retry: (of: string) => rewrite('retry', of),
+    // Runs no one owes any more deleted: failed ones, and pending ones whose
+    // handler the tracker no longer declares (effect_drop's write). How many.
+    drop: (of: string) => rewrite('drop', of),
   }
 }
 export type TrackerStore = ReturnType<typeof store>

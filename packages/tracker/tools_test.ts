@@ -671,6 +671,28 @@ test('tracker_retry puts the platform tracker’s failed runs back to pending', 
   })
   equal(await rerun.box.read('.effect'), [])
 })
+// A run a release stopped declaring sits pending; the drop door deletes it.
+let orphan = '00000000-0000-4000-8000-0000000000f7'
+await rerun.worker.apply([{
+  entity: { eid: orphan },
+  effect: { handler: 'error_trim', target: ids[0], state: 'pending' },
+}], { trusted: true })
+let dropAnswer = await rerun.call('tracker_drop', { of: 'error_trim' })
+test('tracker_drop deletes the platform tracker’s runs no handler owes', async () => {
+  equal(valueIn(dropAnswer), {
+    source: 'yaks.app',
+    of: 'error_trim',
+    dropped: 1,
+  })
+  equal(await rerun.worker.get([orphan], ['effect']), [{
+    entity: { eid: orphan },
+    tombstone: {},
+  }])
+  await throws(
+    () => rerun.call('tracker_drop', { of: 'error_trim' }),
+    'names no effect run to drop in the platform tracker',
+  )
+})
 test('tracker_retry refuses a name with no failed run, by handler or id', async () => {
   for (let  of of['bug_settle', run, 'error_frames']) {
     await throws(

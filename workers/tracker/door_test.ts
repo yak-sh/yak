@@ -457,6 +457,11 @@ test('tracker /retry answers how many failed runs it put back', async () => {
   let response = await markDoor(request('/retry', marker, { of: 'mail_post' }))
   equal(await response.json(), { retried: 0 })
 })
+test('tracker /drop refuses a reader and answers a marker how many it dropped', async () => {
+  equal((await markDoor(request('/drop', reader, { of: 'x' }))).status, 403)
+  let response = await markDoor(request('/drop', marker, { of: 'error_trim' }))
+  equal(await response.json(), { dropped: 0 })
+})
 for (
   let [kind, token, body, code] of [
     ['reader', reader, { eids: [space], reason: 'r' }, 403],

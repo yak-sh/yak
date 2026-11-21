@@ -603,6 +603,26 @@
         "of"
       ]
     },
+    "tracker_drop": {
+      "tool": true,
+      "destructive": true,
+      "noun": "tracker",
+      "verb": "drop",
+      "title": "Drop the platform tracker's runs no one owes",
+      "description": "Delete the platform tracker's effect runs on yaks.app that no one owes any more: failed runs, and pending runs whose handler the tracker no longer declares, such as those a release stopped running. Takes a handler name for all such runs, or one run's id, and says how many it deleted. The box tracker's own runs are dropped with effect_drop in its graph.\n\n  yak tracker drop error_trim",
+      "input": {
+        "of": {
+          "type": "string",
+          "description": "a handler name (all its failed or orphaned runs) or one run's id"
+        }
+      },
+      "required": [
+        "of"
+      ],
+      "positional": [
+        "of"
+      ]
+    },
     "error_frames": {
       "effect": true,
       "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; unavailable catalogs defer the recorded run until they answer.",

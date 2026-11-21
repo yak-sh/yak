@@ -25,7 +25,7 @@ import { CallError } from '@yaks/tools/errors'
 import { valued } from '@yaks/tools/value'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
-import { mark as upstream, retry } from './remote.ts'
+import { drop, mark as upstream, retry } from './remote.ts'
 import { type Explanation, explanation } from './resolution.ts'
 import { survivor } from './merge.ts'
 import { occurring } from './reading.ts'
@@ -344,6 +344,22 @@ export let runs = (
         )
       }
       return answer(call, { of, retried }, 'yaks.app')
+    },
+    tracker_drop: async (call) => {
+      let of = str(argsOf(call).of)
+      let dropped
+      try {
+        dropped = await drop(options.remote ?? {}, of, go)
+      } catch (error) {
+        throw new CallError('remote', (error as Error).message)
+      }
+      if (!dropped) {
+        throw new CallError(
+          'refused',
+          `${of} names no effect run to drop in the platform tracker`,
+        )
+      }
+      return answer(call, { of, dropped }, 'yaks.app')
     },
   }
 }

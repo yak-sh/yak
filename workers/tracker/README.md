@@ -73,25 +73,27 @@ capability and `{of: <handler or run eid>}`, and puts the failed effect runs it
 names back to pending with a fresh allowance (@yaks/effects `settling`, the
 write `effect_retry` applies), answering `{retried: n}`; the object arms its
 alarm after every write a door accepts, so the pool works them within seconds.
-The box's `tracker_retry` tool sends it. `POST /settle` takes the same
-capability and `{eids, reason}`, up to 100 of a space's occurrences, and
-archives them for the reason as the platform's `bug_settle` does
-(`Fixed by yaks.app: <cause>`), answering `{settled: n}`: for reports of a fixed
-break that its occurrence's tags cannot name. The platform's `bug_settle` also
-hands each space whose Operator conversations the bug stopped (its occurrences
-tagged `rerun`) the faults they were filed under, through the kernel's `Reruns`
-entrypoint on the `KERNEL` binding, and the space runs them again
-(workers/yak/operator-rerun.ts). Each such space's reports are kept apart from
-the others' and never counted away, and the newest of each is retained. Missing
-bugs are refused with 404; malformed marks with 400. Platform-only
-`POST /errors` accepts immutable error captures with a separately signed
-`ingest: true` capability; ordinary read tickets cannot submit captures. Box
-reporters retain their outbox until this intake admits their records. Retrying a
-capture preserves its global eid and counts it once. `POST /app-errors` requires
-both admin and intake capabilities. It accepts `{app, eids, mark}` to add
-`notified` or `archived` to the app's occurrences; `remove: true` removes that
-mark, allowing an incorrectly archived occurrence to reopen without changing its
-report or delivery history.
+The box's `tracker_retry` tool sends it. `POST /drop` takes the same body and
+deletes the failed runs, and the pending ones of a handler the tracker no longer
+declares, that it names (effect_drop's write), answering `{dropped: n}`; the
+box's `tracker_drop` tool sends it. `POST /settle` takes the same capability and
+`{eids, reason}`, up to 100 of a space's occurrences, and archives them for the
+reason as the platform's `bug_settle` does (`Fixed by yaks.app: <cause>`),
+answering `{settled: n}`: for reports of a fixed break that its occurrence's
+tags cannot name. The platform's `bug_settle` also hands each space whose
+Operator conversations the bug stopped (its occurrences tagged `rerun`) the
+faults they were filed under, through the kernel's `Reruns` entrypoint on the
+`KERNEL` binding, and the space runs them again (workers/yak/operator-rerun.ts).
+Each such space's reports are kept apart from the others' and never counted
+away, and the newest of each is retained. Missing bugs are refused with 404;
+malformed marks with 400. Platform-only `POST /errors` accepts immutable error
+captures with a separately signed `ingest: true` capability; ordinary read
+tickets cannot submit captures. Box reporters retain their outbox until this
+intake admits their records. Retrying a capture preserves its global eid and
+counts it once. `POST /app-errors` requires both admin and intake capabilities.
+It accepts `{app, eids, mark}` to add `notified` or `archived` to the app's
+occurrences; `remove: true` removes that mark, allowing an incorrectly archived
+occurrence to reopen without changing its report or delivery history.
 
 `GET /scopes?scope=platform` answers an admin `{scopes: [space eid, …]}`: every
 space tracker the Worker has routed to, which the platform tracker keeps. A

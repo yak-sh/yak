@@ -9,26 +9,26 @@ keeps a reporter's UUID so a queue or spool resend is the same sample. Grouping
 runs downstream and atomically links it and adds its hits to `bug.hits`. All
 references may name entities in other stores.
 
-| Export         | Owns                                                                                |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `.`            | Fault keys, grouping patches, regression and retention                              |
-| `./vocab`      | Tracker words, RAM computations and SQL-derived expressions                         |
-| `./report`     | Capture, transport, `coalesce` and a page's reports                                 |
-| `./instrument` | A class whose construction and every method run inside a given reporting boundary   |
-| `./page`       | Classic browser capture script and twenty breadcrumbs                               |
-| `./effects`    | `error_group`, `error_frames`, `bug_settle`, `bug_digest`                           |
-| `./views`      | Bug pages, list rows, error frames and the Bugs destination                         |
-| `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry` |
-| `./service`    | Spool record admission and acknowledgement                                          |
-| `./remote`     | Signed remote reads, bug marks and durable error delivery                           |
-| `./poll`       | A polled watch of the platform tracker's bugs, or a space tracker's, with marks     |
-| `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                  |
-| `./digest`     | The daily digest of bugs: its letter, its wake and its sending                      |
-| `./chart`      | The digest's chart as a PNG, drawn from its address's query string                  |
-| `./errors`     | The admin_errors report: unresolved bugs, newest first, and their time to fix       |
-| `./everywhere` | One read of every tracker on yaks.app: the platform's and each space's it lists     |
-| `./graph`      | The precondition refusing an unexplained resolution                                 |
-| `./resolution` | A resolution's explanation: its check and how it reads                              |
+| Export         | Owns                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `.`            | Fault keys, grouping patches, regression and retention                                              |
+| `./vocab`      | Tracker words, RAM computations and SQL-derived expressions                                         |
+| `./report`     | Capture, transport, `coalesce` and a page's reports                                                 |
+| `./instrument` | A class whose construction and every method run inside a given reporting boundary                   |
+| `./page`       | Classic browser capture script and twenty breadcrumbs                                               |
+| `./effects`    | `error_group`, `error_frames`, `bug_settle`, `bug_digest`                                           |
+| `./views`      | Bug pages, list rows, error frames and the Bugs destination                                         |
+| `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`, `bug_reopen`, `tracker_retry`, `tracker_drop` |
+| `./service`    | Spool record admission and acknowledgement                                                          |
+| `./remote`     | Signed remote reads, bug marks and durable error delivery                                           |
+| `./poll`       | A polled watch of the platform tracker's bugs, or a space tracker's, with marks                     |
+| `./fixtime`    | Time to fix: first seen (or regressed) to resolved                                                  |
+| `./digest`     | The daily digest of bugs: its letter, its wake and its sending                                      |
+| `./chart`      | The digest's chart as a PNG, drawn from its address's query string                                  |
+| `./errors`     | The admin_errors report: unresolved bugs, newest first, and their time to fix                       |
+| `./everywhere` | One read of every tracker on yaks.app: the platform's and each space's it lists                     |
+| `./graph`      | The precondition refusing an unexplained resolution                                                 |
+| `./resolution` | A resolution's explanation: its check and how it reads                                              |
 
 ```ts
 import { normalize } from '@yaks/tracker'

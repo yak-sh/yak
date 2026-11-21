@@ -81,7 +81,7 @@ let marks: string[] = Object.values(doors)
 // What a door answered, when it answered JSON.
 let answered = (response: Response) =>
   response.json().catch(() => null) as Promise<
-    { error?: string; retried?: number } | null
+    { error?: string; retried?: number; dropped?: number } | null
   >
 
 export let request = async (
@@ -117,7 +117,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...[...marks, 'retry', 'settle', 'resume'].includes(path)
+    ...[...marks, 'retry', 'drop', 'settle', 'resume'].includes(path)
       ? { mark: true }
       : {},
   }
@@ -318,14 +318,17 @@ export let spaces = async (
 
 /** Put the Worker's failed effect runs `of` names (a handler, or one run's id)
  * back to pending once their cause is fixed, returning how many it did. */
-export let retry = async (
+// Effect runs in the platform tracker, settled through its door as
+// effect_retry or effect_drop settles them in a box graph. How many.
+let rewrite = async (
+  act: 'retry' | 'drop',
   remote: Remote,
   of: string,
-  go: typeof fetch = fetch,
+  go: typeof fetch,
 ): Promise<number> => {
   let response = await request(
     remote,
-    'retry',
+    act,
     new URLSearchParams({ scope: 'platform' }),
     {
       method: 'POST',
@@ -336,15 +339,25 @@ export let retry = async (
   )
   let answer = await answered(response)
   if (response.status == 404 && answer?.error == 'tracker route not found') {
-    throw Error('Remote tracker has no retry door (404)')
+    throw Error(`Remote tracker has no ${act} door (404)`)
   }
   if (!response.ok) {
     let why = response.status == 400 ? answer?.error : undefined
     throw Error(
-      `Remote tracker refused the retry (${response.status})${
+      `Remote tracker refused the ${act} (${response.status})${
         why ? `: ${why}` : ''
       }`,
     )
   }
-  return Number(answer?.retried)
+  return Number(act == 'retry' ? answer?.retried : answer?.dropped)
 }
+export let retry = (
+  remote: Remote,
+  of: string,
+  go: typeof fetch = fetch,
+): Promise<number> => rewrite('retry', remote, of, go)
+export let drop = (
+  remote: Remote,
+  of: string,
+  go: typeof fetch = fetch,
+): Promise<number> => rewrite('drop', remote, of, go)

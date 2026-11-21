@@ -251,11 +251,13 @@ async (request: Request): Promise<Response> => {
     return json({ ok: true })
   }
   // A failed effect run back to the pool once its fix is live, so the fix is
-  // seen to work: a bug's settling, its frames, its letter. The same
-  // capability as a bug's mark.
-  if (request.method == 'POST' && path == '/retry') {
+  // seen to work: a bug's settling, its frames, its letter. Or a run no one
+  // owes any more dropped: a failed one, or one waiting for a handler the
+  // tracker no longer declares. The same capability as a bug's mark.
+  let act = path == '/retry' ? 'retry' : path == '/drop' ? 'drop' : undefined
+  if (request.method == 'POST' && act) {
     if (access.mark !== true) {
-      return json({ error: 'tracker retry denied' }, 403)
+      return json({ error: `tracker ${act} denied` }, 403)
     }
     let body = await request.json().catch(() => null) as
       | { of?: unknown }
@@ -267,7 +269,9 @@ async (request: Request): Promise<Response> => {
         400,
       )
     }
-    return json({ retried: await tracker.retry(of) })
+    return act == 'retry'
+      ? json({ retried: await tracker.retry(of) })
+      : json({ dropped: await tracker.drop(of) })
   }
   // A space's reports of breaks the platform fixed, archived for the fix as
   // `bug_settle` archives them: for the reports its tags could not name. The
