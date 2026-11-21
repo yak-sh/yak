@@ -11,6 +11,7 @@ import type {
   Basics,
   Control,
   Linker,
+  Mentioner,
   Page,
   Platform,
   Posted,
@@ -406,13 +407,28 @@ let rows = (controls: Control[]) => {
   return all
 }
 
+// The people a message's content mentions (`<@id>`, `<@!id>`), at most the
+// hundred Discord allows (message#allowed-mentions-object): only people,
+// never a role or everyone.
+let users = (content: string, ping?: string) =>
+  [
+    ...new Set([
+      ...ping ? [ping] : [],
+      ...[...content.matchAll(/<@!?(\d+)>/g)].map((m) => m[1]),
+    ]),
+  ].slice(0, 100)
+
 // A message's content, mentions and buttons: `ping` named before the words,
-// and pinged alone.
-let body = (m: Omit<Reply, 'room'>) => ({
-  content: m.ping ? `<@${m.ping}> ${m.text}` : m.text,
-  allowed_mentions: m.ping ? { parse: [], users: [m.ping] } : { parse: [] },
-  ...m.controls?.length ? { components: rows(m.controls) } : {},
-})
+// and only the people it mentions notified.
+let body = (m: Omit<Reply, 'room'>) => {
+  let content = m.ping ? `<@${m.ping}> ${m.text}` : m.text
+  let them = users(content, m.ping)
+  return {
+    content,
+    allowed_mentions: them.length ? { parse: [], users: them } : { parse: [] },
+    ...m.controls?.length ? { components: rows(m.controls) } : {},
+  }
+}
 
 /** How a press is answered for its presser alone (receiving-and-responding):
  * held at once, within the three seconds Discord waits, as a deferred
@@ -872,12 +888,16 @@ export let links: Linker = (words, url) =>
     ? `[${words}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`
     : url
 
+/** A mention as a Discord message writes one, which notifies them. */
+export let mentions: Mentioner = (account) => `<@${account}>`
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
   title: 'Discord',
   limit: 2000,
   links,
+  mentions,
   user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,

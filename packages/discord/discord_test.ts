@@ -306,6 +306,20 @@ test('a button pressed is a press, by its member, on its message; any other inte
   }])
 })
 
+// Only the people a message mentions are notified: never everyone, here
+// or a role, whatever its words say (T-2379).
+test('a message notifies the people it mentions alone', async () => {
+  let { f, seen } = rest(200, { id: 'r1' })
+  await discord.send('T0K', {
+    room: 'room',
+    text: '<@7>, <@!8> and <@7>: @everyone @here <@&99>',
+  }, f)
+  assertEquals(
+    JSON.parse(String(seen[0].init.body)).allowed_mentions,
+    { parse: [], users: ['7', '8'] },
+  )
+})
+
 test('a private notice names and pings its one reader alone, with its buttons', async () => {
   let { f, seen } = rest(200, { id: 'r1' })
   await discord.send('T0K', {

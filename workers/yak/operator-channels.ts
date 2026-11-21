@@ -57,7 +57,14 @@ import {
   replying,
   type Speakers,
 } from './operator-rooms.ts'
-import { framing, kept, messageEid, type Said, showing } from '@yaks/chat'
+import {
+  framing,
+  kept,
+  messageEid,
+  type Named,
+  type Said,
+  showing,
+} from '@yaks/chat'
 import { cue, passes } from '@yaks/session/turn'
 
 /** What a person reads when the Operator could not start on their request
@@ -803,7 +810,8 @@ export let LETTERED = new Set(['email', 'letter'])
 /**
  * What answers words that came by a channel, in the package of the item
  * they arrived as, for its own effect to send: a letter answering a letter
- * in its thread ({@link letterRows}), signed by the space's Operator, naming
+ * in its thread ({@link letterRows}), mentioning those of `people` it names
+ * in a chat room (operator-rooms.ts `peopleIn`), signed by the space's Operator, naming
  * the answer it carries where it is one of its own (`target`). Words
  * answered where they were said need nothing written.
  */
@@ -813,9 +821,10 @@ export let replyRows = (
   channel: string,
   item: Bundle,
   reply: { eid: string; text: string; target?: string },
+  people: Named[] = [],
 ): Bundle[] =>
   PLATFORMS.has(channel)
-    ? chatRows(channel, item, reply)
+    ? chatRows(channel, item, reply, people)
     : LETTERED.has(channel)
     ? letterRows(env, space, {
       eid: reply.eid,

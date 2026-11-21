@@ -173,6 +173,7 @@ import {
   chatRead,
   chatRoomSet,
   chatSend,
+  peopleIn,
   privateIn,
   roomsOf,
   spaceRooms,
@@ -2181,6 +2182,10 @@ export let operating = (
     let room = (i: number) =>
       `${heard[i].channel}|${comp(items[i], 'chat_message')?.room ?? i}`
     let newest = new Map(heard.map((_, i) => [room(i), i]))
+    let people = await Promise.all(heard.map((_, i) => {
+      let at = comp(items[i], 'chat_message')?.room
+      return at && newest.get(room(i)) == i ? peopleIn(env, g, String(at)) : []
+    }))
     let sent = heard.flatMap(({ channel }, i) =>
       items[i] && !items[i].operator_request && from &&
         newest.get(room(i)) == i
@@ -2189,7 +2194,7 @@ export let operating = (
             `operator-reply|${items[i].entity.eid}|${mark.entity.eid}`,
           ),
           text: reply.text,
-        })
+        }, people[i])
         : []
     )
     let ids = [
@@ -2388,11 +2393,11 @@ export let operating = (
         ? [chatRoomSet(store)]
         : [],
       acts && wide.length
-        ? chatSend(store, true)
+        ? chatSend(env, store, true)
         : rooms.length
-        ? chatSend(store)
+        ? chatSend(env, store)
         : {
-          ...chatSend(store),
+          ...chatSend(env, store),
           withheld: acts
             ? 'nobody has addressed you in a chat room (a Discord channel) in this space yet, so there is none to write in'
             : 'nobody addressed you in a chat room in this conversation',

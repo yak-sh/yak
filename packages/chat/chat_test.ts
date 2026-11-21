@@ -20,6 +20,7 @@ import {
   framing,
   kept,
   linked,
+  mentioned,
   messageEid,
   notice,
   pieces,
@@ -211,6 +212,31 @@ test('a link is written once, by its words or else its address alone', () => {
       ],
     ] as [string, string, Parameters<typeof linked>[1]?][]
   ) assertEquals(linked(text, form), want, text)
+})
+
+// The Operator naming someone in its reply mentions them, so they are
+// notified (T-2379): the first time each is named, by any name they go by.
+test('a reply names each person once as a mention, never in code or a link', () => {
+  let people = [
+    { name: 'Matt', account: '7' },
+    { name: 'Matthew Doe', account: '7' },
+    { name: 'Bo', account: '8' },
+    { name: 'Ann', account: '9' },
+  ]
+  let at = (a: string) => `<@${a}>`
+  for (
+    let [text, want] of [
+      ['Matt, it is live.', '<@7>, it is live.'],
+      ['matt and Matt', '<@7> and Matt'],
+      ['Matthew Doe, then Matt.', '<@7>, then Matt.'],
+      ['Mattress, Bo, @Matt', 'Mattress, Bo, @Matt'],
+      [
+        '`Ann` [Ann](https://a.com/Ann) <https://a.com/Ann>, ann!',
+        '`Ann` [Ann](https://a.com/Ann) <https://a.com/Ann>, <@9>!',
+      ],
+      ['Nobody here.', 'Nobody here.'],
+    ]
+  ) assertEquals(mentioned(text, people, at), want, text)
 })
 
 // A graph that keeps chat messages and posts them through `chatter`.

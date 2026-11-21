@@ -16,7 +16,9 @@ import {
   type Control,
   kept,
   linked,
+  mentioned,
   messageEid,
+  type Named,
   type Page,
   pieces,
   recounted,
@@ -29,6 +31,7 @@ import { type Tool, topOf } from '@yaks/session'
 import {
   apiRead,
   basicsOf,
+  linkedAll,
   message,
   PLATFORMS,
   recent,
@@ -36,7 +39,7 @@ import {
 } from './chat.ts'
 import { known } from '@yaks/connections'
 import { addingAt, ctxOf } from './connections.ts'
-import type { Space } from './directory.ts'
+import { directoryOf, type Space } from './directory.ts'
 import type { Room } from './operator-draw.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
@@ -656,18 +659,24 @@ export let chatRead = (
  * (`chat_message{room}`), replying to it where it names its message, posted
  * by the bot of its connection (@yaks/chat `chat_post`), its links written
  * as the platform writes them (@yaks/chat `linked`), cut to the platform's
- * limit, one message a piece. One `to` an account alone (`chat_private`) is
+ * limit, one message a piece. The first time it names one of `people`
+ * ({@link peopleIn}) it mentions them (@yaks/chat `mentioned`), so they are
+ * notified. One `to` an account alone (`chat_private`) is
  * one message, never cut, as a press answers it whole; `controls` go with
  * its last piece. */
 export let chatRows = (
   via: string,
   item: Bundle,
   reply: { eid: string; text: string; to?: string; controls?: Control[] },
+  people: Named[] = [],
 ): Bundle[] => {
   let heard = item.chat_message as Comp | undefined
   let platform = PLATFORMS.get(via)
   if (!platform || !heard?.room || !heard.connection) return []
-  let text = linked(reply.text, platform.links)
+  let named = platform.mentions
+    ? mentioned(reply.text, people, platform.mentions)
+    : reply.text
+  let text = linked(named, platform.links)
   let all = reply.to ? [text] : pieces(text, platform.limit)
   return all.map((body, i) => ({
     entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
@@ -685,11 +694,49 @@ export let chatRows = (
   }))
 }
 
+/** Those a reply in room `room` (a `chat_room` eid) may mention: whoever
+ * spoke there lately, by the name they go by on its platform, and, where
+ * their account is linked to a person here, by that person's name too. */
+export let peopleIn = async (
+  env: Env,
+  g: Store['g'],
+  room: string,
+): Promise<Named[]> => {
+  let [held] = await g.get([room], ['chat_room'])
+  let platform = PLATFORMS.get(String(comp(held ?? undefined, 'chat_room').via))
+  if (!platform?.mentions) return []
+  let heard = await g.read(
+    line`.chat_message.room=${room}&.order=-chat_message.at&.limit=${SAID}&*`,
+  )
+  let authors = [
+    ...new Set(heard.flatMap((b) => {
+      let a = comp(b, 'chat_message').author
+      return a ? [String(a)] : []
+    })),
+  ]
+  let accounts = (await g.get(authors, ['chat_account'])).flatMap((b) => {
+    let a = comp(b ?? undefined, 'chat_account')
+    return a.id ? [{ account: String(a.id), name: String(a.name ?? '') }] : []
+  })
+  let people = await linkedAll(env, platform, accounts.map((a) => a.account))
+  let dir = directoryOf(env.STORE)
+  let names = await Promise.all(
+    accounts.map(async (a) => {
+      let person = people.get(a.account)
+      return person ? (await dir.known(person))?.name : undefined
+    }),
+  )
+  return accounts.flatMap((a, i) => [
+    ...a.name ? [a] : [],
+    ...names[i] ? [{ account: a.account, name: String(names[i]) }] : [],
+  ])
+}
+
 /** The Operator's `chat_send`: a message in a chat room it was addressed in
  * during this conversation, or, on a member's own turn (`space`), in any
  * conversation of the space, replying to one of its messages: how a request
  * said there is answered there when this turn came from somewhere else. */
-export let chatSend = (store: Store, space = false): Tool => ({
+export let chatSend = (env: Env, store: Store, space = false): Tool => ({
   name: 'chat_send',
   title: 'Write in a chat room',
   step: { doing: 'Writing in the room…', done: 'Wrote in the room' },
@@ -740,15 +787,21 @@ export let chatSend = (store: Store, space = false): Tool => ({
     // A direct room is one person's already.
     let to = args.to && at.server ? String(args.to) : undefined
     let eid = crypto.randomUUID()
+    let people = await peopleIn(env, store.g, at.eid)
     await store.g.apply(
-      chatRows(at.via, {
-        entity: { eid },
-        chat_message: {
-          room: at.eid,
-          connection: at.connection,
-          ...message ? { message_id: message } : {},
+      chatRows(
+        at.via,
+        {
+          entity: { eid },
+          chat_message: {
+            room: at.eid,
+            connection: at.connection,
+            ...message ? { message_id: message } : {},
+          },
         },
-      }, { eid, text, ...to ? { to } : {} }),
+        { eid, text, ...to ? { to } : {} },
+        people,
+      ),
       { trusted: true },
     )
     return JSON.stringify({

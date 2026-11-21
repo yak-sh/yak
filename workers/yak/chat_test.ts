@@ -35,6 +35,8 @@ import {
 } from './chat.ts'
 import { chatCard } from './operator-page.ts'
 import { chatRows } from './connections.ts'
+import { chatRows as replyIn, peopleIn } from './operator-rooms.ts'
+import { operatorMemory } from './operator-testing.ts'
 
 let OWNER = crypto.randomUUID()
 
@@ -475,6 +477,65 @@ test('a linked Discord account is its person’s, and a space’s link is nobody
   let discord = PLATFORMS.get('discord')!
   assertEquals(await linked(p.env, discord, 'ann-on-discord'), ann)
   assertEquals(await linked(p.env, discord, 'barn-on-discord'), undefined)
+})
+
+// Whom the Operator's reply in a room notifies (T-2379): someone who spoke
+// there, by the name they go by on Discord or, once they linked it, by their
+// own name here, is mentioned where the reply names them.
+test('a reply in a room mentions those it names who spoke there, by either name', async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let matt = crypto.randomUUID()
+  await meta(p.env).apply([
+    {
+      entity: { eid: matt },
+      person: {},
+      doc: { title: 'Matthew' },
+      email: { address: 'matt@example.com' },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      connection: {
+        integration: 'discord-account',
+        owner: matt,
+        account: '700',
+        status: 'connected',
+      },
+    },
+  ], KERNEL)
+  let store = operatorMemory()
+  let room = roomEid('discord', 'general')
+  let said = (who: string, name: string) => [{
+    entity: { eid: accountEid('discord', who) },
+    chat_account: { via: 'discord', id: who, name },
+  }, {
+    entity: { eid: crypto.randomUUID() },
+    chat_message: {
+      via: 'discord',
+      room,
+      author: accountEid('discord', who),
+      at: new Date().toISOString(),
+    },
+    doc: { body: 'hi' },
+  }]
+  await store.g.apply([
+    { entity: { eid: room }, chat_room: { via: 'discord', id: 'general' } },
+    ...said('700', 'mattp'),
+    ...said('800', 'Ember'),
+  ], { trusted: true })
+  let eid = crypto.randomUUID()
+  let [row] = replyIn('discord', {
+    entity: { eid },
+    chat_message: { room, connection: 'c1' },
+  }, {
+    eid,
+    text: 'Matthew, it is live; Ember, thanks. Bob, hi.',
+  }, await peopleIn(p.env, store.g, room))
+  assertEquals(row.doc, {
+    body: '<@700>, it is live; <@800>, thanks. Bob, hi.',
+  })
 })
 
 // What the Operator reads back of a room (chat.ts `recent`): by the bot that
