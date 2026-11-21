@@ -38,7 +38,7 @@ import { filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
-import { GRACE, LANES, type Pinner, waiting } from './versions.ts'
+import { GRACE, LANES, latest, type Pinner, waiting } from './versions.ts'
 import {
   addressed,
   type Files,
@@ -634,11 +634,14 @@ export let modifying = async <T>(
     // state, so a draft another write of its opened is either seen or opened
     // on the same head, and the two race for one eid. Only a release that
     // took the draft this write goes into holds it; the guard on the app's
-    // fence sends round a write a release began under.
-    let [rows, head] = await Promise.all([
+    // fence sends round a write a release began under. The app's row reads
+    // in the same turn, so `waiting` answers from it without a trip.
+    let [standing, rows, head] = await Promise.all([
+      latest(dir, space, row),
       dir.drafts(row),
       dir.newestWrite(row),
     ])
+    row = standing
     let drafts = withLegacy(row, rows)
     let into = chosen(row, drafts, who, asked)
     row = await waiting(dir, space, row, who, into?.eid ?? null)

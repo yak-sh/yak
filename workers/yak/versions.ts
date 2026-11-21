@@ -39,7 +39,8 @@ export let LANES = 6
 export let releaseOf = (space: { store: string }, app: App) =>
   `${space.store}/.releases/${app.eid}/${crypto.randomUUID()}`
 
-let latest = async (dir: Directory, space: Space, app: App) => {
+/** The app's newest row, from the request-local read `waiting` reuses. */
+export let latest = async (dir: Directory, space: Space, app: App) => {
   // Reuse the addressed app's request-local read until a directory write
   // invalidates it. A rename or reused slug still resolves by identity.
   let current = await dir.app(space, app.slug)
