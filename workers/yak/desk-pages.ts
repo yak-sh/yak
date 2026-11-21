@@ -55,6 +55,8 @@ import {
 } from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { size } from '@yaks/fp'
+import { browserName } from '@yaks/platform/signed-in'
+import type { BrowserSession } from './browser-sessions.ts'
 import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
@@ -406,9 +408,7 @@ let option = (value: string, label: string, chosen: boolean) =>
 let profile = (at: DeskPage, env: Host) => {
   let mine = (at.spaces ?? []).filter((s) => s.owner)
   let first = mine.find((s) => s.own)?.slug ?? ''
-  return h(
-    Group,
-    null,
+  return [
     saving(
       managePath('profile'),
       h(
@@ -457,19 +457,7 @@ let profile = (at: DeskPage, env: Host) => {
       h(
         Rows,
         null,
-        (at.sessions ?? []).map((s) =>
-          h(
-            Rows.Item,
-            { key: s.eid },
-            h(Rows.Main, null, h(Rows.Name, null, s.agent)),
-            h(
-              Rows.Form,
-              { method: 'post', action: managePath('profile') },
-              h(Form.Hidden, { name: 'session', value: s.eid }),
-              send('Sign out'),
-            ),
-          )
-        ),
+        signedIn(at).map((s) => browserRow(s, s.eid == at.session)),
       ),
       h(
         Form,
@@ -478,8 +466,46 @@ let profile = (at: DeskPage, env: Host) => {
         send('Sign out everywhere'),
       ),
     ),
-  )
+  ]
 }
+
+// The person's browsers, the one asking first, then the newest sign-in.
+let signedIn = (at: DeskPage) =>
+  (at.sessions ?? []).toSorted((a, b) =>
+    Number(b.eid == at.session) - Number(a.eid == at.session) ||
+    (b.at ?? '').localeCompare(a.at ?? '')
+  )
+
+// One browser by what it is and where it runs (@yaks/platform/signed-in),
+// then where and when it signed in; its raw user-agent is the name's tip.
+let browserRow = (s: BrowserSession, here: boolean) =>
+  h(
+    Rows.Item,
+    { key: s.eid },
+    h(
+      Rows.Main,
+      null,
+      h(Rows.Name, { title: s.agent }, browserName(s.agent)),
+      h(
+        Rows.Meta,
+        null,
+        joined([
+          s.place,
+          s.at ? ['signed in ', h(Time, { at: s.at })] : null,
+          here ? 'this browser' : null,
+        ]),
+      ),
+    ),
+    h(
+      Rows.Form,
+      { method: 'post', action: managePath('profile') },
+      h(Form.Hidden, { name: 'session', value: s.eid }),
+      send('Sign out'),
+    ),
+  )
+
+let joined = (parts: Kids[]) =>
+  parts.filter(Boolean).flatMap((p, i) => i ? [' · ', p] : [p])
 
 // Invite (Your account, T-138777): the person's own QR code, shown to a
 // friend on their phone, so it is the code first and large. Scanning it opens

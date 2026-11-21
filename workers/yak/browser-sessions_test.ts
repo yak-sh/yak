@@ -3,6 +3,7 @@ import { parseHTML } from 'linkedom'
 import { test } from '@yaks/testing'
 import { kernel, signIn } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
+import { headings } from '@yaks/ui/contents'
 
 let k = await kernel()
 let one = await signIn(k), two = await signIn(k, one.email)
@@ -17,6 +18,23 @@ let post = (path: string, cookie: string, fields = {}) =>
 let signed = async (cookie: string) =>
   (await (await k.at(k.host, '/login/who', { headers: { cookie } })).json())
     .signedIn
+
+test('Profile lists its cards in its contents and names this browser first', async () => {
+  let page = await k.at(k.host, profile, { headers: { cookie: other.cookie } })
+  let { document } = parseHTML(await page.text())
+  let nav = document.querySelector('.Contents') as HTMLElement
+  let root = nav.closest('[data-contents-root]')!
+  assertEquals(
+    headings(root, nav.dataset.contents!).map((e) => e.label),
+    ['Profile', 'Signed-in browsers'],
+  )
+  let rows = [...document.querySelectorAll('.Rows_Item')]
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].querySelector('.Rows_Name')!.textContent, 'Browser')
+  assert(
+    rows[0].querySelector('.Rows_Meta')!.textContent.includes('this browser'),
+  )
+})
 
 test('logout and Profile end selected browsers through the HTTP doors', async () => {
   let logout = await post('/logout', one.cookie)

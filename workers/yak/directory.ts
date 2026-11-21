@@ -2831,13 +2831,14 @@ export let directoryRows = (rows: {
     },
     browserSessions: async (person: string): Promise<BrowserSession[]> =>
       (await query(
-        line`.browser_session.person=${person}&!cancelled&.browser_session.until>now`,
+        line`.browser_session.person=${person}&!cancelled&.browser_session.until>now&?created`,
       ))
         .map((row) => ({
           ...row.browser_session!,
           eid: row.entity.eid,
           person,
           via: idOf(row.browser_session!.via),
+          at: row.created?.at,
         })),
     hasPerson: async (eid: string) =>
       !!await one(line`.entity.eid=${eid}&.person&!trashed`),

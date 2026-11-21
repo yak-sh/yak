@@ -679,6 +679,8 @@ export type DeskPage = {
   name?: string
   email?: string
   sessions?: import('./browser-sessions.ts').BrowserSession[]
+  /** the session the asking browser holds, among `sessions` */
+  session?: string
   /** the person's connected agents; none while not yet known, which leaves
    * what depends on them for the page's script to settle (`state`) */
   agents?: Agent[]

@@ -222,10 +222,10 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     url.searchParams.has('browser') && url.searchParams.size == 1 &&
     !!bearerIn(req)
   let caller = socket ? (await asking(env, req)).who : undefined
-  let { person, until } = caller
-    ? { person: caller.person, until: caller.until }
+  let { person, until, session } = caller
+    ? { person: caller.person, until: caller.until, session: undefined }
     : socket
-    ? { person: null, until: undefined }
+    ? { person: null, until: undefined, session: undefined }
     : await whoIs(req, env, ahead, null, dir)
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
@@ -260,7 +260,13 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     return 'first' in at ? redirect(to.href) : moved(req, to.href)
   }
   if ('account' in at) {
-    return mine(req, env, dir, { person, role: null, until }, at.account)
+    return mine(
+      req,
+      env,
+      dir,
+      { person, role: null, until, session },
+      at.account,
+    )
   }
   let view = at.view
   let paged = page ?? dir.page(
@@ -903,6 +909,7 @@ let mine = async (
     email: email ?? '',
     agents,
     sessions,
+    session: who.session,
     shared: theirs,
     referral,
     shops: provider.shops.on(),

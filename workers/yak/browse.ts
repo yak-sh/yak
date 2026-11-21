@@ -8,9 +8,10 @@
 // accepts the admin bot's OAuth grant and issues a short-lived directory
 // credential for the browser.
 //
-// Only the fleet's test accounts and the platform's owners may ask: the
-// browser time is the platform's, spent checking the platform. Only pages on
-// our own zone are opened, the hosts the cookie belongs to.
+// Only the fleet's test accounts may ask. The browser time is the platform's,
+// spent checking the platform, and a person's own sign-in never goes into a
+// browser that automation drives, the platform owner's included (T-2254).
+// Only pages on our own zone are opened, the hosts the cookie belongs to.
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { apex } from '@yaks/platform/host'
 import { ADMIN as ADMIN_BOT, isTestAddress } from '@yaks/platform/bots'
@@ -149,16 +150,11 @@ let sessionCaller = async (req: Request, env: Env, dir: Directory) => {
     )
   }
   let known = await dir.known(claims.person)
-  let permitted = isTestAddress(known?.email ?? '')
-  if (!permitted) {
-    let meta = await dir.space(dirPart.META.space)
-    permitted = !!meta && await dir.role(meta, claims.person) == 'owner'
-  }
-  if (!permitted) {
+  if (!isTestAddress(known?.email ?? '') && known?.email != ADMIN_BOT) {
     return json(
       403,
       'not_a_test_account',
-      'the browser is for the platform’s test accounts and owners',
+      'the browser is for the platform’s test accounts: sign in as one with --as',
     )
   }
   return {

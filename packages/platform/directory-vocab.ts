@@ -26,6 +26,8 @@ export let directoryDoc: VocabDoc = {
         via: owned(ref('keep')),
         until: owned(time),
         agent: owned(text),
+        // Where its network placed it when it signed in or last renewed.
+        place: owned(text),
       },
     },
     // One CLI grant (workers/yak/grants.ts): whose it is, its id, the space

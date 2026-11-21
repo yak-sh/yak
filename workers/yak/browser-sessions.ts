@@ -1,5 +1,6 @@
 import { identityEid } from '@yaks/graph/identity'
 import { instrumentEid } from '@yaks/platform/instrument'
+import { placeOf, type Whereabouts } from '@yaks/platform/signed-in'
 import { type Directory, directory } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
@@ -13,8 +14,18 @@ export type BrowserSession = {
   via: string
   until: string
   agent: string
+  /** Where its network placed it, when it said. */
+  place?: string
+  /** When it signed in. */
+  at?: string
 }
-export type SessionSeed = Omit<BrowserSession, 'person'>
+export type SessionSeed = Omit<BrowserSession, 'person' | 'at'>
+
+/** What a request says of the browser that sent it. */
+export let seen = (req: Request & { cf?: Whereabouts }) => ({
+  agent: (req.headers.get('user-agent') ?? 'Browser').slice(0, 300),
+  place: placeOf(req.cf ?? {}),
+})
 
 export let sessionRow = (seed: SessionSeed, person: string): Bundle => ({
   entity: { eid: seed.eid },
@@ -23,6 +34,7 @@ export let sessionRow = (seed: SessionSeed, person: string): Bundle => ({
     via: instrumentEid(seed.via),
     until: seed.until,
     agent: seed.agent,
+    ...seed.place ? { place: seed.place } : {},
   },
 })
 
@@ -68,7 +80,7 @@ export let keep = async (
         eid: claims.session,
         via: claims.via,
         until: new Date(claims.exp * 1000).toISOString(),
-        agent: (req.headers.get('user-agent') ?? 'Browser').slice(0, 300),
+        ...seen(req),
       }, claims.person),
     ],
   })

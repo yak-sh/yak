@@ -45,6 +45,9 @@ export type Claims = {
   via?: string
   /** The directory row that can end this session. Absent on old cookies. */
   session?: string
+  /** A sign-in lent to one render (preview.ts): it ends when it was signed
+   * to, never slides into a session, and is never kept as a browser. */
+  render?: true
 }
 
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
@@ -146,6 +149,7 @@ export let verify = async (
     ...(typeof c.session == 'string' && c.session
       ? { session: c.session }
       : {}),
+    ...(c.render === true ? { render: true as const } : {}),
     ...(o.legacy ? { legacy: true as const } : {}),
   }
 }

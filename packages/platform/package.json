@@ -23,6 +23,7 @@
     "./home/sky": "./home/sky.tsx",
     "./home/assets": "./home/assets.ts",
     "./browser-visit": "./browser-visit.ts",
+    "./signed-in": "./signed-in.ts",
     "./preview-audit": "./preview-audit.ts",
     "./visits": "./visits.ts",
     "./installs": "./installs.ts",
@@ -107,6 +108,7 @@
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
+    "@types/ua-parser-js": "0.7.39",
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
     "@yaks/blob": "0.2.30",
@@ -137,6 +139,7 @@
     "@yaks/yaml": "0.2.24",
     "lucide": "1.31.0",
     "preact": "10.29.7",
+    "ua-parser-js": "1.0.41",
     "uqr": "0.1.3"
   },
   "devDependencies": {

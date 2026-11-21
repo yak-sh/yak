@@ -278,6 +278,26 @@ test('a returning anonymous browser keeps its cookie without renewal', async () 
   assertEquals(again.headers.get('set-cookie'), null)
 })
 
+test('a sign-in lent to one render serves its person and never becomes a session', async () => {
+  let person = '00000000-0000-4000-8000-000000000012'
+  let lent = await sign({
+    person,
+    space: 'garden',
+    exp: Math.floor(Date.now() / 1000) + 120,
+    render: true,
+  }, SECRET)
+  let req = asked(`${COOKIE}=${lent}`)
+  let served = await browsing(req, ENV, async (req) =>
+    Response.json(
+      await whoIs(req, ENV, () => Promise.resolve('owner'), 'garden'),
+    ))
+  assertEquals((await served.json()).person, person)
+  assertEquals(served.headers.get('set-cookie'), null)
+  let renewed = await slid(req, ENV, new Response('ok'))
+  assertEquals(renewed.headers.get('set-cookie'), null)
+  assertEquals(await browsers(ENV, person), [])
+})
+
 let oldSession = await sign({
   person: '00000000-0000-4000-8000-000000000011',
   space: 'garden',

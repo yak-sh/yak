@@ -324,7 +324,7 @@ export let sessionStart = async (
     via: browser?.source ?? browser?.via ?? crypto.randomUUID(),
     until: new Date((Math.floor(Date.now() / 1000) + SESSION) * 1000)
       .toISOString(),
-    agent: (req.headers.get('user-agent') ?? 'Browser').slice(0, 300),
+    ...browsers.seen(req),
   }
 }
 
@@ -422,6 +422,7 @@ export let browsing = async (
     sessionCookie(req, env) ?? '',
     secret,
   )
+  if (offered?.render) return serve(req)
   let browser = await browserOf(req, secret, env)
   if (
     browser && (!offered || offered.via && !offered.legacy) &&
@@ -478,7 +479,8 @@ export let browsing = async (
 // It happens on the way out of the router (index.ts), where every request
 // passes whatever door answered it, because every door has to slide and no
 // door should have to remember to. An answer that sets the cookie itself is
-// left alone (`sets`), and so is a socket, which has no body to copy.
+// left alone (`sets`), and so is a socket, which has no body to copy. A
+// sign-in lent to one render (`render`) ends when it was signed to.
 export let slid = async (
   req: Request,
   env: Keeper,
@@ -491,7 +493,7 @@ export let slid = async (
   // A cookie sealed before 2c05d0f6 is re-minted on sight, whatever its age,
   // so the old ones leave as their people come back (lib/token_legacy.ts).
   if (
-    !offered ||
+    !offered || offered.render ||
     !offered.legacy && offered.exp - Date.now() / 1000 > SESSION / 2
   ) return res
   let claims = await sessionAt(req, env, offered.space)

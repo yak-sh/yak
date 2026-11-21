@@ -4369,6 +4369,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@types/ua-parser-js@0.7.39",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
             "npm:@yaks/blob@0.2.30",
@@ -4404,6 +4405,7 @@
             "npm:@yaks/yaml@0.2.24",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7",
+            "npm:ua-parser-js@1.0.41",
             "npm:uqr@0.1.3"
           ]
         }

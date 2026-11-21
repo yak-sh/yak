@@ -676,6 +676,7 @@ let signedIn = async (
     person,
     space: space.eid,
     exp: Math.floor(Date.now() / 1000) + SIGNED,
+    render: true,
   }, env.SESSION_SECRET!),
   domain: host,
   path: '/',

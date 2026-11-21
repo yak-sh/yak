@@ -1,5 +1,5 @@
 // The browse door (browse.ts): a page of ours opened in the browser signed in
-// as its caller, for the platform's test accounts and owners alone.
+// as its caller, for the platform's test accounts alone.
 import { cleanup, clock, equal, match, test } from '@yaks/testing'
 import {
   answer,
@@ -133,10 +133,15 @@ test('a test account opens a page of ours signed in as itself, on a phone unless
   equal(visit.audit, false)
 })
 
-test('the platform owner may browse, and a window named is the one opened', async () => {
+test('a person never lends their sign-in to the browser, not even the platform owner', async () => {
+  let r = await browse(manage, { cookie: owner.cookie })
+  equal(r.status, 403)
+})
+
+test('a window named is the one opened', async () => {
   let r = await browse(
     { ...manage, view: { width: 1280, height: 800, touch: false } },
-    { cookie: owner.cookie },
+    { cookie: checks.cookie },
   )
   equal(r.status, 200)
   equal(visits.at(-1)!.view, {
