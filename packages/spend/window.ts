@@ -34,9 +34,12 @@ let WEEK = 7 * 864e5
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
+/** The start of a UTC day, as an instant in a query. */
+export let midnight = (day: string): string => `${day}T00:00:00Z`
+
 /** The UTC day after `day`, and `n` days from it. */
 export let after = (day: string, n = 1): string =>
-  new Date(Date.parse(`${day}T00:00:00Z`) + n * 864e5).toISOString()
+  new Date(Date.parse(midnight(day)) + n * 864e5).toISOString()
     .slice(0, 10)
 
 /** The UTC day a moment falls on. */
@@ -194,7 +197,7 @@ export let span = (
   if (since) return [since, to]
   let week = limits.filter((l) => l.provider == 'claude')
     .flatMap((l) => weekOf(l, now) ?? [])[0]
-  return [week ?? dayOf(Date.parse(`${to}T00:00:00Z`) - 6 * 864e5), to]
+  return [week ?? after(to, -6), to]
 }
 
 /** What a day's requests ran up on a limit, and each session's part of it:

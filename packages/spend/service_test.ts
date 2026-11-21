@@ -42,9 +42,9 @@ let box = async () => {
 
 test('a day read in late is owed a tally, and the next pass takes it', async () => {
   let { graph, asked, requests, owed } = await box()
-  await asked('a', '2026-10-20T12:00:00.000Z')
-  await asked('b', '2026-10-20T13:00:00.000Z')
-  await asked('c', '2026-10-21T09:00:00.000Z')
+  await asked('a', '2026-10-20T00:00:00.000Z')
+  await asked('b', '2026-10-20T23:59:59.999Z')
+  await asked('c', '2026-10-21T00:00:00.000Z')
   equal((await owed()).sort(), ['2026-10-20', '2026-10-21'])
   await pass(graph, Date.parse('2026-10-25T12:00:00Z'))
   equal([await requests('2026-10-20'), await requests('2026-10-21')], [2, 1])

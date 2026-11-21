@@ -17,7 +17,7 @@ import { idsIn, parse } from '@yaks/id'
 import { accountEid, listPrice, type Price } from '@yaks/model'
 import { type Home, home } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
-import { after, dayEid } from './window.ts'
+import { after, dayEid, midnight } from './window.ts'
 import { type Known, type Spend, tally } from './tally.ts'
 
 /** The row that keeps a day's tally. */
@@ -237,7 +237,7 @@ let worked = async (
   day: string,
   root: (s: Eid) => Eid,
 ): Promise<Map<Eid, Eid[]>> => {
-  let from = day, to = after(day, 2)
+  let from = midnight(day), to = midnight(after(day, 2))
   let links: [Eid, Eid][] = [] // session, entity
   let rows = async (q: Built, of: string, by: string) => {
     for (let r of await g.rows(q) as Record<string, unknown>[]) {
@@ -331,7 +331,9 @@ export let known = async (
 export let requests = (g: Graph, day: string): Promise<Bundle[]> =>
   every(
     g,
-    line`.ask .usage .created.at>=${day} .created.at<${after(day)}`,
+    line`.ask .usage .created.at>=${midnight(day)} .created.at<${
+      midnight(after(day))
+    }`,
   )
 
 /** Give each of these models its list price on its row, where the table

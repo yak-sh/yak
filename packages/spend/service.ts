@@ -18,7 +18,7 @@ import type { Eid, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
 import { sleep } from '@yaks/fp'
 import { recompute } from './day.ts'
-import { after, dayOf } from './window.ts'
+import { after, dayOf, midnight } from './window.ts'
 import { read } from './budget.ts'
 import { identityEid } from '@yaks/graph/identity'
 
@@ -61,7 +61,7 @@ export let pass = async (
   let tally = async (day: string) => {
     for (let m of (await recompute(g, day)).unpriced) unpriced.add(m)
   }
-  if (now - Date.parse(`${today}T00:00:00Z`) < LATE) {
+  if (now - Date.parse(midnight(today)) < LATE) {
     await tally(after(today, -1))
   }
   await tally(today)
