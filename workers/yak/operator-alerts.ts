@@ -8,6 +8,7 @@
 // nothing more than Updates. A reply to a text or an email reaches the
 // Operator as any text or email from them does. What a person writes, and
 // what is told to everyone in a space, stays in Updates.
+import { type Reach, reachBy } from '@yaks/notify/whereabouts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Blocked } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
@@ -103,6 +104,7 @@ export let routeFor = async (
   person: string,
   at?: string,
   except?: Alerting,
+  reach?: Reach,
 ) => {
   let [chosen, texting, email, pushes] = await Promise.all([
     dir.alerts(person),
@@ -111,8 +113,40 @@ export let routeFor = async (
     dir.pushes(person),
   ])
   let before = at ? pushes.filter((b) => !b.since || b.since <= at) : pushes
-  return routeOf(chosen, texting, email, before.map(subscription), except)
+  return routeOf(
+    present(chosen, reach),
+    texting,
+    email,
+    before.map(subscription),
+    except,
+  )
 }
+
+/**
+ * The way chosen, as where the person is now changes it (whereabouts.ts
+ * `reachBy`): looking at this Operator's tab, nothing is sent, as the tab
+ * shows it; with the tab in the background or elsewhere on yaks.app, a
+ * browser notification first. Someone who chose Updates alone is never sent
+ * anything.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { present } from './operator-alerts.ts'
+ * equal(present('text', 'tab'), 'updates')
+ * equal(present('text', 'notification'), 'push')
+ * equal(present('updates', 'notification'), 'updates')
+ * equal(present('email', 'usual'), 'email')
+ * ```
+ */
+export let present = (
+  chosen: Alerting | null,
+  reach?: Reach,
+): Alerting | null =>
+  chosen == 'updates' || reach == 'tab'
+    ? 'updates'
+    : reach == 'notification'
+    ? 'push'
+    : chosen
 
 // A browser as a push goes to it, without when it was allowed.
 let subscription = ({ endpoint, keys }: Subscription): Subscription => ({
@@ -279,7 +313,17 @@ export let alert = async (
   let space = by ? await dir.at(by) : null
   if (!space || space.trashed || !to || to == space.eid || !words) return
   let written = String(part(row, 'created')?.at ?? '') || undefined
-  let route = await routeFor(dir, to, written)
+  // Where they are now: in the tab, it is there already; with the tab in the
+  // background, a notification (whereabouts.ts).
+  let { seen } = await import('./whereabouts.ts')
+  let now = await seen(env, to, space.eid)
+  let route = await routeFor(
+    dir,
+    to,
+    written,
+    undefined,
+    now && reachBy(now),
+  )
   if (!route) return
   let note = { words, subject, id: eid, about: told.about, asks, at: written }
   let outcome: Bundle[]

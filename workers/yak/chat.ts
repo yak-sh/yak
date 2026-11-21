@@ -577,14 +577,14 @@ export let linkedAll = async (
   return found
 }
 
-/** Who a platform says is about, kept as the presence of each linked to a
- * person here (presence.ts); anyone else is nobody we know. */
+/** Who a platform says is about, kept as the whereabouts of each linked to a
+ * person here (whereabouts.ts); anyone else is nobody we know. */
 let present = async (env: Env, platform: Platform, all: Present[]) => {
   let status = new Map(all.map((p) => [p.account, p.status]))
   let people = await linkedAll(env, platform, [...status.keys()])
   if (!people.size) return
-  let { present } = await import('./presence.ts')
-  type Channel = import('@yaks/notify/presence').Channel
+  let { present } = await import('./whereabouts.ts')
+  type Channel = import('@yaks/notify/whereabouts').Channel
   for (let [account, person] of people) {
     await present(env, {
       person,
@@ -1062,10 +1062,10 @@ export class Listening {
           ),
         }
         : {},
-      // Who is about, kept for each person here it is (presence.ts).
+      // Who is about, kept for each person here it is (whereabouts.ts).
       present: bound((p: Present[]) =>
         present(env, platform, p).catch((e) =>
-          caught(e, { request: `${via} presence`, ...tags })
+          caught(e, { request: `${via} whereabouts`, ...tags })
         )
       ),
       report: bound((e: unknown) =>

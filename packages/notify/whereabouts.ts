@@ -2,24 +2,24 @@
  * Where a person is available right now, channel by channel: the Operator's
  * page open and focused, open in a background tab, an app's page open,
  * Discord's status, and when they last texted or emailed. Each is a
- * `presence` row a host writes when the channel says something new
+ * `whereabouts` row a host writes when the channel says something new
  * ({@link noted}), and each fades on its own once the channel has gone quiet
  * longer than its {@link FADE}, so a dropped socket or a lost close never
  * leaves someone "here" for good.
  *
  * Pure: a host reads the rows, applies what {@link noted} returns, and reads
- * {@link glance} to say it ({@link presenceLine}) or to choose where to reach
+ * {@link glance} to say it ({@link whereaboutsLine}) or to choose where to reach
  * the person ({@link reachBy}).
  *
  * ```ts
- * import { glance, noted, presenceLine, reachBy } from '@yaks/notify/presence'
+ * import { glance, noted, whereaboutsLine, reachBy } from '@yaks/notify/whereabouts'
  * import { equal } from '@yaks/testing'
  *
  * let now = Date.parse('2026-11-20T12:00:00Z')
  * let tab = noted(undefined, { person: 'jeff', channel: 'operator', place: 'home', state: 'here' }, now)!
  * let discord = noted(undefined, { person: 'jeff', channel: 'discord', state: 'online' }, now)!
  * let seen = glance([tab, discord], { place: 'home', now })
- * equal(presenceLine('Jeff', seen), 'Jeff: here, this tab · Discord online')
+ * equal(whereaboutsLine('Jeff', seen), 'Jeff: here, this tab · Discord online')
  * equal(reachBy(seen), 'tab')
  * // The same state said again soon after writes nothing.
  * equal(noted(tab, { person: 'jeff', channel: 'operator', place: 'home', state: 'here' }, now + 1000), undefined)
@@ -49,10 +49,10 @@ export type Said = {
   state: State
 }
 
-/** A `presence` row as a host reads it. */
+/** A `whereabouts` row as a host reads it. */
 export type Row = {
   entity: { eid: string }
-  presence?: Partial<Said> & { at?: string }
+  whereabouts?: Partial<Said> & { at?: string }
 }
 
 let MINUTE = 60_000
@@ -77,12 +77,12 @@ export let BEAT: number = 5 * MINUTE
 // A state that says the person is not there: never worth a new row.
 let gone = (s?: string) => s == 'away' || s == 'offline'
 
-/** The row a person's presence on `channel` (at `place`) is kept in. */
-export let presenceEid = (
+/** The row a person's whereabouts on `channel` (at `place`) is kept in. */
+export let whereaboutsEid = (
   person: string,
   channel: Channel,
   place?: string,
-): string => derivedEid(`presence|${person}|${channel}|${place ?? ''}`)
+): string => derivedEid(`whereabouts|${person}|${channel}|${place ?? ''}`)
 
 /**
  * The write `said` needs, given the row it replaces: none when the state is
@@ -96,7 +96,7 @@ export let noted = (
   said: Said,
   now: number = Date.now(),
 ): Row | undefined => {
-  let was = row?.presence
+  let was = row?.whereabouts
   let age = now - Date.parse(was?.at ?? '')
   if (!was?.state && gone(said.state)) return
   if (was?.state == said.state && age < FADE[said.channel] / 3) return
@@ -104,8 +104,8 @@ export let noted = (
     return
   }
   return {
-    entity: { eid: presenceEid(said.person, said.channel, said.place) },
-    presence: {
+    entity: { eid: whereaboutsEid(said.person, said.channel, said.place) },
+    whereabouts: {
       person: said.person,
       channel: said.channel,
       ...said.place ? { place: said.place } : {},
@@ -148,7 +148,7 @@ export let glance = (
   { place, now = Date.now() }: { place?: string; now?: number },
 ): Glance => {
   let seen: Glance = { now }
-  for (let { presence: p } of rows) {
+  for (let { whereabouts: p } of rows) {
     if (!p?.channel || !p.state || !p.at) continue
     let channel = p.channel as Channel
     if (!(now - Date.parse(p.at) < (FADE[channel] ?? 0))) continue
@@ -187,7 +187,7 @@ let DISCORD: Record<string, string> = {
 
 /** The glance in one short line, for each of an Operator's turns:
  * "Jeff: here, this tab · Discord online". */
-export let presenceLine = (name: string, g: Glance): string => {
+export let whereaboutsLine = (name: string, g: Glance): string => {
   let parts = [
     g.tab == 'here'
       ? 'here, this tab'

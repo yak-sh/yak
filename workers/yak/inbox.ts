@@ -490,14 +490,14 @@ let asked = async (
     await usedMail(env, space)
   }
   // A person who wrote, as the mail proves them, was on email just now
-  // (presence.ts).
+  // (whereabouts.ts).
   let person = who['x-yak-person']
   if (person && signed !== false) {
-    let { present } = await import('./presence.ts')
+    let { present } = await import('./whereabouts.ts')
     let { caught } = await import('./defects.ts')
     await present(env, { person, channel: 'email', state: 'used' }).catch((
       e,
-    ) => caught(e, { request: 'email presence' }))
+    ) => caught(e, { request: 'email whereabouts' }))
   }
   return id
 }

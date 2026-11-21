@@ -26,7 +26,7 @@ import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Handoff } from '@yaks/platform/operator-handoff'
 import { WAKE } from './door.ts'
-import { type Tab, tabsState } from '@yaks/notify/presence'
+import { type Tab, tabsState } from '@yaks/notify/whereabouts'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { finishedJobs, JOBS } from '../../packages/platform/finished-jobs.ts'
 import { COPY, copying } from './store-copy.ts'
@@ -1077,7 +1077,7 @@ export class Builder extends Durable {
   }
 
   // Where `held`'s person is on this Operator, across their tabs open on it
-  // (all but `closing`), kept as their presence (presence.ts).
+  // (all but `closing`), kept as their whereabouts (whereabouts.ts).
   async #present(held: Watching, closing?: Wire) {
     let tabs = this.#ctx.getWebSockets().filter((ws) => ws != closing)
       .map((ws) => ws.deserializeAttachment() as Socket | null)
@@ -1085,7 +1085,7 @@ export class Builder extends Durable {
         !!h && 'operator' in h && h.person == held.person
       )
       .map((h) => h.tab ?? { visible: true, focused: false })
-    let { present } = await import('./presence.ts')
+    let { present } = await import('./whereabouts.ts')
     await present(this.#env, {
       person: held.person,
       channel: 'operator',
@@ -1104,7 +1104,7 @@ export class Builder extends Durable {
       if (!tab) return
       ws.serializeAttachment({ ...held, tab })
       return void this.#present(held).catch((e) =>
-        caught(e, { request: 'operator presence' })
+        caught(e, { request: 'operator whereabouts' })
       )
     }
     // A page reading the Operator's store through @yaks/api.
@@ -1126,7 +1126,7 @@ export class Builder extends Durable {
     let held = ws.deserializeAttachment() as Socket | null
     if (held && 'operator' in held) {
       return void this.#present(held, ws).catch((e) =>
-        caught(e, { request: 'operator presence' })
+        caught(e, { request: 'operator whereabouts' })
       )
     }
     if (paged(held)) {

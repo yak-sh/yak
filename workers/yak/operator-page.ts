@@ -1,5 +1,5 @@
 import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
-import { BEAT } from '@yaks/notify/presence'
+import { BEAT } from '@yaks/notify/whereabouts'
 import { Time, wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
@@ -3014,7 +3014,7 @@ let hear = (frame) => {
 // Where its person is: whether this tab is in view and focused, said on the
 // socket when it changes and every few minutes while open, so their
 // Operator knows to tell them here, notify them, or reach them elsewhere
-// (presence.ts).
+// (whereabouts.ts).
 let wire
 let sayTab = () => { if (wire?.readyState == 1) wire.send(JSON.stringify({ tab: { visible: document.visibilityState == 'visible', focused: document.hasFocus() } })) }
 for (let on of ['visibilitychange', 'focus', 'blur']) (on == 'visibilitychange' ? document : window).addEventListener(on, sayTab)

@@ -26,22 +26,22 @@ on that record.
   `archived{at, by, via}` marks from [@yaks/kernel](../kernel) sit on this row,
   not on the target; clearing the mode preserves attention.
 - `chat{actor, target}` records an open conversation with a target.
-- `presence{person, channel, place, state, at}` records where a person is
+- `whereabouts{person, channel, place, state, at}` records where a person is
   available on one channel, as it last changed: the Operator's page of the space
   `place` (`here`, focused; `background`, open but hidden or unfocused; `away`),
   an app's page (`open`, `away`), Discord (`online`, `idle`, `dnd`, `offline`),
   and a text or an email (`used`). One row per person, channel and place
-  (`presenceEid`).
+  (`whereaboutsEid`).
 
-## Presence
+## Whereabouts
 
-`@yaks/notify/presence` is pure. `noted(row, said, now)` is the write a
+`@yaks/notify/whereabouts` is pure. `noted(row, said, now)` is the write a
 channel's say needs: none when nothing changed and the row is still fresh, so a
 page saying "still here" every `BEAT` writes about once in three. A row older
 than its channel's `FADE` says nothing, so a lost close never leaves someone
 here for good. `tabsState(tabs)` is a person's state on an Operator across their
 tabs. `glance(rows, {place, now})` is what one Operator sees,
-`presenceLine(name, glance)` says it in one line ("Jeff: here, this tab ·
+`whereaboutsLine(name, glance)` says it in one line ("Jeff: here, this tab ·
 Discord online"), and `reachBy(glance)` says where something that needs them
 reaches them: `tab`, `notification`, `discord` or `usual`.
 

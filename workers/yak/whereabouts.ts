@@ -1,5 +1,5 @@
-// Where each person is available now (@yaks/notify/presence), kept in the
-// directory as `presence` rows: what each channel last said, written only
+// Where each person is available now (@yaks/notify/whereabouts), kept in the
+// directory as `whereabouts` rows: what each channel last said, written only
 // when it changes or is about to fade. The channels say it here: the
 // Operator's page over its socket (build.ts), an app's page as its socket
 // opens and closes (graph.ts), Discord's gateway (chat.ts), and a text or an
@@ -14,15 +14,15 @@ import {
   type Glance,
   glance,
   noted,
-  presenceEid,
-  presenceLine,
   reachBy,
   type Said,
-} from '@yaks/notify/presence'
+  whereaboutsEid,
+  whereaboutsLine,
+} from '@yaks/notify/whereabouts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 
-/** The directory as presence reads and writes it. */
+/** The directory as whereabouts reads and writes it. */
 export type Kept = {
   read: (q: string) => Bundle[] | Promise<Bundle[]>
   apply: (bundles: Bundle[]) => unknown
@@ -42,20 +42,20 @@ export let present = async (
   dir?: Kept,
 ): Promise<void> => {
   dir ??= await kept(env)
-  let eid = presenceEid(said.person, said.channel, said.place)
-  let [row] = await dir.read(line`.entity.eid=${eid}&.presence&*`)
+  let eid = whereaboutsEid(said.person, said.channel, said.place)
+  let [row] = await dir.read(line`.entity.eid=${eid}&.whereabouts&*`)
   let next = noted(row, said, now)
   if (next) await dir.apply([next as Bundle])
 }
 
-/** A person's presence rows, read for their own Operator. */
-export let presenceOf = async (
+/** A person's whereabouts rows, read for their own Operator. */
+export let whereaboutsOf = async (
   env: Pick<Env, 'STORE'>,
   person: string,
   dir?: Kept,
 ): Promise<Bundle[]> => {
   dir ??= await kept(env)
-  return await dir.read(line`.presence.person=${person}&*`)
+  return await dir.read(line`.whereabouts.person=${person}&*`)
 }
 
 /** What a person's own Operator (of space `place`) sees of them, none for
@@ -67,13 +67,13 @@ export let seen = async (
   now: number = Date.now(),
   dir?: Kept,
 ): Promise<Glance | undefined> => {
-  let rows = await presenceOf(env, person, dir)
+  let rows = await whereaboutsOf(env, person, dir)
   return rows.length ? glance(rows, { place, now }) : undefined
 }
 
 /** The line each turn of a person's own Operator is given, about them and
  * no one else: "Jeff: here, this tab · Discord online". */
-export let presenceItem = async (
+export let whereaboutsItem = async (
   env: Pick<Env, 'STORE'>,
   person: string,
   place: string,
@@ -87,17 +87,17 @@ export let presenceItem = async (
   if (!g) return
   let name = String((row?.doc as { title?: string })?.title || 'They')
   return 'Where the person you are talking with is now, which says where ' +
-    'to reach them (presence_show has more): ' + presenceLine(name, g)
+    'to reach them (whereabouts_show has more): ' + whereaboutsLine(name, g)
 }
 
-/** The Operator's `presence_show`: where the person it works for is now,
+/** The Operator's `whereabouts_show`: where the person it works for is now,
  * channel by channel, and where something that needs them reaches them. */
-export let presenceShow = (
+export let whereaboutsShow = (
   env: Pick<Env, 'STORE'>,
   person: string,
   space: string,
 ): Tool => ({
-  name: 'presence_show',
+  name: 'whereabouts_show',
   title: 'See where they are',
   readOnly: true,
   description:
@@ -105,12 +105,12 @@ export let presenceShow = (
   parameters: { type: 'object', properties: {} },
   run: async () => {
     let now = Date.now()
-    let rows = await presenceOf(env, person)
+    let rows = await whereaboutsOf(env, person)
     let g = glance(rows, { place: space, now })
     return JSON.stringify({
-      line: presenceLine('They', g),
+      line: whereaboutsLine('They', g),
       reach: reachBy(g),
-      channels: rows.flatMap(({ presence: p }) => {
+      channels: rows.flatMap(({ whereabouts: p }) => {
         let at = (p as { at?: string })?.at
         if (!p || !at) return []
         let { channel, place, state } = p as Record<string, string>

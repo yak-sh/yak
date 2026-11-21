@@ -110,16 +110,16 @@
       },
       "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
     },
-    "presence": {
+    "whereabouts": {
       "component": true,
       "type": "object",
-      "description": "where a person is available on one channel, as it last changed: one row per person, channel and place, its eid derived from the three (@yaks/notify/presence `presenceEid`). A row is written when its state changes, or again while it holds once it is old enough to fade; a row older than its channel's fade says nothing.",
+      "description": "where a person is available on one channel, as it last changed: one row per person, channel and place, its eid derived from the three (@yaks/notify/whereabouts `whereaboutsEid`). A row is written when its state changes, or again while it holds once it is old enough to fade; a row older than its channel's fade says nothing.",
       "properties": {
         "person": {
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "whose presence it is"
+          "description": "whose whereabouts it is"
         },
         "channel": {
           "type": "string",

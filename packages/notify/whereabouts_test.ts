@@ -3,12 +3,12 @@ import {
   type Channel,
   glance,
   noted,
-  presenceLine,
   reachBy,
   type Row,
   type State,
   tabsState,
-} from './presence.ts'
+  whereaboutsLine,
+} from './whereabouts.ts'
 
 let T = Date.parse('2026-11-20T12:00:00Z')
 let MIN = 60_000
@@ -20,7 +20,7 @@ let say = (channel: Channel, state: State, place?: string) => ({
 })
 let row = (channel: Channel, state: State, ago = 0, place?: string) => ({
   entity: { eid: channel + (place ?? '') },
-  presence: {
+  whereabouts: {
     ...say(channel, state, place),
     at: new Date(T - ago).toISOString(),
   },
@@ -83,6 +83,6 @@ test('the line and the reach, from the rows still standing', () => {
   ]
   for (let [rows, line, reach] of cases) {
     let g = glance(rows, { place: 'home', now: T })
-    equal([presenceLine('Jeff', g), reachBy(g)], [line, reach])
+    equal([whereaboutsLine('Jeff', g), reachBy(g)], [line, reach])
   }
 })
