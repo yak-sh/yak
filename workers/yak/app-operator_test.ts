@@ -1,4 +1,5 @@
-// An app's own worker tells its space's Operator something, once a key.
+// An app's own worker tells its space's Operator something, once a key; a
+// page sends its signed-in reader's words into their own conversation.
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -213,4 +214,53 @@ test('a page or a person cannot tell the Operator, and a tell says something by 
       [400, 'arguments'],
     ],
   )
+})
+
+let send = (body: unknown, headers: Record<string, string> = { cookie }) =>
+  k.at(`${slug}.yaks.app`, '/township/api/operator/send', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      referer: `https://${slug}.yaks.app/township/`,
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  })
+
+test("a page sends a reader's words into their own conversation, with its context", async () => {
+  let r = await send({
+    say: 'Is this right?',
+    context: { passage: 'Dues are paid in May.', revision: 3 },
+  })
+  let { request, conversation } = await r.json()
+  assertEquals(r.status, 202)
+  assertStringIncludes(conversation, `/${request}`)
+  await k.settled()
+  let { entries } = JSON.parse(
+    String(
+      (await connector(k, cookie).answer('operator_read', {
+        space: slug,
+        task: request,
+      })).text,
+    ),
+  )
+  let [words] = entries.filter((e: { channel?: { name: string } }) =>
+    e.channel?.name == 'chat'
+  )
+  assertEquals(words.content.body, 'Is this right?')
+  assertStringIncludes(
+    words.channel.framing,
+    `Sent from the page https://${slug}.yaks.app/township/ of the app township, which gave this context with their words: {"passage":"Dues are paid in May.","revision":3}. Their words: `,
+  )
+})
+
+test('a signed-out reader is told to sign in, and a send says something', async () => {
+  let [status, { error }] = await said(await send({ say: 'Hi' }, {}))
+  assertEquals([status, error.code, typeof error.signIn], [
+    401,
+    'sign_in',
+    'string',
+  ])
+  assertEquals((await send({ say: ' ' })).status, 400)
+  assertEquals((await send({ say: 'Hi', context: [1] })).status, 400)
 })

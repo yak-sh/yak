@@ -608,6 +608,20 @@ export let store = (base, { clock = system } = {}) => {
   // after someone has typed.
   let me = () => ask('who')
 
+  // Words from this page's signed-in reader to the space's Operator, in their
+  // own conversation with it and as them: `say` is their words, and `context`
+  // what the page says beside them, such as the passage they selected and the
+  // app's revision. It starts a turn there, with the reader's permissions in
+  // the space, and answers `{request, conversation}`: the request's id and the
+  // address of the conversation, where the Operator answers. A signed-out
+  // reader is refused with `signIn`, where they sign in and come back.
+  let operatorSend = (say, context = {}) =>
+    ask('operator/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ say, context }),
+    })
+
   // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The
   // door answers `{eid, url, mime, bytes}` — the eid to point a row at
   // (`{photo: {caption, blob: eid}}`) and the url to put in an `<img src>`.
@@ -856,6 +870,7 @@ export let store = (base, { clock = system } = {}) => {
     apply,
     outbox,
     me,
+    operatorSend,
     query,
     search,
     subscribe,
@@ -968,6 +983,7 @@ export let {
   apply,
   drafts,
   me,
+  operatorSend,
   outbox,
   publicFiles,
   publish,

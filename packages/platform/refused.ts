@@ -26,6 +26,9 @@ export let SAYS: Record<string, string> = {
   refused: 'the app store would not take that',
   // A stranger's first write, when no store of their own can be made for it:
   // too many made from one place, or the app holds all it keeps.
+  // A page's word to the Operator (`./api/operator/send`) is the reader's
+  // own, so it needs a reader.
+  sign_in: 'sign in to send this to the Operator',
   sign_up: 'sign up to keep your own copy of this app: too many people are ' +
     'trying it right now to keep one in this browser',
 }

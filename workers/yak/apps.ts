@@ -283,7 +283,10 @@ let DOORS = new Map<string, () => Promise<Answer>>([
   }],
   ['rtc', async () => (await import('./rtc.ts')).voice],
   ['notices', async () => (await import('./notices.ts')).notices],
-  ['operator', async () => (await import('./app-operator.ts')).tell],
+  ['operator', async () => {
+    let { send, tell } = await import('./app-operator.ts')
+    return async (asked) => await send(asked) ?? await tell(asked)
+  }],
   ['form', async () => (await import('./forms.ts')).forms],
   ['line', async () => (await import('./app-texts.ts')).lineAnswer],
 ])
@@ -779,10 +782,17 @@ export let wearing = (
   return {
     ...badged(space, app, env),
     edit: editOf(space, app, env, who),
+    send: sendOf(app, who),
     ...api ? { api } : {},
     bar: barOf(env, app, who),
   }
 }
+
+/** Whether the corner of this app's pages offers its reader the note to the
+ * space's Operator (public/edit.js, app-operator.ts `send`): to anyone signed
+ * in, the same for every one of them who holds no seat, as Site keeps their
+ * page (`aloneOf`). A sandboxed app's pages reach no platform door. */
+export let sendOf = (app: App, who: Who) => !!who.person && !sandboxed(app)
 
 /** The Operator's chat for this app, which the pencil on its pages offers
  * (public/edit.js), or null where it wears no pencil: for whoever the file

@@ -38,7 +38,7 @@ import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { NEW_APP, onPage } from './operator-view.ts'
+import { fromApp, NEW_APP, onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
 import { type Stepped, STEPPING } from './walkthrough.ts'
 import { inputOf, type Intake, take } from '@yaks/session/intake'
@@ -103,8 +103,11 @@ export type Request = {
   // told it, on the `app` channel (app-operator.ts).
   app?: string
   // The address of the yaks.app page the words were written on, on the
-  // `chat` channel.
+  // `chat` channel; of the app's page, when the app sent them.
   page?: string
+  // What the app's page said beside the words it sent for its reader, on
+  // the `chat` channel (app-operator.ts `send`): the passage, the revision.
+  context?: Record<string, unknown>
   // Asked for on the New app screen, on the `chat` channel: its words are a
   // request for a new app (operator-view.ts `NEW_APP`).
   new_app?: boolean
@@ -947,6 +950,8 @@ let BY: Record<
     (request.stepped ? STEPPING(request.stepped) : '') +
     (request.new_app
       ? NEW_APP
+      : request.context && request.page
+      ? fromApp(request.page, request.app, request.context)
       : request.page
       ? onPage(request.page, request.app)
       : ''),

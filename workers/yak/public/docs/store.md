@@ -49,11 +49,11 @@ at `../api/client.js`.
 
 ## Exports of `client.js`
 
-`client.js` exports sixteen names. These eleven are bound to the app's own
+`client.js` exports seventeen names. These twelve are bound to the app's own
 store:
 
-- the functions `apply`, `query`, `search`, `subscribe`, `upload` and `me`, and
-  the `outbox` object, each documented below.
+- the functions `apply`, `query`, `search`, `subscribe`, `upload`, `me` and
+  `operatorSend`, and the `outbox` object, each documented below.
 - `drafts`, which keeps a person's typed input in the store
   ([Realtime Sync and Persistence](./storage.md)).
 - `publish`, `unpublish` and `publicFiles`, which put a file on the public web
@@ -69,13 +69,13 @@ These five functions need no store:
 - `qr(text, label)`, an inline SVG QR code, documented below.
 - `store(base)`, described next.
 
-`store(base)` returns an object holding the eleven names bound to a store
-(`apply`, `query`, `search`, `subscribe`, `upload`, `me`, `outbox`, `drafts`,
-`publish`, `unpublish` and `publicFiles`), pointed at the store at the address
-you pass. Every app in a space shares one hostname, so a sibling app (another
-app in the same space) is addressed by its path, with or without the trailing
-slash. The sibling answers according to its own `access` setting, whoever is
-asking:
+`store(base)` returns an object holding the twelve names bound to a store
+(`apply`, `query`, `search`, `subscribe`, `upload`, `me`, `operatorSend`,
+`outbox`, `drafts`, `publish`, `unpublish` and `publicFiles`), pointed at the
+store at the address you pass. Every app in a space shares one hostname, so a
+sibling app (another app in the same space) is addressed by its path, with or
+without the trailing slash. The sibling answers according to its own `access`
+setting, whoever is asking:
 
     import { store } from './api/client.js'
 
@@ -210,6 +210,48 @@ reads the file a few MiB at a time, so it works on a file larger than memory.
 Returns `{person, name, role, reads, writes, signIn, invited, visit}` to any
 caller, including a signed-out visitor at a `private` app, so a page can always
 ask what the visitor may do. The fields are described below.
+
+### operatorSend(say, context?)
+
+    try {
+      let { conversation } = await operatorSend('Is this still true?', {
+        selection: 'Dues are paid in May.',
+        section: 'Dues',
+        release: 12,
+      })
+      status.innerHTML = `Sent. <a href="${conversation}">See the answer</a>.`
+    } catch (e) {
+      if (e.signIn) location.assign(e.signIn)
+      else throw e
+    }
+
+Sends the reader's words to the space's Operator, in their own conversation with
+it and as them. It is how a page lets its reader ask about what they are
+reading, critique it, or ask for a change, without copying anything into the
+chat.
+
+- **`say`** is the reader's words, up to 4,000 characters. Send only what they
+  typed: the Operator reads it as theirs.
+- **`context`** is an object of what the page knows about where they are, up to
+  4,000 characters as JSON: the passage they selected, the section, the
+  revision, a row's eid. The Operator reads it beside their words, with the
+  page's address and the app's slug.
+- It starts a turn in their conversation, with the reader's own permissions in
+  the space: the Operator can change the app for an owner or an editor, and
+  answers a viewer. A reader who holds no seat in the space is answered by a
+  helper with a guest's tools, which passes on to the space's people what only
+  they can do. The turn is paid from the space's budget.
+- It answers `{request, conversation}`: the request's id and the address of the
+  conversation on yaks.app, where the Operator answers.
+- A signed-out reader is refused `401 sign_in` with `e.signIn`, where they sign
+  in and come back to the page. Keep what they typed first (`drafts`, or
+  `sessionStorage`), so it is still there when they return.
+
+Every app page already offers this to a signed-in reader without any code: the
+note button in the bottom-right corner quotes the text they selected and sends
+their words with the page, its title, the selection, the heading it is under and
+the release. Call `operatorSend` when the page should offer it in its own place,
+such as a button beside each passage.
 
 ### outbox
 
@@ -694,6 +736,12 @@ directly from `curl`, from another page, or from your own `worker.js` through
     → {"person": null, "name": null, "role": null, "reads": true,
        "writes": false, "signIn": "https://yaks.app/login?return=…",
        "invited": false, "visit": null}
+
+    POST ./api/operator/send
+    content-type: application/json
+    {"say": "Is this still true?", "context": {"selection": "Dues are paid in May."}}
+    → 202 {"request": "7d1e…",
+           "conversation": "https://yaks.app/manage/operator/clerk/7d1e…"}
 
     GET ./api/vocab.json
     → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,

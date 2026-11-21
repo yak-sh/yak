@@ -56,6 +56,20 @@ export let onPage = (page: string, app?: string) =>
     app ? `, with the app ${app} open beside it` : ''
   }: `
 
+/** How a reader's words an app's page sent reach the Operator (app-operator.ts
+ * `send`): the page, the app, and what the page said beside them. The context
+ * is the app's, and says what the words are about. */
+export let fromApp = (
+  page: string,
+  app: string | undefined,
+  context: Record<string, unknown>,
+) =>
+  `Sent from the page ${page}${app ? ` of the app ${app}` : ''}, which gave ${
+    Object.keys(context).length
+      ? `this context with their words: ${JSON.stringify(context)}`
+      : 'no context with their words'
+  }. Their words: `
+
 /** How the words of the New app screen reach the Operator (desk-pages.ts
  * `asking`), in place of the page they were written on: a request for a new
  * app, which the person's own words on that screen leave out. */
