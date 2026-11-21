@@ -158,9 +158,18 @@ test('the People page invites and takes people off the way member_add and member
       title: 'Notes',
     })
     let roster = managePath('people', jeff.email.split('@')[0])
-    let page = (q = '') =>
-      k.at(k.host, `${roster}${q}`, { headers: { cookie: jeff.cookie } })
+    let page = () =>
+      k.at(k.host, roster, { headers: { cookie: jeff.cookie } })
         .then((r) => r.text())
+    // The page a press lands on, with what it said in its one-time cookie.
+    let landed = (res: Response) =>
+      k.at(k.host, new URL(res.headers.get('location')!).pathname, {
+        headers: {
+          cookie: `${jeff.cookie}; ${
+            res.headers.get('set-cookie')!.split(';')[0]
+          }`,
+        },
+      }).then((r) => r.text())
     assertStringIncludes(await page(), 'Send invitation')
 
     let ana = await signIn(k)
@@ -171,11 +180,10 @@ test('the People page invites and takes people off the way member_add and member
       note: 'have a look',
     })
     assertEquals(sent.status, 303)
-    let back = new URL(sent.headers.get('location')!)
-    assertEquals(back.pathname, roster)
+    assertEquals(new URL(sent.headers.get('location')!).pathname, roster)
     let l = await letter(k, ana.email, '/invite?t=')
     assertStringIncludes(l.body, '> have a look')
-    let listed = await page(back.search)
+    let listed = await landed(sent)
     assertStringIncludes(listed, 'Invitation sent.')
     assertStringIncludes(listed, 'Notes · this app only')
     assertStringIncludes(listed, `${ana.email} · viewer · `)
@@ -186,7 +194,7 @@ test('the People page invites and takes people off the way member_add and member
       app: 'notes',
     })
     assertEquals(gone.status, 303)
-    let after = await page(new URL(gone.headers.get('location')!).search)
+    let after = await landed(gone)
     assertStringIncludes(after, 'Removed.')
     assert(!after.includes(ana.email))
 

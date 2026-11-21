@@ -229,9 +229,17 @@ test("a lowered or removed owner's Operators keep no reach beyond their seat", a
     "(was owner); mine's Operator no longer works there",
   )
   assertEquals(editing, { mine: null, solo: 'editor', ours: 'editor' })
-  assertEquals(removed.status, 200)
+  // Said on the page the press lands on, carried in its one-time cookie.
+  assertEquals(removed.status, 303)
+  let said = removed.headers.get('set-cookie')!.split(';')[0]
+  let landed = await handler.fetch(
+    new Request(removed.headers.get('location')!, {
+      headers: { cookie: `${cookie}; ${said}` },
+    }),
+    env,
+  )
   assertStringIncludes(
-    await removed.text(),
+    await landed.text(),
     "solo's Operator no longer works there",
   )
   assertEquals(gone, { mine: null, solo: null, ours: 'editor' })
