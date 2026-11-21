@@ -142,6 +142,16 @@ test('settings an image model does not take, and a refused prompt, are bad reque
   assertEquals((e as { code: string }).code, 'bad_request')
 })
 
+test("a refusal carries OpenAI's parameter and message", async () => {
+  let error = { code: 'invalid_value', param: 'size', message: 'Bad size.' }
+  let h = harness(() => Response.json({ error }, { status: 400 }))
+  let e = await assertRejects(() => h.model(ask('gpt-image-2.6-flare')))
+  assertEquals(
+    (e as Error).message,
+    'OpenAI refused the image (400, invalid_value, param size): Bad size.',
+  )
+})
+
 test('a store with no room refuses before the image is asked or paid for', async () => {
   let full = () => Promise.reject(new ModelError('space_full', 'full'))
   let h = harness(ok, full)

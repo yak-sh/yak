@@ -246,6 +246,17 @@ let deliver = async (
   }
 }
 
+type Refusal = { error?: { code?: string; param?: string; message?: string } }
+
+/** OpenAI's refusal in its own words: the status, its code, the parameter it
+ * names and its message, so a caller can fix its request. */
+let refusal = (status: number, body: unknown) => {
+  let { code, param, message } = (body as Refusal)?.error ?? {}
+  let head = [status, code, param && 'param ' + param].filter(Boolean)
+  return `OpenAI refused the image (${head.join(', ')})` +
+    (message ? ': ' + message : '')
+}
+
 /** The Image API as a model: the newest user text is the prompt, image items
  * its references, and `req.input` its settings. The answer is kept as a private
  * receipt before its bytes are stored, so a stored image is never bought twice. */
@@ -293,13 +304,9 @@ export let generations = (options: Generations) => {
       throw new ModelError('transport', 'OpenAI image connection failed')
     }
     if (!res.ok) {
-      let code = await res.json().then(
-        (b) => (b as { error?: { code?: string } })?.error?.code,
-        () => undefined,
-      )
       throw new ModelError(
         res.status == 400 ? 'bad_request' : 'http_' + res.status,
-        `OpenAI refused the image (${res.status}${code ? ', ' + code : ''})`,
+        refusal(res.status, await res.json().catch(() => undefined)),
         res.status == 429 || res.status >= 500 ? { after: 0 } : undefined,
       )
     }
