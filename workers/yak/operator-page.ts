@@ -206,13 +206,14 @@ export let keepCard = (back: string) =>
         'Email',
         h(Field, {
           id: 'keep-email',
+          placeholder: 'you@example.com',
           name: 'address',
           type: 'email',
           required: true,
           autocomplete: 'email',
         }),
       ),
-      h('input', { type: 'hidden', name: 'return', value: back }),
+      h(Form.Hidden, { name: 'return', value: back }),
     ),
     h(
       Form.Actions,
@@ -286,9 +287,9 @@ export let chatCard = (
           method: 'post',
           action: enabling(connections, i.testing ? [i.name] : []),
         },
-        h('input', { type: 'hidden', name: 'do', value: 'add' }),
-        h('input', { type: 'hidden', name: 'integration', value: i.name }),
-        h('input', { type: 'hidden', name: 'back', value: at }),
+        h(Form.Hidden, { name: 'do', value: 'add' }),
+        h(Form.Hidden, { name: 'integration', value: i.name }),
+        h(Form.Hidden, { name: 'back', value: at }),
         h(Button, { type: 'submit' }, label),
       )
     let hearing = (s: Server, i: number) => {
@@ -312,7 +313,7 @@ export let chatCard = (
       return h(
         'form',
         { method: 'post', action: `${at}?chat=1` },
-        h('input', { type: 'hidden', name: 'connection', value: s.connection }),
+        h(Form.Hidden, { name: 'connection', value: s.connection }),
         s.rooms
           ? field(
             id,
@@ -446,7 +447,7 @@ export let textsCard = (
         method: 'post',
         action: `${at}?texts=1`,
         hidden: true,
-      }, h('input', { type: 'hidden', name: 'stop', value: '1' }))
+      }, h(Form.Hidden, { name: 'stop', value: '1' }))
       : null,
   )
 
@@ -475,6 +476,7 @@ let agreeing = (label: string) => [
     'Verification code',
     h(Field, {
       id: 'texts-code',
+      placeholder: '6 digits from your text',
       name: 'code',
       inputmode: 'numeric',
       autocomplete: 'one-time-code',

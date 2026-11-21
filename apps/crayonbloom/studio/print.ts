@@ -79,23 +79,29 @@ let Destination = () =>
       Form,
       { 'data-destination': true },
       ([
-        ['name', 'Recipient name'],
-        ['street1', 'Street address'],
-        ['street2', 'Apartment or unit', '', true],
-        ['city', 'City'],
-        ['state_code', 'State or region'],
-        ['postcode', 'Postal code'],
-        ['country_code', 'Country code', 'US'],
-        ['phone_number', 'Delivery phone'],
-      ] as [string, string, string?, boolean?][]).map((
-        [name, title, defaultValue, optional],
-      ) =>
-        h(Labeled, { id: 'to-' + name, title, name, defaultValue, optional })
+        ['name', 'Recipient name', 'e.g. Maya Chen'],
+        ['street1', 'Street address', 'e.g. 123 Oak Street'],
+        ['street2', 'Apartment or unit', 'e.g. Apt 2B', '', true],
+        ['city', 'City', 'e.g. Kalamazoo'],
+        ['state_code', 'State or region', 'e.g. MI'],
+        ['postcode', 'Postal code', 'e.g. 49007'],
+        ['country_code', 'Country code', 'e.g. US', 'US'],
+        ['phone_number', 'Delivery phone', '269-555-0142'],
+      ] as const).map(([name, title, placeholder, defaultValue, optional]) =>
+        h(Labeled, {
+          id: 'to-' + name,
+          title,
+          name,
+          placeholder,
+          defaultValue,
+          optional,
+        })
       ),
       h(Labeled, {
         id: 'to-quantity',
         title: 'Copies',
         name: 'quantity',
+        placeholder: 'e.g. 1',
         type: 'number',
         min: 1,
         defaultValue: 1,

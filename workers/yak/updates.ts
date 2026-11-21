@@ -1,4 +1,4 @@
-import { Empty } from '@yaks/ui/parts'
+import { Empty, Form } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
 // (@yaks/platform/routes `managePath('updates', …)`), beside the chat app's side
@@ -101,7 +101,7 @@ let form = (
       action: managePath('updates', space.slug),
     },
     [...fields, ['id', crypto.randomUUID()]].map(([name, value]) =>
-      h('input', { type: 'hidden', name, value })
+      h(Form.Hidden, { name, value })
     ),
     ...inner,
   )
@@ -272,6 +272,7 @@ let other = (space: Space, u: Update) =>
           lines: true,
           name: 'choice',
           required: true,
+          placeholder: 'Your own answer…',
           'aria-label': 'Your own answer',
         }),
         h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
@@ -297,6 +298,7 @@ let replying = (space: Space, u: Update) =>
           name: 'say',
           required: true,
           'aria-label': `Your words to ${space.operator}`,
+          placeholder: 'Write a follow-up…',
         }),
         h(Button, { mod: 'go', type: 'submit' }, 'Send'),
       ),

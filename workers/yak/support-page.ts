@@ -115,6 +115,7 @@ export let view = (t: Thread, me: string, say?: string, no?: boolean) =>
         class: 'Support_Input',
         lines: true,
         name: 'text',
+        placeholder: 'Write a reply…',
         required: true,
         'aria-label': 'Add to the thread',
       }),

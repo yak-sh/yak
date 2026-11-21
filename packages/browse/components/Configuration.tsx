@@ -148,6 +148,7 @@ let Authorization = () => {
           <Field
             type='password'
             aria-label='Sign-in return URL'
+            placeholder='Paste the URL from your browser'
             autocomplete='off'
             value={state.callback}
             onInput={(ev: InputEvent) => {

@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import { keys, read } from '@yaks/copy'
-import { Button, Card, Field } from '@yaks/ui'
+import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
@@ -180,8 +180,8 @@ let Step = ({ app, step }: { app: string; step: string }) => {
           <span class='Walk_Picture' data-walk-shot={`${app}/${step}`} />
         </a>
         <form class='Walk_Ask' method='post' action={START}>
-          <input type='hidden' name='demo' value={app} />
-          <input type='hidden' name='step' value={step} />
+          <Form.Hidden name='demo' value={app} />
+          <Form.Hidden name='step' value={step} />
           <label
             class='Walk_Label'
             for={`ask-${app}-${step}`}

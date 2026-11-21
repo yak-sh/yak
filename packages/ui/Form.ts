@@ -14,11 +14,11 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { type FunctionComponent, h } from 'preact'
+import { block, type Part, type Props } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'
-import { Field } from './Field.ts'
+import { drawNativeInput, Field } from './Field.ts'
 
 /** A form. */
 export let Form:
@@ -33,16 +33,23 @@ export let Form:
     | 'Actions'
     | 'Trap',
     Part
-  > = block('form', 'Form', {
-    Field: 'div',
-    Label: 'label',
-    Optional: 'span',
-    Hint: 'p',
-    Value: 'p',
-    Line: 'div',
-    Actions: 'div',
-    Trap: 'div',
-  })
+  >
+  & { Hidden: FunctionComponent<Props & { name: string }> } = Object.assign(
+    block('form', 'Form', {
+      Field: 'div',
+      Label: 'label',
+      Optional: 'span',
+      Hint: 'p',
+      Value: 'p',
+      Line: 'div',
+      Actions: 'div',
+      Trap: 'div',
+    }),
+    {
+      Hidden: ({ type: _, ...p }: Props & { name: string }) =>
+        drawNativeInput(h, { type: 'hidden', ...p }),
+    },
+  )
 
 /** What it is, in a line. */
 export let description =
@@ -88,7 +95,12 @@ export let specimens = (): Specimen[] => [
           'How to get the key ',
           h(Optional, {}, '(optional)'),
         ),
-        h(Field, { id: 'form-note', lines: true, value: '' }),
+        h(Field, {
+          id: 'form-note',
+          placeholder: 'Describe what this key is used for…',
+          lines: true,
+          value: '',
+        }),
       ),
       h(
         Form.Field,
@@ -110,7 +122,11 @@ export let specimens = (): Specimen[] => [
         h(
           Line,
           {},
-          h(Field, { id: 'form-tag', value: 'weather' }),
+          h(Field, {
+            id: 'form-tag',
+            placeholder: 'e.g. weather',
+            value: 'weather',
+          }),
           h(Button, { type: 'button' }, 'add'),
         ),
       ),

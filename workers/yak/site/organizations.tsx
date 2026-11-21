@@ -92,7 +92,7 @@ export let Organizations = () => (
         />
         <p class='Note' {...text('organizations.hello.note')} />
         <Form method='post' action={START} id='start'>
-          <input type='hidden' name='org' value='organization' />
+          <Form.Hidden name='org' value='organization' />
           <Form.Field>
             <Form.Label for='say' {...text('organizations.hello.label')} />
             <Form.Line>

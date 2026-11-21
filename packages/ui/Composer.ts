@@ -7,12 +7,12 @@
  */
 import { Form } from './Form.ts'
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { type FunctionComponent, h } from 'preact'
+import { block, el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'
 import { Drop } from './Drop.ts'
-import { Field } from './Field.ts'
+import { Field, type FieldProps } from './Field.ts'
 import { Notice } from './Notice.ts'
 
 let Gather: Part = ({ over, ...p }) =>
@@ -25,7 +25,6 @@ export let Composer:
   & Record<
     | 'Form'
     | 'Figure'
-    | 'Field'
     | 'Tools'
     | 'Attach'
     | 'File'
@@ -35,19 +34,24 @@ export let Composer:
     | 'Status'
     | 'To',
     Part
-  > = block(Gather, 'Composer', {
-    Form,
-    Figure: 'img',
-    Field: Field as Part,
-    Tools: 'div',
-    Attach: 'label',
-    File: Drop.File,
-    Stop: Button,
-    Send: Send,
-    Voice: Button,
-    Status: Notice,
-    To: 'p',
-  })
+  >
+  & { Field: FunctionComponent<FieldProps> } = Object.assign(
+    block(Gather, 'Composer', {
+      Form,
+      Figure: 'img',
+      Tools: 'div',
+      Attach: 'label',
+      File: Drop.File,
+      Stop: Button,
+      Send: Send,
+      Voice: Button,
+      Status: Notice,
+      To: 'p',
+    }),
+    {
+      Field: el(Field, 'Composer_Field'),
+    },
+  )
 /** What this part presents. */
 export let description =
   'A message field, attachments and controls for sending it.'

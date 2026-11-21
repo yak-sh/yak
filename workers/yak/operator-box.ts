@@ -20,7 +20,7 @@ import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import type { Drafts } from '@yaks/ux'
 import { Conversation } from '@yaks/ux/conversation'
-import { Attachments, Button, Composer, Drop, Icon } from '@yaks/ui/parts'
+import { Attachments, Button, Composer, Drop, Form, Icon } from '@yaks/ui/parts'
 import { Idle } from './mascot.ts'
 import { icons } from './icons.ts'
 import { Filed, fileSize } from '@yaks/session/conversation'
@@ -226,8 +226,8 @@ export let Ask = (
       h(Icon, { of: icons['arrow-down'] }),
       'Newest',
     ),
-    h('input', { type: 'hidden', name: 'request', value: request }),
-    h('input', { type: 'hidden', name: 'page', value: here }),
-    app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
+    h(Form.Hidden, { name: 'request', value: request }),
+    h(Form.Hidden, { name: 'page', value: here }),
+    app ? h(Form.Hidden, { name: 'app', value: app.slug }) : null,
   )
 }

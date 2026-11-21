@@ -23,17 +23,31 @@ import { Surface } from './Surface.ts'
 import { el, type Props } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 
-let Input = el(Surface.Well, 'Field')
+let name = 'Field'
+let Input = el(Surface.Well, name)
+let tagOf = (choose?: boolean, lines?: boolean) =>
+  choose ? 'select' : lines ? 'textarea' : 'input'
 
 /** What a field takes besides a part's props. */
-export type FieldProps = Props & {
-  /** several lines: a textarea, where a newline can be typed */
-  lines?: boolean
-  /** a value picked from its options, the field's children: a select */
-  choose?: boolean
-  /** the caret's offset into `value`, while the field has the keyboard */
-  caret?: number
-}
+export type FieldProps =
+  & Props
+  & {
+    /** several lines: a textarea, where a newline can be typed */
+    lines?: boolean
+    /** the caret's offset into `value`, while the field has the keyboard */
+    caret?: number
+  }
+  & (
+    | { choose: true; lines?: false; as?: 'select'; placeholder?: never }
+    | {
+      choose?: false
+      lines?: false
+      type: 'file' | 'date' | 'time' | 'datetime-local'
+      as?: 'input'
+      placeholder?: never
+    }
+    | { choose?: false; placeholder: string }
+  )
 
 /** Where offset `at` in `was` stands once it reads `now`: before the one
  * span that changed it stays, after it it moves by what the span grew, and
@@ -111,7 +125,7 @@ export let Field: FunctionComponent<FieldProps> = (
   }, [])
   return h(Input, {
     ...p,
-    as: as ?? (choose ? 'select' : lines ? 'textarea' : 'input'),
+    as: as ?? tagOf(choose, lines),
     elRef: ref,
     // Drawn, a text field is told what it already shows, so drawing it
     // again never writes over typing; `show` puts a new value in. A field
@@ -122,6 +136,33 @@ export let Field: FunctionComponent<FieldProps> = (
     'data-caret': caret,
   })
 }
+
+/** An input that a person cannot type into, for hosts that build DOM nodes directly. */
+export let drawNativeInput = <Node>(
+  draw: (tag: string, props: Record<string, unknown>) => Node,
+  props:
+    & { type: 'checkbox' | 'radio' | 'file' | 'hidden' }
+    & Record<string, unknown>,
+): Node => draw('input', props)
+
+/** A field for hosts that build DOM nodes directly. */
+export let drawField = <Node, Child>(
+  draw: (
+    tag: string,
+    props: Record<string, unknown>,
+    ...children: Child[]
+  ) => Node,
+  { lines, choose, class: extra, ...props }: FieldProps,
+  ...children: Child[]
+): Node =>
+  draw(
+    tagOf(choose, lines),
+    {
+      ...props,
+      class: extra ? `Surface_Well ${name} ${extra}` : `Surface_Well ${name}`,
+    },
+    ...children,
+  )
 
 /** What it is, in a line. */
 export let description =
@@ -142,8 +183,18 @@ export let native = (c: Colors): Native => ({
 /** Empty, typed in, typed in with the caret shown, picked in, and bare. */
 export let specimens = (): Specimen[] => [
   ['Field, empty', h(Field, { value: '', placeholder: 'filter…' })],
-  ['Field', h(Field, { value: '.task.status=open' })],
-  ['Field, caret', h(Field, { value: '.task.status=open', caret: 12 })],
+  [
+    'Field',
+    h(Field, { placeholder: 'Filter by status…', value: '.task.status=open' }),
+  ],
+  [
+    'Field, caret',
+    h(Field, {
+      placeholder: 'Filter by status…',
+      value: '.task.status=open',
+      caret: 12,
+    }),
+  ],
   [
     'Field, choose',
     h(
@@ -153,5 +204,13 @@ export let specimens = (): Specimen[] => [
       h('option', { value: 'done' }, 'done'),
     ),
   ],
-  ['Field-bare, lines', h(Field, { mod: 'bare', lines: true, value: 'set' })],
+  [
+    'Field-bare, lines',
+    h(Field, {
+      mod: 'bare',
+      lines: true,
+      placeholder: 'Write a note…',
+      value: 'set',
+    }),
+  ],
 ]

@@ -325,7 +325,7 @@ let Box = (
     sending,
     said,
     name,
-    placeholder,
+    placeholder = 'Write a message…',
     top,
     tools,
     beside,

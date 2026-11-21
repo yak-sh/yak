@@ -4,7 +4,7 @@
 // one row of buttons that open the person's mail app, phone or chat app
 // there, each chat place's wearing its platform's logo.
 import { h } from 'preact'
-import { Button, Card, Icon, Logo, Toolbar } from '@yaks/ui/parts'
+import { Button, Card, Form, Icon, Logo, Toolbar } from '@yaks/ui/parts'
 import { copyable, copying } from './pages.ts'
 import { type IconName, icons } from './icons.ts'
 import type { Env } from './env.ts'
@@ -80,7 +80,7 @@ let press = (p: Press) => {
       'form',
       { method: 'post', action: p.href, key: p.label },
       Object.entries(p.fields).map(([name, value]) =>
-        h('input', { type: 'hidden', name, value })
+        h(Form.Hidden, { name, value })
       ),
       h(Button, { type: 'submit' }, face),
     )

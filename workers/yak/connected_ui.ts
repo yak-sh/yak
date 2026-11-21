@@ -3,7 +3,7 @@
 // without a list still refresh prompts without touching surrounding inputs.
 // The rows are @yaks/ui's (Card, Rows, State, Button, Icon), drawn by the
 // pencil skin.
-import { Button, Card, Icon, Rows, State } from '@yaks/ui/parts'
+import { Button, Card, Form, Icon, Rows, State } from '@yaks/ui/parts'
 import { h } from 'preact'
 import type { Agent, Brand } from './connected.ts'
 import { icons } from './icons.ts'
@@ -14,7 +14,7 @@ let destinations: Partial<Record<Brand, { href: string; label: string }>> = {
 }
 
 let hidden = (name: string, value: string, more = {}) =>
-  h('input', { type: 'hidden', name, ...more, value })
+  h(Form.Hidden, { name, ...more, value })
 
 // A row's way out: it revokes what the row stands for and comes back to
 // `back` (identity.ts answers the post).

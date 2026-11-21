@@ -12,25 +12,31 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
-import { block, type Part } from './el.ts'
+import { type FunctionComponent, h } from 'preact'
+import { Field, type FieldProps } from './Field.ts'
+import { block, el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A value that can be changed, and its editors' parts. */
 export let Prop:
   & Part
   & Record<
-    'Val' | 'Hand' | 'Pop' | 'Tab' | 'Row' | 'Find' | 'Query',
+    'Val' | 'Hand' | 'Pop' | 'Tab' | 'Row' | 'Query',
     Part
-  > = block('span', 'Prop', {
-    Val: 'span',
-    Hand: 'button',
-    Pop: 'span',
-    Tab: 'button',
-    Row: 'span',
-    Find: 'input',
-    Query: 'span',
-  })
+  >
+  & { Find: FunctionComponent<FieldProps> } = Object.assign(
+    block('span', 'Prop', {
+      Val: 'span',
+      Hand: 'button',
+      Pop: 'span',
+      Tab: 'button',
+      Row: 'span',
+      Query: 'span',
+    }),
+    {
+      Find: el(Field, 'Prop_Find'),
+    },
+  )
 
 /** What it is, in a line. */
 export let description =

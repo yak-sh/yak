@@ -14,9 +14,9 @@ import {
   Cards,
   Empty,
   Field,
+  type FieldProps,
   Form,
   Notice,
-  type Part,
 } from '@yaks/ui/parts'
 import { Desk, Proof, Slip } from './site/parts.ts'
 
@@ -66,8 +66,8 @@ let field = (
   form: string,
   name: string,
   title: ComponentChildren,
-  props: Record<string, unknown> = {},
-  Control: Part | typeof Field = Field,
+  props: FieldProps,
+  Control = Field,
 ) =>
   h(
     Form.Field,
@@ -130,14 +130,22 @@ let Source = ({ book, on }: { book: Row | null; on: Does }) => {
     h(
       Form,
       { 'data-source': '', onInput: on.typed, onSubmit: on.keep },
-      field('book', 'title', 'Book title', { value: book?.doc.title }),
-      field('book', 'author', optional('Author'), { value: s.author }),
+      field('book', 'title', 'Book title', {
+        value: book?.doc.title,
+        placeholder: 'e.g. The Long Way Home',
+      }),
+      field('book', 'author', optional('Author'), {
+        value: s.author,
+        placeholder: 'e.g. Maya Chen',
+      }),
       field('book', 'markdown', 'Your conversation or Markdown', {
         lines: true,
         value: s.markdown,
+        placeholder: 'Paste a conversation or write your text…',
       }, Desk.Words),
       field('book', 'dedication', optional('Dedication'), {
         value: s.dedication,
+        placeholder: 'e.g. For everyone who helped me write this',
       }),
       h(
         Form.Hint,
@@ -220,16 +228,26 @@ let Destination = ({ on }: { on: Does }) =>
     h(
       Form,
       { 'data-destination': '', onSubmit: on.quote },
-      field('to', 'name', 'Recipient name'),
-      field('to', 'street1', 'Street address'),
-      field('to', 'street2', optional('Apartment or unit')),
-      field('to', 'city', 'City'),
-      field('to', 'state_code', 'State or region'),
-      field('to', 'postcode', 'Postal code'),
-      field('to', 'country_code', 'Country code', { value: 'US' }),
-      field('to', 'phone_number', 'Delivery phone'),
+      field('to', 'name', 'Recipient name', { placeholder: 'e.g. Maya Chen' }),
+      field('to', 'street1', 'Street address', {
+        placeholder: 'e.g. 123 Oak Street',
+      }),
+      field('to', 'street2', optional('Apartment or unit'), {
+        placeholder: 'e.g. Apt 2B',
+      }),
+      field('to', 'city', 'City', { placeholder: 'e.g. Kalamazoo' }),
+      field('to', 'state_code', 'State or region', { placeholder: 'e.g. MI' }),
+      field('to', 'postcode', 'Postal code', { placeholder: 'e.g. 49007' }),
+      field('to', 'country_code', 'Country code', {
+        value: 'US',
+        placeholder: 'e.g. US',
+      }),
+      field('to', 'phone_number', 'Delivery phone', {
+        placeholder: '269-555-0142',
+      }),
       field('to', 'quantity', 'Copies', {
         type: 'number',
+        placeholder: 'e.g. 1',
         min: 1,
         max: 100,
         value: 1,

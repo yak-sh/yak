@@ -1,3 +1,4 @@
+import { drawField, drawNativeInput } from '@yaks/ui/parts'
 import { day } from '@yaks/ui/relative'
 import { stamp } from './dates.ts'
 // An app's data editor (apps.ts serves it at `<app>/_web/data`): its rows
@@ -266,8 +267,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
         ],
         kind.hint ? h('p', { class: 'Card_Sub' }, kind.hint) : null,
         rows.length > 8
-          ? h('input', {
-            class: 'Field',
+          ? drawField(h, {
             type: 'search',
             placeholder: 'Find a row',
             'aria-label': 'Find a row',
@@ -308,7 +308,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
       : {}
 
   let fileControl = (f, id, value, writes, changed) => {
-    let hold = h('input', { type: 'hidden', name: place(f), value })
+    let hold = drawNativeInput(h, { type: 'hidden', name: place(f), value })
     let shown = h('div', { class: 'Form_Line' })
     let said = say('')
     let show = async (sha) => {
@@ -346,7 +346,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
     }
     // The drop zone (@yaks/ui `Drop`, public/drop.js); what is kept
     // shows above it, so it lists nothing chosen of its own.
-    let pick = h('input', {
+    let pick = drawNativeInput(h, {
       class: 'Drop_File',
       id,
       type: 'file',
@@ -410,7 +410,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
   }
 
   let controlOf = async (f, id, value, writes, changed) => {
-    let attrs = { class: 'Field', id, name: place(f), disabled: !writes }
+    let attrs = { id, name: place(f), disabled: !writes }
     if (f.control == 'file') {
       return fileControl(f, id, value, writes, changed)
     }
@@ -418,9 +418,9 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
       let choices = f.control == 'pick'
         ? await picks(f, value)
         : f.choices.map((c) => [c, c])
-      return h(
-        'select',
-        attrs,
+      return drawField(
+        h,
+        { ...attrs, choose: true },
         h('option', { value: '' }, 'None'),
         choices.map(([v, label]) =>
           h('option', { value: v, selected: v == value }, label)
@@ -431,7 +431,7 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
       return h(
         'label',
         { class: 'Check' },
-        h('input', {
+        drawNativeInput(h, {
           ...attrs,
           class: 'Check_Input',
           type: 'checkbox',
@@ -442,14 +442,25 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
       )
     }
     if (['text', 'lines', 'json'].includes(f.control)) {
-      let area = h('textarea', attrs)
-      area.value = value
-      return area
+      return drawField(h, {
+        ...attrs,
+        lines: true,
+        placeholder: {
+          text: 'Type a value…',
+          lines: 'One item per line',
+          json: 'Enter a JSON value',
+        }[f.control],
+        value,
+      })
     }
-    return h('input', {
+    if (f.control == 'time') {
+      return drawField(h, { ...attrs, type: 'datetime-local', value })
+    }
+    return drawField(h, {
       ...attrs,
-      type: { number: 'number', time: 'datetime-local', url: 'url' }[f.control],
+      type: f.control,
       step: f.control == 'number' ? 'any' : null,
+      placeholder: f.control == 'url' ? 'https://example.com' : 'e.g. 12',
       value,
     })
   }

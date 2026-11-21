@@ -14,7 +14,7 @@
 // before the Operator was told how (newcomer.ts `rebuilding`). The page first
 // showed after 83 and 81 seconds.
 import type { VNode } from 'preact'
-import { Button, Card, Field } from '@yaks/ui'
+import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
 import { Page, Yours } from './frame.tsx'
@@ -69,7 +69,7 @@ export let Churches = () => (
         </h1>
         <p class='Note' {...text('churches.hello.note')} />
         <form class='Hello_Ask' method='post' action={START}>
-          <input type='hidden' name='org' value='church' />
+          <Form.Hidden name='org' value='church' />
           <Field
             class='Hello_Field Hello_Field-line'
             id='say'

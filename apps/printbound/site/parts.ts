@@ -160,20 +160,17 @@ export let Foot:
  * on a phone, a `Column` holding several in one side of it. `Words` is the
  * field a book's words are pasted into, tall before any are. `Said` is where
  * the line the desk says back stays in sight. */
-export let Desk:
-  & Part
-  & Record<
-    'Head' | 'Back' | 'Title' | 'Spread' | 'Column' | 'Words' | 'Said',
-    Part
-  > = block('main', 'Desk', {
+export let Desk = Object.assign(
+  block('main', 'Desk', {
     Head: 'header',
     Back: 'a',
     Title: 'h1',
     Spread: 'div',
     Column: 'div',
-    Words: Field as Part,
     Said: 'div',
-  })
+  }),
+  { Words: el(Field, 'Desk_Words') },
+)
 
 /** A printer's proof: the composed `Pages` one under another, each `Page`
  * its `Image` over its `Caption`, then the `Files` they were cut from. */

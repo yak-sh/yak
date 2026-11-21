@@ -281,7 +281,10 @@ test('"Other" answers a question in the person\'s own words, which the Operator 
     other.querySelector('input[name=choose]')?.getAttribute('value'),
     'when',
   )
-  assertEquals(!!other.querySelector('textarea[name=choice]'), true)
+  assertEquals(
+    other.querySelector('textarea[name=choice]')?.getAttribute('placeholder'),
+    'Your own answer…',
+  )
   let sent = await updatesAnswer(
     new Request('https://yaks.app' + managePath('updates', 'club'), {
       method: 'POST',

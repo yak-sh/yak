@@ -1,5 +1,5 @@
 import { line } from '@yaks/query'
-import { Head } from '@yaks/ui/parts'
+import { Form, Head } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
 // what the spaces they own spent this month (each against its own budget), the
@@ -773,7 +773,7 @@ export let listing = (d: Reading, key: List, q: string) => {
           placeholder: `Search ${what}`,
           'aria-label': `Search ${what}`,
         }),
-        d.tests && h('input', { type: 'hidden', name: 'tests', value: '1' }),
+        d.tests && h(Form.Hidden, { name: 'tests', value: '1' }),
         h(Button, { type: 'submit' }, 'Search'),
       ),
       toggle,

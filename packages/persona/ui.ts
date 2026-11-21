@@ -24,6 +24,7 @@ export let NameCard = ({ name }: { name: string }): JSX.Element =>
       h(Field, {
         id: 'persona-name',
         name: 'name',
+        placeholder: 'e.g. Dana',
         value: name,
         maxlength: LONGEST,
         required: true,

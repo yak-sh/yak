@@ -53,7 +53,11 @@ export let specimens = (): Specimen[] => [[
     Save.Field,
     { as: Form.Field, mod: 'changed' },
     h(Save.Label, { as: Form.Label, for: 'save-name' }, 'Name'),
-    h(Field, { id: 'save-name', value: 'A changed name' }),
+    h(Field, {
+      id: 'save-name',
+      placeholder: 'e.g. My workspace',
+      value: 'A changed name',
+    }),
   ),
 ], [
   'A failed save keeps its changes',

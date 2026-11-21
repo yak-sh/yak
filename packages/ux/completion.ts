@@ -347,7 +347,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
         lines: p.lines,
         mod: p.mod,
         class: p.class,
-        placeholder: p.placeholder,
+        placeholder: p.placeholder ?? 'Type to search…',
         'aria-label': p['aria-label'],
         value: text,
         caret: p.active ? r?.caret ?? text.length : undefined,

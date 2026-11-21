@@ -12,7 +12,7 @@
  */
 
 import type { Sheet } from '@yaks/tui/theme'
-import type { ComponentType, VNode } from 'preact'
+import type { ComponentType, JSX } from 'preact'
 
 /** A theme's colours, named as its custom properties are (`hues` are
  * `--hue-0` to `--hue-5`). A terminal paints with one palette; where the
@@ -103,7 +103,7 @@ export type Style = Record<string, string | number>
 export type Native = Record<string, Style>
 
 /** One sample in the style guide: what it shows, and the tree. */
-export type Specimen = [label: string, node: VNode]
+export type Specimen = [label: string, node: JSX.Element]
 
 /** What each part of the kit brings besides its component: a line saying
  * what it is, its terminal entries, its native ones where it has a native

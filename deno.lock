@@ -3545,8 +3545,11 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/oauth@0.2.23",
             "npm:@yaks/testing@0.2.30",
+            "npm:@yaks/ui@0.2.30",
             "npm:esbuild@0.28.1",
-            "npm:linkedom@~0.18.12"
+            "npm:linkedom@~0.18.12",
+            "npm:preact-render-to-string@6.7.0",
+            "npm:preact@10.29.7"
           ]
         }
       },
@@ -5069,6 +5072,7 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
             "npm:@yaks/tools@0.2.30",
+            "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12"
           ]

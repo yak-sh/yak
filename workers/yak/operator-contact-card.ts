@@ -18,8 +18,8 @@ export let contactCard = (body: string) => {
   return h(
     Form,
     { method: 'post', action: contact.action, 'data-contact-form': '' },
-    h('input', { type: 'hidden', name: 'contact', value: contact.id }),
-    h('input', { type: 'hidden', name: 'number', value: contact.number }),
+    h(Form.Hidden, { name: 'contact', value: contact.id }),
+    h(Form.Hidden, { name: 'number', value: contact.number }),
     h('p', null, `Text you at ${contact.number}?`),
     h(
       Check,
@@ -38,6 +38,7 @@ export let contactCard = (body: string) => {
       h(Form.Label, null, 'Verification code'),
       h(Field, {
         name: 'code',
+        placeholder: '6 digits from your text',
         inputmode: 'numeric',
         autocomplete: 'one-time-code',
         pattern: '[0-9]{6}',

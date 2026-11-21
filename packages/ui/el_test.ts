@@ -6,7 +6,7 @@ import { block, el } from './el.ts'
 import { Field } from './Field.ts'
 import { parseHTML } from 'linkedom'
 
-let html = (node: VNode) => renderToString(node)
+let html = (node: Parameters<typeof renderToString>[0]) => renderToString(node)
 let Dot = el('span', 'Dot')
 let Card = block('div', 'Card', { Head: 'header' })
 
@@ -79,10 +79,10 @@ test('a composed field keeps its input kind and an explicit element', () => {
   for (let Part of [Field, Wrapped]) {
     for (
       let [props, tag] of [
-        [{}, 'INPUT'],
-        [{ lines: true }, 'TEXTAREA'],
+        [{ placeholder: 'Write a note…' }, 'INPUT'],
+        [{ lines: true, placeholder: 'Write a note…' }, 'TEXTAREA'],
         [{ choose: true }, 'SELECT'],
-        [{ lines: true, as: 'input' }, 'INPUT'],
+        [{ lines: true, as: 'input', placeholder: 'Write a note…' }, 'INPUT'],
       ] as const
     ) {
       let { document } = parseHTML(html(h(Part, props)))

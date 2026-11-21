@@ -317,6 +317,7 @@ UX things are considered from now on" (M-28). Each rule carries what he said.
 8. **Work over workers:** show the work being done, live, in plain words; helpers and other internals are details you can open, never headline cards. "i want to see what's happening, i care less about *who* is doing it", "they are implementation details, not some huge event to highlight"
 9. **Labelled prose:** text about the thing in front of you (this connection, this request) is labelled apart from general text about a service. "it should be clear which prose is about the connect request and which is about discord"
 10. **Modal actions:** a modal's actions go in a small card at the top-right of the main pane, not in the title bar. "add a little floated top-right action-card: Disconnect, Reconnect, the two links from the bottom, etc"
+11. **Placeholders:** every text input and textarea shows a short hint saying what to enter.
 
 ## Looking at it
 

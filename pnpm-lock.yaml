@@ -1997,9 +1997,18 @@ importers:
       '@yaks/oauth':
         specifier: 0.2.23
         version: link:../oauth
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
+      preact:
+        specifier: 10.29.7
+        version: 10.29.7(preact-render-to-string@6.7.0)
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.7)
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -5481,6 +5490,9 @@ importers:
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

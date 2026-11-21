@@ -12,7 +12,11 @@ test('a controlled changed field keeps the same label and control markup', () =>
         Save.Field,
         { as: Form.Field, changed },
         h(Form.Label, { for: 'name' }, 'Name'),
-        h(Field, { id: 'name', value: 'A name' }),
+        h(Field, {
+          id: 'name',
+          placeholder: 'e.g. My workspace',
+          value: 'A name',
+        }),
       ),
     )).document.querySelector('.Save_Field')!
   let clean = draw(false), changed = draw(true)

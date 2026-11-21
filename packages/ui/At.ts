@@ -27,6 +27,11 @@ export let sheet = (c: Colors): Sheet => ({
 export let specimens = (): Specimen[] => [
   [
     'At, End',
-    h(At, {}, h(Field, { value: 'dana' }), h(At.End, {}, '.yaks.app')),
+    h(
+      At,
+      {},
+      h(Field, { placeholder: 'e.g. dana', value: 'dana' }),
+      h(At.End, {}, '.yaks.app'),
+    ),
   ],
 ]

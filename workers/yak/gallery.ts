@@ -81,7 +81,7 @@ import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { type ComponentChildren, h } from 'preact'
-import { Button, Card, Notice } from '@yaks/ui/parts'
+import { Button, Card, Form, Notice } from '@yaks/ui/parts'
 import { markup } from './html.ts'
 import { GALLERY } from './seo.ts'
 import { drawn, head } from './shell.ts'
@@ -733,7 +733,7 @@ let confirm = (at: {
       h(
         'form',
         { method: 'post', action: REVIEW },
-        h('input', { type: 'hidden', name: 't', value: at.token }),
+        h(Form.Hidden, { name: 't', value: at.token }),
         h(
           Button,
           { mod: 'go', type: 'submit' },

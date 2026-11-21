@@ -14,7 +14,10 @@
     "@yaks/blob": "0.2.30",
     "@yaks/fp": "0.2.23",
     "@yaks/oauth": "0.2.23",
-    "esbuild": "0.28.1"
+    "@yaks/ui": "0.2.30",
+    "esbuild": "0.28.1",
+    "preact": "10.29.7",
+    "preact-render-to-string": "6.7.0"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

@@ -113,3 +113,4 @@ Jeff, 2026-11-20: "please ensure these UX things are considered from now on".
   when requesting it"
 - Show the work, not the workers: "i want to see what's happening, i care less
   about _who_ is doing it"
+- Every text input and textarea shows a short placeholder saying what to enter.

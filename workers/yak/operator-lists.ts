@@ -12,7 +12,16 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { type ComponentChildren as Node, h } from 'preact'
-import { Badge, Button, Card, Empty, Field, More, Rows } from '@yaks/ui/parts'
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Field,
+  Form,
+  More,
+  Rows,
+} from '@yaks/ui/parts'
 import { runConnectedCommands } from './connected-mcp.ts'
 import { type Asked, reachedIn } from '@yaks/connections/mcp'
 import { caught } from './defects.ts'
@@ -337,9 +346,9 @@ let answering = (
   h(
     Rows.Form,
     { method: 'post', action },
-    h('input', { type: 'hidden', name: 'server', value: server }),
-    h('input', { type: 'hidden', name: 'ask', value: a.eid }),
-    h('input', { type: 'hidden', name: 'back', value: back }),
+    h(Form.Hidden, { name: 'server', value: server }),
+    h(Form.Hidden, { name: 'ask', value: a.eid }),
+    h(Form.Hidden, { name: 'back', value: back }),
     ...body,
   )
 
@@ -409,6 +418,7 @@ let row = (
                 lines: true,
                 name: 'choice',
                 required: true,
+                placeholder: 'Your own answer…',
                 'aria-label': 'Your own answer',
               }),
               h(Button, { mod: 'go', type: 'submit' }, 'Answer'),

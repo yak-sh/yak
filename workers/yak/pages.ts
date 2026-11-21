@@ -98,7 +98,7 @@ export let run = (code: string) =>
 
 // A form's hidden field, only when there is something to carry.
 export let held = (name: string, value?: string | null) =>
-  value ? h('input', { type: 'hidden', name, value }) : null
+  value ? h(Form.Hidden, { name, value }) : null
 
 export let home = (env: Host) =>
   h('a', { class: 'Away', href: url(env, '/') }, 'yaks.app')
@@ -462,7 +462,7 @@ export let dropZone = (slug?: string, to = '/deploy') =>
       maxlength: 63,
       autocomplete: 'off',
       spellcheck: 'false',
-      placeholder: 'Name for your website',
+      placeholder: 'e.g. oak-street-church',
       'aria-label': 'Website name',
     }),
     h(
@@ -873,6 +873,7 @@ export let keyBox = (
       id: at,
       name,
       type: shown ? 'text' : 'password',
+      placeholder: 'Paste the credential',
       autocomplete: 'off',
       spellcheck: 'false',
       required: true,
@@ -1425,6 +1426,7 @@ export let addressBox = (
       id,
       name,
       maxlength: 63,
+      placeholder: 'e.g. oak-street',
       autocomplete: 'off',
       spellcheck: 'false',
       ...more,
@@ -1587,12 +1589,13 @@ let byInvoice = (target: string, due: number) =>
       h(
         Form,
         { class: 'Page_Form', method: 'post', action: target },
-        h('input', { type: 'hidden', name: 'billing', value: 'invoice' }),
+        h(Form.Hidden, { name: 'billing', value: 'invoice' }),
         labeled(
           'invoice-email',
           'Send the invoice to',
           h(Field, {
             id: 'invoice-email',
+            placeholder: 'billing@example.org',
             name: 'email',
             type: 'email',
             autocomplete: 'email',
@@ -1607,6 +1610,7 @@ let byInvoice = (target: string, due: number) =>
           'Made out to',
           h(Field, {
             id: 'invoice-name',
+            placeholder: 'e.g. Oak Street Church',
             name: 'name',
             maxlength: 200,
             autocomplete: 'organization',
@@ -1636,7 +1640,7 @@ let credit = (
       action: target,
       'data-save': 'credit-cap',
     },
-    h('input', { type: 'hidden', name: 'billing', value: 'cap' }),
+    h(Form.Hidden, { name: 'billing', value: 'cap' }),
     labeled(
       'credit-cap',
       'Monthly cap on AI credit',
@@ -1645,6 +1649,7 @@ let credit = (
         null,
         h(Field, {
           id: 'credit-cap',
+          placeholder: 'e.g. 25',
           name: 'cap',
           type: 'number',
           min: 0,

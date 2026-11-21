@@ -55,7 +55,7 @@ let fold = (open: boolean) =>
       More.Body,
       {},
       h('p', null, 'The name its code reads the key by.'),
-      h(Field, { value: 'WEATHER_API' }),
+      h(Field, { placeholder: 'e.g. WEATHER_API', value: 'WEATHER_API' }),
     ),
   )
 

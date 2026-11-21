@@ -46,7 +46,8 @@ export let text = (key: string, slots: Slots = {}) => {
 }
 
 /** The props of an element whose attribute `name` is the snippet at `key`. */
-export let attr = (name: string, key: string) => ({
-  [name]: said(key),
-  [names.attr(name)]: key,
-})
+export let attr = <Name extends string>(name: Name, key: string) =>
+  ({
+    [name]: said(key),
+    [names.attr(name)]: key,
+  }) as Record<Name, string>

@@ -18,7 +18,7 @@
 // What differs between pages is handed in: the side's title and Back
 // are its own (sidebar.ts `Sidebar`), and the panes beside are the page's.
 import { type ComponentChildren as Kids, h } from 'preact'
-import { Button, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
+import { Button, Form, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { icons } from './icons.ts'
 import { waitingBadge } from './sidebar.ts'
@@ -66,12 +66,11 @@ let toggle = (at: Aside) => {
       action: managePath('profile'),
       'data-side': '',
     },
-    h('input', {
-      type: 'hidden',
+    h(Form.Hidden, {
       name: 'aside',
       value: at.shut ? 'open' : 'shut',
     }),
-    h('input', { type: 'hidden', name: 'back', value: at.back }),
+    h(Form.Hidden, { name: 'back', value: at.back }),
     h(
       Button,
       {

@@ -11,6 +11,7 @@ export type FieldSpec = {
   kind: 'text' | 'lines' | 'choice' | 'check' | 'file' | 'repeat'
   required?: boolean
   hint?: string
+  placeholder?: string
   options?: readonly string[]
   multiple?: boolean
   type?: string
@@ -229,6 +230,7 @@ export let Fields = (
           after(a),
         )
       default: {
+        let { type } = q
         let lines = q.kind == 'lines'
         return h(
           Form.Field,
@@ -237,11 +239,18 @@ export let Fields = (
           h(Field, {
             id,
             name,
-            lines,
+            ...(!lines &&
+                (type == 'date' || type == 'time' || type == 'datetime-local')
+              ? { type }
+              : {
+                type,
+                lines,
+                placeholder: q.placeholder ??
+                  (lines ? 'Write your response…' : 'Type your answer…'),
+              }),
             required: q.required,
             disabled,
             value: text,
-            type: q.type,
             autocomplete: q.autocomplete,
             inputMode: q.inputMode,
             onInput: (ev: Event) =>

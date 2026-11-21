@@ -64,6 +64,7 @@ let Page = ({ place, book, page }: Shown) => {
         id: id + '-prompt',
         title: 'Scene to draw',
         name: 'prompt',
+        placeholder: 'Describe what should appear in the picture…',
         lines: true,
         defaultValue: prompt,
       }),
@@ -71,6 +72,7 @@ let Page = ({ place, book, page }: Shown) => {
         id: id + '-caption',
         title: 'Story sentence',
         name: 'caption',
+        placeholder: 'Write the line that goes with this scene…',
         defaultValue: caption,
       }),
       h(

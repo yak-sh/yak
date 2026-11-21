@@ -1,6 +1,6 @@
 // yaks.app's sidebar: one frame and navigation tree, specialized by data.
 import { h } from 'preact'
-import { Badge, Button, Icon, SideNav } from '@yaks/ui/parts'
+import { Badge, Button, Form, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -69,12 +69,11 @@ let fold = (at: NonNullable<Sidebar['fold']>) => {
       action: managePath('profile'),
       'data-side': '',
     },
-    h('input', {
-      type: 'hidden',
+    h(Form.Hidden, {
       name: 'sidebar',
       value: at.collapsed ? 'open' : 'collapsed',
     }),
-    h('input', { type: 'hidden', name: 'back', value: at.back }),
+    h(Form.Hidden, { name: 'back', value: at.back }),
     h(
       Button,
       {
@@ -130,7 +129,7 @@ export let link = (at: Item) => {
       'form',
       { class: 'Sidebar_Form', method: 'post', action: at.href },
       Object.entries(at.fields ?? {}).map(([name, value]) =>
-        h('input', { type: 'hidden', name, value })
+        h(Form.Hidden, { name, value })
       ),
       node,
     )

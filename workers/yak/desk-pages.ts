@@ -123,17 +123,17 @@ let asking = (space: string) =>
         action: managePath('operator', space),
         enctype: 'multipart/form-data',
       },
-      h('input', {
-        type: 'hidden',
+      h(Form.Hidden, {
         name: 'page',
         value: managePath('new', space),
       }),
-      h('input', { type: 'hidden', name: 'new_app', value: '1' }),
+      h(Form.Hidden, { name: 'new_app', value: '1' }),
       h(
         'p',
         null,
         h(Field, {
           class: 'Desk_Words',
+          placeholder: 'Describe the app you need…',
           lines: true,
           name: 'say',
           rows: 3,
@@ -465,7 +465,7 @@ let profile = (at: DeskPage, env: Host) => {
             h(
               Rows.Form,
               { method: 'post', action: managePath('profile') },
-              h('input', { type: 'hidden', name: 'session', value: s.eid }),
+              h(Form.Hidden, { name: 'session', value: s.eid }),
               send('Sign out'),
             ),
           )
@@ -474,7 +474,7 @@ let profile = (at: DeskPage, env: Host) => {
       h(
         Form,
         { method: 'post', action: managePath('profile') },
-        h('input', { type: 'hidden', name: 'session', value: 'all' }),
+        h(Form.Hidden, { name: 'session', value: 'all' }),
         send('Sign out everywhere'),
       ),
     ),
@@ -677,6 +677,7 @@ let preferences = (at: DeskPage, env: Host) => {
             'Name',
             h(Field, {
               id: 'space-title',
+              placeholder: 'e.g. Oak Street Church',
               name: 'title',
               maxlength: 60,
               value: was.title,
@@ -1258,6 +1259,7 @@ let connection = (
                 step: 1,
                 inputmode: 'numeric',
                 value: a.lends ?? 100,
+                placeholder: 'e.g. 100',
                 required: true,
               }),
               a.lends == null ? press('lend', 'Lend') : null,
@@ -1605,6 +1607,7 @@ let mcpClient = (
           'Client id',
           h(Field, {
             id: `mcp-client-${s.id}`,
+            placeholder: 'Paste the ID from your provider',
             name: 'client_id',
             required: true,
           }),
@@ -1614,6 +1617,7 @@ let mcpClient = (
           'Client secret',
           h(Field, {
             id: `mcp-client-secret-${s.id}`,
+            placeholder: 'Paste the secret from your provider',
             name: 'client_secret',
             type: 'password',
             autocomplete: 'off',
@@ -1722,6 +1726,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
                 value: s.name,
                 required: true,
                 'aria-label': 'Name',
+                placeholder: 'e.g. Calendar tools',
               }),
               press('mcp-name', 'Rename', false),
             ),
@@ -1806,13 +1811,21 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
               labeled(
                 'mcp-name',
                 'Name',
-                h(Field, { id: 'mcp-name', name: 'name' }),
+                h(Field, {
+                  id: 'mcp-name',
+                  name: 'name',
+                  placeholder: 'e.g. Calendar tools',
+                }),
                 'Left empty, it is called what it calls itself, or by its host.',
               ),
               labeled(
                 'mcp-client',
                 'OAuth client id',
-                h(Field, { id: 'mcp-client', name: 'client_id' }),
+                h(Field, {
+                  id: 'mcp-client',
+                  name: 'client_id',
+                  placeholder: 'Paste the ID from your provider',
+                }),
                 `For a server you sign in to that registers no client for yaks.app: one made in its developer portal, with the redirect URI ${m.redirect}.`,
               ),
               on
@@ -1821,6 +1834,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
                   'OAuth client secret',
                   h(Field, {
                     id: 'mcp-client-secret',
+                    placeholder: 'Paste the secret from your provider',
                     name: 'client_secret',
                     type: 'password',
                     autocomplete: 'off',
@@ -1834,6 +1848,7 @@ let mcpServers = (m: McpPage, on: boolean, action: string) => {
                   'Key',
                   h(Field, {
                     id: 'mcp-key',
+                    placeholder: 'Paste the server’s access key',
                     name: 'key',
                     type: 'password',
                     autocomplete: 'off',
@@ -1999,6 +2014,7 @@ let connections = (at: DeskPage, env: Host) => {
         'Key',
         h(Field, {
           id: 'new-key',
+          placeholder: 'Paste the service’s access key',
           name: 'key',
           type: 'password',
           autocomplete: 'off',
@@ -2440,6 +2456,7 @@ let inviting = (at: DeskPage) => {
         h(Field, {
           lines: true,
           id: 'invite-note',
+          placeholder: 'Tell them why you’re inviting them…',
           name: 'note',
           rows: 2,
           maxlength: 500,

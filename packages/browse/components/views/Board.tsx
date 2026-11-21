@@ -23,7 +23,7 @@ import { drafts, useDraft } from '@yaks/draft/input'
 import { bundlesOf } from '../../wire.ts'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
-import { block, Loading } from '@yaks/ui'
+import { block, Field, Loading } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { filteredQuery } from '../Filter.tsx'
@@ -39,11 +39,10 @@ let Frame = block('div', 'Board', {
   Item: 'div',
   Add: 'div',
   More: 'button',
-  New: 'textarea',
   Chips: 'div',
   Chip: 'span',
 })
-let { Col, ColName, Count, Scroll, Item, Add, More, New, Chips, Chip } = Frame
+let { Col, ColName, Count, Scroll, Item, Add, More, Chips, Chip } = Frame
 
 // A column asks for a screenful, not a 400-row page sorted after delivery.
 // Priority ordering belongs before the server window; explicit saved bounds
@@ -126,9 +125,10 @@ export let QuickAdd = (
           {!!body && <Chip mod='body'>+ body</Chip>}
         </Chips>
       )}
-      <New
+      <Field
+        class='Board_New'
+        lines
         elRef={box}
-        rows={1}
         placeholder='P1 .filed.domain=Eng title…'
         onInput={(ev: InputEvent) =>
           sync(ev.currentTarget as HTMLTextAreaElement)}

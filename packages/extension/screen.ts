@@ -3,6 +3,9 @@
 // text, so a test reads it on a parsed document. Each button names what it
 // does in `data-do` (and a site in `data-site`); the popup's glue runs that.
 
+import { Field } from '@yaks/ui/parts'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import type { Config } from './connect.ts'
 import { spaceHost } from './connect.ts'
 import { type Consent, host } from './consent.ts'
@@ -60,7 +63,12 @@ let signin = (config: Config) =>
 
 let choose = (config: Config) =>
   `<form data-do="space"><label>Your space<span class="space">` +
-  `<input name="space" placeholder="name" autocomplete="off" required>` +
+  renderToString(h(Field, {
+    name: 'space',
+    placeholder: 'e.g. oak-street',
+    autocomplete: 'off',
+    required: true,
+  })) +
   `<span>.${esc(new URL(config.origin).host)}</span></span></label>` +
   `<button>Connect</button></form>`
 

@@ -11,7 +11,7 @@
 // tap. Under it, where every side stands so far, with what was measured of
 // it: what the Operator's decision carries into each choice.
 import { type ComponentChildren, h } from 'preact'
-import { Button, Card, Empty, Field, Preview } from '@yaks/ui/parts'
+import { Button, Card, Empty, Field, Form, Preview } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { markdown } from '@yaks/session/conversation'
 import type { Env } from './env.ts'
@@ -89,8 +89,8 @@ let form = (space: Space, t: Tapping, ...inner: ComponentChildren[]) =>
   h(
     'form',
     { class: 'Update_Form Page_Form', method: 'post', action: here(space) },
-    h('input', { type: 'hidden', name: 'round', value: t.round }),
-    h('input', { type: 'hidden', name: 'pair', value: String(t.card!.n) }),
+    h(Form.Hidden, { name: 'round', value: t.round }),
+    h(Form.Hidden, { name: 'pair', value: String(t.card!.n) }),
     ...inner,
   )
 

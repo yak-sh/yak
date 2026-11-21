@@ -91,39 +91,41 @@ let drawn = (tag: string | Part, as?: string | Part) =>
 
 /** A part: `tag` (an element, or a part it is drawn as), wearing the class
  * `base`. */
-export let el =
-  (tag: string | Part, base: string): Part =>
-  ({ mod, class: extra, elRef, children, href, as, ...props }: Props) => {
-    let d = drawn(tag, as)
-    // Drawn as another part, which makes the element and its link. Whether
-    // a part is drawn so is fixed where it is written, so hooks keep order.
-    if (d.look) {
-      let names = classes(base, mod, extra)
-      return h(d.look, {
-        ...props,
-        as: d.tag,
-        class: names,
-        elRef,
-        href,
-        children,
-      })
-    }
-    let a = anchor(d.tag!, href, useContext(Surround).href)
-    // A part given no children passes none, rather than children that are
-    // nothing: a textarea's `value` is its content only when it has none.
-    let node = h(a.tag, {
+export let el = <P extends Props = Props>(
+  tag: string | FunctionComponent<P>,
+  base: string,
+): FunctionComponent<P> =>
+({ mod, class: extra, elRef, children, href, as, ...props }: Props) => {
+  let d = drawn(tag as string | Part, as)
+  // Drawn as another part, which makes the element and its link. Whether
+  // a part is drawn so is fixed where it is written, so hooks keep order.
+  if (d.look) {
+    let names = classes(base, mod, extra)
+    return h(d.look, {
       ...props,
-      ...(a.href && { href: a.href }),
-      ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
-      ref: elRef,
-      class: classes(base, mod, extra),
-      ...(children !== undefined && { children }),
+      as: d.tag,
+      class: names,
+      elRef,
+      href,
+      children,
     })
-    // One value per href: a fresh object each render would wake every nested
-    // reader as a render of its own.
-    let surround = useMemo(() => ({ href: a.href }), [a.href])
-    return a.href ? h(Surround.Provider, { value: surround }, node) : node
   }
+  let a = anchor(d.tag!, href, useContext(Surround).href)
+  // A part given no children passes none, rather than children that are
+  // nothing: a textarea's `value` is its content only when it has none.
+  let node = h(a.tag, {
+    ...props,
+    ...(a.href && { href: a.href }),
+    ...(a.demote && { role: 'link', tabIndex: 0, 'data-href': a.demote }),
+    ref: elRef,
+    class: classes(base, mod, extra),
+    ...(children !== undefined && { children }),
+  })
+  // One value per href: a fresh object each render would wake every nested
+  // reader as a render of its own.
+  let surround = useMemo(() => ({ href: a.href }), [a.href])
+  return a.href ? h(Surround.Provider, { value: surround }, node) : node
+}
 
 /** A block and its elements: `block('section', 'Card', { Head: 'header' })`
  * renders `<section class="Card">`, and carries `Card.Head`, rendering

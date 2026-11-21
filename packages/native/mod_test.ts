@@ -68,6 +68,7 @@ test('a press, a field and a toggle deliver what the person did to the app', asy
           },
         },
         h(Field, {
+          placeholder: 'Write a note…',
           value: typed,
           onInput: (e: Event) => setTyped((e.target as HTMLInputElement).value),
         }),
@@ -131,30 +132,50 @@ test('a field brings up the keyboard its entry takes', async () => {
     if (field.kind != 'field') throw new Error('no field')
     return field.traits
   }
-  assertEquals(await traitsOf(h(Field, { type: 'email' })), {
-    keyboardType: 'email-address',
-    returnKeyType: 'done',
-    autoCapitalize: 'none',
-    autoCorrect: false,
-    submitBehavior: 'blurAndSubmit',
-  })
-  assertEquals(await traitsOf(h(Field, { type: 'password' })), {
-    secureTextEntry: true,
-    returnKeyType: 'done',
-    autoCapitalize: 'none',
-    autoCorrect: false,
-    submitBehavior: 'blurAndSubmit',
-  })
+  assertEquals(
+    await traitsOf(h(Field, { type: 'email', placeholder: 'you@example.com' })),
+    {
+      keyboardType: 'email-address',
+      returnKeyType: 'done',
+      autoCapitalize: 'none',
+      autoCorrect: false,
+      submitBehavior: 'blurAndSubmit',
+    },
+  )
+  assertEquals(
+    await traitsOf(
+      h(Field, { type: 'password', placeholder: 'Enter your password' }),
+    ),
+    {
+      secureTextEntry: true,
+      returnKeyType: 'done',
+      autoCapitalize: 'none',
+      autoCorrect: false,
+      submitBehavior: 'blurAndSubmit',
+    },
+  )
   // A form's "add" keeps the keyboard up, so one entry follows another.
   assertEquals(
-    await traitsOf(h('form', {}, h(Field, {}), h(Button, {}, 'Add'))),
+    await traitsOf(
+      h(
+        'form',
+        {},
+        h(Field, { placeholder: 'Enter a name' }),
+        h(Button, {}, 'Add'),
+      ),
+    ),
     { returnKeyType: 'done', submitBehavior: 'submit' },
   )
-  assertEquals(await traitsOf(h(Field, { lines: true, autofocus: true })), {
-    returnKeyType: 'done',
-    autoFocus: true,
-    submitBehavior: 'newline',
-  })
+  assertEquals(
+    await traitsOf(
+      h(Field, { lines: true, autofocus: true, placeholder: 'Write a note…' }),
+    ),
+    {
+      returnKeyType: 'done',
+      autoFocus: true,
+      submitBehavior: 'newline',
+    },
+  )
 })
 
 test('a select is a pick of its options, and choosing tells the app', async () => {

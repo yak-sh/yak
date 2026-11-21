@@ -26,5 +26,8 @@ export let specimens = (): Specimen[] => [
   ['Surface', h(Surface, {}, 'Flat surface')],
   ['Surface.Raised', h(Surface.Raised, {}, 'Raised surface')],
   ['Surface.Press', h(Surface.Press, { type: 'button' }, 'Press')],
-  ['Surface.Well', h(Surface.Well, { value: 'Input well' })],
+  [
+    'Surface.Well',
+    h(Surface.Well, { placeholder: 'Write a note…', value: 'Input well' }),
+  ],
 ]

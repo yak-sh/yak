@@ -32,6 +32,7 @@ let field = (value = '') => {
   let root = document.getElementById('f')!
   let Owner = () =>
     h(Field, {
+      placeholder: 'Write a sentence…',
       lines: true,
       value: text.value,
       onInput: (e: Event) =>
@@ -89,7 +90,15 @@ test('a value arriving while a word is composed waits until it ends', () => {
 
 test('a field given only a defaultValue shows it, drawn on the server', () => {
   let shown = (lines: boolean) =>
-    parseHTML(renderToString(h(Field, { lines, defaultValue: 'A fox' })))
+    parseHTML(
+      renderToString(
+        h(Field, {
+          lines,
+          placeholder: 'Write a sentence…',
+          defaultValue: 'A fox',
+        }),
+      ),
+    )
       .document.querySelector(lines ? 'textarea' : 'input')!
   equal(shown(true).textContent, 'A fox')
   equal(shown(false).getAttribute('value'), 'A fox')

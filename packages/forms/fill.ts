@@ -1,7 +1,7 @@
 /** Adapts form questions and their HTTP door to controlled kit components. @module */
 import { h, type JSX } from 'preact'
 import { derivedEid } from '@yaks/graph/identity'
-import { Body, Button, Form, Notice } from '@yaks/ui'
+import { Body, Button, Field, Form, Notice } from '@yaks/ui'
 import {
   Fields,
   type FieldSpec,
@@ -118,10 +118,23 @@ let paragraphs = (text?: string) =>
 let input: Partial<
   Record<Question['question']['kind'], Record<string, string>>
 > = {
-  email: { type: 'email', autocomplete: 'email', inputMode: 'email' },
-  phone: { type: 'tel', autocomplete: 'tel', inputMode: 'tel' },
+  email: {
+    type: 'email',
+    autocomplete: 'email',
+    inputMode: 'email',
+    placeholder: 'you@example.com',
+  },
+  phone: {
+    type: 'tel',
+    autocomplete: 'tel',
+    inputMode: 'tel',
+    placeholder: '269-555-0142',
+  },
   date: { type: 'date' },
-  address: { autocomplete: 'street-address' },
+  address: {
+    autocomplete: 'street-address',
+    placeholder: 'Street, city and postal code',
+  },
 }
 
 let fields = (shown: Asked[], questions: readonly Question[]): FieldSpec[] =>
@@ -293,7 +306,8 @@ let drawn = (
           'label',
           {},
           'Leave this empty ',
-          h('input', {
+          h(Field, {
+            placeholder: 'Leave blank',
             name: SIGNS.trap,
             tabindex: '-1',
             autocomplete: 'off',

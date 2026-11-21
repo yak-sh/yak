@@ -5,8 +5,7 @@ import { type Ent, uuid, vocab } from '../../types.ts'
 import { link } from '../../edge.ts'
 import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
-import { block } from '@yaks/ui'
-import { Float } from '@yaks/ui'
+import { block, Field, Float } from '@yaks/ui'
 import { label, pickLine, useHits } from '@yaks/ux'
 import { drafts, useDraft } from '@yaks/draft/input'
 import { bundlesOf } from '../../wire.ts'
@@ -17,11 +16,10 @@ let Frame = block('span', 'Relate', {
   Verb: 'button',
   Anchor: 'span',
   Pop: 'span',
-  Find: 'input',
   Row: 'span',
   New: 'span',
 })
-let { Verb, Anchor, Pop, Find, Row, New } = Frame
+let { Verb, Anchor, Pop, Row, New } = Frame
 
 // A sentence an entity grows a link by: a relation, and which end the entity
 // is (out: it is the parent), the same grammar Dependency renders.
@@ -162,7 +160,8 @@ export let Relate = ({ e }: { e: Ent }) => {
         {verb ? said(verb) : '+ link'}
       </Verb>
       <Anchor>
-        <Find
+        <Field
+          class='Relate_Find'
           elRef={find}
           placeholder={verb ? 'entity…' : 'relation…'}
           onInput={(ev: InputEvent) => {

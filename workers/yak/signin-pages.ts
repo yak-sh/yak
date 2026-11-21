@@ -267,6 +267,7 @@ export let askCode = (at: {
       held('address', address),
       h(Field, {
         class: 'Code',
+        placeholder: '6 digits from your code',
         name: 'code',
         inputmode: 'numeric',
         pattern: '[0-9]{6}',
@@ -372,6 +373,7 @@ export let askDelete = (at: {
           ),
           h(Field, {
             id: 'confirm',
+            placeholder: at.slug,
             name: 'confirm',
             autocomplete: 'off',
             spellcheck: 'false',
@@ -453,6 +455,7 @@ export let askConfirm = (at: {
           ),
           h(Field, {
             id: 'confirm',
+            placeholder: at.typed,
             name: 'confirm',
             autocomplete: 'off',
             spellcheck: 'false',

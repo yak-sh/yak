@@ -10,6 +10,7 @@
  *
  * @module
  */
+import { drawField } from '@yaks/ui/parts'
 import type { H } from '@yaks/render'
 import { next } from './rating.ts'
 import { draw } from './sides.ts'
@@ -204,7 +205,12 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
 
   let compose = (c: Shown) => {
     let fields = c.deck.parts.map((name, i) =>
-      h(i ? 'textarea' : 'input', { name, placeholder: name, rows: i + 1 })
+      drawField(h, {
+        name,
+        lines: i > 0,
+        placeholder: `Write your ${name}…`,
+        rows: i + 1,
+      })
     )
     return h(
       'form',
@@ -291,7 +297,7 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
           type: 'button',
           click: () => choose(c, null),
         }, 'Neither'),
-        h('input', {
+        drawField(h, {
           class: 'why',
           placeholder: 'Why? A few words, if you like',
           value: why(c),

@@ -12,6 +12,7 @@
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, el, type Part } from './el.ts'
+import { Field } from './Field.ts'
 import type { Colors, Specimen } from './theme.ts'
 
 /** A value, typed over where it stands. */
@@ -28,7 +29,6 @@ export let sheet = (c: Colors): Sheet => ({
   Edit: { fg: c.text },
 })
 
-let Input = el('input', 'Edit')
 let Select = el('select', 'Edit')
 
 /** The value at rest and typed over, and each control. */
@@ -38,7 +38,10 @@ export let specimens = (): Specimen[] => [
     'Edit, typed over',
     h(Edit, { contentEditable: 'plaintext-only' }, 'Inspect the data'),
   ],
-  ['Edit, text', h(Input, { type: 'text', value: 'Inbox' })],
+  [
+    'Edit, text',
+    h(Field, { class: 'Edit', placeholder: 'e.g. Inbox', value: 'Inbox' }),
+  ],
   [
     'Edit, a choice',
     h(
