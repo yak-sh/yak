@@ -455,7 +455,7 @@ test('an unknown --as account is a refusal, not an exception', async () => {
   }
 })
 
-test('upload accepts the oldest account default without --as and sends bearer bytes', async () => {
+test('upload without --as is recorded as the platform admin and sends bearer bytes', async () => {
   let { host, kept, ask } = await box()
   let dir = Deno.makeTempDirSync({ prefix: 't64688-' }),
     path = `${dir}/theme.mp3`
@@ -463,11 +463,12 @@ test('upload accepts the oldest account default without --as and sends bearer by
   Deno.writeFileSync(path, bytes)
   try {
     await kept('probe@bot.yak.sh', 'probe-bearer')
+    await kept(ADMIN, 'admin-bearer')
     await answering((url, init) => {
       equal(url, 'https://probe.yaks.app/vale/api/blob')
       equal(
         new Headers(init?.headers).get('authorization'),
-        'Bearer probe-bearer',
+        'Bearer admin-bearer',
       )
       equal(new Headers(init?.headers).get('cookie'), null)
       equal(init?.body, bytes)
@@ -748,7 +749,7 @@ test('private upload binds its customer and never falls through to a public blob
   let bytes = new Uint8Array([0, 1, 0, 0])
   Deno.writeFileSync(path, bytes)
   try {
-    await kept('probe@bot.yak.sh', 'probe-bearer')
+    await kept(ADMIN, 'admin-bearer')
     await answering((url, init) => {
       equal(
         url,
@@ -756,7 +757,7 @@ test('private upload binds its customer and never falls through to a public blob
       )
       equal(
         new Headers(init?.headers).get('authorization'),
-        'Bearer probe-bearer',
+        'Bearer admin-bearer',
       )
       equal(init?.body, bytes)
       return Response.json({

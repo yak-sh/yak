@@ -770,7 +770,7 @@ export let runs = (
       let customer = a.private
         ? { buyer: word(a, 'buyer'), via: word(a, 'via') }
         : undefined
-      let at = await acting(a)
+      let at = await writing(a)
       let path = String(a.path)
       let name = word(a, 'name') ?? basename(path)
       let mime = word(a, 'mime') ?? 'application/octet-stream'
@@ -788,7 +788,7 @@ export let runs = (
     admin_push: verb(async (call) => {
       let a = argsOf(call)
       let dir = String(a.dir).replace(/\/+$/, '')
-      let at = await acting(a)
+      let at = await writing(a)
       note(`reading ${dir}…`)
       let files = await read(dir)
       note(`read ${files.length} local files`)
