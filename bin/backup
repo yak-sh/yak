@@ -74,6 +74,13 @@ files="frozen migration roles"
 tab=$(printf '\t')
 
 say() { echo "backup: $*"; }
+# Each step's seconds in the log, so a night that runs long says which step
+# grew: "copy yak.db 300s".
+lap() {
+  now=$(date +%s)
+  say "$* $(( now - ${mark:-$now} ))s"
+  mark=$now
+}
 die() {
   echo "backup: $*" >&2
   exit 1
@@ -164,14 +171,19 @@ snapshot() {
   left=$(room) || exit 1
   [ "$(stat -c %s "$data/$1")" -lt $(( left * 1024 )) ] ||
     die "$1 will not fit in the $left KiB free above the reserve"
+  mark=$(date +%s)
   "$here/copy-db" "$copy" "$data/$1"
+  lap "copy $1"
   [ "$(sq -readonly "$copy" "PRAGMA quick_check")" = ok ] ||
     die "$1 failed quick_check: the database is damaged"
+  lap "quick_check $1"
   counts "$1" "$copy" >> "$work/counts"
+  lap "count $1"
   kept "$z" "$here/capped" zstd -q -T0 -c "$copy" ||
     die "$1: compressing the copy failed"
   [ "$(zstd -dcq "$z" | wc -c)" -eq "$(stat -c %s "$copy")" ] ||
     die "$1: the compressed copy is missing pages"
+  lap "compress $1"
   rm -f "$copy" "$copy-wal" "$copy-shm"
 }
 
@@ -218,6 +230,7 @@ uploaded() {
   rclone check -q --one-way --download "$work/night" "$remote/snapshots/$night"
   zstd -tq "$work/night"/*.zst
   rm "$work/night"/*.zst
+  lap upload
 }
 
 # An upload that failed can leave the only snapshot of an older graph here.
@@ -285,10 +298,13 @@ backup() {
   if [ $# != 0 ]; then
     kept "$work/night/files.tar.zst" tar -C "$data" --zstd -cf - "$@" ||
       die "files.tar.zst: tar failed"
+    lap "tar files"
     uploaded
   fi
+  mark=$(date +%s)
   [ ! -d "$data/images" ] ||
     rclone copy --ignore-existing "$data/images" "$remote/images"
+  lap images
   rclone copyto "$work/counts" "$remote/snapshots/$night/counts"
 
   # Only a complete night moves older and partial nights into trash. The
