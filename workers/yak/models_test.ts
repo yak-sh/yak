@@ -19,7 +19,6 @@ import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import {
   listPrice,
-  measured,
   mediaReceipts,
   type MediaRecord,
   type Model,
@@ -994,13 +993,10 @@ test('./api/ai/run answers a chat name apps already use from OpenAI, at its rate
     reasoning_effort: 'none',
     max_completion_tokens: 400,
   })
-  assertAlmostEquals(
-    (await v.spent()).meter!.models,
-    measured(
-      { usage: { input_tokens: 2_000, output_tokens: 50 } },
-      listPrice('gpt-6-luna'),
-    )!.dollars,
-  )
+  // Usage does not say how much was cached, so allow the default write rate.
+  let price = listPrice('gpt-6-luna')!
+  let cost = (2_000 * price.cache_write! + 50 * price.output) / 1e6
+  assertAlmostEquals((await v.spent()).meter!.models, cost)
   assertEquals(
     (await v.run({ model: '@cf/example/new-release', input: { messages } }))
       .said,
