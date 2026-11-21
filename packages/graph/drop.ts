@@ -2,7 +2,9 @@
 // finished effect's run (@yaks/effects pool.ts), removed through storage
 // alone (`Graph.drop`). Nothing refers to such a row and nothing derives from
 // it, so none of `apply()`'s phases has anything to say about its removal,
-// and through them it cost more than many a run.
+// and through them it cost more than many a run. No person restores one, so
+// storage keeps no recoverable copy of it (`Tx.discard`): kept, each run cost
+// a store a trash row for good.
 
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
@@ -35,7 +37,9 @@ export let drop = (
       preconditions(bundles, found, vocab)
       let standing = found.filter((b) => !dead(b)).map((b) => b.entity)
       return after(
-        standing.length ? tx.remove(standing) : undefined,
+        standing.length
+          ? tx.discard ? tx.discard(standing) : tx.remove(standing)
+          : undefined,
         () => standing.map((e) => e.eid),
       )
     })
