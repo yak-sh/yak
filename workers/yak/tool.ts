@@ -187,6 +187,7 @@ export type Tool = {
   // caller (outlast.ts).
   outlasts?: (args: Args) => string
   run: (ctx: Ctx, args: Args) => Promise<Out>
+  recover?: (ctx: Ctx, args: Args) => Promise<Out | undefined>
 }
 
 /**

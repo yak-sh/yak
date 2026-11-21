@@ -252,9 +252,10 @@ let metaOf = (t: Sugar): Pick<Tool, 'meta'> =>
 // What one of the platform's tools says about itself: the same for every
 // caller of one deployment, so it is built once per tool per apex and not on
 // every call — the Zod its input becomes was a tenth of what a call cost.
-let described = new WeakMap<Sugar, Map<string, Omit<Tool, 'run'>>>()
-let said = (t: Sugar, env: Host): Omit<Tool, 'run'> => {
-  let by = described.get(t) ?? new Map<string, Omit<Tool, 'run'>>()
+type Description = Omit<Tool, 'run' | 'recover'>
+let described = new WeakMap<Sugar, Map<string, Description>>()
+let said = (t: Sugar, env: Host): Description => {
+  let by = described.get(t) ?? new Map<string, Description>()
   described.set(t, by)
   let at = apex(env)
   let hit = by.get(at)
@@ -292,6 +293,13 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   // is its arguments, which the runner has already checked, and the call it is
   // answering.
   run: (call) => running(ctx, t)(argsOf(call), call.entity.eid),
+  ...t.recover && {
+    recover: async (call) => {
+      let invocation = { ...ctx, call: call.entity.eid }
+      let out = await t.recover!(invocation, argsOf(call))
+      return out ? answered(invocation, out, call.entity.eid, t.readOnly) : []
+    },
+  },
 })
 
 /**

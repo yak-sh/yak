@@ -1,4 +1,4 @@
-import { type Hold, sharing } from '@yaks/fp'
+import { type Hold, sharing, sleep } from '@yaks/fp'
 import { listing } from './list.ts'
 import { described } from './info.ts'
 import { reads } from './reads.ts'
@@ -12,6 +12,7 @@ import {
   cacheExpiry,
   type Item,
   type Listed,
+  type Mark,
   type MediaReceipt,
   type MediaReceipts,
   type Model,
@@ -55,6 +56,8 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   receipts?: MediaReceipts
   /** Offer provider-hosted web search, page opening, and find-in-page. */
   web?: boolean
+  /** Let an acknowledged generation finish after its stream disconnects. */
+  background?: boolean
   /** The account whose ChatGPT plan the Codex backend's limit readings are
    * of (@yaks/model `accountEid`). */
   account?: string
@@ -334,7 +337,12 @@ export let responses = (opts: Options): Model => {
       let model = (await list()).find((m) => m.name == name)
       return model ? described(model, opts.fetch) : undefined
     }, { hold: opts.hold })
-  return Object.assign(ask(opts), {
+  let client = transport({
+    ...opts,
+    shape: (request) => request,
+    credentials: { get: opts.credential, refresh: opts.refresh },
+  })
+  return Object.assign(ask(opts, client), {
     reads,
     lateResults: true as const,
     list,
@@ -351,30 +359,73 @@ export let responses = (opts: Options): Model => {
         opts.receipts,
         (receipt) => delivered(receipt, opts),
       ),
+    ...opts.background ? { retrieve: retrieving(opts, client) } : {},
   })
 }
 
-let ask = (opts: Options) => {
-  let client = transport({
-    ...opts,
-    shape: (request) => request,
-    credentials: { get: opts.credential, refresh: opts.refresh },
-  })
-  return async (req: Request): Promise<Reply> => {
+let cancelling = (
+  opts: Options,
+  client: ReturnType<typeof transport>,
+  id: string,
+) => opts.hold ? opts.hold(client.cancel(id)) : client.cancel(id)
+
+let retrieving =
+  (opts: Options, client: ReturnType<typeof transport>) =>
+  async (mark: Mark, signal?: AbortSignal): Promise<Reply | undefined> => {
+    let id = str(mark[opts.provider ?? OPENAI_COMP]?.response_id)
+    if (!id) return
+    try {
+      while (true) {
+        let response = await client.get(id, signal)
+        if (!response) return
+        if (response.id != id || typeof response.model != 'string') {
+          throw new ModelError(
+            'response_receipt',
+            'Invalid background response',
+          )
+        }
+        if (response.status == 'queued' || response.status == 'in_progress') {
+          await sleep(2000, signal, opts.clock)
+          continue
+        }
+        let cut = response.status == 'incomplete' &&
+          record(response.incomplete_details) &&
+          response.incomplete_details.reason == 'max_output_tokens'
+        if (response.status != 'completed' && !cut) return
+        let reply = await delivery(
+          response,
+          responseItems(response),
+          opts.images,
+        )
+        return cut ? { ...reply, cut: true } : reply
+      }
+    } finally {
+      if (signal?.aborted) await cancelling(opts, client, id)
+    }
+  }
+
+let ask =
+  (opts: Options, client: ReturnType<typeof transport>) =>
+  async (req: Request): Promise<Reply> => {
     if (req.questions) {
       throw new ModelError(
         'questions',
         'The Responses API answers no typed questions',
       )
     }
+    let responseId = ''
+    let background = !!opts.background && !!req.onAck
+    let signal = req.signal && opts.signal
+      ? AbortSignal.any([req.signal, opts.signal])
+      : req.signal ?? opts.signal
     try {
       // The endpoint decides support, including OAuth and custom deployments.
       // Never retry without the tool based on an ambiguous provider error.
       let started = Date.now()
       let selected = opts.images
       const textIndexes = new Map<string, number>()
-      let responseId = ''
       let prepared = body(req, opts.store, selected, opts.web ?? true)
+      if (background) prepared.background = true
       let wire = (opts.shape?.(prepared) ?? prepared) as ResponseRequest
       let output: Frame[] = []
       let receipt: MediaReceipt | undefined
@@ -389,9 +440,7 @@ let ask = (opts: Options) => {
               await submitted(req)
             }
             : undefined,
-          signal: req.signal && opts.signal
-            ? AbortSignal.any([req.signal, opts.signal])
-            : req.signal ?? opts.signal,
+          signal,
           noRetry: () => checkpointed || !!req.onText && textIndexes.size > 0,
           conversation: req.conversation,
           ...req.stallTimeout == null
@@ -506,9 +555,12 @@ let ask = (opts: Options) => {
         read.length ? { limits: read } : {},
         usage ? { usage } : {},
       )
+    } finally {
+      if (background && responseId && signal?.aborted) {
+        await cancelling(opts, client, responseId)
+      }
     }
   }
-}
 
 // The API's refusal of a `previous_response_id` it does not hold.
 let unanchored = (error: unknown) =>

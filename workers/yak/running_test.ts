@@ -224,16 +224,16 @@ let socket = (held: unknown) => ({ deserializeAttachment: () => held })
 operating.sockets.push(socket({ person: 'ada', operator: true }))
 let ask = () => new Request('http://builder/nowhere')
 
-test('a Builder only the Operator page watches restarts for a newer caller, which the page joins again', async () => {
+test('a Builder watched by an Operator page serves a newer caller without resetting the connection', async () => {
   learn(B)
   assertEquals((await through(operating.instance)(ask)).status, 404)
-  assertEquals(operating.restarts.length, 1)
+  assertEquals(operating.restarts.length, 0)
 })
 
-test('an idle Builder restarts for a newer caller', async () => {
+test('an idle Builder leaves its version update to the runtime', async () => {
   learn(B)
   assertEquals((await through(idle.instance)(ask)).status, 404)
-  assertEquals(idle.restarts.length, 1)
+  assertEquals(idle.restarts.length, 0)
 })
 
 // A Worker on a newer deploy than its Store (T-140262): the store restarted

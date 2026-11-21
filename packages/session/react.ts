@@ -1365,6 +1365,7 @@ export let react = async (
   if (unfinished && !executor) {
     let result = await (original?.model ?? deps.model).result?.(
       unfinished.entity.eid,
+      deps.signal,
     )
     if (result) {
       signer = { by: String(comp(unfinished, ASK)?.to), via: session }
@@ -1712,11 +1713,11 @@ export let react = async (
         )
         continue
       }
+      let tool = toolEntities.get(String(comp(pending, CALL)?.to))
       try {
         // A crashed async tool may have performed its external action. The
         // generic runner can redrive lapsed owners, but native sessions must
-        // inspect/recover instead. Make that uncertain claim anonymous so its
-        // normal UnfinishedCall path records a recovered/interrupted outcome.
+        // inspect/recover instead. Reads can retake the same invocation.
         const holder = comp(pending, 'execution')?.by
         if (deps.runCall && holder != null) {
           const [owner] = await g.get([String(holder)], ['exit'])
@@ -1728,10 +1729,13 @@ export let react = async (
             }], { trusted: true })
           }
         }
-        added.push(...await run.run(pending.entity.eid))
+        added.push(
+          ...await run.run(pending.entity.eid, {
+            redrive: !!tool?.readOnly,
+          }),
+        )
       } catch (error) {
         if (!(error instanceof UnfinishedCall)) throw error
-        let tool = toolEntities.get(String(comp(pending, CALL)?.to))
         let answer: Bundle[] | undefined
         try {
           let recovered = await tool?.recover?.(argsOf(pending), {

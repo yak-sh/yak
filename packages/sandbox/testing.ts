@@ -50,7 +50,12 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     }
     return row
   }
-  type Opts = { cwd?: string; timeout?: number; env?: Record<string, string> }
+  type Opts = {
+    cwd?: string
+    timeout?: number
+    env?: Record<string, string>
+    processId?: string
+  }
   let heard = (name: string, cmd: string, opts?: Opts) => {
     files = state(name).files
     alive.add(name)
@@ -85,8 +90,8 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     },
     startProcess: (cmd: string, opts?: Opts) => {
       let said = heard(name, cmd, opts)
-      let id = `proc-${++sequence}`
-      let pid = sequence + 99
+      let pid = ++sequence + 99
+      let id = opts?.processId ?? `proc-${sequence}`
       state(name).processes.set(id, {
         pid,
         status: said.running ? 'running' : 'completed',

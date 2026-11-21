@@ -194,13 +194,15 @@ export let countedTexts = async (
   await spending(env, space, { texts: cost }, now)
 }
 
-/** Deliver a saved result and finish only its original, idempotent settlement. */
+/** Deliver the original generation and finish its idempotent settlement. */
 export let resultOf = (
   bind: Partial<Pick<Env, 'STORE'>>,
   results: ModelResults,
+  providers?: Record<string, Model>,
 ): NonNullable<Model['result']> =>
-async (call) => {
-  let result = await results.read(call)
+async (call, signal) => {
+  let result = await results.read(call) ??
+    await recovered(results, providers, call, signal)
   if (!result) return
   let cost = result.reply.cost
   if (cost != null) {
@@ -219,6 +221,34 @@ async (call) => {
     }
   }
   return result
+}
+
+let recovered = async (
+  results: ModelResults,
+  providers: Record<string, Model> | undefined,
+  call: string,
+  signal?: AbortSignal,
+) => {
+  if (!providers) return
+  let pending = await results.pending?.(call)
+  if (!pending) return
+  let model = providers[pending.provider]
+  let reply = await model?.retrieve?.(pending.mark, signal)
+  if (!reply) return
+  let result = {
+    reply: pricedReply(reply, pending.tariff),
+    mark: model.mark?.(reply, { requestedAt: pending.requestedAt }),
+  }
+  await results.save(call, result)
+  return result
+}
+
+let pricedReply = (reply: Awaited<ReturnType<Model>>, tariff?: Price) => {
+  let cost = measured(reply, tariff)
+  if (cost && (!Number.isFinite(cost.dollars) || cost.dollars < 0)) {
+    throw new Error('Hosted provider returned no valid request cost')
+  }
+  return { ...reply, cost: cost?.dollars, costReported: cost?.reported }
 }
 
 /** Why a request's most cost cannot be known before it runs, or null: its
@@ -320,7 +350,7 @@ export let accounted = (
         },
       )
       reached('reserved', hold)
-      let submitted = false, begun = false, written = 0
+      let submitted = false, begun = false, written = 0, acknowledged = false
       let requestedAt = Date.now()
       let reply: Awaited<ReturnType<Model>>
       try {
@@ -340,6 +370,15 @@ export let accounted = (
           },
           onAck: async (mark) => {
             begun = true
+            if (source && model.retrieve && results?.acknowledge) {
+              await results.acknowledge(call, {
+                provider: source,
+                mark,
+                tariff: tariff || undefined,
+                requestedAt,
+              })
+              acknowledged = true
+            }
             await req.onAck?.(mark)
           },
           onFirst: () => {
@@ -353,6 +392,15 @@ export let accounted = (
           }),
         })
       } catch (error) {
+        if (
+          acknowledged && !req.signal?.aborted &&
+          error instanceof ModelError &&
+          ['transport', 'stalled', 'disconnected'].includes(error.code)
+        ) {
+          throw new ModelError('model_result_delivery', error.message, {
+            after: 1000,
+          })
+        }
         // A provider refusal before any work lets the next model hold the
         // same call. Media the space had no room to keep is free to the
         // person too, but the provider may already have generated it.
@@ -379,17 +427,15 @@ export let accounted = (
         }
         throw error
       }
-      let cost = measured(reply, tariff)
-      if (cost && (!Number.isFinite(cost.dollars) || cost.dollars < 0)) {
-        throw new Error('Hosted provider returned no valid request cost')
-      }
-      reply = { ...reply, cost: cost?.dollars, costReported: cost?.reported }
+      reply = pricedReply(reply, tariff || undefined)
       try {
         await results?.save(call, {
           reply,
           mark: model.mark?.(reply, { requestedAt }),
         })
-        if (cost) await hold.settle(cost.dollars, cost.reported)
+        if (reply.cost != null) {
+          await hold.settle(reply.cost, reply.costReported ?? true)
+        }
       } catch (error) {
         if (!results) throw error
         throw new ModelError('model_result_delivery', String(error), {

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { MediaReceipt, MediaReceipts, Request } from '@yaks/model'
+import type { Mark, MediaReceipt, MediaReceipts, Request } from '@yaks/model'
 import { responses } from './responses.ts'
 import { ResponseError, transport } from './transport.ts'
 
@@ -17,6 +17,45 @@ let image = {
   status: 'completed',
   result: png,
 }
+
+test('an acknowledged background response survives the original stream', async () => {
+  let mark: Mark | undefined
+  let methods: string[] = []
+  let fetcher: typeof fetch = (at, init) => {
+    methods.push(init!.method!)
+    if (init!.method == 'POST') {
+      assertEquals(JSON.parse(String(init!.body)).background, true)
+      return Promise.resolve(sse({
+        type: 'response.created',
+        response: { id: 'resp_kept' },
+      }))
+    }
+    assertEquals(String(at), 'https://example.invalid/responses/resp_kept')
+    return Promise.resolve(Response.json({
+      id: 'resp_kept',
+      status: 'completed',
+      model: 'gpt-6.2-sol',
+      output: [{ type: 'message', id: 'm', content: [{ text: 'Finished.' }] }],
+    }))
+  }
+  let open = () => responses({ credential, fetch: fetcher, background: true })
+  await assertRejects(() =>
+    open()({
+      model: 'gpt-6.2-sol',
+      items: [],
+      tools: [],
+      onAck: (given) => {
+        mark = given
+        return Promise.resolve()
+      },
+    })
+  )
+  assertEquals(mark, { openai: { response_id: 'resp_kept' } })
+  assertEquals((await open().retrieve!(mark!))?.items, [
+    { kind: 'assistant', id: 'm', text: 'Finished.' },
+  ])
+  assertEquals(methods, ['POST', 'GET'])
+})
 
 test('provider submission, first acknowledgement and complete receipt gate delivery', async () => {
   let trace: string[] = [], receipts: MediaReceipt[] = []

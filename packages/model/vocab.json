@@ -388,8 +388,13 @@
       "journal": false,
       "wire": false,
       "type": "object",
-      "description": "a complete provider reply and its provider marks on the original ask, saved before billing settlement and transcript delivery so either can recover without generation",
+      "description": "provider evidence on the original ask, saved before billing settlement and transcript delivery so either can recover without generation",
       "properties": {
+        "pending": {
+          "type": "string",
+          "store": "blob",
+          "description": "the provider acknowledgement and the accounting terms of a generation that can be retrieved"
+        },
         "body": {
           "type": "string",
           "store": "blob",

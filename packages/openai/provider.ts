@@ -92,6 +92,8 @@ export type Options = {
   images?: ImageOptions | false
   /** offer hosted web search (default on, unless `HARNESS_WEB=0`) */
   web?: boolean
+  /** allow acknowledged Responses calls to be recovered after a disconnect */
+  background?: boolean
   /** an OpenAI-compatible endpoint to call instead of OpenAI's own, opened
    * by `OPENAI_API_KEY`, else the lent `openai` key, else by nothing, which
    * leaves the endpoint to authenticate the call (an AI Gateway's own key) */
@@ -191,6 +193,7 @@ export let providers = (
           redact: true,
           images,
           web: options.web ?? lent.env('HARNESS_WEB') != '0',
+          background: options.background,
           receipts: lent.receipts,
           hold: lent.hold,
           store,
@@ -203,6 +206,7 @@ export let providers = (
       anchor: (comps) => store ? responseAnchor(comps) : undefined,
       lateResults: true,
       recover: true,
+      ...options.background ? { retrieve: true } : {},
       info: true,
       reads,
     },

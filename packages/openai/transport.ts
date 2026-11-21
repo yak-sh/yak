@@ -611,6 +611,11 @@ export let request = (
  * connectivity, not authorization. Neither keeps conversation state. */
 export let transport = (options: ResponseOptions): {
   run: (value: ResponseRequest, run?: RunOptions) => Promise<ResponseResult>
+  get: (
+    response: string,
+    signal?: AbortSignal,
+  ) => Promise<Record<string, unknown> | undefined>
+  cancel: (response: string) => Promise<void>
   reach: () => Promise<boolean>
 } => {
   let fetcher = options.fetch ?? fetch
@@ -847,5 +852,63 @@ export let transport = (options: ResponseOptions): {
     }
   }
 
-  return { run, reach }
+  let background = async (
+    response: string,
+    method: 'GET' | 'POST',
+    signal?: AbortSignal,
+  ): Promise<Record<string, unknown> | undefined> => {
+    let auth = await credentials(
+      options.credentials.get,
+      CREDENTIAL_FAULT,
+      pause,
+      options.authentication == 'optional',
+      retries,
+      options.credentials.hint,
+      options.redact,
+    )
+    remember(auth)
+    let headers = new Headers(options.headers)
+    headers.set('accept', 'application/json')
+    if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
+    if (auth.account) headers.set('chatgpt-account-id', auth.account)
+    let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
+      .replace(/\/$/, '')
+    let path = '/responses/' + encodeURIComponent(response) +
+      (method == 'POST' ? '/cancel' : '')
+    let dog = watchdog(stallMs, clock, signal)
+    try {
+      let answer = await fetcher(endpoint + path, {
+        method,
+        headers,
+        signal: dog.signal,
+      })
+      if (answer.status == 404) {
+        await answer.body?.cancel()
+        return
+      }
+      if (!answer.ok) {
+        await answer.body?.cancel()
+        throw fault(
+          'http_' + answer.status,
+          'responses: background request returned HTTP ' + answer.status,
+          { status: answer.status },
+        )
+      }
+      return safe(await answer.json(), secrets)
+    } catch (error) {
+      signal?.throwIfAborted()
+      if (error instanceof ResponseError) throw error
+      throw fault('transport', 'responses: could not read background response')
+    } finally {
+      dog.close()
+    }
+  }
+  return {
+    run,
+    reach,
+    get: (response, signal) => background(response, 'GET', signal),
+    cancel: async (response) => {
+      await background(response, 'POST')
+    },
+  }
 }

@@ -11,13 +11,14 @@ export let deferredModel = (
     >
     & {
       recover?: true
+      retrieve?: true
       info?: true
       reads?: Model['reads'] | true
     },
 ): Model => {
   let pending: Promise<Model> | undefined
   let get = () => pending ??= load()
-  let { recover, info, reads, ...record } = meta
+  let { recover, retrieve, info, reads, ...record } = meta
   return Object.assign(
     async (...args: Parameters<Model>) => (await get())(...args),
     record,
@@ -33,6 +34,13 @@ export let deferredModel = (
         : {},
       ...recover
         ? { recover: async (call: string) => (await get()).recover!(call) }
+        : {},
+      ...retrieve
+        ? {
+          retrieve: async (
+            ...args: Parameters<NonNullable<Model['retrieve']>>
+          ) => (await get()).retrieve?.(...args),
+        }
         : {},
     },
   )

@@ -394,6 +394,7 @@ let openai = (key = 'OPENAI_API_KEY', web = false): Plug => ({
     key: { secret: key },
     base: { binding: 'OPENAI_API' },
     web,
+    background: web,
     images: false,
   },
 })

@@ -6,6 +6,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
 import { sandboxDoc } from './vocab.ts'
+import { sandboxes } from './testing.ts'
 import {
   type Box,
   cloudflareProvider,
@@ -14,6 +15,37 @@ import {
   lending,
   slept,
 } from './cloudflare.ts'
+
+test('a retried start reads its process after an acknowledgement is lost', async () => {
+  let command = 'write once'
+  let sandbox = sandboxes()
+  let ns = sandbox.WORKBENCH
+  let provider = cloudflareProvider({
+    ...ns,
+    get: (name) => {
+      let box = ns.get(String(name))
+      return {
+        ...box,
+        startProcess: async (...args) => {
+          await box.startProcess(...args)
+          throw new Error('lost connection')
+        },
+      }
+    },
+  }, {
+    ephemeral: true,
+    retry: async (send) => {
+      try {
+        return await send()
+      } catch {
+        return await send()
+      }
+    },
+  })
+  let { workspace } = await provider.connect({ id: 'workbench' })
+  equal(await workspace.start(command, undefined, 'ask'), 'ask')
+  equal(sandbox.ran, [command])
+})
 
 test('Cloudflare refuses unsupported provenance, images and existing addresses without RPC', async () => {
   let calls = 0

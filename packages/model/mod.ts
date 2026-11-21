@@ -370,7 +370,10 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   /** A saved complete answer, with any original accounting finished; never generation. */
   result?: (
     call: string,
+    signal?: AbortSignal,
   ) => Promise<import('./results.ts').ModelResult | undefined>
+  /** Retrieve the original generation using its durable acknowledgement. */
+  retrieve?: (mark: Mark, signal?: AbortSignal) => Promise<Reply | undefined>
   list?: () => Promise<Listed[]>
   info?: (name: string) => Promise<Listed | undefined>
   mark?: (reply: Reply, cache?: CacheContext) => Mark

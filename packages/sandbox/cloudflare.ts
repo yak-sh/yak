@@ -25,7 +25,7 @@ export type Box = {
   ): Promise<{ stdout: string; stderr: string; exitCode: number }>
   startProcess(
     cmd: string,
-    opts?: Run & { autoCleanup?: boolean },
+    opts?: Run & { autoCleanup?: boolean; processId?: string },
   ): Promise<{ id: string; pid?: number }>
   getProcess(
     id: string,
@@ -248,8 +248,29 @@ export let cloudflareProvider = (
       exec: (cmd, opts) =>
         call(async (box) => box.exec(cmd, await dressed(opts))),
       getState: () => call((box) => box.getState()),
-      startProcess: (cmd, opts) =>
-        call(async (box) => box.startProcess(cmd, await dressed(opts))),
+      startProcess: (cmd, opts) => {
+        let sent = false, failure: unknown
+        return call(async (box) => {
+          let id = opts?.processId
+          if (sent) {
+            if (id) {
+              let found = await box.getProcess(id)
+              if (found) return { id, pid: found.pid }
+            }
+            throw new Error('Sandbox process start could not be confirmed', {
+              cause: failure,
+            })
+          }
+          let args = await dressed(opts)
+          sent = true
+          try {
+            return await box.startProcess(cmd, args)
+          } catch (error) {
+            failure = error
+            throw error
+          }
+        })
+      },
       getProcess: (id) => call((box) => box.getProcess(id)),
       killProcess: (id) => call((box) => box.killProcess(id)),
       getProcessLogs: (id) => call((box) => box.getProcessLogs(id)),
@@ -415,12 +436,14 @@ let lines = (said: string) => said ? said.replace(/\n$/, '').split('\n') : []
 let workspaceOf = (box: Box): Workspace => ({
   // Every look is a call into the container, so it looks twice a second.
   poll: 500,
-  start: async (command, cwd) =>
+  start: async (command, cwd, call) =>
     (await box.startProcess(command, {
       cwd: cwd ?? CWD,
       timeout: TIMEOUT,
       autoCleanup: false,
+      ...call ? { processId: call } : {},
     })).id,
+  receipt: async (call) => await box.getProcess(call) ? call : undefined,
   look: async (id) => {
     let p = await box.getProcess(id)
     return p && {

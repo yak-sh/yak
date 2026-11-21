@@ -2,7 +2,7 @@
 // (T-123372, T-123489).
 //
 // Cloudflare leaves a busy Durable Object on the code it started with for up
-// to five minutes after a deploy (wrangler.toml `code_update_strategy`) and
+// to the first deploy's deadline (wrangler.toml `code_update_strategy`) and
 // moves an idle one within seconds. Every request to an object carries the
 // version its caller runs (door.ts `doorOf` for a store, `fetchOf` for the
 // Wire and the Builder), so an object knows when a newer caller reaches it.
@@ -16,8 +16,8 @@
 // moves an object, and a restart does neither (T-1887, T-2011). A restart is not
 // free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
 // its first line, where Cloudflare's own moves started in under a second
-// (T-150897). The Wire and the Builder restart before anything, when they are
-// idle (@yaks/durable-object `Durable`'s `behind`, given `owed`). A store
+// (T-150897). The Wire uses `Durable.behind` when idle. The Builder lets the
+// runtime update it so a newer caller cannot cut an Operator step (T-2212). A store
 // still behind its caller after its restart answers a refusal as a
 // failure the caller sends again (`skewed`, T-140262): a store cannot tell a
 // word its code lacks from a word nobody declares, and the newer code's
@@ -136,8 +136,8 @@ let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 /**
  * The object restarted for its caller's newer deploy before serving the call,
  * so the call never ran and may be sent again, a write as safely as a read.
- * That holds for an object on @yaks/durable-object `Durable` (the Builder, the
- * Wire), whose `behind` restarts it only while idle and before the call
+ * That holds for the Wire, whose `Durable.behind` restarts it only while idle
+ * and before the call
  * enters. A store restarts after answering a refusal and cuts whatever else
  * it has in flight, so its doors do not lean on this.
  *

@@ -34,6 +34,8 @@ import { CallError } from '@yaks/tools/errors'
 
 /** How the machine tools behave, all optional. */
 export type MachineOpts = {
+  /** The durable invocation when a host calls outside a session runner. */
+  call?: string
   /** how long `shell` waits for its command before answering the process id
    * instead (ms, default 5000); a `timeout` argument overrides it per call */
   budget?: number
@@ -199,18 +201,6 @@ export let machineTools = (
   let told = async (id: string, head: string) =>
     [head, ...await m.tail(id, lines)].join('\n')
 
-  let shellResult = (id: string, p: Proc | null, ms?: number) =>
-    told(
-      id,
-      p?.exit
-        ? `process ${id} ${code(p.exit.code)}`
-        : !p?.pid
-        ? `process ${id} start unconfirmed — inspect before retrying`
-        : `process ${id} still running${pid(p)}${
-          ms == null ? '' : ` after ${ms}ms`
-        } — wait or stop it by that id`,
-    )
-
   let runs: Record<string, Tool['run']> = {
     shell: async (args, ctx) => {
       let ms = Number(args.timeout ?? o.budget ?? BUDGET)
@@ -220,14 +210,14 @@ export let machineTools = (
       let id = await m.start(
         String(args.command ?? ''),
         await here(ctx),
-        ctx?.call.entity.eid,
+        ctx?.call.entity.eid ?? o.call,
         ctx?.session,
       )
       let p = await settle(m, id, {
         ms: end - Date.now(),
         signal: ctx?.signal,
       }) ?? {}
-      return shellResult(id, p, ctx?.signal?.aborted ? undefined : ms)
+      return shellResult(m, id, p, lines, ctx?.signal?.aborted ? undefined : ms)
     },
     wait: async (args, ctx) => {
       let id = String(args.process ?? '')
@@ -278,17 +268,44 @@ export let machineTools = (
     },
   }
   let recover = async (_args: Record<string, unknown>, ctx?: ToolContext) => {
-    let call = ctx?.call.entity.eid
-    let id = call && await m.receipt?.(call)
-    return id
-      ? await shellResult(id, await m.look(id))
-      : 'Shell execution has no process receipt; inspect before retrying.'
+    let call = ctx?.call.entity.eid ?? o.call
+    return await shellReceipt(m, call, lines) ??
+      'Shell execution has no process receipt; inspect before retrying.'
   }
   return machineDeclared(o).map((d) => ({
     ...d,
     run: runs[d.name],
     ...d.name == 'shell' ? { recover } : {},
   }))
+}
+
+let shellResult = async (
+  m: Machine,
+  id: string,
+  p: Proc | null,
+  lines: number,
+  ms?: number,
+) => {
+  let head = p?.exit
+    ? `process ${id} ${code(p.exit.code)}`
+    : !p?.pid
+    ? `process ${id} start unconfirmed — inspect before retrying`
+    : `process ${id} still running${pid(p)}${
+      ms == null ? '' : ` after ${ms}ms`
+    } — wait or stop it by that id`
+  return [head, ...await m.tail(id, lines)].join('\n')
+}
+
+/** Recover the command identified by its invocation, without starting one. */
+export let shellReceipt = async (
+  m: Machine,
+  call?: string,
+  lines = Number.MAX_SAFE_INTEGER,
+): Promise<string | undefined> => {
+  let id = call && await m.receipt?.(call)
+  if (!id) return
+  let process = await m.look(id)
+  if (process) return shellResult(m, id, process, lines)
 }
 
 /** Bind tools to graph targets. Each call persists its concrete target before

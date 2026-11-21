@@ -278,7 +278,11 @@ import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
 import { CWD } from '@yaks/sandbox/cloudflare'
 import { attachmentBytes, attachmentText } from './attachments.ts'
 import { logoAt, logoed } from './logo.ts'
-import { machineDeclared, machineTools } from '@yaks/harness/machine'
+import {
+  machineDeclared,
+  machineTools,
+  shellReceipt,
+} from '@yaks/machine/tools'
 import {
   connect,
   disconnect,
@@ -3459,9 +3463,11 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
         space,
         async ({ workspace, provider, ref }) => {
           if (!file) {
-            return await machineTools(workspace, { cwd: () => CWD })
-              .find((m) => m.name == t.name)!
-              .run(args)
+            return await machineTools(workspace, {
+              cwd: () => CWD,
+              call: ctx.call,
+            })
+              .find((m) => m.name == t.name)!.run(args)
           }
           await provider.put(ref, file)
           return `wrote ${file.path}`
@@ -3469,6 +3475,33 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
       )
       return { text: said, space }
     },
+    ...writes || t.name == 'shell'
+      ? {
+        recover: async (ctx: Ctx, args: Args) => {
+          let { space, who } = await inSpace(ctx, args, true)
+          let said = await bench(
+            ctx,
+            space,
+            async ({ workspace, provider, ref }) => {
+              if (!writes) return shellReceipt(workspace, ctx.call)
+              let file = await attachedFile(ctx, space, args, who)
+              let path = file?.path ?? text(args.path, 'path')
+              let bytes = file?.bytes ??
+                new TextEncoder().encode(String(args.content))
+              let [found] = await workspace.stat([path])
+              if (found?.kind != 'file') return
+              for await (let kept of provider.export(ref, [found.canonical])) {
+                if (
+                  kept.bytes.length == bytes.length &&
+                  kept.bytes.every((byte, index) => byte == bytes[index])
+                ) return `wrote ${path}`
+              }
+            },
+          )
+          return typeof said == 'string' ? { text: said, space } : undefined
+        },
+      }
+      : {},
   }
 })
 

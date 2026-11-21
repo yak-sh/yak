@@ -850,6 +850,35 @@ export let operatorRoster = async (
       },
     }
   }
+  let recovery = (
+    t: NamedTool,
+    host: Graph,
+    target: Graph,
+    from: 'own' | 'apps' | 'remote',
+  ): Pick<Tool, 'recover'> => {
+    if (!t.recover) return {}
+    return {
+      recover: async (args, context) => {
+        let found = false
+        let read = run(
+          {
+            ...t,
+            applied: true,
+            run: async (call, graph) => {
+              let answer = await t.recover!(call, graph)
+              found = answer.length > 0
+              return answer
+            },
+          },
+          host,
+          target,
+          from,
+        )
+        let answer = await read(args, context)
+        if (found) return answer
+      },
+    }
+  }
   let shaped = (t: NamedTool) => ({
     name: t.name,
     ...t.title ? { title: t.title } : {},
@@ -885,6 +914,7 @@ export let operatorRoster = async (
     ...remote.map(namedTool).map((t): Tool => ({
       ...shaped(t),
       run: run(t, g, landing, 'remote'),
+      ...recovery(t, g, landing, 'remote'),
     })),
     // Their own words, sent on to their machine as theirs: only someone who
     // writes in the space, as the rest of what changes anything is. What
@@ -898,11 +928,21 @@ export let operatorRoster = async (
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
       let there = run(t, g, landing, 'apps', ours && IN_OWN)
-      if (!ours) return { ...shaped(t), run: there }
+      if (!ours) {
+        return { ...shaped(t), run: there, ...recovery(t, g, landing, 'apps') }
+      }
       let here = run(ours, self, self, 'own', IN_APPS)
       let tool = shaped(t)
       return {
         ...tool,
+        ...(t.recover || ours.recover) && {
+          recover: ({ self: reads, ...args }, context) => {
+            let { space: _, app: __, ...own } = args
+            return reads
+              ? recovery(ours, self, self, 'own').recover?.(own, context)
+              : recovery(t, g, landing, 'apps').recover?.(args, context)
+          },
+        },
         parameters: {
           ...tool.parameters,
           properties: {
@@ -931,7 +971,11 @@ export let operatorRoster = async (
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
-        let tool = { ...shaped(t), run: run(t, self, self, 'own', OWN_ONLY) }
+        let tool = {
+          ...shaped(t),
+          run: run(t, self, self, 'own', OWN_ONLY),
+          ...recovery(t, self, self, 'own'),
+        }
         if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }
@@ -1749,7 +1793,7 @@ export let operating = (
       // `providerResolver`).
       free ? base : rowed(base),
       {
-        result: resultOf(env, modelResults(g)),
+        result: resultOf(env, modelResults(g), implementations),
       },
     )
   // The line that tells a conversation a hosted model is answering it
@@ -1871,7 +1915,7 @@ export let operating = (
         { model: models[hosted.provider], name: hosted.model, hosted: true },
       ]
     }, fell),
-    { result: resultOf(env, modelResults(g)) },
+    { result: resultOf(env, modelResults(g), implementations) },
   )
   // The base persona as plugins/yaks.app/persona says it, kept in the
   // directory once per wake; one that could not be written is reported and

@@ -276,6 +276,9 @@ export type Tool<R = Bundle[]> = {
   outputSchema?: Record<string, unknown>
   /** the implementation: the call in, the result's bundles out */
   run: (call: Bundle, graph: Graph) => R | Promise<R>
+  /** Read the outcome of this invocation after its runner disappeared.
+   * Empty means its outcome is unknown. */
+  recover?: (call: Bundle, graph: Graph) => R | Promise<R>
 }
 
 /** A read hook's caller options and committed storage, outside a transaction.

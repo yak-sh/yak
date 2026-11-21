@@ -292,6 +292,18 @@ test('sandbox_shell preserves every output line and wide text', () => {
   assertStringIncludes(fullShell.text, fullOutput + '\nlast error')
 })
 
+test('sandbox_shell recovers the original process output without starting another command', async () => {
+  let { ctx, box } = await bench(() => ({ stdout: 'saved output' }))
+  let shell = tool('sandbox_shell')
+  let args = { command: 'produce a file' }
+  let call = crypto.randomUUID()
+  let original = await shell.run({ ...ctx, call }, args)
+  let found = await shell.recover!({ ...ctx, call }, args)
+  assertEquals(found?.text, original.text)
+  assertStringIncludes(found!.text, 'saved output')
+  assertEquals(box.ran.filter((line) => line == args.command), [args.command])
+})
+
 test('sandbox_wait preserves every output line and wide text', async () => {
   let out = await tool('sandbox_wait').run(fullSandbox.ctx, {
     process: fullProcess,

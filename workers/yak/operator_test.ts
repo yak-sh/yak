@@ -600,6 +600,63 @@ test('a reply a reset cut off keeps the words it showed, and its turn is taken u
   assertEquals(resumed.at(-1), 'The icon is set.')
 })
 
+let acknowledged = operatorMemory()
+let generation = Promise.withResolvers<string>()
+let purchases: string[] = []
+let resumable = Object.assign(
+  async (req: Parameters<Model>[0]) => {
+    purchases.push(req.call!)
+    await req.onSubmit?.()
+    await req.onAck?.({ provider: { id: 'original' } })
+    req.onText?.({ index: 0, text: 'The icon' })
+    generation.resolve(req.call!)
+    return await new Promise<never>(() => {})
+  },
+  {
+    retrieve: (mark: Parameters<NonNullable<Model['retrieve']>>[0]) => {
+      assertEquals(mark, { provider: { id: 'original' } })
+      return Promise.resolve({
+        id: 'original',
+        model: 'claude-sonnet-5-5',
+        items: [{ kind: 'assistant' as const, text: 'The icon is set.' }],
+        cost: 0.001,
+      })
+    },
+  },
+)
+let seenPart = Promise.withResolvers<void>()
+let resumeOptions = operatorModel(resumable)
+resumeOptions.model.retrieve = resumable.retrieve
+let beforeReset = operate(acknowledged, roundsPlatform, {
+  ...resumeOptions,
+  typing: () => seenPart.resolve(),
+})
+let originalTurn = await beforeReset.ask(roundsHeld, roundsSpace, {
+  say: 'Set the icon.',
+})
+void drain(acknowledged)
+let originalAsk = await generation.promise
+await seenPart.promise
+let afterReset = operatorMemory(acknowledged.storage)
+operate(afterReset, roundsPlatform, resumeOptions)
+await drain(afterReset)
+let recoveredTurn = await afterReset.g.read(
+  ql`.entry.session=${originalTurn.session}&*`,
+  { durable: true },
+)
+test('a replacement Operator completes the acknowledged ask and its streamed entry', () => {
+  assertEquals(purchases, [originalAsk])
+  let asks = recoveredTurn.filter((row) => row.ask)
+  assertEquals(asks.map((row) => row.entity.eid), [originalAsk])
+  assertEquals(asks[0].interrupted, undefined)
+  assertEquals(
+    recoveredTurn.filter((row) => row.stream_item).map((row) =>
+      comp(row, 'content')?.body
+    ),
+    ['The icon is set.'],
+  )
+})
+
 // A reset under a tool call that never returned: the next incarnation answers
 // the call as interrupted and the turn goes on, rather than the session
 // staying running with nobody to finish it (Jeff's app_preview, T-145961).

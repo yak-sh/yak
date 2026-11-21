@@ -13,7 +13,7 @@ import type { Alarms } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
 import { type Level, writes } from '@yaks/member'
 import { directory } from './directory.ts'
-import { onceRead, owed, restart, type Restartable } from './running.ts'
+import { onceRead, restart, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
@@ -97,8 +97,6 @@ export class Builder extends Durable {
   #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
   #arming?: Promise<void>
   #revivals = 0
-  // The Operator's pool, once this incarnation has made it (`#work`).
-  #fx?: { running(): unknown[] }
   // When the Operator's work stops starting runs (the alarm's slice),
   // and whether the alarm's drain is working it: beside a drain a write's
   // work starts only within the drain's slice, so the drain ends; otherwise
@@ -201,9 +199,6 @@ export class Builder extends Durable {
   }
 
   async #answer(request: Request): Promise<Response> {
-    // A caller on a later deploy restarts this object first, when it is idle
-    // (`busy`).
-    await this.behind(request)
     let url = new URL(request.url)
     if (url.pathname == WAKE) {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
@@ -784,7 +779,6 @@ export class Builder extends Durable {
           let { ctxOf, logosOf } = await import('./connections.ts')
           return logosOf(ctxOf(this.#env).graph.read, this.#env, named)
         }
-        this.#fx = store.fx
         owing(store.fx, () => this.#work())
         // What a person is called, as the Operator asks it (operator.ts
         // `named`).
@@ -1035,11 +1029,6 @@ export class Builder extends Durable {
       }
     },
     report: (e, entry) => caught(e, { request: `operator ${entry}` }),
-    behind: (request) =>
-      owed(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx),
-    // An Operator's step under way is never cut by a restart, and keeps the
-    // code it started on.
-    busy: () => !!this.#fx?.running().length,
     alarm: {
       keep: this.#ctx.waitUntil && ((work) => this.#ctx.waitUntil!(work)),
     },
