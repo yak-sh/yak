@@ -2551,12 +2551,18 @@ export let operating = (
       ]
     },
     // Where the person of the conversation is now, for them alone, sent
-    // after the conversation and never kept in it (whereabouts.ts).
+    // after the conversation and never kept in it (whereabouts.ts). The turn
+    // needs none of it: one that can't be read is reported, and the turn goes
+    // on without it (M-37965). A directory a deploy reached before this object
+    // refuses a word it no longer speaks, so even its refusal is ours.
     turnItems: async (_, __, { session }) => {
       let o = await workingOf(store, session)
       if (!o?.person || !o.space) return []
       let { whereaboutsItem } = await import('./whereabouts.ts')
-      let text = await whereaboutsItem(env, o.person, o.space)
+      let text = await whereaboutsItem(env, o.person, o.space).catch((e) => {
+        defect(e, { request: 'operator whereabouts', session, space: o.space })
+        return undefined
+      })
       return text ? [{ kind: 'instruction' as const, text }] : []
     },
     // A child works for the same space and person as the session that

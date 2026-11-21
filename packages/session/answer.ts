@@ -167,12 +167,10 @@ export type Naming = { host?: string; name?: string }
 /**
  * What ended a session's work: its newest reply, else what kept it from one,
  * in plain words, naming the host where it is at fault ({@link Naming}). `fault` is what went
- * wrong, for the host's tracker: a refusal, a failure, or an end with no
- * reply. A person's stop is no fault, nor a ceiling met (a spent budget says
- * so in its own words), and a step that threw was reported where it threw
- * (./run.ts `report`). Every end the host is at fault for `broke` it, the
- * step that threw too; a model that declined, was busy or is unavailable
- * did not.
+ * wrong, for the host's tracker: a refusal, a failure, a step that threw, or
+ * an end with no reply. A person's stop is no fault, nor a ceiling met (a
+ * spent budget says so in its own words). Every end the host is at fault for
+ * `broke` it; a model that declined, was busy or is unavailable did not.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -195,6 +193,10 @@ export type Naming = { host?: string; name?: string }
  *   output: { source: 'a' }, refusal: { code: 'limit' },
  *   content: { body: "clerk's model and voice budget for this month is spent" },
  * })]), { text: "clerk's model and voice budget for this month is spent" })
+ * equal(replyOf([line(3, {
+ *   exception: { type: 'Unknown', value: 'unknown prop: .presence' },
+ *   content: { body: 'Unknown: unknown prop: .presence' },
+ * })]).fault, 'Unknown: unknown prop: .presence')
  * equal(replyOf([]).fault, 'ended without an answer')
  * let refused = line(4, {
  *   result: { call: 'c' }, refusal: { code: 'arguments' },
@@ -210,12 +212,19 @@ export let replyOf = (
 ): Reply => {
   // A model asked after its calls were answered, a refusal among them, is
   // where the work stands: what it answered, or that it answered nothing.
-  let end = ordered(entries).findLast((b) =>
+  let lines = ordered(entries)
+  let end = lines.findLast((b) =>
     b.content && (b.output && !b.reasoning || b.refusal || b.exception) ||
     b.failed ||
     kindOf(b) == 'stop' || kindOf(b) == 'ask'
   )
   if (end && kindOf(end) == 'ask' && !end.failed) end = undefined
+  // A step that threw after a stop was withdrawn by it: the stop ends it.
+  if (end && kindOf(end) == 'exception') {
+    end = lines.slice(0, lines.indexOf(end)).findLast((b) =>
+      kindOf(b) == 'stop'
+    ) ?? end
+  }
   let text = end ? textOf(end) : ''
   let kind = end && kindOf(end)
   if (kind == 'stop') return { text }
@@ -223,7 +232,6 @@ export let replyOf = (
   if (kind == 'output' && !end!.notice && text) return { text }
   let told = ` The people who run ${host} have been told.`
   let broke = couldnt(`something in ${host} failed while working on it`)
-  if (kind == 'exception') return { text: broke + told, broke: true }
   let code = String(comp(end, 'refusal')?.code)
   let fault = kind == 'refusal'
     ? `${code}: ${text}`

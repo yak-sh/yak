@@ -25,6 +25,9 @@ let space = await directoryOf(p.env.STORE).mint(owner, 'reran', 'Reran', {
   'x-yak-role': 'owner',
 })
 let broken = true
+// A step that throws, not a model's refusal: a query yaks.app wrote, refused
+// by a directory a deploy reached first, carries a refusal's status.
+let threw: Error | undefined
 let heard: string[] = []
 let store = operatorMemory()
 let operator = operating(
@@ -32,6 +35,7 @@ let operator = operating(
   p.env,
   operatorModel((req) => {
     heard.push(JSON.stringify(req.items))
+    if (threw) throw threw
     if (broken) throw new ModelError('claude_tool', 'an unoffered tool')
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -120,4 +124,26 @@ test("a break's task a bug stopped is taken up in its own conversation, and its 
   assertEquals(notes.length, 1)
   assertStringIncludes(String((notes[0].doc as Comp).body), 'started again')
   assertEquals((await store.g.read(q`.contains .edge.from=${task}`)).length, 1)
+})
+
+test("a turn that threw is filed under its conversation, even with a refusal's status, and stalls until its fix", async () => {
+  let presence = 'unknown prop: .presence (closest declared: .ref.present)'
+  threw = Object.assign(new Error(presence), { status: 400 })
+  await run(async () => {
+    await receive(store, { space, person: owner, channel: 'chat' }, 'Hi')
+    await drain(store)
+  })
+  threw = undefined
+  let filed = reports.filter((r) =>
+    ((r.error as Comp).tags as Record<string, string>).request ==
+      'operator conversation' && JSON.stringify(r).includes(presence)
+  )
+  assertEquals(filed.length, 1)
+  let [stall] = await stalled()
+  assertEquals(stall.fault, faultOf(filed[0]))
+  await run(async () => {
+    await rerun(store, space, { faults: [stall.fault], bug: 'b3', said })
+    await drain(store)
+  })
+  assertEquals(await stalled(), [])
 })
