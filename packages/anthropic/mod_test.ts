@@ -451,7 +451,7 @@ test('the web is offered beside the tools, and a search is counted and its pages
     {
       kind: 'assistant',
       text:
-        'Searching.\n\nYaks are bovines [Yak  wiki ](<https://yak.example/>)' +
+        'Searching.\n\nYaks are bovines [Yak  wiki](<https://yak.example/>)' +
         '. [herd.example](<https://herd.example/a%3Eb>)',
     },
     { kind: 'call', id: 'tu_1', name: 'find', args: '{}' },

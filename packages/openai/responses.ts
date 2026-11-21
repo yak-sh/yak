@@ -196,7 +196,9 @@ export let body = (
     ...req.anchor ? { previous_response_id: req.anchor } : {},
   }, store)
 
-/** Keep provider citations as clickable Markdown in the stored final text. */
+/** Keep provider citations as clickable Markdown in the stored final text:
+ * each page cited that the text does not link yet, once, by its title or else
+ * its host. */
 let citedText = (part: Frame): string => {
   let text = str(part.text ?? part.refusal)
   let annotations = Array.isArray(part.annotations) ? part.annotations : []
@@ -204,13 +206,14 @@ let citedText = (part: Frame): string => {
     record(a) && a.type == 'url_citation' && typeof a.url == 'string'
   )
   for (let a of links) {
-    try {
-      let url = new URL(String(a.url))
-      if (url.protocol != 'https:' && url.protocol != 'http:') continue
-      let title = str(a.title, url.hostname).replace(/[\[\]\\\r\n]/g, ' ')
-      // Source links remain available even if provider offsets are absent.
-      text += ` [${title}](<${url.href.replaceAll('>', '%3E')}>)`
-    } catch { /* Invalid provider URLs are not rendered as links. */ }
+    let url = URL.parse(String(a.url))
+    if (url?.protocol != 'https:' && url?.protocol != 'http:') continue
+    // The model often links its source inline itself, where the citation's
+    // offsets point; then the text has it already.
+    if (text.includes(String(a.url)) || text.includes(url.href)) continue
+    let title = str(a.title).replace(/[\[\]\\\r\n]/g, ' ').trim() ||
+      url.hostname
+    text += ` [${title}](<${url.href.replaceAll('>', '%3E')}>)`
   }
   return text
 }

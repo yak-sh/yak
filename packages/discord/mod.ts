@@ -8,6 +8,7 @@ import type {
   Addressed,
   Api,
   Basics,
+  Linker,
   Page,
   Platform,
   Room,
@@ -670,11 +671,20 @@ export let basics = async (
   }
 }
 
+/** A link as a Discord message writes one: a masked link `[words](url)`,
+ * which a bot may send, or the address alone. A parenthesis in the address is
+ * escaped, so it cannot end the link early. */
+export let links: Linker = (words, url) =>
+  words
+    ? `[${words}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`
+    : url
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
   title: 'Discord',
   limit: 2000,
+  links,
   user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,

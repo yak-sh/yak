@@ -214,13 +214,15 @@ let page = (url?: string) => {
   }
 }
 
-/** A link to each page cited that the text has not linked yet. */
-let sources = (cited: Citation[] = [], linked: Set<string>) =>
+/** A link to each page cited that the text has not linked yet, nor `text`
+ * holds, by its title or else its host. */
+let sources = (cited: Citation[] = [], linked: Set<string>, text: string) =>
   cited.map((c) => {
     let url = page(c.url)
-    if (!url || linked.has(url.href)) return ''
+    if (!url || linked.has(url.href) || text.includes(url.href)) return ''
     linked.add(url.href)
-    let title = (c.title || url.hostname).replace(/[\[\]\\\r\n]/g, ' ')
+    let title = (c.title ?? '').replace(/[\[\]\\\r\n]/g, ' ').trim() ||
+      url.hostname
     return ` [${title}](<${url.href.replaceAll('>', '%3E')}>)`
   }).join('')
 
@@ -243,7 +245,8 @@ export let items = (content: Content[]): Item[] => {
     } else if (b.type == 'text') {
       let last = out.at(-1)
       if (last?.kind != 'assistant') linked = new Set()
-      let text = (b.text ?? '') + sources(b.citations, linked)
+      let said = (last?.kind == 'assistant' ? last.text : '') + (b.text ?? '')
+      let text = (b.text ?? '') + sources(b.citations, linked, said)
       if (!text) continue
       if (last?.kind == 'assistant') last.text += (ran ? '\n\n' : '') + text
       else out.push({ kind: 'assistant', text })

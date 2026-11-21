@@ -19,6 +19,7 @@ import {
   confined,
   framing,
   kept,
+  linked,
   messageEid,
   pieces,
   reading,
@@ -174,6 +175,41 @@ test('pieces cut at a paragraph, a line, a space, or hard', () => {
       ['  ', 4, []],
     ] as [string, number, string[]][]
   ) assertEquals(pieces(text, limit), want, text)
+})
+
+// An Operator's reply as Discord was sent it, a page linked by the model and
+// cited again with no words.
+let CITED =
+  'Both use the same read and write model as tasks. ([raw.githubusercontent.com](https://raw.githubusercontent.com/yak-sh/yak/main/packages/README.md)) [](<https://raw.githubusercontent.com/yak-sh/yak/main/packages/README.md>)'
+
+test('a link is written once, by its words or else its address alone', () => {
+  let md = (words: string, url: string) => words ? `[${words}](${url})` : url
+  for (
+    let [text, want, form] of [
+      [
+        CITED,
+        'Both use the same read and write model as tasks. (raw.githubusercontent.com (https://raw.githubusercontent.com/yak-sh/yak/main/packages/README.md))',
+      ],
+      ['See https://a.com/x.', 'See https://a.com/x.'],
+      ['(see https://a.com/x(1)), then', '(see https://a.com/x(1)), then'],
+      [
+        '[](https://a.com) and <https://b.com>',
+        'https://a.com and https://b.com',
+      ],
+      ['[https://a.com](https://a.com/z)', 'https://a.com/z', md],
+      [
+        '[guide](https://a.com) [guide](https://a.com)',
+        '[guide](https://a.com) [guide](https://a.com)',
+        md,
+      ],
+      ['https://a.com then [](https://a.com/)', 'https://a.com then', md],
+      [
+        '`[](https://a.com)` [x](T-12) [y](mailto:a@b.c)',
+        '`[](https://a.com)` [x](T-12) [y](mailto:a@b.c)',
+        md,
+      ],
+    ] as [string, string, Parameters<typeof linked>[1]?][]
+  ) assertEquals(linked(text, form), want, text)
 })
 
 // A graph that keeps chat messages and posts them through `chatter`.

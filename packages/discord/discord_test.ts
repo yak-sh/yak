@@ -6,7 +6,8 @@ import { assertEquals, assertRejects } from '@std/assert'
 import type { Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
-import { discord, everyone, gateway, INTENTS, NEEDED } from './mod.ts'
+import { linked } from '@yaks/chat'
+import { discord, everyone, gateway, INTENTS, links, NEEDED } from './mod.ts'
 
 let ME = '900'
 let wire = () => {
@@ -557,4 +558,29 @@ test('api reads, as the bot, what a member could see, and never the servers the 
     assertEquals(api!.reads.includes(path), true, path)
   }
   assertEquals(api!.reads.some((r) => r.startsWith('/users/@me')), false)
+})
+
+test('a reply’s links reach Discord as one masked link each, never empty', () => {
+  let readme =
+    'https://raw.githubusercontent.com/yak-sh/yak/main/packages/README.md'
+  // An Operator's reply as Discord was sent it, a page linked by the model
+  // and cited again with no words.
+  let cited =
+    `Both use the same read and write model as tasks. ([raw.githubusercontent.com](${readme})) [](<${readme}>)`
+  for (
+    let [text, want] of [
+      [
+        cited,
+        `Both use the same read and write model as tasks. ([raw.githubusercontent.com](${readme}))`,
+      ],
+      [
+        '[the wiki](<https://w.org/Yak_(animal)>)',
+        '[the wiki](https://w.org/Yak_%28animal%29)',
+      ],
+      [
+        'Tap https://yaks.app/approve?t=a.b to approve.',
+        'Tap https://yaks.app/approve?t=a.b to approve.',
+      ],
+    ]
+  ) assertEquals(linked(text, links), want, text)
 })

@@ -120,6 +120,9 @@ export type Platform = {
   title: string
   /** the most characters one message may carry */
   limit: number
+  /** how a message there writes a link ({@link linked}); as plain text,
+   * {@link plainLink}, where none */
+  links?: Linker
   /** the integration someone signs in to it with (@yaks/connections), whose
    * connection's `account` is their id there: how a person here is known
    * when they speak on it */
@@ -452,6 +455,72 @@ export let pieces = (text: string, limit: number): string[] => {
   }
   if (rest) out.push(rest)
   return out.filter(Boolean)
+}
+
+/** How a platform writes a link to `url`: by its `words`, or by the address
+ * alone where there are none. */
+export type Linker = (words: string, url: string) => string
+
+/** A link as plain text writes it: its words, then its address. */
+export let plainLink: Linker = (words, url) => words ? `${words} (${url})` : url
+
+// Code, fenced or inline, which keeps what it holds; a Markdown link, its
+// address bare or in <>, with the spaces before it; an autolink; a bare URL.
+let LINK =
+  /(```[\s\S]*?```|`[^`\n]*`)|([ \t]*)\[([^\]\n]*)\]\(\s*(?:<([^>\n]*)>|((?:[^\s()]|\([^\s()]*\))*))\s*\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/[^\s<>]+)/gi
+
+// A bare URL ends before the punctuation that closes its sentence, and before
+// a closing parenthesis it never opened.
+let ending = (url: string): [string, string] => {
+  let end = url.length
+  while (end) {
+    let c = url[end - 1]
+    let part = url.slice(0, end)
+    let open = part.split('(').length < part.split(')').length
+    if (!/[.,;:!?'"*_]/.test(c) && !(c == ')' && open)) break
+    end--
+  }
+  return [url.slice(0, end), url.slice(end)]
+}
+
+let web = (href: string) => {
+  let url = URL.parse(href.trim())
+  return url && /^https?:$/.test(url.protocol) ? url.href : undefined
+}
+
+/**
+ * A reply with every link written as its platform writes one (`form`): a
+ * Markdown link `[words](url)` or `[words](<url>)`, an autolink `<url>`, and
+ * a bare URL. Words that are empty or are themselves an address are none. A
+ * link without words to an address the reply linked already is dropped, so a
+ * page cited after the words that link it is one link. Code keeps what it
+ * holds, and a link to anything but a web page stays as written.
+ */
+export let linked = (text: string, form: Linker = plainLink): string => {
+  let seen = new Set<string>()
+  // A link to `href` by `words`, or none where it is wordless and linked
+  // already; anything but a web page stays as written (`whole`).
+  let write = (whole: string, words: string, href: string) => {
+    let url = web(href)
+    if (!url) return whole
+    let bare = !words || !!web(words)
+    if (bare && seen.has(url)) return ''
+    seen.add(url)
+    return form(bare ? '' : words, href.trim())
+  }
+  return text.replace(
+    LINK,
+    (whole, code, space, words, angled, inline, auto, loose) => {
+      if (code) return code
+      if (auto) return write(whole, '', auto)
+      if (loose) {
+        let [href, after] = ending(loose)
+        return write(href, '', href) + after
+      }
+      let out = write(whole, words.trim(), angled ?? inline)
+      return out && out != whole ? space + out : out
+    },
+  )
 }
 
 /**

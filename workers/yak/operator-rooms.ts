@@ -14,6 +14,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import {
   chain,
   kept,
+  linked,
   type Page,
   pieces,
   recounted,
@@ -506,8 +507,9 @@ export let chatRead = (
 
 /** A chat answer: a message in the room `item` was said in
  * (`chat_message{room}`), replying to it where it names its message, posted
- * by the bot of its connection (@yaks/chat `chat_post`), cut to the
- * platform's limit, one message a piece. */
+ * by the bot of its connection (@yaks/chat `chat_post`), its links written
+ * as the platform writes them (@yaks/chat `linked`), cut to the platform's
+ * limit, one message a piece. */
 export let chatRows = (
   via: string,
   item: Bundle,
@@ -516,7 +518,10 @@ export let chatRows = (
   let heard = item.chat_message as Comp | undefined
   let platform = PLATFORMS.get(via)
   if (!platform || !heard?.room || !heard.connection) return []
-  return pieces(reply.text, platform.limit).map((body, i) => ({
+  return pieces(linked(reply.text, platform.links), platform.limit).map((
+    body,
+    i,
+  ) => ({
     entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
     chat_message: {
       via,

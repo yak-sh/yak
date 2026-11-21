@@ -145,3 +145,28 @@ test('each hosted search is counted in the reply usage, a page opened is not', a
   assertEquals(reply.usage?.web_searches, 2)
   assertEquals(reply.usage?.input_tokens, 5)
 })
+
+test('a page the text links already, or cited with no title, is linked once by its host', () => {
+  let readme =
+    'https://raw.githubusercontent.com/yak-sh/yak/main/packages/README.md'
+  let cite = (text: string, title: string) =>
+    items([{
+      type: 'message',
+      content: [{
+        type: 'output_text',
+        text,
+        annotations: [{ type: 'url_citation', url: readme, title }],
+      }],
+    }])[0]
+  assertEquals(
+    cite(`As tasks. ([raw.githubusercontent.com](${readme}))`, ''),
+    {
+      kind: 'assistant',
+      text: `As tasks. ([raw.githubusercontent.com](${readme}))`,
+    },
+  )
+  assertEquals(cite('As tasks.', ''), {
+    kind: 'assistant',
+    text: `As tasks. [raw.githubusercontent.com](<${readme}>)`,
+  })
+})
