@@ -1,13 +1,16 @@
 /** @jsxImportSource preact */
 import { Button, Card, Chip, Chips } from '@yaks/ui'
-import { type Demo, DEMOS, type Line } from './demos.ts'
+import { SECTIONS } from './parts.ts'
+import { ServiceLogo } from './scenes.tsx'
+import { type Demo, DEMOS, type Line, TURNS } from './demos.ts'
 
 let Message = (
-  { line, turn, at, first }: {
+  { line, turn, at, first, logo }: {
     line: Line
     turn: number
     at: number
     first: boolean
+    logo?: string
   },
 ) => (
   <li
@@ -18,7 +21,10 @@ let Message = (
     hidden={!first}
   >
     <div class={`Chat_Bubble Chat_Bubble-${line.who}`}>
-      {line.text}
+      <a class='Home_MessageLink' href={`#${SECTIONS[turn]}`}>
+        {logo && <ServiceLogo slug={logo} />}
+        {line.text}
+      </a>
       {line.shot && (
         <a
           class='Home_Shot'
@@ -45,6 +51,15 @@ let Message = (
   </li>
 )
 
+let CONNECTED: Record<string, string> = {
+  menu: 'google-sheet',
+  directory: 'google-calendar',
+  bookclub: 'zoom',
+  guestbook: 'google-drive',
+  trip: 'google-sheet',
+  recipes: 'notion',
+}
+
 let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
   <div
     class='Home_Track'
@@ -57,7 +72,17 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
     <ol class='Home_Messages'>
       {demo.turn.flatMap((lines, turn) =>
         lines.map((line, at) => (
-          <Message line={line} turn={turn} at={at} first={turn == 0} />
+          <Message
+            line={line}
+            turn={turn}
+            at={at}
+            first={turn == 0}
+            logo={line.who == 'them' && TURNS[turn] == 'connect'
+              ? CONNECTED[demo.slug]
+              : line.who == 'them' && TURNS[turn] == 'sell'
+              ? 'stripe'
+              : undefined}
+          />
         ))
       )}
     </ol>

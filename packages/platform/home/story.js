@@ -87,6 +87,72 @@ let navigation = (track, calm) => {
   }
 }
 
+let mascot = (root, calm, narrow) => {
+  let slot = root.querySelector('[data-wander]')
+  let rest = '/mascot/idle-rest-128-1x.webp'
+  let beside = new Image()
+  beside.alt = ''
+  beside.className = 'Home_WanderPose'
+  let seated, section, shown
+  let update = () => {
+    let name = !calm.matches && section?.dataset.storyPose
+    let path = name && `/home-mascot/${name}.webp`
+    if (shown) shown.src = rest, shown = undefined
+    if (path && narrow.matches) {
+      shown = section.querySelector('[data-section-yak]')
+      shown.src = path
+    }
+    if (seated) {
+      beside.toggleAttribute('data-ready', false)
+      if (path && !narrow.matches) {
+        seated.append(beside)
+        beside.src = path
+        beside.toggleAttribute(
+          'data-ready',
+          beside.complete && beside.naturalWidth > 0,
+        )
+      } else beside.remove()
+    }
+  }
+  beside.addEventListener('load', () => beside.setAttribute('data-ready', ''))
+  root.ownerDocument.addEventListener('sat', (e) => {
+    seated = e.target
+    update()
+  }, true)
+  root.ownerDocument.addEventListener('home', () => {
+    beside.remove()
+    seated = undefined
+  }, true)
+  calm.addEventListener('change', update)
+  narrow.addEventListener('change', update)
+  return (step) => {
+    section = step
+    let perch = step.querySelector('[data-section-yak]')?.parentElement ?? null
+    slot.dataset.wanderTo = perch?.id ?? ''
+    slot.dispatchEvent(new CustomEvent('wander-to', { detail: perch }))
+    update()
+  }
+}
+
+let ideas = (root) => {
+  let hero = root.querySelector('#say')
+  let demo = root.querySelector('#example-say')
+  for (let button of root.querySelectorAll('[data-service-idea]')) {
+    button.addEventListener('click', () => {
+      let r = demo.getBoundingClientRect()
+      let box =
+        button.closest('.Story_Hero') || r.top < 0 || r.bottom > innerHeight
+          ? hero
+          : demo
+      if (!box.value) {
+        box.value = `Make me an app that uses ${button.dataset.serviceIdea} to `
+      }
+      box.focus()
+      box.setSelectionRange(box.value.length, box.value.length)
+    })
+  }
+}
+
 let copyLinks = (root) => {
   for (let button of root.querySelectorAll('[data-copy-link]')) {
     let box = button.closest('.Copy')
@@ -122,20 +188,27 @@ let mount = (root) => {
   let i = 0, active = -1, frame = 0, timer = 0
   let playing = !calm.matches
   let highlight = navigation(nav, calm)
+  let pose = mascot(root, calm, narrow)
 
   let draw = (motion = !calm.matches) => {
     let line = Math.min(innerHeight * .45, 250),
       rects = steps.map((el) => el.getBoundingClientRect())
     let at = reading(rects, line)
     let last = rects.at(-1)
-    let mini = narrow.matches && at.step > 0 && last.bottom > line
-    demo.toggleAttribute('data-mini', mini)
+    let past = last.bottom <= line
+    demo.toggleAttribute('data-mini', narrow.matches && at.step > 0 && !past)
+    demo.toggleAttribute(
+      'data-docked',
+      !narrow.matches && !past && desk.getBoundingClientRect().top < 16,
+    )
+    demo.toggleAttribute('data-finished', !narrow.matches && past)
     reveal(logs[i], at, motion)
     if (active == at.step) return
     if (active >= 0) jumps[active].removeAttribute('aria-current')
     let link = jumps[active = at.step]
     link.setAttribute('aria-current', 'location')
     highlight(link)
+    pose(steps[active])
     if (active > 0) hold()
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))
@@ -173,7 +246,11 @@ let mount = (root) => {
 
   // The published home app sets a base URL for shared assets. Keep jumps
   // in this document even when the visitor arrived with a query string.
-  for (let link of root.querySelectorAll('a[href^="#"]')) {
+  for (
+    let link of document.querySelectorAll(
+      '.Top a[href^="#"], [data-story] a[href^="#"]',
+    )
+  ) {
     link.href = location.pathname + location.search + link.getAttribute('href')
   }
   picks.hidden = false
@@ -194,6 +271,7 @@ let mount = (root) => {
   })
   for (let log of logs) resized.observe(log.firstElementChild)
   copyLinks(root)
+  ideas(root)
   draw(false)
   wait()
 }

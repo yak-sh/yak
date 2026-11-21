@@ -20,7 +20,12 @@
 // keeps answering at its own address too, as pages already shipped name it.
 import { type Asset, plan, reading, write } from '@yaks/web/assets'
 import { halved } from '@yaks/ui'
-import { homeScript, homeStyle, skyScript } from '@yaks/platform/home/assets'
+import {
+  homeFigures,
+  homeScript,
+  homeStyle,
+  skyScript,
+} from '@yaks/platform/home/assets'
 import { kit } from './sheet-assets.ts'
 import { pageDocs } from './operator-words.ts'
 
@@ -46,6 +51,7 @@ export let ASSETS: Asset[] = [
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_home.css', file: homeStyle, named: true },
   { name: '_home.js', file: homeScript, named: true },
+  ...homeFigures,
   { name: 'sky.js', file: skyScript, named: true },
   ...['style.css', 'pages.css'].map((name) => ({ name, named: true })),
   ...[

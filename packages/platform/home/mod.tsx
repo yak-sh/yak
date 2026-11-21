@@ -2,22 +2,14 @@
 import type { ComponentChildren } from 'preact'
 import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
 import { TURNS } from './demos.ts'
-import { ICONS } from './icons.ts'
+import { gift, ICONS } from './icons.ts'
 import { Phone, Picks } from './phone.tsx'
+import { POSES, SECTIONS } from './parts.ts'
 import { Change, People, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
 
-let IDS = [
-  'hello',
-  'how',
-  'integrations',
-  'work',
-  'email-in',
-  'payments',
-  'helpers',
-  'people',
-  'domains',
-]
+let [, ...FEATURE_TURNS] = TURNS
+
 let POINTS = {
   change: [2, 3],
   connect: [1, 2, 3],
@@ -116,7 +108,11 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
     <ul class='Home_Jumps' id='feature-nav' data-feature-nav=''>
       {TURNS.map((turn, i) => (
         <li class='Home_Jump'>
-          <a class='Home_JumpLink' href={`#${IDS[i]}`} data-feature-link={i}>
+          <a
+            class='Home_JumpLink'
+            href={`#${SECTIONS[i]}`}
+            data-feature-link={i}
+          >
             <Icon of={ICONS[turn]} />
             <span {...copy.text(`home.story.turn.${turn}.short`)} />
           </a>
@@ -148,24 +144,34 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
   </nav>
 )
 
-let Features = ({ copy, plans }: { copy: Copy; plans: ComponentChildren }) => (
+let Features = ({ copy }: { copy: Copy }) => (
   <div class='Home_Features'>
-    {TURNS.slice(1).map((turn, j) => {
+    {FEATURE_TURNS.map((turn, j) => {
       let i = j + 1, key = `home.story.turn.${turn}`
       let scene = SCENES[turn as keyof typeof SCENES]
       let points = POINTS[turn as keyof typeof POINTS]
       return (
         <section
           class='Home_Feature'
-          id={IDS[i]}
+          id={SECTIONS[i]}
           aria-labelledby={`title-${turn}`}
           data-story-step={i}
+          data-story-pose={POSES[turn]}
         >
           <h2 class='Title Home_FeatureTitle' id={`title-${turn}`}>
             <span class='Home_Icon'>
               <Icon of={ICONS[turn]} />
             </span>
             <span {...copy.text(`${key}.heading`)} />
+            <img
+              class='Home_SectionYak'
+              data-section-yak=''
+              src='/mascot/idle-rest-128-1x.webp'
+              alt=''
+              width='80'
+              height='80'
+              loading='lazy'
+            />
           </h2>
           <div class='Home_FeatureWords'>
             <p class='Note' {...copy.text(`${key}.body`)} />
@@ -189,14 +195,13 @@ let Features = ({ copy, plans }: { copy: Copy; plans: ComponentChildren }) => (
             </div>
           )}
           {scene && <Scene id={scene} />}
-          {turn == 'domain' && plans}
         </section>
       )
     })}
   </div>
 )
 
-let Details = ({ copy, action }: { copy: Copy; action: string }) => (
+let Details = ({ copy }: { copy: Copy }) => (
   <div class='Home_Details'>
     <section class='Home_Detail' aria-labelledby='assistant'>
       <h2
@@ -232,7 +237,7 @@ let Details = ({ copy, action }: { copy: Copy; action: string }) => (
       ))}
     </section>
     <section class='Home_Detail' aria-labelledby='made'>
-      <h2 class='Title' id='made' {...copy.text('home.made.title')} />
+      <h2 class='Title' id='made' {...copy.text('home.story.company')} />
       <p
         class='Note'
         {...copy.text('home.made.us.detail', {
@@ -240,11 +245,6 @@ let Details = ({ copy, action }: { copy: Copy; action: string }) => (
         })}
       />
     </section>
-    <Card class='Join Home_Join' aria-labelledby='join'>
-      <h2 class='Title' id='join' {...copy.text('home.join.title')} />
-      <Ask copy={copy} action={action} id='join-say' cta='join' />
-      <p class='Note Note-small' {...copy.text('home.join.note')} />
-    </Card>
   </div>
 )
 
@@ -280,8 +280,20 @@ export let Story = (
         <Ask copy={copy} action={action} id='example-say' cta='walk' />
       </aside>
       <FeatureNav copy={copy} />
-      <Features copy={copy} plans={plans} />
-      <Details copy={copy} action={action} />
+      <Features copy={copy} />
+    </div>
+    <div class='Home_After'>
+      <div class='Home_Pricing'>
+        {plans}
+        <Card class='Home_Reward'>
+          <Icon of={gift} />
+          <div class='Home_RewardWords'>
+            <b {...copy.text('home.story.pricing.reward.title')} />
+            <p class='Note' {...copy.text('home.story.pricing.reward.body')} />
+          </div>
+        </Card>
+      </div>
+      <Details copy={copy} />
     </div>
   </div>
 )
@@ -309,10 +321,32 @@ let COLUMNS = [
   ], ['cookies', '/cookies']]],
 ] as const
 
+/** Building credit earned on a person's first space or first subscription. */
+export let PlanCredit = ({ copy, plan }: { copy: Copy; plan: string }) => (
+  <li class='Home_PlanCredit'>
+    <Icon of={gift} />
+    <span
+      {...copy.text(
+        plan == 'free'
+          ? 'home.story.pricing.free.credit'
+          : 'home.story.pricing.paid.credit',
+      )}
+    />
+  </li>
+)
+
 export let StoryFooter = (
-  { copy, yak }: { copy: Copy; yak: ComponentChildren },
+  { copy, action, yak }: { copy: Copy; action: string; yak: ComponentChildren },
 ) => (
   <footer class='Foot Home_Foot'>
+    <div class='Home_FootLead' id='join'>
+      {yak}
+      <div class='Home_Join'>
+        <h2 class='Title' {...copy.text('home.join.title')} />
+        <Ask copy={copy} action={action} id='join-say' cta='join' />
+        <p class='Note Note-small' {...copy.text('home.join.note')} />
+      </div>
+    </div>
     <nav
       class='Home_FootLinks'
       {...copy.attr('aria-label', 'home.story.footer.label')}
@@ -338,7 +372,6 @@ export let StoryFooter = (
       ))}
     </nav>
     <div class='Home_FootBy'>
-      {yak}
       <p {...copy.text('frame.foot.by')} />
       <a class='Foot_Link' href='mailto:hello@yaks.app'>hello@yaks.app</a>
     </div>

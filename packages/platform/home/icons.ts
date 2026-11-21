@@ -28,3 +28,6 @@ export const ICONS = {
   team: users,
   domain: globe,
 }
+
+// @ts-types="@yaks/ui/lucide"
+export { default as gift } from 'lucide/dist/esm/icons/gift.mjs'

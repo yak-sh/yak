@@ -89,7 +89,15 @@ let NAV = [
   ['/docs', 'docs'],
 ]
 
-let Top = ({ path }: { path: string }) => {
+let HOME_NAV = [
+  ['#how', 'features'],
+  ['#integrations', 'integrations'],
+  ['/gallery', 'gallery'],
+  ['#cost', 'pricing'],
+  ['/docs', 'docs'],
+]
+
+let Top = ({ path, sections }: { path: string; sections?: boolean }) => {
   let home = path == '/'
   return (
     <header class='Top'>
@@ -103,7 +111,7 @@ let Top = ({ path }: { path: string }) => {
         <span {...text('frame.top.name')} />
       </a>
       <nav class='Nav' {...attr('aria-label', 'frame.nav.label')}>
-        {NAV.map(([href, key]) => (
+        {(sections ? HOME_NAV : NAV).map(([href, key]) => (
           <a
             class='Nav_Link'
             href={href}
@@ -168,6 +176,7 @@ export let Page = (
     after,
     foot,
     sheet,
+    sections,
     children,
   }: {
     copy: string
@@ -175,6 +184,7 @@ export let Page = (
     kind?: string
     robots?: string
     sheet?: string
+    sections?: boolean
     head?: ComponentChildren
     before?: ComponentChildren
     after?: ComponentChildren
@@ -188,7 +198,7 @@ export let Page = (
     </Head>
     <body class={kind}>
       {before}
-      <Top path={path} />
+      <Top path={path} sections={sections} />
       <main class={kind ? 'Page' : 'Page Prose'}>{children}</main>
       {foot ?? <Foot />}
       <script type='module' src='_dates.js' />

@@ -20,7 +20,7 @@ const built = (text: string, d: { slug: string; shot: Shot }): Line => ({
   who: 'them',
   text,
   shot: d.shot,
-  link: { label: 'Open the app', href: `${DEMO_AT}${d.slug}/` },
+  link: { label: 'Open demo', href: `${DEMO_AT}${d.slug}/` },
 })
 const live = (domain: string) => them(`Your app is ready at ${domain}.`)
 /** The reply to a domain on the Free plan: the Plus plan, and where to get it. */

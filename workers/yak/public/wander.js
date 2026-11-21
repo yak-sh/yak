@@ -181,6 +181,9 @@
       dir = 1,
       homing = false
     let phase = 0, last = 0, scrolled = -Infinity
+    let perch = slot.dataset.wanderTo &&
+      document.getElementById(slot.dataset.wanderTo)
+    slot.addEventListener('wander-to', (e) => perch = e.detail)
     addEventListener('scroll', () => scrolled = performance.now(), {
       passive: true,
     })
@@ -222,7 +225,10 @@
       // for what he holds
       let target = () =>
         inView ? hy : Math.min(
-          Math.max(y, top + PAD + room[0]),
+          Math.max(
+            perch ? perch.getBoundingClientRect().top + top - size * .2 : y,
+            top + PAD + room[0],
+          ),
           bottom - size - PAD - room[1],
         )
 

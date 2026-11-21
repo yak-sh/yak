@@ -3,10 +3,13 @@ import { Card, Icon } from '@yaks/ui'
 import type { ComponentChildren } from 'preact'
 import { LOGOS } from '../routes.ts'
 import { DEMOS, SCENES } from './demos.ts'
+import { BRANDS } from './parts.ts'
 import { ICONS } from './icons.ts'
 import type { Copy } from './words.ts'
 
 let SERVICES = [
+  ['stripe', 'Stripe'],
+  ['zoom', 'Zoom'],
   ['google-sheet', 'Google Sheets'],
   ['google-calendar', 'Google Calendar'],
   ['slack', 'Slack'],
@@ -19,19 +22,34 @@ let SERVICES = [
   ['hubspot', 'HubSpot'],
 ]
 
+export let ServiceLogo = (
+  { slug, title }: { slug: string; title?: string },
+) => (
+  <img
+    class='Home_Logo'
+    src={BRANDS.some((name) => name == slug)
+      ? `/home-brands/${slug}.svg`
+      : LOGOS + slug}
+    alt={title ?? ''}
+    width='23'
+    height='23'
+    loading='lazy'
+  />
+)
+
 export let Services = ({ short = false }: { short?: boolean }) => (
   <ul class={short ? 'Home_Services Home_Services-short' : 'Home_Services'}>
     {SERVICES.slice(0, short ? 7 : undefined).map(([slug, name]) => (
       <li class='Home_Service'>
-        <img
-          class='Home_Logo'
-          src={LOGOS + slug}
-          alt={short ? name : ''}
-          width='23'
-          height='23'
-          loading='lazy'
-        />
-        {!short && <span>{name}</span>}
+        <button
+          type='button'
+          class='Home_ServicePick'
+          data-service-idea={name}
+          aria-label={short ? name : undefined}
+        >
+          <ServiceLogo slug={slug} />
+          {!short && <span>{name}</span>}
+        </button>
       </li>
     ))}
   </ul>
@@ -97,9 +115,12 @@ let Envelope = ({ box, subject, children }: {
 )
 
 let Scenes = {
-  send: ({ letter }: typeof SCENES[string]) => (
+  send: ({ letter }: typeof SCENES[string], slug: string) => (
     <Envelope box='Inbox' subject={letter[0]}>
-      <span class='Home_MailFrom'>From the app</span>
+      <p class='Home_MailFrom'>
+        <b>From</b> yourname.{slug}@yaks.app
+      </p>
+      <p class='Home_MailFrom'>To me · 7:02 AM</p>
       <p>{letter[1]}</p>
       <span class='Home_MailFrom'>Unsubscribe</span>
     </Envelope>
@@ -108,12 +129,15 @@ let Scenes = {
     <Envelope box='Forward' subject={`Fwd: ${mail[0]}`}>
       <span class='Home_MailFrom'>To yourname.{slug}@yaks.app</span>
       <span class='Home_Attachment'>{mail[1]}</span>
+      <span class='Home_MailSend' aria-hidden='true'>Send</span>
     </Envelope>
   ),
   sell: ({ sale }: typeof SCENES[string]) => (
     <div class='Home_Checkout'>
       <figure class='Home_Payment'>
-        <figcaption class='Home_WindowBar'>Checkout by Stripe</figcaption>
+        <figcaption class='Home_WindowBar'>
+          <ServiceLogo slug='stripe' /> Checkout by Stripe
+        </figcaption>
         <div class='Home_MailBody'>
           <p>{sale[0]}</p>
           <b>${sale[1]}.00</b>

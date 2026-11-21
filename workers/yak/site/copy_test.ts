@@ -45,5 +45,5 @@ test('a snippet changed in the copy is what the served page says', async () => {
     at('meta[name="description"]').getAttribute('content'),
     'Apps, built by asking.',
   )
-  assertEquals(at('.Nav a[href="/pricing"]').textContent, 'Plans')
+  assertEquals(at('.Nav a[href="#cost"]').textContent, 'Plans')
 })

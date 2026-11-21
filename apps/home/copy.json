@@ -6,6 +6,8 @@
       "name": "yaks.app"
     },
     "nav": {
+      "features": "Features",
+      "integrations": "Integrations",
       "how": "How it works",
       "how-home": "How yaks.app works",
       "gallery": "Gallery",
@@ -34,7 +36,7 @@
       "title": "Build your ideas by asking.",
       "hint": "Type what you need, like “Make me a menu for my market stall”",
       "go": "Build it",
-      "note": "Free to start, with no card. Your first 5 apps are free, and %{price} covers as many as you like. %{examples}.",
+      "note": "Free to start, with no card. Get $20 of building credit and your first 5 apps free. The Plus plan is %{price} for more apps. %{examples}.",
       "price": "$12 a month",
       "examples": "See examples"
     },
@@ -227,9 +229,9 @@
       }
     },
     "story": {
-      "lead": "Describe the app you need. An AI assistant builds it and puts it online. You can also build from Claude or ChatGPT.",
+      "lead": "Describe what you need, and an AI assistant builds your app and puts it online. You can also build and change your apps from Claude or ChatGPT.",
       "prompt": "Make me an app that…",
-      "ask": "The app you would like",
+      "ask": "Your app you would like",
       "example": "Example conversation",
       "works": "Works with",
       "more": "See integrations",
@@ -252,15 +254,36 @@
         "roles": "Access to an app",
         "owner": {
           "name": "Owner",
-          "note": "Manage the app and who can open it."
+          "note": "Manage your app and who can open it."
         },
-        "editor": { "name": "Editor", "note": "Change what the app keeps." },
+        "editor": { "name": "Editor", "note": "Change what your app keeps." },
         "viewer": {
           "name": "Viewer",
-          "note": "Open the app and see what’s shared."
+          "note": "Open your app and see what’s shared."
         }
       },
       "features": "Features on this page",
+      "company": "Made by a small company in Michigan.",
+      "pricing": {
+        "heading": "Free to start, a plan for more.",
+        "free": {
+          "note": "Your first space.",
+          "credit": "$20 of building credit when you sign up"
+        },
+        "paid": {
+          "credit": "$100 of building credit with your first subscription"
+        },
+        "plus": {
+          "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe."
+        },
+        "pro": {
+          "note": "Twice the Plus plan's AI use for your apps and assistant, and more room for data, files and email. $490 a year."
+        },
+        "reward": {
+          "title": "A free month when a friend builds their first app.",
+          "body": "Each friend who signs up with your invite and builds their first app earns you one month of the Plus plan."
+        }
+      },
       "earlier": "Earlier features",
       "later": "More features",
       "assistant": {
@@ -288,7 +311,7 @@
         },
         "data": {
           "question": "Can I take my data with me?",
-          "answer": "Ask for the data in an app as a spreadsheet, or delete the app whenever you like."
+          "answer": "Ask for the data in an app as a spreadsheet, or delete your app whenever you like."
         }
       },
       "footer": {
@@ -332,7 +355,7 @@
         "connect": {
           "short": "Integrations",
           "heading": "Connect the services you already use.",
-          "body": "Apps can use Google Calendar, Google Sheets, Slack, Notion, QuickBooks and more. You sign in to the service once. yaks.app keeps the connection for the app.",
+          "body": "Apps can use Google Calendar, Google Sheets, Slack, Notion, QuickBooks and more. You sign in to the service once. yaks.app keeps the connection for your app.",
           "point1": "Sign in on the service’s own page, with nothing to copy or paste",
           "point2": "Each visitor can connect an account of their own",
           "point3": "Remove a connection at any time, and your app stops using the service"
@@ -362,7 +385,7 @@
           "point3": "Buyers pay on Stripe’s checkout page"
         },
         "helper": {
-          "short": "AI helpers",
+          "short": "Helpers",
           "heading": "An AI helper that answers your visitors.",
           "body": "Give your app a helper that answers the questions visitors ask: the allergens on a menu, parking at the church, what’s on for Tuesday of the trip. The helper answers from what your app keeps.",
           "point1": "AI use is included on every plan",
@@ -377,7 +400,7 @@
           "point3": "Members use a sign-in code sent by email"
         },
         "domain": {
-          "short": "Plans",
+          "short": "Pricing",
           "heading": "Your own domain, on the Plus plan.",
           "body": "Your apps start at an address like yourname.yaks.app. The Plus and Pro plans let you use a domain you own for one app or for the whole space.",
           "point1": "Add two settings at the company you bought the domain from, and yaks.app does the rest",

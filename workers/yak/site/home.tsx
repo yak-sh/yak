@@ -2,7 +2,7 @@
 import { keys, read } from '@yaks/copy'
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
-import { Story, StoryFooter } from '@yaks/platform/home'
+import { PlanCredit, Story, StoryFooter } from '@yaks/platform/home'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
@@ -269,12 +269,13 @@ export let Walkthrough = () => (
 // A plan's card on the home page: its price, its note, its list and its
 // button, each a snippet under `home.cost.<plan>`.
 let Plan = (
-  { plan, items, mod, href, cta }: {
+  { plan, items, mod, href, cta, story }: {
     plan: string
     items: Record<string, Slots>
     mod?: string
     href: string
     cta?: string
+    story?: boolean
   },
 ) => (
   <Card as='div' class={mod ? `Plan ${mod}` : 'Plan'}>
@@ -284,8 +285,14 @@ let Plan = (
         per: <span class='Plan_Per' {...text('home.cost.per')} />,
       })}
     />
-    <p class='Note Note-small' {...text(`home.cost.${plan}.note`)} />
+    <p
+      class='Note Note-small'
+      {...text(
+        story ? `home.story.pricing.${plan}.note` : `home.cost.${plan}.note`,
+      )}
+    />
     <ul class='Plan_List'>
+      {story && <PlanCredit copy={{ attr, text }} plan={plan} />}
       {Object.entries(items).map(([item, slots]) => (
         <li class='Plan_Item' {...text(`home.cost.${plan}.${item}`, slots)} />
       ))}
@@ -301,13 +308,18 @@ let Plan = (
 
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
-export let Cost = () => (
+export let Cost = ({ story }: { story?: boolean } = {}) => (
   <section class='Cost' aria-labelledby='cost'>
-    <h2 class='Title' id='cost' {...text('home.cost.title')} />
+    <h2
+      class='Title'
+      id='cost'
+      {...text(story ? 'home.story.pricing.heading' : 'home.cost.title')}
+    />
     <p class='Note' {...text('home.cost.note', { yours: <Yours /> })} />
     <div class='Plans'>
       <Plan
         plan='free'
+        story={story}
         href='/login'
         items={{
           apps: {},
@@ -319,6 +331,7 @@ export let Cost = () => (
       />
       <Plan
         plan='plus'
+        story={story}
         mod='Plan-plus'
         href={GET_PLAN}
         cta='plus'
@@ -332,6 +345,7 @@ export let Cost = () => (
       />
       <Plan
         plan='pro'
+        story={story}
         mod='Plan-pro'
         href={GET_PLAN}
         cta='pro'
@@ -403,6 +417,7 @@ export let StoryHome = () => (
     path='/'
     kind='Home Story_Page'
     sheet='_home.css'
+    sections
     head={
       <>
         <script type='module' src='_home.js' />
@@ -415,11 +430,17 @@ export let StoryHome = () => (
     foot={
       <StoryFooter
         copy={{ attr, text }}
+        action={START}
         yak={<Idle class='Yak Yak-small' base='.' />}
       />
     }
   >
-    <Story copy={{ attr, text }} action={START} yak={yak()} plans={<Cost />} />
+    <Story
+      copy={{ attr, text }}
+      action={START}
+      yak={yak()}
+      plans={<Cost story />}
+    />
   </Page>
 )
 
