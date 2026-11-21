@@ -255,10 +255,12 @@ test('Operator spaces with the same tools share the base prefix and keep local c
 })
 
 // A stranger's helper is worn on the same persona, so it holds read_open for
-// its Reads, and a Read's id given to graph_show says to open it there.
-test("a stranger's helper opens its Reads, and graph_show on one points to read_open", async () => {
+// its Reads, a Read's id given to graph_show says to open it there, and
+// chat_send, which the persona names, is told withheld where no room is.
+test("a stranger's helper opens its Reads, graph_show on one points to read_open, and chat_send says why it is not held", async () => {
   let read = short(derivedEid('operator-persona|work'))
   let steps = [
+    { name: 'tool_load', args: { names: ['chat_send'] } },
     { name: 'graph_show', args: { id: read } },
     { name: 'read_open', args: { read } },
   ]
@@ -291,4 +293,8 @@ test("a stranger's helper opens its Reads, and graph_show on one points to read_
     `${read} is one of your Reads: open it with read_open`,
   )
   assertStringIncludes(told, `# ${read} Working in the apps`)
+  assertStringIncludes(
+    told,
+    'chat_send is not held in this turn: nobody addressed you in a chat room',
+  )
 })

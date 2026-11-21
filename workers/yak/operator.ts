@@ -2308,13 +2308,20 @@ export let operating = (
     // anything else a member there could see. From any turn it writes there,
     // and from a member's own turn in any room of the space, to answer a
     // request where it was asked.
+    // Where it holds none, tool_load says why, since the persona names it in
+    // every space.
     let chat = [
       ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
-      ...acts && wide.length
-        ? [chatSend(store, true)]
+      acts && wide.length
+        ? chatSend(store, true)
         : rooms.length
-        ? [chatSend(store)]
-        : [],
+        ? chatSend(store)
+        : {
+          ...chatSend(store),
+          withheld: acts
+            ? 'nobody has addressed you in a chat room (a Discord channel) in this space yet, so there is none to write in'
+            : 'nobody addressed you in a chat room in this conversation',
+        },
     ]
     // Any service's API: a room's platform on any turn there, the person's
     // connections on their own (operator-integrations.ts).
