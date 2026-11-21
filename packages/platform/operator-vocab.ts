@@ -263,6 +263,11 @@ export let operatorDoc: VocabDoc = {
           description:
             'On a call, that the carriers vouched the caller holds the number they called from (STIR/SHAKEN full attestation, validated), so the call is trusted as chat is.',
         },
+        linked: {
+          type: 'boolean',
+          description:
+            "On a chat platform or in its voice room, that the writer's account there is linked to a person here, not a guest's.",
+        },
       },
     },
     operator_oracle: {

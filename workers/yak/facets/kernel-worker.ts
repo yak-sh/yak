@@ -131,7 +131,7 @@ export let PUBLIC_DIRECTORY = [
 export let PURGER = ['purge', ...DURABLE] as const
 export let OUTLAST = ['call', ...DURABLE] as const
 export let LEXICON = ['admit', 'grow', 'put', 'forget', ...DURABLE] as const
-export let CHATS = ['listen', 'stop', 'alarm'] as const
+export let CHATS = ['listen', 'stop', 'alarm', 'voice', 'voiced'] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.

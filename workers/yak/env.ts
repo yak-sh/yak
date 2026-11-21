@@ -263,6 +263,12 @@ export type Env = {
   // The signing secret of the webhook a provider whose own line carries
   // calls rings when one comes in (speech.ts LINES, operator-carried.ts).
   OPENAI_CALLS_SECRET?: string
+  // The relay that holds a chat platform's voice rooms (@yaks/discord-voice,
+  // chat-voice.ts): its `https://` address and the bearer its joins carry,
+  // both secrets its deploy puts (packages/discord-voice/deploy.sh). Unset,
+  // the Operator joins no voice room.
+  VOICE_RELAY?: string
+  VOICE_RELAY_KEY?: string
   SPEECH_FLOOR?: string
   SPEECH_API?: string
   // `on` signs up a stranger who texts the platform's number

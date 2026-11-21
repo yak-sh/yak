@@ -3,7 +3,16 @@
 // its host opens, so the host (a Durable Object, a process on the box) only
 // connects, keeps time and closes, and knows no platform.
 
-import type { Present, Press, Said, Seated, Socket, Step } from './mod.ts'
+import type {
+  Media,
+  Present,
+  Press,
+  Said,
+  Seated,
+  Socket,
+  Step,
+  Voice,
+} from './mod.ts'
 
 /** The host's end of an open socket: send a text frame, or close it. */
 export type Wire = {
@@ -29,13 +38,16 @@ export type Holder = {
 
 /** What a holder tells of what its socket read: each message `heard`, what
  * the platform says of the servers the bot is in (`seated`), who it says is
- * about (`present`), and the controls pressed on the bot's messages
- * (`pressed`). */
+ * about (`present`), the controls pressed on the bot's messages
+ * (`pressed`), who it says came into, moved in or left voice rooms
+ * (`voices`), and where the bot's own voice audio goes (`media`). */
 export type Telling = {
   heard: (said: Said[]) => unknown
   seated?: (servers: Seated) => unknown
   present?: (present: Present[]) => unknown
   pressed?: (pressed: Press[]) => unknown
+  voices?: (voices: Voice[]) => unknown
+  media?: (media: Media) => unknown
 }
 
 /**
@@ -69,6 +81,8 @@ export let holder = <S>(socket: Socket<S>, tell: Telling): Holder => {
       if (step.pressed?.length) await tell.pressed?.(step.pressed)
       if (step.servers) await tell.seated?.(step.servers)
       if (step.present?.length) await tell.present?.(step.present)
+      if (step.voices?.length) await tell.voices?.(step.voices)
+      if (step.media) await tell.media?.(step.media)
       if (step.heard?.length) await tell.heard(step.heard)
       return next
     },

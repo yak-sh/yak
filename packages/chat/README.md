@@ -124,13 +124,13 @@ fits.
 
 ## Holding a socket
 
-`holder(socket, {heard, seated, present, pressed})` (`@yaks/chat/socket`) runs a
-platform's steps over a `Wire` its host opens: `url()` to connect to,
-`frame(wire, text)` for each frame, `beat(wire)` when one is due, and
-`ended(code)`. Each answers what the host does next: beat every `every`
-milliseconds, or close and connect `again`. What the socket remembers survives a
-reconnect, so a session is resumed. The host only connects, keeps time and
-closes.
+`holder(socket, {heard, seated, present, pressed, voices, media})`
+(`@yaks/chat/socket`) runs a platform's steps over a `Wire` its host opens:
+`url()` to connect to, `frame(wire, text)` for each frame, `beat(wire)` when one
+is due, and `ended(code)`. Each answers what the host does next: beat every
+`every` milliseconds, or close and connect `again`. What the socket remembers
+survives a reconnect, so a session is resumed. The host only connects, keeps
+time and closes.
 
 `listener(hosting)` (`@yaks/chat/listen`) is the loop a host runs around a
 holder for as long as it lives: given the platform, the bot's credential, how to
@@ -139,7 +139,26 @@ to answer them, its `alarm` opens the socket when it is not open, and the host
 calls it every `WATCH` (a minute), so a socket dropped by a deploy is open again
 within one. It beats when due, connects again when told or dropped, and stops
 only on a close the platform says is final (`ended`), until `close()` forgets
-the session, as when the credential changes.
+the session, as when the credential changes. `send(frame)` sends a frame of the
+host's own on the open socket, false while none is.
+
+## Voice rooms
+
+A platform whose bot talks in voice rooms gives `voice`: `join(server, room)`,
+the frame its socket sends to join a room, or to leave with `room` null, and the
+`Line` (@yaks/phone) its relay streams a room's audio over, as a phone
+provider's line streams a call's. Its socket's steps say who is in each voice
+room (`voices`, each a `Voice{server, account, room, session, me?, bot?}`) and
+where the bot's own audio goes once it joined one (`media`,
+`Media{server, endpoint, token}`).
+
+`voiceRooms()` (`@yaks/chat/voice`) keeps those for one bot, as pure steps:
+`ask(server, room, stream)` and `leave(server)` from the host, `voices(all)` and
+`media(m)` from the socket, each answering what the host does next, an `Act`:
+`join` a room on the socket, hand a `relay` the session it joins with (`Joined`,
+once the bot's session and media are both known), or let a room go (`left`). The
+bot leaves a room once only bots are left in it. `where(server, account)` is the
+room someone is in.
 
 ## Presses
 

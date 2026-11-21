@@ -61,7 +61,7 @@ let setup = async () => {
   // events to fire.
   type Wire = {
     url: string
-    sent: { op: number; d?: { token?: string } }[]
+    sent: { op: number; d?: { token?: string } & Record<string, unknown> }[]
     fire: Record<string, (e: { data?: unknown; code?: number }) => void>
     closed?: number
   }
@@ -116,6 +116,8 @@ let setup = async () => {
       return {
         listen: (bot) => call(() => object.listen(bot)),
         stop: () => call(() => object.stop()),
+        voice: (ask) => call(() => object.voice(ask)),
+        voiced: (server, account) => call(() => object.voiced(server, account)),
       }
     },
   }
@@ -360,4 +362,118 @@ test('a connection serves the server yaks.app’s bot was added to, or every one
     ],
     [['barn'], ['barn', 'mill'], []],
   )
+})
+
+// In a voice room, the bot's object joins on its own Gateway, hands the relay
+// (@yaks/discord-voice) the session Discord gave it, and leaves once only
+// bots are left (chat.ts `Listening.voice`, @yaks/chat/voice).
+test('the bot joins the voice room someone is in, the relay is handed its session, and it leaves once the room empties', async () => {
+  let s = await setup()
+  Object.assign(s.p.env, {
+    VOICE_RELAY: 'https://relay.test',
+    VOICE_RELAY_KEY: 'relay-key',
+  })
+  let relayed: { path: string; auth: string | null; body: unknown }[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    let req = new Request(input, init)
+    if (new URL(req.url).host != 'relay.test') return was(input, init)
+    relayed.push({
+      path: new URL(req.url).pathname,
+      auth: req.headers.get('authorization'),
+      body: await req.json(),
+    })
+    return Response.json({})
+  }
+  try {
+    await s.call(() => s.held.object.alarm())
+    s.frame({ op: 10, d: { heartbeat_interval: 3_600_000 } })
+    s.frame({
+      op: 0,
+      t: 'READY',
+      s: 1,
+      d: {
+        session_id: 'session',
+        resume_gateway_url: 'wss://resume.test',
+        user: { id: ME, username: 'Kit' },
+      },
+    })
+    let state = (user: string, room: string | null, session: string) => ({
+      op: 0,
+      t: 'VOICE_STATE_UPDATE',
+      s: 3,
+      d: {
+        guild_id: 'mill',
+        channel_id: room,
+        user_id: user,
+        session_id: session,
+      },
+    })
+    s.frame({
+      op: 0,
+      t: 'GUILD_CREATE',
+      s: 2,
+      d: {
+        id: 'mill',
+        voice_states: [{ channel_id: 'loft', user_id: 'ann', session_id: 'a' }],
+      },
+    })
+    let o = s.held.object
+    let where = () => s.call(() => o.voiced('mill', 'ann'))
+    for (let i = 0; i < 100 && !await where(); i++) {
+      await new Promise((r) => setTimeout(r, 5))
+    }
+    assertEquals(await where(), 'loft')
+    assertEquals(await s.call(() => o.voiced('mill', 'bo')), null)
+    let stream = 'wss://yaks.app/discord/stream?call=sealed'
+    let joining = s.call(() =>
+      o.voice({ server: 'mill', room: 'loft', stream })
+    )
+    await s.settled(() => s.wires[0].sent.some((f) => f.op == 4))
+    s.frame(state(ME, 'loft', 'mine'))
+    s.frame({
+      op: 0,
+      t: 'VOICE_SERVER_UPDATE',
+      s: 4,
+      d: { guild_id: 'mill', token: 'vt', endpoint: 'c.discord.media' },
+    })
+    assertEquals(await joining, 'joined')
+    s.frame(state('ann', null, 'a'))
+    await s.settled(() => relayed.length > 1)
+    assertEquals(
+      s.wires[0].sent.filter((f) => f.op == 4).map((f) => f.d),
+      [
+        {
+          guild_id: 'mill',
+          channel_id: 'loft',
+          self_mute: false,
+          self_deaf: false,
+        },
+        {
+          guild_id: 'mill',
+          channel_id: null,
+          self_mute: false,
+          self_deaf: false,
+        },
+      ],
+    )
+    assertEquals(relayed, [
+      {
+        path: '/join',
+        auth: 'Bearer relay-key',
+        body: {
+          server: 'mill',
+          room: 'loft',
+          me: ME,
+          session: 'mine',
+          endpoint: 'c.discord.media',
+          token: 'vt',
+          stream,
+        },
+      },
+      { path: '/leave', auth: 'Bearer relay-key', body: { server: 'mill' } },
+    ])
+  } finally {
+    globalThis.fetch = was
+  }
 })

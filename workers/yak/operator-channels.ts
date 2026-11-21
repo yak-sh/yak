@@ -329,9 +329,9 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
 /** What proves the writer of words that came by a channel is who their name
  * says, or that nothing does (T-2079). */
 export let proofOf = (
-  request: Pick<Request, 'channel' | 'attested' | 'linked'>,
+  request: Pick<Request, 'channel' | 'attested' | 'linked' | 'via'>,
 ) => {
-  let platform = PLATFORMS.get(request.channel)
+  let platform = PLATFORMS.get(request.channel) ?? roomOf(request)
   if (platform) {
     return request.linked
       ? `verified by their linked ${platform.title} account`
@@ -353,6 +353,11 @@ export let proofOf = (
       : ''
   }`
 }
+
+/** The chat platform whose voice room words were said in, on the `voice`
+ * channel (operator-calls.ts `Ticket.room`); none for a phone's. */
+export let roomOf = (request: Pick<Request, 'channel' | 'via'>) =>
+  request.channel == 'voice' ? PLATFORMS.get(request.via ?? '') : undefined
 
 /** Who wrote words, as the Operator reads them before the words: their
  * name, whether that is verified and how ({@link proofOf}), and their role
@@ -944,7 +949,11 @@ let BY: Record<
     }${cue({ group: true, to: !!request.addressed })}From ${request.address}: `,
   rcs: (request) => byText(request),
   voice: (request) =>
-    request.call
+    roomOf(request)
+      ? `In a ${
+        roomOf(request)!.title
+      } voice room, where everyone there hears you, your voice there asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting): `
+      : request.call
       ? 'On the phone, your voice on the call asks you for them, and tells them your reply in its own words (answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): '
       : 'By phone, spoken aloud (they hear your reply read out: answer in a sentence or two of plain speech, with no lists, links or formatting; text them a link with text_send if they need one): ',
   letter: (request, id, sent) =>
@@ -1434,8 +1443,10 @@ export let SMS = new Set(['text', 'texted'])
 /** The number the links a turn's privileged acts wait on are texted to: its
  * sender's, on an SMS or a call, where a link said aloud or in a text's
  * answer would reach nobody signed in. */
-export let confirmOf = (request: Pick<Request, 'channel' | 'address'>) =>
-  SMS.has(request.channel) || request.channel == 'voice'
+export let confirmOf = (
+  request: Pick<Request, 'channel' | 'address' | 'via'>,
+) =>
+  SMS.has(request.channel) || request.channel == 'voice' && !roomOf(request)
     ? request.address
     : undefined
 
@@ -1443,10 +1454,10 @@ export let confirmOf = (request: Pick<Request, 'channel' | 'address'>) =>
  * show: an SMS's, a call's the carriers did not vouch for, or RCS's. Its
  * words keep it as `unverified{number}` in the conversation. */
 export let unverifiedOf = (
-  request: Pick<Request, 'channel' | 'address' | 'attested'>,
+  request: Pick<Request, 'channel' | 'address' | 'attested' | 'via'>,
 ) =>
   SMS.has(request.channel) || UNPROVEN.has(request.channel) ||
-    (request.channel == 'voice' && !request.attested)
+    (request.channel == 'voice' && !request.attested && !roomOf(request))
     ? request.address
     : undefined
 

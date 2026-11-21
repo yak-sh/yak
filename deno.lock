@@ -3104,6 +3104,7 @@
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
             "npm:@yaks/mail@0.2.23",
+            "npm:@yaks/phone@0.2.30",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"
@@ -3353,7 +3354,18 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/chat@0.2.0",
             "npm:@yaks/host@0.2.29",
+            "npm:@yaks/phone@0.2.30",
             "npm:@yaks/testing@0.2.30"
+          ]
+        }
+      },
+      "packages/discord-voice": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@discordjs/voice@0.19.2",
+            "npm:@snazzah/davey@0.1.12",
+            "npm:@yaks/testing@0.2.30",
+            "npm:opusscript@0.1.1"
           ]
         }
       },

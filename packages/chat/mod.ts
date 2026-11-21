@@ -12,6 +12,7 @@ import {
   type Control,
   Unsent,
 } from '@yaks/host/senders'
+import type { Line } from '@yaks/phone'
 
 export type { Control }
 
@@ -181,9 +182,29 @@ export type Step<S> = {
   present?: Present[]
   /** controls pressed on the bot's messages */
   pressed?: Press[]
+  /** who came into a server's voice rooms, moved or left them */
+  voices?: Voice[]
+  /** where the bot's own audio in a server's voice room goes */
+  media?: Media
   /** close and connect again, at `url(state)` */
   again?: boolean
 }
+
+/** Someone in a server's voice room, as the platform says: their account,
+ * the room they are in (null once they left every one), and the voice
+ * session they hold. The bot's own is `me`; any other bot's is `bot`. */
+export type Voice = {
+  server: string
+  account: string
+  room: string | null
+  session: string
+  me?: true
+  bot?: true
+}
+
+/** Where the bot's audio in a server's voice room is sent, and the token it
+ * connects there with, as the platform gives them once it joins. */
+export type Media = { server: string; endpoint: string; token: string }
 
 /** Whether someone on a platform is about: their account there and the
  * status the platform shows for them. */
@@ -311,6 +332,14 @@ export type Platform = {
   /** how a press of a control on the bot's message is answered for its
    * presser alone, where the platform can ({@link Presses}) */
   presses?: Presses
+  /** how its bot talks in a voice room, where the platform lets it: the
+   * frame its socket sends to join a server's voice room, or to leave it
+   * with none, and the {@link Line} its audio relay speaks, a voice room's
+   * audio streamed both ways the way a phone call's is */
+  voice?: {
+    join: (server: string, room: string | null) => unknown
+    line: Line
+  }
   /** how a bot shows a room it is working on an answer, where the platform
    * can: `show` once lasts `every` milliseconds ({@link Working}) */
   working?: Working<

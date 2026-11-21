@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Present, Press, Said, Seated } from '@yaks/chat'
+import type { Media, Present, Press, Said, Seated, Voice } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
 import { linked, Unreachable } from '@yaks/chat'
@@ -46,13 +46,17 @@ let held = () => {
   let seated: Seated[] = []
   let present: Present[] = []
   let pressed: Press[] = []
+  let voices: Voice[] = []
+  let media: Media[] = []
   let h = holder(gateway('T0K'), {
     heard: (s) => heard.push(...s),
     seated: (s) => seated.push(s),
     present: (p) => present.push(...p),
     pressed: (p) => pressed.push(...p),
+    voices: (v) => voices.push(...v),
+    media: (m) => media.push(m),
   })
-  return { h, heard, seated, present, pressed, ...wire() }
+  return { h, heard, seated, present, pressed, voices, media, ...wire() }
 }
 let say = (h: ReturnType<typeof held>['h'], w: Wire, f: unknown) =>
   h.frame(w, JSON.stringify(f))
@@ -186,6 +190,73 @@ test("who is about: a server's people as it is joined, then each change, never a
     { account: 'ann', status: 'idle' },
     { account: 'bo', status: 'offline' },
   ])
+})
+
+test("who is in voice rooms as a server arrives and as they move, the bot's own audio, and the frame that joins", async () => {
+  let { h, w, voices, media } = held()
+  let frame = (t: string, d: Record<string, unknown>) =>
+    say(h, w, { op: 0, s: 4, t, d })
+  await say(h, w, ready)
+  await frame('GUILD_CREATE', {
+    id: 'mill',
+    voice_states: [
+      { channel_id: 'loft', user_id: 'ann', session_id: 'a1' },
+      {
+        channel_id: 'loft',
+        user_id: 'dj',
+        session_id: 'd1',
+        member: { user: { bot: true } },
+      },
+    ],
+  })
+  await frame('VOICE_STATE_UPDATE', {
+    guild_id: 'mill',
+    channel_id: 'loft',
+    user_id: ME,
+    session_id: 's1',
+  })
+  await frame('VOICE_STATE_UPDATE', {
+    guild_id: 'mill',
+    channel_id: null,
+    user_id: 'ann',
+    session_id: 'a1',
+  })
+  await frame('VOICE_SERVER_UPDATE', {
+    guild_id: 'mill',
+    token: 'vt',
+    endpoint: null,
+  })
+  await frame('VOICE_SERVER_UPDATE', {
+    guild_id: 'mill',
+    token: 'vt',
+    endpoint: 'c-ord.discord.media:443',
+  })
+  let v = (account: string, room: string | null, session: string) => ({
+    server: 'mill',
+    account,
+    room,
+    session,
+  })
+  assertEquals(voices, [
+    v('ann', 'loft', 'a1'),
+    { ...v('dj', 'loft', 'd1'), bot: true },
+    { ...v(ME, 'loft', 's1'), me: true },
+    v('ann', null, 'a1'),
+  ])
+  assertEquals(media, [{
+    server: 'mill',
+    endpoint: 'c-ord.discord.media:443',
+    token: 'vt',
+  }])
+  assertEquals(discord.voice!.join('mill', null), {
+    op: 4,
+    d: {
+      guild_id: 'mill',
+      channel_id: null,
+      self_mute: false,
+      self_deaf: false,
+    },
+  })
 })
 
 test('an unanswered beat reconnects, and the new wire resumes where it was', async () => {

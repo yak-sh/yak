@@ -79,13 +79,25 @@ reply with the REST API. `discord` is the `Platform` both make.
   channel's name and topic, and each of `people` by their nickname, with the
   server's roles they hold, highest first.
 
+- **Voice rooms.** Who is in each comes from the Voice States intent: the
+  `voice_states` a server arrives with and each `VOICE_STATE_UPDATE`, read by
+  `voices(server, states, me)`, the bot's own marked `me` and other bots `bot`.
+  `join(server, room)` is the Update Voice State frame (op 4) that takes the bot
+  into a room, or out with `room` null, and `VOICE_SERVER_UPDATE` says where its
+  audio goes (`media`). The audio itself needs UDP and Discord's end-to-end
+  encryption (DAVE), which a Worker cannot hold, so
+  [@yaks/discord-voice](../discord-voice/README.md)'s relay does, and streams
+  the room to its host over `line`: 24 kHz 16-bit mono, as JSON frames
+  `start{call}`, `media{payload}`, `speaking{user}`, `mark{name}` and `stop`,
+  the host sending `media`, `clear` and `mark`.
+
 yaks.app's authorize link asks for `PERMISSIONS` (@yaks/connections'
 `discord.json` carries the same integer): View Channels and Read Message
 History; Send Messages, in threads too, with Embed Links, Attach Files, Send
 Polls, Add Reactions and outside emoji and stickers; creating and managing
-threads; Manage and Pin Messages; creating and managing events; and Change
-Nickname. A server that added the bot before keeps what it was given then until
-it adds it again.
+threads; Manage and Pin Messages; creating and managing events; Change Nickname;
+and Connect, Speak and Use Voice Activity. A server that added the bot before
+keeps what it was given then until it adds it again.
 
 Messages in rooms the bot was not named in carry their words only with the
 Message Content intent, and a server's member list needs Server Members. Discord

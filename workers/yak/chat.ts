@@ -33,6 +33,7 @@ import {
   type Basics,
   confined,
   kept,
+  type Media,
   type Page,
   type Platform,
   platforms,
@@ -43,9 +44,11 @@ import {
   roomEid,
   type Said,
   type Seated,
+  type Voice,
   within,
 } from '@yaks/chat'
 import { type Listener, listener, type Socket, WATCH } from '@yaks/chat/listen'
+import { type Act, voiceRooms } from '@yaks/chat/voice'
 import { discord } from '@yaks/discord'
 import type { Chatter } from '@yaks/host/senders'
 import type { Env } from './env.ts'
@@ -84,10 +87,21 @@ export type Chats = {
   idFromName(name: string): unknown
   get(
     id: unknown,
-  ): { listen(bot: Bot): Promise<unknown>; stop(): Promise<void> }
+  ): {
+    listen(bot: Bot): Promise<unknown>
+    stop(): Promise<void>
+    voice(ask: VoiceAsk): Promise<string>
+    voiced(server: string, account: string): Promise<string | null>
+  }
 }
 
-let listening = (chats: Chats, bot: Bot) =>
+/** What the Operator asks of its bot's voice: to join `room` of `server`,
+ * streaming the room's audio to `stream`, or, with `room` null, to leave the
+ * one it is in there. */
+export type VoiceAsk = { server: string; room: string | null; stream?: string }
+
+/** The object listening as `bot`. */
+export let listening = (chats: Chats, bot: Bot) =>
   chats.get(chats.idFromName(
     bot.connection ? `connection:${bot.connection}` : `platform:${bot.via}`,
   ))
@@ -362,6 +376,41 @@ export let platformBot = async (env: Env, via: string) => {
 export let listen = async (env: Env, bot: Bot) => {
   if (!env.CHATS || !PLATFORMS.get(bot.via)?.socket) return
   await listening(env.CHATS, bot).listen(bot)
+}
+
+/** Ask the bot that speaks for `connection` into a voice room of `server`,
+ * or out of the one it is in there ({@link VoiceAsk}): answered as
+ * {@link Listening.voice} answers. */
+export let voice = async (
+  env: Env,
+  connection: string,
+  ask: VoiceAsk,
+): Promise<string> => {
+  let bot = await botFor(env, connection)
+  if (!env.CHATS || !bot) return 'No bot speaks for this connection now.'
+  return await listening(env.CHATS, bot).voice(ask)
+}
+
+/** The voice room of `server` that `account` is in, as the bot that speaks
+ * for `connection` sees it; null in none. */
+export let voicedIn = async (
+  env: Env,
+  connection: string,
+  server: string,
+  account: string,
+) => {
+  let bot = await botFor(env, connection)
+  if (!env.CHATS || !bot) return null
+  return await listening(env.CHATS, bot).voiced(server, account)
+}
+
+/** Take the bot out of a voice room a call was in: what hanging up on it
+ * does (operator-calls.ts). */
+export let leaveVoice = async (
+  env: Env,
+  room: { connection: string; server: string },
+) => {
+  await voice(env, room.connection, { server: room.server, room: null })
 }
 
 /** The bot that speaks for `connection`, if it chats: the one the space
@@ -1165,6 +1214,32 @@ let answerOf = async (
   return await response.json() as Answer
 }
 
+// How long a voice join waits for the platform and the relay.
+let JOINING = 10_000
+
+// The relay that holds voice rooms (@yaks/discord-voice), asked to `join`
+// one or `leave` one, answering `joined`, `left`, or why not.
+let relayed = async (env: Env, door: 'join' | 'leave', body: unknown) => {
+  if (!env.VOICE_RELAY || !env.VOICE_RELAY_KEY) {
+    return 'No voice relay is set up here.'
+  }
+  let res = await fetch(`${env.VOICE_RELAY}/${door}`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.VOICE_RELAY_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  let said = await res.json().catch(() => ({})) as { error?: string }
+  if (!res.ok) {
+    throw new Error(
+      `The voice relay refused a ${door}: ${res.status} ${said.error ?? ''}`,
+    )
+  }
+  return door == 'join' ? 'joined' : 'left'
+}
+
 /** What a Workers runtime gives an object, as much as listening uses. */
 type State = {
   storage: {
@@ -1200,6 +1275,10 @@ export class Listening {
   #env: Env
   #open: (url: string) => Promise<Socket>
   #held?: Promise<Listener>
+  // The voice rooms its bot is in, as its socket says (@yaks/chat/voice),
+  // and the joins waiting on the relay, by server.
+  #rooms = voiceRooms()
+  #joining = new Map<string, (said: string) => void>()
   constructor(state: State, env: Env, open = opened) {
     this.#state = state
     this.#env = env
@@ -1282,6 +1361,18 @@ export class Listening {
           caught(e, { request: `${via} whereabouts`, ...tags })
         )
       ),
+      // Who is in voice rooms, and where its own audio goes: what joins the
+      // relay to a room and takes the bot out of one nobody is left in.
+      voices: bound((v: Voice[]) =>
+        this.#act(this.#rooms.voices(v)).catch((e) =>
+          caught(e, { request: `${via} voice`, ...tags })
+        )
+      ),
+      media: bound((m: Media) =>
+        this.#act(this.#rooms.media(m)).catch((e) =>
+          caught(e, { request: `${via} voice`, ...tags })
+        )
+      ),
       report: bound((e: unknown) =>
         caught(e, { request: `${via} socket`, ...tags })
       ),
@@ -1298,6 +1389,71 @@ export class Listening {
     if ('ended' in was && was.ended) l.close()
     await storage.setAlarm(Date.now())
     return l.status()
+  }
+  // What the voice rooms say to do: join or leave a room on the socket,
+  // hand the relay a session, or tell it a room was let go. A join waiting
+  // on the relay hears how it went.
+  async #act(acts: Act[]) {
+    let l = await this.#held
+    for (let act of acts) {
+      if ('join' in act) {
+        let { server, room } = act.join
+        let frame = PLATFORMS.get((await this.#bot())?.via ?? '')?.voice
+          ?.join(server, room)
+        if (!l?.send(frame)) throw new Error('The bot is not connected now.')
+      } else if ('relay' in act) {
+        let { server } = act.relay
+        let done = (said: string) => {
+          this.#joining.get(server)?.(said)
+          this.#joining.delete(server)
+        }
+        done(
+          await relayed(this.#env, 'join', act.relay).catch((e) => {
+            done('The voice relay could not join the room.')
+            throw e
+          }),
+        )
+      } else {
+        await relayed(this.#env, 'leave', { server: act.left })
+        this.#joining.get(act.left)?.('left')
+        this.#joining.delete(act.left)
+      }
+    }
+  }
+  /**
+   * Its bot into a voice room, or out of one ({@link VoiceAsk}): answered
+   * `joined` once the relay holds the room, `left` once it let it go, or
+   * in words saying why not.
+   */
+  async voice(ask: VoiceAsk): Promise<string> {
+    let bot = await this.#bot()
+    let platform = PLATFORMS.get(bot?.via ?? '')
+    if (!bot || !platform?.voice) return 'This bot talks in no voice room.'
+    await this.#listener(bot)
+    if (ask.room === null) {
+      await this.#act(this.#rooms.leave(ask.server))
+      return 'left'
+    }
+    let { room } = ask
+    if (!ask.stream) return 'A join needs the stream its audio goes to.'
+    let joined = new Promise<string>((resolve) => {
+      this.#joining.get(ask.server)?.('asked again')
+      this.#joining.set(ask.server, resolve)
+      setTimeout(() => {
+        if (this.#joining.get(ask.server) != resolve) return
+        this.#joining.delete(ask.server)
+        resolve(`${platform.title} did not let the bot into the room in time.`)
+      }, JOINING)
+    })
+    await this.#act(this.#rooms.ask(ask.server, room, ask.stream))
+    return await joined
+  }
+  /** The voice room of `server` that `account` is in, as its socket last
+   * said; null in none. */
+  async voiced(server: string, account: string): Promise<string | null> {
+    let bot = await this.#bot()
+    if (bot) await this.#listener(bot)
+    return this.#rooms.where(server, account) ?? null
   }
   /** Stop listening and forget the bot, until it is asked to listen again. */
   async stop() {

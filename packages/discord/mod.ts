@@ -11,6 +11,7 @@ import type {
   Basics,
   Control,
   Linker,
+  Media,
   Mentioner,
   Page,
   Platform,
@@ -24,19 +25,23 @@ import type {
   Server,
   Socket,
   Step,
+  Voice,
 } from '@yaks/chat'
 import { Unreachable } from '@yaks/chat'
+import type { Line } from '@yaks/phone'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
 let GATEWAY = 'wss://gateway.discord.gg'
 let QUERY = '/?v=10&encoding=json'
 
-/** The Gateway intents a bot cannot do without: servers, their messages and
- * direct messages, as said and as edited (MESSAGE_CREATE and MESSAGE_UPDATE),
- * and the words of messages (Message Content, privileged),
- * so it hears a room it was given and not only the messages that name it. */
-export let NEEDED: number = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15)
+/** The Gateway intents a bot cannot do without: servers, who is in their
+ * voice rooms, their messages and direct messages, as said and as edited
+ * (MESSAGE_CREATE and MESSAGE_UPDATE), and the words of messages (Message
+ * Content, privileged), so it hears a room it was given and not only the
+ * messages that name it. */
+export let NEEDED: number = (1 << 0) | (1 << 7) | (1 << 9) | (1 << 12) |
+  (1 << 15)
 
 /** The Gateway intents asked for: the {@link NEEDED} ones, and the two
  * other privileged ones, server members and presence, so the bot knows who
@@ -48,7 +53,8 @@ export let INTENTS: number = NEEDED | (1 << 1) | (1 << 8)
  * permissions integer: View Channels and Read Message History; Send
  * Messages, in threads too, with embeds, files, polls, reactions and
  * outside emoji and stickers; create and manage threads; manage and pin
- * messages; create and manage events; and Change Nickname. */
+ * messages; create and manage events; Change Nickname; and Connect, Speak
+ * and Use Voice Activity in voice rooms. */
 export let PERMISSIONS: bigint = [
   6, // Add Reactions
   10, // View Channels
@@ -58,6 +64,9 @@ export let PERMISSIONS: bigint = [
   15, // Attach Files
   16, // Read Message History
   18, // Use External Emojis
+  20, // Connect
+  21, // Speak
+  25, // Use Voice Activity
   26, // Change Nickname
   33, // Manage Events
   34, // Manage Threads
@@ -75,6 +84,7 @@ let OP = {
   dispatch: 0,
   heartbeat: 1,
   identify: 2,
+  voice: 4,
   resume: 6,
   reconnect: 7,
   invalid: 9,
@@ -206,6 +216,30 @@ export let presents = (all: Presence[]): Present[] =>
       : []
   )
 
+type VoiceState = {
+  guild_id?: string
+  channel_id: string | null
+  user_id: string
+  session_id: string
+  member?: { user?: { bot?: boolean } }
+}
+
+/** Who Discord says is in a server's voice rooms, as @yaks/chat reads it:
+ * the bot itself is `me`, and any other bot is `bot`. */
+export let voices = (
+  server: string,
+  all: VoiceState[],
+  me?: string,
+): Voice[] =>
+  all.map((v) => ({
+    server: v.guild_id ?? server,
+    account: v.user_id,
+    room: v.channel_id,
+    session: v.session_id,
+    ...v.user_id == me ? { me: true as const } : {},
+    ...v.member?.user?.bot && v.user_id != me ? { bot: true as const } : {},
+  }))
+
 /** Close codes after which the same token must not connect again
  * (opcodes-and-status-codes, Gateway Close Event Codes). */
 let ENDS: Record<number, string> = {
@@ -283,13 +317,40 @@ export let gateway = (token: string): Socket<Session> => ({
         // A server the bot joined, or one it was in that is reachable again;
         // one it left, unless Discord only lost it for a while.
         if (f.t == 'GUILD_CREATE') {
-          let d = f.d as { id: string; presences?: Presence[] }
+          let d = f.d as {
+            id: string
+            presences?: Presence[]
+            voice_states?: VoiceState[]
+          }
           let present = presents(d.presences ?? [])
+          let voiced = voices(d.id, d.voice_states ?? [], s.me)
           return {
             state,
             servers: { joined: d.id },
             ...present.length ? { present } : {},
+            ...voiced.length ? { voices: voiced } : {},
           }
+        }
+        // Someone came into a voice room, moved, or left (the Voice States
+        // intent).
+        if (f.t == 'VOICE_STATE_UPDATE') {
+          let d = f.d as VoiceState
+          return d.guild_id
+            ? { state, voices: voices(d.guild_id, [d], s.me) }
+            : { state }
+        }
+        // Where the bot's own audio goes, once it joined a voice room, or
+        // when its voice server moved; none while Discord finds a new one.
+        if (f.t == 'VOICE_SERVER_UPDATE') {
+          let d = f.d as {
+            guild_id: string
+            token: string
+            endpoint: string | null
+          }
+          let media: Media | undefined = d.endpoint
+            ? { server: d.guild_id, endpoint: d.endpoint, token: d.token }
+            : undefined
+          return { state, ...media ? { media } : {} }
         }
         // Someone in a server was seen coming, going or changing status
         // (the Presence intent).
@@ -891,6 +952,71 @@ export let links: Linker = (words, url) =>
 /** A mention as a Discord message writes one, which notifies them. */
 export let mentions: Mentioner = (account) => `<@${account}>`
 
+/** The frame that joins the bot to `room`, a voice room of `server`, or
+ * takes it out of the one it is in with none (Gateway, Update Voice State).
+ * Discord answers with the bot's {@link Voice} and its {@link Media}. */
+export let join = (server: string, room: string | null): unknown => ({
+  op: OP.voice,
+  d: { guild_id: server, channel_id: room, self_mute: false, self_deaf: false },
+})
+
+let base64 = (bytes: Uint8Array) => {
+  let text = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(text)
+}
+let unbase64 = (text: string) =>
+  Uint8Array.from(atob(text), (c) => c.charCodeAt(0))
+
+/**
+ * A voice room's audio as the relay (./relay) streams it: everyone heard
+ * mixed into one 24 kHz 16-bit mono track, who began speaking, and the
+ * Operator's own audio played back. Frames are JSON: `start{call}`,
+ * `media{payload}` (base64 samples), `speaking{user}`, `mark{name}` once
+ * what was sent before it played, and `stop`; the host sends `media`,
+ * `clear` and `mark`. Discord charges nothing for the room; what it costs is
+ * the relay's traffic, about 0.17 GB an hour each way at $0.12 a GB.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { line } from '@yaks/discord'
+ * equal(line.frame('{"event":"media","payload":"AQI="}'), { audio: new Uint8Array([1, 2]) })
+ * equal(line.frame('{"event":"speaking","user":"42"}'), { speaker: '42' })
+ * equal(line.frame('{"event":"start","call":"c"}'), { start: { call: 'c' } })
+ * equal(line.frame('not json'), {})
+ * equal(JSON.parse(line.play(new Uint8Array([1, 2]))), { event: 'media', payload: 'AQI=' })
+ * ```
+ */
+export let line: Line = {
+  format: { encoding: 'linear16', rate: 24000 },
+  perMinute: 0.0004,
+  frame: (data) => {
+    let f: {
+      event?: string
+      call?: string
+      payload?: string
+      user?: string
+      name?: string
+    }
+    try {
+      f = JSON.parse(data)
+    } catch {
+      return {}
+    }
+    if (f.event == 'start') return { start: { call: String(f.call ?? '') } }
+    if (f.event == 'media' && f.payload) return { audio: unbase64(f.payload) }
+    if (f.event == 'speaking' && f.user) return { speaker: String(f.user) }
+    if (f.event == 'mark') return { played: String(f.name ?? '') }
+    if (f.event == 'stop') return { stop: true }
+    return {}
+  },
+  play: (audio) => JSON.stringify({ event: 'media', payload: base64(audio) }),
+  clear: () => JSON.stringify({ event: 'clear' }),
+  mark: (name) => JSON.stringify({ event: 'mark', name }),
+}
+
 /** Discord, as @yaks/chat takes a platform. */
 export let discord: Platform = {
   name: 'discord',
@@ -914,4 +1040,5 @@ export let discord: Platform = {
   basics,
   working: { every: 8000, show: typing },
   presses,
+  voice: { join, line },
 }

@@ -516,10 +516,14 @@ grouped approximately by function, **not** by dependency order.
   `chat_account{via, id, name}`. A platform package gives itself as data
   (`Platform`: its socket as pure steps, how a reply is posted, its message
   limit), and `@yaks/chat/socket` holds any platform's socket over a wire its
-  host opens. Chat names no platform.
+  host opens, and `@yaks/chat/voice` keeps which voice rooms a bot is in and
+  when it joins or leaves one. Chat names no platform.
 - **[@yaks/discord](./discord)** — Discord for @yaks/chat: its Gateway's
-  handshake, heartbeat and resume as pure steps, messages read as said, and
-  replies posted with a bot's token.
+  handshake, heartbeat and resume as pure steps, messages read as said, replies
+  posted with a bot's token, and its voice rooms joined and left.
+- **[@yaks/discord-voice](./discord-voice)** — The relay that holds a Discord
+  voice room for its host, over UDP with Discord's end-to-end encryption, and
+  streams the room's audio both ways over a WebSocket as a phone call's is.
 - **[@yaks/push](./push)** — Web Push: a browser's subscription as
   `push_subscription{person, endpoint, p256dh, auth}`, and `push()`, which
   encrypts a message for that browser (RFC 8291) and signs it with the site's

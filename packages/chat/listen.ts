@@ -8,7 +8,15 @@
 // awake (a deploy, an eviction), and reads the credential again: a new one
 // starts afresh with it, and none closes the socket.
 
-import type { Platform, Present, Press, Said, Seated } from './mod.ts'
+import type {
+  Media,
+  Platform,
+  Present,
+  Press,
+  Said,
+  Seated,
+  Voice,
+} from './mod.ts'
 import { holder, type Wire } from './socket.ts'
 
 /** The host's open socket, as much of a WebSocket as listening uses. */
@@ -35,6 +43,10 @@ export type Hosting = {
   /** controls pressed on the bot's messages, to answer with `credential`,
    * the one the socket is open with */
   pressed?: (pressed: Press[], credential: string) => Promise<void>
+  /** who the platform says came into, moved in or left voice rooms */
+  voices?: (voices: Voice[]) => Promise<void>
+  /** where the platform says the bot's own voice audio goes */
+  media?: (media: Media) => Promise<void>
   /** a failure no one asked about, for the host's tracker */
   report: (error: unknown) => void
   /** the host's timers, for a test to drive */
@@ -54,6 +66,8 @@ export type Listener = {
    * the host's alarm runs */
   alarm: () => Promise<Status>
   status: () => Status
+  /** send `frame` on the open socket, as JSON; false while none is open */
+  send: (frame: unknown) => boolean
   /** close it and forget the session, as when its credential changed */
   close: () => void
 }
@@ -124,6 +138,8 @@ export let listener = (host: Hosting): Listener => {
         heard: host.heard,
         seated: host.seated,
         present: host.present,
+        voices: host.voices,
+        media: host.media,
         ...pressed ? { pressed: (p: Press[]) => pressed(p, credential) } : {},
       })
       let at = era
@@ -182,6 +198,11 @@ export let listener = (host: Hosting): Listener => {
       return 'ended' in status && status.ended ? status : open()
     },
     status: () => status,
+    send: (frame) => {
+      if (!socket) return false
+      socket.send(JSON.stringify(frame))
+      return true
+    },
     close,
   }
 }

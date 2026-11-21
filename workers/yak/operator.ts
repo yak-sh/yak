@@ -1339,9 +1339,13 @@ export let actorOf = async (
     )} .intake .order=-entry.seq .limit=1 .fields=channel.name,created.by`,
   )
   let writer = comp(newest, 'created')?.by as string | undefined
+  // A chat room's words, or a voice room's, said on the `voice` channel by
+  // whoever spoke last (operator-calls.ts `Ticket.room`): a phone call's
+  // writer is its person.
+  let channel = String(comp(newest, 'channel')?.name)
   if (
     !writer || writer == o.person ||
-    !PLATFORMS.has(String(comp(newest, 'channel')?.name))
+    !(PLATFORMS.has(channel) || channel == 'voice')
   ) return o
   return await dir.role({ eid: o.space }, writer)
     ? { ...o, person: writer, administrative: undefined }
@@ -2386,11 +2390,17 @@ export let operating = (
     // request where it was asked.
     // Where it holds none, tool_load says why, since the persona names it in
     // every space.
+    // Asked in a room of a server whose bot talks in voice rooms, it joins
+    // the asker's (chat-voice.ts).
+    let voiced = rooms.some((r) => r.server && PLATFORMS.get(r.via)?.voice)
     let chat = [
       ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
       // An owner says which rooms are private (operator-route.ts).
       ...rooms.length && acts && ctx.role == 'owner'
         ? [chatRoomSet(store)]
+        : [],
+      ...voiced
+        ? [(await import('./chat-voice.ts')).voiceJoin(env, store, space)]
         : [],
       acts && wide.length
         ? chatSend(env, store, true)

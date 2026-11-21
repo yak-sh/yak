@@ -34,12 +34,16 @@ export type Frame = {
   stop?: true
   /** what was sent before a mark has played */
   played?: string
+  /** who began speaking, as the line knows them: on a line many share, such
+   * as a voice room, their account there */
+  speaker?: string
 }
 
 /** How a provider's audio stream speaks: what its frames mean, and the
  * frames that play audio to the caller, stop it, and mark where it ends. */
 export type Line = {
-  format: { encoding: 'mulaw'; rate: number }
+  /** its raw samples: μ-law, or 16-bit little-endian PCM, at `rate` */
+  format: { encoding: 'mulaw' | 'linear16'; rate: number }
   /** what a minute of an answered call costs, its stream included */
   perMinute: number
   frame: (data: string) => Frame

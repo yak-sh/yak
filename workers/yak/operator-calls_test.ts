@@ -4,7 +4,8 @@
 import { cleanup, clock, equal, test, until } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { line } from '@yaks/telnyx'
-import { consentEid } from '@yaks/phone'
+import { line as roomLine } from '@yaks/discord'
+import { consentEid, type Line } from '@yaks/phone'
 import {
   OPENAI,
   type Socket,
@@ -663,7 +664,11 @@ test('a call whose hearing stream is refused once the call is answered reports t
 // A call a model hears and speaks itself, the model stood in for, or with
 // `talking` OpenAI's realtime stream itself, its messages told by the test;
 // `given` stands in for what the call is given (its Operator, its notes).
-let talkingCall = (real = false, given: Partial<Talking> = {}) => {
+let talkingCall = (
+  real = false,
+  given: Partial<Talking> = {},
+  over: Line = line,
+) => {
   let on: Record<string, ((e: { data?: unknown }) => void)[]> = {}
   let sent: string[] = []
   let wire: Socket = {
@@ -682,7 +687,7 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
   let streamed: Record<string, unknown>[] = []
   let call = talking({
     call: 'v3:t',
-    stream: { wire, line },
+    stream: { wire, line: over },
     talk: (t, opens) => {
       told = t
       opened.push(opens)
@@ -754,6 +759,21 @@ let talkingCall = (real = false, given: Partial<Talking> = {}) => {
     streamed,
   }
 }
+
+// In a voice room, who began speaking reaches the call, which tells its model
+// who it hears and keeps what it heard as theirs.
+test('in a voice room, the model is told who is speaking and what it heard is kept under their name', async () => {
+  let spoke: string[] = []
+  let c = talkingCall(false, { spoke: (a) => void spoke.push(a) }, roomLine)
+  c.frame({ event: 'speaking', user: '42' })
+  equal(spoke, ['42'])
+  c.call.spoke!('Ann')
+  equal(c.known, ['Ann is speaking.'])
+  c.told().heard!('Is the barn open?')
+  c.told().done!()
+  await until(() => c.noted.length > 0)
+  equal(c.noted, [['Ann: Is the barn open?', false]])
+})
 
 test('a recorded call answers small talk itself, keeping it in the conversation, and asks the Operator what needs a tool', async () => {
   let c = talkingCall(true)

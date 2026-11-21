@@ -126,6 +126,12 @@ export type Ticket = {
    * way its privileged acts wait for a tap on a link texted to `from`
    * (operator-approvals.ts) */
   attested?: boolean
+  /** a chat platform's voice room the call is, rather than a phone's line
+   * (chat-voice.ts): the bot's connection, the server and the room. Its
+   * words are whoever spoke last's, as in a room heard in full */
+  room?: { via: string; connection: string; server: string; room: string }
+  /** how many minutes it lasts, where not MINUTES */
+  minutes?: number
 }
 
 let secretOf = (env: Env) => {
@@ -190,7 +196,7 @@ export let greeting = (operator: string, first?: string) =>
  * ```
  */
 export let opening = (
-  ticket: Pick<Ticket, 'call' | 'via' | 'at' | 'first'>,
+  ticket: Pick<Ticket, 'call' | 'via' | 'at' | 'first' | 'minutes'>,
   operator: string,
   now = Date.now(),
   dropped?: number,
@@ -200,7 +206,7 @@ export let opening = (
     : dropped != undefined && now - dropped > NOTICED
     ? BACK
     : '',
-  minutes: MINUTES - (now - ticket.at) / 60_000,
+  minutes: (ticket.minutes ?? MINUTES) - (now - ticket.at) / 60_000,
   /** whether the call begins with this stream, rather than opens again */
   began: now - ticket.at <= RESUMED,
   turn: (n: number) => `${ticket.via}:${ticket.call}:${now}:${n}`,
@@ -260,7 +266,7 @@ export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   let ticket = await opened<Ticket>('call', sealed, secretOf(env))
   let refused = !ticket
     ? 'its ticket was not sealed here'
-    : now - ticket.at > (MINUTES + 1) * 60_000
+    : now - ticket.at > ((ticket.minutes ?? MINUTES) + 1) * 60_000
     ? `its ticket is ${Math.round((now - ticket.at) / 1000)} s old`
     : undefined
   if (!ticket || refused) {
@@ -308,6 +314,8 @@ export type Call = {
   moved: () => void
   /** the call ended */
   ended: Promise<void>
+  /** on a line many share, `name` began speaking */
+  spoke?: (name: string) => void
 }
 
 /** How long one of the caller's turns waited, in milliseconds from their
@@ -325,6 +333,8 @@ export type Around = {
   stream?: { wire: Socket; line: Line }
   /** the caller's words, given to the Operator */
   ask: (text: string) => Promise<void>
+  /** on a line many share, the account there that began speaking */
+  spoke?: (account: string) => void
   /** what is said when the call is answered */
   hello: string
   /** what the call used since it was last charged: seconds of the line and
@@ -390,8 +400,10 @@ export type Talking = Around & {
   note: (text: string, said: boolean) => Promise<void>
 }
 
-// The least audio sent to the line at once: a tenth of a second at 8 kHz.
-let CHUNK = 800
+// The least audio sent to the line at once: a tenth of a second in its
+// format.
+let chunkOf = (format: Line['format']) =>
+  format.rate / 10 * (format.encoding == 'linear16' ? 2 : 1)
 
 let GOODBYE = 'I have to go now. Call me back any time.'
 
@@ -537,6 +549,7 @@ let carry = (
     heardAt = time.now()
     let frame: Frame = line!.frame(String(event.data))
     if (frame.audio) hear(frame.audio)
+    if (frame.speaker) o.spoke?.(frame.speaker)
     if (frame.stop) finish('stop')
   })
   wire?.addEventListener('close', ({ code }) => {
@@ -616,6 +629,7 @@ export let converse = (o: Talk): Call => {
   let opens = o.stream && plain(o.hello)
     ? first(o.stream.line.format)
     : undefined
+  let chunk = o.stream ? chunkOf(o.stream.line.format) : 800
   let c = carry(
     o,
     (audio) => stream?.send(opens ? opens.heard(audio) : audio),
@@ -653,7 +667,7 @@ export let converse = (o: Talk): Call => {
           more.set(held)
           more.set(next.value, held.length)
           held = more
-          if (held.length >= CHUNK) send()
+          if (held.length >= chunk) send()
         }
         send()
       } finally {
@@ -781,6 +795,9 @@ export let backed = (name: string, now: Date) =>
 export let talking = (o: Talking): Call => {
   let pending: ((text: string) => void)[] = []
   let talker: Talker | undefined
+  // On a line many share, who spoke last, whose words what is heard is kept
+  // as.
+  let who: string | undefined
   // What the response under way heard and said, kept in the conversation in
   // the order it was said: once the response ends, or before what it asks
   // the Operator, so the caller's words come before the request made of
@@ -824,7 +841,8 @@ export let talking = (o: Talking): Call => {
   talker = o.talk({
     over: () => c.clear(),
     stopped: (ago) => c.stopped(ago),
-    heard: (text) => void lines.push({ text, said: false }),
+    heard: (text) =>
+      void lines.push({ text: who ? `${who}: ${text}` : text, said: false }),
     said: (text) => void lines.push({ text, said: true }),
     done: () => void keep(),
     audio: (bytes) => c.play(bytes, !asking),
@@ -901,6 +919,10 @@ export let talking = (o: Talking): Call => {
     },
     waiting: () => pending.length > 0,
     ended: c.ended,
+    spoke: (name) => {
+      who = name
+      if (!c.over()) talker?.tell(`${name} is speaking.`)
+    },
   }
 }
 
@@ -961,6 +983,41 @@ export let upgraded = upgrading(CALL)
 // The WebSocket pair the runtime makes, declared structurally as build.ts does.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }
 
+/** Who began speaking in a voice room: their account there, the person
+ * here it is linked to or else the guest it speaks as (chat.ts `guestOf`),
+ * and the name they go by there. */
+type Speaking = {
+  account: string
+  person: string
+  linked: boolean
+  name: string
+}
+
+let speakingIn = async (
+  env: Env,
+  room: NonNullable<Ticket['room']>,
+  account: string,
+): Promise<Speaking> => {
+  let { basicsOf, guestOf, linked, PLATFORMS } = await import('./chat.ts')
+  let platform = PLATFORMS.get(room.via)!
+  let [mine, basics] = await Promise.all([
+    linked(env, platform, account),
+    basicsOf(env, room.via, room, [account]).catch((e) => {
+      defect(e, CALL)
+      return undefined
+    }),
+  ])
+  let known = mine ? await directoryOf(env.STORE).known(mine) : undefined
+  return {
+    account,
+    person: mine ?? await guestOf(env, room.via, account),
+    linked: !!mine,
+    name: known?.name ||
+      basics?.people.find((p) => p.id == account)?.name ||
+      'someone',
+  }
+}
+
 /**
  * What a call to `space`'s Operator shares however its audio travels: what
  * the caller says asked of the Operator, what it used charged at the line's
@@ -992,6 +1049,19 @@ export let calling = async (
   let turn = 0
   let key = keyOf(space.eid, ticket.person)
   let call: Call | undefined
+  // In a voice room, who spoke last: the words asked of the Operator are
+  // theirs, as a room's are their writer's, and the call is told their name.
+  let speaker: Speaking | undefined
+  let spoke = ticket.room
+    ? (account: string) => {
+      if (speaker?.account == account) return
+      let room = ticket.room!
+      speakingIn(env, room, account).then((s) => {
+        speaker = s
+        call?.spoke?.(s.name)
+      }).catch((e) => defect(e, CALL))
+    }
+    : undefined
   // The caller's words, or a talking model's request made of them (`call`),
   // to their conversation, answered by `model`.
   let asking = (model: string, call?: string) => async (text: string) => {
@@ -1001,10 +1071,16 @@ export let calling = async (
         space: space.eid,
         person: ticket.person,
         channel: 'voice',
-        address: ticket.from,
+        address: speaker?.name ?? ticket.from,
         reply_to: ticket.to,
         via: ticket.via,
         ...ticket.attested ? { attested: true } : {},
+        ...speaker
+          ? {
+            writer: speaker.person,
+            ...speaker.linked ? { linked: true } : {},
+          }
+          : {},
         model,
         ...call ? { call } : {},
       },
@@ -1015,6 +1091,7 @@ export let calling = async (
   }
   let around = {
     call: ticket.call,
+    ...spoke ? { spoke } : {},
     hello: opens.hello,
     minutes: opens.minutes,
     charge: ({ seconds, heard }: Parameters<Around['charge']>[0]) =>
@@ -1073,7 +1150,9 @@ export let calling = async (
     ? await operator.tools(
       { person: ticket.person },
       space,
-      ticket.from,
+      // A voice room's caller has no number to text approvals to: they go
+      // where a room's do.
+      ticket.room ? undefined : ticket.from,
     ).catch((e) => {
       defect(e, CALL)
       return undefined
@@ -1126,6 +1205,26 @@ export let calling = async (
   }
 }
 
+/** The line a call's audio streams over, and how it is hung up: a phone
+ * provider's, or a chat platform's voice room, which hanging up leaves. */
+let lineOf = async (env: Env, ticket: Ticket) => {
+  if (ticket.room) {
+    let { PLATFORMS, leaveVoice } = await import('./chat.ts')
+    let voice = PLATFORMS.get(ticket.room.via)?.voice
+    let room = ticket.room
+    return voice && {
+      line: voice.line,
+      hangup: () => leaveVoice(env, room),
+    }
+  }
+  let phone = await phoneAt(env, { via: ticket.via })
+  let caller = phone?.caller
+  return phone?.line && caller && {
+    line: phone.line,
+    hangup: () => caller().hangup(ticket.call),
+  }
+}
+
 /**
  * `/operator/call` in the space's object: the provider's stream accepted,
  * and the conversation run on it until the call ends.
@@ -1139,10 +1238,10 @@ export let answering = async (
 ): Promise<Response> => {
   let seen = space
   space = await settled(operator.store.g, seen)
-  let phone = await phoneAt(env, { via: ticket.via })
+  let held = await lineOf(env, ticket)
   let setup = setupOf(env, space)
   let speech = speechOf(env, setup.provider)
-  if (!phone?.line || !phone.caller || !speech) {
+  if (!held || !speech) {
     defect(
       new Error(
         `A call's stream was refused: ${
@@ -1153,8 +1252,7 @@ export let answering = async (
     )
     return new Response(null, { status: 404 })
   }
-  let line = phone.line
-  let caller = phone.caller
+  let { line, hangup } = held
   // The ring was let through at `ticket.at`, its speech not paused: the
   // greeting goes ahead on that while this object reads the balance itself.
   passed(ticket.at, setup.provider)
@@ -1163,7 +1261,7 @@ export let answering = async (
   let c = await calling(env, operator, space, ticket, armed, {
     setup,
     perMinute: line.perMinute,
-    hangup: () => caller().hangup(ticket.call),
+    hangup,
     line: ticket.via,
   })
   let stream = { wire: pair[1], line }
@@ -1228,10 +1326,10 @@ async (text: string) => {
 
 /** The `voice` channel: an answer spoken on the call it was asked on, or,
  * when the call has ended, texted to a caller who agreed to texts and kept
- * in their conversation otherwise. */
+ * in their conversation otherwise; a voice room's only kept. */
 export let voiced = async (
   env: Env,
-  request: { space: string; person: string },
+  request: { space: string; person: string; via?: string },
   text: string,
   texted: () => Promise<{ id?: string }>,
 ) => {
@@ -1240,6 +1338,10 @@ export let voiced = async (
     call.answered(text)
     return {}
   }
+  // A voice room's answer, once the room was let go, is kept in its
+  // conversation: nobody there agreed to texts.
+  let { PLATFORMS } = await import('./chat.ts')
+  if (PLATFORMS.has(request.via ?? '')) return {}
   let agreed = await directoryOf(env.STORE).texting(request.person)
   return agreed ? await texted() : {}
 }

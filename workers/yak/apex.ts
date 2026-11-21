@@ -152,7 +152,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
     let { textDoor } = await import('./operator-texts.ts')
     return textDoor(req, env, via)
   }
-  if (phone && door == 'stream') {
+  // A chat platform's voice room streams the way a call does (chat-voice.ts).
+  let voiced = via && door == 'stream' &&
+    (await import('./chat.ts')).PLATFORMS.get(via)?.voice
+  if ((phone || voiced) && door == 'stream') {
     let { streamDoor } = await import('./operator-calls.ts')
     return streamDoor(req, env)
   }

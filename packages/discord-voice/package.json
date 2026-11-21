@@ -1,0 +1,19 @@
+{
+  "name": "@yaks/discord-voice",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./audio.ts",
+    "./relay": "./relay.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A relay that joins a Discord voice room for a host and streams its audio both ways over a WebSocket, the way a phone call's is streamed.",
+  "dependencies": {
+    "@discordjs/voice": "0.19.2",
+    "@snazzah/davey": "0.1.12",
+    "opusscript": "0.1.1"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.30"
+  }
+}

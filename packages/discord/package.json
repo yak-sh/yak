@@ -9,7 +9,8 @@
   "description": "Discord for @yaks/chat: its Gateway read as messages said, and replies posted to a channel.",
   "dependencies": {
     "@yaks/chat": "0.2.0",
-    "@yaks/host": "0.2.29"
+    "@yaks/host": "0.2.29",
+    "@yaks/phone": "0.2.30"
   },
   "devDependencies": {
     "@yaks/testing": "0.2.30",
