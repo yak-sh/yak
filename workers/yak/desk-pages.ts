@@ -367,6 +367,8 @@ let finding = (at: DeskPage) =>
       value: at.sift?.q ?? '',
       placeholder: 'Find an app',
       'aria-label': 'Find an app',
+      // Narrow enough to share a phone's line with the order beside it.
+      size: 14,
     }),
     h(
       Field,
@@ -407,6 +409,8 @@ export let library = (at: DeskPage, env: Host) => {
                 visits: `${managePath('visits', at.space)}#visits-${a.slug}`,
                 made: a.made,
                 deployed: a.deployed,
+                writers: at.writers,
+                me: at.person,
               })
             ),
           ),

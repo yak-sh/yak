@@ -29,10 +29,11 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
       })
       await hand.tool('app_deploy', { app: slug })
       let [row] = await meta(k).query(
-        `.app.slug=${slug}&?created&?last_deploy`,
+        `.app.slug=${slug}&?app&?created&?last_deploy`,
       )
       return row as {
         entity: { eid: string }
+        app: { slug: string }
         created?: Stamp
         last_deploy?: Stamp
       }
@@ -54,17 +55,33 @@ test('a deploy is stamped with the person, or the agent writing for them, and wh
     assertEquals(row.doc?.title, 'probe')
     assertEquals(idOf(row.acts_for?.person), owner.person)
 
-    // The Apps page says when each changed; /admin says who.
+    // Both say who made and deployed each app where people see their apps,
+    // and in /admin.
     let page = async (path: string, cookie: string) => {
       let r = await k.at(k.host, path, { headers: { cookie } })
       assertEquals(r.status, 200)
       return (await r.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
     }
     let today = relative(String(mine.created?.at))
+    // The dashboard's row says who last changed each app where it was not
+    // the person looking: the agent writing for them, never themselves.
+    let dashboard = await page(managePath('apps', owner.name), owner.cookie)
+    let [ours, agents] = [mine.app.slug, theirs.app.slug]
+    assertStringIncludes(dashboard, `/${ours} · changed ${today} `)
+    assert(!dashboard.includes(`/${ours} · changed ${today} by`))
     assertStringIncludes(
-      await page(managePath('apps', owner.name), owner.cookie),
-      `changed ${today}`,
+      dashboard,
+      `/${agents} · changed ${today} by probe for ${owner.name}`,
     )
+    // An app last deployed before `last_deploy` was kept says its newest
+    // release's, still unsaid to its own deployer.
+    await meta(k).apply([{
+      entity: { eid: mine.entity.eid },
+      last_deploy: null,
+    }])
+    let again = await page(managePath('apps', owner.name), owner.cookie)
+    assertStringIncludes(again, `/${ours} · changed ${today} `)
+    assert(!again.includes(`/${ours} · changed ${today} by`))
     let admin = await page(`/admin/${theirs.entity.eid}`, k.owner.cookie)
     assertStringIncludes(admin, `the last ${today} by probe for ${owner.name}`)
     assertStringIncludes(admin, `Made ${today} by probe for ${owner.name}`)

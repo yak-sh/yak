@@ -16,7 +16,7 @@ import { Time } from '@yaks/ui/parts'
 // icon, the yak, a QR code, markdown theirs.ts drew) goes in whole (`raw`),
 // and so does a page's own script.
 
-import type { Stamp } from './stamps.ts'
+import type { Stamp, Writers } from './stamps.ts'
 import { type Field as Fielded, KEY } from '@yaks/connections'
 
 import {
@@ -683,6 +683,8 @@ export type DeskPage = {
   /** what the apps page was asked to find and how to order it (desk-pages.ts
    * `sifted`) */
   sift?: { q: string; sort: string }
+  /** what each writer those stamps name is called (stamps.ts `writers`) */
+  writers?: Writers
   trash?: { eid: string; slug: string; title: string; days: number }[]
   numbers?: { eid: string; number: string; monthly: string; days: number }[]
   name?: string

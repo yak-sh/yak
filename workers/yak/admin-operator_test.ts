@@ -371,7 +371,7 @@ Object.defineProperties(globalThis, {
   innerWidth: { value: 1000, configurable: true },
   innerHeight: { value: 800, configurable: true },
 })
-test('the margin reveals request details in the kit tooltip on keyboard focus', () => {
+test('the margin reveals request details in the kit tooltip on keyboard focus', async () => {
   let document = metered.document
   let target = margin(afterCompact) as unknown as HTMLElement
   target.getBoundingClientRect = () => new DOMRect(20, 30, 20, 20)
@@ -379,6 +379,7 @@ test('the margin reveals request details in the kit tooltip on keyboard focus', 
   target.dispatchEvent(
     new document.defaultView!.Event('focusin', { bubbles: true }),
   )
+  await Promise.resolve() // a focused tip opens once the move is done
   let tip = document.querySelector('[role=tooltip]')!
   assertEquals(tip.className, 'Overlay Tip')
   for (

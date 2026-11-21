@@ -61,7 +61,7 @@ test('written dates use ordinal days, and timestamps use a twelve-hour clock', (
   equal(day('soon'), '')
 })
 
-test('a rendered date says its age and reveals the full timestamp in a kit tooltip', () => {
+test('a rendered date says its age and reveals the full timestamp in a kit tooltip', async () => {
   let { document, Event, root } = page()
   root.innerHTML = renderToString(
     h(Time, { at, now, timeZone: 'UTC', title: at }),
@@ -73,6 +73,7 @@ test('a rendered date says its age and reveals the full timestamp in a kit toolt
   equal(face.getAttribute('tabindex'), '0')
   tips(document as unknown as Document)
   face.dispatchEvent(new Event('focusin', { bubbles: true }))
+  await Promise.resolve() // a focused tip opens once the move is done
   equal(
     document.querySelector('.Tip[role=tooltip]')?.textContent,
     'Nov 6th, 2026, 3:42 PM',

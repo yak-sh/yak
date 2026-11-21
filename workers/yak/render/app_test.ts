@@ -123,23 +123,37 @@ test('app Tile says who may use it and whether it is the homepage, as glyphs wit
   }
 })
 
-test('app Tile says when it last changed, and its menu only to whoever may edit', () => {
-  let made = { at: '2026-01-01T00:00:00Z', by: 'u' }
-  let deployed = { at: '2026-02-01T00:00:00Z', by: 'u' }
-  for (
-    let [stamps, at] of [[{}, null], [{ made }, made.at], [
-      { made, deployed },
-      deployed.at,
-    ]] as const
-  ) {
-    let root = one({}, stamps)
-    assertEquals(root.getAttribute('data-changed'), at ?? '')
-    assertEquals(
-      root.querySelector('.Rows_Meta-line time')?.getAttribute('datetime') ??
-        null,
-      at,
-    )
+test('app Tile says when it last changed, by whom where that was not the viewer, and its menu only to whoever may edit', () => {
+  let writers = new Map([['ada', 'Ada'], ['probe', 'probe for Ada']])
+  let made = { at: '2026-01-01T00:00:00Z', by: 'probe' }
+  let deployed = { at: '2026-02-01T00:00:00Z', by: 'ada' }
+  let line = (stamps: object, me = 'ada') => {
+    let root = one({}, { ...stamps, writers, me })
+    let time = root.querySelector('.Rows_Meta-line time')
+    let text = root.querySelector('.Rows_Meta-line')!.textContent!
+    return [
+      root.getAttribute('data-changed'),
+      time?.getAttribute('datetime') ?? null,
+      time ? text.replace(time.textContent!, 'WHEN') : text,
+    ]
   }
+  // Never deployed: when it was made, by the agent that made it.
+  assertEquals(line({ made }), [
+    made.at,
+    made.at,
+    '/recipes · changed WHEN by probe for Ada',
+  ])
+  // Last deployed by the viewer: theirs goes unsaid; to anyone else, named.
+  assertEquals(line({ made, deployed }), [
+    deployed.at,
+    deployed.at,
+    '/recipes · changed WHEN',
+  ])
+  assertEquals(
+    line({ made, deployed }, 'bo')[2],
+    '/recipes · changed WHEN by Ada',
+  )
+  assertEquals(line({}), ['', null, '/recipes'])
   assertEquals(one().querySelector('details'), null)
   assert(one({}, { editor: true }).querySelector('details[data-menu]'))
 })

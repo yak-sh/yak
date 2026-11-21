@@ -3,7 +3,7 @@
 // parts, each a row for a `Rows` list, drawn into its pages as nodes; the admin's directory rows are
 // portable renderers, drawn as markup (admin.ts).
 
-import type { Stamp } from '../stamps.ts'
+import type { Stamp, Writers } from '../stamps.ts'
 import { render as markup } from '@yaks/html'
 import { render } from '@yaks/preact'
 import { type Bundle, type Context, define } from '@yaks/render'
@@ -34,6 +34,8 @@ export type Around = {
   visits?: string
   made?: Stamp | null
   deployed?: Stamp | null
+  writers?: Writers
+  me?: string
 }
 
 export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>

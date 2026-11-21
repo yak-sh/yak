@@ -11,6 +11,7 @@
   font-weight: 800;
   line-height: 1.4;
   text-align: center;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 /* Pressed, it opens what waits. */

@@ -207,8 +207,9 @@ export let tips = (
     let put = () => {
       if (host != next) return
       tip.textContent = next.getAttribute('data-tip') ?? ''
-      // Stay in the dialog's accessible scope, then above it in the top layer.
-      let layer = next.closest('dialog[open]') ?? doc.body
+      // Stay in the dialog's or popover's accessible scope, then above it in
+      // the top layer.
+      let layer = next.closest('dialog[open], [popover]') ?? doc.body
       layer.appendChild(tip)
       tip.showPopover?.()
       let ids = next.getAttribute('aria-describedby')
@@ -232,8 +233,18 @@ export let tips = (
       hide()
     }
   })
-  doc.addEventListener('focusin', (e) => show(target(e)))
-  doc.addEventListener('focusout', hide)
+  // Focus that a dialog or popover moves as it opens arrives while it is
+  // still opening, when no other popover may open; so the tip of what took
+  // focus opens once that is done, unless focus has left it by then.
+  let focused: Element | null = null
+  doc.addEventListener('focusin', (e) => {
+    let next = focused = target(e)
+    queueMicrotask(() => focused == next && show(next))
+  })
+  doc.addEventListener('focusout', () => {
+    focused = null
+    hide()
+  })
   doc.addEventListener('pointerdown', hide, true)
   doc.addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key == 'Escape') hide()

@@ -32,6 +32,9 @@ test('a growing overlay stays inside the viewport', () => {
   assertEquals(put('below', 480), { left: '330px', top: '314px' })
 })
 
+// A tip shown on focus opens once the focus move is done.
+let settled = () => Promise.resolve()
+
 let documentOf = (
   content =
     '<button data-tip="Hide" aria-describedby="help"><svg></svg></button>',
@@ -44,11 +47,12 @@ let documentOf = (
   return { document: document as unknown as Document, button, Event }
 }
 
-test('a kit tooltip follows keyboard focus, describes the control and dismisses on Escape', () => {
+test('a kit tooltip follows keyboard focus, describes the control and dismisses on Escape', async () => {
   let { document, button, Event } = documentOf()
   tips(document)
   tips(document)
   button.dispatchEvent(new Event('focusin', { bubbles: true }))
+  await settled()
   let tip = document.querySelector('[role=tooltip]')!
   assertEquals(tip.textContent, 'Hide')
   assertEquals(tip.className, 'Overlay Tip')
@@ -56,12 +60,14 @@ test('a kit tooltip follows keyboard focus, describes the control and dismisses 
   document.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }))
   assertEquals(document.querySelector('[role=tooltip]'), null)
   assertEquals(button.getAttribute('aria-describedby'), 'help')
+  // Focus that leaves before the move settles never opens its tip.
   button.dispatchEvent(new Event('focusin', { bubbles: true }))
   button.dispatchEvent(new Event('focusout', { bubbles: true }))
+  await settled()
   assertEquals(document.querySelector('[role=tooltip]'), null)
 })
 
-test('a kit tooltip enters the top layer above each newly opened modal', () => {
+test('a kit tooltip enters the top layer above each newly opened modal', async () => {
   let { document, button, Event } = documentOf(
     '<dialog open><button data-tip="Hide"></button></dialog>',
   )
@@ -80,6 +86,7 @@ test('a kit tooltip enters the top layer above each newly opened modal', () => {
   })
   tips(document)
   button.dispatchEvent(new Event('focusin', { bubbles: true }))
+  await settled()
   let tip = document.querySelector('[role=tooltip]')!
   assertEquals(shown.length, 1)
   assertEquals(shown[0] === tip, true)
@@ -92,6 +99,7 @@ test('a kit tooltip enters the top layer above each newly opened modal', () => {
   let next = modal.querySelector('button')!
   next.getBoundingClientRect = button.getBoundingClientRect
   next.dispatchEvent(new Event('focusin', { bubbles: true }))
+  await settled()
   assertEquals(shown.length, 2)
   assertEquals(shown[1] === tip, true)
   assertEquals(tip.parentElement === modal, true)
@@ -101,12 +109,13 @@ test('a kit tooltip enters the top layer above each newly opened modal', () => {
   assertEquals(tip.isConnected, false)
 })
 
-test('without native popovers a kit tooltip stays inside the innermost open dialog', () => {
+test('without native popovers a kit tooltip stays inside the innermost open dialog', async () => {
   let { document, button, Event } = documentOf(
     '<dialog open><dialog open><button data-tip="Hide"></button></dialog></dialog>',
   )
   tips(document)
   button.dispatchEvent(new Event('focusin', { bubbles: true }))
+  await settled()
   let tip = document.querySelector('[role=tooltip]')!
   assertEquals(tip.parentElement === button.parentElement, true)
   assertEquals(tip.textContent, 'Hide')

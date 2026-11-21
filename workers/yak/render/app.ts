@@ -1,7 +1,8 @@
 // The app library's Tile: one row of the kit's Rows, pressed anywhere to open
 // the app in a new tab. Its mark is the app's own icon, or its first letter
 // where it drew none (apps.ts `unwritten`); under its name, one quiet line
-// says where it lives and when it last changed. At the far side sit its open
+// says where it lives and when it last changed, and who changed it where that
+// was not the person looking, such as an agent writing for them. At the far side sit its open
 // errors, as a badge that opens them, a glyph for whether it is the space's
 // homepage and one for who may use it, each named in a tooltip, and the menu
 // of what else can be done with it.
@@ -13,14 +14,16 @@
 // to wear instead of the app's own, for a viewer the app's own would be
 // refused to (a private app, before they are in); `editor`, a menu for
 // someone who may open its data editor; `visits`, where its visits are
-// counted; `made` and `deployed`, when it was made and last deployed; and
-// `gallery`, how it stands with the gallery, said only to its owner.
+// counted; `made` and `deployed`, when it was made and last deployed, and by
+// whom; `writers`, what each writer is called (stamps.ts), and `me`, the
+// person looking; and `gallery`, how it stands with the gallery, said only to
+// its owner.
 
 import { parse } from '@yaks/query'
 import type { ComponentRenderer } from '@yaks/preact'
 import { Badge, Icon, Menu, Rows, Time } from '@yaks/ui/parts'
 import { h } from 'preact'
-import type { Stamp } from '../stamps.ts'
+import type { Stamp, Writers } from '../stamps.ts'
 import { icons } from '../icons.ts'
 
 // Who may use an app, as a glyph and the words its tooltip says.
@@ -57,6 +60,10 @@ export let app: ComponentRenderer = {
     let errors = Number(ctx.errors ?? 0)
     let broke = errors ? `${errors} ${errors == 1 ? 'error' : 'errors'}` : ''
     let changed = (ctx.deployed ?? ctx.made) as Stamp | null | undefined
+    let names = (ctx.writers ?? new Map()) as Writers
+    let by = changed?.by && changed.by != ctx.me
+      ? names.get(changed.by)
+      : undefined
     let access = ACCESS[a.access as keyof typeof ACCESS]
     let fix = { popovertarget: fixId(a.slug), type: 'button' }
     // What public/sift.js finds and orders the row by.
@@ -91,7 +98,13 @@ export let app: ComponentRenderer = {
           Rows.Meta,
           { mod: 'line' },
           `${ctx.host ?? ''}/${a.slug}`,
-          changed ? [' · changed ', h(Time, { at: changed.at })] : null,
+          changed
+            ? [
+              ' · changed ',
+              h(Time, { at: changed.at }),
+              by ? ` by ${by}` : null,
+            ]
+            : null,
           ctx.gallery ? ` · ${ctx.gallery}` : null,
         ),
       ),
