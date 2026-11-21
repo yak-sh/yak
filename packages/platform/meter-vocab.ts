@@ -15,6 +15,29 @@ export let docs: VocabDoc[] = [{
         // `SOURCES`): a model provider, voice, texts or the browser.
         source: { type: 'string' },
         visitor: { type: 'boolean' },
+        // What the call most likely cost should it end with nothing measured
+        // (@yaks/model `likely`), and the moment past which it can no longer
+        // be running: a hold still open then is settled at `likely`
+        // (workers/yak model-spend.ts `expired`). A hold with no `until` is
+        // its owner's to settle, however long it waits.
+        likely: { type: 'number' },
+        until: { type: 'string', format: 'date-time' },
+      },
+    },
+    // A call's hold settled at an estimate, nothing having measured it, and
+    // whom it was held for: a measured cost arriving later replaces the
+    // estimate on the same space's month (workers/yak model-spend.ts
+    // `settled`).
+    model_estimate: {
+      component: true,
+      wire: false,
+      type: 'object',
+      properties: {
+        space: { type: 'string', ref: 'space', death: 'cascade' },
+        month: { type: 'string' },
+        what: { type: 'string', enum: ['models', 'realtime', 'texts'] },
+        source: { type: 'string' },
+        visitor: { type: 'boolean' },
       },
     },
     // The model calls one visitor has asked a space's apps for on `day`

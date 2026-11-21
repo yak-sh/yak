@@ -1,5 +1,8 @@
-// A paid call reserves its quoted cost before submission. Uncertain submissions
-// keep that debit; only a measured answer or a known unsubmitted call frees it.
+// A paid call reserves its quoted cost before submission. A measured answer
+// settles it, a known unsubmitted call frees it, and an uncertain one settles
+// at what it most likely cost: when it fails, or, for a call whose owner died
+// with it, once it is past the moment it could still be running ({@link
+// expired}). A measured cost arriving after an estimate replaces it.
 import { line } from '@yaks/query'
 import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -32,6 +35,12 @@ export type Paying = {
   source?: string
   visitor?: string
   now?: Date
+  /** what the call most likely costs should it end with nothing measured,
+   * and the moment past which it can no longer be running: a hold still open
+   * then is settled at `likely` ({@link expired}). Without `until` the hold
+   * is its owner's to settle, however long that takes. */
+  likely?: number
+  until?: Date
 }
 
 export let receiptEid = (call: string) =>
@@ -66,50 +75,76 @@ let tallied = async (env: Env, space: string, visitor: string, now: Date) => {
   }
 }
 let held = (row: Bundle | undefined) =>
-  row?.model_reservation as Hold | undefined
+  row?.model_reservation as
+    | Hold & { likely?: number; until?: string }
+    | undefined
+// A hold settled at an estimate: whom it was held for.
+let guessed = (row: Bundle | undefined) =>
+  row?.model_estimate as Omit<Hold, 'dollars'> | undefined
+let paidBy = (
+  { space, month, what, source, visitor }: Omit<Hold, 'dollars'>,
+) => ({
+  space,
+  month,
+  what,
+  ...source ? { source } : {},
+  ...visitor ? { visitor } : {},
+})
 
 export let reservation = async (
   env: Env,
   call: string,
 ): Promise<Hold | undefined> => held(await read(env, receiptEid(call)))
 
-// A release returns the hold without writing a completed cost.
+// A release returns the hold without writing a completed cost; an estimate
+// settles it at `dollars` and keeps whom it was held for, so a measured cost
+// arriving later replaces the estimate on the same month.
 let finish = async (
   env: Env,
-  call: string,
+  eid: string,
   dollars: number | null,
   reported: boolean,
+  estimate = false,
 ): Promise<boolean> => {
   if (dollars != null && (!Number.isFinite(dollars) || dollars < 0)) {
     throw new Error('Invalid model cost')
   }
-  let eid = receiptEid(call)
   while (true) {
     let receipt = await read(env, eid)
     let hold = held(receipt)
-    if (!hold) {
-      let previous = (receipt?.cost as Comp | undefined)?.dollars
+    let guess = !hold && !estimate && dollars != null
+      ? guessed(receipt)
+      : undefined
+    let previous = (receipt?.cost as Comp | undefined)?.dollars as
+      | number
+      | undefined
+    if (!hold && !guess) {
+      if (estimate) return previous != null
       if (dollars != null && previous != null && previous != dollars) {
         throw new Error('The settled provider cost changed for the same call')
       }
       return dollars != null && previous != null
     }
+    let paying = (hold ?? guess)!
     // The provider has already spent these dollars. A low estimate must not
     // hide usage or strand delivery; the next admission sees the full debit.
-    let space = await read(env, hold.space)
+    let space = await read(env, paying.space)
     let meter = space?.meter as Comp | undefined
-    let delta = (dollars ?? 0) - hold.dollars
+    let delta = (dollars ?? 0) - (hold ? hold.dollars : previous ?? 0)
+    let at = (receipt?.created as Comp | undefined)?.at
     // Last month's reservation stays in last month's reading. A late answer
     // must never reset this month's counters or free this month's dollars.
-    let spends = meter?.month == hold.month && delta
+    let spends = meter?.month == paying.month && delta
       ? [{
-        entity: { eid: hold.space },
+        entity: { eid: paying.space },
         $was: guard(space, 'meter', ['month']),
         spend: {
-          month: hold.month,
-          [hold.what]: delta,
-          ...hold.source ? { source: hold.source } : {},
-          ...hold.visitor ? { visitors: delta } : {},
+          month: paying.month,
+          [paying.what]: delta,
+          ...paying.source ? { source: paying.source } : {},
+          ...paying.visitor ? { visitors: delta } : {},
+          // Corrected on the day the hold was made, not the day it settled.
+          ...typeof at == 'string' ? { at } : {},
         },
       }]
       : []
@@ -117,8 +152,15 @@ let finish = async (
       await stamp(env, {
         entities: [{
           entity: { eid },
-          $was: guard(receipt, 'model_reservation', ['dollars']),
-          model_reservation: null,
+          $was: hold
+            ? guard(receipt, 'model_reservation', ['dollars'])
+            : guard(receipt, 'cost', ['dollars']),
+          ...hold ? { model_reservation: null } : {},
+          ...estimate
+            ? { model_estimate: paidBy(paying) }
+            : guess
+            ? { model_estimate: null }
+            : {},
           ...dollars == null ? {} : { cost: { dollars, reported } },
         }, ...spends],
       })
@@ -136,7 +178,36 @@ export let settled = (
   call: string,
   dollars: number,
   reported = true,
-): Promise<boolean> => finish(env, call, dollars, reported)
+): Promise<boolean> => finish(env, receiptEid(call), dollars, reported)
+
+/** Settle a call nothing measured at what it most likely cost, `dollars`
+ * (@yaks/model `likely`), never its worst case. A measured cost settled later
+ * replaces it. */
+export let estimated = (
+  env: Env,
+  call: string,
+  dollars: number,
+): Promise<boolean> => finish(env, receiptEid(call), dollars, false, true)
+
+/** How many expired holds one sweep settles at most. */
+let SWEPT = 1000
+
+/** Every hold past the moment its call could still be running, settled at
+ * what the call most likely cost (its `likely`): its owner died with it, so
+ * nothing else ever will, and the worst case it holds was never spent. The
+ * hourly meter runs it (jobs.ts `meter`). */
+export let expired = async (env: Env, now = new Date()): Promise<number> => {
+  let rows = await meta(env).query(
+    line`.model_reservation.until<${now.toISOString()}&.limit=${SWEPT}`,
+  )
+  let n = 0
+  for (let row of rows) {
+    let hold = held(row)
+    if (!hold) continue
+    if (await finish(env, row.entity.eid, hold.likely ?? 0, false, true)) n++
+  }
+  return n
+}
 
 /** Hold a call's most against its space's month budget before it starts, in
  * one write: the quote is made on the caller's reading of the space, and the
@@ -153,11 +224,13 @@ export let reserved = async <T extends { dollars: number }>(
   space: Space,
   quote: (remaining: number) => T | null,
   call = mint(),
-  { what = 'models', source, visitor, now = new Date() }: Paying = {},
+  { what = 'models', source, visitor, now = new Date(), likely, until }:
+    Paying = {},
 ): Promise<
   {
     value: T
     settle(dollars: number, reported?: boolean): Promise<boolean>
+    estimate(dollars: number): Promise<boolean>
     release(): Promise<boolean>
   }
 > => {
@@ -204,6 +277,12 @@ export let reserved = async <T extends { dollars: number }>(
               what,
               ...source ? { source } : {},
               ...visitor ? { visitor: true } : {},
+              ...until
+                ? {
+                  likely: Math.min(likely ?? value!.dollars, value!.dollars),
+                  until: until.toISOString(),
+                }
+                : {},
             },
           },
           ...tally ? [tally.more] : [],
@@ -223,7 +302,8 @@ export let reserved = async <T extends { dollars: number }>(
       return {
         value: value!,
         settle: (dollars, reported) => settled(env, call, dollars, reported),
-        release: () => released ??= finish(env, call, null, false),
+        estimate: (dollars) => estimated(env, call, dollars),
+        release: () => released ??= finish(env, eid, null, false),
       }
     } catch (error) {
       if (error instanceof Stale && error.eid == eid) {
@@ -274,6 +354,7 @@ export let tabbed = async <T extends { dollars: number }>(
   {
     value: T
     settle(dollars: number, reported?: boolean): Promise<boolean>
+    estimate(dollars: number): Promise<boolean>
     release(): Promise<boolean>
   }
 > => {
@@ -286,31 +367,33 @@ export let tabbed = async <T extends { dollars: number }>(
     !value || !Number.isFinite(value.dollars) || value.dollars < 0 ||
     unaffordable(space, what, value.dollars + owed, now)
   ) return await reserved(env, space, quote, call, paying)
+  let settle = async (dollars: number) => {
+    if (!Number.isFinite(dollars) || dollars < 0) {
+      throw new Error('Invalid model cost')
+    }
+    let due = (tabs.get(key) ?? 0) + dollars
+    if (due < TAB) {
+      tabs.set(key, due)
+      return true
+    }
+    tabs.delete(key)
+    try {
+      await stamp(env, {
+        entities: [{
+          entity: { eid: space.eid },
+          spend: { month, [what]: due, ...source ? { source } : {} },
+        }],
+      })
+    } catch (error) {
+      tabs.set(key, (tabs.get(key) ?? 0) + due)
+      throw error
+    }
+    return true
+  }
   return {
     value,
-    settle: async (dollars) => {
-      if (!Number.isFinite(dollars) || dollars < 0) {
-        throw new Error('Invalid model cost')
-      }
-      let due = (tabs.get(key) ?? 0) + dollars
-      if (due < TAB) {
-        tabs.set(key, due)
-        return true
-      }
-      tabs.delete(key)
-      try {
-        await stamp(env, {
-          entities: [{
-            entity: { eid: space.eid },
-            spend: { month, [what]: due, ...source ? { source } : {} },
-          }],
-        })
-      } catch (error) {
-        tabs.set(key, (tabs.get(key) ?? 0) + due)
-        throw error
-      }
-      return true
-    },
+    settle,
+    estimate: settle,
     release: () => Promise.resolve(true),
   }
 }

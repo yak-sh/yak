@@ -115,6 +115,7 @@ export {
   affordable,
   charged,
   FRAMING,
+  likely,
   measured,
   promptBound,
   requestBound,
@@ -419,6 +420,9 @@ export class ModelError extends Error {
   response?: Answered
   /** the plan limits the provider answered with, where it meters a plan */
   limits?: Limit[]
+  /** what the provider said the request used before it failed, where it
+   * said: a meter settles the request's hold at it */
+  usage?: Usage
   constructor(
     code: string,
     message = code,

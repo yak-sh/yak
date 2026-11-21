@@ -87,8 +87,9 @@ export let summed = (all: (ByDay | null | undefined)[]): ByDay => {
   return out
 }
 
-/** These days and today's `n` more of what they count, past `days` days
- * forgotten, so what a row keeps stays small.
+/** These days and `n` more of what they count on the day of `on` (today
+ * where absent), past `days` days forgotten, so what a row keeps stays small.
+ * An `n` for a day already forgotten is dropped with it.
  *
  * ```ts
  * import { kept } from '@yaks/ui/chart'
@@ -96,6 +97,9 @@ export let summed = (all: (ByDay | null | undefined)[]): ByDay => {
  *
  * let now = Date.parse('2026-10-31T12:00:00Z')
  * equal(kept({ '2026-10-31': 1, '2026-09-01': 9 }, 2, now), { '2026-10-31': 3 })
+ * let yesterday = now - 86_400_000
+ * equal(kept({ '2026-10-30': 5 }, -4, now, 30, yesterday), { '2026-10-30': 1 })
+ * equal(kept({}, 4, now, 30, Date.parse('2026-09-01')), {})
  * ```
  */
 export let kept = (
@@ -103,13 +107,14 @@ export let kept = (
   n: number,
   now: number = Date.now(),
   days = 30,
+  on: number = now,
 ): ByDay => {
   let oldest = ymd(now - (days - 1) * DAY)
-  let today = ymd(now)
+  let day = ymd(Math.min(on, now))
   let out = Object.fromEntries(
     Object.entries(byDay ?? {}).filter(([day]) => day >= oldest),
   )
-  out[today] = tidy((out[today] ?? 0) + n)
+  if (day >= oldest) out[day] = tidy((out[day] ?? 0) + n)
   return out
 }
 

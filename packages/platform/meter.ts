@@ -583,7 +583,8 @@ export let sourceOf = (spend: Record<string, unknown>): string =>
  * all and under its source (`sourceOf`), and under `paid` too when the space
  * pays for a plan, so a day's dollars say who covered them: the space's own
  * plan, or the platform. A letter or a spend of nothing costs nothing and
- * leaves the days as they are.
+ * leaves the days as they are. A spend made `at` an earlier moment (a hold
+ * settled after its day) lands on that day.
  *
  * ```ts
  * import { trended } from '@yaks/platform/meter'
@@ -606,6 +607,11 @@ export let sourceOf = (spend: Record<string, unknown>): string =>
  *   paid: { '2026-10-31': 0.25 },
  * })
  * equal(trended({}, { emails: 1 }, now), {})
+ * let held = Date.parse('2026-10-30T23:00:00Z')
+ * equal(trended({ spend: { '2026-10-30': 9 } }, { models: -8 }, now, false, held), {
+ *   spend: { '2026-10-30': 1 },
+ *   sources: { models: { '2026-10-30': -8 } },
+ * })
  * ```
  */
 export let trended = (
@@ -613,14 +619,16 @@ export let trended = (
   spend: Record<string, unknown>,
   now: number,
   paying: boolean = false,
+  at: number = now,
 ): Record<string, unknown> => {
   let cost = DOLLARS.reduce((sum, k) => sum + Number(spend[k] ?? 0), 0)
   if (!cost) return {}
   let source = sourceOf(spend)
   let sources = (trend?.sources ?? {}) as Record<string, ByDay>
+  let on = (days: ByDay | undefined) => kept(days, cost, now, undefined, at)
   return {
-    spend: kept(trend?.spend as ByDay, cost, now),
-    sources: { ...sources, [source]: kept(sources[source], cost, now) },
-    ...paying ? { paid: kept(trend?.paid as ByDay, cost, now) } : {},
+    spend: on(trend?.spend as ByDay),
+    sources: { ...sources, [source]: on(sources[source]) },
+    ...paying ? { paid: on(trend?.paid as ByDay) } : {},
   }
 }

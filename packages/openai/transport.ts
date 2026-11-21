@@ -73,6 +73,8 @@ export type ResponseFault = Error & {
   /** what the provider sent, redacted: an error status's body, or the event
    * that ended the stream */
   body?: string
+  /** the usage the event that ended the stream reported, as OpenAI sent it */
+  usage?: unknown
 }
 
 /** HTTP-edge policy. No environment, filesystem, or Tasks dependencies. */
@@ -176,6 +178,7 @@ export class ResponseError extends Error {
   evidence?: ResponseEvent[]
   items?: ResponseItem[]
   body?: string
+  usage?: unknown
 
   constructor(public kind: string, message: string) {
     super(message)
@@ -517,6 +520,9 @@ let terminal = async (
     let code = eventCode(frame as ResponseEvent) ??
       incomplete(frame as ResponseEvent)
     let reason = eventMessage(frame as ResponseEvent)
+    // A request that failed or stopped short says what it used.
+    let answered = frame?.response
+    let used = record(answered) ? answered.usage : frame?.usage
     let kept = limits(response.headers)
     let wait = waitOf(kept, reason ?? '', clock.now())
     let rate = limited(200, code) ? wait : undefined
@@ -525,6 +531,7 @@ let terminal = async (
       limits: kept,
       wait,
       ...frame ? { body: JSON.stringify(frame) } : {},
+      ...record(used) ? { usage: used } : {},
       evidence: frame ? [...unknown, frame as ResponseEvent] : unknown,
       items,
     })

@@ -196,7 +196,10 @@ test('hosted provider gets an affordable output cap before its paid call', async
   assertEquals(seen, 1)
 })
 
-test('an ambiguous paid provider failure retains the reservation for recovery', async () => {
+// What `req` most likely costs, nothing measured: its few tokens of text.
+let likely = 0.000006
+
+test('an ambiguous paid provider failure settles at its likely cost until a measure replaces it', async () => {
   let call = mint()
   let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
     await ask.onSubmit!()
@@ -207,8 +210,8 @@ test('an ambiguous paid provider failure retains the reservation for recovery', 
     Error,
     'transport lost',
   )
-  assertAlmostEquals(await failed.used(), 0.003)
-  assertEquals((await reservation(p.env, call))!.dollars, 0.003)
+  assertAlmostEquals(await failed.used(), likely, 1e-12)
+  assertEquals(await reservation(p.env, call), undefined)
   await settled(p.env, call, 0.0015)
   assertAlmostEquals(await failed.used(), 0.0015)
 })
@@ -484,7 +487,7 @@ test('a result checkpoint interrupted before settlement finishes billing on reco
   assertEquals(purchases, 1)
 })
 
-test('an uncertain provider outcome has no completed result and keeps its reservation', async () => {
+test('an uncertain provider outcome has no completed result and is charged its likely cost', async () => {
   let results = storage()
   let call = mint()
   let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
@@ -506,6 +509,6 @@ test('an uncertain provider outcome has no completed result and keeps its reserv
     'lost provider answer',
   )
   assertEquals(await paid.result!(call), undefined)
-  assertEquals((await reservation(p.env, call))?.dollars, 0.003)
-  assertAlmostEquals(await uncertainDelivery.used(), 0.003)
+  assertEquals(await reservation(p.env, call), undefined)
+  assertAlmostEquals(await uncertainDelivery.used(), likely, 1e-12)
 })

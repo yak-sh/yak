@@ -46,6 +46,45 @@ export let promptBound = (
     ? Math.min(context, 2 * (size(prompt) + size(tools)) + FRAMING)
     : context
 
+/** Bytes of compact JSON a text token covers on average, where
+ * {@link promptBound} takes one byte a token to bound it. */
+let BYTES = 4
+
+/**
+ * What a request that failed with nothing measured most likely cost, never
+ * above `most`, its hold: the text it sent at the input tariff, its anchored
+ * history uncounted since a cut request reads little of it, and the `output`
+ * tokens it was seen writing at the output tariff. An estimate, not a bound:
+ * it settles a hold the provider said nothing of, where the worst case would
+ * charge a space for money never spent.
+ *
+ * ```ts
+ * import { likely } from '@yaks/model'
+ * import { equal } from '@yaks/testing'
+ * let price = { input: 1, output: 10 }
+ * // 1,003 tokens of text sent, about four bytes each
+ * let req = { instructions: 'x'.repeat(3990), items: [], tools: [] }
+ * equal(likely(req, price, 5), 0.001003)
+ * equal(likely(req, price, 5, 100), 0.002003)
+ * equal(likely(req, price, 0.0005), 0.0005)
+ * ```
+ */
+export let likely = (
+  req: Pick<Request, 'instructions' | 'tools' | 'questions' | 'input'> & {
+    items: unknown[]
+  },
+  price: Price,
+  most: number,
+  output = 0,
+): number => {
+  let input = Math.ceil(
+    (size([req.instructions, req.items, req.questions, req.input]) +
+      size(req.tools)) / BYTES,
+  )
+  let dollars = upward((input * price.input + output * price.output) / 1e6)
+  return Math.min(most, dollars)
+}
+
 /** A request's input bound. An anchor continues a conversation the provider
  * holds, whose earlier turns this side cannot measure. */
 export let requestBound = (

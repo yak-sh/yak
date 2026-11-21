@@ -11,7 +11,7 @@ import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { monthOf } from '@yaks/platform/meter'
 import { plans } from '@yaks/platform/standing'
-import { reserved, settled, TAB, tabbed } from './model-spend.ts'
+import { expired, reserved, settled, TAB, tabbed } from './model-spend.ts'
 import { accounted } from './meter.ts'
 import { type Tally, tallying } from './lib/hops.ts'
 
@@ -52,6 +52,8 @@ let counted = await fixture(0, {
 })
 let tab = await fixture()
 let full = await fixture(0.2)
+let interrupted = await fixture()
+let swept = await fixture()
 let price = { input: 0.15, output: 0.5 }
 
 test('the pilot last answered call fits the remaining space budget', async () => {
@@ -168,6 +170,55 @@ test('a missing-model error after provider acknowledgement or output keeps the d
     assertEquals(retry.code, 'submitted')
   }
   assertAlmostEquals(await started.used(), 0.1)
+})
+
+// A call cut short once the provider may have worked on it is charged what
+// the provider said it used, else what it most likely cost: never the most it
+// held.
+test('a call that fails after its output began settles at its usage or its likely cost', async () => {
+  let window = 100_000
+  let raw = Object.assign(async (req: Parameters<Model>[0]) => {
+    await req.onSubmit?.()
+    req.onText?.({ index: 0, text: 'x'.repeat(4000) })
+    throw Object.assign(
+      new ModelError('transport'),
+      req.model == 'said'
+        ? { usage: { input_tokens: 2000, output_tokens: 1000 } }
+        : {},
+    )
+  }, {
+    info: (name: string) => Promise.resolve({ name, context: window, price }),
+  })
+  let callModel = accounted(p.env, (dir) => dir.at(interrupted.space.eid), raw)
+  let charged = async (model: string) => {
+    let before = await interrupted.used()
+    let req = { call: mint(), model, items: [], tools: [], onText() {} }
+    await assertRejects(() => callModel(req), ModelError, 'transport')
+    return (await interrupted.used()) - before
+  }
+  // 2,000 tokens in and 1,000 out, as it said
+  assertAlmostEquals(await charged('said'), 0.0008, 1e-9)
+  // a few tokens of request and the 1,000 it was seen writing
+  assertAlmostEquals(await charged('silent'), 0.0005009, 1e-9)
+})
+
+test('a hold its caller died holding settles at its likely cost once expired, and a later measure replaces it', async () => {
+  let call = mint()
+  let now = new Date()
+  await reserved(p.env, swept.space, () => ({ dollars: 0.15 }), call, {
+    likely: 0.01,
+    until: new Date(now.getTime() + 1000),
+  })
+  assertEquals(await expired(p.env, now), 0)
+  assertAlmostEquals(await swept.used(), 0.15)
+  assertEquals(await expired(p.env, new Date(now.getTime() + 2000)), 1)
+  assertAlmostEquals(await swept.used(), 0.01)
+  assertEquals(await expired(p.env, new Date(now.getTime() + 3000)), 0)
+  await settled(p.env, call, 0.03)
+  assertAlmostEquals(await swept.used(), 0.03)
+  await settled(p.env, call, 0.03)
+  assertAlmostEquals(await swept.used(), 0.03)
+  await assertRejects(() => settled(p.env, call, 0.04), Error, 'cost changed')
 })
 
 test('an unanswered submitted call keeps its maximum unavailable', async () => {

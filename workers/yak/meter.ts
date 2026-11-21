@@ -16,6 +16,7 @@ import {
   affordable,
   billed,
   gone,
+  likely,
   measured,
   type Model,
   ModelError,
@@ -243,10 +244,20 @@ let unboundable = (
   return null
 }
 
+/** How long a model call can run in the isolate that asked it: a hold still
+ * open past it outlived its caller, and the hourly sweep settles it at what
+ * the call most likely cost (model-spend.ts `expired`). */
+export let CALL = 3_600_000
+
+// Bytes of streamed text a token covers on average.
+let BYTES = 4
+
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
  * `visiting` names a visitor for is held to their share as well, and counted
- * among their calls of the day. */
+ * among their calls of the day. A call that fails once the provider may have
+ * worked on it settles at the usage the provider reported, else at what it
+ * most likely cost (@yaks/model `likely`), never at the worst case it held. */
 export let accounted = (
   bind: Host & Partial<Pick<Env, 'STORE'>>,
   spaceOf: (dir: Directory) => Promise<Space | null>,
@@ -300,10 +311,15 @@ export let accounted = (
           return req.questions && quote?.tokens != output ? null : quote
         },
         call,
-        { visitor, source },
+        {
+          visitor,
+          source,
+          likely: own ? undefined : likely(req, tariff!, Infinity),
+          until: new Date(Date.now() + CALL),
+        },
       )
       reached('reserved', hold)
-      let submitted = false, begun = false
+      let submitted = false, begun = false, written = 0
       let requestedAt = Date.now()
       let reply: Awaited<ReturnType<Model>>
       try {
@@ -331,6 +347,7 @@ export let accounted = (
           },
           onText: req.onText && ((delta) => {
             begun = true
+            written += delta.text.length
             req.onText!(delta)
           }),
         })
@@ -341,6 +358,24 @@ export let accounted = (
         let unkept = error instanceof ModelError && error.code == 'space_full'
         if (unkept) await hold.settle(0, false)
         else if (!begun && (!submitted || gone(error))) await hold.release()
+        else {
+          // The provider may have worked on it: what it said it used, else
+          // what it most likely cost.
+          let said = error instanceof ModelError
+            ? measured({ usage: error.usage }, tariff || undefined)
+            : undefined
+          if (said) await hold.settle(said.dollars, false)
+          else {
+            await hold.estimate(
+              own ? hold.value.dollars : likely(
+                req,
+                tariff!,
+                hold.value.dollars,
+                Math.ceil(written / BYTES),
+              ),
+            )
+          }
+        }
         throw error
       }
       let cost = measured(reply, tariff)

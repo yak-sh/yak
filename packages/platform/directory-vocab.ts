@@ -665,6 +665,9 @@ export let directoryDoc: VocabDoc = {
         // What its dollars bought (meter.ts `SOURCES`), kept by the day in
         // the space's `trend.sources`.
         source: text,
+        // When its dollars were spent, where before the write: a settlement
+        // correcting a hold lands on the day the hold was made.
+        at: { type: 'string', format: 'date-time' },
         refunded: owned(num),
         why: owned(text),
         bought: owned(num),

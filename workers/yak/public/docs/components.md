@@ -859,10 +859,10 @@ The complete list of reserved names:
     integration integration_install interrupted invite inviting key
     last_deploy lease lent lines mail mail_answered mail_dismissed
     mail_domain mail_post mail_task mcp_list mcp_server member memory
-    mentions meter miss model model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy occurrence offer openai opened openrouter operator
+    mentions meter miss model model_estimate model_reservation model_result
+    newcomer newcomer_builds notice notice_confirmed notice_letter
+    notice_posted notice_subscription notified notify_deaths notify_trash
+    oauth_grant occupancy occurrence offer openai opened openrouter operator
     operator_alerts operator_reach order output output_of outreach_batch
     outreach_letter outreach_read outreach_trial outreach_write
     outreach_written own_number parent pending person persona phone

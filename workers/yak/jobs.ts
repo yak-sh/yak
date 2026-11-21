@@ -28,11 +28,17 @@ export let jobs: Record<string, Job> = {
       let { collected } = await import('./erase.ts')
       return await collected(env, new Date(row.Now.at), spent)
     }),
-  // The hourly meter: each store's counts, read into the directory.
+  // The hourly meter: each store's counts, read into the directory, and every
+  // model call's hold its caller died holding settled (model-spend.ts
+  // `expired`).
   meter: (env, row) =>
     reporting(env, row, async () => {
+      let now = new Date(row.Now.at)
+      let { expired } = await import('./model-spend.ts')
+      let n = await expired(env, now)
+      if (n) console.log(`yak-meter: ${n} expired model holds settled`)
       let { metered } = await import('./usage.ts')
-      await metered(env, new Date(row.Now.at))
+      await metered(env, now)
     }),
   // Each month after the first that a space holds a number (numbers.ts
   // `number_buy`), its monthly price spent from the space's budget under

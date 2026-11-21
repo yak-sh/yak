@@ -46,7 +46,7 @@ let spending = (row: Bound) => {
       })
     }
   }
-  let { held: _, bought, ...spent } = said
+  let { held: _, bought, at, ...spent } = said
   let next = added(props(meter), spent)
   let drew = row.credit && space &&
     credited(space, next, Number(bought ?? 0), now)
@@ -59,6 +59,7 @@ let spending = (row: Bound) => {
       spent,
       Date.parse(Now.at),
       paid(space && r.plan?.tier),
+      at ? Date.parse(String(at)) : undefined,
     ),
     ...drew ? { credit: drew.credit } : {},
     spend: null,

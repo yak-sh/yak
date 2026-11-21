@@ -438,6 +438,7 @@ let ask = (opts: Options) => {
       let { body, limits } = error
       let headers = limits && Object.keys(limits).length ? limits : undefined
       let read = planLimits(limits ?? {}, opts.account)
+      let { usage } = tokenUsage(error.usage)
       throw Object.assign(
         new ModelError(
           error.code ?? error.kind,
@@ -446,6 +447,7 @@ let ask = (opts: Options) => {
           body || headers ? { body, headers } : undefined,
         ),
         read.length ? { limits: read } : {},
+        usage ? { usage } : {},
       )
     }
   }
