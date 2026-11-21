@@ -3,7 +3,8 @@
 // (`wake.for`), so it runs as them, with their permissions as they stand when
 // it fires, and only they list and cancel it. The store's alarm fires them
 // (operator-store.ts `drain`). What a firing asks is @yaks/wake's `wake_run`,
-// run here: the wake's note becomes their words in their conversation, a call
+// run here: the wake's note becomes their words in the conversation that set
+// it (`wake.target`, operator-channels.ts `operator_receive`), a call
 // runs with no model turn (@yaks/wake/run), and a brief starts a fresh helper
 // given the call's outcome. A subscription is a wake that watches a query
 // (`watch`): it fires only when the query's rows changed, and its note comes
@@ -16,7 +17,7 @@
 import { line } from '@yaks/query'
 import { type Bundle, derivedEid, type Plugin } from '@yaks/graph'
 import { short } from '@yaks/id'
-import type { Tool } from '@yaks/session'
+import { type Tool, type ToolContext, topOf } from '@yaks/session'
 import {
   cancel,
   held,
@@ -96,6 +97,11 @@ let shownWatch = (b: Bundle) => {
   }
 }
 
+// The conversation a wake set in `context` wakes when it fires: the one
+// that set it, though a helper of it set it (`wake.target`).
+let settingOf = async (store: Store, context?: ToolContext) =>
+  context ? { target: await topOf(store.g, context.session) } : {}
+
 /** The tools that set, list and cancel a person's wake-ups. */
 export let wakeTools = (store: Store): Tool[] => [
   {
@@ -163,6 +169,7 @@ export let wakeTools = (store: Store): Tool[] => [
         wake: {
           at: firstOf(at, every, now),
           for: person,
+          ...await settingOf(store, context),
           ...every ? { every } : {},
           ...say ? { note: say } : {},
           ...helper ? { brief: helper } : {},
@@ -312,7 +319,7 @@ export let subscriptionTools = (
       if (!say) throw refuse('arguments', 'Say what to do when it changes.')
       let watch = watchFor(args, holding)
       let { person } = await whoseOf(store, context)
-      let wake = { for: person, note: say }
+      let wake = { for: person, note: say, ...await settingOf(store, context) }
       // What it answers now is what a change is measured from, and a query
       // it cannot read is refused here rather than at every look. Reading it
       // over the space asks each app it reads to tell this store of its

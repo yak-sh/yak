@@ -144,7 +144,8 @@ import {
   UNPROVEN,
 } from './operator-channels.ts'
 import { HANDOFF, handoffNote } from '@yaks/platform/operator-handoff'
-import { handoffsTool, handoffTool } from './operator-handoff.ts'
+import { handoffsTool } from './operator-handoff.ts'
+import { sessionSend } from './operator-send.ts'
 import { spacesTool } from './operator-staff.ts'
 import { attachedOf, type File } from './operator-files.ts'
 import {
@@ -515,8 +516,8 @@ let RELEASING = new Set([
 // `HEARSAY`) holds only some of the Operator's tools, as `tool_load` tells it
 // of the rest (@yaks/session `withheld`).
 let OUTSIDE =
-  'this turn answers words from outside the space (a break, or what ' +
-  'visitors wrote), so it holds reads, telling ' +
+  "this turn answers words that are not the person's own (a break, what " +
+  "visitors wrote, or another thread's note), so it holds reads, telling " +
   'the person, and for a break app_files, app_preview, app_deploy and ' +
   "app_errors; do the work with those. The person's own next message gives " +
   'back every tool.'
@@ -2540,6 +2541,8 @@ export let operating = (
     // helper with a guest's tools: no fork or helper at the space's cost, and what needs more is raised with the space's people
     // (operator-escalate.ts).
     let seated = !!ctx.role
+    let handing = acts && !work?.signup && proven(channel) && !confirm &&
+      !SMS.has(channel)
     return kept(confirmed(deferred(listened([
       ...odd,
       ...seated
@@ -2559,10 +2562,14 @@ export let operating = (
         )
         : [],
       ...member ? [...mine(), ...google] : [],
-      ...acts && !work?.signup && proven(channel) && !confirm &&
-          !SMS.has(channel)
+      // One tool speaks to any other session: a thread, a helper, or, from a
+      // member's proven turn, another space's Operator (operator-send.ts).
+      sessionSend(env, store, space, ctx.person!, {
+        handoff: handing,
+        member,
+      }),
+      ...handing
         ? [
-          handoffTool(env, store, space, ctx.person),
           handoffsTool(store, ctx.person),
           ...ctx.pa ? [spacesTool(env, space, ctx.person, ctx.beyond)] : [],
         ]

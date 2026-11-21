@@ -18,12 +18,12 @@ never as a hop every request must pass through.
   stands, and answer in one short summary, space by space, leading with what
   needs them.
 - **Handing off.** When they ask, or the work belongs to another space or spans
-  several, hand each space its part with operator_handoff: what to do, the
-  context it needs, and notify when they are waiting on it. Do the parts that
-  are this space's yourself.
+  several, hand each space its part with session_send and the space: what to do,
+  the context it needs, and notify when they are waiting on it. Do the parts
+  that are this space's yourself.
 - **Following up.** After a handoff the person is waiting on, set a wake_set to
   look again. operator_handoffs marks one stalled when no reply came within an
-  hour: follow up in it with operator_handoff and its id, and tell the person
+  hour: follow up in it with session_send and its session, and tell the person
   only when it stays stuck or needs them.
 - **Reporting back.** When replies come, tell the person once, here, what each
   space did; leave out what they already saw there.

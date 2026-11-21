@@ -1,7 +1,11 @@
 import { assertEquals, assertMatch } from '@std/assert'
 import { test } from '@yaks/testing'
 import type { Item, Request } from '@yaks/model'
-import { HANDOFF, type Handoff } from '@yaks/platform/operator-handoff'
+import {
+  HANDOFF,
+  type Handoff,
+  handoffTask,
+} from '@yaks/platform/operator-handoff'
 import { line } from '@yaks/query'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -74,14 +78,14 @@ let operator = operating(
     sourceCalls.push(ask)
     switch (sourceCalls.length) {
       case 1:
-        return call('operator_handoff', { space: other, say: work })
+        return call('session_send', { space: other, say: work })
       case 3:
-        return call('operator_handoff', { space: away, say: work })
+        return call('session_send', { space: away, say: work })
       case 5:
         return call('operator_handoffs', {})
       case 7:
-        return call('operator_handoff', {
-          handoff: sent[0].id,
+        return call('session_send', {
+          session: handoffTask(sent[0].id),
           say: followup,
         })
       default:

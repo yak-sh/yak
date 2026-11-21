@@ -12,7 +12,7 @@ import { CallError } from '@yaks/tools/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { writes } from '@yaks/member'
 import { line } from '@yaks/query'
-import type { Tool } from '@yaks/session'
+import type { Tool, ToolContext } from '@yaks/session'
 import { builderOf, SPACE } from './build-door.ts'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -53,117 +53,92 @@ export let door = async (
 // How long a handoff waits for its reply before it counts as stalled.
 let STALLS = 3_600_000
 
-let asked = (row: Bundle) => ({
-  handoff: row.entity.eid,
-  ...row.operator_handoff as SentHandoff,
-  space_name: (row.doc as { title?: string })?.title,
-  say: (row.doc as { body?: string })?.body,
-  at: (row.created as { at?: string } | undefined)?.at,
-})
+// A handoff as its lists show it: `session` is the conversation it started
+// in the other space, which session_send follows up in.
+let asked = (row: Bundle) => {
+  let { task, previous, notify, report } = row.operator_handoff as SentHandoff
+  return {
+    handoff: row.entity.eid,
+    session: task,
+    ...previous ? { previous } : {},
+    ...notify ? { notify } : {},
+    ...report ? { report } : {},
+    space_name: (row.doc as { title?: string })?.title,
+    say: (row.doc as { body?: string })?.body,
+    at: (row.created as { at?: string } | undefined)?.at,
+  }
+}
 
 /** The handoffs sent for `person` that have no reply yet, newest first. */
 export let waiting = async (store: OperatorStore, person: string) =>
   (await store.g.read(
     line`.operator_handoff.person=${person}&!completed&!failed&.order=-created.at&.limit=20&.fields=operator_handoff,doc,created`,
   )).map((row) => {
-    let { handoff, space_name, say, at } = asked(row)
-    return { handoff, space: space_name, say, at }
+    let { session, space_name, say, at } = asked(row)
+    return { session, space: space_name, say, at }
   })
 
-export let handoffTool = (
+/**
+ * Hand work to the Operator of another space `person` owns or administers
+ * (session_send, operator-send.ts): a new conversation there in `space`, or a
+ * follow-up in the one an earlier handoff `sent` started. Answers its receipt:
+ * the destination conversation's session, which a follow-up names.
+ */
+export let handOff = async (
   env: Env,
   store: OperatorStore,
   from: Space,
   person: string,
-): Tool => ({
-  name: 'operator_handoff',
-  title: 'Hand off to another space’s Operator',
-  step: { doing: 'Handing off…', done: 'Handed off' },
-  description:
-    'Send a message or give work to the Operator of another space the person owns or administers. Use this after space_new to let its Operator set up the new space. Send only the context it needs. The receiving Operator works for the same person in that space with their permissions there. This returns a receipt immediately. The reply comes back to this conversation when ready. Set notify when the person is waiting for the outcome or asked to hear about it. Carry on with independent work while it runs.',
-  parameters: {
-    type: 'object',
-    properties: {
-      space: {
-        type: 'string',
-        description: 'The destination space slug or id for a new handoff.',
-      },
-      handoff: {
-        type: 'string',
-        description: 'To follow up, use the id from operator_handoffs.',
-      },
-      say: { type: 'string', description: 'The message or job to hand off.' },
-      notify: {
-        type: 'boolean',
-        description: 'Alert the person when the reply arrives.',
-      },
-    },
-    required: ['say'],
-  },
-  run: async ({ space, handoff, say, notify }, context) => {
-    let text = typeof say == 'string' ? say.trim() : ''
-    if (!text) throw refuse('arguments', 'Say what to hand off.')
-    if (
-      !context || !await owns(store, context.session, {
-        space: from.eid,
+  context: ToolContext,
+  o: { space?: string; sent?: Bundle; say: string; notify: boolean },
+) => {
+  if (!await owns(store, context.session, { space: from.eid, person })) {
+    throw refuse('access', 'Use your own Operator conversation to hand off.')
+  }
+  let dir = directoryOf(env.STORE)
+  let sent = o.sent?.operator_handoff as SentHandoff | undefined
+  let previous = o.sent?.entity.eid
+  let to = sent
+    ? await dir.at(sent.space)
+    : await dir.space(o.space!) ?? await dir.at(o.space!)
+  if (
+    !to || to.trashed || to.eid == from.eid ||
+    await dir.role(to, person) != 'owner'
+  ) {
+    throw refuse('access', 'Choose another space you own or administer.')
+  }
+  let id = derivedEid(`operator-handoff|${context.call.entity.eid}`)
+  let task = sent?.task ?? handoffTask(id)
+  let root = await rootAt(store, from.eid, person)
+  let body = `Handed off to [${to.slug}'s Operator](${
+    chatPath(to.slug, task)
+  }).\n\n${o.say}`
+  await store.g.apply([
+    {
+      entity: { eid: id },
+      operator_handoff: {
         person,
-      })
-    ) {
-      throw refuse('access', 'Use your own Operator conversation to hand off.')
-    }
-    let dir = directoryOf(env.STORE)
-    let previous = typeof handoff == 'string' ? handoff : ''
-    let [earlier] = previous
-      ? await store.g.get([previous], ['operator_handoff'])
-      : []
-    let sent = earlier?.operator_handoff as SentHandoff | undefined
-    if (previous && sent?.person != person) {
-      throw refuse('missing', 'No handoff of yours has that id.')
-    }
-    let name = String(space ?? '')
-    if (!sent && !name) throw refuse('arguments', 'Name a space or a handoff.')
-    let to = sent
-      ? await dir.at(sent.space)
-      : await dir.space(name) ?? await dir.at(name)
-    if (
-      !to || to.trashed || to.eid == from.eid ||
-      await dir.role(to, person) != 'owner'
-    ) {
-      throw refuse('access', 'Choose another space you own or administer.')
-    }
-    let id = derivedEid(`operator-handoff|${context.call.entity.eid}`)
-    let task = sent?.task ?? handoffTask(id)
-    let root = await rootAt(store, from.eid, person)
-    let body = `Handed off to [${to.slug}'s Operator](${
-      chatPath(to.slug, task)
-    }).\n\n${text}`
-    await store.g.apply([
-      {
-        entity: { eid: id },
-        operator_handoff: {
-          person,
-          space: to.eid,
-          session: context.session,
-          task,
-          ...previous ? { previous } : {},
-          ...notify === true ? { notify } : {},
-        },
-        doc: { title: to.slug, body: text },
-        $actor: { by: from.eid, via: context.session },
+        space: to.eid,
+        session: context.session,
+        task,
+        ...previous ? { previous } : {},
+        ...o.notify ? { notify: true } : {},
       },
-      ...[...new Set([context.session, root])].map((session) =>
-        handoffNote(session, id, from.eid, body)
-      ),
-    ], { trusted: true })
-    return JSON.stringify({ handoff: id, space: to.slug, status: 'queued' })
-  },
-})
+      doc: { title: to.slug, body: o.say },
+      $actor: { by: from.eid, via: context.session },
+    },
+    ...[...new Set([context.session, root])].map((session) =>
+      handoffNote(session, id, from.eid, body)
+    ),
+  ], { trusted: true })
+  return { session: task, space: to.slug, status: 'queued' }
+}
 
 export let handoffsTool = (store: OperatorStore, person: string): Tool => ({
   name: 'operator_handoffs',
   title: 'List work handed off to other Operators',
   description:
-    'List the most recent handoffs you sent for this person, what you asked and when, whether each has a report, any failure, and which are stalled (no reply after an hour). Use a handoff id with operator_handoff to follow up in its destination conversation.',
+    "List the most recent handoffs you sent for this person to other spaces' Operators, what you asked and when, whether each has a report, any failure, and which are stalled (no reply after an hour). Follow one up with session_send and its session, the conversation it started there.",
   readOnly: true,
   parameters: { type: 'object', properties: {} },
   run: async () =>
@@ -304,7 +279,7 @@ export let acceptHandoffReport = async (
     { ...report, notify: sent.notify },
     from,
     root,
-    asked!.entity.eid,
+    { id: asked!.entity.eid, session: sent.task },
     mine,
     (notice) => notification({ ...notice, to: report.person }),
   )

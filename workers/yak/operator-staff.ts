@@ -6,7 +6,7 @@
 // waiting on, and what it spent. Each space answers from its own store at the
 // handoff door (operator-handoff.ts `door`), as the same person there, so what
 // they said to that Operator directly is seen here too. Handing work to one
-// and following it up is operator_handoff; each space's Operator still answers
+// and following it up is session_send (operator-send.ts); each space's Operator still answers
 // its own people directly.
 import { line } from '@yaks/query'
 import type { Tool } from '@yaks/session'
@@ -24,7 +24,7 @@ export type Overview = {
   said: string
   work: string
   updates: string
-  handoffs: { handoff: string; space?: string; say?: string; at?: string }[]
+  handoffs: { session: string; space?: string; say?: string; at?: string }[]
   /** dollars its Operator spent over the last thirty days, everyone's */
   spent: number
 }

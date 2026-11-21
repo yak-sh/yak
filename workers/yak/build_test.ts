@@ -16,6 +16,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, modelPage, platform, state, type Turn } from './testing.ts'
+import { rootOf } from './operator-root.ts'
 import { test, until } from '@yaks/testing'
 import { line } from '@yaks/query'
 import { sign } from './lib/token.ts'
@@ -874,7 +875,14 @@ test('named in a room, the Operator reads what was said there since its last ans
 // (T-2356): Matt's thread promised to tell him when the explainer's owner
 // changes, and Ada's turn, asked to change it, is told so, both in its line
 // of other threads and in the room's messages, each marked with its thread.
-test("a turn in a room knows the room's other threads and what they promised", async () => {
+// It wakes Matt's thread with a note, which tells Matt in the room.
+test("a turn in a room knows the room's other threads, what they promised, and wakes one", async () => {
+  let note = {
+    name: 'session_send',
+    arguments: {
+      say: "The explainer's owner is now Bo; tell Matt.",
+    } as Record<string, unknown>,
+  }
   let o = await seeded([
     {
       calls: [{
@@ -887,10 +895,23 @@ test("a turn in a room knows the room's other threads and what they promised", a
       }],
     },
     { text: "I'll tell you when its owner changes." },
+    { calls: [note] },
     { text: 'Done.' },
+    {
+      calls: [{
+        name: 'chat_send',
+        arguments: {
+          message: '1',
+          text: "Matt, the explainer's owner is now Bo.",
+        },
+      }],
+    },
+    { text: 'Told Matt.' },
     { text: 'Hello.' },
   ], VAULTED)
   let MATT = 'a0000000-0000-4000-8000-00000000a77e'
+  let matts = rootOf(o.space.eid, MATT)
+  note.arguments.session = matts
   await dirOf(o.env).apply({
     entities: [
       { entity: { eid: MATT }, person: {} },
@@ -919,20 +940,43 @@ test("a turn in a room knows the room's other threads and what they promised", a
   } finally {
     r.restore()
   }
-  let [, , ada, kit] = r.model()
+  let asked = r.model()
+  let [, , ada] = asked
+  let woken = asked.find((m) => m.includes('A note from your thread'))!
+  let kit = asked.find((m) => m.includes('hello?'))!
   assertStringIncludes(
     ada,
-    `- Matt's thread: last said ${
+    `- Matt's thread (session ${matts}): last said ${
       now.slice(0, 16).replace('T', ' ')
     } “tell me when the explainer's owner changes”; you answered “I'll tell you when its owner changes.”; open: subscribed: Tell Matt when the explainer's owner changes.`,
   )
   assertMatch(ada, /\(message 1\) Matt \([^)]*\) \[Matt's thread\]: tell me/)
   // Matt's own turn came before Ada said anything: it has no other thread.
   assert(!r.model()[0].includes("'s thread"))
-  // A stranger is told what was said in the room, never what Matt's thread
-  // set for him.
-  assertMatch(kit, /- Matt's thread: .*; you answered “I'll tell you/)
+  // A stranger, after, is told what was said in the room, Matt's thread's
+  // newest answer there included, never what it set for him.
+  assertMatch(
+    kit,
+    /- Matt's thread \(session [^)]+\): .*; you answered “<@Matt>, the explainer's owner is now Bo.”/,
+  )
   assert(!kit.includes('open: subscribed'))
+  // Matt's thread is woken with Ada's note, as her thread's words, and tells
+  // Matt in the room, replying to what he asked.
+  assertStringIncludes(
+    woken,
+    `A note from your thread with Ada (owner here)`,
+  )
+  assertStringIncludes(woken, "The explainer's owner is now Bo; tell Matt.")
+  let told = await r.store.g.read(
+    line`.chat_message.reply_to=1&.deliver.to=${roomEid('discord', BARN)}&*`,
+  )
+  assertEquals(
+    told.map((b) => (b.doc as { body: string }).body).sort(),
+    [
+      "<@Matt>, the explainer's owner is now Bo.",
+      "I'll tell you when its owner changes.",
+    ],
+  )
 })
 
 // An edit is taken only where it is said to the Operator, and a message is

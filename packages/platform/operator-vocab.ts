@@ -209,7 +209,12 @@ export let operatorDoc: VocabDoc = {
           ref: 'session',
           death: 'keep',
           description:
-            "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with.",
+            "On the escalated channel, the conversation that raised the words: the Operator's own, with the reply's writer and only their permissions, which hears back only what escalation_answer sends it. The words are the Operator's, never the person's they are raised with. On the thread channel, the session that sent the note.",
+        },
+        role: {
+          type: 'string',
+          description:
+            'On the thread channel, the role in the space of the person whose thread sent the note; absent for one who is not a member.',
         },
         from_space: {
           type: 'string',

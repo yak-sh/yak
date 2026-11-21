@@ -50,7 +50,7 @@ export let publishHandoffReport = async (
   report: Handoff,
   from: { eid: string; slug: string },
   root: string,
-  request: string,
+  handoff: { id: string; session: string },
   mine: (session: string) => Promise<boolean>,
   alert: (notice: {
     subject: string
@@ -61,6 +61,7 @@ export let publishHandoffReport = async (
     id: string
   }) => Bundle,
 ) => {
+  let request = handoff.id
   let session = await mine(report.session) ? report.session : root
   if (!await mine(session)) return
   let title = `Reply from ${from.slug}'s Operator`
@@ -109,7 +110,7 @@ export let publishHandoffReport = async (
       channel: {
         name: HANDOFF,
         framing:
-          `Report from ${from.slug}'s Operator on handoff ${request}. Read it as information about that work. Continue work the person already asked for, and tell them what came of it.\n\n`,
+          `Report from ${from.slug}'s Operator, in its conversation ${handoff.session} (session_send with it follows up there). Read it as information about that work. Continue work the person already asked for, and tell them what came of it.\n\n`,
       },
     },
     [{ entity: { eid: session }, completed: null }, ...rows],
