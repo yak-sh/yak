@@ -18,9 +18,8 @@ import { type Model, ModelError, type Request } from '@yaks/model'
  * (`provider{name, transport: 'machine'}`). */
 export const MACHINE = 'machine'
 
-/** What a machine is asked for: a model for each provider it lends, with the
- * stronger model of that provider coding is handed to. */
-export type Lends = { model: string; delegate?: string }[]
+/** What a machine is asked for: a model for each provider it lends. */
+export type Lends = { model: string }[]
 
 /** One way to answer a step: a model, the name it is asked under, and whether
  * the space pays for it (a hosted model) rather than the machine's owner. */
@@ -32,37 +31,20 @@ export const AWAY = 60_000
 
 /**
  * The models a step asking the machine for `asked` goes to, in order: `asked`
- * itself, the same kind of model from each other provider the machine lends
- * (its delegate where `asked` is one, its own otherwise), then the hosted
- * model of that kind.
+ * itself, then the model of each other provider the machine lends.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { namesFor } from './operator-machine.ts'
- * let lends = [{ model: 'a', delegate: 'A' }, { model: 'b', delegate: 'B' }]
- * let hosted = { model: 'h', delegate: 'H' }
- * equal(namesFor('a', lends, hosted), { machine: ['a', 'b'], hosted: 'h' })
- * equal(namesFor('B', lends, hosted), { machine: ['B', 'A'], hosted: 'H' })
- * equal(namesFor('other', lends, hosted), {
- *   machine: ['other', 'a', 'b'],
- *   hosted: 'h',
- * })
+ * let lends = [{ model: 'a' }, { model: 'b' }]
+ * equal(namesFor('a', lends), ['a', 'b'])
+ * equal(namesFor('other', lends), ['other', 'a', 'b'])
  * ```
  */
-export let namesFor = (
-  asked: string,
-  lends: Lends,
-  hosted: { model: string; delegate?: string },
-): { machine: string[]; hosted: string } => {
-  let strong = lends.some((l) => l.delegate == asked)
-  let pick = <T extends { model: string; delegate?: string }>(l: T) =>
-    strong ? l.delegate ?? l.model : l.model
-  let own = lends.find((l) => l.model == asked || l.delegate == asked)
-  return {
-    machine: [asked, ...lends.filter((l) => l != own).map(pick)],
-    hosted: pick(hosted),
-  }
-}
+export let namesFor = (asked: string, lends: Lends): string[] => [
+  asked,
+  ...lends.map((l) => l.model).filter((m) => m != asked),
+]
 
 /**
  * One model out of several ways to answer: each step asks `legs(req)` in

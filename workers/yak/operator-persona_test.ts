@@ -16,7 +16,6 @@ import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { PRICE } from '@yaks/platform/plans'
-import { agents } from './config.ts'
 import { short } from '@yaks/id'
 
 let owner = crypto.randomUUID()
@@ -123,11 +122,10 @@ test('the guidance is a doc in the directory: an edit reaches the next turn', ()
 
 test("a tool's guidance is where the tool is given", () => {
   let spawn = first.tools.find((t) => t.name == 'spawn')!
-  assertStringIncludes(
-    spawn.description,
-    `use spawn with model ${agents.operator[0].delegate}`,
+  assertStringIncludes(spawn.description, 'To consult an app or space oracle')
+  assert(
+    !String(first.instructions).includes('To consult an app or space oracle'),
   )
-  assert(!String(first.instructions).includes('use spawn with model'))
   let update = first.tools.find((t) => t.name == 'task_update')!
   assert(!update.description.includes('carries on that task'))
   let close = tasked.tools.find((t) => t.name == 'task_update')!

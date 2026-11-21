@@ -230,9 +230,8 @@ test('a helper of the conversation the machine answers is answered by the hosted
     said: { body: 'the hosted model' },
   })
   // A model of the machine's, named, is hosted too.
-  for (let { model, delegate } of agents.machine) {
+  for (let { model } of agents.machine) {
     assertEquals((await helper(model)).using, HOSTED)
-    assertEquals((await helper(delegate)).using?.provider, HOSTED.provider)
   }
 })
 

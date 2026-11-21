@@ -1351,15 +1351,14 @@ existing credentials. An input asking another model gets it where the directory
 holds its row or its provider lists it, and the Operator's own otherwise. Every
 step, a summary included, is priced and bounded by the model's row in the
 directory, and by its provider's list (then @yaks/model's) only where no row
-says. With a delegate (config.ts `agents.operator`: `gpt-6.2-astra` on OpenAI;
-Opus has none), a conversation and its forks have `spawn`, whose description
-sends writing or fixing code and tasks that need careful reasoning to the
-delegate of the provider the session is on, in a child session working for the
-same space and charged to it; the child's answer comes back to the session that
-asked, and the child is offered no `spawn` of its own. This entry accepts text.
-Picture attachments and the email, chat and SMS interfaces are separate work.
-Interrupted requests remain in the graph and can be continued explicitly; they
-do not resume automatically.
+says. A conversation and its forks have `spawn`, which starts a helper on the
+model the session is on, in a child session working for the same space and
+charged to it; the child's answer comes back to the session that asked, and the
+child is offered no `spawn` of its own. An Operator's helpers, forks and coding
+all run on its own model: no stronger model is offered for coding. This entry
+accepts text. Picture attachments and the email, chat and SMS interfaces are
+separate work. Interrupted requests remain in the graph and can be continued
+explicitly; they do not resume automatically.
 
 A platform admin who owns a space with a tunnel can choose to be answered by
 their own machine instead (operator.ts `machineFor`, the one place that says

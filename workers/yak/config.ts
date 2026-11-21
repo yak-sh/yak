@@ -417,26 +417,25 @@ export let operatorProviders: Config = supplied('OPENAI_OPERATOR_API_KEY', true)
 
 /** What the platform's own agents run on, each a model of a provider
  * `providing` (the Operator's, `operatorProviders`) names: the Operator's
- * choices, the first taken whose provider the Worker holds
- * every credential of, each with the stronger model of its provider it hands
- * coding to. The model the directory's base persona names
+ * choices, the first taken whose provider the Worker holds every credential
+ * of. An Operator's helpers, forks and coding run on the same model. The model the directory's base persona names
  * (@yaks/platform/operator-model) comes first, and these answer where it names
  * none. `machine` is what the Operator of someone whose own machine serves it
  * asks that machine for instead. */
 export let agents: {
-  operator: { provider: string; model: string; delegate?: string }[]
-  machine: { model: string; delegate?: string }[]
+  operator: { provider: string; model: string }[]
+  machine: { model: string }[]
 } = {
   operator: [
-    { provider: 'openai', model: 'gpt-6.2-sol', delegate: 'gpt-6.2-astra' },
+    { provider: 'openai', model: 'gpt-6.2-sol' },
     { provider: 'anthropic', model: 'claude-opus-5-5' },
     { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3' },
   ],
   // What an Operator asks its person's own machine for, where they chose it
   // (operator-machine.ts): a model for each provider a machine lends, by the
-  // model's own name, in the order asked, with the stronger model of that
-  // provider. The machine says which of its providers answers each.
-  machine: [{ model: 'gpt-6-sol', delegate: 'gpt-6-astra' }],
+  // model's own name, in the order asked. The machine says which of its
+  // providers answers each.
+  machine: [{ model: 'gpt-6-sol' }],
 }
 
 /** What the Operator makes pictures with (operator-images.ts): a provider

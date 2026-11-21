@@ -16,11 +16,11 @@ import { transcript } from '@yaks/session'
 import { PART } from '@yaks/persona'
 import { agents } from './config.ts'
 
-// The Operator runs on Sol and hands code to Astra in a child session: each
-// ask is priced at its own model's price.
+// The Operator runs on Sol and starts a helper in a child session, here on a
+// model its spawn names: each ask is priced at its own model's price.
 let SOL = agents.operator[0].model
-let ASTRA = agents.operator[0].delegate!
-let price = (name: string) => ({ input: name == ASTRA ? 4 : 2, output: 0 })
+let OTHER = 'other-model'
+let price = (name: string) => ({ input: name == OTHER ? 4 : 2, output: 0 })
 let asked: Request[] = []
 // The child's answer comes back as words given to the session that asked.
 let said = (r: Request) =>
@@ -28,17 +28,17 @@ let said = (r: Request) =>
 let model: Model = Object.assign(
   (req: Request) => {
     asked.push(req)
-    let items: Item[] = req.model == ASTRA
+    let items: Item[] = req.model == OTHER
       ? [{ kind: 'assistant', text: 'Fixed.' }]
       : said(req)
-      ? [{ kind: 'assistant', text: 'Astra fixed the page.' }]
+      ? [{ kind: 'assistant', text: 'The helper fixed the page.' }]
       : req.items.some((i) => i.kind == 'result')
-      ? [{ kind: 'assistant', text: 'Astra is on it.' }]
+      ? [{ kind: 'assistant', text: 'A helper is on it.' }]
       : [{
         kind: 'call',
         id: crypto.randomUUID(),
         name: 'spawn',
-        args: JSON.stringify({ prompt: 'Fix the page', model: ASTRA }),
+        args: JSON.stringify({ prompt: 'Fix the page', model: OTHER }),
       }]
     return Promise.resolve({
       id: crypto.randomUUID(),
@@ -55,7 +55,7 @@ let model: Model = Object.assign(
 
 let owner = crypto.randomUUID()
 // The platform holds the Operator's OpenAI key, so the Operator is on Sol.
-let { env } = platform('operator-delegate', {
+let { env } = platform('operator-spawn', {
   OPENAI_OPERATOR_API_KEY: 'probe',
 })
 let dir = directoryOf(env.STORE)
@@ -76,20 +76,17 @@ let entries = async (session: string) =>
     b.cost ? [(b.cost as { dollars: number }).dollars] : []
   )
 
-test('the Operator hands code to Astra, which works for its space at its own price', async () => {
+test("the Operator's helper works for its space at its own model's price", async () => {
   assertEquals(
     child.operator_session,
     (await store.g.get([out.session]))[0].operator_session,
   )
   let on = (name: string) => asked.filter((r) => r.model == name)
-  let [astra] = on(ASTRA)
-  assertEquals(on(ASTRA).length, 1)
-  // Told where spawn is given, which the helper on Astra is not.
-  assertStringIncludes(
-    on(SOL)[0].tools.find((t) => t.name == 'spawn')!.description,
-    `spawn with model ${ASTRA}`,
-  )
-  assertEquals(astra.tools.some((t) => t.name == 'spawn'), false)
+  let [other] = on(OTHER)
+  assertEquals(on(OTHER).length, 1)
+  // Given where spawn is given, which the helper is not.
+  assert(on(SOL)[0].tools.some((t) => t.name == 'spawn'))
+  assertEquals(other.tools.some((t) => t.name == 'spawn'), false)
   // The child's answer wakes the session that asked, once.
   assertEquals(on(SOL).filter(said).length, 1)
   assertEquals(said(on(SOL).at(-1)!), true)
@@ -152,7 +149,7 @@ test('the conversation shows the context the Operator and each helper were given
       .innerHTML
   let whoOf = (m: string) =>
     first(m).instructions!.split(' Who you are\n')[1].split(PART)[0].trim()
-  for (let [d, m] of [[operator, SOL], [helper, ASTRA]] as const) {
+  for (let [d, m] of [[operator, SOL], [helper, OTHER]] as const) {
     let all = layers(d)
     assertEquals(
       [all[0], ...all.slice(-3)].map(named),
@@ -182,7 +179,7 @@ test('the conversation shows the context the Operator and each helper were given
     )
   }
   // Each tool is drawn once on the page, where it was first offered.
-  let offers = [SOL, ASTRA].flatMap((m) =>
+  let offers = [SOL, OTHER].flatMap((m) =>
     first(m).tools.map((t) => JSON.stringify(t))
   )
   assertEquals(
@@ -229,14 +226,14 @@ test('the conversation shows the context the Operator and each helper were given
 let REFUSED = 'What is left of claude’s model and voice budget is too little'
 let talked = async (refused: boolean) => {
   let store = operatorMemory()
-  let astra: Model = Object.assign(
+  let refusing: Model = Object.assign(
     (req: Request) =>
-      refused && req.model == ASTRA
+      refused && req.model == OTHER
         ? Promise.reject(new ModelError('limit', REFUSED))
         : model(req),
     { info: model.info },
   )
-  let { session } = await operating(store, env, { model: astra, name: SOL })
+  let { session } = await operating(store, env, { model: refusing, name: SOL })
     .ask({ person: owner }, space, { say: 'The page is broken; fix it.' })
   await drain(store)
   let { html } = await conversationOf(
@@ -302,7 +299,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
     r.items.filter((i) => i.kind == 'user' && i.text.endsWith(REFUSED)).length
   let three: Model = Object.assign(
     (req: Request) => {
-      if (req.model == ASTRA) {
+      if (req.model == OTHER) {
         return Promise.reject(new ModelError('limit', REFUSED))
       }
       parent = req.conversation
@@ -312,7 +309,7 @@ test('the Operator hears helpers refused while it prepares, and answers once', a
           kind: 'call',
           id: crypto.randomUUID(),
           name: 'spawn',
-          args: JSON.stringify({ prompt: 'Fix an app', model: ASTRA }),
+          args: JSON.stringify({ prompt: 'Fix an app', model: OTHER }),
         }))
       return Promise.resolve({
         id: crypto.randomUUID(),

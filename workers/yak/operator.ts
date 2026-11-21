@@ -1041,36 +1041,25 @@ export let operatorChoice = (env: Env, machine = false) => {
   // model config.ts `agents.machine` names, of the provider `machine`.
   if (machine) {
     let [first] = agents.machine
-    return { provider: MACHINE, name: first.model, delegate: first.delegate }
+    return { provider: MACHINE, name: first.model }
   }
   let chosen =
     agents.operator.find((c) => ready(env, c.provider, operatorProviders)) ??
       agents.operator.at(-1)!
-  return {
-    provider: chosen.provider,
-    name: chosen.model,
-    delegate: chosen.delegate,
-  }
+  return { provider: chosen.provider, name: chosen.model }
 }
-
-/** The stronger model of `provider` an Operator on it hands coding and tricky
- * work to (config.ts `agents`), if it has one. */
-export let delegateOf = (provider: string) =>
-  agents.operator.find((c) => c.provider == provider)?.delegate
 
 /**
  * The hosted models a step asked of `asked` goes on to where its provider
  * says that model is retired or unknown (@yaks/model `onward`), in order:
  * `asked`, the models its space may be answered with (`own`), then each of
- * `choices` (config.ts `agents.operator`) whose provider `serves`. Where
- * `asked` is a stronger model handed coding (a `delegate`), each is its
- * provider's stronger model.
+ * `choices` (config.ts `agents.operator`) whose provider `serves`.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { chainOf } from './operator.ts'
  * let choices = [
- *   { provider: 'a', model: 'a1', delegate: 'A1' },
+ *   { provider: 'a', model: 'a1' },
  *   { provider: 'b', model: 'b1' },
  *   { provider: 'c', model: 'c1' },
  * ]
@@ -1079,34 +1068,17 @@ export let delegateOf = (provider: string) =>
  *   chainOf(asked, [{ provider: 'b', model: 'b2' }], choices, serves)
  *     .map((c) => c.provider + ':' + c.model)
  * equal(names({ provider: 'x', model: 'old' }), ['x:old', 'b:b2', 'a:a1', 'b:b1'])
- * equal(names({ provider: 'a', model: 'A1' }), ['a:A1', 'b:b2', 'b:b1'])
- * equal(
- *   chainOf({ provider: 'b', model: 'A1' }, [choices[0]], choices, serves),
- *   [{ provider: 'b', model: 'A1' }, { provider: 'a', model: 'A1' }, { provider: 'b', model: 'b1' }],
- * )
+ * equal(names({ provider: 'a', model: 'a1' }), ['a:a1', 'b:b2', 'b:b1'])
  * equal(names({ provider: 'b', model: 'b2' }), ['b:b2', 'a:a1', 'b:b1'])
  * ```
  */
 export let chainOf = (
   asked: Choice,
   own: Choice[],
-  choices: { provider: string; model: string; delegate?: string }[],
+  choices: Choice[],
   serves: (provider: string) => boolean,
 ): Choice[] => {
-  let strong = choices.some((c) => c.delegate == asked.model)
-  let pick = (provider: string, model: string) => ({
-    provider,
-    model: strong
-      ? choices.find((c) => c.provider == provider)?.delegate ?? model
-      : model,
-  })
-  let all = [
-    asked,
-    ...own.map((c) => pick(c.provider, c.model)),
-    ...choices.filter((c) => serves(c.provider)).map((c) =>
-      pick(c.provider, c.model)
-    ),
-  ]
+  let all = [asked, ...own, ...choices.filter((c) => serves(c.provider))]
   let key = (c: Choice) => c.provider + '\n' + c.model
   return all.filter((c, i) => all.findIndex((d) => key(d) == key(c)) == i)
 }
@@ -1443,21 +1415,14 @@ export let operating = (
       machineFor(env, space, person, options.directory ?? opening(env), via))
   // A machine serves only its person's own conversation. What that
   // conversation starts, a fork or a helper, asks the hosted model as every
-  // Operator's helpers do: the stronger one where it asked the machine for
-  // its stronger one. A helper runs on a machine only where helper_spawn
+  // Operator's helpers do. A helper runs on a machine only where helper_spawn
   // names one.
   let machined = identityEid('provider', [MACHINE])
-  let strong = new Set(
-    agents.machine.flatMap((l) =>
-      l.delegate ? [identityEid('model', [l.delegate])] : []
-    ),
-  )
   let children: ChildLimits = {
     using: async (u) => {
       if (u.provider != machined) return u
       let hosted = await current()
-      let to = strong.has(String(u.model)) && delegateOf(hosted.provider)
-      return { ...u, provider: hosted.provider, model: to || hosted.model }
+      return { ...u, provider: hosted.provider, model: hosted.model }
     },
   }
   let spawn = sessionTools(g, {
@@ -1465,23 +1430,13 @@ export let operating = (
     childProperties: { topic: TOPIC },
   })
     .find((t) => t.name == 'spawn')!
-  // Coding and tricky work go to a stronger model of the provider a session
-  // is on (`delegateOf`), in a child session (`spawn`) whose answer comes
-  // back to the one that asked.
-  let delegates = new Map(
-    agents.operator.map((
-      c,
-    ) => [identityEid('provider', [c.provider]), c.delegate]),
-  )
-  // `to` is the stronger model of the provider the session is on, if any.
-  let delegated = (to?: string): Tool => ({
+  // A child session (`spawn`) whose answer comes back to the one that
+  // asked, on the model the session is on: an app or space oracle consulted.
+  let consulting: Tool = {
     ...spawn,
     description:
-      `${spawn.description} To consult an app or space oracle, supply topic from the Oracles map and the question as prompt. Its answer comes back automatically.` +
-      (to
-        ? ` For writing or fixing code, or work that needs careful reasoning, use spawn with model ${to} and a prompt that carries everything it needs; its answer comes back to you.`
-        : ''),
-  })
+      `${spawn.description} To consult an app or space oracle, supply topic from the Oracles map and the question as prompt. Its answer comes back automatically.`,
+  }
   // The model an input asks for, once its provider lists it (`chosen`). Both
   // are named by their names, so the store gives one it has not met a row as
   // it writes the input (@yaks/model `requesting`), and the provider's answer
@@ -1892,14 +1847,11 @@ export let operating = (
   models[MACHINE] = Object.assign(
     falling(async (req) => {
       let hosted = await current()
-      let names = namesFor(req.model, agents.machine, {
-        model: hosted.model,
-        delegate: delegateOf(hosted.provider),
-      })
-      let own = names.machine.map((name) => ({ model: lent, name }))
+      let own = namesFor(req.model, agents.machine)
+        .map((name) => ({ model: lent, name }))
       return await unasked(await sessionOf(req.call)) ? own : [
         ...own,
-        { model: models[hosted.provider], name: names.hosted, hosted: true },
+        { model: models[hosted.provider], name: hosted.model, hosted: true },
       ]
     }, fell),
     { result: resultOf(env, modelResults(g)) },
@@ -2125,24 +2077,22 @@ export let operating = (
     // A step its person's machine answers reaches for the machine now, beside
     // its roster: what that reads of the directory is read once a step
     // (lib/hops.ts `recall`), so the step finds it read when it is sent.
-    let last = Promise.resolve(g.read(
+    Promise.resolve(g.read(
       q`.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
-    ))
-    last.then(([using]) => {
+    )).then(([using]) => {
       if (
         comp(using, 'using')?.provider == identityEid('provider', [MACHINE])
       ) {
         return machineAt(session)
       }
     }).catch(() => {})
-    let [{ eid, space: at, here, ctx: context, files }, task, [row], [using]] =
+    let [{ eid, space: at, here, ctx: context, files }, task, [row]] =
       await Promise.all([
         working(env, store, session, options.directory),
         taskOf(store, session),
         g.read(
           q`.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
         ),
-        last,
       ])
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
@@ -2279,7 +2229,7 @@ export let operating = (
         ...holding(
           [
             ...sessionTools(g, children).filter((t) => t.name == 'fork'),
-            delegated(),
+            consulting,
             ...roster,
           ],
           (t) => !!t.readOnly || (channel == 'error' && RELEASING.has(t.name)),
@@ -2311,8 +2261,7 @@ export let operating = (
       ])))
     }
     // Someone who is not a member is answered in their own conversation, a
-    // helper with a guest's tools: no fork or stronger model at the space's
-    // cost, and what needs more is raised with the space's people
+    // helper with a guest's tools: no fork or helper at the space's cost, and what needs more is raised with the space's people
     // (operator-escalate.ts).
     let seated = !!ctx.role
     return confirmed(deferred(listened([
@@ -2320,16 +2269,9 @@ export let operating = (
       ...seated
         ? sessionTools(g, children).filter((t) => t.name == 'fork')
         : [],
-      // A conversation and its forks hand coding and careful reasoning
-      // to the stronger model in a fresh helper, which starts no other.
+      // A conversation and its forks start helpers, which start no other.
       ...seated && !(row?.spawned && !row.fork && !topicOf(row))
-        ? [
-          delegated(
-            comp(using, 'using')?.provider == machined
-              ? delegateOf((await current(space.eid)).provider)
-              : delegates.get(String(comp(using, 'using')?.provider)),
-          ),
-        ]
+        ? [consulting]
         : [],
       ...roster,
       ...text
