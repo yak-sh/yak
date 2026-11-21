@@ -5,8 +5,9 @@ import { native as notice } from './Notice.ts'
 import { native as body } from './Body.ts'
 /** Messages, their replies and the marks describing each entry. @module */
 import type { Sheet } from '@yaks/tui/theme'
-import { h } from 'preact'
+import { type FunctionComponent, h } from 'preact'
 import { block, type Part } from './el.ts'
+import { discord, Icon, type IconProps } from './Icon.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 import { Time } from './Time.ts'
 
@@ -37,6 +38,17 @@ export let Transcript:
     Status: 'p',
     Error: 'div',
   })
+/** The channel a message came through, named on hover and keyboard focus. */
+export let ChannelBadge: FunctionComponent<{
+  of: IconProps['of']
+  label: string
+}> = ({ of, label }) =>
+  h(
+    Transcript.Via,
+    { role: 'img', tabindex: 0, 'data-tip': label, 'aria-label': label },
+    h(Icon, { of }),
+  )
+
 /** What this part presents. */
 export let description =
   'Messages, their replies and the marks describing each entry.'
@@ -89,6 +101,7 @@ export let specimens = (): Specimen[] => [
           h(
             Transcript.Meta,
             {},
+            h(ChannelBadge, { of: discord, label: 'By Discord · garden' }),
             h(Transcript.When, {
               at: '2026-11-06T15:42:00Z',
               now: 1794238920000,

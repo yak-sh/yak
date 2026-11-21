@@ -20,6 +20,7 @@ import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import {
   Annotated,
   Body,
+  ChannelBadge,
   Icon,
   Menu,
   More,
@@ -103,6 +104,8 @@ export type Line = {
   /** a step that is no work of the model's (words the platform wrote),
    * never gathered into a run of steps */
   alone?: boolean
+  /** The channel mark already opens a fold in the line's words. */
+  channelControl?: boolean
 }
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
@@ -110,6 +113,7 @@ let cut = (text: string, most: number) =>
 // Each channel's mark beside the words that came by it. Words written in
 // the chat app itself carry none.
 export let VIA: Record<string, [IconName, string]> = {
+  discord: ['discord', 'By Discord'],
   email: ['mail', 'By email'],
   letter: ['mail', 'A reply to a letter'],
   text: ['message-square', 'By text'],
@@ -123,15 +127,10 @@ export let VIA: Record<string, [IconName, string]> = {
   support: ['message-circle', 'From TaskMaster, who runs yaks.app'],
 }
 
-let via = (b: Bundle) => {
-  let [name, label] = VIA[String(cameBy(b).name)] ?? []
-  return name
-    ? h(
-      Transcript.Via,
-      { title: label, 'aria-label': label },
-      h(Icon, { of: icons[name] }),
-    )
-    : null
+let via = (b: Bundle, room?: string) => {
+  let [name, channel] = VIA[String(cameBy(b).name)] ?? []
+  let label = room ? `${channel} · ${room}` : channel
+  return name ? h(ChannelBadge, { of: icons[name], label }) : null
 }
 
 // What the person said: their words without the framing the model read, and
@@ -187,9 +186,7 @@ export let input = (b: Bundle, body: string, kept?: Kept) => {
   return h(
     Fragment,
     null,
-    said && (sourceOf(b) != null || said != unsaid(held))
-      ? yours(said, via(b))
-      : null,
+    said && (sourceOf(b) != null || said != unsaid(held)) ? yours(said) : null,
     kept ? attached(kept.message, held, 'end') : null,
   )
 }
@@ -557,6 +554,7 @@ export type Seen = {
   helpers?: Helper[]
   threads?: Record<string, Thread>
   rooms?: Record<string, Room>
+  roomNames?: Record<string, string>
   offers?: Offers
   instructions?: Instructions
   called?: string
@@ -643,6 +641,9 @@ export let framed = (
       h(
         Transcript.Meta,
         {},
+        own && !line.channelControl
+          ? via(own, beside.roomNames?.[line.id])
+          : null,
         h(Menu.Trigger, {
           type: 'button',
           'data-menu-trigger': ENTRY_MENU,
@@ -759,6 +760,7 @@ let drawing = (
     helpers = [],
     threads = {},
     rooms = {},
+    roomNames,
     offers,
     instructions,
     called = 'the Operator',
@@ -776,7 +778,7 @@ let drawing = (
         r,
       ) => [r.id, r]),
   )
-  let beside: Heard = { names, who: 'the Operator', opens, files }
+  let beside: Heard = { names, who: 'the Operator', opens, files, roomNames }
   // The entries each line is framed with, which a run of them is framed with.
   let framing = new Map<string, Bundle[]>()
   let frame = (line: Line, rows: Bundle[]) => {
@@ -904,6 +906,7 @@ let drawing = (
             node: h(Called, l),
             text: l.said,
             is: 'theirs',
+            channelControl: true,
           }, [l.b])
           : l
       ),
@@ -992,6 +995,7 @@ type Heard = Beside & {
   opens?: string
   told?: Map<string, Told>
   files?: Record<string, Kept>
+  roomNames?: Record<string, string>
 }
 
 /** A view of a conversation: the renderers it loads, defined from a list
@@ -1254,6 +1258,7 @@ export type Lines = {
   threads?: Record<string, Thread>
   /** the rooms words came from, by the entry each is drawn before */
   rooms?: Record<string, Room>
+  roomNames?: Record<string, string>
   /** each line, and the entries it draws when it draws more than its own,
    * which it is drawn in place of */
   lines: Sending[]
@@ -1364,6 +1369,9 @@ export let wire = (
     ),
     rooms: Object.fromEntries(
       Object.entries(seen.rooms ?? {}).filter(([id]) => used.has(id)),
+    ),
+    roomNames: Object.fromEntries(
+      Object.entries(seen.roomNames ?? {}).filter(([id]) => used.has(id)),
     ),
     offers: Object.fromEntries(
       [...seen.offers ?? []].filter(([sha]) => offers.has(sha)),

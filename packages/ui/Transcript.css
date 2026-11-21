@@ -35,6 +35,9 @@
   color: var(--muted);
   font-size: var(--fine, var(--small));
 }
+.Transcript_Meta > .Transcript_Via {
+  margin-right: 0;
+}
 .Transcript_Entry-theirs > .Transcript_Meta {
   justify-content: end;
 }

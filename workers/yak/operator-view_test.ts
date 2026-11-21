@@ -178,7 +178,8 @@ let shown = (entries: Bundle[]) => {
   ).document
   return [...doc.querySelectorAll('.Transcript_Bubble')].map((p) => ({
     said: p.textContent,
-    via: p.querySelector('.Transcript_Via')?.getAttribute('title') ?? null,
+    via: p.closest('.Transcript_Entry')!
+      .querySelector('.Transcript_Via')?.getAttribute('data-tip') ?? null,
   }))
 }
 

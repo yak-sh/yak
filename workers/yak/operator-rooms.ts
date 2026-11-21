@@ -321,36 +321,44 @@ export let named = async (
 export let SAID = 100
 
 /**
- * The rooms of a chat platform the words of `entries` came from, each by the
- * newest of those words, where its line is drawn (operator-draw.ts `Room`):
- * the platform's title, the room's name, and what was said there as the
- * store keeps it, everyone's heard messages and the Operator's answers
- * delivered there, oldest first.
+ * The room name for each entry's channel mark, and the room's conversation
+ * for the fold drawn at its newest entry (operator-draw.ts `Room`).
  */
 export let roomsBy = async (
   { g }: Store,
   entries: Bundle[],
-): Promise<Record<string, Room>> => {
+) => {
   let chat = entries.filter((b) =>
     PLATFORMS.has(String(comp(b, 'channel').name)) && comp(b, 'intake').item
   )
-  if (!chat.length) return {}
+  if (!chat.length) return { rooms: {}, roomNames: {} }
   let items = await g.get(
     chat.map((b) => String(comp(b, 'intake').item)),
     ['chat_message'],
   )
   let newest = new Map<string, string>()
+  let from = new Map<string, string>()
   chat.forEach((b, i) => {
     let room = comp(items[i] ?? undefined, 'chat_message').room
-    if (room) newest.set(String(room), b.entity.eid)
+    if (!room) return
+    newest.set(String(room), b.entity.eid)
+    from.set(b.entity.eid, String(room))
   })
   let read = await Promise.all(
-    [...newest].map(async ([eid, at]) => {
-      let room = await roomOf(g, eid)
-      return room ? [[at, room] as const] : []
-    }),
+    [...newest.keys()].map(async (eid) => [eid, await roomOf(g, eid)] as const),
   )
-  return Object.fromEntries(read.flat())
+  let byRoom = new Map(read)
+  let rooms: Record<string, Room> = {}
+  for (let [eid, entry] of newest) {
+    let room = byRoom.get(eid)
+    if (room) rooms[entry] = room
+  }
+  let roomNames: Record<string, string> = {}
+  for (let [entry, room] of from) {
+    let name = byRoom.get(room)?.name
+    if (name) roomNames[entry] = name
+  }
+  return { rooms, roomNames }
 }
 
 // A room as its line draws it, from the rows the store keeps of it.

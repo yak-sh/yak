@@ -134,7 +134,8 @@ let page = parseHTML(
   `<main>${(await conversationOf(store, '/at', root)).html}</main>`,
 ).document
 let lines = [...page.querySelectorAll('.Transcript_Bubble')].map((p) => ({
-  via: p.querySelector('.Transcript_Via')?.getAttribute('title'),
+  via: p.closest('.Transcript_Entry')!
+    .querySelector('.Transcript_Via')?.getAttribute('data-tip'),
   said: p.textContent,
   at: !!p.parentElement?.querySelector('.Transcript_When'),
 }))
@@ -187,8 +188,8 @@ test('the chat app lists the conversation first and the work it started, and ope
   assertEquals(listed[1].standing, 'done')
   assertEquals(byRequest.task, root)
   assertStringIncludes(byRequest.html, 'Remind me about the dentist')
-  assertStringIncludes(wednesday.html, 'title="By text"')
-  assertStringIncludes(wednesday.html, '</span>Make it Wednesday')
+  assertStringIncludes(wednesday.html, 'data-tip="By text"')
+  assertStringIncludes(wednesday.html, '>Make it Wednesday</p>')
   assertEquals(wednesday.html.includes('By text:'), false)
   assertEquals(ofFork.task, fork.entity.eid)
   // A piece of work shows what it did, not the conversation it came from.

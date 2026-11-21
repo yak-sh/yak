@@ -1111,6 +1111,12 @@ test("a member's conversation lists the room their words came from as one line",
   let at = rows.indexOf(rooms[0])
   assertEquals(bubbles[at + 1]?.textContent?.endsWith('say hello'), true)
   assert(bubbles.some((b) => b?.textContent?.endsWith('thoughts?')))
+  assertEquals(
+    rows.filter((row) => row.querySelector('.Transcript_Bubble')).map((row) =>
+      row.querySelector('.Transcript_Via')?.getAttribute('data-tip')
+    ),
+    ['By Discord · barn', 'By Discord · barn'],
+  )
 })
 
 // A member's own earlier messages in a room, by the platform's id for their

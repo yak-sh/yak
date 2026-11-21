@@ -1264,7 +1264,7 @@ export let conversationOf = async (
     let seen = {
       ...helped,
       threads: await threadsOf(store, entries, named, called, opens),
-      rooms: await roomsBy(store, entries),
+      ...await roomsBy(store, entries),
       called,
       opens,
       ...mentions ? { mentions } : {},
@@ -1340,7 +1340,7 @@ export let conversationOf = async (
   let seen = {
     ...helped,
     threads: await threadsOf(store, entries, named, called, opens),
-    rooms: await roomsBy(store, entries),
+    ...await roomsBy(store, entries),
     called,
     opens,
     ...mentions ? { mentions } : {},
@@ -1418,7 +1418,7 @@ export let frameOf = async (
       frame(await keyOf(store, session), entries, names, since, {
         helpers: await lined(store, helpers, names, opens),
         threads: await threadsOf(store, changed, named, called, opens),
-        rooms: await roomsBy(store, changed),
+        ...await roomsBy(store, changed),
         ...await askedOf(store, withHelpers(entries, helpers)),
         files: await drawnFiles(store, changed),
         called,

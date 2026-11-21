@@ -22,6 +22,15 @@ let Svg = el('svg', 'Icon')
 /** What an icon is drawn from: its nodes, and anything a part takes. */
 export type IconProps = Props & { of: IconNode }
 
+/** Discord's controller mark in the kit's outline style. */
+export let discord: IconNode = [
+  ['path', {
+    d: 'M9 5.5 8 4.5c-1.5.3-3 .9-4.3 1.7C2.4 8.7 1.8 12 2 15.8a16 16 0 0 0 5.4 2.7l1.2-2.2m6.8 0 1.2 2.2a16 16 0 0 0 5.4-2.7c.2-3.8-.4-7.1-1.7-9.6-1.3-.8-2.8-1.4-4.3-1.7l-1 1',
+  }],
+  ['path', { d: 'M7 6.5a14 14 0 0 1 10 0M6 15a13 13 0 0 0 12 0' }],
+  ['path', { d: 'M9 11v.5m6-.5v.5' }],
+]
+
 /** A glyph in lines. */
 export let Icon: FunctionComponent<IconProps> = ({ of, ...props }) =>
   h(
@@ -61,6 +70,7 @@ export let native = (_c: Colors): Native => ({
 /** An icon on its own, and one leading its words. */
 export let specimens = (): Specimen[] => [
   ['Icon', h('span', null, h(Icon, { of: plug }))],
+  ['Discord', h('span', null, h(Icon, { of: discord }))],
   [
     'Icon, with words',
     h('span', null, h(Icon, { of: bot }), ' Connect your agent'),

@@ -5,6 +5,7 @@
 // guide's external sprite shares the same paths, without any browser
 // JavaScript.
 import type { IconNode } from 'lucide'
+import { discord } from '@yaks/ui/parts'
 // @ts-types="@yaks/ui/lucide"
 import ArrowDown from 'lucide/dist/esm/icons/arrow-down.mjs'
 // @ts-types="@yaks/ui/lucide"
@@ -127,6 +128,7 @@ export let icons = {
   menu: Menu,
   'message-circle': MessageCircle,
   'message-square': MessageSquare,
+  discord,
   mail: Mail,
   mic: Mic,
   phone: Phone,

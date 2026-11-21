@@ -297,6 +297,7 @@ test('a room words came from is one line before them, drawn again alike from wha
     channel: { name: 'discord' },
   })
   let seen: Seen = {
+    roomNames: { said: 'barn' },
     rooms: {
       said: {
         eid: 'barn',
@@ -314,6 +315,13 @@ test('a room words came from is one line before them, drawn again alike from wha
   assertEquals(drawn.map((l) => l.id), [roomLine('barn'), 'said'])
   let again = drawLines(wire(drawn, [said], seen))
   assertEquals(again.map((l) => l.id), [roomLine('barn'), 'said'])
+  let message = parseHTML(renderToString(h(Fragment, null, again[1].node)))
+    .document
+  let badge = message.querySelector('.Transcript_Meta .Transcript_Via')!
+  assertEquals(badge.getAttribute('data-tip'), 'By Discord · barn')
+  assertEquals(badge.getAttribute('tabindex'), '0')
+  assertEquals(badge.getAttribute('aria-label'), 'By Discord · barn')
+  assertEquals(!!badge.querySelector('svg'), true)
   let html = renderToString(h(Fragment, null, again[0].node))
   let fold = parseHTML(`<div>${html}</div>`).document
   assertEquals(
