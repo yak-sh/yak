@@ -19,6 +19,7 @@ import {
   RECOVERY_HOST,
   snapshot,
 } from '@yaks/sandbox/recovery'
+import { moved } from '@yaks/durable-object/resets'
 
 type Env = Host & {
   KERNEL: {
@@ -87,11 +88,18 @@ export class Workbench extends sdk.Sandbox<Env> {
     this.files.reset()
     await super.onStop(...args)
   }
+  // A deploy or move that resets the object mid-snapshot fails this alarm, and
+  // the runtime retries it on the new instance, whose activity has expired, so
+  // it saves again. A save writes a new archive and moves the head only once
+  // that archive is whole, so a cut one is never the head; a moved instance's
+  // failure is the retry working, not a fault (@yaks/durable-object `moved`).
   override async onActivityExpired() {
     try {
       await this.files.stop(() => super.onActivityExpired())
     } catch (error) {
-      await this.env.KERNEL.fault(String(error), String(this.ctx.id))
+      if (!moved(error)) {
+        await this.env.KERNEL.fault(String(error), String(this.ctx.id))
+      }
       throw error
     }
   }
