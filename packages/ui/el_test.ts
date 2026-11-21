@@ -6,7 +6,7 @@ import { block, el } from './el.ts'
 import { Field } from './Field.ts'
 import { parseHTML } from 'linkedom'
 
-let html = (node: Parameters<typeof renderToString>[0]) => renderToString(node)
+let html = renderToString
 let Dot = el('span', 'Dot')
 let Card = block('div', 'Card', { Head: 'header' })
 
