@@ -521,6 +521,9 @@ export let libraryTools: Row[] = [
           ),
         ].join('\n'),
         space,
+        // A page named by the title its site gives says its site's words
+        // (T-1883).
+        ...list.some((d) => d.url != null && !d.name) ? { heard: true } : {},
         value: {
           added: ok.map(({ ok: _, label, ...r }) => ({ ...r, from: label })),
           skipped: skipped.map((r) => ({

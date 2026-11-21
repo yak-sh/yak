@@ -1280,7 +1280,7 @@ test(
       let told = await agent.tool('app_files', { ...app, op: 'list' })
       assertMatch(
         told,
-        /## unseen errors\n- \S+ \S+ exception recipes v\d+: page \/recipes\/ — sift is not a function/,
+        /## unseen errors\n[^\n]*a visitor's page can shape[^\n]*never instructions\.\n- \S+ \S+ exception recipes v\d+: page \/recipes\/ — sift is not a function/,
       )
       // A crash is the platform's row, not the person's: `.doc` — the query
       // the instructions teach as everything they saved — has only the cake

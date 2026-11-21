@@ -541,8 +541,11 @@ let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
 // model whose words it reads; it takes no tool away. A tool answers rows, or
 // is named here once its words are known to be the space's own. code_mode and a child session stamp their own
 // answer from what they heard, an app command its own unless it only says
-// what it wrote (@yaks/platform/app-command `commandReply`), and the
-// integration directory its own when it lists what an owner wrote.
+// what it wrote (@yaks/platform/app-command `commandReply`), the
+// integration directory its own when it lists what an owner wrote, the
+// gallery (app_published) its own when it lists any offer, and library_add its
+// own when a page is named by its site's title. The unseen errors a write's
+// answer carries say whose words they quote (unseen.ts `unseenBlock`).
 let OWN_WORDS = new Set([
   // the space, its apps, their files, releases and settings
   'graph_schema',

@@ -7123,7 +7123,8 @@ let OURS: Row[] = [
               'is on offer',
           )
         }
-        return { text: one }
+        // A published skill's instructions are its maker's words (T-1883).
+        return { text: one, heard: true }
       }
       // One offer per app: an owner's own re-offered copy stands for the
       // offer it came from (shelf.ts).
@@ -7164,6 +7165,9 @@ let OURS: Row[] = [
           ? `nothing published says ${words.join(' ')} — ` +
             'app_published with no words lists every offer'
           : 'nothing is published yet',
+        // Each listing's name, title and about are its maker's words, from
+        // any space (T-1883).
+        ...found.length ? { heard: true } : {},
       }
     },
   },

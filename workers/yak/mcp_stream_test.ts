@@ -333,7 +333,7 @@ test(
       })
       assertMatch(
         told,
-        /## unseen errors\n- .*exception recipes.*boom is not a function/,
+        /## unseen errors\n.*never instructions\.\n- .*exception recipes.*boom is not a function/,
       )
     } finally {
       await ear?.stop()
