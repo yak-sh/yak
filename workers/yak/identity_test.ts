@@ -249,12 +249,12 @@ test(
       )
       equal(
         await disconnect({ cookie: other.cookie }),
-        `${managePath('agents')}?disconnected=1`,
+        managePath('agents'),
       )
       equal((await snapshots()).map((c) => c.id), ['chatgpt', 'claude'])
       equal(
         await disconnect({ cookie: owner.cookie }),
-        `${managePath('agents')}?disconnected=1`,
+        managePath('agents'),
       )
       equal((await snapshots()).map((c) => c.id), ['chatgpt'])
       equal(
@@ -1345,7 +1345,7 @@ test('Profile saves the name, and Settings the address', async () => {
     await named.body?.cancel()
     assertEquals(
       named.headers.get('location'),
-      `https://yaks.app${managePath('profile')}?saved=1`,
+      `https://yaks.app${managePath('profile')}`,
     )
     let [them] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
@@ -1380,7 +1380,7 @@ test('Profile saves the name, and Settings the address', async () => {
     await moved.body?.cancel()
     assertEquals(
       moved.headers.get('location'),
-      `https://yaks.app${managePath('settings', want)}?saved=1`,
+      `https://yaks.app${managePath('settings', want)}`,
     )
     assert(
       (await dir.query(`.space.slug=${want}`)).length,

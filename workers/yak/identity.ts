@@ -196,6 +196,7 @@ import {
   OAUTH,
   onZone,
 } from '@yaks/platform/routes'
+import { telling } from '@yaks/platform/cookie'
 import { woken } from './build-door.ts'
 import { INVITE, LINK, SLUG } from '@yaks/platform/names'
 import {
@@ -1557,9 +1558,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     }
     let agent = field('agent')
     await disconnect(grants(env), person, agent)
-    let to = new URL(back, req.url)
-    to.searchParams.set('disconnected', '1')
-    return redirect(to.href, undefined, 303)
+    return telling(
+      redirect(new URL(back, req.url).href, undefined, 303),
+      { say: 'Disconnected.' },
+      MANAGE,
+    )
   }
 
   // An invitation's one click (invite.ts, T-37880): accepted for the person

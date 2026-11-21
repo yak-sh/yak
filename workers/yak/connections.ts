@@ -119,6 +119,7 @@ import {
   OURS,
   signInAt,
 } from '@yaks/platform/routes'
+import { telling } from '@yaks/platform/cookie'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
@@ -1259,12 +1260,15 @@ let backTo = (env: Env, space: Space, req: Request, path: string) => {
   return enabling(own ? to!.href : page, enabled(req))
 }
 
-// A page, told how a sign-in went.
-let told = (page: string, how: 'connected' | 'refused') => {
-  let to = new URL(page)
-  to.searchParams.set(how, '1')
-  return to.href
-}
+// A page, told how a sign-in went (@yaks/platform/cookie `telling`).
+let told = (page: string, how: 'connected' | 'refused') =>
+  telling(
+    new Response(null, { status: 303, headers: { location: page } }),
+    how == 'connected'
+      ? { say: 'Connected.' }
+      : { say: "The sign-in didn't finish. Try connecting again.", no: true },
+    MANAGE,
+  )
 
 // Whether a connection is an app's ask that each person answers with their
 // own, which is nobody's to connect.
@@ -1641,7 +1645,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
       request: `GET ${CALLBACK}`,
       ...held ? { space: held.space, connection: held.connection } : {},
     })
-    return answer(held ? told(held.back, 'refused') : url(env, MANAGE))
+    return held ? told(held.back, 'refused') : answer(url(env, MANAGE))
   }
   let { back } = held
   try {
@@ -1659,10 +1663,10 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
     await heard(env, connection)
     if (held.app) await attached(env, who, at, held.app, connection)
     await rebound(env, await usersOf(env, connection))
-    return answer(told(back, 'connected'))
+    return told(back, 'connected')
   } catch (e) {
     caught(e, { request: `GET ${CALLBACK}` })
-    return answer(told(back, 'refused'))
+    return told(back, 'refused')
   }
 }
 
@@ -1753,7 +1757,7 @@ export let own: Answer = async (
       ? page(
         no(String(comp(now, 'content').body ?? 'The key could not be saved.')),
       )
-      : Response.redirect(told(back, 'connected'), 303)
+      : Response.redirect(back, 303)
   } catch (e) {
     if (e instanceof CallError) return page(no(e.message))
     caught(e, { request: `POST /api${path}` })

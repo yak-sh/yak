@@ -48,6 +48,32 @@ let post = (
 let at = (path: string) =>
   k.at(host, path, { headers: { cookie: them.cookie } })
 let to = (path: string) => `https://yaks.app${path}`
+// The page a plain form's press lands on, with what it carried in its
+// one-time cookie: what that page says, and whether it spent the cookie.
+let landed = async (res: Response) => {
+  let carried = res.headers.get('set-cookie')!.split(';')[0]
+  let page = await get(
+    new URL(res.headers.get('location')!).pathname,
+    `${them.cookie}; ${carried}`,
+  )
+  let said = /class="Notice"[^>]*>([^<]*)</.exec(await page.text())?.[1]
+  return [
+    said,
+    /yak_said=;.*Max-Age=0/.test(page.headers.get('set-cookie') ?? ''),
+  ]
+}
+// A press from the page's script (@yaks/ux save-browser): answered in a word.
+let scripted = (path: string, fields: Record<string, string>) =>
+  k.at('yaks.app', path, {
+    method: 'POST',
+    headers: {
+      cookie: them.cookie,
+      origin: 'https://yaks.app',
+      accept: 'application/json',
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams(fields),
+  })
 let title = async () => {
   let [person] = await dir.query(`.entity.eid=${them.person}&?doc`)
   return (person.doc as { title: string }).title
@@ -196,11 +222,16 @@ test('an icon linked from the setup page downloads from the apex', async () => {
 test('the name is the person’s, saved on their Profile', async () => {
   let named = await post(profile, { name: 'Dana' })
   assertEquals(named.status, 303)
-  assertEquals(named.headers.get('location'), to(`${profile}?saved=1`))
+  assertEquals(named.headers.get('location'), to(profile))
   assertEquals(await title(), 'Dana')
-  let confirmed = await (await get(`${profile}?saved=1`)).text()
-  assertStringIncludes(confirmed, 'role="status"')
-  assertStringIncludes(confirmed, 'value="Dana"')
+  assertEquals(await landed(named), ['Saved.', true])
+  assertStringIncludes(await (await get(profile)).text(), 'value="Dana"')
+  let answer = await scripted(profile, { name: 'Dana P' })
+  assertEquals(
+    [answer.status, await answer.json()],
+    [200, { say: 'Saved.', to: to(profile) }],
+  )
+  assertEquals(await title(), 'Dana P')
 })
 
 // The side collapses to a rail of its icons (T-151458): the choice is the
@@ -302,11 +333,11 @@ test('a space’s Settings save its address and its name', async () => {
   assertStringIncludes(page, `href="${managePath('trash', slug)}"`)
   let saved = await post(settings, { space: slug })
   assertEquals(saved.status, 303)
-  assertEquals(saved.headers.get('location'), to(`${settings}?saved=1`))
-  assertStringIncludes(
-    await (await get(`${settings}?saved=1`)).text(),
-    'role="status"',
-  )
+  assertEquals(saved.headers.get('location'), to(settings))
+  assertEquals(await landed(saved), ['Saved.', true])
+  let refused = await scripted(settings, { space: 'Not An Address' })
+  assertEquals(refused.status, 400)
+  assertStringIncludes((await refused.json()).say, 'lowercase letters')
   await post(settings, { title: 'Peterson Reunion 2027', space: slug })
   assertStringIncludes(
     await (await get(settings)).text(),
@@ -326,10 +357,9 @@ test('a deleted app comes back from the Trash', async () => {
   await agent.tool('app_new', { space: slug, slug: 'discarded', title: 'New' })
   let restored = await post(trash, { restore: discarded })
   assertEquals(restored.status, 303)
-  let back = new URL(restored.headers.get('location')!)
-  assertEquals(back.pathname, trash)
+  assertEquals(restored.headers.get('location'), to(trash))
   assertStringIncludes(
-    await (await get(back.pathname + back.search)).text(),
+    String((await landed(restored))[0]),
     'Its previous address was /discarded/; it is now /discarded-2/.',
   )
   assertStringIncludes(

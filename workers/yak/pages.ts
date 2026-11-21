@@ -695,7 +695,6 @@ export type DeskPage = {
    * (payments.ts), as the selling and billing cards say it */
   provider?: string
   plan?: Billed
-  paid?: boolean
   /** the Billing page's month: each allowance the space answers to and how
    * much of it is used, its model budget, when the hourly sweep last read
    * them, and whom the payment provider bills (`undefined` when it couldn't
@@ -1407,10 +1406,6 @@ export type PlanCard = {
   provider?: string
   // Who pays, as the provider has them.
   payer?: Payer | null
-  // `?paid=1` on the way back from the provider's checkout. The webhook is
-  // what moves the tier and it may not have landed yet, so the line says "in
-  // a moment" rather than claiming something this request cannot see.
-  paid?: boolean
 }
 
 // A space's address, its name typed in the box and the apex after it.
@@ -1565,13 +1560,6 @@ export let plan = (
     invoiced,
     more,
     ask,
-    y.paid
-      ? h(
-        Notice,
-        null,
-        'Thanks — that went through. Your space moves to its new plan in a moment.',
-      )
-      : null,
     h(Notice, { class: 'Bill_Say', role: 'status' }),
   )
 }

@@ -2726,7 +2726,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
               known: false,
               sold: { plus: [], pro: [] },
             },
-          paid: at.paid,
           provider: at.provider,
           payer: at.bill?.payer,
         },

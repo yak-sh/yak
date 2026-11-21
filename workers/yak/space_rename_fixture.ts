@@ -137,7 +137,7 @@ export let renamed = async (k: Kernel) => {
   // A dashboard link naming the space by the old name follows it.
   let desk = await k.at(
     'yaks.app',
-    `/manage/${ada46}/settings?saved=1`,
+    `/manage/${ada46}/settings?q=soup`,
     {
       redirect: 'manual',
       headers: { cookie: them.cookie },
@@ -146,7 +146,7 @@ export let renamed = async (k: Kernel) => {
   assertEquals(desk.status, 301)
   assertEquals(
     desk.headers.get('location'),
-    `https://yaks.app/manage/${adacooks46}/settings?saved=1`,
+    `https://yaks.app/manage/${adacooks46}/settings?q=soup`,
   )
   // An assistant still naming the space the old way is told where it went.
   await assertRejects(

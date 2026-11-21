@@ -142,7 +142,8 @@ for (let width of [1280, 390]) {
     ])
     equal(p.saved(), 1)
     equal(p.binding.count, 0)
-    equal(p.$('.Save'), null)
+    equal(p.$('.Save_Count').textContent, 'Saved')
+    equal(p.$('.Save_Actions'), null)
     equal(p.$('body').querySelectorAll('[data-changed]').length, 0)
     equal(p.drafts.text('operator:instructions'), '')
   })
@@ -226,6 +227,19 @@ test('a failed write keeps its draft and leaves successfully saved forms clean',
   p.binding.discard()
   equal(p.field('instructions').value, 'Saved words')
   equal(p.field('name').value, 'My space')
+})
+
+test('the bar says Saving… while it saves, then what the save said, until it fades', async () => {
+  let pending = Promise.withResolvers<unknown>()
+  using p = page(390, stash(), { save: () => pending.promise, linger: 0 })
+  p.type('name', 'Our space')
+  let saving = p.binding.save()
+  equal(p.$('.Save_Count').textContent, 'Saving…')
+  pending.resolve('Invitation sent.')
+  await saving
+  equal(p.$('.Save-done .Save_Count').textContent, 'Invitation sent.')
+  await new Promise((r) => setTimeout(r, 0))
+  equal(p.$('.Save'), null)
 })
 
 test('typing during Save keeps newer edits for the next Save', async () => {

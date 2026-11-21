@@ -217,12 +217,12 @@ test(
     let state = await begun('/manage/ada/operator')
     assertEquals(to(await refused(s.p.env, state)), [
       303,
-      'https://yaks.app/manage/ada/operator?enable=google-search-console&refused=1',
+      'https://yaks.app/manage/ada/operator?enable=google-search-console',
     ])
     for (let elsewhere of ['/manage/bo/operator', '//evil.test/x', 'x']) {
       assertEquals(to(await refused(s.p.env, await begun(elsewhere))), [
         303,
-        'https://yaks.app/manage/ada/connections?enable=google-search-console&refused=1',
+        'https://yaks.app/manage/ada/connections?enable=google-search-console',
       ])
     }
     // A return naming no attempt, or one already finished, has no page of
@@ -250,7 +250,7 @@ test(
       ),
       [
         303,
-        'https://yaks.app/manage/ada/operator?enable=google-search-console&refused=1',
+        'https://yaks.app/manage/ada/operator?enable=google-search-console',
       ],
     )
   },
@@ -742,7 +742,7 @@ test(
     assert((await (await door(him)).text()).includes('Notes asks each person'))
     assertEquals(
       to(await door(him, posted({ key: 'bob-key' }))),
-      [303, 'https://ada.yaks.app/notes/?connected=1'],
+      [303, 'https://ada.yaks.app/notes/'],
     )
     let [mine] = await his()
     assertEquals(
@@ -803,7 +803,7 @@ test(
     let { bob, door, his } = await asks(s, 'Cal')
     let went = await door({ person: bob, role: null }, posted())
     let back = await returned(s.p.env, stateOf(went), { query: 'code=C' })
-    assertEquals(to(back), [303, 'https://ada.yaks.app/notes/?connected=1'])
+    assertEquals(to(back), [303, 'https://ada.yaks.app/notes/'])
     let [mine] = await his()
     assertEquals([mine.integration, mine.status], ['Cal', 'connected'])
   },

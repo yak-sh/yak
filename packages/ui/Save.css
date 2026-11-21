@@ -54,6 +54,26 @@
   color: var(--negative);
   overflow-wrap: anywhere;
 }
+/* A save that worked says so, then fades before the bar goes. */
+.Save-done {
+  animation: Save-fade 2.5s ease-in forwards;
+}
+.Save-done .Save_Count {
+  color: var(--positive, var(--text));
+}
+@keyframes Save-fade {
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Save-done {
+    animation: none;
+  }
+}
 body:has(.Save:not(.Save-sample)) {
   padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
 }

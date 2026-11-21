@@ -32,6 +32,7 @@ export let sheet = (c: Colors): Sheet => ({
   Save_Actions: { spaced: true },
   Save_Mark: { fg: c.accent },
   Save_Notice: { fg: c.negative },
+  'Save-done': { fg: c.positive },
 })
 
 export let specimens = (): Specimen[] => [[
@@ -59,6 +60,9 @@ export let specimens = (): Specimen[] => [[
       value: 'A changed name',
     }),
   ),
+], [
+  'A save that worked, before it fades',
+  h(Save, { mod: ['sample', 'done'] }, h(Save.Count, {}, 'Saved')),
 ], [
   'A failed save keeps its changes',
   h(

@@ -19,7 +19,7 @@ let refused = async (response: Response) => {
   let type = response.headers.get('content-type') ?? ''
   if (type.includes('application/json')) {
     let answer = await response.json().catch(() => null)
-    return answer?.message ?? answer?.error?.message
+    return answer?.say ?? answer?.message ?? answer?.error?.message
   }
   let doc = new DOMParser().parseFromString(await response.text(), 'text/html')
   return doc.querySelector('.Notice-negative')?.textContent?.trim()
@@ -53,7 +53,7 @@ export let settings = (root: Document = document) => {
       let response = await fetch(form.action, {
         method: 'POST',
         body,
-        headers: { accept: 'text/html, application/json' },
+        headers: { accept: 'application/json' },
       })
       if (response.status == 202) {
         let answer = await response.json()
@@ -72,15 +72,21 @@ export let settings = (root: Document = document) => {
           'Sign in again to save. Your changes are kept on this device.',
         )
       }
-      // Renaming a space changes this page's path. The form's own redirect
-      // names its new address; other settings stay on the page being edited.
-      if (form.querySelector('[name=space]') && response.redirected) {
-        destination = response.url
-      }
+      // What the save said, beside the Save bar's button. Renaming a space
+      // moves this page: the answer names its new address, and the page
+      // there says it (manage.ts `answered`).
+      let answer = response.headers.get('content-type')
+          ?.includes('application/json')
+        ? await response.json().catch(() => null)
+        : null
+      if (
+        answer?.to && new URL(answer.to, location.href).pathname !=
+          location.pathname
+      ) destination = answer.to
+      return typeof answer?.say == 'string' ? answer.say : undefined
     },
     saved: () => {
       if (destination) location.assign(destination)
-      else location.reload()
     },
   })
   return binding

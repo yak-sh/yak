@@ -5,6 +5,7 @@
 import { copyOf } from './directory-copy.ts'
 import { spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
+import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
 import {
   type App,
   daysLeft,
@@ -131,37 +132,36 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
   }
 }
 
-// What a page arrived back from says: a form saved, a service's sign-in
-// finished or not (connections.ts `callback`), or an agent was disconnected
-// (identity.ts).
-let returned = (q: URLSearchParams) =>
-  q.has('restored')
-    ? {
-      say: `Restored at /${q.get('restored')}/.` +
-        restoredAddress(q.get('previous') ?? '', q.get('restored') ?? ''),
-      no: false,
-    }
-    : q.has('saved')
-    ? { say: 'Saved.', no: false }
-    : q.has('invoiced')
-    ? {
-      say: 'The invoice reaches the address you gave within the hour. ' +
-        'The Pro plan starts when it is paid.',
-      no: false,
-    }
-    : q.has('sent')
-    ? { say: 'Sent again.', no: false }
-    : q.has('invited')
-    ? { say: 'Invitation sent.', no: false }
-    : q.has('removed')
-    ? { say: 'Removed.', no: false }
-    : q.has('connected')
-    ? { say: 'Connected.', no: false }
-    : q.has('disconnected')
-    ? { say: 'Disconnected.', no: false }
-    : q.has('refused')
-    ? { say: "The sign-in didn't finish. Try connecting again.", no: true }
-    : null
+// What a press answered (@yaks/platform/cookie `Said`). A page's script
+// (@yaks/ux save-browser) asks for it as JSON and says it beside the button
+// it pressed, the page staying where it is; a plain form is sent on to `to`
+// with it in a one-time cookie, which that page says once and spends, as is a
+// script whose page moves (a space's new address). The address never carries
+// it.
+let scripted = (req: Request) =>
+  (req.headers.get('accept') ?? '').startsWith('application/json')
+let answered = (
+  req: Request,
+  env: Env,
+  said: Said,
+  to = sentFrom(req, env).href,
+) =>
+  !scripted(req)
+    ? telling(redirect(to, 303), said, MANAGE)
+    : new URL(to).pathname == new URL(req.url).pathname
+    ? Response.json({ ...said, to })
+    : telling(Response.json({ ...said, to }), said, MANAGE)
+
+// A refusal: to a page's script, in a word; to a plain form, the page drawn
+// again saying why, with what was typed still in it.
+let refusal = (req: Request, said: Said, draw: () => Promise<Response>) =>
+  scripted(req) ? Response.json(said, { status: 400 }) : draw()
+
+// What the press before this page carried to it, said once.
+let saying = (req: Request, said?: Said) =>
+  said ?? heard(req.headers.get('cookie'))
+let spend = (req: Request, res: Response) =>
+  heard(req.headers.get('cookie')) ? unsaid(res, MANAGE) : res
 
 // The dashboard, at the apex (T-39354): the person's own pages at
 // `/manage/account/<page>`, and each space's at `/manage/<space>/<page>`
@@ -642,11 +642,27 @@ let desk = async (
   space: Space,
   who: Owner,
   view: SpaceView,
-  said?: { say: string; no: boolean },
+  said?: Said,
   typed?: Pick<DeskPage, 'invite' | 'typed'>,
 ): Promise<Response> => {
   let owner = who.person
   let q = new URL(req.url).searchParams
+  // Back from the payment provider's checkout (billing.ts): the page again
+  // without the provider's word in its address, saying it went through when
+  // it did. The webhook is what moves the tier and it may not have landed
+  // yet, so the line says "in a moment" rather than claiming something this
+  // request cannot see.
+  if (q.has('paid') && req.method == 'GET') {
+    let to = sentFrom(req, env)
+    to.searchParams.delete('paid')
+    let res = redirect(to.href, 303)
+    return q.get('paid') == '1'
+      ? telling(res, {
+        say:
+          'Thanks — that went through. Your space moves to its new plan in a moment.',
+      }, MANAGE)
+      : res
+  }
   // Everything a page shows, asked at once: nothing here waits on anything but
   // the apps it says something about.
   if (view == 'apps') {
@@ -812,7 +828,6 @@ let desk = async (
     provider: provider.name,
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
-    paid: q.get('paid') == '1',
     // The space's month against its allowances (@yaks/platform/meter), as the
     // directory's row holds it.
     bill: view == 'billing'
@@ -848,10 +863,10 @@ let desk = async (
     member: who.role != 'owner',
     panes,
     ...typed,
-    say: said?.say ?? returned(q)?.say ?? '',
-    no: said?.no ?? returned(q)?.no,
+    say: saying(req, said)?.say ?? '',
+    no: saying(req, said)?.no,
   }, env)
-  return keptIn(page, space.slug)
+  return spend(req, keptIn(page, space.slug))
 }
 
 // One page of the person's own (pages.ts `desk`): their profile, their
@@ -863,7 +878,7 @@ let mine = async (
   dir: ReturnType<typeof directory>,
   who: Owner,
   view: AccountView,
-  said?: { say: string; no: boolean },
+  said?: Said,
   typed?: Pick<DeskPage, 'typed' | 'made'>,
 ): Promise<Response> => {
   let person = who.person
@@ -926,10 +941,10 @@ let mine = async (
     member: !picks.find((s) => s.slug == space)?.owner,
     panes,
     ...typed,
-    say: said?.say ?? returned(q)?.say ?? '',
-    no: said?.no ?? returned(q)?.no,
+    say: saying(req, said)?.say ?? '',
+    no: saying(req, said)?.no,
   }, env)
-  return q.has('space') ? keptIn(page, space) : page
+  return spend(req, q.has('space') ? keptIn(page, space) : page)
 }
 
 // What a page of the person's own posts: Profile's name and the space they
@@ -951,7 +966,13 @@ let account = async (
       slug: made.slug,
       title: made.title || made.slug,
     })
-    if (said) return mine(req, env, dir, who, view, said, { made })
+    if (said) {
+      return refusal(
+        req,
+        said,
+        () => mine(req, env, dir, who, view, said, { made }),
+      )
+    }
     return keptIn(
       redirect(hostUrl(env, chatPath(made.slug)), 303),
       made.slug,
@@ -968,7 +989,12 @@ let account = async (
     for (let session of all.filter((s) => s.eid == id)) {
       await endSession(env, session)
     }
-    return redirect(hostUrl(env, `${managePath('profile')}?saved=1`), 303)
+    return answered(
+      req,
+      env,
+      { say: 'Signed out.' },
+      hostUrl(env, managePath('profile')),
+    )
   }
   // The side's fold (sidebar.ts `fold`) and the aside's (frame.ts `toggle`),
   // pressed on any page: kept on the person's row, then that page again, or
@@ -1020,9 +1046,7 @@ let account = async (
       }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
     }
   }
-  let to = sentFrom(req, env)
-  to.searchParams.set('saved', '1')
-  return redirect(to.href, 303)
+  return answered(req, env, { say: 'Saved.' })
 }
 
 // A dashboard control is the tool the person's assistant would call, called
@@ -1069,6 +1093,12 @@ let saved = async (
   view: SpaceView,
 ): Promise<Response> => {
   let form = await req.formData().catch(() => new FormData())
+  let refused = (
+    view: SpaceView,
+    said: Said,
+    typed?: Pick<DeskPage, 'invite' | 'typed'>,
+  ) =>
+    refusal(req, said, () => desk(req, env, dir, space, who, view, said, typed))
   // The connections page's buttons (connections.ts): each is one form with a
   // `do`, answered with the page saying what came of it, or sent on to a
   // service to sign in there.
@@ -1076,16 +1106,16 @@ let saved = async (
     let said = await connecting(req, env, space, who, form)
     return said instanceof Response
       ? said
-      : desk(req, env, dir, space, who, 'connections', said)
+      : said.no
+      ? refused('connections', said)
+      : answered(req, env, said)
   }
   // The People page's button: another letter for an invitation not yet
   // accepted, exactly as asking member_add again sends one (invite.ts).
   if (form.has('again')) {
     let said = await again(env, dir, space, who, String(form.get('again')))
-    if (said) return desk(req, env, dir, space, who, 'people', said)
-    let to = sentFrom(req, env)
-    to.searchParams.set('sent', '1')
-    return redirect(to.href, 303)
+    if (said) return refused('people', said)
+    return answered(req, env, { say: 'Sent again.' })
   }
   // The People page's invitation: member_add, as the assistant asks it. A
   // refusal draws the page again with what was typed still in the form.
@@ -1103,15 +1133,11 @@ let saved = async (
       ...asked.role ? { role: asked.role } : {},
       ...asked.note ? { note: asked.note } : {},
     })
-    if (said) {
-      return desk(req, env, dir, space, who, 'people', said, { invite: asked })
-    }
-    if (unreached(out)) {
-      return desk(req, env, dir, space, who, 'people', told(out!))
-    }
-    let to = sentFrom(req, env)
-    to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
-    return redirect(to.href, 303)
+    if (said) return refused('people', said, { invite: asked })
+    if (unreached(out)) return answered(req, env, told(out!))
+    return answered(req, env, {
+      say: out?.value?.invited ? 'Invitation sent.' : 'Saved.',
+    })
   }
   // The People page's Operators (operator-reach.ts): one of the owner's
   // other spaces whose Operator they let work here, or take back out. Only a
@@ -1131,14 +1157,11 @@ let saved = async (
       }
     } catch (e) {
       if (!(e instanceof CallError)) throw e
-      return desk(req, env, dir, space, who, 'people', {
-        say: sentence(e.message),
-        no: true,
-      })
+      return refused('people', { say: sentence(e.message), no: true })
     }
-    let to = sentFrom(req, env)
-    to.searchParams.set(form.has('operator') ? 'saved' : 'removed', '1')
-    return redirect(to.href, 303)
+    return answered(req, env, {
+      say: form.has('operator') ? 'Saved.' : 'Removed.',
+    })
   }
   // A People row's Remove, or Withdraw for an invitation: member_remove, as
   // the assistant asks it.
@@ -1149,13 +1172,9 @@ let saved = async (
       email: String(form.get('remove')).trim(),
       ...app ? { app } : {},
     })
-    if (said) return desk(req, env, dir, space, who, 'people', said)
-    if (unreached(out)) {
-      return desk(req, env, dir, space, who, 'people', told(out!))
-    }
-    let to = sentFrom(req, env)
-    to.searchParams.set('removed', '1')
-    return redirect(to.href, 303)
+    if (said) return refused('people', said)
+    if (unreached(out)) return answered(req, env, told(out!))
+    return answered(req, env, { say: 'Removed.' })
   }
   if (form.get('billing') == 'checkout') {
     return checkout(env, req, space, wanted(form))
@@ -1168,30 +1187,19 @@ let saved = async (
       email: String(form.get('email') ?? '').trim(),
       name: String(form.get('name') ?? '').trim(),
     })
-    if (no) {
-      return desk(req, env, dir, space, who, 'billing', {
-        say: sentence(no),
-        no: true,
-      })
-    }
-    let to = sentFrom(req, env)
-    to.searchParams.set('invoiced', '1')
-    return redirect(to.href, 303)
+    if (no) return refused('billing', { say: sentence(no), no: true })
+    return answered(req, env, {
+      say: 'The invoice reaches the address you gave within the hour. ' +
+        'The Pro plan starts when it is paid.',
+    })
   }
   if (form.get('billing') == 'credit') return buy(env, req, space)
   // The plan card's cap on AI credit: a plain form, so it lands back on the
   // page saying it saved, or why not.
   if (form.get('billing') == 'cap') {
     let no = await setCap(env, req, space, Number(form.get('cap')))
-    if (no) {
-      return desk(req, env, dir, space, who, 'billing', {
-        say: sentence(no),
-        no: true,
-      })
-    }
-    let to = sentFrom(req, env)
-    to.searchParams.set('saved', '1')
-    return redirect(to.href, 303)
+    if (no) return refused('billing', { say: sentence(no), no: true })
+    return answered(req, env, { say: 'Saved.' })
   }
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
@@ -1200,13 +1208,12 @@ let saved = async (
   let back = String(form.get('restore') ?? '').trim()
   if (back) {
     let app = await dir.binned(space, back)
-    let to = sentFrom(req, env)
-    if (app?.trashed) {
-      let restored = await untrash(env, dir, space, app, who)
-      to.searchParams.set('restored', restored.slug)
-      to.searchParams.set('previous', app.slug)
-    }
-    return redirect(to.href, 303)
+    if (!app?.trashed) return redirect(sentFrom(req, env).href, 303)
+    let restored = await untrash(env, dir, space, app, who)
+    return answered(req, env, {
+      say: `Restored at /${restored.slug}/.` +
+        restoredAddress(app.slug, restored.slug),
+    })
   }
   let number = String(form.get('restore_number') ?? '').trim()
   if (number) {
@@ -1228,7 +1235,7 @@ let saved = async (
   if (till == 'start') {
     let no = refusedSell(space, env)
     if (no) {
-      return desk(req, env, dir, space, who, 'selling', { say: no, no: true })
+      return refused('selling', { say: no, no: true })
     }
     try {
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
@@ -1236,7 +1243,7 @@ let saved = async (
     } catch (e) {
       defect(e, { request: 'POST /manage/selling' })
       let { name } = await payments(env)
-      return desk(req, env, dir, space, who, 'selling', {
+      return refused('selling', {
         say: `we couldn't reach ${name} just now — try again in a minute`,
         no: true,
       })
@@ -1258,12 +1265,8 @@ let saved = async (
         new Uint8Array(await file.arrayBuffer()),
         vouched(who),
       )
-    if (no) {
-      return desk(req, env, dir, space, who, 'settings', { say: no, no: true })
-    }
-    let to = sentFrom(req, env)
-    to.searchParams.set('saved', '1')
-    return redirect(to.href, 303)
+    if (no) return refused('settings', { say: no, no: true })
+    return answered(req, env, { say: 'Saved.' })
   }
   // Settings: the space's name, homepage and address, one form and one Save. A
   // refusal draws the page again with everything typed still in the fields,
@@ -1275,8 +1278,7 @@ let saved = async (
     space: String(form.get('space') ?? '').trim().toLowerCase(),
     home: String(form.get('home') ?? '').trim(),
   }
-  let refused = (said: { say: string; no: boolean }) =>
-    desk(req, env, dir, space, who, 'settings', said, { typed })
+  let kept = (said: Said) => refused('settings', said, { typed })
   // The name is space_set's `title`, as the assistant asks it; a blank one
   // leaves the name as it was. The move below reads the space as renamed, so
   // a new name saved with a new address stays.
@@ -1285,7 +1287,7 @@ let saved = async (
       space: space.slug,
       title: typed.title,
     })
-    if (said) return refused(said)
+    if (said) return kept(said)
     space = (await dir.at(space.eid)) ?? space
   }
   // The homepage is app_set's `home`, as the assistant asks it. The library is
@@ -1299,19 +1301,19 @@ let saved = async (
         app: typed.home || now!.slug,
         home: !!typed.home,
       })
-    if (said) return refused(said)
+    if (said) return kept(said)
   }
   let moving = typed.space && typed.space != space.slug
     ? await (await identity()).choose(env, who.person, typed.space, space)
     : null
-  if (moving?.error) return refused({ say: moving.error, no: true })
+  if (moving?.error) return kept({ say: moving.error, no: true })
   // The page names the space by its new address.
-  let to = new URL(
-    managePath('settings', moving?.slug ?? space.slug),
-    hostUrl(env),
+  return answered(
+    req,
+    env,
+    { say: 'Saved.' },
+    hostUrl(env, managePath('settings', moving?.slug ?? space.slug)),
   )
-  to.searchParams.set('saved', '1')
-  return redirect(to.href, 303)
 }
 
 // The bytes of a space's logo, to anyone in the space, at the address only

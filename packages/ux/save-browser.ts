@@ -19,11 +19,14 @@ export type SaveOptions = {
     type: (place: string, text: string) => void
     spend?: (place: string) => Promise<boolean>
   }
-  /** Save the captured body; a rejection leaves its fields pending. */
+  /** Save the captured body; a rejection leaves its fields pending, and a
+   * string it resolves to is what the bar says in place of "Saved". */
   save: (form: HTMLFormElement, body: FormData) => Promise<unknown>
   report?: (error: unknown) => void
   /** Called after every changed form succeeds and no newer changes remain. */
   saved?: () => void
+  /** How long the bar says a save worked before it goes, in milliseconds. */
+  linger?: number
 }
 
 export type SaveBinding = {
@@ -148,7 +151,18 @@ export let bindSave = (
     label.append(text)
     labels.push(label)
   }
-  let busy = false, message = '', closed = false
+  let busy = false, message = '', done = '', closed = false
+  let fading: ReturnType<typeof setTimeout> | undefined
+  let say = (text: string) => {
+    clearTimeout(fading)
+    done = text
+    if (text) {
+      fading = setTimeout(() => {
+        done = ''
+        draw()
+      }, opts.linger ?? 2500)
+    }
+  }
   let count = () => groups.filter(changed).length
   let draw = () => {
     if (closed) return
@@ -165,6 +179,7 @@ export let bindSave = (
         count: count(),
         busy,
         message,
+        done,
         onSave: save,
         onDiscard: discard,
       }),
@@ -213,10 +228,13 @@ export let bindSave = (
     }))
     busy = true
     message = ''
+    say('')
     draw()
+    let said = ''
     try {
       for (let { form, body, fields } of snapshots) {
-        await opts.save(form, body)
+        let answer = await opts.save(form, body)
+        if (typeof answer == 'string') said = answer
         batch(() => {
           for (let { g, value } of fields) {
             g.before = value
@@ -234,7 +252,10 @@ export let bindSave = (
           } else opts.drafts.type(g.place, '')
         }
       }
-      if (!count()) opts.saved?.()
+      if (!count()) {
+        say(said || 'Saved')
+        opts.saved?.()
+      }
     } catch (error) {
       report(error)
     } finally {
@@ -244,6 +265,7 @@ export let bindSave = (
   }
   let input = () => {
     message = ''
+    say('')
     batch(() => {
       for (let g of groups) keep(g)
     })
@@ -294,6 +316,7 @@ export let bindSave = (
     },
     close: () => {
       closed = true
+      clearTimeout(fading)
       stop()
       observer?.disconnect()
       for (let form of forms) {
