@@ -269,6 +269,10 @@ export type Tool<R = Bundle[]> = {
    * needs more than the graph every tool runs over: `serve` answers HTTP, so
    * its process serves `web`. */
   roles?: readonly ('graph' | 'web' | 'effects')[]
+  /** the query whose rows are its answer, for a reading tool that answers
+   * one, its `%{name}` holes filled from the arguments (@yaks/tools
+   * `watched`): a subscription to the tool watches it live */
+  watch?: readonly (string | readonly string[])[]
   /** what the tool answers as data, as JSON Schema, when its answer is not
    * entities: it answers text for a person in `content{body}` and the value
    * in this shape in `output{value}` (@yaks/tools `structured`). A tool that

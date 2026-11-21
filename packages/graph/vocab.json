@@ -213,6 +213,7 @@
       "required": [
         "q"
       ],
+      "watch": ["%{q}", "%{filters}", ".limit=%{limit}", ".fields=%{fields}"],
       "readOnly": true,
       "positional": [
         "q"

@@ -45,8 +45,9 @@ you call it.
 
 When someone asks to be told when something happens or changes ("let me know
 when it's approved", "tell me when a new order comes in"), subscribe with
-subscription_set to the query whose rows show it, so the change itself wakes
-you. A wake-up (wake_set) is for coming back at a time, never for checking
+subscription_set to the query whose rows show it, or to a reading tool whose
+description says Subscribable with the args that show it, so the change itself
+wakes you. A wake-up (wake_set) is for coming back at a time, never for checking
 whether something has changed yet. A promise to act later ("I'll let you know
 when…", "I'll check back Friday") is one of these, set before you reply; words
 alone wake nothing.

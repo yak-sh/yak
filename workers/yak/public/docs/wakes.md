@@ -307,6 +307,12 @@ ask it to watch something: "tell me when a sign-up arrives", "when the build
 finishes, deploy it". Its tools are `subscription_set` (words to act on, a
 `query` written as for `graph_query`, and `mine` to read it over the Operator's
 own store rather than the space), `subscription_list` and `subscription_cancel`.
+In place of a query, `subscription_set` takes a reading tool's name and its
+`args`, as the Operator would call it now: a tool whose answer is a store
+query's rows declares that query as `watch` in its vocabulary (`graph_query`,
+`task_list`, `goal_list`), and the subscription watches it over the store the
+tool reads. A tool whose answer comes from anywhere else (an outside API, a
+listing it builds) declares none; it is refused, and never re-asked on a clock.
 Each is a `wake` row in the Operator's own store that also carries the query and
 the rows it saw last. It keeps no cadence: it hears each commit live. An app the
 query read tells the Operator of each commit to it, as an app tells a store that

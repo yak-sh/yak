@@ -83,6 +83,7 @@
           "short": "n"
         }
       },
+      "watch": [".goal", "%{query}", ".limit=%{limit}", "*"],
       "readOnly": true,
       "positional": [
         "query"

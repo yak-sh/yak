@@ -65,6 +65,7 @@ import {
   invoke,
   runner as toolRunner,
   unreferenced,
+  watched,
 } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { memoryDoc } from '@yaks/memory/vocab'
@@ -194,6 +195,7 @@ import {
   fired,
   helperInput,
   subscriptionTools,
+  UNSUBSCRIBABLE,
   wakeTools,
   type Watching,
 } from './operator-schedules.ts'
@@ -731,6 +733,40 @@ let BULK: Record<string, string> = {
     'For bulk changes, imports or reconciles, call this inside code_mode; generate bundles from source data and existing rows in the script, write batches and return counts. Direct calls are for single edits. ',
 }
 
+// What a tool's description says when a subscription can watch its answer.
+let SUBSCRIBABLE =
+  ' Subscribable: subscription_set with this tool and its args watches its answer live.'
+
+// A tool whose declaration names the query it answers (@yaks/tools
+// `watched`), as the Operator offers it: its description says it can be
+// subscribed to, and `watch` says the query for a call's arguments, over the
+// Operator's own store when it reads there (`local`).
+let watchOf = (
+  t: Pick<NamedTool, 'name' | 'watch'>,
+  local: boolean,
+): Tool['watch'] =>
+  t.watch &&
+  ((args) => {
+    let said = watched(t.watch!, args)
+    if ('refused' in said) {
+      throw new CallError(
+        'arguments',
+        `A subscription to ${t.name} watches the query it answers, which ${said.refused} plays no part in: leave ${said.refused} out`,
+      )
+    }
+    return { query: said.query, ...local ? { local } : {} }
+  })
+let watchable = (
+  tool: Tool,
+  t: Pick<NamedTool, 'name' | 'watch'>,
+  local: boolean,
+): Tool => {
+  let watch = watchOf(t, local)
+  return watch
+    ? { ...tool, description: tool.description + SUBSCRIBABLE, watch }
+    : tool
+}
+
 // Discovery is refreshed before every ask: a deploy may add words and tools.
 export let operatorRoster = async (
   ctx: Ctx,
@@ -983,12 +1019,28 @@ export let operatorRoster = async (
       let ours = own.get(t.name)
       let there = run(t, g, landing, 'apps', ours && IN_OWN)
       if (!ours) {
-        return { ...shaped(t), run: there, ...recovery(t, g, landing, 'apps') }
+        return watchable(
+          { ...shaped(t), run: there, ...recovery(t, g, landing, 'apps') },
+          t,
+          false,
+        )
       }
       let here = run(ours, self, self, 'own', IN_APPS)
       let tool = shaped(t)
+      // Watched as it is read: over the apps, or with self over its own
+      // store.
+      let overApps = watchOf(t, false), overOwn = watchOf(ours, true)
       return {
         ...tool,
+        ...(overApps || overOwn) && {
+          description: tool.description + SUBSCRIBABLE,
+          watch: ({ self: reads, ...args }: Record<string, unknown>) => {
+            let { space: _, app: __, ...mine } = args
+            let watch = reads ? overOwn : overApps
+            if (!watch) throw new CallError('arguments', UNSUBSCRIBABLE(t.name))
+            return watch(reads ? mine : args)
+          },
+        },
         ...(t.recover || ours.recover) && {
           recover: ({ self: reads, ...args }, context) => {
             let { space: _, app: __, ...own } = args
@@ -1026,11 +1078,15 @@ export let operatorRoster = async (
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
-        let tool = {
-          ...shaped(t),
-          run: run(t, self, self, 'own', OWN_ONLY),
-          ...recovery(t, self, self, 'own'),
-        }
+        let tool = watchable(
+          {
+            ...shaped(t),
+            run: run(t, self, self, 'own', OWN_ONLY),
+            ...recovery(t, self, self, 'own'),
+          },
+          t,
+          true,
+        )
         if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }
@@ -2348,6 +2404,12 @@ export let operating = (
       acting || vias.length
         ? [apiCall(env, space, { ...acting ? { ctx } : {}, store, vias })]
         : []
+    // The tools this turn holds, once they are listed: a subscription to a
+    // reading tool finds it there by name.
+    let listed: Tool[] = []
+    let kept = (tools: Tool[]) => (listed = tools)
+    let hold = (name: string) =>
+      listed.find((t) => t.name == name && !t.withheld)
     // What a member's turn holds beyond the space's tools: their alerts,
     // texts, mail, numbers, wakes and subscriptions.
     let mine = () => [
@@ -2362,7 +2424,7 @@ export let operating = (
       imageNew(env, space, store),
       ...pickTools(store, ctx.person!),
       ...wakeTools(store),
-      ...subscriptionTools(store, watching),
+      ...subscriptionTools(store, watching, hold),
       escalationAnswer(store, ctx, space),
     ]
     // Any turn may report an odd request for a guest-tooled helper to look
@@ -2422,7 +2484,7 @@ export let operating = (
         : tools
     if (heard) {
       let why = texted ? TEXTED : OUTSIDE
-      return confirmed(deferred(listened([
+      return kept(confirmed(deferred(listened([
         ...odd,
         ...holding(
           [
@@ -2456,13 +2518,13 @@ export let operating = (
             why,
           )
           : [],
-      ])))
+      ]))))
     }
     // Someone who is not a member is answered in their own conversation, a
     // helper with a guest's tools: no fork or helper at the space's cost, and what needs more is raised with the space's people
     // (operator-escalate.ts).
     let seated = !!ctx.role
-    return confirmed(deferred(listened([
+    return kept(confirmed(deferred(listened([
       ...odd,
       ...seated
         ? sessionTools(g, children).filter((t) => t.name == 'fork')
@@ -2499,7 +2561,7 @@ export let operating = (
       ...member && options.browsers
         ? browserTools(env, space, ctx.person, options.browsers, store)
         : [],
-    ])))
+    ]))))
   }
 
   // This object's runner, a new one each time the object starts: a Durable

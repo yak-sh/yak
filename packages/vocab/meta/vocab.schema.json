@@ -530,6 +530,17 @@
           "description": "Its answer is one entity to read whole, so a person is shown a lone one as its page; any other answer reads a line per entity, a list of one included.",
           "type": "boolean"
         },
+        "watch": {
+          "description": "The query whose rows are its answer, for a reading tool that answers one: its parts, joined with &, each with %{name} holes its arguments fill; a part whose hole is left out is dropped, a list is alternatives (the first that fills), and a hole filled by a list is one copy of its part each. A subscription to the tool watches this query live (@yaks/tools watched).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              { "type": "string", "minLength": 1 },
+              { "type": "array", "minItems": 1, "items": { "type": "string" } }
+            ]
+          }
+        },
         "scope": {
           "description": "Arguments selecting another graph, which resolves its own references.",
           "type": "array",

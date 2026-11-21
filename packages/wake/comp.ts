@@ -86,6 +86,10 @@ export let WATCH = 'watch'
 export type Watch = {
   /** the query, as graph_query takes it */
   query: string
+  /** the reading tool it was subscribed to, whose declared query this is */
+  tool?: string | null
+  /** the arguments that tool was given */
+  args?: Record<string, unknown> | null
   /** read over the store the wake is kept in, not all its person reaches */
   local?: boolean | null
   /** each row the last look saw, by eid, with a digest of it */

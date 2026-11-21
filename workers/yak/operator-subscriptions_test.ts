@@ -81,6 +81,26 @@ let script: Record<string, [string, unknown]> = {
     query: '.operator_request.channel=chat',
     mine: true,
   }],
+  'Watch the meetings graph_query answers': ['subscription_set', {
+    say: 'The meetings answer moved.',
+    tool: 'graph_query',
+    args: { q: '.meeting&*' },
+  }],
+  'Watch my open tasks': ['subscription_set', {
+    say: 'An open task moved.',
+    tool: 'task_list',
+    args: {},
+  }],
+  'Watch my apps': ['subscription_set', {
+    say: 'Apps moved.',
+    tool: 'app_list',
+    args: {},
+  }],
+  'Watch a branch': ['subscription_set', {
+    say: 'The branch moved.',
+    tool: 'graph_query',
+    args: { q: '.meeting', branch: 2 },
+  }],
   'What am I subscribed to?': ['subscription_list', {}],
   'What wake-ups do I have?': ['wake_list', {}],
 }
@@ -165,6 +185,33 @@ let wakes = JSON.parse(results.at(-1)!.split('\n')[1])
 await ask(`Cancel ${short(mine.entity.eid)}`)
 let gone = await store.g.get([mine.entity.eid])
 
+// A reading tool's answer, subscribed to by name and args: its declared
+// query is watched live, over the space or the Operator's own store as the
+// tool reads.
+let firedFor = async (sub: { entity: { eid: string } }) =>
+  (await fired()).filter((r) =>
+    (r.operator_request as { about?: string }).about == sub.entity.eid
+  )
+await ask('Watch the meetings graph_query answers')
+let [byQuery] = await store.g.read('.watch.tool=graph_query&*')
+await meeting('Parks board: Friday at 5')
+await look()
+let [queried] = await firedFor(byQuery)
+await ask('Watch my open tasks')
+let [byTasks] = await store.g.read('.watch.tool=task_list&*')
+await store.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  task: { status: 'open' },
+  doc: { title: 'Call the clerk' },
+}], { trusted: true })
+await heard(store, true, Date.now() - SOON)
+await service.drain()
+let [tasked] = await firedFor(byTasks)
+await ask('Watch my apps')
+let appsRefused = results.at(-1)!
+await ask('Watch a branch')
+let branchRefused = results.at(-1)!
+
 test('subscription_set reads the query as the person, and what it answers now is no change', () => {
   assertEquals(Object.keys(first), [road])
   assertEquals((sub.wake as { every?: string }).every, undefined)
@@ -248,4 +295,21 @@ test('subscription_list shows each subscription, wake_list leaves them out, and 
   assertEquals(chats.rows > 0, true)
   assertEquals(wakes, [])
   assertEquals(gone.filter((b) => b && !b.tombstone).length, 0)
+})
+
+test("subscription_set watches a reading tool's declared query, over the space or its own store as the tool reads", () => {
+  let watch = byQuery.watch as Record<string, unknown>
+  assertEquals([watch.query, watch.local ?? null], ['.meeting&*', null])
+  assertEquals(watch.args, { q: '.meeting&*' })
+  let said = JSON.stringify(queried)
+  assertStringIncludes(said, 'graph_query')
+  assertStringIncludes(said, 'answers differently now')
+  assertStringIncludes(said, 'Parks board')
+  assertEquals((byTasks.watch as { local?: boolean }).local, true)
+  assertStringIncludes(JSON.stringify(tasked), 'Call the clerk')
+})
+
+test('a tool whose answer is no store query is refused, and so is an argument its query has no part for', () => {
+  assertStringIncludes(appsRefused, 'app_list is not subscribable')
+  assertStringIncludes(branchRefused, 'branch plays no part in')
 })

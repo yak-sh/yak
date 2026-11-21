@@ -87,6 +87,7 @@ let shownWatch = (b: Bundle) => {
   let watch = watchOf(b)!
   return {
     subscription: short(b.entity.eid),
+    ...watch.tool ? { tool: watch.tool, args: watch.args ?? {} } : {},
     query: watch.query,
     ...watch.local ? { mine: true } : {},
     say: wakeOf(b).note ?? '',
@@ -223,18 +224,59 @@ export let wakeTools = (store: Store): Tool[] => [
   },
 ]
 
-/** The tools that subscribe the Operator to a query, list what it is
- * subscribed to, and cancel one. */
+// Why a subscription to a tool is refused: its answer is no store query's
+// rows (an outside API, a listing it builds), so nothing commits to tell it
+// of a change, and it is never polled instead.
+export let UNSUBSCRIBABLE = (name: string) =>
+  `${name} is not subscribable: its answer is not a store query's rows, so no commit tells you it changed, and it is never re-asked on a clock. Subscribe to a tool whose description says Subscribable, or to graph_query over what it reads`
+
+// What a subscription watches: a query as given, or the one a reading tool
+// declares for its arguments (session Tool `watch`).
+let watchFor = (
+  args: Record<string, unknown>,
+  holding: (name: string) => Tool | undefined,
+): Watch => {
+  let name = String(args.tool ?? '').trim()
+  let query = String(args.query ?? '').trim()
+  if (!name) {
+    if (!query) throw refuse('arguments', 'Give the tool or query to watch.')
+    if (args.args !== undefined) {
+      throw refuse('arguments', 'Give the tool these arguments belong to.')
+    }
+    return { query, ...args.mine === true ? { local: true } : {} }
+  }
+  if (query || args.mine !== undefined) {
+    throw refuse(
+      'arguments',
+      'Give a tool or a query, not both: a tool says where its query reads.',
+    )
+  }
+  let tool = holding(name)
+  if (!tool) throw refuse('missing', `You hold no tool ${name}.`)
+  if (!tool.readOnly || !tool.watch) {
+    throw refuse('arguments', UNSUBSCRIBABLE(name))
+  }
+  let given = (args.args ?? {}) as Record<string, unknown>
+  if (typeof given != 'object' || Array.isArray(given)) {
+    throw refuse('arguments', `Give ${name}'s args as an object.`)
+  }
+  return { ...tool.watch(given), tool: name, args: given }
+}
+
+/** The tools that subscribe the Operator to a query or a reading tool's
+ * answer, list what it is subscribed to, and cancel one. `holding` finds a
+ * tool the turn holds by name. */
 export let subscriptionTools = (
   store: Store,
   watching: Watching,
+  holding: (name: string) => Tool | undefined,
 ): Tool[] => [
   {
     name: 'subscription_set',
     title: 'Be told when something changes: watch a query',
     step: { doing: 'Subscribing…', done: 'Subscribed' },
     description:
-      `Be woken when something changes for the person you work for: a query you watch live, and within seconds of each commit that changes its rows (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). Writes close together make one turn, and nothing is spent while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
+      `Be woken when something changes for the person you work for: a reading tool's answer or a query you watch live, and within seconds of each commit that changes its rows (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). Writes close together make one turn, and nothing is spent while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need. Give tool and args to watch a reading tool's answer to those args, as you would call it now: only a tool whose description says Subscribable, whose answer is a store query's rows; any other (an outside API, a listing) is never re-asked on a clock and is refused. Or give query, as graph_query's q.`,
     parameters: {
       type: 'object',
       properties: {
@@ -243,28 +285,34 @@ export let subscriptionTools = (
           description:
             'What to do when it changes, as words to yourself: what to tell them, check or do.',
         },
+        tool: {
+          type: 'string',
+          description:
+            'A reading tool whose answer you watch, one whose description says Subscribable.',
+        },
+        args: {
+          type: 'object',
+          description: "That tool's arguments, as you would call it now.",
+        },
         query: {
           type: 'string',
           description:
-            'The query whose rows you watch, written as for graph_query (.in=<app> narrows it to one app).',
+            'Without tool: the query whose rows you watch, written as for graph_query (.in=<app> narrows it to one app).',
         },
         mine: {
           type: 'boolean',
           description:
-            'Read the query over your own store (your sessions, helpers and requests) rather than the space.',
+            'With query: read it over your own store (your sessions, helpers and requests) rather than the space.',
         },
       },
-      required: ['say', 'query'],
+      required: ['say'],
     },
     run: async (args, context) => {
       let say = String(args.say ?? '').trim()
-      let query = String(args.query ?? '').trim()
-      let local = args.mine === true
       if (!say) throw refuse('arguments', 'Say what to do when it changes.')
-      if (!query) throw refuse('arguments', 'Give the query to watch.')
+      let watch = watchFor(args, holding)
       let { person } = await whoseOf(store, context)
       let wake = { for: person, note: say }
-      let watch = { query, ...local ? { local } : {} }
       // What it answers now is what a change is measured from, and a query
       // it cannot read is refused here rather than at every look. Reading it
       // over the space asks each app it reads to tell this store of its
@@ -284,7 +332,7 @@ export let subscriptionTools = (
     title: 'List subscriptions',
     step: { doing: 'Reading subscriptions…', done: 'Read subscriptions' },
     description:
-      'What you are subscribed to for the person you work for: each subscription’s id, its query, its words, how many rows it watches and when it last looked.',
+      'What you are subscribed to for the person you work for: each subscription’s id, the tool and args it watches the answer of or its query, its words, how many rows it watches and when it last looked.',
     readOnly: true,
     parameters: { type: 'object', properties: {} },
     run: async (_, context) => {
@@ -463,8 +511,13 @@ export let fired = async (
   if (!wake?.for) return
   let ask: Ask = { space, person: wake.for }
   if (!row.call && !wake.brief) {
-    let channel = row.watch ? 'subscription' : 'wake'
-    await fire(store, space, row, channel, at, watchOf(row)?.changes ?? '')
+    let watch = watchOf(row)
+    let changes = watch?.tool
+      ? `${watch.tool} ${
+        JSON.stringify(watch.args ?? {})
+      } answers differently now.\n${watch.changes ?? ''}`
+      : watch?.changes ?? ''
+    await fire(store, space, row, watch ? 'subscription' : 'wake', at, changes)
     return
   }
   let ran = await run(store.g, row, at, {

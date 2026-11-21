@@ -227,6 +227,14 @@ export type Tool = Declared & {
    * refusal of the call, and its answer is the result's words, not an entity
    * of their own (@yaks/tools `keeps`). */
   readOnly?: boolean
+  /** The query whose rows are its answer to these arguments, where its answer
+   * is one (@yaks/tools `watched`), and whether that query reads the runner's
+   * own store rather than the graph its calls reach (`local`): a subscription
+   * to the tool watches the query live. It throws a refusal for arguments the
+   * query cannot follow. */
+  watch?: (
+    args: Record<string, unknown>,
+  ) => { query: string; local?: boolean }
   /** Its schema is sent only once a `tool_load` call names it; until then
    * that tool lists it by name and title (./deferred.ts). */
   deferred?: boolean

@@ -148,6 +148,14 @@
           "format": "query",
           "description": "the query whose rows it watches, written as for graph_query"
         },
+        "tool": {
+          "type": "string",
+          "description": "the reading tool it was subscribed to, whose declared query (@yaks/tools watched) is its query"
+        },
+        "args": {
+          "type": "object",
+          "description": "the arguments that tool was given, which filled its query"
+        },
         "local": {
           "type": "boolean",
           "description": "read over the store the wake is kept in, rather than everything its person reaches (on yaks.app, the space's apps)"

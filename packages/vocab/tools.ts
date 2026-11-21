@@ -431,6 +431,11 @@ export type ToolDefinition = {
   roles?: Role[]
   /** Arguments selecting another graph, which resolves its own references. */
   scope?: string[]
+  /** the query whose rows are its answer, for a reading tool that answers
+   * one: its parts, each with `%{name}` holes its arguments fill, a list
+   * being alternatives (@yaks/tools `watched`). A subscription to the tool
+   * watches this query live. */
+  watch?: (string | string[])[]
 }
 
 /** A role a process serves over a graph (@yaks/cli `ROLES`). */
@@ -510,6 +515,16 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     surfaces: SURFACES,
     roles: ROLES,
     scope: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+    watch: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        anyOf: [
+          { type: 'string', minLength: 1 },
+          { type: 'array', minItems: 1, items: { type: 'string' } },
+        ],
+      },
+    },
   },
 }
 
@@ -647,6 +662,7 @@ let HINTS = [
   'surfaces',
   'roles',
   'scope',
+  'watch',
 ] as const
 
 /**

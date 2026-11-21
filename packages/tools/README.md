@@ -149,6 +149,23 @@ is assigned a fresh eid first.
 | `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `@yaks/tools/readable` | `readable`, `drawing`, `Ids`                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `@yaks/tools/watch`    | `watched`, `Watch`: the query a reading tool's `watch` declaration answers for a call's arguments, which a subscription to the tool watches live                                                                                                                                                                                                                                                                                                                                   |
+
+## Subscribable reading tools
+
+A reading tool whose answer is a store query's rows declares that query as
+`watch` in its vocabulary: the query's parts, joined with `&`, each with
+`%{name}` holes the call's arguments fill. A part whose hole is left out is
+dropped, a part given as a list is its alternatives (the first that fills), and
+a hole filled by a list is one copy of its part per item. `watched` renders it
+for a call, and refuses an argument no part names, since the query could not
+follow it. A subscription to the tool (the yaks.app Operator's
+`subscription_set` with `tool` and `args`) watches that query live (@yaks/wake
+`watch`).
+
+    "task_list": {
+      "watch": [".task", ["%{query}", ".task.status=open"], ".limit=%{limit}", "*"]
+    }
 
 ## Stored data
 

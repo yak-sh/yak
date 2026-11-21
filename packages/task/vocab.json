@@ -240,6 +240,12 @@
           "short": "n"
         }
       },
+      "watch": [
+        ".task",
+        ["%{query}", ".task.status=open"],
+        ".limit=%{limit}",
+        "*"
+      ],
       "readOnly": true,
       "positional": [
         "query"
