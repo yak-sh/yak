@@ -335,11 +335,12 @@
     min-height: 3rem;
     padding: calc(.5rem + env(safe-area-inset-top, 0px)) .75rem .5rem;
   }
+  /* No display of its own: the kit's rail puts it away while shut. */
   .Frame_AsideBody {
-    display: grid;
-    align-content: start;
-    gap: .75rem;
     padding: 0 1rem 1rem;
+  }
+  .Frame_AsideBody > :not([hidden]) ~ * {
+    margin-top: .75rem;
   }
   .Frame_AsideOpen {
     display: none;
