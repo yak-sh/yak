@@ -16,6 +16,7 @@ import { heard, ownCommits, uncadenced } from './operator-schedules.ts'
 import { SOON } from '@yaks/wake'
 import { operatorContext } from './operator.ts'
 import { seatsAs } from './people.ts'
+import { present } from './whereabouts.ts'
 
 // A person asks their Operator to tell them when something in the space
 // changes: it subscribes to a query, a wake that watches it (@yaks/wake
@@ -154,6 +155,9 @@ let service = operatorService(env, held, {
 })
 env.BUILDER = service.binding
 let { store } = service
+// On the Operator's page as it answers what they ask, so its answers are not
+// news; what a run tells them is (whereabouts.ts).
+await present(env, { person, channel: 'operator', place: eid, state: 'here' })
 let ask = async (say: string) => {
   await receive(store, { space: eid, person, channel: 'chat' }, say)
   await service.drain()

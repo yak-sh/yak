@@ -9,6 +9,7 @@ import { operatorModel, operatorService } from './operator-testing.ts'
 import { fire, receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { drain } from './operator-store.ts'
+import { present } from './whereabouts.ts'
 
 // A person asks their Operator to come back to something: it sets a wake-up
 // in its own store, a wake set for them (@yaks/wake `wake.for`), the store's
@@ -83,6 +84,9 @@ let service = operatorService(
 )
 env.BUILDER = service.binding
 let { store } = service
+// On the Operator's page as it answers what they ask, so its answers are not
+// news; what a run tells them is (whereabouts.ts).
+await present(env, { person, channel: 'operator', place: eid, state: 'here' })
 let ask = async (say: string) => {
   await receive(store, { space: eid, person, channel: 'chat' }, say)
   await service.drain()
