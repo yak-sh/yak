@@ -32,8 +32,8 @@ test('a growing overlay stays inside the viewport', () => {
   assertEquals(put('below', 480), { left: '330px', top: '314px' })
 })
 
-// A tip shown on focus opens once the focus move is done.
-let settled = () => Promise.resolve()
+// A tip shown on focus opens in the task after the focus move.
+let settled = () => new Promise((done) => setTimeout(done))
 
 let documentOf = (
   content =

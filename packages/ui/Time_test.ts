@@ -73,7 +73,7 @@ test('a rendered date says its age and reveals the full timestamp in a kit toolt
   equal(face.getAttribute('tabindex'), '0')
   tips(document as unknown as Document)
   face.dispatchEvent(new Event('focusin', { bubbles: true }))
-  await Promise.resolve() // a focused tip opens once the move is done
+  await new Promise((done) => setTimeout(done)) // a focused tip opens a task later
   equal(
     document.querySelector('.Tip[role=tooltip]')?.textContent,
     'Nov 6th, 2026, 3:42 PM',

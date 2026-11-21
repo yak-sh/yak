@@ -79,7 +79,7 @@ test('app Tile resolves by component and draws the same row served and mounted',
   )
   assertEquals(
     served.querySelector('.Rows_Meta-line')?.textContent,
-    'ada.yaks.app/recipes · waiting for the gallery',
+    '/recipes · waiting for the gallery',
   )
 
   let Entity = entity({ registry, vocab: vocab(), store: () => bundle })
@@ -88,7 +88,6 @@ test('app Tile resolves by component and draws the same row served and mounted',
     view: 'List.Tile',
     gallery: 'waiting for the gallery',
     at: 'https://ada.yaks.app',
-    host: 'ada.yaks.app',
     editor: true,
     visits: '/manage/ada/visits#visits-recipes',
   }))
@@ -107,7 +106,9 @@ test('app Tile says who may use it and whether it is the homepage, as glyphs wit
   }
   for (let home of [false, true]) {
     for (let access of [null, 'public', 'open', 'private'] as const) {
-      let root = one({ title: '', home, access }, { host: 'ada.yaks.app' })
+      let root = one({ title: '', home, access }, {
+        at: 'https://ada.yaks.app',
+      })
       assertEquals(root.querySelector('.Rows_Open')?.textContent, 'recipes')
       assertEquals(
         said(root),

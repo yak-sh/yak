@@ -331,7 +331,7 @@ type Listed = DeskPage['apps'][number]
 let changed = (a: Listed) => (a.deployed ?? a.made)?.at ?? ''
 // The orders the apps page offers, the first the one it opens in.
 let ORDERS = [
-  ['changed', 'Recently changed'],
+  ['changed', 'Recent'],
   ['name', 'Name'],
 ] as const
 
@@ -381,7 +381,8 @@ let finding = (at: DeskPage) =>
 
 /** The apps view: the space's apps, one row each, every row opening its app
  * and the errors it has opening over the page; with none, the way to make
- * one. */
+ * one. Each says its address from its path: the host is the space's, the same
+ * on every row and named above them. */
 export let library = (at: DeskPage, env: Host) => {
   let host = spaceHost(env, at.space)
   let long = at.apps.length > LONG
@@ -403,7 +404,6 @@ export let library = (at: DeskPage, env: Host) => {
             shown.map((a) =>
               tile(a, {
                 at: `https://${host}`,
-                host,
                 errors: a.errors?.length,
                 editor: true,
                 visits: `${managePath('visits', at.space)}#visits-${a.slug}`,

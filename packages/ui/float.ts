@@ -200,7 +200,7 @@ export let tips = (
     }
     host = null
   }
-  let show = (next: Element | null, wait = 0) => {
+  let show = (next: Element | null, wait?: number) => {
     hide()
     host = next
     if (!next) return
@@ -219,8 +219,8 @@ export let tips = (
       )
       place(tip, next.getBoundingClientRect(), 'above')
     }
-    if (wait) cancel = clock.after(wait, put)
-    else put()
+    if (wait == null) put()
+    else cancel = clock.after(wait, put)
   }
   let target = (e: Event) =>
     (e.target as Element)?.closest?.('[data-tip]') ?? null
@@ -234,17 +234,11 @@ export let tips = (
     }
   })
   // Focus that a dialog or popover moves as it opens arrives while it is
-  // still opening, when no other popover may open; so the tip of what took
-  // focus opens once that is done, unless focus has left it by then.
-  let focused: Element | null = null
-  doc.addEventListener('focusin', (e) => {
-    let next = focused = target(e)
-    queueMicrotask(() => focused == next && show(next))
-  })
-  doc.addEventListener('focusout', () => {
-    focused = null
-    hide()
-  })
+  // still opening, when no other popover may open, and its microtasks run
+  // before that is done; so the tip of what took focus opens in the next
+  // task, unless focus has left it by then (`hide` cancels it).
+  doc.addEventListener('focusin', (e) => show(target(e), 0))
+  doc.addEventListener('focusout', hide)
   doc.addEventListener('pointerdown', hide, true)
   doc.addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key == 'Escape') hide()

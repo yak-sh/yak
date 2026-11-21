@@ -57,6 +57,8 @@ export let app: ComponentRenderer = {
     let a = b.app as { slug: string; access?: string | null }
     let title = (b.doc as { title?: string } | undefined)?.title || a.slug
     let at = `${ctx.at ?? ''}/${a.slug}`
+    // The space's host, which its homepage opens at.
+    let space = ctx.host || (ctx.at ? new URL(String(ctx.at)).host : '')
     let errors = Number(ctx.errors ?? 0)
     let broke = errors ? `${errors} ${errors == 1 ? 'error' : 'errors'}` : ''
     let changed = (ctx.deployed ?? ctx.made) as Stamp | null | undefined
@@ -121,7 +123,7 @@ export let app: ComponentRenderer = {
         b.home
           ? glyph(
             icons.house,
-            `The homepage: it opens at ${ctx.host || 'the space’s address'}`,
+            `The homepage: it opens at ${space || 'the space’s address'}`,
           )
           : null,
         access ? glyph(access[0], access[1]) : null,

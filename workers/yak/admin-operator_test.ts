@@ -379,7 +379,7 @@ test('the margin reveals request details in the kit tooltip on keyboard focus', 
   target.dispatchEvent(
     new document.defaultView!.Event('focusin', { bubbles: true }),
   )
-  await Promise.resolve() // a focused tip opens once the move is done
+  await new Promise((done) => setTimeout(done)) // a focused tip opens a task later
   let tip = document.querySelector('[role=tooltip]')!
   assertEquals(tip.className, 'Overlay Tip')
   for (
