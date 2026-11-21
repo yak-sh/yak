@@ -206,7 +206,7 @@ test('a fixed break tells its person only what the Operator wrote them, linked t
   }
   assertStringIncludes(
     asked.at(-1)!,
-    'code_mode is not held in this turn: this turn answers words from outside the space',
+    "code_mode is not held in this turn: this turn answers words that are not the person's own",
   )
   let all = (await read(ada)).updates
   let fixed = all.find((u) => u.subject == 'Recipes: printing works again')!

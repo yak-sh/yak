@@ -124,6 +124,8 @@ test('wake_set keeps a one-shot in ten minutes, as the person, and the alarm com
     at: wake.at,
     for: person,
     note: 'Remind them to call Mom.',
+    // The conversation that set it, which it wakes (T-2356).
+    target: rootOf(eid, person),
   })
   assertEquals(early, 0)
   assertEquals(next, Date.parse(wake.at))

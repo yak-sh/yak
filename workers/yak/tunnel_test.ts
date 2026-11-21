@@ -431,6 +431,11 @@ let telling = async () => {
       idFromName: (n: string) => n,
       get: () => ({
         fetch: async (r: Request) => {
+          // A seat written in a space tells its Operator (build.ts
+          // `HEARD`), which none here watches.
+          if (new URL(r.url).pathname == '/heard') {
+            return new Response(null, { status: 410 })
+          }
           if (new URL(r.url).pathname == '/operator/read') {
             let { task } = await r.json()
             return Response.json({}, { status: task == HELPER ? 200 : 404 })
