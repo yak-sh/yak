@@ -879,6 +879,16 @@ export let referralDoc: VocabDoc = {
       description:
         "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
     },
+    // A person's own chat account linked: what its guest raised before is
+    // re-read as theirs in each space they sit in (chat.ts `linkedNow`).
+    chat_linked: {
+      effect: true,
+      created: ['connection'],
+      changed: ['connection.status'],
+      target: '.connection.status=connected&.connection.owner.person',
+      description:
+        "re-read what a chat account's guest raised as its person's once they link it, so a request within their role goes on without waiting for anyone",
+    },
     // The platform's answer in a support thread, or its completion, carried
     // to the thread's person (support-reply.ts).
     support_reply: {

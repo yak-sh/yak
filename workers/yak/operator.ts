@@ -3359,16 +3359,15 @@ export let operating = (
   let approve = approvals(
     store,
     async (a, { who, space }) => {
-      let session = a.why == 'authority' && who
-        ? await rootAt(store, space, who)
-        : a.session
-      if (!await workingOf(store, session)) {
-        throw new CallError(
-          'tool',
-          `${await named(
-            String(who),
-          )} has no conversation here to do it from yet.`,
-        )
+      let session = a.session
+      // An approver who never talked with the Operator has their
+      // conversation begun to do it from.
+      if (a.why == 'authority' && who) {
+        let at = await dir().at(space)
+        if (!at) throw new CallError('tool', 'That space is gone.')
+        let begun = await conversing({ person: who }, at)
+        if (begun.fresh) await g.apply([begun.fresh], { trusted: true })
+        session = begun.session
       }
       let tool = offerable(await roster(session, { approved: true }))
         .find((t) => t.name == a.tool)

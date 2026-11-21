@@ -3,6 +3,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
 import { assert, assertEquals, assertRejects } from '@std/assert'
+let equal = assertEquals
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -13,6 +14,7 @@ import {
   escalate,
   escalationAnswer,
   investigatorOf,
+  linkedTo,
   oddReport,
 } from './operator-escalate.ts'
 import { rootOf } from './operator-root.ts'
@@ -460,5 +462,61 @@ test("an odd request is looked into by a helper with a guest's tools, whose repo
   assert(
     JSON.stringify(await entries(mine)).includes('likely phishing'),
     "the helper's report reaches the owner's conversation",
+  )
+})
+
+test('a guest who links their account to a member is served within their role, with no one else to wait for; beyond it, it still waits', async () => {
+  let ctx = await operatorContext(env, held, space)
+  let raise = async (say: string) =>
+    JSON.parse(
+      String(
+        await escalate(store, ctx, space).run({ say }, {
+          session: theirs,
+          call: { entity: { eid: crypto.randomUUID() } },
+          entries: [],
+        }),
+      ),
+    ).escalation
+  let copiesOf = (raised: string) =>
+    store.g.read(q`.operator_request.raised=${raised}&*`)
+  let answered = async (raised: string) =>
+    (await copiesOf(raised)).map((b) =>
+      (b.operator_request as { answered_by?: string }).answered_by
+    )
+  // As a viewer, what they asked still waits for those whose role allows it.
+  let looked = await raise('Wants the illustrated guide turned into an app.')
+  equal(
+    await linkedTo(store, eid, writer, {
+      person: bo,
+      role: 'viewer',
+      name: 'Bo',
+    }),
+    [],
+  )
+  equal(await answered(looked), [undefined, undefined])
+  // As an editor, it is theirs: closed for the rest, and back with them.
+  let [back] = await linkedTo(store, eid, writer, {
+    person: ana,
+    role: 'editor',
+    name: 'Ana',
+  })
+  equal(await answered(looked), [ana, ana])
+  let [request] = await store.g.get([back])
+  let { person: to, channel } = request.operator_request as Record<
+    string,
+    unknown
+  >
+  equal([to, channel], [ana, 'linked'])
+  await service.drain()
+  assert(
+    asked.some((r) =>
+      turn(r).words.includes('is theirs to decide') &&
+      turn(r).words.includes('illustrated guide')
+    ),
+  )
+  assert(
+    JSON.stringify(await entries(mine)).includes(
+      'Ana linked',
+    ),
   )
 })

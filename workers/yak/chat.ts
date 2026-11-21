@@ -904,12 +904,46 @@ let heard = async (env: Env, via: string, connection: string, room: string) => {
   }
 }
 
+/** The guest a chat account `id` on `via` speaks as while linked to nobody
+ * ({@link guestOf}). */
+export let guestId = (via: string, id: string) =>
+  derivedEid(`chatted|${via}|${id}`)
+
+/**
+ * The chat account a person's connection `connection` links (`linked`): in
+ * each space they sit in, what the guest it spoke as before raised is re-read
+ * as theirs (operator-escalate.ts `linkedTo`), so a request made before
+ * linking goes on without waiting for anyone its role does not need.
+ */
+export let linkedNow = async (env: Env, connection: string) => {
+  let [row] = await read(env, line`.entity.eid=${connection}&*`)
+  let c = comp(row ?? undefined, CONNECTION)
+  let platform = [...PLATFORMS.values()].find((p) =>
+    p.user && p.user == c.integration
+  )
+  if (!platform || c.status != 'connected' || !c.owner || !c.account) return
+  let person = String(c.owner)
+  let { directoryOf } = await need()
+  let dir = directoryOf(env.STORE)
+  let [seats, known] = await Promise.all([
+    dir.seats(person),
+    dir.known(person),
+  ])
+  let { operatorDoor } = await import('./build-door.ts')
+  for (let s of seats) {
+    await operatorDoor(env, s.space, { person, role: s.role }, 'linked', {
+      from: guestId(platform.name, String(c.account)),
+      name: known?.name ?? '',
+    })
+  }
+}
+
 /** The guest who speaks as `id` on `via`: a person with no seat and no
  * address, minted the first time they speak, as a stranger's number is
  * (operator-texts.ts `phonedIn`); or who stands for a group text's thread
  * (operator-texts.ts `textedOperator`). */
 export let guestOf = async (env: Env, via: string, id: string) => {
-  let person = derivedEid(`chatted|${via}|${id}`)
+  let person = guestId(via, id)
   let [had] = await read(env, line`.entity.eid=${person}&.person`)
   let { KERNEL, meta } = await need()
   if (!had) {

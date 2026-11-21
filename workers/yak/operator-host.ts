@@ -2157,6 +2157,21 @@ export let operatorRequest = async (
     let { matching } = await import('./operator-trials.ts')
     return Response.json(await matching(store, person, args))
   }
+  // A chat account the guest `from` spoke as is the person's now: what that
+  // guest raised is re-read as theirs (operator-escalate.ts `linkedTo`).
+  if (path == '/operator/linked') {
+    let { linkedTo } = await import('./operator-escalate.ts')
+    let back = await linkedTo(store, spaceId, String(args.from ?? ''), {
+      person,
+      role: held.role == 'owner' || held.role == 'editor' ||
+          held.role == 'viewer'
+        ? held.role
+        : null,
+      name: String(args.name ?? '') || 'the person',
+    })
+    if (back.length) await armed()
+    return Response.json({ back })
+  }
   // What `from` had here is the person's now (newcomer.ts `keep`).
   if (path == '/operator/handover') {
     let { handOver } = await channels()
