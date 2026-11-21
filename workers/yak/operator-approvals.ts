@@ -211,7 +211,8 @@ async ({ tool, args, say }) => {
     return `Nothing has happened yet. It waits for them to approve it ` +
       `("${say}"): a card with Approve and Decline is in their ` +
       `conversation now. Tell them in a line to press Approve on it within ` +
-      `${minutes} minutes, and write no link. ${only}`
+      `${minutes} minutes. Write no link to approve it; any other link they ` +
+      `asked for still goes in your answer. ${only}`
   }
   if (!at.number) {
     return `Nothing has happened yet. It waits for them to approve it ` +
@@ -348,7 +349,7 @@ export let approvals = (
       let came: Standing = { state: 'declined', ...about }
       await store.g.apply([
         { entity: { eid }, declined: {} },
-        pressed(a, await topOf(store.g, a.session), came),
+        pressed(a, await topOf(store.g, a.session), came, own),
       ], { trusted: true })
       return came
     }
@@ -369,7 +370,9 @@ export let approvals = (
     } finally {
       pressing.delete(eid)
     }
-    await store.g.apply([pressed(a, await topOf(store.g, a.session), came)], {
+    await store.g.apply([
+      pressed(a, await topOf(store.g, a.session), came, own),
+    ], {
       trusted: true,
     })
     return came
@@ -381,8 +384,13 @@ export let pressed = (
   a: Approval,
   session: string,
   standing: Standing,
+  own = false,
 ): Bundle => {
-  let link = a.number ? `the link texted to ${a.number}` : 'your link'
+  let link = own
+    ? 'its card in the conversation'
+    : a.number
+    ? `the link texted to ${a.number}`
+    : 'your link'
   return {
     entity: { eid: crypto.randomUUID() },
     entry: { session, from: 'the system' },

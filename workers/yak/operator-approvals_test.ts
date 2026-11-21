@@ -329,4 +329,15 @@ test("a card pressed in a texted approval's conversation is still theirs alone",
     'theirs',
   )
   equal((await press(approval, digest, { ...own, who: person })).state, 'done')
+  let notes = await store.g.read(
+    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
+  )
+  equal(
+    notes.some((n) =>
+      /Approve on its card .*lu@x\.com/.test(
+        String((n.content as { body: string }).body),
+      )
+    ),
+    true,
+  )
 })
