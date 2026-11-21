@@ -42,9 +42,9 @@ export let overviewOf = async (
   let g = { store, space, person, dir: directoryOf(env.STORE) }
   let since = new Date(Date.now() - DAYS * 86_400_000).toISOString()
   let [said, work, updates, handoffs, asks] = await Promise.all([
-    recentOf(g, 8),
-    workingOf(g, 6),
-    updatesText(g, 6),
+    recentOf(g, 4),
+    workingOf(g, 4),
+    updatesText(g, 4),
     waiting(store, person),
     store.g.read(line`.ask&.created.at>=${since}&.fields=cost.dollars`),
   ])
