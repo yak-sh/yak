@@ -122,6 +122,10 @@ let page = (
       log.push(`view ${v.width}x${v.height}${v.hasTouch ? ' touch' : ''}`)
       return Promise.resolve()
     },
+    emulateMediaFeatures: (features) => {
+      log.push(features.map((f) => `${f.name} ${f.value}`).join(', '))
+      return Promise.resolve()
+    },
     setCookie: (...c) => {
       cookies.push(...c)
       return Promise.resolve()
@@ -257,6 +261,15 @@ test('a visit takes its steps in order on a phone, and keeps each named screensh
   assertEquals(result.shots, [{ name: 'typed', image: 'png-bytes' }])
   assertEquals(result.accessibility != null, true)
   assertEquals(result.image, 'png-2')
+})
+
+test('a visit in the dark theme asks for it before the page loads', async () => {
+  let p = page()
+  await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view: { ...view, dark: true },
+  })
+  assertEquals(p.log.slice(0, 2), ['view 390x844', 'prefers-color-scheme dark'])
 })
 
 test('a visit that asks for no audit reads its text and runs no check', async () => {

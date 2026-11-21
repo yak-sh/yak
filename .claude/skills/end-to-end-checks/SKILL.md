@@ -222,6 +222,7 @@ answer gives the HTTP status, the page's errors and its visible text. Read the p
 yak admin browse /manage/checks/operator --as checks
 yak admin browse /manage/checks/operator --as checks --steps @.scratch/say.json
 yak admin browse https://checks.yaks.app/roster/ --width 1280 --height 800 --touch=false --as checks
+yak admin browse /manage/checks/people --dark --as checks   # the dark theme
 ```
 
 `--steps` is a JSON array, run in order once the page loads:

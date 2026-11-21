@@ -21,13 +21,15 @@ import {
 export { CONNECT, OPEN, RELEASE } from './browser-session.ts'
 export { bounded, BrowserTimeout } from './browser-time.ts'
 
-/** A window: its size, how long to wait after loading, and whether it is a
- * phone's (touch events, a mobile viewport). */
+/** A window: its size, how long to wait after loading, whether it is a
+ * phone's (touch events, a mobile viewport), and whether the system asks for
+ * the dark theme. */
 export type View = {
   width: number
   height: number
   wait: number
   touch?: boolean
+  dark?: boolean
 }
 /** A cookie the page is opened with: a private app's sign-in. One with a
  * `url` and no `domain` is host-only, as a `__Host-` cookie must be. */
@@ -111,6 +113,9 @@ export type Page = {
     isMobile?: boolean
     hasTouch?: boolean
   }): Promise<void>
+  emulateMediaFeatures(
+    features: { name: string; value: string }[],
+  ): Promise<void>
   setCookie(...cookies: Cookie[]): Promise<void>
   goto(url: string, options: {
     waitUntil: 'domcontentloaded'
@@ -508,6 +513,12 @@ let loaded = async (
       page.on('error', error)
       signal.throwIfAborted()
       await page.setViewport(viewport(view))
+      signal.throwIfAborted()
+      if (view.dark) {
+        await page.emulateMediaFeatures([
+          { name: 'prefers-color-scheme', value: 'dark' },
+        ])
+      }
       signal.throwIfAborted()
       if (cookies.length) await page.setCookie(...cookies)
       signal.throwIfAborted()

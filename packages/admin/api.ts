@@ -335,7 +335,13 @@ export type Step =
 /** A page to open in the browser: where, in what window, and what to do. */
 export type Browse = {
   url: string
-  view?: { width?: number; height?: number; wait?: number; touch?: boolean }
+  view?: {
+    width?: number
+    height?: number
+    wait?: number
+    touch?: boolean
+    dark?: boolean
+  }
   steps?: Step[]
   /** Browser permissions the page holds as it opens, such as
    * `notifications`. */

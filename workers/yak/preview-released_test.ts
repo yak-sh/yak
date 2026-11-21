@@ -23,6 +23,7 @@ let browsing: Browsing = {
           ...actions(),
           on: () => {},
           setViewport: () => Promise.resolve(),
+          emulateMediaFeatures: () => Promise.resolve(),
           setCookie: () => Promise.resolve(),
           goto: async (url: string) => {
             let { host, pathname } = new URL(url)

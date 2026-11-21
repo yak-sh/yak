@@ -39,6 +39,7 @@ let browsing: Browsing = {
           },
           on: () => {},
           setViewport: () => Promise.resolve(),
+          emulateMediaFeatures: () => Promise.resolve(),
           setCookie: () => Promise.resolve(),
           goto: async (url) => {
             if (new URL(url).searchParams.has('slow')) await time.advance(3_000)
