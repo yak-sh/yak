@@ -66,6 +66,12 @@ export let operatorDoc: VocabDoc = {
           description:
             "Where the person's role does not allow it and their words came where nothing proves who sent them: who approves it once the person has confirmed it is theirs, asked anew then.",
         },
+        raised: {
+          type: 'string',
+          index: true,
+          description:
+            "The escalation (operator_request.raised) the turn that asked it was answering. Where the guest who raised it links their chat account to a member whose role allows it, it is theirs: this approval and its approval_ask decisions are cancelled{}, and its approvers told (yaks.app's operator-escalate.ts `linkedTo`).",
+        },
       },
     },
     approval_ask: {

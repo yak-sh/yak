@@ -18,6 +18,7 @@ import {
   oddReport,
 } from './operator-escalate.ts'
 import { rootOf } from './operator-root.ts'
+import { askOf, waiting } from './operator-approvals.ts'
 import { conversationOf } from './operator-host.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { arrived, reading } from './inbox.ts'
@@ -494,6 +495,26 @@ test('a guest who links their account to a member is served within their role, w
     [],
   )
   equal(await answered(looked), [undefined, undefined])
+  // Jeff's conversation, answering it, asked an approval Bo is asked too.
+  let approval = crypto.randomUUID()
+  await store.g.apply([{
+    entity: { eid: rootOf(eid, bo) },
+    session: {},
+    operator_session: { space: eid, person: bo, channel: 'chat' },
+  }], { trusted: true })
+  await store.g.apply(
+    await waiting(store, eid, approval, {
+      person,
+      session: mine,
+      tool: 'app_new',
+      args: {},
+      say: 'Make the guide an app',
+      expires: new Date(Date.now() + 60_000).toISOString(),
+      approvers: [person, bo],
+      raised: looked,
+    }),
+    { trusted: true },
+  )
   // As an editor, it is theirs: closed for the rest, and back with them.
   let [back] = await linkedTo(store, eid, writer, {
     person: ana,
@@ -501,6 +522,13 @@ test('a guest who links their account to a member is served within their role, w
     name: 'Ana',
   })
   equal(await answered(looked), [ana, ana])
+  let open = await store.g.get([approval, askOf(approval, bo)])
+  equal(open.map((b) => !!b.cancelled), [true, true])
+  assert(
+    JSON.stringify(await entries(rootOf(eid, bo))).includes(
+      'went through as theirs',
+    ),
+  )
   let [request] = await store.g.get([back])
   let { person: to, channel } = request.operator_request as Record<
     string,

@@ -53,6 +53,8 @@ export type Approval = {
   /** who approves it once the person confirms it is theirs, where their
    * role does not allow it and nothing proved who asked */
   then?: string[]
+  /** the escalation the turn that asked it was answering */
+  raised?: string
 }
 
 /** Everyone who may answer an approval. */

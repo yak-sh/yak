@@ -85,6 +85,10 @@ export type Route = { why: 'identity' | 'authority'; approvers: string[] }
  *   why: 'authority',
  *   approvers: ['jeff', 'matt'],
  * })
+ * equal(route({ act: 'app_new', person: 'bo', seats }), {
+ *   why: 'authority',
+ *   approvers: ['jeff', 'matt', 'ana'],
+ * })
  * equal(route({ person: 'stranger', seats }), {
  *   why: 'authority',
  *   approvers: ['jeff', 'matt', 'ana'],

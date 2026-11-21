@@ -272,6 +272,9 @@ export let escalate = (
       }
       let address = await writerOf(store, ctx.dir, person, from)
       await Promise.all(to.map((p) => raise(p, { address })))
+      // A member (a viewer) is who they are already.
+      let seated = (await ctx.dir.roles(space)).some((s) => s.person == person)
+      if (seated) return JSON.stringify({ escalation: raised })
       let verify = await verifying(
         store,
         space,
@@ -502,12 +505,66 @@ export let oddReport = (
   },
 })
 
+// The approvals asked while answering escalation `raised` and still open,
+// with the decisions asking their other approvers: each cancelled, and each
+// of those approvers told it went through as `name`'s.
+let withdrawn = async (
+  store: Store,
+  space: string,
+  raised: string,
+  name: string,
+) => {
+  let approvals = (await store.g.read(
+    q`.operator_approval.raised=${raised}&*`,
+  )).filter((b) => !b.verified && !b.declined && !b.cancelled)
+  let rows: Bundle[] = []
+  for (let a of approvals) {
+    let { say } = part<{ say: string }>(a, 'operator_approval')
+    let asks = (await store.g.read(
+      q`.approval_ask.approval=${a.entity.eid}&*`,
+    )).filter((b) => !b.decided && !b.cancelled)
+    rows.push(
+      ...[a, ...asks].map((b) => ({
+        entity: { eid: b.entity.eid },
+        cancelled: {},
+        $actor: { by: space },
+      })),
+      // Told in their conversation, where they have one; the decision
+      // leaves their Updates either way.
+      ...(await Promise.all(asks.map(async (b) => {
+        let session = await rootAt(
+          store,
+          space,
+          String(part<Comp>(b, 'filed').assignee),
+        )
+        let [there] = await store.g.get([session], ['session'])
+        return there?.session
+          ? [{
+            entity: { eid: derivedEid(`operator-linked|${b.entity.eid}`) },
+            entry: { session, from: 'the system' },
+            content: {
+              body:
+                `${name} linked their chat account to themselves, so what you were asked to approve ("${say}") went through as theirs, within their role, and no longer waits on you.`,
+            },
+            notice: {},
+            system: {},
+            channel: { name: 'escalation' },
+            $actor: { by: space },
+          }]
+          : []
+      }))).flat(),
+    )
+  }
+  return rows
+}
+
 /**
  * A chat account the guest `guest` spoke as is linked to `person` now: what
  * that guest raised and nobody answered is re-read as theirs. Within their
  * role (operator-route.ts), it no longer waits on anyone: each copy is
- * closed, its people are told, and it comes back to the person's own
- * conversation to do. Beyond it, it stays with those whose role allows it.
+ * closed, any approval asked while answering it is cancelled, its people are
+ * told, and it comes back to the person's own conversation to do. Beyond it,
+ * it stays with those whose role allows it.
  */
 export let linkedTo = async (
   store: Store,
@@ -557,6 +614,7 @@ export let linkedTo = async (
         channel: { name: 'escalation' },
         $actor: { by: space },
       }))),
+      ...await withdrawn(store, space, String(raised), name),
     ], { trusted: true })
     back.push(
       await receive(

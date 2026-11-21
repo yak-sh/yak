@@ -2532,6 +2532,12 @@ export let operating = (
     // someone's whose does (operator-route.ts).
     let closed = asking && PLATFORMS.has(channel) &&
       await privateIn(store, session)
+    // What another conversation raised, which an approval this turn asks is
+    // part of (operator-escalate.ts `linkedTo`).
+    let answering = asking ? (await requestAt(store, session))?.request : null
+    let raised = answering?.channel == 'escalated'
+      ? answering.raised
+      : undefined
     let confirmed = (tools: Tool[]) =>
       asking
         ? deferred(confirming(
@@ -2546,6 +2552,7 @@ export let operating = (
               number: confirm,
               chat: channel == 'chat',
               private: closed,
+              ...raised ? { raised } : {},
               // A turn from a chat room asks there, privately.
               ...PLATFORMS.has(channel) && rooms[0] ? { room: rooms[0] } : {},
             },
@@ -2645,7 +2652,9 @@ export let operating = (
           ...ctx.pa ? [spacesTool(env, space, ctx.person, ctx.beyond)] : [],
         ]
         : [],
-      ...seated ? [] : [escalate(store, ctx, space, hostUrl(env))],
+      // Whoever may change nothing here (a guest, a viewer) raises what needs
+      // more with everyone whose role allows it (operator-route.ts).
+      ...member ? [] : [escalate(store, ctx, space, hostUrl(env))],
       ...chat,
       ...api(member),
       ...platform ? adminTools(env, whole) : [],

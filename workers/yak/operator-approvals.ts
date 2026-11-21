@@ -202,6 +202,8 @@ export type At = {
    * role allows the act may vouch for them */
   private?: boolean
   room?: Room
+  /** the escalation the turn is answering (operator-escalate.ts) */
+  raised?: string
 }
 
 /** A chat room a turn came from (operator-rooms.ts `roomsOf`): its
@@ -337,6 +339,7 @@ async ({ tool, args, say }) => {
     person: at.person,
     session: at.session,
     ...at.number ? { number: at.number } : {},
+    ...at.raised ? { raised: at.raised } : {},
     tool,
     args,
     say,
@@ -588,7 +591,7 @@ export let approvals = (
         ? { logo: (await store.logos([integration]))[integration] ?? null }
         : {},
     }
-    if (row.verified || row.declined || pressing.has(eid)) {
+    if (row.verified || row.declined || row.cancelled || pressing.has(eid)) {
       return { state: 'used', ...about }
     }
     if (Date.parse(a.expires) < now()) return { state: 'expired', ...about }
@@ -663,7 +666,9 @@ export let answered = async (
   let of = (asked?.approval_ask as { approval?: string } | undefined)?.approval
   let [row] = of ? await store.g.get([of]) : [asked]
   let a = row?.operator_approval as Approval | undefined
-  if (!a || !decided || row.verified || row.declined) return
+  if (!a || !decided || row.verified || row.declined || row.cancelled) {
+    return
+  }
   let approve = decided.choice == CHOICE.approve
   await press(row.entity.eid, digestOf(a), {
     press: approve,
