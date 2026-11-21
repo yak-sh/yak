@@ -84,10 +84,18 @@ let chat: Omit<Tool, 'title' | 'description'> = {
 
 // What words given to a conversation name of themselves (@yaks/harness
 // `conversation_start`, `conversation_send`).
-let PROJECT = str('The space to talk with, by its slug or id.')
-let SESSION = str(
-  'The conversation, as conversation_start or conversation_recent names it.',
-)
+let PROJECT = {
+  ...str(
+    'The space to talk with: its slug, as in <space>.yaks.app, or its id as conversation_projects lists it.',
+  ),
+  minLength: 1,
+}
+let SESSION = {
+  ...str(
+    'The conversation: the session id conversation_start answered, or one conversation_recent lists. Never empty; with none yet, call conversation_start or conversation_recent first.',
+  ),
+  minLength: 1,
+}
 let given = {
   request: str(
     'Your own id for these words. Sending them again under it does nothing, so a retry never says them twice.',
@@ -168,9 +176,12 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
   conversing(
     'conversation_read',
     {
-      session: str(
-        'The conversation, a helper or fork working under it, a task, or any line of one.',
-      ),
+      session: {
+        ...str(
+          'The conversation, a helper or fork working under it, a task, or any line of one: the session id conversation_start answered, or one conversation_recent lists. Never empty; with none yet, call conversation_start or conversation_recent first.',
+        ),
+        minLength: 1,
+      },
       limit: { type: 'integer', minimum: 1, maximum: 256 },
       before: {
         type: 'integer',

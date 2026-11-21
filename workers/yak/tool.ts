@@ -513,14 +513,22 @@ let entered = async (
     : { space: await named(ctx, slug) }
 }
 
+/** An entity's id, as a UUID. */
+export let EID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
 // The space a call names by its address. An assistant remembers a space by
 // the name it last used, and where that space went is what its old
 // hostname's redirect says to anybody, so the refusal says it too and the
 // next call names the space where it lives (D-131924). A name that never
 // was one is often a guess at the caller's own (`nottawa` for
 // `nottawatownship`), so the refusal names theirs, as `notMember` does.
+// It names it by its slug, or by its id as conversation_projects lists it;
+// an id is read as its slug, so a narrowed directory still decides.
 let named = async (ctx: Ctx, slug: string) => {
-  let space = await ctx.dir.space(slug)
+  let space = await ctx.dir.space(
+    EID.test(slug) ? (await ctx.dir.at(slug))?.slug ?? slug : slug,
+  )
   if (space) return space
   let moved = await ctx.dir.formerly(slug)
   if (moved) {

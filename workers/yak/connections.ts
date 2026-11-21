@@ -123,7 +123,8 @@ import { telling } from '@yaks/platform/cookie'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import { held as live } from './browser-sessions.ts'
-import { type Ctx as Asking, refuse } from './tool.ts'
+import { type Ctx as Asking, EID, refuse } from './tool.ts'
+export { EID }
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
 import { adopting, BROKER, offersOf } from './catalog.ts'
@@ -138,9 +139,6 @@ let pendingAt = (state: string) => `connect:${state}`
 
 // The biggest webhook body kept, as a store keeps it: one blob.
 let HOOK_ROOM = 1_000_000
-
-export let EID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp

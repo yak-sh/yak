@@ -121,3 +121,28 @@ test('a space that is not there is refused with the spaces the caller has', asyn
     ],
   )
 })
+
+// conversation_projects lists spaces by id, so a call may name one that way;
+// the id is read as its slug, so a directory that hides the space still does.
+test('a space named by its id is the space with that id', async () => {
+  let id = '0b2f6c1e-1d4a-4c8e-9f3a-5e6d7c8b9a01'
+  let peterson = { eid: id, slug: 'peterson' } as unknown as Space
+  let dir = (shown: string[]) =>
+    ({
+      at: (eid: string) => Promise.resolve(eid == id ? peterson : null),
+      space: (slug: string) =>
+        Promise.resolve(shown.includes(slug) ? peterson : null),
+      formerly: () => Promise.resolve(null),
+      seats: () => Promise.resolve([]),
+      role: () => Promise.resolve('owner'),
+    }) as unknown as Directory
+  let seat = (d: Directory) =>
+    seatIn({ dir: d, person: 'p' } as unknown as Ctx, id).then(
+      ([s]) => s.space.slug,
+      (e) => e.message,
+    )
+  assertEquals(await Promise.all([seat(dir(['peterson'])), seat(dir([]))]), [
+    'peterson',
+    `no space ${id} — you are a member of no space yet. Get one by signing up at https://yaks.app, or by accepting an invitation to someone's space.`,
+  ])
+})
