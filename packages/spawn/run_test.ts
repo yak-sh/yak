@@ -202,6 +202,55 @@ test('a first run signs in with the offered account further under its weekly pac
   })
 })
 
+test('a run that ran before its request recorded an account carries its thread into the one it is given', async () => {
+  let { g } = tracked(false)
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let [own, teams] = ['.claude', '.claude-teams'].map((n) => `${dir}/${n}`)
+  let thread = (home: string) => `${home}/projects/-w/thread.jsonl`
+  Deno.mkdirSync(`${own}/projects/-w`, { recursive: true })
+  Deno.writeTextFileSync(thread(own), '{}\n')
+  let provider = identityEid('provider', ['claude'])
+  let launched = launching()
+  try {
+    await g.apply([
+      ...asking('S1', 'E1', 'fix it'),
+      { entity: { eid: provider }, provider: { name: 'claude' } },
+      {
+        entity: { eid: accountEid(teams) },
+        account: { home: teams, provider, offered: true },
+      },
+      {
+        entity: { eid: 'S1' },
+        session: { id: 'thread' },
+        process: { pid: 1, command: 'fake' },
+        exit: { code: 0 },
+      },
+      {
+        entity: { eid: 'E3' },
+        entry: { session: 'S1' },
+        content: { body: 'continue' },
+        using: { provider: FAKE.provider },
+      },
+    ])
+    await start(g, 'S1', {
+      dir,
+      cwd: dir,
+      adapters: { fake: claude },
+      env: { HOME: dir },
+      launch: launched.launch,
+      signal: AbortSignal.abort(),
+    })
+    assertEquals(launched.envs[0].CLAUDE_CONFIG_DIR, teams)
+    let there = (path: string) => Deno.stat(path).then(() => true, () => false)
+    assertEquals([await there(thread(own)), await there(thread(teams))], [
+      false,
+      true,
+    ])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a first run passes over an account whose five hours are spent', async () => {
   let { g } = tracked(false)
   let { teams } = await accounts(g)

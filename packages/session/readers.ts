@@ -357,7 +357,14 @@ let line: Reader = (e) => {
     : e.type == 'result' && e.is_error
     ? [{
       refusal: { code: String(e.subtype ?? 'error') },
-      content: { body: String(e.result ?? 'the turn failed') },
+      // A turn that failed before it began (a resume that finds no
+      // conversation) has no result text; its reason is in `errors`.
+      content: {
+        body: String(
+          e.result || (Array.isArray(e.errors) && e.errors.join('; ')) ||
+            'the turn failed',
+        ),
+      },
       output: {},
     }]
     : []

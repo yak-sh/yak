@@ -777,6 +777,7 @@ export let start = async (
   // A run signs in with the account its request records, else is given an
   // offered one. A CLI that runs only on offered accounts (`offeredOnly`)
   // never signs in with the box's default login, the owner's own.
+  let recorded = job.account
   let account = await accountFor(g, adapter, job)
   if (account) job = { ...job, account }
   if (adapter.offeredOnly && !job.account) {
@@ -798,6 +799,23 @@ export let start = async (
     // began a thread begins now, given everything it was told.
     if (!await requested(g, session)) return null
     let thread = comp(row, SESSION)?.id
+    // A thread begun before its request recorded an account sits in the
+    // box's default login; one just given an account carries on there, so
+    // the thread moves with it, or its provider finds no conversation.
+    if (thread != null && !recorded && job.account) {
+      let { account: _, ...bare } = job
+      let from = signedIn(
+        adapter.account!,
+        { get: (name) => runEnv(adapter, bare, o)[name] },
+      )
+      if (from && from != job.account.home) {
+        await moveThread(
+          { runner: adapter.account!, dir: from },
+          job.account.home,
+          String(thread),
+        )
+      }
+    }
     let said = thread == null
       ? await everything(g, session)
       : await unanswered(g, session)

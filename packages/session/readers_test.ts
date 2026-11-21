@@ -178,6 +178,20 @@ test('claude: a managed run opens with its id, and each reply names its request'
       output: {},
     }],
   )
+  // One that failed before it began says why in `errors`.
+  assertEquals(
+    entries(claude, {
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      errors: ['No conversation found with session ID: x'],
+    }),
+    [{
+      refusal: { code: 'error_during_execution' },
+      content: { body: 'No conversation found with session ID: x' },
+      output: {},
+    }],
+  )
   assertEquals(claude(say('hi', { timestamp: 'T1' })).at, 'T1')
 })
 
