@@ -35,7 +35,7 @@ let allowed = (url: URL) => {
     return false
   }
   if (url.hostname == 'yaks.app') {
-    return /^\/(?:mcp|invite|login\/link|api\/(?:fee|budget|comp|support|funnel|move|relocate|operator-copy|operator-graph|store-copy|graves|uses|account|tunnel)|space\/[a-z0-9-]+\/delete)$/
+    return /^\/(?:mcp|invite|login\/link|api\/(?:fee|budget|comp|spaces|support|funnel|move|relocate|operator-copy|operator-graph|store-copy|graves|uses|account|tunnel)|space\/[a-z0-9-]+\/delete)$/
       .test(url.pathname)
   }
   return /^[a-z0-9][a-z0-9-]*\.yaks\.app$/.test(url.hostname) &&

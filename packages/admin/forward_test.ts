@@ -100,6 +100,12 @@ test('the private admin forwards only visits to admin pages, using the private O
   equal(await response.json(), { bearer: '[redacted]', session: '[redacted]' })
 })
 
+test('forwarding preserves the platform free-space allowance door', async () => {
+  let url = 'https://yaks.app/api/spaces?person=checks%40bot.yak.sh'
+  equal((await handler(request(url))).status, 200)
+  equal(sent.at(-1)?.url, url)
+})
+
 test('forwarding preserves built-in store calls without returning the bearer', async () => {
   for (let door of ['query?q=.doc', 'vocab']) {
     let response = await handler(
