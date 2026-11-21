@@ -1996,11 +1996,8 @@ let showing = (app: Shown) =>
 // space's own manifest (`installing`), named for its Operator and opening its
 // chat, and the tags a phone reads beside it. The icon is the Operator's own
 // tile, the connector's, which is opaque, so iOS paints no black behind it.
-// The window wears the page's ground, light or dark (@yaks/ui's linen theme,
-// `--bg`), so the status bar reads as part of the page. Its
-// scope is the whole origin, so signing in stays in the window.
+// Its scope is the whole origin, so signing in stays in the window.
 let ICON = '/connector-512.png'
-let NIGHT = '#2b231f'
 let whoseOf = (space: Space) =>
   `${space.operator}, ${space.title || space.slug}’s Operator`
 let installable = (space: Space) =>
@@ -2011,22 +2008,8 @@ let installable = (space: Space) =>
       crossorigin: 'use-credentials',
     }),
     h('link', { rel: 'apple-touch-icon', href: ICON }),
-    h('meta', {
-      name: 'theme-color',
-      content: PLATFORM_BACKGROUND,
-      media: '(prefers-color-scheme: light)',
-    }),
-    h('meta', {
-      name: 'theme-color',
-      content: NIGHT,
-      media: '(prefers-color-scheme: dark)',
-    }),
     h('meta', { name: 'mobile-web-app-capable', content: 'yes' }),
     h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }),
-    h('meta', {
-      name: 'apple-mobile-web-app-status-bar-style',
-      content: 'default',
-    }),
     h('meta', { name: 'apple-mobile-web-app-title', content: space.operator }),
   ])
 

@@ -289,7 +289,8 @@
   .Framed {
     display: block;
     height: var(--viewport-height, 100dvh);
-    overflow: hidden;
+    min-height: 0;
+    overflow: clip;
   }
   .Framed_Main {
     max-width: none;
@@ -301,11 +302,15 @@
   .Frame_Column {
     container: workspace / inline-size;
   }
-  /* Over the body, so what the bar opens under itself lies above it. */
+  /* WebKit extends the solid colour of an edge-pinned bar into the status
+     area. Keep the controls below any inset the viewport exposes. */
   .Frame_Bar {
     anchor-name: --frame-bar;
-    position: relative;
+    position: sticky;
+    top: 0;
     z-index: 1;
+    padding-block-start: calc(var(--toolbar-padding-block) +
+      env(safe-area-inset-top, 0px));
   }
   .Frame_Menu {
     display: none;

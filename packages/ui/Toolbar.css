@@ -38,17 +38,19 @@
 }
 
 .Toolbar {
+  --toolbar-padding-block: .75rem;
   display: flex;
   align-items: center;
   gap: .75rem;
   min-width: 0;
-  padding: .75rem 1.25rem;
+  padding: var(--toolbar-padding-block) 1.25rem;
   background: var(--bg);
   border-bottom: 1px solid var(--border2);
 }
 @media (max-width:700px) {
   .Toolbar {
-    padding: .5rem 1rem;
+    --toolbar-padding-block: .5rem;
+    padding-inline: 1rem;
   }
 }
 .Toolbar-compact {

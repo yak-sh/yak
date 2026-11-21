@@ -66,12 +66,14 @@ import {
 } from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
+import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
 
 import { versionOf } from './running.ts'
 
 import { yak } from './mascot.ts'
 
 import { asset, links } from './sheets.ts'
+import { FRAMED } from './frame.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
 import { decodeHTML } from 'entities'
 
@@ -203,12 +205,20 @@ let documented = (
   preview?: Preview,
 ) => {
   let file = (name: string) => asset(env, name, undefined, assets)
+  let layouts = layout.split(/\s+/).filter(Boolean)
+  let framed = layouts.includes(FRAMED)
   let open = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light dark">${
+    framed
+      ? `
+<meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#2b231f" media="(prefers-color-scheme: dark)">`
+      : ''
+  }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
 ${previewTags(env, preview ?? { title: `${decodeHTML(title)} · yaks.app` })}
 ${links(env, 'pages.css', undefined, assets)}${
@@ -218,7 +228,7 @@ ${links(env, 'pages.css', undefined, assets)}${
   }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main class="${
-    layout.split(/\s+/).filter(Boolean).map((name) => name + '_Main').join(' ')
+    layouts.map((name) => name + '_Main').join(' ')
   }">${main}`
   let close = `</main><script type="module" src="${
     file('_dates.js')
