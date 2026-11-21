@@ -240,17 +240,48 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   // A new build shipped to replace the folder leaves none of the last one.
   dist.splice(0, dist.length, 'about/index.html', '_astro/app2.js')
   box.files.set('/workspace/dist/_astro/app2.js', 'boot2()')
-  let again = await tool('sandbox_ship').run(ctx, {
+  let staged = await tool('app_files').run(ctx, {
+    app: 'chess',
+    path: 'notes.txt',
+    content: 'Keep working in this draft',
+  })
+  let reconnected: Ctx = {
+    ...ctx,
+    who: {
+      person: ADA,
+      via: 'oauth',
+      agent: 'claude-ai',
+      instrument: crypto.randomUUID(),
+    },
+  }
+  let again = await tool('sandbox_ship').run(reconnected, {
     app: 'chess',
     paths: ['dist'],
     into: 'site',
     replace: true,
+  })
+  assertEquals(again.value, {
+    draft: (staged.value as { draft: string }).draft,
   })
   assertStringIncludes(again.text, 'deleted 1 the build no longer makes')
   let listed = await tool('app_files').run(ctx, { app: 'chess', op: 'list' })
   assertStringIncludes(listed.text, 'site/_astro/app2.js')
   assert(!listed.text.includes('site/_astro/app.js '), listed.text)
   assertStringIncludes(listed.text, 'chess.js')
+
+  dist.splice(1)
+  let trimmed = await tool('sandbox_ship').run(reconnected, {
+    app: 'ada/chess',
+    draft: (staged.value as { draft: string }).draft,
+    paths: ['dist'],
+    into: 'site',
+    replace: true,
+  })
+  assertStringIncludes(trimmed.text, 'the draft already held as built')
+  assertStringIncludes(
+    trimmed.text,
+    'deleted 1 the build no longer makes: site/_astro/app2.js',
+  )
 
   // Every one of those touched the same container, under the space's own id.
   assertEquals([...box.alive], [named(space.eid, ADA)])

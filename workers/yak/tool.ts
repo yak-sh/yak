@@ -331,7 +331,7 @@ export let SPACE = str(
     "'<space>/<app>'), else an Operator's own space, else your own space",
 )
 
-export let APP = str('the app slug, as in <space>.yaks.app/<app>/')
+export let APP = str('the app slug, or <space>/<app> to name its space too')
 
 export let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) {

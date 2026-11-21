@@ -162,11 +162,11 @@ export let invokePackage = async (
   let declaration = declarations().find((d) => d.name == name)
   if (!declaration) throw refuse('missing', `no store tool ${name}`)
   let { kind, definition } = declaration
-  let { space: _, app: appArg, ...input } = args
   let write = definition.readOnly !== true
   if (kind == 'operator') return await operatorWork(ctx, name, args, write)
   let appTarget = kind == 'app' ? await inApp(ctx, args, write) : undefined
   let target = appTarget ?? await inSpace(ctx, args, write)
+  let { space: _, app: appArg, ...input } = args
   let { space, who } = target
   let store = appTarget?.store ?? storeOf(ctx.env.STORE, PLATFORM_STORE)
   if (kind == 'directory') {

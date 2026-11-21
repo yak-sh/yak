@@ -19,6 +19,19 @@ test('the slice is storable', () => {
   assertEquals(storable(slice), [])
 })
 
+test('storable explains property spelling and reserved names separately', () => {
+  let media = (prop: string) =>
+    storable(
+      doc({ lovedfirst_media: { properties: { [prop]: { type: 'string' } } } }),
+    )
+  let [spelling] = media('blobHash')
+  assert(spelling.includes('lowercase'))
+  assert(spelling.includes('"blob_hash"'))
+  assert(!spelling.includes('"eid"'))
+  assertEquals(media('blob_hash'), [])
+  assert(media('eid')[0].includes('reserved name "eid"'))
+})
+
 test('entity-named references are storable properties', () => {
   assertEquals(
     storable(doc({
@@ -86,7 +99,7 @@ test('storable refuses what a table cannot lower', () => {
   )
   assert(said.includes('recipe.nested declares no type'))
   assert(said.includes('recipe.linked uses $ref'))
-  assert(said.includes('recipe."eid" is not a property name'))
+  assert(said.includes('recipe."eid" uses the reserved name "eid"'))
   assert(said.includes('starting with a lowercase letter'))
   assert(said.includes('Name it "bell_two".'))
   assert(said.includes('recipe.aim is a reference without a death word'))

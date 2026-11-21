@@ -400,6 +400,7 @@ import {
   replayed,
   restoring,
   served,
+  shipping,
   when,
   whichDraft,
   type Written,
@@ -410,6 +411,7 @@ import { within } from '@yaks/workerd/rate'
 import {
   accounted,
   admin,
+  apart,
   APP,
   type Args,
   asCaller,
@@ -2898,9 +2900,19 @@ export let wroteAt = async (
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
   draft?: Asked,
+  replace?: string,
 ) => {
   await c.time('pictures', () => pictured(files))
-  return await wrotePinned(env, space, app, who, await hashed(files), c, draft)
+  return await wrotePinned(
+    env,
+    space,
+    app,
+    who,
+    await hashed(files),
+    c,
+    draft,
+    replace,
+  )
 }
 
 /**
@@ -2921,11 +2933,12 @@ export let wrotePinned = async (
   sent: Change[],
   c: Clock = clock(),
   draft?: Asked,
+  replace?: string,
 ) => {
   await admitted(env, space, app, sent, c)
   let landing = await c.time(
     'files',
-    () => drafted(env, space, app, who, sent, draft),
+    () => drafted(env, space, app, who, sent, draft, replace),
   )
   return { ...landing, paths: sent.map((f) => f.path) }
 }
@@ -3068,7 +3081,8 @@ export let wrote = async (...args: Parameters<typeof wroteAt>) =>
  * Changes into an app's draft (written.ts `modifying`), with the wrangler
  * config the app serves by once they have landed, worked out beside them so
  * it adds no wait. Answers which paths the draft already held as sent, the
- * draft they landed in and the app's open drafts.
+ * draft they landed in and the app's open drafts. With `replace`, all other
+ * files under that folder are deleted in the same write.
  */
 export let drafted = async (
   env: Env,
@@ -3077,25 +3091,35 @@ export let drafted = async (
   who: Who,
   changes: Change[],
   asked?: Asked,
+  replace?: string,
 ) => {
   let raw = r2RawObjects(env.BLOBS)
   let config: Promise<Config> = Promise.resolve({})
-  let { already, draft, drafts } = await modifying(
+  let keep = replace ? new Set(changes.map((c) => c.path)) : null
+  let { already, draft, drafts, value: gone } = await modifying(
     raw,
     directory(bound(env.DIRECTORY, dirPart.fetch, env)),
     space,
     app,
     who,
     (draft) => {
-      config = configAfter(raw, changes, draft)
+      let gone = keep
+        ? own(Object.keys(draft.files)).filter((path) =>
+          path.startsWith(`${replace}/`) && !keep.has(path)
+        )
+        : []
+      let next = gone.length
+        ? [...changes, ...gone.map((path) => ({ path }))]
+        : changes
+      config = configAfter(raw, next, draft)
       config.catch(() => {})
-      return Promise.resolve({ changes, value: null })
+      return Promise.resolve({ changes: next, value: gone })
     },
     watching(env, space, app),
     asked,
   )
   if (!who.administrative) scheduleUse(env, app.eid)
-  return { config: await config, already, draft, drafts }
+  return { config: await config, already, draft, drafts, gone }
 }
 
 /**
@@ -3114,42 +3138,6 @@ let configAfter = async (raw: Objects, changes: Change[], draft: Draft) => {
       ? view.read(`${draft.root}/${p}`)
       : Promise.resolve(null)
   )).config
-}
-
-/**
- * Delete each file under `folder` that `kept` does not name, into its own
- * history as app_files' delete does (written.ts): a build shipped over the
- * last one leaves none of the last one's files behind. Answers the paths it
- * deleted.
- */
-let swept = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
-  folder: string,
-  kept: string[],
-  draft?: Asked,
-) => {
-  let keep = new Set(kept)
-  return (await modifying(
-    r2RawObjects(env.BLOBS),
-    directory(bound(env.DIRECTORY, dirPart.fetch, env)),
-    space,
-    app,
-    who,
-    (draft) => {
-      let gone = own(Object.keys(draft.files)).filter((path) =>
-        path.startsWith(`${folder}/`) && !keep.has(path)
-      )
-      return Promise.resolve({
-        changes: gone.map((path) => ({ path })),
-        value: gone,
-      })
-    },
-    watching(env, space, app),
-    draft,
-  )).value
 }
 
 /**
@@ -4911,6 +4899,10 @@ let OURS: Row[] = [
       properties: {
         space: SPACE,
         app: APP,
+        draft: str(
+          'the draft id from app_files, or new to open one. Omit for this ' +
+            "conversation's latest draft, then the newest draft you opened",
+        ),
         paths: {
           type: 'array',
           items: str(
@@ -4949,6 +4941,15 @@ let OURS: Row[] = [
           'replace: needs into, the folder of the app the build replaces',
         )
       }
+      let c = ctx.clock ?? clock()
+      let named = anew(draftArg(args), ctx.call)
+      let target = await shipping(
+        ctx.dir,
+        app,
+        await draftsOf(ctx.dir, app),
+        who,
+        named,
+      )
       let files = await bench(ctx, space, async ({ provider, ref }) => {
         // One listing expands every glob and walks every folder at once, so
         // a whole build costs one command rather than one per path.
@@ -4971,27 +4972,35 @@ let OURS: Row[] = [
         }
         return files
       })
-      let { paths, already } = await wroteAt(ctx.env, space, app, who, files)
-      let gone = replace
-        ? await swept(ctx.env, space, app, who, into, paths)
-        : []
+      let { paths, already, draft, drafts, gone } = await wroteAt(
+        ctx.env,
+        space,
+        app,
+        who,
+        files,
+        c,
+        target?.eid ?? named,
+        replace ? into : undefined,
+      )
       // A ship cut off and sent again puts up only what had not landed, and
       // says so.
       return {
-        text: `shipped ${paths.length} ${
-          paths.length == 1 ? 'file' : 'files'
-        } → ${url(space, app, ctx.env)}: ${paths.join(', ')}${
-          already.length
-            ? `; ${already.length} of them the draft already held as built, ` +
-              `so they did not go up again: ${already.join(', ')}`
-            : ''
-        }${
-          gone.length
-            ? `; deleted ${gone.length} the build no longer makes: ${
-              gone.join(', ')
-            }`
-            : ''
-        }; staged for app_deploy`,
+        text:
+          `shipped ${paths.length} ${paths.length == 1 ? 'file' : 'files'} → ${
+            url(space, app, ctx.env)
+          }: ${paths.join(', ')}${
+            already.length
+              ? `; ${already.length} of them the draft already held as built, ` +
+                `so they did not go up again: ${already.join(', ')}`
+              : ''
+          }${
+            gone.length
+              ? `; deleted ${gone.length} the build no longer makes: ${
+                gone.join(', ')
+              }`
+              : ''
+          }; staged for app_deploy` + landedIn(app, who, draft, drafts),
+        value: { draft },
         space,
       }
     },
@@ -6198,7 +6207,7 @@ let OURS: Row[] = [
             'to, or with app, the space holding it',
         ),
         app: str(
-          'one app slug to list in full: its email address, version, ' +
+          'one app slug or <space>/<app> to list in full: email, version, ' +
             "bindings, month's usage and everyone who can open it",
         ),
         people: {
@@ -6221,6 +6230,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       // One app asked about is listed alone, in full and with its people
       // named; naming the app names its space, as every other tool reads it.
+      apart(args)
       let named = args.app == null ? null : text(args.app, 'app')
       let namedSpace = args.space == null ? null : text(args.space, 'space')
       let reading = ctx.dir.listing(ctx.person)
@@ -8021,7 +8031,7 @@ let OURS: Row[] = [
             'with thread, what to add to it, or leave it out to read it',
         ),
         app: str(
-          'the slug of the app they were using, if any',
+          'the slug or <space>/<app> of the app they were using, if any',
         ),
         space: SPACE,
         thread: str(
@@ -8112,16 +8122,19 @@ let OURS: Row[] = [
       // loss than a refusal on plumbing at the moment someone is already
       // annoyed. No membership check either: this is attribution, not
       // authorization, and being signed in is the whole of it.
+      let atApp: Args = { app: args.app }
+      apart(atApp)
+      let atSpace = atApp.space ?? args.space
       let space = !ctx.person
         ? null
-        : args.space != null
-        ? await ctx.dir.space(text(args.space, 'space'))
-        : await ownSpace(ctx, args.app).catch((e) => {
+        : atSpace != null
+        ? await ctx.dir.space(text(atSpace, 'space'))
+        : await ownSpace(ctx, atApp.app).catch((e) => {
           caught(e, { tool: 'feedback' })
           return null
         })
-      let app = space && args.app != null
-        ? await ctx.dir.app(space, text(args.app, 'app'))
+      let app = space && atApp.app != null
+        ? await ctx.dir.app(space, text(atApp.app, 'app'))
         : null
       if (!ctx.person) {
         if (

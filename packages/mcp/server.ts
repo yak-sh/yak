@@ -175,6 +175,7 @@ export type Options = {
   /** extra arguments every generic read tool takes here — see
    * {@link CoreOpts.scope} */
   scope?: CoreOpts['scope']
+  scopeRequired?: CoreOpts['scopeRequired']
   /** how a caller undoes a delete on this deployment, appended to
    * `graph_apply`'s description — see {@link CoreOpts.undo} */
   undo?: CoreOpts['undo']
@@ -440,6 +441,7 @@ export let listing = (opts: Options): Tool[] =>
       search: opts.search,
       readOnly: opts.readOnly,
       scope: opts.scope,
+      scopeRequired: opts.scopeRequired,
       undo: opts.undo,
       narrow: opts.narrow,
     })),

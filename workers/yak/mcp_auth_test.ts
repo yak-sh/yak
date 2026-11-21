@@ -539,7 +539,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       assertEquals(t.annotations.readOnlyHint, true, name)
       // And each says which app to name, and that naming it is not optional.
       assertEquals(t.inputSchema.required?.includes('app'), true, name)
-      assertEquals(t.inputSchema.required?.includes('space'), true, name)
+      assertEquals(t.inputSchema.required?.includes('space'), false, name)
     }
 
     // The guide, read here instead of fetched off the web.
@@ -570,8 +570,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     // gets at that address, through the tool an agent already has.
     let rows = JSON.parse(
       await anon.tool('graph_query', {
-        space: ada30,
-        app: 'runs',
+        app: `${ada30}/runs`,
         q: '.jog&?doc',
       }),
     ) as { entity: { eid: string }; doc: { title: string } }[]

@@ -61,7 +61,7 @@ export type CoreOpts = {
    * clause a query grammar does not have is said by the server that answers
    * it, where an agent reads it at the moment it writes the query. */
   narrow?: string
-  /** extra arguments every read here requires, as the JSON Schema of each,
+  /** extra arguments every read here takes, as the JSON Schema of each,
    * merged into each read tool's input, for a server whose reads are scoped by
    * something of its own — yaks.app's signed-out endpoint names which app to
    * read.
@@ -70,6 +70,8 @@ export type CoreOpts = {
    * around, and the endpoint read them off the call before this server saw it.
    * They are declared so that a client knows to send them. */
   scope?: Record<string, Schema>
+  /** Required scope arguments. Defaults to all declared scope arguments. */
+  scopeRequired?: string[]
 }
 
 /**
@@ -168,7 +170,10 @@ export let core = (opts: CoreOpts): Tool[] =>
       // on every read — yaks.app's signed-out endpoint names which app to read
       // — and those arguments come first, where a caller reads them.
       let scope = t.readOnly && opts.scope ? opts.scope : {}
-      let required = [...Object.keys(scope), ...(said.required ?? [])]
+      let scopeRequired = t.readOnly
+        ? opts.scopeRequired ?? Object.keys(scope)
+        : []
+      let required = [...scopeRequired, ...(said.required ?? [])]
       // What this server adds to a tool's description in its own words: how a
       // read narrows, and how a delete is undone, each where an agent reads it
       // at the moment it writes the query or decides to risk the write.

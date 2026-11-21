@@ -232,6 +232,26 @@ export let touched = (d: AppDraft, rows: Written[]) =>
     '',
   )
 
+let latestAt = (drafts: AppDraft[], stamps: (string | null)[]) => {
+  let latest = stamps.reduce<string>(
+    (last, at) => at && at > last ? at : last,
+    '',
+  )
+  return drafts.filter((_, i) => (stamps[i] ?? '') == latest)
+}
+
+let lastWorked = async (
+  dir: Pick<Directory, 'written'>,
+  app: App,
+  drafts: AppDraft[],
+) =>
+  latestAt(
+    drafts,
+    await Promise.all(
+      drafts.map(async (d) => touched(d, await dir.written(app, d.eid))),
+    ),
+  )
+
 /** The draft a read, a patch or a preview works in: as {@link chosen}, but
  * of several of the caller's own and none named, the one it last wrote or
  * previewed. A read changes nothing, and a patch refuses where the draft
@@ -245,10 +265,35 @@ export let guessed = async (
 ): Promise<AppDraft | null> => {
   let own = asked ? [] : drafts.filter(ownBy(who))
   if (own.length < 2) return chosen(app, drafts, who, asked)
-  let last = await Promise.all(
-    own.map(async (d) => touched(d, await dir.written(app, d.eid))),
-  )
-  return own[last.indexOf([...last].sort().at(-1)!)]
+  return (await lastWorked(dir, app, own))[0]
+}
+
+/** The draft a ship continues: the conversation's latest work, then the
+ * newest draft the caller opened. Equal timestamps leave the choice to the
+ * caller. With neither, the ship opens its own draft. */
+export let shipping = async (
+  dir: Pick<Directory, 'written'>,
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  asked?: Asked,
+): Promise<AppDraft | null> => {
+  if (asked) return chosen(app, drafts, who, asked)
+  let own = drafts.filter(ownBy(who))
+  if (own.length == 1) return own[0]
+  let byPerson = drafts.filter((d) => who.person && d.by == who.person)
+  let latest = own.length
+    ? await lastWorked(dir, app, own)
+    : latestAt(byPerson, byPerson.map((d) => d.at))
+  if (latest.length > 1) {
+    throw refuse(
+      'arguments',
+      `${app.slug} has ${latest.length} equally recent drafts: ${
+        whichDraft(latest)
+      }`,
+    )
+  }
+  return latest[0] ?? null
 }
 
 /**

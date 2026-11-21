@@ -39,7 +39,8 @@ let run = async (name: string, args = {}) =>
     )!.run(args) as string,
   )
 let forms = await run('forms')
-let started = (await run('start', { app: 'forms', form }))[0].result
+let started =
+  (await run('start', { app: `${space.slug}/forms`, form }))[0].result
 let answered = (await run('answer', {
   app: 'forms',
   registration: started.registration,

@@ -29,15 +29,18 @@ let object = (v: unknown): v is Record<string, unknown> =>
 let propertyName = (name: string) => NAME.test(name) && name != 'eid'
 
 let badProperty = (comp: string, prop: string, props: object) => {
+  let name = `${comp}.${JSON.stringify(prop)}`
+  if (prop == 'eid') {
+    return `${name} uses the reserved name "eid", which holds the entity's id. Pick another name.`
+  }
   let fixed = prop.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2').toLowerCase()
     .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
   let rename = propertyName(fixed) && !Object.hasOwn(props, fixed)
     ? ` Name it ${JSON.stringify(fixed)}.`
     : ''
-  return `${comp}.${JSON.stringify(prop)} is not a property name. Use 1–40 ` +
-    `characters, starting with a lowercase letter (a–z), followed by ` +
-    `lowercase letters, digits or underscores. The name "eid" is reserved.${rename}`
+  return `${name} must use 1–40 characters, starting with a lowercase ` +
+    `letter (a–z), followed by lowercase letters, digits or underscores.${rename}`
 }
 
 // One property schema is storable when it names a scalar, a reference, a

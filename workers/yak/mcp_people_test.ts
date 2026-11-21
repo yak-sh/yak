@@ -147,7 +147,10 @@ test('feedback reaches the platform, in the words it was said in', async () => {
 
     let words = 'She said renaming an app is impossible to find. I looked ' +
       'for app_rename and there is no such tool.'
-    let said = await agent.answer('feedback', { app: 'recipes', text: words })
+    let said = await agent.answer('feedback', {
+      app: `${kitchen43}/recipes`,
+      text: words,
+    })
     // One sentence the agent can repeat: it is kept, and answered in the
     // thread it names.
     assertStringIncludes(said.text, 'people who run yaks.app')

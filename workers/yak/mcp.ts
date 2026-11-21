@@ -632,6 +632,7 @@ let stranger = async (
     // people.
     security: asked,
     scope: scope(env),
+    scopeRequired: ['app'],
     report: reporter(ctx, clientOf(req.headers.get('mcp-session-id') ?? '')),
     refused: hearing(env),
     ...connector(env),

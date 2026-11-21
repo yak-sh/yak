@@ -368,6 +368,10 @@ sandbox_ship:
   description: >-
     Copy files from the sandbox into the app's draft, as if app_files had
     written them: a built site, a compiled .wasm, a file a script produced.
+    Pass a draft id from app_files to choose where the files land. With
+    draft omitted, this takes the latest draft of this conversation, then
+    the newest draft you opened. The answer names the draft to preview and
+    release.
     Name files, folders or wildcard patterns (globs) relative to
     /workspace. A folder copies every file inside it and keeps its
     subfolders: dist lands dist/about/index.html at about/index.html. A file

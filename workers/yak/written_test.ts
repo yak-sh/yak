@@ -3,7 +3,7 @@
 // the bucket holds actual bytes. Connector wording and access live with the
 // app_files tests in mcp_deploy_test.ts and files_read_test.ts.
 import { clock, test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { guard } from '@yaks/graph/guard'
 import { digest, token } from '@yaks/graph/sha256'
@@ -33,6 +33,7 @@ import {
   releasing,
   replaced,
   restoring,
+  shipping,
   type Written,
 } from './written.ts'
 import { draftMove } from './draft-move.ts'
@@ -737,6 +738,28 @@ test('a release takes the draft named, else the conversation’s own, else the p
     () => chosen(APPROW, two, ONE),
     Error,
     "2 drafts of notes: pass draft: '<id>', one of one, two",
+  )
+})
+
+test('a ship prefers the conversation’s latest work, then the caller’s newest draft', async () => {
+  let first = { ...mine('first', ADA, ONE.via!), at: '1', previewed: '3' }
+  let second = { ...mine('second', ADA, ONE.via!), at: '2' }
+  let other = { ...mine('other', BEN, null), at: '4' }
+  let dir = { written: () => Promise.resolve([]) }
+  let drafts = [other, first, second]
+
+  assertEquals((await shipping(dir, APPROW, drafts, ONE))?.eid, 'first')
+  assertEquals((await shipping(dir, APPROW, drafts, TWO))?.eid, 'second')
+  assertEquals(
+    (await shipping(dir, APPROW, drafts, ONE, 'second'))?.eid,
+    'second',
+  )
+  assertEquals(await shipping(dir, APPROW, [other], ONE), null)
+  await assertRejects(
+    () =>
+      shipping(dir, APPROW, [first, { ...second, previewed: '3' }, other], ONE),
+    Error,
+    "pass draft: '<id>', one of first, second",
   )
 })
 

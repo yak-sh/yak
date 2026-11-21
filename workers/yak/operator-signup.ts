@@ -12,7 +12,7 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL } from './meta.ts'
-import { refuse } from './tool.ts'
+import { apart, refuse } from './tool.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { requestId } from './operator-channels.ts'
 import { phonedIn, textedOperator } from './operator-texts.ts'
@@ -79,11 +79,13 @@ export let signupTools = (
 ): Tool[] => {
   let apps = () => directoryOf(env.STORE).apps(space)
   let ask = async (op: string, args: Record<string, unknown>) => {
+    let target = { app: args.app, space: space.slug }
+    apart(target)
     let all = (await apps()).filter((a) => !a.trashed && a.version != null)
-    let selected = args.app
-      ? all.filter((a) => a.eid == args.app || a.slug == args.app)
+    let selected = target.app
+      ? all.filter((a) => a.eid == target.app || a.slug == target.app)
       : all
-    if (args.app && !selected.length) {
+    if (target.app && !selected.length) {
       throw refuse('missing', 'No such sign-up app.')
     }
     let out = await Promise.all(selected.map(async (app) => {

@@ -769,6 +769,13 @@ test('one read of the bindings still lands each on its own app', async () => {
   assertStringIncludes(one.text, 'binding: DB (d1) — recipes-db; creation')
   assertStringIncludes(one.text, 'email ada.recipes@')
   assertEquals(one.text.includes('/garden/'), false)
+  let qualified = await call(ctx, 'app_list', { app: 'ada/recipes' })
+  assertEquals(apps(qualified).map((a) => a.slug), ['recipes'])
+  await assertRejects(
+    () => call(ctx, 'app_list', { space: 'elsewhere', app: 'ada/recipes' }),
+    Error,
+    'app ada/recipes names space ada',
+  )
 })
 
 // What is broken is said of the apps listed, so a space whose apps are all in

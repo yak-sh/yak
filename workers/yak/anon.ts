@@ -35,7 +35,7 @@ import { apex, type Host, url } from '@yaks/platform/host'
 import { says } from '@yaks/platform/routes'
 import { nobody } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
-import { refuse } from './tool.ts'
+import { apart, refuse } from './tool.ts'
 
 type Args = Record<string, unknown>
 
@@ -106,14 +106,11 @@ export let scope = (env: Host = {}) => ({
     type: 'string',
     description:
       `the space the app is in — the <space> of <space>.${apex(env)}. ` +
-      'Required while nobody is signed in: there is no space of yours to mean',
+      'Omit when app includes its space as <space>/<app>',
   },
   app: {
     type: 'string',
-    description:
-      `the app's slug in that space — the <app> of <space>.${
-        apex(env)
-      }/<app>/. ` +
+    description: 'the app slug with space, or <space>/<app> on its own. ' +
       'Required while nobody is signed in, and the app must be one anyone ' +
       'with the link can read; app_published lists apps people have offered',
   },
@@ -122,8 +119,8 @@ export let scope = (env: Host = {}) => ({
 export let SCOPE = scope()
 
 let nameIt = (env: Host = {}) =>
-  'signed out, a read answers for one app: name space and app — ' +
-  `the two halves of <space>.${apex(env)}/<app>/ — and the app must be one ` +
+  'signed out, a read answers for one app. Send app as <space>/<app> or ' +
+  'send space and app separately. The app must be one ' +
   'anyone with the link can read. app_published lists what people have ' +
   `published, and signing in at ${
     url(env, '/login')
@@ -139,6 +136,7 @@ let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''
  * lets the agent tell "not that app" from "not signed in".
  */
 export let opened = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
+  apart(args)
   let slug = said(args.app)
   let where = said(args.space)
   if (!slug || !where) throw refuse('arguments', nameIt(ctx.env))

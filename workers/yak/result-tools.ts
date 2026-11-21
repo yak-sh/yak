@@ -5,12 +5,13 @@ import { resultDoor } from './build-door.ts'
 import { opened } from './anon.ts'
 import { queryResult } from './result-query.ts'
 import { keepResult, readResult } from './results.ts'
-import { APP, type Args, type Ctx, inSpace, SPACE } from './tool.ts'
+import { apart, APP, type Args, type Ctx, inSpace, SPACE } from './tool.ts'
 
 /** A running Operator already stands inside the space's durable graph. */
 export type ResultHost = { graph: Graph; person: string; space: string }
 
 export let resultStore = (ctx: Ctx, args: Args = {}, local?: ResultHost) => {
+  args = { ...args }
   let publicly = async (path: string, body: Record<string, unknown>) => {
     let [{ space, app }] = await opened(ctx, args)
     let value = await resultDoor(
@@ -25,6 +26,7 @@ export let resultStore = (ctx: Ctx, args: Args = {}, local?: ResultHost) => {
       : value
   }
   let door = async (path: string, body: Record<string, unknown>) => {
+    apart(args)
     // Public directory tools have no app or person's space. Their snapshots
     // share one system graph, separate from every person's private results.
     if (
