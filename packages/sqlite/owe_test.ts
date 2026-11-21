@@ -430,7 +430,8 @@ test('statistics are due as soon as an index is built', () => {
 })
 
 // A file that counts its tables' rows (./ddl.ts `counted`), whose receipt
-// owes `big`, `small` (remembered empty) and a dropped table their statistics:
+// owes `big`, `small` (remembered empty, now one row) and a dropped table their
+// statistics, a table of one row taking none:
 // the receipt after each window, and the statistics written.
 let [, tallying] = stage((db) => {
   let file = Object.assign(db, { statistics: 'sampled' as const })
@@ -454,13 +455,10 @@ test('a table with no index is counted a window at a time, its count its statist
         counting: { table: 'big', rows: 2, after: 2 },
       },
       { bytes: 1, empty: ['small'], owed: ['small', 'gone'] },
-      { bytes: 1, empty: [], owed: ['gone'] },
-      { bytes: 1, empty: [], owed: [] },
+      { bytes: 1, empty: ['small'], owed: ['gone'] },
+      { bytes: 1, empty: ['small'], owed: [] },
     ],
-    [
-      { tbl: 'big', idx: null, stat: '3' },
-      { tbl: 'small', idx: null, stat: '1' },
-    ],
+    [{ tbl: 'big', idx: null, stat: '3' }],
   ])
 })
 

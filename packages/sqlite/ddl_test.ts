@@ -24,7 +24,7 @@ import {
   val,
 } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
-import { schema, tables } from './ddl.ts'
+import { analyzing, schema, tables } from './ddl.ts'
 import { open } from './db.ts'
 import {
   analyzed,
@@ -859,7 +859,7 @@ test('a file owes the sizes its planner reads it by, and its upkeep finds them',
       id: 3,
       eid: 'c',
     }))
-    d.query(insert('product', { entity: 1, sku: 'x' }))
+    d.query(insert('product', { entity: 1, sku: 'x' }, { entity: 2, sku: 'y' }))
     // Installation owes the analysis, holding the write lock for none of it;
     // a read never analyzes tables to discover them.
     storage(d, shop).install()
@@ -871,7 +871,7 @@ test('a file owes the sizes its planner reads it by, and its upkeep finds them',
       String(scan(d, 'sqlite_stat1', by({ tbl: t }), ['stat'])[0]?.stat)
         .split(' ')[0]
     assertEquals(rows('entity'), '3')
-    assertEquals(rows('product'), '1')
+    assertEquals(rows('product'), '2')
   } finally {
     d.close()
     Deno.removeSync(path)
@@ -1039,20 +1039,19 @@ test('statistics forget a table remembered empty once it is dropped', () => {
     name: 'kept',
     cols: [{ name: 'id', type: 'integer', pk: true }],
   })
-  let previous = { bytes: 1, empty: ['kept', 'gone'], few: [], owed: [] }
+  let previous = { bytes: 1, empty: ['kept', 'gone'], owed: [] }
   assertEquals(analyzed(d, previous, true), {
     bytes: 1,
     empty: ['kept'],
-    few: [],
     owed: [],
   })
   assertEquals(analyzed(d, { ...previous, empty: ['kept'] }, true), undefined)
 })
 
 // SQLite probes a table its statistics say holds one row by scanning it, so
-// one that grew since is owed an analysis, the store's bytes aside; a receipt
-// kept before this was remembered reads which they are off `sqlite_stat1`
-// (bug b5285b5d).
+// one that grew since is owed an analysis, the store's bytes aside, though no
+// receipt names it: a copy's far end analyzes every table it fills (bug
+// b5285b5d).
 test('statistics owe a table analyzed at one row once it holds more', () => {
   let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
   for (let [name, rows] of [['one', 1], ['grew', 3], ['many', 3]] as const) {
@@ -1071,15 +1070,48 @@ test('statistics owe a table analyzed at one row once it holds more', () => {
     where: eq(col('tbl'), val('grew')),
   })
   let previous = { bytes: 1, empty: [], owed: [] }
-  let adopted = { bytes: 1, empty: [], few: ['one'], owed: ['grew'] }
-  assertEquals(analyzed(d, previous, true), adopted)
-  assertEquals(analyzed(d, { ...previous, few: ['one'] }, true), undefined)
+  assertEquals(analyzed(d, previous, true), { ...previous, owed: ['grew'] })
   d.query(insert('one', { id: 2 }))
-  assertEquals(analyzed(d, { ...previous, few: ['one'] }, true), {
+  assertEquals(analyzed(d, { ...previous, owed: ['grew'] }, true), {
     ...previous,
-    few: [],
-    owed: ['one'],
+    owed: ['grew', 'one'],
   })
+  // A receipt kept with the list this read replaced is written anew.
+  let kept = { ...previous, owed: ['grew', 'one'] }
+  assertEquals(analyzed(d, kept, true), undefined)
+  assertEquals(analyzed(d, { ...kept, few: [] } as typeof kept, true), kept)
+})
+
+// So an analysis never writes one: a table of one row is left unanalyzed,
+// remembered as empty, and owed once it holds a second.
+test('statistics are never taken of a table holding one row', () => {
+  let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
+  d.query({
+    t: 'create table',
+    name: 'one',
+    cols: [{ name: 'id', type: 'integer', pk: true }],
+  })
+  d.query(insert('one', { id: 1 }))
+  let stat = () =>
+    d.query({ t: 'pragma', name: 'table_list', arg: 'sqlite_stat1' }).length
+      ? scan(d, 'sqlite_stat1', undefined, ['tbl', 'stat'])
+      : []
+  let previous = { bytes: 1, empty: [], owed: ['one'] }
+  assertEquals(analyzing(d, previous, 1), {
+    ...previous,
+    empty: ['one'],
+    owed: [],
+  })
+  assertEquals(stat(), [])
+  let empty = { ...previous, empty: ['one'], owed: [] }
+  assertEquals(analyzed(d, empty, true), undefined)
+  d.query(insert('one', { id: 2 }))
+  assertEquals(analyzed(d, empty, true), { ...previous, owed: ['one'] })
+  assertEquals(analyzing(d, { ...previous, owed: ['one'] }, 1), {
+    ...previous,
+    owed: [],
+  })
+  assertEquals(stat(), [{ tbl: 'one', stat: '2' }])
 })
 
 // A Durable Object's statistics list Cloudflare's own tables, and its
@@ -1104,17 +1136,10 @@ test("statistics never probe the engine's own tables", () => {
     },
   })
   let previous = { bytes: 1, empty: [], owed: [] }
-  assertEquals(analyzed(refusing, previous, true), {
-    ...previous,
-    few: ['one'],
-  })
+  assertEquals(analyzed(refusing, previous, true), undefined)
   // Nor when a receipt already names one.
   assertEquals(
-    analyzed(
-      refusing,
-      { ...previous, empty: ['_cf_KV'], few: ['_cf_KV'] },
-      true,
-    ),
-    { ...previous, few: [] },
+    analyzed(refusing, { ...previous, empty: ['_cf_KV'] }, true),
+    previous,
   )
 })

@@ -1059,9 +1059,9 @@ export let SAMPLE = 400
  * connection restart. A table empty at its last analysis that holds rows now
  * is owed, and so, after a schema change, is a populated table or index
  * without statistics. Existing complete statistics are adopted once by
- * installations predating receipts; empty tables are remembered and checked
- * with zero-billed counts, and tables analyzed at one row ({@link few}) with
- * counts of two rows at most.
+ * installations predating receipts. A table holding at most one row is never
+ * analyzed: it is remembered as empty and checked with a count of two rows at
+ * most, as is each that statistics already say holds one ({@link few}).
  *
  * Optimize decides none of it: empty tables get no stat1 row, so it names
  * them on every run, and it names as often a table whose row count it guesses
@@ -1134,17 +1134,24 @@ let extant = (driver: Driver, name: string) =>
 let holds = (driver: Driver, name: string) =>
   populated(driver, [name]).length > 0
 
+// Whether a table holds a second row: two billed rows at most.
+let many = (driver: Driver, name: string) =>
+  populated(driver, [name], 1).length > 0
+
 /**
  * The tables whose statistics say they hold one row, read off
  * `sqlite_stat1`. SQLite plans a probe of such a table by its key as a scan of
  * it, which costs the same while it holds one row. Once it holds thousands,
  * every probe reads all of them: `cost`, analyzed at one row and grown to
  * 15,108 while the store as a whole grew less than tenfold, made a lookup of
- * 29 receipts read 437,077 rows (bug b5285b5d). So these are remembered, and
- * each is owed an analysis once it holds a second row, which a probe of two
- * rows finds. The engine's own tables are left out: a Durable Object's
- * statistics list `_cf_KV` and `_cf_METADATA`, which its authorizer refuses
- * to any statement of the object's (bug c95c5a57).
+ * 29 receipts read 476,675 rows (bug b5285b5d). A Durable Object may not write
+ * `sqlite_stat1`, so no statement mends such a row; only an analysis of the
+ * table once it holds more does. Analysis here never writes one ({@link
+ * analyzing}), but a copy's far end, or an analysis from before, may have, and
+ * no receipt knows of it, so each decision reads them here and owes an
+ * analysis to each holding a second row. The engine's own tables are left out:
+ * a Durable Object's statistics list `_cf_KV` and `_cf_METADATA`, which its
+ * authorizer refuses to any statement of the object's (bug c95c5a57).
  */
 export let few = (stats: readonly Row[]): string[] => {
   let most = new Map<string, number>()
@@ -1161,12 +1168,6 @@ let stat1 = (driver: Driver): Row[] =>
   extant(driver, 'sqlite_stat1')
     ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])
     : []
-
-// Those of `names` that do not hold a second row.
-let single = (driver: Driver, names: string[]): string[] => {
-  let more = populated(driver, names, 1)
-  return names.filter((name) => !more.includes(name))
-}
 
 let joined = (owed: string[] = [], more: string[]) => [
   ...new Set([...owed, ...more]),
@@ -1214,20 +1215,18 @@ let owing = (
   if (previous && unchanged && bytes < previous.bytes * 10) {
     let stands = new Set(analyzable(driver))
     let empty = previous.empty.filter((name) => stands.has(name))
-    let ones = (previous.few ?? few(stat1(driver)))
-      .filter((name) => stands.has(name) && !owed.includes(name))
-    let filled = populated(driver, empty)
-    let grown = populated(driver, ones, 1)
+    let ones = few(stat1(driver)).filter((name) =>
+      stands.has(name) && !owed.includes(name) && !empty.includes(name)
+    )
+    let grown = populated(driver, [...empty, ...ones], 1)
     if (
-      !filled.length && !grown.length &&
-      empty.length == previous.empty.length &&
-      ones.length == previous.few?.length
+      !grown.length && empty.length == previous.empty.length &&
+      !('few' in previous)
     ) return
     return {
       bytes: previous.bytes,
-      empty: empty.filter((name) => !filled.includes(name)),
-      few: ones.filter((name) => !grown.includes(name)),
-      owed: joined(owed, [...filled, ...grown]),
+      empty: empty.filter((name) => !grown.includes(name)),
+      owed: joined(owed, grown),
     }
   }
   let tables = driver.query({ t: 'pragma', name: 'table_list' })
@@ -1239,14 +1238,14 @@ let owing = (
   let indexes = new Set(stats.map((r) => String(r.idx)))
   // Adopt the statistics that stand, and owe the populated tables lacking
   // them: one with statistics for some of its indexes held rows when it was
-  // analyzed, and one with none that is not owed already is counted for rows
-  // at no billed cost while it holds none.
+  // analyzed, and one with none that is not owed already is remembered as
+  // empty while it holds at most one row.
   if (
     previous ? bytes < previous.bytes * 10 : taken.has('entity')
   ) {
     let missing = names.map((r) => String(r.name))
       .filter((name) => !taken.has(name) && !owed.includes(name))
-    let filled = populated(driver, missing)
+    let filled = populated(driver, missing, 1)
     let partial = names.filter((r) =>
       taken.has(String(r.name)) &&
       driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
@@ -1261,31 +1260,30 @@ let owing = (
     return {
       bytes: previous?.bytes ?? bytes,
       empty: missing.filter((name) => !filled.includes(name)),
-      few: ones.filter((name) => !grown.includes(name)),
       owed: joined(owed, [...partial, ...filled, ...grown]),
     }
   }
   if (!holds(driver, 'entity')) return
-  // Tenfold growth, or no statistics to adopt: every table that holds rows
-  // afresh, found at a billed row a table, and the bytes stored now are what
-  // the next growth is measured from.
+  // Tenfold growth, or no statistics to adopt: every table that holds more
+  // than a row afresh, found at two billed rows a table, and the bytes stored
+  // now are what the next growth is measured from.
   let all = names.map((r) => String(r.name))
-  let filled = populated(driver, all)
+  let filled = populated(driver, all, 1)
   return {
     bytes,
     empty: all.filter((name) => !filled.includes(name)),
-    few: [],
     owed: filled,
   }
 }
 
 /**
  * Analyze up to `n` of the tables `statistics` owes, one `ANALYZE` each, and
- * answer the receipt that follows: those tables no longer owed, each that
- * holds no rows remembered as empty, since no statistics row will, and each
- * that holds one row remembered as {@link few}. A table dropped since it was
- * owed is no longer owed. Each statement reads that table's index rows, so a
- * caller bounds `n` to keep a window short.
+ * answer the receipt that follows: those tables no longer owed, and each
+ * that holds at most one row remembered as empty and left unanalyzed, since
+ * statistics saying it holds one would have SQLite scan it for every probe
+ * once it holds more ({@link few}). A table dropped since it was owed is no
+ * longer owed. Each statement reads that table's index rows, so a caller
+ * bounds `n` to keep a window short.
  */
 export let analyzing = (
   driver: Driver,
@@ -1295,20 +1293,13 @@ export let analyzing = (
   let owed = statistics.owed ?? []
   let taken = owed.slice(0, n)
   let empty = statistics.empty.filter((name) => !taken.includes(name))
-  let ones = (statistics.few ?? []).filter((name) => !taken.includes(name))
   if (taken.length) sample(driver)
   for (let name of taken) {
     if (!extant(driver, name)) continue
-    driver.query({ t: 'analyze', table: name })
-    if (!holds(driver, name)) empty.push(name)
-    else ones.push(...single(driver, [name]))
+    if (many(driver, name)) driver.query({ t: 'analyze', table: name })
+    else empty.push(name)
   }
-  return {
-    ...statistics.few ? { few: ones } : {},
-    bytes: statistics.bytes,
-    empty,
-    owed: owed.slice(taken.length),
-  }
+  return { bytes: statistics.bytes, empty, owed: owed.slice(taken.length) }
 }
 
 /**
@@ -1370,7 +1361,8 @@ export let tally = (
  * The receipt that follows a window of counting ({@link tally}), in the unit
  * that writes it: the count so far, or once it is `done`, the table's
  * statistics written as `ANALYZE` writes a table with no index's (its count,
- * or no row for an empty table, remembered as empty), and the table no longer
+ * or no row for a table of at most one row, remembered as empty, {@link
+ * analyzing}), and the table no longer
  * owed. A receipt that moved since the window read it is answered as it
  * stands, and the next window reads again.
  */
@@ -1386,18 +1378,12 @@ export let tallied = (
   if (name != counting.table || standing?.after != since) return statistics
   if (!done) return { ...statistics, counting }
   let empty = statistics.empty.filter((e) => e != name)
-  let ones = (statistics.few ?? []).filter((e) => e != name)
   if (extant(driver, name)) {
-    stated(driver, name, counting.rows)
-    if (!counting.rows) empty.push(name)
-    if (counting.rows == 1) ones.push(name)
+    let rows = counting.rows > 1 ? counting.rows : 0
+    stated(driver, name, rows)
+    if (!rows) empty.push(name)
   }
-  return {
-    ...statistics.few ? { few: ones } : {},
-    bytes: statistics.bytes,
-    empty,
-    owed: rest,
-  }
+  return { bytes: statistics.bytes, empty, owed: rest }
 }
 
 // Write `rows` as the statistics of `name`, a table with no index, and have

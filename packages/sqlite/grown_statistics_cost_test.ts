@@ -1,7 +1,8 @@
-// A table analyzed while it held one row is analyzed again once it holds
+// A table holding one row takes no statistics, and is analyzed once it holds
 // more, though the store as a whole grew less than tenfold: SQLite plans a
-// probe of a one-row table by its key as a scan of it, so a lookup of 29
-// receipts read every `cost` row once per receipt (bug b5285b5d).
+// probe of a table its statistics say holds one row as a scan of it, so a
+// lookup of 29 receipts read every `cost` row once per receipt (bug
+// b5285b5d).
 import { graph } from '@yaks/graph'
 import { DEPTH, renderStable, VARIABLES } from '@yaks/sql'
 import { equal, ok, test } from '@yaks/testing'
