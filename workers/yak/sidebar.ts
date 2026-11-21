@@ -4,7 +4,7 @@ import { Badge, Button, Form, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from '@yaks/platform/routes'
-import { choice } from './space-picker.ts'
+import { acrossBadge, choice } from './space-picker.ts'
 
 export type Item = {
   href: string
@@ -22,6 +22,9 @@ export type Item = {
    * drawn hidden at none so a page can add what it learns later to it
    * (`data-waiting`, operator-page.ts `lateScript`). */
   waiting?: number
+  /** How many of the person's Updates wait on them across their spaces,
+   * filled once the page has asked (space-picker.ts `acrossBadge`). */
+  across?: boolean
   more?: boolean
   submit?: boolean
   /** What a `submit` item's form posts besides its press. */
@@ -118,6 +121,8 @@ export let link = (at: Item) => {
     h(SideNav.Label, null, at.label),
     at.beside
       ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, 'Open')
+      : at.across
+      ? acrossBadge('', 'Sidebar_Count')
       : at.waiting != null
       ? waitingBadge(at.waiting, 'Sidebar_Count')
       : at.count != null

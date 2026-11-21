@@ -208,12 +208,14 @@ export let publisherAt = (slug: string, env: Host = {}): string =>
  */
 export type StoreDoor = 'apply' | 'query' | 'ws'
 let STORE_DOORS: string[] = ['apply', 'query', 'ws'] satisfies StoreDoor[]
-/** What a manage path asks for: an account page, a space's page (a new chat
- * with its Operator when none is named), a door of its Operator's store, its
- * logo's bytes, or an address from before T-136122 (`legacy`), to be sent
- * on. Null is no page. */
+/** What a manage path asks for: an account page, the person's Updates from
+ * every space's Operator (`updates`, at `/manage/updates`), a space's page (a
+ * new chat with its Operator when none is named), a door of its Operator's
+ * store, its logo's bytes, or an address from before T-136122 (`legacy`), to
+ * be sent on. Null is no page. */
 export type Managed =
   | { account: AccountView }
+  | { updates: true }
   | {
     space: string
     view: SpaceView
@@ -255,6 +257,7 @@ export let managed = (path: string): Managed | null => {
       ? { account: two as AccountView }
       : null
   }
+  if (one == 'updates' && !two) return { updates: true }
   if (!two) {
     return Object.hasOwn(LEGACY, one)
       ? { legacy: LEGACY[one] }
@@ -277,6 +280,7 @@ export let landing = (
  * (`/_yaks/<page>`, `/manage/<page>`) stands for in `space`, or null. */
 export let movedFor = (path: string, space: string): string | null => {
   let at = managed(path)
+  if (at && 'updates' in at) return managePath('updates', space)
   return at && ('first' in at || 'legacy' in at) ? landing(at, space) : null
 }
 /** One space's settings page, as an address to put in a letter or an

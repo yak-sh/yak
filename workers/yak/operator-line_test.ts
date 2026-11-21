@@ -708,9 +708,13 @@ test("a text back is answered in its writer's own conversation, with only their 
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
   let words = 'Tuesday at 3 works for us.'
+  // The reply, and the answer to the words Jeff left the chat after, once.
   assertEquals(updates.map((u) => [u.subject, u.words]), [[
     '+12695550142 replied to the text you sent them',
     words,
+  ], [
+    'Reply to “Text Dr Alvarez at 269-555-0142 and ask if Tuesday at 3 works for my checkup”',
+    'I texted Dr Alvarez; I will tell you what they say.',
   ]])
   assertEquals(
     letters.filter((l) => l.text?.includes(words)).map((l) => l.to),

@@ -6,7 +6,10 @@ import { Empty, Form } from '@yaks/ui/parts'
 // Operator's store (operator-updates.ts): what needs the person first, with a
 // button for each choice, then what happened, newest first. A choice, or
 // words about one, go into their conversation, and the chat they went to
-// opens.
+// opens. Every space's together are at `/manage/updates` (`allUpdates`), the
+// same read across the spaces a person talks with an Operator in
+// (`updatesAcross`), and how many wait in each badges the Operator switcher
+// (`waitingAcross`, space-picker.ts `acrossBadge`).
 import { Time } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -14,7 +17,7 @@ import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
-import { chatPath, managePath } from '@yaks/platform/routes'
+import { backTo, chatPath, managePath } from '@yaks/platform/routes'
 import { spaceHost } from '@yaks/platform/host'
 import type { Shown, Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
@@ -29,29 +32,115 @@ import { updateAnchor } from './operator-lists.ts'
 import { draftsOf, theirs } from './written.ts'
 import { CallError } from '@yaks/tools/errors'
 
-/** A person's Updates in a space, and how many wait on them: what needs
- * them, and what they have not read, which the side counts beside "Updates
- * from <Operator>". `seen` marks what they read now as read. */
-export type Updates = { updates: Update[]; waiting: number }
-export let updatesOf = (
+/** A space a person reads Updates in, and who they are there. */
+export type Seat = { space: Space; who: Who }
+
+/** One of a person's Updates, with the space whose Operator wrote it. */
+export type Placed = Update & { space: Space }
+
+/** A person's Updates, and how many wait on them: what needs them, and what
+ * they have not read, which the side counts beside "Updates from
+ * <Operator>" and the Operator switcher beside each space. */
+export type Updates = { updates: Placed[]; waiting: number }
+
+/** A space whose Operator did not answer, and how it failed. */
+export type Missed = { space: Space; error: unknown }
+
+/** What reading Updates asks of each space: what they read now marked read
+ * (`seen`), or the notices they dismissed (`dismissed`). */
+type Asking = { seen?: boolean; dismissed?: boolean }
+
+/** A person's Updates across the spaces they stand in: @yaks/inbox read in
+ * each space's Operator store (operator-updates.ts), as one list, what needs
+ * them first and then newest first, each with its space, and how many wait
+ * on them in all and in each space (`by`, by slug). A space whose Operator
+ * did not answer is left out, its failure in `missed` for the caller. One space's Updates
+ * are this read of that space alone (`updatesOf`). */
+export let updatesAcross = async (
+  env: Env,
+  seats: Seat[],
+  { seen = false, dismissed = false }: Asking = {},
+): Promise<
+  Updates & { by: Map<string, number>; missed: Missed[] }
+> => {
+  let args = dismissed ? { dismissed } : seen ? { seen } : {}
+  let missed: Missed[] = []
+  let read = await Promise.all(seats.map(async ({ space, who }) => {
+    try {
+      let { updates, waiting } = await operatorDoor(
+        env,
+        space,
+        who,
+        'updates',
+        args,
+      ) as { updates: Update[]; waiting: number }
+      return { space, waiting, updates: updates.map((u) => ({ ...u, space })) }
+    } catch (error) {
+      missed.push({ space, error })
+      return { space, waiting: 0, updates: [] }
+    }
+  }))
+  let updates = read.flatMap((r) => r.updates).sort((a, b) =>
+    +b.needs - +a.needs || b.at.localeCompare(a.at)
+  )
+  return {
+    updates,
+    waiting: read.reduce((n, r) => n + r.waiting, 0),
+    by: new Map(read.map((r) => [r.space.slug, r.waiting])),
+    missed,
+  }
+}
+
+/** A person's Updates in one space. `seen` marks what they read now as
+ * read. */
+export let updatesOf = async (
   env: Env,
   space: Space,
   who: Who,
   seen = false,
-): Promise<Updates> =>
-  operatorDoor(env, space, who, 'updates', seen ? { seen } : {}) as Promise<
-    Updates
-  >
+): Promise<Updates> => {
+  let { updates, waiting, missed } = await updatesAcross(env, [{
+    space,
+    who,
+  }], { seen })
+  if (missed.length) throw missed[0].error
+  return { updates, waiting }
+}
 
 /** The notices a person dismissed in a space, newest first. */
-export let dismissedOf = (
+export let dismissedOf = async (
   env: Env,
   space: Space,
   who: Who,
-): Promise<Updates> =>
-  operatorDoor(env, space, who, 'updates', { dismissed: true }) as Promise<
-    Updates
-  >
+): Promise<Updates> => {
+  let { updates, waiting, missed } = await updatesAcross(env, [{
+    space,
+    who,
+  }], { dismissed: true })
+  if (missed.length) throw missed[0].error
+  return { updates, waiting }
+}
+
+/** How many of a person's Updates wait on them in each of their spaces, by
+ * slug: the count each space's own Updates badge says, asked alone. A space
+ * whose Operator did not answer is reported and left out. */
+export let waitingAcross = async (
+  env: Env,
+  seats: Seat[],
+): Promise<Record<string, number>> =>
+  Object.fromEntries(
+    (await Promise.all(seats.map(async ({ space, who }) => {
+      try {
+        let { waiting } = await operatorDoor(env, space, who, 'updates', {
+          count: true,
+        }) as { waiting: number }
+        return [[space.slug, waiting]]
+      } catch (e) {
+        caught(e, { request: 'updates waiting', space: space.slug })
+        return []
+      }
+    }))).flat(),
+  )
 
 /** The apps an update can be about, by eid, where they open. */
 export type Apps = { eid: string; slug: string; title: string }[]
@@ -86,9 +175,14 @@ let opening = (env: Env, space: Space, app: Apps[number]) =>
     rel: 'noopener',
   }, `Open ${app.title || app.slug}`)
 
+/** Where an update's card is drawn: its space, and the page it is on where
+ * that is not the space's own Updates (`back`), which a choice or a
+ * dismissal returns to. */
+type At = { space: Space; back?: string }
+
 // A reply carries a request id so sending it twice sends it once.
 let form = (
-  space: Space,
+  { space, back }: At,
   fields: [string, string][],
   ...inner: ComponentChildren[]
 ) =>
@@ -99,9 +193,11 @@ let form = (
       method: 'post',
       action: managePath('updates', space.slug),
     },
-    [...fields, ['id', crypto.randomUUID()]].map(([name, value]) =>
-      h(Form.Hidden, { name, value })
-    ),
+    [
+      ...fields,
+      ...back ? [['back', back] as [string, string]] : [],
+      ['id', crypto.randomUUID()],
+    ].map(([name, value]) => h(Form.Hidden, { name, value })),
     ...inner,
   )
 
@@ -159,9 +255,9 @@ let showing = (space: Space, u: Update, s: Shown) => {
 // Choices that show something: each a column with what it shows, its words
 // and its button under them, side by side where there is room and one above
 // the next on a phone.
-let shownChoices = (space: Space, u: Update, choices: Choice[]) =>
+let shownChoices = (at: At, u: Update, choices: Choice[]) =>
   form(
-    space,
+    at,
     [['choose', u.eid]],
     h(
       'ul',
@@ -171,7 +267,7 @@ let shownChoices = (space: Space, u: Update, choices: Choice[]) =>
           'li',
           { class: 'Update_Choice' },
           (u.shown ?? []).filter((s) => s.choice == c.label)
-            .map((s) => showing(space, u, s)),
+            .map((s) => showing(at.space, u, s)),
           h('p', null, h('b', null, c.label), `: ${c.description}`),
           h(
             Button,
@@ -187,7 +283,8 @@ let shownChoices = (space: Space, u: Update, choices: Choice[]) =>
 // each (the one it recommends first and filled), "Other" for an answer in
 // their own words, and below them a way to ask
 // about it, opened in place. Choices that show something are drawn with it.
-let needsCard = (space: Space, u: Update) => {
+let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
+  let { space } = at
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
@@ -207,16 +304,18 @@ let needsCard = (space: Space, u: Update) => {
     return h(
       Card,
       { class: 'Update Update-needs', id: updateAnchor(u.eid) },
+      where,
       head,
       words(u.words),
-      shownChoices(space, u, choices),
-      other(space, u),
-      replying(space, u),
+      shownChoices(at, u, choices),
+      other(at, u),
+      replying(at, u),
     )
   }
   return h(
     Card,
     { class: 'Update Update-needs', id: updateAnchor(u.eid) },
+    where,
     head,
     words(u.words),
     choices.length
@@ -231,7 +330,7 @@ let needsCard = (space: Space, u: Update) => {
           ),
         ),
         form(
-          space,
+          at,
           [['choose', u.eid]],
           h(
             Card.Actions,
@@ -247,15 +346,15 @@ let needsCard = (space: Space, u: Update) => {
         ),
       )
       : null,
-    other(space, u),
-    replying(space, u),
+    other(at, u),
+    replying(at, u),
   )
 }
 
 // The last choice, always there: "Other", opened in place, a box for the
 // person's own words, which answer the question as theirs and reach the
 // Operator as the answer.
-let other = (space: Space, u: Update) =>
+let other = (at: At, u: Update) =>
   u.choices && h(
     More,
     { class: 'Update_Other' },
@@ -264,7 +363,7 @@ let other = (space: Space, u: Update) =>
       More.Body,
       {},
       form(
-        space,
+        at,
         [['choose', u.eid]],
         h(Field, {
           class: 'Update_Input',
@@ -280,23 +379,23 @@ let other = (space: Space, u: Update) =>
   )
 
 // A way to send the Operator words about an update, opened in place.
-let replying = (space: Space, u: Update) =>
+let replying = (at: At, u: Update) =>
   h(
     More,
     { mod: 'quiet', class: 'Update_Reply' },
-    h(More.Summary, {}, `Ask ${space.operator} about it`),
+    h(More.Summary, {}, `Ask ${at.space.operator} about it`),
     h(
       More.Body,
       {},
       form(
-        space,
+        at,
         [['reply', u.eid]],
         h(Field, {
           class: 'Update_Input',
           lines: true,
           name: 'say',
           required: true,
-          'aria-label': `Your words to ${space.operator}`,
+          'aria-label': `Your words to ${at.space.operator}`,
           placeholder: 'Write a follow-up…',
         }),
         h(Button, { mod: 'go', type: 'submit' }, 'Send'),
@@ -305,24 +404,32 @@ let replying = (space: Space, u: Update) =>
   )
 
 // A notice put away: it leaves their Updates until something happens on it.
-let dismissing = (space: Space, u: Update) =>
+let dismissing = (at: At, u: Update) =>
   form(
-    space,
+    at,
     [['dismiss', u.eid]],
     h(Button, { mod: 'quiet', type: 'submit' }, 'Dismiss'),
   )
 
 // A notice: its subject and a way to put it away, its words, when it came
 // and where it came from, and a way to ask about it.
-let card = (env: Env, space: Space, u: Update, apps: Apps) => {
-  if (u.needs) return needsCard(space, u)
-  let away = u.dismissed ? null : h(Card.Actions, null, dismissing(space, u))
+let card = (
+  env: Env,
+  at: At,
+  u: Update,
+  apps: Apps,
+  where: ComponentChildren = null,
+) => {
+  let { space } = at
+  if (u.needs) return needsCard(at, u, where)
+  let away = u.dismissed ? null : h(Card.Actions, null, dismissing(at, u))
   return h(
     Card,
     {
       class: u.unread ? 'Update Update-new' : 'Update',
       id: updateAnchor(u.eid),
     },
+    where,
     u.subject || away
       ? h(
         Card.Head,
@@ -342,7 +449,7 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
       leads(env, space, u, apps),
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),
-    replying(space, u),
+    replying(at, u),
   )
 }
 
@@ -351,7 +458,7 @@ let card = (env: Env, space: Space, u: Update, apps: Apps) => {
 export let dismissedUpdates = (
   env: Env,
   space: Space,
-  { updates }: Updates,
+  { updates }: { updates: Update[]; waiting: number },
   apps: Apps = [],
 ) =>
   h(
@@ -364,7 +471,7 @@ export let dismissedUpdates = (
       h('a', { href: managePath('updates', space.slug) }, 'Back to Updates'),
     ),
     updates.length
-      ? updates.map((u) => card(env, space, u, apps))
+      ? updates.map((u) => card(env, { space }, u, apps))
       : h('p', { class: 'Update_Meta' }, 'Nothing dismissed.'),
   )
 
@@ -430,7 +537,7 @@ export let lastDayLine = (
 export let updates = (
   env: Env,
   space: Space,
-  { updates }: Updates,
+  { updates }: { updates: Update[]; waiting: number },
   lists: ComponentChildren = null,
   apps: Apps = [],
   views?: Map<string, number>,
@@ -454,7 +561,7 @@ export let updates = (
       )
       : null,
     lists,
-    updates.length ? updates.map((u) => card(env, space, u, apps)) : h(
+    updates.length ? updates.map((u) => card(env, { space }, u, apps)) : h(
       'div',
       { class: 'Talk_Hello' },
       h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
@@ -476,6 +583,71 @@ export let updates = (
   )
 }
 
+/** The person's Updates from every space's Operator, at `/manage/updates`. */
+export let ALL = managePath('updates')
+
+// Which space and Operator an update came from, leading to that space's own
+// Updates.
+let whereFrom = (space: Space) =>
+  h(
+    'p',
+    { class: 'Update_Meta Update_Where' },
+    h(
+      'a',
+      { href: managePath('updates', space.slug) },
+      `${space.title || space.slug} · ${space.operator}`,
+    ),
+  )
+
+/** The person's Updates from every space's Operator together, newest first
+ * with what needs them ahead: each card names the space and Operator it came
+ * from, acts as it does on that space's page, and comes back here. A space
+ * whose Operator did not answer says so. `apps` are each space's, by slug. */
+export let allUpdates = (
+  env: Env,
+  { updates }: Updates,
+  apps: Map<string, Apps>,
+  missed: Space[] = [],
+) =>
+  h(
+    Fragment,
+    null,
+    h(
+      'p',
+      { class: 'Note Update_About' },
+      'What the Operator of each of your spaces wrote or asked you, together. Ask about any of it, and its chat opens.',
+    ),
+    missed.map((space) =>
+      h(
+        'p',
+        { class: 'Note' },
+        `${space.operator} in ${
+          space.title || space.slug
+        } could not be reached just now. Open this page again to try.`,
+      )
+    ),
+    updates.length
+      ? updates.map((u) =>
+        card(
+          env,
+          { space: u.space, back: ALL },
+          u,
+          apps.get(u.space.slug) ?? [],
+          whereFrom(u.space),
+        )
+      )
+      : h(
+        'div',
+        { class: 'Talk_Hello' },
+        h(Empty.Title, { mod: 'welcome' }, 'Nothing yet'),
+        h(
+          'p',
+          null,
+          'When an Operator finishes something, fixes an app, or someone joins one of your spaces, it shows here.',
+        ),
+      ),
+  )
+
 /** A choice or dismissal stays in Updates. A message opens its chat. */
 export let updatesAnswer = async (
   req: Request,
@@ -485,14 +657,16 @@ export let updatesAnswer = async (
 ) => {
   let form = await req.formData()
   let field = (name: string) => String(form.get(name) ?? '')
+  // Back to the page the card was on: the space's Updates, or every space's.
+  let to = new URL(
+    backTo(env, field('back'), managePath('updates', space.slug)),
+  )
+  let back = to.pathname + to.search
   if (form.has('dismiss')) {
     await operatorDoor(env, space, who, 'updates', {
       dismiss: field('dismiss'),
     })
-    return new Response(null, {
-      status: 303,
-      headers: { location: managePath('updates', space.slug) },
-    })
+    return new Response(null, { status: 303, headers: { location: back } })
   }
   let { request } = await operatorDoor(
     env,
@@ -506,9 +680,7 @@ export let updatesAnswer = async (
   return new Response(null, {
     status: 303,
     headers: {
-      location: request
-        ? chatPath(space.slug, request)
-        : managePath('updates', space.slug),
+      location: request ? chatPath(space.slug, request) : back,
     },
   })
 }

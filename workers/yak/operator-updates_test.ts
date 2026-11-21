@@ -20,6 +20,7 @@ import { chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
 import { attachmentKey } from './attachments.ts'
 import { managed, managePath } from '@yaks/platform/routes'
+import { present } from './whereabouts.ts'
 
 let p = platform('operator-updates')
 let [ada, bo, eid] = [0, 1, 2].map(() => crypto.randomUUID())
@@ -89,6 +90,12 @@ let decide = (eid: string, choice: string) =>
   store.g.apply(answer(eid, choice).map((b) => ({ ...b, $actor: { by: ada } })))
 let words = async (person: string) =>
   (await read(person)).updates.map((u) => [u.needs, u.words, u.unread])
+
+// Where Ada is: on her Operator's page, watching each answer arrive, until
+// a test says she left (whereabouts.ts).
+let where = (state: 'here' | 'away') =>
+  present(p.env, { person: ada, channel: 'operator', place: eid, state })
+await where('here')
 
 await receive(
   store,
@@ -246,7 +253,10 @@ test('the Updates page shows what needs the person, counts it in the side, and a
   // A chat counts what needs them in the side, and answers it in Updates.
   assertEquals(buttons(fresh), [])
   let count = (d: Document) => d.querySelector('.Sidebar_Count')?.textContent
-  assertEquals(Number(count(fresh)) > 1, true)
+  // What waits on them: the question, and anything unread from a chat they
+  // have not opened since.
+  assertEquals(Number(count(fresh)), (await read(ada)).waiting)
+  assertEquals(Number(count(fresh)) >= 1, true)
   let updates = await page(updatesPage(p.env, space, who))
   assertEquals(buttons(updates), ['Send', 'Not yet'])
   // with no visits to tell of, there is no day to say
@@ -629,4 +639,56 @@ test('a generic answer to an approval resumes once, after its approved call', as
   )
   await service.drain()
   assertEquals(asked.length, before + 1)
+})
+
+test('a turn the person left before it ended is in their Updates with its answer, and read once they open its chat', async () => {
+  let said_ = (words: string) =>
+    read(ada).then((r) => r.updates.filter((u) => u.words == words))
+  // Still on the page: they watch it arrive, and are told nothing more.
+  script.push(said('The hall is booked.'))
+  await receive(store, { space: eid, person: ada, channel: 'chat' }, 'Book it')
+  await service.drain()
+  assertEquals(await said_('The hall is booked.'), [])
+  await where('away')
+  script.push(said('Here is the picnic plan.'))
+  await receive(
+    store,
+    { space: eid, person: ada, channel: 'chat' },
+    'Plan the picnic for Saturday',
+  )
+  await service.drain()
+  let [left] = await said_('Here is the picnic plan.')
+  assertEquals(left.subject, 'Reply to “Plan the picnic for Saturday”')
+  assertEquals(left.unread, true)
+  assertEquals(left.from?.chat, rootOf(eid, ada))
+  assertEquals(await lands(left), true)
+  let after = await said_('Here is the picnic plan.')
+  assertEquals(after.map((u) => u.unread), [false])
+  await where('here')
+})
+
+test('dismissing from every space’s Updates comes back there, and never off yaks.app', async () => {
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let dismiss = async (back: string) => {
+    await store.g.apply([notification({ to: ada, words: back })], {
+      trusted: true,
+    })
+    let [u] = (await read(ada)).updates.filter((u) => u.words == back)
+    let sent = await updatesAnswer(
+      new Request('https://yaks.app' + managePath('updates', 'club'), {
+        method: 'POST',
+        body: new URLSearchParams({ dismiss: u.eid, back }),
+      }),
+      p.env,
+      space,
+      who,
+    )
+    return sent.headers.get('location')
+  }
+  assertEquals(await dismiss(managePath('updates')), managePath('updates'))
+  assertEquals(
+    await dismiss('https://elsewhere.example/'),
+    managePath('updates', 'club'),
+  )
 })

@@ -10,6 +10,9 @@ import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { lastDayLine, updates } from './updates.ts'
+import type { Telling } from './operator-updates.ts'
+import { SPACE } from './build-door.ts'
+import { chatPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let slug = unique('told')
@@ -98,4 +101,97 @@ test('an update’s words, and a question that needs the person, are drawn from 
   assertEquals(drawn('n', 'li code'), 'due')
   assertEquals(drawn('d', 'em'), 'both')
   assertEquals(page.querySelector('#u-n')!.textContent!.includes('**'), false)
+})
+
+// Someone in two spaces, the club's and their own: what each space's
+// Operator writes them, read together and one space at a time.
+let across = async () => {
+  let own = (await k.dir.own(other.person))!
+  let club = (await k.dir.at(eids[slug]))!
+  let get = (path: string, accept = 'text/html') =>
+    k.at('yaks.app', path, {
+      redirect: 'manual',
+      headers: { cookie: other.cookie, accept },
+    })
+  let waiting = async () =>
+    await (await get(`${managePath('updates')}?waiting`, 'application/json'))
+      .json() as Record<string, number>
+  // What the space's own Updates badge says, beside its chat.
+  let badge = async (space: Space) => {
+    let d = parseHTML(await (await get(chatPath(space.slug))).text()).document
+    return Number(
+      d.querySelector(
+        `a[href="${managePath('updates', space.slug)}"] [data-waiting]`,
+      )
+        ?.getAttribute('data-waiting'),
+    )
+  }
+  // The Operator telling them, as the kernel brings it (updates.ts `tell`).
+  let tell = async (space: Space, telling: Telling) => {
+    let res = await k.builder(space.eid).fetch(
+      new Request('https://builder/operator/tell', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-kernel': '1',
+          [SPACE]: space.eid,
+        },
+        body: JSON.stringify(telling),
+      }),
+    )
+    assertEquals(res.ok, true)
+    await res.body?.cancel()
+  }
+  return { own, club, get, waiting, badge, tell }
+}
+
+test('every space’s Updates in one place: labelled, counted from each space’s own read, and read once seen', async () => {
+  let { own, club, get, waiting, badge, tell } = await across()
+  await tell(club, { to: other.person, words: 'The club met.' })
+  await new Promise((r) => setTimeout(r, 2))
+  await tell(own, { to: other.person, words: 'Your barn is up.' })
+  let counted = await waiting()
+  assertEquals(counted[club.slug] >= 1 && counted[own.slug] >= 1, true)
+  assertEquals(counted[club.slug], await badge(club))
+  assertEquals(counted[own.slug], await badge(own))
+  let page = parseHTML(await (await get(managePath('updates'))).text())
+    .document
+  let cards = [...page.querySelectorAll('.Update')].map((c) => ({
+    where: c.querySelector('.Update_Where')?.textContent,
+    words: c.querySelector('.Update_Words')?.textContent?.trim(),
+    back: c.querySelector('input[name=back]')?.getAttribute('value'),
+  }))
+  let of = (words: string) => cards.find((c) => c.words == words)
+  assertEquals(of('The club met.')?.where?.startsWith(club.title || slug), true)
+  assertEquals(of('Your barn is up.')?.where?.startsWith(own.title), true)
+  assertEquals(of('Your barn is up.')?.back, managePath('updates'))
+  // The newer first.
+  assertEquals(
+    cards.findIndex((c) => c.words == 'Your barn is up.') <
+      cards.findIndex((c) => c.words == 'The club met.'),
+    true,
+  )
+  assertEquals(await waiting(), { [club.slug]: 0, [own.slug]: 0 })
+})
+
+test('the Operator switcher badges each space and the total, filled from one read', async () => {
+  let { own, club, get } = await across()
+  let page = await (await get(managePath('updates', club.slug))).text()
+  let d = parseHTML(page).document
+  let badges = [...d.querySelectorAll('.Sidebar_Whose [data-across]')]
+    .map((b) => b.getAttribute('data-across'))
+  assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
+  assertEquals(page.includes(`${managePath('updates')}?waiting`), true)
+  let all = d.querySelector(`a[href^="${managePath('updates')}?in="]`)
+  assertEquals(all?.querySelector('[data-across=""]') != null, true)
+})
+
+test('an address from before the space was in the path still opens that space’s Updates', async () => {
+  let { get } = await across()
+  let sent = await get(`${managePath('updates')}?space=${slug}`)
+  await sent.body?.cancel()
+  assertEquals(
+    new URL(sent.headers.get('location')!).pathname,
+    managePath('updates', slug),
+  )
 })

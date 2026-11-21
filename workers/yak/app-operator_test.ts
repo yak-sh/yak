@@ -1,6 +1,7 @@
 // An app's own worker tells its space's Operator something, once a key; a
 // page's code sends words into its signed-in reader's own conversation as the
 // app's, and the corner's note, yaks.app's own page, sends theirs as them.
+import { present } from './whereabouts.ts'
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -87,6 +88,13 @@ let operator = operating(store, p.env, {
   directory: () => p.dir,
 })
 handleChannels(operator, p.env)
+// On the Operator's page as it answers, so its answers are not news.
+await present(p.env, {
+  person: owner,
+  channel: 'operator',
+  place: spaceId,
+  state: 'here',
+})
 await receive(
   store,
   { space: spaceId, person: owner, channel: 'chat' },

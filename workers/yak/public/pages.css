@@ -1154,6 +1154,10 @@
   .Sidebar_Count {
     margin-left: auto;
   }
+  /* How many Updates wait in all, beside the space switcher's arrows. */
+  .Identity_Count {
+    margin-right: .35rem;
+  }
   .Sidebar_Foot {
     display: grid;
     gap: .75rem;

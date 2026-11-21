@@ -235,7 +235,8 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
   // The approval alert, the letter, the approval follow-up, the reply,
-  // its answer, and Jeff's alert about the reply.
+  // its answer, Jeff's alert about the reply, and his alert that the turn
+  // he asked from the chat and left ended.
   let followedApproval = letters.find((l) =>
     l.to == 'jeff@example.com' && l.subject == 'Follow-up to your answer'
   )
@@ -247,7 +248,12 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   )
   assert(alert)
   assertStringIncludes(alert.text!, 'Tuesday at 3 works for us.')
-  assertEquals(meter, 6)
+  assert(
+    letters.some((l) =>
+      l.to == 'jeff@example.com' && l.subject?.startsWith('Reply to “Ask Dr')
+    ),
+  )
+  assertEquals(meter, 7)
 })
 
 test('a letter answering the reply threads on it and keeps its subject', () => {

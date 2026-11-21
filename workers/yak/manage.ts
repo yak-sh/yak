@@ -282,6 +282,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
       at.account,
     )
   }
+  if ('updates' in at) return everyUpdate(req, env, dir, person, until, asked)
   let view = at.view
   let paged = page ?? dir.page(
     at.space,
@@ -611,6 +612,65 @@ let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
     operator: s.space.operator,
     logo: logoPath(s.space),
   }))
+}
+
+// The person's Updates from every space's Operator they talk with, at
+// `/manage/updates` (operator-page.ts `allUpdatesPage`), beside the side of
+// the space they came from (`?in=`), else their own; with `?waiting`, how
+// many wait on them in each space, which the Operator switcher badges
+// (space-picker.ts `acrossScript`). An address from before the space was in
+// the path (`?space=`) still goes to that space's Updates.
+let everyUpdate = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  person: string,
+  until: number | undefined,
+  asked: string | null,
+): Promise<Response> => {
+  let url = new URL(req.url)
+  if (asked) {
+    let to = new URL(managePath('updates', asked), hostUrl(env))
+    for (let [k, v] of url.searchParams) {
+      if (k != 'space') to.searchParams.append(k, v)
+    }
+    return moved(req, to.href)
+  }
+  if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
+  let seats = (await dir.seated(person)).filter((s) =>
+    !s.space.trashed && writes(s.role)
+  ).sort((a, b) => Number(b.own) - Number(a.own))
+  let held = seats.map(({ space, role }) => ({
+    space,
+    who: { person, role, until } satisfies Owner,
+  }))
+  if (url.searchParams.has('waiting')) {
+    let { waitingAcross } = await import('./updates.ts')
+    return Response.json(await waitingAcross(env, held), {
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
+  let into = url.searchParams.get('in')
+  let home = held.find((s) => s.space.slug == into) ?? held[0]
+  if (!home) return redirect(hostUrl(env, MANAGE), 303)
+  let apps = Promise.all(
+    held.map(async ({ space, who }) => {
+      let { mine } = shelf(await dir.apps(space), space, who)
+      return [
+        space.slug,
+        mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
+      ] as const
+    }),
+  ).then((all) => new Map(all))
+  apps.catch(() => {})
+  let { allUpdatesPage } = await import('./operator-page.ts')
+  return allUpdatesPage(
+    env,
+    home,
+    held,
+    await beside(env, dir, home.space, home.who),
+    apps,
+  )
 }
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:

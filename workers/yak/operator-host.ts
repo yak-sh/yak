@@ -1,5 +1,5 @@
 import { type Built, type Line, line as q, sub } from '@yaks/query'
-import { updatesOf, updating } from './operator-updates.ts'
+import { openedIn, updatesOf, updating } from './operator-updates.ts'
 import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
 import { remove } from './operator-remove.ts'
@@ -2184,10 +2184,14 @@ export let operatorRequest = async (
   if (path == '/operator/conversation') {
     let root = await rootAt(store, spaceId, person)
     let open = String(args.open || root)
-    let news = async () =>
-      args.updates === true
-        ? { updates: await updatesOf(store, person, spaceId) }
-        : {}
+    // What came from the conversation opened is read once it is open.
+    let news = async (chat?: string) => {
+      if (args.updates !== true) return {}
+      let read = await updatesOf(store, person, spaceId)
+      return {
+        updates: chat ? await openedIn(store, person, read, chat) : read,
+      }
+    }
     if (!everyone && !await own(open)) {
       return args.open
         ? missing()
@@ -2216,7 +2220,7 @@ export let operatorRequest = async (
       root,
       ...talked,
       ...args.lines ? { lines: lines() } : {},
-      ...await news(),
+      ...await news(talked.task || undefined),
     })
   }
   if (path == '/operator/remove') {

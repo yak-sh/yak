@@ -1594,6 +1594,79 @@ let HOSTED =
 // how long a turn waits after its machine's providers refused it (ms).
 let REACHES = new Set(['unreachable', 'stalled'])
 
+// The channels a person's own words come by from a yaks.app page (the chat,
+// an app's page, their Updates), where they watch the answer arrive while
+// the Operator's page stays open.
+let WATCHED = new Set(['chat', 'update'])
+
+// What a subject quotes of the words a turn answered: their first line, cut
+// short at a word.
+let SUBJECT = 80
+let quoted = (words: string) => {
+  let first = words.trim().split('\n')[0].trim()
+  if (first.length <= SUBJECT) return first
+  let cut = first.slice(0, SUBJECT)
+  return cut.slice(
+    0,
+    cut.lastIndexOf(' ') > 40 ? cut.lastIndexOf(' ') : SUBJECT,
+  )
+    .trimEnd() + '…'
+}
+
+/** A turn its people left before it ended: each person whose words from a
+ * yaks.app page it answers (`WATCHED`, the inputs it was `given`) and who no
+ * longer has this Operator's page open (@yaks/notify/whereabouts, the line
+ * each turn is given) is told its answer in their Updates, from their newest
+ * words it answered, so it opens there. Someone still on the page sees it
+ * arrive, and is told nothing more. Their words are told once: a turn that
+ * ends again on them (a quick word as it hands work to a helper, then what
+ * came of it) says its newer answer in the same notice, unread again and
+ * back from dismissal. */
+let leftBy = async (
+  g: Graph,
+  env: Env,
+  requests: Bundle[],
+  given: Bundle[],
+  space: string,
+  session: string,
+  text: string,
+): Promise<Bundle[]> => {
+  let inputs = new Map(given.map((b) => [b.entity.eid, b]))
+  // Each person's newest words the turn answers, by person.
+  let said = new Map<string, Bundle>()
+  for (let r of requests) {
+    let asked = comp(r, 'operator_request')
+    let input = inputs.get(inputOf(r.entity.eid))
+    if (asked?.person && input && WATCHED.has(String(asked.channel))) {
+      said.set(String(asked.person), input)
+    }
+  }
+  if (!said.size) return []
+  let { seen } = await import('./whereabouts.ts')
+  let told = await Promise.all([...said].map(async ([person, input]) => {
+    if ((await seen(env, person, space))?.tab) return []
+    let words = String(comp(input, 'content')?.body ?? '')
+    let notice = notification({
+      to: person,
+      ...words.trim() ? { subject: `Reply to “${quoted(words)}”` } : {},
+      words: text,
+      from: input.entity.eid,
+      by: space,
+      via: session,
+      id: `left|${input.entity.eid}|${person}`,
+    })
+    // What they did with it before this newer answer.
+    let [had] = await g.read(
+      q`.subscription.actor=${person}&.subscription.target=${notice.entity.eid}&.fields=entity.eid`,
+    )
+    return [
+      notice,
+      ...had ? [{ entity: had.entity, opened: null, archived: null }] : [],
+    ]
+  }))
+  return told.flat()
+}
+
 // The channels whose run nobody watches as it goes, by what the run was
 // doing, said to its person: none of it reaches them unless the run tells
 // them (notification_send), or could not finish (`stoppedNotice`).
@@ -2312,7 +2385,22 @@ export let operating = (
     let handoffs = space
       ? requests.filter((r) => comp(r, 'operator_request')?.channel == HANDOFF)
       : []
+    // A turn yaks.app stopped is taken up again once fixed, and its person
+    // told then (`reran`), so neither it nor its rerun is told as left.
+    let left = space && !continued && !reran.length && !reply.fault &&
+        !passes(reply.text) && reply.text.trim()
+      ? await leftBy(
+        g,
+        env,
+        requests,
+        reply.given,
+        space,
+        session,
+        reply.text,
+      )
+      : []
     await g.apply([
+      ...left,
       ...await Promise.all(handoffs.map(async (r) => {
         let request = comp(r, 'operator_request')!
         let root = await rootAt(store, space!, String(request.person))

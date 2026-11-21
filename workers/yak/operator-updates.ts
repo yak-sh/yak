@@ -362,6 +362,33 @@ export let updatesOf = async (
   dismissed = false,
   now = Date.now(),
 ): Promise<{ updates: Update[]; waiting: number }> => {
+  let { kept, abouts } = await keptOf(store, person, space, dismissed, now)
+  let shown = kept.slice(0, most)
+  let held = shown.map((s) => s.row)
+  let [shows, places] = await Promise.all([
+    shownOf(store, held),
+    rootAt(store, space, person).then((root) =>
+      placesOf(store, held, abouts, root)
+    ),
+  ])
+  return {
+    updates: shown.map(({ t, row }, i) =>
+      updateOf(t, row, shows.get(t.eid), places[i])
+    ),
+    waiting: dismissed ? 0 : waitingIn(kept),
+  }
+}
+
+// The person's Updates as their page lists them, newest first with what
+// needs them ahead, and what each tells of: every thread but a run's report,
+// an approval that lapsed, and those dismissed or not (`dismissed`).
+let keptOf = async (
+  store: Store,
+  person: string,
+  space: string,
+  dismissed: boolean,
+  now: number,
+) => {
   let threads = await threadsOf(store, person, space, dismissed)
   let rows = await store.g.get(threads.map((t) => t.eid))
   let abouts = await aboutsOf(store, rows)
@@ -375,23 +402,23 @@ export let updatesOf = async (
     +(b.t.lane == 'Needs you') - +(a.t.lane == 'Needs you') ||
     b.t.at.localeCompare(a.t.at)
   )
-  let shown = kept.slice(0, most)
-  let held = shown.map((s) => s.row)
-  let [shows, places] = await Promise.all([
-    shownOf(store, held),
-    rootAt(store, space, person).then((root) =>
-      placesOf(store, held, abouts, root)
-    ),
-  ])
-  return {
-    updates: shown.map(({ t, row }, i) =>
-      updateOf(t, row, shows.get(t.eid), places[i])
-    ),
-    waiting: dismissed
-      ? 0
-      : kept.filter(({ t }) => t.unread || t.lane == 'Needs you').length,
-  }
+  return { kept, abouts }
 }
+
+// How many wait on the person: what needs them, and what they have not read.
+// The one count every badge of their Updates says.
+let waitingIn = (kept: { t: Thread }[]) =>
+  kept.filter(({ t }) => t.unread || t.lane == 'Needs you').length
+
+/** How many of a person's Updates in a space wait on them, as `updatesOf`
+ * counts them, without drawing any: the Operator switcher's badge. */
+export let waitingOf = async (
+  store: Store,
+  person: string,
+  space: string,
+  now = Date.now(),
+): Promise<number> =>
+  waitingIn((await keptOf(store, person, space, false, now)).kept)
 
 // One of the person's Updates, dismissed or not, or a refusal: nobody acts
 // on another's.
@@ -411,10 +438,34 @@ let opening = async (store: Store, person: string, eid: string) =>
   (await markAttention(store.g, person, eid, 'opened'))
     .map((b) => ({ ...b, $actor: { by: person } }))
 
+/** A person's Updates once they opened the conversation `chat`: what came
+ * from it is read now, since they are reading it there, and counts no more. */
+export let openedIn = async (
+  store: Store,
+  person: string,
+  read: { updates: Update[]; waiting: number },
+  chat: string,
+) => {
+  let seen = read.updates.filter((u) =>
+    u.unread && !u.needs && u.from?.chat == chat
+  )
+  if (!seen.length) return read
+  await store.g.apply(
+    (await Promise.all(seen.map((u) => opening(store, person, u.eid)))).flat(),
+  )
+  let now = new Set(seen.map((u) => u.eid))
+  return {
+    updates: read.updates.map((u) =>
+      now.has(u.eid) ? { ...u, unread: false } : u
+    ),
+    waiting: read.waiting - seen.length,
+  }
+}
+
 /**
  * What a person does in their Updates: reads them (`{}`, or `{seen}` to
  * mark what they read now as read, or `{dismissed}` for the notices they
- * dismissed), reads one (`{open}`), dismisses a notice (`{dismiss}`), reads
+ * dismissed, or `{count}` for how many wait on them alone), reads one (`{open}`), dismisses a notice (`{dismiss}`), reads
  * a file one of their questions shows (`{shown, eid}`: its address and
  * media type), answers a question with a choice (`{choose, choice}`), or
  * sends words about one (`{reply, say}`), which opens the chat.
@@ -448,6 +499,9 @@ export let updating = async (
   }
   if (args.dismissed === true) {
     return await updatesOf(store, person, space, 50, true)
+  }
+  if (args.count === true) {
+    return { waiting: await waitingOf(store, person, space) }
   }
   if (str('open')) {
     await theirs(store, person, space, str('open'))

@@ -120,13 +120,19 @@ import { provePhone } from './phone-contact.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {
+  ALL,
+  allUpdates,
+  type Apps,
   dismissedOf,
   dismissedUpdates,
+  type Seat,
   type Updates,
   updates,
+  updatesAcross,
   updatesOf,
   visitsOf,
 } from './updates.ts'
+import { acrossScript } from './space-picker.ts'
 import {
   answered,
   type Listed,
@@ -2145,7 +2151,9 @@ let talkPage = (
     })) + (page.script ?? '') +
       (listed ? '' : lateScript(
         `${at}?${new URLSearchParams({ lists: '1', back: page.here })}`,
-      )),
+      )) +
+      // The Operator switcher's counts, once every space's Operator answers.
+      ((beside.spaces?.length ?? 0) > 1 ? acrossScript(`${ALL}?waiting`) : ''),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     FRAMED,
     installable(space),
@@ -2545,6 +2553,44 @@ export let updatesPage = async (
         beside.apps,
         views,
       ),
+    ),
+  })
+}
+
+/** The person's Updates from every space's Operator together
+ * (updates.ts `allUpdates`), beside the chat app's side of `home`, the
+ * space they came from. Opening them reads them, in every space. `apps` are
+ * each space's the person may open, by slug. */
+export let allUpdatesPage = async (
+  env: Env,
+  home: Seat,
+  seats: Seat[],
+  beside: Beside,
+  apps: Promise<Map<string, Apps>>,
+) => {
+  let { space, who } = home
+  let lists = reading(env, space, who)
+  let [news, shelves] = await Promise.all([
+    updatesAcross(env, seats, { seen: true }),
+    apps,
+    lists.listing,
+  ])
+  for (let { space, error } of news.missed) {
+    caught(error, { request: 'all updates', space: space.slug })
+  }
+  return talkPage(env, space, who, beside, {
+    title: 'All updates',
+    status: 200,
+    waiting: news.updates.filter((u) => u.needs && u.space.eid == space.eid)
+      .length,
+    listed: await lists.drawn(),
+    current: ['all'],
+    here: `${ALL}?in=${encodeURIComponent(space.slug)}`,
+    skip: ['#content', 'Skip to content'],
+    main: h(
+      'div',
+      { class: 'Talk_Column Updates' },
+      allUpdates(env, news, shelves, news.missed.map((m) => m.space)),
     ),
   })
 }

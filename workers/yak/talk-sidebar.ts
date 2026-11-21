@@ -36,7 +36,10 @@ export let talkSide = (
   }
   let spaces = beside.spaces ?? []
   let apps = beside.apps ?? []
-  let open = at.current.find((c) => c && c != 'updates') ?? 'new'
+  // `updates` is the space's Updates, `all` every space's.
+  let reading = at.current.some((c) => c == 'updates' || c == 'all')
+  let open = at.current.find((c) => c && c != 'updates' && c != 'all') ??
+    'new'
   let items: Item[] = apps.slice(0, APPS).map((a) => ({
     href: aboutPath(space.slug, a.slug, open),
     beside: a.slug == at.app,
@@ -63,6 +66,8 @@ export let talkSide = (
       (s) => chatPath(s.slug),
       null,
       (s) => s.operator ?? '',
+      undefined,
+      true,
     ],
     sections: [
       {
@@ -72,7 +77,7 @@ export let talkSide = (
           {
             href: chatPath(space.slug),
             // The conversation stays the page with an app open beside it.
-            current: !at.current.includes('updates'),
+            current: !reading,
             icon: 'message-circle',
             label: space.operator,
           },
@@ -83,6 +88,20 @@ export let talkSide = (
             label: 'Updates',
             waiting: at.waiting,
           },
+          // Every space's Updates together, where there are several.
+          ...spaces.length > 1
+            ? [
+              {
+                href: `${managePath('updates')}?in=${
+                  encodeURIComponent(space.slug)
+                }`,
+                current: at.current.includes('all'),
+                icon: 'inbox',
+                label: 'All updates',
+                across: true,
+              } satisfies Item,
+            ]
+            : [],
         ],
       },
       {

@@ -1,7 +1,7 @@
 import { Identity } from '@yaks/ui/parts'
 // The space picker shared by the dashboard and Operator sidebar.
 import { h } from 'preact'
-import { Icon, Menu } from '@yaks/ui/parts'
+import { Badge, Icon, Menu } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
 import type { Picked } from './pages.ts'
 let named = (s: Picked) => s.title || s.slug
@@ -26,11 +26,38 @@ export let spaceTile = (s: Picked, mod?: string) =>
       named(s).charAt(0).toUpperCase(),
     )
 
+/** How many of the person's Updates wait on them in the space `slug`, or in
+ * all their spaces where it is empty: drawn hidden, and filled once the page
+ * has asked every space's Operator (`acrossScript`), so no page waits on
+ * them all. */
+export let acrossBadge = (slug: string, cls?: string) =>
+  h(Badge, { class: cls, hidden: true, 'data-across': slug })
+
+/** The script filling every `acrossBadge` on a page from `from`
+ * (`/manage/updates?waiting`): how many wait on the person in each space, by
+ * slug, and their sum where a badge names none. */
+export let acrossScript = (from: string) =>
+  `<script type="module">
+let got = await fetch(${
+    JSON.stringify(from)
+  }, { headers: { accept: 'application/json' } }).then((r) => r.ok ? r.json() : null).catch(() => null)
+if (got) {
+  let total = Object.values(got).reduce((n, m) => n + m, 0)
+  for (let badge of document.querySelectorAll('[data-across]')) {
+    let n = badge.dataset.across ? got[badge.dataset.across] ?? 0 : total
+    badge.textContent = n
+    badge.hidden = !n
+  }
+}
+</script>`
+
 // The space selector over `all`, holding `here`: each space opens at `to`,
 // `make` follows the list, and `about` leads the line under each space's name
 // (the dashboard's side, and the Operator's chat app, which names each
 // space's Operator: operator-page.ts `chatPage`), and `ask` heads the list
 // (the connect dialog asks where a connection goes: desk-pages.ts `to`).
+// `counted` badges each space with how many of the person's Updates wait on
+// them there, and the selector with how many in all (the Operator's).
 export let choice = (
   here: Picked,
   all: Picked[],
@@ -38,6 +65,7 @@ export let choice = (
   make: { href: string; label: string } | null = null,
   about: (s: Picked) => string = () => '',
   ask = 'Which space do you want to work in?',
+  counted = false,
 ) => {
   let add = make
     ? h(
@@ -76,7 +104,12 @@ export let choice = (
         'aria-label': `Change space: ${named(here)}`,
       },
       box(here),
-      h(Identity.Action, {}, glyph('chevrons-up-down')),
+      h(
+        Identity.Action,
+        {},
+        counted ? acrossBadge('', 'Identity_Count') : null,
+        glyph('chevrons-up-down'),
+      ),
     ),
     h(
       Menu,
@@ -97,6 +130,7 @@ export let choice = (
               ? `${s.whose}’s space · you’re a member`
               : 'You’re a member',
           ),
+          counted ? acrossBadge(s.slug) : null,
           s.slug == here.slug ? h(Identity.Mark, {}, glyph('check')) : null,
         )
       ),

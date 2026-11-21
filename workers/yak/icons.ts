@@ -15,6 +15,8 @@ import Bell from 'lucide/dist/esm/icons/bell.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
 // @ts-types="@yaks/ui/lucide"
+import Inbox from 'lucide/dist/esm/icons/inbox.mjs'
+// @ts-types="@yaks/ui/lucide"
 import ChartNoAxesColumnIncreasing from 'lucide/dist/esm/icons/chart-no-axes-column-increasing.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Check from 'lucide/dist/esm/icons/check.mjs'
@@ -112,6 +114,7 @@ export let icons = {
   ellipsis: Ellipsis,
   bot: Bot,
   bell: Bell,
+  inbox: Inbox,
   'sliders-horizontal': SlidersHorizontal,
   shield: Shield,
   plug: Plug,
