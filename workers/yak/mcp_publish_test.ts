@@ -1,7 +1,7 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { listable } from './shelf.ts'
-import { HOME as EXAMPLES } from './demos.ts'
 import { test } from '@yaks/testing'
+import { parseHTML } from 'linkedom'
 import {
   assert,
   assertEquals,
@@ -360,6 +360,13 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertStringIncludes(said, `published ${published} v1`)
     let empty = await k.at('yaks.app', '/gallery')
     assertEquals(cards(await empty.text()), 0)
+    let home = () => k.at('yaks.app', '/').then((r) => r.text())
+    let demos = (html: string) =>
+      [...parseHTML(html).document.querySelectorAll('#examples a[href]')]
+        .map((link) => link.getAttribute('href')!)
+        .filter((href) => href.startsWith('https://yourname.yaks.app/'))
+    let before = demos(await home())
+    assert(before.length > 0, 'the homepage links to its demos')
 
     // Somebody else's app: the ask goes to the platform's agents for a code
     // review, and nothing reaches the platform's owner until one is recorded.
@@ -536,11 +543,9 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       'withdraw the gallery listing',
     )
     // Gallery approval does not replace the chosen demos on the home page.
-    let home = await k.at('yaks.app', '/').then((r) => r.text())
-    for (let [slug] of EXAMPLES) {
-      assertStringIncludes(home, `https://yourname.yaks.app/${slug}/`)
-    }
-    assertEquals(home.includes('Somewhere to keep recipes'), false)
+    let after = await home()
+    assertEquals(demos(after), before)
+    assertEquals(after.includes('Somewhere to keep recipes'), false)
 
     // A stranger finds it: no cookie, no bearer, the same answer with the
     // install line on it.
