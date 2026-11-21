@@ -107,9 +107,14 @@ if (add) {
   }
 }
 
-/** Gives the file loaded next its own global error events: what the one
- * before listened for there hears no more. */
+// The runtime's own fetch, as the runner found it.
+let platformFetch = globalThis.fetch
+
+/** Gives the file loaded next its own global error events, and the runtime's
+ * own `fetch`: what the one before listened for there hears no more, and a
+ * stand-in for `fetch` it left in place answers it no more. */
 export let apart = () => {
+  globalThis.fetch = platformFetch
   events = new EventTarget()
   for (let type of TYPES) {
     if (`on${type}` in globalThis) Reflect.set(globalThis, `on${type}`, null)
