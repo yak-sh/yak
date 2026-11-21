@@ -48,21 +48,42 @@ let latest = async (dir: Directory, space: Space, app: App) => {
     : (await dir.apps(space)).find((row) => row.eid == app.eid) ?? app
 }
 
-/** A release fence holds new edits until its source switch or refusal. The
- * edit gives up after 30 seconds, an answer well inside the minute after which
- * a request that has not answered is a defect (defects.ts `watched`). */
+/** Whether `fence` holds edits of `draft`: a release holds only the draft it
+ * takes, which `fenced` writes after the fence's own name. A draft it did
+ * not take is laid over whatever serves (written.ts `overlaid`), so an edit
+ * of it goes on while the release runs; with no draft named, every fence
+ * holds.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * assert(holds('1:f:d', 'd') && holds('1:f:d') && !holds('1:f:d', 'e'))
+ * assert(!holds('1:f', 'd') && !holds('1:f', null) && !holds('1:f:d', null))
+ * assert(holds('1:f'))
+ * ```
+ */
+export let holds = (fence: string, draft?: string | null) => {
+  let took = fence.split(':')[2]
+  return draft === undefined || (!!took && took === draft)
+}
+
+/** A release fence holds new edits of the draft it takes (`holds`) until its
+ * source switch or refusal. The edit gives up after 30 seconds, an answer
+ * well inside the minute after which a request that has not answered is a
+ * defect (defects.ts `watched`). `draft` is the one the edit goes into, null
+ * for a draft it opens; left out, every fence holds the edit. */
 export let waiting = async (
   dir: Directory,
   space: Space,
   app: App,
   who: Who,
+  draft?: string | null,
 ) => {
   let until = Date.now() + 30_000
   for (let n = 0;; n++) {
     // The release lifting the fence is another request's write.
     if (n) dir.reread()
     let row = await latest(dir, space, app)
-    if (!row.fence) return row
+    if (!row.fence || !holds(row.fence, draft)) return row
     let started = Number(row.fence.split(':')[0])
     if (Date.now() - started > 5 * 60_000) {
       try {
@@ -97,6 +118,8 @@ export let fenced = async (
   who: Who,
   fence = drawn(),
 ) => {
+  // A draft eid never holds a colon, so the fence's third part is it.
+  if (taken) fence = `${fence}:${taken.eid}`
   await dir.stamp({
     entities: [
       {

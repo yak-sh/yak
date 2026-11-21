@@ -527,7 +527,7 @@ export let previewed = async (
   for (let n = 0; n < 5; n++) {
     let told = !!now.previewed || (!now.by && !!row.followed)
     if (told && now.branch != null) return await kept(now)
-    row = await waiting(dir, space, row, who)
+    row = await waiting(dir, space, row, who, now.eid)
     let at = new Date().toISOString()
     let branch = now.branch ?? (made ??= await branches.make())
     try {
@@ -629,20 +629,20 @@ export let modifying = async <T>(
   let opened = opensNew(asked) ? openedFor(app, asked) : null
   let row = app
   for (let n = 0; n < 5; n++) {
-    // The app, its drafts, and its newest write, which names the draft a
-    // writer with none of its own opens: read in one turn, they travel as
-    // one trip and answer from one state, so a draft another write of its
-    // opened is either seen or opened on the same head, and the two race
-    // for one eid.
-    let [standing, rows, head] = await Promise.all([
-      waiting(dir, space, row, who),
+    // The app's drafts and its newest write, which names the draft a writer
+    // with none of its own opens: read in one turn, they answer from one
+    // state, so a draft another write of its opened is either seen or opened
+    // on the same head, and the two race for one eid. Only a release that
+    // took the draft this write goes into holds it; the guard on the app's
+    // fence sends round a write a release began under.
+    let [rows, head] = await Promise.all([
       dir.drafts(row),
       dir.newestWrite(row),
     ])
-    row = standing
+    let drafts = withLegacy(row, rows)
+    let into = chosen(row, drafts, who, asked)
+    row = await waiting(dir, space, row, who, into?.eid ?? null)
     try {
-      let drafts = withLegacy(row, rows)
-      let into = chosen(row, drafts, who, asked)
       let draft = await drafting(raw, dir, row, into)
       let { changes, value } = await act(draft, row, n)
       // A batch naming one path twice keeps the last, as a person would
@@ -711,7 +711,7 @@ export let modifying = async <T>(
             ...pointer.app ? { app: pointer.app } : {},
             $was: {
               app: {
-                fence: token(null),
+                fence: token(row.fence ?? null),
                 source: token(row.source ?? null),
                 version: token(row.version ?? null),
                 ...pointer.was,

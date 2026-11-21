@@ -313,9 +313,10 @@ export let str = (description: string) => ({ type: 'string', description })
 // per tool on every listing.
 export let SPACE = str(
   'the space slug, as in <space>.yaks.app: one of the spaces you own or ' +
-    'hold a seat in, as app_list names them. If optional and omitted: the ' +
-    "space holding the app, else an Operator's own space, else the " +
-    "person's only space; a person who owns several spaces names one",
+    'hold a seat in, as app_list names them. Required when you own more ' +
+    'than one space, unless the app you name is in only one of them. ' +
+    'Otherwise, if omitted: the space holding the app, else an ' +
+    "Operator's own space, else your only space",
 )
 
 export let APP = str('the app slug, as in <space>.yaks.app/<app>/')

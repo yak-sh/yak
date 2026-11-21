@@ -481,14 +481,29 @@ test('a file deleted comes back, and a delete sent again says so', async () => {
 })
 
 let fencedWrite = made()
-test('a write held by a release goes ahead once another request lifts its fence', async () => {
-  let { write, read, fence } = fencedWrite
-  fence(`${Date.now()}:release`)
-  let wrote = write({ 'a.txt': 'one' })
+await fencedWrite.write({ 'a.txt': 'one' })
+test('a write into the draft a release took goes ahead once another request lifts its fence', async () => {
+  let { write, read, fence, drafts } = fencedWrite
+  let [taken] = await drafts()
+  fence(`${Date.now()}:release:${taken.eid}`)
+  let done = false
+  let wrote = write({ 'a.txt': 'two' }).finally(() => done = true)
   await new Promise((done) => setTimeout(done, 100))
+  assert(!done, 'the write waits on the release')
   fence(null)
   assertEquals((await wrote).wrote, ['a.txt'])
-  assertEquals(await read('a.txt'), 'one')
+  assertEquals(await read('a.txt'), 'two')
+})
+
+let otherRelease = made()
+await otherRelease.write({ 'a.txt': 'one' })
+test('a write goes ahead while a release of another draft, or of no draft, holds its fence', async () => {
+  let { write, read, fence } = otherRelease
+  for (let [held, text] of [['release:another', 'two'], ['release', 'one']]) {
+    fence(`${Date.now()}:${held}`)
+    assertEquals((await write({ 'a.txt': text })).wrote, ['a.txt'])
+    assertEquals(await read('a.txt'), text)
+  }
 })
 
 let concurrentWrites = made()
