@@ -10,13 +10,18 @@ export let wanted = (root: string): string => `${root}/pnpm-lock.yaml`
 export let current = (root: string): string =>
   `${root}/node_modules/.pnpm/lock.yaml`
 
-let packages = (lock?: string) => lock?.split(/^---\n/m).at(-1)
+// A formatter may have rewrapped the lockfile's flow mappings (`{ a: 1, }` over
+// three lines where pnpm writes `{a: 1}`): its whitespace and trailing commas
+// are not what pnpm installed.
+let packages = (lock?: string) =>
+  lock?.split(/^---\n/m).at(-1)?.replace(/\s+/g, '').replaceAll(',}', '}')
 
 /// differs('a', 'a') -> false
 /// differs('---\npnpm: 12\n\n---\na', 'a') -> false
+/// differs('a: {\n  b: 1,\n}\n', 'a: {b: 1}') -> false
 /// differs('a', 'b') -> true
 /// differs('a', undefined) -> true
 /// differs(undefined, undefined) -> false
 /** Whether what pnpm installed (`current`'s text) is not the lockfile wanted. */
 export let differs = (wanted?: string, installed?: string): boolean =>
-  packages(wanted) !== installed
+  packages(wanted) !== packages(installed)
