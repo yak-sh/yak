@@ -347,6 +347,10 @@ export let responses = (opts: Options): Model => {
     lateResults: true as const,
     list,
     info,
+    // Only OpenAI's own API, which keeps replies, counts input.
+    ...opts.store
+      ? { count: (req: Request) => client.count(wired(opts, req), req.signal) }
+      : {},
     vocab: openaiDoc,
     mark: marking(opts.provider ?? OPENAI_COMP, opts.retention),
     anchor: (comps: Record<string, unknown>) =>
@@ -404,6 +408,13 @@ let retrieving =
     }
   }
 
+// The request as it is sent.
+let wired = (opts: Options, req: Request, background = false) => {
+  let prepared = body(req, opts.store, opts.images, opts.web ?? true)
+  if (background) prepared.background = true
+  return (opts.shape?.(prepared) ?? prepared) as ResponseRequest
+}
+
 let ask =
   (opts: Options, client: ReturnType<typeof transport>) =>
   async (req: Request): Promise<Reply> => {
@@ -424,9 +435,7 @@ let ask =
       let started = Date.now()
       let selected = opts.images
       const textIndexes = new Map<string, number>()
-      let prepared = body(req, opts.store, selected, opts.web ?? true)
-      if (background) prepared.background = true
-      let wire = (opts.shape?.(prepared) ?? prepared) as ResponseRequest
+      let wire = wired(opts, req, background)
       let output: Frame[] = []
       let receipt: MediaReceipt | undefined
       let checkpointed = false

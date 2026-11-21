@@ -6,6 +6,7 @@
 // model API pass; facets/directory-effects.ts seeds the directory's recurring
 // usage schedule.
 import { reached } from './lib/hops.ts'
+import { caught } from './defects.ts'
 import type { Host } from '@yaks/platform/host'
 import { monthOf } from '@yaks/platform/meter'
 import type { Spend } from '@yaks/platform/plans'
@@ -282,6 +283,27 @@ export let CALL = 3_600_000
 // Bytes of streamed text a token covers on average.
 let BYTES = 4
 
+/** The input tokens a call is held for: its provider's own count of the
+ * request where it counts one, which is what it bills, anchored history
+ * included; else the bound worked out from the request (@yaks/model
+ * `requestBound`), which for an anchored request is the whole window. A
+ * count that fails is a defect, and the call is held to the bound. */
+let inputOf = async (
+  model: Model,
+  req: Parameters<Model>[0],
+  window: number,
+) => {
+  if (model.count && window > 0) {
+    try {
+      return Math.min(window, await model.count(req))
+    } catch (error) {
+      req.signal?.throwIfAborted()
+      caught(error, { request: 'model input count', model: req.model })
+    }
+  }
+  return requestBound(req, window)
+}
+
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
  * `visiting` names a visitor for is held to their share as well, and counted
@@ -321,6 +343,7 @@ export let accounted = (
       if (unbounded) throw new ModelError('limit', unbounded)
       let call = req.call ?? mint()
       let visitor = await visiting?.(req)
+      let counted = own ? 0 : await inputOf(model, req, window!)
       let hold = await reserved(
         { STORE: ns },
         space,
@@ -328,7 +351,7 @@ export let accounted = (
           if (own) return model.quote!(req, remaining) ?? null
           // What the provider's own tools may add is reserved beside it.
           let extra = model.hosted
-          let input = requestBound(req, window!) + (extra?.input ?? 0)
+          let input = counted + (extra?.input ?? 0)
           let output = req.questions
             ? window
             : outputTokens(info, req.tokens, input)

@@ -21,13 +21,13 @@ import { reservation, settled } from './model-spend.ts'
 
 let p = platform('accounted budget')
 let dir = directoryOf(p.env.STORE)
-let fixture = async (models = 0) => {
+let fixture = async (models = 0, dollars = 0.2) => {
   let eid = mint()
   await stamp(p.env, {
     entities: [{
       entity: { eid },
       space: { slug: 'budget-' + eid, store: eid },
-      budget: { dollars: 0.2 },
+      budget: { dollars },
       starter: { dollars: 0 },
       meter: { month: monthOf(new Date()), models },
     }],
@@ -130,6 +130,40 @@ test('a large catalogue output limit still shrinks to the remaining space budget
   await withModel(large.space, raw)({ ...req, tokens: undefined })
   assertEquals(seen > 0 && seen <= 500, true)
   assertEquals(await large.used() <= 0.2, true)
+})
+
+// An anchored turn's history is the provider's to count: held at the
+// window, two such turns would take more than $2.
+let ending = await fixture(18, 20)
+test('two anchored turns counted by their provider both run on the last $2', async () => {
+  let held: number[] = []
+  let go: () => void
+  let both = new Promise<void>((done) => go = done)
+  let raw: Model = Object.assign(async (ask: Parameters<Model>[0]) => {
+    held.push(ask.tokens!)
+    if (held.length == 2) go()
+    await both
+    await ask.onSubmit!()
+    return {
+      id: 'answer',
+      model: ask.model,
+      items: [],
+      usage: { input_tokens: 90_000, output_tokens: 2000 },
+    }
+  }, {
+    info: () =>
+      Promise.resolve({
+        name: 'sol',
+        context: 500_000,
+        price: { input: 2, output: 10, cached: 0.1, cache_write: 2.5 },
+      }),
+    count: () => Promise.resolve(90_000),
+  })
+  let turn = { model: 'sol', items: [], tools: [], anchor: 'resp_1' }
+  let model = withModel(ending.space, raw)
+  await Promise.all([model(turn), model(turn)])
+  assertEquals(held, [65_536, 65_536])
+  assertAlmostEquals(await ending.used(), 18 + 2 * (0.225 + 0.02), 1e-9)
 })
 
 let rejected = await fixture()

@@ -804,3 +804,34 @@ test('watchdog bounds both a missing first frame and a stalled HTTP error body',
     await stalled
   }
 })
+
+test('count asks the input token count with only the fields that make the input', async () => {
+  let asked: [string, Record<string, unknown>][] = []
+  let client = responses({
+    credentials: auth(),
+    fetch: (input, init) => {
+      asked.push([String(input), JSON.parse(String(init?.body))])
+      return Promise.resolve(Response.json({ input_tokens: 86 }))
+    },
+  })
+  let n = await client.count({
+    model: 'gpt-6.2-sol',
+    instructions: 'Be brief.',
+    input: 'And three in Asia.',
+    tools: [{ type: 'function', name: 'lookup' }],
+    previous_response_id: 'resp_1',
+    reasoning: { effort: 'high' },
+    max_output_tokens: 400,
+    prompt_cache_key: 'stable',
+    prompt_cache_options: { mode: 'implicit', ttl: '30m' },
+  })
+  assertEquals(n, 86)
+  assertEquals(asked, [['https://api.openai.com/v1/responses/input_tokens', {
+    model: 'gpt-6.2-sol',
+    instructions: 'Be brief.',
+    input: 'And three in Asia.',
+    tools: [{ type: 'function', name: 'lookup' }],
+    previous_response_id: 'resp_1',
+    reasoning: { effort: 'high' },
+  }]])
+})

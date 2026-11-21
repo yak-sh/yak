@@ -208,6 +208,8 @@ export let providers = (
       recover: true,
       ...options.background ? { retrieve: true } : {},
       info: true,
+      // OpenAI's own API counts a request's input, anchored history and all.
+      ...store ? { count: true as const } : {},
       reads,
     },
   )

@@ -375,6 +375,10 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   /** Retrieve the original generation using its durable acknowledgement. */
   retrieve?: (mark: Mark, signal?: AbortSignal) => Promise<Reply | undefined>
   list?: () => Promise<Listed[]>
+  /** The input tokens its provider counts a request at, anchored history and
+   * framing included: what it will bill as that request's input. A meter
+   * holds this in place of a bound it works out (./afford.ts). */
+  count?: (req: Request) => Promise<number>
   info?: (name: string) => Promise<Listed | undefined>
   mark?: (reply: Reply, cache?: CacheContext) => Mark
   anchor?: (comps: Record<string, unknown>) => string | undefined

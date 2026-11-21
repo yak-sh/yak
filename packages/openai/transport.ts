@@ -607,6 +607,25 @@ export let request = (
   return { ...value, include, store, stream: true }
 }
 
+// What the input token count reads of a request: the fields that make its
+// input, never how it is run, stored or cached, which it refuses.
+let COUNTED = [
+  'model',
+  'input',
+  'instructions',
+  'tools',
+  'tool_choice',
+  'parallel_tool_calls',
+  'previous_response_id',
+  'reasoning',
+  'text',
+  'truncation',
+]
+let countable = (value: ResponseRequest) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([key]) => COUNTED.includes(key)),
+  )
+
 /** The provider-native transport. `run` reads through EOF; `reach` probes
  * connectivity, not authorization. Neither keeps conversation state. */
 export let transport = (options: ResponseOptions): {
@@ -616,6 +635,9 @@ export let transport = (options: ResponseOptions): {
     signal?: AbortSignal,
   ) => Promise<Record<string, unknown> | undefined>
   cancel: (response: string) => Promise<void>
+  /** The input tokens the endpoint counts a request at, its previous
+   * response and framing included: what it bills as that request's input. */
+  count: (value: ResponseRequest, signal?: AbortSignal) => Promise<number>
   reach: () => Promise<boolean>
 } => {
   let fetcher = options.fetch ?? fetch
@@ -852,10 +874,14 @@ export let transport = (options: ResponseOptions): {
     }
   }
 
-  let background = async (
-    response: string,
+  // One JSON exchange beside a run: undefined where the endpoint has no such
+  // thing (404).
+  let exchange = async (
+    path: string,
+    what: string,
     method: 'GET' | 'POST',
     signal?: AbortSignal,
+    payload?: unknown,
   ): Promise<Record<string, unknown> | undefined> => {
     let auth = await credentials(
       options.credentials.get,
@@ -871,15 +897,15 @@ export let transport = (options: ResponseOptions): {
     headers.set('accept', 'application/json')
     if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
     if (auth.account) headers.set('chatgpt-account-id', auth.account)
+    if (payload) headers.set('content-type', 'application/json')
     let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
       .replace(/\/$/, '')
-    let path = '/responses/' + encodeURIComponent(response) +
-      (method == 'POST' ? '/cancel' : '')
     let dog = watchdog(stallMs, clock, signal)
     try {
       let answer = await fetcher(endpoint + path, {
         method,
         headers,
+        ...payload ? { body: JSON.stringify(payload) } : {},
         signal: dog.signal,
       })
       if (answer.status == 404) {
@@ -890,7 +916,7 @@ export let transport = (options: ResponseOptions): {
         await answer.body?.cancel()
         throw fault(
           'http_' + answer.status,
-          'responses: background request returned HTTP ' + answer.status,
+          `responses: ${what} returned HTTP ${answer.status}`,
           { status: answer.status },
         )
       }
@@ -898,10 +924,36 @@ export let transport = (options: ResponseOptions): {
     } catch (error) {
       signal?.throwIfAborted()
       if (error instanceof ResponseError) throw error
-      throw fault('transport', 'responses: could not read background response')
+      throw fault('transport', `responses: could not read ${what}`)
     } finally {
       dog.close()
     }
+  }
+  let background = (
+    response: string,
+    method: 'GET' | 'POST',
+    signal?: AbortSignal,
+  ) =>
+    exchange(
+      '/responses/' + encodeURIComponent(response) +
+        (method == 'POST' ? '/cancel' : ''),
+      'background request',
+      method,
+      signal,
+    )
+  let count = async (value: ResponseRequest, signal?: AbortSignal) => {
+    let answer = await exchange(
+      '/responses/input_tokens',
+      'input token count',
+      'POST',
+      signal,
+      countable(value),
+    )
+    let n = answer?.input_tokens
+    if (typeof n != 'number' || !Number.isSafeInteger(n) || n < 0) {
+      throw fault('transport', 'responses: no input token count')
+    }
+    return n
   }
   return {
     run,
@@ -910,5 +962,6 @@ export let transport = (options: ResponseOptions): {
     cancel: async (response) => {
       await background(response, 'POST')
     },
+    count,
   }
 }
