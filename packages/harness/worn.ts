@@ -172,6 +172,25 @@ export let readsOf = async (
 ): Promise<Bundle[]> =>
   (await worn(g, await openedAs(g, session), how.bases))?.names ?? []
 
+/** The Read among `names` that `asked` names: by its id or title, or,
+ * `loosely`, by its id and more words or the start of its title. */
+export let readAt = (
+  g: Graph,
+  names: Bundle[],
+  asked: string,
+  loosely = true,
+): Bundle | undefined => {
+  let said = asked.trim().toLowerCase()
+  let title = (b: Bundle) => callsOf(g, b).at(-1) ?? ''
+  return names.find((b) => callsOf(g, b).includes(said)) ??
+    (loosely
+      ? names.find((b) =>
+        callsOf(g, b).some((c) => said.startsWith(c + ' '))
+      ) ??
+        names.find((b) => said.length > 3 && title(b).startsWith(said))
+      : undefined)
+}
+
 /** A Read as one text: its id and title as a heading, then its body. */
 export let readText = (g: Graph, b: Bundle): string => {
   let doc = (b.doc ?? b.content ?? {}) as Comp
@@ -203,15 +222,12 @@ export let readOpen = (how: Wear = {}): NamedTool => ({
   run: async (call, g) => {
     let session = who(call)?.via
     if (!session) throw new Refused('read_open needs a session')
-    let asked = String(argsOf(call).read ?? '').trim().toLowerCase()
+    let asked = String(argsOf(call).read ?? '').trim()
     let names = await readsOf(g, session, how)
-    let title = (b: Bundle) => callsOf(g, b).at(-1) ?? ''
-    let found = names.find((b) => callsOf(g, b).includes(asked)) ??
-      names.find((b) => callsOf(g, b).some((c) => asked.startsWith(c + ' '))) ??
-      names.find((b) => asked.length > 3 && title(b).startsWith(asked))
+    let found = readAt(g, names, asked)
     if (!found) {
       throw new Refused(
-        `no Read called ${asked || '(nothing)'}; your Reads are ${
+        `no Read called ${asked.toLowerCase() || '(nothing)'}; your Reads are ${
           names.map((b) => human(g.vocab)(b)).join(', ') || 'none'
         }`,
       )

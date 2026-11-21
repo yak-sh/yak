@@ -8,7 +8,7 @@
 // is theirs. A room the space hears in full (`chat_hears`) needs neither:
 // all of it is already in its conversation.
 
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import {
@@ -242,10 +242,30 @@ export let roomsOf = async ({ g }: Store, at: string) => {
   let entries = await g.read(
     line`.entry.session=${session}&.intake.item&.channel.name&.order=-entry.seq&.limit=200&.fields=intake.item,channel.name`,
   )
-  let items = await g.get(
-    entries.filter((b) => PLATFORMS.has(String(comp(b, 'channel').name)))
-      .map((b) => String(comp(b, 'intake').item)),
+  return roomsIn(
+    g,
+    await g.get(
+      entries.filter((b) => PLATFORMS.has(String(comp(b, 'channel').name)))
+        .map((b) => String(comp(b, 'intake').item)),
+    ),
   )
+}
+
+/** The rooms of the space's chat platforms the Operator heard a message in,
+ * in any conversation, newest first: where a member's own turn writes with
+ * `chat_send`, as when they ask in their chat about a request said in a
+ * room they were not in. */
+export let spaceRooms = async ({ g }: Store) =>
+  roomsIn(
+    g,
+    await g.read(
+      line`.chat_message.room&.chat_message.connection&.order=-chat_message.at&.limit=200&.fields=chat_message.via,chat_message.room,chat_message.connection,chat_message.message_id`,
+    ),
+  )
+
+// The rooms `items`, chat messages newest first, were said in, each once with
+// its newest message.
+let roomsIn = async (g: Graph, items: (Bundle | null | undefined)[]) => {
   let rooms = new Map<string, Where & { message: string }>()
   for (let b of items) {
     let m = comp(b ?? undefined, 'chat_message')
@@ -277,6 +297,7 @@ export let roomsOf = async ({ g }: Store, at: string) => {
 export let roomAt = <R extends { eid: string; room: string }>(
   rooms: R[],
   named?: unknown,
+  place = 'in this conversation',
 ): R => {
   let at = named
     ? rooms.find((r) => r.eid == named || r.room == named)
@@ -285,10 +306,10 @@ export let roomAt = <R extends { eid: string; room: string }>(
   throw refuse(
     'missing',
     rooms.length
-      ? `You were not addressed in room ${named} in this conversation; you were in ${
+      ? `You were not addressed in room ${named} ${place}; you were in ${
         rooms.map((r) => `${r.room} (${r.eid})`).join(', ')
       }.`
-      : 'Nobody addressed you in a chat room in this conversation.',
+      : `Nobody addressed you in a chat room ${place}.`,
   )
 }
 
@@ -542,15 +563,17 @@ export let chatRows = (
 }
 
 /** The Operator's `chat_send`: a message in a chat room it was addressed in
- * during this conversation, replying to one of its messages, from any turn:
- * how a request said there is answered there when this turn came from
- * somewhere else. */
-export let chatSend = (store: Store): Tool => ({
+ * during this conversation, or, on a member's own turn (`space`), in any
+ * conversation of the space, replying to one of its messages: how a request
+ * said there is answered there when this turn came from somewhere else. */
+export let chatSend = (store: Store, space = false): Tool => ({
   name: 'chat_send',
   title: 'Write in a chat room',
   step: { doing: 'Writing in the room…', done: 'Wrote in the room' },
   description:
-    'Write in a chat room (a Discord channel) you were addressed in during this conversation, as a reply to one of its messages. Use it to answer a request where it was asked when this turn came from somewhere else, such as the person asking you here about something said in Discord: name the room and message its framing gave (room …, message …). A turn that came from the room is answered there already, so never send its answer with this too. Then tell the person here in one line that you did.',
+    `Write in a chat room (a Discord channel) you were addressed in ${
+      space ? 'in this space' : 'during this conversation'
+    }, as a reply to one of its messages. Use it to answer a request where it was asked when this turn came from somewhere else, such as the person asking you here about something said in Discord: name the room and message its framing gave (room …, message …). A turn that came from the room is answered there already, so never send its answer with this too. Then tell the person here in one line that you did.`,
   parameters: {
     type: 'object',
     properties: {
@@ -571,9 +594,19 @@ export let chatSend = (store: Store): Tool => ({
   run: async (args, context) => {
     let text = String(args.text ?? '').trim()
     if (!text) throw refuse('arguments', 'Say what to write.')
+    let here = context?.session ? await roomsOf(store, context.session) : []
+    let rooms = space
+      ? [
+        ...here,
+        ...(await spaceRooms(store)).filter((r) =>
+          !here.some((h) => h.eid == r.eid)
+        ),
+      ]
+      : here
     let at = roomAt(
-      context?.session ? await roomsOf(store, context.session) : [],
+      rooms,
       args.room,
+      space ? 'in this space' : 'in this conversation',
     )
     let message = args.message ? String(args.message) : undefined
     let eid = crypto.randomUUID()

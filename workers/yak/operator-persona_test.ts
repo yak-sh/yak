@@ -253,3 +253,42 @@ test('Operator spaces with the same tools share the base prefix and keep local c
     ),
   )
 })
+
+// A stranger's helper is worn on the same persona, so it holds read_open for
+// its Reads, and a Read's id given to graph_show says to open it there.
+test("a stranger's helper opens its Reads, and graph_show on one points to read_open", async () => {
+  let read = short(derivedEid('operator-persona|work'))
+  let steps = [
+    { name: 'graph_show', args: { id: read } },
+    { name: 'read_open', args: { read } },
+  ]
+  let seen: Request[] = []
+  let helper = operating(store, env, {
+    ...operatorModel((req) => {
+      seen.push(req)
+      let step = steps.shift()
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: step
+          ? [{
+            kind: 'call',
+            id: crypto.randomUUID(),
+            name: step.name,
+            args: JSON.stringify(step.args),
+          }]
+          : [{ kind: 'assistant', text: 'Done.' }],
+      })
+    }),
+    name: 'claude-sonnet-5-5',
+  })
+  await helper.ask({ person: crypto.randomUUID() }, space, { say: 'Hi' }, {})
+  await drain(store)
+  assert(seen[0].tools.some((t) => t.name == 'read_open'))
+  let told = JSON.stringify(seen.at(-1)!.items)
+  assertStringIncludes(
+    told,
+    `${read} is one of your Reads: open it with read_open`,
+  )
+  assertStringIncludes(told, `# ${read} Working in the apps`)
+})

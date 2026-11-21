@@ -149,3 +149,60 @@ test('with nothing waiting on them, their words carry no note', async () => {
   await say('hi')
   assertEquals((await notes()).length, before)
 })
+
+// A decision waiting on someone else, or a task that is no decision, is
+// refused with whose it is and the decisions that do wait on the person.
+test('relaying what is not theirs names whose it is and what waits on them', async () => {
+  let [bo, theirs, plain] = [
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+  ]
+  await directoryOf(p.env.STORE).apply({
+    entities: [{
+      entity: { eid: bo },
+      person: {},
+      doc: { title: 'Bo' },
+      email: { address: 'bo@example.com' },
+    }],
+  }, { 'x-yak-person': ada, 'x-yak-role': 'owner' })
+  await store.g.apply([
+    {
+      entity: { eid: theirs },
+      task: {},
+      doc: { title: 'Which mug?' },
+      decision: {
+        question: 'Which mug?',
+        choices: [{ label: 'Red' }, { label: 'Blue' }],
+        recommended: 'Red',
+      },
+      filed: { assignee: bo },
+    },
+    { entity: { eid: plain }, task: {}, doc: { title: 'Wash mugs' } },
+  ], { trusted: true })
+  replies.push(() => asking('Which cup?'), () => said('Asked.'))
+  await say('Make a cup')
+  let refused: string[] = []
+  for (let named of [theirs, plain]) {
+    replies.push(
+      () => call('decision_relay', { decision: named, choice: 'Red' }),
+      (sent) => {
+        refused.push(sent)
+        return said('Noted.')
+      },
+    )
+    await say('red')
+  }
+  assertStringIncludes(
+    refused[0],
+    'waits on Bo, not on the person you are talking with',
+  )
+  assertStringIncludes(refused[1], 'is not a decision.')
+  for (let sent of refused) {
+    assertStringIncludes(
+      sent,
+      'The decisions waiting on the person you are talking with:',
+    )
+    assertStringIncludes(sent, 'Which cup?')
+  }
+})

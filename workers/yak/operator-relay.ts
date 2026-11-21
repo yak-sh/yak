@@ -334,6 +334,24 @@ export let waitingOn = async (
   ].filter(Boolean).join('\n\n')
 }
 
+// Why a decision `decision_relay` was named is not the person's to answer,
+// and what is: a decision waiting on someone else is answered by their words
+// in their own conversation, and the ones waiting on this person are listed.
+let notTheirs = async (ctx: Ctx, work: Store, assignee: unknown) => {
+  let who = typeof assignee == 'string'
+    ? (await ctx.dir.persons([assignee])).get(assignee)?.name || 'someone else'
+    : undefined
+  let rows = await work.g.read(line`${sub(waiting(ctx.person!))}&*`)
+  return (who
+    ? `waits on ${who}, not on the person you are talking with: only ${who}'s own words answer it, in their conversation with you. `
+    : 'is not a decision. ') +
+    (rows.length
+      ? `The decisions waiting on the person you are talking with:\n${
+        asked(rows, await work.known(rows.map((b) => b.entity.eid)))
+      }`
+      : 'No decision waits on the person you are talking with.')
+}
+
 /**
  * The tool that answers one of the person's open decisions with one of their
  * own messages in this conversation: the answer is theirs, the choice their
@@ -376,8 +394,12 @@ export let decisionRelay = (
     let eid = (await work.g.address([named])).get(named) ?? named
     let [row] = await work.g.get([eid])
     let decision = comp(row, 'decision')
-    if (!decision || comp(row, 'filed')?.assignee != ctx.person) {
-      throw refuse('arguments', `${named} is no decision waiting on them`)
+    let assignee = comp(row, 'filed')?.assignee
+    if (!decision || assignee != ctx.person) {
+      throw refuse(
+        'arguments',
+        `${named} ${await notTheirs(ctx, work, decision && assignee)}`,
+      )
     }
     let closed = (row: Bundle | undefined) => {
       let decided = comp(row, 'decided')

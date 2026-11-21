@@ -56,6 +56,42 @@ export let refs = (schema?: Record<string, unknown>): [string, string][] =>
       return typeof ref == 'string' ? [[key, ref] as [string, string]] : []
     })
 
+/**
+ * `schema` with no argument marked a reference: what a runner is handed for a
+ * tool whose own run resolves them where it reads (@yaks/tools `invoke`), so
+ * an id is never resolved first against a store the tool does not read.
+ *
+ * ```ts
+ * import { unreferenced } from './args.ts'
+ *
+ * unreferenced({
+ *   type: 'object',
+ *   properties: {
+ *     id: { type: 'string', ref: 'entity' },
+ *     ids: { type: 'array', items: { type: 'string', ref: 'task' } },
+ *   },
+ * })
+ * // { type: 'object', properties: { id: { type: 'string' }, ids: { type: 'array', items: { type: 'string' } } } }
+ * ```
+ */
+export let unreferenced = <S extends Args>(schema: S): S => {
+  let { ref: _, items, properties, ...rest } = schema as Args & Prop
+  return {
+    ...rest,
+    ...items ? { items: unreferenced(items as Args) } : {},
+    ...properties
+      ? {
+        properties: Object.fromEntries(
+          Object.entries(properties).map(([k, p]) => [
+            k,
+            p && typeof p == 'object' ? unreferenced(p as Args) : p,
+          ]),
+        ),
+      }
+      : {},
+  } as unknown as S
+}
+
 // What an argument said, as the ids in it.
 let ids = (v: unknown): string[] =>
   (Array.isArray(v) ? v : [v]).filter((x): x is string =>

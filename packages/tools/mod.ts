@@ -24,7 +24,7 @@ export {
   type Finding,
   type Level,
 } from './check.ts'
-export { CallError, parsed } from './args.ts'
+export { CallError, parsed, unreferenced } from './args.ts'
 export { said } from './said.ts'
 export { persist } from './persist.ts'
 export {

@@ -981,6 +981,50 @@ test('a web turn told to handle a Discord request answers it in its room, replyi
   )
 })
 
+// Ann, linked to nobody, asks in a room, so her words reach a guest's helper,
+// never Ada's conversation; Ada, in her chat on the page, still answers Ann
+// there, in any room of the space (T-2337).
+test("a member's web turn answers in a room only another conversation was addressed in", async () => {
+  let o = await seeded([
+    { text: 'I passed it on.' },
+    {
+      calls: [{
+        name: 'chat_send',
+        arguments: { room: BARN, message: '9', text: 'Bring folding chairs.' },
+      }],
+    },
+    { text: 'Replied to Ann in #barn.' },
+  ], VAULTED)
+  let r = await roomed(o, [])
+  try {
+    await r.says('9', 'what should we bring?')
+    let web = await o.object.fetch(
+      new Request('https://builder/operator/receive', {
+        method: 'POST',
+        headers: { 'x-space-eid': o.space.eid, 'x-yak-person': ADA },
+        body: JSON.stringify({
+          say: "answer Ann's question in Discord",
+          request: { channel: 'chat' },
+        }),
+      }),
+    )
+    await web.body?.cancel()
+    while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
+  } finally {
+    r.restore()
+  }
+  assert(offers(r.model().at(-1)!, 'chat_send'))
+  let posted = await r.store.g.read(
+    line`.chat_message.connection=${r.connection}&.deliver&*`,
+  )
+  assert(
+    posted.some((b) =>
+      (b.doc as { body: string }).body == 'Bring folding chairs.' &&
+      (b.chat_message as { reply_to?: string }).reply_to == '9'
+    ),
+  )
+})
+
 // Each turn in a room opens with what anyone there sees (the server, its
 // icon, the room, its topic, who is talking and their roles), and api_call
 // reads anything else a member could, as the bot, in its own server alone.

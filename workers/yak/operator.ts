@@ -16,7 +16,7 @@ import {
 import { begin, lend, seed } from '@yaks/harness'
 import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
-import { readOpen } from '@yaks/harness/worn'
+import { readAt, readOpen, readsOf } from '@yaks/harness/worn'
 import {
   answerOf,
   type ChildLimits,
@@ -60,7 +60,12 @@ import { artifactsOf } from '@yaks/blob/attachment'
 import { attached, fileContext } from './operator-inputs.ts'
 import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
-import { CallError, invoke, runner as toolRunner } from '@yaks/tools'
+import {
+  CallError,
+  invoke,
+  runner as toolRunner,
+  unreferenced,
+} from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { trialDoc } from '@yaks/trial/vocab'
@@ -161,7 +166,7 @@ import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
-import { chatRead, chatSend, roomsOf } from './operator-rooms.ts'
+import { chatRead, chatSend, roomsOf, spaceRooms } from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
@@ -779,10 +784,22 @@ export let operatorRoster = async (
         ...loadTools([trialDoc], trialRuns(trials)),
         ...held(),
         skillRead,
-        readOpen({ bases: bases(ctx.env) }),
       ].map(namedTool).map((t) => [t.name, t])
       : [],
   )
+  // Every turn opens the Reads its persona lists, a stranger's helper's too:
+  // the tool reaches only those, so it reads the whole store.
+  let wear = { bases: bases(ctx.env) }
+  let reads = namedTool(readOpen(wear))
+  // An id given to a tool that names nothing there may be a Read's: its
+  // refusal says to open it with read_open.
+  let aRead = async (args: Record<string, unknown>, session?: string) => {
+    let ids = Object.values(args).filter((v) => typeof v == 'string')
+    if (!session || !ids.length) return
+    let names = await readsOf(work.g, session, wear)
+    let id = ids.find((v) => readAt(work.g, names, v as string, false))
+    return id && `${id} is one of your Reads: open it with read_open`
+  }
   // What the model reads of an answer from the Operator's own store is drawn
   // (operator-store.ts `readable`): an eid in its prose as the entity's id.
   // An answer is `heard` (operator-heard.ts) unless its words are the
@@ -804,6 +821,23 @@ export let operatorRoster = async (
     target: Graph,
     from: 'own' | 'apps' | 'remote',
     elsewhere?: string,
+  ): Tool['run'] =>
+  async (args, context) => {
+    try {
+      return await ran(t, host, target, from)(args, context)
+    } catch (error) {
+      if (!nowhere(error)) throw error
+      let more = (await aRead(args, context?.session)) ?? elsewhere
+      if (!more) throw error
+      let { code, message } = error as CallError
+      throw new CallError(code, `${message}. ${more}`)
+    }
+  }
+  let ran = (
+    t: NamedTool,
+    host: Graph,
+    target: Graph,
+    from: 'own' | 'apps' | 'remote',
   ): Tool['run'] =>
   async (args, context) => {
     let call = context!.call
@@ -837,12 +871,9 @@ export let operatorRoster = async (
     )
     let refusal = out.find((b) => b.refusal)
     if (refusal && !refusal.heard) {
-      let body = String(comp(refusal, 'content')?.body)
       throw new CallError(
         String(comp(refusal, 'refusal')?.code),
-        elsewhere && body.includes(' names nothing')
-          ? `${body}. ${elsewhere}`
-          : body,
+        String(comp(refusal, 'content')?.body),
       )
     }
     if (fault) throw fault
@@ -897,7 +928,9 @@ export let operatorRoster = async (
     ...t.title ? { title: t.title } : {},
     ...t.step ? { step: t.step } : {},
     description: (BULK[t.name] ?? '') + t.description,
-    parameters: inputSchemaOf(t),
+    // Its run resolves each id where the tool reads (`invoke`), never
+    // first in the conversation's store.
+    parameters: unreferenced(inputSchemaOf(t)),
     readOnly: t.readOnly,
   })
   // Every tool the connector lists for the person (agent.ts `connected`), to
@@ -981,6 +1014,7 @@ export let operatorRoster = async (
         },
       }
     }),
+    { ...shaped(reads), run: run(reads, work.g, work.g, 'own') },
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
@@ -2245,7 +2279,7 @@ export let operating = (
     let acts = member && !heard
     // A turn that holds no escalating tool asks for no tap.
     let asking = acts && !o.approved
-    let [roster, google, platform, [text], rooms] = await Promise.all([
+    let [roster, google, platform, [text], rooms, wide] = await Promise.all([
       operatorRoster(ctx, store, {
         space: space.eid,
         tasked: !!task,
@@ -2268,13 +2302,20 @@ export let operating = (
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
       ),
       roomsOf(store, session),
+      acts ? spaceRooms(store) : [],
     ])
     // Addressed in a chat room, it reads back what was said there, and
-    // anything else a member there could see, and from any turn writes
-    // there, to answer a request where it was asked.
-    let chat = rooms.length
-      ? [chatRead(env, store, speakersOf(env, space)), chatSend(store)]
-      : []
+    // anything else a member there could see. From any turn it writes there,
+    // and from a member's own turn in any room of the space, to answer a
+    // request where it was asked.
+    let chat = [
+      ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
+      ...acts && wide.length
+        ? [chatSend(store, true)]
+        : rooms.length
+        ? [chatSend(store)]
+        : [],
+    ]
     // Any service's API: a room's platform on any turn there, the person's
     // connections on their own (operator-integrations.ts).
     let vias = rooms.map((r) => r.via)

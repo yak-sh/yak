@@ -38,7 +38,7 @@ export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
  * })
  * equal(
  *   unnamed('#744b934dac'),
- *   "#744b934dac names nothing: a #… handle is the start of an entity's eid, and no entity here has an eid starting 744b934dac",
+ *   "#744b934dac names nothing: a #… handle is the start of an entity's eid, and no entity here has an eid starting 744b934dac; search finds one by its words",
  * )
  * equal(
  *   unnamed('W-99', v),
@@ -59,7 +59,8 @@ export let unnamed = (id: string, v?: Vocab): string => {
   let said = `${id} names nothing:`
   if (SHORT.test(id)) {
     return `${said} a #… handle is the start of an entity's eid, and no ` +
-      `entity here has an eid starting ${id.slice(1).toLowerCase()}`
+      `entity here has an eid starting ${id.slice(1).toLowerCase()}; ` +
+      'search finds one by its words'
   }
   let p = parse(id)
   if (p && !p.prefix) {
