@@ -4,9 +4,9 @@
 // conversation with the space's Operator, as them, beside the context the
 // page gives (`{say, context}`). They are the reader's own words on the
 // `chat` channel, said in the Operator's chat beside the app, so the turn
-// holds the reader's permissions in the space: an editor's Operator can
-// change the app, a reader who holds no seat gets a guest's helper. A
-// signed-out reader is answered where to sign in.
+// holds the reader's permissions in the space and can change the app. The
+// Operator talks with the space's owners and editors, so a reader who is
+// neither is refused, and a signed-out one is answered where to sign in.
 //
 // `tell`: an app telling its space's Operator something: `POST ./api/operator/tell`
 // with `{say, key}`, from the app's own worker (`env.APP`). The words are a
@@ -22,6 +22,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { itsApp } from './dispatch.ts'
 import { bound } from './env.ts'
+import { writes } from '@yaks/member'
 import { chatPath } from '@yaks/platform/routes'
 import { url } from '@yaks/platform/host'
 import type { Request as Intake } from './operator-channels.ts'
@@ -87,6 +88,11 @@ export let send: Answer = async (
   if (path != '/operator/send') return null
   if (req.method != 'POST') return json(405, 'method_not_allowed')
   if (!who.person) return await refuse('sign_in')
+  // The space's Operator talks with the members who may change it (build.ts
+  // `#operate`), on a seat in the space, not a grant on this one app.
+  if (!writes(who.role) || who.guest || who.visit) {
+    return await refuse('not_a_writer')
+  }
   let sent = await req.json().catch(() => null) as
     | { say?: unknown; context?: unknown }
     | null
@@ -104,12 +110,9 @@ export let send: Answer = async (
       `send says something (at most ${SAY} characters), with context an object of at most ${CONTEXT} characters as JSON`,
     )
   }
-  // A guest of this one app, or a stranger at its sample, holds no seat in
-  // the space: the Operator meets them as someone who is not a member.
-  let seat = who.guest || who.visit ? { ...who, role: null } : who
   let request = crypto.randomUUID()
   let { operatorDoor } = await import('./build-door.ts')
-  await operatorDoor(env, space, seat, 'receive', {
+  await operatorDoor(env, space, who, 'receive', {
     say,
     request: {
       channel: 'chat',

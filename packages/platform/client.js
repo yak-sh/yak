@@ -613,8 +613,10 @@ export let store = (base, { clock = system } = {}) => {
   // what the page says beside them, such as the passage they selected and the
   // app's revision. It starts a turn there, with the reader's permissions in
   // the space, and answers `{request, conversation}`: the request's id and the
-  // address of the conversation, where the Operator answers. A signed-out
-  // reader is refused with `signIn`, where they sign in and come back.
+  // address of the conversation, where the Operator answers. The Operator
+  // talks with the space's owners and editors: anyone else is refused
+  // (`not_a_writer`), and a signed-out reader with `signIn`, where they sign
+  // in and come back.
   let operatorSend = (say, context = {}) =>
     ask('operator/send', {
       method: 'POST',

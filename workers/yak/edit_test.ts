@@ -1,9 +1,9 @@
 // The corner of an app's pages (public/edit.js), its note to the Operator and
-// its pencil: who is sent each, how it is woven, and that it draws beside the
+// its pencil: who is sent it, how it is woven, and that it draws beside the
 // page rather than in it. Edit mode itself is edit-mode_test.ts.
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { aloneOf, editOf, sendOf } from './apps.ts'
+import { aloneOf, editOf } from './apps.ts'
 import type { App, Space } from './directory.ts'
 import { pageScript } from './page-script.ts'
 import { assets } from './binding-probe.ts'
@@ -27,25 +27,16 @@ test('the pencil is sent to whoever the file door lets write the app', () => {
   equal(edit({ person: 'p', role: 'owner' }, installed), null)
 })
 
-test('the note is sent to whoever is signed in, outside a sandbox', () => {
-  equal(sendOf(app, { person: 'p', role: null }), true)
-  equal(sendOf(app, { person: 'p', role: 'viewer', guest: true }), true)
-  equal(sendOf(app, { person: null, role: null }), false)
-  let installed = { ...app, installed: { sandboxed: true } } as unknown as App
-  equal(sendOf(installed, { person: 'p', role: 'owner' }), false)
-})
-
 test("a member's page is never one Site keeps for everyone", () => {
   equal(aloneOf({ person: null, role: null }), 'stranger')
   equal(aloneOf({ person: 'p', role: null }), 'outsider')
   equal(aloneOf({ person: 'p', role: 'editor' }), null)
 })
 
-let woven = async (edit?: string, send?: boolean) => {
+let woven = async (edit?: string) => {
   let { tags, hashes } = await pageScript(ASSETS, '/cookbook/', 1, {
     badge: 'https://yaks.app/',
     edit,
-    send,
   })
   let scripts = [...parseHTML(tags).document.querySelectorAll('script')]
   return { scripts, hashes }
@@ -59,12 +50,6 @@ test('the pencil is woven after the badge, saying where the chat is', async () =
   ok(scripts.at(-2)!.hasAttribute('data-yak-badge'))
   equal(hashes.length, scripts.length)
   ok(!(await woven()).scripts.some((s) => s.textContent == code))
-  let reader = (await woven(undefined, true)).scripts.at(-1)!
-  equal(
-    [reader.textContent == code, reader.getAttribute('data-yak-send')],
-    [true, '1'],
-  )
-  ok(!reader.hasAttribute('data-yak-edit'))
 })
 
 let drawn = (attrs: string) => {
@@ -101,5 +86,4 @@ test('it draws beside the body, where a page redrawing its body leaves it', () =
   equal(host.parentNode, doc.documentElement)
   doc.body.innerHTML = '<p>Redrawn</p>'
   ok(doc.querySelector('yaks-edit'))
-  ok(drawn('data-yak-send="1"').querySelector('yaks-edit'))
 })

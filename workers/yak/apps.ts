@@ -782,20 +782,13 @@ export let wearing = (
   return {
     ...badged(space, app, env),
     edit: editOf(space, app, env, who),
-    send: sendOf(app, who),
     ...api ? { api } : {},
     bar: barOf(env, app, who),
   }
 }
 
-/** Whether the corner of this app's pages offers its reader the note to the
- * space's Operator (public/edit.js, app-operator.ts `send`): to anyone signed
- * in, the same for every one of them who holds no seat, as Site keeps their
- * page (`aloneOf`). A sandboxed app's pages reach no platform door. */
-export let sendOf = (app: App, who: Who) => !!who.person && !sandboxed(app)
-
-/** The Operator's chat for this app, which the pencil on its pages offers
- * (public/edit.js), or null where it wears no pencil: for whoever the file
+/** The Operator's chat for this app, which the corner of its pages offers
+ * with its note and pencil (public/edit.js), or null where it wears none: for whoever the file
  * door would not let write the app's files (`api`'s `/files/`). */
 export let editOf = (space: Space, app: App, env: Host, who: Who) =>
   writes(who.role) && !who.guest && !sandboxed(app)

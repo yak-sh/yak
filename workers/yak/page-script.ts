@@ -1,9 +1,9 @@
 // The platform's own script in every page an app serves: the reporter
 // (public/report.js), the release listener (public/release.js), the framed
 // address reporter (public/location.js), the badge (public/badge.js) in a page
-// of a space on the free plan, the corner (public/edit.js) in a page served to
-// a signed-in reader, with its note to the Operator, and its pencil for a
-// member who may write the app, and the visitor's bar (public/visit.js) in a
+// of a space on the free plan, the corner (public/edit.js), its note to the
+// Operator and its pencil, in a page served to a member who may write the
+// app, and the visitor's bar (public/visit.js) in a
 // page served to a stranger from a published app's sample or their own store of
 // it (@yaks/platform/visits), woven into the page's text inline, as
 // @yaks/platform/woven `tagged` weaves them.
@@ -12,8 +12,7 @@
 // the pencil's also say where the app's own `api/` is when it is not under
 // the mount (`data-yak-api`). The badge's says what it opens
 // (`data-yak-badge`): the app's own page on yaks.app, or yaks.app itself. The
-// pencil's says where the Operator's chat for the app is (`data-yak-edit`),
-// and the corner's that it offers the note (`data-yak-send`).
+// corner's says where the Operator's chat for the app is (`data-yak-edit`).
 // The bar's says where keeping it goes and what its button says
 // (`data-yak-keep`, `data-yak-keep-says`).
 //
@@ -46,9 +45,6 @@ export type Scripts = {
   preview?: string | null
   draft?: string
   edit?: string | null
-  /** The corner offers its reader the note to the Operator (apps.ts
-   * `sendOf`). */
-  send?: boolean
   /** Where the app's own `api/` is for this browser, where it is not under
    * the mount (@yaks/platform/routes `API_AT`): the release listener's and
    * the pencil's doors. */
@@ -78,7 +74,7 @@ export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  { badge, draft, bar, preview, edit, send, api }: Scripts,
+  { badge, draft, bar, preview, edit, api }: Scripts,
 ) => {
   try {
     let [report, release, badged, barred, location, pencil] = await scripts(
@@ -102,13 +98,7 @@ export let pageScript = async (
         ...preview ? { 'data-yak-preview': preview } : {},
       }])
     }
-    if (edit || send) {
-      worn.push([pencil, {
-        ...edit ? { 'data-yak-edit': edit } : {},
-        ...send ? { 'data-yak-send': '1' } : {},
-        ...doors,
-      }])
-    }
+    if (edit) worn.push([pencil, { 'data-yak-edit': edit, ...doors }])
     if (bar) {
       worn.push([barred, {
         'data-yak-keep': bar.keep,

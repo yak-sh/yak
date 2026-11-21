@@ -225,21 +225,22 @@ chat.
   revision, a row's eid. The Operator reads it beside their words, with the
   page's address and the app's slug.
 - It starts a turn in their conversation, with the reader's own permissions in
-  the space: the Operator can change the app for an owner or an editor, and
-  answers a viewer. A reader who holds no seat in the space is answered by a
-  helper with a guest's tools, which passes on to the space's people what only
-  they can do. The turn is paid from the space's budget.
+  the space, so the Operator can answer and change the app. The turn is paid
+  from the space's budget.
+- The space's Operator talks with its owners and editors. Anyone else, a viewer
+  or a guest of this one app included, is refused `403 not_a_writer`: call
+  `me()` first and offer it where `role` is `owner` or `editor`.
 - It answers `{request, conversation}`: the request's id and the address of the
   conversation on yaks.app, where the Operator answers.
 - A signed-out reader is refused `401 sign_in` with `e.signIn`, where they sign
   in and come back to the page. Keep what they typed first (`drafts`, or
   `sessionStorage`), so it is still there when they return.
 
-Every app page already offers this to a signed-in reader without any code: the
-note button in the bottom-right corner quotes the text they selected and sends
-their words with the page, its title, the selection, the heading it is under and
-the release. Call `operatorSend` when the page should offer it in its own place,
-such as a button beside each passage.
+Every app page already offers this to its owners and editors without any code:
+the note button in the bottom-right corner, beside the pencil, quotes the text
+they selected and sends their words with the page, its title, the selection, the
+heading it is under and the release. Call `operatorSend` when the page should
+offer it in its own place, such as a button beside each passage.
 
 ### outbox
 

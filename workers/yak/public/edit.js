@@ -1,14 +1,14 @@
-// The corner of an app's pages where a signed-in reader reaches the space's
-// Operator (page-script.ts).
+// The corner of an app's pages where a member who may write the app reaches
+// the space's Operator (page-script.ts, apps.ts `editOf`): those its Operator
+// talks with.
 //
-// The note, for every signed-in reader (apps.ts `sendOf`, `data-yak-send`):
-// pressed with text selected or not, it opens a note to the Operator quoting
+// The note: pressed with text selected or not, it opens a note to the Operator quoting
 // the selection, and Send puts their words in their own conversation with it,
 // beside the page, its title, the selection, the section it is under and the
 // release, through the store client's `operatorSend` (app-operator.ts
 // `send`). What they type is kept in the tab until it is sent.
 //
-// The pencil, for a member who may write the app (apps.ts `editOf`). Pressed, it loads edit mode (edit-mode.ts, at the app's
+// The pencil: Pressed, it loads edit mode (edit-mode.ts, at the app's
 // `./api/_edit.js`) and the app's store client, and the panel to its left
 // counts the person's changes and saves them (`./api/save`, save.ts). Edit
 // mode stays on across a reload of the tab until Done.
@@ -83,7 +83,7 @@ button {
 .pencil:disabled { opacity: 0.6; cursor: progress }
 button:focus-visible, a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 svg { width: 18px; height: 18px }
-.note[hidden], .pencil[hidden], .sheet[hidden] { display: none }
+.sheet[hidden] { display: none }
 .sheet {
   display: grid;
   gap: 8px;
@@ -153,8 +153,7 @@ svg { width: 18px; height: 18px }
   let at = script?.dataset.yakAt || '/'
   let api = script?.dataset.yakApi || at
   let version = script?.dataset.yakVersion
-  let ask = script?.dataset.yakEdit
-  let sends = script?.dataset.yakSend == '1'
+  let ask = script?.dataset.yakEdit || 'https://yaks.app/'
   let KEPT = 'yaks:editing:' + at
   let host = document.createElement('yaks-edit')
   let root = host.attachShadow({ mode: 'closed' })
@@ -178,7 +177,6 @@ svg { width: 18px; height: 18px }
   pencil.title = "Edit this page's words"
   pencil.setAttribute('aria-label', "Edit this page's words")
   pencil.setAttribute('aria-pressed', 'false')
-  pencil.hidden = !ask
   let note = document.createElement('button')
   note.type = 'button'
   note.className = 'pencil note'
@@ -186,7 +184,6 @@ svg { width: 18px; height: 18px }
   note.title = 'Send a note to the Operator'
   note.setAttribute('aria-label', 'Send a note to the Operator')
   note.setAttribute('aria-expanded', 'false')
-  note.hidden = !sends
   let sheet = noteSheet()
   let buttons = document.createElement('div')
   buttons.className = 'stack'
@@ -385,7 +382,7 @@ svg { width: 18px; height: 18px }
     try {
       on = sessionStorage.getItem(KEPT) == '1'
     } catch { /* no storage: edit mode starts off */ }
-    if (on && ask) open()
+    if (on) open()
   }
   if (document.body) wear()
   else document.addEventListener('DOMContentLoaded', wear, { once: true })

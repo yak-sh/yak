@@ -254,7 +254,7 @@ test("a page sends a reader's words into their own conversation, with its contex
   )
 })
 
-test('a signed-out reader is told to sign in, and a send says something', async () => {
+test('a send is refused to a reader who does not write the space, and says something', async () => {
   let [status, { error }] = await said(await send({ say: 'Hi' }, {}))
   assertEquals([status, error.code, typeof error.signIn], [
     401,
@@ -263,4 +263,7 @@ test('a signed-out reader is told to sign in, and a send says something', async 
   ])
   assertEquals((await send({ say: ' ' })).status, 400)
   assertEquals((await send({ say: 'Hi', context: [1] })).status, 400)
+  let other = await seed(k, [{ slug: unique('reader'), apps: [] }])
+  let [code] = await said(await send({ say: 'Hi' }, { cookie: other.cookie }))
+  assertEquals(code, 403)
 })
