@@ -228,12 +228,7 @@ export let Story = (
   <div class='Home_Story' data-story=''>
     <div class='Home_MoonSpace' data-moon-at='' aria-hidden='true' />
     <div class='Home_Desk' data-story-desk=''>
-      <div class='Home_Reading'>
-        <Hero copy={copy} action={action} yak={yak} />
-        <FeatureNav copy={copy} />
-        <Features copy={copy} plans={plans} />
-        <Details copy={copy} action={action} />
-      </div>
+      <Hero copy={copy} action={action} yak={yak} />
       <aside
         class='Home_Demo'
         id='examples'
@@ -249,6 +244,9 @@ export let Story = (
         <Picks />
         <Ask copy={copy} action={action} id='example-say' cta='walk' />
       </aside>
+      <FeatureNav copy={copy} />
+      <Features copy={copy} plans={plans} />
+      <Details copy={copy} action={action} />
     </div>
   </div>
 )

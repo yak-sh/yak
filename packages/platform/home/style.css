@@ -30,14 +30,12 @@
 .Home_Desk {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'hero' 'demo' 'contents' 'features' 'details';
   align-items: start;
 }
 
-.Home_Reading {
-  display: contents;
-}
-
 .Home_Story .Story_Hero {
+  grid-area: hero;
   grid-template-columns: minmax(0, 1fr);
   padding: 0;
   color: var(--sky-ink);
@@ -188,13 +186,17 @@
   opacity: .88;
 }
 
+.Story_Page .Sky_Far {
+  overflow: visible;
+}
+
 .Story_Page .Sky_Grass {
   mask-image: linear-gradient(#000 48%, transparent 100%);
 }
 
 .Story_Page .Home_Demo {
   display: grid;
-  grid-row: 2;
+  grid-area: demo;
   grid-template-rows: auto 20rem auto auto;
   align-content: start;
   gap: .65rem;
@@ -334,6 +336,7 @@
 }
 
 .Home_Contents {
+  grid-area: contents;
   position: sticky;
   z-index: 2;
   top: 0;
@@ -374,6 +377,10 @@
 .Home_JumpLink[aria-current='location'] {
   background: var(--accent);
   color: var(--bg);
+}
+
+.Home_Features {
+  grid-area: features;
 }
 
 .Home_Feature {
@@ -498,6 +505,7 @@
 }
 
 .Home_Details {
+  grid-area: details;
   gap: clamp(2.5rem, 5vw, 5rem);
   padding-block: 3rem 1rem;
 }
@@ -562,12 +570,9 @@
 
   .Home_Desk {
     grid-template-columns: minmax(0, 1fr) var(--phone-width);
+    grid-template-areas: 'hero demo' 'contents demo' 'features demo'
+      'details demo';
     column-gap: var(--story-gap);
-  }
-
-  .Home_Reading {
-    display: grid;
-    min-width: 0;
   }
 
   .Home_MoonSpace {
@@ -594,8 +599,6 @@
   }
 
   .Story_Page .Home_Demo {
-    grid-column: 2;
-    grid-row: 1;
     grid-template-rows: auto var(--phone-height) auto auto;
     position: sticky;
     z-index: 1;

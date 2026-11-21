@@ -51,6 +51,7 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
     data-conversation={demo.slug}
     hidden={!first}
     tabindex={0}
+    role='group'
     aria-label='Example messages'
   >
     <ol class='Home_Messages'>
@@ -97,7 +98,7 @@ export let Picks = () => (
 )
 
 export let Phone = () => (
-  <Card class='Home_Phone' as='section' aria-label='Example conversation'>
+  <Card class='Home_Phone'>
     <div class='Home_Log' data-log=''>
       {DEMOS.map((demo, i) => (
         <Conversation key={demo.slug} demo={demo} first={i == 0} />
