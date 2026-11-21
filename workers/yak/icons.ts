@@ -62,6 +62,10 @@ import PanelLeftOpen from 'lucide/dist/esm/icons/panel-left-open.mjs'
 // @ts-types="@yaks/ui/lucide"
 import PanelRight from 'lucide/dist/esm/icons/panel-right.mjs'
 // @ts-types="@yaks/ui/lucide"
+import PanelRightClose from 'lucide/dist/esm/icons/panel-right-close.mjs'
+// @ts-types="@yaks/ui/lucide"
+import PanelRightOpen from 'lucide/dist/esm/icons/panel-right-open.mjs'
+// @ts-types="@yaks/ui/lucide"
 import TriangleAlert from 'lucide/dist/esm/icons/triangle-alert.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
@@ -132,6 +136,8 @@ export let icons = {
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,
   'panel-right': PanelRight,
+  'panel-right-close': PanelRightClose,
+  'panel-right-open': PanelRightOpen,
   x: X,
 }
 export type IconName = keyof typeof icons

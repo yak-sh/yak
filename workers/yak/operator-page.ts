@@ -15,7 +15,13 @@ import {
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import type { Server } from './chat.ts'
-import { directoryOf, type Reach, type Space, walkTo } from './directory.ts'
+import {
+  directoryOf,
+  type Panes,
+  type Reach,
+  type Space,
+  walkTo,
+} from './directory.ts'
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
 import { caught } from './defects.ts'
@@ -88,6 +94,8 @@ import { inputOf } from '@yaks/session/intake'
 import {
   Aside,
   type Aside as Asided,
+  Glance,
+  glanced,
   type HelperLine,
   Mark,
 } from './operator-aside.ts'
@@ -125,7 +133,7 @@ import {
   needCount,
   waitsOf,
 } from './operator-lists.ts'
-import { besideButton, talkBeside } from './talk-beside.ts'
+import { talkBeside } from './talk-beside.ts'
 
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
@@ -1569,9 +1577,9 @@ export type Beside = {
   apps?: { eid: string; slug: string; title: string }[]
   name?: string | null
   admin?: boolean
-  /** whether the person keeps the side folded to its icons
-   * (`desk_sidebar{collapsed}`) */
-  collapsed?: boolean
+  /** how the person keeps the panes: the side folded to its icons, the
+   * aside put away (directory.ts `Panes`) */
+  panes?: Panes
   /** every way to reach this Operator (operator-ways.ts `waysOf`) */
   ways?: Ways
 }
@@ -1938,9 +1946,10 @@ export let installing = (space: Space) => {
 
 // A page of the chat app, in the frame (frame.ts): the side
 // (talk-sidebar.ts), and beside it the bar naming the page and whose Operator
-// it is, over `main`; the lists that do not wait on the person beside it
-// where the page has them (`column`, talk-beside.ts); and the app open beside
-// them all. The side's Updates is the page's one bell: what
+// it is, over `main`; at its right the frame's aside, holding what the
+// conversation is doing now (`aside`, operator-aside.ts) over the lists that
+// do not wait on the person (`column`, talk-beside.ts), where the page has
+// them; and the app open beside them all. The side's Updates is the page's one bell: what
 // waits on the person there and in their servers' lists, counted once.
 let talkPage = (
   env: Env,
@@ -1963,8 +1972,12 @@ let talkPage = (
     skip: [string, string]
     script?: string
     app?: Making
-    // what it is doing now, at the bar's right end (operator-aside.ts)
+    // what it is doing now, at the top of the aside (operator-aside.ts), and
+    // the summary of it the bar's button to the aside wears, and what that
+    // button is then called
     aside?: Node
+    mark?: Node
+    said?: string
     // whether the lists that do not wait on the person stand beside it
     column?: boolean
     // on a page zoomed in on part of a conversation (a helper's), the way
@@ -2000,20 +2013,25 @@ let talkPage = (
       title: page.heading ?? page.title,
       sub: page.back ? null : whoseOf(space),
       waiting,
-      tools: [
-        page.app ? showing(page.app) : null,
-        page.aside,
-        lists.length ? besideButton() : null,
-      ],
+      tools: page.app ? showing(page.app) : null,
       content: page.main,
-      beside: [
-        lists.length ? talkBeside(lists) : null,
-        page.app ? canvas(env, space, page.app, space.operator) : null,
-      ],
+      aside: page.aside || lists.length
+        ? {
+          label: 'What is happening',
+          mark: page.mark,
+          said: page.said,
+          content: [
+            page.aside,
+            lists.length ? talkBeside(lists, !!listed) : null,
+          ],
+          shut: beside.panes?.shut,
+          back: page.here,
+        }
+        : undefined,
+      beside: page.app ? canvas(env, space, page.app, space.operator) : null,
       class: [
         'Talk',
         page.app && 'Talk-app',
-        listed && lists.length && 'Talk-beside',
         page.back && 'Talk-zoomed',
       ].filter(Boolean).join(' '),
       skip: page.skip,
@@ -2051,7 +2069,8 @@ for (let slot of document.querySelectorAll('[data-later]')) {
   slot.replaceWith(made.content)
 }
 if (got) {
-  if (document.querySelector('.Talk_Lists')?.children.length) document.querySelector('.Talk')?.classList.add('Talk-beside')
+  let lists = document.querySelector('.Talk_Lists')
+  if (lists?.children.length) lists.hidden = false
   for (let badge of document.querySelectorAll('[data-waiting]')) {
     let n = Number(badge.dataset.waiting) + got.waiting
     badge.textContent = n
@@ -2269,6 +2288,8 @@ export let chatPage = async (
     reads: READ,
   }
   let place = 'operator:' + (talked.begun || open)
+  let reach = !talked.helper && !!beside.ways
+  let happening = talked.aside ?? { turn: null, helpers: [] }
   return talkPage(env, space, who, beside, {
     // The chat is the Operator's, an app open beside it or not.
     title: fresh ? `Message ${operator}` : talked.title || 'Not here',
@@ -2327,17 +2348,22 @@ export let chatPage = async (
         )
         : null,
     ],
-    // What it is doing now and the helpers it set going, in the bar
-    // (operator-aside.ts), and below them the ways to reach it
-    // (operator-ways.ts), but on a helper's page, which is about the helper.
+    // What it is doing now and the helpers it set going, at the top of the
+    // aside (operator-aside.ts), and below them the ways to reach it
+    // (operator-ways.ts), but on a helper's page, which is about the helper;
+    // and their summary on the bar's button to it.
     aside: talked.aside || beside.ways
       ? h(Aside, {
         aside: talked.aside ?? { turn: null, helpers: [] },
         now: Date.now(),
-        reach: !talked.helper && beside.ways &&
-          h(Reaching, { space, ways: beside.ways, here }),
+        reach: reach && h(Reaching, { space, ways: beside.ways!, here }),
       })
       : undefined,
+    mark: [
+      h(Icon, { of: icons['panel-right'] }),
+      h(Glance, { aside: happening, reach }),
+    ],
+    said: glanced(happening, reach),
     script: chatScript(
       talked.aside ?? { turn: null, helpers: [] },
       at,
@@ -2601,7 +2627,7 @@ let put = (drawn) => {
     refreshFrames()
     made.innerHTML = drawn.show
     let bar = document.querySelector('.Frame_Bar')
-    bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside]'))
+    bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside-open]'))
     return
   }
   if (was.dataset.app != next.dataset.app) return
@@ -2737,12 +2763,11 @@ if (form && typed) {
 }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
 let working = () => talk.working()
-// The aside in the bar (operator-aside.ts): the turn under way and the
-// helpers (\`happening\`), each put in place as a frame tells it, shown while either
-// is there, and how long each has lasted kept current every second. Where
-// the margin has no room for it, its summary's dots are drawn again with
-// each, and a press on it shows the whole list under the bar
-// (\`[data-open]\`) until pressed again, pressed outside it or Escape.
+// The aside (operator-aside.ts), at the top of the pane at the page's right:
+// the turn under way and the helpers (\`happening\`), each put in place as a
+// frame tells it, shown while either is there, and how long each has lasted
+// kept current every second. The bar's button to the pane, where it is not in
+// sight, wears their summary, drawn again with each.
 let happening = ${script(now)}
 let aside = () => document.querySelector('[data-aside]')
 let drawn = (html) => {
@@ -2750,7 +2775,6 @@ let drawn = (html) => {
   made.innerHTML = html
   return made.content.firstElementChild
 }
-let unfolded = () => aside()?.hasAttribute('data-open') ?? false
 let shown = () => {
   let a = aside()
   if (!a) return
@@ -2759,15 +2783,13 @@ let shown = () => {
   a.querySelector('[data-helpers]').hidden = !helping && !turn
   let reach = !!a.querySelector('[data-reach]')
   a.hidden = !helping && !reach && !turn && !happening.self
-  let glance = a.querySelector('[data-glance]'), next = drawn(glanceHtml(happening, unfolded(), reach))
-  glance.innerHTML = next.innerHTML
-  for (let name of ['aria-label', 'aria-expanded']) glance.setAttribute(name, next.getAttribute(name))
-}
-let unfold = (open) => {
-  let a = aside()
-  if (!a) return
-  a.toggleAttribute('data-open', open)
-  shown()
+  let glance = document.querySelector('[data-glance]')
+  if (!glance) return
+  let next = drawn(glanceHtml(happening, reach))
+  glance.replaceWith(next)
+  let open = next.closest('[data-aside-open]')
+  open?.setAttribute('aria-label', next.dataset.label)
+  open?.setAttribute('title', next.dataset.label)
 }
 // Work that will take a while is when the page offers an alert for when it
 // is done (alerts-browser.ts \`offer\`), once.
@@ -2813,17 +2835,6 @@ let helped = (helper) => {
   shown()
   lengthy()
 }
-document.addEventListener('click', (e) => {
-  let a = aside()
-  if (!a) return
-  if (e.target.closest?.('[data-glance]')) return void unfold(!unfolded())
-  if (unfolded() && !a.contains(e.target)) unfold(false)
-})
-document.addEventListener('keydown', (e) => {
-  if (e.key != 'Escape' || !unfolded()) return
-  unfold(false)
-  aside().querySelector('[data-glance]').focus()
-})
 // Every time on the page is the kit's (\`Time\`), said again in the person's
 // clock and zone each second, so a duration counts up, and at once after
 // anything is drawn here.
@@ -2961,7 +2972,7 @@ let read = async () => {
       if (got.aside && aside()) {
         // The ways to reach the Operator are drawn once, and stay below the helpers.
         let reach = aside().querySelector('[data-reach]')
-        happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded())))
+        happening = got.aside, aside().replaceWith(drawn(asideHtml(happening)))
         if (reach) aside().querySelector('[data-helpers]').after(reach)
         shown(), show()
       }

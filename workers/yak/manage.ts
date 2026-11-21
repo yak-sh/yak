@@ -602,11 +602,11 @@ let beside = async (
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name, collapsed, ways] = await Promise.all([
+  let [spaces, { mine }, name, panes, ways] = await Promise.all([
     pickable(dir, who.person),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
-    dir.collapsed(who.person),
+    dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
     chatRows(dir, walkTo(space.slug, space.eid)).then(async (rows) =>
       (await import('./operator-ways.ts')).waysOf(
@@ -622,7 +622,7 @@ let beside = async (
     apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
     admin: !!who.administrative,
-    collapsed,
+    panes,
     ways,
   }
 }
@@ -672,7 +672,7 @@ let desk = async (
     billed,
     provider,
     made,
-    collapsed,
+    panes,
     lines,
   ] = await Promise.all([
     shelved,
@@ -762,8 +762,8 @@ let desk = async (
         return undefined
       })
       : undefined,
-    // How the person keeps the side (`desk_sidebar{collapsed}`).
-    dir.collapsed(owner),
+    // How the person keeps the panes (directory.ts `Panes`).
+    dir.panes(owner),
     dir.lines(walkTo(space.slug, space.eid)),
   ])
   let known = await inHand(agents)
@@ -840,7 +840,7 @@ let desk = async (
     ],
     operator,
     member: who.role != 'owner',
-    collapsed,
+    panes,
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
@@ -877,7 +877,7 @@ let mine = async (
     theirs,
     referral,
     own,
-    collapsed,
+    panes,
     sessions,
     provider,
   ] = await Promise.all([
@@ -888,7 +888,7 @@ let mine = async (
     view == 'shared' ? shared(dir, person) : undefined,
     view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),
-    dir.collapsed(person),
+    dir.panes(person),
     view == 'profile' ? browsers(env, person) : [],
     payments(env),
   ])
@@ -917,7 +917,7 @@ let mine = async (
       ...picks,
     ],
     member: !picks.find((s) => s.slug == space)?.owner,
-    collapsed,
+    panes,
     ...typed,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
@@ -963,14 +963,16 @@ let account = async (
     }
     return redirect(hostUrl(env, `${managePath('profile')}?saved=1`), 303)
   }
-  // The side's fold (desk-pages.ts `fold`), pressed on any page: kept on the
-  // person's row, then that page again, or for the script that sent it,
-  // nothing more.
-  if (form.has('sidebar')) {
+  // The side's fold (sidebar.ts `fold`) and the aside's (frame.ts `toggle`),
+  // pressed on any page: kept on the person's row, then that page again, or
+  // for the script that sent it, nothing more.
+  if (form.has('sidebar') || form.has('aside')) {
     await dir.apply({
       entities: [{
         entity: { eid: who.person },
-        desk_sidebar: { collapsed: form.get('sidebar') == 'collapsed' },
+        ...form.has('sidebar')
+          ? { desk_sidebar: { collapsed: form.get('sidebar') == 'collapsed' } }
+          : { desk_aside: { shut: form.get('aside') == 'shut' } },
       }],
     }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
     if (!req.headers.get('accept')?.includes('text/html')) {

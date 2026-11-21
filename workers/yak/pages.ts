@@ -46,7 +46,7 @@ import { day, esc, fileDrop, markup, raw } from './html.ts'
 
 import type { People } from './people.ts'
 
-import type { Role } from './directory.ts'
+import type { Panes, Role } from './directory.ts'
 
 import type { Plain } from './unseen.ts'
 
@@ -735,9 +735,8 @@ export type DeskPage = {
   /** a member of the space who does not own it: of its pages they may open
    * only the Operator, so the side links only that */
   member?: boolean
-  /** whether the person keeps the side collapsed to its icons
-   * (`desk_sidebar{collapsed}`) */
-  collapsed?: boolean
+  /** how the person keeps the panes (directory.ts `Panes`) */
+  panes?: Panes
 }
 
 // What broke in an app, for its owner: each break as its line says it to their

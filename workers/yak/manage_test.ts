@@ -256,6 +256,42 @@ test('the side collapses to its icons on every settings page, and opens again', 
   }
 })
 
+// What sits at the right of the conversation (frame.ts `Aside`) is put away
+// and opened again by its toggle: the choice is the person's, kept on their
+// row, so every page of theirs draws it so.
+test('the aside is put away and opened again, and every page keeps it', async () => {
+  let toggle = (aside: string, back: string) =>
+    k.at('yaks.app', profile, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        cookie: them.cookie,
+        origin: 'https://yaks.app',
+        accept: 'text/html',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ aside, back }),
+    })
+  let chat = chatPath(slug)
+  let drawn = async () => {
+    let { document } = parseHTML(await (await get(chat)).text())
+    let button = document.querySelector('#aside .Frame_AsideFolder')!
+    return [
+      document.querySelector('#aside')!.closest('.Shell')!.classList
+        .contains('Shell-shut'),
+      button.getAttribute('aria-expanded'),
+      button.getAttribute('aria-label'),
+    ]
+  }
+  assertEquals(await drawn(), [false, 'true', 'Hide the panel'])
+  let shut = await toggle('shut', chat)
+  assertEquals(shut.status, 303)
+  assertEquals(shut.headers.get('location'), to(chat))
+  assertEquals(await drawn(), [true, 'false', 'Show the panel'])
+  await toggle('open', chat)
+  assertEquals(await drawn(), [false, 'true', 'Hide the panel'])
+})
+
 // The space's Settings: its address and homepage, its name, and the way to
 // delete it; none of it the person's own name.
 test('a space’s Settings save its address and its name', async () => {

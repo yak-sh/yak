@@ -197,6 +197,11 @@ export let META_STORE = PLATFORM_STORE
 // moment of the provider's event that last wrote this, `status` is the
 // provider's own word, and
 // `ending` is set only when the subscription will not renew.
+/** How a person keeps the panes of their pages (frame.ts): the side
+ * collapsed to its icons (`desk_sidebar{collapsed}`), and what sits at the
+ * right put away (`desk_aside{shut}`). */
+export type Panes = { collapsed: boolean; shut: boolean }
+
 export type Plan = {
   tier: Tier
   customer: string
@@ -928,6 +933,7 @@ export type Row = MeteredRow & {
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
+  desk_aside?: { shut?: boolean | null }
   free_spaces?: { count?: number | null }
   role_free_spaces?: Partial<Record<Role, Allowance>>
   push_subscription?: {
@@ -4086,9 +4092,15 @@ export let directoryRows = (rows: {
     roleSpaces: async (): Promise<Partial<Record<Role, Allowance>>> =>
       (await one(line`.space.slug=${META.space}&?role_free_spaces`))
         ?.role_free_spaces ?? {},
-    // Whether this person keeps the side of their pages collapsed to icons.
-    collapsed: async (person: string): Promise<boolean> =>
-      !!(await one(line`.entity.eid=${person}`))?.desk_sidebar?.collapsed,
+    // How this person keeps the panes of their pages: the side collapsed to
+    // icons, and what sits at the right put away.
+    panes: async (person: string): Promise<Panes> => {
+      let row = await one(line`.entity.eid=${person}`)
+      return {
+        collapsed: !!row?.desk_sidebar?.collapsed,
+        shut: !!row?.desk_aside?.shut,
+      }
+    },
     // The browsers this person allowed notifications on (@yaks/push), each
     // as its `PushSubscription` gave it, and since when.
     pushes: async (

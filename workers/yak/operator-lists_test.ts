@@ -2,7 +2,7 @@
 // drawn in their Updates and beside their conversation with their Operator:
 // both ends in one process.
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, mint } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
 import { Fragment, h } from 'preact'
@@ -301,13 +301,11 @@ test('pages draw without lists their machine has not answered, saying nothing wh
       from: text.match(/fetch\("([^"]+lists=1[^"]*)"\)/)?.[1],
     }
   }
-  // Beside the conversation the column stands hidden around its slot.
+  // In the aside the lists stand hidden around their slot.
   let chat = (await page(chatPage(slow, space, held, 'new'))).document
-  assertEquals(
-    chat.querySelector('.Talk_Beside [data-later=other]')?.textContent,
-    '',
-  )
-  assertEquals(chat.querySelector('.Talk-beside'), null)
+  let lists = chat.querySelector('#aside .Talk_Lists')!
+  assertEquals(lists.querySelector('[data-later=other]')?.textContent, '')
+  assert(lists.hasAttribute('hidden'))
   // What waits on the person comes into their Updates.
   let { document, from } = await page(updatesPage(slow, space, held))
   let slot = document.querySelector('.Updates [data-later=waits]')!

@@ -1220,10 +1220,10 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   )
 })
 
-// On a phone, or wherever the margin has no room, the aside is a summary at
-// the bar's right end: a dot for the turn and each helper, how many more past
-// four, and the whole list under the bar while it is open.
-test('the aside’s summary in the bar shows a dot for each, “+N” past four, and opens to the list', async () => {
+// On a phone, or wherever the aside is put away, the bar's button to it
+// wears a summary: a dot for the turn and each helper, how many more past
+// four, drawn again as each lands, and it opens the aside as a layer.
+test('the bar’s button to the aside shows a dot for each, “+N” past four, and opens it', async () => {
   let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let { g } = store
   let { session } = await openedOf(store, park)
@@ -1252,15 +1252,11 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
   }
   let page = await load(storage(), false, park)
   let { document } = page
-  let glance = () =>
-    document.querySelector('.Frame_Bar [data-aside] [data-glance]')!
-  let aside = document.querySelector('[data-aside]')!
+  let button = () => document.querySelector('.Frame_Bar [data-aside-open]')!
+  let glance = () => button().querySelector('[data-glance]')!
+  let aside = document.querySelector('#aside [data-aside]')!
   let dots = () =>
     [...glance().querySelectorAll('.Dot')].map((d) => d.className)
-  let seen = () => ({
-    open: aside.hasAttribute('data-open'),
-    expanded: glance().getAttribute('aria-expanded'),
-  })
   // Each the list draws, the turn under way among them.
   let listed = document.querySelectorAll('[data-helping] > *').length +
     document.querySelectorAll('[data-turn] time').length
@@ -1268,20 +1264,9 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
     dots: dots(),
     more: glance().textContent,
     hidden: aside.hasAttribute('hidden'),
+    opens: button().getAttribute('href'),
   }
-  page.press(glance())
-  let pressed = seen()
-  page.press(glance())
-  let again = seen()
-  page.press(glance())
-  page.key('Escape')
-  let escaped = seen()
-  page.press(glance())
-  page.press(document.querySelector('[data-conversation]')!)
-  let outside = seen()
-  page.press(glance())
-  // A helper's step lands while the list is open: its dot changes, and the
-  // list stays open.
+  // A helper's step lands: its dot changes, and the button says so.
   let at = new Date().toISOString()
   page.hear({
     operator: {
@@ -1296,18 +1281,14 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
       },
     },
   })
-  let heard = { ...seen(), label: glance().getAttribute('aria-label') }
+  let label = button().getAttribute('aria-label')
   page.leave()
   assertEquals(first.hidden, false)
+  assertEquals(first.opens, '#aside')
   assertEquals(first.dots.length, 4, 'four dots, then how many more')
   assertEquals(listed >= 1 + helpers.length, true, 'the turn and each helper')
   assertEquals(first.more, `+${listed - 4}`)
-  assertEquals(pressed, { open: true, expanded: 'true' })
-  assertEquals(again, { open: false, expanded: 'false' })
-  assertEquals(escaped, { open: false, expanded: 'false' })
-  assertEquals(outside, { open: false, expanded: 'false' })
-  assertEquals(heard.open, true)
-  assertStringIncludes(heard.label!, '2 failed')
+  assertStringIncludes(label!, '2 failed')
 })
 
 // Drafts are read only as the store's socket answers: one it cannot open is

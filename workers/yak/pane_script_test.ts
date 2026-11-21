@@ -46,7 +46,8 @@ let page = async (hash = '', how = 'navigate') => {
     return prevented
   }
   let show = (persisted = false) => on.pageshow({ persisted })
-  return { html, location, replaced, press, show }
+  let key = (key: string) => on.keydown({ key })
+  return { html, location, replaced, press, show, key }
 }
 
 test('a page with a layer loads its script', async () => {
@@ -59,6 +60,20 @@ test('the menu opens and closes in place, adding no history entry', async () => 
   assertEquals(p.location.hash, '#menu')
   assert(p.press('#menu .Sidebar_Close'))
   assertEquals([p.location.hash, p.replaced], ['', ['#menu', '#']])
+})
+
+test('Escape closes the layer open, and only a layer', async () => {
+  for (
+    let [hash, k, want] of [
+      ['#menu', 'Escape', ['#']],
+      ['#menu', 'Enter', []],
+      ['#content', 'Escape', []],
+    ] as const
+  ) {
+    let p = await page(hash)
+    p.key(k)
+    assertEquals(p.replaced, [...want], `${hash} ${k}`)
+  }
 })
 
 test('a press with a modifier key is left to the browser', async () => {

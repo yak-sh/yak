@@ -5,7 +5,10 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { desk } from './desk-pages.ts'
+import { frame } from './frame.ts'
 
 let code = await Deno.readTextFile(
   new URL('./public/side.js', import.meta.url),
@@ -70,4 +73,45 @@ test('a fold that could not be sent is sent as the form', async () => {
   let p = await page(false)
   await p.press()
   assertEquals(p.submitted(), 1)
+})
+
+// The aside's toggle (frame.ts `toggle`) the same way: it is put away at
+// once, the choice sent, and opened again.
+test('the aside’s toggle puts it away, then opens it', async () => {
+  let { document } = parseHTML(
+    `<html><body>${
+      renderToString(h(
+        'div',
+        null,
+        frame({
+          side: null,
+          title: 'Hazel',
+          content: 'The conversation.',
+          aside: { label: 'What is happening', content: 'Helpers', back: '/' },
+        }),
+      ))
+    }</body></html>`,
+  )
+  let on: Record<string, (e: unknown) => Promise<void>> = {}
+  let sent: string[] = []
+  new Function('document', 'addEventListener', 'fetch', code)(
+    document,
+    (type: string, fn: (e: unknown) => Promise<void>) => on[type] = fn,
+    (_to: string, init: { body: URLSearchParams }) => (
+      sent.push(init.body.get('aside')!), Promise.resolve({ ok: true })
+    ),
+  )
+  let button = document.querySelector('#aside form[data-side] button')!
+  let seen = () => [
+    document.querySelector('.Shell')!.classList.contains('Shell-shut'),
+    button.getAttribute('aria-expanded'),
+    button.getAttribute('aria-label'),
+  ]
+  let press = () => on.submit({ target: button, preventDefault() {} })
+  assertEquals(seen(), [false, 'true', 'Hide the panel'])
+  await press()
+  assertEquals(seen(), [true, 'false', 'Show the panel'])
+  await press()
+  assertEquals(seen(), [false, 'true', 'Hide the panel'])
+  assertEquals(sent, ['shut', 'open'])
 })

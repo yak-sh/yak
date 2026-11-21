@@ -9,6 +9,14 @@
  * is narrow the tools take a line of their own under the title, and scroll
  * sideways when they outrun it.
  *
+ * An `Aside` after the `Main` column is what sits at the page's right (what
+ * is happening, lists beside a conversation): a pane of its own height that
+ * scrolls apart from the page, so the page centers in the width left beside
+ * it. `Shell-shut` puts it away to a rail, its first part alone (the toggle
+ * that opens it again), and the page centers in the whole width. Narrower
+ * than a laptop it stands only while it is the address's target, over the
+ * page from the right, and so does a shut one opened that way.
+ *
  * A phone-width window folds the sidebar away: `Menu` shows, and `Shell-open`
  * slides the sidebar over the page with a `Shade` behind it that a press on
  * closes. A terminal lays the sidebar beside the page always, by its sheet,
@@ -43,7 +51,8 @@ export let Shell:
     | 'Title'
     | 'Tools'
     | 'Body'
-    | 'Content',
+    | 'Content'
+    | 'Aside',
     Part
   > = block('div', 'Shell', {
     Side: 'nav',
@@ -62,6 +71,7 @@ export let Shell:
     Tools: 'div',
     Body: 'div',
     Content: 'div',
+    Aside: 'aside',
   })
 
 /** What it is, in a line. */
@@ -86,6 +96,7 @@ export let sheet = (c: Colors): Sheet => ({
   Shell_Title: { bold: true, fg: c.text, grow: true, ellipsis: true },
   Shell_Tools: { row: true, spaced: true },
   Shell_Body: { grow: true, wrap: true },
+  Shell_Aside: { col: true, width: 30, border: 'Shell_Edge' },
   Shell_Edge: { fg: c.border2 },
 })
 
@@ -103,7 +114,8 @@ let place = (label: string, on?: boolean, count?: string) =>
     count && h(Count, {}, count),
   )
 
-/** An app on its inbox, with two more places and a page. */
+/** An app on its inbox, with two more places and a page, and beside the
+ * page what sits beside it, open and put away. */
 export let specimens = (): Specimen[] => [
   [
     'Shell, variants',
@@ -126,7 +138,7 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   [
-    'Shell, Side, Brand, Find, Item, Item-on, Icon, Label, Count, Main, Bar, Title, Body',
+    'Shell, Side, Brand, Find, Item, Item-on, Icon, Label, Count, Main, Bar, Title, Body, Aside',
     h(
       Shell,
       { style: 'height: 18rem; width: 40rem; max-width: 100%' },
@@ -150,6 +162,16 @@ export let specimens = (): Specimen[] => [
         h(Bar, {}, h(Title, {}, 'Inbox')),
         h(Body, {}, h('p', {}, 'The page you are on.')),
       ),
+      h(Shell.Aside, {}, h('p', {}, 'Beside the page.')),
+    ),
+  ],
+  [
+    'Shell-shut, Aside',
+    h(
+      Shell,
+      { mod: 'shut', style: 'height: 8rem; width: 40rem; max-width: 100%' },
+      h(Main, {}, h(Body, {}, h('p', {}, 'The page, in the whole width.'))),
+      h(Shell.Aside, {}, h('span', {}, '‹'), h('p', {}, 'Put away.')),
     ),
   ],
 ]

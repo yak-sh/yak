@@ -25,13 +25,13 @@ export { browserDrafts } from '@yaks/draft/browser'
 // The aside beside the lines, drawn the same way (operator-aside.ts).
 export { long, ordered, showing } from './operator-aside.ts'
 
-/** The aside as HTML, its list shown or not. */
-export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>
-  renderToString(h(Aside, { aside, now, open }))
+/** The aside as HTML. */
+export let asideHtml = (aside: Aside, now = Date.now()) =>
+  renderToString(h(Aside, { aside, now }))
 
-/** The summary's button as HTML. */
-export let glanceHtml = (aside: Aside, open = false, reach = false) =>
-  renderToString(h(Glance, { aside, open, reach }))
+/** The summary the bar's button to the aside wears, as HTML. */
+export let glanceHtml = (aside: Aside, reach = false) =>
+  renderToString(h(Glance, { aside, reach }))
 
 /** The turn's line as HTML. */
 export let turnHtml = (turn: Turn | null, now = Date.now()) =>

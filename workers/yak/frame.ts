@@ -6,12 +6,38 @@
 // side where the window has no room for it; a page that names itself in a
 // head of its own (`headed`) shows the bar only there.
 //
+// A page with something to keep at its right (the conversation's helpers and
+// lists) hands it in as its `aside`, and the frame holds it the same way on
+// every page: a pane beside the column, so the page centers in the width left
+// beside it, whose toggle at its top puts it away to a rail and the page
+// centers in the whole width. Whether it is put away is the person's, kept on
+// their row (`desk_aside{shut}`) as the side's fold is, so it holds on every
+// page and device. Narrower than a laptop the pane is one press away: the
+// bar's button opens it over the page, and Close goes back.
+//
 // What differs between pages is handed in: the side's title and Back
 // are its own (sidebar.ts `Sidebar`), and the panes beside are the page's.
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
+import { managePath } from '@yaks/platform/routes'
 import { icons } from './icons.ts'
 import { waitingBadge } from './sidebar.ts'
+
+/** Where the aside is, which the bar's button opens where it has no room. */
+export let ASIDE = 'aside'
+
+/** What a page keeps at its right: what it is called, what the bar's button
+ * to it wears (its icon unless the page says more) and is called (its
+ * `label` unless the page says), what it holds, whether the person keeps it
+ * put away, and the page a press on its toggle comes back to. */
+export type Aside = {
+  label: string
+  mark?: Kids
+  said?: string
+  content: Kids
+  shut?: boolean
+  back: string
+}
 
 /** The layout (pages.ts `shell`) of a page drawn in the frame. */
 export let FRAMED = 'Framed'
@@ -27,6 +53,66 @@ let menu = (waiting?: number) =>
     h(Icon, { of: icons.menu }),
     h('span', { class: 'Frame_MenuWord' }, 'Menu'),
     waiting != null ? waitingBadge(waiting) : null,
+  )
+
+// The toggle at the aside's top: a form that keeps the choice on the
+// person's row (manage.ts), pressed without leaving the page (public/side.js);
+// and where the aside is opened over the page, Close.
+let toggle = (at: Aside) => {
+  let said = at.shut ? 'Show the panel' : 'Hide the panel'
+  return h(
+    Toolbar,
+    { class: 'Frame_AsideBar' },
+    h(
+      'form',
+      {
+        class: 'Frame_AsideFold',
+        method: 'post',
+        action: managePath('profile'),
+        'data-side': '',
+      },
+      h('input', {
+        type: 'hidden',
+        name: 'aside',
+        value: at.shut ? 'open' : 'shut',
+      }),
+      h('input', { type: 'hidden', name: 'back', value: at.back }),
+      h(
+        Button,
+        {
+          type: 'submit',
+          class: 'Frame_AsideFolder',
+          title: said,
+          'aria-label': said,
+          'aria-controls': ASIDE,
+          'aria-expanded': String(!at.shut),
+        },
+        h(Icon, { of: icons['panel-right-close'], class: 'Frame_AsideShut' }),
+        h(Icon, { of: icons['panel-right-open'], class: 'Frame_AsideUnshut' }),
+      ),
+    ),
+    h(
+      Button,
+      { href: '#', class: 'Frame_AsideClose', 'data-pane': '' },
+      h(Icon, { of: icons.x }),
+      'Close',
+    ),
+  )
+}
+
+// The bar's way to the aside where it is not in sight.
+let opener = (at: Aside) =>
+  h(
+    Button,
+    {
+      href: `#${ASIDE}`,
+      class: 'Frame_AsideOpen',
+      'data-pane': '',
+      'data-aside-open': '',
+      title: at.said ?? at.label,
+      'aria-label': at.said ?? at.label,
+    },
+    at.mark ?? h(Icon, { of: icons['panel-right'] }),
   )
 
 export let frame = (at: {
@@ -45,7 +131,9 @@ export let frame = (at: {
   // the page lies on a sheet, a card, rather than the floor
   sheet?: boolean
   content: Kids
-  // panes beside the column
+  // what the page keeps at its right, beside the column
+  aside?: Aside
+  // panes beside the column, after the aside
   beside?: Kids
   // the page's own names for the frame
   class?: string
@@ -58,7 +146,7 @@ export let frame = (at: {
     h(
       Shell,
       {
-        mod: at.sheet && 'sheet',
+        mod: [at.sheet && 'sheet', at.aside?.shut && 'shut'],
         class: ['Frame', at.headed && 'Frame-headed', at.class]
           .filter(Boolean).join(' '),
       },
@@ -82,6 +170,7 @@ export let frame = (at: {
             at.sub ? h(Toolbar.Sub, {}, at.sub) : null,
           ),
           at.tools,
+          at.aside ? opener(at.aside) : null,
         ),
         h(
           Shell.Body,
@@ -89,6 +178,14 @@ export let frame = (at: {
           at.content,
         ),
       ),
+      at.aside
+        ? h(
+          Shell.Aside,
+          { id: ASIDE, class: 'Frame_Aside', 'aria-label': at.aside.label },
+          toggle(at.aside),
+          h('div', { class: 'Frame_AsideBody' }, at.aside.content),
+        )
+        : null,
       at.beside,
     ),
   ]

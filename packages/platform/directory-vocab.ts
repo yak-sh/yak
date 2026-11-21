@@ -260,6 +260,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { collapsed: { type: 'boolean' } },
     },
+    // Whether a person keeps what sits at the right of their yaks.app pages
+    // (frame.ts `Aside`, the conversation's helpers and lists) put away to a
+    // rail, the page centered in the whole width; open without it.
+    desk_aside: {
+      component: true,
+      type: 'object',
+      properties: { shut: { type: 'boolean' } },
+    },
     // One list an MCP server a person connected offers their Operator's page,
     // drawn beside the conversation with no model turn (operator-lists.ts),
     // on an entity of its own whose `doc{title}` heads it: the `server`'s

@@ -56,7 +56,7 @@ export let talkSide = (
     base: url(env),
     home: chatPath(space.slug),
     label: 'Menu',
-    fold: { collapsed: !!beside.collapsed, back: at.here },
+    fold: { collapsed: !!beside.panes?.collapsed, back: at.here },
     picker: [
       here,
       spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],

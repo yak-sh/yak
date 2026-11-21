@@ -494,7 +494,7 @@ test('a new chat greets the person by name, with ways to start over the box', ()
   )
   // Nothing needs the person yet: nothing beside the conversation, and no
   // count anywhere.
-  assertEquals(document.querySelector('.Talk_Beside, .Talk_BesideOpen'), null)
+  assertEquals(document.querySelector('.Talk_Lists'), null)
   assertEquals(document.querySelector('.Badge:not([hidden])'), null)
   assertEquals(fresh.code, 200)
   assertStringIncludes(
@@ -928,7 +928,7 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
   assertEquals(aside.querySelector('[data-reach]'), null)
   assertEquals(aside.hasAttribute('hidden'), false)
   assertEquals(
-    aside.querySelector('[data-glance]')?.getAttribute('aria-label'),
+    document.querySelector('[data-aside-open]')?.getAttribute('aria-label'),
     'Running',
   )
   let listed = parseHTML(
@@ -1042,10 +1042,7 @@ test('what needs the person is counted once, in the side the settings pages shar
       app,
     )
     let { document } = parseHTML(await page.text())
-    assertEquals(
-      document.querySelector('.Talk_Beside, .Talk_BesideOpen'),
-      null,
-    )
+    assertEquals(document.querySelector('.Talk_Lists'), null)
     assertEquals(document.querySelector(`#u-${needs.eid}`), null)
     // one bell: the side's, and Menu wearing its count on a phone
     assertEquals(

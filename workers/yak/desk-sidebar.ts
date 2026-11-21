@@ -51,7 +51,7 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
     title: 'Manage',
     back: { href: chatPath(at.space), name: here.operator || 'your Operator' },
     fold: {
-      collapsed: !!at.collapsed,
+      collapsed: !!at.panes?.collapsed,
       back: managePath(view, at.space),
     },
     picker: [

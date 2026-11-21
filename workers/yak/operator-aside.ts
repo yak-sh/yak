@@ -1,10 +1,10 @@
-// The aside in the chat's header (operator-page.ts `talkPage`): what the
-// conversation is doing now, and the helpers it set going, each with its
-// title, how it stands and, while it works, its step and how long it has
-// taken, or once it ended, how long ago. In the right margin where the
-// page is wide enough; elsewhere, a phone among them, a summary at the
-// header's right end, a dot for the turn and for each helper and a "+N" past
-// `DOTS`, that a press opens to the whole list. The Builder object works out
+// What the chat is doing now (operator-page.ts `talkPage`), at the top of the
+// pane at the page's right (frame.ts `Aside`): what the conversation is
+// doing, and the helpers it set going, each with its title, how it stands
+// and, while it works, its step and how long it has taken, or once it ended,
+// how long ago. Where the pane is not in sight (put away, or a phone), the
+// bar's button to it wears a summary (`Glance`), a dot for the turn and for
+// each helper and a "+N" past `DOTS`. The Builder object works out
 // what it holds (operator-view.ts `turnOf`, `helping`) and sends it on the
 // page's socket as data; this draws it, in the Builder for the page's first
 // drawing and in the browser as `_talk.js` (operator-rows.ts) for each frame,
@@ -279,25 +279,29 @@ export let glanceOf = ({ turn, helpers, self }: Aside) => {
   }
 }
 
-/** The summary's button: its dots and "+N", pressed to show or hide the
- * whole list (`[data-open]` on the aside). */
+/** What the bar's button to the aside is called while it wears the
+ * summary. */
+export let glanced = (aside: Aside, reach = false) => {
+  let { dots, label } = glanceOf(aside)
+  return !dots.length && reach ? 'Ways to reach your Operator' : label
+}
+
+/** The summary the bar's button to the aside wears (frame.ts `Aside`'s
+ * `mark`) where the aside is not in sight: its dots and "+N", or "Reach"
+ * where nothing runs and the aside holds the ways to reach the Operator,
+ * after the button's icon. Its `data-label` is what the button is then
+ * called. */
 export let Glance = (
-  { aside, open, reach = false }: {
-    aside: Aside
-    open: boolean
-    reach?: boolean
-  },
+  { aside, reach = false }: { aside: Aside; reach?: boolean },
 ) => {
-  let { dots, more, label } = glanceOf(aside)
+  let { dots, more } = glanceOf(aside)
   let idle = !dots.length && reach
   return h(
-    Popover.Trigger,
+    'span',
     {
-      type: 'button',
+      class: 'Talk_Glance',
       'data-glance': '',
-      'aria-expanded': open ? 'true' : 'false',
-      'aria-controls': 'aside-now',
-      'aria-label': idle ? 'Ways to reach your Operator' : label,
+      'data-label': glanced(aside, reach),
     },
     idle ? h(Popover.Count, { 'aria-hidden': 'true' }, 'Reach') : null,
     dots.map((mod) => h(Dot, { mod, 'aria-hidden': 'true' })),
@@ -305,60 +309,48 @@ export let Glance = (
   )
 }
 
-/** The aside: the summary, then on a helper's page the helper's own row
- * (`self`), which says how it stands, when it began or ended, what it came
- * to and its model; then Helpers while anything runs or a helper was
- * started, the turn under way at its top (but on a helper's page), and below
- * them `reach`, the ways to reach the Operator (operator-ways.ts). Hidden
- * while nothing runs, no helper was started and there is nothing below
- * them. */
+/** The aside: on a helper's page the helper's own row (`self`), which says
+ * how it stands, when it began or ended, what it came to and its model;
+ * then Helpers while anything runs or a helper was started, the turn under
+ * way at its top (but on a helper's page), and below them `reach`, the ways
+ * to reach the Operator (operator-ways.ts). Hidden while nothing runs, no
+ * helper was started and there is nothing below them. */
 export let Aside = (
-  { aside, now, open = false, reach }: {
-    aside: Aside
-    now: number
-    open?: boolean
-    reach?: Node
-  },
+  { aside, now, reach }: { aside: Aside; now: number; reach?: Node },
 ) =>
   h(
-    Popover,
+    'div',
     {
       class: 'Talk_Aside',
-      mod: 'responsive',
+      id: 'aside-now',
       'data-aside': '',
-      'data-open': open ? '' : undefined,
       'aria-label': 'What is happening now',
       hidden: !aside.turn && !aside.helpers.length && !aside.self && !reach,
     },
-    h(Glance, { aside, open, reach: !!reach }),
-    h(
-      Popover.Body,
-      { class: 'Talk_AsideIn', id: 'aside-now' },
-      aside.self
-        ? h(
-          Card,
-          { 'data-self': '' },
-          h(Rows, null, h(Self, { self: aside.self, now })),
-        )
-        : null,
-      h(
+    aside.self
+      ? h(
         Card,
-        {
-          hidden: !aside.helpers.length && (!!aside.self || !aside.turn),
-          'data-helpers': '',
-        },
-        h(Card.Head, null, h(Card.Title, null, 'Helpers')),
-        aside.self ? null : h(TurnNow, { turn: aside.turn, now }),
-        h(
-          Rows,
-          { 'data-helping': '' },
-          aside.helpers.map((helper) =>
-            h(Work, { work: helper, now, fold: true })
-          ),
+        { 'data-self': '' },
+        h(Rows, null, h(Self, { self: aside.self, now })),
+      )
+      : null,
+    h(
+      Card,
+      {
+        hidden: !aside.helpers.length && (!!aside.self || !aside.turn),
+        'data-helpers': '',
+      },
+      h(Card.Head, null, h(Card.Title, null, 'Helpers')),
+      aside.self ? null : h(TurnNow, { turn: aside.turn, now }),
+      h(
+        Rows,
+        { 'data-helping': '' },
+        aside.helpers.map((helper) =>
+          h(Work, { work: helper, now, fold: true })
         ),
       ),
-      reach,
     ),
+    reach,
   )
 
 /** A helper's own row on its own page, which opens nowhere: it is there. */

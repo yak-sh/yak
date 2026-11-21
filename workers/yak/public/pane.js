@@ -1,10 +1,10 @@
 // The layers a page opens over itself by its address (`#menu`, `#app`,
-// `#beside`, each shown by `:target` in pages.css), opened and closed without
-// a history entry: a link marked `data-pane` replaces the address's fragment
-// instead of following it, so Back leaves the page as in any chat app and
-// never opens a layer. Coming back to a page whose address still names a
-// layer (Back from a page the menu led to), the layer is taken off. Without
-// this script the links work as links.
+// `#aside`, each shown by `:target`), opened and closed without a history
+// entry: a link marked `data-pane` replaces the address's fragment instead of
+// following it, so Back leaves the page as in any chat app and never opens a
+// layer, and Escape closes the one open. Coming back to a page whose address
+// still names a layer (Back from a page the menu led to), the layer is taken
+// off. Without this script the links work as links.
 {
   let layers = () =>
     new Set(
@@ -20,6 +20,9 @@
     ) return
     e.preventDefault()
     location.replace(new URL(link.href, location.href).hash || '#')
+  })
+  addEventListener('keydown', (e) => {
+    if (e.key == 'Escape' && layers().has(location.hash)) location.replace('#')
   })
   addEventListener('pageshow', (e) => {
     let back = e.persisted ||

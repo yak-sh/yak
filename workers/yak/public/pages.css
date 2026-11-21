@@ -324,6 +324,56 @@
     isolation: isolate;
     overflow: hidden auto;
   }
+  /* What a page keeps at its right (frame.ts `Aside`), in the kit's
+     Shell aside: its toggle at the top, level with the column's bar, then
+     what it holds. Shut, the toggle alone stands, and the bar's button to
+     it shows, wearing what the page says it holds. Where the window has no
+     room for it, the bar's button opens it over the page, and Close goes
+     back. With nothing in it, neither shows. */
+  .Frame_AsideBar {
+    flex: none;
+    min-height: 3rem;
+    padding: calc(.5rem + env(safe-area-inset-top, 0px)) .75rem .5rem;
+  }
+  .Frame_AsideBody {
+    display: grid;
+    align-content: start;
+    gap: .75rem;
+    padding: 0 1rem 1rem;
+  }
+  .Frame_AsideOpen {
+    display: none;
+    margin-left: auto;
+  }
+  .Frame_AsideClose,
+  .Frame_AsideUnshut,
+  .Shell-shut .Frame_AsideShut {
+    display: none;
+  }
+  .Shell-shut .Frame_AsideUnshut {
+    display: inline-flex;
+  }
+  .Shell-shut .Frame_AsideOpen {
+    display: inline-flex;
+  }
+  .Shell-shut .Frame_Aside:is(:target, :has(:target)) .Frame_AsideFold {
+    display: none;
+  }
+  .Shell-shut .Frame_Aside:is(:target, :has(:target)) .Frame_AsideClose {
+    display: inline-flex;
+  }
+  @media (max-width: 68.75rem) {
+    .Frame_AsideOpen,
+    .Frame_AsideClose {
+      display: inline-flex;
+    }
+    .Frame_AsideFold {
+      display: none;
+    }
+  }
+  .Frame:not(:has(.Frame_AsideBody > :not([hidden]))) :is(.Frame_Aside, .Frame_AsideOpen) {
+    display: none;
+  }
   @media (min-width: 701px) {
     .Frame-headed .Frame_Bar {
       display: none;
@@ -635,40 +685,35 @@
   }
 
   .Talk_Back,
-  .Talk_Show,
-  .Talk_BesideOpen,
-  .Talk_Close {
+  .Talk_Show {
     display: none;
   }
-  /* The person's lists, at the right of the conversation, held in place
-     while it scrolls: each under its own title, scrolling within the
-     window. Its bar holds only Close, so it shows only where the column is
-     opened over the conversation. It stands hidden until a list has
-     something in it (operator-page.ts `lateScript`). */
-  .Talk:not(.Talk-beside) .Talk_Beside {
-    display: none;
-  }
-  .Talk_Beside {
-    display: flex;
-    flex: 0 0 22rem;
-    flex-direction: column;
-    min-width: 0;
-    height: var(--viewport-height, 100dvh);
-    border-left: 1px solid var(--border);
-    background: var(--bg);
-  }
-  .Talk_BesideBar {
-    display: none;
-    flex: none;
-  }
+  /* In the frame's aside: what the conversation is doing now, then the
+     person's lists, each under its own title. */
+  .Talk_Aside,
   .Talk_Lists {
     display: grid;
     align-content: start;
     gap: .75rem;
-    min-height: 0;
-    padding: 1rem;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+  }
+  .Talk_Aside[hidden],
+  .Talk_Lists[hidden] {
+    display: none;
+  }
+  /* The summary the bar's button to the aside wears: a dot for the turn and
+     each helper, and how many more. */
+  .Talk_Glance {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .Talk_Glance:empty {
+    display: none;
+  }
+  .Talk_Glance .Dot {
+    width: .55rem;
+    height: .55rem;
   }
   /* The bar's button to the app, named for it: a button is one line tall,
      so a long name is cut short rather than wrapped out of it on a phone. */
@@ -746,35 +791,6 @@
     from {
       opacity: 0;
       scale: .96;
-    }
-  }
-  /* What the conversation is doing now and the helpers it set going
-     (operator-aside.ts), in the bar: a summary at its right end, a dot for
-     each and how many more, that shows the whole list under the bar while
-     it is open; and where the page is wide enough, that list in the margin
-     to the right of the conversation, held in view as it scrolls. */
-  .Talk_Aside {
-    flex: none;
-    margin-left: auto;
-  }
-
-  .Talk_AsideIn {
-    position: absolute;
-    top: calc(100% + .5rem);
-    right: .75rem;
-    gap: .75rem;
-    width: min(22rem, calc(100cqw - 1.5rem));
-    max-height: calc(100dvh - 6rem);
-    overflow-y: auto;
-  }
-
-  @container workspace (min-width: 76rem) {
-    .Talk_AsideIn,
-    .Talk_Aside[data-open] .Talk_AsideIn {
-      display: grid;
-      top: calc(100% + .75rem);
-      right: 1.25rem;
-      width: calc(min(22rem, (100cqw - 46rem) / 2) - 1.25rem);
     }
   }
   /* Updates from the Operator (updates.ts): a card for each, what needs the
@@ -911,11 +927,27 @@
       min-width: 20rem;
     }
   }
-  /* Beside an app, the lists keep their column where the window holds all
-     three; narrower, they are behind the bar's button, as on a phone. */
-  @media (min-width: 1400px) {
-    .Talk-app .Talk_Beside {
-      flex-basis: 20rem;
+  /* Beside an app, the aside keeps its place where the window holds all
+     three; narrower, it is behind the bar's button, as on a phone. */
+  @media (max-width: 1399px) {
+    .Talk-app .Frame_Aside:not(:target, :has(:target)) {
+      display: none;
+    }
+    .Talk-app .Frame_Aside:is(:target, :has(:target)) {
+      position: fixed;
+      inset: 0 0 0 auto;
+      z-index: 10;
+      width: min(26rem, 100vw);
+      height: auto;
+      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
+        transparent);
+    }
+    .Talk-app .Frame_AsideOpen,
+    .Talk-app .Frame_AsideClose {
+      display: inline-flex;
+    }
+    .Talk-app .Frame_AsideFold {
+      display: none;
     }
   }
   .Talk_App {
@@ -995,61 +1027,6 @@
     translate: -50% 0;
   }
 
-  /* Where the conversation needs the whole width, and beside an app short
-     of the widest windows, the lists are one press away: the bar's button
-     opens them over the conversation, and Close goes back. */
-  .Talk_BesideOpen {
-    margin-left: auto;
-  }
-  :is(.Talk_Aside, .Talk_Show) ~ .Talk_BesideOpen {
-    margin-left: 0;
-  }
-  @media (max-width: 1399px) {
-    .Talk-app.Talk-beside .Talk_BesideOpen {
-      display: inline-flex;
-    }
-    .Talk-app .Talk_Beside:not(:target, :has(:target)) {
-      display: none;
-    }
-    .Talk-app .Talk_Beside:is(:target, :has(:target)) {
-      position: fixed;
-      inset: 0 0 0 auto;
-      z-index: 3;
-      width: min(26rem, 100vw);
-      height: auto;
-      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
-        transparent);
-    }
-    .Talk-app .Talk_Beside:is(:target, :has(:target)) .Talk_BesideBar {
-      display: flex;
-    }
-    .Talk-app .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
-      display: inline-flex;
-    }
-  }
-  @media (max-width: 1099px) {
-    .Talk-beside .Talk_BesideOpen {
-      display: inline-flex;
-    }
-    .Talk_Beside:not(:target, :has(:target)) {
-      display: none;
-    }
-    .Talk_Beside:is(:target, :has(:target)) {
-      position: fixed;
-      inset: 0 0 0 auto;
-      z-index: 3;
-      width: min(26rem, 100vw);
-      height: auto;
-      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
-        transparent);
-    }
-    .Talk_Beside:is(:target, :has(:target)) .Talk_BesideBar {
-      display: flex;
-    }
-    .Talk_Beside:is(:target, :has(:target)) .Talk_Close {
-      display: inline-flex;
-    }
-  }
   @media (max-width: 700px) {
     .Talk_Column,
     .Talk_Box {
@@ -1064,7 +1041,7 @@
       display: inline-flex;
       margin-left: auto;
     }
-    .Talk-app .Talk_Show + .Talk_Aside {
+    .Talk-app .Talk_Show + .Frame_AsideOpen {
       margin-left: 0;
     }
     .Talk_App {
