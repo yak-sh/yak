@@ -277,6 +277,7 @@ export let streamDoor = async (req: Request, env: Env, now = Date.now()) => {
   return builderOf(env, ticket.space)(() => {
     let out = carried('http://builder/operator/call', req)
     out.headers.set(SPACE, ticket.space)
+    out.headers.set('x-yak-kernel', '1')
     out.headers.set('x-yak-person', ticket.person)
     out.headers.set('x-yak-call', JSON.stringify(ticket))
     return out

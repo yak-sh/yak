@@ -197,9 +197,10 @@ let streaming = (
       if (socket != ws) return
       socket = undefined
       if (!held()) return
-      // The host's door answers a ticket it will not take with a 404, which a
-      // WebSocket sees as a close before it opened.
-      if (event.code == 1006 && !opened) return refused()
+      // The host's door answers a ticket it will not take with a refusal,
+      // which a WebSocket sees as a close before it opened (code 1006, or 0
+      // in Deno).
+      if (!opened) return refused()
       log('stream dropped', { server: join.server, code: event.code })
       setTimeout(() => held() && open(), AGAIN)
     }

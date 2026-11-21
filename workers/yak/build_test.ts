@@ -19,7 +19,9 @@ import { ai, modelPage, platform, state, type Turn } from './testing.ts'
 import { rootOf } from './operator-root.ts'
 import { test, until } from '@yaks/testing'
 import { line } from '@yaks/query'
-import { sign } from './lib/token.ts'
+import { seal, sign } from './lib/token.ts'
+import { streamDoor, type Ticket } from './operator-calls.ts'
+import type { Bundle } from '@yaks/graph'
 import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
 import { conversationOf } from './operator-host.ts'
@@ -1506,5 +1508,50 @@ test("in a room heard in full, a member's words keep that member's tools, and a 
   assertStringIncludes(
     guest,
     'from Bo (unverified: a Discord account linked to nobody here; not a member of ada): and mail',
+  )
+})
+
+// A voice room's audio streams in under the guest who stands for the room
+// (chat-voice.ts `roomCall`), who holds no seat here: the kernel's sealed
+// ticket lets it through to the call, which answers it rather than the
+// door refusing a stranger's write.
+test("a voice room's stream reaches its call under a guest who holds no seat", async () => {
+  let o = await seeded()
+  o.bound()
+  let errors: Bundle[][] = []
+  let env = {
+    ...o.env,
+    ERRORS: { send: (s: Bundle[]) => Promise.resolve(void errors.push(s)) },
+  }
+  let ticket: Ticket = {
+    space: o.space.eid,
+    person: crypto.randomUUID(),
+    call: 'discord:lounge:1',
+    from: '4243',
+    to: 'lounge',
+    via: 'discord',
+    at: Date.now(),
+    room: {
+      via: 'discord',
+      connection: crypto.randomUUID(),
+      server: '81384788765712384',
+      room: 'lounge',
+    },
+  }
+  let sealed = await seal('call', ticket, env.SESSION_SECRET!)
+  let r = await within(env, {}, () =>
+    streamDoor(
+      new Request(
+        `https://yaks.app/discord/stream?call=${encodeURIComponent(sealed)}`,
+        { headers: { upgrade: 'websocket' } },
+      ),
+      env,
+    ))
+  // Speech is off in this test, so the call itself turns it away.
+  assertEquals(r.status, 404)
+  await until(() => errors.length > 0)
+  assertEquals(
+    (errors[0][0].exception as { value: string }).value,
+    "A call's stream was refused: speech is off",
   )
 })

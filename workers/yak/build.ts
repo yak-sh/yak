@@ -352,6 +352,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/ask' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
+          url.pathname == '/operator/call' ||
           url.pathname == '/operator/press' ||
           url.pathname == '/operator/handoff' ||
           url.pathname == '/operator/approval' ||
@@ -412,6 +413,21 @@ export class Builder extends Durable {
             let rows = owedRows(this.#env, at, await request.json())
             await store.g.apply(rows, { trusted: true })
             return Response.json({ letter: rows[1].entity.eid })
+          }
+          // A call's audio, its ticket sealed and opened by the kernel
+          // (operator-calls.ts `streamDoor`): a caller here, or the guest
+          // who stands for a voice room, who has no seat to check.
+          if (url.pathname == '/operator/call') {
+            let at = await dirPart.directoryOf(this.#env.STORE).at(space)
+            if (!at) return no(404, 'that space is gone')
+            let { answering } = await import('./operator-calls.ts')
+            return answering(
+              this.#env,
+              await this.#work(),
+              at,
+              JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
+              () => this.#arming,
+            )
           }
           // A message heard on a chat platform, from a person here or a
           // guest the kernel already told apart (chat.ts `arrived`).
@@ -580,16 +596,6 @@ export class Builder extends Durable {
         )
       }
       return answer
-    }
-    if (new URL(request.url).pathname == '/operator/call') {
-      let { answering } = await import('./operator-calls.ts')
-      return answering(
-        this.#env,
-        await this.#work(),
-        space,
-        JSON.parse(request.headers.get('x-yak-call') ?? '{}'),
-        () => this.#arming,
-      )
     }
     if (new URL(request.url).pathname == '/operator/settings') {
       let { setting } = await import('./operator-persona.ts')
