@@ -1562,7 +1562,8 @@ export let operatorFrames = (
       effect: async (bundles) => {
         let ids = bundles.filter((b) =>
           'archived' in b || comp(b, 'delivery')?.through ||
-          'operator_contact' in b || 'verified' in b || 'cancelled' in b
+          'operator_contact' in b || 'verified' in b || 'cancelled' in b ||
+          'declined' in b
         ).map((b) => b.entity.eid)
         if (ids.length) {
           let entries = await store.g.get(ids, ['entry'])

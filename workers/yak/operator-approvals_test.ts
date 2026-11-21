@@ -9,12 +9,16 @@ import { operatorMemory } from './operator-testing.ts'
 import { opened } from './lib/token.ts'
 import {
   acquainted,
+  type Approval,
   approvals,
   asker,
+  type At,
   confirming,
   digestOf,
   LIFE,
 } from './operator-approvals.ts'
+import { approvalCard } from './operator-approval-card.ts'
+import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Space } from './directory.ts'
@@ -108,17 +112,17 @@ test('an escalating call texts a link instead of running; any other runs', async
 test('opening spends nothing; the press runs it once; a second press runs nothing', async () => {
   let { approval, digest } = await linked()
   ran.length = 0
-  equal((await press(approval, digest, false)).state, 'waiting')
+  equal((await press(approval, digest)).state, 'waiting')
   equal(ran, [])
   let [one, two] = await Promise.all([
-    press(approval, digest, true),
-    press(approval, digest, true),
+    press(approval, digest, { press: true }),
+    press(approval, digest, { press: true }),
   ])
   equal([one.state, two.state].sort(), ['done', 'used'])
-  equal((await press(approval, digest, true)).state, 'used')
+  equal((await press(approval, digest, { press: true })).state, 'used')
   equal(ran, ['app_files {"member_add":{"email":"eve@x.com","role":"owner"}}'])
   let [note] = await store.g.read(
-    line`.entry.session=${session} .notice .fields=content.body`,
+    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
   )
   equal(
     String((note.content as { body: string }).body).includes('eve@x.com'),
@@ -130,11 +134,11 @@ test('Decline spends the link and runs nothing, and the conversation hears it', 
   await named('member_add').run({ email: 'zed@x.com' })
   let { approval, digest } = await linked()
   ran.length = 0
-  equal((await press(approval, digest, false, null, true)).state, 'declined')
-  equal((await press(approval, digest, true)).state, 'used')
+  equal((await press(approval, digest, { decline: true })).state, 'declined')
+  equal((await press(approval, digest, { press: true })).state, 'used')
   equal(ran, [])
   let notes = await store.g.read(
-    line`.entry.session=${session} .notice .fields=content.body`,
+    line`.entry.session=${session} .notice !operator_approval .fields=content.body`,
   )
   equal(
     notes.some((n) =>
@@ -156,15 +160,15 @@ test('a link is bound to its act: changed arguments open nothing', async () => {
     entity: { eid: approval },
     operator_approval: { args: { email: 'mallory@x.com', role: 'owner' } },
   }], { trusted: true })
-  equal((await press(approval, digest, true)).state, 'gone')
-  equal((await press(approval, 'forged', true)).state, 'gone')
+  equal((await press(approval, digest, { press: true })).state, 'gone')
+  equal((await press(approval, 'forged', { press: true })).state, 'gone')
 })
 
 test('a link dies after LIFE', async () => {
   await named('member_add').run({ email: 'eve@x.com' })
   let { approval, digest } = await linked()
   clock += LIFE + 1
-  equal((await press(approval, digest, true)).state, 'expired')
+  equal((await press(approval, digest, { press: true })).state, 'expired')
 })
 
 test('approval_request asks for any tool the turn holds, and only those', async () => {
@@ -226,30 +230,43 @@ test("an outside service's calls run with no tap, writes too; member_add still w
   equal([ran.length, texts.length], [3, sent + 1])
 })
 
-test('in chat the link comes back in the answer, and opens only for its person signed in', async () => {
-  let given = confirming(
+// member_add as a turn asks it where its person reads at `at`.
+let asking = (at: Partial<At>) =>
+  confirming(
     [tool('member_add')],
     asker(
       env,
       store,
       { eid: crypto.randomUUID() } as Space,
-      { person, session },
+      { person, session, ...at },
       () => Promise.reject(new Error('nothing is texted')),
       () => clock,
     ),
     { known },
+  )[0]
+
+test('elsewhere the link comes back in the answer with words, and opens only for its person signed in', async () => {
+  let said = String(await asking({}).run({ email: 'eve@x.com' }))
+  equal(
+    said.includes('[Approve: Add eve@x.com to the space as an editor]('),
+    true,
   )
-  let said = String(await given[0].run({ email: 'eve@x.com' }))
-  let t = said.match(/approve\?t=(\S+)/)![1]
+  let t = said.match(/approve\?t=([^\s)]+)/)![1]
   let [, approval, digest] = (await opened<[string, string, string]>(
     'approval',
     t,
     SECRET,
   ))!
-  equal((await press(approval, digest, false)).state, 'theirs')
-  equal((await press(approval, digest, true, 'mallory')).state, 'theirs')
-  equal((await press(approval, digest, false, person)).state, 'waiting')
-  equal((await press(approval, digest, true, person)).state, 'done')
+  equal((await press(approval, digest)).state, 'theirs')
+  equal(
+    (await press(approval, digest, { press: true, who: 'mallory' })).state,
+    'theirs',
+  )
+  equal((await press(approval, digest, { who: person })).state, 'waiting')
+  equal(
+    (await press(approval, digest, { press: true, who: person })).state,
+    'done',
+  )
 })
 
 test('an approval of an act naming an integration carries its logo', async () => {
@@ -272,7 +289,44 @@ test('an approval of an act naming an integration carries its logo', async () =>
   let standing = await approvals(logos, () => Promise.resolve(''), () => clock)(
     eid,
     digestOf(row),
-    false,
   )
   equal([standing.state, standing.logo], ['waiting', 'at:gmail'])
+})
+
+test('in their chat the answer carries no link: the card in the conversation is pressed in place, by them alone', async () => {
+  let said = String(await asking({ chat: true }).run({ email: 'kim@x.com' }))
+  equal([said.includes('http'), said.includes('a card')], [false, true])
+  let [row] = await store.g.read(
+    line`.operator_approval .entry.session=${session} .order=-created.at .limit=1`,
+  )
+  let drawn = () => renderToString(approvalCard(row, clock))
+  equal(drawn().includes('Add kim@x.com to the space as an editor?'), true)
+  equal(drawn().includes('data-act="approve"'), true)
+  let digest = digestOf(row.operator_approval as Approval)
+  let own = { own: true, press: true }
+  equal((await press(row.entity.eid, digest, own)).state, 'theirs')
+  equal(
+    (await press(row.entity.eid, digest, { ...own, who: 'mallory' })).state,
+    'theirs',
+  )
+  equal(
+    (await press(row.entity.eid, digest, { ...own, who: person })).state,
+    'done',
+  )
+  ;[row] = await store.g.get([row.entity.eid])
+  equal([drawn().includes('Approved.'), drawn().includes('data-act')], [
+    true,
+    false,
+  ])
+})
+
+test("a card pressed in a texted approval's conversation is still theirs alone", async () => {
+  await named('member_add').run({ email: 'lu@x.com' })
+  let { approval, digest } = await linked()
+  let own = { own: true, press: true }
+  equal(
+    (await press(approval, digest, { ...own, who: 'mallory' })).state,
+    'theirs',
+  )
+  equal((await press(approval, digest, { ...own, who: person })).state, 'done')
 })

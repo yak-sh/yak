@@ -8,12 +8,15 @@ import type { Request as Ask } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { owned } from './directory-fixture.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { operatorMemory, operatorModel, sentRows } from './operator-testing.ts'
+import { frameOf } from './operator-host.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import { endpoints } from './endpoints.ts'
 import { opened } from './lib/token.ts'
+import { line } from '@yaks/query'
+import { type Approval, digestOf } from './operator-approval-card.ts'
 import type { Ctx } from './tools.ts'
 
 let store = operatorMemory()
@@ -161,7 +164,7 @@ test('a member added by text waits for the tap on the link texted to that number
     t,
     'secret',
   ))!
-  let tap = (press: boolean) => operator.approve(approval, digest, press)
+  let tap = (press: boolean) => operator.approve(approval, digest, { press })
   equal((await tap(false)).state, 'waiting')
   equal(await invited(), 0)
   equal((await tap(true)).state, 'done')
@@ -170,7 +173,7 @@ test('a member added by text waits for the tap on the link texted to that number
   equal(await invited(), 1)
 })
 
-test('a member added in chat waits for the tap on the link in the answer, which opens only for them', async () => {
+test('a member added in chat waits for a press on its card in the conversation, which only they can press', async () => {
   let invited = async () => (await ctx.dir.read('.invite')).length
   let before = await invited(), links = texted.length
   await asked(
@@ -178,16 +181,32 @@ test('a member added in chat waits for the tap on the link in the answer, which 
     'Call member_add {"email":"ann@bot.yak.sh","role":"editor"}\nby chat',
   )
   let said = answered.get('chat')!
-  equal(said.includes('Nothing has happened yet'), true)
+  equal([said.includes('Nothing has happened yet'), said.includes('http')], [
+    true,
+    false,
+  ])
   equal([await invited(), texted.length], [before, links])
-  let t = said.match(/approve\?t=(\S+)/)![1]
-  let [, approval, digest] = (await opened<[string, string, string]>(
-    'approval',
-    t,
-    'secret',
-  ))!
-  equal((await operator.approve(approval, digest, true)).state, 'theirs')
+  let card = (await store.g.read(
+    line`.operator_approval .entry .order=-created.at .limit=1`,
+  ))[0]
+  equal((card.operator_approval as Approval).args.email, 'ann@bot.yak.sh')
+  let drawn = async () =>
+    sentRows(
+      (await frameOf(store, (card.entry as { session: string }).session))!.frame
+        .operator.lines,
+    ).map((r) => r.html).join('')
+  equal(
+    (await drawn()).includes(
+      `data-approval="${card.entity.eid}"`,
+    ),
+    true,
+  )
+  let digest = digestOf(card.operator_approval as Approval)
+  let press = (who?: string) =>
+    operator.approve(card.entity.eid, digest, { press: true, own: true, who })
+  equal((await press()).state, 'theirs')
   equal(await invited(), before)
-  equal((await operator.approve(approval, digest, true, person)).state, 'done')
+  equal((await press(person)).state, 'done')
   equal(await invited(), before + 1)
+  equal((await drawn()).includes('Approved.'), true)
 })

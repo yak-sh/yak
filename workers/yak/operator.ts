@@ -142,6 +142,7 @@ import {
   asker,
   confirming,
   ESCALATING,
+  type Press,
   type Standing,
 } from './operator-approvals.ts'
 import { heardIn, unvouched } from './operator-heard.ts'
@@ -2242,8 +2243,9 @@ export let operating = (
     let ruled = new Set(roster.map((t) => t.name))
     let listened = (tools: Tool[]) =>
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
-    // A member's privileged acts wait for their tap, on a link texted to
-    // their number or given in the answer (operator-approvals.ts).
+    // A member's privileged acts wait for their tap: on a link texted to
+    // their number, on a card in their chat, or on a link given in the answer
+    // (operator-approvals.ts).
     let confirmed = (tools: Tool[]) =>
       asking
         ? deferred(confirming(
@@ -2252,7 +2254,12 @@ export let operating = (
             env,
             store,
             space,
-            { person: ctx.person!, session, number: confirm },
+            {
+              person: ctx.person!,
+              session,
+              number: confirm,
+              chat: channel == 'chat',
+            },
             (to, words) => textPerson(env, space, to, words),
           ),
           {
@@ -3297,8 +3304,6 @@ export type Operator = {
   approve: (
     approval: string,
     digest: string,
-    press: boolean,
-    who?: string | null,
-    decline?: boolean,
+    press?: Press,
   ) => Promise<Standing>
 }

@@ -16,6 +16,7 @@ import {
   kinds,
   MARGIN,
   margin,
+  markdown,
   namer,
 } from './conversation.ts'
 
@@ -227,4 +228,16 @@ test('the files with a line: a picture as itself, any other file as its kind, na
   equal(held.includes('aria-label="Remove notes.pdf"'), true)
   equal(drawn({ name: 'a.svg', mime: 'image/svg+xml' }).includes('<img'), false)
   equal(files([]), null)
+})
+
+test('a bare URL in prose reads as its host; a link with words keeps them', () => {
+  let drawn = (text: string) =>
+    renderToString(markdown(text)).match(/<a [^>]*>([^<]*)<\/a>/g)!
+      .map((a) => a.replace(/<[^>]+>/g, ''))
+  equal(
+    drawn(
+      'Tap https://yaks.app/approve?t=a.b to approve, <https://www.x.com/y>, or [the guide](https://yaks.app/guide).',
+    ),
+    ['yaks.app', 'x.com', 'the guide'],
+  )
 })

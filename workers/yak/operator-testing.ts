@@ -282,7 +282,10 @@ export let operatorService = (
       let rows = await store.g.get(waiting.map((r) => r.entity.eid))
       return Promise.all(rows.map((r) => {
         let a = r.operator_approval as Parameters<typeof digestOf>[0]
-        return operator.approve(r.entity.eid, digestOf(a), true, a.person)
+        return operator.approve(r.entity.eid, digestOf(a), {
+          press: true,
+          who: a.person,
+        })
       }))
     },
   }

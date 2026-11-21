@@ -4,6 +4,7 @@
 // its first name, Builder, which the Worker's binding and every object
 // already made are known by.
 import type { OperatorStore } from './operator-store.ts'
+import type { Press } from './operator-approvals.ts'
 import type { Bundle } from '@yaks/graph'
 import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
@@ -384,21 +385,13 @@ export class Builder extends Durable {
           // in (operator-approvals.ts `approvalDoor`).
           if (url.pathname == '/operator/approval') {
             let { approval, digest, press, decline, who } = await request
-              .json() as {
-                approval: string
-                digest: string
-                press?: boolean
-                decline?: boolean
-                who?: string | null
-              }
+              .json() as { approval: string; digest: string } & Press
             let operator = await this.#work()
-            let standing = await operator.approve(
-              approval,
-              digest,
-              !!press,
-              who ?? null,
-              !!decline,
-            )
+            let standing = await operator.approve(approval, digest, {
+              press,
+              decline,
+              who,
+            })
             await this.#arming
             return Response.json(standing)
           }
@@ -616,6 +609,22 @@ export class Builder extends Durable {
           String(args.code ?? ''),
         ),
       )
+    }
+    // Approve or Decline pressed on an approval's card in the person's
+    // conversation (operator-approvals.ts `approvalCard`): theirs alone.
+    if (new URL(request.url).pathname == '/operator/approve') {
+      let standing = await operator.approve(
+        String(args.approval ?? ''),
+        String(args.digest ?? ''),
+        {
+          press: args.act == 'approve',
+          decline: args.act == 'decline',
+          who: held.person,
+          own: true,
+        },
+      )
+      await this.#arming
+      return Response.json(standing)
     }
     if (new URL(request.url).pathname == '/operator/receive') {
       let { heardAt } = await import('./operator-channels.ts')

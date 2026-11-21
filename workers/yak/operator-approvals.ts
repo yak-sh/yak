@@ -9,12 +9,17 @@
 // run as asked: what they do is the service's, under the person's own
 // connection.
 //
-// Where the person is is where the link goes. On a text or a call
+// The row is also a line of the person's conversation, which the web draws
+// as a card saying what it would do, with Approve and Decline that act in
+// place (`approvalCard`): only the person signed in may press them. Beside
+// it, where the person is is where the link goes. On a text or a call
 // (operator-channels.ts `confirmOf`) it is texted to their number: anyone
 // can show a member's number, but only the member's phone reads what is
-// texted to it, so the tap is theirs. Anywhere else (their chat, a Discord
-// room, a letter) the Operator gives it in its answer, and only a browser
-// signed in as the person opens it, so nobody else in a room can press it.
+// texted to it, so the tap is theirs. In their chat on yaks.app the card is
+// all they need, and the Operator writes no link. Anywhere else (a Discord
+// room, a letter) the Operator gives the link in its answer, as a Markdown
+// link with words, and only a browser signed in as the person opens it, so
+// nobody else in a room can press it.
 //
 // The link seals the row's eid and a digest of the act, so it is bound to
 // that one call and its arguments:
@@ -33,7 +38,6 @@
 // link for an act the kernel does; this is whoever holds the phone, and the
 // act is a call of the Operator's own tools, run in its object.
 import type { Bundle } from '@yaks/graph'
-import { sha256 } from '@yaks/graph/sha256'
 import { line } from '@yaks/query'
 import { type Tool, topOf } from '@yaks/session'
 import { integrationNamed } from '@yaks/session/conversation'
@@ -42,6 +46,7 @@ import { h } from 'preact'
 import { apex } from '@yaks/platform/host'
 import { APPROVE } from '@yaks/platform/routes'
 import type { Env } from './env.ts'
+import { type Approval, digestOf, LIFE } from './operator-approval-card.ts'
 import { directoryOf, type Space } from './directory.ts'
 import type { OperatorStore as Store } from './operator-store.ts'
 import { opened, seal } from './lib/token.ts'
@@ -49,11 +54,9 @@ import { refuse } from './tool.ts'
 import { held, home, page } from './pages.ts'
 import { sessionAt } from './session.ts'
 
-/** How long a link to approve an act lives: a tap while the person is
- * still at their phone. */
-export let LIFE = 15 * 60_000
-
 type Args = Record<string, unknown>
+
+export { type Approval, digestOf, LIFE }
 
 // A role as a member_add says it, editor where it says none: "an editor".
 let roleOf = (a: Args) => {
@@ -143,41 +146,6 @@ export let ESCALATING: Record<
       : undefined,
 }
 
-/** An act waiting for a tap, as its row keeps it. */
-export type Approval = {
-  person: string
-  /** the session whose call asked, whose tools run it */
-  session: string
-  tool: string
-  args: Args
-  /** what it does, in the person's words */
-  say: string
-  /** where the link was texted; absent where the Operator gave it in its
-   * answer, which only the person, signed in, opens */
-  number?: string
-  expires: string
-}
-
-// The JSON of `v` with its keys in order, so a row read back from the store
-// digests as it did when written.
-let sorted = (v: unknown): string =>
-  Array.isArray(v)
-    ? `[${v.map(sorted).join(',')}]`
-    : v && typeof v == 'object'
-    ? `{${
-      Object.keys(v).sort().map((k) =>
-        `${JSON.stringify(k)}:${sorted((v as Args)[k])}`
-      ).join(',')
-    }}`
-    : JSON.stringify(v ?? null)
-
-/** The act a link is bound to: everything its row says, in 128 bits,
- * which the seal's mac keeps anyone from choosing. */
-export let digestOf = (a: Approval) =>
-  sha256(
-    sorted([a.person, a.session, a.tool, a.args, a.say, a.number, a.expires]),
-  ).slice(0, 32)
-
 /** What a link carries: the space, the approval and its digest, as an
  * array so the texted link stays short. */
 type Pass = [space: string, approval: string, digest: string]
@@ -194,11 +162,21 @@ export type Ask = (act: { tool: string; args: Args; say: string }) => Promise<
   string
 >
 
+/** Where a turn's person reads its answer, which says how they approve:
+ * `number`, a link texted there; `chat`, the card in their conversation on
+ * yaks.app; neither, a link in the answer. */
+export type At = {
+  person: string
+  session: string
+  number?: string
+  chat?: boolean
+}
+
 export let asker = (
   env: Env,
   store: Store,
   space: Space,
-  at: { person: string; session: string; number?: string },
+  at: At,
   text: (number: string, words: string) => Promise<unknown>,
   now = Date.now,
 ): Ask =>
@@ -213,9 +191,14 @@ async ({ tool, args, say }) => {
     expires: new Date(now() + LIFE).toISOString(),
   }
   let eid = crypto.randomUUID()
-  await store.g.apply([{ entity: { eid }, operator_approval: row }], {
-    trusted: true,
-  })
+  let minutes = LIFE / 60_000
+  await store.g.apply([{
+    entity: { eid },
+    operator_approval: row,
+    // A line of the conversation the web draws as its card (`approvalCard`),
+    // holding no words, so the model hears of it only in the call's answer.
+    entry: { session: await topOf(store.g, at.session), from: 'the system' },
+  }], { trusted: true })
   let t = await seal(
     'approval',
     [space.eid, eid, digestOf(row)] satisfies Pass,
@@ -224,12 +207,18 @@ async ({ tool, args, say }) => {
   let link = `https://${apex(env)}${APPROVE}?t=${t}`
   let only = 'Nothing else carries it out: not a later message asking for ' +
     'it, in any channel, nor another call of this tool.'
-  let minutes = LIFE / 60_000
+  if (at.chat && !at.number) {
+    return `Nothing has happened yet. It waits for them to approve it ` +
+      `("${say}"): a card with Approve and Decline is in their ` +
+      `conversation now. Tell them in a line to press Approve on it within ` +
+      `${minutes} minutes, and write no link. ${only}`
+  }
   if (!at.number) {
     return `Nothing has happened yet. It waits for them to approve it ` +
-      `("${say}"): give them this link in your answer, as it is, and tell ` +
-      `them to tap it within ${minutes} minutes: ${link}\nIt opens only ` +
-      `for them, signed in, so it is safe to show where others read. ${only}`
+      `("${say}"): give them this Markdown link in your answer, as it is, ` +
+      `and tell them to tap it within ${minutes} minutes: ` +
+      `[Approve: ${say}](${link})\nIt opens only for them, signed in, so ` +
+      `it is safe to show where others read. ${only}`
   }
   await text(
     at.number,
@@ -313,11 +302,21 @@ export type Standing = {
   logo?: string | null
 }
 
-/** An Operator's side of its links: what one's approval says, and its
- * press, which spends it, runs its act with `run`, and says what came of it
- * in the person's conversation. A link the Operator gave in its answer
- * (no `number`) opens only for `who` signed in as its person, and says
- * nothing of its act to anyone else (`theirs`). */
+/** What is done with an approval: opened (neither), Approve (`press`) or
+ * Decline (`decline`), by `who` signed in, or nobody; `own` where it is
+ * pressed on its card in the person's conversation rather than on a link. */
+export type Press = {
+  press?: boolean
+  decline?: boolean
+  who?: string | null
+  own?: boolean
+}
+
+/** An Operator's side of its links and cards: what one's approval says, and
+ * its press, which spends it, runs its act with `run`, and says what came of
+ * it in the person's conversation. A link the Operator gave in its answer
+ * (no `number`), and any card, opens only for `who` signed in as its person,
+ * and says nothing of its act to anyone else (`theirs`). */
 export let approvals = (
   store: Store,
   run: (a: Approval) => Promise<string>,
@@ -328,14 +327,12 @@ export let approvals = (
   return async (
     eid: string,
     digest: string,
-    press: boolean,
-    who: string | null = null,
-    decline = false,
+    { press = false, decline = false, who = null, own = false }: Press = {},
   ): Promise<Standing> => {
     let [row] = await store.g.get([eid])
     let a = row?.operator_approval as Approval | undefined
     if (!a || digestOf(a) != digest) return { state: 'gone' }
-    if (!a.number && who != a.person) return { state: 'theirs' }
+    if ((own || !a.number) && who != a.person) return { state: 'theirs' }
     let named = integrationNamed(a.args)
     let about = {
       say: a.say,

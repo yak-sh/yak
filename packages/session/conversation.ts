@@ -209,8 +209,18 @@ let Called = (
   return h(Host.Provider, { value }, children)
 }
 
+// A link whose words are its own address, a bare URL that slipped into the
+// prose, as its host alone: https://yaks.app/approve?t=… reads "yaks.app".
+let shortened = (href: unknown, kids: Node[]): Node[] => {
+  let url = typeof href == 'string' && /^https?:/.test(href) &&
+    URL.parse(href)
+  return url && kids.flat().join('') == href
+    ? [url.host.replace(/^www\./, '')]
+    : kids
+}
+
 // An id that opens on another site opens in a tab of its own, so the page
-// it was read on stays.
+// it was read on stays; a bare URL is drawn as its host (`shortened`).
 let away =
   ((tag: string, props: Record<string, unknown> | null, ...kids: Node[]) =>
     h(
@@ -218,7 +228,7 @@ let away =
       tag == 'a' && props?.['data-ref'] && /^https?:/.test(String(props.href))
         ? { ...props, target: '_blank', rel: 'noopener' }
         : props,
-      ...kids,
+      ...tag == 'a' ? shortened(props?.href, kids) : kids,
     )) as typeof h
 
 // The words, under the Refs of the page they are drawn on.

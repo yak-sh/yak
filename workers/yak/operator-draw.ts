@@ -77,6 +77,7 @@ import {
 } from '@yaks/platform/operator-source'
 export { cameBy } from '@yaks/platform/operator-source'
 import { contactCard } from './operator-contact-card.ts'
+import { approvalCard } from './operator-approval-card.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -1069,7 +1070,7 @@ let brief = (b: Bundle): Said => ({
 
 /** The kinds of line only the Operator's rows have, ahead of every
  * transcript's (@yaks/session `kinds`): a call's step with the files it
- * brought back, a contact card, a line of a phone call, a helper stopped or
+ * brought back, an approval's card, a contact card, a line of a phone call, a helper stopped or
  * heard back from, a line the platform wrote, a helper's brief, and a
  * person's words with the channel they came by and the files they sent. */
 let own: Kind<Heard>[] = [
@@ -1093,6 +1094,7 @@ let own: Kind<Heard>[] = [
       }
       : step
   }),
+  kind('.operator_approval', (b) => ({ node: approvalCard(b) })),
   kind('.operator_contact', contact),
   kind('.operator_call&!output', onCall),
   kind('.operator_stopped&!result', (b, heard) => {

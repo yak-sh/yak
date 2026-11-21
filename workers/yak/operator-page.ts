@@ -1005,6 +1005,13 @@ export let operatorAnswer = async (
       { headers: { 'cache-control': 'private, no-store' } },
     )
   }
+  // Approve or Decline on an approval's card (operator-approvals.ts
+  // `approvalCard`), pressed by whoever is signed in.
+  if (q.has('approval') && req.method == 'POST') {
+    return Response.json(
+      await operatorDoor(env, space, who, 'approve', await req.json()),
+    )
+  }
   if (q.has('archive') && req.method == 'POST') {
     return Response.json(
       await operatorDoor(env, space, who, 'archive', await req.json()),
@@ -2647,6 +2654,40 @@ let remake = async (slug) => {
     }
   } catch (e) { said(e) } finally { remaking = false }
 }
+// Approve or Decline on an approval's card acts in place: the card says what
+// came of it at once, and is drawn again as its row now stands.
+let APPROVAL = {
+  done: 'Approved and done.',
+  declined: 'Declined. Nothing was done.',
+  failed: 'Approved, but it could not be done.',
+  used: 'This was answered already.',
+  expired: 'This waited too long. Ask again if you still want it.',
+  gone: 'What this was for changed or is gone. Ask again.',
+  theirs: 'Only the person it is for can answer this.',
+}
+document.addEventListener('click', async (event) => {
+  let button = event.target.closest?.('[data-approval] [data-act]')
+  if (!button) return
+  let card = button.closest('[data-approval]')
+  let said = card.querySelector('[data-approval-status]')
+  let buttons = card.querySelectorAll('[data-act]')
+  for (let b of buttons) b.disabled = true
+  said.textContent = button.dataset.act == 'approve' ? 'Approving…' : 'Declining…'
+  try {
+    let response = await fetch('${at}?approval', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ approval: card.dataset.approval, digest: card.dataset.digest, act: button.dataset.act }),
+    })
+    let answer = await response.json()
+    if (!response.ok) throw new Error(answer?.message ?? 'That could not be answered. Try again.')
+    said.textContent = [APPROVAL[answer.state], answer.state == 'failed' && answer.said].filter(Boolean).join(' ')
+    for (let b of buttons) b.hidden = true
+  } catch (error) {
+    said.textContent = error.message
+    for (let b of buttons) b.disabled = false
+  }
+})
 document.addEventListener('submit', async (event) => {
   let contact = event.target.closest?.('[data-contact-form]')
   if (!contact) return
