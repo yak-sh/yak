@@ -91,6 +91,9 @@ export let directoryConfig: Config = {
     },
     // The browsers a person allowed notifications on (operator-alerts.ts).
     { use: '@yaks/push', facets: ['vocab'], words: ['push_subscription'] },
+    // Where each person is available now, channel by channel (presence.ts):
+    // read by their own Operator only.
+    { use: '@yaks/notify', facets: ['vocab'], words: ['presence'] },
     '@yaks/tunnel',
     // Who has a sandbox in each space and until when it is awake
     // (sandbox.ts `awake`): what a space's plan counts and its erasure destroys.

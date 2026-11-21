@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Said, Seated } from '@yaks/chat'
+import type { Present, Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
 import { linked } from '@yaks/chat'
@@ -44,12 +44,14 @@ let message = (n: number, d: Record<string, unknown>) => ({
 let held = () => {
   let heard: Said[] = []
   let seated: Seated[] = []
+  let present: Present[] = []
   let h = holder(
     gateway('T0K'),
     (s) => heard.push(...s),
     (s) => seated.push(s),
+    (p) => present.push(...p),
   )
-  return { h, heard, seated, ...wire() }
+  return { h, heard, seated, present, ...wire() }
 }
 let say = (h: ReturnType<typeof held>['h'], w: Wire, f: unknown) =>
   h.frame(w, JSON.stringify(f))
@@ -162,6 +164,27 @@ test('the servers the bot is in: all of them when ready, then each it joins or l
   assertEquals(seated, [{ all: ['barn'] }, { joined: 'mill' }, {
     left: 'mill',
   }])
+})
+
+test("who is about: a server's people as it is joined, then each change, never a bot", async () => {
+  let { h, w, present } = held()
+  let frame = (t: string, d: Record<string, unknown>) =>
+    say(h, w, { op: 0, s: 3, t, d })
+  await say(h, w, ready)
+  await frame('GUILD_CREATE', {
+    id: 'mill',
+    presences: [
+      { user: { id: 'ann' }, status: 'online' },
+      { user: { id: 'bot', bot: true }, status: 'online' },
+    ],
+  })
+  await frame('PRESENCE_UPDATE', { user: { id: 'ann' }, status: 'idle' })
+  await frame('PRESENCE_UPDATE', { user: { id: 'bo' }, status: 'invisible' })
+  assertEquals(present, [
+    { account: 'ann', status: 'online' },
+    { account: 'ann', status: 'idle' },
+    { account: 'bo', status: 'offline' },
+  ])
 })
 
 test('an unanswered beat reconnects, and the new wire resumes where it was', async () => {

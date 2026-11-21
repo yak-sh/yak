@@ -25,6 +25,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
+import { type Tab, tabsState } from '@yaks/notify/presence'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
@@ -63,9 +64,20 @@ export type State = Hibernation & Restartable & {
   waitUntil?(work: Promise<unknown>): void
 }
 
+// What a page watching the Operator says of its tab: `{tab: {visible,
+// focused}}`, anything else none.
+let tabOf = (data: string | ArrayBuffer): Tab | undefined => {
+  try {
+    let t = JSON.parse(String(data))?.tab
+    if (t && typeof t == 'object') {
+      return { visible: t.visible === true, focused: t.focused === true }
+    }
+  } catch { /* not a tab's say */ }
+}
+
 // Who is at a socket: a page watching the Operator, or a browser lent to it
 // (operator-browser.ts).
-type Watching = Held & { operator: true }
+type Watching = Held & { operator: true; tab?: Tab }
 type Socket = Watching | Lent
 
 export class Builder extends Durable {
@@ -1039,10 +1051,37 @@ export class Builder extends Durable {
     )
   }
 
+  // Where `held`'s person is on this Operator, across their tabs open on it
+  // (all but `closing`), kept as their presence (presence.ts).
+  async #present(held: Watching, closing?: Wire) {
+    let tabs = this.#ctx.getWebSockets().filter((ws) => ws != closing)
+      .map((ws) => ws.deserializeAttachment() as Socket | null)
+      .filter((h): h is Watching =>
+        !!h && 'operator' in h && h.person == held.person
+      )
+      .map((h) => h.tab ?? { visible: true, focused: false })
+    let { present } = await import('./presence.ts')
+    await present(this.#env, {
+      person: held.person,
+      channel: 'operator',
+      place: held.space,
+      state: tabsState(tabs),
+    })
+  }
+
   /** A frame from a page reading the Operator's store, or from a browser
-   * lent to it. A page watching the Operator says nothing on its socket. */
+   * lent to it. A page watching the Operator says only whether its tab is
+   * visible and focused (`{tab}`), which is where its person is. */
   override webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
     let held = ws.deserializeAttachment() as Socket | null
+    if (held && 'operator' in held) {
+      let tab = tabOf(data)
+      if (!tab) return
+      ws.serializeAttachment({ ...held, tab })
+      return void this.#present(held).catch((e) =>
+        caught(e, { request: 'operator presence' })
+      )
+    }
     // A page reading the Operator's store through @yaks/api.
     if (paged(held)) {
       return void this.#stored().then(({ door }) => door.message(ws, data))
@@ -1060,6 +1099,11 @@ export class Builder extends Durable {
    * waiting out the person. */
   override webSocketClose(ws: Wire): void {
     let held = ws.deserializeAttachment() as Socket | null
+    if (held && 'operator' in held) {
+      return void this.#present(held, ws).catch((e) =>
+        caught(e, { request: 'operator presence' })
+      )
+    }
     if (paged(held)) {
       return void this.#stored().then(({ door }) => door.close(ws))
         .catch((e) => caught(e, { request: 'operator socket' }))

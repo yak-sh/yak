@@ -104,8 +104,17 @@ export type Step<S> = {
   heard?: Said[]
   /** what the platform said of the servers the bot is in */
   servers?: Seated
+  /** whether people the bot can see are about, as the platform said */
+  present?: Present[]
   /** close and connect again, at `url(state)` */
   again?: boolean
+}
+
+/** Whether someone on a platform is about: their account there and the
+ * status the platform shows for them. */
+export type Present = {
+  account: string
+  status: 'online' | 'idle' | 'dnd' | 'offline'
 }
 
 /** The servers a bot is in, as its platform says them over its socket: all

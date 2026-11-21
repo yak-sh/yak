@@ -238,6 +238,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   /** Render host context around the words when the model reads the input. */
   inputBody?: (entry: Bundle, body: string) => string
   requestItems?: Deps['requestItems']
+  turnItems?: Deps['turnItems']
   /** defects, apart from refusals (default `console.error`) */
   report?: (error: unknown, where: Where) => void
   /** each refusal a tool call met, apart from defects (@yaks/session
@@ -607,6 +608,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ),
     contextItems: opts.context,
     requestItems: opts.requestItems,
+    turnItems: opts.turnItems,
     resultText: opts.resultText ??
       ((entry) => outputView(h.g, entry, opts.outputLimit)),
     report: (error, session, phase) => report(error, { session, phase }),

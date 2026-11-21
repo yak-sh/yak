@@ -139,6 +139,7 @@ import {
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
+import { presenceShow } from './presence.ts'
 import {
   acquainted,
   approvals,
@@ -636,6 +637,7 @@ let OWN_WORDS = new Set([
   // what the person's own doors sent, set and hold
   'platform_bug',
   'text_send',
+  'presence_show',
   'contact_add',
   'notification_send',
   'mail_send',
@@ -2165,6 +2167,7 @@ export let operating = (
     let mine = () => [
       platformBug(ctx, space),
       textSend(env, ctx, space),
+      presenceShow(env, ctx.person!, space.eid),
       contactAdd(env, ctx, space, store),
       notificationSend(ctx, space, store),
       mailSend(env, ctx, space, store),
@@ -2408,6 +2411,15 @@ export let operating = (
     // The skills the space keeps, by title and description, for a session
     // offered skill_read: the same rule as the box's (@yaks/harness).
     requestItems: (_, __, current) => skillItems(g, current),
+    // Where the person of the conversation is now, for them alone, sent
+    // after the conversation and never kept in it (presence.ts).
+    turnItems: async (_, __, { session }) => {
+      let o = await workingOf(store, session)
+      if (!o?.person || !o.space) return []
+      let { presenceItem } = await import('./presence.ts')
+      let text = await presenceItem(env, o.person, o.space)
+      return text ? [{ kind: 'instruction' as const, text }] : []
+    },
     // A child works for the same space and person as the session that
     // started it, and is charged to that space.
     prepareChild: async ({ parent, args }) => {

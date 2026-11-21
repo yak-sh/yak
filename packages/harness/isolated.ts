@@ -533,6 +533,7 @@ export let isolate = (g: Graph, isolation: Isolation = {}) => {
         [await runner.resolveInstructions?.(inherited, s) ?? inherited, NOTE]
           .filter(Boolean).join('\n\n'),
       requestItems: undefined,
+      turnItems: undefined,
       ended: async (s) => {
         await runner.ended?.(s)
         if (box) await box.dispose(await box.ref(s))

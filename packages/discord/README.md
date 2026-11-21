@@ -15,6 +15,10 @@ reply with the REST API. `discord` is the `Platform` both make.
   bots' are not, so two bots never answer each other. It is `mentioned` when it
   names the bot or was sent to it directly, and the bot's mention is taken out
   of its words.
+- **Who is about** is each person's status as Discord says it, `online`, `idle`,
+  `dnd` or `offline` (someone invisible shows offline), from the presences a
+  server arrives with and each `PRESENCE_UPDATE` after (`presents`), never a
+  bot's. It needs the Presence intent.
 - **A beat Discord never answered**, a reconnect request, or an invalid session
   connects again; a session Discord says can be resumed is resumed, any other
   identifies afresh.

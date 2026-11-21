@@ -11,6 +11,7 @@ import type {
   Linker,
   Page,
   Platform,
+  Present,
   Room,
   Said,
   Server,
@@ -145,6 +146,24 @@ let read = (m: Message): Said => ({
     : {},
 })
 
+type Presence = { user?: { id?: string; bot?: boolean }; status?: string }
+let STATUSES = new Set(['online', 'idle', 'dnd', 'offline'])
+
+/** Who Discord says is about, as @yaks/chat reads it: a bot is not anyone,
+ * and someone invisible shows as offline, as Discord shows them. */
+export let presents = (all: Presence[]): Present[] =>
+  all.flatMap((p) =>
+    p.user?.id && !p.user.bot
+      ? [{
+        account: p.user.id,
+        status:
+          (STATUSES.has(p.status ?? '') ? p.status : 'offline') as Present[
+            'status'
+          ],
+      }]
+      : []
+  )
+
 /** Close codes after which the same token must not connect again
  * (opcodes-and-status-codes, Gateway Close Event Codes). */
 let ENDS: Record<number, string> = {
@@ -222,7 +241,19 @@ export let gateway = (token: string): Socket<Session> => ({
         // A server the bot joined, or one it was in that is reachable again;
         // one it left, unless Discord only lost it for a while.
         if (f.t == 'GUILD_CREATE') {
-          return { state, servers: { joined: (f.d as { id: string }).id } }
+          let d = f.d as { id: string; presences?: Presence[] }
+          let present = presents(d.presences ?? [])
+          return {
+            state,
+            servers: { joined: d.id },
+            ...present.length ? { present } : {},
+          }
+        }
+        // Someone in a server was seen coming, going or changing status
+        // (the Presence intent).
+        if (f.t == 'PRESENCE_UPDATE') {
+          let present = presents([f.d as Presence])
+          return { state, ...present.length ? { present } : {} }
         }
         if (f.t == 'GUILD_DELETE') {
           let d = f.d as { id: string; unavailable?: boolean }

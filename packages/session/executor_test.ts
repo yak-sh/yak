@@ -467,6 +467,9 @@ for (let hosted of [false, true]) {
       if (!hosted) delete p.r.executor
       p.r.requestItems = () =>
         Promise.resolve([{ kind: 'instruction', text: 'Available skills' }])
+      // About this moment: before the newest words, and kept nowhere.
+      p.r.turnItems = () =>
+        Promise.resolve([{ kind: 'instruction', text: 'Jeff: here' }])
       p.r.contextItems = () =>
         Promise.resolve(
           new Map([
@@ -480,6 +483,7 @@ for (let hosted of [false, true]) {
       let req = (hosted ? p.submitted : requests)[0]
       equal(req.items, [
         { kind: 'instruction', text: 'From the system:\nAvailable skills' },
+        { kind: 'instruction', text: 'From the system:\nJeff: here' },
         { kind: 'user', text: 'From an unknown sender:\nhello' },
         {
           kind: 'user',
@@ -491,6 +495,12 @@ for (let hosted of [false, true]) {
         },
       ])
       equal((await p.g.get(['input']))[0].input_context, recalled)
+      equal(
+        (await transcript(p.g, 'session')).some((b) =>
+          JSON.stringify(b).includes('Jeff: here')
+        ),
+        false,
+      )
     },
   )
 }

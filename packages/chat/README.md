@@ -61,12 +61,13 @@ type Platform = {
 
 A platform that sends its messages over a socket gives it as pure steps
 (`Socket`): where to connect, and for each frame what to send back, how often to
-beat, what was heard, and whether to connect again; and what a beat sends, or
-`again` when the last went unanswered. `ends(code)` says why a close cannot be
-tried again with the same credential, and `closed(state, code)`, where a close
-is answered by asking less (Discord's refused intents), what the socket
-remembers as it connects again. A platform that posts to a webhook instead gives
-that the way @yaks/phone's providers do; none does yet.
+beat, what was heard, who is about (`present`, each account's status), and
+whether to connect again; and what a beat sends, or `again` when the last went
+unanswered. `ends(code)` says why a close cannot be tried again with the same
+credential, and `closed(state, code)`, where a close is answered by asking less
+(Discord's refused intents), what the socket remembers as it connects again. A
+platform that posts to a webhook instead gives that the way @yaks/phone's
+providers do; none does yet.
 
 `send` posts a reply with a bot's credential. A refusal that never took it (a
 rate limit, a 5xx) is @yaks/host's `Unsent`, so it is tried again.

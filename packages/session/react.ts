@@ -365,6 +365,15 @@ export type Deps = {
     entries: Bundle[],
     current: { session: Eid; tools: readonly Tool[] },
   ) => Promise<Item[]>
+  /** Context about this moment, read again for each request and sent just
+   * before the newest words said, never kept in the transcript: what changes from one turn to the next
+   * (where the person is now) without breaking the cached prefix, and with
+   * nothing for a compaction to carry. */
+  turnItems?: (
+    window: Bundle[],
+    entries: Bundle[],
+    current: { session: Eid },
+  ) => Promise<Item[]>
   /** Unexpected model/tool defects, separate from expected refusals. */
   report?: (error: unknown, session: Eid, phase: string) => void
   /** Each refusal a tool call met, apart from defects (@yaks/tools
@@ -897,6 +906,18 @@ let saying = (question: string, a: Answer): string => {
  * it did. Safe to call when there is nothing to do. A runner that has read the
  * transcript for this step already ({@link reading}) hands that reading in.
  */
+// `moment` set just before the newest words said and what came with them,
+// so those stay where the model reads them, and the history before is the
+// cached prefix it was; after everything, where no one has said anything.
+let REPLIED = new Set(['assistant', 'call', 'result'])
+let beforeNewest = (items: Item[], moment: Item[]): Item[] => {
+  if (!moment.length) return items
+  let at = items.findLastIndex((i) => i.kind == 'user')
+  if (at < 0) return [...items, ...moment]
+  while (at > 0 && !REPLIED.has(items[at - 1].kind)) at--
+  return [...items.slice(0, at), ...moment, ...items.slice(at)]
+}
+
 export let react = async (
   g: Graph,
   session: Eid,
@@ -1839,6 +1860,7 @@ export let react = async (
   // Resolve media once, before admission, and project beside its source entry.
   let media: Map<Eid, Item[]> | undefined
   let dynamic: Item[]
+  let moment: Item[]
   try {
     media = deps.contextItems
       ? await deps.contextItems(window, entries, {
@@ -1850,6 +1872,11 @@ export let react = async (
     dynamic = deps.requestItems
       ? await deps.requestItems(window, entries, { session, tools }) ?? []
       : []
+    moment = (deps.turnItems
+      ? await deps.turnItems(window, entries, { session }) ?? []
+      : []).map((item) =>
+        message(item, item.from ?? 'the system')
+      )
   } catch (error) {
     if (error instanceof Stale) throw error
     // A host refusing to prepare context cannot be fixed by asking again.
@@ -1885,18 +1912,21 @@ export let react = async (
     // A turn: what the model answers, never words of its own to finish.
     items: closed([
       ...dynamic.map((item) => message(item, item.from ?? 'the system')),
-      ...project(
-        entries,
-        window,
-        toolEntities,
-        {
-          anchor: anchorId ? asked!.entity.eid : undefined,
-          results,
-          media,
-          session,
-          inputText: inputs,
-          resultUpdatesAsUser: !providerModel.lateResults,
-        },
+      ...beforeNewest(
+        project(
+          entries,
+          window,
+          toolEntities,
+          {
+            anchor: anchorId ? asked!.entity.eid : undefined,
+            results,
+            media,
+            session,
+            inputText: inputs,
+            resultUpdatesAsUser: !providerModel.lateResults,
+          },
+        ),
+        moment,
       ),
     ]),
     tools: schemas(tools, entries, await sentBefore(g, entries, tools)).map((
@@ -1931,6 +1961,7 @@ export let react = async (
       fixed: tokens(
         String(req.instructions ?? '').length +
           JSON.stringify(dynamic).length +
+          JSON.stringify(moment).length +
           JSON.stringify(req.tools).length +
           JSON.stringify(
             project(entries, retained(entries), toolEntities, {
@@ -2031,6 +2062,7 @@ export let react = async (
       ...req.tools.map(toolPart),
       ...instructionParts(String(req.instructions ?? ''), 'system'),
       ...itemLines(dynamic).map(([, n]): Part => ['skills', n]),
+      ...itemLines(moment).map(([, n]): Part => ['turn', n]),
     ],
     lines: itemLines(
       anchorId
@@ -2040,7 +2072,7 @@ export let react = async (
           session,
           inputText: inputs,
         })
-        : req.items.slice(dynamic.length),
+        : req.items.slice(dynamic.length).filter((i) => !moment.includes(i)),
     ),
   }
   // The tools sent, kept once per set under their sha (`offer{tools}`), and

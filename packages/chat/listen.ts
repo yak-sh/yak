@@ -8,7 +8,7 @@
 // awake (a deploy, an eviction), and reads the credential again: a new one
 // starts afresh with it, and none closes the socket.
 
-import type { Platform, Said, Seated } from './mod.ts'
+import type { Platform, Present, Said, Seated } from './mod.ts'
 import { holder, type Wire } from './socket.ts'
 
 /** The host's open socket, as much of a WebSocket as listening uses. */
@@ -30,6 +30,8 @@ export type Hosting = {
   heard: (said: Said[]) => Promise<void>
   /** what the platform says of the servers the bot is in, to keep */
   seated?: (servers: Seated) => Promise<void>
+  /** who the platform says is about, to keep */
+  present?: (present: Present[]) => Promise<void>
   /** a failure no one asked about, for the host's tracker */
   report: (error: unknown) => void
   /** the host's timers, for a test to drive */
@@ -117,6 +119,7 @@ export let listener = (host: Hosting): Listener => {
         host.platform.socket!(token),
         host.heard,
         host.seated,
+        host.present,
       )
       let at = era
       let s = await host.open(held.url())

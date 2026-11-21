@@ -35,6 +35,7 @@ import {
   type Page,
   type Platform,
   platforms,
+  type Present,
   reading,
   type Room,
   roomEid,
@@ -544,20 +545,53 @@ let held = (env: Env, via: string, space: string) =>
  * a connection they hold, or one a space holds, which stands for its owner
  * as the Operator's own Google does (connections.ts `ownConnection`) when it
  * has exactly one. */
-export let linked = async (env: Env, platform: Platform, id: string) => {
-  if (!platform.user) return undefined
-  let [b] = await read(
+export let linked = async (env: Env, platform: Platform, id: string) =>
+  (await linkedAll(env, platform, [id])).get(id)
+
+/** {@link linked} for many accounts at once, in one read of their
+ * connections: those linked here, each to its person. */
+export let linkedAll = async (
+  env: Env,
+  platform: Platform,
+  ids: string[],
+): Promise<Map<string, string>> => {
+  let found = new Map<string, string>()
+  if (!platform.user || !ids.length) return found
+  let rows = await read(
     env,
-    line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${id}&.${CONNECTION}.status=connected&*`,
+    line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${ids}&.${CONNECTION}.status=connected&*`,
   )
-  let owner = comp(b, CONNECTION).owner
-  if (!owner) return undefined
+  if (!rows.length) return found
   let { directoryOf } = await need()
   let dir = directoryOf(env.STORE)
-  let space = await dir.at(String(owner))
-  if (!space) return String(owner)
-  let owners = await dir.owners(space)
-  return owners.length == 1 ? owners[0] : undefined
+  for (let b of rows) {
+    let { owner, account } = comp(b, CONNECTION)
+    if (!owner || found.has(String(account))) continue
+    let space = await dir.at(String(owner))
+    if (!space) found.set(String(account), String(owner))
+    else {
+      let owners = await dir.owners(space)
+      if (owners.length == 1) found.set(String(account), owners[0])
+    }
+  }
+  return found
+}
+
+/** Who a platform says is about, kept as the presence of each linked to a
+ * person here (presence.ts); anyone else is nobody we know. */
+let present = async (env: Env, platform: Platform, all: Present[]) => {
+  let status = new Map(all.map((p) => [p.account, p.status]))
+  let people = await linkedAll(env, platform, [...status.keys()])
+  if (!people.size) return
+  let { present } = await import('./presence.ts')
+  type Channel = import('@yaks/notify/presence').Channel
+  for (let [account, person] of people) {
+    await present(env, {
+      person,
+      channel: platform.name as Channel,
+      state: status.get(account)!,
+    })
+  }
 }
 
 /** What a space's Operator settings offer for each platform whose bot
@@ -1028,6 +1062,12 @@ export class Listening {
           ),
         }
         : {},
+      // Who is about, kept for each person here it is (presence.ts).
+      present: bound((p: Present[]) =>
+        present(env, platform, p).catch((e) =>
+          caught(e, { request: `${via} presence`, ...tags })
+        )
+      ),
       report: bound((e: unknown) =>
         caught(e, { request: `${via} socket`, ...tags })
       ),

@@ -1,4 +1,5 @@
 import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
+import { BEAT } from '@yaks/notify/presence'
 import { Time, wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
@@ -3008,14 +3009,23 @@ let hear = (frame) => {
   if (reading) again = true
   doing(o.doing)
 }
+// Where its person is: whether this tab is in view and focused, said on the
+// socket when it changes and every few minutes while open, so their
+// Operator knows to tell them here, notify them, or reach them elsewhere
+// (presence.ts).
+let wire
+let sayTab = () => { if (wire?.readyState == 1) wire.send(JSON.stringify({ tab: { visible: document.visibilityState == 'visible', focused: document.hasFocus() } })) }
+for (let on of ['visibilitychange', 'focus', 'blur']) (on == 'visibilitychange' ? document : window).addEventListener(on, sayTab)
+setInterval(sayTab, ${BEAT})
 let listen = () => {
-  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
+  let socket = wire = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
   let opening = setTimeout(() => socket.close(), WAIT)
   // A socket opening again may follow a deploy, which the page then moves onto
   // (public/deploy.js).
   socket.onopen = () => {
     clearTimeout(opening); live = true
+    sayTab()
     let app = canvas()
     if (app) remake(app.dataset.app)
     if (opened) dispatchEvent(new Event('yak-reconnect'))

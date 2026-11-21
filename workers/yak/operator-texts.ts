@@ -384,6 +384,11 @@ export let textedOperator = async (
   if (response.status == 202) {
     await countedTexts(env, space, costOf(arrival.text))
   }
+  // They were on their phone just now (presence.ts).
+  let { present } = await import('./presence.ts')
+  await present(env, { person, channel: 'text', state: 'used' }).catch((e) =>
+    caught(e, { request: 'text presence' })
+  )
 }
 
 /**
