@@ -1033,7 +1033,11 @@ export let storeApply = (
   check = false,
 ) => {
   if (where(at).length != 2) {
-    throw new CallError('where', `name an app as space/app, not "${at}"`)
+    throw new CallError(
+      'where',
+      `name an app as space/app, not "${at}"; the space's Operator store ` +
+        `is the space alone with --operator: yak admin apply ${at} … --operator`,
+    )
   }
   return graphed(session, 'graph_apply', {
     app: at,

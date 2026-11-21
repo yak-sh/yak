@@ -1576,6 +1576,13 @@ test(
         ),
         new RegExp(`^no app scratch in ${jeff54} — its apps are \\w`),
       )
+      // The Operator's store, named after its page, is told its doors.
+      await assertRejects(
+        () =>
+          agent.tool('app_files', { ...scratch, app: 'operator', op: 'list' }),
+        Error,
+        `self: true, and the platform's admin with yak admin query|apply ${jeff54} --operator`,
+      )
       assertEquals(
         (await agent.tool('app_list', { space: jeff54 })).includes(
           `https://${jeff54}.yaks.app/scratch/`,

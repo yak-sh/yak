@@ -337,6 +337,12 @@ test("a store's rows are answered as data, their eids whole wherever the answer 
           equal(structured(declared, read), { result: rows })
           ok(worded(read).includes(eid))
         }
+        // A space alone is its Operator store's address, with --operator.
+        await assertRejects(
+          () => ask('admin_apply', { where: 'jeff', bundles: rows }),
+          CallError,
+          'yak admin apply jeff … --operator',
+        )
       },
     )
   } finally {

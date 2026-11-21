@@ -252,6 +252,13 @@ let yours = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
       "https://yaks.app, or by accepting an invitation to someone's space."
 }
 
+// The space's Operator store, which a caller names as an app called
+// `operator` after its page (/manage/<space>/operator): the doors it has.
+let ownStore = (space: Space) =>
+  `The Operator's own store is no app: the Operator reads and writes it ` +
+  `with self: true, and the platform's admin with yak admin query|apply ` +
+  `${space.slug} --operator. `
+
 /** The refusal of an app a space does not hold, naming the ones it does. Said
  * only to a member: the caller's seat is admitted first. `apps` is the
  * space's apps where the caller read them already. */
@@ -269,7 +276,9 @@ export let noApp = async (
       held.length
         ? `its apps are ${listed(held)}`
         : 'it has no apps yet; app_new makes one'
-    }. Send space: '${space.slug}' and app: '<app slug from app_list>'. ` +
+    }. ${
+      slug == 'operator' ? ownStore(space) : ''
+    }Send space: '${space.slug}' and app: '<app slug from app_list>'. ` +
       `app_list(space: '${space.slug}') lists active apps and the trash; ` +
       'store_inspect and store_writes also accept the trash eid listed there. ' +
       'Use an active app slug or a trash eid, not a store handle.',
