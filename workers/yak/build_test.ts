@@ -1350,7 +1350,7 @@ test("in a room heard in full, a member's words keep that member's tools, and a 
       entity: { eid: crypto.randomUUID() },
       connection: {
         integration: 'discord-account',
-        owner: o.space.eid,
+        owner: ADA,
         account: 'ann-id',
         status: 'connected',
       },
