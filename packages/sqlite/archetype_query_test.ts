@@ -29,6 +29,19 @@ let vocab = loadVocab([...shop.docs, archetypeDoc, {
     _t: { component: true, type: 'object' },
   },
 }])
+// The entity's archetype as a property a query reads (@yaks/kernel's).
+let archetyped = loadVocab([...vocab.docs, {
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      extends: true,
+      properties: {
+        archetype: { type: 'string', ref: 'archetype', stamped: true },
+      },
+    },
+  },
+}])
 test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
   let driver = mem()
   // Numbered: the golden reads the order a numbered store hands rows back in.
@@ -122,22 +135,26 @@ test('a value compared with a component is refused beside another component', ()
   }
 })
 
+// A store that hides a component from some readers still names its entities
+// by their lettered ids.
+test('a lettered id names its entity where a component is hidden', () => {
+  let v = archetyped
+  let s = storage(mem(), v, { number: { product: 'P' } })
+  s.install()
+  let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'a' }, product: { price: 1 }, marker: {} },
+    { entity: { eid: 'b' }, product: { price: 2 } },
+  ])
+  let named = (visibility: object) =>
+    s.rows('.entity.eid=P-2', { visibility }).map((r) => r.eid)
+  assertEquals(named({ components: { marker: '.entity.eid=a' } }), ['b'])
+})
+
 // A tally groups by the archetype each entity stores, and still answers with
 // the archetype's eid: the count each entity's own archetype adds up to.
 test('a tally by archetype counts each entity under its archetype', () => {
-  // the entity's archetype as a property a query reads (@yaks/kernel's)
-  let v = loadVocab([...vocab.docs, {
-    $defs: {
-      entity: {
-        component: true,
-        type: 'object',
-        extends: true,
-        properties: {
-          archetype: { type: 'string', ref: 'archetype', stamped: true },
-        },
-      },
-    },
-  }])
+  let v = archetyped
   let s = storage(mem(), v)
   s.install()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })

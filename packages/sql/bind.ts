@@ -6024,8 +6024,12 @@ let visible = (
           not(permits(policy, raw('"__visible"."id"'))),
         )
       )
+      // Every spine column but the archetype, which the mask stands in for:
+      // a lettered id reads `prefix` beside `num`.
       cols = [
-        ...['id', 'eid', 'num'].map((p) => raw(`"__visible".${quoted(p)}`)),
+        ...['id', 'eid', 'num', 'prefix'].map((p) =>
+          raw(`"__visible".${quoted(p)}`)
+        ),
         raw('"__visible"."archetype" as "__stored_archetype"'),
         as(
           when([[or(...hidden), lit(null)]], raw('"__visible"."archetype"')),
