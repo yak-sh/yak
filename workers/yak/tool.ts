@@ -185,7 +185,10 @@ export type Tool = {
   // call is about (`space/app` for a release): a door that lets calls outlast
   // it (Ctx `outlast`) runs this one in the object for that key, one per
   // caller (outlast.ts).
-  outlasts?: (args: Args) => string
+  outlasts?: (
+    args: Args,
+    ctx: Ctx,
+  ) => { key: string; patience?: number; progress?: string }
   run: (ctx: Ctx, args: Args) => Promise<Out>
   recover?: (ctx: Ctx, args: Args) => Promise<Out | undefined>
 }

@@ -14,12 +14,6 @@ type Archive = {
     }>
     complete(parts: { partNumber: number; etag: string }[]): Promise<unknown>
   }>
-  get(
-    key: string,
-    options: { range: { offset: number; length: number } },
-  ): Promise<
-    { arrayBuffer(): Promise<ArrayBuffer> } | null
-  >
   put(key: string, content: string): Promise<unknown>
   list(options: { prefix: string; cursor?: string }): Promise<{
     objects: { key: string }[]
@@ -35,15 +29,55 @@ type Box = {
     stdout: string
     stderr: string
   }>
-  writeFile(
-    path: string,
-    content: string,
-    options: { encoding: 'base64' },
-  ): unknown
+}
+type Filesystem = {
+  live(): Promise<boolean>
+  run(mode: string, ...args: string[]): Promise<string>
+  read(): AsyncIterable<Uint8Array>
+  restore(name: string, size: number): Promise<string>
+}
+type Recovery = {
+  prepare(): Promise<void>
+  save(): Promise<void>
+  use<T>(act: () => Promise<T>): Promise<T>
+  stop<T>(act: () => Promise<T>): Promise<T>
+  purge(stop: () => Promise<unknown>): Promise<void>
+  reset(): void
 }
 
 let quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
 let live = (status: string) => status == 'running' || status == 'healthy'
+export let RECOVERY_HOST = 'workbench-recovery.internal'
+export let ARCHIVE_PATH = '/.yak-recovery/snapshot.tar.gz'
+let prefix = (id: string) => `workbench/${id}/`
+let archiveName = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.tar\.gz$/
+
+type Download = {
+  get(key: string): Promise<
+    {
+      body: ReadableStream<Uint8Array>
+      size: number
+    } | null
+  >
+}
+
+/** A container can stream only its own archives through its outbound proxy. */
+export let snapshot = async (
+  bucket: Download,
+  id: string,
+  request: Request,
+): Promise<Response> => {
+  if (request.method != 'GET') return new Response(null, { status: 405 })
+  let name = new URL(request.url).pathname.slice(1)
+  if (!id || !archiveName.test(name)) return new Response(null, { status: 404 })
+  let found = await bucket.get(prefix(id) + name)
+  return found
+    ? new Response(found.body, {
+      headers: { 'Content-Length': String(found.size) },
+    })
+    : new Response(null, { status: 404 })
+}
+
 let PART = 5 * 1024 * 1024
 // R2 answers a part it could not store with an internal error (10001) and
 // asks for it again, so a part is sent up to three times before a save fails.
@@ -68,7 +102,7 @@ export let filesystem = (
   box: Box,
   read: () => AsyncIterable<Uint8Array>,
   root = '/',
-) => {
+): Filesystem => {
   let run = async (mode: string, ...args: string[]) => {
     let result = await box.exec(
       `python3 -c ${quote(script)} ${
@@ -82,14 +116,8 @@ export let filesystem = (
     live: async () => live((await box.getState()).status),
     run,
     read,
-    write: async (offset: number, content: Uint8Array) => {
-      await box.writeFile(
-        `${root == '/' ? '' : root}/.yak-recovery/part`,
-        content.toBase64(),
-        { encoding: 'base64' },
-      )
-      await run('write', String(offset))
-    },
+    restore: (name: string, size: number) =>
+      run('restore', `http://${RECOVERY_HOST}/${name}`, String(size)),
   }
 }
 
@@ -97,7 +125,7 @@ export let filesystem = (
 export let chunks = async function* (
   source: AsyncIterable<Uint8Array>,
   size: number,
-) {
+): AsyncIterable<Uint8Array<ArrayBuffer>> {
   let buffer = new Uint8Array(size)
   let used = 0
   for await (let chunk of source) {
@@ -120,11 +148,11 @@ export let chunks = async function* (
  * archives and receipts have no expiry; the DO holds only the current head.
  * A failed archive or head write leaves the container running. */
 export let recovery = (
-  box: ReturnType<typeof filesystem>,
+  box: Filesystem,
   state: State,
   bucket: Archive,
   id: string,
-) => {
+): Recovery => {
   let { run } = box
   let prepared: Promise<void> | undefined
   let checkpoint: Promise<void> | undefined
@@ -139,14 +167,19 @@ export let recovery = (
       let made = await run(await box.live() ? 'existing' : 'fresh')
       if (made != 'fresh') return
       let head = await state.get<Head>(HEAD)
-      for (let offset = 0; head && offset < head.size; offset += PART) {
-        let object = await bucket.get(head.key, {
-          range: { offset, length: Math.min(PART, head.size - offset) },
+      if (head) {
+        let name = head.key.slice(prefix(id).length)
+        if (!head.key.startsWith(prefix(id)) || !archiveName.test(name)) {
+          throw new Error('workbench snapshot key is invalid')
+        }
+        let started = Date.now()
+        let phases = await box.restore(name, head.size)
+        console.info('workbench restored', {
+          bytes: head.size,
+          ms: Date.now() - started,
+          phases,
         })
-        if (!object) throw new Error(`workbench snapshot missing: ${head.key}`)
-        await box.write(offset, new Uint8Array(await object.arrayBuffer()))
       }
-      if (head) await run('restore')
       await run('ready')
     })().catch((error) => {
       prepared = undefined
@@ -162,7 +195,7 @@ export let recovery = (
           'workbench snapshot size is invalid',
         )
       }
-      let key = `workbench/${id}/${crypto.randomUUID()}`
+      let key = prefix(id) + crypto.randomUUID()
       let upload = await bucket.createMultipartUpload(key + '.tar.gz')
       let parts = []
       let received = 0
@@ -200,7 +233,7 @@ export let recovery = (
         await stop()
         let cursor: string | undefined
         do {
-          let page = await bucket.list({ prefix: `workbench/${id}/`, cursor })
+          let page = await bucket.list({ prefix: prefix(id), cursor })
           if (page.objects.length) {
             await bucket.delete(page.objects.map(({ key }) => key))
           }

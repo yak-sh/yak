@@ -90,7 +90,7 @@ export let outlasting = (keep: Keep, {
       await keep.put(UNREAD, { asked: j.asked, ended: now(), out })
     }
   }
-  return async (run: () => Promise<Ended>): Promise<Heard> => {
+  return async (run: () => Promise<Ended>, wait = patience): Promise<Heard> => {
     if (!job) {
       let mine: Promise<Job> = begin(run).then((j) => {
         j.ended.then((out) => after(0, () => settle(mine, j, out)))
@@ -102,7 +102,7 @@ export let outlasting = (keep: Keep, {
     let cancel = () => {}
     let out = await Promise.race([
       j.ended,
-      new Promise<null>((done) => cancel = after(patience, () => done(null))),
+      new Promise<null>((done) => cancel = after(wait, () => done(null))),
     ])
     cancel()
     if (!out) return { running: j.asked }
@@ -119,6 +119,7 @@ export type Asked = {
   call?: string
   person: string
   who?: Caller
+  patience?: number
 }
 
 /** The objects calls outlast their callers in (index.ts `Outlast`). */
@@ -143,12 +144,15 @@ export let outlasted = async (
   objects: Outlasts,
   key: string,
   asked: Asked,
+  progress?: string,
 ): Promise<Bundle[]> => {
   let name = asked.tool
   let heard = await objects.get(objects.idFromName(key)).call(asked)
   if ('running' in heard) {
     return said(
-      `${name} asked at ${heard.running} is still running, and goes on. ` +
+      (progress ??
+        `${name} asked at ${heard.running} is still running, and goes on.`) +
+        ' ' +
         `Call ${name} again with the same arguments to wait for it and hear ` +
         'how it ended.',
       { running: true, asked: heard.running },

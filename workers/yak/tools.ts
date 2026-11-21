@@ -1,6 +1,7 @@
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { type Line, line as ql } from '@yaks/query'
+import { sha256 } from '@yaks/graph/sha256'
 import { base64, unbase64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
@@ -3446,6 +3447,20 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
   return {
     ...HINTS[t.name],
     name: `sandbox_${t.name}`,
+    ...t.name == 'shell'
+      ? {
+        outlasts: (args: Args, { who }: Ctx) => ({
+          key: sha256(JSON.stringify([
+            who?.spaceEid ?? who?.space,
+            args.space,
+            args.command,
+            args.timeout,
+          ])),
+          patience: 6_000,
+          progress: 'The sandbox is preparing or running your command.',
+        }),
+      }
+      : {},
     input: {
       type: 'object',
       properties: {
@@ -4982,7 +4997,7 @@ let OURS: Row[] = [
     name: 'app_deploy',
     // A compile in a cold container, or again under a compiler rollout, can
     // take longer than a client waits (outlast.ts, T-141686).
-    outlasts: (args) => `${args.space ?? ''}/${args.app}`,
+    outlasts: (args) => ({ key: `${args.space ?? ''}/${args.app}` }),
     // The two examples the code owns, said in its words (tools.yml
     // `app_deploy`): a vocab.json's component and its tool, so the sentence
     // follows the example rather than keeping a copy of it.

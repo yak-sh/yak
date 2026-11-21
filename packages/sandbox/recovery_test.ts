@@ -1,5 +1,11 @@
 import { equal, test, throws } from '@yaks/testing'
-import { chunks, filesystem, recovery } from './recovery.ts'
+import {
+  chunks,
+  filesystem,
+  recovery,
+  RECOVERY_HOST,
+  snapshot,
+} from './recovery.ts'
 
 let fixture = () => {
   let state = new Map<string, unknown>()
@@ -17,12 +23,12 @@ let fixture = () => {
     read: async function* () {
       yield archive
     },
-    write: (offset: number, content: Uint8Array) => {
-      let next = new Uint8Array(offset + content.length)
-      next.set(archive.subarray(0, offset))
-      next.set(content, offset)
-      archive = next
-      return Promise.resolve()
+    restore: (name: string, size: number) => {
+      if (restoreFailure) return Promise.reject(new Error('restore failed'))
+      let content = objects.get(`workbench/person-space/${name}`)!
+      equal(content.length, size)
+      files = new Map(JSON.parse(new TextDecoder().decode(content)))
+      return Promise.resolve('')
     },
     run: (mode: string) => {
       awake = true
@@ -34,10 +40,6 @@ let fixture = () => {
       if (mode == 'save') {
         archive = new TextEncoder().encode(JSON.stringify([...files]))
         return Promise.resolve(String(archive.length))
-      }
-      if (mode == 'restore') {
-        if (restoreFailure) return Promise.reject(new Error('restore failed'))
-        files = new Map(JSON.parse(new TextDecoder().decode(archive)))
       }
       return Promise.resolve('')
     },
@@ -74,15 +76,6 @@ let fixture = () => {
         },
       })
     },
-    get: (key) =>
-      Promise.resolve(
-        objects.has(key)
-          ? {
-            arrayBuffer: () =>
-              Promise.resolve(objects.get(key)!.slice().buffer),
-          }
-          : null,
-      ),
     put: (key, content) => {
       objects.set(key, new TextEncoder().encode(content))
       return Promise.resolve()
@@ -247,26 +240,31 @@ test('archive byte chunks are rebatched intact across file and multipart boundar
   equal(result, [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]])
 })
 
-let large = new Uint8Array(196_608).fill(255)
-test('restoring large archive bytes uses the file API and a bounded command', async () => {
-  let calls: string[] = []
-  let written: Uint8Array | undefined
-  let box = filesystem({
-    getState: () => Promise.resolve({ status: 'healthy' }),
-    exec: (command) => {
-      calls.push(command)
-      return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' })
+test('an outbound archive read streams bytes only from the calling container', async () => {
+  let key = 'a9560c84-ae13-421c-96dc-34bd72357834.tar.gz'
+  let reads: string[] = []
+  let bytes = Uint8Array.of(0, 128, 255)
+  let bucket = {
+    get: (path: string) => {
+      reads.push(path)
+      return Promise.resolve({
+        body: new Blob([bytes]).stream(),
+        size: bytes.length,
+      })
     },
-    writeFile: (_path, content) => {
-      written = Uint8Array.fromBase64(content)
-      return Promise.resolve()
-    },
-  }, async function* () {})
-  await box.write(0, large)
-  equal(written?.length, large.length)
-  equal(written?.[large.length - 1], 255)
-  equal(calls.length, 1)
-  equal(calls[0].length < 8_192, true)
+  }
+  let get = (path: string, method = 'GET') =>
+    snapshot(
+      bucket,
+      'mine',
+      new Request(`http://${RECOVERY_HOST}/${path}`, { method }),
+    )
+  equal((await get(`others/${key}`)).status, 404)
+  equal((await get(key, 'PUT')).status, 405)
+  let reply = await get(key)
+  equal(reply.headers.get('Content-Length'), '3')
+  equal([...await reply.bytes()], [0, 128, 255])
+  equal(reads, [`workbench/mine/${key}`])
 })
 
 test('a snapshot skips entries it cannot read instead of failing', async () => {
@@ -287,7 +285,6 @@ test('a snapshot skips entries it cannot read instead of failing', async () => {
             stderr: text.decode(out.stderr),
           }
         },
-        writeFile: () => undefined,
       },
       async function* () {},
       root,
@@ -320,7 +317,6 @@ test('a snapshot keeps every byte when an interrupted write left the baseline em
             stderr: text.decode(out.stderr),
           }
         },
-        writeFile: () => undefined,
       },
       async function* () {},
       root,

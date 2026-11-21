@@ -224,16 +224,19 @@ export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) => {
     let invocation = { ...ctx, ...(call ? { call } : {}) }
     if (t.outlasts && ctx.outlast && ctx.env.OUTLAST) {
+      let { key, patience, progress } = t.outlasts(args, invocation)
       return outlasted(
         ctx.env.OUTLAST,
-        `${ctx.person}|${t.name}|${t.outlasts(args)}`,
+        `${ctx.person}|${t.name}|${key}`,
         {
           tool: t.name,
           args,
           person: ctx.person,
           ...(call ? { call } : {}),
           ...(ctx.who ? { who: ctx.who } : {}),
+          ...(patience == null ? {} : { patience }),
         },
+        progress,
       )
     }
     return t.run(invocation, args).then((out) =>

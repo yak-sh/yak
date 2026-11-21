@@ -12,17 +12,22 @@
 import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
 import { apex, type Host } from '@yaks/platform/host'
-import { filesystem, recovery } from './recovery.ts'
+import {
+  ARCHIVE_PATH,
+  filesystem,
+  recovery,
+  RECOVERY_HOST,
+  snapshot,
+} from '@yaks/sandbox/recovery'
 
 type Env = Host & {
   KERNEL: {
     send(req: Request, container: string): Promise<Response>
     fault(message: string, container: string): Promise<void>
   }
-  BLOBS: Parameters<typeof recovery>[2]
+  BLOBS: Parameters<typeof recovery>[2] & Parameters<typeof snapshot>[0]
 }
 
-let archive = '/.yak-recovery/snapshot.tar.gz'
 let streamed = async function* (stream: Promise<ReadableStream<Uint8Array>>) {
   for await (let chunk of sdk.streamFile(await stream)) {
     yield typeof chunk == 'string' ? new TextEncoder().encode(chunk) : chunk
@@ -35,9 +40,7 @@ export class Workbench extends sdk.Sandbox<Env> {
     filesystem({
       getState: () => super.getState(),
       exec: (command) => super.exec(command, { timeout: 240_000 }),
-      writeFile: (path, content, options) =>
-        super.writeFile(path, content, options),
-    }, () => streamed(super.readFileStream(archive))),
+    }, () => streamed(super.readFileStream(ARCHIVE_PATH))),
     this.ctx.storage,
     this.env.BLOBS,
     String(this.ctx.id),
@@ -98,8 +101,14 @@ export class Workbench extends sdk.Sandbox<Env> {
 // skip that registration. The hosts are the deployment's (APEX).
 let platform = (req: Request, env: Env, out: { containerId: string }) =>
   env.KERNEL.send(req, out.containerId)
+let restore = (req: Request, env: Env, out: { containerId: string }) =>
+  snapshot(env.BLOBS, out.containerId, req)
 let at = apex(env as Env)
-Workbench.outboundByHost = { [at]: platform, [`*.${at}`]: platform }
+Workbench.outboundByHost = {
+  [at]: platform,
+  [`*.${at}`]: platform,
+  [RECOVERY_HOST]: restore,
+}
 
 export let ContainerProxy = sdk.ContainerProxy
 

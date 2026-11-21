@@ -65,6 +65,9 @@ export class Outlast extends Durable {
     this.#env = env
   }
   call(asked: Asked): Promise<Heard> {
-    return this.enter('call', () => this.#once(() => ran(this.#env, asked)))
+    return this.enter(
+      'call',
+      () => this.#once(() => ran(this.#env, asked), asked.patience),
+    )
   }
 }

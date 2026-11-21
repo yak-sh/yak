@@ -7,6 +7,7 @@
     "./vocab": "./vocab.ts",
     "./docker": "./docker.ts",
     "./cloudflare": "./cloudflare.ts",
+    "./recovery": "./recovery.ts",
     "./bubblewrap": "./bubblewrap.ts",
     "./pve": "./pve.ts",
     "./effects": "./effects.ts",

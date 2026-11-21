@@ -48,9 +48,9 @@ test('a call within patience is answered with its own answer', async () => {
 
 test('a call past patience is still running; the next joins it and hears how it ended', async () => {
   let keep = memory()
-  let { c, call } = calls(keep, 20)
+  let { c, call } = calls(keep, 50)
   let r = runs()
-  let first = call(r.run)
+  let first = call(r.run, 20)
   await c.advance(20)
   equal(await first, { running: zero })
   let joined = call(r.run)
@@ -119,6 +119,17 @@ test('the door says a late answer was asked earlier, and a refusal stays one', a
     running: true,
     asked: 'T',
   })
+  let [preparing] = await outlasted(
+    objects({ running: 'T' }),
+    'k',
+    { ...asked, tool: 'sandbox_shell' },
+    'The sandbox is preparing or running your command.',
+  )
+  equal(
+    (preparing.content as { body: string }).body,
+    'The sandbox is preparing or running your command. Call sandbox_shell ' +
+      'again with the same arguments to wait for it and hear how it ended.',
+  )
   let refused = await outlasted(
     objects({ refused: { code: 'limit', text: 'no' }, asked: 'T' }),
     'k',

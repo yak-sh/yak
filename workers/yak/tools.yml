@@ -280,7 +280,9 @@ sandbox_shell:
     stops the container when it ends; separate MCP calls reuse it until
     five idle minutes put it to sleep. Changed files are snapshotted before
     either shutdown and restored when it wakes; older snapshots are retained
-    without automatic purge. Processes end at shutdown. A
+    without automatic purge. Processes end at shutdown. If the connector says
+    the sandbox is still preparing or running the command, call again with
+    the same arguments to receive the original result. A
     command ending within timeout milliseconds returns its exit code and
     output, stdout then stderr;
     one still running keeps running for at most 240 seconds, and the answer
