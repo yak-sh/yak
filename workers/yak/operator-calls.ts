@@ -754,9 +754,14 @@ export let ASK = {
   },
 }
 
-// Who a talking model is and how it sounds, said to both kinds.
-let butler = (name: string) =>
-  `You are ${name}, a person's Operator on yaks.app, on the phone with them. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Your greeting says their name; after it, a person on the phone hardly says the other's name again, and nor do you: leave it out of your answers, even where your notes or the Operator's words use it.`
+// Who a talking model is and how it sounds, said to both kinds: on the
+// phone with one person, or in a chat platform's voice room with several.
+let butler = (name: string, room?: string) =>
+  `You are ${name}, a person's Operator on yaks.app, ${
+    room
+      ? `in a ${room} voice room with the people there`
+      : 'on the phone with them'
+  }. Speak like a refined British butler: cool, calm, professional, and brisk: a sentence or two, each short, in plain speech. Your greeting says their name; after it, a person on the phone hardly says the other's name again, and nor do you: leave it out of your answers, even where your notes or the Operator's words use it.`
 
 // What a turned model is told of what to answer and how it asks.
 let TURNED =
@@ -770,11 +775,24 @@ Interruption policy: When they talk over you with words that say something, stop
 
 Delegation policy: Your backend is the Operator's own work, which can do anything they could ask of you in writing. Delegate at once whenever they want something done, found, remembered or changed, and for any question your notes do not answer, with no words first when the answer should come quickly. Do not delegate greetings, thanks, goodbyes and small talk; fillers such as oh or hm; acknowledgements such as okay, yep, right, cool or got it; a laugh; or a reaction or remark such as "that's odd" or "we still have work to do": to these say a word or two, and never ask what they meant. Do not delegate a question about how things stand that your notes answer, such as what you are working on and how far it got, whether anything needs them, which apps they have, or what was said before: answer it yourself, at once. You are told the newest of your conversation with them and the work you have going for them, and told the work again as it moves. Never do anything yourself, and never say you cannot do something: delegate. Never speak of the backend or of anyone else doing the work. Say what it answers in your own voice, as briefly as it allows. Never guess what it would know.`
 
+// What a talking model in a voice room is told of when to speak: people
+// there talk with each other as much as with it (Jeff, T-1650: "it may
+// mostly be listening and only responding if mentioned or it's clear he
+// should talk").
+let ROOM = (name: string) =>
+  `Several people talk here, with each other as much as with you, and you are told who starts speaking. Most of what is said is not for you: say nothing and keep listening unless you are named (${name}), asked something directly, or it is plainly your turn, such as a question put to you or to the room that nobody else takes up. Someone thinking aloud or telling an idea at length is heard out, never answered sentence by sentence: listen until they hand you the turn. When you answer, answer the one who spoke to you.`
+
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator does the work, through `ask`, or for a `duplex` model, which has
- * no tools of its own, through the work it hands over. */
-export let instructed = (name: string, duplex = false) =>
-  duplex ? `${butler(name)}\n\n${DUPLEX}` : `${butler(name)} ${TURNED}`
+ * no tools of its own, through the work it hands over; in a voice room
+ * (`room`, its platform), when to speak at all. */
+export let instructed = (name: string, duplex = false, room?: string) =>
+  [
+    duplex
+      ? `${butler(name, room)}\n\n${DUPLEX}`
+      : `${butler(name, room)} ${TURNED}`,
+    ...room ? [ROOM(name)] : [],
+  ].join('\n\n')
 
 /** What a larger model a talking model hands hard requests to on its
  * provider's side is told: that it works for the caller's Operator on a live
@@ -1140,6 +1158,10 @@ export let calling = async (
   }
   let looked = looks(glance)
   let name = space.operator ?? 'the Operator'
+  // The platform whose voice room the call is, which changes when it speaks.
+  let roomTitle = ticket.room
+    ? (await import('./chat.ts')).PLATFORMS.get(ticket.room.via)?.title
+    : undefined
   let tools = [ASK, ...looked.map(({ read: _, ...tool }) => tool)]
   // A duplex model whose Operator picked a larger model on its provider's
   // side hands its work there, offered the Operator's own tools through the
@@ -1163,7 +1185,7 @@ export let calling = async (
     tools: Tool[]
     backend?: Backend
   } = {
-    instructions: `${instructed(name, setup.duplex)}\n\n${FIXED}`,
+    instructions: `${instructed(name, setup.duplex, roomTitle)}\n\n${FIXED}`,
     tools,
     ...own
       ? {

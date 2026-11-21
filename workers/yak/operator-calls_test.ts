@@ -26,6 +26,7 @@ import {
   type Around,
   converse,
   greeting,
+  instructed,
   MINUTES,
   saying,
   streamDoor,
@@ -759,6 +760,17 @@ let talkingCall = (
     streamed,
   }
 }
+
+// In a voice room the model is with several people, and mostly listens; on
+// the phone it is with one, and told nothing of rooms.
+test('a voice room tells the talking model it is with several people and speaks only when it is its turn', () => {
+  let room = instructed('Ember', false, 'Discord')
+  equal(room.includes('in a Discord voice room with the people there'), true)
+  equal(room.includes('unless you are named (Ember)'), true)
+  let phone = instructed('Ember')
+  equal(phone.includes('on the phone with them'), true)
+  equal(phone.includes('voice room'), false)
+})
 
 // In a voice room, who began speaking reaches the call, which tells its model
 // who it hears and keeps what it heard as theirs.
