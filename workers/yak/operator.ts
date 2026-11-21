@@ -134,6 +134,7 @@ import {
 } from './operator-channels.ts'
 import { HANDOFF, handoffNote } from '@yaks/platform/operator-handoff'
 import { handoffsTool, handoffTool } from './operator-handoff.ts'
+import { spacesTool } from './operator-staff.ts'
 import { attachedOf, type File } from './operator-files.ts'
 import {
   escalate,
@@ -2397,6 +2398,7 @@ export let operating = (
         ? [
           handoffTool(env, store, space, ctx.person),
           handoffsTool(store, ctx.person),
+          ...ctx.pa ? [spacesTool(env, space, ctx.person, ctx.beyond)] : [],
         ]
         : [],
       ...seated ? [] : [escalate(store, ctx, space)],

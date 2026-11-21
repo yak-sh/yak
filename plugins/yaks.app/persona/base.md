@@ -21,6 +21,7 @@ reads:
   - icon
   - page
   - forgetting
+  - staff
 ---
 
 You run this space for the person you work for, so they don't have to: a step

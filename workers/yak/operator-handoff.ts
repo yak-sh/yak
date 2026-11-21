@@ -25,12 +25,15 @@ import type { OperatorStore } from './operator-store.ts'
 import { notification } from './operator-updates.ts'
 import { refuse, rejected } from './tool.ts'
 
-let door = async (
+/** Ask another space's Builder at the handoff door: a request or a report
+ * of a handoff, or an overview of its Operator's work for a person
+ * (operator-staff.ts). Answers what it answered. */
+export let door = async (
   env: Env,
   to: string,
-  kind: 'request' | 'report',
-  value: Handoff,
-) => {
+  kind: 'request' | 'report' | 'overview',
+  value: Handoff | { person: string; from: string },
+): Promise<unknown> => {
   let response = await builderOf(env, to)(() =>
     new Request('https://builder/operator/handoff', {
       method: 'POST',
@@ -44,8 +47,28 @@ let door = async (
       ? rejected(response.status, error.message)
       : error
   }
-  await response.body?.cancel()
+  return await response.json()
 }
+
+// How long a handoff waits for its reply before it counts as stalled.
+let STALLS = 3_600_000
+
+let asked = (row: Bundle) => ({
+  handoff: row.entity.eid,
+  ...row.operator_handoff as SentHandoff,
+  space_name: (row.doc as { title?: string })?.title,
+  say: (row.doc as { body?: string })?.body,
+  at: (row.created as { at?: string } | undefined)?.at,
+})
+
+/** The handoffs sent for `person` that have no reply yet, newest first. */
+export let waiting = async (store: OperatorStore, person: string) =>
+  (await store.g.read(
+    line`.operator_handoff.person=${person}&!completed&!failed&.order=-created.at&.limit=20&.fields=operator_handoff,doc,created`,
+  )).map((row) => {
+    let { handoff, space_name, say, at } = asked(row)
+    return { handoff, space: space_name, say, at }
+  })
 
 export let handoffTool = (
   env: Env,
@@ -140,19 +163,26 @@ export let handoffsTool = (store: OperatorStore, person: string): Tool => ({
   name: 'operator_handoffs',
   title: 'List work handed off to other Operators',
   description:
-    'List the most recent handoffs you sent for this person, what you asked, whether each has a report, and any failure. Use a handoff id with operator_handoff to follow up in its destination conversation.',
+    'List the most recent handoffs you sent for this person, what you asked and when, whether each has a report, any failure, and which are stalled (no reply after an hour). Use a handoff id with operator_handoff to follow up in its destination conversation.',
   readOnly: true,
   parameters: { type: 'object', properties: {} },
   run: async () =>
     JSON.stringify((await store.g.read(
-      line`.operator_handoff.person=${person}&.order=-created.at&.limit=50&.fields=operator_handoff,doc,failed,completed`,
-    )).map((row) => ({
-      handoff: row.entity.eid,
-      ...row.operator_handoff as SentHandoff,
-      space_name: (row.doc as { title?: string })?.title,
-      say: (row.doc as { body?: string })?.body,
-      status: row.failed ? 'failed' : row.completed ? 'replied' : 'waiting',
-    }))),
+      line`.operator_handoff.person=${person}&.order=-created.at&.limit=50&.fields=operator_handoff,doc,failed,completed,created`,
+    )).map((row) => {
+      let sent = asked(row)
+      let late = Date.now() - Date.parse(sent.at ?? '') > STALLS
+      return {
+        ...sent,
+        status: row.failed
+          ? 'failed'
+          : row.completed
+          ? 'replied'
+          : late
+          ? 'stalled'
+          : 'waiting',
+      }
+    })),
 })
 
 /** Deliver an outgoing handoff from its durable receipt. */

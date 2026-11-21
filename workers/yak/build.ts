@@ -370,7 +370,18 @@ export class Builder extends Durable {
               await this.#arming
               return Response.json({ ok: true })
             }
-            return no(400, 'Choose a handoff request or report.')
+            if (kind == 'overview') {
+              let { acceptOverview } = await import('./operator-staff.ts')
+              return Response.json(
+                await acceptOverview(
+                  this.#env,
+                  store,
+                  space,
+                  message as unknown as { person: string; from: string },
+                ),
+              )
+            }
+            return no(400, 'Choose a handoff request, report or overview.')
           }
           // What happened in the space, for its people's Updates
           // (operator-updates.ts `tell`).
