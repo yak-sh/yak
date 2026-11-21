@@ -22,11 +22,13 @@ import {
   arrived,
   choose,
   connected,
+  directTo,
   offers,
   PLATFORMS,
   reached,
   recent,
   renamed,
+  sayDirect,
   type Server,
 } from './chat.ts'
 import { chatCard } from './operator-page.ts'
@@ -258,6 +260,10 @@ let discordApi = (asked: string[]): typeof fetch => (input, init) => {
   let path = url.replace('https://discord.com/api/v10/', '')
   if (path == url) return Promise.reject(new Error(`no network: ${url}`))
   asked.push(`${init?.method ?? 'GET'} ${path}`)
+  if (path == 'users/@me/channels') {
+    let { recipient_id } = JSON.parse(String(init?.body))
+    return Promise.resolve(Response.json({ id: `dm-${recipient_id}` }))
+  }
   let room = path.split('/')[1]
   if (path.includes('/messages?')) {
     return Promise.resolve(Response.json([{
@@ -381,6 +387,55 @@ test('an app that uses the connection hears its server, and answers only into it
       'GET channels/general',
       'GET channels/lobby',
       'POST channels/general/messages',
+    ])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+// The Operator writes to one of its people alone (chat.ts `directTo`,
+// `sayDirect`): to the Discord account they linked, by the bot of the
+// space's own connection there.
+test("a person is written to directly at the account they linked, by their space's bot", async () => {
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let space = crypto.randomUUID(), ann = crypto.randomUUID()
+  let bot = crypto.randomUUID()
+  let connection = (integration: string, owner: string, account: string) => ({
+    entity: { eid: integration == 'discord' ? bot : crypto.randomUUID() },
+    connection: { integration, owner, account, status: 'connected' },
+  })
+  await meta(p.env).apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    connection('discord', space, 'barn'),
+    connection('discord-account', ann, 'ann-on-discord'),
+  ], KERNEL)
+  let to = await directTo(p.env, 'discord', space, ann)
+  assertEquals(to, {
+    via: 'discord',
+    connection: bot,
+    account: 'ann-on-discord',
+  })
+  assertEquals(
+    await directTo(p.env, 'discord', space, crypto.randomUUID()),
+    undefined,
+  )
+  assertEquals(
+    await directTo(p.env, 'discord', crypto.randomUUID(), ann),
+    undefined,
+  )
+  let asked: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = discordApi(asked)
+  try {
+    assertEquals(await sayDirect(p.env, to!, 'Your report is ready.'), {
+      id: 'p1',
+    })
+    assertEquals(asked, [
+      'POST users/@me/channels',
+      'POST channels/dm-ann-on-discord/messages',
     ])
   } finally {
     globalThis.fetch = was

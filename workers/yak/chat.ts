@@ -577,6 +577,70 @@ export let linkedAll = async (
   return found
 }
 
+/** Where the Operator of a space writes to one of its people alone on a
+ * platform: the platform (`via`), the space's connection whose bot speaks
+ * for it there, and the person's account there. */
+export type Direct = { via: string; connection: string; account: string }
+
+/** Where `space`'s Operator writes to `person` directly on `via`
+ * ({@link Direct}): the account linked to them there, the other way round
+ * from {@link linkedAll} (one they hold, or one `space` holds while they are
+ * its only owner), and the bot of a connection `space` holds there, its own
+ * or yaks.app's. None when the platform writes to no one directly, or either
+ * is missing. */
+export let directTo = async (
+  env: Env,
+  via: string,
+  space: string,
+  person: string,
+): Promise<Direct | undefined> => {
+  let p = PLATFORMS.get(via)
+  if (!p?.direct || !p.user) return undefined
+  let { ctxOf, directoryOf, installed } = await need()
+  let chats = new Set(
+    (await installed(ctxOf(env).graph.read)).filter((i) => i.chat == via)
+      .map((i) => i.name),
+  )
+  let rows = await read(
+    env,
+    line`.${CONNECTION}.owner=${[
+      person,
+      space,
+    ]}&.${CONNECTION}.status=connected&*`,
+  )
+  let bot = rows.find((b) =>
+    comp(b, CONNECTION).owner == space &&
+    chats.has(String(comp(b, CONNECTION).integration))
+  )
+  let accounts = rows.filter((b) =>
+    comp(b, CONNECTION).integration == p.user && comp(b, CONNECTION).account
+  )
+  let theirs = async () => {
+    let dir = directoryOf(env.STORE)
+    let s = await dir.at(space)
+    let owners = s ? await dir.owners(s) : []
+    return owners.length == 1 && owners[0] == person
+  }
+  let mine = accounts.find((b) => comp(b, CONNECTION).owner == person) ??
+    (accounts.length && await theirs() ? accounts[0] : undefined)
+  if (!bot || !mine) return undefined
+  return {
+    via,
+    connection: bot.entity.eid,
+    account: String(comp(mine, CONNECTION).account),
+  }
+}
+
+/** Say `text` to the person at `to` alone, through the bot that speaks for
+ * its connection, cut to what one message there may carry. Refused as the
+ * platform refuses it (@yaks/chat `Unreachable`, `Unsent`). */
+export let sayDirect = async (env: Env, to: Direct, text: string) => {
+  let p = PLATFORMS.get(to.via)
+  if (!p?.direct) throw new Error(`${to.via} writes to no one directly`)
+  let said = text.length > p.limit ? text.slice(0, p.limit - 1) + '…' : text
+  return p.direct(await speaker(env, p, to.connection), to.account, said)
+}
+
 /** Who a platform says is about, kept as the whereabouts of each linked to a
  * person here (whereabouts.ts); anyone else is nobody we know. */
 let present = async (env: Env, platform: Platform, all: Present[]) => {

@@ -6,7 +6,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import type { Present, Said, Seated } from '@yaks/chat'
 import { holder, type Wire } from '@yaks/chat/socket'
 import { Unsent } from '@yaks/host/senders'
-import { linked } from '@yaks/chat'
+import { linked, Unreachable } from '@yaks/chat'
 import { discord, everyone, gateway, INTENTS, links, NEEDED } from './mod.ts'
 
 let ME = '900'
@@ -291,6 +291,39 @@ test('a rate limit is tried again after what Discord says; a refusal is thrown',
       ),
     Error,
     'Discord refused the reply: 403 Missing Access',
+  )
+})
+
+test("direct opens the person's direct room and posts there, pinging nobody", async () => {
+  let seen: { url: string; body: unknown }[] = []
+  let f = ((url: string, init: RequestInit) => {
+    seen.push({ url, body: JSON.parse(String(init.body)) })
+    let body = url.endsWith('/users/@me/channels') ? { id: 'dm' } : { id: 'm' }
+    return Promise.resolve(new Response(JSON.stringify(body)))
+  }) as unknown as typeof fetch
+  assertEquals(await discord.direct!('T', 'u1', 'Hi.', f), { id: 'm' })
+  assertEquals(seen, [
+    {
+      url: 'https://discord.com/api/v10/users/@me/channels',
+      body: { recipient_id: 'u1' },
+    },
+    {
+      url: 'https://discord.com/api/v10/channels/dm/messages',
+      body: { content: 'Hi.', allowed_mentions: { parse: [] } },
+    },
+  ])
+})
+
+test('a person the bot may not write to directly is unreachable', async () => {
+  let refusing = rest(403, { message: 'Cannot send messages to this user' })
+  await assertRejects(
+    () => discord.direct!('T', 'u1', 'Hi.', refusing.f),
+    Unreachable,
+    'Cannot send messages to this user',
+  )
+  await assertRejects(
+    () => discord.direct!('T', 'u1', 'Hi.', rest(503, {}).f),
+    Unsent,
   )
 })
 

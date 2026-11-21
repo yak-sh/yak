@@ -5,11 +5,14 @@
 // row): a notification on each browser they allowed (@yaks/push); a text to
 // the number they agreed to, paid from the space's budget like every text; an
 // email from the Operator's address, counted against the space's mail; or
-// nothing more than Updates. A reply to a text or an email reaches the
+// nothing more than Updates. Someone on Discord and away from yaks.app is
+// written to there directly instead, by the bot that speaks for the space,
+// when their Discord account is linked. A reply to a text or an email reaches the
 // Operator as any text or email from them does. What a person writes, and
 // what is told to everyone in a space, stays in Updates.
 import { type Reach, reachBy } from '@yaks/notify/whereabouts'
 import type { Bundle, Comp } from '@yaks/graph'
+import { Unreachable } from '@yaks/chat'
 import { Blocked } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
 import {
@@ -36,6 +39,7 @@ import {
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
+import type { Direct } from './chat.ts'
 import type { OperatorStore } from './operator-store.ts'
 
 type Store = OperatorStore
@@ -43,11 +47,15 @@ type Store = OperatorStore
 /** The ways a person may choose to be alerted. */
 export let ALERTING = ['push', 'text', 'email', 'updates'] as const
 export type Alerting = typeof ALERTING[number]
-/** Where one alert goes: the browsers allowed, a number agreed to, or an
- * address. */
+/** A way an alert goes: one a person may choose, or Discord, where they are
+ * written to while they are on it and away from yaks.app. */
+export type Way = Alerting | 'discord'
+/** Where one alert goes: the browsers allowed, a number agreed to, an
+ * address, or their Discord account. */
 export type Route =
   | { by: 'push'; to: Subscription[] }
   | { by: 'text' | 'email'; to: string }
+  | { by: 'discord'; to: Direct }
 
 // What each choice falls back to when it is gone, in order.
 let ORDER = {
@@ -82,7 +90,7 @@ export let routeOf = (
   texting: Pick<Texting, 'number'> | null,
   email: string | null,
   pushes: Subscription[] = [],
-  except?: Alerting,
+  except?: Way,
 ): Route | null => {
   let wanted = chosen ?? (texting ? 'text' : 'email')
   if (wanted == 'updates') return null
@@ -96,16 +104,19 @@ export let routeOf = (
 }
 
 /** Where an alert written at `at` reaches `person` now, as the directory
- * has them. A browser allowed after it was written is not told it: turning
- * alerts on brings what happens next, never what was already owed. `except`
- * skips a channel that refused this alert. */
+ * has them and as where they are changes it (`present`): on Discord, `direct`
+ * where their account there is reached, else the way they chose. A browser
+ * allowed after it was written is not told it: turning alerts on brings what
+ * happens next, never what was already owed. `except` skips a channel that
+ * refused this alert. */
 export let routeFor = async (
   dir: Directory,
   person: string,
   at?: string,
-  except?: Alerting,
+  except?: Way,
   reach?: Reach,
-) => {
+  direct?: Direct,
+): Promise<Route | null> => {
   let [chosen, texting, email, pushes] = await Promise.all([
     dir.alerts(person),
     dir.texting(person),
@@ -113,8 +124,12 @@ export let routeFor = async (
     dir.pushes(person),
   ])
   let before = at ? pushes.filter((b) => !b.since || b.since <= at) : pushes
+  let way = present(chosen, reach)
+  if (way == 'discord' && direct && except != 'discord') {
+    return { by: 'discord', to: direct }
+  }
   return routeOf(
-    present(chosen, reach),
+    way == 'discord' ? chosen : way,
     texting,
     email,
     before.map(subscription),
@@ -126,8 +141,8 @@ export let routeFor = async (
  * The way chosen, as where the person is now changes it (whereabouts.ts
  * `reachBy`): looking at this Operator's tab, nothing is sent, as the tab
  * shows it; with the tab in the background or elsewhere on yaks.app, a
- * browser notification first. Someone who chose Updates alone is never sent
- * anything.
+ * browser notification first; on Discord and away from yaks.app, a direct
+ * message there. Someone who chose Updates alone is never sent anything.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -136,16 +151,20 @@ export let routeFor = async (
  * equal(present('text', 'notification'), 'push')
  * equal(present('updates', 'notification'), 'updates')
  * equal(present('email', 'usual'), 'email')
+ * equal(present(null, 'discord'), 'discord')
+ * equal(present('updates', 'discord'), 'updates')
  * ```
  */
 export let present = (
   chosen: Alerting | null,
   reach?: Reach,
-): Alerting | null =>
+): Way | null =>
   chosen == 'updates' || reach == 'tab'
     ? 'updates'
     : reach == 'notification'
     ? 'push'
+    : reach == 'discord'
+    ? 'discord'
     : chosen
 
 // A browser as a push goes to it, without when it was allowed.
@@ -314,16 +333,16 @@ export let alert = async (
   if (!space || space.trashed || !to || to == space.eid || !words) return
   let written = String(part(row, 'created')?.at ?? '') || undefined
   // Where they are now: in the tab, it is there already; with the tab in the
-  // background, a notification (whereabouts.ts).
+  // background, a notification; on Discord alone, a message there
+  // (whereabouts.ts).
   let { seen } = await import('./whereabouts.ts')
   let now = await seen(env, to, space.eid)
-  let route = await routeFor(
-    dir,
-    to,
-    written,
-    undefined,
-    now && reachBy(now),
-  )
+  let reach = now ? reachBy(now) : undefined
+  let { directTo } = await import('./chat.ts')
+  let direct = reach == 'discord'
+    ? await directTo(env, 'discord', space.eid, to)
+    : undefined
+  let route = await routeFor(dir, to, written, undefined, reach, direct)
   if (!route) return
   let note = { words, subject, id: eid, about: told.about, asks, at: written }
   let outcome: Bundle[]
@@ -361,10 +380,11 @@ type Note = {
   at?: string
 }
 
-// An alert on its way: a notification on each browser allowed, a text, or a
-// letter with a link to their Updates, given back as the rows that write it
-// for @yaks/mail to send. When every browser allowed is gone, it goes the way
-// they are reached next.
+// An alert on its way: a notification on each browser allowed, a message on
+// Discord, a text, or a letter with a link to their Updates, given back as
+// the rows that write it for @yaks/mail to send. When every browser allowed
+// is gone, or Discord will not take it, it goes the way they are reached
+// next.
 let sent = async (
   env: Env,
   store: Store,
@@ -394,6 +414,27 @@ let sent = async (
     if (next) return sent(env, store, dir, space, person, next, note)
     if (refused) throw refused
     throw refuse('gone', 'No browser they allowed takes notifications now.')
+  }
+  if (route.by == 'discord') {
+    let { sayDirect } = await import('./chat.ts')
+    let open = answer ??
+      openAt(url(env, chatPath(space.slug)), updates, note.about)
+    let said = subject ? `${subject}\n\n${words}` : words
+    try {
+      await sayDirect(env, route.to, `${said}\n\n${open}`)
+      return undefined
+    } catch (error) {
+      if (error instanceof Unsent) throw error
+      if (!(error instanceof Unreachable)) {
+        caught(error, { request: 'operator alert', channel: 'discord' })
+      }
+    }
+    let next = await routeFor(dir, person, note.at, 'discord')
+    if (next) return sent(env, store, dir, space, person, next, note)
+    throw refuse(
+      'gone',
+      'Discord would not take it, and they chose no other way.',
+    )
   }
   if (route.by == 'text') {
     let { textPerson } = await import('./operator-texts.ts')

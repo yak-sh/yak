@@ -41,6 +41,16 @@ export type Addressed = 'mention' | 'reply' | 'direct'
 /** A reply to post into a room, answering a message where it names one. */
 export type Reply = { room: string; text: string; reply_to?: string }
 
+/** A refusal that knows the bot may not write to that person directly: they
+ * take no direct messages from it, or share no server with it. It says
+ * where they are not reached, not that anything broke. */
+export class Unreachable extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'Unreachable'
+  }
+}
+
 /** What a platform answers when it took a reply: its id for it. */
 export type Posted = { id?: string }
 
@@ -143,6 +153,16 @@ export type Platform = {
   send: (
     credential: string,
     reply: Reply,
+    fetch?: typeof globalThis.fetch,
+  ) => Promise<Posted>
+  /** say `text` to the person whose id there is `user` alone, from the bot
+   * with `credential`, where the platform lets a bot write to someone
+   * directly: their direct room is opened and posted to. One the platform
+   * will not let the bot reach is {@link Unreachable} */
+  direct?: (
+    credential: string,
+    user: string,
+    text: string,
     fetch?: typeof globalThis.fetch,
   ) => Promise<Posted>
   /** the platform's id for the server a room belongs to, as the bot with

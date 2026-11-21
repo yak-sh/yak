@@ -419,3 +419,22 @@ test('an alert the space cannot pay for is bounced with the reason, and nothing 
     'texts go again',
   )
 })
+
+// On Discord and away from yaks.app (whereabouts.ts `reachBy`), an alert is
+// a message there when their account is reached, else goes their usual way.
+test('someone on Discord alone is written to there, else reached the usual way', async () => {
+  let direct = { via: 'discord', connection: 'c', account: 'ann' }
+  let usual = await routeFor(dir, person)
+  assertEquals(
+    await routeFor(dir, person, undefined, undefined, 'discord', direct),
+    { by: 'discord', to: direct },
+  )
+  assertEquals(
+    await routeFor(dir, person, undefined, undefined, 'discord'),
+    usual,
+  )
+  assertEquals(
+    await routeFor(dir, person, undefined, 'discord', 'discord', direct),
+    usual,
+  )
+})

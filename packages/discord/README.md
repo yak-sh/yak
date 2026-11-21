@@ -28,6 +28,11 @@ reply with the REST API. `discord` is the `Platform` both make.
 - **A reply** answers the message it names, when there still is one, and pings
   nobody. A 429 or 5xx is `Unsent`, tried again after what Discord says.
 
+- **A direct message** (`direct(token, user, text)`) opens the person's direct
+  room (POST `/users/@me/channels`) and posts to it, pinging nobody. Discord
+  refuses someone who shares no server with the bot or takes no direct messages
+  from it (403), which is `Unreachable`.
+
 - **A room's server** is what Discord says of the channel
   (`server(token, room)`, GET `/channels/{id}`): its guild, none for a direct
   one.

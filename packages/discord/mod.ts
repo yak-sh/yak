@@ -11,6 +11,7 @@ import type {
   Linker,
   Page,
   Platform,
+  Posted,
   Present,
   Room,
   Said,
@@ -18,6 +19,7 @@ import type {
   Socket,
   Step,
 } from '@yaks/chat'
+import { Unreachable } from '@yaks/chat'
 import { Unsent } from '@yaks/host/senders'
 
 let API = 'https://discord.com/api/v10'
@@ -307,11 +309,12 @@ let afresh = (s: Session): Session => ({
 })
 
 // What Discord answered a call with, read: a 429 or a 5xx never took it, so
-// it is {@link Unsent}, tried again after what Discord says; any other
+// it is {@link Unsent}, tried again after what Discord says; a 403 where
+// `said.closed` names who was not reached is {@link Unreachable}; any other
 // refusal is thrown with Discord's own words.
 let answer = async <T>(
   res: Response,
-  said: { unsent: string; refused: string },
+  said: { unsent: string; refused: string; closed?: string },
 ): Promise<T> => {
   let body = await res.json().catch(() => ({})) as T & {
     message?: string
@@ -321,6 +324,11 @@ let answer = async <T>(
     throw new Unsent(
       `${said.unsent}: ${res.status}`,
       Math.ceil((body.retry_after ?? 1) * 1000),
+    )
+  }
+  if (res.status == 403 && said.closed) {
+    throw new Unreachable(
+      `${said.closed}: ${body.message ?? 'Discord refused'}`.trim(),
     )
   }
   if (!res.ok) {
@@ -358,6 +366,46 @@ export let send: Platform['send'] = async (token, reply, fetcher = fetch) => {
     unsent: 'Discord did not take the reply',
     refused: 'Discord refused the reply',
   })
+  return { id }
+}
+
+/** Say `text` to the person `user` in a direct message from the bot with
+ * `token`, pinging nobody: their direct room is opened
+ * (POST /users/@me/channels) and posted to. Discord refuses one who shares
+ * no server with the bot or takes no direct messages from it (403, 50007),
+ * which is {@link Unreachable}; a 429 or a 5xx is {@link Unsent}. */
+export let direct = async (
+  token: string,
+  user: string,
+  text: string,
+  fetcher: typeof fetch = fetch,
+): Promise<Posted> => {
+  let headers = { ...bot(token), 'content-type': 'application/json' }
+  let closed = `Discord will not let the bot write to ${user} directly`
+  let room = await answer<{ id: string }>(
+    await fetcher(`${API}/users/@me/channels`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ recipient_id: user }),
+    }),
+    {
+      unsent: 'Discord did not open the direct room',
+      refused: `Discord refused to open a direct room with ${user}`,
+      closed,
+    },
+  )
+  let { id } = await answer<{ id?: string }>(
+    await fetcher(`${API}/channels/${room.id}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: text, allowed_mentions: { parse: [] } }),
+    }),
+    {
+      unsent: 'Discord did not take the direct message',
+      refused: 'Discord refused the direct message',
+      closed,
+    },
+  )
   return { id }
 }
 
@@ -719,6 +767,7 @@ export let discord: Platform = {
   user: 'discord-account',
   socket: gateway as (token: string) => Socket<unknown>,
   send,
+  direct,
   server,
   rooms,
   recent,
