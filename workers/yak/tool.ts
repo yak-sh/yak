@@ -39,8 +39,8 @@ import { wrote } from './lib/hops.ts'
 export type Ctx = {
   env: Env
   dir: Directory
-  /** Start a new authorization operation; no standing crosses this boundary. */
-  reopen?: () => Directory
+  /** Open a directory view. After a write, refresh its reach too. */
+  reopen?: (fresh?: boolean) => Directory
   person: string
   /** Whether this channel can reach the person’s connected MCP servers. Unsaid
    * at a door, where a credential narrowed to one space reaches none
@@ -112,7 +112,7 @@ export type Entered = {
 /** Discard only the directory view, never carry its role or app into the next
  * operation. Callers must acquire both again before doing authorized work. */
 export let renew = (ctx: Ctx) => {
-  if (ctx.reopen) ctx.dir = ctx.reopen()
+  if (ctx.reopen) ctx.dir = ctx.reopen(true)
 }
 
 /** This caller at one permission level. A door's verified credential names
@@ -634,7 +634,7 @@ export let reacquire = async (
   trash = false,
 ) => {
   for (let attempt = 0;; attempt++) {
-    let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    let scope = { ...ctx, dir: ctx.reopen?.(true) ?? ctx.dir }
     try {
       let now = await scope.dir.target(previous.eid, ctx.person, held?.eid)
       let { space } = now

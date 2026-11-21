@@ -285,15 +285,21 @@ let opened = (
   open: () => Directory,
   reach: ReturnType<typeof reachOf>,
   instrument?: string,
+  local = false,
 ) => {
-  let reopen = () =>
-    narrowed(
-      open(),
+  let reopen = (fresh = false) => {
+    let dir = open()
+    let current = fresh && !local
+      ? reachOf(dir, { eid }, held.person, held.administrative)
+      : reach
+    return narrowed(
+      dir,
       undefined,
       eid,
       held.administrative,
-      reach.then((r) => r.beyond),
+      local ? [] : current.then((r) => r.beyond),
     )
+  }
   let who: Caller = {
     person: held.person,
     via: 'session',
@@ -320,7 +326,7 @@ let opened = (
     beyond,
     who: {
       ...who,
-      ...beyond.length ? {} : { space: space.slug, spaceEid: space.eid },
+      ...pa || beyond.length ? {} : { space: space.slug, spaceEid: space.eid },
     },
   }))
   return { here, ctx }
@@ -1289,7 +1295,16 @@ let working = async (
     if (!s || s.trashed) throw refuse('missing', 'That space is gone.')
     return s
   })
-  let openedFor = opened(env, o, o.space, space, reading, reach, session)
+  let openedFor = opened(
+    env,
+    o,
+    o.space,
+    space,
+    reading,
+    reach,
+    session,
+    channel == HANDOFF,
+  )
   let remote = !o.signup && channel != HANDOFF && proven(channel)
   let here = { ...openedFor.here, remote }
   let ctx = openedFor.ctx.then((ctx) => ({ ...ctx, remote }))

@@ -137,6 +137,34 @@ let ownRead = (administrative: boolean) =>
     return (await ctx.dir.reachable(ada.person)).map((r) => r.app.slug)
   })
 let own = [await ownRead(false), await ownRead(true)]
+let createOwner = crypto.randomUUID()
+let createHome = await dir.mint(createOwner, 'creating', 'Creating', {
+  'x-yak-person': createOwner,
+  'x-yak-role': 'owner',
+}, true)
+await dir.stamp({
+  entities: [{
+    entity: { eid: createOwner },
+    free_spaces: { count: 2 },
+  }],
+})
+let homeForCreation = (await dir.at(createHome))!
+test('a personal Operator receives the space it just created', async () => {
+  await tallying(new Map(), async () => {
+    let ctx = await operatorContext(
+      env,
+      { person: createOwner },
+      homeForCreation,
+    )
+    let answer = await call(ctx, 'space_new', {
+      slug: 'created',
+      title: 'Created',
+    })
+    assertStringIncludes(answer.text, 'space created (')
+    assertEquals(await ctx.dir.role(answer.space!, createOwner), 'owner')
+  })
+})
+
 // Someone with no seat in the shop, talking with its Operator.
 let outsider = await reach(crypto.randomUUID())
 let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })

@@ -70,7 +70,7 @@ export let coded = <T extends Options>(
         report: opts.report,
         refused: opts.refused,
         current: async () => {
-          let now = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+          let now = { ...ctx, dir: ctx.reopen?.(true) ?? ctx.dir }
           let reach = await inReach(now)
           let graph = await reaching(now, reach)
           let catalog = registry([{
