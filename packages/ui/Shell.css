@@ -203,10 +203,9 @@
 
 /* What sits at the page's right: a pane the window's height that scrolls
    apart from the page, so the page centers in the width left beside it.
-   Shut, it is a rail of its first part alone (the toggle that opens it
-   again). Narrower than a laptop it stands only while it is the address's
-   target, over the page from the right with the page shaded behind it;
-   a shut one opened so stands the same. */
+   Shut, it leaves the full width to the page. Narrower than a laptop it
+   stands only while it is the address's target, over the page from the right
+   with the page shaded behind it. */
 .Shell_Aside {
   flex: 0 0 var(--shell-aside, 20rem);
   display: flex;
@@ -219,29 +218,16 @@
   border-left: 1px solid var(--border);
   background: var(--floor);
 }
-.Shell_Aside[hidden] {
+.Shell_Aside[hidden],
+.Shell-shut .Shell_Aside {
   display: none;
-}
-.Shell-shut .Shell_Aside:not(:target, :has(:target)) {
-  flex-basis: auto;
-  overflow: visible;
-}
-.Shell-shut .Shell_Aside:not(:target, :has(:target)) > * + * {
-  display: none;
-}
-.Shell-shut .Shell_Aside:is(:target, :has(:target)) {
-  position: fixed;
-  inset: 0 0 0 auto;
-  z-index: 10;
-  width: min(26rem, 100vw);
-  height: auto;
-  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%, transparent);
 }
 @media (max-width: 68.75rem) {
   .Shell_Aside:not(:target, :has(:target)) {
     display: none;
   }
-  .Shell_Aside:is(:target, :has(:target)) {
+  .Shell_Aside:is(:target, :has(:target)):not([hidden]) {
+    display: flex;
     position: fixed;
     inset: 0 0 0 auto;
     z-index: 10;

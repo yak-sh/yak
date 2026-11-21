@@ -303,6 +303,7 @@
   }
   /* Over the body, so what the bar opens under itself lies above it. */
   .Frame_Bar {
+    anchor-name: --frame-bar;
     position: relative;
     z-index: 1;
   }
@@ -324,28 +325,18 @@
     isolation: isolate;
     overflow: hidden auto;
   }
-  /* What a page keeps at its right (frame.ts `Aside`), in the kit's
-     Shell aside: its toggle at the top, level with the column's bar, then
-     what it holds. Shut, the toggle alone stands, and the bar's button to
-     it shows, wearing what the page says it holds. Where the window has no
-     room for it, the bar's button opens it over the page, and Close goes
-     back. With nothing in it, neither shows. */
-  .Frame_AsideBar {
-    flex: none;
-    min-height: 3rem;
-    padding: calc(.5rem + env(safe-area-inset-top, 0px)) .75rem .5rem;
-  }
-  /* No display of its own: the kit's rail puts it away while shut. */
+  /* The title bar holds the panel's controls in both layouts. */
   .Frame_AsideBody {
-    padding: 0 1rem 1rem;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) 1rem 1rem;
   }
   .Frame_AsideBody > :not([hidden]) ~ * {
     margin-top: .75rem;
   }
-  .Frame_AsideOpen {
-    display: none;
-    margin-left: auto;
+  .Frame_AsideTools {
+    flex: none;
+    margin-inline-start: auto;
   }
+  .Frame_AsideOpen,
   .Frame_AsideClose,
   .Frame_AsideUnshut,
   .Shell-shut .Frame_AsideShut {
@@ -353,27 +344,54 @@
   }
   .Shell-shut .Frame_AsideUnshut {
     display: inline-flex;
+    align-items: center;
+    gap: var(--half-gap);
   }
-  .Shell-shut .Frame_AsideOpen {
-    display: inline-flex;
-  }
-  .Shell-shut .Frame_Aside:is(:target, :has(:target)) .Frame_AsideFold {
+  .Frame:not(:has(.Frame_AsideBody > :not([hidden]))) :is(.Frame_Aside, .Frame_AsideTools) {
     display: none;
   }
-  .Shell-shut .Frame_Aside:is(:target, :has(:target)) .Frame_AsideClose {
-    display: inline-flex;
-  }
+  /* The overlay starts below the title bar so Close stays in the same slot.
+     Beside an app, switch to the overlay sooner to leave room for the chat. */
   @media (max-width: 68.75rem) {
-    .Frame_AsideOpen,
-    .Frame_AsideClose {
+    .Framed {
+      --frame-aside-overlay: 1;
+    }
+  }
+  @media (max-width: 1399px) {
+    .Framed:has(.Talk-app) {
+      --frame-aside-overlay: 1;
+    }
+  }
+  @container style(--frame-aside-overlay: 1) {
+    .Frame_AsideOpen {
       display: inline-flex;
     }
-    .Frame_AsideFold {
+    .Frame_AsideFold,
+    .Frame_Aside:not(:target, :has(:target)),
+    .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_AsideOpen {
       display: none;
     }
-  }
-  .Frame:not(:has(.Frame_AsideBody > :not([hidden]))) :is(.Frame_Aside, .Frame_AsideOpen) {
-    display: none;
+    .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_AsideClose {
+      display: inline-flex;
+    }
+    .Frame:has(.Frame_Aside:is(:target, :has(:target))) .Frame_Bar {
+      z-index: 11;
+    }
+    .Frame_Aside:is(:target, :has(:target)) {
+      --frame-aside-top: calc(4rem + env(safe-area-inset-top, 0px));
+      display: flex;
+      position: fixed;
+      inset: var(--frame-aside-top) 0 0 auto;
+      top: anchor(--frame-bar bottom, var(--frame-aside-top));
+      z-index: 10;
+      width: min(26rem, 100vw);
+      height: auto;
+      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
+        transparent);
+    }
+    .Frame_AsideBody {
+      padding-top: 1rem;
+    }
   }
   @media (min-width: 701px) {
     .Frame-headed .Frame_Bar {
@@ -928,29 +946,6 @@
       min-width: 20rem;
     }
   }
-  /* Beside an app, the aside keeps its place where the window holds all
-     three; narrower, it is behind the bar's button, as on a phone. */
-  @media (max-width: 1399px) {
-    .Talk-app .Frame_Aside:not(:target, :has(:target)) {
-      display: none;
-    }
-    .Talk-app .Frame_Aside:is(:target, :has(:target)) {
-      position: fixed;
-      inset: 0 0 0 auto;
-      z-index: 10;
-      width: min(26rem, 100vw);
-      height: auto;
-      box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--text) 18%,
-        transparent);
-    }
-    .Talk-app .Frame_AsideOpen,
-    .Talk-app .Frame_AsideClose {
-      display: inline-flex;
-    }
-    .Talk-app .Frame_AsideFold {
-      display: none;
-    }
-  }
   .Talk_App {
     flex: 1.4 1 0;
     position: sticky;
@@ -1042,7 +1037,7 @@
       display: inline-flex;
       margin-left: auto;
     }
-    .Talk-app .Talk_Show + .Frame_AsideOpen {
+    .Talk-app .Talk_Show + .Frame_AsideTools {
       margin-left: 0;
     }
     .Talk_App {

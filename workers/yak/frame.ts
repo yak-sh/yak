@@ -9,8 +9,8 @@
 // A page with something to keep at its right (the conversation's helpers and
 // lists) hands it in as its `aside`, and the frame holds it the same way on
 // every page: a pane beside the column, so the page centers in the width left
-// beside it, whose toggle at its top puts it away to a rail and the page
-// centers in the whole width. Whether it is put away is the person's, kept on
+// beside it. The title bar's toggle puts it away and the page centers in
+// the whole width. Whether it is put away is the person's, kept on
 // their row (`desk_aside{shut}`) as the side's fold is, so it holds on every
 // page and device. Narrower than a laptop the pane is one press away: the
 // bar's button opens it over the page, and Close goes back.
@@ -55,64 +55,75 @@ let menu = (waiting?: number) =>
     waiting != null ? waitingBadge(waiting) : null,
   )
 
-// The toggle at the aside's top: a form that keeps the choice on the
-// person's row (manage.ts), pressed without leaving the page (public/side.js);
-// and where the aside is opened over the page, Close.
+// The title bar's toggle keeps the desktop choice on the person's row.
 let toggle = (at: Aside) => {
   let said = at.shut ? 'Show the panel' : 'Hide the panel'
   return h(
-    Toolbar,
-    { class: 'Frame_AsideBar' },
-    h(
-      'form',
-      {
-        class: 'Frame_AsideFold',
-        method: 'post',
-        action: managePath('profile'),
-        'data-side': '',
-      },
-      h('input', {
-        type: 'hidden',
-        name: 'aside',
-        value: at.shut ? 'open' : 'shut',
-      }),
-      h('input', { type: 'hidden', name: 'back', value: at.back }),
-      h(
-        Button,
-        {
-          type: 'submit',
-          class: 'Frame_AsideFolder',
-          title: said,
-          'aria-label': said,
-          'aria-controls': ASIDE,
-          'aria-expanded': String(!at.shut),
-        },
-        h(Icon, { of: icons['panel-right-close'], class: 'Frame_AsideShut' }),
-        h(Icon, { of: icons['panel-right-open'], class: 'Frame_AsideUnshut' }),
-      ),
-    ),
+    'form',
+    {
+      class: 'Frame_AsideFold',
+      method: 'post',
+      action: managePath('profile'),
+      'data-side': '',
+    },
+    h('input', {
+      type: 'hidden',
+      name: 'aside',
+      value: at.shut ? 'open' : 'shut',
+    }),
+    h('input', { type: 'hidden', name: 'back', value: at.back }),
     h(
       Button,
-      { href: '#', class: 'Frame_AsideClose', 'data-pane': '' },
-      h(Icon, { of: icons.x }),
-      'Close',
+      {
+        type: 'submit',
+        class: 'Frame_AsideFolder',
+        title: said,
+        'aria-label': said,
+        'aria-controls': ASIDE,
+        'aria-expanded': String(!at.shut),
+      },
+      h(Icon, { of: icons['panel-right-close'], class: 'Frame_AsideShut' }),
+      h(
+        'span',
+        { class: 'Frame_AsideUnshut' },
+        at.mark ?? h(Icon, { of: icons['panel-right-open'] }),
+      ),
     ),
   )
 }
 
-// The bar's way to the aside where it is not in sight.
-let opener = (at: Aside) =>
+// On narrow windows the same slot opens and closes an overlay.
+let asideTools = (at: Aside) =>
   h(
-    Button,
-    {
-      href: `#${ASIDE}`,
-      class: 'Frame_AsideOpen',
-      'data-pane': '',
-      'data-aside-open': '',
-      title: at.said ?? at.label,
-      'aria-label': at.said ?? at.label,
-    },
-    at.mark ?? h(Icon, { of: icons['panel-right'] }),
+    'div',
+    { class: 'Frame_AsideTools' },
+    h(
+      Button,
+      {
+        href: `#${ASIDE}`,
+        class: 'Frame_AsideOpen',
+        'data-pane': '',
+        'data-aside-open': '',
+        title: at.said ?? at.label,
+        'aria-label': at.said ?? at.label,
+        'aria-controls': ASIDE,
+        'aria-expanded': 'false',
+      },
+      at.mark ?? h(Icon, { of: icons['panel-right'] }),
+    ),
+    h(
+      Button,
+      {
+        href: '#',
+        class: 'Frame_AsideClose',
+        'data-pane': '',
+        'aria-controls': ASIDE,
+        'aria-expanded': 'true',
+      },
+      h(Icon, { of: icons.x }),
+      'Close',
+    ),
+    toggle(at),
   )
 
 export let frame = (at: {
@@ -147,7 +158,7 @@ export let frame = (at: {
       Shell,
       {
         mod: [at.sheet && 'sheet', at.aside?.shut && 'shut'],
-        class: ['Frame', at.headed && 'Frame-headed', at.class]
+        class: ['Frame', at.headed && !at.aside && 'Frame-headed', at.class]
           .filter(Boolean).join(' '),
       },
       at.side,
@@ -170,7 +181,7 @@ export let frame = (at: {
             at.sub ? h(Toolbar.Sub, {}, at.sub) : null,
           ),
           at.tools,
-          at.aside ? opener(at.aside) : null,
+          at.aside ? asideTools(at.aside) : null,
         ),
         h(
           Shell.Body,
@@ -182,7 +193,6 @@ export let frame = (at: {
         ? h(
           Shell.Aside,
           { id: ASIDE, class: 'Frame_Aside', 'aria-label': at.aside.label },
-          toggle(at.aside),
           h('div', { class: 'Frame_AsideBody' }, at.aside.content),
         )
         : null,

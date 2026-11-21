@@ -12,8 +12,7 @@
  * An `Aside` after the `Main` column is what sits at the page's right (what
  * is happening, lists beside a conversation): a pane of its own height that
  * scrolls apart from the page, so the page centers in the width left beside
- * it. `Shell-shut` puts it away to a rail, its first part alone (the toggle
- * that opens it again), and the page centers in the whole width. Narrower
+ * it. `Shell-shut` hides it and the page centers in the whole width. Narrower
  * than a laptop it stands only while it is the address's target, over the
  * page from the right, and so does a shut one opened that way.
  *
@@ -171,7 +170,7 @@ export let specimens = (): Specimen[] => [
       Shell,
       { mod: 'shut', style: 'height: 8rem; width: 40rem; max-width: 100%' },
       h(Main, {}, h(Body, {}, h('p', {}, 'The page, in the whole width.'))),
-      h(Shell.Aside, {}, h('span', {}, '‹'), h('p', {}, 'Put away.')),
+      h(Shell.Aside, {}, h('p', {}, 'Put away.')),
     ),
   ],
 ]

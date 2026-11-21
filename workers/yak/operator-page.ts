@@ -2627,7 +2627,7 @@ let put = (drawn) => {
     refreshFrames()
     made.innerHTML = drawn.show
     let bar = document.querySelector('.Frame_Bar')
-    bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside-open]'))
+    bar.insertBefore(made.content.firstElementChild, bar.querySelector('.Frame_AsideTools'))
     return
   }
   if (was.dataset.app != next.dataset.app) return
@@ -2783,13 +2783,13 @@ let shown = () => {
   a.querySelector('[data-helpers]').hidden = !helping && !turn
   let reach = !!a.querySelector('[data-reach]')
   a.hidden = !helping && !reach && !turn && !happening.self
-  let glance = document.querySelector('[data-glance]')
-  if (!glance) return
-  let next = drawn(glanceHtml(happening, reach))
-  glance.replaceWith(next)
-  let open = next.closest('[data-aside-open]')
-  open?.setAttribute('aria-label', next.dataset.label)
-  open?.setAttribute('title', next.dataset.label)
+  for (let glance of document.querySelectorAll('[data-glance]')) {
+    let next = drawn(glanceHtml(happening, reach))
+    glance.replaceWith(next)
+    let open = next.closest('[data-aside-open]')
+    open?.setAttribute('aria-label', next.dataset.label)
+    open?.setAttribute('title', next.dataset.label)
+  }
 }
 // Work that will take a while is when the page offers an alert for when it
 // is done (alerts-browser.ts \`offer\`), once.

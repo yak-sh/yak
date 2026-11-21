@@ -1,6 +1,6 @@
 // The folds of the frame, pressed without leaving the page: the side's
 // (sidebar.ts `fold`), which collapses it to its rail of icons, and the
-// aside's (frame.ts `toggle`), which puts it away to a rail and the page
+// aside's (frame.ts `toggle`), which puts it away and the page
 // centers in the whole width; each opens again the same way. The change is
 // drawn at once and the choice sent to be kept on the person's row. Where it
 // could not be sent, the form is sent as it would be without this script, and

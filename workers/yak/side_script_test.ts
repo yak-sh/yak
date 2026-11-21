@@ -101,7 +101,7 @@ test('the aside’s toggle puts it away, then opens it', async () => {
       sent.push(init.body.get('aside')!), Promise.resolve({ ok: true })
     ),
   )
-  let button = document.querySelector('#aside form[data-side] button')!
+  let button = document.querySelector('.Frame_Bar form[data-side] button')!
   let seen = () => [
     document.querySelector('.Shell')!.classList.contains('Shell-shut'),
     button.getAttribute('aria-expanded'),

@@ -275,7 +275,7 @@ test('the aside is put away and opened again, and every page keeps it', async ()
   let chat = chatPath(slug)
   let drawn = async () => {
     let { document } = parseHTML(await (await get(chat)).text())
-    let button = document.querySelector('#aside .Frame_AsideFolder')!
+    let button = document.querySelector('.Frame_Bar .Frame_AsideFolder')!
     return [
       document.querySelector('#aside')!.closest('.Shell')!.classList
         .contains('Shell-shut'),
