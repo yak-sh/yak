@@ -119,6 +119,76 @@ let addressIn = (said: string | null | undefined): string => {
   return angled?.[1] ?? (/^\S+@\S+$/.test(head) ? head : '')
 }
 
+/**
+ * The words a letter's author wrote: its text without the quote of somebody
+ * else's letter, which a mail client sets below a reply (or between its
+ * lines). A person's letter then never carries another's words as theirs; the
+ * letter it quotes is the one its `in-reply-to` names, kept where it was.
+ *
+ * A quote is known by the line a client introduces it with: `On <date>,
+ * <name> <address> wrote:` (which some clients wrap over two lines), or an
+ * Outlook header block, `From:` then `Sent:` or `Date:`, or `-----Original
+ * Message-----`. Where that line names the author, the quote is their own
+ * earlier letter and stays. Otherwise the quote goes: its `>` lines, wherever
+ * they fall after it, or everything after it where its lines carry no `>` (an
+ * html letter read as text, an Outlook reply). A letter with no such line is
+ * its author's, `>` lines and all.
+ *
+ * ```ts
+ * import { own } from '@yaks/mail'
+ * own('ok\n\nOn Fri, Bo <bo@x.example> wrote:\n> Send the keys.', 'ana@x.example')
+ * // 'ok'
+ * own('ok\n\nOn Fri, Ana <ana@x.example> wrote:\n> My list.', 'ana@x.example')
+ * // 'ok\n\nOn Fri, Ana <ana@x.example> wrote:\n> My list.'
+ * ```
+ */
+export let own = (text: string, author: string): string => {
+  let lines = text.split(/\r?\n/)
+  let me = author.trim().toLowerCase()
+  for (let i = 0; i < lines.length; i++) {
+    let span = introduces(lines, i)
+    if (!span) continue
+    let said = lines.slice(i, i + span.lines).join(' ')
+    if (said.match(ADDRESS)?.[0].toLowerCase() == me) {
+      i += span.lines - 1
+      continue
+    }
+    let rest = lines.slice(i + span.lines)
+    let first = rest.find((l) => l.trim())
+    let kept = span.whole || !first?.startsWith('>')
+      ? []
+      : rest.filter((l) => !l.startsWith('>'))
+    return [...lines.slice(0, i), ...kept].join('\n')
+      .replace(/\n{3,}/g, '\n\n').trim()
+  }
+  return text
+}
+
+// An address as a quote's introduction writes it: bare, in angles, or
+// after `mailto:`.
+let ADDRESS = /[^\s<>[\]"'(),;:]+@[^\s<>[\]"'(),;:]+/
+
+// Whether line `i` introduces a quote, and over how many lines, the last of
+// them naming who wrote it; `whole` where what follows is the quoted letter
+// to its end, `>` or not.
+let introduces = (
+  lines: string[],
+  i: number,
+): { lines: number; whole?: boolean } | null => {
+  let at = (n: number) => lines[i + n]?.trim() ?? ''
+  if (/^-{2,}\s*original message\s*-{2,}$/i.test(at(0))) {
+    let from = [1, 2, 3].find((n) => /^from:\s/i.test(at(n)))
+    return { lines: (from ?? 0) + 1, whole: true }
+  }
+  if (/^from:\s/i.test(at(0)) && /^(sent|date):\s/i.test(at(1))) {
+    return { lines: 1, whole: true }
+  }
+  if (!/^on\s/i.test(at(0))) return null
+  if (/\swrote:$/i.test(at(0))) return { lines: 1 }
+  if (/\swrote:$/i.test(at(1))) return { lines: 2 }
+  return null
+}
+
 /** The unbracketed Message-ID of a received letter, or `''`. */
 export let messageId = (m: Received): string =>
   (m.headers.get('message-id') ?? '').replace(/[<>]/g, '').trim()

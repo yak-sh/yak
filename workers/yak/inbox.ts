@@ -57,7 +57,7 @@ import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { and, eq, every, list, stringify } from '@yaks/query'
-import { author, inbound, messageId } from '@yaks/mail'
+import { author, inbound, messageId, own } from '@yaks/mail'
 import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
 import { acceptsOf, filed } from './uploads.ts'
@@ -150,6 +150,14 @@ export let reading = async (m: Inbound, env: Env): Promise<Incoming> => {
 /** The words the letter carried: its plain text, else its html read as text. */
 export let words = (mail: { text?: string; html?: string }) =>
   mail.text?.trim() || (mail.html ? plain(mail.html) : '')
+
+// The words a letter for the Operator brings as its writer's: theirs, without
+// the quote of a letter somebody else wrote (@yaks/mail `own`, T-1855). A
+// member's reply to the Operator's letter quotes it, and so whatever
+// stranger's words the letter carried; those stay the letter's, kept where
+// it was, and the private source keeps the whole. An app's letter is kept as
+// it arrived.
+let spoken = (mail: Incoming) => own(words(mail), author(mail))
 
 // A time property takes a date-time, and a `Date:` header is RFC 5322 ("Tue, 27
 // Aug 2024 08:49:44 -0700"). The parser's reading is used where it parses and
@@ -319,7 +327,7 @@ let signingUp = async (
     env,
     from,
     mail.name?.trim(),
-    `${mail.headers.get('subject') ?? ''}\n${words(mail)}`,
+    `${mail.headers.get('subject') ?? ''}\n${spoken(mail)}`,
   )
   return await asked(
     mail,
@@ -452,9 +460,10 @@ let asked = async (
   }
   let id = requestId(space.eid, messageId(mail))
   let signed = arrival.verified ?? mail.verified
+  let said = spoken(mail)
   let received = inbound(mail, {
     eid: id,
-    text: words(mail),
+    text: said,
     ...(arrival.reply ? { reply: arrival.reply } : {}),
     ...(signed == null ? {} : { verified: signed }),
   })[0]
@@ -468,7 +477,7 @@ let asked = async (
         [SPACE]: space.eid,
       },
       body: JSON.stringify({
-        say: words(mail),
+        say: said,
         request: {
           channel: 'email',
           address: extra.address ?? author(mail).trim().toLowerCase(),

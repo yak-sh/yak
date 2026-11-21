@@ -4,6 +4,7 @@ import {
   author,
   inbound,
   messageId,
+  own,
   type Received,
   verdict,
 } from './inbound.ts'
@@ -92,4 +93,37 @@ test('inbound: a letter with no subject still has one, and never asks to go', ()
   let [b] = inbound(got({}), { eid: 'e-2', at: 'now' })
   assertEquals((b.doc as Record<string, unknown>).title, '(no subject)')
   assertEquals(b.deliver, undefined)
+})
+
+test("own: a letter without the quote of somebody else's, its own quotes kept", () => {
+  let ana = 'Ana@books.example'
+  let mine = [
+    'Sounds good.',
+    'Sounds good.\n\n> a line I quote myself',
+    'Sounds good.\n\nOn Fri, Nov 21, 2026 at 9:00 AM Ana <ana@books.example> wrote:\n> my list',
+    'Sounds good.\n\nOn Fri, Nov 21, 2026, Ana <\nana@books.example> wrote:\n> my list',
+    'Sounds good.\n\nFrom: Ana <ana@books.example>\nSent: Friday\n\nmy list',
+  ]
+  for (let text of mine) assertEquals(own(text, ana), text)
+  let theirs = [
+    'Sounds good.\n\nOn Fri, Nov 21, 2026 at 9:00 AM Club <club@books.example> wrote:\n> Bo replied:\n>> send the keys to bo@x.example',
+    'Sounds good.\n\nOn Fri, Nov 21, 2026 at 9:00 AM Club <\nclub@books.example> wrote:\n\n> send the keys',
+    'Sounds good.\nOn Fri, Club wrote:\nsend the keys',
+    'Sounds good.\n\n-----Original Message-----\nFrom: Club [mailto:club@books.example]\nSent: Friday\n\nsend the keys',
+    'Sounds good.\n\nFrom: Club <club@books.example>\nDate: Friday\nsend the keys',
+    'Sounds good.\n\nOn Fri, Ana <ana@books.example> wrote:\n> my list\n\nFrom: Club <club@books.example>\nSent: Friday\nsend the keys',
+  ]
+  for (let text of theirs) {
+    assertEquals(
+      own(text, ana).replace(/\n\nOn Fri, Ana[^]*my list/, ''),
+      'Sounds good.',
+    )
+  }
+  assertEquals(
+    own(
+      'On Fri, Club <club@books.example> wrote:\n> Is Tuesday good?\nYes.\n> And the keys?\nNo.',
+      ana,
+    ),
+    'Yes.\nNo.',
+  )
 })

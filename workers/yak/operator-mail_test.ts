@@ -93,6 +93,8 @@ let service = operatorService(
         })
       : said(req, /By email from alvarez/)
       ? reply('Thank you; I will tell Jeff.')
+      : said(req, /Sounds good, thanks/)
+      ? reply('Glad it works.')
       : said(req, /By email from bea/)
       ? reply('It is a list Jeff keeps; you could read it.')
       : said(req, /Asked Dr Alvarez/)
@@ -424,4 +426,35 @@ test("an invitee's reply is answered once, knowing the place and role the invita
     l.to == 'bea@example.com' && l.subject?.startsWith('Re:')
   )
   assertEquals(answers.length, 1)
+})
+
+// Jeff answers the alert that quoted Dr Alvarez's reply, and his mail client
+// quotes the alert below his words (T-1855). The turn hears his words as his,
+// and the quoted letter, which the Operator wrote and kept, not as his.
+let alert = letters.find((l) =>
+  l.to == 'jeff@example.com' && /replied to the letter/.test(l.subject ?? '')
+)!
+let jeffAsked = asked.length
+await arrived(
+  await reading(
+    answer(
+      'jeff-ok',
+      `sent-${letters.indexOf(alert) + 1}`,
+      'Jeff Peterson <jeff@example.com>',
+      `Sounds good, thanks.\n\nOn Fri, Nov 21, 2026 at 9:00 AM ${space.operator} <${from}> wrote:\n` +
+        alert.text!.split('\n').map((l) => `> ${l}`).join('\n'),
+    ),
+    env,
+  ),
+  env,
+)
+await service.drain()
+let jeffTurn = asked.slice(jeffAsked)[0]
+
+test("a member's reply to the Operator's letter is heard as their words, without the letter it quotes", () => {
+  let heard = jeffTurn.items.findLast((i) => i.kind == 'user')
+  assert(heard?.kind == 'user')
+  assertStringIncludes(heard.text, 'Sounds good, thanks.')
+  assertEquals(heard.text.includes('Tuesday at 3 works for us.'), false)
+  assertEquals(heard.text.includes('wrote:'), false)
 })
