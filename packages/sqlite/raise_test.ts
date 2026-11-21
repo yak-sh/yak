@@ -189,9 +189,13 @@ test('a table a first write makes is owed its statistics once it holds rows', ()
   }
   let analyzed = (name: string) =>
     scan(d, 'sqlite_stat1', by({ tbl: name })).length > 0
-  s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, tag: { name: 'x' } }]))
+  let write = (comp: (eid: string) => object) =>
+    s.tx((tx) =>
+      tx.patch(['a', 'b'].map((eid) => ({ entity: { eid }, ...comp(eid) })))
+    )
+  write((name) => ({ tag: { name } }))
   reopen()
-  s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'Hi' } }]))
+  write((title) => ({ doc: { title } }))
   reopen()
   equal([analyzed('tag'), analyzed('doc')], [true, true])
 })
