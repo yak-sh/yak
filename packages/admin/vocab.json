@@ -745,7 +745,7 @@
           }
         }
       },
-      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --as admin@bot.yak.sh\n  yak admin apply jeff/recipes @fix.json --check --as admin@bot.yak.sh\n  yak admin apply concept @trash.json --operator",
+      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]'\n  yak admin apply jeff/recipes @fix.json --check\n  yak admin apply concept @trash.json --operator",
       "input": {
         "where": {
           "type": "string",
@@ -768,7 +768,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is the platform admin, admin@bot.yak.sh, so an agent's write is recorded as the agent; name the person's own account only for a write they asked for"
         }
       },
       "required": [

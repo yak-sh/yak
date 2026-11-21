@@ -287,6 +287,9 @@ export let runs = (
   host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping' | 'fetch'>,
 ): Runs => {
   let acting = (a: Args) => account(host)(word(a, 'as'))
+  // A write is recorded as its account, and an agent's write is the agent's
+  // (M-31958): the platform admin, unless --as names the person's own.
+  let writing = (a: Args) => account(host)(word(a, 'as') ?? ADMIN)
   // Infrastructure uses the box's Cloudflare/GitHub logins. Only the platform
   // admin or the configured person's own account may act on them.
   let platform = async (a: Args) => {
@@ -740,7 +743,7 @@ export let runs = (
 
     admin_apply: verb(async (call) => {
       let a = argsOf(call)
-      let at = await acting(a)
+      let at = await writing(a)
       let applied = a.operator === true
         ? await operatorGraph(at.bearer, String(a.where), {
           bundles: a.bundles as Bundle[],

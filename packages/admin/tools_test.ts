@@ -320,7 +320,7 @@ test('a gallery decision goes to the hosted tool as the caller, or whoever it na
 test("a store's rows are answered as data, their eids whole wherever the answer is read", async () => {
   let { host, kept, ask } = await box()
   try {
-    await kept('own@example.com', 'own-bearer')
+    await kept(ADMIN)
     let eid = '97d31ac6-ffce-46ef-b88f-f31868df02a6'
     let rows = [{ entity: { eid }, counted: { report: eid } }]
     await answering(
@@ -345,6 +345,32 @@ test("a store's rows are answered as data, their eids whole wherever the answer 
         )
       },
     )
+  } finally {
+    await host.close()
+  }
+})
+
+test('a store write is recorded as the platform admin unless --as names another account', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    await kept(ADMIN, 'admin-bearer')
+    let seen: string[] = []
+    await answering(
+      (_url, init) => {
+        seen.push(new Headers(init?.headers).get('authorization') ?? '')
+        return Response.json({ result: { structuredContent: { result: [] } } })
+      },
+      async () => {
+        await ask('admin_apply', { where: 'jeff/recipes', bundles: [] })
+        await ask('admin_apply', {
+          where: 'jeff/recipes',
+          bundles: [],
+          as: 'own@example.com',
+        })
+      },
+    )
+    equal(seen, ['Bearer admin-bearer', 'Bearer own-bearer'])
   } finally {
     await host.close()
   }
