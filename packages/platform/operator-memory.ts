@@ -17,7 +17,7 @@ let ref = (row: Bundle | undefined, name: string, field: string) =>
 export let memoryAudience = (tool: NamedTool, person: string): NamedTool => ({
   ...tool,
   description: tool.description +
-    ' Each new save is private to the person in this conversation unless shared is true. With id, shared true or false moves that memory to the space or back to this person; leaving shared out keeps whom it is for.',
+    ' Save every principle, standard or preference a person states, in their words, also when it arrives inside a request for one piece of work or in a chat room. Each new save is private to the person in this conversation unless shared is true. With id, shared true or false moves that memory to the space or back to this person; leaving shared out keeps whom it is for.',
   inputSchema: {
     ...tool.inputSchema,
     properties: {

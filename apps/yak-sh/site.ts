@@ -141,9 +141,9 @@ export let SECTIONS: Section[] = [
     eid: '35cd004b-ca47-4090-9d3c-285a1f8de275',
     pane: 'eea2335c-b3d2-40ae-8ab4-a166ec45f33b',
     view: 'Step',
-    title: 'A task is an entity',
+    title: 'Everything in the graph is an entity',
     body: [
-      "Say you're starting a business, and agents build the product. An entity is an id and the components it carries. `task new` writes one with `doc{title}` and `task{}`, and the graph gives it a number.",
+      "The graph is one database, here a SQLite file, that you and your agents share. Everything in it is an **entity**: an id, its **eid**, and the components it carries. A **component** is one named set of properties, written `name{property, …}`: `doc{title, body}` holds text, and `task{}`, a component with no properties, makes an entity a piece of work. An entity has no type of its own; its components make it what it is. This page brings in yak's ideas one at a time, and each comes with an example: a business you start, whose product your agents build. The tasks, letters and memories in the example are not ideas of yak itself. Each is a set of components that one of the `@yaks` packages declares. In the example, `task new` writes an entity with `doc{title}` and `task{}`, and the graph gives it a short number for people to type, T-1.",
       sh(
         '# A task for an agent: the sign-up page',
         "yak task new 'Add the sign-up page'",
@@ -154,9 +154,9 @@ export let SECTIONS: Section[] = [
     eid: '599e735a-c838-49d8-9299-bbc8d005d047',
     pane: '329d0f98-94c8-455e-bb62-08fe643e1e27',
     view: 'Step',
-    title: 'A link is an entity too',
+    title: 'An edge is an entity too',
     body: [
-      'Some work only a person can do, such as signing up with a payment processor, so that task is assigned to you. An edge ties one entity to another: this one says the checkout requires it.',
+      'An **edge** is an entity that ties one entity to another. It carries `edge{from, to}`, and a second component beside it says what the tie means. In the example, some work only a person can do, such as signing up with a payment processor, so that task is assigned to you. `--requires` writes an edge with `requires{}`: the checkout requires the sign-up.',
       sh(
         '# A task only you can do, assigned to you',
         "yak task new 'Sign up for payments' --assignee U-1",
@@ -173,7 +173,7 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'Your agent calls the same tools',
     body: [
-      'Every `yak` command is also an MCP tool, served at `/mcp` by `yak serve`. An agent finishes the sign-up page and says so, and its writes carry its own id.',
+      "A **tool** is a named operation on the graph, declared by a package. Every tool is a `yak` command, and also an MCP tool, which an agent calls over the Model Context Protocol at `/mcp` once `yak serve` runs. A write records who made it, so an agent's writes carry its own id. In the example, an agent finishes the sign-up page, says so in a comment on the task, and marks the task done.",
       mcp(
         '# The agent says what it did, on the task',
         'comment_new {"target": "T-1", "body": "The sign-up page is up at /signup, with tests."}',
@@ -188,7 +188,7 @@ export let SECTIONS: Section[] = [
     view: 'Step',
     title: 'One query finds them',
     body: [
-      "What's left is the payments sign-up only you can do, and the checkout that waits on it. The same query grammar reads the graph in the terminal, over MCP and in the browser.",
+      "A **query** finds entities by their components: `.task.status=open` matches every entity carrying `task{}` that is still open (a task's status is worked out from the components it carries, such as `completed{}`), and `?doc` adds each one's `doc` to the answer. The same queries read the graph in the terminal, over MCP and in the browser. In the example, what's left is the payments sign-up only you can do, and the checkout that waits on it.",
       sh(
         '# Every open task, with its doc',
         "yak graph query '.task.status=open ?doc'",
@@ -216,8 +216,8 @@ export let SECTIONS: Section[] = [
     view: 'Stack',
     title: 'A write is a list of bundles, applied in one transaction',
     body: [
-      "A bundle is one entity's components, and a write is a list of them. Here your agent writes you a letter: one bundle, its `doc` the words, `mail` the task it is about and `deliver` who it goes to.",
-      '`apply()` takes the list through the phases below, and the rules and checks of every package the graph loads run inside them. As you scroll past each, it does its work on the letter: the short ids become eids, the alias is given one, a rule fills in the sender, and after the commit an effect hands the letter to a mail service. The phases in the box are one transaction: the batch is stored whole at commit, or not at all.',
+      "A **bundle** is one entity's eid and the components to write on it, and a **write** is a list of bundles. Each package declares its components in a **vocabulary**, with the checks and rules that run on every write: a check refuses a write that breaks it. In the example, your agent writes you a letter: one bundle, its `doc` the words, `mail` the task it is about and `deliver` who it goes to.",
+      "`apply()` takes the list through the phases below. As you scroll past each, it does its work on the letter: the short number T-2 becomes that task's eid, `$letter`, a name for an entity not yet written, is given a new eid, a rule fills in the sender, and after the commit an effect hands the letter to a mail service. The next section says what rules and effects are. The phases in the box are one transaction: the list is stored whole at commit, or not at all.",
       mcp(
         '# One bundle: a letter to you about T-2',
         'graph_apply {"bundles": [{"entity": {"eid": "$letter"}, "doc": {"title": "Can you sign up for payments?", "body": "The checkout can\'t be built until T-2 is done."}, "mail": {"target": "T-2"}, "deliver": {"to": "U-1"}}]}',
@@ -248,7 +248,7 @@ export let SECTIONS: Section[] = [
     view: 'Rules',
     title: 'Rules change a write as it is made, and effects do what it leaves',
     body: [
-      "You don't write code that watches the graph. A **rule** is a query a vocabulary declares, and the graph runs it inside every write, whichever door the write came through: what it matches, it changes before the write is stored, so nothing ever reads the graph without it. An **effect** is work a write leaves behind. The commit records it in the same transaction, so it can't be lost, and after the commit it runs on its own, tried again until it succeeds.",
+      "You don't write code that watches the graph. A **rule** is a query a vocabulary declares, and the graph runs it inside every write, whichever interface the write came through: what it matches, it changes before the write is stored, so nothing ever reads the graph without it. An **effect** is work a write leaves behind. The commit records it in the same transaction, so it can't be lost, and after the commit it runs on its own, tried again until it succeeds.",
       '### Your agent asks you',
       'Fixing the build, your agent needs an answer only you can give, and asks.',
       mcp(
@@ -284,7 +284,7 @@ export let SECTIONS: Section[] = [
     view: 'Memory',
     title: 'What one agent learns, every agent after it knows',
     body: [
-      "An agent's context is gone when its session ends, so what it learns is kept in the graph. A **memory** marks words a person said, verbatim, where they said them. A **persona** is the instructions an agent wears: it contains documents and memories by edges, and every session that wears it starts with all of them, after the personas it is built on. A **topic** holds what is known about one subject the same way. A session opened on a topic wears one persona, the oracle, and starts with the topic's tree, so it answers from what the topic holds.",
+      "A **session** is one agent's conversation, kept as an entity. What an agent knows is gone when its session ends, so what it learns is kept in the graph, by three more sets of components the packages declare. A **memory** marks words a person said, verbatim, where they said them. A **persona** is the instructions an agent wears: edges tie docs and memories to it, and every session that wears it starts with all of them, after the personas it is built on. A **topic** gathers what is known about one subject with edges the same way, and a session opened on a topic starts with all of it. In the example, you tell your agent why once, and every agent after it knows.",
       '### You say it once',
       'Answering the question, you say why.',
       web(
@@ -345,7 +345,7 @@ export let SECTIONS: Section[] = [
     title: 'Get set up on yaks.app',
     body: part(
       "Type your email address, and yaks.app's Operator writes to you. Its letter has a code and a link that signs you in. Reply to it, and the Operator sets you up: `yak` installed and signed in, yaks.app added to Claude or ChatGPT, and your first app online.",
-      "This is the one thing on this page that leaves the tab. What you type becomes a bundle in the graph here and goes through `apply()` like everything above; its effect then posts your address to yaks.app's sign-in door, the one yaks.app's own sign-in uses. Nothing more is sent until you reply.",
+      "This is the one thing on this page that leaves the tab. What you type becomes a bundle in the graph here and goes through `apply()` like everything above; its effect then posts your address to the same sign-in yaks.app's own page uses. Nothing more is sent until you reply.",
     ),
   },
   {
@@ -410,7 +410,7 @@ export let SECTIONS: Section[] = [
         ['id', 'Entity ids, and the short numbers people type, such as T-2.'],
         [
           'edge',
-          'Links between entities, stored as entities, and walks across them.',
+          'Edges between entities, stored as entities, and walks across them.',
         ],
         [
           'doc',
