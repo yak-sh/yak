@@ -311,6 +311,11 @@
   font-size: var(--fine);
   line-height: 1.48;
   overflow-wrap: anywhere;
+  isolation: isolate;
+}
+
+.Home_Message .Chat_Bubble::after {
+  z-index: -1;
 }
 
 .Home_MessageLink {
@@ -869,24 +874,23 @@
     position: fixed;
     z-index: 3;
     inset: auto 0 max(.5rem, env(safe-area-inset-bottom));
-    width: min(calc(100% - 1rem), 27rem);
+    width: min(calc(100% - 1rem), 21rem);
     height: auto;
-    max-height: min(9.5rem, 28svh);
+    max-height: min(16rem, 40svh);
     margin-inline: auto;
-    padding: .45rem .6rem;
-    grid-template-rows: minmax(0, 1fr);
+    padding: .6rem .7rem .5rem;
+    grid-template-rows: auto minmax(0, 1fr);
     border-radius: 1.4rem;
     box-shadow: 0 -.25rem 1.3rem #151b2832;
   }
 
-  .Home_Demo[data-mini] .Home_Phone::before,
   .Home_Demo[data-mini] .Home_Shot,
   .Home_Demo[data-mini] .Home_Message:not([data-recent]) {
     display: none;
   }
 
   .Home_Demo[data-mini] .Home_Track {
-    max-height: min(8.5rem, 24svh);
+    max-height: min(13rem, 32svh);
   }
 
   .Home_Demo[data-mini] .Home_Messages {

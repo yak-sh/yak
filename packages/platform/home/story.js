@@ -39,7 +39,7 @@ let reveal = (log, { step, through }, motion) => {
   if (motion && before >= 0 && before < shown.length - 1) {
     last.animate(
       [{ opacity: 0, translate: '0 .45rem' }, { opacity: 1, translate: '0 0' }],
-      { duration: 190, easing: 'ease-out' },
+      { duration: 320, easing: 'ease-out' },
     )
   }
 }
