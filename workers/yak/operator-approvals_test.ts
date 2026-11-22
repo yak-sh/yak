@@ -231,6 +231,44 @@ test("an outside service's calls run with no tap, writes too; member_add still w
   equal([ran.length, texts.length], [3, sent + 1])
 })
 
+test('app_set waits when it opens the app to joining or lets it out of its sandbox, never when it closes either; screen_pair waits', async () => {
+  let [app_set, screen_pair] = confirming(
+    [tool('app_set'), tool('screen_pair')],
+    ask,
+    { known, texted: true },
+  )
+  let asked = async (t: Tool, args: Record<string, unknown>) => {
+    let said = String(await t.run(args))
+    return said == 'ran' ? 'ran' : texts.at(-1)!.words.split('? Tap')[0]
+  }
+  let cases: [Tool, Record<string, unknown>, string][] = [
+    [app_set, { app: 'a', join: {} }, 'ran'],
+    [app_set, { app: 'a', sandboxed: true }, 'ran'],
+    [app_set, { app: 'a', title: 'T' }, 'ran'],
+    [
+      app_set,
+      { app: 'a', join: { policy: 'anyone' } },
+      'Let people join the app a without an invitation, as its join policy says',
+    ],
+    [
+      app_set,
+      { app: 'a', sandboxed: 'false' },
+      'Let the app a out of its sandbox, to everything in the space',
+    ],
+    [
+      app_set,
+      { app: 'a', access: 'public', sandboxed: false },
+      'Make the app a public and let it out of its sandbox, to everything in the space',
+    ],
+    [
+      screen_pair,
+      { code: 'BCDFGHJK' },
+      'Let the screen showing BCDFGHJK show your drafts as you write them, in every space',
+    ],
+  ]
+  for (let [t, args, said] of cases) equal(await asked(t, args), said)
+})
+
 // member_add as a turn asks it where its person reads at `at`.
 let asking = (at: Partial<At>) =>
   confirming(
