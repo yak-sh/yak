@@ -26,7 +26,7 @@ import { provenanceDoc } from '@yaks/provenance'
 import { edgeDoc } from '@yaks/edge'
 import { mcpDoc } from '@yaks/mcp-client/vocab'
 import { fixture } from '../../packages/mcp-client/testing.ts'
-import { remoteCommands } from './mcp.ts'
+import { remoteCommands, type Seat } from './mcp.ts'
 
 let setup = async () => {
   let vocab = loadVocab([
@@ -67,6 +67,8 @@ let setup = async () => {
     vault,
     redirect: 'https://yaks.test/connections/callback',
     signIn: 'https://yaks.test/manage/connections',
+    // Everyone writes in every space, unless a test seats them otherwise.
+    seat: () => Promise.resolve<Seat>('writes'),
     report: (e: unknown) => {
       failures.push(e)
     },
@@ -527,6 +529,39 @@ test("a server connected for everyone in a space reaches others there with its o
   await assertRejects(() => as(other).remove(shared.server), Error)
   await as(person).set(shared.server, { everyone: false })
   assertEquals(await names(other), [])
+})
+
+test('in a space, a person with no seat reaches no server, and one who only reads reaches only their own', async () => {
+  let { host, person, other } = await setup()
+  let f = fixture()
+  let space = mint()
+  let as = (who: string, seat: Seat = 'writes') =>
+    remoteCommands(who, { ...host, space, seat: () => Promise.resolve(seat) }, {
+      fetch: f.fetcher,
+    })
+  let shared = await as(person).configure({
+    name: 'Team',
+    url: 'https://team.test/mcp',
+  })
+  await as(other).configure({
+    name: 'Mine',
+    url: 'https://mine.test/mcp',
+    everyone: false,
+  })
+  let names = async (who: string, seat: Seat) =>
+    (await as(who, seat).list()).map((t) => t.namespace).sort()
+  assertEquals(await names(other, 'writes'), ['Mine', 'Team'])
+  assertEquals(await names(other, 'reads'), ['Mine'])
+  assertEquals(await names(other, null), [])
+  await assertRejects(
+    () =>
+      as(other, null).call(`mcp:${shared.server}`, 'publish_mockup', {
+        html: 'from a stranger',
+      }),
+    Error,
+    'not connected for you',
+  )
+  assertEquals(f.calls.filter((c) => c.method == 'tools/call'), [])
 })
 
 // A server at `host` that takes a sign-in through its OAuth metadata, a key

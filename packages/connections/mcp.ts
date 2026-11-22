@@ -68,10 +68,16 @@ type Host = Ctx & {
   /** The space the servers are reached in, by its eid; absent at a door that
    * names none, which reaches only servers kept without a space. */
   space?: string
+  /** The person's seat in `space`: one who writes there, one who only reads,
+   * or none. A host that does not say is answered as none. */
+  seat?: () => Promise<Seat>
   /** Reaches the person's servers in every space: an app's code, which
    * calls only the ones the person granted it (@yaks/connections `grant`). */
   every?: boolean
 }
+/** A person's seat in a space, as the servers reached there ask it. */
+export type Seat = 'writes' | 'reads' | null
+
 export type Settings = {
   // Unsaid, a new server is called what it calls itself (its `serverInfo`),
   // or by its host where it says nothing before a sign-in; one connected
@@ -354,8 +360,17 @@ export let remoteCommands = (
         !comp(r, 'mcp_server').machine
       )
       : []
+  // In a space, a person with no seat there reaches no server, their own
+  // neither, and only one who writes there reaches those shared with
+  // everyone, whose calls carry their connector's credential.
+  let seat = async (): Promise<Seat> =>
+    host.every || !host.space ? 'writes' : await host.seat?.() ?? null
   let reachable = async () => {
-    let [own, theirs] = await Promise.all([rows(), shared()])
+    let held = await seat()
+    let [own, theirs] = await Promise.all([
+      held ? rows() : [],
+      held == 'writes' ? shared() : [],
+    ])
     for (let r of [...own, ...theirs]) {
       owners.set(r.entity.eid, String(comp(r, 'mcp_server').owner))
     }

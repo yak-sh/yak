@@ -1,6 +1,7 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
 import { url } from '@yaks/platform/host'
+import { writes } from '@yaks/member'
 import { manageAt } from '@yaks/platform/routes'
 import {
   type Ask,
@@ -58,7 +59,15 @@ let serversOf = (
 ) =>
   remoteCommands(person, {
     ...ctxOf(env, who),
-    ...space ? { space } : {},
+    ...space
+      ? {
+        space,
+        seat: async () => {
+          let role = await dir.role({ eid: space }, person)
+          return role == null ? null : writes(role) ? 'writes' : 'reads'
+        },
+      }
+      : {},
     ...every ? { every } : {},
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: space
