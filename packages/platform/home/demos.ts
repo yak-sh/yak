@@ -26,7 +26,8 @@ const live = (domain: string) => them(`Your app is ready at ${domain}.`)
 /** The reply to a domain on the Free plan: the Plus plan, and where to get it. */
 const plus: Line = {
   who: 'them',
-  text: 'You can use your own domain on the Plus plan.',
+  text:
+    'You can use your own domain on the Plus plan. I’ll tell you the two settings to add where you bought it.',
   link: { label: 'See the plans', href: '#cost' },
 }
 

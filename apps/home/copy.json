@@ -277,7 +277,7 @@
           "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe."
         },
         "pro": {
-          "note": "$100 of AI use a month for your apps and assistant, $200 of building credit when you take it, and more room for data, files and email. $490 a year."
+          "note": "The Pro plan, for each space, or $490 a year: $100 of AI use a month for your apps and assistant, and more room for data, files and email. Taking it adds $200 of building credit."
         },
         "reward": {
           "title": "A free month when a friend builds their first app.",
@@ -1109,7 +1109,7 @@
     "invite": {
       "title": "How do invitations work?",
       "lead": "Tell your assistant who, and why: %{said} Ana receives an email with your note and a link to accept. Nothing is shared with them until they click it, signed in with the same email address. No prior account or installation is required.",
-      "roles": "Choose whether the person can edit, only view, or invite other people. Membership applies to every app under %{yours}, not to a single app. Invite only people who should have access to the whole space.",
+      "roles": "Choose whether the person can edit, only view, or invite other people. Invite them to one app, and they can open that app and nothing else, or to %{yours}, and they reach every app in it.",
       "remove": "To remove access, ask %{said} They can still sign in to yaks.app, but they lose access to your space. Their previous contributions are not deleted.",
       "says": {
         "invite": "invite ana@example.com to the recipe box, and say it's for Saturday.",
