@@ -82,13 +82,6 @@ let Hero = (
         class='Note Note-small Home_Lead'
         {...copy.text('home.hello.note', {
           price: <a href='#cost' {...copy.text('home.hello.price')} />,
-          examples: (
-            <a
-              href='#examples'
-              data-cta='examples'
-              {...copy.text('home.hello.examples')}
-            />
-          ),
         })}
       />
       <div class='Home_Works'>

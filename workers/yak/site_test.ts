@@ -967,13 +967,15 @@ test('the townships page installs the township app and counts with its own funct
   assertStringIncludes(text, `about $${townships.MEETING.toFixed(2)} of AI`)
 })
 
-// The pages a home page is split with say the free plan's apps and the Plus
-// plan's price in their own copy, as the code holds a space to them.
+// The home page's hero and the pages it is split with say the free plan's
+// apps and the Plus plan's price in their own copy, as the code holds a space to them.
 test('the split home pages quote the free apps and the Plus price the code holds', () => {
   let apps = `${FREE.apps} apps`, plus = `$${PRICE.plus} a month`
   for (
     let [key, said] of [
       ['build.hello.note', `Free for ${apps}.`],
+      ['home.hello.note', `${apps} and $${STARTER} of building credit`],
+      ['home.hello.price', plus],
       ['operator.hello.price', plus],
       ['operator.cost.title', plus],
       ['operator.cost.note', `with ${apps}`],
