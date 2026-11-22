@@ -1,6 +1,9 @@
+import { bucketCode, BucketUnavailable, patient } from '@yaks/blob'
+import { sleep } from '@yaks/fp'
 import { script } from './recovery-script.ts'
 
 type Head = { key: string; size: number; at: string }
+type Part = { partNumber: number; etag: string }
 type State = {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<unknown>
@@ -8,11 +11,9 @@ type State = {
 }
 type Archive = {
   createMultipartUpload(key: string): Promise<{
-    uploadPart(part: number, bytes: Uint8Array): Promise<{
-      partNumber: number
-      etag: string
-    }>
-    complete(parts: { partNumber: number; etag: string }[]): Promise<unknown>
+    uploadPart(part: number, bytes: Uint8Array): Promise<Part>
+    complete(parts: Part[]): Promise<unknown>
+    abort(): Promise<void>
   }>
   put(key: string, content: string): Promise<unknown>
   list(options: { prefix: string; cursor?: string }): Promise<{
@@ -79,23 +80,7 @@ export let snapshot = async (
 }
 
 let PART = 5 * 1024 * 1024
-// R2 answers a part it could not store with an internal error (10001) and
-// asks for it again, so a part is sent up to three times before a save fails.
-let TRIES = 3
-
-let stored = async (
-  upload: Awaited<ReturnType<Archive['createMultipartUpload']>>,
-  part: number,
-  bytes: Uint8Array,
-) => {
-  for (let tried = 1;; tried++) {
-    try {
-      return await upload.uploadPart(part, bytes)
-    } catch (error) {
-      if (tried >= TRIES) throw error
-    }
-  }
-}
+let NO_UPLOAD = 10024
 let HEAD = 'workbench:head'
 
 export let filesystem = (
@@ -144,6 +129,43 @@ export let chunks = async function* (
   if (used) yield buffer.subarray(0, used)
 }
 
+let archived = async (
+  box: Filesystem,
+  bucket: Archive,
+  id: string,
+  size: number,
+  pause: (ms: number) => Promise<void>,
+): Promise<Head> => {
+  let key = prefix(id) + crypto.randomUUID() + '.tar.gz'
+  let upload = await bucket.createMultipartUpload(key)
+  try {
+    let parts: Part[] = []
+    let received = 0
+    for await (let content of chunks(box.read(), PART)) {
+      received += content.length
+      let part = parts.length + 1
+      parts.push(
+        await patient(() => upload.uploadPart(part, content), pause, 3),
+      )
+    }
+    if (received != size) throw new Error('workbench snapshot is incomplete')
+    await upload.complete(parts)
+  } catch (error) {
+    try {
+      await patient(() => upload.abort(), pause, 3)
+    } catch (cleanup) {
+      if (bucketCode(cleanup) != NO_UPLOAD) {
+        throw new AggregateError(
+          [error, cleanup],
+          `workbench snapshot failed and could not abort its upload: ${error}; ${cleanup}`,
+        )
+      }
+    }
+    throw error instanceof BucketUnavailable ? error.cause : error
+  }
+  return { key, size, at: new Date().toISOString() }
+}
+
 /** Recoverable workbench files, independent of the container SDK. Immutable
  * archives and receipts have no expiry; the DO holds only the current head.
  * A failed archive or head write leaves the container running. */
@@ -152,6 +174,7 @@ export let recovery = (
   state: State,
   bucket: Archive,
   id: string,
+  pause: (ms: number) => Promise<void> = sleep,
 ): Recovery => {
   let { run } = box
   let prepared: Promise<void> | undefined
@@ -191,22 +214,18 @@ export let recovery = (
       await prepare()
       let size = Number(await run('save'))
       if (!Number.isSafeInteger(size) || size <= 0) {
-        throw new Error(
-          'workbench snapshot size is invalid',
-        )
+        throw new Error('workbench snapshot size is invalid')
       }
-      let key = prefix(id) + crypto.randomUUID()
-      let upload = await bucket.createMultipartUpload(key + '.tar.gz')
-      let parts = []
-      let received = 0
-      for await (let content of chunks(box.read(), PART)) {
-        received += content.length
-        parts.push(await stored(upload, parts.length + 1, content))
-      }
-      if (received != size) throw new Error('workbench snapshot is incomplete')
-      await upload.complete(parts)
-      let head = { key: key + '.tar.gz', size, at: new Date().toISOString() }
-      await bucket.put(key + '.json', JSON.stringify(head))
+      // The tar file can be read afresh. Each attempt owns a separate upload,
+      // so a lost completion response cannot make a retry overwrite an archive.
+      let head = await patient(
+        () => archived(box, bucket, id, size, pause),
+        pause,
+        3,
+        1000,
+      )
+      let receipt = head.key.replace(/\.tar\.gz$/, '.json')
+      await patient(() => bucket.put(receipt, JSON.stringify(head)), pause)
       await state.put(HEAD, head)
     })().finally(() => {
       checkpoint = undefined

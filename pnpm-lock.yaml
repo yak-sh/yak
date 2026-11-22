@@ -4335,6 +4335,9 @@ importers:
 
   packages/sandbox:
     dependencies:
+      '@yaks/blob':
+        specifier: 0.2.30
+        version: link:../blob
       '@yaks/effects':
         specifier: 0.2.33
         version: link:../effects

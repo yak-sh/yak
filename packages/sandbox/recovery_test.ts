@@ -7,6 +7,8 @@ import {
   snapshot,
 } from './recovery.ts'
 
+type Stage = 'createMultipartUpload' | 'uploadPart' | 'complete' | 'put'
+
 let fixture = () => {
   let state = new Map<string, unknown>()
   let objects = new Map<string, Uint8Array>()
@@ -17,10 +19,22 @@ let fixture = () => {
   let archive = new Uint8Array()
   let restoreFailure = false
   let writeFailure = false
-  let partFailures = 0
+  let failures = new Map<Stage, number>()
+  let waits: number[] = []
+  let reads = 0
+  let aborted = 0
+  let fault = (stage: Stage) => {
+    let left = failures.get(stage) ?? 0
+    if (!left) return
+    failures.set(stage, left - 1)
+    return new Error(
+      `${stage}: We encountered an internal error. Please try again. (10001)`,
+    )
+  }
   let box = {
     live: () => Promise.resolve(awake),
     read: async function* () {
+      reads++
       yield archive
     },
     restore: (name: string, size: number) => {
@@ -44,58 +58,76 @@ let fixture = () => {
       return Promise.resolve('')
     },
   }
-  let held = recovery(box, {
-    get: <T>(key: string) => Promise.resolve(state.get(key) as T | undefined),
-    put: (key, value) => {
-      if (writeFailure) return Promise.reject(new Error('head write failed'))
-      state.set(key, value)
-      return Promise.resolve()
+  let held = recovery(
+    box,
+    {
+      get: <T>(key: string) => Promise.resolve(state.get(key) as T | undefined),
+      put: (key, value) => {
+        if (writeFailure) return Promise.reject(new Error('head write failed'))
+        state.set(key, value)
+        return Promise.resolve()
+      },
+      delete: (key) => {
+        state.delete(key)
+        return Promise.resolve()
+      },
     },
-    delete: (key) => {
-      state.delete(key)
-      return Promise.resolve()
+    {
+      createMultipartUpload: (key) => {
+        let error = fault('createMultipartUpload')
+        if (error) return Promise.reject(error)
+        let parts: Uint8Array[] = []
+        return Promise.resolve({
+          uploadPart: (partNumber, bytes) => {
+            let error = fault('uploadPart')
+            if (error) return Promise.reject(error)
+            parts.push(bytes)
+            return Promise.resolve({ partNumber, etag: String(partNumber) })
+          },
+          complete: () => {
+            let error = fault('complete')
+            if (error) return Promise.reject(error)
+            objects.set(key, parts[0])
+            return Promise.resolve()
+          },
+          abort: () => {
+            aborted++
+            return Promise.resolve()
+          },
+        })
+      },
+      put: (key, content) => {
+        let error = fault('put')
+        if (error) return Promise.reject(error)
+        objects.set(key, new TextEncoder().encode(content))
+        return Promise.resolve()
+      },
+      list: ({ prefix }) =>
+        Promise.resolve({
+          objects: [...objects.keys()].filter((key) => key.startsWith(prefix))
+            .map((key) => ({ key })),
+          truncated: false,
+        }),
+      delete: (keys) => {
+        for (let key of keys) objects.delete(key)
+        return Promise.resolve()
+      },
     },
-  }, {
-    createMultipartUpload: (key) => {
-      let parts: Uint8Array[] = []
-      return Promise.resolve({
-        uploadPart: (partNumber, bytes) => {
-          if (partFailures > 0 && partFailures--) {
-            return Promise.reject(
-              new Error(
-                'uploadPart: We encountered an internal error. Please try again. (10001)',
-              ),
-            )
-          }
-          parts.push(bytes)
-          return Promise.resolve({ partNumber, etag: String(partNumber) })
-        },
-        complete: () => {
-          objects.set(key, parts[0])
-          return Promise.resolve()
-        },
-      })
-    },
-    put: (key, content) => {
-      objects.set(key, new TextEncoder().encode(content))
-      return Promise.resolve()
-    },
-    list: ({ prefix }) =>
-      Promise.resolve({
-        objects: [...objects.keys()].filter((key) => key.startsWith(prefix))
-          .map((key) => ({ key })),
-        truncated: false,
-      }),
-    delete: (keys) => {
-      for (let key of keys) objects.delete(key)
-      return Promise.resolve()
-    },
-  }, 'person-space')
+    'person-space',
+    (ms) => Promise.resolve(void waits.push(ms)),
+  )
   return {
     ...held,
     shutdown: held.stop,
     objects,
     state,
+    waits,
+    get reads() {
+      return reads
+    },
+    get aborted() {
+      return aborted
+    },
     get awake() {
       return awake
     },
@@ -111,8 +143,8 @@ let fixture = () => {
     failWrite: (fail: boolean) => {
       writeFailure = fail
     },
-    failParts: (times: number) => {
-      partFailures = times
+    fail: (stage: Stage, times: number) => {
+      failures.set(stage, times)
     },
     stop: () => {
       awake = false
@@ -120,6 +152,7 @@ let fixture = () => {
       ready = false
       files = new Map()
       held.reset()
+      return Promise.resolve()
     },
   }
 }
@@ -165,25 +198,48 @@ test('failed head persistence leaves unique bytes live and a durable recovery re
   equal(bench.objects.size, 2)
 })
 
-test('a part R2 fails to store is sent again, and the snapshot is whole', async () => {
-  let bench = fixture()
-  await bench.prepare()
-  bench.files.set('/workspace/report', 'unique')
-  bench.failParts(2)
-  await bench.save()
-  bench.stop()
-  await bench.prepare()
-  equal(bench.files.get('/workspace/report'), 'unique')
-})
+for (
+  let [stage, failures, reads, aborted] of [
+    ['createMultipartUpload', 2, 1, 0],
+    ['uploadPart', 2, 1, 0],
+    ['uploadPart', 3, 2, 1],
+    ['complete', 1, 2, 1],
+    ['put', 1, 1, 0],
+  ] as const
+) {
+  test(`a snapshot recovers from ${failures} transient ${stage} failures`, async () => {
+    let bench = fixture()
+    await bench.prepare()
+    bench.files.set('/workspace/report', 'unique')
+    bench.fail(stage, failures)
+    await bench.shutdown(bench.stop)
+    equal(bench.waits.length, failures)
+    equal(bench.waits.every((ms) => ms > 0), true)
+    equal(bench.reads, reads)
+    equal(bench.aborted, aborted)
+    equal(bench.objects.size, 2)
+    await bench.prepare()
+    equal(bench.files.get('/workspace/report'), 'unique')
+  })
+}
 
-test('a part R2 fails to store three times fails the save and leaves the workbench live', async () => {
+test('an exhausted snapshot leaves the previous head and the running workbench intact', async () => {
   let bench = fixture()
   await bench.prepare()
-  bench.files.set('/workspace/report', 'unique')
-  bench.failParts(3)
-  await throws(bench.save, 'internal error')
+  bench.files.set('/workspace/report', 'previous')
+  await bench.save()
+  let head = [...bench.state]
+  let objects = [...bench.objects]
+  bench.files.set('/workspace/report', 'latest')
+  bench.fail('complete', 3)
+  await throws(() => bench.shutdown(bench.stop), 'internal error')
   equal(bench.awake, true)
-  equal(bench.files.get('/workspace/report'), 'unique')
+  equal(bench.files.get('/workspace/report'), 'latest')
+  equal([...bench.state], head)
+  equal([...bench.objects], objects)
+  await bench.shutdown(bench.stop)
+  await bench.prepare()
+  equal(bench.files.get('/workspace/report'), 'latest')
 })
 
 test('disposal of a stopped workbench does not recreate its filesystem', async () => {

@@ -18,6 +18,7 @@
   "license": "Apache-2.0",
   "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
   "dependencies": {
+    "@yaks/blob": "0.2.30",
     "@yaks/effects": "0.2.33",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",
