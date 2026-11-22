@@ -79,9 +79,11 @@ export let holder = <S>(socket: Socket<S>, tell: Telling): Holder => {
       let next = run(wire, step)
       // A press is answered within moments, so it is told first.
       if (step.pressed?.length) await tell.pressed?.(step.pressed)
+      // Record the voice snapshot before server lookups can let a later
+      // voice update overtake it.
+      if (step.voices?.length) await tell.voices?.(step.voices)
       if (step.servers) await tell.seated?.(step.servers)
       if (step.present?.length) await tell.present?.(step.present)
-      if (step.voices?.length) await tell.voices?.(step.voices)
       if (step.media) await tell.media?.(step.media)
       if (step.heard?.length) await tell.heard(step.heard)
       return next

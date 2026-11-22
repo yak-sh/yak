@@ -62,7 +62,8 @@ let setup = async () => {
   type Wire = {
     url: string
     sent: { op: number; d?: { token?: string } & Record<string, unknown> }[]
-    fire: Record<string, (e: { data?: unknown; code?: number }) => void>
+    fire: Record<string, Parameters<Socket['addEventListener']>[1]>
+    onSend?: (frame: Wire['sent'][number]) => void
     closed?: number
   }
   let wires: Wire[] = []
@@ -70,13 +71,17 @@ let setup = async () => {
     let w: Wire = { url, sent: [], fire: {} }
     wires.push(w)
     return Promise.resolve<Socket>({
-      send: (t) => w.sent.push(JSON.parse(t)),
+      send: (t) => {
+        let frame = JSON.parse(t)
+        w.sent.push(frame)
+        w.onSend?.(frame)
+      },
       close: (code) => w.closed = code,
       addEventListener: (type, fn) => w.fire[type] = fn,
     })
   }
   let frame = (f: unknown) =>
-    wires.at(-1)!.fire.message({ data: JSON.stringify(f) })
+    Promise.resolve(wires.at(-1)!.fire.message({ data: JSON.stringify(f) }))
 
   // Each bot's object, by name, with what it keeps and when it wakes next.
   type Held = {
@@ -374,12 +379,27 @@ test('the bot joins the voice room someone is in, the relay is handed its sessio
     VOICE_RELAY_KEY: 'relay-key',
   })
   let relayed: { path: string; auth: string | null; body: unknown }[] = []
+  let naming = Promise.withResolvers<void>()
+  let named = Promise.withResolvers<Response>()
   let was = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     let req = new Request(input, init)
-    if (new URL(req.url).host != 'relay.test') return was(input, init)
+    let { host, pathname } = new URL(req.url)
+    if (host != 'relay.test') {
+      if (
+        req.method == 'PATCH' && pathname.endsWith('/guilds/mill/members/@me')
+      ) {
+        naming.resolve()
+        return named.promise
+      }
+      assert(
+        req.method == 'GET' && pathname.endsWith('/guilds/mill'),
+        `Unexpected request: ${req.method} ${req.url}`,
+      )
+      return Response.json({ name: 'Mill' })
+    }
     relayed.push({
-      path: new URL(req.url).pathname,
+      path: pathname,
       auth: req.headers.get('authorization'),
       body: await req.json(),
     })
@@ -387,8 +407,8 @@ test('the bot joins the voice room someone is in, the relay is handed its sessio
   }
   try {
     await s.call(() => s.held.object.alarm())
-    s.frame({ op: 10, d: { heartbeat_interval: 3_600_000 } })
-    s.frame({
+    await s.frame({ op: 10, d: { heartbeat_interval: 3_600_000 } })
+    await s.frame({
       op: 0,
       t: 'READY',
       s: 1,
@@ -409,7 +429,7 @@ test('the bot joins the voice room someone is in, the relay is handed its sessio
         session_id: session,
       },
     })
-    s.frame({
+    let guild = s.frame({
       op: 0,
       t: 'GUILD_CREATE',
       s: 2,
@@ -419,27 +439,39 @@ test('the bot joins the voice room someone is in, the relay is handed its sessio
       },
     })
     let o = s.held.object
-    let where = () => s.call(() => o.voiced('mill', 'ann'))
-    for (let i = 0; i < 100 && !await where(); i++) {
-      await new Promise((r) => setTimeout(r, 5))
+    try {
+      // The Gateway already said who is in the room while REST is still busy.
+      assert(
+        await Promise.race([
+          naming.promise.then(() => true),
+          guild.then(() => false),
+        ]),
+        'Discord nickname request was not sent',
+      )
+      assertEquals(await s.call(() => o.voiced('mill', 'ann')), 'loft')
+      assertEquals(await s.call(() => o.voiced('mill', 'bo')), null)
+    } finally {
+      named.resolve(Response.json({}))
+      await guild
     }
-    assertEquals(await where(), 'loft')
-    assertEquals(await s.call(() => o.voiced('mill', 'bo')), null)
     let stream = 'wss://yaks.app/discord/stream?call=sealed'
+    let sent = Promise.withResolvers<void>()
+    s.wires[0].onSend = (frame) => {
+      if (frame.op == 4) sent.resolve()
+    }
     let joining = s.call(() =>
       o.voice({ server: 'mill', room: 'loft', stream })
     )
-    await s.settled(() => s.wires[0].sent.some((f) => f.op == 4))
-    s.frame(state(ME, 'loft', 'mine'))
-    s.frame({
+    assertEquals(await Promise.race([sent.promise, joining]), undefined)
+    await s.frame(state(ME, 'loft', 'mine'))
+    await s.frame({
       op: 0,
       t: 'VOICE_SERVER_UPDATE',
       s: 4,
       d: { guild_id: 'mill', token: 'vt', endpoint: 'c.discord.media' },
     })
     assertEquals(await joining, 'joined')
-    s.frame(state('ann', null, 'a'))
-    await s.settled(() => relayed.length > 1)
+    await s.frame(state('ann', null, 'a'))
     assertEquals(
       s.wires[0].sent.filter((f) => f.op == 4).map((f) => f.d),
       [
@@ -473,7 +505,9 @@ test('the bot joins the voice room someone is in, the relay is handed its sessio
       },
       { path: '/leave', auth: 'Bearer relay-key', body: { server: 'mill' } },
     ])
+    assertEquals(s.told, [])
   } finally {
     globalThis.fetch = was
+    await s.call(() => s.held.object.stop())
   }
 })

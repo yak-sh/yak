@@ -23,7 +23,9 @@ import { holder, type Wire } from './socket.ts'
 export type Socket = Wire & {
   addEventListener(
     type: 'message' | 'close' | 'error',
-    listener: (event: { data?: unknown; code?: number }) => void,
+    listener: (
+      event: { data?: unknown; code?: number },
+    ) => void | Promise<void>,
   ): void
 }
 
@@ -152,7 +154,7 @@ export let listener = (host: Hosting): Listener => {
       status = { open: true }
       s.addEventListener('message', (event) => {
         if (socket != s) return
-        held!.frame(s, String(event.data)).then(follow, host.report)
+        return held!.frame(s, String(event.data)).then(follow, host.report)
       })
       s.addEventListener('close', (event) => {
         if (socket != s) return
