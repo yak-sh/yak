@@ -1,8 +1,9 @@
 import { line } from '@yaks/query'
-import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
+import { addressed, type Bundle, type Graph, type ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or, pred, present } from '@yaks/query/core'
+import { CallError } from '@yaks/tools/errors'
 import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
 import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import type { Held } from './build-door.ts'
@@ -218,11 +219,18 @@ export let sight = (
 ): ReadOpts => ({
   visibility: {
     entity: and(
-      owned(store)
-        ? member ? theirs(person) : eq('owner.person', person)
-        : member
-        ? claimed(person)
-        : and(claimed(person), named(person)),
+      // Approval asks have no stored owner, including those already filed.
+      or(
+        and(present('approval_ask'), eq('filed.assignee', person)),
+        and(
+          absent('approval_ask'),
+          owned(store)
+            ? member ? theirs(person) : eq('owner.person', person)
+            : member
+            ? claimed(person)
+            : and(claimed(person), named(person)),
+        ),
+      ),
       ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
       ...store.marks && store.marks.get(MEMORY_OWNERS) != 'done'
         ? [
@@ -237,8 +245,23 @@ export let sight = (
   },
 })
 
-/** The Operator's store as `reader` reads it (`sight`). Only its reads are
- * narrowed; a write goes to the store as it stands. */
+// The assignment also determines whose Updates an approval ask appears in.
+// The system assigns it when it asks. A work tool may not transfer it.
+let keepAssignees = async (g: Graph, bundles: Bundle[]) => {
+  let moves = bundles.filter((b) =>
+    !b.entity.eid.startsWith('$') &&
+    typeof b.filed == 'object' &&
+    (b.filed === null || Object.hasOwn(b.filed, 'assignee'))
+  ).map((b) => b.entity.eid)
+  if (!moves.length) return
+  let rows = await g.get(await addressed(g, moves), ['approval_ask'])
+  if (rows.some((b) => b.approval_ask)) {
+    throw new CallError('access', 'Only the system assigns approval asks.')
+  }
+}
+
+/** The Operator's store as `reader` reads it (`sight`) and edits its work.
+ * Tools resolve their write targets through the same scoped reads. */
 export let seenBy = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
   reader: Reader,
@@ -252,6 +275,10 @@ export let seenBy = (
     rows: (query, opts) => g.rows(query, narrow(opts)),
     get: (eids, comps, opts) => g.get(eids, comps, narrow(opts)),
     view: (query, opts) => g.view(query, narrow(opts)),
+    apply: async (bundles, opts) => {
+      await keepAssignees(g, bundles)
+      return g.apply(bundles, opts)
+    },
   }
 }
 

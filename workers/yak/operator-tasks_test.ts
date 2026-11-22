@@ -7,7 +7,9 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
 import { human } from '@yaks/id'
 import { operatorMemory } from './operator-testing.ts'
-import { operatorVocab } from './operator-store.ts'
+import { operatorStore, operatorVocab } from './operator-store.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
+import { askOf, waiting } from './operator-approvals.ts'
 import { working } from './operator-tasks.ts'
 import { invokePackage, packageTools } from './package-tools.ts'
 import { owned } from './directory-fixture.ts'
@@ -69,6 +71,57 @@ test('a question the Operator asks the person is not a shared tool', async () =>
       'no Operator work tool',
     )
   }
+})
+
+let approvals = await operatorStore(durable())
+let requester = crypto.randomUUID(), approver = crypto.randomUUID()
+let approval = crypto.randomUUID(), approvalSpace = crypto.randomUUID()
+let session = crypto.randomUUID()
+let ask = askOf(approval, approver)
+await approvals.g.apply([
+  { entity: { eid: session }, session: {} },
+  { entity: { eid: requester }, doc: { title: 'Requester' } },
+  ...await waiting(approvals, approvalSpace, approval, {
+    person: requester,
+    session,
+    tool: 'example',
+    args: {},
+    say: 'Review the draft',
+    expires: '2099-01-01T00:00:00Z',
+    approvers: [approver],
+  }),
+], { trusted: true })
+let approvalWork = (person: string, name: string, args: unknown) =>
+  working(approvals, { person, member: true }, name, args)
+
+test('an approval ask without a stored owner is private to its assignee', async () => {
+  let [row] = await approvals.g.get([ask])
+  equal(row.owner, undefined)
+  equal(titles(await approvalWork(approver, 'task_list', {})), [
+    'Review the draft?',
+  ])
+  equal(await approvalWork(requester, 'task_list', {}), [])
+  await assertRejects(
+    () =>
+      approvalWork(requester, 'task_update', {
+        task: ask,
+        status: 'cancelled',
+      }),
+    CallError,
+    'names no task',
+  )
+  equal((await approvals.g.get([ask]))[0].cancelled, undefined)
+})
+
+test('a work tool keeps the approval assigned to the person asked to answer it', async () => {
+  await assertRejects(
+    () =>
+      approvalWork(approver, 'task_update', { task: ask, assignee: requester }),
+    CallError,
+    'Only the system assigns approval asks.',
+  )
+  let [row] = await approvals.g.get([ask])
+  equal((row.filed as Comp).assignee, approver)
 })
 
 let requests: Request[] = []
