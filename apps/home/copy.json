@@ -175,7 +175,7 @@
         "example": "ourtownship.org",
         "go": "Get Started"
       },
-      "ai": "Building credit and each month’s AI use pay for the AI: the assistant building and changing your apps, the helpers that answer your visitors, voice calls and texts. Building credit is spent first and never expires. When a month’s AI use runs out, the assistant and helpers pause until the 1st and nothing more is charged. Your apps stay online, and you can keep building from Claude or ChatGPT.",
+      "ai": "Building credit and each month’s AI use pay for the same AI: the assistant building and changing your apps, the helpers that answer your visitors, voice calls and texts. A space spends its building credit first, then the month’s AI use, and building credit never expires. When a month’s AI use runs out, the assistant and helpers pause until the 1st and nothing more is charged. Your apps stay online, and you can keep building from Claude or ChatGPT.",
       "limits": "Tax is included. Going over a limit never deletes your apps or data. %{plans}.",
       "plans": "Compare plans and limits"
     },
@@ -273,11 +273,11 @@
         },
         "plus": {
           "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe.",
-          "credit": "$100 of building credit with your first subscription"
+          "credit": "$100 of building credit with your first subscription, added to what the space has left"
         },
         "pro": {
           "note": "The Pro plan, for each space, or $490 a year: $100 of AI use a month for your apps and assistant, and more room for data, files and email.",
-          "credit": "$200 of building credit, and $100 more if it’s your first subscription"
+          "credit": "$200 of building credit, and $100 more if it’s your first subscription, added to what the space has left"
         },
         "reward": {
           "title": "A free month when a friend builds their first app.",
