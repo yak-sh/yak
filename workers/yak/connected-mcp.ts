@@ -1,6 +1,6 @@
 import { ctxOf } from './connections.ts'
 import { caught } from './defects.ts'
-import { spaceHost, url } from '@yaks/platform/host'
+import { url } from '@yaks/platform/host'
 import { writes } from '@yaks/member'
 import { manageAt } from '@yaks/platform/routes'
 import {
@@ -8,7 +8,6 @@ import {
   type Choice,
   type Offered,
   remoteCommands,
-  sharing,
   type Shown,
   type Told,
 } from '@yaks/connections/mcp'
@@ -30,8 +29,7 @@ import {
   SPACE,
   str,
 } from './tool.ts'
-import type { Directory, Role, Space } from './directory.ts'
-import { mail } from './mail.ts'
+import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import type { Row } from './tool-words.ts'
@@ -106,35 +104,6 @@ let commands = async (ctx: Ctx, asking?: Calling, space?: string) =>
     asking,
     !!ctx.app,
   )
-/** Tells `person`, at `email`, once, that the servers they connected in
- * `space` for everyone stopped serving it when they stopped owning it, their
- * seat there now `now`: no row changes (@yaks/connections/mcp `shared`).
- * Answers the servers' names, none where they shared nothing there. */
-export let unshared = async (
-  env: Env,
-  space: Space,
-  person: string,
-  email: string,
-  now: Role | null,
-): Promise<string[]> => {
-  let names = await sharing(ctxOf(env).graph.read, person, space.eid)
-  if (!names.length) return names
-  let at = `${space.title} (${spaceHost(env, space.slug)})`
-  await mail(env)({
-    to: email,
-    subject: `Your MCP servers are no longer shared in ${space.title}`,
-    about: space.eid,
-    body: [
-      `You no longer own ${at}, so the MCP servers you connected there for ` +
-      `everyone are no longer used for anyone there: ${names.join(', ')}.`,
-      'Nothing was deleted, and nobody else reaches them with your sign-in ' +
-      'or key.' + (now ? ' You still use them yourself there.' : ''),
-      `If you own ${space.title} again, they are shared there again.`,
-    ].join('\n\n'),
-  })
-  return names
-}
-
 /** A person's servers in `space` as its connections page shows and changes
  * them: that page is at the platform's address, which no credential narrowed
  * to one space reaches. */

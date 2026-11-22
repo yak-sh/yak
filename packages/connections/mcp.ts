@@ -16,6 +16,7 @@
 // space is, and to anyone else it is not connected.
 import { line } from '@yaks/query'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import {
   checkNamespaces,
@@ -338,15 +339,19 @@ export type Remote = {
 /** The names of the servers `person` connected in `space` for everyone in
  * it, those in the trash left out: what they stop sharing there when they
  * own it no longer. */
-export let sharing = async (
+export let sharing = (
   read: Ctx['graph']['read'],
   person: string,
   space: string,
-): Promise<string[]> =>
-  (await read(
-    line`.mcp_server.space=${space}&.mcp_server.owner=${person}&.mcp_server.everyone=true&*`,
-  )).filter((r) => !r.trashed && !comp(r, 'mcp_server').machine)
-    .map((r) => String(comp(r, 'mcp_server').name)).sort()
+): string[] | Promise<string[]> =>
+  after(
+    read(
+      line`.mcp_server.space=${space}&.mcp_server.owner=${person}&.mcp_server.everyone=true ?trashed`,
+    ),
+    (rows) =>
+      rows.filter((r) => !r.trashed && !comp(r, 'mcp_server').machine)
+        .map((r) => String(comp(r, 'mcp_server').name)).sort(),
+  )
 
 /** Each operation reads ownership anew; no roster retains authority. */
 export let remoteCommands = (

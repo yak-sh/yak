@@ -178,6 +178,29 @@ export let contactCode = (space: Writer, code: string) => ({
     `changed.\n\n${signed(space)}`,
 })
 
+/** The security notice for a connector whose shared MCP servers lost their
+ * owner seat. The space may have been deleted in the same write. */
+export let mcpUnshared = (
+  space: { title: string; host: string },
+  names: string[],
+  seat: 'editor' | 'viewer' | null,
+  deleted: boolean,
+) => ({
+  subject: `Your MCP servers are no longer shared in ${space.title}`,
+  body: [
+    deleted
+      ? `${space.title} (${space.host}) was deleted.`
+      : `You no longer own ${space.title} (${space.host}).`,
+    'People in that space can no longer use the MCP servers you shared ' +
+    `with everyone there.\n\n${bullets(names)}`,
+    ...deleted ? [] : [
+      'Your sign-in or key was kept.' +
+      (seat ? ' You can still use your servers there yourself.' : ''),
+      `If you own ${space.title} again, your servers are shared there again.`,
+    ],
+  ].join('\n\n'),
+})
+
 /**
  * An alert by email: what the Operator tells the person, an invitation to
  * answer by replying, and where their Updates are; or what it `asks` them,

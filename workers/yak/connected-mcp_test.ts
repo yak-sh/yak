@@ -3,7 +3,7 @@
 // stub gateway.
 import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { evaluate } from '../../packages/code-mode/testing.ts'
@@ -14,7 +14,6 @@ import {
   heardFrom,
   mcpConnect,
   runConnectedCommand,
-  unshared,
 } from './connected-mcp.ts'
 import { ctxOf } from './connections.ts'
 import { DESCRIBED, SAID, TITLED } from '@yaks/connections/mcp'
@@ -29,7 +28,7 @@ import { operatorTools } from './operator-tools.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import type { Request as ModelRequest } from '@yaks/model'
 import { drain } from './operator-store.ts'
-import { compiler } from './testing.ts'
+import { compiler, platform as runtime } from './testing.ts'
 
 // The machine, and the gateway in the apps' namespace that reaches it while
 // it is `up`.
@@ -520,49 +519,100 @@ for (
   }
 }
 
-test('a former owner is told once which servers they shared with everyone stopped serving the space, and none is changed', async () => {
-  let { read, apply } = ctxOf(env).graph
-  let shared = (name: string, more = {}) => ({
+let notices = runtime('mcp-notices')
+let roster = directoryOf(notices.env.STORE)
+let sharingIn = async (name: string) => {
+  let person = mint(), seat = mint(), at = mint(), away = mint()
+  let email = `${name}@example.test`
+  let { read, apply } = ctxOf(notices.env).graph
+  let server = (name: string, options = {}) => ({
     entity: { eid: mint() },
     mcp_server: {
-      owner: bob,
+      owner: person,
       name,
       url: `https://${name}.test/mcp`,
-      space: eid,
+      space: at,
       everyone: true,
-      ...more,
+      ...options,
     },
   })
-  let rows = [
-    shared('Books'),
-    shared('Art'),
-    shared('Mine', { everyone: false }),
-    shared('Away', { space: elsewhere.eid }),
-  ]
-  await apply(rows)
-  let before = await read(line`.mcp_server.owner=${bob}&*`)
-  let letters = () => read(line`.mail.target=${eid}&.doc&*`)
-  assertEquals(await unshared(env, space, bob, 'bob@example.test', 'editor'), [
-    'Art',
-    'Books',
+  await apply([
+    {
+      entity: { eid: person },
+      person: {},
+      email: { address: email },
+    },
+    {
+      entity: { eid: at },
+      space: { slug: name },
+      doc: { title: name },
+    },
+    {
+      entity: { eid: seat },
+      member: { space: at, person, role: 'owner' },
+    },
+    {
+      entity: { eid: away },
+      space: { slug: `${name}-away` },
+    },
+    server('Books'),
+    server('Art'),
+    server('Mine', { everyone: false }),
+    server('Away', { space: away }),
   ])
-  let [letter, ...more] = await letters()
-  assertEquals(more, [])
-  let { title, body } = letter.doc as { title: string; body: string }
-  assertEquals(title, 'Your MCP servers are no longer shared in Ada')
-  for (
-    let said of [
-      'You no longer own Ada',
-      'no longer used for anyone there: Art, Books.',
-      'Nothing was deleted',
-      'You still use them yourself there.',
-    ]
-  ) assertEquals(body.includes(said), true, said)
-  assertEquals(await read(line`.mcp_server.owner=${bob}&*`), before)
-  // One who shared nothing there is told nothing.
-  assertEquals(await unshared(env, space, ada, 'ada@example.test', null), [])
+  let servers = () => read(line`.mcp_server.owner=${person}&*`)
+  let letters = async () => {
+    await notices.settled()
+    return read(
+      line`.mail.target=${at}&.deliver.to.email.address=${email} ?doc`,
+    )
+  }
+  let body = async () => {
+    let [letter, ...extra] = await letters()
+    assertEquals(extra.length, 0)
+    assertEquals(!!letter, true, 'the connector received a letter')
+    let body = (letter.doc as { body: string }).body
+    assertStringIncludes(body, 'Art\n  - Books')
+    assertEquals(body.includes('Mine') || body.includes('Away'), false)
+    return body
+  }
+  return { at, person, seat, apply, servers, letters, body }
+}
+
+let demoted = await sharingIn('mcp-demotion')
+let leaving = await sharingIn('mcp-departure')
+let erased = await sharingIn('mcp-erasure')
+
+test('the directory tells a connector once when their owner role changes', async () => {
+  let { at, person, seat, apply, servers, letters, body } = demoted
+  let kept = await servers()
+  let entity = { eid: seat }
+  await apply([{ entity, member: { own: true } }])
+  assertEquals(await letters(), [])
+  await apply([{ entity, member: { role: 'editor' } }])
+  assertEquals(await roster.role({ eid: at }, person), 'editor')
+  assertStringIncludes(await body(), 'You can still use your servers')
+  await apply([{ entity, member: { role: 'viewer' } }])
   assertEquals((await letters()).length, 1)
-  await ctxOf(env).graph.apply(
-    rows.map((r) => ({ entity: r.entity, tombstone: {} })),
+  assertEquals(await servers(), kept)
+})
+
+test('deleting a seat tells the connector and keeps their servers', async () => {
+  let { at, person, seat, apply, servers, body } = leaving
+  let kept = await servers()
+  await apply([{ entity: { eid: seat }, $delete: true }])
+  assertEquals(await roster.role({ eid: at }, person), null)
+  assertStringIncludes(await body(), 'You no longer own')
+  assertEquals(await servers(), kept)
+})
+
+test('deleting the space tells the connector even when the seat and servers are removed in the cascade', async () => {
+  let { at, person, apply, servers, body } = erased
+  await apply([{ entity: { eid: at }, tombstone: {} }])
+  assertEquals(await roster.role({ eid: at }, person), null)
+  assertStringIncludes(await body(), 'was deleted')
+  assertEquals(
+    (await servers()).map((row) => (row.mcp_server as { name: string }).name),
+    ['Away'],
   )
 })
