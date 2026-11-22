@@ -262,6 +262,28 @@ test('a read the cache holds back past its patience is answered in-process', asy
   assertEquals(time.pending(), 0)
 })
 
+test('a read held back while its origin fails too is not blamed on the cache', async () => {
+  let held: number[] = []
+  let stalled = { fetch: () => new Promise<Response>(() => {}) }
+  let read = (local: () => Promise<Response>) => {
+    let time = clock()
+    let answer = through(stalled, asked(), local, {
+      clock: time,
+      patience: 5_000,
+      held: (_, ms) => held.push(ms),
+    })
+    return time.advance(5_000).then(() => answer)
+  }
+  let busy = () => Promise.reject(new Error('BucketUnavailable'))
+  await assertRejects(() => read(busy), Error, 'BucketUnavailable')
+  assertEquals(
+    (await read(() => Promise.resolve(new Response(null, { status: 500 }))))
+      .status,
+    500,
+  )
+  assertEquals(held, [])
+})
+
 test('a failure the cache cannot be read around is thrown', async () => {
   let broken = cache(() => {
     throw new TypeError('bad')

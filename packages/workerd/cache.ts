@@ -150,7 +150,8 @@ export type Through = {
    * waits the hop out, for a read only the entrypoint's origin can answer,
    * which answering in-process would ask a second time. */
   patience?: number
-  /** told of a read the cache did not answer within `patience` */
+  /** told of a read the cache did not answer within `patience`, whose
+   * in-process answer then came back whole */
   held?: (req: Request, ms: number) => void
 }
 
@@ -169,9 +170,12 @@ export type Through = {
  *   (`@yaks/durable-object/resets` `retried`). Anything with a body is its
  *   caller's to send again.
  * - A read the cache has not answered within `patience` is given up on and
- *   answered in-process, which `held` is told of: the cache can hold a burst
- *   of misses back for a minute while the entrypoint behind it has long
- *   answered.
+ *   answered in-process: the cache can hold a burst of misses back for a
+ *   minute while the entrypoint behind it has long answered. `held` is told
+ *   only when that answer comes back whole, which says the cache held back
+ *   what could be given. One that fails too, or is a server error, says the
+ *   origin was slow, not the cache (a bucket retrying through a blip), and
+ *   that failure is what reports it, once, where it happened.
  */
 export let through = async (
   cache: Bound | undefined,
@@ -196,8 +200,9 @@ export let through = async (
     if (!answer) {
       stop.abort()
       asking.then((late) => late.body?.cancel(), () => {})
-      held?.(req, patience)
-      return await local(req)
+      let drawn = await local(req)
+      if (drawn.status < 500) held?.(req, patience)
+      return drawn
     }
     if (answer.status < 520 || answer.status > 530) return answer
     await answer.body?.cancel()
