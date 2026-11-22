@@ -321,16 +321,13 @@ let COLUMNS = [
   ], ['cookies', '/cookies']]],
 ] as const
 
-/** Building credit earned on a person's first space or first subscription. */
+/** The building credit a plan's card names: a person's first space's, a
+ * first subscription's, and what taking the Pro plan adds. */
 export let PlanCredit = ({ copy, plan }: { copy: Copy; plan: string }) => (
   <li class='Home_PlanCredit'>
     <Icon of={gift} />
     <span
-      {...copy.text(
-        plan == 'free'
-          ? 'home.story.pricing.free.credit'
-          : 'home.story.pricing.paid.credit',
-      )}
+      {...copy.text(`home.story.pricing.${plan}.credit`)}
     />
   </li>
 )

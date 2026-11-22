@@ -36,7 +36,7 @@
       "title": "Build your ideas by asking.",
       "hint": "Type what you need, like “Make me a menu for my market stall”",
       "go": "Build it",
-      "note": "Free to start, with no card. Get $20 of building credit and your first 5 apps free. The Plus plan is %{price} for more apps. %{examples}.",
+      "note": "Free to start, with no card. Get $20 of building credit for the AI assistant’s work, and your first 5 apps free. The Plus plan is %{price} for more apps. %{examples}.",
       "price": "$12 a month",
       "examples": "See examples"
     },
@@ -146,6 +146,7 @@
       "free": {
         "price": "Free",
         "note": "Your first space, with $20 of building credit.",
+        "ai": "$20 of AI use a month",
         "apps": "5 apps",
         "visitors": "Unlimited visitors",
         "storage": "1 GB of app data, 1 GB of photos and files",
@@ -156,6 +157,7 @@
       "plus": {
         "price": "$12 %{per}",
         "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe. Your first subscription adds $100 of building credit.",
+        "ai": "$30 of AI use a month",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "10 GB of app data, 50 GB of photos and files",
@@ -166,7 +168,8 @@
       },
       "pro": {
         "price": "$49 %{per}",
-        "note": "The Pro plan, or $490 a year: $100 of AI use a month and more room for everything. Your staff ask the Operator by email or chat, and it makes the change. Taking it adds $200 of building credit, and your first subscription $100 more.",
+        "note": "The Pro plan, or $490 a year, with more room for everything. Your staff ask the Operator by email or chat, and it makes the change. Taking it adds $200 of building credit, and your first subscription $100 more.",
+        "ai": "$100 of AI use a month",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "50 GB of app data, 250 GB of photos and files",
@@ -175,6 +178,7 @@
         "example": "ourtownship.org",
         "go": "Get Started"
       },
+      "ai": "Building credit and each month’s AI use pay for the AI: the assistant building and changing your apps, the helpers that answer your visitors, voice calls and texts. Building credit is spent first and never expires. When a month’s AI use runs out, the assistant and helpers pause until the 1st and nothing more is charged. Your apps stay online, and you can keep building from Claude or ChatGPT.",
       "limits": "Tax is included. Going over a limit never deletes your apps or data. %{plans}.",
       "plans": "Compare plans and limits"
     },
@@ -217,11 +221,11 @@
       },
       "free": {
         "name": "Free",
-        "offer": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free, with $20 of building credit."
+        "offer": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, 100 emails a month, and $20 of AI use a month. A person's first space is free, with $20 of building credit."
       },
       "plus": {
         "name": "Plus",
-        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $120 a year. A first subscription adds $100 of building credit."
+        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, $30 of AI use a month, and a custom domain. Or $120 a year. A first subscription adds $100 of building credit."
       },
       "pro": {
         "name": "Pro",
@@ -270,14 +274,13 @@
           "note": "Your first space.",
           "credit": "$20 of building credit when you sign up"
         },
-        "paid": {
+        "plus": {
+          "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe.",
           "credit": "$100 of building credit with your first subscription"
         },
-        "plus": {
-          "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe."
-        },
         "pro": {
-          "note": "The Pro plan, for each space, or $490 a year: $100 of AI use a month for your apps and assistant, and more room for data, files and email. Taking it adds $200 of building credit."
+          "note": "The Pro plan, for each space, or $490 a year, with more room for data, files and email.",
+          "credit": "$200 of building credit, and $100 more if it’s your first subscription"
         },
         "reward": {
           "title": "A free month when a friend builds their first app.",
@@ -388,7 +391,7 @@
           "short": "Helpers",
           "heading": "An AI helper that answers your visitors.",
           "body": "Give your app a helper that answers the questions visitors ask: the allergens on a menu, parking at the church, what’s on for Tuesday of the trip. The helper answers from what your app keeps.",
-          "point1": "AI use is included on every plan",
+          "point1": "$20 to $100 of AI use a month, by plan",
           "point2": "You choose how much of your monthly AI budget visitors may spend",
           "point3": "Each visitor has a daily limit, so no stranger spends the whole budget"
         },
@@ -860,7 +863,7 @@
         "domain": "No custom domain",
         "payments": "No payments",
         "badge": "A small “Made with yaks.app” badge",
-        "ai": "AI use included",
+        "ai": "$20 of AI use a month",
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "plus": {
@@ -873,7 +876,7 @@
         "domain": "A custom domain, like %{domain}",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
-        "ai": "AI use included",
+        "ai": "$30 of AI use a month",
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "pro": {
@@ -977,9 +980,9 @@
       },
       "ai": {
         "name": "AI use a month %{note}",
-        "note": "What models and voice cost, in your apps and in the built-in builder.",
-        "free": "Included",
-        "plus": "Included",
+        "note": "What models, voice and texts cost, in your apps and in the built-in builder. Building credit is spent first and never expires. When a month’s runs out, they pause until the 1st and nothing more is charged.",
+        "free": "$20",
+        "plus": "$30",
         "pro": "$100"
       },
       "builds": {

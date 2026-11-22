@@ -434,10 +434,9 @@ let FEATURES = [
 
 let pricing = () => parseHTML(read('pricing.html')).document
 
-// What a card says of AI use: the Pro plan's is what it gives beyond the
-// Plus plan, said first (standing.ts `beyond`).
-let month = beyond().split(',')[0]
-let ai = (tier: Tier) => tier == 'pro' ? month : 'AI use included'
+// What a card says of AI use: the plan's monthly budget, which on the Pro
+// plan is also what it gives beyond the Plus plan (standing.ts `beyond`).
+let ai = (tier: Tier) => `$${BUDGET[tier]} of AI use a month`
 
 test('every pricing card lists the same features in the same order', () => {
   let cards = [...pricing().querySelectorAll('.Plan')]
@@ -464,7 +463,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use a month', (t) => t == 'pro' ? `$${BUDGET.pro}` : 'Included'],
+    ['AI use a month', (t) => `$${BUDGET[t]}`],
     ['Builds a month', (t) => String(BUILDS[t])],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
@@ -1244,6 +1243,10 @@ test('every place a person decides names the building credit the code grants', a
       ['home.cost.plus.note', subscribed],
       ['home.cost.pro.note', pro],
       ['home.cost.pro.note', more],
+      ['home.story.pricing.free.credit', starter],
+      ['home.story.pricing.plus.credit', subscribed],
+      ['home.story.pricing.pro.credit', pro],
+      ['home.story.pricing.pro.credit', `$${SUBSCRIBED} more`],
       ['home.data.free.offer', starter],
       ['home.data.plus.offer', subscribed],
       ['home.data.pro.offer', pro],
@@ -1270,6 +1273,30 @@ test('every place a person decides names the building credit the code grants', a
   assertEquals(
     refused({ ...space, tier: 'plus' }, {}).includes(subscribed),
     false,
+  )
+})
+
+// Each plan's monthly AI use, said where its price is read: the home page's
+// cards, its offers to search engines and the helpers' range, each the
+// budget @yaks/platform/plans gives.
+test("the home page names each plan's monthly AI use as the code gives it", () => {
+  let { document } = parseHTML(read('index.html'))
+  let offers = Object.fromEntries(
+    // deno-lint-ignore no-explicit-any
+    ld(read('index.html'))[0]['@graph'].find((n: any) => n.offers).offers
+      // deno-lint-ignore no-explicit-any
+      .map((o: any) => [o.name.toLowerCase(), o.description]),
+  )
+  for (let tier of TIERS) {
+    let card = flat(document.querySelector(cardOf(tier))!.textContent!)
+    assertStringIncludes(card, ai(tier), tier)
+    assertStringIncludes(offers[tier], ai(tier), tier)
+  }
+  assertStringIncludes(beyond(), ai('pro'))
+  let budgets = Object.values(BUDGET)
+  assertStringIncludes(
+    copied('home.story.turn.helper.point1'),
+    `$${Math.min(...budgets)} to $${Math.max(...budgets)} of AI use a month`,
   )
 })
 
