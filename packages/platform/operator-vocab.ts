@@ -74,6 +74,45 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_escalation: {
+      component: true,
+      description:
+        "On a decision assigned to one of the space's people: what a stranger's conversation raised with them (yaks.app's operator-escalate.ts). It waits in their Updates and starts no turn; taken up (decided), it starts their conversation on it on the escalated channel, and let go, it is closed for everyone. A conversation has one open at a time, and what it raises meanwhile is added to it.",
+      properties: {
+        raised: {
+          type: 'string',
+          index: true,
+          description:
+            'The escalation this is one copy of: the same on the copy raised with each person who may answer it.',
+        },
+        from: {
+          type: 'string',
+          ref: 'session',
+          death: 'keep',
+          index: true,
+          description:
+            'The conversation that raised it, with the writer and only their permissions, which hears back only what escalation_answer sends it.',
+        },
+        address: {
+          type: 'string',
+          description: 'What the writer goes by: a name or an address.',
+        },
+        about: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description:
+            "The writer's reply it raises, to a letter or text the Operator sent for this person.",
+        },
+        answered_by: {
+          type: 'string',
+          ref: 'person',
+          death: 'keep',
+          description:
+            'Who of those it was raised with answered it first, on every copy: it is theirs, and the rest answer it no more.',
+        },
+      },
+    },
     approval_ask: {
       component: true,
       description:
@@ -203,12 +242,10 @@ export let operatorDoc: VocabDoc = {
           description:
             "On the escalated channel, the escalation these words are one copy of: the same on the copy raised with each person who may answer it (yaks.app's operator-route.ts).",
         },
-        answered_by: {
+        answer: {
           type: 'string',
-          ref: 'person',
-          death: 'keep',
           description:
-            'On the escalated channel, who of those it was raised with answered it first, on every copy: it is theirs, and the rest answer it no more.',
+            'On the escalated channel, what the person answered the escalation with in their Updates, in their own words, where they did not just take it up.',
         },
         from: {
           type: 'string',
@@ -772,11 +809,19 @@ export let operatorDoc: VocabDoc = {
     },
     operator_decision_answer: {
       effect: true,
-      target: '.decision !operator_approval !approval_ask',
+      target: '.decision !operator_approval !approval_ask !operator_escalation',
       created: ['decided'],
       tries: 3,
       description:
         "Continue the Operator's work when its person answers a question.",
+    },
+    operator_escalation_take: {
+      effect: true,
+      target: '.operator_escalation',
+      created: ['decided'],
+      tries: 3,
+      description:
+        "What a stranger's conversation raised, answered in its person's Updates: taken up, it starts their conversation on it; let go, it is closed for everyone it was raised with (yaks.app's operator-escalate.ts `taken`).",
     },
     operator_approval_ask_answer: {
       effect: true,

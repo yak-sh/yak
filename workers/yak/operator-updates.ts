@@ -468,7 +468,8 @@ export let openedIn = async (
  * dismissed, or `{count}` for how many wait on them alone), reads one (`{open}`), dismisses a notice (`{dismiss}`), reads
  * a file one of their questions shows (`{shown, eid}`: its address and
  * media type), answers a question with a choice (`{choose, choice}`), or
- * sends words about one (`{reply, say}`), which opens the chat.
+ * sends words about one (`{reply, say}`), which opens the chat; words on
+ * what a stranger's conversation raised answer it.
  */
 export let updating = async (
   store: Store,
@@ -530,7 +531,13 @@ export let updating = async (
   }
   if (!say) throw refuse('arguments', 'Say something about it.')
   let opened = await opening(store, person, about)
-  if (str('choose')) {
+  // Words on what a stranger's conversation raised answer it, in their own
+  // words: only an answer starts their conversation on it
+  // (operator-escalate.ts `taken`).
+  let raised = found.lane == 'Needs you' &&
+    !!(await store.g.get([about], ['operator_escalation']))[0]
+      ?.operator_escalation
+  if (str('choose') || raised) {
     await store.g.apply([
       ...opened,
       {

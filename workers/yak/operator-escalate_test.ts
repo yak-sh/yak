@@ -11,7 +11,9 @@ import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { receive } from './operator-channels.ts'
 import {
+  copyOf,
   escalate,
+  ESCALATION,
   escalationAnswer,
   investigatorOf,
   linkedTo,
@@ -25,6 +27,7 @@ import { askOf, waiting } from './operator-approvals.ts'
 import { conversationOf } from './operator-host.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { arrived, reading } from './inbox.ts'
+import { updatesOf, updating } from './operator-updates.ts'
 import type { Inbound } from './env.ts'
 
 // A person's Operator writes to Dr Alvarez for them. Her reply is answered in
@@ -203,6 +206,18 @@ await service.drain()
 
 let writer = (await dir.personAt('alvarez@clinic.example'))!
 let theirs = rootOf(eid, writer), mine = rootOf(eid, person)
+// What her conversation raised waits in Jeff's Updates, and starts no turn
+// until he takes it up there.
+let [copy] = await store.g.read('.operator_escalation&*')
+let waited = {
+  turns: asked.filter((r) => /Raised from/.test(turn(r).words)).length,
+  updates: await updatesOf(store, person, eid),
+}
+await updating(store, held, {
+  choose: copy.entity.eid,
+  choice: ESCALATION.take,
+})
+await service.drain()
 let [raised] = await store.g.read('.operator_request.channel=escalated&*')
 let request = raised.operator_request as Record<string, unknown>
 let entries = (session: string) =>
@@ -217,6 +232,20 @@ let note = await noteOf()
 let hers = asked.filter((r) => /By email from alvarez/.test(turn(r).words))
 let raisedAsks = asked.filter((r) => /Raised from/.test(turn(r).words))
 let threaded = letters.find((l) => l.text?.includes('Tuesday at 3 works'))!
+
+// T-2523: a stranger's escalate starts no model turn with anyone; it is a
+// decision in their Updates, and a turn starts when they answer it.
+test('what is raised waits in the Updates of who may answer it, and starts no turn until they take it up', () => {
+  equal(waited.turns, 0)
+  let item = waited.updates.updates.find((u) => u.eid == copy.entity.eid)!
+  assert(item.needs)
+  equal(
+    item.choices?.map((c) => c.label),
+    [ESCALATION.take, ESCALATION.leave],
+  )
+  equal(item.from?.chat, mine)
+  equal(raisedAsks.length > 0, true)
+})
 
 test("the writer's conversation raises what needs the person with the person's own conversation, as a request of the Operator's own words", async () => {
   assert(writer && writer != person)
@@ -351,13 +380,27 @@ test("a stranger's conversation raises what needs the space's people with everyo
       ),
     ),
   )
-  await service.drain()
   let copies = await store.g.read(
-    q`.operator_request.raised=${escalation}&*`,
+    q`.operator_escalation.raised=${escalation}&*`,
   )
   let of = (b: (typeof copies)[number]) =>
-    b.operator_request as Record<string, unknown>
-  assertEquals(new Set(copies.map((b) => of(b).person)), new Set([person, ana]))
+    b.operator_escalation as Record<string, unknown>
+  let to = (b: (typeof copies)[number]) =>
+    (b.filed as { assignee: string }).assignee
+  assertEquals(new Set(copies.map(to)), new Set([person, ana]))
+  // Both take it up: each conversation is started by its own person.
+  for (
+    let [who, b] of [[held, copies.find((b) => to(b) == person)!], [{
+      person: ana,
+      space: eid,
+    }, copies.find((b) => to(b) == ana)!]] as const
+  ) {
+    await updating(store, who, {
+      choose: b.entity.eid,
+      choice: ESCALATION.take,
+    })
+  }
+  await service.drain()
   for (let b of copies) {
     assertEquals(of(b).from, theirs)
     assertEquals(of(b).about, undefined)
@@ -375,8 +418,8 @@ test("a stranger's conversation raises what needs the space's people with everyo
   )
   assert(words.includes('notification_send: Dr Alvarez asks whether'))
   // Jeff answers first: Ana is told, and answers it no more.
-  let jeffs = copies.find((b) => of(b).person == person)!
-  let anas = copies.find((b) => of(b).person == ana)!
+  let jeffs = copies.find((b) => to(b) == person)!
+  let anas = copies.find((b) => to(b) == ana)!
   await escalationAnswer(store, ctx, space).run(
     { escalation: jeffs.entity.eid, say: 'No texts, thank you.' },
     as(mine),
@@ -419,12 +462,99 @@ test('a stranger who says they are a member raises it with that member alone, ou
     ),
   )
   let copies = await store.g.read(
-    q`.operator_request.raised=${escalation}&*`,
+    q`.operator_escalation.raised=${escalation}&*`,
   )
   assertEquals(
-    copies.map((b) => (b.operator_request as { person: string }).person),
+    copies.map((b) => (b.filed as { assignee: string }).assignee),
     [ana],
   )
+  // Her words on it in her Updates answer it, and start her conversation
+  // with them.
+  let anas = { person: ana, space: eid }
+  await updating(store, anas, {
+    reply: copies[0].entity.eid,
+    say: 'Not me; ask Jeff.',
+  })
+  await service.drain()
+  assert(
+    asked.some((r) =>
+      turn(r).words.includes('this person answered it: “Not me; ask Jeff.”')
+    ),
+  )
+  await escalationAnswer(
+    store,
+    await operatorContext(env, { person: ana }, space),
+    space,
+  ).run({ escalation: copies[0].entity.eid, say: 'That was not Ana.' }, {
+    session: rootOf(eid, ana),
+    call: { entity: { eid: crypto.randomUUID() } },
+    entries: [],
+  })
+})
+
+// T-2523: a stranger raises one escalation at a time; more while it is open
+// is added to it, never a new one.
+test('a conversation has one escalation open at a time, and a repeat folds into it', async () => {
+  let ctx = await operatorContext(env, held, space)
+  let raise = async (say: string) => {
+    let said = String(
+      await escalate(store, ctx, space).run({ say }, {
+        session: theirs,
+        call: { entity: { eid: crypto.randomUUID() } },
+        entries: [],
+      }),
+    )
+    return JSON.parse(said.slice(0, said.indexOf('}') + 1))
+  }
+  let first = await raise('Asks for a refund.')
+  let again = await raise('Asks again, louder.')
+  equal(again, { escalation: first.escalation, folded: 2 })
+  let copies = await store.g.read(
+    q`.operator_escalation.raised=${first.escalation}&*`,
+  )
+  equal(copies.length, 2)
+  for (let b of copies) {
+    equal(
+      (b.doc as { body: string }).body,
+      'Asks for a refund.\n\nAsks again, louder.',
+    )
+  }
+  equal(
+    (await store.g.read(q`.operator_escalation.from=${theirs}&*`))
+      .filter((b) =>
+        !(b.operator_escalation as Record<string, unknown>).answered_by
+      )
+      .length,
+    2,
+  )
+  // Taken up, what is added later is a note in that conversation, no turn.
+  let jeffs = copyOf(first.escalation, person)
+  await updating(store, held, { choose: jeffs, choice: ESCALATION.take })
+  await service.drain()
+  let turns = asked.length
+  await raise('Asks a third time.')
+  await service.drain()
+  equal(asked.length, turns)
+  assert(JSON.stringify(await entries(mine)).includes('Asks a third time.'))
+  // Ana lets it go: it is closed for everyone, Jeff's conversation and the
+  // writer's are told, and nothing starts.
+  await updating(store, { person: ana, space: eid }, {
+    choose: copyOf(first.escalation, ana),
+    choice: ESCALATION.leave,
+  })
+  await service.drain()
+  let closed = await store.g.read(
+    q`.operator_escalation.raised=${first.escalation}&*`,
+  )
+  equal(
+    closed.map((b) =>
+      (b.operator_escalation as { answered_by?: string }).answered_by
+    ),
+    [ana, ana],
+  )
+  equal(asked.length, turns)
+  assert(JSON.stringify(await entries(mine)).includes('Ana answered'))
+  assert(JSON.stringify(await entries(theirs)).includes('They let it go'))
 })
 
 // T-2511: one report starts one investigation, held to one at a time and
@@ -511,10 +641,10 @@ test('a guest who links their account to a member is served within their role, w
       ),
     ).escalation
   let copiesOf = (raised: string) =>
-    store.g.read(q`.operator_request.raised=${raised}&*`)
+    store.g.read(q`.operator_escalation.raised=${raised}&*`)
   let answered = async (raised: string) =>
     (await copiesOf(raised)).map((b) =>
-      (b.operator_request as { answered_by?: string }).answered_by
+      (b.operator_escalation as { answered_by?: string }).answered_by
     )
   // As a viewer, what they asked still waits for those whose role allows it.
   let looked = await raise('Wants the illustrated guide turned into an app.')
@@ -527,6 +657,12 @@ test('a guest who links their account to a member is served within their role, w
     [],
   )
   equal(await answered(looked), [undefined, undefined])
+  // Jeff took it up; Ana never did.
+  await updating(store, held, {
+    choose: copyOf(looked, person),
+    choice: ESCALATION.take,
+  })
+  await service.drain()
   // Jeff's conversation, answering it, asked an approval Bo is asked too.
   let approval = crypto.randomUUID()
   await store.g.apply([{
