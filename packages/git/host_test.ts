@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   createWorktree,
+  holds,
   inUse,
   processCwds,
   processPaths,
@@ -58,6 +59,18 @@ test('a process the scan cannot read holds nothing', async () => {
     [...await processCwds(procs)].slice(1).sort(),
     ['/cwd/1', '/cwd/6', '/hidden'],
   )
+})
+
+test('a paused rebase keeps a linked worktree busy', async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    await Deno.mkdir(`${dir}/work`)
+    await Deno.mkdir(`${dir}/gitdir/rebase-merge`, { recursive: true })
+    await Deno.writeTextFile(`${dir}/work/.git`, 'gitdir: ../gitdir\n')
+    assertEquals(await holds(`${dir}/work`, 'refs/heads/main'), 'busy')
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
 })
 
 // A throwaway repository with one commit on main.

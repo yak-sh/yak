@@ -543,8 +543,9 @@ export let keepSpare = async (
 }
 
 /** Why a worktree was kept: uncommitted files, commits that exist nowhere
- * else, a removal that did not succeed, or a run that took it up again. */
-export type Held = 'dirty' | 'unlanded' | 'failed' | 'taken'
+ * else, an unfinished Git operation or lock, a failed removal, or a run
+ * that took it up again. */
+export type Held = 'dirty' | 'unlanded' | 'busy' | 'failed' | 'taken'
 
 /** What the scan reads of this host's processes, each read failing as procfs
  * does: `procfs` reads Linux's, and a test hands the scan its own. */
@@ -715,6 +716,32 @@ let gitdirOf = async (path: string): Promise<string | undefined> => {
   return named && !named.startsWith('/') ? `${path}/${named}` : named
 }
 
+// Git keeps operation state with the worktree, even after the process exits.
+let BUSY = new Set([
+  'rebase-merge',
+  'rebase-apply',
+  'MERGE_HEAD',
+  'CHERRY_PICK_HEAD',
+  'REVERT_HEAD',
+  'sequencer',
+  'BISECT_START',
+  'locked',
+  'index.lock',
+])
+
+let busy = async (path: string): Promise<boolean> => {
+  let dir = await gitdirOf(path)
+  if (!dir) return false
+  try {
+    for await (let entry of io.readDir(dir)) {
+      if (BUSY.has(entry.name)) return true
+    }
+  } catch (error) {
+    if (!io.isNotFound(error)) throw error
+  }
+  return false
+}
+
 /** A worktree Git has already lost: the gitdir its `.git` file names is gone,
  * so nothing can be committed from it and nothing read out of it. */
 export let lost = async (path: string): Promise<boolean> => {
@@ -824,6 +851,7 @@ let holding = async (
   landed?: string,
   base?: string,
 ): Promise<{ held?: Held; branch?: string }> => {
+  if (await busy(path)) return { held: 'busy' }
   let at = await standing(path)
   if (at?.dirty) return { held: 'dirty' }
   if (!at?.head) return { held: 'unlanded' }
@@ -856,7 +884,8 @@ let holding = async (
  * `unlanded` — kept, never guessed at. With `landed`, only that full local
  * branch ref counts as a landing (for example `refs/heads/main`), and the
  * branch reflog must prove it committed work still contained in HEAD. A fresh
- * branch or missing reflog evidence is kept. A caller supplying the checkout's
+ * branch or missing reflog evidence is kept. A lock or unfinished Git
+ * operation keeps a linked worktree as `busy`. A caller supplying the checkout's
  * pinned `base` can also take back a clean checkout still at that commit. */
 export let holds = async (
   path: string,
@@ -906,6 +935,7 @@ export let reclaim = async (
     let { held, branch } = await holding(path, landed, base)
     if (held) return held
     if (!await free()) return 'taken'
+    if (await busy(path)) return 'busy'
     await keepIgnored(path)
     if (await quiet(path, ['worktree', 'remove', path]) == null) {
       return 'failed'
@@ -930,7 +960,8 @@ export let LARGE = 1_000_000
  * on a branch, so `restore` cuts it again where it stood once `onBranch` (run
  * with the work committed and the checkout still there) has recorded it.
  * Returns what kept it, or nothing: `dirty` for an untracked file of
- * {@link LARGE} or more, `failed` when Git refused a step. It is removed
+ * {@link LARGE} or more, `busy` for a lock or unfinished Git operation,
+ * `failed` when Git refused a step. It is removed
  * under the lock creation takes at its path, as `reclaim` removes one. */
 export let shelve = async (
   path: string,
@@ -949,6 +980,7 @@ let put = async (
   onBranch: () => Promise<unknown>,
   free: () => Promise<boolean>,
 ): Promise<Held | undefined> => {
+  if (await busy(path)) return 'busy'
   let at = await standing(path)
   if (!at) return 'unlanded'
   if (at.dirty) {
@@ -964,6 +996,7 @@ let put = async (
     }
   }
   if (!await free()) return 'taken'
+  if (await busy(path)) return 'busy'
   if (at.dirty) {
     let shelved = await quiet(path, ['add', '-A']) != null &&
       await quiet(path, [

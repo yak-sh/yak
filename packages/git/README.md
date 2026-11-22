@@ -629,6 +629,10 @@ linked worktrees, and `idleFor(path)` says how long since Git last moved one's
 HEAD, read from its reflog's last entry rather than the file's mtime, which
 `git gc` rewrites in every worktree whenever it expires reflogs.
 
+`holds` also returns `busy` for a worktree with a Git lock or an unfinished Git
+operation. The collector checks it again on a later pass, even when it is old
+enough to shelve.
+
 `processPaths()` reads the working directories and open file paths of this
 user's live Linux processes, so agents outside the graph also keep their
 worktrees. A process that cannot be read holds nothing. It reads them through
