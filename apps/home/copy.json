@@ -36,7 +36,7 @@
       "title": "Build your ideas by asking.",
       "hint": "Type what you need, like “Make me a menu for my market stall”",
       "go": "Build it",
-      "note": "Free with no card: 5 apps and $20 of building credit for the AI assistant. The Plus plan is %{price}.",
+      "note": "Free, no card: 5 apps and $20 of building credit for the AI. The Plus plan is %{price}.",
       "price": "$12 a month",
       "examples": "See examples"
     },
