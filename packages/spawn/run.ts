@@ -1143,16 +1143,35 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   }
   let read = new Set(runs.map((r) => r.eid))
   // Only their eids: every ended run's whole row is megabytes read cold at
-  // each start-up.
-  let unread =
+  // each start-up. More requests than stops only says where to look: a run
+  // carried on can end once for both, so one whose newest request has its
+  // ending is over, and its report was given then.
+  let ended =
     (await g.read(line`.${SESSION}&.${PROCESS}&.${EXIT}&.fields=entity.eid`))
       .map((b) => b.entity.eid)
-      .filter((eid) =>
-        !read.has(eid) &&
-        ((asks.get(eid) ?? 0) > (over.get(eid) ?? 0) || logs.has(eid))
-      )
-  for (let eid of unread) await readOn(g, eid, o)
+      .filter((eid) => !read.has(eid))
+  for (let eid of ended) {
+    let short = (asks.get(eid) ?? 0) > (over.get(eid) ?? 0)
+    if (
+      logs.has(eid) ||
+      short && !await answered(g, eid, await latestRequest(g, eid))
+    ) {
+      await readOn(g, eid, o)
+    }
+  }
   return runs
+}
+
+// Whether a request has its ending after it: a run asks once and ends once,
+// and an ending answers every request before it.
+let answered = async (
+  g: Graph,
+  session: string,
+  request: Bundle | undefined,
+): Promise<boolean> => {
+  let stop = await receiptOf(g, session)
+  let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
+  return !!stop && seq(stop) > seq(request)
 }
 
 // A run that ended without saying so. A provider prints a terminal event when
@@ -1169,12 +1188,11 @@ let ended = async (
   o: Opts,
   through?: string,
 ): Promise<Onward | undefined> => {
-  let [stop, request] = await Promise.all([
-    receiptOf(g, session),
-    through ? one(g, through) : latestRequest(g, session),
-  ])
+  let request = through
+    ? await one(g, through)
+    : await latestRequest(g, session)
+  if (await answered(g, session, request)) return undefined
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
-  if (stop && seq(stop) > seq(request)) return undefined
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
   // A shell or service manager can ask the provider to stop without writing

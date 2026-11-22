@@ -853,6 +853,36 @@ test('a run that ended while nobody read its log is read to its end on start-up'
   }
 })
 
+test('a run carried on and ended once is over: a start-up does not report it again', async () => {
+  let { g, dir, close } = await logged(said)
+  let releases: (() => Promise<void>)[] = []
+  let detach = detached((release) => void releases.push(release))
+  try {
+    Deno.removeSync(`${dir}/S1.out`)
+    await g.apply([
+      { entity: { eid: 'work' }, task: {}, claim: { session: 'S1' } },
+      {
+        entity: { eid: 'E2' },
+        entry: { session: 'S1' },
+        content: { body: 'Continue the work.' },
+        using: FAKE,
+      },
+      // One ending, after both requests, that names the first.
+      {
+        entity: { eid: 'E3' },
+        entry: { session: 'S1' },
+        ask: { through: 'E1' },
+        stop: {},
+      },
+    ])
+    await resume(g, { dir, adapters: { fake: claude }, detach })
+    for (let release of releases) await release()
+    assertEquals(await g.read('.comment.target=work'), [])
+  } finally {
+    close()
+  }
+})
+
 test('a host that closes waits out the reader a run left going', async () => {
   let { g, dir, close } = await logged(said)
   let releases: (() => Promise<void>)[] = []
