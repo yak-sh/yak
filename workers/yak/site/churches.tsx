@@ -150,10 +150,11 @@ export let Churches = () => (
           price='home.cost.pro.price'
           note='home.cost.pro.note'
           items={[
+            ['home.cost.pro.credit'],
             ['home.cost.pro.apps'],
             ['churches.cost.pro.invited'],
             ['home.cost.pro.domain', { domain }],
-            ['churches.cost.pro.ai'],
+            ['home.cost.pro.change'],
           ]}
           go={
             <Button

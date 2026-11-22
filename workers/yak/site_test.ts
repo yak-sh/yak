@@ -33,7 +33,7 @@ import {
   YEARLY,
 } from '@yaks/platform/plans'
 import { size } from '@yaks/fp'
-import { beyond, count, plans as refused } from '@yaks/platform/standing'
+import { count, plans as refused } from '@yaks/platform/standing'
 import { GET_PLAN, installAt } from '@yaks/platform/routes'
 import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
@@ -388,6 +388,7 @@ test('the plan pages carry the email allowance the code enforces', () => {
 // the pricing page in full, and both show every plan.
 let CARDS: Record<string, Tier[]> = {
   'index.html': [...TIERS],
+  'build.html': [...TIERS],
   'pricing.html': [...TIERS],
 }
 let cardOf = (tier: Tier) =>
@@ -420,6 +421,7 @@ test('the plan cards and every offer carry the meter allowances', () => {
 // pricing page names the same things in the same order: a card's nth line
 // says FEATURES[n]. What a plan lacks is a line on its card that says so.
 let FEATURES = [
+  'building credit',
   'apps',
   'visitors',
   'app data',
@@ -428,16 +430,10 @@ let FEATURES = [
   'custom domain',
   'payments',
   'badge',
-  'AI use',
   'change',
 ]
 
 let pricing = () => parseHTML(read('pricing.html')).document
-
-// What a card says of AI use: the Pro plan's is what it gives beyond the
-// Plus plan, said first (standing.ts `beyond`); the others name no amount.
-let month = beyond().split(',')[0]
-let ai = (tier: Tier) => tier == 'pro' ? month : 'AI use included'
 
 test('every pricing card lists the same features in the same order', () => {
   let cards = [...pricing().querySelectorAll('.Plan')]
@@ -451,7 +447,6 @@ test('every pricing card lists the same features in the same order', () => {
         : line
     )
     assertEquals(named, FEATURES, TIERS[i])
-    assertEquals(lines[FEATURES.indexOf('AI use')], ai(TIERS[i]))
   })
 })
 
@@ -1232,27 +1227,29 @@ test('every place a person decides names the building credit the code grants', a
   let starter = `$${STARTER} of building credit`
   let subscribed = `$${SUBSCRIBED} of building credit`
   let pro = `$${PRO_GRANT} of building credit`
-  let more = `subscription $${SUBSCRIBED} more`
-  for (
-    let [key, said] of [
-      ['home.cost.free.note', starter],
-      ['home.cost.plus.note', subscribed],
-      ['home.cost.pro.note', pro],
-      ['home.cost.pro.note', more],
-      ['home.story.pricing.free.credit', starter],
-      ['home.story.pricing.plus.credit', subscribed],
-      ['home.story.pricing.pro.credit', pro],
-      ['home.story.pricing.pro.credit', `$${SUBSCRIBED} more`],
-      ['home.data.free.offer', starter],
-      ['home.data.plus.offer', subscribed],
-      ['home.data.pro.offer', pro],
-      ['home.data.pro.offer', more],
-      ['pricing.plans.free.note', starter],
-      ['pricing.plans.plus.note', subscribed],
-      ['pricing.plans.pro.note', pro],
-      ['pricing.plans.pro.note', more],
-    ]
-  ) assertStringIncludes(copied(key), said, key)
+  let grants = {
+    free: [starter],
+    plus: [subscribed],
+    pro: [`one-time ${pro}`, `$${SUBSCRIBED} more`],
+  }
+  for (let [page, tiers] of Object.entries(CARDS)) {
+    for (let tier of tiers) {
+      let card = parsed(page).querySelector(cardOf(tier))!
+      for (let grant of grants[tier]) {
+        assertStringIncludes(flat(card.textContent!).toLowerCase(), grant, page)
+      }
+    }
+  }
+  let [doc] = ld(read('index.html'))
+  let offers =
+    doc['@graph'].find((n: { '@type': string }) =>
+      n['@type'] == 'SoftwareApplication'
+    ).offers
+  for (let [i, tier] of TIERS.entries()) {
+    for (let grant of grants[tier]) {
+      assertStringIncludes(offers[i].description.toLowerCase(), grant, tier)
+    }
+  }
   assertStringIncludes(await askEmail({}).text(), starter)
   let card = (tier: Tier) =>
     flat(markup(plan(
@@ -1283,9 +1280,17 @@ test("only the Pro plan's monthly AI use is named in dollars", () => {
     }
     assertEquals(html.match(/\$[\d,]+ on the (free|Plus) plan/), null, name)
   }
-  for (let page of ['index.html', 'pricing.html']) {
-    let card = flat(parsed(page).querySelector('.Plan-pro')!.textContent!)
-    assertStringIncludes(card, month, page)
+  for (let page of Object.keys(CARDS)) {
+    for (let tier of TIERS) {
+      let card = flat(parsed(page).querySelector(cardOf(tier))!.textContent!)
+      assertStringIncludes(
+        card,
+        tier == 'pro'
+          ? `$${BUDGET.pro} of AI use a month`
+          : 'Monthly AI use included',
+        page,
+      )
+    }
   }
 })
 

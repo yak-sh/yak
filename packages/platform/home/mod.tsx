@@ -1,6 +1,8 @@
 /** @jsxImportSource preact */
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, VNode } from 'preact'
 import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
+import type { Tier } from '../plans.ts'
+import { GET_PLAN } from '../routes.ts'
 import { TURNS } from './demos.ts'
 import { gift, ICONS } from './icons.ts'
 import { Phone, Picks } from './phone.tsx'
@@ -321,16 +323,49 @@ let COLUMNS = [
   ], ['cookies', '/cookies']]],
 ] as const
 
-/** The building credit a plan's card names: a person's first space's, a
- * first subscription's, and what taking the Pro plan adds. */
-export let PlanCredit = ({ copy, plan }: { copy: Copy; plan: string }) => (
-  <li class='Home_PlanCredit'>
-    <Icon of={gift} />
-    <span
-      {...copy.text(`home.story.pricing.${plan}.credit`)}
-    />
-  </li>
-)
+let PLAN_FEATURES = ['apps', 'visitors', 'data', 'files', 'emails']
+
+/** The same plan card on the home and pricing pages, with room for a page's
+ * selection of features. */
+export let Plan = (
+  { copy, plan, items, slots, cta, illustrated }: {
+    copy: Copy
+    plan: Tier
+    items: readonly string[]
+    slots?: Record<string, VNode>
+    cta?: string
+    illustrated?: boolean
+  },
+) => {
+  let at = `home.cost.${plan}`
+  let free = plan == 'free'
+  return (
+    <Card as='div' class={free ? 'Plan' : `Plan Plan-${plan}`}>
+      <h3
+        class='Plan_Price'
+        {...copy.text(`${at}.price`, {
+          per: <span class='Plan_Per' {...copy.text('home.cost.per')} />,
+        })}
+      />
+      <p class='Note Note-small' {...copy.text(`${at}.note`)} />
+      <ul class='Plan_List'>
+        <li class={illustrated ? 'Home_PlanCredit' : 'Plan_Item'}>
+          {illustrated && <Icon of={gift} />}
+          <span {...copy.text(`${at}.credit`)} />
+        </li>
+        {[...PLAN_FEATURES, ...items].map((item) => (
+          <li class='Plan_Item' {...copy.text(`${at}.${item}`, slots)} />
+        ))}
+      </ul>{' '}
+      <Button
+        mod='go'
+        href={free ? '/login' : GET_PLAN}
+        data-cta={cta}
+        {...copy.text(`${at}.go`)}
+      />
+    </Card>
+  )
+}
 
 export let StoryFooter = (
   { copy, action, yak }: { copy: Copy; action: string; yak: ComponentChildren },

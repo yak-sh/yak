@@ -1,8 +1,7 @@
 /** @jsxImportSource preact */
 import { keys, read } from '@yaks/copy'
 import { Button, Card, Field, Form } from '@yaks/ui'
-import { GET_PLAN } from '@yaks/platform/routes'
-import { PlanCredit, Story, StoryFooter } from '@yaks/platform/home'
+import { Plan, Story, StoryFooter } from '@yaks/platform/home'
 import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
@@ -22,7 +21,9 @@ let offer = (plan: string) => ({
   'priceCurrency': 'USD',
   'url': 'https://yaks.app/pricing',
   'availability': 'https://schema.org/InStock',
-  'description': said(`home.data.${plan}.offer`),
+  'description': `${said(`home.data.${plan}.offer`)} ${
+    said(`home.cost.${plan}.credit`)
+  }`,
   ...(plan == 'free' ? {} : {
     'priceSpecification': {
       '@type': 'UnitPriceSpecification',
@@ -266,46 +267,6 @@ export let Walkthrough = () => (
   </section>
 )
 
-// A plan's card on the home page: its price, its note, its list and its
-// button, each a snippet under `home.cost.<plan>`.
-let Plan = (
-  { plan, items, mod, href, cta, story }: {
-    plan: string
-    items: Record<string, Slots>
-    mod?: string
-    href: string
-    cta?: string
-    story?: boolean
-  },
-) => (
-  <Card as='div' class={mod ? `Plan ${mod}` : 'Plan'}>
-    <h3
-      class='Plan_Price'
-      {...text(`home.cost.${plan}.price`, {
-        per: <span class='Plan_Per' {...text('home.cost.per')} />,
-      })}
-    />
-    <p
-      class='Note Note-small'
-      {...text(
-        story ? `home.story.pricing.${plan}.note` : `home.cost.${plan}.note`,
-      )}
-    />
-    <ul class='Plan_List'>
-      {story && <PlanCredit copy={{ attr, text }} plan={plan} />}
-      {Object.entries(items).map(([item, slots]) => (
-        <li class='Plan_Item' {...text(`home.cost.${plan}.${item}`, slots)} />
-      ))}
-    </ul>{' '}
-    <Button
-      mod='go'
-      href={href}
-      data-cta={cta}
-      {...text(`home.cost.${plan}.go`)}
-    />
-  </Card>
-)
-
 /** What a space costs: what one is, a card for each plan, and where the
  * limits are. */
 export let Cost = ({ story }: { story?: boolean } = {}) => (
@@ -318,44 +279,27 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
     <p class='Note' {...text('home.cost.note', { yours: <Yours /> })} />
     <div class='Plans'>
       <Plan
+        copy={{ attr, text }}
         plan='free'
-        story={story}
-        href='/login'
-        items={{
-          apps: {},
-          visitors: {},
-          storage: {},
-          emails: {},
-          address: { yours: <Yours /> },
-        }}
+        illustrated={story}
+        items={['address']}
+        slots={{ yours: <Yours /> }}
       />
       <Plan
+        copy={{ attr, text }}
         plan='plus'
-        story={story}
-        mod='Plan-plus'
-        href={GET_PLAN}
+        illustrated={story}
         cta='plus'
-        items={{
-          apps: {},
-          visitors: {},
-          storage: {},
-          emails: {},
-          domain: { domain: <b {...text('home.cost.plus.example')} /> },
-        }}
+        items={['domain', 'payments']}
+        slots={{ domain: <b {...text('home.cost.plus.example')} /> }}
       />
       <Plan
+        copy={{ attr, text }}
         plan='pro'
-        story={story}
-        mod='Plan-pro'
-        href={GET_PLAN}
+        illustrated={story}
         cta='pro'
-        items={{
-          apps: {},
-          visitors: {},
-          storage: {},
-          emails: {},
-          domain: { domain: <b {...text('home.cost.pro.example')} /> },
-        }}
+        items={['domain', 'change']}
+        slots={{ domain: <b {...text('home.cost.pro.example')} /> }}
       />
     </div>
     <p class='Note Note-small' {...text('home.cost.ai')} />

@@ -47,3 +47,13 @@ test('a snippet changed in the copy is what the served page says', async () => {
   )
   assertEquals(at('.Nav a[href="#cost"]').textContent, 'Plans')
 })
+
+test('one edit to the Pro credit reaches both home pages and pricing', async () => {
+  let credit = 'A one-time building credit followed by monthly AI use.'
+  let copy = parse(set(committed, { 'home.cost.pro.credit': credit }))
+  for (let name of ['index.html', 'build.html', 'pricing.html']) {
+    let { document } = parseHTML(await served(name, copy))
+    let card = document.querySelector('.Plan-pro')!
+    assertEquals(card.querySelector('.Plan_List li')?.textContent, credit, name)
+  }
+})

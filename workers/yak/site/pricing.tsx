@@ -1,56 +1,19 @@
 /** @jsxImportSource preact */
 import { Button, Card } from '@yaks/ui'
-import { GET_PLAN } from '@yaks/platform/routes'
+import { Plan } from '@yaks/platform/home'
 import { Page, Yours } from './frame.tsx'
-import { type Slots, text } from './copy.ts'
+import { attr, type Slots, text } from './copy.ts'
 
-let PLANS = ['free', 'plus', 'pro']
+let PLANS = ['free', 'plus', 'pro'] as const
 
 // What every card lists, in the same order, so a reader compares the plans
 // across: a card's nth line says the same thing of each plan.
 let ITEMS = [
-  'apps',
-  'visitors',
-  'data',
-  'files',
-  'emails',
   'domain',
   'payments',
   'badge',
-  'ai',
   'change',
 ]
-
-// A plan's card: its price and button as the home page's card says them, and
-// its note and list under `pricing.plans.<plan>`, each line filled from
-// `slots`.
-let Plan = (
-  { plan, mod, href, slots = {} }: {
-    plan: string
-    mod?: string
-    href: string
-    slots?: Slots
-  },
-) => (
-  <Card as='div' class={mod ? `Plan ${mod}` : 'Plan'}>
-    <h3
-      class='Plan_Price'
-      {...text(`home.cost.${plan}.price`, {
-        per: <span class='Plan_Per' {...text('home.cost.per')} />,
-      })}
-    />
-    <p class='Note Note-small' {...text(`pricing.plans.${plan}.note`)} />
-    <ul class='Plan_List'>
-      {ITEMS.map((item) => (
-        <li
-          class='Plan_Item'
-          {...text(`pricing.plans.${plan}.${item}`, slots)}
-        />
-      ))}
-    </ul>{' '}
-    <Button mod='go' href={href} {...text(`home.cost.${plan}.go`)} />
-  </Card>
-)
 
 // Terms and what each means, a pair under `<at>.<item>`: an item's slots fill
 // either of its lines.
@@ -82,26 +45,27 @@ export let Pricing = () => (
         id='hello'
         {...text('pricing.hello.title')}
       />
-      <p class='Note Note-lead' {...text('pricing.hello.lead')} />
-      <p class='Note' {...text('pricing.hello.note', { yours: <Yours /> })} />
+      <p
+        class='Note Note-lead'
+        {...text('home.cost.note', { yours: <Yours /> })}
+      />
+      <p class='Note' {...text('pricing.hello.lead')} />
     </section>
     <section class='Cost' aria-labelledby='plans'>
       <h2 class='Title' id='plans' {...text('pricing.plans.title')} />
       <div class='Plans'>
-        <Plan plan='free' href='/login' />
-        <Plan
-          plan='plus'
-          mod='Plan-plus'
-          href={GET_PLAN}
-          slots={{ domain: <b {...text('home.cost.plus.example')} /> }}
-        />
-        <Plan
-          plan='pro'
-          mod='Plan-pro'
-          href={GET_PLAN}
-          slots={{ domain: <b {...text('home.cost.pro.example')} /> }}
-        />
+        {PLANS.map((plan) => (
+          <Plan
+            copy={{ attr, text }}
+            plan={plan}
+            items={ITEMS}
+            slots={plan == 'free' ? {} : {
+              domain: <b {...text(`home.cost.${plan}.example`)} />,
+            }}
+          />
+        ))}
       </div>
+      <p class='Note Note-small' {...text('home.cost.ai')} />
     </section>
     <section aria-labelledby='always'>
       <h2 class='Title' id='always' {...text('pricing.always.title')} />
