@@ -3,7 +3,7 @@
 // is pointed at the app's components and never the platform's machinery, a
 // word kept elsewhere says where.
 import { test } from '@yaks/testing'
-import { assertRejects } from '@std/assert'
+import { assertRejects, assertStringIncludes } from '@std/assert'
 import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
 
 test('graph_query refusals in a checks app speak its words', async () => {
@@ -33,7 +33,11 @@ test('graph_query refusals in a checks app speak its words', async () => {
       '.note',
       '.note is a property, not a component — name it .check.note',
     )
-    await refused('.draft_conflict', 'conversation_inbox')
+    let conflict = await refused(
+      '.draft_conflict',
+      ".draft_conflict is a component in the space's Operator store",
+    )
+    assertStringIncludes(conflict.message, 'add self: true to graph_query')
   } finally {
     await k.stop()
   }
