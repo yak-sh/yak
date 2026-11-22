@@ -2,7 +2,6 @@ import { equal, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { human } from '@yaks/id'
-import { notifyDoc } from '@yaks/notify/vocab'
 import { mailDoc } from '@yaks/mail/vocab'
 import { provenanceDoc } from '@yaks/provenance'
 import { loadVocab } from '@yaks/vocab'
@@ -14,7 +13,7 @@ import { host } from './testing.ts'
 import { complete, reportOf } from './completion.ts'
 
 let vocab = loadVocab(
-  [...host.docs, notifyDoc, provenanceDoc, mailDoc],
+  [...host.docs, provenanceDoc, mailDoc],
   host.keywords,
 )
 let bare = (rows: Bundle[]) => {

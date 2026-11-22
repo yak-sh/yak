@@ -16,6 +16,7 @@ import { docDoc } from '@yaks/doc'
 import { personaDoc } from '@yaks/persona'
 import { projectDoc } from '@yaks/project'
 import { kernelDoc } from '@yaks/kernel/vocab'
+import { notifyDoc } from '@yaks/notify'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -39,6 +40,7 @@ export let host: Vocab = loadVocab(
     processDoc,
     edgeDoc,
     docDoc,
+    notifyDoc,
     personaDoc,
     projectDoc,
     taskDoc,

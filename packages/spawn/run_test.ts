@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph, mint } from '@yaks/graph'
 import { accountEid } from '@yaks/model'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
@@ -141,6 +141,57 @@ for (let resumed of [false, true]) {
     }
   })
 }
+
+test('a continued launch carries the current task and feedback from its previous runs', async () => {
+  let { g } = tracked()
+  let owner = mint(), previous = mint()
+  await g.apply([
+    ...asking('S1', 'E1', 'previous brief'),
+    {
+      entity: { eid: 'S1' },
+      session: { id: 'provider-thread' },
+      process: { pid: 1, command: 'fake' },
+      exit: { code: 0 },
+    },
+    { entity: { eid: owner }, doc: { title: 'Owner' } },
+    { entity: { eid: previous }, session: {} },
+    {
+      entity: { eid: 'work' },
+      task: {},
+      claim: { session: 'S1' },
+      doc: { title: 'The task', body: 'Current task body.' },
+    },
+    {
+      entity: { eid: mint() },
+      comment: { target: 'work' },
+      knock: { target: previous, from: owner },
+      doc: { body: 'Keep the foreground fade.' },
+    },
+    {
+      entity: { eid: 'E2' },
+      entry: { session: 'S1' },
+      content: { body: 'Continue the detail pass.' },
+      using: { provider: FAKE.provider },
+    },
+  ])
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let launched = launching()
+  try {
+    await start(g, 'S1', {
+      dir,
+      cwd: dir,
+      adapters: { fake: claude },
+      launch: launched.launch,
+      signal: AbortSignal.abort(),
+    })
+    let instruction = launched.started[0].at(-1)!
+    assertStringIncludes(instruction, 'Current task body.')
+    assertStringIncludes(instruction, 'from Owner: Keep the foreground fade.')
+    assertStringIncludes(instruction, 'Continue the detail pass.')
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
 
 // Two Claude accounts offered to runs, the personal one well over its weekly
 // pace: three days into the week, 90% of it used.

@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { skyScript } from '@yaks/platform/home/assets'
+import { homeStyle, skyScript } from '@yaks/platform/home/assets'
 import { page as home } from './site/mod.ts'
 import {
   DEPTH,
@@ -23,6 +23,19 @@ import {
 let file = (path: string) =>
   path == '/' ? 'index.html' : `${path.slice(1)}.html`
 let code = await Deno.readTextFile(skyScript)
+let style = await Deno.readTextFile(homeStyle)
+
+test('the homepage foreground hill fades into the page color in both themes', () => {
+  let { document } = parseHTML(home('index.html'))
+  let foreground = document.querySelector('.Sky_Ground')!
+  let fill = foreground.getAttribute('fill')!
+  let last = document.querySelector(`${fill.slice(4, -1)} > stop:last-child`)!
+  assertEquals(last.getAttribute('offset'), '1')
+  let rule = new RegExp(
+    `\\.${last.getAttribute('class')}\\s*\\{[^}]*stop-color:\\s*var\\(--bg\\)`,
+  )
+  assert(rule.test(style), 'the gradient ends at the theme’s page background')
+})
 
 let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let { document, window } = parseHTML(home(file(path)))

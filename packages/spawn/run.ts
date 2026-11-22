@@ -105,6 +105,7 @@ import {
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
+import { continuing } from './brief.ts'
 import { complete } from './completion.ts'
 
 /** How a spawn runs, all optional. */
@@ -821,7 +822,11 @@ export let start = async (
       : await unanswered(g, session)
     let carried = carry(row, job, said)
     if (!carried) return null
-    job = carried
+    let briefs = await continuing(g, session)
+    job = {
+      ...carried,
+      instruction: [...briefs, carried.instruction].join('\n\n'),
+    }
   }
   // A bare run has no tools to work in a checkout with, so none is cut for
   // it: it starts in an empty directory of its own.
