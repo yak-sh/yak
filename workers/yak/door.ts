@@ -400,7 +400,7 @@ export let storeOf = (
 ): Door => {
   let send = (req: Request) => placed(ns, name).fetch(req)
   let open = name == PLATFORM_STORE
-    ? (req: Request) => send(req).then((answer) => directoryAnswer(req, answer))
+    ? async (req: Request) => directoryAnswer(req, await send(req))
     : send
   return resending(doorOf(open, name, app), {
     report: (e, path) =>
