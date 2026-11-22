@@ -170,7 +170,7 @@ export let projection = (vocab: Vocab, query: Query): Projection | null => {
   let fields: Fields = { ...asked, fields: [...asked.fields, ...refs] }
   let own: Record<string, string[]> = {}
   for (let { steps } of paths) cover(own, steps[0])
-  let same = fields.fields.length == given.fields.length
+  let same = !refs.length && given.fields.every((f, i) => f == asked.fields[i])
   return {
     query: same
       ? ast

@@ -8,7 +8,7 @@
 // promise: a filter written once means one thing wherever the data lives.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { open } from '@yaks/sqlite/db'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
@@ -744,11 +744,15 @@ test('a status ladder reads the same from both sides, from the vocabulary alone'
 test('an order naming a whole component declines, naming its properties', () => {
   let mine = assertThrows(() => matcher('.order=doc', shop), Unsupported)
   let theirs = assertThrows(() => sql().read('.order=doc'), Unsupported)
-  assertEquals(
-    mine.message,
-    '@yaks/match cannot compile a component where a property belongs: ' +
-      'doc — a directive names one property, as .order=doc.title or ' +
-      '.fields=doc.title; doc also has doc.body',
-  )
+  for (
+    let hint of [
+      'doc is a component',
+      'doc.title, doc.body',
+      '.order=doc.title',
+      '.fields=doc.title',
+      '.doc to match rows',
+      '?doc to include all its fields without filtering',
+    ]
+  ) assertStringIncludes(mine.message, hint)
   assertEquals(theirs.message, mine.message.replace('match', 'sql'))
 })

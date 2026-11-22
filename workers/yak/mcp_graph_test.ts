@@ -108,6 +108,12 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     ) await readNamed(owner.cookie, args)
     await held('graph_query', { q: `.actor&.in=${at}` })
     await held('graph_query', { q: '.actor' })
+    await held(
+      'graph_query',
+      { q: '.actor', fields: 'actor', app: at },
+      (row) => row.actor,
+      { name: 'Root actor' },
+    )
     await held('graph_show', { ids: [eid] })
     await held('search', { words: 'Root' }, (row) => row?.entity.eid, eid)
     await readNamed(k.owner.cookie, { q: `.actor&.in=${at}` })
@@ -125,6 +131,20 @@ test('the reads answer rows that fit the schema their tools are listed with', as
     let row = directory.structuredContent.result[0]
     assertEquals(typeof row.space, 'object')
     assert(row.space.slug)
+    let refused = await assertRejects(
+      () =>
+        admin.tool('graph_query', {
+          app: 'yak/platform',
+          q: '.operator_request',
+        }),
+      Error,
+      "the space's Operator store",
+    )
+    assertStringIncludes(refused.message, 'self: true')
+    assertStringIncludes(
+      refused.message,
+      "yak admin query yak '.operator_request' --operator",
+    )
   } finally {
     await k.stop()
   }
@@ -466,6 +486,9 @@ test('a read with no app composes every app the caller can reach', async () => {
     assertEquals(bundle.kind, 'recipe')
     assertMatch(bundle._stores!.recipe, /\/recipes$/)
     assertMatch(bundle._stores!.loan, /\/lending$/)
+    let [recipe] = await rows(`id=${cake}&.fields=recipe`)
+    assertEquals(recipe.recipe, { serves: 4 })
+    assertEquals(recipe.doc, undefined)
 
     // A filter naming two apps' words is intersected at the door: the cake
     // wears both, the pancakes and the zester wear one each.

@@ -22,6 +22,7 @@ import {
 import { kvStorage, state } from './testing.ts'
 import { within } from './defects.ts'
 import { KERNEL } from './meta.ts'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
 let B = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
@@ -302,4 +303,75 @@ test('a store still behind after every resend answers its refusal as a refusal, 
   assertEquals(status, 400)
   assertMatch(reports, /"fault":"behind:\/apply \.release_remake"/)
   assertMatch(said, /release_remake/)
+})
+
+let directoryBehind = async (
+  q: string,
+  first: (req: Request) => Promise<Response>,
+  next = first,
+) => {
+  learn(B)
+  let sends = 0, reports: unknown[] = []
+  let ns = {
+    idFromName: (name: string) => name,
+    get: () => ({ fetch: sends++ ? next : first }),
+  }
+  let answer = await within(
+    {
+      ERRORS: {
+        send: (rows: unknown[]) => (reports.push(...rows), Promise.resolve()),
+      },
+    } as never,
+    {},
+    () =>
+      storeOf(ns, PLATFORM_STORE, undefined, unpaused)(
+        `/query?q=${encodeURIComponent(q)}`,
+        {},
+        KERNEL,
+      ),
+  )
+  return { sends, status: answer.status, body: await answer.json(), reports }
+}
+
+test('an older directory’s query refusal is returned without retrying when the current vocabulary confirms it', async () => {
+  let ctx = state()
+  await ctx.storage.put('restarted for', { id: B.id, at: B.timestamp })
+  let old = new Store(ctx as never, { CF_VERSION_METADATA: A })
+  for (
+    let [query, code, words] of [
+      ['.comped&.order=comped', 'Unsupported', '.order=comped.until'],
+      ['.operator_request', 'Unknown', '.operator_request'],
+    ]
+  ) {
+    let { sends, status, body, reports } = await directoryBehind(
+      query,
+      (req) => old.fetch(req),
+    )
+    assertEquals([sends, status, body.error, reports], [1, 400, code, []])
+    assert(body.message.includes(words), body.message)
+  }
+})
+
+test('a projection fixed in the newer query compiler still retries across deploys', async () => {
+  let { sends, status, body, reports } = await directoryBehind(
+    '.comped&.fields=comped',
+    () =>
+      Promise.resolve(Response.json({
+        error: 'Skewed',
+        message:
+          'Durable Object on an older deploy refused a caller on a newer one: comped',
+        retryable: true,
+        refusal: {
+          status: 400,
+          body: {
+            error: 'Unsupported',
+            feature: 'a component where a property belongs',
+          },
+        },
+      }, { status: 503 })),
+    () => Promise.resolve(Response.json([{ comped: { until: '2026-12-01' } }])),
+  )
+  assertEquals([sends, status, body, reports], [2, 200, [{
+    comped: { until: '2026-12-01' },
+  }], []])
 })

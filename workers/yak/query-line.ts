@@ -1,4 +1,9 @@
-import { bareLine, tokens, untokens } from '@yaks/query'
+import { bareLine, kinded, parse, tokens, untokens } from '@yaks/query'
+import { projection } from '@yaks/graph/read'
+import { compile, Unsupported } from '@yaks/sql'
+import { Unknown, type Vocab } from '@yaks/vocab'
+import { operatorDoc } from '@yaks/platform/operator-vocab'
+import type { Refusal } from '@yaks/api'
 
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,
 // not the query grammar's, so it comes off the line before any store sees it —
@@ -13,11 +18,42 @@ export let scope = (line: string) => {
   return { said, line: untokens(segs.filter((s) => !/^\.in=/.test(s))) }
 }
 
-// App trash is a directory mark; it is neither a property of app nor a
-// deleted graph entity. Teach only after an unknown-name refusal, so an app
-// that declares one of these names keeps its own meaning.
+/** Check a vocabulary refusal against the current code using no store data.
+ * A newly readable query must keep its retry, including projections whose
+ * syntax the older compiler refused. */
+export let confirmedRefusal = (
+  line: string,
+  vocab: Vocab,
+  old: Partial<Refusal>,
+): Unknown | Unsupported | undefined => {
+  try {
+    let query = kinded(vocab, parse(line))
+    compile(projection(vocab, query)?.query ?? query, vocab)
+  } catch (e) {
+    if (e instanceof Unknown && old.error == e.name && old.prop == e.prop) {
+      return e
+    }
+    if (
+      e instanceof Unsupported && old.error == e.name &&
+      old.feature == e.feature &&
+      e.feature == 'a component where a property belongs'
+    ) return e
+  }
+}
+
+// Teach after an unknown-name refusal so an app that declares one of these
+// names keeps its own meaning. The Operator store is outside app reach.
 export let queryRefusal = (error: unknown, at?: string): string | undefined => {
   if (!(error instanceof Error)) return
+  let word = /(?:^|: )unknown prop: \.(\w+)(?= |$)/.exec(error.message)?.[1]
+  if (word && operatorDoc.$defs?.[word]?.component) {
+    return `.${word} is a component in the space's Operator store. ` +
+      'In that space’s Operator, add self: true to graph_query. ' +
+      `Platform admins can use yak admin query ${
+        at?.split('/')[0] ?? '<space>'
+      } ` +
+      `'.${word}' --operator.`
+  }
   let tombstone = /unknown prop(?:erty)?: \.?tombstone\b/.test(error.message)
   let trashed = /unknown prop(?:erty)?: \.?app\.trashed\b/.test(error.message)
   if (!tombstone && !trashed) return

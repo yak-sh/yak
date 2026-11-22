@@ -17,6 +17,8 @@ import type { Caller } from '@yaks/egress'
 import { apart, elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { background, caught, defect } from './defects.ts'
 import { behind, settled, stamp, unserved } from './running.ts'
+import { confirmedRefusal } from './query-line.ts'
+import { type Refusal, refuse } from '@yaks/api'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { evicted, retried } from '@yaks/durable-object/resets'
 import {
@@ -354,6 +356,31 @@ export let ahead = (
 
 let stamped = (req: Request) => (stamp(req.headers), req)
 
+// A directory query can be checked against this deploy's vocabulary without
+// reaching storage. The older store's refusal may still apply on new code.
+let directoryAnswer = async (req: Request, answer: Response) => {
+  if (answer.status != 503) return answer
+  let url = new URL(req.url)
+  if (url.pathname != '/query') return answer
+  let said = await answer.clone().json().catch(() => null) as {
+    error?: string
+    refusal?: { status?: number; body?: Partial<Refusal> }
+  } | null
+  let refusal = said?.refusal
+  let old = refusal?.body
+  if (
+    said?.error != 'Skewed' || refusal?.status != 400 ||
+    old?.error != 'Unknown' && old?.error != 'Unsupported'
+  ) return answer
+  let { platformVocab } = await import('./vocab.ts')
+  let current = confirmedRefusal(
+    url.searchParams.get('q') ?? '',
+    platformVocab(),
+    old,
+  )
+  return current ? refuse(current) : answer
+}
+
 /** The kernel's door to one store, sent again when the runtime resets it or
  * loses the call (@yaks/durable-object `resending`). Every call to a store
  * comes through here, so this is the one place a deploy's restart is
@@ -370,8 +397,12 @@ export let storeOf = (
   name: string,
   app?: Served,
   wait?: (ms: number) => Promise<void>,
-): Door =>
-  resending(doorOf((req) => placed(ns, name).fetch(req), name, app), {
+): Door => {
+  let send = (req: Request) => placed(ns, name).fetch(req)
+  let open = name == PLATFORM_STORE
+    ? (req: Request) => send(req).then((answer) => directoryAnswer(req, answer))
+    : send
+  return resending(doorOf(open, name, app), {
     report: (e, path) =>
       defect(e, { request: `store ${path.split('?')[0]}`, store: name }),
     // A store still behind after every resend: its refusal, as a refusal,
@@ -395,3 +426,4 @@ export let storeOf = (
     },
     wait,
   })
+}

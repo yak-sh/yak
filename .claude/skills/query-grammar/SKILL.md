@@ -96,6 +96,10 @@ every component. A query that names no component (`.entity.eid=T-12`, a bare
 word) answers whole. So `.task .task.status=open` returns task rows without
 their `doc`; add `?doc` or `.fields=doc.title` to read titles.
 
+`.doc` matches rows that carry `doc`. `?doc` includes all fields of `doc`
+without filtering on it. Use `.fields=doc` to project the whole component
+or `.fields=doc.title` to project one property.
+
 ## A name alone is a component
 
 Many components share a property name, and a guess between them would be
@@ -173,13 +177,17 @@ A directive belongs to the whole line wherever it is written.
 | `.count`            | `.task !completed !cancelled .count`        | `{"count": 1394}`                                                                                                |
 | `.tally=`           | `.task .tally=filed.project`                | each value with its count (references come back as eids)                                                         |
 | `.distinct=`        | `.distinct=filed.priority`                  | the values                                                                                                       |
-| `.fields=`          | `.fields=doc.title,filed.project.doc.title` | those properties; a path through a reference brings what it reaches as its own row                               |
+| `.fields=`          | `.fields=doc,filed.project.doc.title`       | the named properties or whole components; a path through a reference brings what it reaches as its own row        |
 | `*` / `?*`          | `.task *`                                   | every component of each row                                                                                      |
 | `.order=`           | `.order=-created.at`                        | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                        |
 | `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
 | `.refs=`            | `.refs=D-334 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
 | `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
 | `.edges`            | `.edges[requires]`                          | a retired spelling: it answers as if absent; read edges as rows (`.requires&.edge.from=T-1`)                     |
+
+An order names a property, as in `.order=doc.title`. `.order=doc` is
+refused with `doc`'s qualified properties and the forms for matching or
+including the whole component.
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
 `.count&.limit=20` counts every match. An ascending `.order` puts the

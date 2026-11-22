@@ -3144,7 +3144,7 @@ let resolveField = (
       !projection || hops.length != 1 || ctx.v.props(leaf.comp).length ||
       computed(ctx.v, leaf.comp)
     ) {
-      throw whole(ctx.v, leaf.comp)
+      throw whole(ctx.v, leaf.comp, undefined, pathStr)
     }
     return {
       expr: worn(ctx, leaf.comp)

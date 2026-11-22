@@ -143,6 +143,14 @@ test('a projection answers what it names, and what its paths reach', () => {
   }
 })
 
+test('a whole component with one property projects that property', () => {
+  let g = graph({ storage: ram(vocab), vocab })
+  g.apply([at('f1', { file: { path: 'main.ts' }, doc: { title: 'Main' } })])
+  assertEquals(g.read(whole('.file&.fields=file')), [
+    at('f1', { file: { path: 'main.ts' } }),
+  ])
+})
+
 test('an entity both selected and reached is answered once', () => {
   let docs = '.doc&.order=doc.title&.fields=doc.title,book.publisher.doc.title'
   assertEquals(shelf().read(whole(docs)), [

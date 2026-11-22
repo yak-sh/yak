@@ -250,7 +250,7 @@ let field = (ctx: Ctx, path: string, projection = false): Field => {
       !projection || hops.length != 1 || ctx.v.props(leaf.comp).length ||
       ctx.v.comp(leaf.comp)?.computed
     ) {
-      throw whole(ctx.v, leaf.comp, BY)
+      throw whole(ctx.v, leaf.comp, BY, path)
     }
     return { read: (b) => b[leaf.comp] ? 1 : 0, tag: 'number' }
   }

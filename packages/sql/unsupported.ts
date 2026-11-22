@@ -19,11 +19,9 @@ export class Unsupported extends Error {
   }
 }
 
-/** The refusal for a directive naming a whole component (`.order=created`)
- * where one of its properties belongs; it names them, written as the
- * directive takes one, so the next line the caller writes is the one that
- * compiles. An entity's own eid is a property of `entity` like the rest. `by`
- * is as for {@link Unsupported}.
+/** Refuse a directive that needs a property and names a whole component.
+ * Give the qualified properties and the query forms for matching a component
+ * or including it in the result. `by` is as for {@link Unsupported}.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -33,29 +31,35 @@ export class Unsupported extends Error {
  *   },
  * })
  * whole(v, 'doc').message
- * // '@yaks/sql cannot compile a component where a property belongs: doc — a directive names one property, as .order=doc.title or .fields=doc.title'
+ * // '@yaks/sql cannot compile a component where a property belongs: doc is a component. Its properties are doc.title. Use .order=doc.title or .fields=doc.title to name a property. Use .doc to match rows with the component or ?doc to include all its fields without filtering.'
  * whole(v, 'entity').message
- * // '@yaks/sql cannot compile a component where a property belongs: entity — a directive names one property, as .order=entity.eid or .fields=entity.eid'
+ * // '@yaks/sql cannot compile a component where a property belongs: entity is a component. Its properties are entity.eid. Use .order=entity.eid or .fields=entity.eid to name a property.'
  * ```
  */
 export let whole = (
   v: Vocab,
   comp: string,
   by = '@yaks/sql',
+  path = comp,
 ): Unsupported => {
   let props = [
-    ...comp == 'entity' ? ['eid'] : [],
-    ...v.comp(comp) ? v.props(comp).filter((p) => p != 'eid') : [],
-  ].map((p) => `${comp}.${p}`)
-  let [first, ...rest] = props
+    ...new Set([
+      ...comp == 'entity' ? ['eid'] : [],
+      ...v.props(comp),
+    ]),
+  ].map((p) => `${path}.${p}`)
+  let [first] = props
+  let properties = first
+    ? `Its properties are ${props.join(', ')}. ` +
+      `Use .order=${first} or .fields=${first} to name a property.`
+    : 'It has no properties.'
+  let presence = comp != 'entity' && path == comp
+    ? ` Use .${comp} to match rows with the component or ` +
+      `?${comp} to include all its fields without filtering.`
+    : ''
   return new Unsupported(
     'a component where a property belongs',
-    first
-      ? `${comp} — a directive names one property, as .order=${first} or ` +
-        `.fields=${first}${
-          rest.length ? `; ${comp} also has ${rest.join(', ')}` : ''
-        }`
-      : comp,
+    `${comp} is a component. ${properties}${presence}`,
     by,
   )
 }
