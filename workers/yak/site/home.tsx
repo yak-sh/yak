@@ -322,7 +322,6 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
         story={story}
         href='/login'
         items={{
-          ai: {},
           apps: {},
           visitors: {},
           storage: {},
@@ -337,7 +336,6 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
         href={GET_PLAN}
         cta='plus'
         items={{
-          ai: {},
           apps: {},
           visitors: {},
           storage: {},
@@ -352,7 +350,6 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
         href={GET_PLAN}
         cta='pro'
         items={{
-          ai: {},
           apps: {},
           visitors: {},
           storage: {},

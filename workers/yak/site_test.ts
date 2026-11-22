@@ -434,9 +434,10 @@ let FEATURES = [
 
 let pricing = () => parseHTML(read('pricing.html')).document
 
-// What a card says of AI use: the plan's monthly budget, which on the Pro
-// plan is also what it gives beyond the Plus plan (standing.ts `beyond`).
-let ai = (tier: Tier) => `$${BUDGET[tier]} of AI use a month`
+// What a card says of AI use: the Pro plan's is what it gives beyond the
+// Plus plan, said first (standing.ts `beyond`); the others name no amount.
+let month = beyond().split(',')[0]
+let ai = (tier: Tier) => tier == 'pro' ? month : 'AI use included'
 
 test('every pricing card lists the same features in the same order', () => {
   let cards = [...pricing().querySelectorAll('.Plan')]
@@ -463,7 +464,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use a month', (t) => `$${BUDGET[t]}`],
+    ['AI use a month', (t) => t == 'pro' ? `$${BUDGET.pro}` : 'Included'],
     ['Builds a month', (t) => String(BUILDS[t])],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
@@ -968,12 +969,7 @@ test('the townships page installs the township app and counts with its own funct
   let hearing = DEEPGRAM.turns!.find((t) => t.speakers)!.perMinute * 120
   assert(townships.MEETING >= hearing, `${townships.MEETING} < ${hearing}`)
   let text = flat(document.body.textContent!)
-  for (
-    let said of [
-      `about $${townships.MEETING.toFixed(2)} of AI`,
-      `$${BUDGET.free} on the free plan and $${BUDGET.pro} on the Pro plan`,
-    ]
-  ) assertStringIncludes(text, said)
+  assertStringIncludes(text, `about $${townships.MEETING.toFixed(2)} of AI`)
 })
 
 // The pages a home page is split with say the free plan's apps and the Plus
@@ -1276,28 +1272,21 @@ test('every place a person decides names the building credit the code grants', a
   )
 })
 
-// Each plan's monthly AI use, said where its price is read: the home page's
-// cards, its offers to search engines and the helpers' range, each the
-// budget @yaks/platform/plans gives.
-test("the home page names each plan's monthly AI use as the code gives it", () => {
-  let { document } = parseHTML(read('index.html'))
-  let offers = Object.fromEntries(
-    // deno-lint-ignore no-explicit-any
-    ld(read('index.html'))[0]['@graph'].find((n: any) => n.offers).offers
-      // deno-lint-ignore no-explicit-any
-      .map((o: any) => [o.name.toLowerCase(), o.description]),
-  )
-  for (let tier of TIERS) {
-    let card = flat(document.querySelector(cardOf(tier))!.textContent!)
-    assertStringIncludes(card, ai(tier), tier)
-    assertStringIncludes(offers[tier], ai(tier), tier)
+// The free and Plus plans' monthly AI use is the platform's to allocate, so
+// no page, nor its offers to search engines, names an amount for it: the
+// only monthly figure is the Pro plan's, on its cards.
+test("only the Pro plan's monthly AI use is named in dollars", () => {
+  for (let name of Object.keys(site.PAGES)) {
+    let html = read(name)
+    for (let [said] of html.matchAll(/\$[\d,]+ (to \$[\d,]+ )?of AI use/g)) {
+      assertEquals(said, `$${BUDGET.pro} of AI use`, name)
+    }
+    assertEquals(html.match(/\$[\d,]+ on the (free|Plus) plan/), null, name)
   }
-  assertStringIncludes(beyond(), ai('pro'))
-  let budgets = Object.values(BUDGET)
-  assertStringIncludes(
-    copied('home.story.turn.helper.point1'),
-    `$${Math.min(...budgets)} to $${Math.max(...budgets)} of AI use a month`,
-  )
+  for (let page of ['index.html', 'pricing.html']) {
+    let card = flat(parsed(page).querySelector('.Plan-pro')!.textContent!)
+    assertStringIncludes(card, month, page)
+  }
 })
 
 // style.css lays a plan card's parts on four rows the cards share, so the
