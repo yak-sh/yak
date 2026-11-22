@@ -29,11 +29,12 @@ let SCENES = {
 } as const
 
 let Ask = (
-  { copy, action, id, cta }: {
+  { copy, action, id, cta, children }: {
     copy: Copy
     action: string
     id: string
     cta: string
+    children?: ComponentChildren
   },
 ) => {
   let main = id == 'say'
@@ -63,6 +64,7 @@ let Ask = (
         data-cta={cta}
         {...copy.text('home.hello.go')}
       />
+      {children}
     </form>
   )
 }
@@ -77,7 +79,14 @@ let Hero = (
         <label for='say' {...copy.text('home.hello.title')} />
       </h1>
       <p class='Note Note-lead Home_Lead' {...copy.text('home.story.lead')} />
-      <Ask copy={copy} action={action} id='say' cta='start' />
+      <Ask copy={copy} action={action} id='say' cta='start'>
+        <a
+          class='Home_More'
+          href='#examples'
+          data-cta='examples'
+          {...copy.text('home.hello.examples')}
+        />
+      </Ask>
       <p
         class='Note Note-small Home_Lead'
         {...copy.text('home.hello.note', {

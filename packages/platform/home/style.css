@@ -99,6 +99,14 @@
   align-items: end;
 }
 
+.Home_More {
+  grid-column: 1;
+  align-self: center;
+  font-size: var(--small);
+  font-weight: 700;
+  color: var(--sky-accent);
+}
+
 .Home_Field {
   width: 100%;
   --well: light-dark(#fafbff, #222e40);
@@ -899,12 +907,16 @@
 }
 
 @media (max-width: 30rem) {
-  .Home_Ask-hero {
-    grid-template-columns: minmax(0, 1fr);
+  .Home_Ask-hero .Home_Field {
+    grid-column: 1 / -1;
   }
 
   .Home_Ask-hero .Home_Build {
-    justify-self: end;
+    grid-column: 2;
+  }
+
+  .Home_More {
+    grid-row: 2;
   }
 }
 
