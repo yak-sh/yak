@@ -34,6 +34,11 @@ bucket_name = "yak-blobs"
 enabled = true
 invocation_logs = true
 
+# An idle alarm streams the entire container archive through the SDK and R2.
+# Give that invocation the same CPU budget as the kernel's Durable Objects.
+[limits]
+cpu_ms = 300000
+
 [[services]]
 binding = "KERNEL"
 service = "yak"
@@ -87,6 +92,9 @@ bucket_name = "yak-blobs-staging"
 [env.staging.observability.logs]
 enabled = true
 invocation_logs = true
+
+[env.staging.limits]
+cpu_ms = 300000
 
 [[env.staging.services]]
 binding = "KERNEL"
