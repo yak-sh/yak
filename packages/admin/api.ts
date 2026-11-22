@@ -522,7 +522,7 @@ export let refund = (
  * space is answered. */
 export type { Funnel } from '@yaks/platform/funnel'
 import type { Funnel } from '@yaks/platform/funnel'
-import type { Directory } from '@yaks/platform/firsts'
+import { asking, type Directory } from '@yaks/platform/firsts'
 import type { Graves, Window } from '@yaks/platform/graves'
 
 export let FUNNEL = '/api/funnel'
@@ -532,7 +532,9 @@ export let funnelNow = (session: string, since: string): Promise<Funnel> =>
 
 /** The directory's rows outside people's first apps are counted from
  * (@yaks/platform/firsts), read from the platform's store, which answers only
- * a seat in the `yak` space. */
+ * a seat in the `yak` space, and the Operator sessions that made apps in
+ * spaces with an outside owner (`asking`), each read from its space's
+ * Operator store with the person it is owned by. */
 export let firstsNow = async (session: string): Promise<Directory> => {
   let read = (q: string) =>
     storeQuery(session, PLATFORM_STORE, [q]) as Promise<Directory['apps']>
@@ -543,12 +545,24 @@ export let firstsNow = async (session: string): Promise<Directory> => {
     ),
     read('.member&.fields=member.space,member.person,member.role'),
     read(
-      '.app&?created&?installed&.fields=app.space,app.slug,created.at,created.by,installed.of',
+      '.app&?created&?installed&.fields=app.space,app.slug,created.at,created.by,created.via,installed.of',
     ),
     read('.acts_for'),
   ])
   if (!meta[0]) throw new Error('the directory holds no yak space')
-  return { meta: meta[0].entity.eid, people, members, apps, agents }
+  let d = { meta: meta[0].entity.eid, people, members, apps, agents }
+  let asks = asking({ ...d, sessions: [] })
+  let spaces = asks.size
+    ? await read(`.space&.entity.eid=${[...asks.keys()]}&.fields=space.slug`)
+    : []
+  let sessions = await Promise.all(
+    spaces.map((s) =>
+      operatorGraph(session, String((s.space as Comp).slug), {
+        q: `.entity.eid=${asks.get(s.entity.eid)}&.fields=owner.person`,
+      })
+    ),
+  )
+  return { ...d, sessions: sessions.flat() as Directory['sessions'] }
 }
 
 /** The store mover's sweep door (workers/yak/sweep.ts): every store there is,

@@ -7,8 +7,12 @@
 //   space (Jeff, the platform's admin), and not one on bot.yak.sh or
 //   `.invalid` (./bots.ts).
 // - An app is theirs when they made it, an agent acting for them made it
-//   (`acts_for`), or a space they own made it (its Operator writes as the
-//   space). An app installed from somebody else's is nobody's first.
+//   (`acts_for`), or a space's Operator made it at their asking. The
+//   Operator writes as the space, and the session it wrote in (`created.via`)
+//   is kept in the space's Operator store, whose `owner{person}` says who
+//   asked. Where nothing says who asked, the app is nobody's: crediting every
+//   owner of the space credits a co-owner for what somebody else asked for.
+//   An app installed from somebody else's is nobody's first.
 // - A person counts once, in the week their first app was made: Monday to
 //   Sunday, UTC.
 //
@@ -24,13 +28,16 @@ type Row = { entity: { eid: string } } & Record<string, unknown>
 
 /** The directory's rows the count reads: every person, with their address
  * and where they came from (`arrived`), member, app and agent, and the eid of
- * the `yak` space, whose owners are not outside people. */
+ * the `yak` space, whose owners are not outside people. Beside them, from the
+ * spaces' Operator stores, the sessions `asking` names, each with its
+ * `owner{person}`. */
 export type Directory = {
   meta: string
   people: Row[]
   members: Row[]
   apps: Row[]
   agents: Row[]
+  sessions: Row[]
 }
 
 /** One week, by its Monday (`YYYY-MM-DD`), how many outside people made
@@ -48,39 +55,9 @@ let idOf = (v: unknown): string | undefined =>
 let outside = (address: string) =>
   !address.endsWith(BOT) && !address.endsWith('.invalid')
 
-/**
- * When each outside person made their first app, by person.
- *
- * @example
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let at = (eid: string, more = {}) => ({ entity: { eid }, ...more })
- * let made = (eid: string, by: string, when: string, more = {}) =>
- *   at(eid, { app: { space: 's' }, created: { by, at: when }, ...more })
- * let firsts = firstApps({
- *   meta: 'yak',
- *   people: [
- *     at('ann', { email: { address: 'ann@example.com' } }),
- *     at('jeff', { email: { address: 'jeff@example.com' } }),
- *     at('bot', { email: { address: 'probe@bot.yak.sh' } }),
- *   ],
- *   members: [
- *     at('m', { member: { space: 'yak', person: 'jeff', role: 'owner' } }),
- *     at('n', { member: { space: 's', person: { eid: 'ann' }, role: 'owner' } }),
- *   ],
- *   apps: [
- *     made('a2', 'agent', '2026-09-20T00:00:00Z'),
- *     made('a1', 's', '2026-09-18T00:00:00Z'),
- *     made('a0', 'ann', '2026-09-01T00:00:00Z', { installed: { of: 'x' } }),
- *     made('j', 'jeff', '2026-09-01T00:00:00Z'),
- *     made('b', 'bot', '2026-09-01T00:00:00Z'),
- *   ],
- *   agents: [at('agent', { acts_for: { person: 'ann' } })],
- * })
- * assertEquals(firsts, new Map([['ann', '2026-09-18T00:00:00Z']]))
- * ```
- */
-export let firstApps = (d: Directory): Map<string, string> => {
+// Who the directory says each space's owners are, which people are outside
+// ones, and who each agent writes for.
+let read = (d: Directory) => {
   let owners = new Map<string, string[]>()
   for (let m of d.members) {
     let member = comp(m, 'member')
@@ -103,17 +80,118 @@ export let firstApps = (d: Directory): Map<string, string> => {
       return person ? [[a.entity.eid, person] as const] : []
     }),
   )
+  return { owners, theirs, agents }
+}
+
+// An app's maker, when it was made, and the session it was made in.
+let madeOf = (app: Row) => {
+  let made = comp(app, 'created')
+  let by = idOf(made?.by), at = made?.at
+  return comp(app, 'installed') || !by || typeof at != 'string'
+    ? null
+    : { by, at, via: idOf(made?.via) }
+}
+
+/**
+ * The Operator sessions the count needs to know the asker of, by space: each
+ * one that made an app in a space with an outside owner. The rest can credit
+ * no outside person whoever asked.
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = (eid: string, more = {}) => ({ entity: { eid }, ...more })
+ * let owner = (space: string, person: string) =>
+ *   at(`${space}-${person}`, { member: { space, person, role: 'owner' } })
+ * let made = (eid: string, by: string, via: string) =>
+ *   at(eid, { created: { by, at: '2026-11-21T00:00:00Z', via } })
+ * assertEquals(
+ *   asking({
+ *     meta: 'yak',
+ *     people: [at('ann', { email: { address: 'ann@example.com' } })],
+ *     members: [owner('s', 'ann'), owner('t', 'jeff')],
+ *     apps: [made('a', 's', 'S-1'), made('b', 't', 'S-2'), made('c', 'ann', 'x')],
+ *     agents: [],
+ *     sessions: [],
+ *   }),
+ *   new Map([['s', ['S-1']]]),
+ * )
+ * ```
+ */
+export let asking = (d: Directory): Map<string, string[]> => {
+  let { owners, theirs } = read(d)
+  let asks = new Map<string, string[]>()
+  for (let app of d.apps) {
+    let made = madeOf(app)
+    if (!made?.via || !owners.get(made.by)?.some((p) => theirs.has(p))) {
+      continue
+    }
+    asks.set(made.by, [...asks.get(made.by) ?? [], made.via])
+  }
+  return asks
+}
+
+/**
+ * When each outside person made their first app, by person.
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = (eid: string, more = {}) => ({ entity: { eid }, ...more })
+ * let made = (eid: string, by: string, when: string, via?: string) =>
+ *   at(eid, { app: { space: 's' }, created: { by, at: when, via } })
+ * let firsts = firstApps({
+ *   meta: 'yak',
+ *   people: [
+ *     at('ann', { email: { address: 'ann@example.com' } }),
+ *     at('cy', { email: { address: 'cy@example.com' } }),
+ *     at('jeff', { email: { address: 'jeff@example.com' } }),
+ *     at('bot', { email: { address: 'probe@bot.yak.sh' } }),
+ *   ],
+ *   members: [
+ *     at('m', { member: { space: 'yak', person: 'jeff', role: 'owner' } }),
+ *     at('n', { member: { space: 's', person: { eid: 'ann' }, role: 'owner' } }),
+ *     at('o', { member: { space: 's', person: 'cy', role: 'owner' } }),
+ *     at('p', { member: { space: 's', person: 'jeff', role: 'owner' } }),
+ *   ],
+ *   apps: [
+ *     made('a2', 'agent', '2026-09-20T00:00:00Z'),
+ *     // The space's Operator made these: at ann's asking, at jeff's, and
+ *     // at nobody's the record keeps.
+ *     made('a1', 's', '2026-09-18T00:00:00Z', 'S-1'),
+ *     made('s2', 's', '2026-09-10T00:00:00Z', 'S-2'),
+ *     made('s3', 's', '2026-09-11T00:00:00Z'),
+ *     { ...made('a0', 'ann', '2026-09-01T00:00:00Z'), installed: { of: 'x' } },
+ *     made('j', 'jeff', '2026-09-01T00:00:00Z'),
+ *     made('b', 'bot', '2026-09-01T00:00:00Z'),
+ *   ],
+ *   agents: [at('agent', { acts_for: { person: 'ann' } })],
+ *   sessions: [
+ *     at('S-1', { owner: { person: 'ann' } }),
+ *     at('S-2', { owner: { person: 'jeff' } }),
+ *   ],
+ * })
+ * assertEquals(firsts, new Map([['ann', '2026-09-18T00:00:00Z']]))
+ * ```
+ */
+export let firstApps = (d: Directory): Map<string, string> => {
+  let { owners, theirs, agents } = read(d)
+  let asked = new Map(
+    d.sessions.flatMap((s) => {
+      let person = idOf(comp(s, 'owner')?.person)
+      return person ? [[s.entity.eid, person] as const] : []
+    }),
+  )
   let first = new Map<string, string>()
   for (let app of d.apps) {
-    let made = comp(app, 'created')
-    let by = idOf(made?.by), at = made?.at
-    if (comp(app, 'installed') || !by || typeof at != 'string') continue
-    let who = agents.has(by) ? [agents.get(by)!] : owners.get(by) ?? [by]
-    for (let person of who) {
-      if (!theirs.has(person)) continue
-      let was = first.get(person)
-      if (!was || at < was) first.set(person, at)
-    }
+    let made = madeOf(app)
+    if (!made) continue
+    let { by, at, via } = made
+    let who = agents.get(by) ??
+      (owners.has(by) ? via && asked.get(via) : by)
+    if (!who || !theirs.has(who)) continue
+    let was = first.get(who)
+    if (!was || at < was) first.set(who, at)
   }
   return first
 }
@@ -140,6 +218,7 @@ export let firstApps = (d: Directory): Map<string, string> => {
  *   members: [],
  *   apps: [{ entity: { eid: 'r' }, app: { slug: 'recipes' } }],
  *   agents: [],
+ *   sessions: [],
  * })
  * assertEquals(['ann', 'bo', 'cy', 'di'].map(from), [
  *   'unknown',

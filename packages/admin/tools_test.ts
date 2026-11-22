@@ -120,6 +120,9 @@ test("funnel reads the platform's counts from a time or a duration back", async 
     let asked: string[] = []
     // The directory as the platform's store answers each read: one outside
     // person's first app on Nov 3, and the owner of `yak`, who is not one.
+    // Before it, the Operator of a space both own made an app at the owner
+    // of `yak`'s asking, which is not ann's; its session is in that space's
+    // Operator store.
     let ann = '2026-11-03T17:08:08.624Z'
     let directory: Record<string, unknown[]> = {
       '.space.slug=yak': [{ entity: { eid: 'yak' } }],
@@ -131,17 +134,34 @@ test("funnel reads the platform's counts from a time or a duration back", async 
         },
         { entity: { eid: 'jeff' }, email: { address: 'jeff@example.com' } },
       ],
-      '.member': [{
-        entity: { eid: 'm' },
-        member: { space: 'yak', person: 'jeff', role: 'owner' },
-      }],
+      '.member': ['yak', 'both'].flatMap((space) =>
+        ['jeff', ...space == 'both' ? ['ann'] : []].map((person) => ({
+          entity: { eid: `${space}-${person}` },
+          member: { space, person, role: 'owner' },
+        }))
+      ),
       '.app': [
         { entity: { eid: 'a' }, created: { by: 'ann', at: ann } },
         { entity: { eid: 'j' }, created: { by: 'jeff', at: ann } },
+        {
+          entity: { eid: 'o' },
+          created: { by: 'both', at: '2026-11-02T00:00Z', via: 'S-1' },
+        },
       ],
       '.acts_for': [],
+      '.space': [{ entity: { eid: 'both' }, space: { slug: 'both' } }],
     }
     await answering((url, init) => {
+      if (url.includes('/api/operator-graph?space=both')) {
+        equal(
+          JSON.parse(String(init?.body)).q,
+          '.entity.eid=S-1&.fields=owner.person',
+        )
+        return Response.json([{
+          entity: { eid: 'S-1' },
+          owner: { person: 'jeff' },
+        }])
+      }
       if (url.endsWith('/mcp')) {
         let q = JSON.parse(String(init?.body)).params.arguments.q as string
         let result = directory[q.split('&')[0]]
