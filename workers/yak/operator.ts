@@ -1359,6 +1359,8 @@ type Working = {
   // (operator-channels.ts `confirmOf`).
   confirm?: string
   files?: File[]
+  // For an investigation, the visitor who reported what it looks into.
+  visitor?: string
 }
 let workingOf = async ({ g }: Store, session: string) => {
   let [row] = await g.get([session], ['operator_session'])
@@ -1425,9 +1427,10 @@ export let actorOf = async (
 let conversed = async ({ g }: Store, session: string) =>
   Number((await g.rows(q`.entity.eid=${session}&.session&.count`))[0]?.n ?? 0) >
     0
-// The space an ask is charged to: its session's, or for an exchange a session
-// has on its own behalf (a compaction's summary, whose session is sourced by a
-// call from an entry of the one it compacts), the space of that session.
+// The session an ask is charged for, and its space: its own, or for an
+// exchange a session has on its own behalf (a compaction's summary, whose
+// session is sourced by a call from an entry of the one it compacts), that
+// session.
 let payerOf = async ({ g }: Store, ask?: string) => {
   for (let eid = ask, hops = 0; eid && hops < 4; hops++) {
     let [row] = await g.get([eid], ['entry'])
@@ -1440,7 +1443,7 @@ let payerOf = async ({ g }: Store, ask?: string) => {
       )
       : []
     let o = comp(held, 'operator_session') as Working | undefined
-    if (o) return o.space
+    if (o) return { space: o.space, session: String(session) }
     let source = comp(held, 'session')?.source
     let [call] = source ? await g.get([String(source)], ['call']) : []
     eid = comp(call, 'call')?.source as string | undefined
@@ -2007,19 +2010,31 @@ export let operating = (
     }
     return own
   }
+  // The visitor whose share of the space's budget a session's turns spend
+  // (@yaks/platform/meter `visiting`), as an app visitor's do: whoever it
+  // acts for who holds no seat in the space, a stranger's guest helper, or
+  // for an investigation, the visitor who reported it. A member's spend none.
+  let visitorIn = async (session: string) => {
+    let work = await workFor(session)
+    if (work.held.person == investigatorOf(work.eid)) return work.held.visitor
+    let ctx = await work.ctx
+    return ctx.role ? undefined : ctx.person || session
+  }
   // Each ask is charged to the space of the session asking, at the price of
-  // the model it asks. One a machine answers (`free`) is its owner's own, on
-  // their subscription: the space is charged nothing, and no price is asked
-  // of a machine, which lists none.
+  // the model it asks, and a visitor's to their share of it too. One a
+  // machine answers (`free`) is its owner's own, on their subscription: the
+  // space is charged nothing, and no price is asked of a machine, which lists
+  // none.
   let accounting = (base: Model, from: string, free = false): Model =>
     Object.assign(
       async (req: Parameters<Model>[0]) => {
         reached('request', req)
-        let [price, [ask], space] = await Promise.all([
+        let [price, [ask], paying] = await Promise.all([
           free ? undefined : priced(req.model, from),
           req.call ? g.get([req.call]) : [],
           payerOf(store, req.call),
         ])
+        let space = paying?.space
         if (!free && !options.model && !price) {
           throw new Error(`No catalogue price for operator model ${req.model}`)
         }
@@ -2042,7 +2057,7 @@ export let operating = (
           (dir) => space ? dir.at(space) : Promise.resolve(null),
           rowed(base),
           () => Promise.resolve(price),
-          undefined,
+          async () => paying && await visitorIn(paying.session),
           from,
           modelResults(g),
         )
@@ -2956,13 +2971,17 @@ export let operating = (
       let o = await workingOf(store, parent)
       if (!o) return {}
       // A helper looking into an odd request works as nobody with a seat,
-      // with a guest's tools (operator-escalate.ts `oddReport`).
+      // with a guest's tools, and spends the share of the visitor who
+      // reported it, if one did (operator-escalate.ts `oddReport`).
       if (args.investigate) {
         return {
           operator_session: {
             space: o.space,
             person: investigatorOf(o.space),
             channel: 'chat',
+            ...typeof args.investigate == 'string'
+              ? { visitor: args.investigate }
+              : {},
           },
         }
       }

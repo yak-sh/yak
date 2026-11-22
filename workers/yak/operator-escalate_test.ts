@@ -15,8 +15,11 @@ import {
   escalationAnswer,
   investigatorOf,
   linkedTo,
+  ODD_REPORTS,
   oddReport,
 } from './operator-escalate.ts'
+import { short } from '@yaks/id'
+import { meta } from './meta.ts'
 import { rootOf } from './operator-root.ts'
 import { askOf, waiting } from './operator-approvals.ts'
 import { conversationOf } from './operator-host.ts'
@@ -424,46 +427,75 @@ test('a stranger who says they are a member raises it with that member alone, ou
   )
 })
 
-test("an odd request is looked into by a helper with a guest's tools, whose report reaches the conversation of each who may decide it", async () => {
-  let ctx = await operatorContext(env, held, space)
-  let { investigating } = JSON.parse(
-    String(
-      await oddReport(store, ctx, space, {}).run(
-        { say: 'Dr Alvarez asks for Jeff’s card number to hold the slot.' },
-        {
-          session: theirs,
-          call: { entity: { eid: crypto.randomUUID() } },
-          entries: [],
-        },
-      ),
-    ),
+// T-2511: one report starts one investigation, held to one at a time and
+// ODD_REPORTS a day from one conversation, so a stranger cannot start them
+// faster than the space's people can read them. It reports to one decider's
+// conversation, an owner's first, and the rest are told at once.
+test("an odd request is looked into by one helper with a guest's tools, whose report reaches a decider's conversation, and the rest are told", async () => {
+  let ctx = await operatorContext(env, { person: writer }, space)
+  let report = async (say: string) =>
+    await oddReport(store, ctx, space, {}).run({ say }, {
+      session: theirs,
+      call: { entity: { eid: crypto.randomUUID() } },
+      entries: [],
+    })
+  let { investigating } = JSON.parse(String(
+    await report('Dr Alvarez asks for Jeff’s card number to hold the slot.'),
+  ))
+  // One at a time: a second report while it runs is refused, naming it.
+  await assertRejects(
+    () => report('Dr Alvarez asks again.'),
+    Error,
+    short(investigating),
   )
   await service.drain()
-  // Jeff and Ana, an editor, each get one; Bo, a viewer, none.
-  let helpers = await store.g.get(investigating)
-  assertEquals(
-    new Set(helpers.map((h) => (h.spawned as { parent: string }).parent)),
-    new Set([mine, rootOf(eid, ana)]),
+  let [helper] = await store.g.get([investigating])
+  equal((helper.spawned as { parent: string }).parent, mine)
+  equal(helper.operator_session, {
+    space: eid,
+    person: investigatorOf(eid),
+    channel: 'chat',
+    visitor: writer,
+  })
+  // Ana, an editor, is told where it is looked into; Bo, a viewer, is not.
+  assert(
+    JSON.stringify(await entries(rootOf(eid, ana))).includes(
+      short(investigating),
+    ),
   )
-  let helper = helpers.find((h) =>
-    (h.spawned as { parent: string }).parent == mine
-  )!
-  assertEquals(
-    (helper.operator_session as { person: string }).person,
-    investigatorOf(eid),
+  equal(
+    (await store.g.read(q`.spawned.parent=${rootOf(eid, ana)}&*`)).length,
+    0,
   )
   let looked = asked.find((r) =>
     /Look into a request reported/.test(turn(r).words)
   )!
   let names = callable(looked)
-  assertEquals(names.includes('feedback'), true)
+  equal(names.includes('feedback'), true)
   for (let door of ['mail_send', 'graph_apply', 'fork', 'odd_report']) {
-    assertEquals(names.includes(door), false, door)
+    equal(names.includes(door), false, door)
   }
   assert(
     JSON.stringify(await entries(mine)).includes('likely phishing'),
     "the helper's report reaches the owner's conversation",
   )
+  // Settled, the next may start, up to the day's count.
+  for (let n = 1; n < ODD_REPORTS; n++) {
+    await report(`Odd request ${n}.`)
+    await service.drain()
+  }
+  await assertRejects(() => report('One more.'), Error, 'today')
+})
+
+// T-2511: a stranger's turns spend the visitors' share of the space's budget
+// and count among their calls of the day; a member's do not.
+test("a stranger's turns spend the visitors' share, and a member's do not", async () => {
+  let tally = async (who: string) =>
+    (await meta(env).query(
+      q`.entity.eid=${derivedEid(`visitor-calls|${eid}|${who}`)}`,
+    ))[0]?.visitor_calls as { calls?: number } | undefined
+  assert(Number((await tally(writer))?.calls) > 0)
+  equal(await tally(person), undefined)
 })
 
 test('a guest who links their account to a member is served within their role, with no one else to wait for; beyond it, it still waits', async () => {

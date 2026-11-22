@@ -341,6 +341,11 @@ export let operatorDoc: VocabDoc = {
             "The person's one conversation with the Operator (operator-channels.ts `rootAt`), whoever's it was begun as.",
         },
         files: { type: 'array', items: { type: 'object' } },
+        visitor: {
+          type: 'string',
+          description:
+            "The visitor whose share of the space's budget an investigation spends: who holds no seat and reported what it looks into (operator-escalate.ts `oddReport`).",
+        },
       },
     },
     operator_memory: {

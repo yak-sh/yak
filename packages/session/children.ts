@@ -72,6 +72,11 @@ let taskRow = async (
   return b
 }
 
+/** The child a call starts ({@link spawnChild}'s `source`): the same each
+ * time it is asked, so a replay finds it, and so does a caller that names
+ * its own sources. */
+export let childOf = (call: Eid): Eid => derivedEid(`child:${call}`)
+
 /** Direct children, including forks created by the session tools. */
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
   Promise.resolve(g.read(line`.spawned.parent=${session}&*`))
@@ -175,7 +180,7 @@ let delegation = (
     ) {
       throw new ToolError('prompt', 'a nonempty prompt is required')
     }
-    let eid = derivedEid(`child:${ctx.call.entity.eid}`)
+    let eid = childOf(ctx.call.entity.eid)
     if (await row(g, eid)) return eid
     // A fork is offered its parent's tools, so its cached prefix is the
     // parent's, fork among them; one that forked again forked its task down
