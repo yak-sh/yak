@@ -1,8 +1,11 @@
 import { equal, ok, test } from '@yaks/testing'
+import { assertRejects } from '@std/assert'
+import { CallError } from '@yaks/tools/errors'
 import { operatorMemory } from './operator-testing.ts'
 import { keepResult, readResult, resultValue } from './results.ts'
 import { RESULT_LIMIT, resultBytes, resultSummary } from '@yaks/context/result'
 import { queryResult } from './result-query.ts'
+import { cause } from './refusals.ts'
 
 let { g } = operatorMemory()
 let person = crypto.randomUUID()
@@ -56,6 +59,27 @@ test('jq narrows kept data and returns full query outputs to programs', () => {
     values: [[{ id: 98, name: 'row 98' }, { id: 99, name: 'row 99' }]],
   })
   equal(repeated, { values: [{ result: data }] })
+})
+
+test('a jq escape refusal names the replacement and returns a filter that runs', async () => {
+  let query =
+    '.result[0].name | split("a separator longer than twenty-five characters") | map(test("row \\.?\\d+" + "\\n?"))'
+  let error = await assertRejects(
+    () => queryResult(g, summary.id, query, source, person),
+    CallError,
+  )
+  equal(error.code, 'arguments')
+  let [hint, fixed] = error.message.split('\n\nCorrected jq filter\n\n')
+  ok(hint.includes('\\. → \\\\.'), hint)
+  ok(cause(error.message).includes('\\. → \\\\.'))
+  equal(
+    fixed,
+    query.replace('\\.', '\\\\.').replace('\\d', '\\\\d'),
+  )
+  equal(
+    await queryResult(g, summary.id, fixed, source, person),
+    { values: [[true]] },
+  )
 })
 
 test('a kept result is private to the reader who produced it', async () => {

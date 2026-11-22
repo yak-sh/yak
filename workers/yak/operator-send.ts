@@ -20,7 +20,7 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
-import { type Tool, type ToolContext, topOf } from '@yaks/session'
+import { parentOf, type Tool, type ToolContext, topOf } from '@yaks/session'
 import { take } from '@yaks/session/intake'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -134,7 +134,8 @@ export let sessionSend = (
     properties: {
       session: {
         type: 'string',
-        description: 'The session to wake, by its id.',
+        description:
+          'The session to wake by id, or "parent" for the session that started this helper.',
       },
       ...reach.handoff
         ? {
@@ -162,6 +163,16 @@ export let sessionSend = (
     if (!text) throw refuse('arguments', 'Say what the note says.')
     if (!context) throw refuse('access', 'Send it from a conversation.')
     let id = typeof session == 'string' ? session.trim() : ''
+    if (id == 'parent') {
+      let parent = await parentOf(store.g, context.session)
+      if (!parent) {
+        throw refuse(
+          'arguments',
+          'This session has no parent. Name the session to wake by id.',
+        )
+      }
+      id = parent
+    }
     let answer = (value: unknown) => JSON.stringify(value)
     if (!id) {
       if (!reach.handoff || typeof to != 'string' || !to.trim()) {

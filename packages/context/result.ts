@@ -1,5 +1,5 @@
 /** Small model-facing descriptions of JSON values kept whole in the graph. */
-import { run } from '@gabrielbryk/jq-ts'
+import { LexError, run } from '@gabrielbryk/jq-ts'
 
 export let RESULT_LIMIT: number = 16_384
 export let RESULT_MAX: number = 33_554_432
@@ -8,6 +8,18 @@ export let RESULT_MAX: number = 33_554_432
 // `\d`), with the doubled one beside it that stays: `\\`, `\"` and the
 // rest jq reads.
 let LONE = /\\(\\|["\/bfnrtu(])|\\/g
+let BAD_ESCAPE = /^Invalid escape sequence "(\\[\s\S])"$/
+
+let jqFailure = (error: Error, filter: string): Error => {
+  let escape = error instanceof LexError && error.message.match(BAD_ESCAPE)?.[1]
+  if (!escape) return new Error('jq query failed: ' + error.message)
+  let fixed = filter.replace(LONE, (all, kept) => kept ? all : '\\\\')
+  return new Error(
+    'jq query failed: Double the backslash in the jq string (' +
+      `${escape} → \\${escape}` +
+      ')\n\nCorrected jq filter\n\n' + fixed,
+  )
+}
 
 /**
  * The values a jq filter makes of a kept result, with bounded work even for
@@ -20,7 +32,7 @@ let LONE = /\\(\\|["\/bfnrtu(])|\\/g
  * equal(jqOver('.a', { a: 1 }), [1])
  * throws(
  *   () => jqOver('.a | test("x\\.y")', { a: 'x.y' }),
- *   'jq query failed: Invalid escape sequence "\\." — a jq string doubles a regex\'s backslash: .a | test("x\\\\.y")',
+ *   'jq query failed: Double the backslash in the jq string (\\. → \\\\.)\n\nCorrected jq filter\n\n.a | test("x\\\\.y")',
  * )
  * ```
  */
@@ -34,16 +46,7 @@ export let jqOver = (
       limits: { maxSteps: 1_000_000, maxDepth: 128, maxOutputs: outputs },
     })
   } catch (error) {
-    let said = (error as Error).message
-    let fixed = /escape sequence/i.test(said)
-      ? filter.replace(LONE, (all, kept) => kept ? all : '\\\\')
-      : filter
-    throw new Error(
-      `jq query failed: ${said}` +
-        (fixed != filter
-          ? ` — a jq string doubles a regex's backslash: ${fixed}`
-          : ''),
-    )
+    throw jqFailure(error as Error, filter)
   }
 }
 export let resultBytes = (value: unknown): number =>

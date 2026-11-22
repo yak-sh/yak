@@ -50,6 +50,17 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 let row = async (g: Graph, eid: Eid, comps?: string[]) =>
   (await g.get([eid], comps))[0]
+let spawnedOf = async (g: Graph, session: Eid) =>
+  comp(await row(g, session, ['spawned']), 'spawned')
+
+/** The session that directly started this helper or fork. */
+export let parentOf = async (
+  g: Graph,
+  session: Eid,
+): Promise<Eid | undefined> => {
+  let parent = (await spawnedOf(g, session))?.parent
+  return typeof parent == 'string' ? parent : undefined
+}
 
 // Waiting needs only the child's place, not its computed transcript status/cost.
 export let childPlace = async (
@@ -350,7 +361,7 @@ let delegation = (
           native: {},
           spawned: {
             parent: ctx.session,
-            ...comp(await row(g, ctx.session, ['spawned']), 'spawned')?.notice
+            ...(await spawnedOf(g, ctx.session))?.notice
               ? { notice: true }
               : {},
             ...minted || submitted ? {} : { call: ctx.call.entity.eid },
@@ -489,9 +500,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         )
       }
       for (let id of args.tasks == null ? ids : []) {
-        if (
-          comp(await row(g, id, ['spawned']), 'spawned')?.parent != ctx.session
-        ) {
+        if (await parentOf(g, id) != ctx.session) {
           throw new ToolError('children', `not your child: ${id}`)
         }
       }
@@ -559,7 +568,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
 /** The session `session` works for: up its `spawned` links to a person's
  * conversation, or to a session started on its own (`spawned.quiet`). */
 export let topOf = async (g: Graph, session: Eid): Promise<Eid> => {
-  let link = comp(await row(g, session, ['spawned']), 'spawned')
+  let link = await spawnedOf(g, session)
   if (!link?.parent || link.quiet != null) return session
   return topOf(g, String(link.parent))
 }
@@ -606,7 +615,7 @@ export let stopAll = async (
     if (status == 'pending' || status == 'running') busy.push(b.entity.eid)
     else if (status != 'stopped') idle.push(b.entity.eid)
   }
-  let link = comp(await row(g, session, ['spawned']), 'spawned')
+  let link = await spawnedOf(g, session)
   if (!busy.length && !link?.notice) return false
   // The person as the model knows them: the id their own words are labeled
   // with (@yaks/harness `senders`).

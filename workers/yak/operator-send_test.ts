@@ -31,9 +31,10 @@ await dir.apply({
   }],
 }, { 'x-yak-person': ada, 'x-yak-role': 'owner' })
 
-// Ada's conversation and a helper of it; Bo's and Kit's conversations.
+// Ada's conversation and nested helpers; Bo's and Kit's conversations.
 let store = operatorMemory()
-let [adas, helper, bos, kits] = [
+let [adas, helper, nested, bos, kits] = [
+  crypto.randomUUID(),
   crypto.randomUUID(),
   crypto.randomUUID(),
   crypto.randomUUID(),
@@ -53,6 +54,11 @@ await store.g.apply([
     session: {},
     spawned: { parent: adas },
     operator_session: { space: space.eid, person: ada },
+  },
+  {
+    entity: { eid: nested },
+    session: {},
+    spawned: { parent: helper },
   },
 ], { trusted: true })
 
@@ -81,13 +87,37 @@ test("a note to one of the person's own sessions is its next words, from the sen
     { session: helper, status: 'sent' },
   )
   let [said] = await store.g.read(
-    line`.entry.session=${helper}&.content&.order=-entry.seq&.limit=1&*`,
+    line`.entry.session=${helper}&.entry.from=${`your session ${adas}`}&.content&*`,
   )
   assertEquals(
     (said.content as { body: string }).body,
     'The explainer has a new owner.',
   )
   assertEquals((said.entry as { from: string }).from, `your session ${adas}`)
+})
+
+test('parent wakes the session that started the helper', async () => {
+  let say = 'The nested helper found the answer.'
+  assertEquals(
+    JSON.parse(String(await send(ada, nested, { session: 'parent', say }))),
+    { session: helper, status: 'sent' },
+  )
+  let [said] = await store.g.read(
+    line`.entry.session=${helper}&.entry.from=${`your session ${nested}`}&.content&*`,
+  )
+  assertEquals(said.content, { body: say })
+})
+
+test('parent from a session with no parent asks for an explicit id', async () => {
+  await assertRejects(
+    () =>
+      send(ada, adas, { session: 'parent', space: 'send-home' }, {
+        handoff: true,
+        member: true,
+      }),
+    Error,
+    'This session has no parent',
+  )
 })
 
 test("a member's note wakes another person's conversation as their thread's words", async () => {
