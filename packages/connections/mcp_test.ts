@@ -67,8 +67,8 @@ let setup = async () => {
     vault,
     redirect: 'https://yaks.test/connections/callback',
     signIn: 'https://yaks.test/manage/connections',
-    // Everyone writes in every space, unless a test seats them otherwise.
-    seat: () => Promise.resolve<Seat>('writes'),
+    // Everyone owns every space, unless a test seats them otherwise.
+    seat: (_: string) => Promise.resolve<Seat>('owns'),
     report: (e: unknown) => {
       failures.push(e)
     },
@@ -535,10 +535,13 @@ test('in a space, a person with no seat reaches no server, and one who only read
   let { host, person, other } = await setup()
   let f = fixture()
   let space = mint()
+  // The caller sits in `seat`; whoever connected a server owns the space.
   let as = (who: string, seat: Seat = 'writes') =>
-    remoteCommands(who, { ...host, space, seat: () => Promise.resolve(seat) }, {
-      fetch: f.fetcher,
-    })
+    remoteCommands(who, {
+      ...host,
+      space,
+      seat: (p) => Promise.resolve(p == who ? seat : 'owns'),
+    }, { fetch: f.fetcher })
   let shared = await as(person).configure({
     name: 'Team',
     url: 'https://team.test/mcp',
@@ -562,6 +565,51 @@ test('in a space, a person with no seat reaches no server, and one who only read
     'not connected for you',
   )
   assertEquals(f.calls.filter((c) => c.method == 'tools/call'), [])
+})
+
+test('a server shared with everyone reaches nobody else once its connector owns the space no longer, and again once they do', async () => {
+  let { g, host, person, other } = await setup()
+  let f = fixture()
+  let space = mint()
+  let seats = new Map<string, Seat>([[person, 'owns'], [other, 'owns']])
+  let as = (who: string) =>
+    remoteCommands(who, {
+      ...host,
+      space,
+      seat: (p) => Promise.resolve(seats.get(p) ?? null),
+    }, { fetch: f.fetcher })
+  let shared = await as(person).configure({
+    name: 'Team',
+    url: 'https://team.test/mcp',
+  })
+  await as(other).configure({
+    name: 'Mine',
+    url: 'https://mine.test/mcp',
+    everyone: false,
+  })
+  let names = async (who: string) =>
+    (await as(who).list()).map((t) => t.namespace).sort()
+  let kept = () => g.read(line`.mcp_server.space=${space}&*`)
+  let before = await kept()
+  assertEquals(await names(other), ['Mine', 'Team'])
+  for (let left of ['writes', 'reads', null] as Seat[]) {
+    seats.set(person, left)
+    assertEquals(await names(other), ['Mine'])
+    await assertRejects(
+      () =>
+        as(other).call(`mcp:${shared.server}`, 'publish_mockup', { html: 'x' }),
+      Error,
+      'not connected for you',
+    )
+  }
+  assertEquals(f.calls.filter((c) => c.method == 'tools/call'), [])
+  // Demoted, the connector still reaches it as their own.
+  seats.set(person, 'writes')
+  assertEquals(await names(person), ['Team'])
+  // Nothing they kept was changed, and owning the space again shares it.
+  assertEquals(await kept(), before)
+  seats.set(person, 'owns')
+  assertEquals(await names(other), ['Mine', 'Team'])
 })
 
 // A server at `host` that takes a sign-in through its OAuth metadata, a key

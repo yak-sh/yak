@@ -68,15 +68,18 @@ type Host = Ctx & {
   /** The space the servers are reached in, by its eid; absent at a door that
    * names none, which reaches only servers kept without a space. */
   space?: string
-  /** The person's seat in `space`: one who writes there, one who only reads,
-   * or none. A host that does not say is answered as none. */
-  seat?: () => Promise<Seat>
+  /** A person's seat in `space`: the caller's, and that of each person who
+   * connected a server there for everyone. A host that does not say is
+   * answered as none. */
+  seat?: (person: string) => Promise<Seat>
   /** Reaches the person's servers in every space: an app's code, which
    * calls only the ones the person granted it (@yaks/connections `grant`). */
   every?: boolean
 }
-/** A person's seat in a space, as the servers reached there ask it. */
-export type Seat = 'writes' | 'reads' | null
+/** A person's seat in a space, as the servers reached there ask it: one who
+ * owns it, one who writes there, one who only reads, or none. */
+export type Seat = 'owns' | 'writes' | 'reads' | null
+let writing = (s: Seat) => s == 'owns' || s == 'writes'
 
 export type Settings = {
   // Unsaid, a new server is called what it calls itself (its `serverInfo`),
@@ -332,6 +335,19 @@ export type Remote = {
   kept: () => Promise<Bundle[]>
 }
 
+/** The names of the servers `person` connected in `space` for everyone in
+ * it, those in the trash left out: what they stop sharing there when they
+ * own it no longer. */
+export let sharing = async (
+  read: Ctx['graph']['read'],
+  person: string,
+  space: string,
+): Promise<string[]> =>
+  (await read(
+    line`.mcp_server.space=${space}&.mcp_server.owner=${person}&.mcp_server.everyone=true&*`,
+  )).filter((r) => !r.trashed && !comp(r, 'mcp_server').machine)
+    .map((r) => String(comp(r, 'mcp_server').name)).sort()
+
 /** Each operation reads ownership anew; no roster retains authority. */
 export let remoteCommands = (
   person: string,
@@ -350,26 +366,33 @@ export let remoteCommands = (
   // Who connected each server reached, whose credential its calls carry.
   let owners = new Map<string, string>()
   let whose = (s: GraphServer) => owners.get(s.id) ?? person
-  // Those another person connected in the space for everyone in it.
-  let shared = async () =>
-    host.space && person && !host.every
-      ? (await host.graph.read(
-        line`.mcp_server.space=${host.space}&.mcp_server.everyone=true&*`,
-      )).filter((r) =>
-        !r.trashed && comp(r, 'mcp_server').owner != person &&
-        !comp(r, 'mcp_server').machine
-      )
-      : []
+  // Those another person connected in the space for everyone in it, while
+  // they own it: owning it is what let them share it, and their calls carry
+  // that person's credential. One who leaves or is demoted shares nothing
+  // there, and owning it again shares it again; the row stays as it was.
+  let shared = async () => {
+    if (!host.space || !person || host.every) return []
+    let found = (await host.graph.read(
+      line`.mcp_server.space=${host.space}&.mcp_server.everyone=true&*`,
+    )).filter((r) =>
+      !r.trashed && comp(r, 'mcp_server').owner != person &&
+      !comp(r, 'mcp_server').machine
+    )
+    let by = [...new Set(found.map((r) => String(comp(r, 'mcp_server').owner)))]
+    let seats = await Promise.all(by.map((p) => host.seat?.(p) ?? null))
+    let owning = new Set(by.filter((_, i) => seats[i] == 'owns'))
+    return found.filter((r) => owning.has(String(comp(r, 'mcp_server').owner)))
+  }
   // In a space, a person with no seat there reaches no server, their own
   // neither, and only one who writes there reaches those shared with
-  // everyone, whose calls carry their connector's credential.
+  // everyone.
   let seat = async (): Promise<Seat> =>
-    host.every || !host.space ? 'writes' : await host.seat?.() ?? null
+    host.every || !host.space ? 'writes' : await host.seat?.(person) ?? null
   let reachable = async () => {
     let held = await seat()
     let [own, theirs] = await Promise.all([
       held ? rows() : [],
-      held == 'writes' ? shared() : [],
+      writing(held) ? shared() : [],
     ])
     for (let r of [...own, ...theirs]) {
       owners.set(r.entity.eid, String(comp(r, 'mcp_server').owner))

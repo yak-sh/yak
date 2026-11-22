@@ -7,7 +7,7 @@ import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
 import { leftWith } from './operator-reach.ts'
-import { mcpConnect, mcpRemove } from './connected-mcp.ts'
+import { mcpConnect, mcpRemove, unshared } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { searchConsoleTools } from './search-console.ts'
@@ -942,6 +942,28 @@ let operatorsOut = (spaces: Space[]) =>
       spaces.length > 1 ? 'work' : 'works'
     } there`
     : ''
+
+// The MCP servers a former owner shared with everyone in a space, which no
+// longer serve it (connected-mcp.ts `unshared`); they are told by letter.
+let serversOut = (names: string[]) =>
+  names.length
+    ? `; the MCP ${names.length > 1 ? 'servers' : 'server'} they shared ` +
+      `with everyone there (${names.join(', ')}) no longer ${
+        names.length > 1 ? 'serve' : 'serves'
+      } it, and they were told`
+    : ''
+// A letter that fails is reported, and the seat has changed either way.
+let unsharing = (
+  ctx: Ctx,
+  space: Space,
+  person: string,
+  email: string,
+  now: Role | null,
+) =>
+  unshared(ctx.env, space, person, email, now).catch((e) => {
+    caught(e, { tool: 'member', space: space.slug })
+    return [] as string[]
+  })
 
 // A domain, as forgivingly as the rest of this file reads an argument: a
 // model that pastes `https://herbusiness.com/` means the hostname in it, and
@@ -7725,12 +7747,15 @@ let OURS: Row[] = [
         let unreached = !app && !reaches(want, had!.role)
           ? await leftWith(ctx.dir, space, person, want, vouched(who))
           : []
+        let stopped = !app && had!.role == 'owner' && want != 'owner'
+          ? await unsharing(ctx, space, person, email, want)
+          : []
         return {
           text: `${email} is now ${an(want)} ${want} of ` +
             (app
               ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
               : space.slug) +
-            ` (was ${was})` + operatorsOut(unreached),
+            ` (was ${was})` + operatorsOut(unreached) + serversOut(stopped),
           space,
           value: { invited: false, unreached: unreached.map((s) => s.slug) },
         }
@@ -7864,9 +7889,12 @@ let OURS: Row[] = [
       if ((await ctx.dir.apps(space)).length) {
         await reachChanged(ctx.env, person)
       }
+      let stopped = had.role == 'owner'
+        ? await unsharing(ctx, space, person!, email, null)
+        : []
       return {
         text: `${email} is no longer a member of ${space.slug}` +
-          operatorsOut(unreached),
+          operatorsOut(unreached) + serversOut(stopped),
         space,
         value: { unreached: unreached.map((s) => s.slug) },
       }

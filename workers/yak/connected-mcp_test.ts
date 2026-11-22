@@ -14,6 +14,7 @@ import {
   heardFrom,
   mcpConnect,
   runConnectedCommand,
+  unshared,
 } from './connected-mcp.ts'
 import { ctxOf } from './connections.ts'
 import { DESCRIBED, SAID, TITLED } from '@yaks/connections/mcp'
@@ -518,3 +519,50 @@ for (
     })
   }
 }
+
+test('a former owner is told once which servers they shared with everyone stopped serving the space, and none is changed', async () => {
+  let { read, apply } = ctxOf(env).graph
+  let shared = (name: string, more = {}) => ({
+    entity: { eid: mint() },
+    mcp_server: {
+      owner: bob,
+      name,
+      url: `https://${name}.test/mcp`,
+      space: eid,
+      everyone: true,
+      ...more,
+    },
+  })
+  let rows = [
+    shared('Books'),
+    shared('Art'),
+    shared('Mine', { everyone: false }),
+    shared('Away', { space: elsewhere.eid }),
+  ]
+  await apply(rows)
+  let before = await read(line`.mcp_server.owner=${bob}&*`)
+  let letters = () => read(line`.mail.target=${eid}&.doc&*`)
+  assertEquals(await unshared(env, space, bob, 'bob@example.test', 'editor'), [
+    'Art',
+    'Books',
+  ])
+  let [letter, ...more] = await letters()
+  assertEquals(more, [])
+  let { title, body } = letter.doc as { title: string; body: string }
+  assertEquals(title, 'Your MCP servers are no longer shared in Ada')
+  for (
+    let said of [
+      'You no longer own Ada',
+      'no longer used for anyone there: Art, Books.',
+      'Nothing was deleted',
+      'You still use them yourself there.',
+    ]
+  ) assertEquals(body.includes(said), true, said)
+  assertEquals(await read(line`.mcp_server.owner=${bob}&*`), before)
+  // One who shared nothing there is told nothing.
+  assertEquals(await unshared(env, space, ada, 'ada@example.test', null), [])
+  assertEquals((await letters()).length, 1)
+  await ctxOf(env).graph.apply(
+    rows.map((r) => ({ entity: r.entity, tombstone: {} })),
+  )
+})
