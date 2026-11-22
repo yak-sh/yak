@@ -101,22 +101,46 @@ export let withSession = async <B, T>(
   run: (browser: B) => Promise<T>,
 ): Promise<T> => {
   let left = () => openBy - time.now()
-  let id = await acquired(sessions, left, time, hold, report)
-  try {
-    let browser = await bounded(
-      time,
-      Math.min(CONNECT, left()),
-      () => 'Connecting to the browser session',
-      (signal) =>
-        retried(
-          () => sessions.connect(id, signal),
-          [250, 500, 1000],
-          time,
-          signal,
+  let release = (id: string) => released(sessions, id, time, hold, report)
+  let open = async (replace: boolean): Promise<{ id: string; browser: B }> => {
+    let id = await acquired(sessions, left, time, hold, report)
+    try {
+      let browser = await bounded(
+        time,
+        Math.min(CONNECT, left()),
+        () => 'Connecting to the browser session',
+        (signal) =>
+          retried(
+            () => sessions.connect(id, signal),
+            [250, 500, 1000],
+            time,
+            signal,
+          ),
+      )
+      return { id, browser }
+    } catch (e) {
+      await release(id)
+      if (e instanceof BrowserTimeout) throw e
+      if (!replace) {
+        throw new Error('Could not connect to a fresh browser session', {
+          cause: e,
+        })
+      }
+      report(
+        new Error(
+          `Replacing a browser session that could not connect (${
+            e instanceof Error ? e.message : e
+          })`,
+          { cause: e },
         ),
-    )
+      )
+      return open(false)
+    }
+  }
+  let { id, browser } = await open(true)
+  try {
     return await run(browser)
   } finally {
-    await released(sessions, id, time, hold, report)
+    await release(id)
   }
 }

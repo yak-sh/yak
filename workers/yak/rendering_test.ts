@@ -616,17 +616,31 @@ test('a screenshot failure closes its browser and the kernel charges its time', 
 let flaky = (misses: number) => {
   let p = page()
   let sessions: string[] = []
+  let lifecycle: string[] = []
+  let next = 0
   let browsing: Browsing = {
     ...p.browsing,
-    acquire: () => Promise.resolve(`session ${sessions.length}`),
+    acquire: () => {
+      let id = `session ${next++}`
+      lifecycle.push(`acquire ${id}`)
+      return Promise.resolve(id)
+    },
     connect: (session) => {
       sessions.push(session)
       return sessions.length > misses
         ? Promise.resolve(p.browser)
-        : Promise.reject(new TypeError("reading 'accept' of null"))
+        : Promise.reject(
+          new Error(
+            `Unable to connect to existing session ${session}: Cannot read properties of null (reading 'accept')`,
+          ),
+        )
+    },
+    release: (id) => {
+      lifecycle.push(`release ${id}`)
+      return p.browsing.release(id)
     },
   }
-  return { p, browsing, sessions }
+  return { p, browsing, sessions, lifecycle }
 }
 // Each pause between connects, one turn of the clock apiece.
 let paused = async (time: ReturnType<typeof clock>) => {
@@ -700,7 +714,37 @@ test('a session not ready yet is connected to again', async () => {
   assertEquals(p.closed(), true)
 })
 
-test('a session that never takes a connection fails the preview', async () => {
+test('a browse visit replaces a session that never connects before taking its steps', async () => {
+  let { p, browsing, sessions, lifecycle } = flaky(4)
+  let time = clock()
+  let rendering = reported(() =>
+    seen(bound(browsing, time), {
+      url: 'https://x.invalid/',
+      view,
+      audit: false,
+      steps: [{ press: 'Enter' }],
+    })
+  )
+  rendering.catch(() => {})
+  await paused(time)
+  let { result, reports } = await rendering
+  assertEquals(result.image, 'png-bytes')
+  assertEquals(p.log.filter((line) => line == 'press Enter'), ['press Enter'])
+  assertEquals(sessions, [...Array(4).fill('session 0'), 'session 1'])
+  assertEquals(lifecycle, [
+    'acquire session 0',
+    'release session 0',
+    'acquire session 1',
+    'release session 1',
+  ])
+  assertStringIncludes(
+    reports,
+    'Replacing a browser session that could not connect',
+  )
+  assertEquals(time.pending(), 0)
+})
+
+test('two sessions that never connect fail the preview and are both released', async () => {
   let { browsing, sessions, p } = flaky(Infinity)
   let time = clock()
   let rendering = capture(
@@ -709,11 +753,20 @@ test('a session that never takes a connection fails the preview', async () => {
     undefined,
     time,
   )
-  rendering.catch(() => {})
+  let failed = assertRejects(
+    () => rendering,
+    Error,
+    'Could not connect to a fresh browser session',
+  )
   await paused(time)
-  await assertRejects(() => rendering, Error, "reading 'accept' of null")
-  assertEquals(sessions.length, 4)
-  assertEquals(p.released, ['session 0'])
+  await paused(time)
+  await failed
+  assertEquals(sessions, [
+    ...Array(4).fill('session 0'),
+    ...Array(4).fill('session 1'),
+  ])
+  assertEquals(p.released, ['session 0', 'session 1'])
+  assertEquals(time.pending(), 0)
 })
 
 test('an acquisition that answers after the timeout releases its session without connecting', async () => {
