@@ -17,6 +17,7 @@ import {
   type Provider,
   type Receipt,
   type Text,
+  type Ways,
 } from '@yaks/phone'
 
 import {
@@ -252,6 +253,37 @@ let heldDid = async (call: Call, digits: string) => {
   return held.find((d) => String(d.did) == digits)
 }
 
+// An address no call comes from (RFC 5737's TEST-NET-1). A sub-account whose
+// calls out may come only from it places none, and its sign-in, and the calls
+// that ring it, stay as they were.
+let NOWHERE = '192.0.2.1'
+
+// Let a number's calls go only `ways`: calls out are shut by restricting its
+// sub-account to NOWHERE, calls in by routing the number to a hang-up. voip.ms
+// sets a sub-account whole, so everything it holds is said again as it reads,
+// its password among them, unchanged.
+let allow = async (call: Call, digits: string, ways: Ways) => {
+  let account = await subaccount(call, digits)
+  if (!account) throw new Error(`${e164(digits)} rings no voip.ms sub-account`)
+  let shut = String(account.enable_ip_restriction) == '1' &&
+    account.ip_restriction == NOWHERE
+  if (shut == ways.out) {
+    let { account: _, ...said } = account
+    await call('setSubAccount', {
+      ...Object.fromEntries(
+        Object.entries(said).map(([k, v]) => [k, String(v ?? '')]),
+      ),
+      enable_ip_restriction: ways.out ? '0' : '1',
+      ip_restriction: ways.out ? '' : NOWHERE,
+    })
+  }
+  let did = await heldDid(call, digits)
+  let routing = ways.in ? `account:${account.account}` : 'sys:hangup'
+  if (did && String(did.routing) != routing) {
+    await call('setDIDRouting', { did: digits, routing })
+  }
+}
+
 // A number this account routed to the sub-account made for it.
 let routed = (did: Available, digits: string) =>
   String(did.routing).endsWith(`_${accountFor(digits)}`)
@@ -264,7 +296,8 @@ let routed = (did: Available, digits: string) =>
  * `point` sends its texts to a host's URL. Buying a number the account
  * already holds on the sub-account made for it completes, and `find` quotes
  * it, so a purchase that ended before its host kept the number is finished
- * by buying it again. `calls` reads its calls from
+ * by buying it again. `allow` stops its calls out, in, or both, and lets
+ * them go again, its password untouched. `calls` reads its calls from
  * voip.ms's call records, each at what voip.ms charged for it, in UTC
  * (`timezone` 0). voip.ms sells no toll-free
  * number here, so none is ever verified.
@@ -480,6 +513,7 @@ export let numbers = (
         .filter((c) => c.at > since)
         .sort((a, b) => a.at.localeCompare(b.at))
     },
+    allow: (number, ways) => allow(call, ten(number), ways),
     login: async (number) => {
       let account = await subaccount(call, ten(number))
       if (!account) throw new Error(`${number} rings no voip.ms sub-account`)

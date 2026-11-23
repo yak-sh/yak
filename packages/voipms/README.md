@@ -17,8 +17,11 @@ digits, or any, at voip.ms's price by the minute, each with its `place`;
 `buy(number, callback)` makes a sub-account that rings the number and calls out
 as it, orders the number onto it, and sends its texts to `callback`; `release`
 cancels the number and removes its sub-account; `login(number)` is the
-sub-account's SIP sign-in for a softphone. voip.ms sells no toll-free number
-here, so `verify` refuses.
+sub-account's SIP sign-in for a softphone; `allow(number, ways)` stops its calls
+out by restricting the sub-account to an address no call comes from (192.0.2.1),
+and its calls in by routing the number to a hang-up, and lets them go again, its
+password said back unchanged. voip.ms sells no toll-free number here, so
+`verify` refuses.
 
 The `provider` export plugs into [@yaks/phone](../phone/README.md). Credentials
 and `fetch` are supplied by the host. Nothing reads the environment.

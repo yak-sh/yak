@@ -18,7 +18,6 @@ import { next } from '@yaks/wake'
 import { connector, fresh, letters, seed, unique } from './probe.ts'
 import { endpoints } from './endpoints.ts'
 import { collected, doomed, erase, untrashSpace } from './erase.ts'
-import { GRACE } from './directory.ts'
 import { door, ticket } from './confirm.ts'
 import { managePath } from '@yaks/platform/routes'
 import { arrived } from './operator-texts.ts'
@@ -26,7 +25,9 @@ import { appTexter } from './app-texts.ts'
 import { phoneOf } from './phones.ts'
 import { rang } from './operator-calls.ts'
 import { monthly, released } from './numbers.ts'
-import { minutes, pointed } from './number-upkeep.ts'
+import { allowed, minutes, pointed } from './number-upkeep.ts'
+import { restoredNumber } from './number-trash.ts'
+import { GRACE, stamp } from './directory.ts'
 import { usage } from '@yaks/platform/numbers'
 import type { Env } from './env.ts'
 
@@ -403,7 +404,11 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
 let LOCAL = '+12692015487'
 let vms = {
   held: new Map<string, { routing: string; callback?: string }>(),
-  accounts: new Map<string, string>(),
+  // each sub-account by id: its name, and where its calls out may come from
+  // where it is restricted (voip.ms `ip_restriction`)
+  accounts: new Map<string, { account: string; only?: string }>(),
+  // the passwords every setSubAccount said
+  passwords: [] as string[],
   asked: [] as URLSearchParams[],
   cdr: [] as Record<string, string>[],
   slow: 0,
@@ -439,7 +444,7 @@ let voipmsApi = endpoints(globalThis).open((req) => {
       })
     case 'createSubAccount': {
       let id = String(vms.accounts.size + 1)
-      vms.accounts.set(id, `100_${q.get('username')}`)
+      vms.accounts.set(id, { account: `100_${q.get('username')}` })
       return ok({ id, account: `100_${q.get('username')}` })
     }
     case 'delSubAccount':
@@ -447,12 +452,22 @@ let voipmsApi = endpoints(globalThis).open((req) => {
       return ok()
     case 'getSubAccounts':
       return ok({
-        accounts: [...vms.accounts].map(([id, account]) => ({
+        accounts: [...vms.accounts].map(([id, { account, only }]) => ({
           id,
           account,
           password: 'sip-pw',
+          enable_ip_restriction: only ? '1' : '0',
+          ip_restriction: only ?? '',
         })),
       })
+    case 'setSubAccount': {
+      let one = vms.accounts.get(q.get('id')!)!
+      vms.passwords.push(q.get('password')!)
+      one.only = q.get('enable_ip_restriction') == '1'
+        ? q.get('ip_restriction')!
+        : undefined
+      return ok()
+    }
     case 'getServersInfo':
       return ok({ servers: [{ server_hostname: 'chicago1.voip.ms' }] })
     case 'orderDID':
@@ -631,6 +646,78 @@ test('a space buys a local voip.ms number by area code at its price and our marg
     await released(env, (await k.dir.lines(space))[0])
     assertEquals(vms.held.size, 0)
     assertEquals(vms.accounts.size, 0)
+  } finally {
+    await k.stop()
+  }
+})
+
+test("a voip.ms number places no calls out once its space's budget is spent and again once it allows, and takes and makes none in the trash until restored, its sign-in untouched", async () => {
+  let env!: Env
+  let k = await fresh({}, (e) => {
+    env = e
+    Object.assign(e, {
+      VOIPMS_API: voipmsApi.url,
+      VOIPMS_USERNAME: 'us@example.com',
+      VOIPMS_API_PASSWORD: 'pw',
+    })
+  })
+  try {
+    let slug = unique('calls')
+    let { cookie, eids, person } = await seed(k, [{ slug, apps: [] }])
+    let agent = connector(k, cookie)
+    let tool = (name: string, args: Record<string, unknown> = {}) =>
+      agent.tool(name, { space: slug, ...args })
+    vms.cdr = []
+    vms.passwords = []
+    await tool('number_buy', { number: LOCAL })
+    let budget = (dollars: number) =>
+      stamp(env, {
+        entities: [{ entity: { eid: eids[slug] }, budget: { dollars } }],
+      })
+    let ways = () => {
+      let [sub] = vms.accounts.values()
+      return {
+        in: vms.held.get('2692015487')?.routing == `account:${sub.account}`,
+        out: !sub.only,
+      }
+    }
+    let hour = async () => {
+      await minutes(env, new Date())
+      await allowed(env, new Date())
+      return ways()
+    }
+    assertEquals(await hour(), { in: true, out: true })
+
+    // A call past what is left of the budget: noticed the next hour, and no
+    // call goes out until the budget has room again.
+    await budget(5)
+    vms.cdr = [{
+      uniqueid: 'over',
+      destination: '2695550142',
+      account: '100_y2692015487',
+      total: '100',
+      seconds: '6000',
+      date: new Date(Date.now() + 60_000).toISOString().slice(0, 19)
+        .replace('T', ' '),
+    }]
+    assertEquals(await hour(), { in: true, out: false })
+    assertEquals(await hour(), { in: true, out: false })
+    await budget(1000)
+    assertEquals(await hour(), { in: true, out: true })
+
+    // In the trash it takes and makes no call, and restored, it does again.
+    await tool('number_release', { number: LOCAL })
+    assertEquals(ways(), { in: false, out: false })
+    assertEquals(await hour(), { in: false, out: false })
+    let space = (await k.dir.space(slug))!
+    let [line] = await k.dir.lines(space)
+    await restoredNumber(env, k.dir, line, { person, role: 'owner' })
+    assertEquals(ways(), { in: true, out: true })
+
+    // Never a new password: the one its softphone holds is said back.
+    assert(vms.passwords.length)
+    assertEquals(new Set(vms.passwords), new Set(['sip-pw']))
+    await released(env, (await k.dir.lines(space))[0])
   } finally {
     await k.stop()
     await voipmsApi.stop()

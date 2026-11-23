@@ -4,21 +4,40 @@
 import { shown } from '@yaks/phone'
 import { type Kind } from './confirm.ts'
 import { type Directory, type PhoneLine } from './directory.ts'
-import { trashNumber } from './erase.ts'
+import type { Env } from './env.ts'
+import { trashNumber, untrashNumber } from './erase.ts'
+import { spaceNow } from './model-spend.ts'
+import { allow, waysOf } from './number-upkeep.ts'
 import { dollars, released } from './numbers.ts'
 import type { Who } from './session.ts'
 
-/** Keep its assignment for an exact restore; phone boundaries read the mark. */
+/** Keep its assignment for an exact restore; phone boundaries read the mark,
+ * and its calls stop both ways at its provider. */
 export let binnedNumber = async (
+  env: Env,
   dir: Directory,
   line: PhoneLine,
   who: Who,
 ) => {
   await trashNumber(dir, line, who)
+  await allow(env, line, { in: false, out: false })
   return `${shown(line.number)} is in the trash. It stops taking ` +
     `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +
     'Only your confirmation returns it to the phone company.'
+}
+
+/** Bring a number back from the trash, its calls going again the ways its
+ * space allows (number-upkeep.ts `waysOf`). */
+export let restoredNumber = async (
+  env: Env,
+  dir: Directory,
+  line: PhoneLine,
+  who: Who,
+) => {
+  await untrashNumber(dir, line, who)
+  let space = await spaceNow(env, line.space)
+  await allow(env, line, waysOf(false, space, new Date()))
 }
 
 // Keep the number door carried by existing letters: its press puts a number
@@ -40,7 +59,7 @@ export let heldNumber: Kind<PhoneLine> = {
     } a month until returned to the phone company`,
   ],
   press: (l) => `Move ${shown(l.number)} to trash`,
-  act: async (_env, dir, _space, l, who) => await binnedNumber(dir, l, who),
+  act: async (env, dir, _space, l, who) => await binnedNumber(env, dir, l, who),
 }
 
 export let trashedNumber: Kind<PhoneLine> = {

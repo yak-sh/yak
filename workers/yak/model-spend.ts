@@ -256,7 +256,7 @@ export let reserved = async <T extends { dollars: number }>(
       // The caller's reading may be older than a settlement that freed
       // dollars; a fresh one decides.
       if (attempt == 0) {
-        reading = await again(env, space.eid)
+        reading = await spaceNow(env, space.eid)
         continue
       }
       throw new ModelError('limit', no)
@@ -319,7 +319,7 @@ export let reserved = async <T extends { dollars: number }>(
       if (attempt >= HOLDS) {
         throw new ModelError('limit', (error as Error).message)
       }
-      reading = await again(env, space.eid)
+      reading = await spaceNow(env, space.eid)
     }
   }
 }
@@ -442,7 +442,7 @@ export let onHold = async <T>(
 let HOLDS = 3
 
 // The paying space as the directory holds it now.
-let again = async (env: Env, eid: string) => {
+export let spaceNow = async (env: Env, eid: string) => {
   let row = await read(env, eid)
   if (!row?.space) throw new Error('The paying space is missing')
   return spaceOf(row as unknown as Row)

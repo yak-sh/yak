@@ -30,8 +30,8 @@ export let jobs: Record<string, Job> = {
     }),
   // The hourly meter: each store's counts, read into the directory, every
   // model call's hold its caller died holding settled (model-spend.ts
-  // `expired`), and each bought number's calls charged and its texts pointed
-  // here (number-upkeep.ts).
+  // `expired`), and each bought number's calls charged, let go only the ways
+  // its space allows, and its texts pointed here (number-upkeep.ts).
   meter: (env, row) =>
     reporting(env, row, async () => {
       let now = new Date(row.Now.at)
@@ -40,8 +40,9 @@ export let jobs: Record<string, Job> = {
       if (n) console.log(`yak-meter: ${n} expired model holds settled`)
       let { metered } = await import('./usage.ts')
       await metered(env, now)
-      let { minutes, pointed } = await import('./number-upkeep.ts')
+      let { allowed, minutes, pointed } = await import('./number-upkeep.ts')
       await minutes(env, now)
+      await allowed(env, now)
       await pointed(env)
     }),
   // Each month after the first that a space holds a number (numbers.ts

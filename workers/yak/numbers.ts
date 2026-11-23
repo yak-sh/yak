@@ -505,7 +505,7 @@ export let numberTools: Row[] = [
             line.eid,
             line,
           )
-          : await binnedNumber(ctx.dir, line, who),
+          : await binnedNumber(ctx.env, ctx.dir, line, who),
         space,
       }
     },

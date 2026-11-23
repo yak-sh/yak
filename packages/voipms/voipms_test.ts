@@ -292,6 +292,55 @@ test("pointing a number's texts where they already go asks voip.ms nothing more"
   assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'setSMS'])
 })
 
+test("a number's calls are stopped and let go by its sub-account's restriction and its routing, its password said back unchanged, and asking for the ways they already go changes nothing", async () => {
+  let sub = {
+    id: '7',
+    account: '100_y2695550100',
+    password: 'sip-pw',
+    enable_ip_restriction: '0',
+    ip_restriction: '',
+  }
+  let did = { did: '2695550100', routing: 'account:100_y2695550100' }
+  let set: Record<string, string>[] = []
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let q = Object.fromEntries(new URL(String(url)).searchParams)
+      let method = q.method
+      if (method == 'setSubAccount') {
+        set.push(q)
+        Object.assign(sub, q)
+      }
+      if (method == 'setDIDRouting') did.routing = q.routing
+      return Promise.resolve(Response.json({
+        status: 'success',
+        accounts: [sub],
+        dids: [did],
+      }))
+    },
+  })
+  let ways = () => ({
+    in: did.routing == 'account:100_y2695550100',
+    out: sub.enable_ip_restriction == '0',
+  })
+  for (
+    let want of [
+      { in: true, out: false },
+      { in: false, out: false },
+      { in: true, out: true },
+      { in: true, out: true },
+    ]
+  ) {
+    await shop.allow!('+12695550100', want)
+    assertEquals(ways(), want)
+  }
+  assertEquals(set.map((q) => [q.id, q.password]), [['7', 'sip-pw'], [
+    '7',
+    'sip-pw',
+  ]])
+})
+
 test('a read voip.ms is slow to answer is asked once more, and a text is never sent twice', async () => {
   let time = clock()
   let asked: string[] = []

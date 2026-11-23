@@ -185,6 +185,8 @@ the phone texts through. `Numbers` is:
   provider's word.
 - `login(number)`, for a provider whose numbers' calls ring a softphone: its SIP
   sign-in, `Login{server, user, password}`.
+- `allow(number, ways)`, for the same provider: lets the number's calls go only
+  `Ways{in, out}`, its sign-in left as it is.
 
 A config entry's `sells` (`local`, `toll_free`) says which numbers a host buys
 through that provider.

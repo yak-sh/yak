@@ -130,6 +130,10 @@ export type Verification = {
   reason?: string
 }
 
+/** Which ways a held number's calls go: `in`, calls to it ring it, and
+ * `out`, calls go out as it. */
+export type Ways = { in: boolean; out: boolean }
+
 /** A provider's numbers, on the account its phone texts through. */
 export type Numbers = {
   find: (search: Search) => Promise<Offer[]>
@@ -147,6 +151,10 @@ export type Numbers = {
   verification: (id: string) => Promise<Verification>
   /** for a provider whose numbers' calls ring a softphone, its sign-in */
   login?: (number: string) => Promise<Login>
+  /** for a provider whose numbers' calls ring a softphone, lets a held
+   * number's calls go only the `ways` given, its sign-in left as it is; a
+   * number already so is changed in nothing */
+  allow?: (number: string, ways: Ways) => Promise<void>
   /** for a provider that bills each call, the calls a number took or made
    * after `since`, oldest first */
   calls?: (number: string, since: string) => Promise<Call[]>

@@ -53,7 +53,8 @@ import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
-import { restoredAddress, untrash, untrashNumber } from './erase.ts'
+import { restoredAddress, untrash } from './erase.ts'
+import { restoredNumber } from './number-trash.ts'
 import { dollars } from './numbers.ts'
 import { shown } from '@yaks/phone'
 import {
@@ -1341,7 +1342,7 @@ let saved = async (
   if (number) {
     if (who.role != 'owner') return nothingHere(env)
     let line = (await dir.lines(space)).find((l) => l.eid == number)
-    if (line?.trashed) await untrashNumber(dir, line, who)
+    if (line?.trashed) await restoredNumber(env, dir, line, who)
     return redirect(sentFrom(req, env).href, 303)
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own
