@@ -17,6 +17,7 @@ import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
 import {
   carried,
   drafted,
+  helpers,
   missed,
   naming,
   open,
@@ -480,6 +481,90 @@ test("trial: missed is the person's corrections of the week before the window th
   let [part] = await missed('jeff')(stand())
   assertEquals([part.door, part.eids], ['notice', ['thursday', 'monday']])
   assertEquals(part.text.endsWith('"not that, monday"'), true)
+})
+
+let family = graph({ storage: ram(vocab), vocab })
+let filedAt = (eid: string, via: string, minute: number) =>
+  doc(eid, entry(minute, '').created.at, {
+    task: {},
+    created: {
+      ...entry(minute, '').created,
+      via,
+    },
+  })
+let child = (eid: string, parent: string) => ({
+  entity: { eid },
+  session: { persona: 'p' },
+  spawned: { parent },
+  ...at(early),
+})
+await family.apply([
+  { entity: { eid: 'p' }, persona: {}, ...at(early) },
+  { entity: { eid: 's' }, session: { persona: 'p' }, ...at(early) },
+  child('child', 's'),
+  child('grandchild', 'child'),
+  child('unrelated', 'other'),
+  filedAt('before-first-entry', 'child', 0),
+  filedAt('before-first-cut', 'child', 1),
+  filedAt('direct', 'child', 3),
+  filedAt('nested', 'grandchild', 4),
+  filedAt('own', 's', 3),
+  filedAt('unrelated-task', 'unrelated', 3),
+  filedAt('after-cut', 'child', 5),
+  said(1, 'start'),
+  entry(2, 'first cut', { checkpoint: {} }),
+  entry(5, 'second cut', { checkpoint: {} }),
+  entry(6, 'wrong answer', { output: {} }),
+  { entity: { eid: 'case' }, miss: { entry: 'e6', needed: 'nested' } },
+])
+
+test('trial: helpers lists descendant filings from the interval before each opening', async () => {
+  for (
+    let [seq, mark, expected] of [
+      [1, said(1, 'start'), ['before-first-entry']],
+      [2, entry(2, '', { checkpoint: {} }), [
+        'before-first-entry',
+        'before-first-cut',
+      ]],
+      [5, entry(5, '', { checkpoint: {} }), ['direct', 'nested']],
+    ] as const
+  ) {
+    let [part] = await helpers({
+      storage: family.storage,
+      vocab,
+      m: { entry: 'e6', session: 's', seq: 6, at: T },
+      had: [mark],
+      since: entry(seq, '').created.at,
+    })
+    assertEquals(part.eids, [...expected])
+    if (seq == 5) {
+      assertEquals(
+        part.text,
+        '#direct · direct · #child\n#nested · nested · #grandchild',
+      )
+    }
+  }
+})
+
+test('trial: score only adds helpers when named', async () => {
+  let score = commands.find((c) => c.name == 'trial_score')!
+  let host = {
+    graph: family,
+    storage: family.storage,
+    vocab,
+    config: {},
+    search: () => [],
+  } as unknown as Host
+  let output = ''
+  let context = {
+    out: (text: string) => output = text,
+  } as unknown as Parameters<
+    CliCommand['run']
+  >[2]
+  await score.run({}, host, context)
+  assertEquals(JSON.parse(output).unasked, 0)
+  await score.run({ arrive: ['helpers'], under: 'p' }, host, context)
+  assertEquals(JSON.parse(output).unasked, 1)
 })
 
 test('trial: a window names a row by its eid, its number or its short handle', () => {

@@ -43,10 +43,11 @@ export let commands: CliCommand[] = [{
             'kept',
             'standing',
             'missed',
+            'helpers',
           ],
         },
         description:
-          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning); or by link: theirs (the person's comments and answers of the day on what the window names), carried (after a compaction, the person's words to the session in the day before it and the tasks it filed quoting them), kept (carried, listing every memory the session saved in the day, whoever wrote the row), standing (at start, who the person is and the notices that came more than once in the day to the session or its parent), missed (at start and after a compaction, the person's corrections of the week that wear a miss, in their words)",
+          "doors that add to the persona: beside (the prompt recall beside the person's words), related (the related list beside a write's hits), said (the person's earlier words and answered decisions beside each thing the session wrote), open (what is open with the person at start), or the resources nearest the agent's own words once: entry (its erring entry), call (its last tool call), reply (its last reply or reasoning); or by link: theirs (the person's comments and answers of the day on what the window names), carried (after a compaction, the person's words to the session in the day before it and the tasks it filed quoting them), kept (carried, listing every memory the session saved in the day, whoever wrote the row), standing (at start, who the person is and the notices that came more than once in the day to the session or its parent), missed (at start and after a compaction, the person's corrections of the week that wear a miss, in their words), helpers (at start and after a compaction, the tasks descendants filed since the previous start or compaction)",
       },
       floor: {
         type: 'number',
@@ -131,6 +132,7 @@ export let commands: CliCommand[] = [{
         kept: () => arrive.carried(person!, { anyone: true }),
         standing: () => arrive.standing(person!),
         missed: () => arrive.missed(person!),
+        helpers: () => arrive.helpers,
       }
       let [as] = [...(await host.graph.address([args.under])).values()]
       variant = {

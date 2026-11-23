@@ -26,6 +26,8 @@
  *   that spawned it, more than once in the day before.
  * - {@link missed}: at the session's start and after each compaction, the
  *   person's corrections of the week before that wear a `miss`, in their words.
+ * - {@link helpers}: at the session's start and after each compaction, the
+ *   tasks its descendants filed since the previous start or compaction.
  *
  * Each reads the graph as it stands now, cut back at the moment: a row
  * created later is left out, and a body edited since reads as it does now.
@@ -45,8 +47,11 @@ import {
   and,
   eq,
   every,
+  fields,
+  ge,
   gt,
   limit,
+  list,
   lt,
   ne,
   near,
@@ -56,11 +61,19 @@ import {
 } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Part } from './mod.ts'
-import { type Arrival, asOf, type At, hits, prompt } from './moment.ts'
+import {
+  type Arrival,
+  asOf,
+  type At,
+  hits,
+  prompt,
+  type Reads,
+} from './moment.ts'
 
-let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
+let comp = (b: Bundle | undefined, name: string): Comp =>
+  (b?.[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
-let at = (b: Bundle): string => str(comp(b, 'created').at)
+let at = (b: Bundle | undefined): string => str(comp(b, 'created').at)
 let body = (b: Bundle): string =>
   str(comp(b, 'content').body) || str(comp(b, 'doc').body)
 
@@ -464,3 +477,69 @@ export let missed =
       ]),
     )
   }
+
+let previousStart = async ({ storage, m, had }: At): Promise<string> => {
+  let first = had[0]
+  let [previous] = first?.checkpoint
+    ? await storage.read(and(
+      eq('entry.session', m.session),
+      present('checkpoint'),
+      lt('entry.seq', Number(comp(first, 'entry').seq)),
+      order('-entry.seq'),
+      limit(1),
+      fields('created.at'),
+    ))
+    : []
+  return at(previous ?? (await storage.get([m.session], ['created']))[0])
+}
+
+let descendants = async (
+  storage: Reads,
+  session: Eid,
+  before: string,
+): Promise<Map<Eid, Bundle>> => {
+  let seen = new Map<Eid, Bundle>()
+  for (let parents = [session]; parents.length;) {
+    let children = await storage.read(and(
+      eq('spawned.parent', list(...parents)),
+      lt('created.at', before),
+      fields('entity.num', 'entity.prefix'),
+    ))
+    parents = []
+    for (let child of children) {
+      let eid = child.entity.eid
+      if (eid == session || seen.has(eid)) continue
+      seen.set(eid, child)
+      parents.push(eid)
+    }
+  }
+  return seen
+}
+
+/** One line per task a descendant filed in the interval ending at the
+ * window's start. A session's first interval begins at its creation. */
+export let helpers: Arrival = async (window) => {
+  let { storage, vocab, m, since } = window
+  let previous = await previousStart(window)
+  if (!previous || previous >= since) return []
+  let children = await descendants(storage, m.session, since)
+  if (!children.size) return []
+  let tasks = await storage.read(and(
+    present('task'),
+    eq('created.via', list(...children.keys())),
+    ge('created.at', previous),
+    lt('created.at', since),
+    order('created.at'),
+    fields('doc.title', 'created.via'),
+  ))
+  let id = human(vocab)
+  return lines(
+    'notice',
+    tasks.map((task) => [
+      task,
+      `${id(task)} · ${flat(str(comp(task, 'doc').title))} · ${
+        id(children.get(str(comp(task, 'created').via))!)
+      }`,
+    ]),
+  )
+}

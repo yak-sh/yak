@@ -75,6 +75,7 @@ names, whose text says what the doors add and which no session wears:
 | `kept`     | `carried`, listing every memory the session saved in the day, whoever wrote the row                                                                                                                      |
 | `standing` | at the window's start, the person's own row, and each notice that came more than once in the day before to the session or the session that spawned it                                                    |
 | `missed`   | at the window's start (the session's start or a compaction), the person's corrections of the week before that wear a `miss`, one line of their words each                                                |
+| `helpers`  | at the window's start, the tasks filed since the previous start or compaction through direct or indirect child sessions, one line with the task id, title and filing session                             |
 
 ```sh
 yak trial score --under <persona> --arrive beside --floor 0.6
