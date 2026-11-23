@@ -731,10 +731,12 @@ export let commandWorker = async (
     throw error
   }
   if (!res.ok) {
-    let body = await res.text()
+    // A refusal in the worker's own words (`{error: {message}}`) reaches
+    // the caller as those words: a service's no is said to its customer.
+    let told = failed(res.status) ? '' : await toldBy(res)
     let error = rejected(
       res.status,
-      `app worker answered ${res.status}: ${body}`,
+      told || `app worker answered ${res.status}: ${await res.text()}`,
     )
     if (failed(res.status)) await opts.report?.(req, error)
     throw error
@@ -759,13 +761,17 @@ let threw = async (
 // What a worker's JSON answer says went wrong (`{error: {message}}`), so the
 // report names it: an outside site's refusal reads as the host and status it
 // gave. Any other body stays unread for the visitor.
-let saying = async (res: Response) => {
+let toldBy = async (res: Response) => {
   if (!/json/.test(res.headers.get('content-type') ?? '')) return ''
   let said = await res.clone().json().catch(() => null) as
     | { error?: { message?: unknown } }
     | null
   let m = said?.error?.message
-  return typeof m == 'string' && m ? `: ${m.slice(0, 500)}` : ''
+  return typeof m == 'string' ? m.slice(0, 500) : ''
+}
+let saying = async (res: Response) => {
+  let m = await toldBy(res)
+  return m ? `: ${m}` : ''
 }
 
 // What the worker's answer means, whichever caller asked for it: a 4xx —

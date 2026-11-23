@@ -387,6 +387,34 @@ test('a command worker failure calls its reporter once', async () => {
   ])
 })
 
+test("a command worker's refusal reaches its caller in the worker's own words", async () => {
+  let said = (body: string, type = 'application/json') =>
+    commandWorker(
+      envOf(() => ({
+        fetch: () =>
+          Promise.resolve(
+            new Response(body, {
+              status: 403,
+              headers: { 'content-type': type },
+            }),
+          ),
+      })),
+      space,
+      app,
+      who,
+      '/inspect',
+      {},
+    ).catch((e: Error) => e.message)
+  assertEquals(
+    await said('{"error":{"message":"Lulu is for members"}}'),
+    'Lulu is for members',
+  )
+  assertEquals(
+    await said('no', 'text/plain'),
+    'app worker answered 403: no',
+  )
+})
+
 test('a command failure is captured once across worker and caller, naming its command', () =>
   tracked(async (seen) => {
     let env = envOf(mirror(503).get)
