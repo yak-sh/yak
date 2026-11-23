@@ -4,11 +4,11 @@ import { suggestion } from '@yaks/platform/friends'
 import { connector, kernel, signIn } from './probe.ts'
 
 let k = await kernel()
-let [ann, bo, cy, dee] = await Promise.all(
-  [1, 2, 3, 4].map(() => signIn(k)),
+let [ann, bo, cy, dee, eve, fay] = await Promise.all(
+  [1, 2, 3, 4, 5, 6].map(() => signIn(k)),
 )
-let [annSpace, boSpace, cySpace, deeSpace] = await Promise.all(
-  [ann, bo, cy, dee].map((p) => k.dir.own(p.person)),
+let [annSpace, boSpace, cySpace, deeSpace, eveSpace] = await Promise.all(
+  [ann, bo, cy, dee, eve].map((p) => k.dir.own(p.person)),
 )
 // Dee's one space is theirs, as a space born before `member.own` is.
 let [deeSeat] = await k.dir.seats(dee.person, 'owner')
@@ -90,5 +90,57 @@ test('nobody friends themselves or a person who is not on yaks.app', async () =>
   )
   await assertRejects(() =>
     tools(ann).tool('friend_add', { email: `nobody@${k.host}` })
+  )
+})
+
+// Eve and Fay are friends; Eve and Ann are not.
+await connector(k, eve.cookie).answer('friend_add', { email: fay.email })
+await connector(k, fay.cookie).answer('friend_add', { email: eve.email })
+await connector(k, eve.cookie).tool('app_new', {
+  space: eveSpace.slug,
+  slug: 'gift',
+  title: 'Gift',
+})
+
+test('an owner invites a friend by picking them, never typing their email', async () => {
+  let page = await (await k.at(k.host, `/manage/${eveSpace.slug}/people`, {
+    headers: { cookie: eve.cookie },
+  })).text()
+  assertStringIncludes(page, `value="${fay.person}"`)
+  let sent = await k.at(k.host, `/manage/${eveSpace.slug}/people`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: eve.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ friend: fay.person, invite: '', app: 'gift' })
+      .toString(),
+  })
+  assertEquals(sent.status, 303, await sent.text())
+  assertEquals(
+    !!await k.dir.invite((await k.dir.app(eveSpace, 'gift'))!.eid, fay.person),
+    true,
+  )
+})
+
+test('an app is offered to a friend by picking them', async () => {
+  let offered = await connector(k, eve.cookie).answer('app_transfer', {
+    space: eveSpace.slug,
+    app: 'gift',
+    friend: fay.person,
+  })
+  assertStringIncludes(offered.text, fay.email)
+})
+
+test('only a confirmed friend can be picked', async () => {
+  await assertRejects(
+    () =>
+      connector(k, eve.cookie).tool('member_add', {
+        space: eveSpace.slug,
+        friend: ann.person,
+      }),
+    Error,
+    'friend list',
   )
 })

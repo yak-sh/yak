@@ -20,19 +20,10 @@ import {
 import { bound, type Env } from './env.ts'
 import type { Who } from './session.ts'
 import { vouched } from './session.ts'
-import {
-  APP,
-  EID,
-  flag,
-  inApp,
-  owner,
-  refuse,
-  SPACE,
-  str,
-  text,
-} from './tool.ts'
+import { APP, EID, flag, inApp, owner, refuse, SPACE, str } from './tool.ts'
 import type { Update } from './operator-updates.ts'
 import type { Row as ToolRow } from './tool-words.ts'
+import { FRIEND, recipientOf } from './friends.ts'
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
@@ -51,22 +42,23 @@ export let transferTool: ToolRow = {
     properties: {
       space: SPACE,
       app: APP,
-      email: str('the recipient’s yaks.app sign-in email'),
+      friend: FRIEND,
+      email: str('the recipient’s yaks.app sign-in email, when not a friend'),
       editor: {
         type: 'boolean',
         description:
           'offer to remain an editor of this app if the recipient agrees',
       },
     },
-    required: ['app', 'email'],
+    required: ['app'],
   },
   run: async (ctx, args) => {
     let { space, app, who } = owner(await inApp(ctx, args, true))
-    let email = canon(text(args.email, 'email'))
+    let dir = open(ctx.env)
+    let email = canon(await recipientOf(dir, ctx.person, args))
     if (!sendable(email)) {
       throw refuse('arguments', 'Enter the recipient’s yaks.app sign-in email.')
     }
-    let dir = open(ctx.env)
     let recipient = await dir.personAt(email)
     if (!recipient) {
       throw refuse('missing', 'No yaks.app account has that sign-in email.')

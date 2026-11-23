@@ -2523,6 +2523,7 @@ let connections = (at: DeskPage, env: Host) => {
 // letter if the owner wants one.
 let inviting = (at: DeskPage) => {
   let was = at.invite ?? { email: '', app: '', role: '', note: '' }
+  let friends = at.friends ?? []
   return h(
     Card,
     null,
@@ -2544,14 +2545,28 @@ let inviting = (at: DeskPage) => {
         method: 'post',
         action: managePath('people', at.space),
       },
+      friends.length
+        ? labeled(
+          'invite-friend',
+          'A friend',
+          h(
+            Field,
+            { choose: true, id: 'invite-friend', name: 'friend' },
+            option('', 'Someone else, by email', !was.friend),
+            friends.map((f) =>
+              option(f.person, f.name, was.friend == f.person)
+            ),
+          ),
+        )
+        : null,
       labeled(
         'invite-email',
-        'Email address',
+        friends.length ? 'Or their email address' : 'Email address',
         h(Field, {
           id: 'invite-email',
           name: 'invite',
           type: 'email',
-          required: true,
+          required: !friends.length,
           autocomplete: 'off',
           spellcheck: 'false',
           placeholder: 'friend@example.com',

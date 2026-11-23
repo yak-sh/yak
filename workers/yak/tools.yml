@@ -1132,8 +1132,9 @@ app_transfer:
   title: Offer an app transfer
   description: >-
     Offer to give an app you own to another yaks.app user. Use when the person
-    asks to give or transfer their app. Ask for the recipient’s sign-in email
-    if it is unclear. When the owner asks to give a named app to a named
+    asks to give or transfer their app. Name a confirmed friend by friend
+    (their person id from friend_list); ask for the recipient’s sign-in email
+    only when they are not a friend. When the owner asks to give a named app to a named
     recipient, call this tool directly to send the offer. The app stays
     where it is until that person accepts in
     their Updates. Acceptance moves the app, its data, files, releases and
@@ -1218,7 +1219,8 @@ app_rate:
 member_add:
   title: Invite someone
   description: >-
-    Invite someone by email address: an editor writes, a viewer only reads,
+    Invite someone by email address, or a confirmed friend by friend (their
+    person id from friend_list): an editor writes, a viewer only reads,
     and a space owner may also invite. Name the app and that one app is all
     they get, its page and its data (how a player joins one game, or a
     household one list); leave it out and they join the space, reaching

@@ -752,7 +752,16 @@ export type DeskPage = {
   operators?: { eid: string; slug: string; title: string; role: string }[]
   /** what was typed into the invitation form, when the invitation was
    * refused and the page is drawn again */
-  invite?: { email: string; app: string; role: string; note: string }
+  invite?: {
+    friend?: string
+    email: string
+    app: string
+    role: string
+    note: string
+  }
+  /** the owner's confirmed friends, offered before the invitation's email
+   * box (friends.ts) */
+  friends?: { person: string; name: string }[]
   /** what was typed into the settings form, when a change was refused and
    * the page is drawn again */
   typed?: { title: string; space: string; home: string }

@@ -53,6 +53,7 @@ import { desk as deskPage } from './desk-pages.ts'
 import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
+import { friendsOf } from './friends.ts'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -808,6 +809,7 @@ let desk = async (
       ? Promise.all([
         shelved.then(({ all }) => peopleIn(dir, space, all)),
         dir.admits(walkTo(space.slug, space.eid)),
+        friendsOf(dir, owner),
       ])
       : undefined,
     // What this space calls out through (connections.ts), read only for the
@@ -926,6 +928,7 @@ let desk = async (
     fee: rate(fee),
     agents: known,
     people: people?.[0],
+    friends: people?.[2].filter((f) => f.standing == 'friend'),
     operators: people?.[1].map((r) => ({
       eid: r.space.eid,
       slug: r.space.slug,
@@ -1242,6 +1245,7 @@ let saved = async (
   // refusal draws the page again with what was typed still in the form.
   if (form.has('invite')) {
     let asked = {
+      friend: String(form.get('friend') ?? '').trim(),
       email: String(form.get('invite') ?? '').trim(),
       app: String(form.get('app') ?? '').trim(),
       role: String(form.get('role') ?? '').trim(),
@@ -1249,7 +1253,7 @@ let saved = async (
     }
     let { out, said } = await pressed(env, dir, who, 'member_add', {
       space: space.slug,
-      email: asked.email,
+      ...asked.friend ? { friend: asked.friend } : { email: asked.email },
       ...asked.app ? { app: asked.app } : {},
       ...asked.role ? { role: asked.role } : {},
       ...asked.note ? { note: asked.note } : {},

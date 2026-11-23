@@ -1,5 +1,5 @@
 import { transferTool } from './app-transfer.ts'
-import { friendTools } from './friends.ts'
+import { FRIEND, friendTools, recipientOf } from './friends.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
@@ -7637,7 +7637,8 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        email: str('their email address'),
+        friend: FRIEND,
+        email: str('their email address, when they are not a friend'),
         app: str(
           'the app slug they are being invited to, and the only app they get: ' +
             'they have access to this app and nothing else in the space. ' +
@@ -7663,7 +7664,6 @@ let OURS: Row[] = [
             'owner may invite others too when the membership is space-wide',
         },
       },
-      required: ['email'],
     },
     run: async (ctx, args) => {
       // Each wait a named stage on the call's `Server-Timing` (timing.ts).
@@ -7681,7 +7681,7 @@ let OURS: Row[] = [
         Promise.allSettled([
           inSpace(ctx, args, true),
           (async () => {
-            let email = address(args.email)
+            let email = address(await recipientOf(ctx.dir, ctx.person, args))
             let name = args.name == null
               ? undefined
               : nameOf(text(args.name, 'name'), email)

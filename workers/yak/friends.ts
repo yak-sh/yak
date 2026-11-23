@@ -23,6 +23,13 @@ import type { Row as ToolRow } from './tool-words.ts'
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
+// Where everyone stands with `person`, unnamed.
+let standingsOf = async (dir: Directory, person: string) =>
+  standings(
+    person,
+    (await Promise.all(sidesOf(person).map((q) => dir.read(q)))).flat(),
+  )
+
 /** Another person, where they stand with the reader, and since when. */
 export type Friend = Stand & { person: string; name: string }
 
@@ -32,11 +39,9 @@ export let friendsOf = async (
   dir: Directory,
   person: string,
 ): Promise<Friend[]> => {
-  let sides = (await Promise.all(sidesOf(person).map((q) => dir.read(q))))
-    .flat()
   let order: Standing[] = ['friend', 'asked', 'suggested', 'asking']
   return (await Promise.all(
-    [...standings(person, sides)].map(async ([other, stand]) => ({
+    [...await standingsOf(dir, person)].map(async ([other, stand]) => ({
       person: other,
       name: await dir.nameAt(other) ?? 'Someone on yaks.app',
       ...stand,
@@ -46,6 +51,49 @@ export let friendsOf = async (
     a.name.localeCompare(b.name)
   )
 }
+
+/** The sign-in email of one of `person`'s confirmed friends, for the tools
+ * that take a friend (`FRIEND`) where they would take an address. */
+export let friendEmail = async (
+  dir: Directory,
+  person: string,
+  friend: unknown,
+): Promise<string> => {
+  let other = text(friend, 'friend')
+  let standing = EID.test(other)
+    ? (await standingsOf(dir, person)).get(other)?.standing
+    : undefined
+  if (standing != 'friend') {
+    throw refuse('arguments', 'Choose someone from your friend list.')
+  }
+  let email = await dir.emailAt(other)
+  if (!email) {
+    throw refuse(
+      'missing',
+      `${
+        await dir.nameAt(other) ?? 'Your friend'
+      } has no sign-in email on yaks.app yet. Ask them for one.`,
+    )
+  }
+  return email
+}
+
+/** The input a tool takes a friend by, in place of an email. */
+export let FRIEND = str(
+  'a confirmed friend, by the person id friend_list gives them, in place of an email',
+)
+
+/** The address a call names: its `friend`'s, else its `email`. */
+export let recipientOf = (
+  dir: Directory,
+  person: string,
+  args: Record<string, unknown>,
+) =>
+  args.friend != null
+    ? friendEmail(dir, person, args.friend)
+    : args.email != null
+    ? text(args.email, 'email')
+    : Promise.reject(refuse('arguments', 'Choose a friend or give an email.'))
 
 let answer = (dir: Directory, who: Who, asked: FriendRequest) =>
   dir.stamp(
