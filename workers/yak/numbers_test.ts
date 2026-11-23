@@ -460,10 +460,15 @@ let voipmsApi = endpoints(globalThis).open((req) => {
     case 'setDIDRouting':
       vms.held.get(q.get('did')!)!.routing = q.get('routing')!
       return ok()
-    case 'getDIDsInfo':
-      return ok({
-        dids: [...vms.held.keys()].map((d) => ({ did: d, sms_enabled: '1' })),
-      })
+    case 'getDIDsInfo': {
+      let dids = [...vms.held].filter(([d]) =>
+        !q.get('did') || d == q.get('did')
+      )
+        .map(([did, { routing }]) => ({ did, routing, sms_enabled: '1' }))
+      return dids.length || !q.get('did')
+        ? ok({ dids })
+        : Response.json({ status: 'invalid_did' })
+    }
     case 'setSMS':
       vms.held.get(q.get('did')!)!.callback = q.get('url_callback')!
       return ok()

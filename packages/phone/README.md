@@ -171,9 +171,11 @@ the phone texts through. `Numbers` is:
   `Offer{number,
   upfront, monthly, currency, sms, voice, place}`, `place`
   where it is local to.
-- `buy(number, callback?)`: a number on offer onto the account, its texts on the
-  phone's profile, or on `callback` for a provider that sends each number's
-  texts to a URL; `Bought{number, order, status}`, `pending` until it is held.
+- `buy(number)`: a number on offer onto the account, its texts on the phone's
+  profile; `Bought{number, order, status}`, `pending` until it is held. Buying a
+  number already bought onto the account for this use completes it.
+- `point(number, callback)`, for a provider that sends each number's texts to a
+  URL of its own: sends a held number's texts to `callback`.
 - `release(number)`: a held number given back.
 - `verify(form)`: files a `TollFree` verification, the carriers' own fields (the
   business, its kind and registration, a contact, the use case, a sample, the

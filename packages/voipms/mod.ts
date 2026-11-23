@@ -302,7 +302,10 @@ let accountFor = (digits: string) => `y${digits}`
  * code, by state and city, by digits they contain, or any, at voip.ms's
  * price by the minute. A number bought rings a sub-account of its own, which
  * a softphone signs in to (`login`) and which calls out as the number, and
- * its texts go to the callback the buyer names. `calls` reads its calls from
+ * `point` sends its texts to a host's URL. Buying a number the account
+ * already holds on the sub-account made for it completes, and `find` quotes
+ * it, so a purchase that ended before its host kept the number is finished
+ * by buying it again. `calls` reads its calls from
  * voip.ms's call records, each at what voip.ms charged for it, in UTC
  * (`timezone` 0). voip.ms sells no toll-free
  * number here, so none is ever verified.
@@ -345,6 +348,22 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
   let subaccount = async (digits: string) =>
     (((await call('getSubAccounts')).accounts ?? []) as Available[])
       .find((a) => String(a.account).endsWith(`_${accountFor(digits)}`))
+  // The number, held on the account and ringing the sub-account made for
+  // it, where it is one.
+  let ours = async (digits: string) => {
+    // voip.ms answers a number the account does not hold as a failure.
+    let held = await call('getDIDsInfo', { did: digits }).then(
+      (said) => (said.dids ?? []) as Available[],
+      (error) => {
+        if (/invalid_did|no_did/.test(String(error))) return []
+        throw error
+      },
+    )
+    return held.find((d) =>
+      String(d.did) == digits &&
+      String(d.routing).endsWith(`_${accountFor(digits)}`)
+    )
+  }
   let offered = (d: Available): Offer => ({
     number: e164(String(d.did)),
     upfront: Number(d.perminute_setup ?? 0),
@@ -360,10 +379,20 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
       let limit = s.limit ?? 5
       let all: Available[]
       if (s.number) {
-        all = (await found('searchDIDsUSA', {
-          type: 'starts',
-          query: ten(s.number),
-        })).filter((d) => String(d.did) == ten(s.number!))
+        let digits = ten(s.number)
+        all = (await found('searchDIDsUSA', { type: 'starts', query: digits }))
+          .filter((d) => String(d.did) == digits)
+        let held = all.length ? undefined : await ours(digits)
+        if (held) {
+          // Bought already, so only its month is left to pay, at what its
+          // rate center's numbers cost.
+          let [ratecenter, state] = String(held.description).split(', ')
+          let [like] = await found('getDIDsUSA', { state, ratecenter })
+          return [{
+            ...offered({ ...like, did: digits, ratecenter, state, sms: 1 }),
+            upfront: 0,
+          }]
+        }
       } else if (s.region || !s.area && !s.contains) {
         let state = s.region?.toUpperCase() ??
           some(await states(), 1)[0]
@@ -388,8 +417,13 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
         limit,
       ).map(offered)
     },
-    buy: async (number, callback) => {
+    buy: async (number) => {
       let digits = ten(number)
+      // A number already ringing the sub-account made for it was bought
+      // here before, by a purchase that ended before its host kept it.
+      if (await ours(digits)) {
+        return { number, order: digits, status: 'held' }
+      }
       // A sub-account calls out as a number the account already holds, so
       // the number is ordered first, hanging up on calls until the
       // sub-account it rings is made.
@@ -427,11 +461,11 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
         await call('cancelDID', { did: digits })
         throw error
       }
-      if (callback) {
-        await voipms(options).point(number, callback)
-      }
       return { number, order: digits, status: 'held' }
     },
+    // voip.ms takes a number's texting settings only a while after it is
+    // ordered, so a host points it once it puts the number to use.
+    point: (number, callback) => voipms(options).point(number, callback),
     release: async (number) => {
       let digits = ten(number)
       await call('cancelDID', { did: digits })

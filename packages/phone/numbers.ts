@@ -133,10 +133,12 @@ export type Verification = {
 /** A provider's numbers, on the account its phone texts through. */
 export type Numbers = {
   find: (search: Search) => Promise<Offer[]>
-  /** buys a number on offer and puts its texts on the phone's profile, or,
-   * for a provider that sends each number's texts to a URL of its own, on
-   * `callback` */
-  buy: (number: string, callback?: string) => Promise<Bought>
+  /** buys a number on offer and puts its texts on the phone's profile;
+   * buying one already bought onto the account for this use completes */
+  buy: (number: string) => Promise<Bought>
+  /** for a provider that sends each number's texts to a URL of its own,
+   * sends a held number's texts to `callback` */
+  point?: (number: string, callback: string) => Promise<void>
   /** gives a held number back; it costs nothing from then on */
   release: (number: string) => Promise<void>
   /** files a toll-free verification */

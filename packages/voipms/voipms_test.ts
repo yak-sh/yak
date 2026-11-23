@@ -79,9 +79,50 @@ test('a number whose sub-account voip.ms will not make is given back', async () 
   })
   await assertRejects(() => shop.buy('+12695550100'), Error, 'invalid_callerid')
   assertEquals(asked, [
+    'getDIDsInfo',
     'orderDID',
     'createSubAccount',
     'getSubAccounts',
     'cancelDID',
   ])
+})
+
+test('buying a number already held on the sub-account made for it completes it, quoted at its month alone', async () => {
+  let asked: string[] = []
+  let said: Record<string, object> = {
+    searchDIDsUSA: { dids: [] },
+    getDIDsInfo: {
+      dids: [{
+        did: '2695550100',
+        description: 'BATTLE CRK, MI',
+        routing: 'account:100_y2695550100',
+      }],
+    },
+    getDIDsUSA: {
+      dids: [{
+        did: '2695550199',
+        perminute_setup: '0.40',
+        perminute_monthly: '1.10',
+      }],
+    },
+  }
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      asked.push(method)
+      return Promise.resolve(
+        Response.json({ status: 'success', ...said[method] }),
+      )
+    },
+  })
+  let [offer] = await shop.find({ number: '+12695550100' })
+  assertEquals([offer.upfront, offer.monthly, offer.place], [
+    0,
+    1.1,
+    'BATTLE CRK, MI',
+  ])
+  assertEquals((await shop.buy('+12695550100')).status, 'held')
+  assertEquals(asked.includes('orderDID'), false)
 })

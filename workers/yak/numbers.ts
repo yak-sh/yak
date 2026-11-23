@@ -76,13 +76,12 @@ export let monthly = (at: Date) =>
     Math.min(at.getUTCDate(), 28)
   } * *`
 
-// The phone that sells this kind of number: its numbers, its name, and how
-// a provider that sends each number's texts to a URL is given one.
+// The phone that sells this kind of number: its numbers and its name.
 let sellerOf = async (env: Env, kind: Kind) => {
   for (let [via, phone] of Object.entries(await phones(env))) {
     if (!phone.transport().sells?.includes(kind) || phone.waiting?.()) continue
     let numbers = phone.numbers?.()
-    if (numbers) return { numbers, via, own: phone.own }
+    if (numbers) return { numbers, via }
   }
   throw refuse(
     'unavailable',
@@ -316,7 +315,7 @@ export let numberTools: Row[] = [
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args, true)
       let number = text(args.number, 'number')
-      let { numbers, via, own } = await sellerOf(
+      let { numbers, via } = await sellerOf(
         ctx.env,
         free(number) ? 'toll_free' : 'local',
       )
@@ -364,10 +363,7 @@ export let numberTools: Row[] = [
           cost,
           'texts',
           async (spent) => {
-            let it = await numbers.buy(
-              number,
-              own && await callbackOf(ctx.env, via, own, number),
-            )
+            let it = await numbers.buy(number)
             spent(cost)
             return it
           },
@@ -430,6 +426,15 @@ export let numberTools: Row[] = [
         let apps = await ctx.dir.apps(space)
         app = apps.find((a) => a.slug == slug)
         if (!app) throw await noApp(ctx, space, slug, apps)
+      }
+      // Its texts come here, for a provider that sends them to a URL.
+      let phone = await phoneNamed(ctx.env, line.via)
+      let point = phone?.numbers?.().point
+      if (phone?.own && point) {
+        await point(
+          line.number,
+          await callbackOf(ctx.env, line.via, phone.own, line.number),
+        )
       }
       await unworn(ctx.env, ctx.dir, line.number)
       await stamp(ctx.env, {
