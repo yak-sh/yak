@@ -349,6 +349,7 @@ what is past it, rather than loading it:
 | An upload's type and picture size (`described`)                       | read off the first bytes                           | `HEAD`, 256 KiB                                       |
 | An Operator attachment (workers/yak `keepFile`)                       | a model's input, OCR, base64                       | 16 MiB, refused past it                               |
 | A document's text extracted (workers/yak documents.ts)                | parsed by its extractor                            | 16 MiB, refused past it                               |
+| A browser visit's mockup files (@yaks/platform/browser-mockup)        | the browser requests each asset after the upload   | 32 MiB, refused past it                               |
 | A logo (workers/yak logo.ts)                                          | drawn into an SVG                                  | 1 MB, refused past it                                 |
 | A published file's request (workers/yak public-files.ts)              | none: it streams                                   | 25 MiB, refused past it                               |
 | Words framed in place (workers/yak operator-page.ts)                  | drawn as a page                                    | 1 MiB; longer ones stream as text                     |
