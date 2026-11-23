@@ -333,6 +333,42 @@ UX things are considered from now on" (M-28). Each rule carries what he said.
 10. **Modal actions:** a modal's actions go in a small card at the top-right of the main pane, not in the title bar. "add a little floated top-right action-card: Disconnect, Reconnect, the two links from the bottom, etc"
 11. **Placeholders:** every text input and textarea shows a short hint saying what to enter.
 
+## Porting a mockup
+
+A mockup's motion and interaction are as much the design as its layout, and
+they are what a port drops. Jeff, 2026-11-23: "those kinds of details often get
+lost from mockup to prod, btw. idk why, probably they aren't recorded or the
+agent doing the port just doesn't care enough". The home page's phone lost its
+messages' scroll-driven ease-in and gained a scrollbar, a shrink and vanishing
+controls on the way (T-2244).
+
+The approved mockup's source is the reference. When Jeff approves one, link
+its page (`https://shared.yak.sh/<name>/<file>.html`) from the design or task
+that builds it, and leave that directory in ~/shared (`sharing`) for as long as
+the port runs.
+
+1. **Before building:** read the mockup's source (its stylesheets and scripts,
+   not only its screenshots) and list on the task every motion and interaction
+   it has, each with its numbers: transitions and their timing and easing,
+   what moves with the scroll and how, what is sticky or fixed and where,
+   what scrolls inside its own box and whether its scrollbar shows, what stays
+   on screen at the end of the page, hover, press and focus states, what a
+   click on each thing does, and what `prefers-reduced-motion` holds still.
+   `grep -nE 'transition|animation|sticky|fixed|overflow|scroll|:hover|:active|:focus|reduced-motion|addEventListener'`
+   over the source finds most of them.
+2. **While building:** carry each item over, or say on the task why it
+   changed. Jeff's notes on the mockup change what they name, and nothing else.
+3. **After building:** open the mockup and the built page in the browser loop
+   (`yak admin browse`, the steps under Looking at it) at the same widths and
+   the same moments: the first screen, mid-scroll and mid-animation frames
+   (`{"swipe": …}` then `{"shot": …}` with a short `{"wait": …}`), and the end
+   of the page. Compare each listed item side by side and fix what differs.
+   `yak admin browse` reaches only yaks.app, so a mockup is opened with
+   `--html <file>` at the page's path, which works for a mockup that is one
+   file (T-2914 opens a mockup directory with its assets).
+
+This is part of building the screen, like reading your diff, not a gate.
+
 ## Looking at it
 
 A screen is done when it reads well to someone using it. There is no Chrome or

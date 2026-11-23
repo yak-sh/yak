@@ -25,6 +25,10 @@ A mockup, render, screenshot, image or raw report made to look at goes in
 `~/shared/<name>/`, never the checkout, even while you iterate on it. The repo
 keeps what a build reads or a shipped app serves.
 
+A mockup Jeff approves is the reference its port is built and compared
+against: link its page from the design or task that builds it, and leave its
+directory, source included, where it is (`ui-building`, Porting a mockup).
+
 ## What he sees
 
 `~/shared` is a plain HTTP file server (Caddy), and the owner reads it in his
