@@ -338,6 +338,29 @@ test(
   },
 )
 
+test('a built integration takes over a custom one of its name that a space asked for first', async () => {
+  let { g } = await setup()
+  await g.apply(
+    await need(g.read, { owner: 'space', app: 'app', integration: 'press' }),
+  )
+  assertEquals((await known(g.read, 'press'))?.owner, 'space')
+  let seed = {
+    name: 'press',
+    title: 'Press',
+    hosts: ['api.press.example'],
+    fields: [{ name: 'key', label: 'Key' }, {
+      name: 'secret',
+      label: 'Secret',
+    }],
+  }
+  await g.apply(await install(g.read, [seed]), { trusted: true })
+  let i = await known(g.read, 'press')
+  assertEquals(
+    [i?.built, i?.owner ?? null, i?.hosts, i?.fields?.length],
+    [true, null, ['api.press.example'], 2],
+  )
+})
+
 test(
   'only the host marks an integration built, and need never writes over one',
   async () => {
