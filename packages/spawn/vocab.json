@@ -238,7 +238,7 @@
     "spawn_start": {
       "effect": true,
       "fifo": true,
-      "target": ".entry !ask !lines",
+      "target": ".entry !ask !lines !entry.session.native",
       "created": [
         "using"
       ],

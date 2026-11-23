@@ -638,6 +638,11 @@ test('managed starts wait for room and launch in request order', async () => {
       comp(first, 'effect')?.waiting,
       'Waiting for machine room (3.0 GiB available, 0.25% memory pressure (PSI avg10))',
     )
+    await g.apply([
+      ...asking('native', 'native-entry', 'run in the native loop'),
+      { entity: { eid: 'native' }, native: {} },
+    ])
+    assertEquals((await owing()).map((b) => comp(b, 'effect')?.target), ['E1'])
     await time.advance(1)
     await g.apply(asking('S2', 'E2', 'second'))
     await time.advance(1)

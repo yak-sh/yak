@@ -26,6 +26,7 @@ import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
 import {
+  absent,
   and,
   conjoin,
   eq,
@@ -266,6 +267,7 @@ let waitingStarts = async (graph: Graph, page: Bundle[]): Promise<string> => {
   let runs = await graph.read(and(
     eq('effect.handler', 'spawn_start'),
     eq('effect.state', 'pending'),
+    absent('effect.target.entry.session.native'),
     eq(
       'effect.target.entry.session',
       list(...waiting.map((b) => b.entity.eid)),

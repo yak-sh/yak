@@ -65,7 +65,11 @@ test('session_list includes the machine room seen by the queued sessions', async
         provider: { name: 'fake', transport: 'process' },
       },
       ...sessions.flatMap((eid, i) => [
-        { entity: { eid }, session: { id: eid } },
+        {
+          entity: { eid },
+          session: { id: eid },
+          ...i == 2 ? { native: {} } : {},
+        },
         {
           entity: { eid: requests[i] },
           entry: { session: eid, seq: 1 },
@@ -77,7 +81,7 @@ test('session_list includes the machine room seen by the queued sessions', async
     let waiting =
       'Waiting for machine room (3.0 GiB available, 0.25% memory pressure (PSI avg10))'
     await h.graph.apply(
-      requests.slice(0, 2).map((target, i) => ({
+      requests.map((target, i) => ({
         entity: { eid: mint() },
         effect: {
           target,
