@@ -939,7 +939,7 @@
       "noun": "admin",
       "verb": "rollback",
       "title": "Roll yaks.app back to a prior version",
-      "description": "Emergency rollback, only for a broken build path: code corrections use `yak admin revert`, since main deploys on every push. Defaults to the prior deployed version, refuses data boundaries and uncertain commits, then probes the public doors. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Emergency rollback, only for a broken build path: code corrections use `yak admin revert`, since main deploys on every push. Defaults to the newest version that went live before the one serving, so repeating it steps further back and never returns to the version it left; name a version (its id or #hex) to go forward. Refuses data boundaries and uncertain commits, then probes the public doors and says what failed; a failed probe leaves the rollback in place. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
         "version": {
           "type": "string",

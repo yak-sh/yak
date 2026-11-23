@@ -530,26 +530,41 @@ export let deploys = async (
 
 // Both activations of a two-phase deploy carry the same source commit. Keep
 // versions addressable, but default rollback must leave that commit entirely.
+// It steps back through history, never forward: only a version that debuted
+// before the one serving is a candidate, so repeating a rollback (after a
+// failed probe, say) never returns to the version it just left. Going
+// forward again names the version.
 let previous = (rows: Deploy[]): Deploy[] => {
   let source = (r: Deploy) => r.commit?.sha ?? r.id
   let latest = (a: Deploy, b: Deploy) =>
     Date.parse(b.created) - Date.parse(a.created)
   let current = rows.filter((r) => r.live).sort(latest)[0]
+  let older = (r: Deploy) =>
+    !current?.first || !r.first ||
+    Date.parse(r.first) < Date.parse(current.first)
   let prior = rows.filter((r) => (r.prior ?? 0) > 0)
   // A prior gradual deployment across distinct commits still needs the owner
   // to choose which source to restore.
   if (new Set(prior.map(source)).size > 1) return prior
+  prior = prior.filter(older)
   if (prior.length && (!current || source(prior[0]) != source(current))) {
     return prior.sort(latest).slice(0, 1)
   }
   return rows.filter((r) =>
-    r.first && !r.live && (!current || source(r) != source(current))
+    older(r) && r.first && !r.live &&
+    (!current || source(r) != source(current))
   ).sort((a, b) => Date.parse(b.last!) - Date.parse(a.last!) || latest(a, b))
     .slice(0, 1)
 }
 
+// A version as anyone names it: its UUID, or the table's `#` and hex.
+let bare = (id: string) =>
+  id.replace(/^#/, '').replaceAll('-', '').toLowerCase()
+
 export let rollbackTarget = (rows: Deploy[], want?: string): Deploy => {
-  let found = want ? rows.filter((r) => r.id.startsWith(want)) : previous(rows)
+  let found = want
+    ? rows.filter((r) => bare(r.id).startsWith(bare(want)))
+    : previous(rows)
   if (found.length != 1) {
     throw new Refused(
       `rollback target ${
@@ -588,11 +603,24 @@ export let rollback = async (
       { login },
     ),
   )
+  let rolled = `${target.id} (${target.commit?.sha ?? 'unknown commit'}) serves`
+  out(rolled)
   let checked = await output(systemProcess.execPath(), {
     cwd: root,
     args: ['run', '-A', 'bin/verify-deploy.ts', '--tail', '0'],
     env: login,
     stdin: 'null',
   }, stopping)
-  return checked.code
+  let said = new TextDecoder().decode(checked.stdout) +
+    new TextDecoder().decode(checked.stderr)
+  // The rollback stands whatever the probes say: a failure here is about the
+  // version now serving, and says so, so nobody repeats the rollback.
+  if (checked.code) {
+    throw new Error(
+      `${rolled}, but its probes failed (bin/verify-deploy.ts ended with ` +
+        `status ${checked.code}):\n${said.trim()}`,
+    )
+  }
+  out(said.trim())
+  return 0
 }

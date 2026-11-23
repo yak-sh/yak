@@ -227,9 +227,33 @@ test('boundaries survive rollback and unserved uploads do not move data', () => 
   assert(
     table(rows).includes('one (at or before the first retained deployment)'),
   )
-  assertEquals(rollbackTarget(rows).id, 'v3')
+  assertThrows(() => rollbackTarget(rows), Refused, 'data moved')
+  assertEquals(rollbackTarget(rows, 'v3').id, 'v3')
   assertThrows(() => rollbackTarget(rows, 'v1'), Refused, 'data moved')
   assertThrows(() => rollbackTarget(rows, 'v'), Refused, 'names 4')
+})
+
+test('a repeated rollback steps further back, never to the version it left', () => {
+  // v3 broke; the first rollback served v2 again, so v3 is now the prior
+  // deployment and the most recently served one.
+  let rows = boundaries([
+    deploy(3, ['one'], { last: at(5), prior: 100 }),
+    deploy(2, ['one'], { live: 100, last: at(6) }),
+    deploy(1, ['one']),
+  ])
+  assertEquals(rollbackTarget(rows).id, 'v1')
+  assertEquals(rollbackTarget(rows, 'v3').id, 'v3')
+})
+
+test('a version is named by its UUID or as a table shows it', () => {
+  let id = '4edbff33-3a1c-4c3e-9a51-0d2f7e1a6b10'
+  let rows = boundaries([deploy(2, ['one'], { live: 100 }), {
+    ...deploy(1, ['one']),
+    id,
+  }])
+  for (let want of [id, '4edbff33', '#4edbff333a', '4EDBFF333A1C']) {
+    assertEquals(rollbackTarget(rows, want).id, id)
+  }
 })
 
 test('later code that drops a served marker remains unsafe despite a newer upload time', () => {
