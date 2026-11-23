@@ -436,28 +436,34 @@ export let servableOf = async (
     caught(error, { request: 'GET servable', cache_url: url })
   }
   hop('files')
-  let answer
   try {
-    answer = await elapsed('files_wait', () =>
-      within(
-        ask.then((rep) => ({ rep })),
-        stale ? GLANCE : PATIENCE,
-        env.CLOCK,
-      ))
+    return await elapsed(
+      'files_wait',
+      () => patiently(env, ask, stale ? GLANCE : PATIENCE),
+    )
   } catch (e) {
     if (!stale) throw e
     tell(e)
     return stale
   }
-  if (answer) return answer.rep
-  let late = new Error(
+}
+
+/** A store's answer to whether an upload is served, waited `ms` at most
+ * ({@link PATIENCE} by default): a store that has not said by then fails the
+ * read, which its door answers 503 and reports, rather than holding it for
+ * the request's whole minute (90344f8c). */
+export let patiently = async <T>(
+  env: Pick<Env, 'CLOCK'>,
+  ask: Promise<T>,
+  ms = PATIENCE,
+): Promise<T> => {
+  let answer = await within(ask.then((said) => ({ said })), ms, env.CLOCK)
+  if (answer) return answer.said
+  throw new Error(
     `the app's store did not say within ${
-      (stale ? GLANCE : PATIENCE) / 1000
+      ms / 1000
     } s whether an upload is served`,
   )
-  if (!stale) throw late
-  tell(late)
-  return stale
 }
 
 // Files' answer, waited out: only the store can give it, and the hop a

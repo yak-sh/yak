@@ -438,8 +438,8 @@ let built = async (
 let states = new Map<string, Promise<{ worker: boolean }>>()
 let HELD = 256
 
-/** The app as a draft stands now, or as released once it is closed, built
- * for the link where no isolate has served this state before. */
+/** The app as a draft stands now, built for the link where no isolate has
+ * served this state before, or as released once it is closed. */
 let following = async (
   ctx: Ctx,
   space: Space,
@@ -449,8 +449,20 @@ let following = async (
   mount: string,
   who: Who,
 ) => {
+  // A closed draft's link shows what was released, which the app already
+  // serves built: its release's files and its own worker. Building that
+  // release again as a preview put a compile and a worker upload in front of
+  // the first visit after every release, and one that never finished held
+  // every visit for the request's whole minute (90344f8c).
+  if (!of) {
+    return {
+      ...previewing(app, link, app.source ?? null, mount, null),
+      script: app.script,
+      worker: app.worker ?? '',
+    }
+  }
   let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app, of)
-  let branch = of?.branch ?? null
+  let branch = of.branch
   let source = stateOf(space.store, app.eid, link, d.files)
   let state = sharing(
     states,

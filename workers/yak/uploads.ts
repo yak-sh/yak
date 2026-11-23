@@ -181,7 +181,8 @@ export let uploaded = async (
  * (@yaks/blob/upload `servable`). For an app anyone may read, Files keeps a
  * yes (files.ts `servedAs`), so a burst of image reads is not a burst of
  * store reads; a no from it, and every read of a private or sandboxed app's,
- * is asked here as the reader. A store that could not say throws. */
+ * is asked here as the reader. A store that could not say, or has not said
+ * within Files' patience, throws. */
 export let servedTo = async (
   env: Env,
   space: Space,
@@ -192,7 +193,10 @@ export let servedTo = async (
   cache?: RequestCache,
 ) => {
   let read = () =>
-    servable(reading(graph), { scope: app.eid, naming: uploads }, sha, eid)
+    files.patiently(
+      env,
+      servable(reading(graph), { scope: app.eid, naming: uploads }, sha, eid),
+    )
   return !sandboxed(app) && mode(app.access) != 'private'
     ? await files.servableOf(
       env,

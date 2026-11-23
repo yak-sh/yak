@@ -1,8 +1,8 @@
 // The app gateway decides who may read before asking Files whether a blob is
 // still served or for its cached bytes. The versioned representation,
 // conditions and seeks all use that one door.
-import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { clock, test } from '@yaks/testing'
+import { assertEquals, assertRejects } from '@std/assert'
 import * as apps from './apps.ts'
 import { filed, servedTo } from './uploads.ts'
 import * as files from './files.ts'
@@ -261,4 +261,22 @@ test('the gateway asks Files about an app anyone may read, and the store when Fi
     sha,
     2,
   ])
+})
+
+// A private app's store is asked as the reader, and one that holds the ask
+// fails the read at 5 s rather than at the request's whole minute (90344f8c).
+test("a private app's store that holds back fails the read at 5 s", async () => {
+  let time = clock()
+  let read = servedTo(
+    { CLOCK: time } as never,
+    { eid: 'space', slug: 'ada' } as Space,
+    { eid: 'app', slug: 'cookbook', space: 'space', access: 'private' } as App,
+    { query: () => new Promise<never>(() => {}) },
+    sha,
+    eid,
+  )
+  let failed = assertRejects(() => read, Error, 'within 5 s')
+  await time.advance(4_999)
+  await time.advance(1)
+  await failed
 })

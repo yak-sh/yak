@@ -169,3 +169,55 @@ test('a break starts one Operator run that fixes the app', async () => {
     await k.stop()
   }
 })
+
+// The Operator is an agent working for the owner, never their own hand
+// (M-31958): what it drafts while fixing a break is its session's own draft,
+// which says who wrote it, and never the draft the owner's own hand shares.
+test("the Operator's draft names its session, not the owner's hand", async () => {
+  let model = ai([
+    {
+      calls: [{
+        name: 'app_files',
+        arguments: {
+          app: 'msp',
+          files: [{
+            path: 'vocab.json',
+            content: vocab({ ...recipe, ...share }),
+          }],
+        },
+      }],
+    },
+    { text: 'Drafted the declaration.' },
+  ])
+  let k = await fresh({ AI: model as Env['AI'] })
+  try {
+    let slug = unique('drafter')
+    let { cookie } = await seed(k, [{ slug, apps: ['msp'] }])
+    let app = { space: slug, app: 'msp' }
+    let agent = connector(k, cookie)
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'vocab.json', content: vocab(recipe) }],
+    })
+    await agent.tool('app_deploy', app)
+    let broke = await k.at(`${slug}.yaks.app`, '/msp/api/query?.nothing', {
+      headers: { cookie, 'sec-fetch-site': 'same-origin' },
+    })
+    await broke.body?.cancel()
+    let drafts = await until(async () => {
+      await k.settled()
+      let rows = await meta(k).query('.app_draft')
+      return rows.length ? rows : null
+    }, { timeout: 10_000 })
+    let [draft] = drafts.map((r) =>
+      r.app_draft as { by?: unknown; via?: string }
+    )
+    assertEquals([drafts.length, typeof draft.via, !!draft.by], [
+      1,
+      'string',
+      true,
+    ])
+  } finally {
+    await k.stop()
+  }
+})

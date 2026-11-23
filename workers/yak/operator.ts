@@ -330,10 +330,15 @@ let opened = (
       local ? [] : current.then((r) => r.beyond),
     )
   }
+  // The Operator is an agent working for its person (M-31958), never their
+  // own hand: a draft it opens carries its session, so it is that session's
+  // own and says who wrote it, not the person's draft every caller without
+  // a session shares (written.ts `ownBy`).
   let who: Caller = {
     person: held.person,
     via: 'session',
     actor: eid,
+    agent: 'operator',
     ...instrument ? { instrument } : {},
   }
   // The space it works in narrows its directory, not the person's own MCP
