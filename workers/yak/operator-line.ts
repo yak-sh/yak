@@ -50,6 +50,7 @@ import {
 import { mobile } from '@yaks/phone/mobile'
 import { phoneOf, phones } from './phones.ts'
 import { charged } from './text-spend.ts'
+import type { Texter } from '@yaks/host/senders'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -476,10 +477,33 @@ export let accountFor = async (env: Env, number: string, space?: Space) => {
 }
 
 /**
+ * The line that texts for `space` from `from`: a number its owners connected
+ * from their own provider (`accountFor`), which they pay, else the platform's
+ * phone, through `via` where given, paid from the space's budget
+ * (text-spend.ts). The platform's phone texts from the space's own number and
+ * from every number bought for its apps.
+ */
+export let lineFor = async (
+  env: Env,
+  space: Space,
+  from: string,
+  via?: string,
+): Promise<Line> => {
+  let held = from ? await accountFor(env, from, space) : null
+  return held ? { phone: held, paid: false } : {
+    phone: await phoneOf(env, via ? { ...space.sender, via } : space.sender),
+    paid: true,
+  }
+}
+export type Line = { phone: Texter; paid: boolean }
+
+/**
  * The Operator's answer to someone replying to a text it sent for a person
- * (`phoneSend`), in their own conversation: texted back from the number they
- * texted, signed as that text was. The space's own number is paid from its
- * budget, a person's connected one by them.
+ * (`phoneSend`), or texting a number of the space's or one of its apps', in
+ * their own conversation: texted back from the number they texted, signed as
+ * that text was, through `lineFor`. A carrier's required answer (the
+ * `control` channel) goes whatever the budget says and is counted all the
+ * same.
  */
 export let answerText = async (
   env: Env,
@@ -494,19 +518,17 @@ export let answerText = async (
   sent?: Bundle,
 ) => {
   let to = request.address!, from = request.reply_to ?? ''
-  let own = space.sender?.number == from
-  let phone = own ? await phoneOf(env, space.sender) : null
-  let account = phone
-    ? request.channel == 'control' ? phone : charged(env, space, phone)
-    : await accountFor(env, from)
-  if (!account) throw new Error(`No connected account texts from ${from}`)
+  if (!from) throw new Error(`No number to answer ${to} from`)
+  let { phone, paid } = await lineFor(env, space, from, request.via)
+  let control = request.channel == 'control'
   let { directoryOf } = await import('./directory.ts')
   let person = String(comp(sent, 'operator_text').person ?? '')
   let me = person ? await directoryOf(env.STORE).known(person) : null
   let body = `${text}\n\n${textedFor(space, me?.name || 'the sender')}`
   try {
-    let receipt = await account.send({ to, text: body })
-    if (own && request.channel == 'control') {
+    let receipt = await (paid && !control ? charged(env, space, phone) : phone)
+      .send({ to, text: body, from })
+    if (paid && control) {
       let { countedTexts } = await import('./meter.ts')
       let { costOf } = await import('./text-spend.ts')
       await countedTexts(env, space, costOf(body))

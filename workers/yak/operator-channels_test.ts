@@ -497,6 +497,34 @@ test('HELP and STOP are answered in the campaign words, and STOP ends consent', 
   assertEquals(stoppedTexts, null)
 })
 
+// A stranger's text to a number bought for one of the space's apps signs up,
+// and the sign-up's answer goes back from that number through the platform's
+// phone, paid from the space's budget.
+let APP_NUMBER = '+12695550133'
+await f.dir.apply({
+  entities: [{
+    entity: { eid: (await f.dir.app(f.space, 'notices'))!.eid },
+    phone: { number: APP_NUMBER },
+  }],
+}, { 'x-yak-person': f.person, 'x-yak-role': 'owner' })
+let beforeApp = (await f.dir.at(f.space.eid))!.meter!.texts ?? 0
+let { answerText } = await import('./operator-line.ts')
+await answerText(f.env, f.space, {
+  address: '+12695550188',
+  reply_to: APP_NUMBER,
+  via: 'telnyx',
+  channel: 'signup',
+}, 'Which form would you like?')
+let appAnswer = texted.splice(0)
+let appSpent = (await f.dir.at(f.space.eid))!.meter!.texts! - beforeApp
+test("an answer from an app's number goes from it through the platform's phone, paid by the space", () => {
+  assertEquals(appAnswer.map((t) => [t.from, t.to]), [[
+    APP_NUMBER,
+    '+12695550188',
+  ]])
+  assertAlmostEquals(appSpent, PER_SEGMENT)
+})
+
 // The Operator texts first, from the toll-free number, signed with its name.
 let unagreed = await Promise.resolve(
   textSend(f.env, f.ctx, f.space).run({ text: 'Hi' }),

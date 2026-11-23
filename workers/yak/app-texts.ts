@@ -23,7 +23,6 @@ import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { mode, reads } from '@yaks/member'
 import type { Answer } from './apps.ts'
-import type { Texter } from '@yaks/host/senders'
 import {
   type Arrival,
   Blocked,
@@ -36,7 +35,6 @@ import {
 import { type App, appStore, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
-import { phoneOf } from './phones.ts'
 import { countedTexts } from './meter.ts'
 import { charged, costOf } from './text-spend.ts'
 
@@ -60,26 +58,6 @@ export let answers = (
 })
 
 /**
- * The account that texts for `space` from `from`: a number its owners
- * connected from their own provider (operator-line.ts), which they pay, else
- * the platform's phone, paid from the space's budget (text-spend.ts).
- */
-let lineFor = async (
-  env: Env,
-  space: Space,
-  from: string,
-  via?: string,
-): Promise<Line> => {
-  let { accountFor } = await import('./operator-line.ts')
-  let held = from ? await accountFor(env, from, space) : null
-  return held ? { phone: held, paid: false } : {
-    phone: await phoneOf(env, via ? { ...space.sender, via } : space.sender),
-    paid: true,
-  }
-}
-type Line = { phone: Texter; paid: boolean }
-
-/**
  * The texter an app's store sends through: from the app's own number, as
  * the store last heard it from the directory (`number`, empty for none), or
  * in its pilot from the platform's; counted against the space it stands in
@@ -100,6 +78,7 @@ export let appTexter = (
       let agreed = person ? await dir.texting(person) : null
       if (agreed?.number != text.to) throw new Blocked(PILOT)
     }
+    let { lineFor } = await import('./operator-line.ts')
     let { phone, paid } = await lineFor(env, at, from ?? '')
     let receipt = await (paid ? charged(env, at, phone) : phone).send({
       to: text.to,
@@ -219,6 +198,7 @@ export let appArrived = async (
   // The answer a carrier requires goes whatever the budget says, and is
   // counted all the same.
   try {
+    let { lineFor } = await import('./operator-line.ts')
     let { phone, paid } = await lineFor(
       env,
       to.space,
