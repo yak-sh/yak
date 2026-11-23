@@ -759,6 +759,9 @@ export type DeskPage = {
     role: string
     note: string
   }
+  /** whether the person hides their presence from their friends
+   * (`presence{hidden}`), on their profile */
+  presenceHidden?: boolean
   /** the owner's confirmed friends, offered before the invitation's email
    * box (friends.ts) */
   friends?: { person: string; name: string }[]

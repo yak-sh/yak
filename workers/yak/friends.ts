@@ -20,7 +20,7 @@ import { type Directory, directory, fetch, type Space } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Who } from './session.ts'
 import { vouched } from './session.ts'
-import { asCaller, type Ctx, EID, refuse, str, text } from './tool.ts'
+import { asCaller, type Ctx, EID, flag, refuse, str, text } from './tool.ts'
 import type { Update } from './operator-updates.ts'
 import type { Row as ToolRow } from './tool-words.ts'
 
@@ -72,18 +72,19 @@ export type Seen = {
 }
 
 /** What `reader` may see of `friend`'s presence (@yaks/notify/whereabouts
- * `presence`), none when no page of theirs is open. Call it for a confirmed
- * friend alone. */
+ * `presence`), none when no page of theirs is open or they hide it
+ * (`presence{hidden}`). Call it for a confirmed friend alone. */
 export let presenceOf = async (
   dir: Directory,
   reader: string,
   friend: string,
   now: number = Date.now(),
 ): Promise<Seen | undefined> => {
-  let said = presence(
-    await dir.read(line`.whereabouts.person=${friend}&*`),
-    now,
-  )
+  let [rows, hidden] = await Promise.all([
+    dir.read(line`.whereabouts.person=${friend}&*`),
+    dir.presenceHidden(friend),
+  ])
+  let said = hidden ? undefined : presence(rows, now)
   if (!said) return
   let [spaces, apps] = await Promise.all([
     Promise.all(said.spaces.map(async (eid) => {
@@ -295,6 +296,33 @@ export let friendTools: ToolRow[] = [
     },
   },
   {
+    name: 'friend_presence',
+    role: 'self',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        hidden: {
+          type: 'boolean',
+          description:
+            'true hides from friends when they are on yaks.app and what they have open; false shows it again',
+        },
+      },
+      required: ['hidden'],
+    },
+    run: async (ctx, args) => {
+      let hidden = flag(args.hidden, 'hidden')
+      await hidePresence(open(ctx.env), asCaller(ctx, null), ctx.person, hidden)
+      return {
+        text: hidden
+          ? 'Your friends no longer see when you are on yaks.app.'
+          : 'Your friends see when you are on yaks.app again.',
+        value: { hidden },
+      }
+    },
+  },
+  {
     name: 'friend_message',
     role: 'self',
     destructive: false,
@@ -328,6 +356,17 @@ export let friendTools: ToolRow[] = [
     }),
   },
 ]
+
+/** Keeps a person's presence from their friends (`hidden`), or shows it. */
+export let hidePresence = (
+  dir: Directory,
+  who: Who,
+  person: string,
+  hidden: boolean,
+) =>
+  dir.apply({
+    entities: [{ entity: { eid: person }, presence: { hidden } }],
+  }, vouched(who))
 
 /** One message between friends, as its reader sees it. */
 export type Message = {

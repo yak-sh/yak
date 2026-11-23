@@ -508,6 +508,17 @@ let profile = (at: DeskPage, env: Host) => {
             h(Form.Label, { as: 'p' }, 'Email'),
             h('p', null, at.email ?? ''),
           ),
+          labeled(
+            'your-presence',
+            'Friends see when you’re here',
+            h(
+              Field,
+              { choose: true, id: 'your-presence', name: 'presence' },
+              option('shown', 'Yes', !at.presenceHidden),
+              option('hidden', 'No', !!at.presenceHidden),
+            ),
+            'Your confirmed friends see when you’re on yaks.app, and which of your apps they could open themselves. Nobody else does.',
+          ),
           mine.length > 1
             ? labeled(
               'your-first',

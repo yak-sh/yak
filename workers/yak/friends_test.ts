@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
+import { managePath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -229,4 +230,27 @@ test('only a confirmed friend can be messaged', async () => {
     Error,
     'friend list',
   )
+})
+
+test('a person who hides their presence shows to no friend, until they show it again', async () => {
+  let seen = async () =>
+    ((await tools(eve).answer('friend_list', {})).value?.friends as {
+      person: string
+      presence?: unknown
+    }[]).find((f) => f.person == fay.person)?.presence
+  await tools(fay).answer('friend_presence', { hidden: true })
+  assertEquals(await seen(), undefined)
+  let page = await (await updates(eve, eveSpace.slug)).text()
+  assertEquals(page.includes('Friends on yaks.app now'), false)
+  let shown = await k.at(k.host, managePath('profile'), {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: fay.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ presence: 'shown' }).toString(),
+  })
+  assertEquals(shown.status, 303, await shown.text())
+  assertEquals((await seen() as { state: string }).state, 'building')
 })

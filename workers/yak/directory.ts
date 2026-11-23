@@ -960,6 +960,7 @@ export type Row = MeteredRow & {
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
   desk_sidebar?: { collapsed?: boolean | null }
   desk_aside?: { shut?: boolean | null }
+  presence?: { hidden?: boolean | null }
   free_spaces?: { count?: number | null }
   role_free_spaces?: Partial<Record<Role, Allowance>>
   push_subscription?: {
@@ -4240,6 +4241,10 @@ export let directoryRows = (rows: {
     },
     // The display name, including for people with no email. Read the same
     // row as the dashboard's other person lookups so they share one answer.
+    // Whether a person hides their presence from their friends
+    // (`presence{hidden}`), read off the same row as their name.
+    presenceHidden: async (person: string): Promise<boolean> =>
+      !!(await one(line`.entity.eid=${person}`))?.presence?.hidden,
     nameAt: async (person: string): Promise<string | null> => {
       let row = await one(line`.entity.eid=${person}`)
       return row

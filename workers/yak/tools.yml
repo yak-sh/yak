@@ -1291,6 +1291,12 @@ friend_messages:
     The person's recent messages with their confirmed friends, newest first:
     each with the friend, whether it was sent to them or by them, whether a
     friend's Operator wrote it, and whether they have read it.
+friend_presence:
+  title: Hide or show presence
+  description: >-
+    Hide from the person's friends when they are on yaks.app and what they
+    have open (hidden true), or show it again (hidden false). Only confirmed
+    friends ever see it. Use only when the person asks.
 friend_remove:
   title: Remove a friend
   description: >-

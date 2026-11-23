@@ -344,6 +344,17 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { shut: { type: 'boolean' } },
     },
+    // Whether a person keeps their presence from their friends (D-472):
+    // hidden, no friend sees when they are on yaks.app or what they have open
+    // (workers/yak/friends.ts `presenceOf`); shown to confirmed friends
+    // without it, as they set it on their profile or ask their Operator.
+    presence: {
+      component: true,
+      type: 'object',
+      description:
+        'Whether a person hides from their friends when they are on yaks.app and what they have open.',
+      properties: { hidden: { type: 'boolean' } },
+    },
     // One list an MCP server a person connected offers their Operator's page,
     // drawn beside the conversation with no model turn (operator-lists.ts),
     // on an entity of its own whose `doc{title}` heads it: the `server`'s

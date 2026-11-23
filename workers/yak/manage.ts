@@ -53,7 +53,7 @@ import { desk as deskPage } from './desk-pages.ts'
 import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
-import { friendsOf } from './friends.ts'
+import { friendsOf, hidePresence } from './friends.ts'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -992,6 +992,7 @@ let mine = async (
     sessions,
     provider,
     links,
+    hidden,
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
@@ -1007,6 +1008,7 @@ let mine = async (
       ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
         .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
+    view == 'profile' ? dir.presenceHidden(person) : undefined,
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -1017,6 +1019,7 @@ let mine = async (
     apps: [],
     name: name ?? '',
     email: email ?? '',
+    presenceHidden: hidden,
     agents,
     sessions,
     links,
@@ -1151,6 +1154,9 @@ let account = async (
       backTo(env, String(form.get('back') ?? ''), managePath('profile')),
       303,
     )
+  }
+  if (form.has('presence')) {
+    await hidePresence(dir, who, who.person, form.get('presence') == 'hidden')
   }
   if (form.has('name')) {
     await keepName(meta(env), who.person, chose(form.get('name')), 'said', {
