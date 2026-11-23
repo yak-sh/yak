@@ -107,6 +107,8 @@ export let state = (name = '', prepared = true) => {
   }
   return {
     pending,
+    // The answer has gone once read: nothing behind it waits a beat.
+    beat: 0,
     waitUntil: (work: Promise<unknown>) => {
       pending.add(work)
       work.then(() => pending.delete(work), () => pending.delete(work))

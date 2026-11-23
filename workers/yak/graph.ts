@@ -558,6 +558,10 @@ export type State = Held & {
   // Detached work belongs to this incarnation's runtime context, which keeps
   // its storage alive until that work has finished.
   waitUntil?(work: Promise<unknown>): void
+  // How long this runtime takes to send an answer on once its caller has read
+  // it, which work behind the answer waits out (running.ts `BEAT`, workerd's
+  // when unset). A stand-in that has sent it by then says 0.
+  beat?: number
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
@@ -5164,7 +5168,7 @@ export class Store extends Durable {
     if (this.#heralding || !tells.some(([l]) => this.#told(l).length)) return
     this.#heralding = true
     let told = new Promise<void>((done) =>
-      clockOf(this.#time).after(BEAT, () => {
+      clockOf(this.#time).after(this.#ctx.beat ?? BEAT, () => {
         this.#heralding = false
         Promise.all(tells.map(async ([list, tell]) => {
           let gone = await Promise.all(
@@ -5950,7 +5954,7 @@ export class Store extends Durable {
     (work) =>
       this.#ctx.waitUntil?.(
         new Promise<void>((done) =>
-          clockOf(this.#time).after(BEAT, () => {
+          clockOf(this.#time).after(this.#ctx.beat ?? BEAT, () => {
             try {
               work()
             } finally {

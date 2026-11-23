@@ -81,9 +81,20 @@ test('test selection names the declarations whose runtime code changed', async (
   equal(await edited(before.replace('let b = 2', '')), { 'm.ts': ['b'] })
 })
 
-test('a runtime import or top-level call changes the whole module', async () => {
-  equal(await edited(before.replace('./x.ts', './y.ts')), { 'm.ts': ['*'] })
+test('an import edit changes what says the names it binds', async () => {
+  equal(await edited(before.replace('./x.ts', './y.ts')), { 'm.ts': ['a'] })
+  equal(await edited(before.replace('{ x }', '{ y as x }')), { 'm.ts': ['a'] })
+  equal(await edited("import { y } from './y.ts'\n" + before), { 'm.ts': [] })
+  equal(await edited(before + '\nconsole.log(x)'), { 'm.ts': ['*'] })
+  equal(
+    await edited(before.replace('./x.ts', './y.ts') + '\nconsole.log(x)'),
+    { 'm.ts': ['*', 'a'] },
+  )
+})
+
+test('a top-level call or an import for its effect changes the whole module', async () => {
   equal(await edited(before + '\na()'), { 'm.ts': ['*'] })
+  equal(await edited("import './y.ts'\n" + before), { 'm.ts': ['*'] })
 })
 
 test('a comment and a type-only edit leave runtime declarations alone', async () => {
