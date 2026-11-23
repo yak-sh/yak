@@ -76,6 +76,26 @@ test('Lulu quotes bind quantity, full shipping address and selected shipping lev
   })
 })
 
+test('Lulu signs in with the key and secret as one Basic credential', async () => {
+  let sent: RequestInit | undefined
+  let printer = lulu({
+    key: 'sentinel-key',
+    secret: 'sentinel-secret',
+    base: 'https://api.sandbox.lulu.com',
+    fetch: ((url: string, init?: RequestInit) => {
+      if (!url.endsWith('/token')) return Promise.resolve(json({}, 503))
+      sent = init
+      return Promise.resolve(json({ access_token: 'token' }))
+    }) as typeof fetch,
+  })
+  await failed(() => printer.find('order'))
+  equal(
+    new Headers(sent?.headers).get('authorization'),
+    `Basic ${btoa('sentinel-key:sentinel-secret')}`,
+  )
+  equal(String(sent?.body), 'grant_type=client_credentials')
+})
+
 test('Lulu rejects malformed quote costs instead of silently quoting zero', async () => {
   let printer = adapter(() =>
     json({

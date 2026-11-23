@@ -157,16 +157,17 @@ export let lulu = (config: {
     method = 'GET',
     body?: Json,
   ): Promise<Wire> => {
+    // The key and secret go as one Basic credential, as Lulu's docs and the
+    // lulu integration say; the egress swaps the sentinel in either half.
     let token = await send(
       `${config.base}/auth/realms/glasstree/protocol/openid-connect/token`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: config.key,
-          client_secret: config.secret,
-        }),
+        headers: {
+          authorization: `Basic ${btoa(`${config.key}:${config.secret}`)}`,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ grant_type: 'client_credentials' }),
       },
     )
     if (!token.ok) throw await failure(token, 'Lulu authentication')
