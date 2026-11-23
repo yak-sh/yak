@@ -161,11 +161,11 @@ export let kernelDoc: VocabDoc = {
     // `decided{choice}` (workers/yak app-decisions.ts).
     decision_ask: {
       effect: true,
-      created: ['decision'],
-      target: '.decision !decided !cancelled',
+      created: ['decision', 'decided'],
+      target: '.decision !cancelled',
       tries: 3,
       description:
-        'ask the person a decision here is for in their Updates, through the space’s Operator',
+        'ask or close the app’s decision in its person’s Updates, through the space’s Operator',
     },
     // Every entity here carries `created`, so its removal is the entity's
     // death (deaths.ts).

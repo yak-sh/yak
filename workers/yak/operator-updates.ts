@@ -543,6 +543,7 @@ export let updating = async (
       {
         entity: { eid: about },
         decided: { choice: say },
+        $was: { decided: { '': null }, cancelled: { '': null } },
         $actor: { by: person },
       },
     ])

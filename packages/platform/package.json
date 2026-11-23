@@ -95,6 +95,7 @@
     "./app-commands": "./app-commands.ts",
     "./app-command": "./app-command.ts",
     "./app-effects": "./app-effects.ts",
+    "./app-decision": "./app-decision.ts",
     "./publishing-graph": "./publishing-graph.ts",
     "./operator-vocab": "./operator-vocab.ts",
     "./operator-owner": "./operator-owner.ts",

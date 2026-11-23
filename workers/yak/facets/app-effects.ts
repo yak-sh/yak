@@ -20,12 +20,9 @@ export let effects = (host: Host, options: Options): Handlers => {
     ...everywhere(host, options),
     refund_sale: refundSale(at),
     ...(noticeEnabled(at.graph.vocab) ? { notice_post: noticePost(at) } : {}),
-    // A decision asked in its person's Updates (app-decisions.ts).
+    // An app decision in its person's Updates (app-decisions.ts).
     decision_ask: async (event) =>
-      await (await import('../app-decisions.ts')).asking(
-        at,
-        event.entity.eid,
-      ),
+      await (await import('../app-decisions.ts')).syncing(at, event.entity.eid),
     document_extract: maintenance((event, _tx, _write, attempt) =>
       extraction(at, event.entity.eid, attempt)
     ),

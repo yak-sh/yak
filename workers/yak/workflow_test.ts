@@ -14,9 +14,8 @@ import type { Dispatch } from './door.ts'
 import { appStore, storeName } from './directory.ts'
 import { appArrived } from './app-texts.ts'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
-import type { Env } from './env.ts'
-import { operatorMemory } from './operator-testing.ts'
-import { answered, type AppAsking, appDecision } from './app-decisions.ts'
+import { SPACE } from './build-door.ts'
+import type { Update } from './operator-updates.ts'
 
 let NUMBER = '+12695550100'
 let words = {
@@ -38,8 +37,7 @@ type Step = { slot: string; reads?: string; query?: string }
 // An app whose worker answers each step with `step(slot, body)`'s words in its
 // step's slot, or the components it gives, and whose builders are `steps`: one
 // reading each text to NUMBER, or the current take in the slot it `reads`
-// (by `query` where it gives one), joined to it by a `requires` edge. What the
-// space's Operator was asked (build.ts `/operator/app-decision`) is `asks`.
+// (by `query` where it gives one), joined to it by a `requires` edge.
 let workflow = async (
   steps: Step[],
   step: (
@@ -72,21 +70,6 @@ let workflow = async (
       },
     }),
   } as Dispatch
-  let asks: AppAsking[] = []
-  let builder = env.BUILDER
-  env.BUILDER = {
-    ...builder,
-    idFromName: (name: string) => builder.idFromName(name),
-    get: (id: never) => ({
-      fetch: async (req: Request) => {
-        if (new URL(req.url).pathname != '/operator/app-decision') {
-          return builder.get(id).fetch(req)
-        }
-        asks.push(await req.json())
-        return Response.json({ ok: true })
-      },
-    }),
-  } as Env['BUILDER']
   let store = appStore(env.STORE, space, app)
   let send = async (path: string, body: unknown) => {
     let res = await store(path, {
@@ -146,12 +129,25 @@ let workflow = async (
         ? found.map((r) => (r.doc as Comp).body as string).sort()
         : null
     }, { label: `${slot}'s takes`, timeout: 10_000 })
+  let operator = async <T>(path: string, args?: object): Promise<T> => {
+    let res = await p.builder(space.eid).fetch(
+      new Request('https://builder' + path, {
+        headers: { ...ADA_OWNS, [SPACE]: space.eid },
+        ...(args ? { method: 'POST', body: JSON.stringify(args) } : {}),
+      }),
+    )
+    let body = await res.text()
+    assertEquals(res.status, 200, body)
+    return JSON.parse(body)
+  }
   return {
-    env,
-    asks,
-    text,
-    takes,
+    apply: (bundles: Bundle[]) => send('/apply', bundles),
     rows,
+    takes,
+    text,
+    updating: (args: object = {}) =>
+      operator<{ updates: Update[] }>('/operator/updates', args),
+    questions: () => operator<Bundle[]>('/api/query?q=.app_decision%26*'),
     [Symbol.asyncDispose]: () => p[Symbol.asyncDispose](),
   }
 }
@@ -207,9 +203,9 @@ test('steps that require none of each other run at once', async () => {
 
 // A person's step: the first step asks whoever set the workflow up with a
 // decision among its outputs, which reaches their Updates through the
-// space's Operator, and the next step builds once they answer there.
-test("a person's step asks them in their Updates, and the workflow goes on with their answer", async () => {
-  await using w = await workflow([
+// space's Operator, and the next step builds once they answer.
+let personStep = () =>
+  workflow([
     { slot: 'ask' },
     {
       slot: 'reply',
@@ -230,36 +226,37 @@ test("a person's step asks them in their Updates, and the workflow goes on with 
         recommended: 'Reply',
       },
     })
-  await w.text('msg-1', 'lunch?')
-  let [asked] = await until(async () => {
-    await w.rows('.decision')
-    return w.asks.length ? w.asks : null
-  }, { label: 'the question asked' })
-  // Asked of whoever wrote the builders.
-  assertEquals([asked.to, asked.title], [ADA, 'Reply to “lunch?”?'])
-  assertEquals(await w.rows('.built.slot=reply'), [])
-  let operator = operatorMemory()
-  operator.fx.handle({
-    app_decision_answer: (event) =>
-      answered(w.env, operator.g, event.entity.eid),
+for (let from of ['Updates', 'the app']) {
+  test(`a workflow decision answered in ${from} closes in Updates and the workflow continues`, async () => {
+    await using w = await personStep()
+    await w.text('msg-1', 'lunch?')
+    let asked = await until(async () => {
+      let [app] = await w.rows('.decision&*')
+      let { updates } = await w.updating()
+      let question = updates.find((u) => u.needs)
+      return app && question ? { app, question } : null
+    }, { label: 'the question in Updates' })
+    assertEquals(asked.question.words, 'A text says “lunch?”. Reply?')
+    assertEquals(await w.rows('.built.slot=reply'), [])
+
+    if (from == 'Updates') {
+      await w.updating({ choose: asked.question.eid, choice: 'Reply' })
+    } else {
+      await w.apply([{
+        entity: asked.app.entity,
+        decided: { choice: 'Reply' },
+      }])
+    }
+    assertEquals(await w.takes('reply', 1), [
+      'Reply: A text says “lunch?”. Reply?',
+    ])
+    let [row] = await w.rows(`.entity.eid=${asked.app.entity.eid}&.decided`)
+    let { choice, by } = row.decided as Comp
+    assertEquals([choice, by], ['Reply', ADA])
+    let copies = await w.questions()
+    assertEquals(copies.map((copy) => copy.entity.eid), [asked.question.eid])
+    assertEquals(copies[0].decided, row.decided)
+    let { updates } = await w.updating()
+    assertEquals(updates.filter((u) => u.needs), [])
   })
-  let [question] = await operator.g.apply([appDecision(asked)], {
-    trusted: true,
-  })
-  // Answered as their Updates answer it (operator-updates.ts `choose`).
-  await operator.g.apply([{
-    entity: question.entity,
-    decided: { choice: 'Reply' },
-    $actor: { by: ADA },
-  }], { trusted: true })
-  await operator.fx.work(operator.g, undefined, { passes: 1 })
-  assertEquals(await w.takes('reply', 1), [
-    'Reply: A text says “lunch?”. Reply?',
-  ])
-  let [row] = await w.rows(`.entity.eid=${asked.row}&.decided`)
-  assertEquals(row.decided, {
-    ...row.decided as Comp,
-    choice: 'Reply',
-    by: ADA,
-  })
-})
+}
