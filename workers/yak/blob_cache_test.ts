@@ -4,7 +4,8 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import * as apps from './apps.ts'
-import { filed, servedTo } from './uploads.ts'
+import { blobDoor, filed, servedTo } from './uploads.ts'
+import type { Door } from '@yaks/durable-object/door'
 import * as files from './files.ts'
 import { storage } from '@yaks/durable-object'
 import { Store } from './graph.ts'
@@ -279,4 +280,33 @@ test("a private app's store that holds back fails the read at 5 s", async () => 
   await time.advance(4_999)
   await time.advance(1)
   await failed
+})
+
+// A bare address is redirected to its representation, read off the store
+// (@yaks/blob/routes `current`): a store that holds that read back fails the
+// request at 5 s too, never at its whole minute (90344f8c).
+test('a bare address whose store holds back answers 503 at 5 s', async () => {
+  await using scenario = platform()
+  let time = clock()
+  let env = { ...scenario.env, CLOCK: time }
+  let hung = Object.assign(() => new Promise<never>(() => {}), {
+    consume: () => new Promise<never>(() => {}),
+  }) as unknown as Door
+  let status = 0
+  void blobDoor(
+    new Request(`https://ada.yaks.app/cookbook/api/blob/${sha}`),
+    env,
+    { eid: 'space', slug: 'ada', store: 'ada' } as Space,
+    { eid: 'app', slug: 'cookbook', space: 'space' } as App,
+    hung,
+    `/blob/${sha}`,
+    { reader: {}, writer: () => Promise.resolve({}) },
+  ).then((r) => (status = r.status))
+  let waited = 0
+  while (!status && waited < 10_000) {
+    await time.advance(500)
+    waited += 500
+  }
+  assertEquals(status, 503)
+  assertEquals(waited <= 6_000, true, `answered after ${waited} ms`)
 })

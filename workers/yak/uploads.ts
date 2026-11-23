@@ -259,7 +259,12 @@ export let blobDoor = async (
   let door = routes({
     artifacts,
     graph: {
-      read: reading(reader),
+      // Every read the door makes of the store waits Files' patience at
+      // most (files.ts `patiently`), so a store that cannot say fails the
+      // request reported rather than holding it its whole minute: a bare
+      // address's redirect (@yaks/blob/routes `current`) reads here (90344f8c).
+      read: (said) =>
+        files.patiently(env, Promise.resolve(reading(reader)(said))),
       // Who may write was asked at the gateway (apps.ts: the app's access and
       // its upload floor), and the store's guard holds the rows themselves,
       // so a check has nothing left to ask before the bytes are kept.
