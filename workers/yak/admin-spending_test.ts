@@ -170,10 +170,12 @@ test('every conversation says its cost, requests and tokens, newest first', () =
 
 test('what each request carries is listed piece by piece', () => {
   // The fixed part's tokens, shared among its pieces by their sizes: the
-  // tool list first, its tools under it.
+  // tool list and the persona each a group, carried by the one request.
   assertEquals(fixed[0][0], 'The fixed part')
-  assertEquals(fixed[1][0]!.startsWith('The tool list ('), true)
-  assertEquals(fixed[1][2], '1')
+  for (let group of ['The tool list (', 'The persona (']) {
+    let line = fixed.find((r) => r[0]!.startsWith(group))
+    assertEquals(line?.[2], '1', group)
+  }
 })
 
 let theirs = await get('/admin/spending', jeff)
