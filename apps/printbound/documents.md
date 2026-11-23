@@ -59,12 +59,15 @@ The platform's authenticated PDF door uses its existing PDFium raster worker,
 which answers the drawn page and whether it carries colored ink, so the app
 never decodes a page's pixels. An 8-bit grayscale or RGB PNG without
 transparency is embedded as its own compressed rows; only artwork that must be
-converted (transparency, or color in a coloring book) is decoded. App code loads
-no WebAssembly or local files, starts no browser, and calls no external
-rendering service. Invalid supplied PDFs and artwork raise `DocumentInputError`,
-which the service answers as a correction request. Transport and
-generated-document failures propagate to the app's error reporting; the caller
-retains its source draft and publishes no incomplete manifest.
+converted (transparency, or color in a coloring book) is decoded, and its
+inflate and deflate run through the runtime's native `DecompressionStream` and
+`CompressionStream`, which keeps a 2400x3040 page inside an app Worker's CPU
+limit. App code loads no WebAssembly or local files, starts no browser, and
+calls no external rendering service. Invalid supplied PDFs and artwork raise
+`DocumentInputError`, which the service answers as a correction request.
+Transport and generated-document failures propagate to the app's error
+reporting; the caller retains its source draft and publishes no incomplete
+manifest.
 
 The binding geometry and layout rules come from the PrintBound and CrayonBloom
 renderers. Lulu requires downloadable interior and cover PDFs, embedded fonts,

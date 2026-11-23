@@ -18,7 +18,7 @@ import {
   scale,
   translate,
 } from 'pdf-lib'
-import { paper, pixels, type Rows, rows } from './artwork.ts'
+import { deflated, paper, pixels, type Rows, rows } from './artwork.ts'
 import { DocumentInputError, supplied } from './document-errors.ts'
 import { inspect } from './inspection.ts'
 import { count, fit, geometry, type Product } from './layout.ts'
@@ -287,15 +287,19 @@ let image = async (
   if (bytes[0] == 0x89) {
     // Already normalized pixels become the PDF's image stream directly;
     // no PNG encoding and second decoding sits between these interfaces.
-    let art = pixels(bytes, coloring, box), context = pdf.context
-    let stream = context.flateStream(art.data, {
-      Type: 'XObject',
-      Subtype: 'Image',
-      BitsPerComponent: 8,
-      Width: art.width,
-      Height: art.height,
-      ColorSpace: art.channels == 1 ? 'DeviceGray' : 'DeviceRGB',
-    })
+    let art = await pixels(bytes, coloring, box), context = pdf.context
+    let stream = PDFRawStream.of(
+      context.obj({
+        Type: 'XObject',
+        Subtype: 'Image',
+        BitsPerComponent: 8,
+        Width: art.width,
+        Height: art.height,
+        ColorSpace: art.channels == 1 ? 'DeviceGray' : 'DeviceRGB',
+        Filter: 'FlateDecode',
+      }),
+      await deflated(art.data),
+    )
     return drawn(context.register(stream), art.width, art.height)
   }
   let art = await pdf.embedJpg(bytes)
