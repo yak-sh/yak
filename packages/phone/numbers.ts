@@ -144,6 +144,9 @@ export type Voice = Ways & {
   revoked?: string[]
 }
 
+/** Claim one submission for a seat whose account the provider has yet to show. */
+export type SubmitLogin = (seat: string) => Promise<boolean>
+
 /** A provider's numbers, on the account its phone texts through. */
 export type Numbers = {
   find: (search: Search) => Promise<Offer[]>
@@ -162,9 +165,14 @@ export type Numbers = {
   /** where a filed verification stands now */
   verification: (id: string) => Promise<Verification>
   /** for a provider whose numbers ring softphones, the owner's sign-in */
-  login?: (number: string, seat: string, voice: Voice) => Promise<Login>
+  login?: (
+    number: string,
+    seat: string,
+    voice: Voice,
+    submit?: SubmitLogin,
+  ) => Promise<Login>
   /** applies the call and seat policy to the number's existing sign-ins */
-  allow?: (number: string, voice: Voice) => Promise<void>
+  allow?: (number: string, voice: Voice, submit?: SubmitLogin) => Promise<void>
   /** for a provider that bills each call, the calls a number took or made
    * after `since`, oldest first */
   calls?: (number: string, since: string) => Promise<Call[]>

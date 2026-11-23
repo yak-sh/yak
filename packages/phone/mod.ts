@@ -66,6 +66,7 @@ export {
   type Search,
   type Shelf,
   shelf,
+  type SubmitLogin,
   type TollFree,
   type Verification,
   type Voice,

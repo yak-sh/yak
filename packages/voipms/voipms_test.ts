@@ -367,6 +367,41 @@ test('a spent budget stops outbound calls and leaves the sign-in and inbound rou
   ]])
 })
 
+test('a late duplicate SIP account leaves the earlier sign-in in place', async () => {
+  let first = {
+    id: '1',
+    account: '100_y2695550100',
+    username: 'y2695550100',
+    password: 'first-password',
+  }
+  let duplicate = { ...first, id: '2', password: 'late-password' }
+  let accounts = [duplicate, first]
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let q = new URL(String(url)).searchParams
+      if (q.get('method') == 'delSubAccount') {
+        accounts = accounts.filter((a) => a.id != q.get('id'))
+      }
+      return Promise.resolve(Response.json({
+        status: 'success',
+        accounts,
+        servers: [{ server_hostname: 'sip.example' }],
+        dids: [{ did: '2695550100', routing: 'account:100_y2695550100' }],
+      }))
+    },
+  })
+  let login = await shop.login!('+12695550100', 'first', {
+    in: true,
+    out: true,
+    seats: ['first'],
+    legacy: 'first',
+  })
+  assertEquals(login.password, first.password)
+  assertEquals(accounts, [first])
+})
+
 test('a read voip.ms is slow to answer is asked once more, and a text is never sent twice', async () => {
   let time = clock()
   let asked: string[] = []

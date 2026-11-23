@@ -1,6 +1,6 @@
 // The carrier's SIP accounts for one DID. Account names identify the line
 // even after deletion, so its outstanding call records can still be billed.
-import type { Login, Voice } from '@yaks/phone'
+import type { Login, SubmitLogin, Voice } from '@yaks/phone'
 import { Unsent } from '@yaks/host/senders'
 import { type Call, type Params, TimedOut, VOIPMS } from './request.ts'
 
@@ -23,6 +23,7 @@ export let callsAs = (digits: string, account: string) =>
 let accountsOf = async (call: Call, digits: string) =>
   (((await call('getSubAccounts')).accounts ?? []) as Fields[])
     .filter((a) => callsAs(digits, String(a.account)))
+    .sort((a, b) => Number(a.id) - Number(b.id))
 
 let drop = (call: Call, account: Fields) =>
   call('delSubAccount', { id: String(account.id) })
@@ -139,13 +140,20 @@ let belongs = (
   account.username == seatAccount(digits, seat, legacy) &&
   (seat == legacy || account.description == described(digits, seat))
 
-let taken = async (call: Call, digits: string, seat: string, voice: Voice) => {
+let taken = async (
+  call: Call,
+  digits: string,
+  seat: string,
+  voice: Voice,
+  submit?: SubmitLogin,
+) => {
   let username = seatAccount(digits, seat, voice.legacy)
   let find = async () =>
     (await accountsOf(call, digits))
       .find((a) => belongs(a, digits, seat, voice.legacy))
   let account = await find()
   if (account) return account
+  if (submit && !await submit(seat)) return undefined
   await made(
     call,
     digits,
@@ -165,17 +173,23 @@ let taken = async (call: Call, digits: string, seat: string, voice: Voice) => {
   return account
 }
 
-export let allow = async (call: Call, digits: string, voice: Voice) => {
+export let allow = async (
+  call: Call,
+  digits: string,
+  voice: Voice,
+  submit?: SubmitLogin,
+) => {
   let requested = new Set([voice.legacy, ...voice.requested ?? []])
   let seats = voice.seats.filter((seat) =>
     requested.has(seat) && !voice.revoked?.includes(seat)
   )
-  let accounts = await accountsOf(call, digits)
   if (!voice.in) {
     // Try both stops even if the carrier fails to apply one of them.
     let ends = await Promise.allSettled([
       route(call, digits, []),
-      ...accounts.map((account) => drop(call, account)),
+      accountsOf(call, digits).then((accounts) =>
+        Promise.all(accounts.map((account) => drop(call, account)))
+      ),
     ])
     let errors = ends.flatMap((r) => r.status == 'rejected' ? [r.reason] : [])
     if (errors.length) {
@@ -183,23 +197,29 @@ export let allow = async (call: Call, digits: string, voice: Voice) => {
     }
     return
   }
-  let kept: Fields[] = []
+  let accounts = await accountsOf(call, digits)
+  let kept = new Map<string, Fields>()
   for (let account of accounts) {
+    let username = String(account.account)
     if (
+      !kept.has(username) &&
       seats.some((seat) => belongs(account, digits, seat, voice.legacy))
     ) {
       await blocking(call, account, voice.out)
-      kept.push(account)
+      kept.set(username, account)
     } else {
       await drop(call, account)
     }
   }
   for (let seat of seats) {
-    if (!kept.some((a) => belongs(a, digits, seat, voice.legacy))) {
-      kept.push(await taken(call, digits, seat, voice))
+    if (
+      ![...kept.values()].some((a) => belongs(a, digits, seat, voice.legacy))
+    ) {
+      let account = await taken(call, digits, seat, voice, submit)
+      if (account) kept.set(String(account.account), account)
     }
   }
-  await route(call, digits, kept)
+  await route(call, digits, [...kept.values()])
 }
 
 export let release = async (call: Call, digits: string) => {
@@ -212,15 +232,17 @@ export let login = async (
   digits: string,
   seat: string,
   voice: Voice,
+  submit?: SubmitLogin,
 ): Promise<Login> => {
   if (!voice.in || !voice.seats.includes(seat)) {
     throw new Error('This seat cannot sign a softphone in')
   }
-  let account = await taken(call, digits, seat, voice)
+  let account = await taken(call, digits, seat, voice, submit)
+  if (!account) throw new Unsent('voip.ms has yet to confirm the SIP account')
   if (!account.password) {
     throw new Error('voip.ms did not return the softphone sign-in')
   }
-  await allow(call, digits, voice)
+  await allow(call, digits, voice, submit)
   let [server] = ((await call('getServersInfo', { server_pop: VOIPMS.pop }))
     .servers ?? []) as Fields[]
   if (!server?.server_hostname) {

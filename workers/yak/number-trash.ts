@@ -7,7 +7,7 @@ import { type Directory, type PhoneLine } from './directory.ts'
 import type { Env } from './env.ts'
 import { trashNumber, untrashNumber } from './erase.ts'
 import { spaceNow } from './model-spend.ts'
-import { syncVoice, voiceOf } from './number-voice.ts'
+import { forgetVoiceAttempts, syncVoice, voiceOf } from './number-voice.ts'
 import { dollars, released } from './numbers.ts'
 import type { Who } from './session.ts'
 
@@ -21,6 +21,7 @@ export let binnedNumber = async (
 ) => {
   await trashNumber(dir, line, who)
   await syncVoice(env, line, { in: false, out: false })
+  await forgetVoiceAttempts(env, line.eid)
   return `${shown(line.number)} is in the trash. It stops taking ` +
     `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +

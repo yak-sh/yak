@@ -54,7 +54,7 @@ import {
 import { type Row } from './tool-words.ts'
 import { binnedNumber, trashedNumber } from './number-trash.ts'
 import { searched, slowPhone } from './number-search.ts'
-import { legacySeat, ownerSeats } from './number-voice.ts'
+import { claimVoice, legacySeat, ownerSeats } from './number-voice.ts'
 export { heldNumber, trashedNumber } from './number-trash.ts'
 
 /** Who files a space's toll-free verification for it: the platform, as the
@@ -443,6 +443,7 @@ export let numberTools: Row[] = [
             }],
           })
         }
+        if (numbers.login && legacy) await claimVoice(ctx.env, eid)(legacy)
         bought = await numbers.buy(number)
       } catch (e) {
         await release?.()

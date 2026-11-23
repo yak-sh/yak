@@ -523,6 +523,7 @@ export let directoryDoc: VocabDoc = {
       properties: {
         line: owned(ref('cascade')),
         seat: owned(ref('cascade')),
+        attempted: owned(time),
       },
     },
     phone_search: {

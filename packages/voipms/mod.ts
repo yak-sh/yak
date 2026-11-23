@@ -468,8 +468,9 @@ export let numbers = (
         .filter((c) => c.at > since)
         .sort((a, b) => a.at.localeCompare(b.at))
     },
-    allow: (number, voice) => allow(call, ten(number), voice),
-    login: (number, seat, voice) => login(call, ten(number), seat, voice),
+    allow: (number, voice, submit) => allow(call, ten(number), voice, submit),
+    login: (number, seat, voice, submit) =>
+      login(call, ten(number), seat, voice, submit),
   }
 }
 

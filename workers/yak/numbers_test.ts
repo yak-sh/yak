@@ -784,6 +784,16 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
     let [ordered] = await k.dir.lines({ eid: eids[slug] })
     assert(!ordered.ordering)
     assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 4.5)
+    // An order and a reveal share the provider submission window.
+    await allowed(env, new Date())
+    assertEquals(vms.accounts.size, 0)
+    let [attempt] = await k.dir.read(q`.phone_login.line=${ordered.eid}`)
+    await stamp(env, {
+      entities: [{
+        entity: attempt.entity,
+        phone_login: { attempted: '2000-01-01T00:00:00.000Z' },
+      }],
+    })
     let budget = (dollars: number) =>
       stamp(env, {
         entities: [{ entity: { eid: eids[slug] }, budget: { dollars } }],

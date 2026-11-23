@@ -1,6 +1,7 @@
 // The directory's owner seats are the authority for softphone sign-ins.
 // The carrier keeps the passwords. Only the signed-in reveal page reads them.
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, token } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Login, Voice, Ways } from '@yaks/phone'
 import { type Built, line as q } from '@yaks/query'
@@ -32,11 +33,57 @@ let read = (env: Env, query: Built) => meta(env).query(query, { live: true })
 
 type Line = Pick<PhoneLine, 'eid' | 'number' | 'space' | 'via'>
 
+// The carrier may accept createSubAccount after timing out and accepts
+// duplicate usernames. Let its prior submission become visible first.
+let SIP_WAIT = 120_000
+
+let loginRows = (env: Env, eid: string) =>
+  read(env, q`.phone_login.line=${eid}`)
+
+export let claimVoice = (env: Env, line: string) => async (seat: string) => {
+  let eid = derivedEid(`phone-login|${line}|${seat}`)
+  let [[row], [member], [held]] = await Promise.all([
+    read(env, q`.entity.eid=${eid}&?phone_login`),
+    read(env, q`.entity.eid=${seat}&.member.role=owner`),
+    read(env, q`.entity.eid=${line}&.phone_line&!trashed`),
+  ])
+  let space = (held?.phone_line as Row['phone_line'])?.space
+  let inSpace = (member?.member as Row['member'])?.space
+  if (!space || !inSpace || idOf(space) != idOf(inSpace)) return false
+  let attempted = (row?.phone_login as { attempted?: string } | undefined)
+    ?.attempted
+  let now = env.CLOCK?.now() ?? Date.now()
+  if (attempted && now - Date.parse(attempted) < SIP_WAIT) return false
+  try {
+    await stamp(env, {
+      entities: [{
+        entity: { eid },
+        $was: { phone_login: { attempted: token(attempted ?? null) } },
+        phone_login: { line, seat, attempted: new Date(now).toISOString() },
+      }],
+    })
+    return true
+  } catch (error) {
+    if (error instanceof Stale) return false
+    throw error
+  }
+}
+
+/** Restoring a line starts new SIP accounts after the carrier removed them. */
+export let forgetVoiceAttempts = async (env: Env, line: string) => {
+  let rows = await loginRows(env, line)
+  let entities = rows.filter((r) =>
+    (r.phone_login as { attempted?: string })?.attempted
+  )
+    .map(({ entity }) => ({ entity, phone_login: { attempted: null } }))
+  if (entities.length) await stamp(env, { entities })
+}
+
 let policy = async (env: Env, line: Line, ways: Ways): Promise<Voice> => {
   let [owners, [held], requested] = await Promise.all([
     read(env, ownerSeats(line.space)),
     read(env, q`.entity.eid=${line.eid}&?phone_line&?trashed`),
-    read(env, q`.phone_login.line=${line.eid}`),
+    loginRows(env, line.eid),
   ])
   let row = held?.phone_line as Row['phone_line']
   if (!row || row.ordering || held.trashed) ways = { in: false, out: false }
@@ -58,7 +105,11 @@ export let syncVoice = async (
 ) => {
   let allow = (await phoneNamed(env, line.via))?.numbers?.().allow
   if (!allow) return
-  await allow(line.number, { ...await policy(env, line, ways), revoked })
+  await allow(
+    line.number,
+    { ...await policy(env, line, ways), revoked },
+    claimVoice(env, line.eid),
+  )
 }
 
 let seatOf = async (env: Env, space: string, person: string) => {
@@ -102,7 +153,7 @@ export let revealVoice = async (
   let latest = voice
   let signed: Login
   try {
-    signed = await login(line.number, seat, voice)
+    signed = await login(line.number, seat, voice, claimVoice(env, line.eid))
   } finally {
     // A seat or line can be taken away while the carrier is answering.
     latest = await current()
