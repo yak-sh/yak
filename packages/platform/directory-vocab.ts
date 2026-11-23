@@ -208,7 +208,7 @@ export let directoryDoc: VocabDoc = {
         from: { ...owned(ref('keep')), index: true },
         to: owned(ref('keep')),
         giver: owned(ref('keep')),
-        recipient: { ...owned(ref('cascade')), index: true },
+        recipient: { ...owned(ref('keep')), index: true },
         editor: owned(bool),
       },
     },

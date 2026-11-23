@@ -8593,7 +8593,7 @@ let appBuildTools = new Set([
 /** The fixed public roster, named once per release (T-34541). */
 export let TOOLS: Tool[] = [
   ...previewTools,
-  transferTool,
+  worded(transferTool),
   ...OURS.map(worded),
   ...operatorTools.map(worded),
   ...libraryTools.map(worded),

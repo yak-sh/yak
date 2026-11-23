@@ -999,7 +999,8 @@ export let pruned = async (
     dir.draftsOf(each),
   ])
   for (let { prefix, app } of apps) {
-    let stage = releasesPrefix({ store: prefix.split('/')[0] }, app)
+    let root = prefix.split('/')[0]
+    let stage = releasesPrefix({ store: root }, app)
     let releases = deploys.get(app.eid) ?? []
     let moves = switches.get(app.eid) ?? []
     let sources = new Set(
@@ -1011,7 +1012,7 @@ export let pruned = async (
         .filter((source): source is string =>
           typeof source == 'string' && !!source
         )
-        .map((source) => stage + source.slice(source.lastIndexOf('/') + 1)),
+        .map((source) => root + source.slice(source.indexOf('/'))),
     )
     let erased = false
     await lanes(LANES)([...sources], async (source) => {

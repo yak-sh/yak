@@ -30,9 +30,9 @@ import {
   SPACE,
   str,
   text,
-  type Tool,
 } from './tool.ts'
 import type { Update } from './operator-updates.ts'
+import type { Row as ToolRow } from './tool-words.ts'
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
@@ -41,11 +41,8 @@ let apply = (dir: Directory, who: Who, asked: TransferRequest) =>
     entities: [{ entity: { eid: '$appTransfer' }, $appTransfer: asked }],
   }, vouched(who))
 
-export let transferTool: Tool = {
+export let transferTool: ToolRow = {
   name: 'app_transfer',
-  title: 'Offer an app transfer',
-  description:
-    'Offer to give an app you own to another yaks.app user. Use when the person asks to give or transfer their app. Ask for the recipient’s sign-in email if it is unclear. The app stays where it is until that person accepts in their own Updates. Acceptance moves the app, data, files, releases and future billing to their space. Offer to keep editing access only if the giver asks for it. The recipient can choose whether to allow it.',
   destructive: false,
   idempotent: true,
   role: 'owner',
