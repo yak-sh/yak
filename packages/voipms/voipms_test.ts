@@ -87,7 +87,7 @@ test('a number whose sub-account voip.ms will not make is given back', async () 
   ])
 })
 
-test('a slow voip.ms sub-account reply ends within the purchase budget and gives back the DID', async () => {
+test('a slow sub-account reply leaves the confirmed DID held for voice upkeep', async () => {
   let time = clock()
   let asked: string[] = []
   let held = false
@@ -126,22 +126,16 @@ test('a slow voip.ms sub-account reply ends within the purchase budget and gives
       return Promise.resolve(ok())
     },
   }, time)
-  let answer = assertRejects(
-    () => shop.buy('+12695550100'),
-    Error,
-    'voip.ms did not answer createSubAccount in time',
-  )
+  let answer = shop.buy('+12695550100')
   await time.advance(14_000)
   assertEquals(held, true)
   await time.advance(14_000)
-  await answer
-  assertEquals(held, false)
+  assertEquals((await answer).status, 'held')
+  assertEquals(held, true)
   assertEquals(asked, [
     'getDIDsInfo',
     'orderDID',
     'createSubAccount',
-    'cancelDID',
-    'getSubAccounts',
   ])
   assertEquals(time.pending(), 0)
 })
@@ -158,6 +152,9 @@ test('a stalled purchase cleanup answers with the carrier state unconfirmed', as
       if (method == 'getDIDsInfo' || method == 'orderDID') {
         return Promise.resolve(Response.json({ status: 'success' }))
       }
+      if (method == 'createSubAccount') {
+        return Promise.resolve(Response.json({ status: 'invalid_callerid' }))
+      }
       let signal = init!.signal!
       return new Promise((_, reject) =>
         signal.addEventListener('abort', () => reject(signal.reason))
@@ -169,7 +166,6 @@ test('a stalled purchase cleanup answers with the carrier state unconfirmed', as
     Error,
     'Cleanup of +12695550100 could not be confirmed',
   )
-  await time.advance(15_000)
   await time.advance(10_000)
   let error = await answer
   assertEquals(asked, [
@@ -180,6 +176,32 @@ test('a stalled purchase cleanup answers with the carrier state unconfirmed', as
   ])
   assertEquals(time.pending(), 0)
   assertEquals((error.cause as AggregateError).errors.length, 2)
+})
+
+test('an unanswered order waits for the DID to appear without ordering it again', async () => {
+  let placed = 0
+  let held = false
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      if (method == 'orderDID') {
+        placed++
+        return Promise.resolve(new Response('', { status: 522 }))
+      }
+      return Promise.resolve(Response.json({
+        status: 'success',
+        dids: held ? [{ did: '2695550100', routing: 'sys:hangup' }] : [],
+      }))
+    },
+  })
+  let number = '+12695550100'
+  assertEquals((await shop.buy(number)).status, 'pending')
+  assertEquals(await shop.ordered!(number), false)
+  held = true
+  assertEquals(await shop.ordered!(number), true)
+  assertEquals(placed, 1)
 })
 
 test('buying a number already held on the sub-account made for it completes it, quoted at its month alone', async () => {
@@ -292,10 +314,11 @@ test("pointing a number's texts where they already go asks voip.ms nothing more"
   assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'setSMS'])
 })
 
-test("a number's calls are stopped and let go by its sub-account's restriction and its routing, its password said back unchanged, and asking for the ways they already go changes nothing", async () => {
+test('a spent budget stops outbound calls and leaves the sign-in and inbound route in place', async () => {
   let sub = {
     id: '7',
     account: '100_y2695550100',
+    username: 'y2695550100',
     password: 'sip-pw',
     enable_ip_restriction: '0',
     ip_restriction: '',
@@ -327,12 +350,15 @@ test("a number's calls are stopped and let go by its sub-account's restriction a
   for (
     let want of [
       { in: true, out: false },
-      { in: false, out: false },
       { in: true, out: true },
       { in: true, out: true },
     ]
   ) {
-    await shop.allow!('+12695550100', want)
+    await shop.allow!('+12695550100', {
+      ...want,
+      seats: ['first'],
+      legacy: 'first',
+    })
     assertEquals(ways(), want)
   }
   assertEquals(set.map((q) => [q.id, q.password]), [['7', 'sip-pw'], [

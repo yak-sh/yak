@@ -7,6 +7,7 @@
 // as its docs and an account's answers name them)
 
 import { type Clock, system } from '@yaks/fp'
+import { Unsent } from '@yaks/host/senders'
 import {
   type Account,
   type Arrival,
@@ -17,7 +18,6 @@ import {
   type Provider,
   type Receipt,
   type Text,
-  type Ways,
 } from '@yaks/phone'
 
 import {
@@ -29,6 +29,16 @@ import {
   VOIPMS,
   type Voipms,
 } from './request.ts'
+import {
+  abandon,
+  accountFor,
+  allow,
+  callsAs,
+  heldDid,
+  login,
+  made,
+  release,
+} from './voice.ts'
 export { VOIPMS, type Voipms } from './request.ts'
 
 // voip.ms writes a North American number as its ten digits.
@@ -228,61 +238,8 @@ let some = <T>(all: T[], n: number) =>
 let FIND = 16_000
 let BUY = 28_000
 let CLEANUP = 10_000
-
-let accountFor = (digits: string) => `y${digits}`
-
-let subaccount = async (call: Call, digits: string) =>
-  (((await call('getSubAccounts')).accounts ?? []) as Available[])
-    .find((a) => String(a.account).endsWith(`_${accountFor(digits)}`))
-
-let release = async (call: Call, digits: string) => {
-  await call('cancelDID', { did: digits })
-  let account = await subaccount(call, digits)
-  if (account) await call('delSubAccount', { id: String(account.id) })
-}
-
-let heldDid = async (call: Call, digits: string) => {
-  // voip.ms answers a number the account does not hold as a failure.
-  let held = await call('getDIDsInfo', { did: digits }).then(
-    (said) => (said.dids ?? []) as Available[],
-    (error) => {
-      if (/invalid_did|no_did/.test(String(error))) return []
-      throw error
-    },
-  )
-  return held.find((d) => String(d.did) == digits)
-}
-
-// An address no call comes from (RFC 5737's TEST-NET-1). A sub-account whose
-// calls out may come only from it places none, and its sign-in, and the calls
-// that ring it, stay as they were.
-let NOWHERE = '192.0.2.1'
-
-// Let a number's calls go only `ways`: calls out are shut by restricting its
-// sub-account to NOWHERE, calls in by routing the number to a hang-up. voip.ms
-// sets a sub-account whole, so everything it holds is said again as it reads,
-// its password among them, unchanged.
-let allow = async (call: Call, digits: string, ways: Ways) => {
-  let account = await subaccount(call, digits)
-  if (!account) throw new Error(`${e164(digits)} rings no voip.ms sub-account`)
-  let shut = String(account.enable_ip_restriction) == '1' &&
-    account.ip_restriction == NOWHERE
-  if (shut == ways.out) {
-    let { account: _, ...said } = account
-    await call('setSubAccount', {
-      ...Object.fromEntries(
-        Object.entries(said).map(([k, v]) => [k, String(v ?? '')]),
-      ),
-      enable_ip_restriction: ways.out ? '0' : '1',
-      ip_restriction: ways.out ? '' : NOWHERE,
-    })
-  }
-  let did = await heldDid(call, digits)
-  let routing = ways.in ? `account:${account.account}` : 'sys:hangup'
-  if (did && String(did.routing) != routing) {
-    await call('setDIDRouting', { did: digits, routing })
-  }
-}
+let uncertain = (error: unknown) =>
+  error instanceof TimedOut || error instanceof Unsent
 
 // A number this account routed to the sub-account made for it.
 let routed = (did: Available, digits: string) =>
@@ -405,18 +362,18 @@ export let numbers = (
     },
     buy: async (number) => {
       let digits = ten(number)
+      let heldOrder = { number, order: digits, status: 'held' } as const
       let purchase = bounded(request, time, time.now() + BUY)
       // A number already ringing the sub-account made for it was bought
       // here before, by a purchase that ended before its host kept it.
       let held = await heldDid(purchase, digits)
       if (held && routed(held, digits)) {
-        return { number, order: digits, status: 'held' }
+        return heldOrder
       }
       if (held) {
         throw new Error(`voip.ms already holds ${number} on another route`)
       }
       let routing = 'sys:hangup'
-      let ordered = false
       try {
         // A sub-account calls out as a number the account already holds.
         // Hang up on calls until the sub-account it rings is made.
@@ -428,36 +385,30 @@ export let numbers = (
           cnam: '1',
           billing_type: VOIPMS.billing,
         })
-        ordered = true
-        let made = await purchase('createSubAccount', {
-          username: accountFor(digits),
-          protocol: '1',
-          description: number,
-          auth_type: '1',
-          password: `Y${crypto.randomUUID().replaceAll('-', '')}`,
-          device_type: '2',
-          callerid_number: digits,
-          lock_international: '1',
-          international_route: '1',
-          music_on_hold: 'default',
-          allowed_codecs: 'ulaw;g729;gsm',
-          dtmf_mode: 'AUTO',
-          nat: 'yes',
+      } catch (error) {
+        if (!uncertain(error)) throw error
+        let recovery = bounded(request, time, time.now() + CLEANUP)
+        let found = await heldDid(recovery, digits).catch((e) => {
+          if (!uncertain(e)) throw e
+          return undefined
         })
+        return found?.routing == routing || found && routed(found, digits)
+          ? heldOrder
+          : { ...heldOrder, status: 'pending' }
+      }
+      try {
+        let account = await made(purchase, digits, accountFor(digits), true)
         await purchase('setDIDRouting', {
           did: digits,
-          routing: `account:${made.account}`,
+          routing: `account:${account.account}`,
         })
       } catch (error) {
+        // The DID is held. The directory's voice reconciler can finish the
+        // sub-account and routing even if this request has ended.
+        if (uncertain(error)) return heldOrder
         let cleanup = bounded(request, time, time.now() + CLEANUP)
         try {
-          // A timed-out order may have reached the carrier. Check ownership
-          // before cancelling a number the carrier never confirmed we bought.
-          if (!ordered && error instanceof TimedOut) {
-            ordered = (await heldDid(cleanup, digits))?.routing == routing
-            if (!ordered) throw Error('voip.ms has yet to confirm the order')
-          }
-          if (ordered) await release(cleanup, digits)
+          await abandon(cleanup, digits)
         } catch (cause) {
           throw new Error(
             `${
@@ -471,7 +422,12 @@ export let numbers = (
         }
         throw error
       }
-      return { number, order: digits, status: 'held' }
+      return heldOrder
+    },
+    ordered: async (number) => {
+      let digits = ten(number)
+      let did = await heldDid(call, digits)
+      return !!did && (did.routing == 'sys:hangup' || routed(did, digits))
     },
     // voip.ms takes a number's texting settings only a while after it is
     // ordered, so a host points it once it puts the number to use.
@@ -498,11 +454,10 @@ export let numbers = (
         if (/no_cdr/.test(String(error))) return { cdr: [] }
         throw error
       })
-      let account = accountFor(digits)
       return ((said.cdr ?? []) as Available[])
         .filter((c) =>
           String(c.destination) == digits ||
-          String(c.account).endsWith(`_${account}`)
+          callsAs(digits, String(c.account))
         )
         .map((c) => ({
           id: String(c.uniqueid),
@@ -513,18 +468,8 @@ export let numbers = (
         .filter((c) => c.at > since)
         .sort((a, b) => a.at.localeCompare(b.at))
     },
-    allow: (number, ways) => allow(call, ten(number), ways),
-    login: async (number) => {
-      let account = await subaccount(call, ten(number))
-      if (!account) throw new Error(`${number} rings no voip.ms sub-account`)
-      let [server] = ((await call('getServersInfo', { server_pop: VOIPMS.pop }))
-        .servers ?? []) as Available[]
-      return {
-        server: String(server?.server_hostname ?? ''),
-        user: String(account.account),
-        password: String(account.password),
-      }
-    },
+    allow: (number, voice) => allow(call, ten(number), voice),
+    login: (number, seat, voice) => login(call, ten(number), seat, voice),
   }
 }
 

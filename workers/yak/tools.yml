@@ -1049,8 +1049,8 @@ number_status:
     read from the provider now, and what it is approved for: calls, texts to
     people who know it, and texts to many people. Leave number out for every
     number the space holds. With a number and login true, the space owner
-    gets the softphone (SIP) sign-in that takes its calls and calls out as
-    it.
+    gets a signed-in page to reveal their own softphone (SIP) username and
+    password.
 app_publish:
   title: Publish an app for others to install
   description: >-

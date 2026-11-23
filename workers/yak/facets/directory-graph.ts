@@ -36,6 +36,7 @@ import { caught } from '../defects.ts'
 import type { Env } from '../env.ts'
 import { type Letter, letterRows } from '../mail.ts'
 import { KERNEL, meta as directoryStore } from '../meta.ts'
+import { legacySeat, ownerSeats } from '../number-voice.ts'
 import type { Options } from './store.ts'
 
 type Own = { person: string; want?: string }
@@ -51,6 +52,63 @@ let killing = (bundles: Bundle[]) => [
 
 type Sharing = { space: string; person: string; names: string[] }
 type Connector = Sharing & { title: string; slug: string; email: string }
+type OwnerSeat = { eid: string; space: string; person: string }
+
+let ownersOf = (rows: Row[]): OwnerSeat[] =>
+  rows.flatMap(({ entity, member }) =>
+    member?.role == 'owner' && member.space && member.person
+      ? [{
+        eid: entity.eid,
+        space: idOf(member.space),
+        person: idOf(member.person),
+      }]
+      : []
+  )
+
+// Bind the original account before the earliest owner's seat can disappear.
+let departures = (bundles: Bundle[], owners: OwnerSeat[], killed: string[]) => {
+  let patches = new Map(bundles.map((b) => [b.entity.eid, b]))
+  return owners.filter(({ eid, space, person }) => {
+    let patch = patches.get(eid)
+    let member = patch?.member as Row['member']
+    return killed.includes(eid) || killed.includes(space) ||
+      killed.includes(person) ||
+      patch?.member === null ||
+      member?.role != null && member.role != 'owner' ||
+      !!member?.space && idOf(member.space) != space ||
+      !!member?.person && idOf(member.person) != person
+  })
+}
+
+let boundLines = (tx: Tx, owners: OwnerSeat[]) =>
+  each(
+    [...new Set(owners.map((s) => s.space))],
+    [] as Bundle[],
+    (out, space) =>
+      after(
+        together([
+          tx.read(ownerSeats(space)),
+          tx.read(line`.phone_line.space=${space}`),
+          tx.read(
+            line`.phone_login.seat=${
+              owners.filter((s) => s.space == space).map((s) => s.eid)
+            }`,
+          ),
+        ]),
+        ([seats, numbers, logins]) => [
+          ...out,
+          ...numbers.flatMap((row) => {
+            let from = (row.phone_line as Row['phone_line'])?.legacy_seat
+            let legacy = from ?? legacySeat(seats)
+            let to = owners.some((s) => s.eid == legacy) ? '' : legacy
+            return from == to
+              ? []
+              : [{ entity: row.entity, phone_line: { legacy_seat: to } }]
+          }),
+          ...logins.map(({ entity }) => ({ entity, tombstone: {} })),
+        ],
+      ),
+  )
 
 let sharingSeats = (tx: Tx, seats: Row[]) =>
   each(seats, [] as Sharing[], (out, { member: m }) => {
@@ -111,7 +169,12 @@ export let seatsHeard = (
   let keys = ['member', '$delete', TOMBSTONE]
   let before = new WeakMap<
     object,
-    { spaces: string[]; connectors: Connector[]; letters?: Letter[] }
+    {
+      spaces: string[]
+      connectors: Connector[]
+      owners: OwnerSeat[]
+      letters?: Letter[]
+    }
   >()
   let leaving = hook(keys, (bundles, tx, _err, context) => {
     if (!context?.transaction || !store.meta) return bundles
@@ -129,11 +192,15 @@ export let seatsHeard = (
           .values(),
       ]
       let spaces = spacesOf(direct.filter((r) => killed.includes(r.entity.eid)))
+      let owners = departures(bundles, ownersOf(seats), killed)
       return after(
-        after(sharingSeats(tx, seats), (servers) => addressing(tx, servers)),
-        (connectors) => {
-          before.set(at, { spaces, connectors })
-          return bundles
+        together([
+          after(sharingSeats(tx, seats), (servers) => addressing(tx, servers)),
+          boundLines(tx, owners),
+        ]),
+        ([connectors, lines]) => {
+          before.set(at, { spaces, connectors, owners })
+          return [...bundles, ...lines]
         },
       )
     })
@@ -159,12 +226,29 @@ export let seatsHeard = (
     let env = store.env as Env
     let at = context?.transaction
     let prior = at && before.get(at)
+    let leaving = prior?.owners.length
+      ? (async (removed) => {
+        let { ownersLeft } = await import('../number-voice.ts')
+        await Promise.all(
+          [...new Set(removed.map((s) => s.space))].map((space) =>
+            ownersLeft(
+              env,
+              space,
+              removed.filter((s) => s.space == space).map((s) => s.eid),
+            )
+              .catch((e) =>
+                caught(e, { request: 'revoke softphone sign-in', space })
+              )
+          ),
+        )
+      })(prior.owners)
+      : undefined
     let due = prior?.letters
     let notify = due && directoryStore(env)
       .apply(due.flatMap((l) => letterRows(l, env)), KERNEL)
       .catch((e) => caught(e, { request: 'tell former MCP owners' }))
     if (!store.meta || !env.BUILDER) {
-      await notify
+      await Promise.all([notify, leaving])
       return applied
     }
     let wrote = applied.filter((b) => b.member && !b.tombstone)
@@ -181,6 +265,7 @@ export let seatsHeard = (
     await Promise.all(
       [
         notify,
+        leaving,
         ...[...spaces].map((space) =>
           tell(env, space).catch((e) =>
             caught(e, { request: 'tell seats', space })

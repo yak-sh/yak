@@ -134,12 +134,24 @@ export type Verification = {
  * `out`, calls go out as it. */
 export type Ways = { in: boolean; out: boolean }
 
+/** Which seats may hold a softphone sign-in, and which one inherits the
+ * original account. A revoked seat loses its old sign-in even if it is
+ * promoted again. */
+export type Voice = Ways & {
+  seats: string[]
+  requested?: string[]
+  legacy: string | null
+  revoked?: string[]
+}
+
 /** A provider's numbers, on the account its phone texts through. */
 export type Numbers = {
   find: (search: Search) => Promise<Offer[]>
   /** buys a number on offer and puts its texts on the phone's profile;
    * buying one already bought onto the account for this use completes */
   buy: (number: string) => Promise<Bought>
+  /** Checks an order whose submission was uncertain, without placing another. */
+  ordered?: (number: string) => Promise<boolean>
   /** for a provider that sends each number's texts to a URL of its own,
    * sends a held number's texts to `callback` */
   point?: (number: string, callback: string) => Promise<void>
@@ -149,12 +161,10 @@ export type Numbers = {
   verify: (form: TollFree) => Promise<Verification>
   /** where a filed verification stands now */
   verification: (id: string) => Promise<Verification>
-  /** for a provider whose numbers' calls ring a softphone, its sign-in */
-  login?: (number: string) => Promise<Login>
-  /** for a provider whose numbers' calls ring a softphone, lets a held
-   * number's calls go only the `ways` given, its sign-in left as it is; a
-   * number already so is changed in nothing */
-  allow?: (number: string, ways: Ways) => Promise<void>
+  /** for a provider whose numbers ring softphones, the owner's sign-in */
+  login?: (number: string, seat: string, voice: Voice) => Promise<Login>
+  /** applies the call and seat policy to the number's existing sign-ins */
+  allow?: (number: string, voice: Voice) => Promise<void>
   /** for a provider that bills each call, the calls a number took or made
    * after `since`, oldest first */
   calls?: (number: string, since: string) => Promise<Call[]>

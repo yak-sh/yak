@@ -510,6 +510,30 @@ export let directoryDoc: VocabDoc = {
         voice: owned(bool),
         campaign: owned(text),
         called: owned(time),
+        legacy_seat: owned(text),
+        ordering: owned(time),
+        order_reported: owned(time),
+      },
+    },
+    phone_login: {
+      description:
+        'An owner seat that requested a softphone sign-in for a held number.',
+      component: true,
+      type: 'object',
+      properties: {
+        line: owned(ref('cascade')),
+        seat: owned(ref('cascade')),
+      },
+    },
+    phone_search: {
+      description: 'A phone provider’s run of unanswered number searches.',
+      component: true,
+      type: 'object',
+      properties: {
+        since: owned(time),
+        last: owned(time),
+        count: owned(num),
+        reported: owned(bool),
       },
     },
     // What the platform takes from one sale, in basis points (sell.ts `fee`),

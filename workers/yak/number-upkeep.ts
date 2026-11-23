@@ -23,15 +23,17 @@
 //   provider was too slow to set.
 import { line as q } from '@yaks/query'
 import { Unsent } from '@yaks/host/senders'
-import { left, monthOf } from '@yaks/platform/meter'
+import { monthOf } from '@yaks/platform/meter'
 import { usage } from '@yaks/platform/numbers'
-import type { Ways } from '@yaks/phone'
-import { idOf, type Space, stamp } from './directory.ts'
+import { idOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import { phoneNamed } from './phones.ts'
 import { callbackOf } from './number-door.ts'
 import { spaceNow } from './model-spend.ts'
+import { purchaseConfirmed } from './numbers.ts'
+import { syncVoice, voiceOf } from './number-voice.ts'
+import { caught } from './defects.ts'
 
 type Line = {
   number: string
@@ -39,16 +41,61 @@ type Line = {
   space: string
   at?: string | null
   called?: string | null
+  ordering?: string | null
+  order_reported?: string | null
 }
 
 // Every number spaces hold, and those in the trash.
-let lines = async (env: Env) => await meta(env).query(q`.phone_line ?trashed`)
+let lines = async (env: Env) =>
+  await meta(env).query(q`.phone_line&!phone_line.ordering&?trashed`)
+
+/** Confirm the carrier's result for a submitted order. The existing budget
+ * hold and line stay in place while the carrier has yet to show the DID. */
+export let orders = async (env: Env, now: Date) => {
+  for (let row of await meta(env).query(q`.phone_line.ordering`)) {
+    let l = row.phone_line as Line & { upfront: number; monthly: number }
+    let ordered = (await phoneNamed(env, l.via))?.numbers?.().ordered
+    if (!ordered) continue
+    try {
+      if (await ordered(l.number)) {
+        await purchaseConfirmed(env, { ...l, eid: row.entity.eid }, true)
+        continue
+      }
+      if (
+        now.getTime() - Date.parse(l.ordering!) < 3_600_000 || l.order_reported
+      ) continue
+      caught(
+        new Error(
+          'The phone company has not confirmed the submitted order for an hour',
+        ),
+        { request: 'confirm phone number order', provider: l.via },
+      )
+      await stamp(env, {
+        entities: [{
+          entity: row.entity,
+          phone_line: { order_reported: now.toISOString() },
+        }],
+      })
+    } catch (error) {
+      if (
+        !(error instanceof Unsent) ||
+        now.getTime() - Date.parse(l.ordering!) >= 3_600_000
+      ) {
+        caught(error, {
+          request: 'confirm phone number order',
+          provider: l.via,
+        })
+      }
+    }
+  }
+}
 
 /** Point every number's texts here again, where its provider takes a URL
  * for them; how many it pointed. A number in the trash takes no texts. */
 export let pointed = async (env: Env): Promise<number> => {
   let n = 0
-  for (let row of await meta(env).query(q`.phone_line`)) {
+  for (let row of await lines(env)) {
+    if (row.trashed) continue
     let line = row.phone_line as Line
     let phone = await phoneNamed(env, line.via)
     let point = phone?.numbers?.().point
@@ -101,32 +148,17 @@ export let minutes = async (env: Env, now: Date): Promise<number> => {
   return charged
 }
 
-/** The ways a number's calls go: none in the trash, its own (`trashed`) or
- * its space's; none out once its space's budget is spent this month. */
-export let waysOf = (trashed: boolean, space: Space, now: Date): Ways => {
-  let open = !trashed && !space.trashed
-  return { in: open, out: open && left(space, now) > 0 }
-}
-
-/** Let `line`'s calls go only `ways`, at the provider it came through
- * (`via`). A provider whose numbers ring no softphone has nothing to allow,
- * and one too slow to answer is asked again by the next hour's `allowed`. */
-export let allow = async (
-  env: Env,
-  line: { number: string; via: string },
-  ways: Ways,
-): Promise<void> => {
-  let set = (await phoneNamed(env, line.via))?.numbers?.().allow
-  await set?.(line.number, ways).catch((error) => {
-    if (!(error instanceof Unsent)) throw error
-  })
-}
-
 /** Let every number's calls go only the ways its space allows at `now`. */
 export let allowed = async (env: Env, now: Date): Promise<void> => {
   for (let row of await lines(env)) {
     let line = row.phone_line as Line
     let space = await spaceNow(env, idOf(line.space))
-    await allow(env, line, waysOf(!!row.trashed, space, now))
+    await syncVoice(
+      env,
+      { ...line, eid: row.entity.eid, space: space.eid },
+      voiceOf(!!row.trashed, space, now),
+    ).catch((e) =>
+      caught(e, { request: 'apply phone call policy', space: space.eid })
+    )
   }
 }

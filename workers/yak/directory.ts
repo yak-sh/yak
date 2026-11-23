@@ -605,6 +605,8 @@ export type PhoneLine = {
   voice: boolean
   /** the 10DLC campaign its texts to many are registered under */
   campaign: string | null
+  legacySeat?: string | null
+  ordering?: string | null
   trashed: Trashed | null
 }
 
@@ -942,6 +944,9 @@ export type Row = MeteredRow & {
     voice?: boolean | null
     campaign?: string | null
     called?: string | null
+    legacy_seat?: string | null
+    ordering?: string | null
+    order_reported?: string | null
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
@@ -1462,6 +1467,8 @@ let lineOf = (r: Row): PhoneLine => {
     sms: l.sms ?? true,
     voice: l.voice ?? true,
     campaign: l.campaign ?? null,
+    legacySeat: l.legacy_seat,
+    ordering: l.ordering,
     trashed: trashedOf(r),
   }
 }

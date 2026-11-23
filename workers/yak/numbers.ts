@@ -23,6 +23,7 @@
 // space that is erased releases every number it holds (erase.ts).
 import { type Numbers, type Offer, shown, type TollFree } from '@yaks/phone'
 import { numberPrice, uses } from '@yaks/platform/numbers'
+import { manageAt } from '@yaks/platform/routes'
 import { ModelError } from '@yaks/model'
 import { Unsent } from '@yaks/host/senders'
 import { next } from '@yaks/wake'
@@ -36,7 +37,7 @@ import {
 } from './directory.ts'
 import { requested } from './confirm.ts'
 import type { Env } from './env.ts'
-import { onHold } from './model-spend.ts'
+import { reserved, settled } from './model-spend.ts'
 import { phoneNamed, phones } from './phones.ts'
 import { callbackOf } from './number-door.ts'
 import {
@@ -52,6 +53,8 @@ import {
 } from './tool.ts'
 import { type Row } from './tool-words.ts'
 import { binnedNumber, trashedNumber } from './number-trash.ts'
+import { searched, slowPhone } from './number-search.ts'
+import { legacySeat, ownerSeats } from './number-voice.ts'
 export { heldNumber, trashedNumber } from './number-trash.ts'
 
 /** Who files a space's toll-free verification for it: the platform, as the
@@ -99,10 +102,36 @@ let numbersOf = async (env: Env, via: string): Promise<Numbers> => {
   return numbers
 }
 
+/** Settle one order once the carrier confirms it, even after a restart. */
+export let purchaseConfirmed = async (
+  env: Env,
+  { eid, upfront, monthly }: Pick<PhoneLine, 'eid' | 'upfront' | 'monthly'>,
+  tracked: boolean,
+) => {
+  await settled(env, eid, upfront + monthly)
+  if (!tracked) return
+  await stamp(env, {
+    entities: [{
+      entity: { eid },
+      phone_line: { ordering: null, order_reported: null },
+    }],
+  })
+}
+
 /** A number given back to the provider it was bought through, and its row
  * buried: it costs nothing from then on. */
 export let released = async (env: Env, line: PhoneLine) => {
-  await (await numbersOf(env, line.via)).release(line.number)
+  let carrier = await numbersOf(env, line.via)
+  if (line.ordering) {
+    if (!await carrier.ordered?.(line.number)) {
+      throw refuse(
+        'unavailable',
+        'The phone company is still confirming this order.',
+      )
+    }
+    await settled(env, line.eid, line.upfront + line.monthly)
+  }
+  await carrier.release(line.number)
   await unworn(env, directoryOf(env.STORE), line.number)
   await stamp(env, { entities: [{ entity: { eid: line.eid }, tombstone: {} }] })
 }
@@ -121,6 +150,12 @@ let heldBy = async (ctx: Ctx, space: Space, args: Args, trash = false) => {
     throw refuse(
       'conflict',
       `${number} is in the trash; restore it on the manage page first`,
+    )
+  }
+  if (line.ordering && !trash) {
+    throw refuse(
+      'unavailable',
+      'The phone company is still confirming this order.',
     )
   }
   return line
@@ -234,11 +269,10 @@ let signIn = async (ctx: Ctx, args: Args) => {
       `${shown(line.number)} takes no calls on a softphone of its own`,
     )
   }
-  let { server, user, password } = await login(line.number)
+  let url = new URL(manageAt(space.slug, 'settings', ctx.env))
+  url.searchParams.set('softphone', line.eid)
   return {
-    text: `A softphone (SIP) takes calls to ${shown(line.number)} and calls ` +
-      `out as it, signed in at ${server} as ${user} with password ` +
-      `${password}. Keep the password private.`,
+    text: `[Open your softphone sign-in for ${shown(line.number)}](${url}).`,
     space,
   }
 }
@@ -275,24 +309,19 @@ export let numberTools: Row[] = [
       if (args.city != null && args.state == null) {
         throw refuse('arguments', 'Name the state the city is in (state).')
       }
-      let { numbers } = await sellerOf(
+      let { numbers, via } = await sellerOf(
         ctx.env,
         tollFree ? 'toll_free' : 'local',
       )
-      let offers = (await numbers.find({
-        tollFree,
-        area: maybe('area'),
-        region: maybe('state')?.toUpperCase(),
-        city: maybe('city'),
-        contains: maybe('contains'),
-        limit: Math.min(Number(args.limit ?? 5) || 5, 20),
-      }).catch((error) => {
-        if (!(error instanceof Unsent)) throw error
-        throw refuse(
-          'unavailable',
-          'The phone company is slow to answer right now. Try again in a minute.',
-        )
-      })).map(priceOf)
+      let offers = (await searched(ctx.env, via, () =>
+        numbers.find({
+          tollFree,
+          area: maybe('area'),
+          region: maybe('state')?.toUpperCase(),
+          city: maybe('city'),
+          contains: maybe('contains'),
+          limit: Math.min(Number(args.limit ?? 5) || 5, 20),
+        }))).map(priceOf)
       if (!offers.length) {
         return { text: 'No number on offer matches that.', space }
       }
@@ -326,7 +355,27 @@ export let numberTools: Row[] = [
         ctx.env,
         free(number) ? 'toll_free' : 'local',
       )
-      let [found] = await numbers.find({ number, tollFree: free(number) })
+      let pending = (await ctx.dir.lines(space)).find((l) =>
+        l.number == number && l.ordering
+      )
+      if (pending) {
+        let confirmed = await numbers.ordered?.(number).catch((e) => {
+          if (e instanceof Unsent) return false
+          throw e
+        })
+        if (confirmed) await purchaseConfirmed(ctx.env, pending, true)
+        return {
+          text: confirmed
+            ? `${shown(number)} is now held for ${space.slug}.`
+            : `The phone company is still confirming ${shown(number)}.`,
+          space,
+        }
+      }
+      let [found] = await searched(
+        ctx.env,
+        via,
+        () => numbers.find({ number, tollFree: free(number) }),
+      )
       let offer = found && priceOf(found)
       if (!offer) {
         // Its neighbours on offer, by its area code, to choose from instead.
@@ -352,6 +401,7 @@ export let numberTools: Row[] = [
       let eid = crypto.randomUUID()
       let now = new Date()
       let every = monthly(now)
+      let legacy = legacySeat(await ctx.dir.read(ownerSeats(space.eid)))
       await stamp(ctx.env, {
         entities: [{
           entity: { eid },
@@ -364,6 +414,7 @@ export let numberTools: Row[] = [
             at: now.toISOString(),
             sms: offer.sms,
             voice: offer.voice,
+            legacy_seat: legacy,
           },
           wake: {
             every,
@@ -373,39 +424,57 @@ export let numberTools: Row[] = [
         }],
       })
       let cost = offer.upfront + offer.monthly
+      let release: (() => Promise<boolean>) | undefined
+      let bought: Awaited<ReturnType<Numbers['buy']>>
       try {
-        let bought = await onHold(
+        let hold = await reserved(
           ctx.env,
           space,
-          cost,
-          'texts',
-          async (spent) => {
-            let it = await numbers.buy(number)
-            spent(cost)
-            return it
-          },
+          (left) => cost <= left ? { dollars: cost } : null,
+          eid,
+          { what: 'texts' },
         )
-        return {
-          text:
-            `Bought ${shown(number)} for ${space.slug}: ${priced(offer)}, ` +
-            `${dollars(cost)} of it from this month's budget.` +
-            (bought.status == 'pending'
-              ? ' The provider is still putting it on the account.'
-              : '') +
-            (free(number)
-              ? ' Carriers carry its texts once its toll-free verification ' +
-                'is approved: number_verify files it.'
-              : ` It is approved for ${
-                uses({ ...offer, campaign: null }).join(' and ')
-              }; texts to many people wait for a registered 10DLC campaign.`) +
-            ` number_assign puts it on ${space.slug} or one of its apps.`,
-          space,
+        release = hold.release
+        if (numbers.ordered) {
+          await stamp(ctx.env, {
+            entities: [{
+              entity: { eid },
+              phone_line: { ordering: now.toISOString() },
+            }],
+          })
         }
+        bought = await numbers.buy(number)
       } catch (e) {
+        await release?.()
         await stamp(ctx.env, { entities: [{ entity: { eid }, tombstone: {} }] })
         throw e instanceof ModelError && e.code == 'limit'
           ? refuse('limit', e.message)
+          : e instanceof Unsent
+          ? slowPhone()
           : e
+      }
+      if (bought.status == 'pending' && numbers.ordered) {
+        return {
+          space,
+          text: `The phone company is still confirming ${shown(number)}. ` +
+            `${dollars(cost)} is reserved from this month's budget.`,
+        }
+      }
+      await purchaseConfirmed(ctx.env, { ...offer, eid }, !!numbers.ordered)
+      return {
+        text: `Bought ${shown(number)} for ${space.slug}: ${priced(offer)}, ` +
+          `${dollars(cost)} of it from this month's budget.` +
+          (bought.status == 'pending'
+            ? ' The provider is still putting it on the account.'
+            : '') +
+          (free(number)
+            ? ' Carriers carry its texts once its toll-free verification ' +
+              'is approved: number_verify files it.'
+            : ` It is approved for ${
+              uses({ ...offer, campaign: null }).join(' and ')
+            }; texts to many people wait for a registered 10DLC campaign.`) +
+          ` number_assign puts it on ${space.slug} or one of its apps.`,
+        space,
       }
     },
   },

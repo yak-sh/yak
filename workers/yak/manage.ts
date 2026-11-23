@@ -415,6 +415,12 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   if (space.trashed) {
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
+  let softphone = url.searchParams.get('softphone')
+  if (softphone && view == 'settings') {
+    if (role != 'owner') return nothingHere(env)
+    let { numberLogin } = await import('./number-login.ts')
+    return numberLogin(req, env, dir, space, person, softphone)
+  }
   if (req.method == 'POST') return saved(req, env, dir, space, who, view)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
   if (view == 'connections') {

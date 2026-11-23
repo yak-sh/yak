@@ -68,5 +68,6 @@ export {
   shelf,
   type TollFree,
   type Verification,
+  type Voice,
   type Ways,
 } from './numbers.ts'

@@ -40,7 +40,10 @@ export let jobs: Record<string, Job> = {
       if (n) console.log(`yak-meter: ${n} expired model holds settled`)
       let { metered } = await import('./usage.ts')
       await metered(env, now)
-      let { allowed, minutes, pointed } = await import('./number-upkeep.ts')
+      let { allowed, minutes, orders, pointed } = await import(
+        './number-upkeep.ts'
+      )
+      await orders(env, now)
       await minutes(env, now)
       await allowed(env, now)
       await pointed(env)
@@ -50,8 +53,8 @@ export let jobs: Record<string, Job> = {
   // its texts. Never refused: the provider bills the platform for the month
   // whether or not the budget has room, so the spend counts all the same.
   lines: async (env, row) => {
-    let { space, monthly } = props(row.phone_line)
-    if (!monthly) return
+    let { space, monthly, ordering } = props(row.phone_line)
+    if (!monthly || ordering) return
     await stamp(env, {
       entities: [{
         entity: { eid: idOf(space as string) },

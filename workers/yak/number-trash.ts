@@ -7,7 +7,7 @@ import { type Directory, type PhoneLine } from './directory.ts'
 import type { Env } from './env.ts'
 import { trashNumber, untrashNumber } from './erase.ts'
 import { spaceNow } from './model-spend.ts'
-import { allow, waysOf } from './number-upkeep.ts'
+import { syncVoice, voiceOf } from './number-voice.ts'
 import { dollars, released } from './numbers.ts'
 import type { Who } from './session.ts'
 
@@ -20,7 +20,7 @@ export let binnedNumber = async (
   who: Who,
 ) => {
   await trashNumber(dir, line, who)
-  await allow(env, line, { in: false, out: false })
+  await syncVoice(env, line, { in: false, out: false })
   return `${shown(line.number)} is in the trash. It stops taking ` +
     `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +
@@ -28,7 +28,7 @@ export let binnedNumber = async (
 }
 
 /** Bring a number back from the trash, its calls going again the ways its
- * space allows (number-upkeep.ts `waysOf`). */
+ * space allows (number-voice.ts `voiceOf`). */
 export let restoredNumber = async (
   env: Env,
   dir: Directory,
@@ -37,7 +37,7 @@ export let restoredNumber = async (
 ) => {
   await untrashNumber(dir, line, who)
   let space = await spaceNow(env, line.space)
-  await allow(env, line, waysOf(false, space, new Date()))
+  await syncVoice(env, line, voiceOf(false, space, new Date()))
 }
 
 // Keep the number door carried by existing letters: its press puts a number
@@ -71,7 +71,12 @@ export let trashedNumber: Kind<PhoneLine> = {
     `It is in the trash and can be restored. It still costs ${
       dollars(l.monthly)
     } a month.`,
-  stop: (l) => l.trashed ? '' : 'Release the number to the trash first.',
+  stop: (l) =>
+    l.ordering
+      ? 'The phone company is still confirming this order.'
+      : l.trashed
+      ? ''
+      : 'Release the number to the trash first.',
   lines: (_space, l) => [
     `${
       shown(l.number)
