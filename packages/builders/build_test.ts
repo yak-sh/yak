@@ -13,7 +13,7 @@ import { Refused } from '@yaks/graph'
 import { keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
-import { CallError, toolEid } from '@yaks/tools'
+import { CallError, type Runner, runner, toolEid } from '@yaks/tools'
 import { marksDoc } from '@yaks/kernel/vocab'
 import { ids, noon, shop } from './testing.ts'
 import {
@@ -356,6 +356,18 @@ test('immediate builders matching one write each make their own build', async ()
   )
   assertEquals(new Set(made).size, 3)
   assertEquals((await rows(g, '.build')).length, 3)
+})
+
+test('a builder naming a tool nothing has called yet stands its row up', async () => {
+  // A host registers its plugins' tools, and a tool's row is written when
+  // something first calls it (a local stack's plugin tool).
+  let late: Runner | undefined
+  let { g, failed } = await shop({ stand: () => late!.ensure(['code']) })
+  late = runner(g, { tools: [code()] })
+  await g.apply([source('a'), builder()])
+  assertEquals(failed, [])
+  assertEquals(comp(await one(g, toolEid('code')), 'tool')?.name, 'code')
+  assert(await buildFor(g, ids.builder, ['a']))
 })
 
 test('nested collection changes the key, retains the build and adds a take', async () => {

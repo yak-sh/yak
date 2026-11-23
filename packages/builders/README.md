@@ -290,6 +290,11 @@ an earlier stage. A loop of requirements is drawn as a last stage. A chain needs
 no depth of its own: a runner writes each answer as a request of its own
 (@yaks/tools), so an effect pool's generation bound starts again at each step.
 
+On a yak stack a step's tool is any tool a plugin registers, a `code()` tool
+included. A tool's row is written when something first calls it, so a builder
+that names one nothing has called yet writes that row as it opens, through the
+host's runner.
+
 ## Exports
 
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`,

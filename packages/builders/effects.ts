@@ -8,7 +8,7 @@
 // answers that removal.
 
 import { line } from '@yaks/query'
-import type { Bundle, Comp, ReadTx } from '@yaks/graph'
+import type { Bundle, Comp, NamedTool, ReadTx } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
@@ -19,6 +19,7 @@ import { BUILD, clock, due, type Options, reconcile } from './build.ts'
 import { answer, Malformed, spent } from './answer.ts'
 import { adapted, modelToolEid } from './model.ts'
 import { preserve } from './preserve.ts'
+import { type Runner, toolEid } from '@yaks/tools'
 
 let str = (c: Comp | undefined, prop: string): string =>
   c?.[prop] == null ? '' : String(c[prop])
@@ -42,6 +43,10 @@ let settle = async (
       builder = fresh
     }
     if (builder.staged) return
+    // A tool a host registers has a row once something calls it: a builder
+    // may name it first (a local stack's plugin tool).
+    let to = str(comp(builder, 'builder'), 'to')
+    if (to && o.stand && !(await tx.get([to]))[0]?.tool) await o.stand(to)
     if (
       scheduled && !builder.archived &&
       !due(comp(builder, 'builder'), (o.now ?? clock)())
@@ -195,7 +200,7 @@ export let watches = (o: Options): Handlers => ({
 })
 
 export let effects = (
-  host: { vocab: Vocab },
+  host: { vocab: Vocab; tools?: NamedTool[]; runner?: Runner },
   options: Omit<Options, 'vocab'> = {},
 ): Handlers => {
   if (options.rest && next(options.rest, Date.now()) == null) {
@@ -204,5 +209,14 @@ export let effects = (
     )
     return {}
   }
-  return watches({ ...options, vocab: host.vocab })
+  // The host builds its runner after its effects: asked for when needed.
+  let stand = 'runner' in host
+    ? (to: string) =>
+      host.runner!.ensure(
+        (host.tools ?? []).filter((t) => toolEid(t.name) == to).map((t) =>
+          t.name
+        ),
+      )
+    : undefined
+  return watches({ stand, ...options, vocab: host.vocab })
 }

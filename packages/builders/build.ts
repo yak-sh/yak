@@ -41,6 +41,9 @@ export type Options = {
   tools?: Code[]
   /** hears what an in-place answer threw, but a refusal */
   report?: (err: unknown) => void
+  /** writes the row of a tool this process registers (@yaks/tools runner
+   * `ensure`), for a builder naming one nothing has called yet */
+  stand?: (tool: Eid) => Promise<unknown>
 }
 
 export type Plan = {
