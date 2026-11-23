@@ -72,8 +72,14 @@ test('a store wakes without its schema under the code that fitted it, and follow
     ]
   ) ok(!stands(fit, moved))
   ok(!stands(null, fitOf('a', schemaShape.key, null)))
-  ok(!stands(null, fitOf(null, schemaShape.key, null)))
-  equal(fitOf(null, schemaShape.key, 'stamp'), null)
+  // A runtime with no version is its process, which fitted what it holds.
+  ok(
+    stands(
+      fitOf(null, schemaShape.key, 'stamp'),
+      fitOf(null, schemaShape.key, 'stamp'),
+    ),
+  )
+  ok(!stands(fitOf(null, schemaShape.key, 'stamp'), fit))
 })
 let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
 test('the old schema refuses a word it has not followed', () =>

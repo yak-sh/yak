@@ -192,17 +192,19 @@ export let KV: CreateTable = {
   ],
 }
 
+// A runtime that names no version (a test, a local run) is named by its
+// process: the code it runs cannot change while it lives.
+let PROCESS = `process ${crypto.randomUUID()}`
+
 // What a schema pass is remembered by: the Worker version it ran under, the
 // words it fitted and the stamp it left. A wake finding the same three renders
-// no schema; one finding any moved asks the print again. A runtime that names
-// no version remembers nothing.
+// no schema; one finding any moved asks the print again.
 export let fitOf = (
   version: string | null,
   key: string,
   schema: string | null,
-): string | null => version && `${version} ${key} ${schema ?? ''}`
-export let stands = (held: string | null, fit: string | null): boolean =>
-  !!fit && held == fit
+): string => `${version ?? PROCESS} ${key} ${schema ?? ''}`
+export let stands = (held: string | null, fit: string): boolean => held == fit
 
 type Read = (key: string) => string | null
 type Write = (key: string, value: string) => void
@@ -377,7 +379,7 @@ export let fitSchema = (
     watchEmbedding(statements(driver), texts(shape.vocab, read))
   }
   let fit = fitted()
-  if (!left.length && fit) write('fitted', fit)
+  if (!left.length) write('fitted', fit)
   if (report) {
     for (let e of left) {
       report(e, { request: 'schema fit', store: read('name') ?? '' })

@@ -1524,7 +1524,7 @@ export class Store extends Durable {
     )))
   }
 
-  #fit(shape: Shape): string | null {
+  #fit(shape: Shape): string {
     return fitOf(this.#version(), shape.key, this.#get('schema'))
   }
 
