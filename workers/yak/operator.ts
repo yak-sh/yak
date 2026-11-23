@@ -1699,9 +1699,10 @@ let leftBy = async (
 
 // The channels whose run nobody watches as it goes, by what the run was
 // doing, said to its person: none of it reaches them unless the run tells
-// them (notification_send), or could not finish (`stoppedNotice`).
+// them (notification_send), or could not finish (`stoppedNotice`). A break's
+// fix is not among them: one that could not finish is yaks.app's to fix, and
+// its tracker already has it, so it never reaches the person.
 let UNWATCHED: Record<string, (app: string) => string> = {
-  error: (app) => `fixing an error in ${app}`,
   wake: () => 'doing something you set me to do later',
   subscription: () => 'looking into a change I watch for you',
   escalated: () => 'handling a reply someone sent you',
@@ -2411,7 +2412,8 @@ export let operating = (
     // subscription that saw a change, what another conversation raised)
     // tells its person what it means them to read itself, with
     // notification_send; its last words stay in its chat. One that could
-    // not finish is told for it, in plain words.
+    // not finish is told for it, in plain words, except a break's fix
+    // (`UNWATCHED`).
     let unwatched = reply.broke && space
       ? requests.filter((r) =>
         UNWATCHED[String(comp(r, 'operator_request')?.channel)]

@@ -504,10 +504,15 @@ let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
           `If the app's own files are wrong, fix them, deploy, and say in a ` +
           `line or two what you changed. If yaks.app itself is at fault, ` +
           `report it with platform_bug, giving error ${idOf(hit)}, and ` +
-          `leave the app as it is. What you say here stays in this chat; ` +
-          `then tell the person what came of it with notification_send, ` +
-          `about the app, in plain words for someone who is not a ` +
-          `programmer and has not read this chat.`,
+          `leave the app as it is: yaks.app's people and agents own it ` +
+          `from there. What you say here stays in this chat, beside the ` +
+          `break on the dashboard, and that is where an error's story ` +
+          `ends: tell the person nothing of it, neither what you fixed nor ` +
+          `what you reported. Only when they must do something themselves ` +
+          `(renew a connection, choose between fixes: a decision_new), or ` +
+          `the app stays broken for something they were doing, tell them ` +
+          `once with notification_send, about the app: one line in plain ` +
+          `words, and never again for the same trouble.`,
         request: { channel: 'error', app: app.eid },
         options: { id },
       }),
