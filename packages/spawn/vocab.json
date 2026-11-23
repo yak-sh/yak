@@ -161,7 +161,7 @@
       "noun": "session",
       "verb": "take",
       "title": "Take the next session asked of a machine",
-      "description": "Take the oldest session asked of one of your machines' providers that has not run yet, or whose run ended and was asked to carry on, and mark it taken. Returns what to run as JSON in content.body (session, name, cli, instruction, and model, effort and thread where set), or an empty body when nothing is asked. A machine's runner calls it; `session_log` hands back the run.",
+      "description": "Take the oldest session asked of one of your machines' providers that has not run yet, or whose run ended and was asked to carry on, and mark it taken. Returns what to run as a JSON code block in content.body (session, name, cli, instruction, and model, effort and thread where set), or an empty body when nothing is asked. A machine's runner calls it; `session_log` hands back the run.",
       "input": {
         "machine": {
           "type": "string",

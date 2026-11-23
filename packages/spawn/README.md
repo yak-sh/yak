@@ -367,9 +367,10 @@ three tools as the machine's owner:
   The machine's eid is derived from its owner and its name, so a caller names
   only machines of their own.
 - `session_take {machine}` answers the oldest session asked of the machine that
-  has not run, or whose run ended and was asked to carry on, as JSON: the
-  session, the CLI, the instruction, and the model, effort and thread where set.
-  It marks the session taken (`process{command}`).
+  has not run, or whose run ended and was asked to carry on, as a JSON code
+  block, which a store keeps literal for its reader, eids and all: the session,
+  the CLI, the instruction, and the model, effort and thread where set. It marks
+  the session taken (`process{command}`).
 - `session_log {machine, session, lines, from, pid, exit}` reads the CLI's
   output lines into the transcript as the importer reads a log (@yaks/session
   `imported`), without a file. With `exit`, it ends the run as a host that runs

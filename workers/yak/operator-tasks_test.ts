@@ -12,6 +12,7 @@ import { durable } from '../../packages/durable-object/testing.ts'
 import { askOf, waiting } from './operator-approvals.ts'
 import { seenBy } from './operator-access.ts'
 import { working } from './operator-tasks.ts'
+import { handedOf } from '@yaks/spawn/machines'
 import { invokePackage, packageTools } from './package-tools.ts'
 import { owned } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -88,7 +89,12 @@ test("a session asked of a developer's machine runs there and reports on its tas
   equal(typeof machine.providers.claude, 'string')
   // Named as a person types them: the task by its id, the provider by name.
   await work('session_spawn', { task: id(made), provider: 'claude on mbp' })
-  let job = JSON.parse(body(await work('session_take', { machine: 'mbp' })))
+  // Read as yaks.app hands it to the machine, its prose drawn for the reader:
+  // the session still its eid, which the CLI names its thread with.
+  let job = handedOf(
+    body(await store.readable(await work('session_take', { machine: 'mbp' }))),
+  )!
+  equal(/^[0-9a-f-]{36}$/.test(job.session), true)
   equal(job.cli, 'claude')
   equal(body(await work('session_take', { machine: 'mbp' })), '')
   let said = (text: string) =>

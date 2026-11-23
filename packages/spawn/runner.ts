@@ -17,7 +17,7 @@
 import { command } from '@yaks/process/command'
 import * as disk from '@yaks/file/io'
 import { adapters } from './adapters.ts'
-import type { Handed } from './machines.ts'
+import { type Handed, handedOf } from './machines.ts'
 
 /** A CLI started for a run: its pid, the lines it prints, and how it ends
  * (its exit code, or null when it was killed by a signal). */
@@ -156,7 +156,7 @@ export let run = async (r: Runner): Promise<void> => {
     let job: Handed | undefined
     try {
       let body = await r.call('session_take', { machine: r.machine })
-      job = body ? JSON.parse(body) as Handed : undefined
+      job = handedOf(body)
     } catch (error) {
       r.report?.(error, 'taking a session')
     }

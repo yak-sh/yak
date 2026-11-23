@@ -87,6 +87,29 @@ export type Handed =
   }
 
 /**
+ * What `session_take` answers: the job as a JSON code block. A store draws
+ * the eids its prose names short for its reader, and keeps code literal, so
+ * the session arrives as the eid its CLI is told to name its thread with.
+ *
+ * ```ts
+ * import { handedOf, handing } from '@yaks/spawn/machines'
+ * import { equal } from '@yaks/testing'
+ *
+ * let job = { session: 'e1', name: 'S-1', cli: 'claude', instruction: 'go' }
+ * equal(handedOf(handing(job)), job)
+ * equal(handedOf(''), undefined)
+ * ```
+ */
+export let handing = (job: Handed): string =>
+  '```json\n' + JSON.stringify(job) + '\n```'
+
+/** The job a `session_take` answer hands over, or undefined for none. */
+export let handedOf = (body: string): Handed | undefined => {
+  let json = body.trim().replace(/^```json\n/, '').replace(/\n```$/, '')
+  return json ? JSON.parse(json) as Handed : undefined
+}
+
+/**
  * Register `name` as a machine of `person`, lending `clis`: the machine row
  * and a provider for each CLI. Registering again changes nothing; a CLI it no
  * longer lends keeps its provider, which nothing new is asked of while the
@@ -366,7 +389,7 @@ export let runs = (): Runs => ({
     let actor = caller(call)
     let machine = machineOf(actor.by, named(argsOf(call)))
     let handed = await take(graph, machine, actor)
-    return [said(call, handed ? JSON.stringify(handed) : '')]
+    return [said(call, handed ? handing(handed) : '')]
   },
 
   session_log: async (call, graph) => {
