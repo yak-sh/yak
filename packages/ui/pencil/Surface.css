@@ -77,6 +77,17 @@
     --edge-drawing: var(--edge-line);
     --outline-filter: none;
   }
+
+  /* The drawing's corners bend only as far as this skin's 4px radius. A
+     part rounder than that (a phone, a pill) marks itself Surface-round
+     and draws its outline through the filter, as a browser without
+     mask-border does, so its line follows its own corners. */
+  .Surface-round {
+    --edge-room: 0px;
+    --edge-style: initial;
+    --pencil-drawing: none;
+    --outline-filter: var(--edge-filter);
+  }
 }
 
 /* In a Shell the panes scroll apart, so the grain cannot lie over the page:

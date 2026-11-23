@@ -32,7 +32,7 @@
 .Home_MoonSlot {
   position: absolute;
   inset-block: 0;
-  inset-inline-end: 2.1rem;
+  inset-inline-start: 50%;
 }
 
 .Home_Desk {
@@ -1073,10 +1073,6 @@
     grid-template-columns: minmax(0, 1fr) var(--phone-width);
     grid-template-areas: 'hero demo' 'contents demo' 'features demo';
     column-gap: var(--story-gap);
-  }
-
-  .Home_MoonSlot {
-    inset-inline-end: max(-3.75rem, calc(2.65rem - 11vw));
   }
 
   .Home_Story .Home_Words {

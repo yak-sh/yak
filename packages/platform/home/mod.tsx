@@ -53,7 +53,7 @@ let Ask = (
         {...!main && copy.attr('aria-label', 'home.story.ask')}
       />
       <Button
-        class='Home_Build'
+        class='Home_Build Surface-round'
         mod='go'
         type='submit'
         data-cta={cta}
