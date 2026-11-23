@@ -13,17 +13,15 @@ import type { Suite } from './test-budget.ts'
 import type { Survey } from '@yaks/testing/deps'
 import type { Examples } from '@yaks/testing/examples'
 import type { Prepared } from './check-types.ts'
+import { localCheck, onRunner } from './check-work.ts'
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
 export let RUN = 'TASKS_TEST_RUN'
 
-/** A run elsewhere is capped at half again its measured peak, about 4 GB: the
- * driver, two type-check programs and a test runtime (T-1463). With no swap,
- * a run past it is ended rather than slowed. */
-export let LIMITS = ['MemoryMax=6G', 'MemorySwapMax=0']
-
-if (import.meta.main && Deno.args[0] !== '--bulk') {
+let reportOnly = Deno.args.some((a) => a.startsWith('--from='))
+let driver = import.meta.main && Deno.args[0] !== '--bulk'
+if (driver) {
   let outer = Deno.env.get(RUN)
   if (outer) {
     console.error(
@@ -49,28 +47,18 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   // The files its change touches are formatted here, in the checkout that
   // keeps them, as a run here formats them. A report of past results reads
   // this checkout, and stays here.
-  if (!Deno.args.some((a) => a.startsWith('--from='))) {
-    let { elsewhere } = await import('./elsewhere.ts')
-    let { base, changes } = await import('./test-changes.ts')
-    let at: Promise<string> | undefined
-    let from = () => at ??= base()
-    let code = await elsewhere(['deno', 'task', 'test', ...Deno.args], {
-      from,
-      // The transferred patch is applied to a detached worktree at its base.
-      env: {
-        TASKS_TEST_BASE: 'HEAD',
-        YAK_MACHINE: '',
-      },
-      before: async () => {
-        if (Deno.args.includes('--all')) return
-        let { format } = await import('./test-checks.ts')
-        await format(await changes({ at: await from() }))
-      },
-      limits: LIMITS,
+  if (!reportOnly) {
+    let code = await onRunner('test', Deno.args, async (at) => {
+      if (Deno.args.includes('--all')) return
+      let { changes } = await import('./test-changes.ts')
+      let { format } = await import('./test-checks.ts')
+      await format(await changes({ at }))
     })
     if (code != undefined) Deno.exit(code)
   }
 }
+
+using _checkCPU = driver && !reportOnly ? await localCheck() : undefined
 
 let { relative } = await import('node:path')
 let { fileURLToPath } = await import('node:url')

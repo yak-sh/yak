@@ -39,6 +39,7 @@ import { type Boundary, platformConfig } from './check-platform.ts'
 import { incremental } from './check-incremental.ts'
 import { compiler } from './check-compiler.ts'
 import { diagnostic, unavailable } from './check-imports.ts'
+import { localCheck, onRunner } from './check-work.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -920,6 +921,9 @@ export let types = async (
 }
 
 if (import.meta.main) {
+  let code = await onRunner('check:types', Deno.args)
+  if (code != undefined) Deno.exit(code)
+  using _checkCPU = await localCheck()
   let all = Deno.args.includes('--all')
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
   let on = await hosts()
@@ -932,6 +936,10 @@ if (import.meta.main) {
       undefined,
       all,
     )
-    : await types(paths.length ? paths : await changes())
+    : await types(
+      paths.length
+        ? paths
+        : await changes({ at: Deno.env.get('TASKS_TEST_BASE') }),
+    )
   if (!ok) Deno.exit(1)
 }

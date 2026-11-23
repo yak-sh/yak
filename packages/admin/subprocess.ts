@@ -73,13 +73,22 @@ export let output = async (
   command: string,
   options: CommandOptions,
   stopping: AbortSignal,
+  input?: Uint8Array<ArrayBuffer>,
 ): Promise<CommandOutput> => {
-  let run = spawn(command, options, stopping)
+  let run = spawn(
+    command,
+    input ? { ...options, stdin: 'piped' } : options,
+    stopping,
+  )
   let finished = false
   try {
-    let result = await run.child.output()
+    let sent = input &&
+      new Response(input).body!.pipeTo(run.child.stdin)
+        .then(() => undefined, (error: unknown) => ({ error }))
+    let [result, failed] = await Promise.all([run.child.output(), sent])
     finished = true
     if (run.stopped() || wasInterrupted(result)) throw interrupted()
+    if (result.success && failed) throw failed.error
     return result
   } finally {
     if (!finished) run.stop()

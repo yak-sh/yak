@@ -35,14 +35,8 @@
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
 import { rpc, zone } from './api.ts'
-import {
-  type Carried,
-  type File,
-  fileOf,
-  homeOf,
-  push,
-  versions,
-} from './push.ts'
+import { type Carried, homeOf, push, versions } from './push.ts'
+import { blobs, filesAt } from './git-files.ts'
 import { onMain } from './landing.ts'
 import * as fs from '@yaks/file/io'
 import { output } from './subprocess.ts'
@@ -424,7 +418,7 @@ export let box = (
     },
     release: async (sha, to) => {
       let at = await account(host)(to.as ?? ADMIN)
-      let files = await filesAt(run, blob, sha, to.dir)
+      let files = await filesAt(run, blobs(dir, stopping), sha, to.dir)
       let key = JSON.stringify([zone(), at.address, 'main', to.space, to.app])
       return await push(rpc(at.bearer), files, to, {
         ...await versions(homeOf(host.config.db), key),
@@ -486,47 +480,6 @@ export let carrying = (to: Release, carried: Carried[]): string =>
   }, changed on yaks.app, into git\n\n` +
   'Its Operator or an edit on its page changed it on yaks.app, and no commit\n' +
   'had it. A release from git merged it in instead of pushing over it.'
-
-/** Every file under `dir` as commit `sha` holds it, the way push.ts `read`
- * reads a checkout: paths relative to `dir`, dotfiles left out, sorted, and a
- * link to a file read as that file. Pictures and fonts git does not keep are
- * absent, so the app keeps the copies it holds. */
-export let filesAt = async (
-  run: (args: string[]) => Promise<string>,
-  blob: (spec: string) => Promise<Uint8Array>,
-  sha: string,
-  dir: string,
-): Promise<File[]> => {
-  let listed = await run([
-    'ls-tree',
-    '-r',
-    '-z',
-    '--full-tree',
-    sha,
-    '--',
-    `${dir}/`,
-  ])
-  let files: File[] = []
-  for (let entry of listed.split('\0').filter(Boolean)) {
-    let [, mode, oid, path] = entry.match(/^(\d+) blob (\w+)\t(.+)$/s) ?? []
-    if (!path) continue
-    let rel = path.slice(dir.length + 1)
-    if (rel.split('/').some((part) => part.startsWith('.'))) continue
-    let bytes = await blob(oid)
-    if (mode == '120000') {
-      let target = posix.normalize(posix.join(
-        posix.dirname(path),
-        new TextDecoder().decode(bytes),
-      ))
-      let kind = await run(['cat-file', '-t', `${sha}:${target}`])
-        .catch(() => undefined)
-      if (kind != 'blob') continue
-      bytes = await blob(`${sha}:${target}`)
-    }
-    files.push(fileOf(rel, bytes))
-  }
-  return files.sort((a, b) => a.path < b.path ? -1 : 1)
-}
 
 let time = (c?: Comp) => c?.at ? Date.parse(String(c.at)) : undefined
 
