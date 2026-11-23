@@ -52,6 +52,11 @@ let point = async (call: Call, at: string, url?: string) => {
     ten(String(d.did ?? '')) == ten(at)
   )
   if (!did) throw new Error(`${at} is not a number on this voip.ms account`)
+  // voip.ms is slow to set texts, and a setting already in place needs no
+  // second asking.
+  let on = String(did.sms_enabled) == '1' &&
+    String(did.sms_url_callback_enabled) == '1'
+  if (url ? on && did.sms_url_callback == url : !on) return
   // setSMS sets every way a number's texts reach its owner at once, so
   // each is said again as the account has it; no url turns the callback off.
   let flag = (v: unknown) => String(v) == '1' ? '1' : '0'

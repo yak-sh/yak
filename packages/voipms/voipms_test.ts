@@ -267,3 +267,27 @@ test('a search voip.ms is slow to answer is asked once more, and a second slow a
   await refused
   assertEquals(twice.time.pending(), 0)
 })
+
+test("pointing a number's texts where they already go asks voip.ms nothing more", async () => {
+  let asked: string[] = []
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      asked.push(method)
+      return Promise.resolve(Response.json({
+        status: 'success',
+        dids: [{
+          did: '2695550100',
+          sms_enabled: '1',
+          sms_url_callback_enabled: '1',
+          sms_url_callback: 'https://host/voipms/t',
+        }],
+      }))
+    },
+  })
+  await shop.point!('+12695550100', 'https://host/voipms/t')
+  await shop.point!('+12695550100', 'https://host/voipms/other')
+  assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'setSMS'])
+})
