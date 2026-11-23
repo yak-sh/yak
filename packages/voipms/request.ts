@@ -50,6 +50,10 @@ export type Voipms = {
   number?: string
   /** the API's address (default {@link VOIPMS}.api) */
   api?: string
+  /** the only methods this client may ask for; none is any, which only
+   * the numbers our own account sells are reached with (./mod.ts
+   * `numbers`) */
+  methods?: string[]
   fetch?: typeof fetch
 }
 
@@ -59,14 +63,21 @@ export type Call = (method: string, params?: Params) => Promise<Said>
 
 // voip.ms's API, called as the account: each method a GET carrying its
 // username and API password, its answer's status read the same way for all.
+// Given `methods`, any other is never sent.
 export let requester = (
-  { user, key, api = VOIPMS.api, fetch: given }: Omit<Voipms, 'number'>,
+  { user, key, api = VOIPMS.api, methods, fetch: given }: Omit<
+    Voipms,
+    'number'
+  >,
 ) =>
 async (
   method: string,
   params: Params = {},
   signal?: AbortSignal,
 ): Promise<Said> => {
+  if (methods && !methods.includes(method)) {
+    throw new Error(`This voip.ms account cannot ask for ${method}`)
+  }
   let url = new URL(api)
   for (
     let [k, v] of Object.entries({

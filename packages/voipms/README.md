@@ -58,3 +58,16 @@ The phone's `own` (@yaks/phone `Own`) is how a person connects a voip.ms number
 of their own: the connection fields their sign-in email and API password are
 kept in (`username`, `password`), their `Account`, the callback's query and
 `called`.
+
+## Two clients
+
+`numbers()` is our own reseller account's client: it orders, cancels, routes and
+makes sub-accounts, and only the config's own credentials open it.
+`connected(options)` is a person's own account's client, the `own.account` a
+host opens with their credentials: an `Account` (`lines`, `from`, `point`,
+`send`) whose requests ask for only the `methods` the integration lists
+(@yaks/connections `voipms.json`: reading numbers, texts, and `setSMS`), and
+none when it lists none. It holds no way to cancel, release or reroute a number,
+so a number a person connected from their own account is never cancelled by
+yaks.app. Ending yaks.app's use of it puts back its SMS URL callback and asks
+voip.ms nothing else.

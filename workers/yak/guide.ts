@@ -448,7 +448,9 @@ number_release stops calls and texts and keeps the number recoverable. Its
 monthly price continues until the owner confirms returning it to the phone
 company. Restore it in the manage page's Trash tab to recover its assignment.
 Calling number_release for an already trashed number emails its owner the
-confirmation link for a permanent return.
+confirmation link for a permanent return. A number a person connected from their
+own account is never cancelled by yaks.app: number_release takes only numbers
+a space bought.
 
 Every file write keeps what it replaced (app_files op history and op restore),
 every deploy can be rolled back, and store_restore can put saved rows back to

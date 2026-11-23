@@ -15,5 +15,9 @@ export type Transport = {
   /** the kinds of number a provider that sells them sells here */
   sells?: ('local' | 'toll_free')[]
   api?: string
+  /** the only API methods a person's own account may be asked, as the
+   * integration they connected it through lists them (@yaks/connections
+   * `Integration.methods`) */
+  methods?: string[]
   fetch?: typeof fetch
 }

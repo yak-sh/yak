@@ -114,6 +114,10 @@ export type Integration = {
    * that only read though their method is not GET (`POST /freeBusy`, `*` for
    * one segment); none is reached at its first host */
   api?: { base: string; docs?: string }
+  /** the only API methods a connection through it may ask for, where the
+   * service names one in each request (voip.ms's `method`); none limits
+   * nothing */
+  methods?: string[]
   /** what a person gives to connect a pasted-key one, when it is more than
    * one key; none is one key */
   fields?: Field[]
@@ -282,6 +286,7 @@ let CARRIED = {
   broker: 1,
   hosts: 1,
   api: 1,
+  methods: 1,
   fields: 1,
   example: 1,
   signature: 1,

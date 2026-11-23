@@ -38,6 +38,7 @@ import {
   CONNECTION,
   credential,
   type Ctx as Connections,
+  known,
 } from '@yaks/connections'
 import {
   type Account,
@@ -76,7 +77,9 @@ export let owned = async (env: Env): Promise<Record<string, Own>> =>
   )
 
 /** The account a connection to `via` opens, read through its credential:
- * each field its provider's `own` names; null while one is missing. */
+ * each field its provider's `own` names; null while one is missing. It asks
+ * the provider for only the methods the integration lists, so a person's
+ * own number is never cancelled or rerouted from here. */
 let accountOf = async (
   c: Connections,
   own: Own,
@@ -92,6 +95,7 @@ let accountOf = async (
   return own.account({
     via,
     ...Object.fromEntries(fields.map(([setting], i) => [setting, read[i]])),
+    methods: (await known(c.graph.read, via))?.methods ?? [],
     ...(number ? { number } : {}),
   })
 }
@@ -269,15 +273,9 @@ export let pointed = async (
   connection: string,
   gone?: string,
 ) => {
-  let [line] = await meta(env).query(
-    q`.entity.eid=${connection}&.${CONNECTION}&*`,
-  )
-  if (!line) return
-  let via = String(comp(line, CONNECTION).integration ?? '')
-  let own = (await owned(env))[via]
-  if (!own) return
-  let account = await accountOf(ctxOf(env), own, via, connection)
-  if (!account) return
+  let open = await opening(env, connection)
+  if (!open) return
+  let { line, via, own, account } = open
   let used = await chosen(g, line)
   let inbound = new Set(used.filter((u) => u.inbound).map((u) => u.number))
   let legacy = String(comp(line, CONNECTION).account ?? '')
@@ -298,6 +296,50 @@ export let pointed = async (
       let callback = await callbackOf(env, own, via, connection, held.number)
       if (held.callback != callback) await account.point(held.number, callback)
     } else if (off.has(held.number) && ours) {
+      await account.point(held.number, kept.get(held.number)?.callback)
+    }
+  }
+}
+
+// A connection's row, the phone it connects a person's number through, and
+// the account its credential opens; undefined while any is missing.
+let opening = async (env: Env, connection: string) => {
+  let [line] = await meta(env).query(
+    q`.entity.eid=${connection}&.${CONNECTION}&*`,
+  )
+  if (!line) return undefined
+  let via = String(comp(line, CONNECTION).integration ?? '')
+  let own = (await owned(env))[via]
+  if (!own) return undefined
+  let account = await accountOf(ctxOf(env), own, via, connection)
+  return account ? { line, via, own, account } : undefined
+}
+
+/**
+ * Before connection `connection` ends: put back as it was the callback of
+ * each of its numbers pointed here. That is all ending yaks.app's use of a
+ * number a person connected does at their provider: it is theirs, and is
+ * never cancelled from here. A key the provider no longer takes leaves the
+ * callbacks as they are, since nothing here can reach them; voip.ms not
+ * answering throws, so the person tries again before their texts are lost.
+ */
+export let unlined = async (env: Env, connection: string) => {
+  let open = await opening(env, connection)
+  if (!open) return
+  let { via, account } = open
+  let kept = new Map(
+    (await numbersOf(env, connection)).map((n) => [n.number, n]),
+  )
+  let here = doorOf(env, via)
+  let lines
+  try {
+    lines = await account.lines()
+  } catch (error) {
+    if (error instanceof Denied) return
+    throw error
+  }
+  for (let held of lines) {
+    if (held.callback?.startsWith(here)) {
       await account.point(held.number, kept.get(held.number)?.callback)
     }
   }
@@ -557,7 +599,7 @@ export let phoneNumbers = (
   title: 'Their phone numbers',
   step: { doing: 'Reading their numbers…', done: 'Read their numbers' },
   description:
-    "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people.",
+    "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. A number they connected from their own account is never cancelled by yaks.app: nothing here can cancel, release or reroute it. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people.",
   parameters: {
     type: 'object',
     properties: {

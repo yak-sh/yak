@@ -42,7 +42,9 @@ export type Account = Sender & {
 export type Own = {
   /** the field of the person's connection each setting is read from */
   fields: Partial<Record<keyof Transport, string>>
-  /** their account, opened with those settings */
+  /** their account, opened with those settings and the methods its
+   * integration lists, the only ones it asks for: it reads, texts and
+   * points, and has no way to give a number back or reroute its calls */
   account: (options: Transport) => Account
   /** the query a callback URL asks the provider to fill in, appended to
    * the host's own address */

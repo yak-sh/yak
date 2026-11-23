@@ -7,6 +7,14 @@
   "hosts": [
     "voip.ms"
   ],
+  "methods": [
+    "getDIDsInfo",
+    "sendSMS",
+    "sendMMS",
+    "getSMS",
+    "getMMS",
+    "setSMS"
+  ],
   "fields": [
     {
       "name": "username",
@@ -19,5 +27,5 @@
       "label": "API password"
     }
   ],
-  "instructions": "1. Sign in at [voip.ms](https://voip.ms) and open **Main Menu → SOAP & REST/JSON API**.\n2. Turn on **Enable API** and save it.\n3. Set an **API Password** and save it.\n4. Under **Enable IP Addresses**, enter `0.0.0.0` and save it. yaks.app calls from changing addresses.\n5. Enter your voip.ms sign-in email and that API password here.\n\nyaks.app lists every number on the account and changes none of them. Tell your Operator which number to text from (\"text from the church line\"), and whether texts to it should come to your Operator. Only a number you send texts to your Operator has its SMS URL callback pointed at yaks.app; its email and forwarding stay as they are, and the callback goes back as it was when you stop."
+  "instructions": "1. Sign in at [voip.ms](https://voip.ms) and open **Main Menu → SOAP & REST/JSON API**.\n2. Turn on **Enable API** and save it.\n3. Set an **API Password** and save it.\n4. Under **Enable IP Addresses**, enter `0.0.0.0` and save it. yaks.app calls from changing addresses.\n5. Enter your voip.ms sign-in email and that API password here.\n\nyaks.app lists every number on the account and changes none of them. A number you connected from your own account is never cancelled by yaks.app: it can read your numbers, text from them, and set where their texts go, and nothing else. Tell your Operator which number to text from (\"text from the church line\"), and whether texts to it should come to your Operator. Only a number you send texts to your Operator has its SMS URL callback pointed at yaks.app; its email and forwarding stay as they are, and the callback goes back as it was when you stop."
 }

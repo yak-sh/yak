@@ -2,7 +2,8 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Unsent } from '@yaks/host/senders'
 import { Blocked, Denied } from '@yaks/phone'
-import { numbers, voipms } from './mod.ts'
+import { connected, numbers, TEXTING, voipms } from './mod.ts'
+import { requester } from './request.ts'
 
 // An account whose API answers every call with `said`, keeping what it was
 // asked.
@@ -447,4 +448,38 @@ test('a read voip.ms is slow to answer is asked once more, and a text is never s
   )
   assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'sendSMS'])
   assertEquals(time.pending(), 0)
+})
+
+test("a person's own account asks voip.ms for only its integration's methods, and holds no way to cancel or route a number", async () => {
+  let asked: string[] = []
+  let fetch = (url: string | URL | Request) => {
+    asked.push(new URL(String(url)).searchParams.get('method')!)
+    return Promise.resolve(Response.json(DIDS))
+  }
+  let own = (methods?: string[]) =>
+    connected({ via: 'voipms', user: 'u', key: 'k', methods, fetch })
+  let line = own(['getDIDsInfo', 'setSMS'])
+  assertEquals(Object.keys(line).sort(), ['from', 'lines', 'point', 'send'])
+  await line.point('+12695550100', 'https://yaks.app/voipms/t')
+  await assertRejects(
+    () => line.send({ to: '+12695550142', text: 'Hi', from: '+12695550100' }),
+    Error,
+    'cannot ask for sendSMS',
+  )
+  await assertRejects(() => own().lines(), Error, 'cannot ask for getDIDsInfo')
+  assertEquals(asked, ['getDIDsInfo', 'setSMS'])
+})
+
+test('a client made from a method list sends voip.ms no other', async () => {
+  let sent = 0
+  let call = requester({
+    user: 'u',
+    key: 'k',
+    methods: TEXTING,
+    fetch: () => (sent++, Promise.resolve(Response.json(DIDS))),
+  })
+  for (let m of ['cancelDID', 'setDIDRouting', 'delSubAccount', 'orderDID']) {
+    await assertRejects(() => call(m, { did: '2695550100' }), Error, m)
+  }
+  assertEquals(sent, 0)
 })

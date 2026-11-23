@@ -136,6 +136,13 @@
           },
           "description": "its API, for an agent calling it as a connection: where its paths are and where they are documented. None is reached at its first host"
         },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the only API methods a connection through it may ask for, where the service names one in each request (voip.ms's `method`): a person's own voip.ms account reads its numbers, texts, and sets where a number's texts go, and has no method that cancels or reroutes a number. None limits nothing"
+        },
         "fields": {
           "type": "array",
           "items": {

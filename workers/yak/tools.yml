@@ -1000,7 +1000,11 @@ number_release:
     automatic purge. Calling this again for a trashed number emails the owner
     a confirmation link, valid for one hour; only their confirmation returns
     it to the provider. A returned number may never be bought back. Only the
-    space owner may release.
+    space owner may release. It releases only numbers the space bought: a
+    number you connected from your own account is never cancelled by
+    yaks.app. Disconnecting that account on the connections page is how
+    yaks.app stops using it, which puts its texts back where they went
+    before and changes nothing else about it.
 number_verify:
   title: Verify a toll-free number
   step:

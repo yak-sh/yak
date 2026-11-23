@@ -13,8 +13,8 @@ import type { Binding } from '@yaks/cloudflare-mail'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
-import { connecting, ctxOf } from './connections.ts'
-import { credential } from '@yaks/connections'
+import { connecting, ctxOf, ended } from './connections.ts'
+import { credential, known } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
 import {
   callable,
@@ -791,4 +791,35 @@ test("a number's 10DLC campaign is recorded alone, kept when the account is list
   assertEquals(campaigned, { ...uncampaigned, campaign: 'CX7Y2ZQ' })
   assertEquals(campaignRelisted, 'CX7Y2ZQ')
   assertEquals(campaignTaken, null)
+})
+
+// Last, since it ends the connection every test above reads.
+test("disconnecting a person's own voip.ms account puts back its callbacks and asks voip.ms nothing else", async () => {
+  let c = ctxOf(env)
+  let integration = await known(c.graph.read, 'voipms')
+  let account = voipms.account({
+    via: 'voipms',
+    user: 'jeff@example.com',
+    key: 'pw',
+    methods: integration?.methods,
+  })
+  assertEquals(Object.keys(account).sort(), ['from', 'lines', 'point', 'send'])
+  // The key the test above changed, as voip.ms takes it.
+  let name = String((connection.secret as Record<string, unknown>).name)
+  await c.graph.apply([{
+    entity: connection.entity,
+    secret: { name, value: 'jeff@example.com:pw' },
+  }])
+  let did = dids.find((d) => d.did == '2695550111')!
+  did.sms_url_callback_enabled = '1'
+  did.sms_url_callback = callback
+  let from = asked.length
+  await ended(env, connection.entity.eid)
+  let methods = asked.slice(from).map((q) => q.get('method'))
+  assertEquals(methods, ['getDIDsInfo', 'getDIDsInfo', 'setSMS'])
+  assertEquals(
+    [did.sms_url_callback_enabled, did.sms_url_callback],
+    ['1', church],
+  )
+  ok(!dids.some((d) => d.sms_url_callback?.startsWith('https://yaks.app/')))
 })

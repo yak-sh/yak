@@ -623,14 +623,17 @@ let usersOf = async (env: Env, connection: string): Promise<string[]> =>
     .map((l) => String(comp(l, 'edge').from))
 
 /** End connection `eid`, as its Disconnect button does: the apps that used
- * it ask for another, and a bot the space brought stops with it, failing
- * which its next alarm finds no token and stops. */
+ * it ask for another, a person's own number stops sending its texts here
+ * (operator-line.ts `unlined`), and a bot the space brought stops with it,
+ * failing which its next alarm finds no token and stops. */
 export let ended = async (
   env: Env,
   eid: string,
   apps?: string[],
 ) => {
   apps ??= await usersOf(env, eid)
+  let { unlined } = await import('./operator-line.ts')
+  await unlined(env, eid)
   let chat = await import('./chat.ts')
   let bot = await chat.botFor(env, eid)
   await disconnect(ctxOf(env), eid, ownersOf(env))

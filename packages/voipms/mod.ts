@@ -85,8 +85,16 @@ let point = async (call: Call, at: string, url?: string) => {
   })
 }
 
+/** What a voip.ms {@link Account} asks for: its numbers, a text sent, and
+ * where a number's texts go. */
+export let TEXTING = ['getDIDsInfo', 'sendSMS', 'sendMMS', 'setSMS']
+
 /**
- * A voip.ms {@link Account}. A text of up to {@link VOIPMS}.sms characters
+ * A voip.ms {@link Account}, which can only read its numbers, text from them
+ * and point their texts: it is made from `methods` (default
+ * {@link TEXTING}), and its requests ask for no other. A person's own
+ * account is made from the methods its integration lists, so nothing it
+ * holds can cancel, release or reroute one of their numbers. A text of up to {@link VOIPMS}.sms characters
  * goes as SMS, a longer one as MMS. A status voip.ms lists in
  * {@link VOIPMS}.blocked rejects with {@link Blocked}; one in `denied`, which
  * the account's owner mends, with {@link Denied}; a connection that failed
@@ -112,10 +120,10 @@ let point = async (call: Call, at: string, url?: string) => {
  * ```
  */
 export let voipms = (
-  { number, ...account }: Voipms,
+  { number, methods = TEXTING, ...account }: Voipms,
   time: Clock = system,
 ): Account => {
-  let call = bounded(requester(account), time)
+  let call = bounded(requester({ ...account, methods }), time)
   let lines = async (): Promise<Held[]> =>
     (await didsOf(call)).map((d) => ({
       number: e164(String(d.did ?? '')),
@@ -277,10 +285,10 @@ let routed = (did: Available, digits: string) =>
  * ```
  */
 export let numbers = (
-  options: Omit<Voipms, 'number'>,
+  { user, key, api, fetch }: Omit<Voipms, 'number' | 'methods'>,
   time: Clock = system,
 ): Numbers => {
-  let request = requester(options)
+  let request = requester({ user, key, api, fetch })
   let call = bounded(request, time)
   let found = async (call: Call, method: string, params: Params) => {
     try {
@@ -482,6 +490,24 @@ let opened = (options: import('@yaks/phone').Transport): Account => {
   return voipms({ ...options, key: options.key, user: options.user })
 }
 
+/**
+ * A person's own voip.ms account, connected with their sign-in email and API
+ * password: an {@link Account} that asks for only the `methods` their
+ * connection's integration lists, and none when it lists none. It never
+ * holds our own account's {@link numbers}, which alone order, cancel and
+ * route numbers.
+ *
+ * ```ts
+ * import { equal, ok } from '@yaks/testing'
+ * import { connected } from '@yaks/voipms'
+ * let line = connected({ via: 'voipms', user: 'u', key: 'k', methods: [] })
+ * equal(Object.keys(line).sort(), ['from', 'lines', 'point', 'send'])
+ * ok(!('release' in line))
+ * ```
+ */
+export let connected = (options: import('@yaks/phone').Transport): Account =>
+  opened({ ...options, methods: options.methods ?? [] })
+
 /** The transport plugged into @yaks/phone's provider boundary, and a
  * person's own number: their sign-in email and API password, kept in their
  * connection as `username` and `password`. */
@@ -496,7 +522,7 @@ export let provider: Provider = {
   },
   own: {
     fields: { user: 'username', key: 'password' },
-    account: opened,
+    account: connected,
     callback: VOIPMS.callback,
     called,
     said: {

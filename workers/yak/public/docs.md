@@ -419,6 +419,14 @@ to return it sooner; the owner's press on that page completes the return. A
 space with held numbers waits out its trash grace before permanent erasure. A
 number returned to the phone company may never be available to buy again.
 
+A person can also connect a number they already have, from their own voip.ms
+account, on the connections page, and their Operator texts from it. A number you
+connected from your own account is never cancelled by yaks.app: `number_release`
+releases only numbers a space bought, and yaks.app reaches that account through
+a client that can only read its numbers, text from them, and set where their
+texts go. Disconnecting the account puts each number's texts back where they
+went before.
+
 ## Query Syntax
 
 Every read uses one query syntax: `.doc` selects rows that have a component,
