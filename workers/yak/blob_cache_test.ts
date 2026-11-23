@@ -3,9 +3,9 @@
 // conditions and seeks all use that one door.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
+import { resolvers } from '@yaks/fp'
 import * as apps from './apps.ts'
 import { blobDoor, filed, servedTo } from './uploads.ts'
-import type { Door } from '@yaks/durable-object/door'
 import * as files from './files.ts'
 import { storage } from '@yaks/durable-object'
 import { Store } from './graph.ts'
@@ -286,27 +286,34 @@ test("a private app's store that holds back fails the read at 5 s", async () => 
 // (@yaks/blob/routes `current`): a store that holds that read back fails the
 // request at 5 s too, never at its whole minute (90344f8c).
 test('a bare address whose store holds back answers 503 at 5 s', async () => {
-  await using scenario = platform()
   let time = clock()
-  let env = { ...scenario.env, CLOCK: time }
-  let hung = Object.assign(() => new Promise<never>(() => {}), {
-    consume: () => new Promise<never>(() => {}),
-  }) as unknown as Door
-  let status = 0
-  void blobDoor(
+  await using scenario = platform({ CLOCK: time })
+  let asked = resolvers<void>()
+  let held = resolvers<Response>()
+  let store = doorOf(() => {
+    asked.resolve()
+    return held.promise
+  }, 'ada/cookbook')
+  let status: number | undefined
+  let answer = blobDoor(
     new Request(`https://ada.yaks.app/cookbook/api/blob/${sha}`),
-    env,
+    scenario.env,
     { eid: 'space', slug: 'ada', store: 'ada' } as Space,
     { eid: 'app', slug: 'cookbook', space: 'space' } as App,
-    hung,
+    store,
     `/blob/${sha}`,
     { reader: {}, writer: () => Promise.resolve({}) },
   ).then((r) => (status = r.status))
-  let waited = 0
-  while (!status && waited < 10_000) {
-    await time.advance(500)
-    waited += 500
+  try {
+    // The bare address computes its attachment id before asking the store.
+    await Promise.race([asked.promise, answer])
+    await time.advance(4_999)
+    await time.advance(0)
+    assertEquals(status, undefined)
+    await time.advance(1)
+  } finally {
+    // Release the read so a missing deadline returns 404 instead of hanging.
+    held.resolve(Response.json([]))
   }
-  assertEquals(status, 503)
-  assertEquals(waited <= 6_000, true, `answered after ${waited} ms`)
+  assertEquals(await answer, 503)
 })
