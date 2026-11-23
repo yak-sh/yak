@@ -65,7 +65,7 @@ import type {
 import { planSettings } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
-import { CURRENCY, paid, type Tier } from '@yaks/platform/plans'
+import { ceilings, CURRENCY, paid, type Tier } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { derivedEid } from '@yaks/graph/identity'
@@ -86,6 +86,15 @@ import { sessionAt } from './session.ts'
 import { defect } from './defects.ts'
 import { plans } from './payments.ts'
 import { sendable } from '@yaks/mail'
+import { CallError } from '@yaks/tools/errors'
+import {
+  dollars as price,
+  offerLine,
+  type Order,
+  ordered,
+  sold as onSale,
+} from '@yaks/domains'
+import { HOST, registryOf } from './domains.ts'
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -291,6 +300,9 @@ export type Card = {
   invoice?: number
   /** whether its subscription is made and waits on its first payment */
   awaiting?: boolean
+  /** whether its owner may buy a domain for it here: its plan includes
+   * custom domains and payments are set up */
+  domains?: boolean
   /** its AI credit, where its plan buys credit or it holds some: the cap,
    * what is left to spend this month, what this month drew, and whether a
    * block may be bought now */
@@ -323,6 +335,7 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     sold: { plus: sold(lent, 'plus'), pro: sold(lent, 'pro') },
     ...lent.offers(INVOICED.tier, INVOICED.per) ? { invoice: DUE } : {},
     ...awaiting(lent, space) ? { awaiting: true } : {},
+    ...lent.on() && domainsWith(space) ? { domains: true } : {},
     ...credits
       ? {
         credit: {
@@ -653,6 +666,149 @@ export let credited = async (env: Env, heard: Bought) => {
     throw e
   }
   return `${space.slug} bought $${bought} of credit`
+}
+
+// ---- a domain ------------------------------------------------------------
+
+/** A domain's checkout, paid once at the price the registry asked for its
+ * first year (@yaks/domains), with no markup, opened for the space that
+ * orders it. Later years come with the space's paid plan, as its name on
+ * the checkout says. Its paid event writes the order (`domainBought`); the address
+ * is the caller's to hand on. */
+export let domainCheckout = async (
+  env: Env,
+  space: Space,
+  email: string,
+  order: Omit<Order, 'space' | 'live'>,
+) => {
+  let lent = await plans(env)
+  if (!lent.on()) throw new Error('payments are not set up here')
+  let back = planSettings(space.slug, env)
+  return await lent.once({
+    payer: await payerFor(env, lent, space, email),
+    name: `${order.name}: its first year; later years come with ` +
+      `${space.slug}'s paid plan`,
+    cents: order.cents,
+    currency: CURRENCY,
+    done: `${back}?domain=${encodeURIComponent(order.name)}`,
+    cancel: back,
+    reference: space.eid,
+    tags: {
+      ...tagsOf(env, space),
+      domain: order.name,
+      serves: order.serves,
+      cents: String(order.cents),
+    },
+  })
+}
+
+// Whether a space's plan includes custom domains: a paid plan, or a space the
+// platform comps, as domain_attach decides.
+export let domainsWith = (space: Space) =>
+  paid(space.tier) || !ceilings(space.tier ?? null, space.slug)
+
+// Buy a domain for a space, or one app in it: the provider's checkout at the
+// registry's price, opened only for the owner of a space whose plan includes
+// domains, for a name the registry will register now. Answers the URL, as
+// `buy` does, from a signed-in page only: a tool never opens a checkout
+// (C-33033), it sends the person to their plan settings.
+export let buyDomain = async (
+  env: Env,
+  req: Request,
+  space: Space,
+  form: FormData,
+) => {
+  let person = await buyer(env, req)
+  if (!person) return json(401, 'unauthorized', 'sign in first')
+  let dir = dirOf(env)
+  if (await dir.role(space, person) != 'owner') {
+    return json(
+      403,
+      'not_the_owner',
+      `only ${space.slug}'s owner may buy its domains`,
+    )
+  }
+  if (!domainsWith(space)) {
+    return json(409, 'not_included', `domains come with ${planName('plus')}`)
+  }
+  let name = String(form.get('domain') ?? '').trim().toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '')
+    .replace(/\.$/, '')
+  if (!HOST.test(name)) {
+    return json(400, 'bad_domain', 'a domain like herbusiness.com')
+  }
+  let slug = String(form.get('app') ?? '').trim()
+  let app = slug
+    ? (await dir.apps(space)).find((a) => a.slug == slug)
+    : undefined
+  if (slug && !app) {
+    return json(404, 'no_app', `${space.slug} has no app ${slug}`)
+  }
+  if (await dir.serves(name)) {
+    return json(409, 'taken', `${name} is already attached on yaks.app`)
+  }
+  let lent = await plans(env)
+  if (!lent.on()) return json(503, 'no_billing', 'domains are not on sale here')
+  try {
+    let [offer] = (await registryOf(env).check([name])).map(onSale)
+    if (!offer?.registrable || offer.cents == null) {
+      return json(
+        409,
+        'not_registrable',
+        offer ? offerLine(offer) : `${name} can't be bought here`,
+      )
+    }
+    let email = await dir.emailAt(person) ?? ''
+    let url = await domainCheckout(env, space, email, {
+      name,
+      serves: (app ?? space).eid,
+      cents: offer.cents,
+    })
+    return Response.json({ url, price: price(offer.cents) })
+  } catch (e) {
+    if (e instanceof CallError) return json(503, e.code, e.message)
+    defect(e, { request: 'buy a domain' })
+    return json(
+      502,
+      'checkout_failed',
+      "we couldn't start that — it's been logged, try again in a minute",
+    )
+  }
+}
+
+// A domain's checkout heard: the order written once its money is there, by
+// the checkout's own derived eid, so a payment told twice orders once. The
+// directory's `register_domain` effect takes it from there.
+export let domainBought = async (env: Env, heard: Bought) => {
+  let here = apex(env)
+  if (elsewhere(heard.tags, here)) return 'elsewhere'
+  if (!heard.paid) return 'not paid yet'
+  let { domain: name, serves } = heard.tags
+  let dir = dirOf(env)
+  let space = await whose(dir, { space: heard.tags.space || heard.reference })
+  if (!space) {
+    if (!heard.live && heard.tags.apex != here) return 'elsewhere'
+    defect(new Error(`no space owns the domain bought at ${heard.checkout}`), {
+      request: 'a purchase heard',
+    })
+    return 'unattributed'
+  }
+  let eid = derivedEid('domain-order|' + heard.checkout)
+  try {
+    await stamp(env, {
+      entities: [ordered(eid, heard.checkout, {
+        name,
+        space: space.eid,
+        serves: serves || space.eid,
+        cents: Number(heard.tags.cents) || 0,
+        live: heard.live,
+      })],
+    })
+  } catch (e) {
+    if (e instanceof Stale && e.eid == eid) return 'already ordered'
+    throw e
+  }
+  return `${space.slug} bought ${name}`
 }
 
 // Manage what is already paid for: the provider's own portal, where a person

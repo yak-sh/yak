@@ -31,8 +31,9 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { ask, found, type Keyed, list } from './mod.ts'
+import { ask, found, idOf, type Keyed, list } from './mod.ts'
 import { checkout } from './checkout.ts'
+import { refund } from './refunds.ts'
 
 /** What a config gives the plans: the key and clock every call is made with
  * (`Keyed`), each tier's price ids by how often it is paid for, in the order
@@ -151,9 +152,6 @@ export let statusOf = (sub: Sub): string => {
     (sub.trial_end ?? sub.start_date ?? sub.created ?? 0)
   return first && !paid ? 'incomplete' : status
 }
-
-let idOf = (v: string | { id?: string } | null | undefined) =>
-  typeof v == 'string' ? v : v?.id ?? ''
 
 /** The tier a subscription's price buys: the first of `prices` listing one of
  * its items' prices, else the first of `kept` listing one, else the first of
@@ -395,6 +393,24 @@ export let plans = (options: Options): Plans => {
       let url = String(made.url ?? '')
       if (!url) throw new Error('stripe made a checkout session with no url')
       return url
+    },
+    // The session names the payment it made and what it took, and the
+    // refund is made on the platform's own account.
+    refunded: async ({ key, checkout, tags }) => {
+      let session = await ask(
+        options,
+        `/v1/checkout/sessions/${encodeURIComponent(checkout)}`,
+      )
+      let payment = idOf(
+        session.payment_intent as string | { id?: string } | undefined,
+      )
+      if (!payment) throw new Error(`stripe holds no payment for ${checkout}`)
+      return await refund(options, undefined, {
+        key,
+        payment,
+        amount: Number(session.amount_total ?? 0),
+        tags,
+      })
     },
     // The portal needs a configuration on the account; without one Stripe
     // refuses, and the refusal throws.

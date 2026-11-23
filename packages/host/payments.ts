@@ -162,6 +162,12 @@ export type Plans = {
   invoice: (asked: Invoice) => Promise<Subscribed>
   /** the address of a hosted checkout for something paid for once */
   once: (asked: Once) => Promise<string>
+  /** A paid {@link once} checkout's payment refunded whole, for what was
+   * bought and could not be given. `key` names the request: asked again, it
+   * refunds nothing twice. */
+  refunded: (
+    asked: { key: string; checkout: string; tags: Tags },
+  ) => Promise<Refunded>
   /** the address of the hosted portal where a payer manages what it pays,
    * handing them back to `back` */
   portal: (payer: string, back: string) => Promise<string>

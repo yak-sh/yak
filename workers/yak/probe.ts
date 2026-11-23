@@ -918,6 +918,79 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     )
   }
   let ok = (result: unknown) => Response.json({ success: true, result })
+  // Cloudflare Registrar and the account's zones (@yaks/cloudflare/registrar):
+  // a name beginning `taken` is someone else's, every other one costs $10.44
+  // a year and registers at once; and each zone made is kept by its name.
+  let names = new Map<string, { auto_renew: boolean }>()
+  let zones = new Map<string, string>()
+  let priced = (name: string) =>
+    name.startsWith('taken')
+      ? { name, registrable: false, reason: 'domain_unavailable' }
+      : {
+        name,
+        registrable: true,
+        tier: 'standard',
+        pricing: {
+          currency: 'USD',
+          registration_cost: '10.44',
+          renewal_cost: '10.44',
+        },
+      }
+  let workflow = (name: string) => ({
+    domain_name: name,
+    state: 'succeeded',
+    completed: true,
+    context: {
+      registration: {
+        expires_at: '2027-11-19T00:00:00Z',
+        auto_renew: names.get(name)?.auto_renew,
+      },
+    },
+  })
+  let missing = () =>
+    Response.json({ success: false, errors: [{ message: 'not found' }] }, {
+      status: 404,
+    })
+  let registrar = async (req: Request, url: URL) => {
+    let path = url.pathname
+    if (path == '/zones' && req.method == 'GET') {
+      let name = url.searchParams.get('name') ?? ''
+      let id = zones.get(name)
+      return ok(id ? [{ id, name }] : [])
+    }
+    if (path == '/zones' && req.method == 'POST') {
+      let { name } = await req.json()
+      let id = zones.get(name) ?? crypto.randomUUID()
+      zones.set(name, id)
+      return ok({ id, name })
+    }
+    let at = /^\/accounts\/[^/]+\/registrar\/(.*)$/.exec(path)?.[1]
+    if (at == null) return null
+    if (at == 'domain-check') {
+      let { domains } = await req.json()
+      return ok({ domains: (domains as string[]).map(priced) })
+    }
+    if (at == 'domain-search') {
+      let q = url.searchParams.get('q') ?? ''
+      return ok({ domains: [`${q}.com`, `${q}.net`].map(priced) })
+    }
+    if (at == 'registrations' && req.method == 'POST') {
+      let { domain_name, auto_renew } = await req.json()
+      names.set(domain_name, { auto_renew: !!auto_renew })
+      return Response.json({ success: true, result: workflow(domain_name) }, {
+        status: 201,
+      })
+    }
+    let [, name, rest] = /^registrations\/([^/]+)\/?(.*)$/.exec(at) ?? []
+    let held = name && names.get(decodeURIComponent(name))
+    if (!held) return missing()
+    if (rest == 'registration-status') return ok(workflow(name))
+    if (!rest && req.method == 'PATCH') {
+      held.auto_renew = !!(await req.json()).auto_renew
+      return ok(workflow(name))
+    }
+    return missing()
+  }
   let calls = new Map<string, Track[]>()
   let workers = new Map<string, { version: string; secrets: Set<string> }>()
   let sfu = async (req: Request, path: string) => {
@@ -979,7 +1052,12 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     let written = /^\/zones\/[^/]+\/dns_records(?:\/([^/]+))?$/
       .exec(url.pathname)
     if (written) return await records(req, url, written[1])
+    let sold = await registrar(req, url)
+    if (sold) return sold
     if (url.pathname == '/probe/zone') return ok([...zone.values()])
+    if (url.pathname == '/probe/registrar') {
+      return ok(Object.fromEntries(names))
+    }
     if (url.pathname.startsWith('/meta/')) {
       logs.set(
         log,
@@ -1406,3 +1484,9 @@ export let bearerFor = async (
   if (!got.access_token) throw new Error(`token: ${JSON.stringify(got)}`)
   return got.access_token
 }
+
+/** The names registered at the kernel's Registrar stand-in, each with
+ * whether it renews. */
+export let registered = async (k: Pick<Kernel, 'cloudflare'>) =>
+  (await (await fetch(`${k.cloudflare}/probe/registrar`)).json())
+    .result as Record<string, { auto_renew: boolean }>

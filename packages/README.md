@@ -331,6 +331,12 @@ grouped approximately by function, **not** by dependency order.
   rendering are implemented once. Its `body` uses `@yaks/blob`'s `store` keyword
   without depending on the package that implements it — content-addressed when
   blob is loaded, plain text otherwise.
+- **[@yaks/domains](./domains)** — domains a person buys through their space:
+  `domain_order{name, space, serves, checkout, cents, live}` written by a paid
+  checkout, `fulfil()` registering it at a registry and attaching it with every
+  DNS record written, or refunding it once where it can't be, and `renew()`
+  keeping renewal beside the space's plan. A registry is a port;
+  @yaks/cloudflare/registrar is one.
 - **[@yaks/draft](./draft)** — what a person has typed and not yet sent:
   `draft{by, place, text}` on an entity derived from the person and the place,
   kept by the store and seen by every interface they use until it is sent or

@@ -216,7 +216,9 @@ import {
   reading,
   records as domainRecords,
   refresh,
+  registryOf,
 } from './domains.ts'
+import { offerLine, sold } from '@yaks/domains'
 import { type Mail, placed, readMail, ready, setUp } from './domain-mail.ts'
 import { subdomainBox, subdomainMail } from './space-mail.ts'
 import type { DomainRecord } from '@yaks/host/senders'
@@ -6849,6 +6851,58 @@ let OURS: Row[] = [
         }
       }
       return { text: await binnedDomain(ctx.dir, row, who), space }
+    },
+  },
+  {
+    name: 'domain_search',
+    readOnly: true,
+    openWorld: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        query: str(
+          'a name to look for, with or without its ending: herbusiness, or ' +
+            'herbusiness.com',
+        ),
+      },
+      required: ['query'],
+    },
+    run: async (ctx, args) => {
+      let query = text(args.query, 'query').trim().toLowerCase()
+        .replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '')
+      let { space } = await owns(ctx, args)
+      let registry = registryOf(ctx.env)
+      // A whole name is checked live first; the suggestions after it are
+      // the registry's cache, so each is checked again before it is sold.
+      let [asked, suggested] = await Promise.all([
+        HOST.test(query) ? registry.check([query]) : Promise.resolve([]),
+        registry.search(query, 10),
+      ])
+      let offers = [
+        ...asked,
+        ...suggested.filter((o) => !asked.some((a) => a.name == o.name)),
+      ].map(sold)
+      let settings = `${planSettings(space.slug, ctx.env)}#domains`
+      return {
+        text:
+          (offers.length
+            ? offers.map(offerLine).join('\n')
+            : `No names found for ${query}.`) +
+          '\n\n' +
+          (!paying(space.tier) && ceilings(space.tier, space.slug)
+            ? `Domains come with the Plus plan. ${space.slug}'s plan ` +
+              `settings compare the paid plans: ${settings}.`
+            : `${space.slug}'s owner buys one, signed in, on its plan ` +
+              `settings: ${settings}. The first year is charged at ` +
+              "Cloudflare's price, with no markup. yaks.app registers it in " +
+              'its own Cloudflare account, attaches it to the space or the ' +
+              'app they name with every DNS record written for them, and ' +
+              'pays its renewal each year while the space stays on a paid ' +
+              'plan; once it leaves, the name stops renewing and lapses when ' +
+              'its year ends. domain_status says when it serves.'),
+        space,
+      }
     },
   },
   {

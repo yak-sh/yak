@@ -31,6 +31,8 @@ import { type Host as Hostname, stamp } from './directory.ts'
 import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
+import { registry } from '@yaks/cloudflare/registrar'
+import type { Registry } from '@yaks/domains'
 
 export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +
@@ -402,3 +404,32 @@ export let reading = (steps: Step[]) =>
       s.state == 'done' ? '✓' : s.state == 'error' ? '✗' : '…'
     } ${s.step}: ${s.said}`
   ).join('\n')
+
+// ── Domains a person buys (@yaks/domains) ─────────────────────────────────
+
+export let NEEDS_REGISTRAR =
+  'the platform has no Cloudflare token to register domains with ' +
+  '(CF_REGISTRAR_TOKEN: Registrar, and Zone and DNS edit on the account) — ' +
+  'domain_attach still serves a domain the person already owns'
+
+/** The platform's registry: Cloudflare Registrar on its account, or one
+ * whose every call refuses, saying which credential is missing. */
+export let registryOf = (env: Env): Registry => {
+  if (env.CF_ACCOUNT && env.CF_REGISTRAR_TOKEN) {
+    return registry({
+      CF_ACCOUNT: env.CF_ACCOUNT,
+      WORKERS_API: env.WORKERS_API,
+      token: env.CF_REGISTRAR_TOKEN,
+    })
+  }
+  let refuse = () =>
+    Promise.reject(new CallError('unavailable', NEEDS_REGISTRAR))
+  return {
+    search: refuse,
+    check: refuse,
+    register: refuse,
+    registration: refuse,
+    renewing: refuse,
+    zone: refuse,
+  }
+}

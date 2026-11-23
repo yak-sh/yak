@@ -110,3 +110,44 @@ export let resent = async (
     await wait(pause)
   }
 }
+
+/** The `result` of an answer from Cloudflare's API, or the sentence it
+ * refused with. Cloudflare wraps every reply in `{success, errors, result}`,
+ * so a failure is read out of the body and not only off the status. One that
+ * was Cloudflare's own is {@link Unavailable}; every failure carries the
+ * answer's `status`.
+ *
+ * ```ts
+ * import { assertEquals, assertRejects } from '@std/assert'
+ * let reply = (status: number, body: unknown) =>
+ *   new Response(JSON.stringify(body), { status })
+ * assertEquals(await answered(reply(200, { success: true, result: 1 })), 1)
+ * let e = await assertRejects(() =>
+ *   answered(reply(404, { success: false, errors: [{ message: 'none' }] }))
+ * )
+ * assertEquals([(e as Error).message, (e as { status: number }).status], [
+ *   'cloudflare: none',
+ *   404,
+ * ])
+ * ```
+ */
+export let answered = async (r: Response): Promise<unknown> => {
+  let body = await r.text()
+  let said = (() => {
+    try {
+      return JSON.parse(body) as {
+        success?: boolean
+        errors?: { message?: string }[]
+        result?: unknown
+      }
+    } catch {
+      return null
+    }
+  })()
+  if (r.ok && said?.success) return said.result
+  let why = said?.errors?.map((e) => e.message).filter(Boolean).join('; ')
+  throw Object.assign(
+    failure(r.status, `cloudflare: ${why || body.slice(0, 400) || r.status}`),
+    { status: r.status },
+  )
+}

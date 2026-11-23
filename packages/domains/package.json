@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/domains",
+  "version": "0.2.24",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Domains a person buys through their space: a name searched and priced at a registry, an order its payment writes, the registration a registry works through, the place it is attached to with every DNS record written for them, and renewal that follows the space's plan.",
+  "dependencies": {
+    "@yaks/graph": "0.2.33",
+    "@yaks/query": "0.2.32",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@std/assert": "npm:@jsr/std__assert@^1.0.0",
+    "@yaks/testing": "0.2.30"
+  }
+}

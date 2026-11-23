@@ -399,6 +399,51 @@ test('a deleted customer is billed to nobody', async () => {
   equal(await lent.billed('cus_1'), null)
 })
 
+test('a paid one-off checkout is refunded whole, once per key', async () => {
+  let made: Record<string, unknown>[] = []
+  using s = stripe((path) =>
+    Response.json(
+      path.startsWith('/v1/checkout/sessions/cs_1')
+        ? { payment_intent: 'pi_1', amount_total: 1117 }
+        : path.startsWith('/v1/refunds?')
+        ? { data: made, has_more: false }
+        : {
+          id: 're_1',
+          payment_intent: 'pi_1',
+          amount: 1117,
+          status: 'succeeded',
+          metadata: { request: 'k', domain: 'ada.com' },
+        },
+    )
+  )
+  let ask = () =>
+    lent.refunded({ key: 'k', checkout: 'cs_1', tags: { domain: 'ada.com' } })
+  let first = await ask()
+  equal([first.id, first.amount, first.status], ['re_1', 1117, 'succeeded'])
+  let post = s.asked.find((a) => a.method == 'POST')!
+  equal([post.path, post.key, Object.fromEntries(post.body)], [
+    '/v1/refunds',
+    'k',
+    {
+      payment_intent: 'pi_1',
+      amount: '1117',
+      'metadata[domain]': 'ada.com',
+      'metadata[request]': 'k',
+    },
+  ])
+  // Stripe forgets an idempotency key after a day; the refund's metadata
+  // still names it.
+  made.push({
+    id: 're_1',
+    payment_intent: 'pi_1',
+    amount: 1117,
+    status: 'succeeded',
+    metadata: { request: 'k' },
+  })
+  equal((await ask()).id, 're_1')
+  equal(s.asked.filter((a) => a.method == 'POST').length, 1)
+})
+
 test('a charge is moved later once, and never earlier', async () => {
   let ends = PERIOD
   using s = stripe(() => Response.json(sub({ current_period_end: ends })))

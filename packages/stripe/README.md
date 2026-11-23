@@ -63,11 +63,13 @@ ended, and the rest have lapsed. An invoiced subscription's status is read with
 its latest invoice (`statusOf`), since Stripe calls it `active` before anything
 is paid: its first billed period is `incomplete` until that period's invoice is
 paid, and `past_due` is `unpaid`, since nothing retries a check. Postponing sets
-the trial to end later, prorating nothing. `changed(options)(event)` reads a
-verified event as a subscription changed: a `customer.subscription.*` event
-carries its subscription, save an invoiced one, which is asked for with its
-latest invoice, and a checkout session or an invoice names one, read on asking;
-one Stripe does not hold reads as `null`.
+the trial to end later, prorating nothing. `refunded` refunds a paid one-off
+checkout's payment whole, its key carried as the idempotency key and in the
+refund's metadata, so a request asked again refunds once.
+`changed(options)(event)` reads a verified event as a subscription changed: a
+`customer.subscription.*` event carries its subscription, save an invoiced one,
+which is asked for with its latest invoice, and a checkout session or an invoice
+names one, read on asking; one Stripe does not hold reads as `null`.
 
 ## Shops
 

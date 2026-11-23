@@ -43,6 +43,11 @@ export class StripeError extends Error {
   }
 }
 
+/** The id of an object Stripe names by id or expanded whole. */
+export let idOf = (
+  v: string | { id?: string } | null | undefined,
+): string => typeof v == 'string' ? v : v?.id ?? ''
+
 /** What Stripe holds at `path`, on account `on` where one is named; null
  * where it holds nothing by that name, which Stripe says as a refusal. */
 export let found = (

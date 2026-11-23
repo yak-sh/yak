@@ -854,7 +854,8 @@ The complete list of reserved names:
     credit_block decided decision decision_ask delegates
     delete_retired_files delete_upload deliver delivered demo deploy
     desk_aside desk_sidebar dispatch doc document_extract document_page
-    document_text draft draft_rows durable_retirement edge effect email
+    document_text domain_order domain_refunded domain_refused
+    domain_registered draft draft_rows durable_retirement edge effect email
     entity entry error event exception execution failed favorite featured
     fee feed feedback file file_retirement filed finding fired form
     form_guest form_mail form_phone form_post former free_spaces gallery
@@ -875,20 +876,20 @@ The complete list of reserved names:
     push_subscription quarantined question questions rating reads recalled
     recipient reconnecting ref referenced refund_failed refund_request
     refund_retry refund_sale refund_sent refusal refusal_report
-    register_writes registration release_remake report report_refusals
-    repository representation requires restored result retired revision
-    role_free_spaces rtc rtc_lapse sale_access sale_artifact satisfies
-    screen screenshot secret seeded seller sender sending serves
-    service_checkout service_quote session session_input session_result
-    session_resume session_run sessions_ended sfu shared signed_in signin
-    signin_miss skill sms_consent space space_logo speech_hear spend staged
-    standing_link started starter stop stream_item submitted subscribed
-    subscription supersedes supervises support sweep switched task text
-    text_post theme told tool tool_refusal topic trashed tree_entry trend
-    tunnel tunnel_tell tunnel_trashed typed unchecked untrashed updated
-    upstream usage uses using verified visit visitor_build visitor_calls
-    visitor_share volume waitlisted wake wake_run wants watch web
-    whereabouts withdrawn worked worktree written
+    register_domain register_writes registration release_remake
+    renew_domains report report_refusals repository representation requires
+    restored result retired revision role_free_spaces rtc rtc_lapse
+    sale_access sale_artifact satisfies screen screenshot secret seeded
+    seller sender sending serves service_checkout service_quote session
+    session_input session_result session_resume session_run sessions_ended
+    sfu shared signed_in signin signin_miss skill sms_consent space
+    space_logo speech_hear spend staged standing_link started starter stop
+    stream_item submitted subscribed subscription supersedes supervises
+    support sweep switched task text text_post theme told tool tool_refusal
+    topic trashed tree_entry trend tunnel tunnel_tell tunnel_trashed typed
+    unchecked untrashed updated upstream usage uses using verified visit
+    visitor_build visitor_calls visitor_share volume waitlisted wake
+    wake_run wants watch web whereabouts withdrawn worked worktree written
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

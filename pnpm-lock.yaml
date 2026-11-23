@@ -1294,6 +1294,9 @@ importers:
 
   packages/cloudflare:
     dependencies:
+      '@yaks/domains':
+        specifier: 0.2.24
+        version: link:../domains
       '@yaks/file':
         specifier: 0.2.28
         version: link:../file
@@ -1658,6 +1661,25 @@ importers:
         version: link:../testing
 
   packages/dom:
+    devDependencies:
+      '@std/assert':
+        specifier: npm:@jsr/std__assert@^1.0.0
+        version: '@jsr/std__assert@1.0.19'
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+
+  packages/domains:
+    dependencies:
+      '@yaks/graph':
+        specifier: 0.2.33
+        version: link:../graph
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
@@ -6144,6 +6166,9 @@ importers:
       '@yaks/doc':
         specifier: 0.2.24
         version: link:../../packages/doc
+      '@yaks/domains':
+        specifier: 0.2.24
+        version: link:../../packages/domains
       '@yaks/draft':
         specifier: 0.2.24
         version: link:../../packages/draft

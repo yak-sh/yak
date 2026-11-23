@@ -23,6 +23,7 @@ import { pilled, standing } from './gallery-row.ts'
 import {
   billedTo,
   buy,
+  buyDomain,
   checkout,
   invoice,
   planCard,
@@ -1323,6 +1324,7 @@ let saved = async (
     })
   }
   if (form.get('billing') == 'credit') return buy(env, req, space)
+  if (form.get('billing') == 'domain') return buyDomain(env, req, space, form)
   // The plan card's cap on AI credit: a plain form, so it lands back on the
   // page saying it saved, or why not.
   if (form.get('billing') == 'cap') {

@@ -18,6 +18,14 @@ repository's.
   seconds in all. `failure(status, message)` throws `Unavailable` for
   Cloudflare's own failure and an `Error` for a refusal; `passing(status)` tells
   the two apart. An `Unavailable` is an outage, not a broken call.
+- `./registrar`: Cloudflare Registrar on the account, as @yaks/domains asks for
+  a registry (`registry({CF_ACCOUNT, WORKERS_API?, token})`): `search`, `check`
+  (price and whether a name can be registered now, in cents), `register` (sent
+  once, charged to the account's default payment method), `registration` (its
+  workflow, null where never asked), `renewing` (the domain's `auto_renew`,
+  which is how renewal happens) and `zone` (the account's zone for a name, made
+  where there is none). `answered(response)` in `./api` reads the
+  `{success, errors, result}` envelope every call answers.
 - `./analytics`: `ask(env, query, variables)` posts a GraphQL query with the
   analytics token (`CF_ANALYTICS_TOKEN`, aimed at `ANALYTICS_API` when a probe
   sets it), and `said(answer)` reads its data or throws its errors, as

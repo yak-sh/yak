@@ -1,0 +1,85 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "domains",
+  "$defs": {
+    "domain_order": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "a domain a space bought at checkout, held in the platform's registrar account; domain_registered{at, expires} once the registry holds it and it is attached, domain_refused{at, why} where it could not be registered, and domain_refunded{at, refund} once its payment is returned",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "the domain bought"
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the space that paid for it, whose plan its renewal follows"
+        },
+        "serves": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the space or app it is attached to once registered"
+        },
+        "checkout": {
+          "type": "string",
+          "description": "the paid checkout, which names the order however often its payment is told"
+        },
+        "cents": {
+          "type": "number",
+          "description": "what the person paid, in cents: the registry's price for the first year"
+        },
+        "live": {
+          "type": "boolean",
+          "description": "whether its payment moved money; a sandbox payment's order registers nothing and is refunded"
+        }
+      }
+    },
+    "domain_registered": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "a bought domain the registry holds, attached to the place it serves with its DNS written, and when its year ends",
+      "properties": {
+        "at": { "type": "string", "format": "date-time" },
+        "expires": { "type": "string", "format": "date-time" }
+      }
+    },
+    "domain_refused": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "a bought domain that could not be registered, and why: a sandbox payment, a name another checkout bought first, or the registry's refusal; its payment is owed back until domain_refunded",
+      "properties": {
+        "at": { "type": "string", "format": "date-time" },
+        "why": { "type": "string" }
+      }
+    },
+    "domain_refunded": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "a refused domain order whose payment was returned whole, and the payment provider's refund",
+      "properties": {
+        "at": { "type": "string", "format": "date-time" },
+        "refund": { "type": "string" }
+      }
+    },
+    "register_domain": {
+      "effect": true,
+      "created": ["domain_order"],
+      "description": "register a bought domain at the registry, waiting out its workflow, then attach it to the place it serves and write every DNS record that takes in its zone; refund one that cannot be registered"
+    },
+    "renew_domains": {
+      "effect": true,
+      "changed": ["plan"],
+      "active": ".space",
+      "description": "turn renewal on for every domain a space bought while its plan is paid, and off once it is not"
+    }
+  }
+}

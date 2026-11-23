@@ -1625,6 +1625,7 @@ export let plan = (
     head,
     billedLine(y.plan, y.payer, y.provider),
     target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
+    target && y.plan.domains ? domain(space, target) : null,
     invoiced,
     more,
     ask,
@@ -1725,6 +1726,39 @@ let credit = (
           dollars(c.drawn)
         } spent. Credit not spent carries to next month.`
         : `Past its monthly AI budget, ${space} can spend credit you buy in $${BLOCK} blocks, up to a monthly cap in dollars you choose here. Nothing is ever charged past it.`,
+    ),
+  )
+
+// A domain bought for the space, or one app in it (@yaks/domains): a name,
+// optionally an app, and a billing button, since it leaves for the provider's
+// checkout. Once paid, the platform registers it and writes its DNS.
+let domain = (space: string, target: string) =>
+  h(
+    Form,
+    { class: 'Page_Form', method: 'post', action: target, id: 'domains' },
+    labeled(
+      'domain-name',
+      'Buy a domain',
+      h(
+        Form.Line,
+        null,
+        h(Field, {
+          id: 'domain-name',
+          name: 'domain',
+          placeholder: 'herbusiness.com',
+          autocomplete: 'off',
+          required: true,
+        }),
+        h(Field, {
+          id: 'domain-app',
+          name: 'app',
+          placeholder: 'app (or the whole space)',
+          'aria-label': 'App it serves',
+          autocomplete: 'off',
+        }),
+        billButton('domain', 'Buy for a year', target),
+      ),
+      `You pay its first year at Cloudflare's price, with no markup. yaks.app registers it, attaches it to the app you name (or the whole space) with nothing for you to set up, and pays its renewal every year while ${space} is on a paid plan. If ${space} leaves its paid plan, the name stops renewing and lapses when its year ends.`,
     ),
   )
 
@@ -1837,6 +1871,7 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
       let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
         method: 'POST',
         body: new URLSearchParams({
+          ...(b.form && b.dataset.door == 'domain' ? Object.fromEntries(new FormData(b.form)) : {}),
           billing: b.dataset.door,
           ...(b.dataset.plan ? { plan: b.dataset.plan, per: b.dataset.per } : {}),
         }),

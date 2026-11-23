@@ -4,14 +4,16 @@
   "type": "module",
   "exports": {
     "./api": "./api.ts",
+    "./registrar": "./registrar.ts",
     "./analytics": "./analytics.ts",
     "./deployed": "./deployed.ts",
     "./hook": "./hook.ts",
     "./wrangler": "./wrangler.ts"
   },
   "license": "Apache-2.0",
-  "description": "Cloudflare's account API, analytics, Workers Builds deploy hooks and the pinned wrangler, as every Worker door and the box's admin share them.",
+  "description": "Cloudflare's account API, its registrar, analytics, Workers Builds deploy hooks and the pinned wrangler, as every Worker door and the box's admin share them.",
   "dependencies": {
+    "@yaks/domains": "0.2.24",
     "@yaks/file": "0.2.28",
     "@yaks/fp": "0.2.23",
     "@yaks/process": "0.2.28",

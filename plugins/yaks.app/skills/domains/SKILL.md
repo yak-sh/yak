@@ -52,6 +52,34 @@ conversation.
 Wait for the plan change before continuing with DNS setup. Keep using the
 existing `.yaks.app` address in the meantime.
 
+## Buying a domain: `domain_search`
+
+A person without a domain can buy one here. `domain_search(query)` answers names
+with what their first year costs at Cloudflare's price, with no markup, or why
+one can't be bought (taken, a premium name, an ending not sold here, or one that
+costs more than $30 a year to renew). A whole name such as `herbusiness.com` is
+checked live; a word such as `herbusiness` gives suggestions across endings,
+which are checked again when bought.
+
+The space's owner buys it on the space's plan settings, signed in, under "Buy a
+domain": the name, and the app it serves, or nothing for the whole space. The
+checkout is never opened by a tool; give them the page `domain_search` answers
+with. Once paid:
+
+1. yaks.app registers the name in its own Cloudflare account. Registration
+   usually takes seconds and can take a few minutes.
+2. It attaches the name to the space or app, exactly as `domain_attach` would,
+   and writes the CNAME, the ownership TXT and the mail records into the name's
+   DNS itself. There is nothing to add at a registrar.
+3. `domain_status` reports the certificate as it is issued, within minutes.
+
+yaks.app pays its renewal each year while the space is on a paid plan; the
+person is never charged for a later year. If the space leaves its paid plan,
+renewal turns off and the name lapses at the end of its year, unless the space
+is back on a paid plan by then. A paid order that can't be registered (the
+registry refuses it, or another checkout bought the name first) is refunded in
+full.
+
 ## Tools: `domain_attach`, `domain_status`, `domain_detach`
 
 - `domain_attach(app?, hostname, to?)` — provisions the hostname, sets up its

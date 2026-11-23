@@ -172,6 +172,7 @@ export let directoryConfig: Config = {
     'yak/meter',
     'yak/refusals',
     'yak/outreach',
+    'yak/domains',
     { use: 'yak/pages', facets: ['graph'] },
     { use: 'yak/publishing', facets: ['graph'] },
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
@@ -619,6 +620,10 @@ export let domains = beside({
   'yak/trash': { effects: './facets/trash-effects.ts' },
   'yak/refusals': { effects: './facets/refusals-effects.ts' },
   'yak/outreach': { effects: './facets/outreach-effects.ts' },
+  'yak/domains': {
+    vocab: '@yaks/domains/vocab',
+    effects: './facets/domains-effects.ts',
+  },
   'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/attribution': { effects: './facets/attribution-effects.ts' },
   'yak/models': { effects: './facets/models-effects.ts' },

@@ -2,7 +2,7 @@
 // provider config.ts `payments` names lends (payments.ts), `via` the name it
 // is lent under. The provider verifies what is posted there and reads it into
 // the Worker's words (@yaks/host/payments `Heard`); a subscription that
-// changed and a block of credit paid for are billing.ts's to apply, and
+// changed, a block of credit and a domain paid for are billing.ts's to apply, and
 // anything that happened on a seller's account is sell.ts's. Nothing here names a provider, and the paths are the
 // ones the provider was told, so nothing is registered with it again.
 //
@@ -12,7 +12,7 @@
 // silently 403'd event is a plan that never activates, so origin_test.ts
 // holds that open on purpose.
 import type { Heard } from '@yaks/host/payments'
-import { apply as subscribed, credited } from './billing.ts'
+import { apply as subscribed, credited, domainBought } from './billing.ts'
 import { apply as shopped } from './sell.ts'
 import { payments, via } from './payments.ts'
 import { defect } from './defects.ts'
@@ -49,7 +49,7 @@ export let applied = (env: Env, heard: Heard): Promise<string> =>
   heard.about == 'subscription'
     ? subscribed(env, heard)
     : heard.about == 'purchase'
-    ? credited(env, heard)
+    ? heard.tags.domain ? domainBought(env, heard) : credited(env, heard)
     : shopped(env, heard)
 
 /**
