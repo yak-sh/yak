@@ -28,9 +28,10 @@ import {
 import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
 
 let flush = async () => {
-  // A turn apart: gathered reads leave on the next one (directory-copy.ts).
+  // A turn apart: gathered reads leave on the next task (directory-copy.ts
+  // `turn`). A zero timer would wait out HTML's nested-timer floor each time.
   for (let turns = 0; turns < 3; turns++) {
-    await new Promise((turned) => setTimeout(turned, 0))
+    await new Promise((turned) => setImmediate(turned))
     for (let n = 0; n < 128; n++) await Promise.resolve()
   }
 }
