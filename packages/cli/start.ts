@@ -16,6 +16,7 @@ import * as system from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
 import { command } from '@yaks/process/command'
 import type { Bundle, Comp } from '@yaks/graph'
+import { resolve } from 'node:path'
 import { remote } from './remote.ts'
 import { doorUrl } from './rpc.ts'
 import { stateDir, tokenFor } from './store.ts'
@@ -112,6 +113,7 @@ let word = (s: string) =>
  *
  * let unit = systemdUnit({ argv: ['yak', 'start', '--foreground'], cwd: '/r', env: { PATH: '/bin' } })
  * assertStringIncludes(unit, 'ExecStart="yak" "start" "--foreground"')
+ * assertStringIncludes(unit, 'WorkingDirectory=/r')
  * assertStringIncludes(unit, 'Environment="PATH=/bin"')
  * assertStringIncludes(unit, 'WantedBy=default.target')
  * ```
@@ -123,7 +125,7 @@ After=network-online.target
 
 [Service]
 ExecStart=${s.argv.map(word).join(' ')}
-WorkingDirectory=${word(s.cwd)}
+WorkingDirectory=${s.cwd.replaceAll('%', '%%')}
 ${
     Object.entries(s.env).map(([k, v]) => `Environment=${word(`${k}=${v}`)}`)
       .join('\n')
@@ -156,12 +158,12 @@ let ran = async (program: string, args: string[]) => {
 }
 
 // Add yaks.app's MCP server to a CLI, under the name `yaks`, where it has
-// none of that name. Its sign-in to the server is the CLI's own: it asks once,
-// the first time a session uses it.
+// none of that name. Codex can ask the person to authorize the server during
+// `mcp add`, so let it speak to the terminal while it runs.
 let attach = async (cli: string, url: string, note: (l: string) => void) => {
   if ((await ran(cli, ['mcp', 'get', 'yaks'])).ok) return
-  let added = cli == 'claude'
-    ? await ran(cli, [
+  let args = cli == 'claude'
+    ? [
       'mcp',
       'add',
       '--scope',
@@ -170,12 +172,13 @@ let attach = async (cli: string, url: string, note: (l: string) => void) => {
       'http',
       'yaks',
       url,
-    ])
-    : await ran(cli, ['mcp', 'add', 'yaks', '--url', url])
+    ]
+    : ['mcp', 'add', 'yaks', '--url', url]
+  let added = await command(cli, { args, stdin: 'inherit' }).spawn().status
   note(
-    added.ok
+    added.success
       ? `added yaks.app's MCP server to ${cli} as yaks`
-      : `could not add yaks.app's MCP server to ${cli}: ${added.said}`,
+      : `${cli} mcp add exited ${added.code}`,
   )
 }
 
@@ -258,7 +261,7 @@ let foreground = async (
 let start = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   let host = c.host
   let machine = String(args.machine ?? '') || system.hostname()
-  let dir = String(args.dir ?? '') || system.cwd()
+  let dir = resolve(String(args.dir ?? '') || system.cwd())
   let space = args.space ? String(args.space) : undefined
   if (args.foreground) return await foreground(host, machine, dir, space, c.as)
   if (!await tokenFor(host, undefined, { as: c.as })) {

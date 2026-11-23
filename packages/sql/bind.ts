@@ -5321,16 +5321,6 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
     }
     return name
   }
-  let admitted = rowAdmits(
-    vocab,
-    opts.visibility?.entity,
-    {
-      ...opts,
-      visibility: undefined,
-      backed: opts.backed && visibleBacked(vocab, opts),
-    },
-    dialectOf(opts),
-  )
   let source = (name: string, alias = name): Source => {
     if (!vocab.comp(name)) return table(name, alias)
     let screen = screens.has(name) ? screens.get(name) : entity
@@ -5340,21 +5330,21 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
         select({
           cols: [star(alias)],
           from: table(name, alias),
-          where: admitted && name != 'entity' && !screens.has(name)
-            ? admitted(row)
-            : exists(select({
-              cols: [lit(1)],
-              from: table(shared(screen), '__allowed'),
-              where: eq(col('id', '__allowed'), row),
-            })),
+          where: exists(select({
+            cols: [lit(1)],
+            from: table(shared(screen), '__allowed'),
+            where: eq(col('id', '__allowed'), row),
+          })),
         }),
         alias,
       )
       : table(name, alias)
   }
   // An owner read through a row the scope admits needs no screen (`ownerReads`).
+  let policy = opts.visibility?.entity
+  let keyed = policy && !screens.size && ownerKeyed(vocab, opts, parsed(policy))
   let scoping = <T extends Cond | Select>(node: T): T => {
-    let owned = admitted && !screens.size ? ownerReads(vocab, node) : new Set()
+    let owned = keyed ? ownerReads(vocab, node) : new Set()
     return sources(
       node,
       (name, alias, src) =>

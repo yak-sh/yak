@@ -347,13 +347,37 @@ let named = (args: Record<string, unknown>): string => {
   return name
 }
 
-/** The tools a machine's runner calls, each as the person whose machine it
- * is. */
+// Provider names are shared in a space. A registration and a retirement of
+// the same name each read and write the registry in turn.
+let changes = new WeakMap<Graph, Map<string, Promise<Bundle[]>>>()
+let changing = (
+  change: (
+    call: Bundle,
+    graph: Graph,
+    name: string,
+    actor: ReturnType<typeof caller>,
+  ) => Promise<Bundle[]>,
+) =>
+async (call: Bundle, graph: Graph): Promise<Bundle[]> => {
+  let actor = caller(call)
+  let name = named(argsOf(call))
+  let pending = changes.get(graph) ?? new Map()
+  changes.set(graph, pending)
+  let previous = pending.get(name)
+  let run = () => change(call, graph, name, actor)
+  let next = previous ? previous.then(run, run) : run()
+  pending.set(name, next)
+  try {
+    return await next
+  } finally {
+    if (pending.get(name) === next) pending.delete(name)
+  }
+}
+
+/** Machine tools, each called as the person whose machine it is. */
 export let runs = (): Runs => ({
-  machine_register: async (call, graph) => {
+  machine_register: changing(async (call, graph, name, actor) => {
     let args = argsOf(call)
-    let actor = caller(call)
-    let name = named(args)
     let clis = (Array.isArray(args.clis) ? args.clis : []).map(str)
     let unknown = clis.filter((c) => !adapters[c])
     if (unknown.length) {
@@ -368,7 +392,7 @@ export let runs = (): Runs => ({
     // under this name is theirs.
     let held = await graph.get(rows.slice(1).map((b) => b.entity.eid))
     let theirs = held.find((b) =>
-      b && comp(b, 'provider')?.machine != rows[0].entity.eid
+      !b.tombstone && comp(b, 'provider')?.machine != rows[0].entity.eid
     )
     if (theirs) {
       throw new CallError(
@@ -387,7 +411,27 @@ export let runs = (): Runs => ({
         ),
       }),
     )]
-  },
+  }),
+
+  machine_remove: changing(async (call, graph, name, actor) => {
+    let machine = machineOf(actor.by, name)
+    let [row] = await graph.get([machine], ['machine'])
+    let providers = await graph.read(
+      line`.provider.machine=${machine}&.provider.transport=process&.fields=entity.eid`,
+    )
+    if (!row?.machine && !providers.length) {
+      return [said(call, `${name} is already absent`)]
+    }
+    await graph.apply(signed([
+      ...row?.machine ? [{ entity: row.entity, $delete: true }] : [],
+      ...providers.map(({ entity }) => ({
+        entity,
+        $delete: true,
+        $was: { provider: { machine: token(machine) } },
+      })),
+    ], actor))
+    return [said(call, `Removed ${name} and its registered CLI providers.`)]
+  }),
 
   session_take: async (call, graph) => {
     let actor = caller(call)

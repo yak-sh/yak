@@ -156,6 +156,24 @@
       "required": ["machine", "clis"],
       "idempotent": true
     },
+    "machine_remove": {
+      "tool": true,
+      "noun": "machine",
+      "verb": "remove",
+      "title": "Remove a registered machine",
+      "description": "Remove one of your registered machines from this space along with the agent CLI providers it lent. Finish work on the machine and stop its runner before retiring it. Session transcripts are kept. Returns text in content.body.",
+      "input": {
+        "machine": {
+          "type": "string",
+          "description": "the name it was registered under (its hostname, unless `yak start` was given another)"
+        }
+      },
+      "required": ["machine"],
+      "positional": ["machine"],
+      "surfaces": ["mcp"],
+      "destructive": true,
+      "idempotent": true
+    },
     "session_take": {
       "tool": true,
       "noun": "session",

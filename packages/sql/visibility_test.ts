@@ -128,10 +128,17 @@ let repeated = {
       ),
   },
 }
-let guardedValue = (text: string) => {
+let guardedValue = (text: string, entire = false) => {
+  let scope = `.private.text="${text}"`
+  let except = Array.from(
+    { length: 120 },
+    (_, i) => `.private.text!="hidden-${i}"`,
+  ).join(' ')
   let registry = visibleDerived(vocab, {
     derived: repeated,
-    visibility: { components: { private: `.private.text="${text}"` } },
+    visibility: entire
+      ? { entity: `${scope} ${except}` }
+      : { components: { private: scope } },
   })
   return exec(select({
     cols: [as(registry['public.value'].expr(col('entity', 'public')), 'value')],
@@ -143,4 +150,9 @@ guardedValue(prose + 'hidden')
 test('repeated derived probes share their permission screen within SQL limits', () => {
   assertEquals(guardedValue(prose), prose)
   assertEquals(guardedValue(prose + 'hidden'), null)
+})
+
+test('repeated derived probes share an owner-keyed entity screen within SQL limits', () => {
+  assertEquals(guardedValue(prose, true), prose)
+  assertEquals(guardedValue(prose + 'hidden', true), null)
 })

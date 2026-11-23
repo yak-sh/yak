@@ -92,6 +92,10 @@ was run in (`--dir`), on a branch of its own, under the state directory's
 yaks.app token, and its transcript and final report go back to the space. The
 runner reads no CLI's sign-in: each CLI uses its own.
 
+When retiring a machine, finish its work and stop its runner. Then run
+`yak --host yaks.app machine remove my-laptop` with the name you registered.
+This removes the registration and the CLI providers it lent to the space.
+
 ## Roles
 
 A plugin says what it contributes, one facet per subpath, and never where it

@@ -360,12 +360,14 @@ machine}`.
 A session asked of one is what `session_spawn` writes for any provider. A
 request that names no model leaves it to the CLI's own default.
 
-The machine's runner (`@yaks/spawn/runner`) dials out to the space and calls
-three tools as the machine's owner:
+These tools are called as the machine's owner. The runner (`@yaks/spawn/runner`)
+dials out to the space to take sessions and hand them back.
 
 - `machine_register {machine, clis}` registers the machine and its providers.
   The machine's eid is derived from its owner and its name, so a caller names
   only machines of their own.
+- `machine_remove {machine}` removes the named registration and its CLI
+  providers, keeping past session transcripts.
 - `session_take {machine}` answers the oldest session asked of the machine that
   has not run, or whose run ended and was asked to carry on, as a JSON code
   block, which a store keeps literal for its reader, eids and all: the session,

@@ -77,6 +77,34 @@ test('a question the Operator asks the person is not a shared tool', async () =>
 
 let body = (rows: Bundle[]) => String((rows[0].content as Comp).body)
 
+test('a developer can retire and register their machine again', async () => {
+  let store = operatorMemory()
+  let machine = 'laptop'
+  let owner = { person, member: true }
+  let other = { person: crypto.randomUUID(), member: true }
+  let register = () =>
+    working(store, owner, 'machine_register', {
+      machine,
+      clis: ['claude', 'codex'],
+    })
+  let remove = (reader = owner) =>
+    working(store, reader, 'machine_remove', { machine })
+  let registration = JSON.parse(body(await register()))
+  let ids = [
+    registration.machine,
+    ...Object.values<string>(registration.providers),
+  ]
+  let live = () => store.g.read(line`.entity.eid=${ids}&(.machine|.provider)`)
+
+  await remove(other)
+  equal((await live()).length, 3)
+  await remove()
+  equal(await live(), [])
+  await remove()
+  equal(JSON.parse(body(await register())), registration)
+  equal((await live()).length, 3)
+})
+
 test("a session asked of a developer's machine runs there and reports on its task", async () => {
   // The store a space keeps, over SQLite as on yaks.app.
   let store = await operatorStore(durable())

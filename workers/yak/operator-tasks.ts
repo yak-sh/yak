@@ -82,6 +82,11 @@ export let working = async (
     : undefined
   if (!tool) throw refuse('missing', `no Operator work tool ${name}`)
   let self = seenBy(store, reader)
+  // Registration tools scope their own reads and writes to the caller's
+  // machine. They also need its old identity when it has been retired.
+  let graph = name == 'machine_register' || name == 'machine_remove'
+    ? store.g
+    : self
   let actor = { by: reader.person }
   let out = await invoke(
     {
@@ -90,9 +95,8 @@ export let working = async (
       $actor: actor,
     },
     tool,
-    self,
+    graph,
     {
-      host: self,
       report: (e) => caught(e, { request: 'operator work tool', tool: name }),
     },
     (answer, state, keeps) =>
