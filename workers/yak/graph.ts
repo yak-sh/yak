@@ -1,4 +1,5 @@
 import { trashDoor } from './graph-trash.ts'
+import { setImmediate } from 'node:timers'
 import { marked } from '@yaks/cloudflare/alarm-logs'
 import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
@@ -758,6 +759,11 @@ type Word =
 // them, so this bounds the alarm, not a request's wait; a deploy owes a few,
 // and only growth or a store's first statistics owe every table holding rows.
 let ANALYSES = 50
+// The object yielded between pieces of a long run, so the requests waiting on
+// it are let in: the next task, not a zero timer, since a timer set five
+// timers deep waits at least 4 ms (HTML's timer rule, which Deno keeps), and a
+// run yields once a piece.
+let yielded = () => new Promise<void>((turn) => void setImmediate(turn))
 // The most pages of first versions one alarm or one first branch takes
 // (`#seeding`): each fits a window's share on its own, and the alarm comes
 // back for the rest.
@@ -3525,7 +3531,7 @@ export class Store extends Durable {
     let left = this.#analyze(0)
     try {
       for (let n = 0; n < ANALYSES && left; n++) {
-        if (n) await new Promise((r) => setTimeout(r, 0))
+        if (n) await yielded()
         left = this.#analyze(1)
       }
     } catch (e) {
@@ -3665,7 +3671,7 @@ export class Store extends Durable {
     if (!this.#versioned || !seeding(this.#sql)) return null
     let wait = 0
     for (let n = 0; n < SEEDS && seeding(this.#sql); n++) {
-      if (n) await new Promise((r) => setTimeout(r, 0))
+      if (n) await yielded()
       let fits = (written: number) =>
         !(wait = this.ceiling.under(SHARE, written))
       if (!this.#tx(() => this.#maintain(fits))) {
@@ -4251,7 +4257,7 @@ export class Store extends Durable {
           }
         }
         if (s.done) break
-        await new Promise((r) => setTimeout(r, 0))
+        await yielded()
       }
     }
     if (this.#owing().length) return wait ? this.#now() + wait : this.#soon()
