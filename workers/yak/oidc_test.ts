@@ -132,7 +132,7 @@ test('a new verified address is somebody new, signed in on their own space', asy
   assertEquals((person.signed_in as { via: string }).via, 'google')
   assert((person.signed_in as { first?: string }).first)
   // Their own space's chat, made for them in the write that signed them in.
-  assertEquals(r.headers.get('location'), 'https://yaks.app/manage/new-person')
+  assertEquals(r.headers.get('location'), 'https://yaks.app/new-person')
   assertEquals(r.headers.get('referrer-policy'), 'no-referrer')
   // The exchange spent the code with the verifier and our client's secret.
   let [form] = s.exchanged

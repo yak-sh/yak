@@ -353,7 +353,7 @@ test("the corner's note is yaks.app's page, quoting the passage, and sends as th
   )
   let r = await noted(form)
   assertEquals(r.status, 303)
-  assertStringIncludes(r.headers.get('location')!, `/operator/${request}`)
+  assertStringIncludes(r.headers.get('location')!, `/${slug}/${request}`)
   await k.settled()
   let { entries } = JSON.parse(
     String(

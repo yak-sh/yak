@@ -14,7 +14,7 @@ let code = await Deno.readTextFile(
 )
 let space = { slug: 'ada' } as Space
 let app = { slug: 'cookbook' } as App
-let CHAT = 'https://yaks.app/manage/ada?app=cookbook'
+let CHAT = 'https://yaks.app/ada?app=cookbook'
 let NOTE = 'https://yaks.app/manage/ada/operator?note=cookbook'
 
 test('the pencil is sent to whoever the file door lets write the app', () => {

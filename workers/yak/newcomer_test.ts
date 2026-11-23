@@ -71,8 +71,10 @@ let build = (
 
 let cookieOf = (r: Response) =>
   r.headers.getSetCookie().map((set) => set.split(';')[0]).join('; ')
+// The space whose chat a response sends its reader to: yaks.app/<space>/….
 let spaceOf = (r: Response) =>
-  /\/manage\/([a-z0-9-]+)/.exec(r.headers.get('location') ?? '')?.[1] ?? ''
+  new URL(r.headers.get('location') ?? '/', 'https://yaks.app').pathname
+    .split('/')[1]
 
 let first = await build('A sign-up sheet for our bake sale', {
   ip: '203.0.113.7',
@@ -378,7 +380,7 @@ test("a stranger's idea opens a space of their own, signed in, in its chat", () 
   assertEquals(first.status, 303)
   assert(cookie.length > 0, 'the browser is signed in')
   assert(
-    /^\/manage\/[a-z0-9-]+\/operator\/[0-9a-f-]{36}$/.test(
+    /^\/[a-z0-9-]+\/[0-9a-f-]{36}$/.test(
       new URL(first.headers.get('location')!).pathname,
     ),
     'it lands on the chat its words opened',

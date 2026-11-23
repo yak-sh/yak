@@ -135,7 +135,7 @@ test('the way back returns requests to the old object', async () => {
   equal((await leave(p.env, 'yak/ord')).status, 200)
   let r = await asked(p.env, 'back=1')
   equal(r.status, 200)
-  equal((await ownedBy(dir, 'home', 'home')).slug, 'home')
+  equal((await ownedBy(dir, 'returned', 'returned')).slug, 'returned')
   equal(await p.states.get(PLATFORM_OBJECT)!.storage.get('dormant'), false)
 })
 

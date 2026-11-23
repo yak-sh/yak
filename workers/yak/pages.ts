@@ -107,14 +107,15 @@ export type Kids = ComponentChildren
 // A page's own script: constant code, which says nothing a person typed. A
 // page brought in place (@yaks/ui/navigate) runs it again, so it runs in a
 // block of its own, and adds what it listens for with `signal`, aborted once
-// its page leaves.
+// its page leaves. Its lines end in semicolons: code opening with `(` would
+// otherwise be read as a call on the line before.
 export let run = (code: string) =>
   h('script', {
     dangerouslySetInnerHTML: {
       __html: `{
-let leave = new AbortController()
-document.addEventListener('yak-leave', () => leave.abort(), { once: true })
-let signal = leave.signal
+let leave = new AbortController();
+document.addEventListener('yak-leave', () => leave.abort(), { once: true });
+let signal = leave.signal;
 ${code.trim()}
 }`,
     },

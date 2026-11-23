@@ -162,8 +162,10 @@ let stepIn = (say: string, step: string, cookie = '') =>
   })
 let cookieOf = (r: Response) =>
   r.headers.getSetCookie().map((set) => set.split(';')[0]).join('; ')
+// The space whose chat a response sends its reader to: yaks.app/<space>/….
 let spaceOf = (r: Response) =>
-  /\/manage\/([a-z0-9-]+)/.exec(r.headers.get('location') ?? '')?.[1] ?? ''
+  new URL(r.headers.get('location') ?? '/', 'https://yaks.app').pathname
+    .split('/')[1]
 
 // What the model was last asked, as text.
 let lastAsked = () => JSON.stringify(model.asked.at(-1)?.input ?? {})
