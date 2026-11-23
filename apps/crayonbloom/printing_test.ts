@@ -5,6 +5,7 @@ import manifest from './vocab.json' with { type: 'json' }
 import { type Book, fingerprint, type Page } from './model.ts'
 import { edition, printer, printing } from './printing.ts'
 import { APPROVE } from './approve.ts'
+import { Refusal } from './db.ts'
 
 // The words the workflow's approval step writes beside the app's own.
 let words = {
@@ -165,4 +166,25 @@ test('the service adapter unwraps the shared command answer envelope', async () 
       ),
   }, crypto.randomUUID())
   assertEquals(await call('prepare', {}), { id: 'prepared', pending: true })
+})
+
+test('a PrintBound failure answers the person on the card, never the failure itself', async () => {
+  let call = printer({
+    fetch: () =>
+      Promise.resolve(
+        Response.json({
+          error: {
+            code: 'failed',
+            message: 'Lulu authentication failed (403)',
+            request_id: 'r1',
+          },
+        }, { status: 500 }),
+      ),
+  }, crypto.randomUUID())
+  let refused = await assertRejects(() => call('quote', {}), Refusal)
+  assertEquals(refused.status, 502)
+  assertEquals(
+    refused.message,
+    'PrintBound could not finish that just now. Your book is kept; try again in a little while. (Request r1.)',
+  )
 })

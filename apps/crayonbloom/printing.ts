@@ -26,6 +26,17 @@ export let printer =
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ service, name, args }),
     })
+    // PrintBound's failure was reported where it happened; the person reads
+    // it on the card, with their book kept, and the id names it for support.
+    if (answer.status >= 500) {
+      let body = await answer.json().catch(() => null)
+      let id = body?.error?.request_id
+      throw new Refusal(
+        'PrintBound could not finish that just now. Your book is kept; ' +
+          `try again in a little while.${id ? ` (Request ${id}.)` : ''}`,
+        502,
+      )
+    }
     let result = await json<{ value: { answer: string } }>(answer)
     return JSON.parse(result.value.answer) as Record<string, unknown>
   }
