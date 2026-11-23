@@ -590,6 +590,13 @@ export let fitting = (vocab: Vocab) => (name: string): boolean =>
 export let standing = (driver: Driver, vocab: Vocab): Standing =>
   stood(driver, fitting(vocab))
 
+/** Whether any table {@link standing} would hold stands in the file, read
+ * off the catalogue without asking each table. */
+export let anyStanding = (driver: Driver, vocab: Vocab): boolean => {
+  let pick = fitting(vocab)
+  return objects(driver, { type: 'table' }).some((t) => pick(t.name))
+}
+
 // SQLite keeps the CREATE declaration without IF NOT EXISTS. An identical
 // declaration already has every column and constraint fitting would check.
 let declarations = new WeakMap<Vocab, Map<string, string>>()

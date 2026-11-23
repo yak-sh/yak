@@ -75,6 +75,7 @@ import type { Query } from './read.ts'
 import {
   analyzable,
   analyzed,
+  anyStanding,
   built,
   emptied,
   fit,
@@ -1462,7 +1463,7 @@ export let storage = (
       // Templates are only for fresh in-memory files; file installs always
       // inspect their standing schema under BEGIN IMMEDIATE.
       let fresh = !installed(driver) &&
-        !Object.keys(standing(driver, vocab)).length
+        !anyStanding(driver, vocab)
       fresh && driver.template ? driver.template(print, make) : make()
       if (!driver.file) {
         unit(driver, () => {
