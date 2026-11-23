@@ -615,6 +615,19 @@ test('a space buys a local voip.ms number by area code at its price and our marg
       await tool('number_find'),
       'On offer near Battle Creek, MI (home, as you said)',
     )
+    // A city with nothing on offer widens to its state.
+    let saidHome = (city: string) =>
+      stamp(env, {
+        entities: [{
+          entity: { eid: locatedEid(me, 'home', 'said') },
+          located: { person: me, kind: 'home', source: 'said', city },
+        }],
+      })
+    await saidHome('Paw Paw')
+    assertStringIncludes(
+      await tool('number_find'),
+      'On offer near MI (home, as you said)',
+    )
     await stamp(env, { entities: [{ entity: { eid: me }, phone: null }] })
     await assertRejects(
       () => tool('number_buy', { number: '+12695550000' }),

@@ -133,6 +133,7 @@ test('a number is looked for near home, else work, else now', () => {
     state: 'MI',
     city: 'Kalamazoo',
     why: 'near Kalamazoo, MI (home, as you said)',
+    wider: 'near MI (home, as you said)',
   })
   // A phone's area code outranks a connection.
   equal(nearOf([phone, network()])?.area, '269')
@@ -140,6 +141,7 @@ test('a number is looked for near home, else work, else now', () => {
     state: 'IL',
     city: 'Chicago',
     why: 'near Chicago, IL (where you are now, from your connection)',
+    wider: 'near IL (where you are now, from your connection)',
   })
   equal(nearOf([said({ kind: 'work', city: undefined }), network()]), {
     state: 'MI',

@@ -121,8 +121,15 @@ let FROM: Record<Source, string> = {
 
 let called = (kind: string) => kind == 'current' ? 'where you are now' : kind
 
-/** Where to look for a local number near a person, and why there. */
-export type Near = { area?: string; state?: string; city?: string; why: string }
+/** Where to look for a local number near a person, and why there; `wider`
+ * says why its state alone, where a city is named. */
+export type Near = {
+  area?: string
+  state?: string
+  city?: string
+  why: string
+  wider?: string
+}
 
 /**
  * Where a local number near a person is looked for: their home, else their
@@ -150,11 +157,12 @@ export let near = (places: Place[]): Near | undefined => {
       }
     }
     if (!region) continue
-    let label = [city?.value, region.value].filter(Boolean).join(', ')
+    let why = (label: string) =>
+      `near ${label} (${called(kind)}, ${FROM[region.source]})`
     return {
       state: region.value,
-      ...city ? { city: city.value } : {},
-      why: `near ${label} (${called(kind)}, ${FROM[region.source]})`,
+      why: why([city?.value, region.value].filter(Boolean).join(', ')),
+      ...city ? { city: city.value, wider: why(region.value) } : {},
     }
   }
 }

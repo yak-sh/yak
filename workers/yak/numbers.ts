@@ -303,8 +303,8 @@ let nearPerson = async (ctx: Ctx) => {
   let close = await placesOf(await kept(ctx.env), ctx.person).then(near)
     .catch((e) => void caught(e, { request: 'number_find near' }))
   if (!close) return
-  let { area, state, city, why } = close
-  return { where: { area, region: state, city }, why }
+  let { area, state, city, why, wider } = close
+  return { where: { area, region: state, city }, why, wider }
 }
 
 /** The number tools, worded in tools.yml. */
@@ -361,27 +361,32 @@ export let numberTools: Row[] = [
             contains: maybe('contains'),
             limit: Math.min(Number(args.limit ?? 5) || 5, 20),
           }))
-      // A city with nothing on offer widens to its state.
-      let offers =
-        (close
-          ? await find(close.where).then((o) =>
-            o.length || !close.where.city
-              ? o
-              : find({ region: close.where.region })
-          )
-          : await find(asked)).map(priceOf)
+      // A city with nothing on offer, or that the provider is slow to
+      // search, widens to its state.
+      let why = close?.why
+      let widen = async (o: Offer[]) => {
+        if (o.length || !close?.wider) return o
+        why = close.wider
+        return await find({ region: close.where.region })
+      }
+      let offers = (close
+        ? await find(close.where).then(widen, (e) => {
+          if (!(e instanceof Unsent) || !close.wider) throw e
+          return widen([])
+        })
+        : await find(asked)).map(priceOf)
       if (!offers.length) {
         return {
-          text: close
-            ? `No number on offer ${close.why}; name an area, state or city.`
+          text: why
+            ? `No number on offer ${why}; name an area, state or city.`
             : 'No number on offer matches that.',
           space,
         }
       }
       return {
         text:
-          (close
-            ? `On offer ${close.why}; name an area, state or city for others.\n\n`
+          (why
+            ? `On offer ${why}; name an area, state or city for others.\n\n`
             : '') +
           offers.map((o) =>
             `${o.number} ${shown(o.number)}${
