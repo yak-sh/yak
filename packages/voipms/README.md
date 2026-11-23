@@ -19,10 +19,10 @@ callback for texts. `login(number, seat, voice)` opens that owner's softphone
 sign-in. The first owner inherits the original sub-account, and the DID rings
 all enrolled owners through one ring group. `allow(number, voice)` removes
 departed owners' sub-accounts and restricts outbound calls when the space's
-budget is spent. Trashing routes the DID to a hang-up and removes every
-sub-account. Restoring recreates the enrolled owners' sign-ins with new
-passwords. `release` also cancels the DID. voip.ms sells no toll-free number
-here, so `verify` refuses.
+budget is spent. Trashing routes the DID to a hang-up and restricts every
+enrolled owner's sub-account the same way, so a restore brings back the
+passwords their softphones hold. `release` deletes the sub-accounts and cancels
+the DID. voip.ms sells no toll-free number here, so `verify` refuses.
 
 The `provider` export plugs into [@yaks/phone](../phone/README.md). Credentials
 and `fetch` are supplied by the host. Nothing reads the environment.

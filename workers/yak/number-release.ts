@@ -7,7 +7,7 @@ import { caught } from './defects.ts'
 import { directoryOf, idOf, lineOf, type Row, stamp } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
-import { forgetVoiceAttempts, syncVoice, voiceOf } from './number-voice.ts'
+import { syncVoice, voiceOf } from './number-voice.ts'
 import { spaceNow } from './model-spend.ts'
 import { released } from './numbers.ts'
 
@@ -59,7 +59,6 @@ let retire = async (env: Env, work: Release) => {
     return
   }
   await syncVoice(env, line, { in: false, out: false })
-  await forgetVoiceAttempts(env, id)
   let standing = await dir.heldLine(line.number)
   if (standing?.line.eid == id && !standing.line.trashed) {
     let space = await spaceNow(env, line.space)

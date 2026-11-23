@@ -755,7 +755,7 @@ test('a space buys a local voip.ms number by area code at its price and our marg
   }
 })
 
-test('a spent budget keeps the sign-in and trash removes it until restore issues a new one', async () => {
+test('a spent budget and the trash both keep the sign-in a softphone holds', async () => {
   let env!: Env
   let k = await fresh({}, (e) => {
     env = e
@@ -866,15 +866,18 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
     assert(line.trashed)
     await retryRelease(line.eid)
     assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
-    assertEquals(vms.accounts.size, 0)
+    assertEquals(vms.accounts.size, 1)
+    assertEquals(ways(), { in: false, out: false })
     assertEquals(await hour(), { in: false, out: false })
     await restoredNumber(env, k.dir, line, { person, role: 'owner' })
     assertEquals(ways(), { in: true, out: true })
 
-    // The budget stop kept the password. Restore made a new sign-in.
+    // Neither stop changed the password.
     assert(vms.passwords.length)
     assertEquals(new Set(vms.passwords), new Set([original.password]))
-    assert([...vms.accounts.values()][0].password != original.password)
+    assertEquals([...vms.accounts.values()].map((a) => a.password), [
+      original.password,
+    ])
 
     // The permanent return cancels the DID before looking up a detached group.
     await tool('number_release', { number: LOCAL })

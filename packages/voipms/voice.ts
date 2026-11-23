@@ -185,34 +185,34 @@ export let allow = async (
   let seats = voice.seats.filter((seat) =>
     requested.has(seat) && !voice.revoked?.includes(seat)
   )
+  // A shut line keeps its sign-ins, restricted, so a restore brings back
+  // the passwords people's softphones hold.
+  let keep = async () => {
+    let kept = new Map<string, Fields>()
+    for (let account of await accountsOf(call, digits)) {
+      let username = String(account.account)
+      if (
+        !kept.has(username) &&
+        seats.some((seat) => belongs(account, digits, seat, voice.legacy))
+      ) {
+        await blocking(call, account, voice.in && voice.out)
+        kept.set(username, account)
+      } else {
+        await drop(call, account)
+      }
+    }
+    return kept
+  }
   if (!voice.in) {
     // Try both stops even if the carrier fails to apply one of them.
-    let ends = await Promise.allSettled([
-      route(call, digits, []),
-      accountsOf(call, digits).then((accounts) =>
-        Promise.all(accounts.map((account) => drop(call, account)))
-      ),
-    ])
+    let ends = await Promise.allSettled([route(call, digits, []), keep()])
     let errors = ends.flatMap((r) => r.status == 'rejected' ? [r.reason] : [])
     if (errors.length) {
       throw new AggregateError(errors, 'voip.ms could not shut all calls')
     }
     return
   }
-  let accounts = await accountsOf(call, digits)
-  let kept = new Map<string, Fields>()
-  for (let account of accounts) {
-    let username = String(account.account)
-    if (
-      !kept.has(username) &&
-      seats.some((seat) => belongs(account, digits, seat, voice.legacy))
-    ) {
-      await blocking(call, account, voice.out)
-      kept.set(username, account)
-    } else {
-      await drop(call, account)
-    }
-  }
+  let kept = await keep()
   for (let seat of seats) {
     if (
       ![...kept.values()].some((a) => belongs(a, digits, seat, voice.legacy))

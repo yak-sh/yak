@@ -69,16 +69,6 @@ export let claimVoice = (env: Env, line: string) => async (seat: string) => {
   }
 }
 
-/** Restoring a line starts new SIP accounts after the carrier removed them. */
-export let forgetVoiceAttempts = async (env: Env, line: string) => {
-  let rows = await loginRows(env, line)
-  let entities = rows.filter((r) =>
-    (r.phone_login as { attempted?: string })?.attempted
-  )
-    .map(({ entity }) => ({ entity, phone_login: { attempted: null } }))
-  if (entities.length) await stamp(env, { entities })
-}
-
 let policy = async (env: Env, line: Line, ways: Ways): Promise<Voice> => {
   let [owners, [held], requested] = await Promise.all([
     read(env, ownerSeats(line.space)),
