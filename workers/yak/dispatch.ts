@@ -582,27 +582,36 @@ let hostOnly = (res: Response): Response => {
   } as ResponseInit)
 }
 
+/** Who an app's worker calls out as (@yaks/egress `Caller`): the app from the
+ * directory's row, and the visitor and their role on it from the kernel's own
+ * vouch, which a stranger's visit holds none of (@yaks/platform/visits
+ * `atApp`). An app serving a declared service command calls out as itself, at
+ * `editor` as `owning` acts, so its own connections answer whoever called;
+ * the customer still rides along as the person, so a connection of their own
+ * stays theirs alone. A service authority on `who` is the kernel's, verified
+ * before the worker runs (service-call.ts `callService`, apps.ts). */
+let outboundCaller = (
+  app: Pick<App, 'eid'>,
+  who: Pick<Who, 'person' | 'role' | 'visit' | 'service'>,
+): Caller => ({
+  app: app.eid,
+  level: who.service ? 'editor' : atApp(who).role,
+  person: who.person,
+})
+
 /** A script in the apps' namespace, run for `app` and its visitor `who`: the
- * namespace's outbound Worker (outbound.ts) is handed them as the caller of
- * every fetch the script makes, the app from the directory's row and the
- * visitor and their role on it from the kernel's own vouch, which a stranger's
- * visit holds none of (@yaks/platform/visits `atApp`). Throws for a script
- * that is not there (`nowhere`). */
+ * namespace's outbound Worker (outbound.ts) is handed `outboundCaller` as the
+ * caller of every fetch the script makes. Throws for a script that is not
+ * there (`nowhere`). */
 export let script = (
   dispatch: Dispatch,
   name: string,
   app: Pick<App, 'eid'>,
-  who: Pick<Who, 'person' | 'role' | 'visit'>,
+  who: Pick<Who, 'person' | 'role' | 'visit' | 'service'>,
   cpuMs?: number,
 ) =>
   dispatch.get(name, {}, {
-    outbound: {
-      CALLER: {
-        app: app.eid,
-        level: atApp(who).role,
-        person: who.person,
-      } satisfies Caller,
-    },
+    outbound: { CALLER: outboundCaller(app, who) },
     ...cpuMs ? { limits: { cpuMs, subRequests: 50 } } : {},
   })
 

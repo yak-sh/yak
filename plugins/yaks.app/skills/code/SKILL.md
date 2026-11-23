@@ -770,6 +770,13 @@ After approval, call `POST ./api/service` with `{service, name, args}`. An
 operation without approval answers 403. The `service_connect` connector tool
 grants the operations directly when the person's assistant chooses them.
 
+The service app's `worker.js` answers each operation as itself: its calls out go
+through its own connections, whoever called, so a print service quotes through
+its own printer key for a customer who holds no role on it. The caller still
+rides along as `x-yak-person`, with the calling app's eid in
+`x-yak-command-source`, so the worker decides what each caller may ask for, such
+as only their own book.
+
 ## Handling each text, email or webhook with the app's own code
 
 Everything that arrives at an app is a row in its store, so one mechanism runs

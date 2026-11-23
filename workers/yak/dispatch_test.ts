@@ -400,6 +400,25 @@ test('what the worker sends out is said to be the app’s, for this visitor', as
     visit: { kept: false },
   }) as [string, object, { outbound: { CALLER: unknown } }]
   assertEquals(outbound.CALLER, { app: app.eid, level: null, person: 'p1' })
+  // Serving another app's customer, the app calls out as itself: its own
+  // connections answer, and the customer still rides along.
+  let [, , served] = await caller({
+    person: 'p1',
+    role: null,
+    service: {
+      person: 'p1',
+      app: 'crayons',
+      space: 's2',
+      service: app.eid,
+      connection: 'c1',
+      operation: 'quote',
+    },
+  }) as [string, object, { outbound: { CALLER: unknown } }]
+  assertEquals(served.outbound.CALLER, {
+    app: app.eid,
+    level: 'editor',
+    person: 'p1',
+  })
 })
 
 test('declared commands have bounded CPU and only scheduled calls have context', async () => {
