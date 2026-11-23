@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
-import { managePath } from '@yaks/platform/routes'
+import { managePath, talkPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -68,8 +68,24 @@ test('a suggestion friends nobody until each says yes, and becomes a request', a
   await k.dir.stamp({ entities: suggestion(bo.person, cy.person) })
   assertEquals((await listed(bo))[cy.person], 'suggested')
   assertEquals((await listed(cy))[bo.person], 'suggested')
+  let fallback = await (await updates(bo, boSpace.slug)).text()
+  assertStringIncludes(fallback, `${cy.name} is on yaks.app too`)
+  let saved = await k.at(k.host, managePath('profile'), {
+    method: 'POST',
+    headers: {
+      cookie: bo.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ name: 'Bea Alvarez' }).toString(),
+  })
+  assertEquals(saved.status, 303, await saved.text())
   let page = await (await updates(cy, cySpace.slug)).text()
   assertStringIncludes(page, 'Someone you know?')
+  assertStringIncludes(page, 'Bea Alvarez is on yaks.app too')
+  let all = await k.at(k.host, talkPath('updates'), {
+    headers: { cookie: cy.cookie },
+  })
+  assertStringIncludes(await all.text(), 'Bea Alvarez is on yaks.app too')
   await answer(cy, cySpace.slug, bo.person, 'approved')
   assertEquals((await listed(cy))[bo.person], 'asking')
   assertEquals((await listed(bo))[cy.person], 'asked')

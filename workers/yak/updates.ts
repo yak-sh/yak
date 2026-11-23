@@ -232,6 +232,22 @@ let words = (text: string) =>
 // When it happened, said the human way.
 let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 
+let head = (
+  u: Update,
+  title: ComponentChildren,
+  where: ComponentChildren,
+  ...actions: ComponentChildren[]
+) =>
+  h(
+    Card.Head,
+    { class: 'Update_Head' },
+    title,
+    h('div', { class: 'Update_Byline' }, where, stamp(u), ...actions),
+  )
+
+let subject = (u: Update) =>
+  u.subject ? h(Card.Title, { class: 'Update_Subject' }, u.subject) : null
+
 // Where what a choice shows is read: a file kept in the space, through the
 // question that shows it, or an app's draft, at the reader's own preview
 // link (`shownAnswer`).
@@ -312,24 +328,17 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
-  let head = h(
-    Card.Head,
-    null,
+  let header = head(
+    u,
     h(State, { mod: 'negative' }, 'Needs you'),
-    h(
-      'span',
-      { class: 'Update_When' },
-      stamp(u),
-      ' · ',
-      seeing(space, u),
-    ),
+    where,
+    h('span', { class: 'Update_Meta' }, seeing(space, u)),
   )
   if (u.shown?.length) {
     return h(
       Card,
       { class: 'Update Update-needs', id: updateAnchor(u.eid) },
-      where,
-      head,
+      header,
       words(u.words),
       shownChoices(at, u, choices),
       other(at, u),
@@ -339,8 +348,7 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
   return h(
     Card,
     { class: 'Update Update-needs', id: updateAnchor(u.eid) },
-    where,
-    head,
+    header,
     words(u.words),
     choices.length
       ? h(
@@ -452,8 +460,7 @@ let offerCard = (
   h(
     Card,
     { class: 'Update', id: updateAnchor(u.eid) },
-    where,
-    h(Card.Head, null, h(Card.Title, null, u.subject), stamp(u)),
+    head(u, subject(u), where),
     h('p', { class: 'Update_Words' }, u.words),
     u.needs
       ? form(
@@ -481,12 +488,10 @@ let messageCard = (
   h(
     Card,
     { class: 'Update', id: updateAnchor(u.eid) },
-    where,
-    h(
-      Card.Head,
-      null,
-      h(Card.Title, { class: 'Update_Subject' }, u.subject),
-      stamp(u),
+    head(
+      u,
+      subject(u),
+      where,
       u.unread ? h(State, { mod: 'positive' }, 'New') : null,
     ),
     h('p', { class: 'Update_Words' }, u.words),
@@ -540,23 +545,11 @@ let card = (
       class: u.unread ? 'Update Update-new' : 'Update',
       id: updateAnchor(u.eid),
     },
-    where,
-    u.subject || away
-      ? h(
-        Card.Head,
-        null,
-        u.subject
-          ? h(Card.Title, { class: 'Update_Subject' }, u.subject)
-          : null,
-        away,
-      )
-      : null,
+    head(u, subject(u), where, away),
     words(u.words),
     h(
       'p',
       { class: 'Update_Meta' },
-      stamp(u),
-      ' · ',
       leads(env, space, u, apps),
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),
@@ -709,13 +702,9 @@ export let ALL = talkPath('updates')
 // Updates.
 let whereFrom = (space: Space) =>
   h(
-    'p',
-    { class: 'Update_Meta Update_Where' },
-    h(
-      'a',
-      { href: talkPath('updates', space.slug) },
-      `${space.title || space.slug} · ${space.operator}`,
-    ),
+    'a',
+    { class: 'Update_Where', href: talkPath('updates', space.slug) },
+    `${space.title || space.slug} · ${space.operator}`,
   )
 
 /** The person's Updates from every space's Operator together, newest first

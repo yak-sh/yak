@@ -841,6 +841,27 @@
     align-content: start;
     gap: .75rem;
   }
+  .Update_Head {
+    column-gap: .75rem;
+    row-gap: .125rem;
+    padding-block: .25rem;
+  }
+  .Update_Subject {
+    flex-basis: auto;
+  }
+  .Update_Byline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .125rem .75rem;
+    min-width: 0;
+    margin-inline-start: auto;
+    font-size: var(--fine);
+  }
+  .Update_Where {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
   .Update_Words {
     font-size: 1.0625rem;
   }
@@ -850,8 +871,8 @@
     color: var(--muted);
     font-size: var(--fine);
   }
-  .Update-needs .Update_When {
-    margin-left: auto;
+  .Update_When {
+    white-space: nowrap;
   }
   .Update_Choices {
     padding-left: 1.25rem;
