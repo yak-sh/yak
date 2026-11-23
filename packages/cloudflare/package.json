@@ -6,6 +6,7 @@
     "./api": "./api.ts",
     "./registrar": "./registrar.ts",
     "./analytics": "./analytics.ts",
+    "./alarm-logs": "./alarm-logs.ts",
     "./deployed": "./deployed.ts",
     "./hook": "./hook.ts",
     "./wrangler": "./wrangler.ts"

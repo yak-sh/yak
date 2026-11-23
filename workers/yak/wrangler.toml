@@ -581,6 +581,8 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # instead of going out. Never set it on a deploy.
 # CF_ANALYTICS_TOKEN is the Account Analytics Read token for usage metrics
 # and Analytics Engine page visits. Unset, neither reader runs.
+# CF_ALARM_LOGS_TOKEN is a Workers Observability Read token for naming the
+# active jobs in an alarm killed by the runtime. Analytics still counts kills.
 # CF_WORKERS_TOKEN is the one an app's own worker.js is uploaded to the
 # dispatch namespace with (Workers Scripts Edit, T-32781); unset, an app's
 # files deploy and its worker does not.

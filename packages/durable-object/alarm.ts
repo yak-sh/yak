@@ -65,6 +65,8 @@ export type Options = {
   now?: () => number
   /** A work's failure, by the work's name. */
   report?: (error: unknown, work: string) => void
+  /** Observe a named work for as long as its slice runs. */
+  around?: (name: string, run: () => ReturnType<Work>) => ReturnType<Work>
   /** How long until the object may work again: its ceiling's
    * `stopped(true)`, 0 while it is admitted. */
   wait?: () => number
@@ -138,7 +140,9 @@ export let clock = (
     let named = typeof works == 'function' ? works() : works
     for (let [name, run] of Object.entries(named)) {
       try {
-        let at = await run(until)
+        let at = await (opts.around
+          ? opts.around(name, () => run(until))
+          : run(until))
         if (at != null) next = Math.min(next, at)
       } catch (e) {
         // Stopped part way, the object takes nothing until its window ends,

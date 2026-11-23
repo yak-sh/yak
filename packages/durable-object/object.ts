@@ -118,7 +118,10 @@ export type Spec = {
    * first, or one that reports and refuses nothing. */
   ceiling?: Limits
   /** The alarm's timing (`./alarm.ts`). */
-  alarm?: Pick<Timing, 'slice' | 'backstop' | 'retry' | 'keep' | 'now'>
+  alarm?: Pick<
+    Timing,
+    'slice' | 'backstop' | 'retry' | 'keep' | 'now' | 'around'
+  >
   /** The deploy the object runs, whose first entry arms the alarm. */
   version?: string
   /** The restart a request's caller is owed when it runs a later deploy than

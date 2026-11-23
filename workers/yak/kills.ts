@@ -6,10 +6,12 @@
 // @yaks/durable-object `killed`). For these two the only record is
 // Cloudflare's own: the outcome of every invocation, by the object's name,
 // minute and version, in the same analytics the meter reads (usage.ts).
+// Workers Logs can add the jobs still active in the killed invocation.
 //
 // The directory's kill sweep (jobs.ts `kills`) reads the minutes since
 // the last run finished and reports each kill it finds, once.
 import { ask, said } from '@yaks/cloudflare/analytics'
+import { alarmKills } from '@yaks/cloudflare/alarm-logs'
 import { defect } from './defects.ts'
 import type { Env } from './env.ts'
 import { sleep } from '@yaks/fp'
@@ -99,22 +101,49 @@ let WHAT: Record<string, string> = {
   hibernation: 'socket message',
 }
 
-// One occurrence per minute an object was killed in, on the version it ran.
-// The message names what was killed and how, so a CPU kill and a memory kill
-// are two bugs; the object's name rides as its tag.
-let reported = (report: typeof defect) => ({ dimensions: d, sum }: Kill) =>
+let reported = (
+  report: typeof defect,
+  d: Kill['dimensions'],
+  count: number,
+  jobs = '',
+  trace?: string,
+) => {
+  let work = jobs ? `alarm (${jobs})` : WHAT[d.type] ?? d.type
+  let error = new Error(`a Durable Object's ${work} was killed: ${d.status}`)
+  // The runtime did not supply a stack for this invocation.
+  delete error.stack
   report(
-    new Error(
-      `a Durable Object's ${WHAT[d.type] ?? d.type} was killed: ${d.status}`,
-    ),
+    error,
     {
-      request: d.type,
+      request: jobs ? `alarm ${jobs}` : d.type,
+      ...jobs ? { jobs } : {},
+      ...trace ? { trace } : {},
       store: d.name || d.objectId,
       at: d.datetimeMinute,
-      count: String(sum.requests),
+      count: String(count),
     },
     d.scriptVersion ? { commit: d.scriptVersion } : {},
   )
+}
+
+let note = (
+  report: typeof defect,
+  { dimensions: d, sum }: Kill,
+  logs: Awaited<ReturnType<typeof alarmKills>>,
+) => {
+  let kept = d.type == 'alarm'
+    ? logs.filter((log) =>
+      log.object == d.objectId && log.minute == Date.parse(d.datetimeMinute) &&
+      log.version == (d.scriptVersion || undefined) && log.status == d.status &&
+      log.jobs.length
+    )
+    : []
+  if (kept.length > sum.requests) kept = []
+  for (let log of kept) reported(report, d, 1, log.jobs.join(', '), log.trace)
+  if (kept.length < sum.requests) {
+    reported(report, d, sum.requests - kept.length)
+  }
+}
 
 /** Read the kills since `through` and report each, to the tracker unless a
  * `report` is given. Answers how far it read, for the next run to read on
@@ -126,16 +155,22 @@ export let swept = async (
   report: typeof defect = defect,
   wait: (ms: number) => Promise<void> = sleep,
   read: typeof ask<Data> = ask,
+  observe = alarmKills,
 ): Promise<string | null> => {
   let window = span(through, now)
   if (!window || !env.CF_ANALYTICS_TOKEN) return null
-  let answer = await read(env, QUERY, {
-    account: env.CF_ACCOUNT ?? '',
-    script: env.WORKER_NAME ?? 'yak',
-    ...window,
-  }, wait)
+  let account = env.CF_ACCOUNT ?? '', script = env.WORKER_NAME ?? 'yak'
+  let answer = await read(env, QUERY, { account, script, ...window }, wait)
   let kills = said(answer)?.viewer?.accounts?.[0]
     ?.durableObjectsInvocationsAdaptiveGroups ?? []
-  kills.forEach(reported(report))
+  let token = env.CF_ALARM_LOGS_TOKEN
+  let logs = token && account &&
+      kills.some(({ dimensions }) => dimensions.type == 'alarm')
+    ? await observe({ account, script, token, ...window }).catch((error) => {
+      report(error, { request: 'alarm kill attribution' })
+      return []
+    })
+    : []
+  for (let kill of kills) note(report, kill, logs)
   return window.until
 }

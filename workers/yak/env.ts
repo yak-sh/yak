@@ -162,6 +162,7 @@ export type Env = {
   // CF_ACCOUNT is public and configured in wrangler.toml. ANALYTICS_API aims
   // all of them somewhere other than Cloudflare, for a probe.
   CF_ANALYTICS_TOKEN?: string
+  CF_ALARM_LOGS_TOKEN?: string
   CF_ACCOUNT?: string
   ANALYTICS_API?: string
   // REST APIs name these resources explicitly; bindings alone cannot keep

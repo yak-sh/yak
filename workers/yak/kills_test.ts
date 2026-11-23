@@ -76,6 +76,63 @@ test('each run reports the kills since the last one, and reads on from there', a
   ])
 })
 
+test('confirmed jobs name their kill and unobserved kills still reach the tracker', async () => {
+  let seen: [unknown, unknown, unknown][] = []
+  await swept(
+    {
+      ...env,
+      CF_ACCOUNT: 'account',
+      CF_ALARM_LOGS_TOKEN: 'test',
+    },
+    iso('04:50'),
+    at('05:00'),
+    (error, tags) => {
+      let e = error as Error
+      seen.push([e.message, e.stack, tags])
+    },
+    wait,
+    () =>
+      Promise.resolve({
+        data: {
+          viewer: {
+            accounts: [{
+              durableObjectsInvocationsAdaptiveGroups: [
+                kill('alarm', 'exceededCpu'),
+              ],
+            }],
+          },
+        },
+      }),
+    () => {
+      let confirmed = {
+        object: '70e2ab05',
+        minute: at('04:52'),
+        version: 'v1',
+        status: 'exceededCpu',
+        jobs: ['effects'],
+        trace: 'cf-trace',
+      }
+      return Promise.resolve([confirmed, { ...confirmed, version: 'v2' }])
+    },
+  )
+  equal(seen, [
+    ["a Durable Object's alarm (effects) was killed: exceededCpu", undefined, {
+      request: 'alarm effects',
+      jobs: 'effects',
+      trace: 'cf-trace',
+      store: 'ada/notes',
+      at: '2026-09-07T04:52:00Z',
+      count: '1',
+    }],
+    ["a Durable Object's alarm was killed: exceededCpu", undefined, {
+      request: 'alarm',
+      store: 'ada/notes',
+      at: '2026-09-07T04:52:00Z',
+      count: '1',
+    }],
+  ])
+})
+
 // 2026-10-28T17:48Z: Cloudflare answered the sweep's query 500, "Internal
 // authentication error: internal server error". Sent again, it answers; one
 // it fails through every resend is `Unavailable` (wake.ts `reporting`), and a

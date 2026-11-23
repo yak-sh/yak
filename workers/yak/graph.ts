@@ -1,4 +1,5 @@
 import { trashDoor } from './graph-trash.ts'
+import { marked } from '@yaks/cloudflare/alarm-logs'
 import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
 import { servingAuthority, told } from './app-serving-authority.ts'
@@ -3289,7 +3290,11 @@ export class Store extends Durable {
       }),
     report: (error, entry) =>
       defect(error, { request: entry, store: this.#name() }),
-    alarm: { now: this.#now, retry: Store.RETRY },
+    alarm: {
+      now: this.#now,
+      retry: Store.RETRY,
+      around: (job, run) => this.#alarmJob(job, run),
+    },
     around: <T>(entry: string, work: () => Promise<T>) => {
       let profiled = (kind: string) =>
         this.#profile ? this.#profile.run(kind, work) : work()
@@ -3307,6 +3312,9 @@ export class Store extends Durable {
       return entry.startsWith('ws ') ? profiled(entry) : work()
     },
   })
+
+  #alarmJob = <T>(job: string, run: () => T | Promise<T>) =>
+    this.#bind.CF_ALARM_LOGS_TOKEN ? marked(job, run) : run()
 
   // The sockets serving now, once the store is started and no draft is
   // being prepared. A hibernated socket outlives a deploy, so one can wake
@@ -4306,13 +4314,15 @@ export class Store extends Durable {
     // One admitted batch per platform event. Refilling slots here would run
     // a whole continuation chain inside one alarm's I/O lineage. Persisted
     // work left by this batch is admitted only after the next alarm starts.
-    this.#effectWork = apart(async () => {
-      this.#effectAgain = false
-      await this.#effects.work(this.#stored(this.#graph).graph, undefined, {
-        passes: 1,
+    this.#effectWork = apart(async () =>
+      await this.#alarmJob('effects', async () => {
+        this.#effectAgain = false
+        await this.#effects.work(this.#stored(this.#graph).graph, undefined, {
+          passes: 1,
+        })
+        if (!this.#dormant) await this.#armPending()
       })
-      if (!this.#dormant) await this.#armPending()
-    }).catch(async (error) => {
+    ).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arm(
         this.#now() + resting(error, Store.RETRY),
@@ -4360,7 +4370,10 @@ export class Store extends Durable {
         : null,
     model: () => this.#embedder(),
     arm: (at, why) => this.#arm(at, why),
-    hold: (work) => this.#ctx.waitUntil?.(work),
+    hold: (work) =>
+      this.#ctx.waitUntil?.(
+        Promise.resolve(this.#alarmJob('vectors', () => work)),
+      ),
     outage: {
       get: () => JSON.parse(this.#get('embedding-outage') ?? 'null'),
       set: (o) => this.#put('embedding-outage', JSON.stringify(o)),
