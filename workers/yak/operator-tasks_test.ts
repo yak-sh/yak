@@ -114,6 +114,10 @@ test("a session asked of a developer's machine runs there and reports on its tas
   let notes = await store.g.read(line`.comment.target=${made.entity.eid}&*`)
   equal(notes.length, 1)
   equal(String((notes[0].doc as Comp).body).includes('Tuned.'), true)
+  // Its claim went with it: the task is asked of a machine again.
+  await work('session_spawn', { task: id(made), provider: 'claude on mbp' })
+  let again = handedOf(body(await work('session_take', { machine: 'mbp' })))!
+  equal(again.session == job.session, false)
   await work('comment_new', { target: made.entity.eid, body: 'Sounds right.' })
   equal(
     (await store.g.read(line`.comment.target=${made.entity.eid}`)).length,

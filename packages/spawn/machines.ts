@@ -28,6 +28,7 @@ import {
   firstRequest,
   imported,
   latestRequest,
+  letGo,
   readers,
   requested,
   SESSION,
@@ -317,6 +318,9 @@ export let log = async (
     { trusted: true },
   )
   await complete(g, session)
+  // Its claims go with it, but for the tasks a clean run is parked on, as
+  // `session_release` lets them go on a host that runs the CLI itself.
+  await letGo(g, session, await one(g, session))
 }
 
 let said = (call: Bundle, body: string): Bundle => ({

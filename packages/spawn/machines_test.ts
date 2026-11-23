@@ -53,6 +53,9 @@ test("a run's lines become its transcript, and its end its report", async () => 
   let [report] = await comments(g)
   assertStringIncludes(String(comp(report, 'doc')?.title), 'exited 0')
   assertStringIncludes(String(comp(report, 'doc')?.body), 'Fixed the parser.')
+  // Its claim goes with it, so the task can be asked of a run again.
+  let [task] = await g.get([TASK])
+  assertEquals(task.claim, undefined)
 })
 
 test('a run that fails says why, and one asked again carries on its thread', async () => {

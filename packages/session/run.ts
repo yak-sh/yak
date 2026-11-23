@@ -777,7 +777,29 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
     }
     if (live && status != 'stopped' && status != 'failed') return
   }
-  let parked = live && cleanEnd(row)
+  await letGo(g, session, live ? row : undefined)
+}
+
+/**
+ * Let go of the claims a transcript whose run is over holds, except those a
+ * managed run that ended cleanly (`row`, its process, exit and stop) is parked
+ * on: a task still waiting on a dependency, or every one while a request
+ * waits for its next run. What `session_release` does once a transcript
+ * stops, for a host that runs no effects of this package's (@yaks/spawn
+ * ./machines.ts, ending a run a developer's machine handed back).
+ *
+ * ```ts
+ * import { letGo } from '@yaks/session'
+ *
+ * // await letGo(graph, session, row)
+ * ```
+ */
+export let letGo = async (
+  g: Graph,
+  session: Eid,
+  row?: Bundle,
+): Promise<void> => {
+  let parked = cleanEnd(row)
   let owed = parked && await requested(g, session)
   for (
     let held of await g.read(
