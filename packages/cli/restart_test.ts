@@ -78,7 +78,7 @@ let fail = (f: Fixture, action: string, unit?: string) => {
   }
 }
 
-test('restart starts every replacement at once and retires the old units only after all are ready', async () => {
+test('restart warms one role while its old units serve before starting the next role', async () => {
   let f = fixture()
   f.options.ready = (path) => {
     f.paths.push(path)
@@ -100,15 +100,23 @@ test('restart starts every replacement at once and retires the old units only af
     'yak-web@*.service',
     'yak-tracker-web@*.service',
   ])
-  assertEquals(f.events, ['list', 'start', 'ready', 'ready', 'ready', 'stop'])
-  assertEquals(stopped(f), [[
-    'yak-work@old.service',
-    'yak-work@older.service',
-    'yak-web@old.service',
-  ]])
+  assertEquals(f.events, [
+    'list',
+    'start',
+    'ready',
+    'ready',
+    'stop',
+    'start',
+    'ready',
+    'stop',
+  ])
+  assertEquals(stopped(f), [
+    ['yak-work@old.service', 'yak-work@older.service'],
+    ['yak-web@old.service'],
+  ])
   let file = (unit: string) =>
     `/runtime/${unit.replace('@', '-').replace('.service', '.ready')}`
-  assertEquals(f.paths, [file(work), file(web), file(work)])
+  assertEquals(f.paths, [file(work), file(work), file(web)])
   assertEquals(
     said,
     `${work} ready in 0.1s; stopping yak-work@old.service (a.ts differs), yak-work@older.service (a.ts differs)\n` +
@@ -200,6 +208,8 @@ test('restart starts unique replacements and stops nothing on a bare box', async
 // Complete the fake-clock polling before timing the deadline contract.
 // Promise turns measure the runner's scheduling, not elapsed wall time.
 let timeout = fixture()
+timeout.options.replace = ['yak-work']
+timeout.options.stale = () => Promise.resolve(undefined)
 timeout.options.ready = () => Promise.resolve(false)
 let timeoutError = await assertRejects(() => restart(timeout.options), Error)
 
@@ -211,6 +221,8 @@ test('restart bounds the supervised handover and stops only its replacement', ()
 
 test('restart rejects readiness that arrives after its deadline', async () => {
   let f = fixture()
+  f.options.replace = ['yak-work']
+  f.options.stale = () => Promise.resolve(undefined)
   let sleep = f.options.sleep!
   f.options.ready = async () => {
     await sleep(PATIENCE + 1)
@@ -238,7 +250,7 @@ test('restart cleans up a failed start or readiness and stops nothing else', asy
     let f = fixture()
     broken(f)
     await assertRejects(() => restart(f.options))
-    assertEquals(stopped(f), [started(f)])
+    assertEquals(stopped(f), started(f).map((unit) => [unit]))
   }
 })
 
@@ -246,12 +258,16 @@ test('restart keeps the ready replacements when stopping the old fails', async (
   let f = fixture()
   fail(f, 'stop', 'yak-work@old')
   await assertRejects(() => restart(f.options), Error, 'failed stop')
-  assertEquals(stopped(f).length, 1)
-  assert(!stopped(f)[0].some((u) => started(f).includes(u)))
+  assertEquals(stopped(f), [
+    ['yak-work@old.service', 'yak-work@older.service'],
+    ['yak-web@old.service'],
+  ])
 })
 
 test('restart reports both the handover and the cleanup failing', async () => {
   let f = fixture()
+  f.options.replace = ['yak-work']
+  f.options.stale = () => Promise.resolve(undefined)
   fail(f, 'start')
   fail(f, 'stop')
   let error = await assertRejects(() => restart(f.options), AggregateError)
@@ -271,7 +287,7 @@ test('restart rolls optional roles only where they run', async () => {
     'yak-web',
     'yak-tracker-web',
   ])
-  assertEquals(stopped(f)[0].filter((u) => u.includes('tracker')), [
+  assertEquals(stopped(f).flat().filter((u) => u.includes('tracker')), [
     'yak-tracker@old.service',
     'yak-tracker-web@old.service',
   ])
@@ -281,23 +297,30 @@ let unready = fixture(['yak-tracker@old'])
 unready.options.ready = (path) => Promise.resolve(!path.includes('yak-web-'))
 let unreadyError = await assertRejects(() => restart(unready.options), Error)
 
-test('a replacement that never readies leaves the old units and the ready replacements running', () => {
+test('a replacement that never readies leaves its old unit serving through other handovers', () => {
   assertMatch(unreadyError.message, /Timed out/)
   let [work, tracker, web] = started(unready)
-  assertEquals(stopped(unready), [[web]])
+  assertEquals(stopped(unready), [
+    ['yak-work@old.service', 'yak-work@older.service'],
+    ['yak-tracker@old.service'],
+    [web],
+  ])
   assert(work && tracker)
 })
 
-test('every role shares the same readiness deadline', async () => {
+test('each role has its full readiness deadline from its own start', async () => {
   let f = fixture()
   let sleep = f.options.sleep!
   f.options.ready = async () => {
     await sleep(PATIENCE / 2)
     return true
   }
-  await assertRejects(() => restart(f.options), Error, 'Timed out')
+  assertMatch(await restart(f.options), /ready in 60\.0s/)
   assertEquals(f.elapsed(), PATIENCE)
-  assertEquals(stopped(f), [[started(f)[1]]])
+  assertEquals(stopped(f), [
+    ['yak-work@old.service', 'yak-work@older.service'],
+    ['yak-web@old.service'],
+  ])
 })
 
 test('judging the old units leaves the replacements their whole patience', async () => {
@@ -317,6 +340,8 @@ test('judging the old units leaves the replacements their whole patience', async
 })
 
 let evidence = fixture()
+evidence.options.replace = ['yak-work']
+evidence.options.stale = () => Promise.resolve(undefined)
 let evidenceRun = evidence.options.run!
 evidence.options.run = async (command, args) => {
   let result = await evidenceRun(command, args)
@@ -351,12 +376,11 @@ test('restart rolls configured mail even on its first installation', async () =>
     'yak-mail',
     'yak-web',
   ])
-  assertEquals(stopped(f), [[
-    'yak-work@old.service',
-    'yak-work@older.service',
-    'yak-mail@old.service',
-    'yak-web@old.service',
-  ]])
+  assertEquals(stopped(f), [
+    ['yak-work@old.service', 'yak-work@older.service'],
+    ['yak-mail@old.service'],
+    ['yak-web@old.service'],
+  ])
   let first = fixture()
   first.options.processes = [{ unit: 'yak-mail' }]
   await restart(first.options)

@@ -641,10 +641,11 @@ process layout; entries marked `optional` roll only when active. Without a
 process layout it rolls the primary worker and web and active tracker units.
 `yak restart` queues a supervised ready-first handover and returns in seconds.
 `yak restart --config /path/to/yak.json` selects its process layout. Its
-`yak-restart-<uuid>.service` job starts each replacement from its unit template
-and waits for its readiness file in the background. Once every replacement is
-ready, it queues the old units' stops without waiting for them. Its journal says
-which units it started, how long each took and which it is stopping.
+`yak-restart-<uuid>.service` job warms one replacement at a time in the
+background to limit CPU contention. It starts each replacement from its unit
+template, waits for its readiness file, and queues the old units' stops before
+starting the next role. Its journal says which units it started, how long each
+took and which it is stopping.
 
 A role whose running units already run what a replacement would is left running,
 so a landing that touched one package interrupts only the processes that load
@@ -667,12 +668,12 @@ its steps in flight. A web listens on the old web's shared port before that web
 stops taking requests ([@yaks/api](../api/README.md)). Inactive optional units
 stay untouched. A second restart waits for the running handover, then coalesces
 into a later one that began after it was called, or else rolls again, so it
-always ends with code at least as new as its caller's. Readiness has one
-two-minute deadline, counted from when the replacements start. A failure
-preserves the old units and any ready replacements, cleans up unready
-replacements, and reports through the ordinary `unit failure` tracker spool. The
-report captures the candidate's systemd state before cleanup unloads its
-instance. Nobody waits on that job before finishing a landing.
+always ends with code at least as new as its caller's. Each replacement has two
+minutes to become ready. If a replacement fails to become ready, its
+predecessors keep serving and the handover cleans up that candidate. The job
+reports failures through the ordinary `unit failure` tracker spool. The report
+captures the candidate's systemd state before cleanup unloads its instance.
+Nobody waits on that job before finishing a landing.
 
 `yak --no-duties` turns inline duties off for a host that stays up: it takes no
 lease, works no effects, and runs neither the services nor the start-up passes

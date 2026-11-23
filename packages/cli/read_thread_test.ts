@@ -1,7 +1,7 @@
 // Reader scheduling and teardown through an in-process worker.
 import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { readThread } from './read_thread.ts'
 import { readActivity } from './read_activity.ts'
 import { type Asker, asking } from '@yaks/graph/asker'
@@ -248,7 +248,13 @@ let watched = (...steps: string[]) => watching(undefined, steps)
 let watching = async (
   who: Asker | undefined,
   steps: string[],
-  { starting = false } = {},
+  {
+    starting = false,
+    starved = () => {},
+  }: {
+    starting?: boolean
+    starved?: (evidence: string) => void
+  } = {},
 ) => {
   let { workers, restore } = fakes({ starting })
   let clock = 0, spent = { cpu: 0, wait: 0 }
@@ -256,6 +262,7 @@ let watching = async (
   let reader = readThread('unused.json', {
     now: () => clock,
     measure: () => ({ ...spent }),
+    starved,
     timer: (fn, ms) => {
       let timer = { at: clock + ms, fn }
       due.push(timer)
@@ -337,6 +344,18 @@ test('a read is told when its own time passes slow', async () => {
     ]],
   ]
   for (let [steps, told] of cases) assertEquals(await watched(...steps), told)
+})
+
+test('a CPU-delayed read below its own deadline reports the scheduler delay', async () => {
+  let waits: string[] = []
+  let reports = await watching(undefined, [
+    '10000 2 5',
+    '15800 2.4 6.2',
+    'answer',
+  ], { starved: (evidence) => void waits.push(evidence) })
+  assertEquals(reports, [])
+  assertEquals(waits.length, 1)
+  assertMatch(waits[0], /waited 5\.0 s for one/)
 })
 
 // A read given to a worker still starting (loading its modules, composing its

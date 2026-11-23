@@ -24,6 +24,7 @@ import { type Asker, asker } from '@yaks/graph/asker'
 import type { Meaning, MeaningHit } from '@yaks/host'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 import { how, own, since, type Spent, spent } from './stall.ts'
+import { cpuStarvation } from './cpu_starvation.ts'
 import { readActivity } from './read_activity.ts'
 import { type Found, searching } from './searching.ts'
 import type { Hit } from '@yaks/fts'
@@ -132,6 +133,7 @@ export let readThread = (
     timer = later,
     now = Date.now,
     measure = spent,
+    starved = cpuStarvation,
   }: {
     grace?: number
     slow?: number
@@ -141,6 +143,7 @@ export let readThread = (
     now?: () => number
     /** what a worker's thread has spent, by where it is */
     measure?: (thread: string) => Spent | undefined
+    starved?: (evidence: string, report: (error: Error) => void) => void
   } = {},
 ): Reader & {
   ready: () => Promise<void>
@@ -163,6 +166,7 @@ export let readThread = (
      * the worker's thread had spent then */
     sent?: number
     spent?: Spent
+    starved?: boolean
   }
   type Lane = {
     worker: Worker
@@ -284,21 +288,21 @@ export let readThread = (
     ].filter(Boolean).join('; ')
   // A timer can run first in the very turn the main thread comes free, with
   // the answer already waiting behind it, so no first look tells: a second
-  // one follows a turn later (./stall.ts tells of what held the thread). A
-  // look the thread ran late looks again too, and one that finds the read
-  // short of `slow` on its own, because the box kept its worker waiting for a
-  // CPU, looks again when it could pass it. A second either way is close
-  // enough.
+  // one follows a turn later (./stall.ts tells of what held the thread).
   let check = (lane: Lane, job: Job, due: number, looked = false) => () => {
     if (lane.job !== job || lane.activity.completed(job.id)) return
     let at = now()
     let again = (ms: number) =>
       void (lane.long = timer(check(lane, job, at + ms, true), ms))
-    if (at - due >= 1000) return again(1000)
     let ran = at - job.sent!, s = since(job.spent, spentBy(lane))
     let left = slow - own(ran, s)
-    if (left >= 1000) return again(left)
-    if (!looked) return again(1000)
+    if (left > 0 && (s?.wait ?? 0) >= 1000 && !job.starved) {
+      job.starved = true
+      starved(how('a read worker', ran, s), (error) => told(error))
+    }
+    if (!looked || at - due >= 1000 || left > 0) {
+      return again(Math.max(1000, left))
+    }
     told(
       Object.assign(
         new Error(

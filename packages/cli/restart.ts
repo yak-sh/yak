@@ -7,10 +7,10 @@ import { FLAGS, runtimeSource, runtimeTree } from './runtime.ts'
 // Ready-first handover for the box's processes, queued from the checkout's
 // `yak` ({@link queue}). A role whose running units run the code and config a
 // replacement would (./code.ts) keeps them. Every
-// other role's replacement is started at once from its unit template and
-// waited on until it says it is ready (its readiness file); only once every
-// replacement is ready are the old units asked to stop, without waiting for
-// them. A worker is ready once its pool and graph are assembled, and its old
+// other role warms its replacement from its unit template and asks the old
+// units of that role to stop after the readiness file arrives. One role warms
+// at a time, so five cold starts cannot compete with the serving box. A worker
+// is ready once its pool and graph are assembled, and its old
 // one drains its steps in flight. A web is ready once it is listening: it
 // shares its port with the one it replaces (`yak serve --share`), so nothing
 // is refused while the old one stops.
@@ -326,87 +326,65 @@ let handover = async (options: RestartOptions): Promise<string> => {
       r.old.map((unit, j) => [unit, why[i][j]] as const)
     ),
   )
-  // Every replacement starts at once and readies beside the old units, so the
-  // handover takes as long as its slowest role, not the sum of them.
-  let candidates = replacing.map((role) => {
+  let roll = async (role: Role): Promise<string> => {
     let instance = crypto.randomUUID()
-    return {
-      role,
-      unit: `${role.unit}@${instance}.service`,
-      file: readyFile(options.runtimeDir, role.unit, instance),
-      ready: false,
-      took: 0,
-    }
-  })
-  try {
-    // Patience runs from the start of the replacements: judging the old units
-    // must never cut short the warming of a new one.
+    let unit = `${role.unit}@${instance}.service`
+    let file = readyFile(options.runtimeDir, role.unit, instance)
     let began = now()
     let deadline = began + PATIENCE
-    if (candidates.length) {
-      await call('--no-block', 'start', ...candidates.map((c) => c.unit))
-    }
-    while (candidates.some((c) => !c.ready)) {
-      let waiting = candidates.filter((c) => !c.ready)
-      if (now() >= deadline) {
-        // Inspect before cleanup: systemd may unload the stopped instance,
-        // losing precisely the evidence of whether it ever started.
-        let state: string
-        try {
-          state = await call(
-            'show',
-            ...waiting.map((c) => c.unit),
-            '--property=Id,ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
-          )
-        } catch (error) {
-          state = String(error)
+    let ready = false
+    try {
+      await call('--no-block', 'start', unit)
+      while (now() < deadline) {
+        if (await exists(file) && now() < deadline) {
+          ready = true
+          break
         }
-        throw new Error(
-          `Timed out after ${PATIENCE}ms waiting for ${
-            waiting.map((c) => c.file).join(', ')
-          }\n${state.trim()}`,
-        )
-      }
-      for (let candidate of waiting) {
-        if (await exists(candidate.file) && now() < deadline) {
-          candidate.ready = true
-          candidate.took = now() - began
-        }
-      }
-      if (candidates.some((c) => !c.ready)) {
         await sleep(Math.min(100, Math.max(0, deadline - now())))
       }
-    }
-    let old = replacing.flatMap((r) => r.old)
-    if (old.length) await call('--no-block', 'stop', ...old)
-    return [
-      ...candidates.map(({ unit, took, role }) =>
-        `${unit} ready in ${(took / 1000).toFixed(1)}s` +
+      if (!ready) {
+        // Read the unit state while systemd still has the instance.
+        let state = await call(
+          'show',
+          unit,
+          '--property=Id,ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
+        ).catch(String)
+        throw new Error(
+          `Timed out after ${PATIENCE}ms waiting for ${file}\n${state.trim()}`,
+        )
+      }
+      let took = now() - began
+      if (role.old.length) await call('--no-block', 'stop', ...role.old)
+      return `${unit} ready in ${(took / 1000).toFixed(1)}s` +
         (role.old.length
           ? `; stopping ${
             role.old.map((u) => reasons.get(u) ? `${u} (${reasons.get(u)})` : u)
               .join(', ')
           }`
           : '')
-      ),
-      ...kept,
-    ].join('\n')
-  } catch (error) {
-    // A ready replacement survives later failures. Never retire old units
-    // until every replacement is ready; a failed start may still have queued
-    // a job.
-    let errors: unknown[] = [error]
-    let unready = candidates.filter((c) => !c.ready).map((c) => c.unit)
-    if (unready.length) {
-      try {
-        await call('--no-block', 'stop', ...unready)
-      } catch (cleanup) {
-        errors.push(cleanup)
+    } catch (error) {
+      if (!ready) {
+        try {
+          await call('--no-block', 'stop', unit)
+        } catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            'Handover and cleanup failed',
+          )
+        }
       }
+      throw error
     }
-    if (errors.length > 1) {
-      throw new AggregateError(errors, 'Handover and cleanup failed')
-    }
-    throw error
   }
+  let summaries: string[] = [], errors: unknown[] = []
+  for (let role of replacing) {
+    try {
+      summaries.push(await roll(role))
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length == 1) throw errors[0]
+  if (errors.length) throw new AggregateError(errors, 'Handover failed')
+  return [...summaries, ...kept].join('\n')
 }
