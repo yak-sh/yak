@@ -41,3 +41,35 @@ test('install links use only a current public offer and its allowed picture', as
     )
   }
 })
+
+test('an install link names the app a copy is of, free unless it is sold', async () => {
+  let copyOf = async (over: Parameters<typeof app>[0]) => {
+    let offered = { app: app(over), space: space() }
+    let dir = {
+      offered: (name: string) =>
+        Promise.resolve(name == 'recipes' ? offered : null),
+    } as Directory
+    return (await linked({}, '/install?name=recipes', dir))?.copy
+  }
+  let shown = shotOf(space(), app())
+  assertEquals(await copyOf({}), {
+    title: 'Recipe box',
+    image: shown,
+    free: true,
+  })
+  assertEquals(await copyOf({ access: 'private' }), {
+    title: 'Recipe box',
+    image: undefined,
+    free: true,
+  })
+  assertEquals(
+    (await copyOf({
+      published: { ...app().published!, price: { cents: 500, interval: null } },
+    }))?.free,
+    false,
+  )
+  assertEquals(
+    await copyOf({ trashed: { at: '2026-09-02', by: 'ada' } }),
+    undefined,
+  )
+})

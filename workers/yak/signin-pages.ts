@@ -25,6 +25,7 @@ import { MANAGE, managePath, OAUTH } from '@yaks/platform/routes'
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
 import { destination, type Preview } from './link-preview.ts'
+import type { Copy } from './preview-route.ts'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { INVITE, REPO as PUBLIC } from '@yaks/platform/names'
 import { STARTER } from '@yaks/platform/plans'
@@ -96,6 +97,29 @@ let onSpace = (back: string | null, env: Host) => {
 let welcome = (back: string | null, env: Host) =>
   onSpace(back, env) ?? 'Build, host and share web apps.'
 
+// A stranger on the way to a copy of a published app (install.ts) reads which
+// app it is, its picture, and what the copy is: the sign-in is all that stands
+// between them and it (T-2623).
+let copying = (copy: Copy) => ({
+  title: `Your own copy of ${copy.title}`,
+  lead: `${
+    copy.free ? 'Free, at' : 'At'
+  } your own address, with your own data.`,
+  picture: copy.image
+    ? h(
+      'figure',
+      { class: 'Copy' },
+      h('img', {
+        class: 'Copy_Image',
+        src: copy.image,
+        alt: copy.title,
+        width: 1200,
+        height: 630,
+      }),
+    )
+    : null,
+})
+
 // Ask for an address. `who` names the app asking, when one is (an authorize
 // request signed out starts here, and the consent card follows), and `why` is the
 // soft refusal, when there was one: a sign-in link that had already been used
@@ -106,6 +130,8 @@ let welcome = (back: string | null, env: Host) =>
 // giving a number agrees to sits under it, where it is read before sending.
 // The note stands aside once the box holds an address, so a person typing
 // their email reads nothing about texts; without script it stays.
+//
+// `copy` is the published app `back` installs, when it is one (`copying`).
 export let askEmail = (at: {
   q?: string | null
   back?: string | null
@@ -114,17 +140,20 @@ export let askEmail = (at: {
   status?: number
   texts?: boolean
   preview?: Preview
+  copy?: Copy
   providers?: Offered[]
-}, env: Host = {}) =>
-  page(
+}, env: Host = {}) => {
+  let copy = at.copy && copying(at.copy)
+  return page(
     env,
     {
-      title: 'Sign in or sign up',
+      title: copy?.title ?? 'Sign in or sign up',
       preview: at.preview ??
         destination(at.back ?? (at.q ? '/oauth/authorize' : null), env),
-      lead: at.why ?? welcome(at.back ?? null, env),
+      lead: at.why ?? copy?.lead ?? welcome(at.back ?? null, env),
       status: at.status ?? 200,
     },
+    copy?.picture,
     h(
       'form',
       { class: 'Page_Form', method: 'post', action: '/login' },
@@ -136,6 +165,8 @@ export let askEmail = (at: {
         `Enter your ${
           at.texts ? 'email or mobile number' : 'email'
         } to get a sign-in code.`,
+        // After the code, the install form asks for one press (install.ts).
+        copy ? " Once you're in, your copy is one press away." : '',
         // Where a person decides to sign up: what their first space starts
         // with (@yaks/platform/plans `STARTER`). An agent asking to be let
         // in is someone already deciding something else.
@@ -200,6 +231,7 @@ export let askEmail = (at: {
       : null,
     home(env),
   )
+}
 
 // Ask for the code just sent, and nothing else (T-34236). Signing up is two
 // steps and both are the address: give it, then prove it. What a person is

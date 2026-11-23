@@ -1320,7 +1320,10 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
     linked(env, at.back, dirOf(env)),
     oidc.offered(env),
   ])
-  return askEmail({ ...at, texts, preview, providers }, env)
+  return askEmail(
+    { ...at, texts, preview, copy: preview?.copy, providers },
+    env,
+  )
 }
 
 // Revoke a newcomer's old external credentials before their verified address

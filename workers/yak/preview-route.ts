@@ -4,11 +4,15 @@ import type { Directory } from './directory.ts'
 import { type Host } from '@yaks/platform/host'
 import { destination, type Preview } from './link-preview.ts'
 
+/** The app a stranger is signing in to get a copy of: its title, its card's
+ * picture where a stranger may see it, and whether a copy costs nothing. */
+export type Copy = { title: string; image?: string; free: boolean }
+
 export let linked = async (
   env: Host,
   back: string | null | undefined,
   dir: Directory,
-): Promise<Preview | undefined> => {
+): Promise<(Preview & { copy?: Copy }) | undefined> => {
   let of = destination(back, env)
   if (!of?.publication) return of
   let offer = await dir.offered(of.publication)
@@ -17,11 +21,13 @@ export let linked = async (
   }
   let { app, space } = offer
   let { shotOf } = await import('./gallery.ts')
+  let image = app.access != 'private' || app.gallery?.listedAt
+    ? shotOf(space, app, env)
+    : undefined
   return {
     title: `${app.title} · yaks.app`,
     description: offer.app.published.about,
-    image: app.access != 'private' || app.gallery?.listedAt
-      ? shotOf(space, app, env)
-      : undefined,
+    image,
+    copy: { title: app.title, image, free: !offer.app.published.price },
   }
 }

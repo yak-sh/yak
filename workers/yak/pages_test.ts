@@ -8,7 +8,7 @@ import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 import type { Card } from './billing.ts'
-import { PRICE, PRO_GRANT, YEARLY } from '@yaks/platform/plans'
+import { PRICE, PRO_GRANT, STARTER, YEARLY } from '@yaks/platform/plans'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -82,6 +82,40 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
       'https://yaks.fyi/',
     ])
   }
+})
+
+// What a sign-in card reads, start to end, and the picture it shows.
+let reads = async (response: Response) => {
+  let { document } = parseHTML(await response.text())
+  let main = document.querySelector('main')!
+  return {
+    says: [...main.querySelectorAll('h1, p')].map((p) => p.textContent),
+    picture: main.querySelector('img.Copy_Image')?.getAttribute('src'),
+  }
+}
+
+test('pages: a stranger signing in for a copy reads which app it is of', async () => {
+  let copy = { title: 'Recipe box', image: 'https://yaks.fyi/r.png' }
+  assertEquals(
+    await reads(askEmail({ copy: { ...copy, free: true } }, env)),
+    {
+      says: [
+        'Your own copy of Recipe box',
+        'Free, at your own address, with your own data.',
+        `Enter your email to get a sign-in code. Once you're in, your copy is one press away. Signing up is free, with $${STARTER} of building credit.`,
+      ],
+      picture: copy.image,
+    },
+  )
+  let sold = await reads(
+    askEmail({ copy: { title: 'Recipe box', free: false } }, env),
+  )
+  assertEquals(sold.says[1], 'At your own address, with your own data.')
+  assertEquals(sold.picture, undefined)
+  assertEquals((await reads(askEmail({}, env))).says.slice(0, 2), [
+    'Sign in or sign up',
+    'Build, host and share web apps.',
+  ])
 })
 
 test('pages: staging space management and connector forms keep their host', async () => {
