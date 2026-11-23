@@ -84,6 +84,26 @@ test('HSTS covers a caught platform failure', async () => {
   equal(res.headers.get('strict-transport-security'), policy)
 })
 
+test('a failure at a JSON door answers JSON its caller can read', async () => {
+  for (
+    let address of [
+      'https://yaks.app/crayonbloom/api/service',
+      'https://crayonbloom.yaks.app/api/service',
+    ]
+  ) {
+    let res = await handler.fetch(
+      new Request(address, { method: 'POST' }),
+      env(() => {
+        throw TypeError('Illegal invocation')
+      }),
+    )
+    let { error } = await res.json()
+    equal(res.status, 500)
+    equal(error.code, 'failed')
+    equal(error.request_id, res.headers.get('x-request-id'))
+  }
+})
+
 test('HSTS covers a preflight response', async () => {
   let res = await handler.fetch(
     new Request('https://hsts.yaks.app/~token/api/query', {

@@ -375,7 +375,7 @@ let hosting = async (
           JSON.stringify(body)
         }`,
       )
-      if (path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)) {
+      if (jsonDoor(path)) {
         let answer: unknown
         try {
           answer = JSON.parse(body)
@@ -413,9 +413,29 @@ let hosting = async (
       app: r.app,
       request_id: requestId,
     })
+    // A JSON door's caller is code (an app's worker calling `./api/service`,
+    // an MCP client): it gets the failure as JSON it can read, not a page.
+    if (jsonDoor(new URL(req.url).pathname)) {
+      return sealed(
+        Response.json({
+          error: {
+            code: 'failed',
+            message:
+              `Something went wrong. Try again shortly. Request ID: ${requestId}.`,
+            request_id: requestId,
+          },
+        }, { status: 500, headers: { 'x-request-id': requestId } }),
+        env,
+      )
+    }
     return oops(env, requestId)
   }
 }
+
+// The doors code calls, which answer JSON: /mcp and an app's or the
+// platform's /api/.
+let jsonDoor = (path: string) =>
+  path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path)
 
 // The third entry point, and the one no URL names: a letter (T-33684,
 // T-33687). Email Routing's catch-all on the yaks.app zone points every
