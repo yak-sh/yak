@@ -1,45 +1,64 @@
 // Recovered pending work runs in bounded, separate alarm events without a
 // polling delay. A future retry remains scheduled rather than running early.
-import { equal, test } from '@yaks/testing'
-import { due } from './graph.ts'
-import { appStore, storeName } from './directory.ts'
-import { ADA_OWNS, platform, seeded } from './serving-probe.ts'
+import { clock, equal, ok, test } from '@yaks/testing'
+import { due, Store } from './graph.ts'
+import { ADA_OWNS } from './serving-probe.ts'
+import { platform, state } from './testing.ts'
 
-let p = platform()
-let { space, app } = await seeded(p.env)
-await p.settled()
-let store = appStore(p.env.STORE, space, app)
-let object = p.object(storeName(space, app))
-let alarm = object.alarm.bind(object), events = 0
-object.alarm = () => {
-  events++
-  return alarm()
+let time = clock(Date.now())
+let p = platform('effect-alarm', { CLOCK: time })
+let name = 'ada/cookbook', ctx = state()
+let store = p.register(
+  name,
+  ctx,
+  () => new Store(ctx, {}, undefined, { now: time.now }),
+)
+let headers = {
+  ...ADA_OWNS,
+  'x-store': name,
+  'x-yak-app': crypto.randomUUID(),
 }
-// Restore a backlog whose original targets are gone. Each effect must still
-// be settled; a bounded admission leaves some for the next event.
-let rows = Array.from({ length: 5 }, () => ({
+// Restore more runs than fit in the pool's default page of 32. Their
+// original targets are gone, but each run still has to be settled.
+let rows = Array.from({ length: 33 }, () => ({
   entity: { eid: crypto.randomUUID() },
   effect: {
-    handler: 'register_writes',
+    handler: 'delete_upload',
     target: crypto.randomUUID(),
-    kind: 'created',
-    comp: 'doc',
+    kind: 'removed',
+    comp: 'blob',
     state: 'pending',
     attempts: 0,
   },
 }))
-await store('/apply', {
-  method: 'POST',
-  body: JSON.stringify(rows),
-}, { ...ADA_OWNS, 'x-yak-kernel': '1' })
+let wrote = await store.fetch(
+  new Request('http://store/apply', {
+    method: 'POST',
+    headers: { ...headers, 'x-yak-kernel': '1' },
+    body: JSON.stringify(rows),
+  }),
+)
+let unsettled = async () =>
+  await (await store.fetch(
+    new Request('http://store/query?q=.effect.handler=delete_upload', {
+      headers,
+    }),
+  )).json()
+
+await Promise.all(ctx.pending)
+let queued = (await unsettled()).length
+await p.ring()
+await Promise.all(ctx.pending)
+let remaining = (await unsettled()).length
 await p.settled()
-let pending =
-  await (await store('/query?q=.effect.state=pending', {}, ADA_OWNS))
-    .json()
+let drained = await unsettled()
 
 test('a recovered backlog completes across fresh alarm batches without advancing time', () => {
-  equal(pending, [])
-  equal(events >= 3, true)
+  equal(wrote.status, 200)
+  equal(queued, rows.length)
+  ok(remaining < queued, 'the first alarm makes progress')
+  ok(remaining > 0, 'the first alarm leaves work for the next alarm')
+  equal(drained, [])
 })
 
 test('alarm selection preserves future retries and makes overdue work immediately ready', () => {
