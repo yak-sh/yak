@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "yak": {
+      "command": "yak",
+      "args": ["mcp", "--host", "${user_config.server}"]
+    }
+  }
+}

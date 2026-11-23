@@ -1,0 +1,78 @@
+{
+  "description": "Each Claude Code session, its tool calls and its end, reported to yak serve at the plugin's server option; /yak:continue is answered at the prompt hook.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; else printf %s \"$payload\" | yak session context --hook - || true; fi"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; else printf %s \"$payload\" | yak session context --hook - || true; fi"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; else printf %s \"$payload\" | yak session context --hook - || true; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; fi"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; fi"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=$(cat); via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; case \"${CLAUDE_CODE_SESSION_ID:+${AI_AGENT:-}}\" in *_agent) case \"$PWD\" in */.claude/worktrees/agent-*) agent=${PWD##*/.claude/worktrees/agent-}; agent=${agent%%/*}; case \"$agent\" in ''|*[!0-9a-f]*) ;; *) via=$agent ;; esac ;; esac ;; esac; if answer=$(printf %s \"$payload\" | curl --fail --silent --connect-timeout 0.1 --max-time 2 --header \"x-via: $via\" --header 'content-type: application/json' --data-binary @- \"${CLAUDE_PLUGIN_OPTION_SERVER:-http://127.0.0.1:8787}\"/session/hook); then printf '%s\\n' \"$answer\"; else printf %s \"$payload\" | yak session wrap --hook - || true; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -389,7 +389,7 @@ seed(managedStore, {
   entry: { session: ids.run1 },
   content: { body: 'do it' },
   using: { provider: managedProvider },
-})
+}, { entity: { eid: ids.run1 }, process: { cwd: '/w' } })
 let managedGraph = locked(managedStore)
 
 test('a managed run is read from its own output, not its transcript file', async () => {

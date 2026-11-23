@@ -13,6 +13,10 @@
 // of this prompt's context rather than holding the turn. A prompt the harness
 // wrote, a background task's notification, recalls nothing.
 //
+// `/yak:continue` is answered here, before the harness asks its model
+// anything (./continue.ts), and so is Claude Code's status line
+// (`POST /session/status`, ./statusline.ts).
+//
 // A body that is not a hook event is the caller's mistake, refused with a
 // 400. Anything else that goes wrong is thrown to the host, which reports it;
 // the harness treats a failed hook as nothing to add and carries on.
@@ -25,11 +29,16 @@ import type { Runner } from '@yaks/tools'
 import { lifecycle } from './lifecycle.ts'
 import { promptContext } from './prompt.ts'
 import { RECALL, recall, type Recalling } from './recall.ts'
+import { carryOn, continued } from './continue.ts'
+import { statusLine } from './statusline.ts'
 
 export { RECALL }
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
+
+/** Where Claude Code's status line posts what it was handed. */
+export let STATUS = '/session/status'
 
 // Whether the harness still waits for this answer. It gives up on a hook after
 // its timeout (2 s, ./hooks.ts), and Deno tells a handler its client hung up
@@ -52,6 +61,21 @@ export let routes = (
   { wait = RECALL }: { wait?: number } = {},
 ): Route[] => {
   return [{
+    method: 'POST',
+    path: STATUS,
+    handle: async (request) => {
+      // It writes plan readings: a browser's cross-origin post is no status
+      // line.
+      if (request.headers.has('origin')) {
+        return new Response('', { status: 403 })
+      }
+      let status: unknown = await request.json().catch(() => null)
+      if (!status || typeof status != 'object' || Array.isArray(status)) {
+        return new Response('', { status: 400 })
+      }
+      return new Response(await statusLine(host.graph, status))
+    },
+  }, {
     method: 'POST',
     path: '/session/earlier',
     handle: async (request) => {
@@ -86,6 +110,13 @@ export let routes = (
       let event = hook as Record<string, unknown>
       if (event.hook_event_name == 'UserPromptSubmit') {
         let words = typeof event.prompt == 'string' ? event.prompt : ''
+        let asked = continued(words)
+        if (asked) {
+          return Response.json({
+            decision: 'block',
+            reason: await carryOn(host, request, event, asked),
+          })
+        }
         let recalled = NOTICE.test(words)
           ? ''
           : await recall(host, wait).said(words, new Date().toISOString())

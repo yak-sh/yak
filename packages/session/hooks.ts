@@ -13,7 +13,13 @@ import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import { accountHome } from '@yaks/model'
 
-import { PATH } from './routes.ts'
+import { served } from '@yaks/api/address'
+import { PATH, STATUS } from './routes.ts'
+
+/** The Claude Code plugin that carries these hooks and the MCP connection
+ * (plugins/yak), as an account's settings enable it: its name, then its
+ * marketplace's. */
+export let PLUGIN = 'yak@yak'
 
 // The Claude Code account this process signs in with (@yaks/model).
 let own = (): string =>
@@ -122,9 +128,10 @@ let post = (url: string, matcher?: string): Hook => ({
   hooks: [{ type: 'http', url, timeout: 2 }],
 })
 
-// Keep a failed/partial HTTP response out of stdout before trying the CLI.
+// Keep a failed/partial HTTP response out of stdout before trying the CLI, if
+// there is one to try. `door` is a shell word.
 let quote = (s: string) => "'" + s.replaceAll("'", "'\"'\"'") + "'"
-let relay = (door: string, fallback: string, timeout?: number): Hook =>
+let relay = (door: string, fallback?: string, timeout?: number): Hook =>
   cmd(
     'payload=$(cat); ' +
       'via=${CLAUDE_CODE_SESSION_ID:-${TASKS_SESSION:-${CODEX_THREAD_ID:-}}}; ' +
@@ -136,10 +143,33 @@ let relay = (door: string, fallback: string, timeout?: number): Hook =>
       '--connect-timeout 0.1 --max-time 2 ' +
       '--header "x-via: $via" ' +
       "--header 'content-type: application/json' --data-binary @- " +
-      quote(door) + '); then printf \'%s\\n\' "$answer"; ' +
-      `else printf %s "$payload" | ${fallback} || true; fi`,
+      door + '); then printf \'%s\\n\' "$answer"; ' +
+      (fallback ? `else printf %s "$payload" | ${fallback} || true; fi` : 'fi'),
     timeout,
   )
+
+// The entries, posting to the hook door at `door`: a URL, or a shell word
+// that names it, where every entry is then a command (a plugin's hooks read
+// its options from their environment, which an HTTP hook's URL cannot).
+let entries = (
+  door: { url: string } | { word: string },
+  yak: string,
+): Record<string, Hook[]> => {
+  let word = 'url' in door ? quote(door.url) : door.word
+  let send = (matcher?: string): Hook =>
+    'url' in door
+      ? post(door.url, matcher)
+      : { ...(matcher ? { matcher } : {}), ...relay(word) }
+  return {
+    SessionStart: [relay(word, `${yak} session context --hook -`)],
+    SubagentStart: [relay(word, `${yak} session context --hook -`)],
+    UserPromptSubmit: [relay(word, `${yak} session context --hook -`, 5)],
+    PreToolUse: [send('mcp__.*')],
+    PostToolUse: [send()],
+    Stop: [send()],
+    SessionEnd: [relay(word, `${yak} session wrap --hook -`, 5)],
+  }
+}
 
 /**
  * The entries this package owns, keyed by the harness event each responds to.
@@ -151,18 +181,33 @@ let relay = (door: string, fallback: string, timeout?: number): Hook =>
 export let lifecycle = (
   server: string,
   yak = 'yak',
-): Record<string, Hook[]> => {
-  let door = `${server.replace(/\/+$/, '')}${PATH}`
-  return {
-    SessionStart: [relay(door, `${yak} session context --hook -`)],
-    SubagentStart: [relay(door, `${yak} session context --hook -`)],
-    UserPromptSubmit: [relay(door, `${yak} session context --hook -`, 5)],
-    PreToolUse: [post(door, 'mcp__.*')],
-    PostToolUse: [post(door)],
-    Stop: [post(door)],
-    SessionEnd: [relay(door, `${yak} session wrap --hook -`, 5)],
-  }
-}
+): Record<string, Hook[]> =>
+  entries({ url: `${server.replace(/\/+$/, '')}${PATH}` }, yak)
+
+/** The plugin's option naming the `yak serve` its hooks and MCP connection
+ * reach, as its hooks read it from their environment. */
+export let SERVER = 'CLAUDE_PLUGIN_OPTION_SERVER'
+
+/** The same entries as the plugin carries them (plugins/yak/hooks/hooks.json):
+ * the door is the server its `server` option names, else the one `yak serve`
+ * listens at by default. */
+export let pluginHooks = (yak = 'yak'): Record<string, Hook[]> =>
+  entries({ word: `"\${${SERVER}:-${served({})}}"${PATH}` }, yak)
+
+/** The status line entry: Claude Code hands what it knows to the server's
+ * status door, which keeps the plan readings and answers the line
+ * (./statusline.ts). A server that is down leaves the line empty. */
+export let statusLine = (server: string) => ({
+  type: 'command',
+  command: 'curl --fail --silent --connect-timeout 0.1 --max-time 1 ' +
+    "--header 'content-type: application/json' --data-binary @- " +
+    quote(`${server.replace(/\/+$/, '')}${STATUS}`),
+  padding: 0,
+})
+
+let ourLine = (line: unknown) =>
+  String((line as { command?: string } | undefined)?.command ?? '')
+    .includes(STATUS)
 
 // Ours, identified by the command it runs or the door it posts to, including
 // the turn hooks an older install wrote (`session/turn.ts`), which an install
@@ -195,53 +240,94 @@ export let merged = (
   return out
 }
 
+/** What an install did to one Claude Code account. */
+export type Installed = {
+  /** the settings file written */
+  path: string
+  /** whether the account runs the plugin, which carries the hooks and the
+   * MCP connection in their place */
+  plugin: boolean
+  /** whether the status line is ours */
+  line: boolean
+}
+
 /** What an install tells the person who ran it: what changed, and what to do
  * next for Claude Code to work with this graph. */
 export let installed = (
-  path: string,
+  done: Installed,
   server: string,
   removed = false,
   mcp?: { path: string; name: string },
 ): string =>
   removed
     ? [
-      `removed this graph's session hooks from ${path}`,
+      `removed this graph's session hooks and status line from ${done.path}`,
       ...mcp ? [`and its MCP server ${mcp.name} from ${mcp.path}`] : [],
     ].join('\n')
     : [
-      `wrote the session hooks into ${path}.`,
-      ...mcp
+      done.plugin
+        ? `${done.path} runs the ${PLUGIN} plugin, which carries the hooks ` +
+          `and this graph's tools: it now reaches ${server}, and the hooks ` +
+          'and MCP server an earlier install wrote by hand are gone.'
+        : `wrote the session hooks into ${done.path}.`,
+      ...mcp && !done.plugin
         ? [
           `wrote this graph's tools into ${mcp.path} as the MCP server ` +
           `${mcp.name}, each call naming its session.`,
         ]
         : [],
+      done.line
+        ? "the status line shows each plan's room."
+        : 'the status line is your own, so it is left as it was.',
       'A Claude Code session started from now on, in any directory, is a ' +
       'session in this graph.',
       `next: yak serve, which the hooks post each tool call to (${server}${PATH}).`,
     ].join('\n')
 
-/** Write the entries into a settings file, keeping everything else in it.
- * Answers the path written. */
+/** Write the entries and the status line into a settings file, keeping
+ * everything else in it; where the account runs the plugin, point it at
+ * `server` and take out the entries an earlier install wrote, which the
+ * plugin carries. A status line of the person's own stays. */
 export let install = (
   path: string,
   opts: { server: string; yak?: string; remove?: boolean },
-): string => {
+): Installed => {
   let settings: Record<string, unknown> = {}
   try {
     settings = JSON.parse(fs.readTextFileSync(path))
   } catch (e) {
     if (!fs.isNotFound(e)) throw e
   }
+  let plugin =
+    !!(settings.enabledPlugins as Record<string, unknown> | undefined)
+      ?.[PLUGIN]
   let hooks = merged(
     settings.hooks as Record<string, unknown> | undefined,
     lifecycle(opts.server, opts.yak),
-    opts.remove,
+    opts.remove || plugin,
   )
   let next: Record<string, unknown> = { ...settings, hooks }
   if (!Object.keys(hooks).length) delete next.hooks
+  let line = !settings.statusLine || ourLine(settings.statusLine)
+  if (line && opts.remove) delete next.statusLine
+  else if (line) next.statusLine = statusLine(opts.server)
+  if (plugin && !opts.remove) {
+    let configs = settings.pluginConfigs as
+      | Record<string, { options?: Record<string, unknown> }>
+      | undefined
+    next.pluginConfigs = {
+      ...configs,
+      [PLUGIN]: {
+        ...configs?.[PLUGIN],
+        options: {
+          ...configs?.[PLUGIN]?.options,
+          server: opts.server.replace(/\/+$/, ''),
+        },
+      },
+    }
+  }
   let dir = path.slice(0, path.lastIndexOf('/'))
   if (dir) fs.mkdirSync(dir, { recursive: true })
   fs.writeTextFileSync(path, `${JSON.stringify(next, null, 2)}\n`)
-  return path
+  return { path, plugin, line }
 }

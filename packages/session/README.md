@@ -731,6 +731,61 @@ project) is one line.
 A listened line counts as heard once printed, so the command's output goes
 straight to the harness, never to a file another loop watches.
 
+## The Claude Code plugin
+
+`plugins/yak` packages the same hooks and the graph's MCP connection as a Claude
+Code plugin, `yak@yak`, from the marketplace at the repository's root:
+
+```sh
+claude plugin marketplace add yak-sh/yak
+claude plugin install yak@yak
+yak hooks install
+```
+
+Its hooks are the ones above (`pluginHooks`), every one a command, since a
+plugin's option reaches a command's environment (`CLAUDE_PLUGIN_OPTION_SERVER`)
+and not an HTTP hook's URL. The option is the plugin's `server`, by default
+`http://127.0.0.1:8787`. `yak hooks install` on an account that runs the plugin
+sets it to this graph's server, takes out the hooks and MCP server an earlier
+install wrote by hand, and writes the status line, which no plugin can.
+
+**The status line.** Claude Code hands the line its session's model, context and
+plan limits; the line posts them to `POST /session/status`
+(`@yaks/session/statusline`), which keeps the limits as the account's
+`rate_limit` rows, written only where a reading moved, and answers each plan's
+room, this session's plan first:
+
+```
+Opus 5.5 ctx 42% │ claude-work 5h 8% (90m) · wk 60% │ codex wk 70%
+```
+
+A plan is an account, named by its directory; each window says what is left, and
+when it resets where less than a tenth is. An install leaves a status line of
+the person's own as it is.
+
+**`/yak:continue`.** The prompt hook answers it before Claude Code asks its
+model anything, so it works when that model's plan is spent: the door blocks the
+prompt and Claude Code shows the answer (`@yaks/session/continue`).
+
+| Typed                                    | Does                                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `/yak:continue [provider/]model [words]` | hands this conversation to that model in place (`session_send`), from the words or "Continue." |
+| `/yak:continue S-12`                     | writes S-12 into this account for `/resume` (`session_open`)                                   |
+| `/yak:continue`                          | how to use it, and each plan's room                                                            |
+
+**Opening a session in Claude Code.** `yak session open S-12 --in claude` writes
+the session's conversation as Claude Code's own transcript, under the session's
+id, so `claude --resume <id>` (or `/resume <id>`) continues it. Claude Code
+resumes a transcript it did not write, other harnesses' tool calls included, as
+long as each line has its shape. Into a file Claude Code already keeps of the
+session goes only what was said since its last line; any other session gets a
+new file in `cwd`'s projects holding all of it. The lines end with the note any
+model gets when it takes over another harness's conversation. Each written line
+names its entry (`yak.entry`), and the Claude Code reader skips such a line,
+while what Claude Code appends after them is read into the same session. A
+session another model took over here is still read from its Claude Code file:
+only a run @yaks/spawn launched (`process`) is read from its own stream instead.
+
 ## Transcripts from outside
 
 A session a harness runs outside this package's daemon is read into the graph

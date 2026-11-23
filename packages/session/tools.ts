@@ -93,6 +93,7 @@ let ENDED = ['stopped', 'failed']
 // (deno.json) is what keeps an import written here from loading at start.
 let wake = () => import('./wake.ts')
 let hooks = () => import('./hooks.ts')
+let resume = () => import('./resume.ts')
 let cache = () => import('./cache.ts')
 let personas = () => import('@yaks/persona')
 let help = () => import('./help.ts')
@@ -477,6 +478,35 @@ export let runs = (
     ]
   },
 
+  session_open: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let { openInClaude } = await resume()
+    let home = systemProcess.env.get('HOME') ?? '~'
+    let account = (str(args.account) ||
+      (await import('@yaks/model')).accountHome(
+        'claude',
+        (name) => systemProcess.env.get(name),
+      ) || `${home}/.claude`).replace(/^~(?=\/|$)/, home)
+    let session = str(args.session)
+    let opened = await openInClaude(graph, session, {
+      account,
+      cwd: str(args.cwd) || undefined,
+    })
+    return [{
+      entity: { eid: '$said' },
+      content: {
+        body: [
+          opened.written
+            ? `wrote ${opened.written} lines of it into ${opened.path}`
+            : `${opened.path} holds all of it already`,
+          `resume it in Claude Code with /resume ${session}, or from a ` +
+          `shell: cd ${opened.cwd} && claude --resume ${session}`,
+        ].join('\n'),
+      },
+      output: { source: call.entity.eid },
+    }]
+  },
+
   hooks_install: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let { install, settingsPath, installed, connect, configPath } =
@@ -499,19 +529,20 @@ export let runs = (
       ? [undefined]
       : known
     let said = accounts.map((account) => {
-      let path = install(str(args.path) || settingsPath(account), {
+      let done = install(str(args.path) || settingsPath(account), {
         server,
         yak,
         remove,
       })
+      // The plugin carries the MCP connection where the account runs it.
       let config = str(args.config) || configPath(account)
       let name = connect(config, {
         server,
         yak,
         name: str(args.name) || undefined,
-        remove,
+        remove: remove || done.plugin,
       })
-      return installed(path, server, remove, { path: config, name })
+      return installed(done, server, remove, { path: config, name })
     })
     return [{
       entity: { eid: '$said' },

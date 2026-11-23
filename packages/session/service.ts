@@ -135,12 +135,16 @@ export type Seen = {
   written?: Map<string, number>
 }
 
-/** Whether a session is a managed run: its transcript asks a provider for
- * one, which is the request @yaks/spawn answers. */
-export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
-  (await g.read(
-    line`.entry.session=${session}&.using.provider&!lines&.limit=1`,
-  )).length > 0
+/** Whether a session is a managed run: one @yaks/spawn launches, claiming
+ * its `process` before the launch, and reads from the run's own stream, so
+ * the transcript file the run also keeps is not read a second time. A model
+ * taking a conversation over here (@yaks/harness `session_send`) makes none:
+ * the harness that ran it may write to its file again. */
+export let managed = async (g: Graph, session: Eid): Promise<boolean> => {
+  if (!g.vocab.comp('process')) return false
+  let [s] = await g.get([session], ['process'])
+  return !!s?.process
+}
 
 // What the harness says of a subagent in the meta file beside its
 // transcript: the call that started it, and what that call said it was for.

@@ -62,7 +62,7 @@ let managedGraph = locked(store())
 let history = locked(store())
 let provider = identityEid('provider', ['codex'])
 await managedGraph.apply([
-  { entity: { eid: id }, session: { id } },
+  { entity: { eid: id }, session: { id }, process: { cwd: '/w' } },
   {
     entity: { eid: provider },
     provider: { name: 'codex', transport: 'process' },

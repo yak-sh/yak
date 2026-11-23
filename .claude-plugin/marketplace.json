@@ -1,0 +1,16 @@
+{
+  "name": "yak",
+  "description": "yak's plugins for Claude Code.",
+  "owner": {
+    "name": "yak",
+    "url": "https://github.com/yak-sh/yak"
+  },
+  "plugins": [
+    {
+      "name": "yak",
+      "source": "./plugins/yak",
+      "description": "Claude Code sessions as sessions in your yak graph, and /yak:continue to carry a conversation to another model.",
+      "category": "productivity"
+    }
+  ]
+}

@@ -1,6 +1,15 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { connect, connection, install, lifecycle, merged } from './hooks.ts'
+import {
+  connect,
+  connection,
+  install,
+  lifecycle,
+  merged,
+  PLUGIN,
+  pluginHooks,
+  statusLine,
+} from './hooks.ts'
 
 let at = 'http://127.0.0.1:8787'
 let ours = lifecycle(at)
@@ -133,4 +142,83 @@ test('an existing local MCP client is replaced and removed on the same door', ()
   })
   connect(path, { server: at, remove: true })
   assertEquals(read(path).mcpServers, { docs: { command: 'docs', args: [] } })
+})
+
+test("the status line is written where the account has none, and a person's own stays", () => {
+  let none = config({})
+  assertEquals(install(none, { server: at }).line, true)
+  install(none, { server: 'http://box:9' })
+  assertEquals(read(none).statusLine, statusLine('http://box:9'))
+  let own = { type: 'command', command: '~/bin/my-line' }
+  let mine = config({ statusLine: own })
+  assertEquals(install(mine, { server: at }).line, false)
+  install(mine, { server: at, remove: true })
+  assertEquals(read(mine).statusLine, own)
+})
+
+test('an account running the plugin is pointed at the server, and the hooks written by hand come out', () => {
+  let path = config({ enabledPlugins: { [PLUGIN]: true } })
+  install(path, { server: at })
+  assertEquals(install(path, { server: 'http://box:9/' }).plugin, true)
+  let said = read(path)
+  assertEquals(said.hooks, undefined)
+  assertEquals(said.pluginConfigs, {
+    [PLUGIN]: { options: { server: 'http://box:9' } },
+  })
+  assertEquals(said.enabledPlugins, { [PLUGIN]: true })
+})
+
+let root = new URL('../../plugins/yak/', import.meta.url)
+let shipped = JSON.parse(
+  Deno.readTextFileSync(new URL('hooks/hooks.json', root)),
+)
+
+test('the plugin carries the hooks an install writes, posting to its server option', () => {
+  assertEquals(shipped.hooks, pluginHooks())
+  assertEquals(Object.keys(shipped.hooks), Object.keys(lifecycle(at)))
+})
+
+// A plugin hook run as Claude Code runs it: the event on stdin, the option in
+// its environment.
+let hook = async (event: string, server: string, payload: object) => {
+  let command = (shipped.hooks[event][0].hooks[0] as { command: string })
+    .command
+  let p = new Deno.Command('sh', {
+    args: ['-c', command],
+    env: { CLAUDE_PLUGIN_OPTION_SERVER: server, PATH: '/usr/bin:/bin' },
+    stdin: 'piped',
+    stdout: 'piped',
+  }).spawn()
+  let w = p.stdin.getWriter()
+  await w.write(new TextEncoder().encode(JSON.stringify(payload)))
+  await w.close()
+  let out = await p.output()
+  return { code: out.code, said: new TextDecoder().decode(out.stdout) }
+}
+
+test("a plugin hook posts its event to the option's server and prints the answer", async () => {
+  let heard: unknown[] = []
+  let server = Deno.serve({ port: 0, onListen: () => {} }, async (r) => {
+    heard.push([new URL(r.url).pathname, await r.json()])
+    return Response.json({ decision: 'block', reason: 'answered' })
+  })
+  try {
+    let { port } = server.addr as Deno.NetAddr
+    let ran = await hook('UserPromptSubmit', `http://127.0.0.1:${port}`, {
+      prompt: '/yak:continue',
+    })
+    assertEquals(ran.code, 0)
+    assertEquals(JSON.parse(ran.said), {
+      decision: 'block',
+      reason: 'answered',
+    })
+    assertEquals(heard, [['/session/hook', { prompt: '/yak:continue' }]])
+  } finally {
+    await server.shutdown()
+  }
+})
+
+test('a plugin hook whose server is down says nothing and lets Claude Code go on', async () => {
+  let ran = await hook('PostToolUse', 'http://127.0.0.1:9', { tool: 'x' })
+  assertEquals(ran, { code: 0, said: '' })
 })

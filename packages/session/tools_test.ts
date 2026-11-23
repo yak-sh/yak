@@ -66,6 +66,7 @@ test('every session tool is declared and implemented', () => {
     'session_context',
     'session_handup',
     'session_listen',
+    'session_open',
     'session_wrap',
   ])
 })

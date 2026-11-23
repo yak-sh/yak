@@ -399,7 +399,9 @@ let line: Reader = (e) => {
  * this session's. The stream also says how much of the plan's limits is used
  * (`rate_limit_event`), whenever a window's percentage moves; an interactive
  * session's file does not, and its status line is read instead
- * (@yaks/spend).
+ * (@yaks/spend). A line written from the graph to open a session in Claude
+ * Code names the entry it came from (`yak.entry`, ./resume.ts) and is read as
+ * nothing: it is that entry already.
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -409,6 +411,8 @@ let line: Reader = (e) => {
  * assertEquals(claude(typed).entries, [{ content: { body: 'hi' } }])
  * let aside = { type: 'assistant', parent_tool_use_id: 'toolu_1', message: { content: 'done' } }
  * assertEquals(claude(aside).entries, [])
+ * let ours = { ...typed, yak: { entry: 'e' } }
+ * assertEquals(claude(ours).entries, [])
  * let week = { utilization: 0.25, resetsAt: 1794913200, status: 'allowed' }
  * let metered = { type: 'rate_limit_event', rate_limit_info: { status: 'allowed', unifiedWindows: { seven_day: week } } }
  * assertEquals(claude(metered).limits, [
@@ -417,7 +421,7 @@ let line: Reader = (e) => {
  * ```
  */
 export let claude: Reader = (e) =>
-  e.isSidechain || e.parent_tool_use_id ? nothing : line(e)
+  e.isSidechain || e.parent_tool_use_id || e.yak ? nothing : line(e)
 
 /**
  * A Claude Code subagent's own transcript

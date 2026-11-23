@@ -18,6 +18,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
+import { processDoc } from '@yaks/process/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { idKeywords } from '@yaks/id'
 import { sessionDoc } from './comp.ts'
@@ -86,6 +87,7 @@ export let pages: Vocab = loadVocab([
   modelDoc,
   fileDoc,
   machineDoc,
+  processDoc,
   edgeDoc,
   doc,
 ], [edgeKeywords, idKeywords])

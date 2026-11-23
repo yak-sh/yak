@@ -978,12 +978,41 @@
         "text"
       ]
     },
+    "session_open": {
+      "tool": true,
+      "noun": "session",
+      "verb": "open",
+      "title": "Open a session in another harness",
+      "description": "Write a session's conversation where another harness resumes it, and answer how to resume it there. in:claude writes Claude Code's transcript under the session's own id (`<account>/projects/<cwd>/<id>.jsonl`), other harnesses' tool calls included: into the file Claude Code already keeps of it, only what was said since its last line, else a new file holding the whole conversation, closed by a note that another harness ran it so far. What Claude Code says after it is read back into the same session. Writes on this machine.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session; pass its id or registered name"
+        },
+        "in": {
+          "type": "string",
+          "enum": ["claude"],
+          "description": "the harness to open it in"
+        },
+        "account": {
+          "type": "string",
+          "description": "the Claude Code account directory (`~/.claude-work`); by default this process's own"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "the directory to resume it in (default: where Claude Code already keeps it); needed for a session Claude Code keeps no file of"
+        }
+      },
+      "required": ["session", "in"],
+      "positional": ["session"]
+    },
     "hooks_install": {
       "tool": true,
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent, and Stop delivers what arrived during its last answer. Transcript import supplies intervening turns. Replaces this install’s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, through the local yak mcp client, which expands local file arguments and names the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent, and Stop delivers what arrived during its last answer. Transcript import supplies intervening turns. Replaces this install’s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, through the local yak mcp client, which expands local file arguments and names the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Also writes the status line, which shows each plan's room (`POST /session/status`), unless the account has one of its own. Where the account runs the yak@yak Claude Code plugin (plugins/yak), which carries the hooks and the MCP server, points the plugin at this server and takes out the hooks and MCP server an earlier install wrote instead. Writes on this machine; answers the paths written and what to do next. remove uninstalls all of it.",
       "input": {
         "account": {
           "type": "string",

@@ -119,9 +119,18 @@ export let handoffOf = async (
       }&(.using|.ask)&.order=-entry.seq&.limit=8&.fields=entry.seq,using.provider,using.model,ask.to`,
     ),
   ])
+  return handoff([...calls, ...said], await namesOf(g, said))
+}
+
+/** The names of the providers and models entries' `using` and `ask` name,
+ * by their rows' eids: what {@link handoff} says a conversation ran on. */
+export let namesOf = async (
+  g: Graph,
+  entries: Bundle[],
+): Promise<Map<Eid, string>> => {
   let named = [
     ...new Set(
-      said.flatMap((b) => [
+      entries.flatMap((b) => [
         comp(b, 'using')?.provider,
         comp(b, 'using')?.model,
         comp(b, 'ask')?.to,
@@ -129,11 +138,10 @@ export let handoffOf = async (
     ),
   ]
   let rows = named.length ? await g.get(named) : []
-  let names = new Map(
+  return new Map(
     rows.flatMap((r) => {
       let name = comp(r, 'provider')?.name ?? comp(r, 'model')?.name
       return typeof name == 'string' ? [[r.entity.eid, name] as const] : []
     }),
   )
-  return handoff([...calls, ...said], names)
 }

@@ -1,0 +1,21 @@
+{
+  "name": "yak",
+  "version": "0.1.0",
+  "description": "Claude Code sessions as sessions in your yak graph: the graph's tools, its session hooks, /yak:continue to carry a conversation to another model, and back.",
+  "author": {
+    "name": "yak",
+    "url": "https://github.com/yak-sh/yak"
+  },
+  "homepage": "https://github.com/yak-sh/yak/tree/main/plugins/yak",
+  "repository": "https://github.com/yak-sh/yak",
+  "license": "Apache-2.0",
+  "keywords": ["yak", "sessions", "hand-off", "models"],
+  "userConfig": {
+    "server": {
+      "type": "string",
+      "title": "yak serve address",
+      "description": "Where yak serve listens on this machine. yak hooks install sets it for you.",
+      "default": "http://127.0.0.1:8787"
+    }
+  }
+}
