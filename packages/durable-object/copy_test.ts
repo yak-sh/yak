@@ -1,6 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { col, eq, op, select, table, val } from '@yaks/sql'
 import {
+  align,
   arrived,
   chunks,
   copied,
@@ -168,6 +169,25 @@ test('a second look sends only what changed, deletions included', () => {
   equal(fired.map((c) => c.table), ['child'])
   for (let c of fired) overwritten(to, p, c, reread(from, p, c))
   equal(stale(to, p, chunks(from, p)), [])
+})
+
+test('a prepared copy catches up when tables and indexes change while the source serves', () => {
+  let from = source()
+  let { to } = copyOf(from)
+  ddl(from, 'alter table child add column label text')
+  ddl(from, 'create table late (v text)')
+  ddl(from, 'create index late_v on late(v)')
+  from.query({ t: 'insert', into: 'late', cols: ['v'], rows: [[val('new')]] })
+  let p = plan(from)
+  let ranges = chunks(from, p)
+  equal(align(to, p), false)
+  let differ = stale(to, p, ranges)
+  equal(differ.map((c) => c.table), ['child', 'late'])
+  for (let c of differ) overwritten(to, p, c, reread(from, p, c))
+  equal(stale(to, p, ranges), [])
+  ending(to, p)
+  equal(plan(to).sequences, p.sequences)
+  equal(align(to, p), true)
 })
 
 test('one table of the plan is had alone, and nothing the plan leaves out', () => {

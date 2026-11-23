@@ -39,6 +39,7 @@
 // serving through `prepare`, and the new one takes writes as soon as it is
 // named.
 import {
+  align,
   arrived,
   type Cell,
   type Chunk,
@@ -144,8 +145,12 @@ let arrive = async (storage: Relocating, told: Told): Promise<Response> => {
         ),
         written,
       })
-    case 'stale':
-      return Response.json(stale(sql, told.plan, told.chunks))
+    case 'stale': {
+      let fitted = align(sql, told.plan)
+      let differ = stale(sql, told.plan, told.chunks)
+      if (!differ.length && !fitted) ending(sql, told.plan)
+      return Response.json(differ)
+    }
     case 'replace':
       overwritten(sql, told.plan, told.chunk, told.rows)
       return Response.json({ written })

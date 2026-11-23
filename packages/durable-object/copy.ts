@@ -17,6 +17,7 @@ import {
   as,
   col,
   type Driver,
+  type Drop,
   eq,
   fn,
   gt,
@@ -301,6 +302,44 @@ export let copied = (driver: Driver, p: Plan): void => {
   unit(driver, () => {
     for (let t of p.tables) driver.query({ t: 'catalogued', sql: t.sql })
   })
+}
+
+/** Fit the far end's tables to a newer plan before comparing ranges. Keep
+ * rows in tables whose definitions still match. If the schema moved, leave
+ * indexes, triggers and views for `ending` once the rows agree. */
+export let align = (driver: Driver, p: Plan): boolean => {
+  let objects = schema(driver)
+  let fts = ftsOf(objects)
+  let tables = objects.filter((o) => rowed(o, fts))
+  let virtuals = objects.filter((o) => virtual(o.sql))
+  let others = objects.filter((o) => o.type != 'table')
+  let held = new Set([...tables, ...virtuals, ...others].map((o) => o.sql))
+  let wanted = [
+    ...p.tables.map((t) => t.sql),
+    ...p.fts.map((t) => t.sql),
+    ...p.views,
+    ...p.after,
+  ]
+  if (held.size == wanted.length && wanted.every((sql) => held.has(sql))) {
+    return true
+  }
+
+  let definitions = new Set(p.tables.map((t) => t.sql))
+  let changed = tables.filter((o) => !definitions.has(String(o.sql)))
+  driver.query({ t: 'pragma', name: 'foreign_keys', value: 'off' })
+  unit(driver, () => {
+    for (let o of [...others, ...virtuals, ...changed]) {
+      driver.query({
+        t: 'drop',
+        kind: o.type as Drop['kind'],
+        name: String(o.name),
+      })
+    }
+    for (let t of p.tables) {
+      if (!held.has(t.sql)) driver.query({ t: 'catalogued', sql: t.sql })
+    }
+  })
+  return false
 }
 
 /** Rows into their table, under the rowids they have always had. */

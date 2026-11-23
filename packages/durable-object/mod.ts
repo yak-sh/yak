@@ -64,6 +64,7 @@ export {
   type SqlValue,
 } from './sql.ts'
 export {
+  align,
   arrived,
   type Cell,
   type Chunk,
