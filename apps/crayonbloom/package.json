@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@yaks/blob": "platform",
     "@yaks/graph": "platform",
     "@yaks/member": "platform",
     "pdf-lib": "1.17.1",

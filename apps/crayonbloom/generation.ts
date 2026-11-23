@@ -1,4 +1,5 @@
-import { decode, encode } from 'fast-png'
+import { encode } from 'fast-png'
+import { mediaTypeOf, sizeOf } from '@yaks/blob'
 import { type Bundle, sha256 } from '@yaks/graph'
 import { type Binding, json, type Store, type Who } from './db.ts'
 import type { Generator } from './atelier.ts'
@@ -25,7 +26,7 @@ export let settings = async (db: Store): Promise<Runtime> => {
 export let put = async (
   app: Binding,
   caller: Who,
-  bytes: Uint8Array,
+  bytes: Uint8Array | ReadableStream<Uint8Array>,
   mime: string,
 ): Promise<Omit<Art, 'input'>> => {
   let query = new URLSearchParams()
@@ -35,19 +36,39 @@ export let put = async (
     await app.fetch('/pay/artifacts?' + query, {
       method: 'POST',
       headers: { 'content-type': mime, 'x-yak-name': 'CrayonBloom artwork' },
-      body: new Uint8Array(bytes),
+      body: bytes instanceof Uint8Array ? new Uint8Array(bytes) : bytes,
     }),
   )
   return { blob: result.eid, hash: result.eid, mime }
 }
 export let checkedImage = (bytes: Uint8Array, size: string) => {
-  let image = decode(bytes), [width, height] = size.split('x').map(Number)
-  if (image.width !== width || image.height !== height) {
+  let image = mediaTypeOf(bytes) == 'image/png' && sizeOf(bytes)
+  if (!image) throw new Error('The image provider did not return a PNG.')
+  if (`${image.w}x${image.h}` !== size) {
     throw new Error(
       'The image provider returned a different size than requested. Your saved pages are kept.',
     )
   }
-  return image
+}
+
+// PNG puts both dimensions in its first 24 bytes. Check them as the
+// generated artifact is copied to the customer's protected artwork.
+let sized = (size: string) => {
+  let header = new Uint8Array(24), at = 0
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, out) {
+      if (at < header.length) {
+        let head = chunk.subarray(0, header.length - at)
+        header.set(head, at)
+        at += head.length
+        if (at == header.length) checkedImage(header, size)
+      }
+      out.enqueue(chunk)
+    },
+    flush() {
+      if (at < header.length) checkedImage(header.subarray(0, at), size)
+    },
+  })
 }
 let sample = (seed: number) => {
   let width = 2400,
@@ -158,8 +179,8 @@ export let generation = (
     if (!bytes.ok) {
       throw new Error('Completed artwork could not be read: ' + bytes.status)
     }
-    let completed = new Uint8Array(await bytes.arrayBuffer())
-    checkedImage(completed, '2400x3040')
+    if (!bytes.body) throw new Error('Completed artwork has no body.')
+    let completed = bytes.body.pipeThrough(sized('2400x3040'))
     return {
       artwork: await put(
         app,

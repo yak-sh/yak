@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
 import { encode } from 'fast-png'
 import { checkedImage, generation } from './generation.ts'
@@ -31,19 +31,38 @@ test('a page request sends ordered character and prior-page references before it
   )
   assertEquals(rows.at(-1)!.content, { body: 'A new scene at the bridge' })
   let sending = rows.at(-1)!.sending as { input: { size: string } }
-  let [width, height] = sending.input.size.split('x').map(Number)
-  assertEquals(
-    checkedImage(
-      encode({
-        width,
-        height,
-        data: new Uint8Array(width * height).fill(255),
-        channels: 1,
-      }),
-      sending.input.size,
-    ).width,
-    width,
-  )
+  assertEquals(sending.input.size, '2400x3040')
+})
+
+let pngHeader = Uint8Array.from([
+  137,
+  80,
+  78,
+  71,
+  13,
+  10,
+  26,
+  10,
+  0,
+  0,
+  0,
+  13,
+  73,
+  72,
+  68,
+  82,
+  0,
+  0,
+  9,
+  96,
+  0,
+  0,
+  11,
+  224,
+])
+
+test('a coloring page checks the PNG dimensions without inflating its pixels', () => {
+  checkedImage(pngHeader, '2400x3040')
   let tiny = encode({
     width: 8,
     height: 8,
@@ -51,8 +70,61 @@ test('a page request sends ordered character and prior-page references before it
     channels: 1,
   })
   assertThrows(
-    () => checkedImage(tiny, sending.input.size),
+    () => checkedImage(tiny, '2400x3040'),
     Error,
     'different size',
   )
+  assertThrows(
+    () => checkedImage(new Uint8Array(24), '2400x3040'),
+    Error,
+    'PNG',
+  )
+})
+
+test('a completed page streams the original bytes to protected artwork', async () => {
+  let pushed: Uint8Array[] = []
+  let original = Uint8Array.of(...pngHeader, 1, 2, 3)
+  let current = original
+  let driver = generation(
+    {
+      query: (query) =>
+        Promise.resolve(
+          query.includes('?session') ? [] : [{
+            entity: { eid: 'answer' },
+            output: {},
+            attachment: { artifact: 'generated' },
+          }],
+        ),
+      apply: () => Promise.reject(new Error('unexpected write')),
+    },
+    {
+      async fetch(path, init) {
+        if (path === '/blob/generated') {
+          return new Response(
+            new ReadableStream({
+              start(out) {
+                out.enqueue(current.slice(0, 7))
+                out.enqueue(current.slice(7))
+                out.close()
+              },
+            }),
+          )
+        }
+        assertEquals(path, '/pay/artifacts?buyer=buyer')
+        let body = init?.body as ReadableStream<Uint8Array>
+        pushed.push(new Uint8Array(await new Response(body).arrayBuffer()))
+        return Response.json({ eid: 'artwork' })
+      },
+    },
+    { person: 'buyer' },
+    { preview: false, font: '', printer: '', model: '' },
+  )
+  let result = await driver.result('job')
+  assertEquals(result, {
+    artwork: { blob: 'artwork', hash: 'artwork', mime: 'image/png' },
+  })
+  assertEquals(pushed, [original])
+  current = pngHeader.slice(0, 20)
+  await assertRejects(() => driver.result('job'), Error, 'PNG')
+  assertEquals(pushed, [original])
 })
