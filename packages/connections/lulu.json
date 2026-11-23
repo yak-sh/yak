@@ -1,0 +1,31 @@
+{
+  "name": "lulu",
+  "title": "Lulu",
+  "tagline": "Print-on-demand books: paperbacks, hardcovers and coil-bound books printed and shipped one at a time.",
+  "site": "https://www.lulu.com",
+  "logo": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><rect width=\"24\" height=\"24\" rx=\"5\" fill=\"#1f2a44\"/><path d=\"M7 5h2.6v11.4H17V19H7z\" fill=\"#fff\"/></svg>",
+  "hosts": [
+    "api.lulu.com",
+    "api.sandbox.lulu.com"
+  ],
+  "api": {
+    "base": "https://api.lulu.com",
+    "docs": "https://api.lulu.com/docs/",
+    "reads": [
+      "POST /print-job-cost-calculations/",
+      "POST /shipping-options/"
+    ]
+  },
+  "fields": [
+    {
+      "name": "key",
+      "label": "Client key",
+      "shown": true
+    },
+    {
+      "name": "secret",
+      "label": "Client secret"
+    }
+  ],
+  "instructions": "1. Sign in at [developers.lulu.com](https://developers.lulu.com) with the Lulu account that pays for printing. A test account at [developers.sandbox.lulu.com](https://developers.sandbox.lulu.com) prints nothing and charges nothing.\n2. Open **API Keys** in your profile and copy the **Client key** and **Client secret**.\n3. In your Lulu account's payment settings, save the card Lulu charges for each print job. Without one, every job waits in Lulu for you to pay it by hand.\n4. Paste the key and secret here.\n\nEvery book printed through this connection is charged to that Lulu account. An app exchanges the pair for a token at `/auth/realms/glasstree/protocol/openid-connect/token` with a Basic credential of `key:secret`, and calls the API with that token."
+}

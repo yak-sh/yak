@@ -35,6 +35,7 @@ import googleDrive from './google-drive.json' with { type: 'json' }
 import googleSearchConsole from './google-search-console.json' with {
   type: 'json',
 }
+import lulu from './lulu.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 import openai from './openai.json' with { type: 'json' }
 import voipms from './voipms.json' with { type: 'json' }
@@ -176,6 +177,7 @@ let SEEDS: Integration[] = [
   googleCalendar,
   googleDrive,
   googleSearchConsole,
+  lulu,
   { ...openai, refresh_encoding: 'json' },
   { ...openrouter, answers: 'key' },
   voipms,

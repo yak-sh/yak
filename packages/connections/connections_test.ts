@@ -634,6 +634,7 @@ test('the integration directory: every built one but those in testing, and each 
     'Gmail',
     'Google Calendar',
     'Google Drive',
+    'Lulu',
     'OpenAI',
     'OpenRouter',
     'texts',
