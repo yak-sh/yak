@@ -365,11 +365,22 @@ export let controls = ({ doc, client, kinds = [], files, accepts }) => {
     if (f.control == 'time') {
       return drawField(h, { ...attrs, type: 'datetime-local', value })
     }
+    // An address may be relative to the app, a file beside its page
+    // (`tee.svg`), which a browser's url field refuses.
+    if (f.control == 'url') {
+      return drawField(h, {
+        ...attrs,
+        type: 'text',
+        inputmode: 'url',
+        placeholder: 'https://example.com or a file name',
+        value,
+      })
+    }
     return drawField(h, {
       ...attrs,
       type: f.control,
       step: f.control == 'number' ? 'any' : null,
-      placeholder: f.control == 'url' ? 'https://example.com' : 'e.g. 12',
+      placeholder: 'e.g. 12',
       value,
     })
   }
