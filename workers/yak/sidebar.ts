@@ -53,8 +53,9 @@ export type Sidebar = {
   label: string
   title?: string
   back?: { href: string; name: string }
-  picker?: Parameters<typeof choice>
-  sections: Section[]
+  personal?: Section
+  space?: { picker: Parameters<typeof choice>; sections: Section[] }
+  sections?: Section[]
   footer?: Section[]
   fold?: { collapsed: boolean; back: string }
 }
@@ -161,8 +162,9 @@ let section = (at: Section, collapsed: boolean) =>
       : h('p', { class: 'Sidebar_None' }, at.empty),
   )
 
-export let Sidebar = (at: Sidebar) =>
-  h(
+export let Sidebar = (at: Sidebar) => {
+  let draw = (s: Section) => section(s, !!at.fold?.collapsed)
+  return h(
     SideNav.Edge,
     {
       class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
@@ -209,17 +211,24 @@ export let Sidebar = (at: Sidebar) =>
         )
         : null,
       at.title ? h('h2', { class: 'Sidebar_Title' }, at.title) : null,
-      at.picker
-        ? h('div', { class: 'Sidebar_Whose' }, choice(...at.picker))
+      at.personal ? draw(at.personal) : null,
+      at.space
+        ? h(
+          'div',
+          { class: 'Sidebar_Space' },
+          h('div', { class: 'Sidebar_Whose' }, choice(...at.space.picker)),
+          at.space.sections.map(draw),
+        )
         : null,
-      at.sections.map((s) => section(s, !!at.fold?.collapsed)),
+      at.sections?.map(draw),
       at.footer?.length
         ? h(
           'div',
           { class: 'Sidebar_Foot' },
           h(SideNav.Rule, { class: 'Sidebar_Rule' }),
-          at.footer.map((s) => section(s, !!at.fold?.collapsed)),
+          at.footer.map(draw),
         )
         : null,
     ),
   )
+}

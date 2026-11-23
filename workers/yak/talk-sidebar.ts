@@ -60,72 +60,79 @@ export let talkSide = (
     home: chatPath(space.slug),
     label: 'Menu',
     fold: { collapsed: !!beside.panes?.collapsed, back: at.here },
-    picker: [
-      here,
-      spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
-      (s) => chatPath(s.slug),
-      null,
-      (s) => s.operator ?? '',
-      undefined,
-      true,
-    ],
-    sections: [
-      {
-        id: 'side-operator',
-        label: space.operator,
+    personal: spaces.length > 1
+      ? {
+        id: 'side-personal',
+        label: 'Across your spaces',
         items: [
           {
-            href: chatPath(space.slug),
-            // The conversation stays the page with an app open beside it.
-            current: !reading,
-            icon: 'message-circle',
-            label: space.operator,
+            href: `${managePath('updates')}?in=${
+              encodeURIComponent(space.slug)
+            }`,
+            current: at.current.includes('all'),
+            icon: 'inbox',
+            label: 'All updates',
+            across: true,
           },
-          {
-            href: managePath('updates', space.slug),
-            current: at.current.includes('updates'),
-            icon: 'bell',
-            label: 'Updates',
-            waiting: at.waiting,
-          },
-          // Every space's Updates together, where there are several.
-          ...spaces.length > 1
-            ? [
-              {
-                href: `${managePath('updates')}?in=${
-                  encodeURIComponent(space.slug)
-                }`,
-                current: at.current.includes('all'),
-                icon: 'inbox',
-                label: 'All updates',
-                across: true,
-              } satisfies Item,
-            ]
-            : [],
         ],
-      },
-      {
-        id: 'side-apps',
-        label: 'Your apps',
-        heading: true,
-        note: `Each opens beside your one chat with ${space.operator}.`,
-        items,
-        empty: `None yet. Ask ${space.operator} to make one.`,
-      },
-    ],
-    footer: [{
-      id: 'side-settings',
-      label: 'Settings',
-      items: [
-        {
-          href: managePath('operator', space.slug),
-          icon: 'sliders-horizontal',
-          label: 'Manage',
-        },
-        ...(beside.admin
-          ? [{ href: ADMIN, icon: 'shield', label: 'Admin' } satisfies Item]
-          : []),
+      }
+      : undefined,
+    space: {
+      picker: [
+        here,
+        spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
+        (s) => chatPath(s.slug),
+        null,
+        (s) => s.operator ?? '',
+        undefined,
+        true,
       ],
-    }],
+      sections: [
+        {
+          id: 'side-operator',
+          label: space.operator,
+          items: [
+            {
+              href: chatPath(space.slug),
+              // The conversation stays the page with an app open beside it.
+              current: !reading,
+              icon: 'message-circle',
+              label: space.operator,
+            },
+            {
+              href: managePath('updates', space.slug),
+              current: at.current.includes('updates'),
+              icon: 'bell',
+              label: 'Updates',
+              waiting: at.waiting,
+            },
+          ],
+        },
+        {
+          id: 'side-apps',
+          label: 'Your apps',
+          heading: true,
+          note: `Each opens beside your one chat with ${space.operator}.`,
+          items,
+          empty: `None yet. Ask ${space.operator} to make one.`,
+        },
+        {
+          id: 'side-settings',
+          label: 'Settings',
+          items: [{
+            href: managePath('operator', space.slug),
+            icon: 'sliders-horizontal',
+            label: 'Manage',
+          }],
+        },
+      ],
+    },
+    footer: beside.admin
+      ? [{
+        id: 'side-admin',
+        label: 'Platform',
+        items: [{ href: ADMIN, icon: 'shield', label: 'Admin' }],
+      }]
+      : undefined,
   })
 }

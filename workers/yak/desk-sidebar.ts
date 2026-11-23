@@ -54,20 +54,20 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
       collapsed: !!at.panes?.collapsed,
       back: managePath(view, at.space),
     },
-    picker: [
-      here,
-      at.spaces ?? [],
-      (s) =>
-        accountView(view)
-          ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
-          : managePath(
-            !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
-            s.slug,
-          ),
-      { href: managePath('space'), label: 'New space' },
-    ],
-    sections: [
-      {
+    space: {
+      picker: [
+        here,
+        at.spaces ?? [],
+        (s) =>
+          accountView(view)
+            ? `${managePath(view)}?space=${encodeURIComponent(s.slug)}`
+            : managePath(
+              !s.owner ? 'operator' : view == 'new' ? 'apps' : view,
+              s.slug,
+            ),
+        { href: managePath('space'), label: 'New space' },
+      ],
+      sections: [{
         id: 'side-space',
         label: 'This space',
         heading: true,
@@ -82,19 +82,19 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
           item('settings', 'Space settings'),
           item('trash', 'Trash'),
         ],
-      },
-      {
-        id: 'side-account',
-        label: 'Your account',
-        heading: true,
-        items: [
-          item('profile', 'Profile'),
-          item('invite', 'Invite a friend'),
-          item('agents', 'Agents'),
-          item('shared', 'Shared with you'),
-        ],
-      },
-    ],
+      }],
+    },
+    sections: [{
+      id: 'side-account',
+      label: 'Your account',
+      heading: true,
+      items: [
+        item('profile', 'Profile'),
+        item('invite', 'Invite a friend'),
+        item('agents', 'Agents'),
+        item('shared', 'Shared with you'),
+      ],
+    }],
     footer: [{
       id: 'side-help',
       label: 'Help and account',

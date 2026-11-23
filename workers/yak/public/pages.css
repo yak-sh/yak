@@ -1144,6 +1144,13 @@
     margin-right: calc(-1 * var(--sidebar-padding));
   }
 
+  .Sidebar_Space {
+    display: grid;
+    gap: .75rem;
+    padding-block: .5rem;
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--border2) 18%, transparent);
+  }
   .Sidebar_Section,
   .Sidebar_Whose {
     display: grid;
@@ -1248,6 +1255,11 @@
   @media (min-width: 701px) {
     .Sidebar {
       width: 15rem;
+    }
+    .Sidebar_Space {
+      margin-right: calc(-1 * var(--sidebar-padding));
+      padding-right: var(--sidebar-padding);
+      border-radius: var(--radius) 0 0 var(--radius);
     }
     /* The current tab opens into the page beside the side, so it is
        filled with the frame's own fill for the page (Shell.css). */

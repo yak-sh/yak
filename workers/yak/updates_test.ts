@@ -2,7 +2,7 @@
 // (updates.ts), through the kernel's own doors: the connector deploys, and
 // the Updates page says who changed what.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -174,16 +174,43 @@ test('every space’s Updates in one place: labelled, counted from each space’
   assertEquals(await waiting(), { [club.slug]: 0, [own.slug]: 0 })
 })
 
-test('the Operator switcher badges each space and the total, filled from one read', async () => {
+test('All updates sits above the space picker and opens with that space still selected', async () => {
   let { own, club, get } = await across()
-  let page = await (await get(managePath('updates', club.slug))).text()
-  let d = parseHTML(page).document
-  let badges = [...d.querySelectorAll('.Sidebar_Whose [data-across]')]
+  let updates = managePath('updates', club.slug)
+  let page = await (await get(updates)).text()
+  let { document } = parseHTML(page)
+  let picker = document.querySelector('.Sidebar_Whose')!
+  let group = picker.closest('.Sidebar_Space')!
+  let badges = [...picker.querySelectorAll('[data-across]')]
     .map((b) => b.getAttribute('data-across'))
   assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
   assertEquals(page.includes(`${managePath('updates')}?waiting`), true)
-  let all = d.querySelector(`a[href^="${managePath('updates')}?in="]`)
-  assertEquals(all?.querySelector('[data-across=""]') != null, true)
+  let all = group.previousElementSibling?.querySelector('a')
+  assert(all?.querySelector('[data-across=""]'))
+  let current = group.querySelector('[aria-current="page"]')
+  assertEquals(current?.getAttribute('href'), updates)
+  let links = [...group.querySelectorAll('.SideNav_Link')].map((a) =>
+    a.getAttribute('href')
+  )
+  assertEquals(links, [
+    chatPath(club.slug),
+    updates,
+    `${chatPath(club.slug, 'new')}?app=notes`,
+    managePath('operator', club.slug),
+  ])
+  let acrossPage = parseHTML(
+    await (await get(all!.getAttribute('href')!)).text(),
+  ).document
+  assertEquals(
+    acrossPage.querySelector('#menu [aria-current="page"]')
+      ?.getAttribute('href'),
+    `${managePath('updates')}?in=${club.slug}`,
+  )
+  assertEquals(
+    acrossPage.querySelector('.Sidebar_Whose .Menu_Item[aria-current="true"]')
+      ?.getAttribute('href'),
+    chatPath(club.slug),
+  )
 })
 
 test('an address from before the space was in the path still opens that space’s Updates', async () => {
