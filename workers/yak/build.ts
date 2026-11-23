@@ -495,11 +495,11 @@ export class Builder extends Durable {
           }
           // An app's question for a person's Updates (app-decisions.ts).
           if (url.pathname == '/operator/app-decision') {
-            let { appDecision } = await import('@yaks/platform/app-decision')
+            let { askAppDecision } = await import(
+              '@yaks/platform/app-decision'
+            )
             let { store } = await this.#stored()
-            await store.g.apply([appDecision(await request.json())], {
-              trusted: true,
-            })
+            await askAppDecision(store.g, await request.json())
             return Response.json({ ok: true })
           }
           if (url.pathname == '/operator/app-decision/answer') {

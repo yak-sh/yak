@@ -9,9 +9,10 @@
 // own, assigned to the person and carrying `app_decision{app, row}`. Their
 // answer runs the Operator store's `app_decision_answer` effect, which
 // writes it on the app's row as theirs. An answer on the app row closes
-// that same copy. The person asked is the row's
-// `filed.assignee`, or else whoever wrote the builder whose output it is:
-// the person who set the workflow up.
+// that same copy. The person asked is the row's `filed.assignee`, or else
+// whoever wrote the builder whose output it is: the person who set the
+// workflow up, or, when their Operator wrote it, the person it worked for. A
+// changed `filed.assignee` asks the question of its new person.
 import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -91,7 +92,10 @@ export let syncing = async (at: Stored, eid: string) => {
     await tell({ app: at.app, row: eid, decided })
     return
   }
-  let to = comp(row, 'filed')?.assignee ?? await stepper(at.graph, row)
+  let assignee = comp(row, 'filed')?.assignee
+  let { by: to, via } = assignee
+    ? { by: assignee, via: undefined }
+    : await stepper(at.graph, row) ?? {}
   if (!to) {
     throw new Error(
       `decision ${eid} has nobody to ask: give it filed.assignee, or write it from a builder a person wrote`,
@@ -99,6 +103,7 @@ export let syncing = async (at: Stored, eid: string) => {
   }
   await tell({
     to: String(to),
+    ...(via ? { via: String(via) } : {}),
     app: at.app,
     row: eid,
     title: String(comp(row, 'doc')?.title ?? decision.question),
@@ -108,15 +113,15 @@ export let syncing = async (at: Stored, eid: string) => {
   await tellAnswer(at.graph, at.app, eid, tell)
 }
 
-// Whoever wrote the builder a row is an output of.
-let stepper = async (g: Graph, row: Bundle) => {
+// Who wrote the builder a row is an output of, and through what session.
+let stepper = async (g: Graph, row: Bundle): Promise<Comp | undefined> => {
   let build = comp(row, 'built')?.build
   if (!build) return undefined
   let [made] = await g.read(line`.entity.eid=${String(build)}&.build`)
   let builder = comp(made, 'build')?.builder
   if (!builder) return undefined
   let [b] = await g.read(line`.entity.eid=${String(builder)}&.created`)
-  return comp(b, 'created')?.by
+  return comp(b, 'created')
 }
 
 /** The Operator store's `app_decision_answer` effect: the person answered

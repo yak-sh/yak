@@ -161,7 +161,8 @@ export let kernelDoc: VocabDoc = {
     // `decided{choice}` (workers/yak app-decisions.ts).
     decision_ask: {
       effect: true,
-      created: ['decision', 'decided'],
+      created: ['decision', 'decided', 'filed'],
+      changed: ['filed.assignee'],
       target: '.decision !cancelled',
       tries: 3,
       description:

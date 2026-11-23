@@ -949,7 +949,9 @@ step's query matches it:
     $d .built.slot=approve, built.current=true, decided.choice=Send
 
 - **Who is asked**: whoever wrote the step's builder, the person who asked for
-  the workflow. Name someone else in the space with `filed: { assignee }`.
+  the workflow; when their Operator wrote it, the person it was working for.
+  Name someone else in the space with `filed: { assignee }`. Changing
+  `filed.assignee` on a question not yet answered asks it of the new person.
 - **The question** is shown alone in their Updates, read later and apart from
   any chat, so it says in plain words what it is about and what each choice
   does.

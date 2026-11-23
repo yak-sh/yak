@@ -4,9 +4,12 @@ import { derivedEid } from '@yaks/graph/identity'
 
 type AppDecision = { app: string; row: string }
 
-/** A question from the app store for its person's Updates. */
+/** A question from the app store for its person's Updates: `to` asked, or,
+ * when `to` is no person here (the Operator, as its space, wrote the step's
+ * builder), the person whose Operator session `via` wrote it. */
 export type AppAsking = AppDecision & {
   to: string
+  via?: string
   title: string
   decision: Comp
 }
@@ -26,6 +29,19 @@ export let appDecision = (asking: AppAsking): Bundle => ({
   filed: { assignee: asking.to },
   app_decision: { app: asking.app, row: asking.row },
 })
+
+/** Keep the question in the Operator store `g`, asked of its person: a
+ * workflow the Operator set up asks the person it set it up for. */
+export let askAppDecision = async (g: Graph, asking: AppAsking) => {
+  let [to] = await g.get([asking.to], ['person'])
+  let [via] = !to?.person && asking.via
+    ? await g.get([asking.via], ['operator_session'])
+    : []
+  let person = (via?.operator_session as Comp | undefined)?.person
+  await g.apply([
+    appDecision({ ...asking, to: person ? String(person) : asking.to }),
+  ], { trusted: true })
+}
 
 /** Close an existing question with the app's answer and its provenance. */
 export let keepAppAnswer = async (g: Graph, answer: AppAnswer) => {

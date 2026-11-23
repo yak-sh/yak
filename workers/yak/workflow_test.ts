@@ -260,3 +260,17 @@ for (let from of ['Updates', 'the app']) {
     assertEquals(updates.filter((u) => u.needs), [])
   })
 }
+
+test('a workflow decision given another person is asked of them', async () => {
+  await using w = await personStep()
+  await w.text('msg-1', 'lunch?')
+  let [app] = await until(() => w.rows('.decision&*').then((r) => r[0] && r), {
+    label: 'the decision',
+  })
+  let bo = crypto.randomUUID()
+  await w.apply([{ entity: app.entity, filed: { assignee: bo } }])
+  await until(async () => {
+    let [copy] = await w.questions()
+    return (copy?.filed as Comp | undefined)?.assignee == bo || null
+  }, { label: 'the question asked of Bo' })
+})
