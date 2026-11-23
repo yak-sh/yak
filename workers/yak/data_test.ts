@@ -17,6 +17,7 @@ import {
 import type { PropSchema } from '@yaks/vocab'
 import { fields, kinds } from './data.ts'
 import { open, patch, title } from './data-editor.js'
+import { appDoc } from './vocab.ts'
 
 let k = await kernel()
 let space = unique('township')
@@ -36,7 +37,7 @@ let file = { type: 'string', ref: 'blob', death: 'keep' }
 let words = {
   $defs: {
     announcement: {
-      description: 'What the township tells its residents.',
+      description: 'Notices about meetings with < 10 attendees.',
       properties: {
         posted: { type: 'string', format: 'date-time' },
         pinned: { type: 'boolean' },
@@ -62,6 +63,7 @@ let words = {
     tap: { edge: true, properties: {} },
   },
 }
+let appKinds = kinds(appDoc(words).$defs)
 let at = { space, app: 'site' }
 await agent.tool('app_files', {
   ...at,
@@ -157,7 +159,7 @@ let page = (cookie: string) => {
       open({
         root,
         client,
-        kinds: kinds(words.$defs),
+        kinds: appKinds,
         accepts: null,
         view,
         files: '/site/api/blob/',
@@ -186,8 +188,11 @@ test('the page carries what the deployed words keep, escaped, and the script is 
   })
   assertEquals(res.status, 200)
   let html = await res.text()
-  let [, served] = html.match(/kinds: (\[.*\]),\n/)!
-  assertEquals(JSON.parse(served), kinds(words.$defs))
+  let held = html.match(/kinds: (\[.*\]),\n/)
+  assert(held, 'the editor receives its kinds')
+  let [, served] = held
+  assert(!served.includes('<'), 'the inline JSON escapes less-than signs')
+  assertEquals(JSON.parse(served), appKinds)
   assertStringIncludes(html, '/site/api/client.js')
   assert(html.includes('class="Data"'))
   let script = await k.at(host, '/site/_web/data.js', {
