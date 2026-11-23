@@ -1029,6 +1029,43 @@ test('./api/ai/run answers embeddings and bills their published input-only rate'
   assertAlmostEquals((await v.spent()).meter!.models, 0.0118 * 3 / 1_000_000)
 })
 
+test('./api/ai/run returns speech bytes and charges for the submitted text', async () => {
+  let audio = Uint8Array.of(0x49, 0x44, 0x33)
+  let cost = 0.03
+  let v = await direct(
+    () => new Response(audio, { headers: { 'content-type': 'audio/mpeg' } }),
+    {
+      models: MONTH - 1.5 * cost,
+      env: {
+        MODEL_FETCH: () =>
+          Promise.resolve(
+            new Response(
+              'Text-to-Speech • Deepgram\n| Unit Pricing | $0.03 per 1k characters |',
+            ),
+          ),
+      },
+    },
+  )
+  cleanup(v.close)
+  let model = '@cf/deepgram/aura-2-en'
+  let input = { text: 'Hello '.repeat(166) + 'word', speaker: 'luna' }
+  let res = await v.runRaw({ model, input })
+  assertEquals(res.status, 200)
+  assertEquals(res.headers.get('content-type'), 'audio/mpeg')
+  assertEquals(new Uint8Array(await res.arrayBuffer()), audio)
+  assertAlmostEquals((await v.spent()).meter!.models, MONTH - 0.5 * cost)
+  assertAlmostEquals(
+    await sourceTotal(v.env, (await v.spent()).eid, 'workers-ai'),
+    cost,
+  )
+  assertEquals((await v.run({ model, input })).status, 429)
+  assertEquals(v.asked, [{
+    model,
+    input,
+    options: { returnRawResponse: true },
+  }])
+})
+
 for (let priced of [false, true]) {
   test(`./api/ai/run checks pricing before inference (${priced ? 'fetch failed' : 'no price'})`, async () => {
     let v = await direct(() => ({ response: 'must not run' }), {

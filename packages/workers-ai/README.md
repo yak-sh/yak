@@ -163,6 +163,12 @@ usage's cost. The account's spent credit is reported through `spending.report`;
 an input the model refuses (`unfit`) is refunded and refused as `bad_request`.
 It answers what the model said, out of AI Gateway's envelope.
 
+For native text-to-speech, the model's published input character rate is used
+for the quote and settlement. The same rate is included in `list()` as
+`speechPerThousand`. Speech models appear in the list when their cost can be
+quoted from the input text. The native call returns a `Response` with the audio
+body.
+
 ## Embedding
 
 `@yaks/workers-ai/graph` lends the host an embedder named `workers-ai`

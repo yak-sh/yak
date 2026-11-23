@@ -248,8 +248,12 @@ export default {
           },
           body: JSON.stringify({ model, input }),
         })
+        if (res.ok) {
+          return res.headers.get('content-type')?.includes('application/json')
+            ? await res.json()
+            : res.body
+        }
         let said = await res.json()
-        if (res.ok) return said
         let e = new Error(said?.error?.message ?? res.statusText)
         e.code = said?.error?.code
         throw e

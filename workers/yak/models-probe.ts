@@ -132,12 +132,12 @@ export let vale = async (
   if (deploy) await deployed()
   // `./api/ai/run` at the app's own address, as a page posts it: signed in
   // as `person`, or signed out.
-  let run = async (
+  let runRaw = async (
     body: unknown,
     person: string | null = ADA,
     headers: Record<string, string> = {},
-  ) => {
-    let res = await apps.fetch(
+  ) =>
+    apps.fetch(
       visit('/vale/api/ai/run', {
         method: 'POST',
         headers: {
@@ -149,6 +149,8 @@ export let vale = async (
       }),
       p.env,
     )
+  let run = async (...asked: Parameters<typeof runRaw>) => {
+    let res = await runRaw(...asked)
     return { status: res.status, said: await res.json() }
   }
   return {
@@ -158,6 +160,7 @@ export let vale = async (
     dir,
     send,
     run,
+    runRaw,
     read,
     landed,
     deployed,

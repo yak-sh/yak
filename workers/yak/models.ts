@@ -542,23 +542,22 @@ export let modelRun: Answer = async (
   let conversation = req.headers.get('x-session-affinity') || asked.session_id
   let graph = metaOf(appStore(env.STORE, space, app, env), KERNEL)
   try {
-    return Response.json(
-      await metered(
-        env,
-        payer(app.eid),
-        modelRows({
-          read: (query) => graph.query(query, { trusted: true }),
-          apply: graph.apply,
-        }),
-        writes(who.role) ? undefined : visitorKey(who, req),
-      ).run(
-        asked.model,
-        asked.input,
-        conversation
-          ? { extraHeaders: { 'x-session-affinity': conversation } }
-          : undefined,
-      ),
+    let answer = await metered(
+      env,
+      payer(app.eid),
+      modelRows({
+        read: (query) => graph.query(query, { trusted: true }),
+        apply: graph.apply,
+      }),
+      writes(who.role) ? undefined : visitorKey(who, req),
+    ).run(
+      asked.model,
+      asked.input,
+      conversation
+        ? { extraHeaders: { 'x-session-affinity': conversation } }
+        : undefined,
     )
+    return answer instanceof Response ? answer : Response.json(answer)
   } catch (e) {
     let no = refusal(e)
     if (no) return json(...no)

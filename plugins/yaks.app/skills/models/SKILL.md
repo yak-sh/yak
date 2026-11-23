@@ -299,6 +299,12 @@ was said. An app's worker calls a model the same way through a binding:
 `env.AI.run(model, input)` (see [Backend Code](/docs/code)), which calls the
 model as the app itself.
 
+For Workers AI text-to-speech models such as `@cf/deepgram/aura-2-en`, send
+`input: { text, speaker }`. The HTTP response contains audio bytes and
+`env.AI.run` returns its readable stream. The space pays the published rate per
+input character.
+[Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
+
 To keep calls from the same conversation on the same cache-capable model worker,
 add a stable `session_id` beside `model` and `input`, or send the
 `x-session-affinity` header (the header takes precedence). An app's worker can

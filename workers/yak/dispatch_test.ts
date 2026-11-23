@@ -1081,7 +1081,9 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
             extraHeaders: { 'x-session-affinity': 'worker-chat' },
           })
           let no = await env.AI.run('typesafe/jev', {}).catch((e) => e)
-          return Response.json([said, no.message, no.code])
+          let spoken = await env.AI.run('@cf/deepgram/aura-2-en', { text: 'hi' })
+          let bytes = new Uint8Array(await new Response(spoken).arrayBuffer())
+          return Response.json([said, no.message, no.code, [...bytes]])
         },
       }`,
     )
@@ -1093,6 +1095,9 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
         { error: { code: 'limit', message: 'the allowance is spent' } },
         { status: 429 },
       ),
+      new Response(Uint8Array.of(0x49, 0x44, 0x33), {
+        headers: { 'content-type': 'audio/mpeg' },
+      }),
     ]
     let env = {
       KERNEL: {
@@ -1118,6 +1123,7 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
       { response: 'hello' },
       'the allowance is spent',
       'limit',
+      [0x49, 0x44, 0x33],
     ])
     assertEquals(asked[0].url, 'https://jeff.yaks.app/vale/api/ai/run')
     assertEquals(asked[0].method, 'POST')

@@ -19,7 +19,7 @@ import {
   type Spending,
 } from '@yaks/model'
 import { music, musicQuote, pricedAudio } from './audio.ts'
-import { modelInfo } from './list.ts'
+import { modelInfo, type Published } from './list.ts'
 import {
   type Binding,
   failure,
@@ -85,6 +85,32 @@ let priceless = (
   return error
 }
 
+let speechResponse = async (answer: unknown): Promise<Response> => {
+  if (answer instanceof ReadableStream) {
+    return new Response(answer, {
+      headers: { 'content-type': 'application/octet-stream' },
+    })
+  }
+  if (!(answer instanceof Response)) {
+    throw new Error('Workers AI returned no speech audio')
+  }
+  if (!answer.ok) {
+    let body = await answer.text()
+    let error = new Error(`Workers AI HTTP ${answer.status}: ${body}`)
+    try {
+      let details = JSON.parse(body)
+      let code = details?.internalCode ?? details?.errors?.[0]?.code
+      if (code != null) error = new Error(`${code}: ${error.message}`)
+    } catch { /* Keep the upstream body when it is not JSON. */ }
+    throw error
+  }
+  let type = answer.headers.get('content-type') ?? 'application/octet-stream'
+  if (!answer.body || !/^(audio\/|application\/octet-stream\b)/i.test(type)) {
+    throw new Error('Workers AI returned no speech audio')
+  }
+  return new Response(answer.body, { headers: { 'content-type': type } })
+}
+
 /**
  * The binding's own door. A model the catalogue does not price is refused
  * before anything is spent, and so is an input whose price has no bound (a
@@ -105,11 +131,14 @@ export let native = (
     let model = successor(options.successors)(asked)
     let ai = options.ai
     if (!ai) throw unbound()
-    let info = music(model)
+    let track = music(model)
+    let info: Published = track
       ? { name: model }
       : await modelInfo(model, lent.fetch, { hold: lent.hold })
-    let price = info.price
-    if (!music(model) && !price) throw priceless(model, lent.fetch, spending)
+    let { price, speechPerThousand } = info
+    if (!track && !price && speechPerThousand == null) {
+      throw priceless(model, lent.fetch, spending)
+    }
     let sent = input && typeof input == 'object'
       ? input as Record<string, unknown>
       : {}
@@ -134,8 +163,20 @@ export let native = (
       : structured
       ? Number(info.context)
       : Number(sent.max_completion_tokens ?? sent.max_tokens ?? 4096)
+    let speechCost: number | undefined
+    if (speechPerThousand != null) {
+      if (typeof sent.text != 'string' || !sent.text.trim()) {
+        throw new ModelError('bad_request', 'Speech needs nonempty text')
+      }
+      speechCost = sent.text.length / 1000 * speechPerThousand
+    }
     let hold = await spending.hold((remaining) => {
-      if (music(model)) return musicQuote(model, sent, remaining)
+      if (speechCost != null) {
+        return speechCost <= remaining
+          ? { dollars: speechCost, tokens: 0 }
+          : null
+      }
+      if (track) return musicQuote(model, sent, remaining)
       if (info.context == null) return null
       // Every choice bills the prompt again; each embedded text fills at
       // most its own context window.
@@ -151,7 +192,7 @@ export let native = (
       )
       return structured && quote?.tokens != desired ? null : quote
     })
-    if (!music(model) && !structured && price!.output) {
+    if (speechCost == null && !track && !structured && price!.output) {
       input = {
         ...sent,
         max_tokens: hold.value.tokens,
@@ -163,31 +204,40 @@ export let native = (
     let answer = await ai.run(
       model,
       input,
-      routing(model, opts, options.gateway),
-    ).catch(async (e) => {
-      let why = failure(e)
-      if (
-        unfit(e) ||
-        why instanceof ModelError &&
-          ['busy', 'model', 'limit'].includes(why.code)
-      ) {
-        await hold.settle(0, false)
-      }
-      if (unfit(e)) {
-        let message = e instanceof Error ? e.message : String(e)
-        throw new ModelError(
-          'bad_request',
-          `${model} refused this input: ${message}`,
-        )
-      }
-      if (why instanceof ModelError && why.code == 'limit') {
-        spending.report?.(e, model)
-      }
-      throw why
-    })
+      routing(
+        model,
+        speechCost == null ? opts : { ...opts, returnRawResponse: true },
+        options.gateway,
+      ),
+    ).then((answer) => speechCost == null ? answer : speechResponse(answer))
+      .catch(async (e) => {
+        let why = failure(e)
+        if (
+          unfit(e) ||
+          why instanceof ModelError &&
+            ['busy', 'model', 'limit'].includes(why.code)
+        ) {
+          await hold.settle(0, false)
+        }
+        if (unfit(e)) {
+          let message = e instanceof Error ? e.message : String(e)
+          throw new ModelError(
+            'bad_request',
+            `${model} refused this input: ${message}`,
+          )
+        }
+        if (why instanceof ModelError && why.code == 'limit') {
+          spending.report?.(e, model)
+        }
+        throw why
+      })
+    if (speechCost != null) {
+      await hold.settle(speechCost, false)
+      return answer
+    }
     await spending.answered?.(model, info)
     let out = said(answer)
-    let cost = music(model)
+    let cost = track
       ? (await pricedAudio(model, input, out)).cost
       : charged({ usage: usageOf(answer) }, price, hold.value.dollars).dollars
     await hold.settle(cost, false)

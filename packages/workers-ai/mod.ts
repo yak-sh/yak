@@ -1,6 +1,18 @@
-import { type Listing, listing, modelInfo, nativeReads } from './list.ts'
+import {
+  type Listing,
+  listing,
+  modelInfo,
+  nativeReads,
+  type Published,
+} from './list.ts'
 import { type Hold, toBase64 } from '@yaks/fp'
-export { listed, listing, modelInfo, pagePrice } from './list.ts'
+export {
+  listed,
+  listing,
+  modelInfo,
+  pagePrice,
+  type Published,
+} from './list.ts'
 /**
  * @yaks/workers-ai implements @yaks/model's {@link Model} over Cloudflare
  * Workers AI, through the `AI` binding a Worker is given. The binding is the
@@ -618,7 +630,10 @@ export let workersAi = (
     /** each retired model's name, and the model that answers for it */
     successors?: Record<string, string>
   } = {},
-): Model => {
+): {
+  list: () => Promise<Published[]>
+  info: (name: string) => Promise<Published>
+} & Model => {
   let current = successor(options.successors)
   let deliver = async (receipt: MediaReceipt): Promise<Reply> => {
     let audio = await pricedAudio(
@@ -760,7 +775,7 @@ export let workersAi = (
     }
   }, {
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
-    list: () => listing(ai),
+    list: () => listing(ai, options.fetch, { hold: options.hold }),
     info: (name: string) =>
       modelInfo(current(name), options.fetch, { hold: options.hold }),
     reads: (name: string) =>

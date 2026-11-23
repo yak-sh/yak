@@ -75,6 +75,37 @@ test('embedding pages price input tokens without charging for the vector output'
   )
 })
 
+test('the Workers AI catalogue offers speech at its native input rate', async () => {
+  let read: string[] = []
+  let model = workersAi({
+    run: () => Promise.reject(new Error('No inference for metadata')),
+    models: () =>
+      Promise.resolve([
+        { name: '@cf/vendor/chat', task: { name: 'Text Generation' } },
+        { name: '@cf/vendor/speaker', task: { name: 'Text-to-Speech' } },
+        { name: '@cf/vendor/unbounded', task: { name: 'Text-to-Speech' } },
+      ]),
+  }, {
+    fetch: (url) => {
+      read.push(String(url))
+      let rate = String(url).includes('/speaker/')
+        ? '$0.03 per 1k characters'
+        : '$0.000205 per audio minute'
+      return Promise.resolve(
+        new Response(`Text-to-Speech • Vendor\n| Unit Pricing | ${rate} |`),
+      )
+    },
+  })
+  assertEquals(
+    (await model.list()).map(({ name, speechPerThousand }) => [
+      name,
+      speechPerThousand,
+    ]),
+    [['@cf/vendor/chat', undefined], ['@cf/vendor/speaker', 0.03]],
+  )
+  assertEquals(read.length, 2)
+})
+
 for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
   test(`${name} metadata falls back to its full provider path`, async () => {
     let urls: string[] = []
