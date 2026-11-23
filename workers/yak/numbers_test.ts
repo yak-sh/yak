@@ -431,6 +431,7 @@ let vms = {
   slow: 0,
   unansweredOrder: false,
   slowHangup: 0,
+  slowGroups: 0,
 }
 let voipmsApi = endpoints(globalThis).open((req) => {
   let q = new URL(req.url).searchParams
@@ -499,6 +500,10 @@ let voipmsApi = endpoints(globalThis).open((req) => {
     case 'getServersInfo':
       return ok({ servers: [{ server_hostname: 'chicago1.voip.ms' }] })
     case 'getRingGroups':
+      if (vms.slowGroups > 0) {
+        vms.slowGroups--
+        return new Response('', { status: 522 })
+      }
       return ok({ ring_groups: [...vms.groups.values()] })
     case 'setRingGroup': {
       let ring_group = q.get('ring_group') ?? '1'
@@ -838,6 +843,20 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
 
     // In the trash it takes and makes no call, and restored, it does again.
     let space = (await k.dir.space(slug))!
+    let retryRelease = async (line: string) => {
+      let [release] = await k.dir.read(q`.phone_release.line=${line}&?wake`)
+      assert(release.wake)
+      await stamp(env, {
+        entities: [{
+          entity: release.entity,
+          wake: { at: new Date().toISOString() },
+        }],
+      })
+      await until(
+        async () => !(await k.dir.read(q`.phone_release.line=${line}`)).length,
+        { label: 'the carrier release retried from its wake' },
+      )
+    }
     vms.slowHangup = 2
     assertStringIncludes(
       await tool('number_release', { number: LOCAL }),
@@ -845,19 +864,7 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
     )
     let [line] = await k.dir.lines(space)
     assert(line.trashed)
-    let [release] = await k.dir.read(q`.phone_release.line=${line.eid}&?wake`)
-    assert(release.wake)
-    await stamp(env, {
-      entities: [{
-        entity: release.entity,
-        wake: { at: new Date().toISOString() },
-      }],
-    })
-    await until(
-      async () =>
-        !(await k.dir.read(q`.phone_release.line=${line.eid}`)).length,
-      { label: 'the carrier release retried from its wake' },
-    )
+    await retryRelease(line.eid)
     assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
     assertEquals(vms.accounts.size, 0)
     assertEquals(await hour(), { in: false, out: false })
@@ -868,7 +875,36 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
     assert(vms.passwords.length)
     assertEquals(new Set(vms.passwords), new Set([original.password]))
     assert([...vms.accounts.values()][0].password != original.password)
-    await released(env, (await k.dir.lines(space))[0])
+
+    // The permanent return cancels the DID before looking up a detached group.
+    await tool('number_release', { number: LOCAL })
+    vms.groups.set('1', { ring_group: '1', name: 'y2692015487', members: '' })
+    vms.slowGroups = 2
+    let t = await ticket(
+      'numbererase',
+      space,
+      line.eid,
+      person,
+      env.SESSION_SECRET!,
+    )
+    let response = await k.at(
+      'yaks.app',
+      new URL(door(slug, 'numbererase', line.eid)).pathname,
+      {
+        method: 'POST',
+        headers: { cookie },
+        body: new URLSearchParams({ t }),
+      },
+    )
+    assertStringIncludes(await response.text(), 'We will retry automatically')
+    assert((await k.dir.lines(space))[0].trashed)
+    assertEquals(vms.held.size, 0)
+    assertEquals(vms.groups.size, 1)
+    await retryRelease(line.eid)
+    assertEquals(vms.groups.size, 0)
+    assertEquals(vms.accounts.size, 0)
+    assertEquals(await k.dir.lines(space), [])
+    assertEquals(await k.dir.trash([line.eid]), [])
   } finally {
     await k.stop()
     await voipmsApi.stop()
