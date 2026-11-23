@@ -210,6 +210,9 @@ export let teach = (env: Host = {}, own?: string[], released = true) =>
 // Words callers guess for something the platform keeps elsewhere, and where
 // it is read instead.
 export let ELSEWHERE: Record<string, string> = {
+  _tx:
+    "an app's store keeps no journal component: a row's history is read as " +
+    '.created.at, .created.by, .updated.at and .updated.by on the row itself',
   draft_conflict:
     "a draft's conflicts are no component: app_deploy's answer says how " +
     'many properties wait for a pick, and each is a decision in the ' +
@@ -233,6 +236,10 @@ export let ELSEWHERE: Record<string, string> = {
  * assertEquals(
  *   inAppWords('.note is a property, not a component — name it .wake.note', ['item'], props),
  *   'unknown prop: .note — no component is named note, and none has a property of that name',
+ * )
+ * assertEquals(
+ *   inAppWords('unknown prop: ._tx', ['recipe'], props).startsWith('unknown prop: ._tx — an app'),
+ *   true,
  * )
  * assertEquals(
  *   inAppWords('unknown prop: .entity', ['recipe'], props),
