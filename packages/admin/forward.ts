@@ -1,27 +1,7 @@
 import { mapped, packet, readAsk, WIRE } from '@yaks/platform/browser-wire'
 import { COOKIE } from '@yaks/platform/cookie'
 import { ADMIN_BROWSE, adminPage, BROWSE } from '@yaks/platform/routes'
-// Credential forwarding is a transport boundary: callers hold an address;
-// only the process forwarding to the platform holds the account's sign-in.
-export let FORWARDED = 'yak_admin_forward:'
-
-export let forwarded = (
-  url: string,
-  credential: string | undefined,
-  browser: boolean,
-  init: RequestInit,
-): { url: string; init: RequestInit } => {
-  if (!credential?.startsWith(FORWARDED)) return { url, init }
-  let headers = new Headers(init.headers)
-  headers.delete('authorization')
-  headers.delete('cookie')
-  headers.set('x-yak-credential', browser ? 'session' : 'bearer')
-  let target = new URL(credential.slice(FORWARDED.length))
-  target.searchParams.set('url', url)
-  // The forwarder follows nothing, so a redirect arriving from it is the
-  // platform's own answer, relayed for the caller to read.
-  return { url: target.href, init: { ...init, headers, redirect: 'manual' } }
-}
+export { FORWARDED, forwarded } from '@yaks/cli/account-forward'
 
 type Credentials = { bearer: string; session?: string }
 export type Forwarding = {

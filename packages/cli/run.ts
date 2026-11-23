@@ -564,7 +564,8 @@ export let cli = async (
       state,
       ask: opts.ask ?? rpc({
         url: doorUrl(host),
-        token: () => tokenFor(host, state, { config, as, env }),
+        token: () =>
+          tokenFor(host, state, { config, as, env, agent: !!speaks }),
         via: speaks,
         fetch: timing ? timed(note) : undefined,
       }),

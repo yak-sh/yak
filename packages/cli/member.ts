@@ -126,6 +126,7 @@ export let hostDoor = (host: string, aim: Aim): Rpc => {
       token(host, aim.state, {
         config: aim.config,
         env: mine ? env : unaimed(env),
+        agent: !!aim.via,
         ...(mine && aim.as ? { as: aim.as } : {}),
       }),
   })

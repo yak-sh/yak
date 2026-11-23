@@ -69,7 +69,9 @@ let TAIL =
                   or the part before @; list them with
                   \`yak connection list <owner>\` (owner id or name), and use
                   a yaks.app entry’s account.
-                  Default is your own email, else the oldest connection.
+                  On a box configured with an admin forwarder, a session
+                  uses the platform admin by default. Outside a session
+                  use your own email, else the oldest connection.
                   A tool's own as argument is written as=<value>.
   --json          print the structured result instead of the text
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C

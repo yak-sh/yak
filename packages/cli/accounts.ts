@@ -16,6 +16,7 @@ import {
 } from './config.ts'
 import type { Reader } from './reader.ts'
 import { type Env, stateDir } from './store.ts'
+import { adminForward } from './account-forward.ts'
 
 export let personalPath = (state: string): string => `${state}/accounts.json`
 /** Make the personal graph only on explicit auth. Domain plugins are secrets
@@ -136,11 +137,17 @@ export let accounts = <H extends AccountHost>(
     if (explicit) return explicit
     let path = opts.config ?? configPath(undefined, env) ?? personalPath(state)
     let config = await doors.config(path)
+    let url = new URL((await import('./rpc.ts')).doorUrl(hostName))
+    if (
+      config && opts.agent !== undefined && url.origin == 'https://yaks.app'
+    ) {
+      let forwarded = adminForward(config, opts.as, opts.agent)
+      if (forwarded) return forwarded
+    }
     if (!config?.person) return null
     let plugins = (config.plugins ?? []).map(used)
     if (!plugins.includes('@yaks/connections')) return null
-    let url = (await import('./rpc.ts')).doorUrl(hostName)
-    let integration = new URL(url).hostname == 'yaks.app' ? 'yaks.app' : url
+    let integration = url.hostname == 'yaks.app' ? 'yaks.app' : url.href
     let direct =
       /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(config.person) ||
       /^(?:[a-z]+-)?[0-9]+$/i.test(config.person)
@@ -208,6 +215,12 @@ let command: Accounts<Served> = accounts({
  * boundary. Dynamic imports keep an environment-only sandbox off the graph. */
 export let accountHost = command.host
 export let closeAccounts = command.close
-export type AccountOptions = { config?: string; as?: string; env?: Env }
+export type AccountOptions = {
+  config?: string
+  as?: string
+  env?: Env
+  /** The transport supports forwarding, and the caller is an agent. */
+  agent?: boolean
+}
 /** The selected yaks.app connection, or YAKS_TOKEN for a graphless sandbox. */
 export let accountToken = command.token

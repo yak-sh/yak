@@ -87,9 +87,11 @@ On the shared box, `@yaks/admin` config names `forward` as
 passes requests through `bin/admin-forward.ts`; a CLI or MCP process receives
 only this transport address. The admin's connection is removed from the shared
 graph and vault after migration. Ordinary account selection, including the
-owner's own connection, stays with @yaks/connections. Connector commands such as
-`yak app_list --as admin` use that ordinary selection and require their own
-account; the private account is available through admin operations.
+owner's own connection, stays with @yaks/connections. On this box, a CLI call to
+yaks.app from an agent session also uses the forwarder. A local MCP client can
+run `yak mcp --host yaks.app --as admin` to select the agent sign-in explicitly.
+For an exact act the owner asked to have recorded as theirs, use `--as` with
+their email. Their separate sign-in stays available.
 
 `yak-admin-forward.service` runs a bundled copy of that entry under the separate
 `yak-admin` Unix identity. Its root-owned code and runtime live in

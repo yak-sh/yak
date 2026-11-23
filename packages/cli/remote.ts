@@ -11,6 +11,7 @@ import type { Result } from './roster.ts'
 import type { Host } from '@yaks/host'
 import { located, person } from './config.ts'
 import type { AccountOptions } from './accounts.ts'
+import { adminForward, forwarded } from './account-forward.ts'
 
 type Selection = {
   as?: string
@@ -20,7 +21,11 @@ type Selection = {
   config?: string
   env?: AccountOptions['env']
   fetch?: typeof globalThis.fetch
-  credential?: (host: string, as?: string) => Promise<string | null>
+  credential?: (
+    host: string,
+    as?: string,
+    agent?: boolean,
+  ) => Promise<string | null>
 }
 
 /** Authenticated JSON delivery shared by HTTP commands and graph tools. */
@@ -43,20 +48,25 @@ export let readJson = async (
       ? options.host
       : origin.host
   let token = options.credential
-    ? await options.credential(key, options.as)
+    ? await options.credential(key, options.as, !!options.via)
     : await tokenFor(key, options.state, {
       config: options.config,
       as: options.as,
       env: options.env,
+      agent: !!options.via,
     })
   let headers = new Headers({ accept: 'application/json' })
   if (token) headers.set('authorization', `Bearer ${token}`)
   if (options.via) headers.set('x-via', options.via)
-  let response = await (options.fetch ?? globalThis.fetch)(origin, {
+  let destination = forwarded(origin.href, token, false, {
     headers,
     redirect: 'error',
     cache: 'no-store',
   })
+  let response = await (options.fetch ?? globalThis.fetch)(
+    destination.url,
+    destination.init,
+  )
   if (!response.ok) {
     await response.body?.cancel()
     throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
@@ -93,10 +103,11 @@ export let remote = async (
     url: door.href,
     token: () =>
       options.credential
-        ? options.credential(origin.origin, options.as)
+        ? options.credential(origin.origin, options.as, !!options.via)
         : tokenFor(origin.origin, options.state, {
           as: options.as,
           config: options.config,
+          agent: !!options.via,
         }),
     via: options.via,
   })
@@ -115,15 +126,20 @@ export let delivery = (
   let credential = async (
     name: string,
     as?: string,
+    agent?: boolean,
   ): Promise<string | null> => {
     let explicit = system.env.get('YAKS_TOKEN')
     if (explicit) return explicit
+    let url = new URL(doorUrl(name))
+    if (url.origin == 'https://yaks.app') {
+      let forwarded = adminForward(host.config, as, agent)
+      if (forwarded) return forwarded
+    }
     let owner = await person(host)
     if (!owner || !host.graph.vocab.comp('connection')) return null
     let { accountCredential } = await importing(
       import.meta.resolve(located('@yaks/connections')),
     )
-    let url = new URL(doorUrl(name))
     let integration = url.hostname == 'yaks.app' ? 'yaks.app' : url.href
     return (await accountCredential(host, owner, integration, as))?.bearer ??
       null

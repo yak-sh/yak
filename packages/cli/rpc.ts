@@ -16,6 +16,8 @@
 // flow, and this client has no browser to follow it with — so it prints the
 // door's refusal, or a sign-in sentence when the door sends only a challenge.
 
+import { forwarded } from './account-forward.ts'
+
 /** The newest MCP protocol version this client supports. */
 export let PROTOCOL = '2025-06-18'
 
@@ -90,7 +92,7 @@ export let rpc = (door: Door): Rpc => {
     let token = typeof door.token == 'function'
       ? await door.token()
       : door.token
-    let request = new Request(door.url, {
+    let { url, init } = forwarded(door.url, token, false, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -103,7 +105,7 @@ export let rpc = (door: Door): Rpc => {
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
     })
-    let r = await go(request)
+    let r = await go(new Request(url, init))
     session ??= r.headers.get('mcp-session-id')
     let text = await r.text()
     let said = r.headers.get('content-type')?.includes('text/event-stream')

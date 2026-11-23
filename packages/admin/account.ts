@@ -6,10 +6,9 @@
 import type { Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
-import { given, used } from '@yaks/cli/config'
+import { adminForward } from '@yaks/cli/account-forward'
 import { ADMIN, isTestAddress } from '@yaks/platform/bots'
 import { botSession } from '@yaks/connections/yaks-app'
-import { FORWARDED } from './forward.ts'
 import { accountCredential } from '@yaks/connections'
 import { records } from '@yaks/secrets'
 import { claimsOf, renewing, zone } from './api.ts'
@@ -29,13 +28,12 @@ export let account = (
   signIn = botSession,
 ) =>
 async (as?: string): Promise<Account> => {
-  let plugin = host.config.plugins?.find((p) => used(p) == '@yaks/admin')
-  let endpoint = plugin && given(plugin).forward
-  if (typeof endpoint == 'string' && (as == ADMIN || as == 'admin')) {
+  let forwarded = adminForward(host.config, as)
+  if (forwarded) {
     return {
       address: ADMIN,
-      bearer: FORWARDED + endpoint,
-      session: FORWARDED + endpoint,
+      bearer: forwarded,
+      session: forwarded,
     }
   }
   let owner = await person(host)

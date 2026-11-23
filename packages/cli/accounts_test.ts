@@ -19,6 +19,7 @@ import { loadVocab } from '@yaks/vocab'
 import type { Config } from './config.ts'
 import { rpc } from './rpc.ts'
 import { cli, globals } from './run.ts'
+import { bridge } from './mcp.ts'
 
 test('personal account graph keeps multiple credentials and computes default without a token file', async () => {
   let a = memoryAccounts()
@@ -57,6 +58,51 @@ test('remote transport reads the credential at each call, not when the door is m
   next = 'two'
   await ask('second')
   equal(seen, ['Bearer one', 'Bearer two'])
+})
+
+test('the box connector forwards its agent account and keeps explicit and sandbox sign-ins', async () => {
+  let a = memoryAccounts()
+  a.connected('person-token', 'owner@example.test')
+  a.config.plugins!.push({
+    use: '@yaks/admin',
+    with: { forward: 'http://127.0.0.1:5176/' },
+  })
+  let seen: (string | null)[][] = []
+  let ask = (options: AccountOptions) =>
+    rpc({
+      url: 'https://yaks.app/mcp',
+      token: () => a.token('yaks.app', options),
+      fetch: (request) => {
+        seen.push([
+          request.url,
+          request.headers.get('authorization'),
+          request.headers.get('x-yak-credential'),
+        ])
+        return Response.json({ result: { tools: [] } })
+      },
+    })
+  try {
+    let answer = bridge(ask({ agent: true }), () => Promise.resolve(''))
+    await answer({ id: 1, method: 'tools/list' })
+    await ask({ agent: true, as: 'owner' })('tools/list')
+    await ask({ agent: false })('tools/list')
+    await ask({
+      agent: true,
+      env: (name) => name == 'YAKS_TOKEN' ? 'sandbox-token' : undefined,
+    })('tools/list')
+    equal(seen, [
+      [
+        'http://127.0.0.1:5176/?url=https%3A%2F%2Fyaks.app%2Fmcp',
+        null,
+        'bearer',
+      ],
+      ['https://yaks.app/mcp', 'Bearer person-token', null],
+      ['https://yaks.app/mcp', 'Bearer person-token', null],
+      ['https://yaks.app/mcp', 'Bearer sandbox-token', null],
+    ])
+  } finally {
+    await a.close()
+  }
 })
 test('global --as is optional and reaches a tool through an explicit binding', async () => {
   equal(globals(['app_list', '--as', 'bot']).rest, ['app_list'])
