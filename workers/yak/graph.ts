@@ -1627,7 +1627,9 @@ export class Store extends Durable {
       version: this.#version() ?? undefined,
       // A builder output (2) starts a downstream builder call (3). The
       // registered tool then opens its ordinary session through the runner.
-      // Keep the chain bounded, but let that owed call run.
+      // Keep the chain bounded, but let that owed call run. A chain of
+      // builders is not: the runner writes each answer at generation zero,
+      // so every step starts the count again (workflow_test.ts).
       depth: 3,
       max: 2,
       nudge: () => this.#owedEffects(),

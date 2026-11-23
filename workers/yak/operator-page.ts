@@ -110,7 +110,19 @@ import {
   row,
 } from './operator-draw.ts'
 import { PICTURES, reply, textual, trouble } from '@yaks/session/conversation'
-import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
+import {
+  does,
+  keeps,
+  type Made,
+  madeOf,
+  type Page,
+  pagesOf,
+  runs,
+} from './made.ts'
+import { type Step, workflow } from '@yaks/builders/workflow'
+import { metaOf } from './meta.ts'
+import type { Door } from '@yaks/durable-object/door'
+import { type Built, line } from '@yaks/query'
 import { drafting, draftsOf, theirs } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
@@ -1710,6 +1722,7 @@ type Shown = { slug: string; title: string }
 type Making = Shown & {
   made: Made
   pages: Page[]
+  steps: Step[][]
   live: string | null
   draft: string | null
 }
@@ -1756,12 +1769,31 @@ let makingOf = async (
     title: app.title || app.slug,
     made: madeOf(words && decoded(words), file),
     pages,
+    steps: await stepsOf(found.store, found.who, space, app.slug),
     live: app.source
       ? `https://${spaceHost(env, space.slug)}/${app.slug}/`
       : null,
     draft: pending && draft.of
       ? (await linkOf(ctx, space, app, found.who, draft.of)).at
       : null,
+  }
+}
+
+// The workflow the app's live store holds: its builders and the `requires`
+// edges between them, as the person may read them. A store that cannot be
+// read draws no steps, and the failure is reported.
+let stepsOf = async (store: Door, who: Who, space: Space, app: string) => {
+  let read = (q: Built) =>
+    metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(q)
+  try {
+    let [builders, edges] = await Promise.all([
+      read(line`.builder&*`),
+      read(line`.requires&*`),
+    ])
+    return workflow([...builders, ...edges])
+  } catch (error) {
+    caught(error, { request: 'app workflow', space: space.slug, app })
+    return []
   }
 }
 
@@ -1967,6 +1999,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
               : null,
           ),
         ),
+        app.steps.length ? tab('runs', 'How it runs', runs(app.steps)) : null,
         tab('screens', 'Screens', screens(app, operator)),
       ),
     ),

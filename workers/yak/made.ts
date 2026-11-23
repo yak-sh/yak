@@ -9,6 +9,7 @@ import { type ComponentChildren as Node, h } from 'preact'
 import { Button, Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
 import { readOnly, titleOf } from './data.ts'
+import type { Step } from '@yaks/builders/workflow'
 
 // How the Operator writes a new app so this column shows it being made, in
 // order and in plain words, is the base persona's
@@ -271,3 +272,30 @@ export let does = (
         : null,
     ]
     : empty(`What ${app} can do shows here as ${operator} adds it.`)
+
+/** How an app runs on its own: the steps of its workflow (@yaks/builders
+ * `workflow`), stage by stage, each saying what it waits for. The steps of
+ * one stage run side by side. */
+export let runs = (stages: Step[][]): Node => {
+  let names = new Map(stages.flat().map((s) => [s.eid, s.title]))
+  return stages.map((stage, i) => [
+    h(
+      Notice,
+      { mod: 'fine' },
+      i == 0 ? 'First' : 'Then',
+      stage.length > 1 ? ', side by side' : '',
+    ),
+    h(
+      Rows,
+      null,
+      stage.map((step) =>
+        row(
+          step.title,
+          step.requires.length
+            ? `After ${AND.format(step.requires.map((r) => names.get(r)!))}`
+            : 'For each new row it watches for',
+        )
+      ),
+    ),
+  ])
+}

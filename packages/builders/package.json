@@ -9,7 +9,8 @@
     "./model": "./model.ts",
     "./tools": "./tools.ts",
     "./cli": "./cli.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./workflow": "./workflow.ts"
   },
   "license": "Apache-2.0",
   "description": "Build query-selected graph inputs into stable, named output entities.",

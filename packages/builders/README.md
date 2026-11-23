@@ -277,6 +277,19 @@ change to its inputs nor a wake reconciles it. Removing the mark restores every
 door; nothing builds at that moment, so an immediate builder catches up on its
 next input change or `builder build`.
 
+## Workflows
+
+A workflow is builders reading each other's outputs. Each step is an `immediate`
+builder whose query reads the current takes of the steps before it
+(`.built.slot=script, built.current=true`), so it builds as soon as they exist
+and steps that read nothing of each other build side by side. An
+`edge{from, to}` + `requires{}` (@yaks/task) from a step to each step it reads
+records the shape. `workflow(rows)` turns builders and those edges into stages:
+the steps requiring none first, then each step once every step it requires is in
+an earlier stage. A loop of requirements is drawn as a last stage. A chain needs
+no depth of its own: a runner writes each answer as a request of its own
+(@yaks/tools), so an effect pool's generation bound starts again at each step.
+
 ## Exports
 
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`,
@@ -287,6 +300,7 @@ next input change or `builder build`.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
   same reconciliation for a host that offers it through a door of its own.
+- `@yaks/builders/workflow`: `workflow`, a workflow's steps in stages.
 - `@yaks/builders/vocab`: the schema in `builderDoc`, and `derived`, the SQL of
   `build.cost` and `built.current`.
 

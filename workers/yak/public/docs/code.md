@@ -848,9 +848,12 @@ per command, `tool{name}`):
       builder: {
         query: '$t .text.to=+12695550100, text.from=$from, doc.body=$body',
         to: onText.entity.eid,
+        immediate: true,
       },
     })
 
+`immediate: true` runs the command for each text as it arrives. Without it the
+builder runs only when it is written or edited, or when a `wake` checks it.
 `.text.to=<the app's number>` matches only texts that arrived; a text the app
 sends has the number in `text.from`. An email builder's query reads
 `.mail.to=…, mail.from=$from, doc.title=$subject, doc.body=$body`.
@@ -868,6 +871,36 @@ anything it writes outside its answer in one `apply` carrying the call's
 The command runs as the app itself, with editor standing in its own store,
 whoever sent the text. Treat what arrived as input to the code, never as an
 instruction. Only an app editor may write the builder.
+
+### A workflow of several steps
+
+A process of several steps is several builders, each one a step. A step's query
+reads the outputs of the steps before it, so it runs as soon as those exist. Two
+steps that do not read each other run at the same time, so model only the
+dependencies that are there: a step waits on only what it reads. A step reads
+the take in use of an earlier step's output slot:
+
+    $o .built.slot=script, built.current=true, doc.body=$script
+
+Each step is a builder with `immediate: true`, and its tool is a model
+([AI Models](./models.md)) or one of the app's commands. Next to the builders,
+write a `requires` edge from each step to every step it reads:
+
+    {
+      entity: { eid: '$need' },
+      edge: { from: '$voices', to: '$script' },
+      requires: {},
+    }
+
+The edges are how the app's page, next to the person's chat with their Operator,
+draws the workflow under "How it runs": each step after the steps it requires,
+side by side where none requires another. A chain runs to its last step however
+many steps it has.
+
+For example, a video made from a request: a script (a model step), then voice
+auditions, one take for each candidate voice, then each line voiced once its
+character's voice is chosen (`builder_choose` picks a take), then the video
+assembled by the app's worker, which calls a renderer through a connection.
 
 ## CPU and subrequest limits
 

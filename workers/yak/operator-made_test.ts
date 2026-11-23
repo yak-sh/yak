@@ -7,7 +7,8 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import type { Item } from '@yaks/model'
-import { directoryOf } from './directory.ts'
+import { appStore, directoryOf } from './directory.ts'
+import { toolEid } from '@yaks/tools'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
@@ -86,6 +87,9 @@ let at = (chosen: string | null) => async (...steps: Item[]) => {
     ),
     keeps: names('keeps'),
     does: names('does'),
+    // The steps of how it runs, each with what it waits for, stage by stage.
+    runs: [...part('runs')?.querySelectorAll('.Notice, .Rows_Item') ?? []]
+      .map((e) => e.textContent),
     screens: part('screens')?.querySelector('iframe')?.getAttribute('src') ??
       part('screens')?.textContent,
     // Its frames by which they are, the radios that switch them and which
@@ -146,6 +150,7 @@ test('beside a newcomer’s chat, what their app keeps and can do as their Opera
     open: 'keeps',
     keeps: ['Recipe'],
     does: ['Plan week', 'Add and find what it keeps'],
+    runs: [],
     screens: `Recipe box’s screens show here as ${space.operator} draws them.`,
     frames: {},
     switch: [],
@@ -204,4 +209,42 @@ test('an address naming no app opens none beside the chat, whatever its Operator
     undefined,
   )
   equal((await at(null)(call('app_new', { slug: 'shelf' }))).app, undefined)
+})
+
+// A workflow in its store: two steps reading a text that arrived, and a third
+// reading both, each saying what it reads with a `requires` edge.
+let recipes = (await dir.apps(space)).find((a) => a.slug == 'recipes')!
+let [heard, priced, answered] = ['Heard', 'Priced', 'Answered'].map((
+  title,
+) => ({
+  entity: { eid: crypto.randomUUID() },
+  doc: { title },
+  builder: { query: '$t .text', to: toolEid('plan_week'), immediate: true },
+}))
+let needs = (from: { entity: { eid: string } }, to: typeof from) => ({
+  entity: { eid: crypto.randomUUID() },
+  edge: { from: from.entity.eid, to: to.entity.eid },
+  requires: {},
+})
+let wrote = await appStore(p.env.STORE, space, recipes)('/apply', {
+  method: 'POST',
+  body: JSON.stringify([
+    heard,
+    priced,
+    answered,
+    needs(answered, heard),
+    needs(answered, priced),
+  ]),
+}, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+equal(wrote.status, 200, await wrote.text())
+let running = await after()
+
+test('how an app runs: its builders stage by stage, side by side where none requires another', () => {
+  equal(running.runs, [
+    'First, side by side',
+    'HeardFor each new row it watches for',
+    'PricedFor each new row it watches for',
+    'Then',
+    'AnsweredAfter Heard and Priced',
+  ])
 })
