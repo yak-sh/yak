@@ -69,27 +69,27 @@ let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
-// The coordinator divides the run's memory among its runtimes. A runner
-// started on its own uses the local default.
+// The first collection threshold, and the limit if the caller asks to
+// hand off unstarted files.
 let FULL = Number(flag('full').at(-1) ?? 1024 ** 3)
-// Most of a runtime past FULL is what it no longer needs or holds: what files
-// kept for those after them (./suite.ts `kept`, a kernel and its stores, say),
-// V8's heap grown while memory was free, a database's pages, freed only once
-// its object is collected, and freed memory, resident until given back. So a
-// runtime past FULL first ends what it kept, collects (with `--expose-gc`),
-// lets the finalizers that queued run, and gives back what it freed
-// (@yaks/process `trim`). It hands on its files only when what remains
-// exceeds its share.
+// Collect when the runtime grows, allow finalizers to close native handles,
+// and give back the memory they free (@yaks/process `trim`). Only a runner
+// with an explicit handoff releases shared fixtures before the last file.
 let sweep = (globalThis as { gc?: () => void }).gc
 let releases: Outcome[] = []
+let sweepAt = FULL
 let full = async () => {
-  if (system.memoryUsage().rss <= FULL) return false
-  releases.push(...await release(timeout, verbose))
-  if (!rest) return false
+  if (system.memoryUsage().rss <= sweepAt) return false
+  if (rest) releases.push(...await release(timeout, verbose))
   sweep?.()
   await tick()
   system.trim()
-  return system.memoryUsage().rss > FULL
+  let kept = system.memoryUsage().rss
+  // Native SQLite pages do not count toward JavaScript heap pressure. Give
+  // unreachable fixtures a chance to free them, then wait for memory to
+  // grow again before collecting. Shared fixtures live for the whole run.
+  if (!rest) sweepAt = Math.max(FULL, kept + FULL / 4)
+  return !!rest && kept > FULL
 }
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href

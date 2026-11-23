@@ -92,3 +92,23 @@ test('a comment and a type-only edit leave runtime declarations alone', async ()
     { 'm.ts': [] },
   )
 })
+
+test('deployment comments leave the test bindings alone and binding edits reach their consumers', async () => {
+  let path = 'workers/yak/wrangler.toml'
+  let original =
+    '[[ratelimits]]\nname = "SIGNIN_RATE"\nsimple = { limit = 5, period = 60 }'
+  let compared = (text: string) =>
+    edits({
+      paths: [path],
+      at: 'HEAD',
+      run: () => Promise.resolve(original),
+      read: () => Promise.resolve(text),
+    })
+  equal(await compared('# A credential used by a deploy\n' + original), {
+    [path]: [],
+  })
+  equal(await compared(original.replace('limit = 5', 'limit = 2')), {
+    [path]: ['*'],
+  })
+  equal(await compared('[[ratelimits]'), { [path]: ['*'] })
+})

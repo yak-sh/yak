@@ -1,6 +1,16 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { denoDir, observe, type Progress } from './test.ts'
+import { denoDir, observe, platforms, type Progress } from './test.ts'
+
+test('the selected files run together in their platform environment', () => {
+  let terminal = 'packages/browse/tui/run_test.tsx'
+  let other = 'packages/browse/tui/keys_test.ts'
+  assertEquals(platforms([terminal, 'a_test.ts', other, 'README.md']), [
+    { name: 'deno', files: ['a_test.ts', 'README.md'] },
+    { name: 'terminal', files: [terminal, other] },
+  ])
+  assertEquals(platforms([terminal]), [{ name: 'terminal', files: [terminal] }])
+})
 
 test('denoDir follows explicit cache, XDG, and platform defaults', () => {
   assertEquals(

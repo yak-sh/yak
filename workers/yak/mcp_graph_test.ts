@@ -11,6 +11,7 @@ import { handle, secretEid } from '@yaks/secrets'
 import {
   client,
   connector,
+  fresh,
   kernel,
   meta,
   num,
@@ -1741,7 +1742,8 @@ test('an app declares which of its own properties are searched', async () => {
 
 for (let plan of ['Plus', 'comped']) {
   test(`${plan} spaces can create and install more than fifty apps`, async () => {
-    let k = await kernel()
+    // The comped plan is tied to the reserved demo space.
+    let k = plan == 'comped' ? await fresh() : await kernel()
     try {
       let slug = plan == 'Plus' ? 'plus-limits37' : 'yourname'
       let name = `limits-${plan.toLowerCase()}`

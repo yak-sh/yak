@@ -60,6 +60,7 @@ export let edits = async (
 ): Promise<Record<string, string[]>> => {
   let from = at ?? await base(run)
   let modules = (paths ?? await changes({ run, at: from })).filter((path) =>
+    path == 'workers/yak/wrangler.toml' ||
     /\.[mc]?[jt]sx?$/.test(path) && !tested(path)
   )
   if (!modules.length) return {}
@@ -74,10 +75,24 @@ export let edits = async (
         path,
         before == undefined || after == undefined
           ? ['*']
+          : path.endsWith('.toml')
+          ? await configEdits(before, after)
           : declarations(path, before, after),
       ]
     })),
   )
+}
+
+// Wrangler and the configuration probes consume the parsed bindings. A
+// comment about a deploy secret does not change any of those bindings.
+let configEdits = async (before: string, after: string) => {
+  let { parse } = await import('smol-toml')
+  let { isDeepStrictEqual } = await import('node:util')
+  try {
+    return isDeepStrictEqual(parse(before), parse(after)) ? [] : ['*']
+  } catch {
+    return ['*']
+  }
 }
 
 let workspace = new Set(members())

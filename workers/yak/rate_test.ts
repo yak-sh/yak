@@ -1,11 +1,9 @@
-// The per-source ceilings on the anonymous doors (@yaks/workerd/rate, T-37884), held by
-// the Workers Rate Limiting bindings wrangler.toml declares. The kernel in
-// memory starts each limit's minute at the first request (testing.ts
-// `limiter`). Each door gets one request past its allowance. Sign-in also
-// checks that a different IPv6 prefix has its own allowance.
+// The anonymous doors spend their own binding's allowance and leave other
+// sources alone. Small counters exercise the same boundary in a few requests.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
-import { connector, kernel, seed, unique } from './probe.ts'
+import { connector, fresh, seed, unique } from './probe.ts'
+import { limiter } from './binding-probe.ts'
 
 let source = unique('rate').slice(-8)
 let from = (ip: string, prefix = source.slice(0, 4)) => ({
@@ -34,7 +32,13 @@ let rated58 = unique('rated58')
 test(
   'a stranger is held to a rate per source at every anonymous door',
   async () => {
-    let k = await kernel()
+    let k = await fresh({
+      SIGNIN_RATE: limiter(2, 60),
+      REGISTER_RATE: limiter(2, 60),
+      TOOL_RATE: limiter(2, 60),
+      FEEDBACK_RATE: limiter(1, 60),
+      API_RATE: limiter(2, 60),
+    })
     try {
       let them = await seed(k, [{ slug: rated58, apps: ['board'] }])
       await connector(k, them.cookie).tool('app_set', {
@@ -43,7 +47,7 @@ test(
         access: 'public',
       })
 
-      // Sign-in codes: five a minute shared by all addresses in one /48.
+      // Sign-in codes are shared by all addresses in one /48.
       let login = (headers: Record<string, string>) =>
         k.at(k.host, '/login', {
           method: 'POST',
@@ -55,8 +59,8 @@ test(
             email: `${unique('rate')}@${k.host}`,
           }).toString(),
         }).then(seen)
-      let codes = await burst(5, () => login(from('198.51.100.1')))
-      assertEquals(codes.map((r) => r.status), [200, 200, 200, 200, 200])
+      let codes = await burst(2, () => login(from('198.51.100.1')))
+      assertEquals(codes.map((r) => r.status), [200, 200])
       let held = await login({
         'cf-connecting-ip': `2001:db8:${source.slice(0, 4)}::2`,
       })
@@ -65,7 +69,7 @@ test(
       let other = (parseInt(source.slice(0, 4), 16) ^ 1).toString(16)
       assertEquals((await login(from('198.51.100.1', other))).status, 200)
 
-      // OAuth client registration: ten a minute.
+      // OAuth client registration uses its own counter.
       let register = (ip: string) =>
         k.at(k.host, '/oauth/register', {
           method: 'POST',
@@ -76,13 +80,13 @@ test(
             token_endpoint_auth_method: 'none',
           }),
         }).then(seen)
-      let clients = await burst(11, () => register('198.51.100.3'))
+      let clients = await burst(3, () => register('198.51.100.3'))
       let refused = one(clients, (r) => r.status != 201)
       assertEquals(refused.status, 429)
       assertEquals(JSON.parse(refused.text).error, 'too_many_requests')
 
-      // Anonymous connector calls: sixty a minute. Feedback, one a minute, is
-      // its own count on top, so one stranger's note leaves another's alone.
+      // Feedback has its own count on top of the anonymous connector limit,
+      // so one stranger's note leaves another's alone.
       let n = 0
       let call = async (ip: string, name: string, args: unknown = {}) => {
         let r = await k.at(k.host, '/mcp?auth=mixed', {
@@ -106,16 +110,15 @@ test(
         'one already this minute',
       )
       assertEquals((await call('198.51.100.5', 'feedback', note)).err, false)
-      let calls = await burst(61, () => call('198.51.100.7', 'about'))
+      let calls = await burst(3, () => call('198.51.100.7', 'about'))
       assertStringIncludes(one(calls, (c) => c.err).text, 'Too many calls')
 
-      // A public app's data: three hundred requests a minute from a stranger,
-      // and its own people are not counted at all.
+      // A public app's data counts strangers and lets its own people through.
       let read = (ip: string, cookie?: string) =>
         k.at(`${rated58}.yaks.app`, '/board/api/query?.doc', {
           headers: { ...from(ip), ...(cookie ? { cookie } : {}) },
         }).then(seen)
-      let reads = await burst(301, () => read('198.51.100.6'))
+      let reads = await burst(3, () => read('198.51.100.6'))
       let over = one(reads, (r) => r.status != 200)
       assertEquals([over.status, over.retry], [429, '60'])
       assertEquals((await read('198.51.100.6', them.cookie)).status, 200)

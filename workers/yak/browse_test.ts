@@ -62,7 +62,6 @@ let browsing: Browsing = {
   release: () => Promise.resolve(),
   axe: { source: '', version: 'test' },
 }
-let rendering = answer(browsing)
 let slow = answer(browsing, time)
 let k: Kernel = await fresh({
   ERRORS: { send: () => Promise.resolve() },
@@ -72,7 +71,10 @@ let k: Kernel = await fresh({
       let visit: Visit = await req.clone().json()
       visits.push(visit)
       if (new URL(visit.url).searchParams.has('slow')) return slow(req)
-      return rendering(req)
+      let elapsed = clock()
+      let rendered = answer(browsing, elapsed)(req)
+      await elapsed.advance(visit.view?.wait ?? 0)
+      return rendered
     },
   } as unknown as typeof env.BROWSER
 })

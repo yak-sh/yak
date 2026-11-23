@@ -220,7 +220,9 @@ export let choose = async (
         : new Map<string, number>()
       // A module edited only inside its declarations reaches the tests
       // naming them (`named`); any other change reaches every importer.
-      let direct = s.distance(changed.filter((p) => !edits?.[p]))
+      let direct = s.distance(
+        changed.filter((p) => !edits?.[p] || edits[p].includes('*')),
+      )
       let far = s.distance(changed, owner)
       let touched = new Set(changed)
       let required = new Set(

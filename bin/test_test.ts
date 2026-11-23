@@ -44,13 +44,19 @@ test('an executor change still selects unrelated tests', () => {
   )
 })
 
-let planned = async (args: string[], shallow = false, pass = true) => {
+let planned = async (
+  args: string[],
+  shallow = false,
+  pass = true,
+  touched = 'a.ts',
+  edited: Record<string, string[]> = {},
+) => {
   let git: string[][] = []
   let checked: string[][] = []
   let selected: { all: boolean; changed?: string[]; sources: string[] }[] = []
   let files = ['a_test.ts', 'a.ts']
   let plan = await prepare(args, '/sqlite.so', {
-    edits: () => Promise.resolve({}),
+    edits: () => Promise.resolve(edited),
     changes: () =>
       changes({
         run: (args) => {
@@ -60,7 +66,7 @@ let planned = async (args: string[], shallow = false, pass = true) => {
             throw new Error("fatal: ambiguous argument 'HEAD^'")
           }
           if (args[0] == 'rev-parse') return Promise.resolve('parent\n')
-          return Promise.resolve(args[0] == 'diff' ? 'a.ts\0' : '')
+          return Promise.resolve(args[0] == 'diff' ? `${touched}\0` : '')
         },
       }),
     format: (paths) => Promise.resolve(paths),
@@ -103,6 +109,15 @@ test('local selection keeps consumer tests, checks changed sources and propagate
   equal(local.plan.run, ['a_test.ts', 'a.ts'])
   equal(await local.plan.ok, true)
   equal(await failed.plan.ok, false)
+})
+
+test('deployment comments still reach source checks and leave runtime consumers alone', async () => {
+  let config = 'workers/yak/wrangler.toml'
+  let comment = await planned([], false, true, config, { [config]: [] })
+  equal(comment.checked, [[config]])
+  equal(comment.selected[0].changed, [])
+  let binding = await planned([], false, true, config, { [config]: ['*'] })
+  equal(binding.selected[0].changed, [config])
 })
 
 test('dependency bookkeeping changes select their consumers without selecting unrelated tests', () => {

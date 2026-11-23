@@ -13,7 +13,7 @@ import {
   client,
   cloudflare,
   connector,
-  kernel,
+  fresh,
   meta,
   onPlus,
   rfc822,
@@ -37,7 +37,7 @@ let recordsOf = (name: string) =>
   ].sort()
 
 test("a Plus plan space's first letter sets its subdomain up for mail, and a free space's does not", async () => {
-  let k = await kernel()
+  let k = await fresh()
   try {
     let plus = unique('plus'), free = unique('free'), sends = unique('sends')
     let { cookie, eids } = await seed(k, [

@@ -1,7 +1,6 @@
 // The kernel and its network boundaries, driven in process. Each fixture
 // owns a synthetic origin; requests to it dispatch directly to its handler.
 import './runtime-resolve.ts'
-import * as io from '@yaks/file/io'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
 import { cleanup, clock, kept, until } from '@yaks/testing'
@@ -17,7 +16,6 @@ import type { Builder } from './build.ts'
 import { bounded, type Ceiling } from '@yaks/durable-object/ceiling'
 import { type Directory, directoryOf, spaceHandle } from './directory.ts'
 import { valueIn } from '@yaks/tools/value'
-import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
 import { delivered, fakeSub } from '@yaks/stripe/testing'
 import { domainsApi } from '../../packages/resend/testing.ts'
@@ -26,8 +24,8 @@ import { run as jq } from '@gabrielbryk/jq-ts'
 
 let logs = new Map<string, string>()
 
-// Compiling tools' output schemas took a sixth of mcp_graph_test.ts's profile;
-// every client of every kernel lists the same schemas.
+// Compile each schema when a reply uses it. Most tests call only a few of the
+// listed tools, and connectors for other callers can share these validators.
 let ajv = new Ajv({ strict: false })
 let compiled = new Map<string, ReturnType<typeof ajv.compile>>()
 let fitting = (schema: unknown) => {
@@ -155,15 +153,6 @@ export let vars = (secret: string, cloudflare: string) => ({
   META_API: `${cloudflare}/meta`,
 })
 
-// The rate limits are bindings rather than settings: the kernel holds every
-// one wrangler.toml declares, each at its declared rate.
-let ratelimits = () =>
-  (parse(
-    io.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
-  ) as {
-    ratelimits: { name: string; simple: { limit: number; period: number } }[]
-  }).ratelimits
-
 // The kernel's handler and graph bindings share the caller's process.
 let boot = async (
   bindings: Vars = {},
@@ -172,7 +161,7 @@ let boot = async (
 ) => {
   let [
     { handler, email },
-    { ai, dataset, emailed, limiter, lasting, modelPage },
+    { ai, dataset, emailed, lasting, modelPage },
     { within },
   ] = await Promise
     .all([
@@ -206,12 +195,6 @@ let boot = async (
     // reaches Workers AI or its catalogue.
     AI: ai([]) as Env['AI'],
     MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
-    ...Object.fromEntries(
-      ratelimits().map((r) => [
-        r.name,
-        limiter(r.simple.limit, r.simple.period),
-      ]),
-    ),
     ...bindings,
   }, load)
   prepare?.(p.env)
@@ -424,7 +407,10 @@ export let client = (
 // The output schemas each caller of a kernel was listed, by tool: a caller
 // lists its tools once, however many clients it opens (`meta` opens one a
 // call), and lists them again only for a tool it was not listed yet.
-type Schemas = Map<string, ReturnType<typeof ajv.compile>>
+type Schemas = Map<
+  string,
+  { schema: object; check?: ReturnType<typeof fitting> }
+>
 let listings = new WeakMap<object, Map<string, Schemas>>()
 let listedFor = (k: Pick<Kernel, 'at'>, caller: string): Schemas => {
   let held = listings.get(k.at) ?? new Map<string, Schemas>()
@@ -478,11 +464,12 @@ export let connector = (
       if (!schemas.has(name)) {
         let { tools } = await ask('tools/list')
         for (let t of tools) {
-          if (t.outputSchema) schemas.set(t.name, fitting(t.outputSchema))
+          if (t.outputSchema) schemas.set(t.name, { schema: t.outputSchema })
         }
       }
-      let fits = schemas.get(name)
-      if (!fits) throw new Error(`${name}: no listed output schema`)
+      let schema = schemas.get(name)
+      if (!schema) throw new Error(`${name}: no listed output schema`)
+      let fits = schema.check ??= fitting(schema.schema)
       if (!fits(out.structuredContent)) {
         throw new Error(`${name}: ${ajv.errorsText(fits.errors)}`)
       }

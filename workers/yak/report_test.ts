@@ -152,20 +152,15 @@ test('a page reports its own breaks, and the agent hears', async () => {
       'served once',
     )
 
-    // A page in a loop cannot flood the door. The allowance is per clock
-    // minute (apps.ts `flooding`), so a loop that straddles a minute can need
-    // twice it before the door says stop.
-    let statuses: number[] = []
-    for (let n = 0; n < 62 && !statuses.includes(429); n++) {
-      statuses.push((await report({ message: `loop ${n}` })).status)
-    }
-    assert(statuses.includes(429), 'the door said stop')
-    let taken = statuses.filter((s) => s == 204).length + 2
-    let listed = await agent.tool('app_errors', app)
-    assert(
-      listed.split('\n').filter((l) => l.startsWith('- ')).length <= taken,
-      'the flood was capped',
+    // A page in a loop cannot flood the door. Every POST spends the allowance,
+    // including one with no break to file. Two windows' worth holds even at a
+    // minute boundary.
+    let statuses = await Promise.all(
+      Array.from({ length: 61 }, () => report('not a report')),
     )
+    assert(statuses.some((r) => r.status == 429), 'the door said stop')
+    let listed = await agent.tool('app_errors', app)
+    assertEquals(listed.split('\n').filter((l) => l.startsWith('- ')).length, 2)
   } finally {
     await k.stop()
   }

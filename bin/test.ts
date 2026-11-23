@@ -52,7 +52,6 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   if (!Deno.args.some((a) => a.startsWith('--from='))) {
     let { elsewhere } = await import('./elsewhere.ts')
     let { base, changes } = await import('./test-changes.ts')
-    let { NEED } = await import('@yaks/machine/room')
     let at: Promise<string> | undefined
     let from = () => at ??= base()
     let code = await elsewhere(['deno', 'task', 'test', ...Deno.args], {
@@ -61,11 +60,6 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
       env: {
         TASKS_TEST_BASE: 'HEAD',
         YAK_MACHINE: '',
-        // The test VM admits this run against NEED. Reserve the rest for
-        // the coordinator and, on a change run, the concurrent source checks.
-        TASKS_TEST_RUNTIME_BYTES: String(
-          NEED.memory * (Deno.args.includes('--all') ? 0.75 : 0.5),
-        ),
       },
       before: async () => {
         if (Deno.args.includes('--all')) return
@@ -126,16 +120,12 @@ export let PLATFORMS = ['deno', 'terminal']
 export let platform = (file: string) =>
   file.includes('packages/browse/tui/') ? 'terminal' : 'deno'
 
-/// deal(['a', 'b', 'c', 'd', 'e'], 2) -> [['a', 'c', 'e'], ['b', 'd']]
-/// deal(['a'], 4) -> [['a']]
-/// deal([], 3) -> []
-/** `files` dealt round among at most `n` hands, none empty. A package's files
- * lie together in the list, so each hand holds its share of the heavy ones. */
-export let deal = <T>(files: readonly T[], n: number): T[][] =>
-  Array.from(
-    { length: Math.min(n, files.length) },
-    (_, k) => files.filter((_, i) => i % n == k),
-  )
+/** Each selected file belongs to one document environment. */
+export let platforms = (paths: string[]) =>
+  PLATFORMS.map((name) => ({
+    name,
+    files: paths.filter((f) => (tested(f) ? platform(f) : 'deno') == name),
+  })).filter(({ files }) => files.length)
 
 /**
  * Git as every process a run starts sees it: none of the machine's config
@@ -552,15 +542,19 @@ export let prepare = async (
       : !paths.length && !all
       ? changedPaths
       : undefined
+    let declarations = await edited
+    let runtimeChanges = changed?.filter((path) =>
+      !path.endsWith('.toml') || declarations?.[path]?.length !== 0
+    )
     let { keys, run, beyond, reaches, read } = await effects.chosen(
       files,
       all,
       [sqlite],
-      changed,
+      runtimeChanges,
       changedFiles.filter((f) => /\.[mc]?[jt]sx?$/.test(f) && !excluded(f)),
       inspect,
       parsed,
-      await edited,
+      declarations,
     )
     if (!inspected) snapshot.resolve(undefined)
     let imported = reaches(IMPORTED)
@@ -604,51 +598,16 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   if (!Number.isFinite(pulse) || pulse < 1) {
     throw new Error('invalid test watch interval')
   }
-  // `--jobs=n` deals each platform's files among n runtimes running at once,
-  // one a core: a test's CPU is its own, so the suite takes the time of its
-  // slowest runtime rather than of all of them. Each holds its share of the
-  // memory free as the run starts, and no more than one runtime alone would
-  // (@yaks/testing/main `--full`).
-  let jobs = Number(
-    flags.findLast((a) => a.startsWith('--jobs='))?.slice(7) ?? 1,
-  )
-  if (!Number.isInteger(jobs) || jobs < 1) {
-    throw new Error('invalid test jobs')
-  }
-  let forwarded = flags.filter((a) => !a.startsWith('--jobs='))
-  let runs = PLATFORMS.flatMap((p) => {
-    let mine = paths.filter((f) => tested(f) ? platform(f) == p : p == 'deno')
-    let hands = deal(mine, jobs)
-    return hands.map((files, k) => ({
-      platform: p,
-      name: hands.length > 1 ? `${p} ${k + 1}/${hands.length}` : p,
-      files,
-    }))
-  })
-  let shares = Math.max(1, runs.length)
-  let reserved = Number(
-    Deno.env.get('TASKS_TEST_RUNTIME_BYTES') ?? shares * 1024 ** 3,
-  )
-  let full = Math.floor(
-    Math.min(reserved, Deno.systemMemoryInfo().available * 0.7) / shares,
-  )
-  // Each platform's runtimes after its first write their times as parts.
-  let parts = new Map<string, number>()
-  let part = (p: string) => {
-    let n = (parts.get(p) ?? 0) + 1
-    parts.set(p, n)
-    return n > 1 ? [`--part=${n}`] : []
-  }
+  let runs = platforms(paths)
   let children: Deno.ChildProcess[] = []
   let host = runtime()
-  let spawn = (p: string, files: readonly string[], more: string[]) => {
+  let spawn = (p: string, files: readonly string[]) => {
     let child = new Deno.Command(Deno.execPath(), {
       args: [
         ...host.args,
         RUNNER,
         `--platform=${p}`,
-        ...forwarded,
-        ...more,
+        ...flags,
         ...files,
       ],
       env: host.env,
@@ -678,8 +637,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       said: 0,
       reported: Date.now(),
       done: false,
-      // Where the output of the platform's latest runtime begins.
-      from: 0,
     }
   })
   // What each platform has said, kept as it comes: one ended before its
@@ -701,14 +658,11 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     progress[i].done = true
     let out = bytes(heard[i].out), err = bytes(heard[i].err)
     let said = new TextDecoder().decode(out)
-    let last = new TextDecoder().decode(
-      bytes(heard[i].out.slice(progress[i].from)),
-    )
     let ok = status?.success ?? false
     // A runtime that died (out of memory, say) never listed its failures.
     let why = `test ${runs[i].name}: ${
       status ? status.signal ?? status.code : 'still running'
-    }${ok || reported(last) ? '' : died(progress[i])}`
+    }${ok || reported(said) ? '' : died(progress[i])}`
     if (verbose) {
       report(Deno.stdout, out)
       report(Deno.stderr, err)
@@ -789,41 +743,17 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       }
     }
   }, pulse)
-  // A runtime keeps every module it loaded until it exits, so one that grew
-  // full hands the files it did not reach to a fresh one
-  // (packages/testing/main.ts `--rest`). The platform's report is all of its
-  // runtimes', and its status the first failure, or a death, which ends it.
   let run = async (i: number) => {
-    let { platform: name, files } = runs[i]
+    let { name, files } = runs[i]
     let p = progress[i]
-    let rest = await Deno.makeTempFile({
-      prefix: 'test-rest-',
-      suffix: '.json',
-    })
-    let status: Deno.CommandStatus | undefined
-    try {
-      for (let left = files; left.length && !ending;) {
-        await Deno.writeTextFile(rest, '[]')
-        let child = spawn(name, left, [
-          `--rest=${rest}`,
-          `--full=${full}`,
-          ...part(name),
-        ])
-        p.now = own(child.pid, { every: pulse / 2 })
-        p.at = p.now()
-        p.from = heard[i].out.length
-        let followed = Promise.all([
-          observe(kept(child.stdout, heard[i].out), p, p.now),
-          observe(kept(child.stderr, heard[i].err), p, p.now),
-        ])
-        let ended = await child.status
-        await followed
-        status = ended.success && status ? status : ended
-        left = JSON.parse(await Deno.readTextFile(rest))
-      }
-    } finally {
-      await Deno.remove(rest).catch(() => {})
-    }
+    let child = spawn(name, files)
+    p.now = own(child.pid, { every: pulse / 2 })
+    p.at = p.now()
+    let [status] = await Promise.all([
+      child.status,
+      observe(kept(child.stdout, heard[i].out), p, p.now),
+      observe(kept(child.stderr, heard[i].err), p, p.now),
+    ])
     say(i, status)
   }
   await Promise.all(runs.map((_, i) => run(i)))

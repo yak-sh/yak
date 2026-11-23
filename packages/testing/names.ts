@@ -72,8 +72,9 @@ export const STEPS = 2
  * declarations, by checkout path, `*` for its top-level code): 0 for a file
  * importing an edited declaration by name, directly or from a module
  * re-exporting it, or reading it off the whole module (`m.fields`), and for
- * one importing a module whose top-level code is edited; 1 for one naming a
- * declaration that names an edited one, in its module or another; and so on
+ * one directly importing a module whose top-level code is edited; 1 for one
+ * naming a declaration that names an edited one, or one step through a
+ * re-export of a module with edited top-level code; and so on
  * to `steps`. A file naming none is left out. Each file is read for the root it stands for
  * (`root`, an example page's plan module), and modules as `info` resolved
  * them.
@@ -146,7 +147,7 @@ export let naming = (
         if (resolved.get(e)?.get(i.from) != m) continue
         // The module's own code runs for whatever loads it.
         if (n == '*') {
-          if (i.exported) go.push({ m: e, n, step })
+          if (i.exported && step < steps) go.push({ m: e, n, step: step + 1 })
           let f = roots.get(e)
           if (f != undefined) {
             near.set(f, Math.min(near.get(f) ?? Infinity, step))

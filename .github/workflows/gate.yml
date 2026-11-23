@@ -79,8 +79,7 @@ jobs:
           SUITE_STEP: tests
         # All of it (`--all`): this machine keeps no record of what passed
         # before. Local runs leave unchanged files out using their dependency keys.
-        # `--jobs=4`: a runtime on each of the runner's four cores.
-        run: 'DB_PATH=:memory: deno task test --all --jobs=4 --verbose'
+        run: 'DB_PATH=:memory: deno task test --all --verbose'
 
       - name: retain suite timings
         if: always()

@@ -1,11 +1,12 @@
 // The connector's refusals reach the platform store as occurrences, and the
 // hourly wake sends TaskMaster what it has not yet counted.
 import { equal, ok, test } from '@yaks/testing'
-import { connector, kernel, letter, meta, seed, unique } from './probe.ts'
+import { connector, fresh, letter, meta, seed, unique } from './probe.ts'
 import { INTERNAL } from './mail-config.ts'
 import { countedIn, KEPT } from './refusals.ts'
 
-let k = await kernel()
+// The hourly job reads refusals across the entire platform.
+let k = await fresh()
 let space = unique('refusing')
 let them = await seed(k, [{ slug: space, apps: ['notes'] }])
 let agent = connector(k, them.cookie)
