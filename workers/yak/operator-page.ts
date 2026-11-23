@@ -1915,8 +1915,8 @@ let screens = (app: Making, operator: string) => {
 // The app open beside the chat (T-140509), and the one the Operator is
 // making in it (D-146737, `following`): its icon, its name and where it
 // lives, a way to open it in a tab of its own, and under them what it is
-// made of, a tab each, in the order it is made: the kinds of things it
-// keeps, what it can do, and its screens, the newest stage open. Its screens
+// made of: Data, Commands, Workflow when it has one, and Screens, with the
+// newest stage of making it open. Its screens
 // are the app itself, live, which the page reloads when the Operator changes
 // it, or before it is released its draft, which follows each write
 // (`chatScript`). The app's host lets the platform frame it
@@ -1999,10 +1999,10 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
       h(
         TabSet,
         { class: 'Talk_Made', 'aria-label': `What ${title} is made of` },
-        tab('keeps', 'What it keeps', keeps(app.made, whose)),
+        tab('keeps', 'Data', keeps(app.made, whose)),
         tab(
           'does',
-          'What it can do',
+          'Commands',
           does(
             app.made,
             whose,
@@ -2015,7 +2015,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
               : null,
           ),
         ),
-        app.steps.length ? tab('runs', 'How it runs', runs(app.steps)) : null,
+        app.steps.length ? tab('runs', 'Workflow', runs(app.steps)) : null,
         tab('screens', 'Screens', screens(app, operator)),
       ),
     ),
@@ -2834,7 +2834,7 @@ let put = (drawn) => {
   let tab = was.querySelector('[name=made][value="' + next.dataset.stage + '"]')
   if (tab) tab.checked = true
 }
-// A page pressed in What it can do opens in its frame by itself (its
+// A page chosen in Commands opens in its frame by itself (its
 // link's target); Screens, and that frame among them, come forward with it.
 document.addEventListener('click', (e) => {
   let shows = e.target.closest?.('[data-shows]')

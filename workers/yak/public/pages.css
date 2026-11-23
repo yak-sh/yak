@@ -993,6 +993,9 @@
     grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
   }
+  .Talk_Made:has(> .Tabs_Item:nth-child(4)) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
   .Talk_Made .Tabs_Panel {
     grid-column: 1 / -1;
     grid-row: 2;

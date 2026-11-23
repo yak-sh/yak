@@ -102,7 +102,9 @@ test('what an app can do: its own commands, then adding and finding what it keep
     }).at(-1),
     'Add and find what it keeps: A meal plan',
   )
-  equal(done({}), ['What Recipe box can do shows here as Otto adds it.'])
+  equal(done({}), [
+    'Recipe box’s commands and pages show here as Otto adds them.',
+  ])
 })
 
 test('what an app can do is asked for in the chat once it is live', () => {

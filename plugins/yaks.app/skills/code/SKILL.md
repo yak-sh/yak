@@ -881,10 +881,9 @@ step it reads:
       requires: {},
     }
 
-The edges are how the app's page, next to the person's chat with their Operator,
-draws the workflow under "How it runs": each step after the steps it requires,
-side by side where none requires another. A chain runs to its last step however
-many steps it has.
+The app's Workflow tab uses these edges to show each step after the steps it
+requires. Steps that can run in parallel appear side by side. A chain runs to
+its last step however many steps it has.
 
 ### Each of them, or all of them at once
 

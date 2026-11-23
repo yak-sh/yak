@@ -775,7 +775,7 @@ test('what the app beside the chat is made of is drawn again as the Operator wor
   page.leave()
 })
 
-test('a page pressed in What it can do brings Screens forward, where it opens', async () => {
+test('choosing a page in Commands opens it in Screens', async () => {
   let page = await load(storage(), false, 'new', apps, 'notes')
   let screens = page.document.querySelector(
     '[name=made][value=screens]',

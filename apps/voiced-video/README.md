@@ -9,9 +9,9 @@ line shown as it is said.
 The app lives in `jeff/voiced-video`.
 
 - `seed.json` writes the four steps, each an `immediate` builder, and a
-  `requires` edge from each step to every step it reads, which the app's page on
-  yaks.app draws under "How it runs". A store is seeded once, so a change to a
-  step reaches an existing copy only as an edit of its builder row.
+  `requires` edge from each step to every step it reads. The app's Workflow tab
+  shows these steps on yaks.app. A store is seeded once, so a change to a step
+  reaches an existing copy only as an edit of its builder row.
 - `worker.js` answers the three code steps (`/audition`, `/voice`, `/assemble`),
   commands declared in `vocab.json`. Voices come from ElevenLabs through
   `./api/speech`, so the space needs its own ElevenLabs connection; without one

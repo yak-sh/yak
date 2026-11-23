@@ -271,7 +271,7 @@ export let does = (
         ]
         : null,
     ]
-    : empty(`What ${app} can do shows here as ${operator} adds it.`)
+    : empty(`${app}’s commands and pages show here as ${operator} adds them.`)
 
 /** How an app runs on its own: the steps of its workflow (@yaks/builders
  * `workflow`), stage by stage, each saying what it waits for. The steps of

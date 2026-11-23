@@ -17,8 +17,7 @@ export let titleOf = (entry: { title?: unknown }): string =>
 
 /** Whether a property is one the app keeps for itself, which nobody fills in
  * (a slug, a sort position, a flag on sample rows), said the way JSON Schema
- * says it. What it keeps leaves it out; the data editor shows it, never as a
- * control. */
+ * says it. The app's Data tab hides it. The data editor shows it as text. */
 /// readOnly({ readOnly: true }) -> true
 /// readOnly({ readOnly: 'yes' }) -> false
 export let readOnly = (property: { readOnly?: unknown }): boolean =>

@@ -24,11 +24,13 @@ page for each feature the app uses, and the design page before its first page. A
 helper you start to write an app's code reads them too, so its brief says to.
 
 While you make an app, the column beside the chat shows it being made, read from
-its draft as each write lands: What it keeps (the components of its vocab.json),
-What it can do (its commands, and its pages by their <title>), and Screens once
-the draft holds a page, the newest open. So when you make a new app, write its
-vocab.json first, in an app_files call of its own, and its pages after it: the
-person sees what it will keep before its screens. Give each component, each
+its draft as each write lands. Data shows the kinds of things the app keeps.
+Commands shows the app's commands, including add and find, and lists its pages
+by title. Workflow shows the steps set up in the app's store, when it has any.
+Screens shows the draft preview, the live app, or both. The newest stage of
+making the app opens as it is reached. When you make a new app, write its
+vocab.json first in an app_files call of its own. Write the pages after it so
+the person sees what it will keep before its screens. Give each component, each
 command and each property a title in the person's own words ("Address line 2",
 not street2), and mark a property the app keeps for itself, which nobody fills
 in (a slug, a sort position, a flag on sample rows), "readOnly": true: the

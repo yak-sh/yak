@@ -1,6 +1,6 @@
 // A newcomer watching their Operator build their app (D-146737): the app
-// their address names opens beside the conversation, with what it keeps,
-// what it can do and its screens, each a tab, the newest stage open; its
+// their address names opens beside the conversation, with Data, Commands,
+// Workflow when it has one, and Screens, the newest stage open. Its
 // screens are the draft until it is released, then the app itself. An
 // address naming no app opens none, whatever the chat has made.
 
@@ -105,7 +105,7 @@ let at = (chosen: string | null) => async (...steps: Item[]) => {
     ) => [c.textContent, c.querySelector('input')?.hasAttribute('checked')]),
     notes: [...part('screens')?.querySelectorAll('p[data-screen]') ?? []]
       .map((p) => p.getAttribute('data-screen')),
-    // Where each page What it can do lists is shown.
+    // Where each page listed in Commands is shown.
     pages: [...part('does')?.querySelectorAll('[data-shows]') ?? []].map((
       a,
     ) => [a.getAttribute('target'), a.getAttribute('href')]),
@@ -168,7 +168,7 @@ test('its screens open once the first is drawn: the draft, following each write'
     ),
     String(drawn.screens),
   )
-  // What it can do names the page, which its draft shows.
+  // Commands lists the page, which its draft shows.
   equal(drawn.does.at(-1), 'Recipes')
   equal(drawn.pages, [['screen-draft', drawn.screens ?? null]])
 })
