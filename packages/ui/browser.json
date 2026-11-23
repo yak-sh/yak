@@ -11,7 +11,8 @@
   "entries": [
     ".",
     "./ui",
-    "./contents"
+    "./contents",
+    "./navigate"
   ],
   "resources": [
     "**/*.css"

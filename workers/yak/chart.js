@@ -52,7 +52,8 @@ export let charts = (document, listen = globalThis.addEventListener) => {
     chart.dataset.on = i
     let x = across(chart, i, values.length)
     chart.style.setProperty('--at', `${x * 100}%`)
-    if (!tip) {
+    // a page brought in place (@yaks/ui/navigate) takes the tip away with it
+    if (!tip?.isConnected) {
       tip = document.createElement('div')
       tip.className = 'Chart_Tip'
       tip.setAttribute('role', 'status')

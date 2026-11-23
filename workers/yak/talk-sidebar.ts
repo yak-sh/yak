@@ -12,6 +12,7 @@ import { spaceHost, url } from '@yaks/platform/host'
 import {
   ADMIN,
   chatPath,
+  iconAt,
   logoPath,
   managePath,
   talkPath,
@@ -50,7 +51,7 @@ export let talkSide = (
     href: aboutPath(space.slug, a.slug, open),
     beside: a.slug == at.app,
     icon: 'layout-grid',
-    image: `https://${spaceHost(env, space.slug)}/${a.slug}/icon.png`,
+    image: iconAt(`https://${spaceHost(env, space.slug)}/${a.slug}/`, a, space),
     label: a.title || a.slug,
   }))
   if (owner && apps.length > APPS) {

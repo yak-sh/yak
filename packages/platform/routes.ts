@@ -209,6 +209,33 @@ export let logoPath = (
   space.logo
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
+/** What draws an app's icon, as its address says it: the release it is
+ * served from and its space's logo, which it wears where it has none. */
+export let iconVersion = (
+  app: { source?: string | null },
+  space: { logo?: { sha: string } | null },
+): string =>
+  `${app.source?.slice(0, 12) ?? ''}.${space.logo?.sha.slice(0, 12) ?? ''}`
+
+/** An app's icon below its address `at` (ending in a slash), named by what
+ * draws it (`iconVersion`), so a browser keeps it until a release or the
+ * logo changes it (workers/yak apps.ts `caching`).
+ *
+ * ```ts
+ * import { iconAt } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   iconAt('https://ada.yaks.app/box/', { source: 'abc' }, { logo: null }),
+ *   'https://ada.yaks.app/box/icon.png?v=abc.',
+ * )
+ * ```
+ */
+export let iconAt = (
+  at: string,
+  app: { source?: string | null },
+  space: { logo?: { sha: string } | null },
+): string => `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space))}`
+
 /** Where the connections page serves the logos it does not keep as SVG
  * (workers/yak catalog.ts `logoDoor`), by the integration's name. */
 export let LOGOS = '/connections/logo/'

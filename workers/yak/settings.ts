@@ -5,6 +5,7 @@ import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
 import { settingsDrafts } from './settings-draft-browser.ts'
 import { allow } from './alerts-browser.ts'
+import { LEAVE, PAGE } from '@yaks/ui/navigate'
 
 let report = (error: unknown) =>
   queueMicrotask(() => {
@@ -89,7 +90,16 @@ export let settings = (root: Document = document) => {
       if (destination) location.assign(destination)
     },
   })
+  // A page brought in place (@yaks/ui/navigate) takes the page before away:
+  // what was bound to it lets go.
+  root.addEventListener(LEAVE, () => {
+    binding?.close()
+    drafts.close()
+  }, { once: true })
   return binding
 }
 
-if (typeof document != 'undefined') settings()
+if (typeof document != 'undefined') {
+  settings()
+  document.addEventListener(PAGE, () => settings())
+}

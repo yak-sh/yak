@@ -18,7 +18,7 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { operatorDoor } from './build-door.ts'
-import { draftAt, fileAnswer } from './updates.ts'
+import { bySha, draftAt, fileAnswer } from './updates.ts'
 import type { Tapped, Tapping } from './operator-trials.ts'
 
 /** The rounds a member may pick in, with how many pairs are left for them. */
@@ -51,9 +51,11 @@ let side = (space: Space, round: string, s: Tapped, parts: string[]) => {
       parts.filter((p) => output[p]).map((p) => h('p', null, output[p])),
     )
   }
-  let file = s.artifact as { media_type?: string } | undefined
+  let file = s.artifact as { media_type?: string; address?: string } | undefined
   if (file) {
-    let at = `${here(space, round)}&side=${encodeURIComponent(eid)}`
+    let at = `${here(space, round)}&side=${encodeURIComponent(eid)}${
+      file.address ? bySha({ address: file.address }) : ''
+    }`
     return String(file.media_type).startsWith('image/')
       ? h('img', { class: 'Update_Picture', src: at, alt: '' })
       : h('a', { href: at, target: '_blank', rel: 'noopener' }, 'Open file')
@@ -226,7 +228,7 @@ export let sideAnswer = async (
     | { address: string; media_type: string }
     | null
   return file
-    ? fileAnswer(env, space, file)
+    ? fileAnswer(env, space, file, req)
     : new Response('That file is missing.', { status: 404 })
 }
 

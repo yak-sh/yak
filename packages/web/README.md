@@ -69,6 +69,7 @@ more-specific routes.
 | `./page`     | the page every address answers, and what it wears         |
 | `./outlived` | whether a page outlived the bundle it runs                |
 | `./assets`   | an asset build said as data, to serve or to write to disk |
+| `./navigate` | the browser entry that starts `@yaks/ui/navigate`         |
 
 An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
 (a browser module bundled with all it imports, a body made in the process, a
@@ -133,6 +134,11 @@ Web installs the `@yaks/ui/history` port before mounting browse. The port owns
 `pushState`, `replaceState` and `popstate`; browse supplies the page's path and
 where it was scrolled. Ordinary internal anchors follow that port, while
 modified clicks keep their native new-tab behavior.
+
+A site of server-drawn pages (yaks.app's signed-in pages) loads `./navigate` in
+a script marked `data-navigate`: it starts `@yaks/ui/navigate` over the
+browser's history, so a link to another such page is fetched and laid over the
+one shown, and the shell and its images keep their nodes.
 
 ## A page that outlived a deploy
 

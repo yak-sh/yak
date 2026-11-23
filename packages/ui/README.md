@@ -57,17 +57,18 @@ equal(
 
 ## Exports
 
-| Import                   | Offers                                                                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/ui`               | Parts below; `el`, `block`, `Surround`, `Props`, `Part`; `relative`; browser placement; kits, themes, skins, composition helpers and their types; `Guide`, `Specimens` |
-| `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` for a host's UI facet                                                                                                                   |
-| `@yaks/ui/chart`         | A chart's marks through any `h`: `sparkline`, `columns`, and the days a row keeps (`kept`, `series`, `summed`)                                                         |
-| `@yaks/ui/contents`      | Browser: `start`, `fill`, `watch` a page's `Contents`, lighting the section in view; pure `current`, `anchor`, `headings`                                              |
-| `@yaks/ui/contributions` | Browser-safe `gather` and `Contributions`                                                                                                                              |
-| `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                      |
-| `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                    |
-| `@yaks/ui/cli`           | `commands`: the terminal guide, `yak ui`                                                                                                                               |
-| `@yaks/ui/<Part>.css`    | A part's sheet, for a Worker that answers its own stylesheet: `import sheet from '@yaks/ui/Button.css' with { type: 'text' }`                                          |
+| Import                   | Offers                                                                                                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ui`               | Parts below; `el`, `block`, `Surround`, `Props`, `Part`; `relative`; browser placement; kits, themes, skins, composition helpers and their types; `Guide`, `Specimens`                  |
+| `@yaks/ui/ui`            | Base `kits`, `themes`, `skins` for a host's UI facet                                                                                                                                    |
+| `@yaks/ui/chart`         | A chart's marks through any `h`: `sparkline`, `columns`, and the days a row keeps (`kept`, `series`, `summed`)                                                                          |
+| `@yaks/ui/contents`      | Browser: `start`, `fill`, `watch` a page's `Contents`, lighting the section in view; pure `current`, `anchor`, `headings`                                                               |
+| `@yaks/ui/navigate`      | Browser: `start` follows a server-drawn site's links in place, `swap`/`morph` lay a fetched page over the one shown keeping shared nodes; `arrived`, `leaving` for scripts across swaps |
+| `@yaks/ui/contributions` | Browser-safe `gather` and `Contributions`                                                                                                                                               |
+| `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                                       |
+| `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                                     |
+| `@yaks/ui/cli`           | `commands`: the terminal guide, `yak ui`                                                                                                                                                |
+| `@yaks/ui/<Part>.css`    | A part's sheet, for a Worker that answers its own stylesheet: `import sheet from '@yaks/ui/Button.css' with { type: 'text' }`                                                           |
 
 ## Building parts
 

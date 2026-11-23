@@ -26,6 +26,7 @@ import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
 import { spaceHost } from '@yaks/platform/host'
+import { browserImmutable } from '@yaks/platform/kept'
 import type { Shown, Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
 import { markdown, PICTURES } from '@yaks/session/conversation'
@@ -238,7 +239,7 @@ let shownAt = (space: Space, u: Update, s: Shown) =>
   s.artifact
     ? `${talkPath('updates', space.slug)}?shown=${
       encodeURIComponent(u.eid)
-    }&eid=${encodeURIComponent(s.eid)}`
+    }&eid=${encodeURIComponent(s.eid)}${bySha(s.artifact)}`
     : draftAt(space, s.eid)
 
 // What a choice shows, drawn by its components: a picture, a file to open,
@@ -821,6 +822,7 @@ export let fileAnswer = async (
   env: Env,
   space: Space,
   file: { address: string; media_type: string },
+  req?: Request,
 ) => {
   let kept = await env.BLOBS.get(attachmentKey(space, file.address))
   if (!kept) return new Response('That file is missing.', { status: 404 })
@@ -831,10 +833,19 @@ export let fileAnswer = async (
       'content-disposition': shows ? 'inline' : 'attachment',
       'x-content-type-options': 'nosniff',
       'content-security-policy': "sandbox; default-src 'none'",
-      'cache-control': 'private, no-store',
+      'cache-control': named(req, file)
+        ? browserImmutable
+        : 'private, no-store',
     },
   })
 }
+
+/** A kept file's address said by its bytes (`?sha=`, `shownAt`): asked for
+ * by it, the browser keeps it for good, since those bytes never change. */
+export let bySha = (file: { address: string }) =>
+  `&sha=${encodeURIComponent(file.address)}`
+let named = (req: Request | undefined, file: { address: string }) =>
+  !!req && new URL(req.url).searchParams.get('sha') == file.address
 
 /** Where a draft of one of the space's apps is read in a page's frame: the
  * reader's own preview link of it (`shownAnswer`). */
@@ -863,7 +874,7 @@ export let shownAnswer = async (
     }).catch((e) => e?.status == 404 ? null : Promise.reject(e)) as
       | { address: string; media_type: string }
       | null
-    return file ? fileAnswer(env, space, file) : missing('file')
+    return file ? fileAnswer(env, space, file, req) : missing('file')
   }
   if (!q.has('draft')) return undefined
   if (!env.SESSION_SECRET) return missing('draft')

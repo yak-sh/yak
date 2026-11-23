@@ -274,6 +274,20 @@ the kit's own specimens (@yaks/ui `Worn`), so a part's example lives with the
 part: a variant pencil draws and no specimen shows is added to the
 part's `specimens()`.
 
+A click between the signed-in pages (those in the frame, frame.ts) never loads
+a new document: @yaks/ui/navigate fetches the next page and lays it over the
+one shown, so the sidebar, the header and every image keep their nodes. Jeff,
+2026-11-23: "clicking things in yaks.app web ui often seems to re-render the
+whole page. images reload in, etc. It feels quite glitchy. i expect it to be
+snappy". So a page's script is written for swaps: a file a page names runs once
+in the document's life and binds what each swap brings on `yak-page` (`arrived`
+binds each element once); a script written into the page (pages.ts `run`) runs
+again after every swap onto its page and adds its listeners with the `signal`
+aborted on `yak-leave`. One that holds its page (the chat's socket) is marked
+`data-stays`, and a link away from it loads the next page. An image the frame
+shows has an address that changes only with its bytes (@yaks/platform/routes
+`iconAt`, `logoPath`, updates.ts `bySha`), so even a new document keeps it.
+
 What a person does to their own account (invite someone, take someone off,
 choose the homepage, connect an agent) is a control on its dashboard page that
 calls the tool their assistant would call (apps.ts `pressed`), never a line

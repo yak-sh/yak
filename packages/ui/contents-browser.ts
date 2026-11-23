@@ -14,6 +14,7 @@
  */
 
 import type { Entry } from './Contents.ts'
+import { leaving, PAGE } from './navigate.ts'
 
 /** Fewer sections than this need no contents: the page shows them all. */
 export let FEW = 3
@@ -86,7 +87,7 @@ let light = (nav: Element, id: string) => {
 /** Light the entry of the section in view as the page scrolls. The band is
  * the top quarter of the view: a heading that has reached it has begun the
  * section being read. */
-export let watch = (nav: HTMLElement): void => {
+export let watch = (nav: HTMLElement, signal?: AbortSignal): void => {
   let doc = nav.ownerDocument
   let links = [...nav.querySelectorAll<HTMLAnchorElement>('.Contents_List')]
     .at(0)?.querySelectorAll<HTMLAnchorElement>('.Contents_Link') ?? []
@@ -104,24 +105,31 @@ export let watch = (nav: HTMLElement): void => {
     light(nav, targets[current(passed)].id)
   }, { rootMargin: '0px 0px -75% 0px' })
   for (let el of targets) seen.observe(el)
+  signal?.addEventListener('abort', () => seen.disconnect())
   let menu = nav.querySelector('details')
   menu?.addEventListener('click', (e) => {
     if ((e.target as Element).closest('a')) menu.open = false
-  })
+  }, { signal })
 }
 
-/** Every contents list on the page, filled and watched; and an address's
- * `#section` followed, where its anchor was only made now. */
-export let start = (doc: Document): void => {
+/** Every contents list on the page, filled and watched until `signal`
+ * aborts; and an address's `#section` followed, where its anchor was only
+ * made now. */
+export let start = (doc: Document, signal?: AbortSignal): void => {
   let navs = [...doc.querySelectorAll<HTMLElement>('.Contents')]
   for (let nav of navs) {
     fill(nav, nav.closest('[data-contents-root]') ?? doc)
-    if (!nav.hidden) watch(nav)
+    if (!nav.hidden) watch(nav, signal)
   }
   let to = decodeURIComponent(location.hash.slice(1))
   if (to) doc.getElementById(to)?.scrollIntoView()
 }
 
+// Each page's lists, those a page brought in place (@yaks/ui/navigate)
+// included, watched until it leaves.
+let page = (doc: Document) => start(doc, leaving(doc))
+
 if (typeof document != 'undefined' && typeof location != 'undefined') {
-  start(document)
+  page(document)
+  document.addEventListener(PAGE, () => page(document))
 }

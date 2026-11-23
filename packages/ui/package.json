@@ -13,6 +13,7 @@
     "./contributions": "./contributions.ts",
     "./guide": "./guide.ts",
     "./history": "./history.ts",
+    "./navigate": "./navigate.ts",
     "./relative": "./relative.ts",
     "./lucide": "./lucide.d.ts",
     "./*.css": "./*.css"

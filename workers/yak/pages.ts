@@ -104,9 +104,21 @@ import { kinds } from '@yaks/data-editor'
 
 export type Kids = ComponentChildren
 
-// A page's own script: constant code, which says nothing a person typed.
+// A page's own script: constant code, which says nothing a person typed. A
+// page brought in place (@yaks/ui/navigate) runs it again, so it runs in a
+// block of its own, and adds what it listens for with `signal`, aborted once
+// its page leaves.
 export let run = (code: string) =>
-  h('script', { dangerouslySetInnerHTML: { __html: code } })
+  h('script', {
+    dangerouslySetInnerHTML: {
+      __html: `{
+let leave = new AbortController()
+document.addEventListener('yak-leave', () => leave.abort(), { once: true })
+let signal = leave.signal
+${code.trim()}
+}`,
+    },
+  })
 
 // A form's hidden field, only when there is something to carry.
 export let held = (name: string, value?: string | null) =>
@@ -216,7 +228,8 @@ let documented = (
     framed
       ? `
 <meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#2b231f" media="(prefers-color-scheme: dark)">`
+<meta name="theme-color" content="#2b231f" media="(prefers-color-scheme: dark)">
+<script type="module" src="${file('_navigate.js')}" data-navigate></script>`
       : ''
   }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
@@ -519,7 +532,7 @@ if (deploy) {
     if (stem == 'index') return
     slug.value = stem.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
       .slice(0, 63)
-  })
+  }, { signal })
 }
 `)
 
@@ -630,7 +643,7 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
       sel.removeAllRanges()
       sel.addRange(range)
     }
-  })
+  }, { signal })
 }
 `)
 
@@ -1857,12 +1870,12 @@ if (tabs) {
     if (want) want.checked = true
   }
   pick()
-  addEventListener('hashchange', pick)
+  addEventListener('hashchange', pick, { signal })
   tabs.addEventListener('change', (e) => {
     if (e.target.name == 'agent') {
       history.replaceState(null, '', '#' + e.target.value)
     }
-  })
+  }, { signal })
 }
 `)
 
@@ -1897,6 +1910,6 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
       say.textContent = "That didn't go through. Try again?"
     }
     b.disabled = false
-  })
+  }, { signal })
 }
 `)

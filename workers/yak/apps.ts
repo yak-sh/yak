@@ -111,6 +111,7 @@ import {
   API_AT,
   chatPath,
   hostOf,
+  iconVersion,
   manageAt,
   managePath,
   MANIFEST,
@@ -612,6 +613,15 @@ export let keeping = (app: App) =>
   `${app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
 
+// What a browser may keep of a file at `path`: an icon asked for by what
+// draws it (@yaks/platform/routes `iconAt`) is kept for good, since a new
+// release or logo names a new address; the rest as `keeping` says.
+let caching = (req: Request, space: Space, app: App, path: string) =>
+  path == '/icon.png' &&
+    new URL(req.url).searchParams.get('v') == iconVersion(app, space)
+    ? app.access == 'public' ? immutable['cache-control'] : browserImmutable
+    : keeping(app)
+
 // The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).
 let etagOf = (version: string) => `"${version}"`
 
@@ -693,14 +703,17 @@ export let unwritten = async (
       return new Response(monogram(app.title || app.slug, app.eid), {
         headers: {
           'content-type': 'image/svg+xml',
-          'cache-control': keeping(app),
+          'cache-control': caching(req, space, app, path),
         },
       })
     }
     let logo = await logoIcon(env, space, app.eid)
     if (logo) {
       return new Response(logo.bytes as Uint8Array<ArrayBuffer>, {
-        headers: { 'content-type': logo.type, 'cache-control': keeping(app) },
+        headers: {
+          'content-type': logo.type,
+          'cache-control': caching(req, space, app, path),
+        },
       })
     }
     let tile = await env.ASSETS.fetch(
@@ -708,7 +721,10 @@ export let unwritten = async (
     )
     if (!tile.ok) return null
     return new Response(tile.body, {
-      headers: { 'content-type': 'image/png', 'cache-control': keeping(app) },
+      headers: {
+        'content-type': 'image/png',
+        'cache-control': caching(req, space, app, path),
+      },
     })
   }
   if (path != `/${MANIFEST}`) return null
@@ -994,7 +1010,7 @@ let asset = async (
     return await media(
       req,
       got,
-      keeping(app),
+      caching(req, space, app, path),
       () => files.fileBytes(env, app.eid, prefix, path, app.source ?? ''),
     ) ?? nothingHere(env)
   }

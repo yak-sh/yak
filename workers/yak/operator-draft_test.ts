@@ -326,7 +326,8 @@ let load = async (
       queueMicrotask(() => this.emit('close'))
     }
   }
-  let source = document.querySelector('script[type=module]')!.textContent!
+  let source = document.querySelector('script[type=module]:not([src])')!
+    .textContent!
   // Generated bundles still depend on the source graph that builds them.
   imported(
     ASSETS.flatMap(({ bundle }) => bundle instanceof URL ? [bundle.href] : []),

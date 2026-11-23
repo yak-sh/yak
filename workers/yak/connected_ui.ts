@@ -115,7 +115,9 @@ export let agentList = (
 /** What keeps the list current while the page is open: on focus and on
  * coming back to the tab, the agents are asked for again and each row the
  * template draws replaces one that changed. A page drawn before its agents
- * were known (pages.ts `state`, unsettled) asks for them as it loads. */
+ * were known (pages.ts `state`, unsettled) asks for them as it loads. It
+ * stops listening when a page brought in place takes this one away
+ * (@yaks/ui/navigate's `yak-leave`), and runs again on a page that has it. */
 export let agentLive = (endpoint: string) =>
   h('script', {
     dangerouslySetInnerHTML: {
@@ -166,8 +168,10 @@ let refresh=async()=>{
     unsettled().forEach(el=>el.removeAttribute('data-unsettled'));
   }catch{}finally{busy=false}
 };
-window.addEventListener('focus',refresh);
-document.addEventListener('visibilitychange',refresh);
+let leave=new AbortController();
+document.addEventListener('yak-leave',()=>leave.abort(),{once:true});
+window.addEventListener('focus',refresh,{signal:leave.signal});
+document.addEventListener('visibilitychange',refresh,{signal:leave.signal});
 if(unsettled().length)refresh();
 })();`,
     },

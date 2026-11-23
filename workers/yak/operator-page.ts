@@ -1650,6 +1650,11 @@ let pushKey = (env: Env) => {
 // registers the service worker that shows them (public/push.js), subscribes
 // with yaks.app's VAPID key and keeps the subscription (\`?push\`).
 let settingsScript = `<script type="module">
+// A page brought in place (@yaks/ui/navigate) runs this again: what it
+// listens for, it lets go when its page leaves.
+let leave = new AbortController()
+document.addEventListener('yak-leave', () => { leave.abort(); playing.pause() }, { once: true })
+let signal = leave.signal
 let playing = new Audio()
 for (let play of document.querySelectorAll('[data-sample]')) {
   play.addEventListener('click', async () => {
@@ -1665,7 +1670,7 @@ for (let play of document.querySelectorAll('[data-sample]')) {
       await playing.play()
     } catch (error) { said.textContent = error.message }
     play.disabled = false
-  })
+  }, { signal })
 }
 let voice = document.querySelector('#voice')
 let fit = () => {
@@ -1676,8 +1681,8 @@ let fit = () => {
   let picked = voice?.querySelector('[name=voice]:checked')
   if (picked?.disabled) voice.querySelector('[name=voice]:not(:disabled)').checked = true
 }
-voice?.addEventListener('change', fit)
-voice?.addEventListener('save-restored', fit)
+voice?.addEventListener('change', fit, { signal })
+voice?.addEventListener('save-restored', fit, { signal })
 fit()
 for (let reveal of document.querySelectorAll('[data-reveal]')) {
   reveal.addEventListener('click', () => {
@@ -1686,13 +1691,13 @@ for (let reveal of document.querySelectorAll('[data-reveal]')) {
     reveal.hidden = true
     reveal.setAttribute('aria-expanded', 'true')
     shown[0].querySelector('input')?.focus()
-  })
+  }, { signal })
 }
 document.querySelector('#texts')?.addEventListener('save-restored', () => {
   let number = document.querySelector('#texts-number')
   let agreed = document.querySelector('#texts [name=agreed]')
   if (number?.value || agreed?.checked) document.querySelector('#texts [data-reveal]')?.click()
-})
+}, { signal })
 for (let form of document.querySelectorAll('#texts-stop')) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -1706,7 +1711,7 @@ for (let form of document.querySelectorAll('#texts-stop')) {
       if (!response.ok) throw new Error(answer?.message ?? 'Your choice could not be saved. Try again.')
       location.reload()
     } catch (error) { said.textContent = error.message }
-  })
+  }, { signal })
 }
 </script>`
 
@@ -1716,7 +1721,12 @@ for (let form of document.querySelectorAll('#texts-stop')) {
  * the platform's admin (tool.ts `admin`), and how to reach its Operator. */
 export type Beside = {
   spaces?: Picked[]
-  apps?: { eid: string; slug: string; title: string }[]
+  apps?: {
+    eid: string
+    slug: string
+    title: string
+    source?: string | null
+  }[]
   name?: string | null
   admin?: boolean
   /** how the person keeps the panes: the side folded to its icons, the
@@ -2673,7 +2683,9 @@ export let matchesPage = async (
 // Builder object's socket, each step's lines drawn from the entries its
 // frame sends (operator-talk.ts) and what it says aloud said to a person who
 // talked. `boxOf` is the box, where the page has one; `paid` is whether the
-// platform's speech is on, for a browser that has none of its own.
+// platform's speech is on, for a browser that has none of its own. Its
+// socket and timers hold the page (`data-stays`), so a link away from a
+// conversation loads the next page (@yaks/ui/navigate).
 let chatScript = (
   now: Asided,
   at: string,
@@ -2687,7 +2699,7 @@ let chatScript = (
   paid: boolean,
   mentions?: string,
 ) =>
-  `<script type="module">
+  `<script type="module" data-stays>
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, long, markHtml, menus, mountAsk, mountTalk, ordered, selfHtml, showing, storeAt, turnHtml } from '/_talk.js'
