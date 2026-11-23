@@ -199,11 +199,14 @@ export let friendUpdates = async (
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
   let dir = open(env)
-  let [own, friends] = await Promise.all([
-    dir.own(who.person),
+  // Their own space as `dir.own` chooses it (the one marked theirs, else
+  // the first they own), read without the marking or minting it does.
+  let [seats, friends] = await Promise.all([
+    dir.seats(who.person, 'owner'),
     friendsOf(dir, who.person),
   ])
-  if (own.eid != space.eid) return []
+  let own = seats.find((s) => s.own) ?? seats[0]
+  if (own?.space.eid != space.eid) return []
   return friends.flatMap(({ person, name, standing, at }): Update[] =>
     standing == 'asked' || standing == 'suggested'
       ? [{
