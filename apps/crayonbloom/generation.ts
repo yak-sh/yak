@@ -51,22 +51,52 @@ export let checkedImage = (bytes: Uint8Array, size: string) => {
   }
 }
 
-// PNG puts both dimensions in its first 24 bytes. Check them as the
-// generated artifact is copied to the customer's protected artwork.
+// Read the IHDR and chunk headers while copying the generated artifact.
+// Chunk data passes through without inflation.
 let sized = (size: string) => {
-  let header = new Uint8Array(24), at = 0
+  let header = new Uint8Array(33), view = new DataView(header.buffer)
+  let width = header.length, read = 0, skip = 0
+  let data = false, end = false
+  let frame = () => {
+    if (width == header.length) {
+      checkedImage(header, size)
+      if (view.getUint32(8) != 13) throw new Error('Invalid PNG header length.')
+      width = 8
+      return
+    }
+    let length = view.getUint32(0)
+    let type = view.getUint32(4)
+    if (type == 0x49444154) data = true // IDAT
+    if (type == 0x49454e44) { // IEND
+      if (length || !data) throw new Error('Invalid PNG end chunk.')
+      end = true
+    }
+    skip = length + 4 // payload and CRC
+  }
   return new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, out) {
-      if (at < header.length) {
-        let head = chunk.subarray(0, header.length - at)
-        header.set(head, at)
+      let at = 0
+      while (at < chunk.length) {
+        if (skip) {
+          let n = Math.min(skip, chunk.length - at)
+          at += n
+          skip -= n
+          continue
+        }
+        if (end) break
+        let head = chunk.subarray(at, at + width - read)
+        header.set(head, read)
         at += head.length
-        if (at == header.length) checkedImage(header, size)
+        read += head.length
+        if (read == width) {
+          frame()
+          read = 0
+        }
       }
       out.enqueue(chunk)
     },
     flush() {
-      if (at < header.length) checkedImage(header.subarray(0, at), size)
+      if (!end || skip) throw new Error('The PNG artwork is incomplete.')
     },
   })
 }

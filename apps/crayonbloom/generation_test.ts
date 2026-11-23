@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { test } from '@yaks/testing'
 import { encode } from 'fast-png'
 import { checkedImage, generation } from './generation.ts'
@@ -81,10 +81,16 @@ test('a coloring page checks the PNG dimensions without inflating its pixels', (
   )
 })
 
+let artwork = encode({
+  width: 2400,
+  height: 3040,
+  data: new Uint8Array(2400 * 3040),
+  channels: 1,
+})
+
 test('a completed page streams the original bytes to protected artwork', async () => {
   let pushed: Uint8Array[] = []
-  let original = Uint8Array.of(...pngHeader, 1, 2, 3)
-  let current = original
+  let current = artwork
   let driver = generation(
     {
       query: (query) =>
@@ -103,16 +109,17 @@ test('a completed page streams the original bytes to protected artwork', async (
           return new Response(
             new ReadableStream({
               start(out) {
-                out.enqueue(current.slice(0, 7))
-                out.enqueue(current.slice(7))
+                for (let at = 0; at < current.length; at += 7) {
+                  out.enqueue(current.subarray(at, at + 7))
+                }
                 out.close()
               },
             }),
           )
         }
         assertEquals(path, '/pay/artifacts?buyer=buyer')
-        let body = init?.body as ReadableStream<Uint8Array>
-        pushed.push(new Uint8Array(await new Response(body).arrayBuffer()))
+        assert(init?.body instanceof ReadableStream)
+        pushed.push(new Uint8Array(await new Response(init.body).arrayBuffer()))
         return Response.json({ eid: 'artwork' })
       },
     },
@@ -123,8 +130,8 @@ test('a completed page streams the original bytes to protected artwork', async (
   assertEquals(result, {
     artwork: { blob: 'artwork', hash: 'artwork', mime: 'image/png' },
   })
-  assertEquals(pushed, [original])
-  current = pngHeader.slice(0, 20)
+  assertEquals(pushed, [artwork])
+  current = artwork.subarray(0, artwork.length - 2)
   await assertRejects(() => driver.result('job'), Error, 'PNG')
-  assertEquals(pushed, [original])
+  assertEquals(pushed, [artwork])
 })
