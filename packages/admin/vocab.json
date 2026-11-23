@@ -987,7 +987,7 @@
       "noun": "admin",
       "verb": "gallery",
       "title": "Decide, code-review or list a gallery app",
-      "description": "As the platform admin, act on a gallery request. code-review records your review of the code of an app somebody else asked into the gallery, which comes to you as a task, and sends the platform’s owner its review request with your verdict and findings. approve and decline answer a request, and list puts a published app in the gallery at once, skipping review: do those only when the platform’s owner asks, and name him with --by. The session is recorded from this call.\n\n  yak admin gallery acme/todo code-review --verdict approve --findings @findings.md --as admin@bot.yak.sh\n  yak admin gallery jeff/housebook approve --by jeff@yak.sh --as admin@bot.yak.sh\n  yak admin gallery yourname/garden list --by jeff@yak.sh --as admin@bot.yak.sh",
+      "description": "As the platform admin, act on a gallery request. code-review records your review of the code of an app somebody else asked into the gallery, which comes to you as a task, and sends the platform’s owner its review request with your verdict and findings. approve and decline answer a request, and list puts a published app in the gallery at once, skipping review: do those only when the platform’s owner asks, and name him with --by. publish publishes an app of a space the account owns, such as yaks.app's own yak space, and asks for its listing, which the platform's owner reviews; --screenshot first gives its card the picture an upload answered (yak admin upload). The session is recorded from this call.\n\n  yak admin gallery yak/back-office publish --screenshot <eid> --as admin@bot.yak.sh\n  yak admin gallery acme/todo code-review --verdict approve --findings @findings.md --as admin@bot.yak.sh\n  yak admin gallery jeff/housebook approve --by jeff@yak.sh --as admin@bot.yak.sh\n  yak admin gallery yourname/garden list --by jeff@yak.sh --as admin@bot.yak.sh",
       "input": {
         "app": {
           "type": "string",
@@ -999,9 +999,14 @@
             "approve",
             "decline",
             "list",
-            "code-review"
+            "code-review",
+            "publish"
           ],
-          "description": "approve or decline answers a request (gallery_review); list puts the app in the gallery now, with no request and no review (app_set gallery: true, review: false); code-review records your code review and sends the request on (gallery_code_review)"
+          "description": "approve or decline answers a request (gallery_review); list puts the app in the gallery now, with no request and no review (app_set gallery: true, review: false); code-review records your code review and sends the request on (gallery_code_review); publish publishes the app and asks for its listing (app_publish gallery: true)"
+        },
+        "screenshot": {
+          "type": "string",
+          "description": "with publish: the eid of an image uploaded to the app, its gallery card's picture (app_set screenshot)"
         },
         "verdict": {
           "type": "string",

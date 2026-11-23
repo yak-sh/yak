@@ -238,9 +238,11 @@ export let tracker = async (
 
 /** A gallery act through the hosted tools, recorded as this call's actor and
  * session: approve or decline answers a request (gallery_review), list asks
- * with review skipped (app_set `review: false`), and code-review records an
+ * with review skipped (app_set `review: false`), code-review records an
  * agent's review of a stranger's app and sends its request to the platform's
- * owner (gallery_code_review). A `by` the call names, the platform owner's
+ * owner (gallery_code_review), and publish publishes an app of a space the
+ * caller owns and asks for its listing (app_publish `gallery: true`), after
+ * giving its card the picture `screenshot` names (app_set). A `by` the call names, the platform owner's
  * address when he asked for the act, stands in for the caller's own. Account
  * selection stays at the admin boundary shared by every operation. */
 export let review = async (bearer: string, call: Bundle): Promise<string> => {
@@ -254,6 +256,24 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
   let [space, app, extra] = String(a.app).split('/')
   if (!space || !app || extra != null) {
     throw new CallError('app', 'name the app as space/app')
+  }
+  if (a.decision == 'publish') {
+    let ask = rpc(bearer)
+    let pictured = a.screenshot
+      ? [
+        saidBy(
+          await ask('tools/call', {
+            name: 'app_set',
+            arguments: { space, app, screenshot: a.screenshot, ...stamp },
+          }),
+        ),
+      ]
+      : []
+    let published = await ask('tools/call', {
+      name: 'app_publish',
+      arguments: { space, app, gallery: true, ...stamp },
+    })
+    return [...pictured, saidBy(published)].join('\n')
   }
   let asked = a.decision == 'list'
     ? {

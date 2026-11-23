@@ -855,3 +855,44 @@ test('tunnel answers keep trash recovery and its owner confirmation request visi
     await host.close()
   }
 })
+
+test('a publish gives the card its picture, then publishes and asks for the listing', async () => {
+  let sent: unknown[] = []
+  await answering((_url, init) => {
+    sent.push(JSON.parse(String(init?.body)).params)
+    return Response.json({
+      result: { content: [{ type: 'text', text: `done ${sent.length}` }] },
+    })
+  }, async () => {
+    equal(
+      await review('admin-bearer', {
+        entity: { eid: 'call' },
+        call: {
+          args: {
+            app: 'yak/back-office',
+            decision: 'publish',
+            screenshot: 's1',
+          },
+        },
+        created: { by: 'yaks-project', via: 'agent-session' },
+      }),
+      'done 1\ndone 2',
+    )
+  })
+  let stamp = { by: 'yaks-project', via: 'agent-session' }
+  equal(sent, [
+    {
+      name: 'app_set',
+      arguments: {
+        space: 'yak',
+        app: 'back-office',
+        screenshot: 's1',
+        ...stamp,
+      },
+    },
+    {
+      name: 'app_publish',
+      arguments: { space: 'yak', app: 'back-office', gallery: true, ...stamp },
+    },
+  ])
+})
