@@ -95,7 +95,9 @@ export let STEPS = [
     of: 'install_sign_in',
   },
   { name: 'install_form', say: 'Install pages opened' },
-  { name: 'install_done', say: 'Installs finished', of: 'install_form' },
+  // By the form's button, or straight back from signing in with nothing to
+  // ask (install.ts), so not a share of install_form.
+  { name: 'install_done', say: 'Installs finished' },
   // Written until T-2621 for any browser's GET of the install page, a
   // stranger's sent to sign in as much as one shown the form, and never
   // rewritten. Once further back than a step is kept, it goes.

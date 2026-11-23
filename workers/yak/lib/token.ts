@@ -64,6 +64,7 @@ export type Use =
   | 'session' // the platform cookie (`sign`, `verify` below)
   | 'admin-browse' // one browser visit to the platform's admin pages
   | 'browser' // a signed-out browser's instrument, never a person
+  | 'press' // a stranger's press of "Make your own copy" (install.ts)
   | 'instrument' // an MCP session's instrument, bound to its signed-in caller
   | 'visit' // an app's worker acting as its visitor (dispatch.ts)
   | 'grant' // the CLI's bearer (grants.ts)

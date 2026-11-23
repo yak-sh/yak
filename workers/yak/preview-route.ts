@@ -1,12 +1,19 @@
 // Only a route's public publication may refine a sign-in card's preview.
 // Private routes never read the directory.
 import type { Directory } from './directory.ts'
-import { type Host } from '@yaks/platform/host'
+import { type Host, url } from '@yaks/platform/host'
 import { destination, type Preview } from './link-preview.ts'
+import { isBack } from '@yaks/platform/routes'
 
 /** The app a stranger is signing in to get a copy of: its title, its card's
- * picture where a stranger may see it, and whether a copy costs nothing. */
-export type Copy = { title: string; image?: string; free: boolean }
+ * picture where a stranger may see it, whether a copy costs nothing, and
+ * whether they pressed for it, so signing in is the last step (install.ts). */
+export type Copy = {
+  title: string
+  image?: string
+  free: boolean
+  pressed?: boolean
+}
 
 export let linked = async (
   env: Host,
@@ -28,6 +35,11 @@ export let linked = async (
     title: `${app.title} · yaks.app`,
     description: offer.app.published.about,
     image,
-    copy: { title: app.title, image, free: !offer.app.published.price },
+    copy: {
+      title: app.title,
+      image,
+      free: !offer.app.published.price,
+      ...isBack(new URL(back!, url(env, '/'))) ? { pressed: true } : {},
+    },
   }
 }

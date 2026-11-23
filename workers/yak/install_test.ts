@@ -5,6 +5,7 @@ import type { Directory, Seat } from './directory.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
 import { dataset } from './testing.ts'
+import { connector, kernel, signIn, unique } from './probe.ts'
 
 let auth = platform('install-test')
 await auth.dir.stamp({ entities: [{ entity: { eid: 'person' }, person: {} }] })
@@ -41,12 +42,26 @@ let request = (
   signed = true,
   name = 'trip-plan',
   back = false,
+  headers: Record<string, string> = {},
 ) =>
   new Request(`https://yaks.app${at(name, back)}`, {
     method,
-    headers: { 'user-agent': BROWSER, ...signed ? { cookie } : {} },
+    headers: {
+      'user-agent': BROWSER,
+      ...headers,
+      cookie: [signed ? cookie : '', headers.cookie ?? ''].filter(Boolean)
+        .join('; '),
+    },
     ...method == 'POST' ? { body: new URLSearchParams() } : {},
   })
+// A stranger's press from a listing of ours, or another site's post, and the
+// press cookie its answer sets, if any.
+let OURS = { 'sec-fetch-site': 'same-origin' }
+let THEIRS = { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }
+let press = async (from: Record<string, string>, name = 'trip-plan') =>
+  (await answer(request('POST', false, name, false, from), env, dir)).headers
+    .getSetCookie().find((c) => c.startsWith('__Host-yak_press='))
+    ?.split(';')[0]
 
 test('install sign-in keeps the chosen app as its return address', async () => {
   let response = await answer(request('POST', false), env, dir)
@@ -76,6 +91,82 @@ test('the funnel counts a stranger sent to sign in, one back from it, and somebo
   assertEquals(await steps(request('GET')), ['install_form'])
   // Pressed signed in with two spaces to choose from, the form asks which.
   assertEquals(await steps(request('POST')), ['install_form'])
+})
+
+test('only a press from our own page is kept for the way back, and only for its app', async () => {
+  assertEquals(await press(THEIRS), undefined)
+  let pressed = await press(OURS)
+  let back = (name = 'trip-plan', held = pressed!) =>
+    answer(request('GET', true, name, true, { cookie: held }), env, dir)
+  // With two spaces to choose from, the press still leaves the choice to the
+  // form, and is spent.
+  let form = await back()
+  assertEquals(form.status, 200)
+  assertStringIncludes(await form.text(), 'name="space"')
+  assertStringIncludes(
+    form.headers.get('set-cookie')!,
+    '__Host-yak_press=; Path=/; Max-Age=0',
+  )
+  // A press of one app opens no other's way back.
+  let other = await press(OURS, 'withdrawn')
+  assertEquals((await back('trip-plan', other!)).status, 200)
+})
+
+// The whole way through the kernel: a stranger presses a listing's "Make your
+// own copy", signs up, and lands in their copy with no form between.
+test('a stranger who pressed for a copy and signed up lands in it', async () => {
+  let k = await kernel()
+  try {
+    let maker = await signIn(k)
+    let space = maker.email.split('@')[0]
+    let agent = connector(k, maker.cookie)
+    let slug = unique('recipes')
+    await agent.tool('app_new', { space, slug, title: 'Recipes' })
+    await agent.tool('app_files', {
+      space,
+      app: slug,
+      op: 'write',
+      path: 'index.html',
+      content: '<h1>Recipes</h1>',
+    })
+    await agent.tool('app_deploy', { space, app: slug })
+    await agent.tool('app_publish', { space, app: slug })
+    let go = (path: string, init: RequestInit & { headers?: object }) =>
+      k.at(k.host, path, {
+        redirect: 'manual',
+        ...init,
+        headers: { 'user-agent': BROWSER, ...init.headers },
+      })
+    let pressed = await go(at(slug), { method: 'POST', headers: OURS })
+    assertEquals(pressed.status, 303)
+    let back = new URL(
+      new URL(pressed.headers.get('location')!).searchParams
+        .get('return')!,
+    )
+    let held = pressed.headers.getSetCookie()
+      .find((c) => c.startsWith('__Host-yak_press='))!.split(';')[0]
+    let ada = await signIn(k)
+    k.views.points.splice(0)
+    let landed = await go(back.pathname + back.search, {
+      headers: { cookie: `${ada.cookie}; ${held}` },
+    })
+    assertEquals(landed.status, 303)
+    let copy = new URL(landed.headers.get('location')!)
+    assertEquals(copy.hostname, `${ada.name}.${k.host}`)
+    assertEquals(
+      k.views.points.map((p) => p.blobs![1])
+        .filter((s) => s.startsWith('install')),
+      ['install_back', 'install_done'],
+    )
+    // The same address again, the press spent, shows the form.
+    let again = await go(back.pathname + back.search, {
+      headers: { cookie: ada.cookie },
+    })
+    assertEquals(again.status, 200)
+    await again.body?.cancel()
+  } finally {
+    await k.stop()
+  }
 })
 
 // The page's one form, read from its markup by where its quotes fall: a DOM

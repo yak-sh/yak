@@ -107,6 +107,13 @@ test('pages: a stranger signing in for a copy reads which app it is of', async (
       picture: copy.image,
     },
   )
+  assertEquals(
+    (await reads(
+      askEmail({ copy: { ...copy, free: true, pressed: true } }, env),
+    ))
+      .says[2],
+    `Enter your email to get a sign-in code. The code is the last step to your copy. Signing up is free, with $${STARTER} of building credit.`,
+  )
   let sold = await reads(
     askEmail({ copy: { title: 'Recipe box', free: false } }, env),
   )

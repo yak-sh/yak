@@ -165,8 +165,13 @@ export let askEmail = (at: {
         `Enter your ${
           at.texts ? 'email or mobile number' : 'email'
         } to get a sign-in code.`,
-        // After the code, the install form asks for one press (install.ts).
-        copy ? " Once you're in, your copy is one press away." : '',
+        // A press of "Make your own copy" makes the copy as they come back
+        // (install.ts); otherwise the install form asks for one press.
+        at.copy?.pressed
+          ? ' The code is the last step to your copy.'
+          : copy
+          ? " Once you're in, your copy is one press away."
+          : '',
         // Where a person decides to sign up: what their first space starts
         // with (@yaks/platform/plans `STARTER`). An agent asking to be let
         // in is someone already deciding something else.
