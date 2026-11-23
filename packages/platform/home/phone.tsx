@@ -5,11 +5,11 @@ import { ServiceLogo } from './scenes.tsx'
 import { type Demo, DEMOS, type Line, TURNS } from './demos.ts'
 
 let Message = (
-  { line, turn, at, first, logo }: {
+  { line, turn, at, count, logo }: {
     line: Line
     turn: number
     at: number
-    first: boolean
+    count: number
     logo?: string
   },
 ) => (
@@ -17,7 +17,8 @@ let Message = (
     class={`Home_Message Home_Message-${line.who}`}
     data-turn={turn}
     data-line={at}
-    hidden={!first}
+    data-count={count}
+    hidden={turn != 0}
   >
     <div class={`Chat_Bubble Chat_Bubble-${line.who}`}>
       <a class='Home_MessageLink' href={`#${SECTIONS[turn]}`}>
@@ -41,11 +42,8 @@ let Message = (
           />
         </a>
       )}
-      {line.link?.href && (
-        <>
-          <a href={line.link.href}>{line.link.label}</a>
-        </>
-      )}
+      {!line.shot && line.link && <a href={line.link.href}>{line.link.label}
+      </a>}
     </div>
   </li>
 )
@@ -64,7 +62,6 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
     class='Home_Track'
     data-conversation={demo.slug}
     hidden={!first}
-    tabindex={0}
     role='group'
     aria-label='Example messages'
   >
@@ -75,7 +72,7 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
             line={line}
             turn={turn}
             at={at}
-            first={turn == 0}
+            count={lines.length}
             logo={line.who == 'them' && TURNS[turn] == 'connect'
               ? CONNECTED[demo.slug]
               : line.who == 'them' && TURNS[turn] == 'sell'
@@ -85,6 +82,20 @@ let Conversation = ({ demo, first }: { demo: Demo; first: boolean }) => (
         ))
       )}
     </ol>
+  </div>
+)
+
+/** A demo stays openable after its first reply scrolls out of the phone. */
+export let DemoLinks = () => (
+  <div class='Home_DemoLinks'>
+    {DEMOS.map(({ slug, turn }, i) => {
+      let link = turn[0].find((line) => line.link)?.link
+      return link && (
+        <a href={link.href} data-demo-scene={slug} hidden={i != 0}>
+          {link.label}
+        </a>
+      )
+    })}
   </div>
 )
 

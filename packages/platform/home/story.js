@@ -9,39 +9,28 @@ export let reading = (rects, line) => {
   return { step, through: clamp((line - top) / Math.max(1, bottom - top)) }
 }
 
-/** The opening exchange is already in the phone. Subsequent lines arrive
- * one at a time, in the first part of their feature section. */
-export let visible = (turn, line, count, { step, through }) =>
-  turn == 0 || turn < step || turn == step && through * count >= line * .6
+const REVEAL = .6
 
-let newestAt = (log) => (log.scrollTop = log.scrollHeight)
+/** Lines share the first 60% of their turn. Each starts just after the previous line finishes. */
+export let progress = (turn, line, count, { step, through }) => {
+  if (turn == 0 || turn < step) return 1
+  if (turn > step) return 0
+  return clamp((through * count / REVEAL - line) / .8)
+}
 
-let reveal = (log, { step, through }, motion) => {
-  let lines = [...log.querySelectorAll('[data-line]')]
-  let count = lines.filter((el) => Number(el.dataset.turn) == step).length
-  let before = lines.findLastIndex((el) => !el.hidden)
-  let shown = lines.filter((el) => {
-    let turn = Number(el.dataset.turn)
-    el.hidden = !visible(turn, Number(el.dataset.line), count, {
-      step,
-      through,
-    })
-    if (!el.hidden) {
-      el.style.setProperty('--sat', Math.max(.25, 1 - (step - turn) * .24))
-    }
-    return !el.hidden
+let messages = (log) =>
+  [...log.querySelectorAll('[data-line]')].map((el) => {
+    let { turn, line, count } = el.dataset
+    return { el, turn: Number(turn), line: Number(line), count: Number(count) }
   })
-  if (shown.at(-1) === lines[before]) return
-  newestAt(log)
-  if (!motion || before < 0) return
-  let entering = shown.slice(before + 1).filter((el) =>
-    Number(el.dataset.turn) == step
-  )
-  for (let [i, el] of entering.entries()) {
-    el.animate(
-      [{ opacity: 0, translate: '0 .45rem' }, { opacity: 1, translate: '0 0' }],
-      { duration: 320, delay: i * 55, easing: 'ease-out', fill: 'backwards' },
-    )
+
+let reveal = (lines, at, calm) => {
+  for (let { el, turn, line, count } of lines) {
+    let v = progress(turn, line, count, at)
+    el.hidden = v == 0
+    if (v == 0) continue
+    el.style.setProperty('--v', calm ? 1 : v)
+    el.style.setProperty('--sat', Math.max(.25, 1 - (at.step - turn) * .24))
   }
 }
 
@@ -53,7 +42,6 @@ let swipe = (old, log, backwards) => {
   let x = backwards ? '-100%' : '100%'
   let timing = { duration: 360, easing: 'cubic-bezier(.2,.8,.2,1)' }
   log.parentElement.append(ghost)
-  ghost.scrollTop = old.scrollTop
   ghost.animate([{ translate: '0' }, { translate: `calc(-1 * ${x})` }], timing)
     .finished.finally(() => ghost.remove())
   log.animate([{ translate: x }, { translate: '0' }], timing)
@@ -182,40 +170,58 @@ let copyLinks = (root) => {
   }
 }
 
+let readingLine = () => innerHeight / 2
+
+let jumpFromMessage = (e, steps, calm) => {
+  if (
+    e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey ||
+    e.altKey
+  ) return
+  let message = e.target.closest('[data-line]')
+  if (!message || e.target.closest('a:not(.Home_MessageLink)')) return
+  let turn = Number(message.dataset.turn)
+  let section = steps[turn]
+  let top = turn
+    ? section.getBoundingClientRect().top + scrollY +
+      REVEAL * section.offsetHeight - readingLine()
+    : 0
+  e.preventDefault()
+  scrollTo({ top, behavior: calm.matches ? 'instant' : 'smooth' })
+}
+
 let mount = (root) => {
-  let showcase = root.querySelector('[data-showcase]')
   let demo = root.querySelector('[data-story-demo]')
   let picks = root.querySelector('[data-picks]')
   let pause = picks.querySelector('[data-pause]')
   let buttons = [...picks.querySelectorAll('[data-pick]')]
   let logs = [...demo.querySelectorAll('[data-conversation]')]
+  let lines = logs.map(messages)
   let scenes = [...root.querySelectorAll('[data-demo-scene]')]
   let steps = [...root.querySelectorAll('[data-story-step]')]
   let nav = root.querySelector('[data-feature-nav]')
   let jumps = [...nav.querySelectorAll('[data-feature-link]')]
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
-  let narrow = matchMedia('(max-width: 59.99rem)')
+  let narrow = matchMedia('(width < 64rem)')
   let i = 0, active = -1, frame = 0, timer = 0
-  let showcaseHeight = 0
   let playing = !calm.matches
   let highlight = navigation(nav, jumps)
   let pose = mascot(root, calm, narrow)
 
   let draw = (motion = !calm.matches) => {
-    let line = Math.min(innerHeight * .45, 250) + showcaseHeight / 2
-    let at = reading(steps.map((el) => el.getBoundingClientRect()), line)
-    reveal(logs[i], at, motion)
+    let at = reading(
+      steps.map((el) => el.getBoundingClientRect()),
+      readingLine(),
+    )
+    reveal(lines[i], at, calm.matches)
+    demo.inert = narrow.matches && at.step == 0
     if (active == at.step) return
     active = at.step
+    demo.dataset.turn = active
     highlight(jumps[active], motion)
     pose(steps[active])
     if (active > 0) hold()
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))
-  let sized = () => {
-    showcaseHeight = showcase.offsetHeight
-    root.style.setProperty('--showcase-height', `${showcaseHeight}px`)
-  }
   let pick = (n, direction = n < i) => {
     if (n == i) return
     let old = logs[i]
@@ -265,18 +271,14 @@ let mount = (root) => {
   for (let event of ['pointerenter', 'pointerleave', 'focusin', 'focusout']) {
     demo.addEventListener(event, () => queueMicrotask(wait))
   }
-  calm.addEventListener('change', hold)
+  calm.addEventListener('change', () => (hold(), soon()))
   document.addEventListener('visibilitychange', wait)
   addEventListener('scroll', soon, { passive: true })
   addEventListener('resize', soon)
-  new ResizeObserver(() => (sized(), soon())).observe(showcase)
-  let resized = new ResizeObserver((entries) => {
-    for (let { target } of entries) newestAt(target.parentElement)
-  })
-  for (let log of logs) resized.observe(log.firstElementChild)
+  new ResizeObserver(soon).observe(root)
+  demo.addEventListener('click', (e) => jumpFromMessage(e, steps, calm))
   copyLinks(root)
   ideas(root)
-  sized()
   draw(false)
   wait()
 }

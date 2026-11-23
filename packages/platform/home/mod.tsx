@@ -5,7 +5,7 @@ import type { Tier } from '../plans.ts'
 import { GET_PLAN } from '../routes.ts'
 import { TURNS } from './demos.ts'
 import { gift, ICONS, priceTag } from './icons.ts'
-import { Phone, Picks } from './phone.tsx'
+import { DemoLinks, Phone, Picks } from './phone.tsx'
 import { POSES, SECTIONS } from './parts.ts'
 import { Change, People, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
@@ -125,10 +125,12 @@ let FeatureNav = ({ copy }: { copy: Copy }) => (
 )
 
 let Features = ({ copy }: { copy: Copy }) => (
-  <div class='Home_Features'>
+  <div class='Home_Features' id='examples'>
     {FEATURE_TURNS.map((turn, j) => {
       let i = j + 1, key = `home.story.turn.${turn}`
-      let scene = SCENES.find((id) => id == turn)
+      let scene = SCENES.find((id) =>
+        id == turn
+      )
       let points = POINTS[turn as keyof typeof POINTS]
       let title = turn == 'email' ? 'email-in' : `title-${turn}`
       return (
@@ -245,24 +247,24 @@ export let Story = (
     </div>
     <div class='Home_Desk'>
       <Hero copy={copy} action={action} yak={yak} />
-      <div class='Home_Showcase' data-showcase=''>
-        <FeatureNav copy={copy} />
-        <aside
-          class='Home_Demo'
-          id='examples'
-          aria-labelledby='example-title'
-          data-story-demo=''
-        >
+      <FeatureNav copy={copy} />
+      <aside
+        class='Home_Demo'
+        aria-labelledby='example-title'
+        data-story-demo=''
+      >
+        <header class='Home_DemoHeader'>
           <p
             class='Home_DemoTitle'
             id='example-title'
             {...copy.text('home.story.example')}
           />
-          <Phone />
-          <Picks />
-          <Ask copy={copy} action={action} id='example-say' cta='walk' />
-        </aside>
-      </div>
+          <DemoLinks />
+        </header>
+        <Phone />
+        <Picks />
+        <Ask copy={copy} action={action} id='example-say' cta='walk' />
+      </aside>
       <Features copy={copy} />
     </div>
     <div class='Home_After'>

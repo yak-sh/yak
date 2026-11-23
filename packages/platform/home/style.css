@@ -3,7 +3,7 @@
 .Story_Page {
   --measure: 45rem;
   --phone-width: 22rem;
-  --phone-height: clamp(8rem, 25svh, 20rem);
+  --phone-height: clamp(6rem, 20dvh, 9rem);
   --story-gap: clamp(2rem, 5vw, 7rem);
   --sky-ink: light-dark(#374450, #e0e6f2);
   --sky-accent: light-dark(#315342, #b8dbad);
@@ -41,6 +41,13 @@
 
 .Home_SunSlot {
   inset-inline-start: 54%;
+}
+
+.Home_Desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'hero' 'contents' 'features';
+  align-items: start;
 }
 
 .Home_Story .Story_Hero {
@@ -226,7 +233,6 @@
 
 .Story_Page .Home_Demo {
   display: grid;
-  grid-area: demo;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto var(--phone-height) auto auto;
   align-content: start;
@@ -241,11 +247,14 @@
   grid-row: 4;
 }
 
-.Home_DemoTitle {
+.Home_DemoHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .3rem .65rem;
   color: var(--muted);
   font-size: var(--small);
   font-weight: 800;
-  text-align: center;
 }
 
 .Story_Page .Home_Phone {
@@ -273,20 +282,18 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 4rem);
 }
 
 .Home_Track {
   height: 100%;
-  overflow-y: auto;
-  overflow-anchor: none;
+  overflow: hidden;
 }
 
-.Home_Track,
 .Home_Jumps {
   scrollbar-width: none;
 }
 
-.Home_Track::-webkit-scrollbar,
 .Home_Jumps::-webkit-scrollbar {
   display: none;
 }
@@ -295,8 +302,7 @@
   display: flex;
   flex-direction: column;
   justify-content: end;
-  gap: .65rem;
-  min-height: 100%;
+  height: 100%;
   margin: 0;
   padding: .3rem .25rem .55rem;
   list-style: none;
@@ -312,7 +318,15 @@
 
 .Home_Message {
   flex: none;
-  filter: saturate(var(--sat, 1));
+  max-height: calc(var(--v, 1) * 40rem);
+  overflow: hidden;
+  opacity: min(1, calc(var(--v, 1) * 4));
+  translate: 0 calc(max(0, 1 - var(--v, 1) * 4) * .75rem);
+  padding: 0 .3rem .25rem;
+}
+
+.Home_Message + .Home_Message {
+  margin-block-start: calc(var(--v, 1) * .45rem);
 }
 
 .Home_Message .Chat_Bubble {
@@ -323,6 +337,11 @@
   line-height: 1.48;
   overflow-wrap: anywhere;
   isolation: isolate;
+  filter: saturate(var(--sat, 1));
+}
+
+.Home_Message .Chat_Bubble:is(:hover, :focus-within) {
+  filter: none;
 }
 
 .Home_Message .Chat_Bubble::after {
@@ -402,6 +421,9 @@
 
 .Home_Contents {
   grid-area: contents;
+  position: sticky;
+  z-index: 2;
+  top: 0;
   min-width: 0;
   padding-block: .45rem .65rem;
   background: var(--bg);
@@ -488,9 +510,10 @@
   align-items: start;
 }
 
+.Home_Features,
 .Home_Feature,
 .Home_FeatureTitle {
-  scroll-margin-top: max(5rem, calc(var(--showcase-height, 0px) + .5rem));
+  scroll-margin-top: 5rem;
 }
 
 .Home_Feature + .Home_Feature {
@@ -523,7 +546,7 @@
   flex: none;
 }
 
-@media (max-width: 59.99rem), (prefers-reduced-motion: reduce) {
+@media (width < 64rem), (prefers-reduced-motion: reduce) {
   .Home_SectionYak {
     display: block;
   }
@@ -789,23 +812,17 @@
   margin: 0;
 }
 
-@media (min-width: 60rem) {
+@media (width >= 64rem) {
   .Story_Page {
     --measure: min(94rem, 78vw);
     --phone-width: clamp(18rem, 25vw, 23rem);
-    --phone-height: clamp(15rem, calc(100svh - 18.5rem), 45rem);
+    --phone-height: clamp(10rem, calc(100dvh - 16rem), 45rem);
   }
 
   .Home_Desk {
-    display: grid;
     grid-template-columns: minmax(0, 1fr) var(--phone-width);
     grid-template-areas: 'hero demo' 'contents demo' 'features demo';
-    align-items: start;
     column-gap: var(--story-gap);
-  }
-
-  .Home_Showcase {
-    display: contents;
   }
 
   .Home_MoonSlot {
@@ -832,16 +849,14 @@
   }
 
   .Story_Page .Home_Demo {
+    grid-area: demo;
     position: sticky;
     z-index: 1;
-    top: 1rem;
-    margin: 0;
-  }
-
-  .Home_Contents {
-    position: sticky;
-    z-index: 2;
     top: 0;
+    height: 100dvh;
+    align-content: center;
+    mask-image: linear-gradient(transparent, #000 1.25rem);
+    margin-block-start: -5rem;
   }
 
   .Home_Contents::after {
@@ -860,18 +875,35 @@
   }
 }
 
-@media (max-width: 59.99rem) {
-  .Home_Story {
-    --showcase-height: calc(var(--phone-height) + 10rem);
-  }
-
-  .Home_Showcase {
+@media (width < 64rem) {
+  .Story_Page .Home_Demo {
+    grid-area: features;
+    align-self: end;
     position: sticky;
     z-index: 2;
-    top: 0;
-    padding-block-end: .85rem;
+    bottom: max(.5rem, env(safe-area-inset-bottom));
+    padding: .55rem .65rem;
+    border: 1px solid var(--border);
+    border-radius: 1.15rem;
     background: var(--bg);
-    box-shadow: 0 .5rem .75rem -.55rem var(--border);
+    box-shadow: 0 -.4rem 1.5rem color-mix(in srgb, var(--text) 12%,
+      transparent);
+  }
+
+  .Story_Page .Home_Demo[data-turn='0'] {
+    translate: 0 calc(100% + 1rem);
+    pointer-events: none;
+  }
+
+  .Story_Page .Home_Phone {
+    grid-template-rows: minmax(0, 1fr);
+    padding: .35rem .4rem;
+    --radius: 1.05rem;
+  }
+
+  .Home_Phone::before,
+  .Home_Shot {
+    display: none;
   }
 
   .Home_Features,
@@ -895,7 +927,13 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .Home_Message {
-    transition: filter .45s ease;
+  .Home_Message .Chat_Bubble {
+    transition: filter .9s ease;
+  }
+
+  @media (width < 64rem) {
+    .Story_Page .Home_Demo {
+      transition: translate .3s ease;
+    }
   }
 }
