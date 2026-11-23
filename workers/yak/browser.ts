@@ -11,6 +11,7 @@ import {
   BROWSE_REPLY,
   type BrowseFrame,
   BrowserTimeout,
+  type BrowseVisit,
   type Fault,
   PREVIEW_REPLY,
   type Rendered,
@@ -96,13 +97,13 @@ let report = (said: Result, where: Record<string, string>) => {
 
 export let browseStream = async (
   env: Pick<Env, 'BROWSER' | 'CLOCK'>,
-  visit: Frame<Visit>,
+  visit: Frame<BrowseVisit>,
   where: Record<string, string>,
 ) => {
   if (!env.BROWSER) {
     throw new Error('Cloudflare Browser Rendering is not configured')
   }
-  let transfer = !!visit.body
+  let transfer = visit.size != null
   let browser = env.BROWSER
   let r = await bounded(
     env.CLOCK ?? system,

@@ -249,8 +249,15 @@ bot with the member's role, accept its invitation, and select its account with
 the browser answers the page's first load with the file (@yaks/platform/still
 makes one), and everything else comes from yaks.app.
 
+Use `--mockup <directory>` to open a mockup with its own stylesheets, scripts,
+and images. The page path is relative to the directory and defaults to
+`index.html`. The browser serves the directory on an isolated origin for the
+visit. The upload includes up to 2,048 regular files and 32 MiB, with dotfiles,
+hidden directories, and symlinks skipped.
+
 ```sh
 yak admin browse /checks/updates --html .scratch/updates.html
+yak admin browse 02-layout.html --mockup ~/shared/mockup --to .scratch/browse/mockup
 yak admin browse /manage/checks/operator --as checks
 yak admin browse /admin/spending --as admin
 yak admin browse /manage/checks/operator --as checks --steps \

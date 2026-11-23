@@ -1,8 +1,11 @@
 import * as fs from '@yaks/file/io'
 import { streamingFetch } from '@yaks/process/http'
 import type { BrowseFrame } from '@yaks/platform/browser-visit'
-import { header, streamed, WIRE } from '@yaks/platform/browser-wire'
+import { mockupAssets, mockupPath } from '@yaks/platform/browser-mockup'
+import { header, readAsk, streamed, WIRE } from '@yaks/platform/browser-wire'
 import { equal, test, throws } from '@yaks/testing'
+import type { Browse } from './api.ts'
+import { mockupAt } from './browse-files.ts'
 import { visit } from './browse.ts'
 
 let asked = { url: 'https://yaks.app/manage' }
@@ -41,6 +44,41 @@ let inDir = async (run: (dir: string) => Promise<void>) => {
     await fs.remove(dir, { recursive: true })
   }
 }
+
+test('a directory upload sends the same local files again after a lost answer', () =>
+  inDir(async (dir) => {
+    let root = `${dir}/mockup`
+    await fs.mkdir(`${root}/images`, { recursive: true })
+    let page = '<img src="images/picture.webp">'
+    let picture = new Uint8Array([0, 255, 27])
+    await fs.writeTextFile(`${root}/index.html`, page)
+    await fs.writeFile(`${root}/images/picture.webp`, picture)
+    await fs.writeTextFile(`${root}/.draft`, 'private')
+    await fs.symlink('.draft', `${root}/link.txt`)
+    let { url, mockup, upload } = await mockupAt(root, '/')
+    let calls = 0
+    let send: typeof fetch = async (input, init) => {
+      let req = new Request(input, init)
+      let file = await readAsk<Browse>(req.body)
+      try {
+        let files = await mockupAssets(file.head.mockup!, file.size!, file.body)
+        equal(
+          new TextDecoder().decode(files.get(mockupPath(file.head.url)!)),
+          page,
+        )
+        equal(files.get('/images/picture.webp'), picture)
+        equal([...files.keys()].sort(), ['/images/picture.webp', '/index.html'])
+      } finally {
+        await file.close()
+      }
+      return ++calls == 1
+        ? answer([shot('end', 2), new Uint8Array([1])])
+        : answer([shot('end', 1), new Uint8Array([1]), end])
+    }
+    let got = await visit('session', { url, mockup }, dir, upload, send)
+    equal(got.text, 'Seen')
+    equal(calls, 2)
+  }))
 
 test('a read-only visit replaces a dropped answer with a whole one on a new connection', () =>
   inDir(async (dir) => {

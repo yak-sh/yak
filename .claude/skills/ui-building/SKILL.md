@@ -363,9 +363,11 @@ the port runs.
    the same moments: the first screen, mid-scroll and mid-animation frames
    (`{"swipe": …}` then `{"shot": …}` with a short `{"wait": …}`), and the end
    of the page. Compare each listed item side by side and fix what differs.
-   `yak admin browse` reaches only yaks.app, so a mockup is opened with
-   `--html <file>` at the page's path, which works for a mockup that is one
-   file (T-2914 opens a mockup directory with its assets).
+   Open the approved mockup with
+   `yak admin browse <file>.html --mockup ~/shared/<name> --to .scratch/browse/mockup`.
+   The visit serves its stylesheets, scripts and images with the page. Open
+   the built page at its yaks.app address and use a separate `--to` directory
+   so both sets of screenshots are available for comparison.
 
 This is part of building the screen, like reading your diff, not a gate.
 

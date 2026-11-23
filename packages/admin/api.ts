@@ -45,6 +45,7 @@ import {
   WIRE,
 } from '@yaks/platform/browser-wire'
 import type { Result, Step } from '@yaks/platform/browser-visit'
+import type { MockupFile } from '@yaks/platform/browser-mockup'
 export type { Step } from '@yaks/platform/browser-visit'
 export { BROWSE } from '@yaks/platform/routes'
 
@@ -354,6 +355,7 @@ export type Browse = {
   allow?: string[]
   /** Open the page as a stranger, holding no cookie. */
   signedOut?: boolean
+  mockup?: MockupFile[]
 }
 
 export type Browsed = Exclude<Result, { failed: string }>

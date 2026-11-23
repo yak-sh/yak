@@ -4,10 +4,13 @@ import { cleanup, clock, equal, match, test } from '@yaks/testing'
 import {
   answer,
   type BrowseFrame,
+  type BrowseVisit,
   type Browsing,
   MOST,
+  type PageRequest,
   type Visit,
 } from '@yaks/platform/browser-visit'
+import { MOCKUP_ORIGIN } from '@yaks/platform/browser-mockup'
 import {
   frames,
   packet,
@@ -25,14 +28,18 @@ import type { Comp } from '@yaks/graph'
 let time = clock()
 let visits: Visit[] = []
 let uploads: string[] = []
+let posted: BrowseVisit[] = []
+let openedFiles: [string, Parameters<PageRequest['respond']>[0] | 'network'][] =
+  []
 let did: string[] = []
 let controls = actions((line) => did.push(line))
 let browsing: Browsing = {
   acquire: () => Promise.resolve('session'),
   connect: () =>
     Promise.resolve({
-      newPage: () =>
-        Promise.resolve({
+      newPage: () => {
+        let route: ((asked: PageRequest) => void) | undefined
+        return Promise.resolve({
           ...controls,
           waitForSelector: async (selector, options) => {
             if (selector == '[data-not-now]') {
@@ -46,12 +53,41 @@ let browsing: Browsing = {
               ? { ...el, tap: () => time.advance(MOST) }
               : el
           },
-          on: () => {},
+          on: (event, hear) => {
+            if (event == 'request') route = hear as (asked: PageRequest) => void
+          },
           setViewport: () => Promise.resolve(),
           emulateMediaFeatures: () => Promise.resolve(),
           setCookie: () => Promise.resolve(),
           goto: async (url) => {
             if (new URL(url).searchParams.has('slow')) await time.advance(3_000)
+            if (new URL(url).origin == MOCKUP_ORIGIN) {
+              for (
+                let path of [
+                  url,
+                  '../theme.css?v=5',
+                  './app.mjs',
+                  '/img/hero%20%C3%A9.webp',
+                  '/missing.css',
+                  'https://cdn.example.com/icon.svg',
+                ]
+              ) {
+                let address = new URL(path, url).href
+                route!({
+                  url: () => address,
+                  isNavigationRequest: () => path == url,
+                  frame: controls.mainFrame,
+                  respond: (answer) => {
+                    openedFiles.push([path, answer])
+                    return Promise.resolve()
+                  },
+                  continue: () => {
+                    openedFiles.push([path, 'network'])
+                    return Promise.resolve()
+                  },
+                })
+              }
+            }
             return { status: () => 200 }
           },
           createCDPSession: () =>
@@ -66,7 +102,8 @@ let browsing: Browsing = {
                 ),
             }),
           screenshot: () => Promise.resolve('png'),
-        }),
+        })
+      },
     }),
   release: () => Promise.resolve(),
   axe: { source: '', version: 'test' },
@@ -78,7 +115,8 @@ let k: Kernel = await fresh({
   env.BROWSER = {
     fetch: async (req: Request) => {
       if (req.headers.get('content-type') == WIRE) {
-        let file = await readAsk<Visit>(req.clone().body)
+        let file = await readAsk<BrowseVisit>(req.clone().body)
+        posted.push(file.head)
         uploads.push(await new Response(file.body).text())
         return answer(browsing, clock())(req)
       }
@@ -208,6 +246,71 @@ test('a checkout document and the screenshots stream through the kernel', async 
   equal(seen, ['reset', ['before', png], ['end', png], 'result'])
   equal(uploads.at(-1), html)
   equal(did.includes('intercept true'), true)
+})
+
+test('a directory visit serves the page and its assets without account cookies', async () => {
+  let contents = [
+    ['/pages/index.html', new TextEncoder().encode('<h1>Mockup</h1>')],
+    ['/theme.css', new TextEncoder().encode('h1 { color: red }')],
+    ['/img/hero é.webp', new Uint8Array([0, 255, 12, 99])],
+    ['/pages/app.mjs', new Uint8Array()],
+  ] as const
+  let size = contents.reduce((n, [, bytes]) => n + bytes.length, 0)
+  let url = MOCKUP_ORIGIN + '/pages/'
+  let r = await k.at(k.host, '/api/browse', {
+    method: 'POST',
+    headers: {
+      origin: `https://${k.host}`,
+      cookie: checks.cookie,
+      accept: WIRE,
+      'content-type': WIRE,
+    },
+    body: packet({
+      head: {
+        url,
+        view: { wait: 0 },
+        mockup: contents.map(([path, bytes]) => ({ path, size: bytes.length })),
+      },
+      size,
+      body: streamed((async function* () {
+        for (let [, bytes] of contents) yield bytes
+      })()),
+    }),
+  })
+  equal(r.status, 200)
+  for await (let { head, body } of frames<BrowseFrame>(r.body)) {
+    if (body) await new Response(body).arrayBuffer()
+    if (head.kind == 'result') match(head.result, { status: 200, errors: [] })
+  }
+  equal(posted.at(-1)!.cookies, [])
+  equal(openedFiles, [
+    [url, {
+      status: 200,
+      contentType: 'text/html; charset=utf-8',
+      body: contents[0][1],
+    }],
+    ['../theme.css?v=5', {
+      status: 200,
+      contentType: 'text/css; charset=utf-8',
+      body: contents[1][1],
+    }],
+    ['./app.mjs', {
+      status: 200,
+      contentType: 'text/javascript; charset=utf-8',
+      body: contents[3][1],
+    }],
+    ['/img/hero%20%C3%A9.webp', {
+      status: 200,
+      contentType: 'image/webp',
+      body: contents[2][1],
+    }],
+    ['/missing.css', {
+      status: 404,
+      contentType: 'text/plain',
+      body: 'File not found',
+    }],
+    ['https://cdn.example.com/icon.svg', 'network'],
+  ])
 })
 
 test('a person never lends their sign-in to the browser, not even the platform owner', async () => {

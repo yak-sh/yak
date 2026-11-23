@@ -6,12 +6,7 @@ import {
   type BrowseFrame,
   waitRoom,
 } from '@yaks/platform/browser-visit'
-import {
-  frames,
-  HTML_BYTES,
-  IncompleteBrowse,
-  streamed,
-} from '@yaks/platform/browser-wire'
+import { frames, IncompleteBrowse } from '@yaks/platform/browser-wire'
 import {
   type Browse,
   browse,
@@ -22,16 +17,6 @@ import {
   traced,
 } from './api.ts'
 import { FORWARDED } from './forward.ts'
-
-let read = async function* (path: string) {
-  using file = await fs.open(path)
-  while (true) {
-    let chunk = new Uint8Array(64 * 1024)
-    let n = await file.read(chunk)
-    if (n == null) return
-    yield chunk.subarray(0, n)
-  }
-}
 
 let write = async (
   path: string,
@@ -56,21 +41,6 @@ let write = async (
     }),
     { signal },
   )
-}
-
-export let documentAt = async (path: string): Promise<BrowseFile> => {
-  let { size, isFile } = await fs.stat(path)
-  if (!isFile) throw new CallError('html_file', 'Choose an HTML file.')
-  if (size > HTML_BYTES) {
-    throw new CallError(
-      'html_too_large',
-      `An HTML file must fit in ${HTML_BYTES / 1_000_000} MB.`,
-    )
-  }
-  return () => ({
-    size,
-    body: size ? streamed(read(path)) : undefined,
-  })
 }
 
 let screenshots = async (

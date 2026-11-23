@@ -71,7 +71,8 @@ import {
   usesIn,
   zone,
 } from './api.ts'
-import { documentAt, visit } from './browse.ts'
+import { documentAt, mockupAt } from './browse-files.ts'
+import { visit } from './browse.ts'
 import { deploys, git, type Login, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
@@ -431,7 +432,17 @@ export let runs = (
         )
       }
       let page = String(a.url ?? '/')
-      let url = page.startsWith('/') ? `https://${zone()}${page}` : page
+      let directory = word(a, 'mockup')
+      let file = word(a, 'html')
+      if (directory != null && file != null) {
+        throw new CallError('browse_files', 'Choose either --mockup or --html.')
+      }
+      let cwd = word(a, 'cwd')
+      let local = directory == null
+        ? undefined
+        : await mockupAt(within(cwd, directory), page)
+      let url = local?.url ??
+        (page.startsWith('/') ? `https://${zone()}${page}` : page)
       let steps = typeof a.steps == 'string' ? JSON.parse(a.steps) : a.steps
       let view = Object.fromEntries(
         (['width', 'height', 'wait', 'touch', 'dark'] as const)
@@ -440,23 +451,21 @@ export let runs = (
       ) as Browse['view']
       let allow = word(a, 'allow')?.split(',').map((p) => p.trim())
         .filter(Boolean)
-      let signedOut = a.stranger === true
-      let file = word(a, 'html')
-      let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
-      let html = file == null ? undefined : await documentAt(
-        within(word(a, 'cwd'), file),
-      )
+      let signedOut = !!local || a.stranger === true
+      let to = within(cwd, word(a, 'to') ?? '.scratch/browse')
+      let upload = local?.upload ??
+        (file == null ? undefined : await documentAt(within(cwd, file)))
       let got = await browserVisit(
         at,
-        { url, view, steps, allow, signedOut },
+        { url, view, steps, allow, signedOut, mockup: local?.mockup },
         to,
-        html,
+        upload,
         (e) =>
           host.report?.(e, { tags: { tool: 'admin_browse', retry: 'browse' } }),
       )
       return [
         said(call, [
-          `${url}${html ? ` showing ${file}` : ''} as ${
+          `${url}${upload ? ` showing ${directory ?? file}` : ''} as ${
             signedOut ? 'a stranger' : at.address
           }: HTTP ${got.status}, ${
             Math.round(got.duration / 100) / 10

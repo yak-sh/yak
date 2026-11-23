@@ -13,7 +13,8 @@
 // Only the fleet's test accounts may ask. The browser time is the platform's,
 // spent checking the platform, and a person's own sign-in never goes into a
 // browser that automation drives, the platform owner's included (T-2254).
-// Only pages on our own zone are opened, the hosts the cookie belongs to.
+// Account cookies go only to visits on our own zone. Mockups use a separate
+// origin held by the browser for that visit.
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { apex } from '@yaks/platform/host'
 import { ADMIN as ADMIN_BOT, isTestAddress } from '@yaks/platform/bots'
@@ -36,12 +37,19 @@ import { system } from '@yaks/fp'
 import { CallError, refused } from '@yaks/tools/errors'
 import {
   bounded,
+  type BrowseVisit,
   type Cookie,
   MOST,
   type Step,
   type View,
   waiting,
 } from '@yaks/platform/browser-visit'
+import {
+  MOCKUP_BYTES,
+  type MockupFile,
+  mockupPath,
+  mockupTooLarge,
+} from '@yaks/platform/browser-mockup'
 import { browseStream, seen, timedOut } from './browser.ts'
 import {
   HTML_BYTES,
@@ -66,6 +74,7 @@ export type Asked = {
   signedOut?: boolean
   /** The document the page answers with, as a checkout renders it. */
   html?: string
+  mockup?: MockupFile[]
 }
 
 // A phone's window unless the caller names another.
@@ -194,6 +203,13 @@ let visitOf = async (
   try {
     signal.throwIfAborted()
     let asked = file?.head ?? await req.json().catch(() => null) as Asked | null
+    if (asked?.mockup != null && (!file || req.headers.get('accept') != WIRE)) {
+      return json(
+        400,
+        'mockup_upload',
+        'Use a browse stream to upload a mockup.',
+      )
+    }
     let visit = await prepared(asked, env, person, token, file?.size ?? 0)
     if (visit instanceof Response) return visit
     signal.throwIfAborted()
@@ -211,14 +227,23 @@ let prepared = async (
   person: string,
   token: string | null,
   bytes: number,
-) => {
+): Promise<BrowseVisit | Response> => {
+  let mockup = asked?.mockup
   let url = typeof asked?.url == 'string' && /^https:/.test(asked.url) &&
-    onZone(asked.url, env)
+    (mockup != null
+      ? mockupPath(asked.url) && asked.url
+      : onZone(asked.url, env))
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
   let html = typeof asked.html == 'string' ? asked.html : undefined
-  if ((html?.length ?? 0) > HTML_LIMIT || bytes > HTML_BYTES) {
+  if (mockup != null && bytes > MOCKUP_BYTES) {
+    let error = mockupTooLarge()
+    return json(413, error.code, error.message)
+  }
+  if (
+    mockup == null && ((html?.length ?? 0) > HTML_LIMIT || bytes > HTML_BYTES)
+  ) {
     return json(
       413,
       'html_too_large',
@@ -233,7 +258,7 @@ let prepared = async (
   let visit = {
     url,
     view: { ...PHONE, ...asked.view },
-    cookies: asked.signedOut === true
+    cookies: mockup != null || asked.signedOut === true
       ? []
       : token
       ? held(token, env)
@@ -246,6 +271,7 @@ let prepared = async (
     // takes the steps it was asked to take.
     audit: false,
     ...html ? { html } : {},
+    ...mockup != null ? { mockup } : {},
   }
   if (waiting(visit) >= MOST) {
     return json(
@@ -281,7 +307,11 @@ export let fetch = async (
       browse_page: pageAddress(visit.url),
       browse_caller: person,
       browse_input: visit.view.touch ? 'touch' : 'mouse',
-      browse_document: visit.html || file?.body ? 'posted' : 'served',
+      browse_document: visit.mockup != null
+        ? 'mockup'
+        : visit.html || file?.body
+        ? 'posted'
+        : 'served',
     })
     if (req.headers.get('accept') == WIRE) {
       try {

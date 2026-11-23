@@ -17,6 +17,13 @@ import {
   WIRE,
 } from './browser-wire.ts'
 import { holding } from '@yaks/blob/stream'
+import {
+  type MockupAssets,
+  mockupAssets,
+  type MockupFile,
+  mockupPath,
+  serveMockup,
+} from './browser-mockup.ts'
 
 import {
   CONNECT,
@@ -95,6 +102,7 @@ export type Visit = {
    * every page a step goes on to, comes from the site. */
   html?: string
 }
+export type BrowseVisit = Visit & { mockup?: MockupFile[] }
 export type Message = { type(): string; text(): string }
 /** An alert, confirm, prompt or beforeunload dialog the page opened. Input
  * waits while one is open, so a step that opens one would never return. */
@@ -103,13 +111,14 @@ export type Dialog = {
   message(): string
   dismiss(): Promise<void>
 }
-type PageRequest = {
+export type PageRequest = {
+  url(): string
   isNavigationRequest(): boolean
   frame(): unknown
   respond(answer: {
     status: number
     contentType: string
-    body: string
+    body: string | Uint8Array
   }): Promise<void>
   continue(): Promise<void>
 }
@@ -561,6 +570,7 @@ let loaded = async (
   ms: number,
   time: Clock,
   screens?: Screens,
+  files?: MockupAssets,
 ): Promise<Loaded> => {
   let stage = 'opening the page'
   let finding: { step: string; selector: string } | undefined
@@ -599,7 +609,7 @@ let loaded = async (
         ])
       }
       signal.throwIfAborted()
-      if (cookies.length) await page.setCookie(...cookies)
+      if (!files && cookies.length) await page.setCookie(...cookies)
       signal.throwIfAborted()
       if (allow.length) {
         await page.browserContext().overridePermissions(
@@ -608,7 +618,8 @@ let loaded = async (
         )
       }
       signal.throwIfAborted()
-      if (html != null) await answered(page, html, error)
+      if (files) await serveMockup(page, files, error)
+      else if (html != null) await answered(page, html, error)
       signal.throwIfAborted()
       stage = 'loading the page'
       let status = 0
@@ -726,7 +737,8 @@ export let capture = async (
     hold = () => {},
     report = () => {},
     screens,
-  }: Partial<SessionOptions> & { screens?: Screens } = {},
+    files,
+  }: Partial<SessionOptions> & { screens?: Screens; files?: MockupAssets } = {},
 ): Promise<Rendered> => {
   let start = time.now()
   let opening = start + OPEN
@@ -742,6 +754,7 @@ export let capture = async (
         Math.min(render, left()),
         time,
         screens,
+        files,
       )
       return {
         ...shot,
@@ -784,12 +797,28 @@ let documentTooLarge = () =>
     } million characters at most`,
   )
 
-let visitIn = async (req: Request): Promise<Visit> => {
-  if (req.headers.get('content-type') != WIRE) return req.json()
-  let file = await readAsk<Visit>(req.body)
+let visitIn = async (
+  req: Request,
+): Promise<{ visit: Visit; files?: MockupAssets }> => {
+  if (req.headers.get('content-type') != WIRE) {
+    return { visit: await req.json() }
+  }
+  let file = await readAsk<BrowseVisit>(req.body)
   try {
+    let { mockup, ...visit } = file.head
+    if (mockup != null) {
+      let files = await mockupAssets(mockup, file.size ?? 0, file.body)
+      let path = mockupPath(visit.url)
+      if (!path || !files.has(path)) {
+        throw new CallError(
+          'mockup_page',
+          'Choose a page in the mockup directory.',
+        )
+      }
+      return { visit, files }
+    }
     if ((file.size ?? 0) > HTML_BYTES) throw documentTooLarge()
-    if (!file.body) return file.head
+    if (!file.body) return { visit }
     // Puppeteer's intercepted response requires the document as one string.
     let held = await holding({ stream: file.body }, HTML_BYTES)
     if (!(held instanceof Uint8Array)) {
@@ -798,7 +827,7 @@ let visitIn = async (req: Request): Promise<Visit> => {
     }
     let html = new TextDecoder('utf-8', { ignoreBOM: true }).decode(held)
     if (html.length > HTML_LIMIT) throw documentTooLarge()
-    return { ...file.head, html }
+    return { visit: { ...visit, html } }
   } finally {
     await file.close()
   }
@@ -816,15 +845,16 @@ let run = async (
   let report = (e: unknown) => faults.push(failure(e))
   let result: Rendered | Failed
   try {
+    let { visit, files } = await visitIn(req)
     result = await capture(
       browsing,
-      await visitIn(req),
+      visit,
       (ms) => {
         duration = ms
         return Promise.resolve()
       },
       time,
-      { hold, report, screens },
+      { hold, report, screens, files },
     )
   } catch (e) {
     result = e instanceof CallError

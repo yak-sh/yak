@@ -257,6 +257,12 @@ yak admin browse /checks/updates --html .scratch/updates.html
 yak admin browse /checks/updates --html .scratch/updates.html --width 1280 --height 800 --touch=false
 ```
 
+A mockup with its own files opens with
+`yak admin browse 02-layout.html --mockup ~/shared/<name>`. The page path is
+relative to that directory and defaults to `index.html`. Cloudflare's browser
+serves the directory for this visit on its own origin, with no sign-in cookies.
+Use `--to .scratch/browse/mockup` to keep its screenshots beside the port's.
+
 `--steps` is a JSON array, run in order once the page loads:
 
 | step                    | what a person does                                      |
