@@ -84,7 +84,7 @@ let setup = async (kept = true) => {
     return { to, r }
   }
   let people = (email: string) =>
-    meta(p.env).query(line`.person&.email.address=${email}&?signed_in`)
+    meta(p.env).query(line`.person&.email.address=${email}&?signed_in&?doc`)
   let whoIs = async (r: Response) =>
     (await verify(cookieValue(jar(r), COOKIE) ?? '', SECRET))?.person
   return { at, signIn, people, whoIs, exchanged }
@@ -122,10 +122,13 @@ test('the button sends the browser to Google for openid, email and profile alone
 test('a new verified address is somebody new, signed in on their own space', async () => {
   let s = await setup()
   let email = 'new.person@gmail.com'
-  let { r } = await s.signIn(said('New.Person@gmail.com'))
+  let { r } = await s.signIn(
+    said('New.Person@gmail.com', { name: 'Nella Person' }),
+  )
   assertEquals(r.status, 303)
   let [person] = await s.people(email)
   assertEquals(await s.whoIs(r), person.entity.eid)
+  assertEquals(person.doc, { title: 'Nella Person' })
   assertEquals((person.signed_in as { via: string }).via, 'google')
   assert((person.signed_in as { first?: string }).first)
   // Their own space's chat, made for them in the write that signed them in.
@@ -141,11 +144,15 @@ test('an address that already has a person signs in as them, never a second', as
   let s = await setup()
   let email = 'ada@example.com'
   let first = await s.signIn(said(email))
-  let again = await s.signIn(said(email))
+  assertEquals((await s.people(email))[0].doc, { title: 'ada' })
+  let again = await s.signIn(said(email, { name: 'Ada Lewis' }))
   let held = await s.people(email)
   assertEquals(held.length, 1)
   assertEquals(await s.whoIs(again.r), held[0].entity.eid)
   assertEquals(await s.whoIs(first.r), held[0].entity.eid)
+  assertEquals(held[0].doc, { title: 'Ada Lewis' })
+  await s.signIn(said(email))
+  assertEquals((await s.people(email))[0].doc, { title: 'Ada Lewis' })
 })
 
 test('a return that proves nothing signs nobody in and says so', async () => {

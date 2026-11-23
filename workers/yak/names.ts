@@ -1,16 +1,32 @@
-// What to call a person, apart from the sign-in that reads a typed address
-// (signin.ts): the directory and every page that shows a person name them
-// without loading a phone number's metadata.
+import {
+  fallbackName,
+  keepName as keep,
+  type NameSource,
+  suppliedName,
+} from '@yaks/platform/named'
+import { KERNEL, type Meta } from './meta.ts'
 
-// An address is not a name. A person minted before anyone was asked wears
-// their address as `doc.title` (T-32627), so that title reads as no name at
-// all: the next sign-in writes the front of the address in its place, and an
-// app's store never learns an address (T-32654). Nothing has to be rewritten on deploy.
-export let chose = (title?: string | null) =>
-  title && !title.includes('@') ? title : null
+export { suppliedName as chose }
 
-// What to call someone: the name they chose, else the front of their email
-// address — `dana` from `dana@example.com`. This is the only name that leaves
-// the directory.
+/** What to call someone in an app or on a page. */
 export let nameOf = (title: string | null | undefined, email: string) =>
-  chose(title) ?? email.trim().toLowerCase().split('@')[0]
+  suppliedName(title) ?? fallbackName(email)
+
+/** Keep a name through the kernel's directory. */
+export let keepName = (
+  store: Meta,
+  person: string,
+  name: string | null,
+  source: NameSource,
+  options?: Parameters<typeof keep>[4],
+) =>
+  keep(
+    {
+      read: (q) => store.query(q as never),
+      apply: (bundles) => store.apply(bundles, KERNEL),
+    },
+    person,
+    name,
+    source,
+    options,
+  )

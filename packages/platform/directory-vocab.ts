@@ -3,6 +3,7 @@ import { CORE_URI, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
 import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
+import { NAME_SOURCES } from './named.ts'
 // A server-owned property and what it holds.
 let described = (s: PropSchema, description: string) => ({
   ...owned(s),
@@ -12,6 +13,14 @@ export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
   $defs: {
+    person_name: {
+      description: "Where a person's doc{title} came from.",
+      component: true,
+      type: 'object',
+      properties: {
+        source: owned({ type: 'string', enum: [...NAME_SOURCES] }),
+      },
+    },
     sessions_ended: {
       description:
         'All browser credentials issued before session rows were ended.',

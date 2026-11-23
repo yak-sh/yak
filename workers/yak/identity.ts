@@ -228,7 +228,6 @@ import {
   texted,
   visitor,
 } from './signin.ts'
-import { nameOf } from './names.ts'
 import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
 import { place, RETRY, source, within } from '@yaks/workerd/rate'
@@ -926,7 +925,12 @@ export let joined = async (
   said = '',
 ) => {
   let back = await met(env, email)
-  let person = await personOf(meta(env), email, name || nameOf(null, email))
+  let person = await personOf(
+    meta(env),
+    email,
+    name,
+    name ? 'email' : 'fallback',
+  )
   await invitedBy(env, person, said)
   // Somebody with a space of their own is writing in, not signing up.
   if (!back) await arrivedBy(env, person, 'email')
@@ -1836,6 +1840,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         let newcomer = await arrivingOn(env, req)
         let session = await sessionStart(req, env)
         let arrived = await arrive(meta(env), said.address, name, {
+          name: said.name,
           newcomer,
           session,
           browser: instrumentEid(session.via),

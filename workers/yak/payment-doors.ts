@@ -12,7 +12,12 @@
 // silently 403'd event is a plan that never activates, so origin_test.ts
 // holds that open on purpose.
 import type { Heard } from '@yaks/host/payments'
-import { apply as subscribed, credited, domainBought } from './billing.ts'
+import {
+  apply as subscribed,
+  credited,
+  domainBought,
+  namedPayer,
+} from './billing.ts'
 import { apply as shopped } from './sell.ts'
 import { payments, via } from './payments.ts'
 import { defect } from './defects.ts'
@@ -45,12 +50,16 @@ let json = (status: number, code: string, message: string) =>
 
 /** What one verified event did, which is what its door says back: the
  * provider ignores the body, and a person reading the logs does not. */
-export let applied = (env: Env, heard: Heard): Promise<string> =>
-  heard.about == 'subscription'
+export let applied = async (env: Env, heard: Heard): Promise<string> => {
+  if (heard.about == 'subscription' || heard.about == 'purchase') {
+    await namedPayer(env, heard)
+  }
+  return heard.about == 'subscription'
     ? subscribed(env, heard)
     : heard.about == 'purchase'
     ? heard.tags.domain ? domainBought(env, heard) : credited(env, heard)
     : shopped(env, heard)
+}
 
 /**
  * The provider's door at this request's path, answered; null where it lends

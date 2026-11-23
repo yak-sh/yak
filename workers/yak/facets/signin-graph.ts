@@ -26,6 +26,7 @@
 // `$was` like any caller's.
 import { type Line, line } from '@yaks/query'
 import { instrumentEid } from '@yaks/platform/instrument'
+import { suppliedName } from '@yaks/platform/named'
 import type { Bundle, Plugin, Tx } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
@@ -35,7 +36,6 @@ import {
   arriving,
   asked,
   barred,
-  called,
   guessed,
   type Miss,
   missed,
@@ -76,7 +76,7 @@ type Guess = {
 }
 
 // How somebody arrives, by a guess that opened or by an `$arrive`.
-type Arriving = Pick<Guess, 'newcomer' | 'via' | 'session'>
+type Arriving = Pick<Guess, 'newcomer' | 'via' | 'session'> & { name?: string }
 
 // Every wrong guess a line reads: an address's, or a network's (signin.ts
 // `barred`).
@@ -119,7 +119,7 @@ let arrival = (
   address: string,
   eid: string,
   at: string,
-  { newcomer, via = 'code', session }: Arriving,
+  { newcomer, via = 'code', session, name }: Arriving,
 ): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
@@ -128,12 +128,14 @@ let arrival = (
         let who = found as Person | undefined
         let handed = newcomerIs(row as Row | undefined)
         let taken = !who && handed
+        let said = via == 'google' ? suppliedName(name) : null
         let person = {
           ...arriving(
             address,
-            called(address),
+            said ?? undefined,
             who,
             taken ? row.entity.eid : eid,
+            said ? 'google' : 'fallback',
           ),
           signed_in: stamped(who?.signed_in, at, via),
         }

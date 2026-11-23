@@ -78,3 +78,57 @@ test('the Operator is sent tools it loads with the next ask, and lists the rest'
     ['app_files', 'number_find'],
   )
 })
+
+test('the first private reply asks once, and the name they give follows them', async () => {
+  let { env, dir } = platform('operator-person-name')
+  let person = crypto.randomUUID()
+  let store = operatorMemory()
+  await dir.stamp({
+    entities: [{
+      entity: { eid: person },
+      person: {},
+      email: { address: 'seedling@example.com' },
+      doc: { title: 'seedling' },
+    }],
+  })
+  let space = await dir.own(person)
+  let turns: Ask[] = []
+  let operator = operating(
+    store,
+    env,
+    operatorModel((req) => {
+      turns.push(req)
+      let names = req.tools.map((t) => t.name)
+      let saved = req.items.some((item) =>
+        item.kind == 'call' && item.name == 'name_set'
+      )
+      let items: Item[] =
+        saved || !JSON.stringify(req.items).includes('I go by Dana')
+          ? [{ kind: 'assistant', text: 'I can help with that.' }]
+          : names.includes('name_set')
+          ? call('name_set', { name: 'Dana' })
+          : call('tool_load', { names: ['name_set'] })
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items,
+      })
+    }),
+  )
+  handleChannels(operator, env, { chat: () => Promise.resolve({}) })
+  let say = async (text: string) => {
+    let start = turns.length
+    await receive(store, { space: space.eid, person, channel: 'chat' }, text)
+    await drain(store)
+    return JSON.stringify(
+      turns.slice(start).flatMap((r) => r.turnContext ?? []),
+    )
+  }
+  ok(
+    (await say('Can you help with my garden?')).includes('ask once, naturally'),
+  )
+  ok(!(await say('I want to grow peas.')).includes('ask once, naturally'))
+  await say('I go by Dana')
+  equal(await dir.nameAt(person), 'Dana')
+  ok((await say('When do I sow?')).includes('Their saved display name is'))
+})

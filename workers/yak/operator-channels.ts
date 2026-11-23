@@ -407,11 +407,11 @@ export let speakerOf = async (env: Env, space: Space, request: Request) => {
   if (OWN.has(request.channel) || UNASKED.has(request.channel)) return ''
   let dir = directoryOf(env.STORE)
   let who = request.writer ?? request.person
-  let [known, role] = await Promise.all([
-    dir.known(who),
+  let [called, role] = await Promise.all([
+    dir.nameAt(who),
     dir.role(space, who),
   ])
-  let name = known?.name || request.address || 'someone'
+  let name = called || request.address || 'someone'
   return speaker(name, proofOf(request), role ?? null, space)
 }
 

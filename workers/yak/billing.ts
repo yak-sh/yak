@@ -95,6 +95,8 @@ import {
   sold as onSale,
 } from '@yaks/domains'
 import { HOST, registryOf } from './domains.ts'
+import { keepName } from './names.ts'
+import { meta } from './meta.ts'
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -605,7 +607,7 @@ export let buy = async (env: Env, req: Request, at?: Space) => {
       done: `${back}?paid=1`,
       cancel: `${back}?paid=0`,
       reference: space.eid,
-      tags: { ...tagsOf(env, space), credit: String(BLOCK) },
+      tags: { ...tagsOf(env, space), person, credit: String(BLOCK) },
     })
     return Response.json({ url })
   } catch (e) {
@@ -679,6 +681,7 @@ export let domainCheckout = async (
   env: Env,
   space: Space,
   email: string,
+  person: string,
   order: Omit<Order, 'space' | 'live'>,
 ) => {
   let lent = await plans(env)
@@ -695,6 +698,7 @@ export let domainCheckout = async (
     reference: space.eid,
     tags: {
       ...tagsOf(env, space),
+      person,
       domain: order.name,
       serves: order.serves,
       cents: String(order.cents),
@@ -759,7 +763,7 @@ export let buyDomain = async (
       )
     }
     let email = await dir.emailAt(person) ?? ''
-    let url = await domainCheckout(env, space, email, {
+    let url = await domainCheckout(env, space, email, person, {
       name,
       serves: (app ?? space).eid,
       cents: offer.cents,
@@ -855,6 +859,15 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
 }
 
 // ---- a subscription changed ---------------------------------------------
+
+/** The payer's name belongs to the person who opened this checkout. */
+export let namedPayer = async (env: Env, heard: Changed | Bought) => {
+  let { payerName, tags } = heard
+  if (!payerName || !tags.person || elsewhere(tags, apex(env))) return
+  await keepName(meta(env), tags.person, payerName.name, 'stripe', {
+    email: payerName.email,
+  })
+}
 
 // One verified event, applied. Answers what it did, which is what the door
 // says back — the provider ignores the body, and a person reading the logs

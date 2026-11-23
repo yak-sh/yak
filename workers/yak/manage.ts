@@ -77,7 +77,8 @@ import { vouched, type Who, whoIs } from './session.ts'
 import { browsers, end as endSession, endAll } from './browser-sessions.ts'
 import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
-import { nameOf } from './names.ts'
+import { chose, keepName } from './names.ts'
+import { meta } from './meta.ts'
 import { writes } from '@yaks/member'
 import { brokenIn, trackedIn } from './unseen.ts'
 import { TOOLS } from './tools.ts'
@@ -1146,20 +1147,10 @@ let account = async (
       303,
     )
   }
-  // Cleared, the front of their address comes back — a person always has a
-  // title, because a member row names them by it and a titleless one reads
-  // back as a bare eid (T-32733). `nameOf` is the same fallback signing in
-  // writes.
   if (form.has('name')) {
-    await dir.apply({
-      entities: [{
-        entity: { eid: who.person },
-        doc: {
-          title: String(form.get('name') ?? '').trim().slice(0, 60) ||
-            nameOf(null, await dir.emailAt(who.person) ?? ''),
-        },
-      }],
-    }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
+    await keepName(meta(env), who.person, chose(form.get('name')), 'said', {
+      by: who.person,
+    })
   }
   // The space they open first is the one their seat marks theirs
   // (`member.own`): the mark moves to another space they own.

@@ -468,7 +468,7 @@ test('a number signs in with its code, and a person wears the number', async () 
   let fresh = asking(() => [])
   assertEquals(await personOf(fresh.at, NUMBER), 'p1')
   assertEquals(fresh.asked, [
-    `.person&.phone.number=${NUMBER}&?doc&?signed_in`,
+    `.person&.phone.number=${NUMBER}&?doc&?person_name&?signed_in`,
   ])
   assertEquals(fresh.wrote, [{
     entity: { eid: '$who' },

@@ -32,7 +32,13 @@ import { minted } from '@yaks/platform/page-wire'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone/mobile'
 import { network } from '@yaks/workerd/rate'
-import { chose, nameOf } from './names.ts'
+import {
+  fallbackName,
+  type NameSource,
+  nameVersion,
+  type PersonName,
+  personNamePatch,
+} from '@yaks/platform/named'
 import { type Host, signupAddress } from '@yaks/platform/host'
 import type { Letter } from './mail.ts'
 import type { SessionSeed } from './browser-sessions.ts'
@@ -590,13 +596,14 @@ export let arrive = async (
   store: Meta,
   address: string,
   via: Via,
-  { newcomer, session, browser }: Arrival = {},
+  { newcomer, session, browser, name }: Arrival & { name?: string } = {},
 ): Promise<Arrived> => {
   let applied = await apply(store, [{
     entity: { eid: '$who' },
     $arrive: {
       email: canon(address),
       via,
+      ...(name ? { name } : {}),
       ...(newcomer ? { newcomer } : {}),
       ...(session ? { session } : {}),
       ...(browser ? { browser } : {}),
@@ -638,9 +645,8 @@ let arrivedIn = (
   }
 }
 
-export type Person = {
+export type Person = PersonName & {
   entity: { eid: string }
-  doc?: { title?: string }
   signed_in?: { at?: string; via?: Via; first?: string }
 }
 
@@ -672,33 +678,21 @@ export let stamped = (
 export let personLine = (typed: string) => {
   let address = canon(typed)
   return texted(address)
-    ? line`.person&.phone.number=${address}&?doc&?signed_in`
-    : line`.person&.email.address=${address}&?doc&?signed_in`
+    ? line`.person&.phone.number=${address}&?doc&?person_name&?signed_in`
+    : line`.person&.email.address=${address}&?doc&?person_name&?signed_in`
 }
 
 let personAt = async (store: Meta, typed: string) =>
   (await store.query(personLine(typed)))[0] as Person | undefined
 
-// What a person signing in is first called: the front of their address, and
-// nothing for a number, which is no name; their space page asks.
+/** The fallback shown for an email address. Phone sign-in supplies no name. */
 export let called = (address: string) =>
-  texted(address) ? undefined : nameOf(null, address)
-
-// Whether anyone has ever named this address, which is what the code card
-// asks about when it asks (identity.ts).
-export let nameAt = async (store: Meta, email: string) =>
-  chose((await personAt(store, email))?.doc?.title)
+  texted(address) ? undefined : fallbackName(address)
 
 // The person behind an address, minted on first sight. `email` is a facet any
 // entity may wear (the mail plugin's address book), so a person is `person` +
 // `email` (or `phone`, for a number) + a `doc` titled with what to call them,
-// once someone says.
-//
-// `name` is that: what an invitation called them (tools.ts member_add), or
-// the front of their address when they sign in (identity.ts, T-34236). It is
-// written only where there is no name yet — an invitation never renames
-// someone who has one — and a person nobody has named keeps no title until
-// their first sign-in. They change it under Settings (apps.ts `saved`).
+// once someone supplies a name or they sign in and need a fallback title.
 
 /**
  * Who arrives at an address, as the one bundle that has them: the person
@@ -716,6 +710,7 @@ export let nameAt = async (store: Meta, email: string) =>
  * assertEquals(arriving('Dana@b.c', 'dana', undefined, 'p2'), {
  *   entity: { eid: 'p2' },
  *   doc: { title: 'dana' },
+ *   person_name: { source: 'invite' },
  *   person: {},
  *   email: { address: 'dana@b.c' },
  * })
@@ -726,17 +721,22 @@ export let arriving = (
   name?: string,
   found?: Person,
   eid = '$who',
+  source: NameSource = 'invite',
 ): Bundle => {
+  let at = canon(address)
+  let email = texted(at) ? undefined : at
+  let patch = source == 'fallback' && !email
+    ? {}
+    : personNamePatch(found ?? {}, name, source, email)
   if (found) {
     return {
       entity: { eid: found.entity.eid },
-      ...name && !chose(found.doc?.title) ? { doc: { title: name } } : {},
+      ...patch,
     }
   }
-  let at = canon(address)
   return {
     entity: { eid },
-    ...name ? { doc: { title: name } } : {},
+    ...patch,
     person: {},
     ...texted(at) ? { phone: { number: at } } : { email: { address: at } },
   }
@@ -755,9 +755,11 @@ export let addressee = async (
   store: Meta,
   address: string,
   name?: string,
+  source?: NameSource,
 ) => {
   let found = await personAt(store, address)
-  let who = arriving(address, name, found)
+  let who = arriving(address, name, found, undefined, source)
+  if (found && who.doc) who.$was = nameVersion(found)
   return {
     eid: who.entity.eid,
     fresh: !found,
@@ -765,12 +767,23 @@ export let addressee = async (
   }
 }
 
-export let personOf = async (store: Meta, address: string, name?: string) => {
-  let who = await addressee(store, address, name)
-  if (!who.write.length) return who.eid
-  let applied = await apply(store, who.write)
-  if (!who.fresh) return who.eid
-  let eid = minted(applied).$who
-  if (!eid) throw new Error('the meta store minted no person')
-  return eid
+export let personOf = async (
+  store: Meta,
+  address: string,
+  name?: string,
+  source?: NameSource,
+) => {
+  for (;;) {
+    let who = await addressee(store, address, name, source)
+    if (!who.write.length) return who.eid
+    try {
+      let applied = await apply(store, who.write)
+      if (!who.fresh) return who.eid
+      let eid = minted(applied).$who
+      if (!eid) throw new Error('the meta store minted no person')
+      return eid
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+    }
+  }
 }

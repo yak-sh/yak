@@ -37,7 +37,7 @@ test(
     let k = await kernel()
     let jeff2 = unique('jeff2')
     try {
-      let { eids, person } = await seed(k, [{
+      let { eids, person, email } = await seed(k, [{
         slug: jeff2,
         apps: ['recipes'],
       }])
@@ -74,6 +74,30 @@ test(
 
       // Nothing paid for yet: the sweep has not run either, so there is no row.
       assertEquals(await plan(), undefined)
+      let name = async () =>
+        ((await graph.query(`id=${person}`))[0].doc as { title?: string })
+          ?.title
+      let before = await name()
+      let checkout = {
+        id: 'cs_names',
+        mode: 'payment',
+        payment_status: 'unpaid',
+        metadata: { ...tagged(space), person },
+      }
+      let completed = 'checkout.session.completed'
+      await post(completed, {
+        ...checkout,
+        customer_details: {
+          name: 'Someone Else',
+          email: 'someone@example.com',
+        },
+      }, Math.floor(Date.now() / 1000))
+      assertEquals(await name(), before)
+      await post(completed, {
+        ...checkout,
+        customer_details: { name: 'Jeff Peterson', email },
+      }, Math.floor(Date.now() / 1000))
+      assertEquals(await name(), 'Jeff Peterson')
 
       // ---- the subscription starts ----
       let sub = fakeSub(tagged(space))

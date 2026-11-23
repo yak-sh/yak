@@ -33,6 +33,8 @@ import { vaulted } from './vault.ts'
 import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { caught } from './defects.ts'
+import { chose, keepName } from './names.ts'
+import { meta } from './meta.ts'
 
 /** The integrations a person's calendar, mail and files connect through. */
 export let CALENDAR = 'google-calendar'
@@ -333,7 +335,7 @@ let toolsOf = (
   i: Integration | undefined,
 ): Tool[] => {
   let name = comp(held, CONNECTION).integration
-  if (name == CALENDAR) return calendarTools(env, held)
+  if (name == CALENDAR) return calendarTools(env, ctx, held)
   if (name != GMAIL) return []
   return [
     gmailSend(env, ctx, space, held),
@@ -395,7 +397,29 @@ export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
     : ''
 }
 
-let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
+let nameFromCalendar = async (
+  env: Env,
+  ctx: Sender,
+  events: Record<string, unknown>[],
+) => {
+  if (!ctx.person) return
+  let named = events.flatMap((e) => {
+    let creator = e.creator as Comp | undefined
+    let name = chose(creator?.displayName)
+    let email = str(creator?.email).toLowerCase()
+    return creator?.self === true && name && email ? [{ email, name }] : []
+  })
+  if (!named.length) return
+  let email = await ctx.dir.emailAt(ctx.person)
+  let own = named.find((who) => who.email == email)
+  if (own) {
+    await keepName(meta(env), ctx.person, own.name, 'calendar', {
+      email: own.email,
+    })
+  }
+}
+
+let calendarTools = (env: Env, ctx: Sender, connection: Bundle): Tool[] => [{
   name: 'calendar_events',
   title: 'Read their calendar',
   readOnly: true,
@@ -438,9 +462,13 @@ let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
       connection,
       `${CALENDAR_API}/calendars/primary/events?${q}`,
     )
+    let events = (got.items ?? []) as Record<string, unknown>[]
+    await nameFromCalendar(env, ctx, events).catch((e) =>
+      caught(e, { request: 'a calendar name heard' })
+    )
     return JSON.stringify({
       zone: got.timeZone,
-      events: ((got.items ?? []) as Record<string, unknown>[]).map(eventOf),
+      events: events.map(eventOf),
     })
   },
 }, {
@@ -515,6 +543,9 @@ let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
           invite,
         })),
       },
+    )
+    await nameFromCalendar(env, ctx, [made]).catch((e) =>
+      caught(e, { request: 'a calendar name heard' })
     )
     return JSON.stringify(eventOf(made))
   },

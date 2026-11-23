@@ -6,8 +6,8 @@
 // A sign-in begins at `POST /login/<name>`, which sends the browser to the
 // provider holding the attempt in a sealed cookie, and returns at
 // `/login/<name>/callback`, where the code is exchanged and the id_token read.
-// What comes back is an address the provider says it verified, and nothing
-// else: identity.ts signs in whoever wears it the way a code that opened would
+// What comes back is an address the provider verified and any profile name
+// it supplied. identity.ts signs in whoever wears the address the way a code that opened would
 // (signin.ts `arrive`), so a verified address that already has a person is
 // that person, and a new one is somebody new with a space of their own.
 //
@@ -191,7 +191,7 @@ export let spent = (name: Named) =>
  * card carried, or why it proved nothing, said to the person. */
 export type Returned =
   & { q?: string; back?: string }
-  & ({ address: string } | { why: string })
+  & ({ address: string; name?: string } | { why: string })
 
 export let NOT_FINISHED = (title: string) =>
   `The sign-in with ${title} didn't finish. Try again, or get a code by email.`
@@ -227,7 +227,7 @@ export let complete = async (
     if (!who.email || !who.verified) {
       return { ...carried, why: UNVERIFIED(title) }
     }
-    return { ...carried, address: who.email }
+    return { ...carried, address: who.email, name: who.name }
   } catch (e) {
     // Somebody pressing Cancel at the provider is no failure of ours.
     if (!(e instanceof OAuthError && e.code == 'access_denied')) {

@@ -14,7 +14,7 @@ let directory = (title: string) => {
     read: () => [me],
     apply: (bundles) => {
       for (let b of bundles) {
-        me = { ...me, doc: { ...me.doc as object, ...b.doc as object } }
+        me = { ...me, ...b }
       }
     },
   }
@@ -31,16 +31,20 @@ test('a title is no name when it is empty, an address or its front', () => {
   )
 })
 
-test('the Operator is told it lacks their name until name_set keeps it', async () => {
+test('name_set keeps a supplied name even if it matches the fallback', async () => {
   let dir = directory('thecompanygardener')
   equal(
     await nameItem(dir, 'erik'),
-    "You don't know the name of the person you are talking with: their " +
-      'account calls them thecompanygardener. When they say their name or ' +
-      'sign with one, keep it with name_set.',
+    'Their name is unknown. When they tell you their own name, keep it with name_set.',
   )
   let set = nameSet(() => dir, 'erik')
   equal(await set.run({ name: ' x@y.z ' }), 'Give their name, not an address.')
-  equal(await set.run({ name: ' Erik Unruh ' }), 'Kept: they go by Erik Unruh.')
-  equal(await nameItem(dir, 'erik'), undefined)
+  equal(
+    await set.run({ name: ' thecompanygardener ' }),
+    'Kept: they go by thecompanygardener.',
+  )
+  equal(
+    await nameItem(dir, 'erik'),
+    'Their saved display name is "thecompanygardener". Use it as their name.',
+  )
 })

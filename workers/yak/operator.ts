@@ -546,6 +546,11 @@ let TEXTED =
 let proven = (channel: string) =>
   !ANSWERING.has(channel) && !UNPROVEN.has(channel)
 
+// The person's own words on authenticated channels can name their account.
+let naming = (channel = '') =>
+  ['chat', 'email', 'update', 'connector'].includes(channel) ||
+  PLATFORMS.has(channel)
+
 // What anyone's turn holds beside reads, member or not: telling the platform
 // what they found. Web search and page reads are the provider's own, offered
 // to every turn.
@@ -1367,6 +1372,7 @@ type Working = {
   administrative?: boolean
   signup?: string
   channel?: string
+  conversation?: boolean
   // The number the links its privileged acts wait on are texted to
   // (operator-channels.ts `confirmOf`).
   confirm?: string
@@ -2631,7 +2637,9 @@ export let operating = (
       textSend(env, ctx, space),
       whereaboutsShow(env, ctx.person!, space.eid),
       placeSet(() => kernelDir(env), ctx.person!),
-      nameSet(() => kernelDir(env), ctx.person!),
+      ...!confirm && naming(channel)
+        ? [nameSet(() => kernelDir(env), ctx.person, space.eid)]
+        : [],
       contactAdd(env, ctx, space, store),
       notificationSend(ctx, space, store),
       mailSend(env, ctx, space, store),
@@ -2997,14 +3005,25 @@ export let operating = (
         kernelDir(env).then((dir) => locatedItem(dir, o.person)).catch(
           failed('operator located'),
         ),
-        // Their name, when nobody has said it (@yaks/platform/named).
-        // Only a member's turn holds name_set.
-        member().then(async (m) =>
-          m ? nameItem(await kernelDir(env), o.person) : undefined
-        ).catch(failed('operator named')),
         member().then((m) => threadsItem(store, session, m)).catch(
           failed('operator threads'),
         ),
+        naming(o.channel) && !o.signup
+          ? ctx.then(async (c) =>
+            writes(c.role)
+              ? nameItem(
+                await kernelDir(env),
+                c.person,
+                async () =>
+                  !!o.conversation && c.pa &&
+                  (o.channel == 'chat' || o.channel == 'email') &&
+                  !(await g.read(
+                    q`.entry.session=${session}&.output&.content&!notice&.limit=1&.fields=entity.eid`,
+                  )).length,
+              )
+              : undefined
+          ).catch(failed('operator person name'))
+          : undefined,
       ])
       return texts.flatMap((text) =>
         text ? [{ kind: 'instruction' as const, text }] : []

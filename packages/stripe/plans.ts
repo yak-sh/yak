@@ -469,6 +469,19 @@ export let changed =
     let referred = typeof reference == 'string' && reference
       ? { reference }
       : {}
+    let details = e.type == 'checkout.session.completed'
+      ? o.customer_details as
+        | { name?: string; email?: string; address?: Address }
+        | undefined
+      : undefined
+    let payer = typeof details?.name == 'string' && details.name.trim()
+      ? {
+        payerName: {
+          name: details.name,
+          ...typeof details.email == 'string' ? { email: details.email } : {},
+        },
+      }
+      : {}
     if ((e.type ?? '').startsWith('checkout.session.') && o.mode == 'payment') {
       return {
         about: 'purchase',
@@ -478,6 +491,7 @@ export let changed =
         paid: o.payment_status == 'paid',
         tags: tagsOf(o),
         ...referred,
+        ...payer,
       }
     }
     let parent = (o.parent ?? {}) as {
@@ -494,9 +508,7 @@ export let changed =
     // A completed checkout says where its payer is billed, when Stripe asked
     // (under Managed Payments, what tax needs: at least the country). Only
     // the town, state and country are read of it.
-    let address = e.type == 'checkout.session.completed'
-      ? (o.customer_details as { address?: Address } | undefined)?.address
-      : undefined
+    let address = details?.address
     let billed = address && Object.fromEntries(
       (['city', 'state', 'country'] as const).flatMap((k) =>
         address[k] ? [[k, String(address[k])]] : []
@@ -508,6 +520,7 @@ export let changed =
       live,
       tags: tagsOf(o),
       ...referred,
+      ...payer,
       ...billed && Object.keys(billed).length ? { billed } : {},
       subscription: () =>
         whole

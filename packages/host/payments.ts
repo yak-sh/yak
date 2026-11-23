@@ -152,7 +152,11 @@ export type Bought = {
   paid: boolean
   tags: Tags
   reference?: string
+  payerName?: PayerName
 }
+
+/** The name and address a completed checkout reported for its payer. */
+export type PayerName = { name: string; email?: string }
 
 /** A subscription changed, as one verified event the provider posted says:
  * when and how it happened, what the object it is about carries, and the
@@ -172,6 +176,7 @@ export type Changed = {
    * asked: never the street or postal code, only the town, its state or
    * province, and the two-letter country */
   billed?: { city?: string; state?: string; country?: string }
+  payerName?: PayerName
   /** the subscription it is about, read off it or asked for: undefined
    * where it is about none, null where the provider holds none by the name
    * it gives */

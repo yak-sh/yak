@@ -1,4 +1,5 @@
 import { afterAll, test } from '@yaks/testing'
+import { line } from '@yaks/query'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request as Asked } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
@@ -125,6 +126,11 @@ globalThis.fetch = (input, init) => {
       items: [{
         id: 'e1',
         summary: 'Standup',
+        creator: {
+          self: true,
+          email: 'jeff@example.com',
+          displayName: 'Jeff from Calendar',
+        },
         start: { dateTime: '2026-11-10T09:00:00-05:00' },
         end: { dateTime: '2026-11-10T09:15:00-05:00' },
       }],
@@ -345,6 +351,32 @@ test('reading, drafting and labelling mail are offered by what the connection wa
   let offered = (await googleTools(env, ctx, space)).map((t) => t.name)
   for (let name of ['gmail_read', 'gmail_draft', 'gmail_label']) {
     assert(offered.includes(name), name)
+  }
+})
+
+test('a primary calendar can supply its owner’s name when their title is a fallback', async () => {
+  let [saved] = await meta(env).query(line`.entity.eid=${person}`)
+  assertEquals(saved.doc, { title: 'Jeff Peterson' })
+  await meta(env).apply(
+    [{ entity: { eid: person }, doc: { title: 'jeff' } }],
+    KERNEL,
+  )
+  try {
+    let ctx = await operatorContext(env, { person }, space)
+    let calendar = (await googleTools(env, ctx, space)).find((t) =>
+      t.name == 'calendar_events'
+    )!
+    await calendar.run({
+      from: '2026-11-10T00:00:00-05:00',
+      to: '2026-11-11T00:00:00-05:00',
+    }, {} as never)
+    assertEquals(await dir.nameAt(person), 'Jeff from Calendar')
+  } finally {
+    await meta(env).apply([{
+      entity: { eid: person },
+      doc: saved.doc,
+      person_name: saved.person_name ?? null,
+    }], KERNEL)
   }
 })
 
