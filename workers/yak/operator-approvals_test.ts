@@ -3,6 +3,9 @@
 // only they, signed in, open it. The link is spent once, lives LIFE, and is
 // bound to the one act and its arguments.
 import { equal, test, throws } from '@yaks/testing'
+import { assertRejects } from '@std/assert'
+import type { Bundle } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { line } from '@yaks/query'
 import { decisionRequestId } from '@yaks/platform/operator-decisions'
 import type { Tool } from '@yaks/session'
@@ -19,7 +22,9 @@ import {
   confirming,
   digestOf,
   LIFE,
+  waiting,
 } from './operator-approvals.ts'
+import { seenBy } from './operator-access.ts'
 import { approvalCard } from './operator-approval-card.ts'
 import type { Member } from './operator-route.ts'
 import { updatesOf, updating } from './operator-updates.ts'
@@ -630,4 +635,58 @@ test('an act needs what its tool declares: one only the person may do is theirs 
   equal(said.includes('may approve it for them'), false)
   let a = (await newest()).operator_approval as Approval
   equal(a.approvers?.some((p) => p != person) ?? false, false)
+})
+
+test("only its people answer an approval: no caller's write answers, spends, moves or reroutes one, and the space never presses", async () => {
+  await asking({ chat: true }).run({ email: 'ned@x.com' })
+  let row = await newest()
+  let eid = row.entity.eid
+  let space = place
+  let a = row.operator_approval as Approval
+  // Raised by a stranger, and waiting on the person.
+  let raised = crypto.randomUUID()
+  await store.g.apply([{
+    entity: { eid: raised },
+    operator_escalation: { raised, from: session },
+    decision: { question: 'Take it up?' },
+    filed: { assignee: person, project: space },
+  }], { trusted: true })
+  // As the person's turn writes, with graph_apply over its own store.
+  let turn = seenBy(store, { person, member: true })
+  let refused = (b: Omit<Bundle, 'entity'>, at = eid) =>
+    assertRejects(
+      async () =>
+        await turn.apply([{
+          entity: { eid: at },
+          ...b,
+          $actor: { by: space, via: session },
+        }]),
+      Refused,
+    )
+  await refused({
+    operator_approval: { approvers: [space] },
+    decided: { choice: 'Approve' },
+  })
+  await refused({ decided: { choice: 'Approve' } })
+  await refused({ decision: { question: 'Nothing to see?' } })
+  await refused({ filed: { assignee: space } })
+  await refused({ verified: {} })
+  await refused({ $delete: true })
+  await refused({ approval_ask: { approval: eid } }, crypto.randomUUID())
+  await refused({ decided: { choice: 'Take it up' } }, raised)
+  await refused({ operator_escalation: { from: crypto.randomUUID() } }, raised)
+  ran.length = 0
+  await answered(store, press, eid)
+  equal(ran, [])
+  // An approval routed to the space itself still waits for a person.
+  let routed = crypto.randomUUID()
+  await store.g.apply(
+    await waiting(store, space, routed, { ...a, approvers: [person, space] }),
+    { trusted: true },
+  )
+  let pressed = (who: string) =>
+    press(routed, digestOf(a), { updates: true, press: true, who })
+  equal((await pressed(space)).state, 'theirs')
+  equal(ran, [])
+  equal((await pressed(person)).state, 'done')
 })

@@ -118,7 +118,7 @@ test('a work tool keeps the approval assigned to the person asked to answer it',
     () =>
       approvalWork(approver, 'task_update', { task: ask, assignee: requester }),
     CallError,
-    'Only the system assigns approval asks.',
+    'Only the system writes an approval',
   )
   let [row] = await approvals.g.get([ask])
   equal((row.filed as Comp).assignee, approver)

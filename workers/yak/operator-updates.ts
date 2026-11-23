@@ -557,6 +557,9 @@ export let updating = async (
   }
   let raised = !!row?.operator_escalation
   if (str('choose') || raised) {
+    // Their own press, signed in as themselves: the system writes it, as
+    // only it answers what waits on a person (@yaks/platform/operator-graph
+    // `answering`).
     await store.g.apply([
       ...opened,
       {
@@ -565,7 +568,7 @@ export let updating = async (
         $was: { decided: { '': null }, cancelled: { '': null } },
         $actor: { by: person },
       },
-    ])
+    ], { trusted: true })
     return { answered: about }
   }
   // The channels load with the words a person sends, not with every read.

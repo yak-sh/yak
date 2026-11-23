@@ -4,7 +4,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Item } from '@yaks/model'
-import { answer } from '@yaks/task'
 import { decisionRequestId } from '@yaks/platform/operator-decisions'
 import { inputOf } from '@yaks/session/intake'
 import type { Comp } from '@yaks/graph'
@@ -87,7 +86,7 @@ let read = async (person: string) =>
     waiting: number
   }
 let decide = (eid: string, choice: string) =>
-  store.g.apply(answer(eid, choice).map((b) => ({ ...b, $actor: { by: ada } })))
+  updating(store, { ...as(ada), role: 'owner' }, { choose: eid, choice })
 let words = async (person: string) =>
   (await read(person)).updates.map((u) => [u.needs, u.words, u.unread])
 

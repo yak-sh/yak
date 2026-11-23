@@ -1,9 +1,8 @@
 import { line } from '@yaks/query'
-import { addressed, type Bundle, type Graph, type ReadOpts } from '@yaks/graph'
+import { type Bundle, type Graph, type ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or, pred, present } from '@yaks/query/core'
-import { CallError } from '@yaks/tools/errors'
 import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
 import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import type { Held } from './build-door.ts'
@@ -245,23 +244,10 @@ export let sight = (
   },
 })
 
-// The assignment also determines whose Updates an approval ask appears in.
-// The system assigns it when it asks. A work tool may not transfer it.
-let keepAssignees = async (g: Graph, bundles: Bundle[]) => {
-  let moves = bundles.filter((b) =>
-    !b.entity.eid.startsWith('$') &&
-    typeof b.filed == 'object' &&
-    (b.filed === null || Object.hasOwn(b.filed, 'assignee'))
-  ).map((b) => b.entity.eid)
-  if (!moves.length) return
-  let rows = await g.get(await addressed(g, moves), ['approval_ask'])
-  if (rows.some((b) => b.approval_ask)) {
-    throw new CallError('access', 'Only the system assigns approval asks.')
-  }
-}
-
 /** The Operator's store as `reader` reads it (`sight`) and edits its work.
- * Tools resolve their write targets through the same scoped reads. */
+ * Tools resolve their write targets through the same scoped reads. What
+ * waits on a person's answer is the system's to write, whoever writes here
+ * (@yaks/platform/operator-graph `answering`). */
 export let seenBy = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
   reader: Reader,
@@ -275,10 +261,6 @@ export let seenBy = (
     rows: (query, opts) => g.rows(query, narrow(opts)),
     get: (eids, comps, opts) => g.get(eids, comps, narrow(opts)),
     view: (query, opts) => g.view(query, narrow(opts)),
-    apply: async (bundles, opts) => {
-      await keepAssignees(g, bundles)
-      return g.apply(bundles, opts)
-    },
   }
 }
 

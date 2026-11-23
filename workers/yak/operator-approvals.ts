@@ -647,10 +647,14 @@ export let approvals = (
     let a = row?.operator_approval as Approval | undefined
     if (!a || digestOf(a) != digest) return { state: 'gone' }
     own ||= !!updates || !!room
+    let space = spaceOf(row)
     // A texted link is the person's, whoever holds the phone; anything
-    // else opens for whoever may answer it (operator-route.ts).
+    // else opens for whoever it was routed to when asked (operator-route.ts),
+    // which only the system writes (@yaks/platform/operator-graph
+    // `answering`). The space, as which its Operator's turns act, is never
+    // one of them.
     let presser = own || !a.number ? who : a.person
-    let may = approversOf(a)
+    let may = approversOf(a).filter((p) => p != space)
     if (!presser || !may.includes(presser)) {
       return { state: 'theirs' }
     }
@@ -692,7 +696,6 @@ export let approvals = (
     if ((row.decided || asks.some((b) => b.decided)) && !updates) {
       return { state: 'used', ...about }
     }
-    let space = spaceOf(row)
     // A texted link confirms its person's identity through possession.
     // Updates already checked the seat when recording the decision.
     if (!updates && !canPress(a, await roleAt(space, presser))) {
