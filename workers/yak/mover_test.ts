@@ -72,6 +72,31 @@ let deployed = seededState(async (ctx) => {
   await deploy(doorOf((r) => store.fetch(r), NAME))
 })
 
+// `n` rows in the old shape, written through the kernel's door.
+let fill = async (meta: ReturnType<typeof metaOf>, n: number) => {
+  let rows = Array.from({ length: n }, (_, i) => ({
+    entity: { eid: crypto.randomUUID() },
+    was: { word: `w${i}` },
+  }))
+  for (let i = 0; i < n; i += 100) {
+    await meta.apply(rows.slice(i, i + 100) as Bundle[], KERNEL)
+  }
+}
+
+// The deployed store holding `n` rows, written once for every case that
+// starts from as many.
+let filled = new Map<number, ReturnType<typeof seededState>>()
+let holding = (n: number) => {
+  let seeded = filled.get(n) ?? seededState(async (ctx) => {
+    let store = new Store(ctx, {}, [])
+    let door = doorOf((r) => store.fetch(r), NAME)
+    await deploy(door)
+    await fill(metaOf(door), n)
+  })
+  filled.set(n, seeded)
+  return seeded()
+}
+
 let movingStore = async (
   n: number,
   env: ConstructorParameters<typeof Store>[1],
@@ -79,7 +104,7 @@ let movingStore = async (
   ceiling?: Options,
 ) => {
   // The ceiling case measures what the initial writes spend in its window.
-  let ctx = ceiling ? state() : await deployed()
+  let ctx = ceiling ? state() : n ? await holding(n) : await deployed()
   let bound = bounded(ctx.storage, ceiling ?? {})
   let o = new Store(ctx, env, rules)
   let fetch = (r: Request) => o.fetch(r)
@@ -90,13 +115,7 @@ let movingStore = async (
   if (ceiling) await deploy(door)
   await o.door
   await ctx.settled()
-  let rows = Array.from({ length: n }, (_, i) => ({
-    entity: { eid: crypto.randomUUID() },
-    was: { word: `w${i}` },
-  }))
-  for (let i = 0; i < n; i += 100) {
-    await meta.apply(rows.slice(i, i + 100) as Bundle[], KERNEL)
-  }
+  if (ceiling) await fill(meta, n)
   return {
     wake: (...rules: Rule[]) => o = new Store(ctx, env, rules),
     schema: () => revision(driver(ctx.storage), 'schema'),
