@@ -7,6 +7,7 @@ import { kindOf, openCalls, statusOf, textOf } from '@yaks/session/status'
 import type { Bundle } from '@yaks/graph'
 import { type LogRow } from './types.ts'
 import { doing } from '@yaks/tools/title'
+import { refusalText } from '@yaks/tools/errors'
 
 export type EntryRow = {
   eid: string
@@ -66,7 +67,7 @@ let failure = (c: EntryRow['comps']) => {
   return c.exception
     ? text(c.exception.value) || text(c.content?.body) || 'exception'
     : refusal
-    ? [text(refusal.code), text(c.content?.body)].filter(Boolean).join(': ')
+    ? refusalText(text(refusal.code), text(c.content?.body))
     : undefined
 }
 

@@ -15,6 +15,7 @@
 import type { Security } from '@yaks/mcp'
 import { type Level, writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
+import { Refused } from '@yaks/graph/errors'
 import type { Steps } from '@yaks/tools/title'
 import type { Image } from '@yaks/tools/value'
 import {
@@ -332,7 +333,9 @@ export let SPACE = str(
     "'<space>/<app>'), else an Operator's own space, else your own space",
 )
 
-export let APP = str('the app slug, or <space>/<app> to name its space too')
+export let APP = str(
+  'the app slug, eid or short hex id, optionally prefixed with <space>/',
+)
 
 export let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) {
@@ -527,6 +530,21 @@ let entered = async (
   if (args.space == null && app) {
     let found = await ctx.dir.holding(app, ctx.person, over, true)
     if (found?.page?.space) return { space: found.page.space, page: found.page }
+    if (found?.holding.length) {
+      return { space: await ownSpace(ctx, app, found.holding) }
+    }
+    let identified = await ctx.dir.appId(app).catch((e) => {
+      if (e instanceof Refused) return null
+      throw e
+    })
+    let home = identified && await ctx.dir.at(identified.space)
+    if (home && identified) {
+      let page = await ctx.dir.page(home.slug, null, ctx.person, over, true)
+      let target = page.roster?.find((a) => a.eid == identified.eid)
+      if (page.space && target && (page.role || page.administrative)) {
+        return { space: page.space, page: { ...page, app: target } }
+      }
+    }
     if (found) return { space: await ownSpace(ctx, app, found.holding) }
   }
   if (args.space == null) {
@@ -814,10 +832,15 @@ let reached = async (
       selectedSpace = space
       // Bind identities as soon as a target has been observed. A failed
       // provisional admission never reselects an already observed entity.
+      let refused: Refused | undefined
       let app = selectedApp
         ? (await scope.dir.appAt(selectedApp.eid))?.app
         : page?.app ??
-          await (trash ? scope.dir.binned : scope.dir.app)(space, slug)
+          await scope.dir.findApp(space, slug, trash).catch((e) => {
+            if (!(e instanceof Refused)) throw e
+            refused = e
+            return null
+          })
       if (app) selectedApp = app
       // A stranger learns no target existence from a failed admission.
       let who = await callerIn(
@@ -829,6 +852,7 @@ let reached = async (
         page?.administrative,
         app?.space == space.eid ? app : null,
       )
+      if (refused) throw refused
       if (!app || app.space != space.eid) {
         throw trash
           ? refuse(

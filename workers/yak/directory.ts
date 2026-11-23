@@ -78,6 +78,7 @@ import type { Actor, Bundle, Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
 import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
+import { BARE, SHORT } from '@yaks/id'
 import type { Rec } from './domains.ts'
 import { type Fetcher, STATIC_QUERY, storeOf } from './door.ts'
 import { type Door, type Namespace } from '@yaks/durable-object/door'
@@ -2241,6 +2242,9 @@ let revised = async (via: Fetcher, q: string): Promise<Revised> => {
 
 export type Page = ReturnType<typeof paged>
 
+let appIdentity = (name: string) =>
+  minted(name) || BARE.test(name) || SHORT.test(name)
+
 // What a page says out of the rows one snapshot answered: the space (its
 // row given), the app at the address, the front page, the roster when
 // `every` app was read, and the asker's seat (`directory.page`).
@@ -3214,16 +3218,32 @@ export let directoryRows = (rows: {
       )
       return row ? appOf(row) : null
     },
-    binned: async (space: Space, name: string) => {
-      let pair = minted(name) ? await self.appAt(name) : null
-      if (pair?.space.eid == space.eid) return pair.app
-      let current = await self.app(space, name)
-      if (current) return current
+    // An identity takes the directory's ordinary graph query path, including
+    // the shared resolver for short handles.
+    appId: async (name: string, space?: Space): Promise<App | null> => {
+      if (!appIdentity(name)) return null
+      let within = space ? line`&.app.space=${space.eid}` : NONE
+      let row = await one(
+        line`.entity.eid=${name}&.app${sub(within)}&${sub(ABOUT)}`,
+      ).catch((e) => {
+        // A directory-wide ambiguity can include entities outside the
+        // caller's reach. Keep the refusal without quoting its candidates.
+        if (e instanceof Error && e.name == 'Refused') {
+          throw new Refused(`give more of the app eid for ${name}`)
+        }
+        throw e
+      })
+      return row ? appOf(row) : null
+    },
+    findApp: async (space: Space, name: string, retained = false) => {
+      let current = await self.app(space, name) ?? await self.appId(name, space)
+      if (current || !retained) return current
       let trash = (await self.apps(space)).filter((app) =>
         app.trashed && app.slug == name
       )
       return trash.length == 1 ? trash[0] : null
     },
+    binned: (space: Space, name: string) => self.findApp(space, name, true),
     claimApp: async (
       space: Space,
       slug: string,

@@ -30,6 +30,14 @@ export class Interrupted extends Error {
   }
 }
 
+/** Say a refusal once when its message already starts with its code. */
+export let refusalText = (code: string, message: string): string => {
+  let first = /^\w+/.exec(message)?.[0]
+  return first && first.toLowerCase() == code.toLowerCase()
+    ? message
+    : [code, message].filter(Boolean).join(': ')
+}
+
 let codes: Record<string, number> = {
   access: 403,
   arguments: 400,

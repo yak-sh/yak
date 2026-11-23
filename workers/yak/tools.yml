@@ -810,9 +810,10 @@ app_restore:
     Restore an app from trash with all files, versions and saved data.
     Its old slug is used if free; otherwise it gets a free numbered slug and
     the answer names the new address. Pass slug to choose another free name.
-    A platform admin may restore any app. Pass the deleted app eid from
-    app_delete or app_list and its space; its old slug also works while no
-    live app owns it. Trash has no automatic expiry.
+    Find the deleted app in app_list's Trash section. Platform admins can
+    also query .app .trashed ?doc ?former in yak/platform and restore any app.
+    Pass the app eid or a short hex id. Its old slug also works while no live
+    app owns it. Trash has no automatic expiry.
     Documentation: https://yaks.app/docs/errors.
 app_erase:
   title: Ask to erase an app from the trash

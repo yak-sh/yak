@@ -1,11 +1,17 @@
 import { cleanup, equal, ok, test, throws } from '@yaks/testing'
+import { short } from '@yaks/id'
 import { accepted, connector, fresh, seed, signIn, unique } from './probe.ts'
 
 let k = await fresh()
 cleanup(() => k.stop())
 let space = unique('recovery')
-let them = await seed(k, [{ slug: space, apps: ['notes'] }])
+let other = unique('recovery')
+let them = await seed(k, [
+  { slug: other, apps: ['shelf'] },
+  { slug: space, apps: ['notes'] },
+])
 let owner = connector(k, them.cookie)
+let trash = them.eids[`${space}/notes`]
 let guest = await signIn(k)
 await owner.tool('member_add', { space, email: guest.email, role: 'editor' })
 await accepted(k, guest.email, guest.cookie)
@@ -16,11 +22,6 @@ await owner.tool('graph_apply', {
   bundles: [{ entity: { eid: '$row' }, doc: { title: 'Saved' } }],
 })
 await owner.tool('app_delete', { space, app: 'notes' })
-let trash = await owner.narrow(
-  'app_list',
-  { space },
-  '.result[0].output.value.spaces[0].trash[0].eid',
-) as string
 
 test('an owner inspects a trashed store by its slug or listed eid without restoring it', async () => {
   for (let app of ['notes', trash]) {
@@ -68,6 +69,11 @@ for (let q of ['.app&.tombstone', '.app.trashed']) {
   test(`a directory query of ${q} teaches a query that lists the trashed app`, async () => {
     let no = await admin.tool('graph_query', { app: 'yak/platform', q })
       .then(() => '', (e: Error) => e.message)
+    if (q == '.app.trashed') {
+      ok(no.startsWith('unknown property: app.trashed'), no)
+      ok(no.includes('a component is no property of another'), no)
+      ok(no.includes('.app&.trashed for presence'), no)
+    }
     let suggestion = /send q: '([^']+)'/.exec(no)?.[1]
     ok(suggestion, no)
     let rows = JSON.parse(
@@ -79,3 +85,31 @@ for (let q of ['.app&.tombstone', '.app.trashed']) {
     ok(rows.some((r: { entity: { eid: string } }) => r.entity.eid == trash))
   })
 }
+
+test('graph_query keeps the vocabulary’s guidance for uses', async () => {
+  let refused = (app: string, q: string) =>
+    admin.tool('graph_query', { app, q }).then(
+      () => '',
+      (e: Error) => e.message,
+    )
+  let unknown = await refused(`${other}/shelf`, '.uses')
+  ok(unknown.startsWith('unknown prop: .uses'), unknown)
+  ok(unknown.includes('vocab.json'), unknown)
+  let property = await refused('yak/platform', '.uses.connection')
+  ok(property.includes('a component is no property of another'), property)
+  ok(property.includes('.uses&.connection for presence'), property)
+})
+
+test('app tools share short ids for live and trashed apps', async () => {
+  let app = short(them.eids[`${other}/shelf`])
+  let bare = app.slice(1)
+  await owner.tool('app_files', { app, op: 'list' })
+  await throws(
+    () => owner.tool('app_delete', { space, app: bare }),
+    `no app ${bare} in ${space}`,
+  )
+  let deleted = await owner.tool('app_delete', { space: other, app: bare })
+  ok(deleted.includes(them.eids[`${other}/shelf`]), deleted)
+  let restored = await owner.tool('app_restore', { app: bare })
+  ok(restored.includes(`${other}/shelf is back`), restored)
+})

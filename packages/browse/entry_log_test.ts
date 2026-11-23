@@ -114,6 +114,14 @@ test('what an entry is decides its row', () => {
     }),
     { kind: 'error', text: 'is_error: not permitted' },
   )
+  assertEquals(
+    shown({
+      refusal: { code: 'Unknown' },
+      result: { call: 'c' },
+      content: { body: 'unknown prop: .uses' },
+    }),
+    { kind: 'error', text: 'unknown prop: .uses' },
+  )
   assertEquals(shown({ exception: exceptionOf(new Error('boom')) }), {
     kind: 'error',
     text: 'boom',

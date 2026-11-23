@@ -58,9 +58,9 @@ export let queryRefusal = (error: unknown, at?: string): string | undefined => {
   let trashed = /unknown prop(?:erty)?: \.?app\.trashed\b/.test(error.message)
   if (!tombstone && !trashed) return
   if (at == 'yak/platform' || trashed) {
-    return 'Apps in the trash carry trashed{at, by}, a separate component. ' +
-      "In yak/platform send q: '.app .trashed ?doc ?former' " +
-      '(app.trashed is not a property, and .tombstone is not app trash). ' +
+    return (trashed ? `${error.message}. ` : '') +
+      'Apps in the trash carry trashed{at, by}, a separate component. ' +
+      "In yak/platform send q: '.app .trashed ?doc ?former'. " +
       "For your own spaces, app_list(space: '<space slug>') lists the " +
       'trash with ids for app_restore.'
   }

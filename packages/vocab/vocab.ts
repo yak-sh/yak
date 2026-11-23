@@ -833,8 +833,12 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
   })
   // A component named as a property (`person.email`) is worn beside it.
   let worn = through.length ? [] : props.flatMap((p) => {
+    if (!v.comp(p)) return []
     let f = first(p)
-    return f ? [`.${comp}&.${p}.${f}=…`] : []
+    let presence = `.${comp}&.${p}`
+    return [
+      f ? `${presence}.${f}=… or ${presence} for presence` : presence,
+    ]
   })
   let kind = v.kind(comp)
   let companions = kind?.is.includes(comp)

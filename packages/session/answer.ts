@@ -8,6 +8,7 @@
 // the helper found goes back where they came from, not to the helper.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { refusalText } from '@yaks/tools/errors'
 import { kindOf, LIMIT, ordered, textOf } from './state.ts'
 import { transcriptBack } from './window.ts'
 
@@ -234,7 +235,7 @@ export let replyOf = (
   let broke = couldnt(`something in ${host} failed while working on it`)
   let code = String(comp(end, 'refusal')?.code)
   let fault = kind == 'refusal'
-    ? `${code}: ${text}`
+    ? refusalText(code, text)
     : String(comp(end, 'failed')?.reason ?? '') || text ||
       'ended without an answer'
   let declined = kind == 'refusal' && !!REFUSED[code]
