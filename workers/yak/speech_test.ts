@@ -426,23 +426,30 @@ test('an app speaks, lists and makes ElevenLabs voices with the key of the conne
   equal(budget(await space()).spent, 0)
 })
 
-test("without a connection, ElevenLabs speaks with the platform's key, charged to the space, and makes no voices", async () => {
+test('without a connection the app uses, ElevenLabs is refused, and the platform’s providers make no voices', async () => {
   unread()
   left = 199.5
   voices = []
-  let { space, ask } = await fixture(1, { ELEVENLABS_API_KEY: 'our-key' })
-  await ask(
-    '/speech/speak',
-    '{"text":"Hello choir","voice":"JBFqnCBsd6RMkjVDRZzb"}',
-    'text/json',
-  )
-  equal(voices, ['JBFqnCBsd6RMkjVDRZzb our-key'])
-  // 11 characters at $0.08 a thousand.
-  equal(budget(await space()).spent.toFixed(6), '0.000880')
+  let { ask } = await fixture()
   equal(
     await error(
-      await ask('/speech/design', '{"description":"x"}', 'application/json'),
+      await ask(
+        '/speech/speak',
+        '{"text":"Hi","voice":"JBFqnCBsd6RMkjVDRZzb","provider":"elevenlabs"}',
+        'text/json',
+      ),
+    ),
+    [400, 'bad_request'],
+  )
+  equal(
+    await error(
+      await ask(
+        '/speech/design?provider=deepgram',
+        '{"description":"x"}',
+        'application/json',
+      ),
     ),
     [403, 'speech_own'],
   )
+  equal(voices, [])
 })

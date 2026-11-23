@@ -10,12 +10,12 @@
 // balance at the start less what the pilot may spend. OpenAI's says none; its
 // project holds it to $10 a month instead.
 //
-// A provider in OWN is also spoken through with a space's own key: the
+// A provider in OWN is spoken through with a space's own key instead: the
 // connection through the integration of the same name (@yaks/connections'
-// `elevenlabs`), whose account pays, so nothing is charged here. Designing,
-// keeping and cloning voices go through such a key only: their price is not
-// said before they are made, and a voice made is kept on the account that
-// made it, which is never the platform's.
+// `elevenlabs`), whose account pays, so nothing is charged here. ElevenLabs
+// is reached only so: yaks.app holds no key of its own for it. Designing,
+// keeping and cloning voices go through such a key only, and a voice made is
+// kept on the account that made it.
 import type { Scheme } from '@yaks/hook'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
@@ -58,11 +58,10 @@ import { modelAccess } from './models.ts'
 export let SECRETS = new Map<Provider, keyof Env>([
   [DEEPGRAM, 'DEEPGRAM_API_KEY'],
   [OPENAI, 'OPENAI_VOICE_KEY'],
-  [ELEVENLABS, 'ELEVENLABS_API_KEY'],
 ])
 
-/** The providers a space may speak through with a key of its own, by the
- * name of the integration its connection is through. */
+/** The providers a space speaks through with a key of its own, by the name
+ * of the integration its connection is through. */
 export let OWN = new Map<string, Provider>([[ELEVENLABS.name, ELEVENLABS]])
 
 /** The providers whose own line carries calls sent to them over SIP
@@ -419,8 +418,8 @@ export let ownKey = async (
 let OWN_ONLY =
   'Designing, keeping and cloning voices needs your own ElevenLabs account: connect it at your space’s connections, and the voices are kept there.'
 
-/** `on`, where it is a space's own key: refused otherwise, since making a
- * voice is priced by nobody before it is made, and kept on the account. */
+/** `on`, where it is a space's own key: refused otherwise, since a voice
+ * made is kept on the account that made it. */
 export let making = (on: Voicing | null): Voicing => {
   if (!on?.own) throw new ModelError('speech_own', OWN_ONLY)
   return on
@@ -710,11 +709,10 @@ let MAX_AUDIO = 25 * 1024 * 1024
  *   clones one from recordings posted as a form (`name`, `description`?,
  *   `files`), answering `{"voice"}`, its id.
  *
- * A provider is the platform's (Deepgram) unless `provider` names another;
- * design and voice are ElevenLabs'. A provider in OWN is asked with the key
- * of the connection through it that the app uses, charged to that account,
- * else with the platform's, charged to the space; design and voice take the
- * app's own key only.
+ * A provider is the platform's (Deepgram), charged to the space, unless
+ * `provider` names another; design and voice are ElevenLabs'. A provider in
+ * OWN is asked with the key of the connection through it that the app uses,
+ * charged to that account.
  */
 export let speechDoor: Answer = async (asked) => {
   let { env, req, path, space, app, json } = asked

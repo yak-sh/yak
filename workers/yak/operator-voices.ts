@@ -1,15 +1,13 @@
 // The Operator's voices: ElevenLabs (@yaks/speech's `ELEVENLABS`) speaking a
 // line in any voice the account has, listing those voices, and designing or
 // cloning new ones, for voice auditions and voiced lines. It asks with the
-// person's own ElevenLabs connection (speech.ts `ownKey`), whose account pays,
-// else with the platform's key, charged to the space's budget (`speaking`);
-// designing and adding voices take their own connection only (`making`).
+// person's own ElevenLabs connection (speech.ts `ownKey`), or their space's
+// when they own it, whose account pays: yaks.app holds no ElevenLabs key.
 //
 // What it makes is kept as Operator files in the space's files
 // (operator-channels.ts `keepFile`) and attached beside the call that made
 // them (`madeFiles`), as an image made is (operator-images.ts): shown to the
 // person, listed among their files, and put in an app by library_add.
-import { ModelError } from '@yaks/model'
 import {
   clone,
   design,
@@ -25,7 +23,7 @@ import { attachmentBytes } from './attachments.ts'
 import { keepFile, madeFiles } from './operator-channels.ts'
 import { attachmentId, type File } from './operator-files.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { making, ownKey, speaking, voicing } from './speech.ts'
+import { ownKey, speaking, voicing } from './speech.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 // Spoken at once: about two minutes of speech.
@@ -41,7 +39,7 @@ export let voiceTools = (
   space: Space,
   store: Pick<OperatorStore, 'g'>,
 ): Tool[] => {
-  // ElevenLabs with the person's own key, else the platform's, or refused.
+  // ElevenLabs with the person's own key, or refused.
   let on = async () => {
     let got = voicing(
       env,
@@ -51,13 +49,12 @@ export let voiceTools = (
     if (!got) throw refuse('connection', CONNECT)
     return got
   }
-  // What ElevenLabs or the space's budget refuses that the Operator can act
-  // on, said back to it; anything else is a fault.
+  // What ElevenLabs refuses that the Operator can act on, said back to it;
+  // anything else is a fault.
   let told = async <T>(work: () => Promise<T>) => {
     try {
       return await work()
     } catch (e) {
-      if (e instanceof ModelError) throw refuse(e.code, e.message)
       if (e instanceof SpeechError && !e.retry) {
         throw refuse('elevenlabs', e.message)
       }
@@ -73,7 +70,7 @@ export let voiceTools = (
       title: 'List voices',
       step: { doing: 'Listing voices…', done: 'Listed voices' },
       description:
-        'List the ElevenLabs voices you can speak a line in with speech_new: the premade ones, and those the person designed, cloned or added on their own ElevenLabs account. Each is its id, name, how it sounds, and a sample to play. Without their own account connected, only the premade ones, charged to the space.',
+        'List the ElevenLabs voices you can speak a line in with speech_new: the premade ones, and those the person designed, cloned or added on their own ElevenLabs account. Each is its id, name, how it sounds, and a sample to play. It needs their ElevenLabs account connected.',
       parameters: {
         type: 'object',
         properties: {
@@ -101,7 +98,7 @@ export let voiceTools = (
       title: 'Voice a line',
       step: { doing: 'Voicing a line…', done: 'Voiced a line' },
       description:
-        "Speak a line in an ElevenLabs voice (voice_list gives their ids) as an MP3, kept in the space's files and shown to the person beside this. Use it for voice auditions, narration and characters' lines: one call a line. With the person's own ElevenLabs account it is charged there; else to the space's budget. library_add with the attachment id it gives puts the audio in an app.",
+        "Speak a line in an ElevenLabs voice (voice_list gives their ids) as an MP3, kept in the space's files and shown to the person beside this. Use it for voice auditions, narration and characters' lines: one call a line. It is charged to their own ElevenLabs account. library_add with the attachment id it gives puts the audio in an app.",
       parameters: {
         type: 'object',
         properties: {
@@ -131,10 +128,10 @@ export let voiceTools = (
           ? args.voice
           : undefined
         let file = await told(async () => {
-          let { key, own } = await on()
+          let { key } = await on()
           let said = await speaking(env, space, text, {
             provider: ELEVENLABS,
-            ...own ? { key } : {},
+            key,
             voice,
             ...typeof args.speed == 'number' ? { speed: args.speed } : {},
           })
@@ -158,7 +155,7 @@ export let voiceTools = (
       title: 'Design a voice',
       step: { doing: 'Designing voices…', done: 'Designed voices' },
       description:
-        "Design new ElevenLabs voices from a description of how one sounds (age, accent, timbre, character, delivery). Answers a few designs, each a sample kept in the space's files and shown to the person, and the design id voice_add keeps it by. Needs the person's own ElevenLabs account, where it is charged.",
+        "Design new ElevenLabs voices from a description of how one sounds (age, accent, timbre, character, delivery). Answers a few designs, each a sample kept in the space's files and shown to the person, and the design id voice_add keeps it by. It is charged to their own ElevenLabs account.",
       parameters: {
         type: 'object',
         properties: {
@@ -183,7 +180,7 @@ export let voiceTools = (
         let files: File[] = []
         let ids = await told(async () => {
           let made = await design({
-            ...making(await on()),
+            ...await on(),
             description,
             ...typeof args.text == 'string' && args.text
               ? { text: args.text }
@@ -247,7 +244,7 @@ export let voiceTools = (
           )
         }
         let id = await told(async () => {
-          let mine = making(await on())
+          let mine = await on()
           if (typeof args.design == 'string' && args.design) {
             return await keep({
               ...mine,
