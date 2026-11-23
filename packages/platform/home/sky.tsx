@@ -201,6 +201,23 @@ let HillPaints = () => (
   </>
 )
 
+let Motes = () => (
+  <div class='Sky_Day Sky_Motes'>
+    {[[2, -18], [15, 8], [32, -27], [51, 6], [62, -13], [83, 14], [96, -8]]
+      .map(([x, y], i) => (
+        <span
+          class='Sky_Mote'
+          style={{
+            '--x-at': `${x}%`,
+            '--y-at': y,
+            '--time': `${11 + i % 4 * 2}s`,
+            '--lead': `-${n1(i * 2.6)}s`,
+          }}
+        />
+      ))}
+  </div>
+)
+
 // the night's stars, a few of them blinking, and its fireflies along the line
 let night = () => {
   let r = rand(404)
@@ -266,6 +283,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
       data-phases={PHASES.map(moon).join('|')}
     >
       <div class='Sky_Air' data-depth={DEPTH.dusk} />
+      {landscape && <div class='Sky_SunSlot' data-sun-at='' />}
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
           {landscape && <HillPaints />}
@@ -342,6 +360,7 @@ export let Sky = ({ landscape = false }: { landscape?: boolean } = {}) => {
           <path class='Sky_Line' d={line(G)} />
         </svg>
       </div>
+      {landscape && <Motes />}
     </div>
   )
 }

@@ -266,7 +266,6 @@ export let Story = (
 ) => (
   <div class='Home_Story' data-story=''>
     <div class='Home_SkySpace' aria-hidden='true'>
-      <span class='Home_SunSlot' data-sun-at='' />
       <span class='Home_MoonSlot' data-moon-at='' />
     </div>
     <div class='Home_Desk'>

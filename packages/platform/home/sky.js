@@ -78,6 +78,7 @@
     set('--u', u)
     let x = r.left + scrollX + r.width * .52
     set('--x', x)
+    set('--feet', feet)
     for (let [slot, group, disk] of lights) {
       if (!slot || !group || !disk) continue
       let [px, py] = center(slot)
@@ -90,7 +91,6 @@
         })`,
       )
     }
-    set('--feet', feet)
     set('--rule', n.top + scrollY + 1)
     set('--rule2', n.bottom + scrollY - .5)
     scroll()

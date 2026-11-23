@@ -29,18 +29,10 @@
   height: 3.6rem;
 }
 
-.Home_MoonSlot,
-.Home_SunSlot {
+.Home_MoonSlot {
   position: absolute;
   inset-block: 0;
-}
-
-.Home_MoonSlot {
   inset-inline-end: 2.1rem;
-}
-
-.Home_SunSlot {
-  inset-inline-start: 54%;
 }
 
 .Home_Desk {
@@ -341,8 +333,63 @@
   overflow: visible;
 }
 
-.Story_Page .Sky_Grass {
-  mask-image: linear-gradient(#000 48%, transparent 100%);
+/* Leave room for the turf to reach the page color beyond the hero. */
+.Story_Page .Sky {
+  height: max(var(--rule, 0px), calc(var(--feet, 0px) + 240 * var(--u, 0px)));
+}
+
+.Sky_SunSlot {
+  left: 58.5%;
+  top: calc(var(--feet) - clamp(9.5rem, 14.5vw, 14rem));
+}
+
+@media (width < 64rem) {
+  .Sky_SunSlot {
+    left: 90%;
+    top: calc(var(--feet) - 4.9rem);
+  }
+}
+
+.Sky_Motes {
+  inset-inline: 0;
+  top: var(--feet);
+}
+
+.Sky_Mote {
+  position: absolute;
+  left: var(--x-at);
+  top: calc(var(--y-at) * var(--u));
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, #fff5c9 0 12%, #f9e8a9 26%, transparent
+    70%);
+  opacity: .65;
+}
+
+.Sky_Mote:nth-child(even) {
+  --drift: -16px;
+  width: 6px;
+  height: 6px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .Sky_Mote {
+    animation: Sky-mote var(--time) var(--lead) ease-in-out infinite alternate;
+  }
+}
+
+@keyframes Sky-mote {
+  0% {
+    opacity: .15;
+  }
+  42% {
+    opacity: .85;
+    transform: translate(calc(var(--drift, 16px) * .45), -7px);
+  }
+  100% {
+    opacity: .3;
+    transform: translate(var(--drift, 16px), 2px);
+  }
 }
 
 .Story_Page .Home_Demo {
