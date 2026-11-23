@@ -31,6 +31,7 @@ import { type Tool, topOf } from '@yaks/session'
 import {
   apiRead,
   basicsOf,
+  linked as linkedPerson,
   linkedAll,
   message,
   PLATFORMS,
@@ -53,7 +54,34 @@ import { inputOf } from '@yaks/session/intake'
 export let LEAD = 30
 
 type Store = Pick<OperatorStore, 'g'>
-type Where = { via: string; connection: string; room: string; server?: string }
+type Where = { via: string; connection?: string; room: string; server?: string }
+
+// A DM may still be in the transcript after the person unlinks Discord.
+// Reading or sending in the live room needs the current link to its author.
+let directAccess = async (
+  env: Env,
+  { g }: Store,
+  at: Where & { message: string },
+  person?: string,
+) => {
+  if (at.connection) return
+  let platform = PLATFORMS.get(at.via)
+  let [message] = await g.get([messageEid(at.via, at.message)], [
+    'chat_message',
+  ])
+  let author = comp(message, 'chat_message').author
+  let [account] = author ? await g.get([String(author)], ['chat_account']) : []
+  let id = comp(account, 'chat_account').id
+  if (
+    !person || !platform || !id ||
+    await linkedPerson(env, platform, String(id)) != person
+  ) {
+    throw refuse(
+      'access',
+      'Link your chat account again to use this direct conversation.',
+    )
+  }
+}
 
 /** Who wrote each of a room's messages on `via`, by their account's id
  * there, as the Operator reads a speaker (operator-channels.ts
@@ -232,7 +260,7 @@ let authors = (said: Said[]) => [...new Set(said.map((s) => s.author.id))]
 export let leading = async (
   env: Env,
   store: Store,
-  at: Heard,
+  at: Heard & { connection: string },
   said: Said,
 ): Promise<Lead | undefined> => {
   try {
@@ -276,6 +304,8 @@ let keptAs = async ({ g }: Store, via: string, room: string, id: string) => {
   )
   if (!b) return
   let m = comp(b, 'chat_message')
+  let deliveredTo = comp(b, 'deliver').to
+  if ((m.room ?? deliveredTo) != roomEid(via, room)) return
   let [author] = m.author
     ? await g.get([String(m.author)], ['chat_account'])
     : []
@@ -354,6 +384,7 @@ export let roomsOf = async ({ g }: Store, at: string) => {
       entries.filter((b) => PLATFORMS.has(String(comp(b, 'channel').name)))
         .map((b) => String(comp(b, 'intake').item)),
     ),
+    true,
   )
 }
 
@@ -372,20 +403,24 @@ export let spaceRooms = async ({ g }: Store) =>
   roomsIn(
     g,
     await g.read(
-      line`.chat_message.room&.chat_message.connection&.order=-chat_message.at&.limit=200&.fields=chat_message.via,chat_message.room,chat_message.connection,chat_message.message_id`,
+      line`.chat_message.room.chat_room.server&.chat_message.connection&.order=-chat_message.at&.limit=200&.fields=chat_message.via,chat_message.room,chat_message.connection,chat_message.message_id`,
     ),
   )
 
 // The rooms `items`, chat messages newest first, were said in, each once with
 // its newest message.
-let roomsIn = async (g: Graph, items: (Bundle | null | undefined)[]) => {
+let roomsIn = async (
+  g: Graph,
+  items: (Bundle | null | undefined)[],
+  direct = false,
+) => {
   let rooms = new Map<string, Where & { message: string }>()
   for (let b of items) {
     let m = comp(b ?? undefined, 'chat_message')
-    if (!m.room || !m.connection || rooms.has(String(m.room))) continue
+    if (!m.room || rooms.has(String(m.room))) continue
     rooms.set(String(m.room), {
       via: String(m.via),
-      connection: String(m.connection),
+      ...m.connection ? { connection: String(m.connection) } : {},
       room: String(m.room),
       message: String(m.message_id),
     })
@@ -394,7 +429,8 @@ let roomsIn = async (g: Graph, items: (Bundle | null | undefined)[]) => {
   let held = await g.get([...rooms.keys()], ['chat_room'])
   return [...rooms.values()].flatMap((r, i) => {
     let c = comp(held[i] ?? undefined, 'chat_room')
-    return c.id
+    return c.id &&
+        (c.server ? r.connection : direct && (r.connection || c.platform_bot))
       ? [{
         ...r,
         room: String(c.id),
@@ -633,6 +669,7 @@ export let chatRead = (
       (o) => o.person,
       () => undefined,
     )
+    await directAccess(env, store, at, person)
     if (args.message) {
       return {
         text: await one(env, store, at, String(args.message), speakers, person),
@@ -672,7 +709,10 @@ export let chatRows = (
 ): Bundle[] => {
   let heard = item.chat_message as Comp | undefined
   let platform = PLATFORMS.get(via)
-  if (!platform || !heard?.room || !heard.connection) return []
+  if (
+    !platform || !heard?.room ||
+    (!heard.connection && heard.addressed != 'direct')
+  ) return []
   let named = platform.mentions
     ? mentioned(reply.text, people, platform.mentions)
     : reply.text
@@ -682,7 +722,7 @@ export let chatRows = (
     entity: { eid: i ? derivedEid(`${reply.eid}|${i}`) : reply.eid },
     chat_message: {
       via,
-      connection: heard.connection,
+      ...heard.connection ? { connection: heard.connection } : {},
       ...heard.message_id && !i ? { reply_to: heard.message_id } : {},
       ...reply.controls?.length && i == all.length - 1
         ? { controls: reply.controls }
@@ -783,6 +823,9 @@ export let chatSend = (env: Env, store: Store, space = false): Tool => ({
       args.room,
       space ? 'in this space' : 'in this conversation',
     )
+    if (!at.connection) {
+      await directAccess(env, store, at, (await whoseOf(store, context)).person)
+    }
     let message = args.message ? String(args.message) : undefined
     // A direct room is one person's already.
     let to = args.to && at.server ? String(args.to) : undefined
@@ -795,7 +838,9 @@ export let chatSend = (env: Env, store: Store, space = false): Tool => ({
           entity: { eid },
           chat_message: {
             room: at.eid,
-            connection: at.connection,
+            ...at.connection
+              ? { connection: at.connection }
+              : { addressed: 'direct' },
             ...message ? { message_id: message } : {},
           },
         },
@@ -879,6 +924,9 @@ export let roomApi = async (
   }
   let rooms = session ? await roomsOf(store, session) : []
   let at = roomAt(rooms, args.room)
+  if (!at.connection || !at.server) {
+    throw refuse('arguments', 'Use chat_read to read a direct message.')
+  }
   let { status, body } = await apiRead(env, at.via, {
     connection: at.connection,
     rooms: rooms.filter((r) => r.connection == at.connection).map((r) =>
@@ -908,7 +956,7 @@ export let roomApi = async (
  */
 export let basics = async (
   env: Env,
-  at: Heard,
+  at: Heard & { connection: string },
   said: Said,
   people: string[],
 ): Promise<Lead | undefined> => {
@@ -956,7 +1004,9 @@ export let chatRoomSet = (store: Store): Tool => ({
   },
   run: async (args, context) => {
     let at = roomAt(
-      context?.session ? await roomsOf(store, context.session) : [],
+      context?.session
+        ? (await roomsOf(store, context.session)).filter((r) => r.server)
+        : [],
       args.room,
     )
     let closed = args.private !== false

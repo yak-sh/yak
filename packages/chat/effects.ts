@@ -53,10 +53,10 @@ async (event, tx, write, attempt) => {
   let bounce = (reason: string) =>
     settle({ bounced: { at: now(), reason: reason.slice(0, 500) } })
   let to = String(comp(message, 'deliver')?.to ?? '')
-  let room = comp(await get(tx, to), 'chat_room')?.id
-  let connection = said.connection ? String(said.connection) : ''
-  if (!room || !connection) {
-    let why = !room ? `no chat room ${to}` : 'no connection to post it with'
+  let room = comp(await get(tx, to), 'chat_room')
+  let connection = said.connection ? String(said.connection) : undefined
+  if (!room?.id || (!connection && (!room.platform_bot || room.server))) {
+    let why = !room?.id ? `no chat room ${to}` : 'no connection to post it with'
     await bounce(why)
     throw new Error(`chat message ${entity.eid}: ${why}`)
   }
@@ -86,8 +86,8 @@ async (event, tx, write, attempt) => {
   let posted
   try {
     posted = await chatter!.post({
-      connection,
-      room: String(room),
+      ...connection ? { connection } : {},
+      room: String(room.id),
       ...alone ? notice(entity.eid, String(alone)) : {
         text: String(comp(message, 'doc')?.body ?? ''),
         ...controls?.length ? { controls } : {},

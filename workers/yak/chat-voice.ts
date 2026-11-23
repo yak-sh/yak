@@ -98,7 +98,7 @@ export let voiceJoin = (env: Env, store: Store, space: Space): Tool => ({
       args.room,
     )
     let platform = PLATFORMS.get(at.via)
-    if (!platform?.voice || !at.server) {
+    if (!platform?.voice || !at.server || !at.connection) {
       throw refuse('arguments', `There is no voice room to join from there.`)
     }
     if (args.leave) {

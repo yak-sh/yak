@@ -1010,6 +1010,28 @@ export let referralDoc: VocabDoc = {
       description:
         "give an invitee's inviter a free month of the Plus plan when the invitee builds their first app",
     },
+    chat_dm: {
+      component: true,
+      type: 'object',
+      journal: false,
+      expire: '.chat_dm.until<=now',
+      description:
+        'A direct message to the platform bot, kept until its sender’s Operator takes it. The message ID prevents a Gateway replay from taking it twice.',
+      properties: {
+        via: owned(text),
+        account: owned(text),
+        said: owned({ type: 'object', additionalProperties: true }),
+        person: owned(ref('keep')),
+        space: owned(ref('keep')),
+        until: owned(time),
+      },
+    },
+    chat_dm_arrived: {
+      effect: true,
+      created: ['chat_dm'],
+      description:
+        'carry a direct message to the sender’s Operator or offer to link their account',
+    },
     // A person's own chat account linked: what its guest raised before is
     // re-read as theirs in each space they sit in (chat.ts `linkedNow`).
     chat_linked: {

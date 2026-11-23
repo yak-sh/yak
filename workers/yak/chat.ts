@@ -26,14 +26,19 @@
 // (`appChatters`).
 
 import type { Bundle, Comp } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import { line } from '@yaks/query'
 import {
   type Answer,
   type Basics,
+  carryDirect as carry,
   confined,
+  type DirectMessage,
   kept,
   type Media,
+  messageEid,
   type Page,
   type Platform,
   platforms,
@@ -56,7 +61,8 @@ import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { chatRows } from './connections.ts'
 import type { Integration } from '@yaks/connections'
-import { integrationLogo } from '@yaks/platform/routes'
+import { accountLink, integrationLogo, managePath } from '@yaks/platform/routes'
+import { url as hostUrl } from '@yaks/platform/host'
 import { CallError } from '@yaks/tools/errors'
 
 // What answering and hearing need, loaded when they first run: the
@@ -108,9 +114,11 @@ export let listening = (chats: Chats, bot: Bot) =>
 
 // The credential of the bot that speaks on `p` for `connection`
 // (@yaks/connections `botOf`).
-let speaker = async (env: Env, p: Platform, connection: string) => {
+let speaker = async (env: Env, p: Platform, connection?: string) => {
   let { botOf, ctxOf } = await need()
-  let token = await botOf(ctxOf(env), connection)
+  let token = connection
+    ? await botOf(ctxOf(env), connection)
+    : await platformBot(env, p.name)
   if (!token) {
     throw new Error(
       `No ${p.title} bot speaks for this connection now: connect ${p.title} again.`,
@@ -180,37 +188,32 @@ export let appChatters = (
 }
 
 /**
- * The messages of `at.room` said before `page.before`, oldest first, read by
- * the bot that speaks for `at.connection` ({@link Platform.recent}), each
- * naming the room's server, and only in a server that connection serves
- * ({@link serves}, @yaks/chat `within`): what the Operator reads of a room
- * it was addressed in. `at.server` is where the room is as its bot heard it;
- * none asks the platform. A platform that keeps no messages reads none.
+ * The messages of `at.room` said before `page.before`, oldest first. The
+ * Operator can read a room in a server its connection serves, or its own
+ * conversation's DMs through the platform bot.
  */
 export let recent = async (
   env: Env,
   via: string,
-  at: { connection: string; room: string; server?: string },
+  at: { connection?: string; room: string; server?: string },
   page: Page,
 ) => {
   let p = PLATFORMS.get(via)
   if (!p?.recent) return []
-  let { token, server } = await heldBy(env, p, at)
+  let { token, server } = await roomSpeaker(env, p, at)
   return (await p.recent(token, at.room, page)).map((s) => ({ ...s, server }))
 }
 
-/** The message `id` of `at.room`, read by the bot of `at.connection` only
- * in a server it serves, as {@link recent} reads; none where the platform
- * reads no message alone. */
+/** The message `id` of `at.room`, as {@link recent} reads it. */
 export let message = async (
   env: Env,
   via: string,
-  at: { connection: string; room: string; server?: string },
+  at: { connection?: string; room: string; server?: string },
   id: string,
 ): Promise<Said | undefined> => {
   let p = PLATFORMS.get(via)
   if (!p?.message) return
-  let { token, server } = await heldBy(env, p, at)
+  let { token, server } = await roomSpeaker(env, p, at)
   return { ...await p.message(token, at.room, id), server }
 }
 
@@ -326,6 +329,17 @@ export let apiRead = async (
     headers: { authorization: `${api.scheme} ${token}` },
   })
   return { status: res.status, body: await res.text() }
+}
+
+// The bot speaking in a room the Operator was addressed in.
+let roomSpeaker = async (
+  env: Env,
+  p: Platform,
+  at: { connection?: string; room: string; server?: string },
+) => {
+  if (at.connection) return heldBy(env, p, { ...at, connection: at.connection })
+  if (at.server) throw new Error('A server room needs its chat connection')
+  return { token: await speaker(env, p), server: undefined }
 }
 
 // The bot token of `at.connection` and the server of `at.room`, refused
@@ -587,10 +601,6 @@ let through = async (env: Env, via: string, where: string) => {
 // Those through which a space added yaks.app's own bot to `server`.
 let serving = (env: Env, via: string, server: string) =>
   through(env, via, line`.${CONNECTION}.account=${server}`)
-
-// Those a space holds.
-let held = (env: Env, via: string, space: string) =>
-  through(env, via, line`.${CONNECTION}.owner=${space}`)
 
 /** The person here whose `platform.user` account is `id`, if one linked it:
  * a connection they hold. The account is personal (@yaks/connections
@@ -958,6 +968,91 @@ let heard = async (env: Env, via: string, connection: string, room: string) => {
 export let guestId = (via: string, id: string) =>
   derivedEid(`chatted|${via}|${id}`)
 
+// The original DM is held in the directory until a space takes it. The same
+// gateway message, including an edit or a replay, opens at most one intake.
+let queueDirect = async (env: Env, p: Platform, said: Said) => {
+  let eid = messageEid(p.name, said.id)
+  let { KERNEL, meta } = await need()
+  await meta(env).apply([{
+    entity: { eid },
+    chat_dm: { via: p.name, account: said.author.id, said },
+    $was: { chat_dm: { via: null } },
+  }], KERNEL).catch((e) => {
+    if (!(e instanceof Stale && e.eid == eid)) throw e
+  })
+}
+
+/** Carry a DM to a linked sender's own conversation, or tell them how to
+ * link. The destination sticks across retries, and the Builder takes the
+ * message idempotently. The directory drops the words once they're taken. */
+export let carryDirect = async (env: Env, eid: string, replay = false) => {
+  let [row] = await read(env, line`.entity.eid=${eid}&.chat_dm&*`)
+  let dm = comp(row, 'chat_dm') as Partial<DirectMessage> & { via?: string }
+  let p = PLATFORMS.get(dm.via ?? '')
+  let { said } = dm
+  if (!said || !p?.user) return
+  let { directoryOf, KERNEL, meta } = await need()
+  let patch = (next: Comp, was?: Record<string, string | null>) =>
+    meta(env).apply([{
+      entity: { eid },
+      chat_dm: next,
+      ...was ? { $was: { chat_dm: was } } : {},
+    }], KERNEL)
+  let result = await carry({ ...dm, said }, {
+    person: await linked(env, p, said.author.id),
+    seats: directoryOf(env.STORE).seats,
+    reserve: async (person, space) => {
+      try {
+        await patch({ person, space: space.eid }, {
+          space: null,
+          said: token(said),
+        })
+        return true
+      } catch (error) {
+        if (error instanceof Stale && error.eid == eid) return false
+        throw error
+      }
+    },
+    forward: (person, space, said) =>
+      toOperator(env, space, person, { via: p.name, said, linked: true }),
+    explain: async (why) => {
+      if (replay && why == 'link') return
+      await p.send(await speaker(env, p), {
+        room: said.room,
+        reply_to: said.id,
+        text: dmAnswer(env, p, why),
+      })
+    },
+    done: async () => {
+      await patch({
+        said: null,
+        until: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      })
+    },
+  })
+  if (result == 'reread') await carryDirect(env, eid, replay)
+}
+
+let dmAnswer = (
+  env: Env,
+  p: Platform,
+  why: 'link' | 'empty' | 'usage' | 'access' | 'space',
+) =>
+  ({
+    link:
+      `Link your ${p.title} account to yaks.app to talk to your Operator. I’ll answer this message once you link.\n${
+        accountLink(hostUrl(env), p.user!).href
+      }`,
+    empty: 'Send me a written message and I’ll take it to your Operator.',
+    usage:
+      'Send \`!space <space-slug> <message>\` to talk to that space’s Operator.',
+    access:
+      'You don’t have access to that space. Check your spaces on yaks.app or send your message without \`!space\` to reach your default Operator.',
+    space: `Choose a space on yaks.app, then send your message again. ${
+      hostUrl(env, managePath('profile'))
+    }`,
+  })[why]
+
 /**
  * The chat account a person's connection `connection` links (`linked`): in
  * each space they sit in, what the guest it spoke as before raised is re-read
@@ -972,6 +1067,13 @@ export let linkedNow = async (env: Env, connection: string) => {
   )
   if (!platform || c.status != 'connected' || !c.owner || !c.account) return
   let person = String(c.owner)
+  let queued = await read(
+    env,
+    line`.chat_dm.via=${platform.name}&.chat_dm.account=${
+      String(c.account)
+    }&.chat_dm.said&.order=created.at`,
+  )
+  for (let b of queued) await carryDirect(env, b.entity.eid, true)
   let { directoryOf } = await need()
   let dir = directoryOf(env.STORE)
   let [seats, known] = await Promise.all([
@@ -1063,6 +1165,12 @@ export let arrived = async (
   bot: Bot = { via: platform.name },
 ) => {
   if (said.edited && !said.addressed) return
+  if (!bot.connection && !said.server) {
+    if (said.addressed == 'direct' && platform.user) {
+      await queueDirect(env, platform, said)
+    }
+    return
+  }
   let heard = bot.connection
     ? await read(
       env,
@@ -1074,7 +1182,7 @@ export let arrived = async (
   if (said.server) {
     await Promise.all(heard.map((c) => toApps(env, platform, said, c)))
   }
-  let { directoryOf, KERNEL } = await need()
+  let { directoryOf } = await need()
   let dir = directoryOf(env.STORE)
   let known: Promise<string | undefined> | undefined
   let author = () => known ??= linked(env, platform, said.author.id)
@@ -1089,13 +1197,6 @@ export let arrived = async (
     if (!room && !said.addressed) return
     connection = c.entity.eid
     space = await dir.at(String(comp(c, CONNECTION).owner))
-  } else if (said.addressed) {
-    let person = await author()
-    let { spaceFor } = await import('./operator-texts.ts')
-    space = person ? await spaceFor(env, person) : null
-    connection = space
-      ? (await held(env, platform.name, space.eid))[0]?.entity.eid
-      : undefined
   }
   if (!space || space.trashed || !connection) return
   let mine = await author()
@@ -1103,6 +1204,28 @@ export let arrived = async (
   let person = room
     ? await guestOf(env, platform.name, `room:${said.room}`)
     : writer
+  await toOperator(env, space, person, {
+    via: platform.name,
+    connection,
+    said,
+    ...room ? { writer } : {},
+    ...mine ? { linked: true } : {},
+  })
+}
+
+let toOperator = async (
+  env: Env,
+  space: Space,
+  person: string,
+  message: {
+    via: string
+    connection?: string
+    said: Said
+    writer?: string
+    linked?: boolean
+  },
+) => {
+  let { KERNEL } = await need()
   let { builderOf, SPACE } = await import('./build-door.ts')
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/chat', {
@@ -1111,23 +1234,14 @@ export let arrived = async (
         'content-type': 'application/json',
         ...KERNEL,
         'x-yak-person': person,
-        [SPACE]: space!.eid,
+        [SPACE]: space.eid,
       },
-      body: JSON.stringify({
-        via: platform.name,
-        connection,
-        said,
-        ...room ? { writer } : {},
-        // Whether the writer's account is linked to a person here, which
-        // the Operator reads beside their words (operator-channels.ts
-        // `proofOf`).
-        ...mine ? { linked: true } : {},
-      }),
+      body: JSON.stringify(message),
     })
   )
   if (!response.ok) {
     throw new Error(
-      `${platform.title} message intake failed: ${await response.text()}`,
+      `${message.via} message intake failed: ${await response.text()}`,
     )
   }
   await response.body?.cancel()

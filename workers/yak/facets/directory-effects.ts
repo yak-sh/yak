@@ -90,6 +90,10 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     // a reply nobody hears is the one thing a support thread is for.
     ...(at.env.BUILDER && at.env.WIRE
       ? {
+        chat_dm_arrived: async (event) => {
+          let { carryDirect } = await import('../chat.ts')
+          await carryDirect(at.env as Env, event.entity.eid)
+        },
         chat_linked: async (event) => {
           let { linkedNow } = await import('../chat.ts')
           await linkedNow(at.env as Env, event.entity.eid)

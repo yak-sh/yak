@@ -2601,7 +2601,7 @@ export let operating = (
     let chat = [
       ...rooms.length ? [chatRead(env, store, speakersOf(env, space))] : [],
       // An owner says which rooms are private (operator-route.ts).
-      ...rooms.length && acts && ctx.role == 'owner'
+      ...rooms.some((r) => r.server) && acts && ctx.role == 'owner'
         ? [chatRoomSet(store)]
         : [],
       ...voiced
@@ -2677,6 +2677,7 @@ export let operating = (
     let raised = answering?.channel == 'escalated'
       ? answering.raised
       : undefined
+    let room = rooms[0]
     let confirmed = (tools: Tool[]) =>
       asking
         ? deferred(confirming(
@@ -2693,7 +2694,9 @@ export let operating = (
               private: closed,
               ...raised ? { raised } : {},
               // A turn from a chat room asks there, privately.
-              ...PLATFORMS.has(channel) && rooms[0] ? { room: rooms[0] } : {},
+              ...PLATFORMS.has(channel) && room?.connection
+                ? { room: { ...room, connection: room.connection } }
+                : {},
             },
             (to, words) => textPerson(env, space, to, words),
             Date.now,

@@ -6,7 +6,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
-import { accountEid, roomEid, type Said } from '@yaks/chat'
+import { accountEid, messageEid, roomEid, type Said } from '@yaks/chat'
 import { registration, seeds } from '@yaks/connections'
 import { integrationLogo } from '@yaks/platform/routes'
 import { link } from '@yaks/edge'
@@ -15,7 +15,7 @@ import { type Line, line } from '@yaks/query'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './directory-rows-probe.ts'
-import { platform as hosted } from './testing.ts'
+import { ai, modelPage, platform as hosted } from './testing.ts'
 import { type App, appStore, directory, over } from './directory.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import {
@@ -37,6 +37,7 @@ import { chatCard } from './operator-page.ts'
 import { chatRows } from './connections.ts'
 import { chatRows as replyIn, peopleIn } from './operator-rooms.ts'
 import { operatorMemory } from './operator-testing.ts'
+import { builderOf, SPACE as SPACE_HEADER } from './build-door.ts'
 
 let OWNER = crypto.randomUUID()
 
@@ -284,6 +285,150 @@ let discordApi = (asked: string[]): typeof fetch => (input, init) => {
       : { id: room, guild_id: room == 'lobby' ? 'mill' : 'barn' },
   ))
 }
+
+test('platform DMs reach the chosen Operator and a message sent before linking is answered once linked', async () => {
+  let model = ai([
+    { text: 'Home here.' },
+    { text: 'Other here.' },
+    { text: 'Welcome.' },
+    {
+      calls: [{
+        name: 'chat_send',
+        arguments: { room: 'dm-ann', message: 'm1', text: 'From the web.' },
+      }],
+    },
+    { text: 'Replied in Discord.' },
+  ])
+  let p = hosted('a probe secret', {
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+    AI: model as never,
+    MODEL_FETCH: () => Promise.resolve(modelPage(0.15, 0.5)),
+  })
+  let at = meta(p.env)
+  let [person, stranger, home, other] = Array.from(
+    { length: 4 },
+    () => crypto.randomUUID(),
+  )
+  let linkAccount = (owner: string, account: string) => ({
+    entity: { eid: crypto.randomUUID() },
+    connection: {
+      integration: 'discord-account',
+      owner,
+      account,
+      status: 'connected',
+    },
+  })
+  await at.apply([
+    registration('discord', { id: 'app', secret: 's', bot: 'BOT' }),
+    { entity: { eid: person }, person: {} },
+    { entity: { eid: stranger }, person: {} },
+    { entity: { eid: home }, space: { slug: 'home', store: 'home' } },
+    { entity: { eid: other }, space: { slug: 'other', store: 'other' } },
+    {
+      entity: { eid: '$seat' },
+      member: { space: home, person, role: 'owner', own: true },
+    },
+    {
+      entity: { eid: '$other' },
+      member: { space: other, person, role: 'owner' },
+    },
+    {
+      entity: { eid: '$guest' },
+      member: { space: home, person: stranger, role: 'owner', own: true },
+    },
+    linkAccount(person, 'ann'),
+  ], KERNEL)
+  await p.settled()
+  let sent: { text: string; reply: string; token: string | null }[] = []
+  let typing: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    let url = new URL(String(input instanceof Request ? input.url : input))
+    if (url.host != 'discord.com') return was(input, init)
+    if (url.pathname.endsWith('/typing')) {
+      typing.push(url.pathname.split('/').at(-2)!)
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }
+    let data = JSON.parse(String(init?.body))
+    sent.push({
+      text: data.content,
+      reply: data.message_reference.message_id,
+      token: new Headers(init?.headers).get('authorization'),
+    })
+    return Promise.resolve(Response.json({ id: String(sent.length) }))
+  }
+  let dm = (id: string, account: string, text: string) =>
+    arrived(
+      p.env,
+      PLATFORMS.get('discord')!,
+      {
+        id,
+        room: `dm-${account}`,
+        author: { id: account, name: account },
+        text,
+        at: '2026-11-23T16:57:00Z',
+        addressed: 'direct',
+      },
+    )
+  try {
+    await dm('m1', 'ann', 'Hello home')
+    await p.settled()
+    await dm('m2', 'ann', '!space other Hello other')
+    await p.settled()
+    await dm('m3', 'guest', 'Hello after linking')
+    await p.settled()
+    assertEquals(model.asked.length, 2)
+    assertStringIncludes(
+      sent[2].text,
+      '/manage/account/profile?link=discord-account',
+    )
+    await at.apply([linkAccount(stranger, 'guest')], KERNEL)
+    await p.settled()
+    await dm('m3', 'guest', 'Hello after linking')
+    await p.settled()
+    assertEquals(model.asked.length, 3)
+    assertEquals(
+      sent.map((s) => [s.reply, s.token]),
+      ['m1', 'm2', 'm3', 'm3'].map((id) => [id, 'Bot BOT']),
+    )
+    assertEquals(sent.filter((_, i) => i != 2).map((s) => s.text), [
+      'Home here.',
+      'Other here.',
+      'Welcome.',
+    ])
+    assertEquals([...new Set(typing)].sort(), ['dm-ann', 'dm-guest'])
+    let [receipt] = await at.query(
+      line`.entity.eid=${messageEid('discord', 'm2')}&.chat_dm`,
+    )
+    assertEquals(
+      (receipt.chat_dm as { space: string; said?: Said }).space,
+      other,
+    )
+    assertEquals((receipt.chat_dm as { said?: Said }).said, undefined)
+
+    let web = await builderOf(p.env, home)(() =>
+      new Request('https://builder/operator/receive', {
+        method: 'POST',
+        headers: { [SPACE_HEADER]: home, 'x-yak-person': person },
+        body: JSON.stringify({
+          say: 'Follow up on my first DM.',
+          request: { channel: 'chat' },
+        }),
+      })
+    )
+    assertEquals(web.ok, true)
+    await web.body?.cancel()
+    await p.settled()
+    assertEquals(sent[4], {
+      text: 'From the web.',
+      reply: 'm1',
+      token: 'Bot BOT',
+    })
+  } finally {
+    globalThis.fetch = was
+  }
+})
 
 // A space's apps on its Discord connection (chat.ts `arrived`,
 // `appChatters`): what the bot hears in the connection's server lands in each

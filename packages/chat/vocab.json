@@ -115,6 +115,11 @@
           "type": "string",
           "description": "what the platform calls it, where it says"
         },
+        "platform_bot": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "this direct room was heard by the host's own bot and replies in it use that bot"
+        },
         "private": {
           "type": "boolean",
           "description": "the space says only its own people talk here: a server or channel it connected, closed to the public. There, anyone whose role allows an act may vouch for the person who asked for it, not only that person (yaks.app's operator-route.ts)"

@@ -103,6 +103,18 @@ export let managePath = (view: ManageView, space?: string): string =>
     : space
     ? `${MANAGE}/${encodeURIComponent(space)}/${view}`
     : `${MANAGE}/${view}`
+
+/** Open a chat account's OAuth confirmation from Profile. */
+export let accountLink = (
+  home: string,
+  integration: string,
+  space?: string,
+): URL => {
+  let link = new URL(managePath('profile'), home)
+  link.searchParams.set('link', integration)
+  if (space) link.searchParams.set('back', space)
+  return link
+}
 /** Where a dashboard form lands back: the page under /manage it names, at
  * the apex, else `fallback`; a form never sends the person off yaks.app. */
 export let backTo = (env: Host, back: string, fallback: string): string => {

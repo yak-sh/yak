@@ -32,7 +32,7 @@ import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
 import { countedTexts } from './meter.ts'
-import { caught } from './defects.ts'
+import { background, caught } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
@@ -658,7 +658,7 @@ export let chatHeard = async (
   person: string,
   args: {
     via: string
-    connection: string
+    connection?: string
     said: Said
     writer?: string
     linked?: boolean
@@ -682,7 +682,11 @@ export let chatHeard = async (
       entity: { eid: derivedEid(`chat-edit|${message.entity.eid}`) },
     }
     : message
-  await g.apply([await named(env, g, room, connection), author], {
+  let place = connection ? await named(env, g, room, connection) : {
+    ...room,
+    chat_room: { ...part<Comp>(room, 'chat_room'), platform_bot: true },
+  }
+  await g.apply([place, author], {
     trusted: true,
   })
   let at = { via, connection, speakers: speakersOf(env, space), person }
@@ -691,11 +695,11 @@ export let chatHeard = async (
   let leads: Lead[] = []
   if (!had?.entry || again) {
     let chain = await replying(env, operator.store, at, said)
-    let since = !writer && said.server && said.addressed
-      ? await leading(env, operator.store, at, said)
+    let since = connection && !writer && said.server && said.addressed
+      ? await leading(env, operator.store, { ...at, connection }, said)
       : undefined
-    let room = said.addressed
-      ? await basics(env, at, said, [
+    let room = connection && said.addressed
+      ? await basics(env, { ...at, connection }, said, [
         ...chain?.people ?? [],
         ...since?.people ?? [],
       ])
@@ -722,13 +726,14 @@ export let chatHeard = async (
   )
   let working = operator.store.chatters?.[via]?.working
   if (fresh && session && working) {
-    void showing(
+    let shown = showing(
       {
         every: working.every,
         show: () => working.show({ connection, room: said.room }),
       },
       async () => BUSY.has(await currentStatus(g, session)),
     ).catch((e) => caught(e, { request: `${via} working`, space: space.slug }))
+    if (!said.server) background(shown)
   }
   return Response.json({ request: messageEid(via, said.id) }, {
     status: fresh ? 202 : 200,

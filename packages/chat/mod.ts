@@ -15,6 +15,7 @@ import {
 import type { Line } from '@yaks/phone'
 
 export type { Control }
+export { carryDirect, type DirectMessage } from './direct.ts'
 
 /** A message as a platform's plugin reads it: where it was said, by whom, in
  * which words, and whether it was said to the bot that heard it. */
@@ -435,17 +436,19 @@ export let confined = (
   chatter: Chatter,
   where: {
     serves: (connection: string) => Promise<string[]>
-    server: (chat: Pick<Chat, 'connection' | 'room'>) => Promise<
+    server: (chat: { connection: string; room: string }) => Promise<
       string | undefined
     >
   },
 ): Chatter => ({
   ...chatter.waiting ? { waiting: chatter.waiting } : {},
   post: async (chat) => {
+    let { connection, room } = chat
+    if (!connection) throw new Error('No chat connection to post with')
     await within(
-      chat,
-      await where.serves(chat.connection),
-      () => where.server(chat),
+      { connection, room },
+      await where.serves(connection),
+      () => where.server({ connection, room }),
     )
     return chatter.post(chat)
   },
@@ -456,7 +459,7 @@ export let confined = (
  * and what a host reads a room's {@link Platform.recent} messages by. Where
  * the room is (`server()`) is asked only of a connection serving any. */
 export let within = async (
-  at: Pick<Chat, 'connection' | 'room'>,
+  at: { connection: string; room: string },
   serves: string[],
   server: () => Promise<string | undefined>,
 ): Promise<string> => {

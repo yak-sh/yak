@@ -35,7 +35,7 @@ import type { OperatorStore } from './operator-store.ts'
 import { rootAt, whoseOf } from './operator-root.ts'
 import { chatRows, privateIn } from './operator-rooms.ts'
 import { PLATFORMS } from './chat.ts'
-import { managePath } from '@yaks/platform/routes'
+import { accountLink } from '@yaks/platform/routes'
 import {
   allows,
   holders,
@@ -180,9 +180,7 @@ let verifying = async (
   let platform = PLATFORMS.get(String(message?.via ?? ''))
   let [room] = message?.room ? await store.g.get([String(message.room)]) : []
   if (!platform?.user || !who?.id || !message?.room) return ''
-  let link = new URL(managePath('profile'), home)
-  link.searchParams.set('link', platform.user)
-  link.searchParams.set('back', space.slug)
+  let link = accountLink(home, platform.user, space.slug)
   // A direct room is one person's already.
   let to = part<Comp | undefined>(room, 'chat_room')?.server
     ? String(who.id)

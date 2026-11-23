@@ -113,8 +113,8 @@ export type Texter = {
 /** One message to post in a room of a chat platform (@yaks/chat), by the
  * bot of a connection: the portable chatter capability. */
 export type Chat = {
-  /** the connection whose bot speaks it (@yaks/connections) */
-  connection: string
+  /** the connection whose bot speaks it, absent for the host's own bot in a DM */
+  connection?: string
   /** the platform's id for the room */
   room: string
   /** the words */
