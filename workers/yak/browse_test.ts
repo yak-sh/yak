@@ -134,6 +134,14 @@ test('a test account opens a page of ours signed in as itself, on a phone unless
   equal(visit.audit, false)
 })
 
+test('a test account opens a page as a stranger, holding no cookie', async () => {
+  let r = await browse({ ...manage, signedOut: true }, {
+    cookie: checks.cookie,
+  })
+  equal(r.status, 200)
+  equal(visits.at(-1)!.cookies, [])
+})
+
 test('a person never lends their sign-in to the browser, not even the platform owner', async () => {
   let r = await browse(manage, { cookie: owner.cookie })
   equal(r.status, 403)

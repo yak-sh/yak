@@ -396,7 +396,8 @@ export let runs = (
       ) as Browse['view']
       let allow = word(a, 'allow')?.split(',').map((p) => p.trim())
         .filter(Boolean)
-      let got = await browserVisit(at, { url, view, steps, allow })
+      let signedOut = a.stranger === true
+      let got = await browserVisit(at, { url, view, steps, allow, signedOut })
       let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
       await fs.mkdir(to, { recursive: true })
       let files: string[] = []
@@ -412,7 +413,9 @@ export let runs = (
       }
       return [
         said(call, [
-          `${url} as ${at.address}: HTTP ${got.status}, ${
+          `${url} as ${
+            signedOut ? 'a stranger' : at.address
+          }: HTTP ${got.status}, ${
             Math.round(got.duration / 100) / 10
           }s of browser`,
           ...files.map((f) => `shot      ${f}`),

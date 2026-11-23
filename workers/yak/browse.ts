@@ -4,9 +4,9 @@
 // on has none (T-1637). It answers what the browser visit renders: the
 // screenshots, the page's text, console, errors and status.
 //
-// Test accounts browse with their session cookie. The private admin door
-// accepts the admin bot's OAuth grant and issues a short-lived directory
-// credential for the browser.
+// Test accounts browse with their session cookie, or with none, to see a page
+// as a stranger does. The private admin door accepts the admin bot's OAuth
+// grant and issues a short-lived directory credential for the browser.
 //
 // Only the fleet's test accounts may ask. The browser time is the platform's,
 // spent checking the platform, and a person's own sign-in never goes into a
@@ -54,6 +54,8 @@ export type Asked = {
   view?: Partial<View>
   steps?: Step[]
   allow?: string[]
+  /** Open the page as a stranger, holding no cookie at all. */
+  signedOut?: boolean
 }
 
 // A phone's window unless the caller names another.
@@ -184,7 +186,11 @@ let visitOf = async (req: Request, env: Env, path: string) => {
   let visit = {
     url,
     view: { ...PHONE, ...asked.view },
-    cookies: token ? held(token, env) : [await adminCookie(env, person)],
+    cookies: asked.signedOut === true
+      ? []
+      : token
+      ? held(token, env)
+      : [await adminCookie(env, person)],
     steps: Array.isArray(asked.steps) ? asked.steps : [],
     allow: Array.isArray(asked.allow)
       ? asked.allow.filter((p) => typeof p == 'string')

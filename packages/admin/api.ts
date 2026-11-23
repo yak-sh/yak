@@ -346,6 +346,8 @@ export type Browse = {
   /** Browser permissions the page holds as it opens, such as
    * `notifications`. */
   allow?: string[]
+  /** Open the page as a stranger, holding no cookie. */
+  signedOut?: boolean
 }
 
 /** What the browser saw (@yaks/platform/browser-visit `Rendered`). */
