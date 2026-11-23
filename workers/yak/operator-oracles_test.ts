@@ -193,12 +193,16 @@ test('a conversation stays small while its fork obtains an answer from the app o
   assertEquals(promptOf(rootAsk).includes('Use grams.'), false)
   assertEquals(rootAsk.instructions, forkAsk.instructions)
   assertStringIncludes(promptOf(forkAsk), 'app home/recipes: Recipe box')
+  let rootTools = rootAsk.tools.map((t) => t.name)
+  assertEquals(rootTools.includes('fork'), true)
   assertEquals(
-    rootAsk.tools.map((t) => t.name),
     forkAsk.tools.map((t) => t.name),
+    rootTools.filter((name) => name != 'fork'),
   )
+  assertEquals(forkAsk.tools.some((t) => t.name == 'spawn'), true)
   assertEquals((oracle.session as Comp).persona, ORACLE)
   assertEquals((oracle.session as Comp).topic, oracleOf(owner, app.eid))
+  assertEquals(oracleAsk.tools.some((t) => t.name == 'graph_apply'), true)
   assertStringIncludes(String(oracleAsk.instructions), 'Use grams.')
   assertStringIncludes(
     String(oracleAsk.instructions),
