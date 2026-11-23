@@ -274,8 +274,10 @@ let cookbook = async (
 }
 
 let recipeState = seededState((ctx) => cookbook(withSockets(ctx, true)))
+// The cookbook's state, a copy of one deploy's, before a Store wakes on it.
+let cooked = async () => withSockets(await recipeState(), true)
 let recipe = async (bindings = {}) => {
-  let ctx = withSockets(await recipeState(), true)
+  let ctx = await cooked()
   let store = new Store(ctx, bindings)
   await store.door
   return { ctx, store }
@@ -315,9 +317,7 @@ test('a decision and an app-owned board word keep their own write behavior', () 
 })
 
 let completion = await (async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 2 },
@@ -336,9 +336,7 @@ test('a kernel completion patch keeps the writer the Store was given', () => {
 })
 
 let draftWrites = await (async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   let eid = draftEid(ADA, 'command')
   let write = (text: string, over: string, also: Bundle[] = []) =>
     post(store, '/apply', [{
@@ -512,14 +510,13 @@ test('a kernel apply dry run returns the patch without keeping it', async () => 
 })
 
 test('a Store checks a large delete as one batch', async () => {
-  let ctx = state()
-  using _db = ctx.storage
+  let ctx = await cooked()
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (sql, ...params) => {
     if (params.length > 100) throw new Error('too many SQL variables')
     return exec(sql, ...params)
   }
-  let store = await cookbook(ctx)
+  let store = new Store(ctx)
   let ids = Array.from({ length: 230 }, (_, i) => `recipe-${i}`)
   let seed = await post(
     store,
@@ -1503,9 +1500,7 @@ test('a woken object serves the same app, and the same sockets', async () => {
 // A wake plants what the platform ships before any door answers (`#sow`), so a
 // row it rewrites for nothing makes every read wait on a durable write.
 test('a woken object rewrites nothing it already holds', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   await get(store, '/query?q=.model', owner)
   let changes = () =>
     ctx.storage.sql.exec('select total_changes() as n').toArray()[0].n
@@ -1518,9 +1513,7 @@ test('a woken object rewrites nothing it already holds', async () => {
 // A wake whose planting throws (`#sow`), here the runtime's alarm failing,
 // still serves, and plants again once its backoff has passed: each try that
 test('cold reads neither plant nor retry deployment work', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   ctx.storage.getAlarm = () =>
     Promise.reject(new Error('reads must not inspect the alarm'))
   for (let incarnation of [store, new Store(ctx)]) {
@@ -1914,8 +1907,7 @@ test('the store dates the trash mark, and signs it', async () => {
 })
 
 test('app archetypes classify writes and migrate old rows only on schema changes', async () => {
-  let ctx = state()
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   let added = await post(store, '/apply', [
     { entity: { eid: CAKE }, recipe: { serves: 4 }, doc: { title: 'Cake' } },
   ], owner)
@@ -1972,7 +1964,7 @@ test('app archetypes classify writes and migrate old rows only on schema changes
 })
 
 test('app archetype descriptors are read-only and vocabulary extension tracks new shapes', async () => {
-  let ctx = state(), store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   let vocab = await post(
     store,
     '/vocab',
@@ -2071,9 +2063,7 @@ test('a Store anatomy supplier observes its own conditional composition without 
 // cac5e3065 to T-65227: its schema pages read, two writes, then a boot under an
 // earlier deploy's stamp, a write and a deploy that adds a property.
 let journaled = await (async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await cookbook(ctx)
+  let { ctx, store } = await recipe()
   let drive = db(ctx)
   let rows = (name: string) => drive.query(select({ from: table(name) }))
   for (let stmt of journalDdl()) drive.query(stmt)
