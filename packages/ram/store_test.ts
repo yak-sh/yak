@@ -48,6 +48,15 @@ test('a patch mints identity in first-touch order and says what it minted', () =
   assertEquals(at(s, 'p1').entity, { eid: 'p1', num: 1, prefix: 'D' })
 })
 
+test('a scoped read keeps the number and its letter', () => {
+  let s = shopRam()
+  put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
+  let visibility = { entity: '.doc' }
+  let entity = { eid: 'p1', num: 1, prefix: 'D' }
+  assertEquals(s.get(['p1'], [], { visibility })[0].entity, entity)
+  assertEquals(s.read('.entity.num=1', { visibility })[0].entity, entity)
+})
+
 test('a patch touches only the properties it names; null clears one', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12, status: 'live' } })

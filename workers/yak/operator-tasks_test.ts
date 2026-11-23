@@ -112,6 +112,24 @@ test('an approval ask is private to its assignee', async () => {
     'names no task',
   )
   equal((await approvals.g.get([ask]))[0].cancelled, undefined)
+  // Nor does their turn's graph_apply reach it, by its number or its eid.
+  let [held] = await approvals.g.get([ask])
+  let self = seenBy(approvals, { person: requester, member: true })
+  for (let at of [`T-${held.entity.num}`, ask]) {
+    for (
+      let b of [
+        { entity: { eid: at }, doc: { title: 'Nothing to see' } },
+        { entity: { eid: '$c' }, comment: { target: at }, doc: { body: 'Ok' } },
+      ]
+    ) {
+      await assertRejects(
+        async () => await self.apply([b]),
+        Error,
+        'names nothing',
+      )
+    }
+  }
+  equal((await approvals.g.get([ask]))[0], held)
 })
 
 test('an escalation is visible to its recipient and its words are written by the system', async () => {

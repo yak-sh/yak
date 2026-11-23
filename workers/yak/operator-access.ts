@@ -1,5 +1,14 @@
 import { line } from '@yaks/query'
-import { type Bundle, type Graph, type ReadOpts } from '@yaks/graph'
+import {
+  type Bundle,
+  comps,
+  type Eid,
+  type Graph,
+  isAlias,
+  type ReadOpts,
+} from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
+import { unnamed } from '@yaks/id'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or, pred, present } from '@yaks/query/core'
@@ -198,9 +207,33 @@ export let sight = (
   },
 })
 
+// Each id a batch names, a bundle's own and every reference's, with the kind
+// the reference declares, as the write resolves them (@yaks/graph `apply`).
+type Named = {
+  i: number
+  id: string
+  comp?: string
+  prop?: string
+  kind?: string
+}
+let naming = (g: Graph, bundles: Bundle[]): Named[] =>
+  bundles.flatMap((b, i) => [
+    { i, id: b.entity.eid },
+    ...comps(b).flatMap(([comp, held]) =>
+      Object.entries(held ?? {}).flatMap(([prop, id]) => {
+        let p = g.vocab.prop(comp, prop)
+        return p?.category == 'ref' && typeof id == 'string'
+          ? [{ i, id, comp, prop, kind: p.ref ? String(p.ref) : undefined }]
+          : []
+      })
+    ),
+  ]).filter(({ id }) => !isAlias(id))
+
 /** The Operator's store as `reader` reads it (`sight`) and edits its work.
- * Tools resolve their write targets through the same scoped reads. What
- * waits on a person's answer is the system's to write, whoever writes here
+ * A write reaches only what its reader sees: each id it names or references
+ * is addressed as the reader reads, so one naming what is out of sight,
+ * by number or by eid, is refused as one naming nothing is. What waits on a
+ * person's answer is the system's to write, whoever writes here
  * (@yaks/platform/operator-graph `answering`). */
 export let seenBy = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
@@ -209,12 +242,44 @@ export let seenBy = (
   let { g } = store
   let { visibility } = sight(store, reader)
   let narrow = (opts?: ReadOpts): ReadOpts => ({ ...opts, visibility })
+  // The batch with every id it names resolved as the reader sees it.
+  let within = async (bundles: Bundle[]) => {
+    let named = naming(g, bundles)
+    let kinds = Map.groupBy(named, (n) => n.kind)
+    let at = new Map<string | undefined, Map<string, Eid>>()
+    for (let [kind, ns] of kinds) {
+      at.set(kind, await g.address(ns.map((n) => n.id), kind, narrow()))
+    }
+    let eid = (n: Named) => at.get(n.kind)?.get(n.id) ?? n.id
+    let eids = [...new Set(named.map(eid))]
+    let [kept, seen] = await Promise.all([
+      g.get(eids, []),
+      g.get(eids, [], narrow()),
+    ])
+    let shown = new Set(seen.map((b) => b.entity.eid))
+    let hidden = kept.find((b) => !shown.has(b.entity.eid))
+    if (hidden) {
+      let n = named.find((n) => eid(n) == hidden.entity.eid)!
+      throw new Refused(unnamed(n.id, g.vocab))
+    }
+    let out = [...bundles]
+    for (let n of named) {
+      if (eid(n) == n.id) continue
+      let b = out[n.i]
+      out[n.i] = n.comp
+        ? { ...b, [n.comp]: { ...b[n.comp] as object, [n.prop!]: eid(n) } }
+        : { ...b, entity: { ...b.entity, eid: eid(n) } }
+    }
+    return out
+  }
   return {
     ...g,
     read: (query, opts) => g.read(query, narrow(opts)),
     rows: (query, opts) => g.rows(query, narrow(opts)),
     get: (eids, comps, opts) => g.get(eids, comps, narrow(opts)),
     view: (query, opts) => g.view(query, narrow(opts)),
+    address: (ids, kind, opts) => g.address(ids, kind, narrow(opts)),
+    apply: async (bundles, opts) => g.apply(await within(bundles), opts),
   }
 }
 

@@ -574,10 +574,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         }
       }
       // Archetype metadata describes stored components, not this caller's view.
-      out.entity = {
-        eid: b.entity.eid,
-        ...b.entity.num === undefined ? {} : { num: b.entity.num },
-      }
+      let { archetype: _, ...entity } = b.entity as Entity
+      out.entity = entity
       return out
     }))
   }

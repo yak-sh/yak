@@ -690,3 +690,42 @@ test("only its people answer an approval: no caller's write answers, spends, mov
   equal(ran, [])
   equal((await pressed(person)).state, 'done')
 })
+
+test("a member's turn writes only what it sees: another's ask, by its number or eid, names nothing to it", async () => {
+  await room('editor').run({ email: 'fay@x.com', role: 'owner' })
+  let approval = (await newest()).entity.eid
+  let ask = askOf(approval, jeff)
+  let [held] = await store.g.get([ask])
+  let num = `T-${held.entity.num}`
+  let turn = seenBy(store, { person: matt, member: true })
+  let write = (b: Bundle) =>
+    turn.apply([{ ...b, $actor: { by: matt, via: session } }])
+  let unseen = (b: Bundle) =>
+    assertRejects(async () => await write(b), Refused, 'names nothing')
+  for (let at of [num, ask]) {
+    await unseen({ entity: { eid: at }, cancelled: {} })
+    await unseen({ entity: { eid: at }, doc: { title: 'Nothing to see' } })
+    await unseen({ entity: { eid: at }, decision: { question: 'Approve?' } })
+    await unseen({
+      entity: { eid: '$c' },
+      comment: { target: at },
+      doc: { body: 'Approve it' },
+    })
+  }
+  equal((await store.g.get([ask]))[0], held)
+  // What the member sees stays theirs to write: the space's work, and their
+  // own ask to comment on.
+  let [task] = await write({
+    entity: { eid: '$t' },
+    task: {},
+    doc: { title: 'Plan' },
+  })
+  await write({ entity: { eid: task.entity.eid }, doc: { title: 'Plan it' } })
+  for (let target of [task.entity.eid, askOf(approval, matt)]) {
+    await write({
+      entity: { eid: '$c' },
+      comment: { target },
+      doc: { body: 'ok' },
+    })
+  }
+})
