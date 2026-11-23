@@ -924,6 +924,17 @@
   .Update_Input {
     width: 100%;
   }
+  .Update_Status {
+    font-size: var(--fine);
+    color: var(--muted);
+  }
+  .Update[hidden],
+  .Update_Form[hidden],
+  .Update_Needs[hidden],
+  .Update_Other[hidden],
+  .Update_Status[hidden] {
+    display: none;
+  }
   /* A support thread (support-page.ts): what was said, a card each, and the
      box that adds to it. */
   .Support {

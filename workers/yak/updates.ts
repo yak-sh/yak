@@ -21,7 +21,7 @@ import { Time } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
-import { type ComponentChildren, Fragment, h } from 'preact'
+import { cloneElement, type ComponentChildren, Fragment, h } from 'preact'
 import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
@@ -33,12 +33,22 @@ import { markdown, PICTURES } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
 import type { Choice } from '@yaks/task'
 import { attachmentKey } from './attachments.ts'
-import { directoryOf } from './directory.ts'
-import { inApp } from './tool.ts'
+import { type Directory, directoryOf } from './directory.ts'
+import { EID, inApp } from './tool.ts'
 import { linkOf } from './preview.ts'
 import { updateAnchor } from './operator-lists.ts'
 import { draftsOf, theirs } from './written.ts'
-import { CallError } from '@yaks/tools/errors'
+import { CallError, refused as toolRefused } from '@yaks/tools/errors'
+import { refusal } from '@yaks/api/refuse'
+import { status } from '@yaks/graph/errors'
+import { writes } from '@yaks/member'
+import {
+  actionKinds,
+  answerField,
+  type InboxAction,
+  type InboxReceipt,
+} from '@yaks/inbox/actions'
+import type { Clock } from './timing.ts'
 
 /** A space a person reads Updates in, and who they are there. */
 export type Seat = { space: Space; who: Who }
@@ -216,6 +226,12 @@ let form = (
       class: 'Update_Form Page_Form',
       method: 'post',
       action: talkPath('updates', space.slug),
+      ...actionKinds.some((kind) => kind == fields[0]?.[0])
+        ? {
+          'data-inbox-action': fields[0][0],
+          'data-inbox-space': space.eid,
+        }
+        : {},
     },
     [
       ...fields,
@@ -330,7 +346,11 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
   )
   let header = head(
     u,
-    h(State, { mod: 'negative' }, 'Needs you'),
+    h(State, {
+      class: 'Update_Needs',
+      mod: 'negative',
+      'data-inbox-pending': '',
+    }, 'Needs you'),
     where,
     h('span', { class: 'Update_Meta' }, seeing(space, u)),
   )
@@ -404,7 +424,7 @@ let other = (at: At, u: Update) => {
   return u.choices?.length
     ? h(
       More,
-      { class: 'Update_Other' },
+      { class: 'Update_Other', 'data-inbox-pending': '' },
       h(More.Summary, {}, 'Other'),
       h(More.Body, {}, box),
     )
@@ -456,12 +476,18 @@ let offerCard = (
   where: ComponentChildren,
   field: [string, string],
   answers: Answer[],
+  prompt?: string,
 ) =>
   h(
     Card,
     { class: 'Update', id: updateAnchor(u.eid) },
     head(u, subject(u), where),
-    h('p', { class: 'Update_Words' }, u.words),
+    h(
+      'p',
+      { class: 'Update_Words' },
+      u.words,
+      prompt ? h('span', { 'data-inbox-pending': '' }, ` ${prompt}`) : null,
+    ),
     u.needs
       ? form(
         at,
@@ -513,7 +539,7 @@ let messageCard = (
 
 // A notice: its subject and a way to put it away, its words, when it came
 // and where it came from, and a way to ask about it.
-let card = (
+let drawCard = (
   env: Env,
   at: At,
   u: Update,
@@ -532,10 +558,16 @@ let card = (
   }
   if (u.message) return messageCard(at, u, where, u.message)
   if (u.friend) {
-    return offerCard(at, u, where, ['friend', u.friend.person], [
-      ['approved', 'Add friend'],
-      ['declined', 'Not now'],
-    ])
+    return offerCard(
+      at,
+      u,
+      where,
+      ['friend', u.friend.person],
+      [['approved', 'Add friend'], ['declined', 'Not now']],
+      u.friend.suggested
+        ? 'Add them as a friend? They see a request only if you do.'
+        : undefined,
+    )
   }
   if (u.needs) return needsCard(at, u, where)
   let away = u.dismissed ? null : h(Card.Actions, null, dismissing(at, u))
@@ -554,6 +586,30 @@ let card = (
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),
     replying(at, u),
+  )
+}
+
+let card = (
+  env: Env,
+  at: At,
+  u: Update,
+  apps: Apps,
+  where: ComponentChildren = null,
+) => {
+  let drawn = drawCard(env, at, u, apps, where)
+  return cloneElement(
+    drawn,
+    {
+      'data-inbox-card': crypto.randomUUID(),
+      'data-inbox-waits': u.needs ? at.space.slug : undefined,
+    },
+    drawn.props.children,
+    h('output', {
+      class: 'Update_Status',
+      'data-inbox-status': '',
+      tabindex: -1,
+      hidden: true,
+    }),
   )
 }
 
@@ -756,6 +812,109 @@ export let allUpdates = (
       ),
   )
 
+/** Commit the action where the card came from and return its receipt. */
+let commitAction = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  { kind, target, answer }: InboxAction,
+  receipt: boolean,
+): Promise<InboxReceipt> => {
+  switch (kind) {
+    case 'transfer':
+      await answerTransfer(env, space, who, target, answer)
+      return { label: answer == 'decline' ? 'Declined' : 'App accepted' }
+    case 'friend': {
+      let standing = await answerFriend(env, who, target, answer, receipt)
+      return {
+        label: answer == 'declined'
+          ? 'Dismissed'
+          : standing == 'friend'
+          ? 'Friends'
+          : 'Request sent',
+      }
+    }
+    case 'dismiss':
+      await operatorDoor(env, space, who, 'updates', { dismiss: target })
+      return { label: 'Dismissed' }
+    case 'choose':
+      await operatorDoor(env, space, who, 'updates', {
+        choose: target,
+        choice: answer,
+      })
+      return { label: 'Answer sent' }
+  }
+}
+
+let readAction = async (req: Request) => {
+  if (req.headers.get('content-type')?.split(';')[0] != 'application/json') {
+    throw new CallError('arguments', 'Send the action as JSON.')
+  }
+  let items = await req.json()
+  if (!Array.isArray(items) || items.length != 1) {
+    throw new CallError('arguments', 'Send one action from an Updates card.')
+  }
+  let { entity, inboxAction: action } = items[0] ?? {}
+  if (
+    typeof entity?.eid != 'string' || !EID.test(entity.eid) ||
+    typeof action?.space != 'string' || !EID.test(action.space) ||
+    !actionKinds.includes(action.kind) ||
+    typeof action.target != 'string' || !EID.test(action.target) ||
+    typeof action.answer != 'string'
+  ) {
+    throw new CallError('arguments', 'Send one action from an Updates card.')
+  }
+  return {
+    entity: { eid: entity.eid } as { eid: string },
+    action: action as InboxAction,
+  }
+}
+
+/** The page graph's write door. It only needs the space and the caller's seat. */
+export let updatesApply = async (
+  req: Request,
+  env: Env,
+  dir: Directory,
+  person: string,
+  until: number | undefined,
+  c: Clock,
+): Promise<Response> => {
+  try {
+    let { entity, action } = await readAction(req)
+    let { space, role, administrative } = await c.time(
+      'updates_seat',
+      () => dir.seat(action.space, person, true),
+    )
+    let who = {
+      person,
+      role: administrative ? 'owner' as const : role ?? null,
+      until,
+      administrative,
+    }
+    if (!space || space.trashed || !writes(who.role)) {
+      throw new CallError('access', 'That Updates card is no longer available.')
+    }
+    let inboxReceipt = await c.time(
+      `updates_${action.kind}`,
+      () => commitAction(env, space, who, action, true),
+    )
+    return Response.json([{ entity, inboxReceipt }])
+  } catch (error) {
+    if (error instanceof CallError) {
+      return Response.json({ error: error.code, message: error.message }, {
+        status: toolRefused(error).status,
+      })
+    }
+    let code = (error as { status?: number } | null)?.status ?? status(error)
+    if (code >= 400 && code < 500) {
+      return Response.json(refusal(error), { status: code })
+    }
+    caught(error, { request: 'Updates action' })
+    // A failed round trip may have committed the action. Let sync retry.
+    return new Response(null, { status: 503 })
+  }
+}
+
 /** A choice or dismissal stays in Updates. A message opens its chat. */
 export let updatesAnswer = async (
   req: Request,
@@ -770,22 +929,18 @@ export let updatesAnswer = async (
     backTo(env, field('back'), talkPath('updates', space.slug)),
   )
   let back = to.pathname + to.search
-  if (form.has('transfer')) {
-    await answerTransfer(env, space, who, field('transfer'), field('answer'))
+  let kind = actionKinds.find((kind) => form.has(kind))
+  if (kind) {
+    await commitAction(env, space, who, {
+      kind,
+      space: space.eid,
+      target: field(kind),
+      answer: field(answerField(kind)),
+    }, false)
     return new Response(null, { status: 303, headers: { location: back } })
   }
   if (form.has('message')) {
     await replyFriend(env, who, field('message'), field('say'))
-    return new Response(null, { status: 303, headers: { location: back } })
-  }
-  if (form.has('friend')) {
-    await answerFriend(env, space, who, field('friend'), field('answer'))
-    return new Response(null, { status: 303, headers: { location: back } })
-  }
-  if (form.has('dismiss')) {
-    await operatorDoor(env, space, who, 'updates', {
-      dismiss: field('dismiss'),
-    })
     return new Response(null, { status: 303, headers: { location: back } })
   }
   let { request } = await operatorDoor(
@@ -793,9 +948,7 @@ export let updatesAnswer = async (
     space,
     who,
     'updates',
-    form.has('choose')
-      ? { choose: field('choose'), choice: field('choice') }
-      : { reply: field('reply'), say: field('say'), id: field('id') },
+    { reply: field('reply'), say: field('say'), id: field('id') },
   ) as { request?: string }
   return new Response(null, {
     status: 303,

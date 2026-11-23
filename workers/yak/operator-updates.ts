@@ -58,7 +58,7 @@ export type Update = {
   dismissed: boolean
   transfer?: { editor: boolean }
   /** A friend request or suggestion from this person (friends.ts). */
-  friend?: { person: string }
+  friend?: { person: string; suggested: boolean }
   /** A message from a friend, answered by a reply to them (friends.ts). */
   message?: { friend: string; name: string }
   choices?: Choice[]
@@ -534,6 +534,10 @@ export let updating = async (
   let found = await theirs(store, person, space, about)
   let say = (str('choose') ? str('choice') : str('say')).trim()
   if (str('choose')) {
+    let decided = found.row.comps.decided
+    if (decided?.by == person && decided.choice == say) {
+      return { answered: about }
+    }
     if (!found.row.comps.decision || found.lane != 'Needs you') {
       throw refuse('arguments', 'That asks nothing of you now.')
     }

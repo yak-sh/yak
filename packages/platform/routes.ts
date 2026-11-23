@@ -48,6 +48,7 @@ export type Door<E = unknown> = (
 export let MANAGE = '/manage'
 /** The person's Updates from every space's Operator. */
 export let UPDATES = '/updates'
+export let UPDATE_APPLY = `${UPDATES}/apply`
 /** A texted link's page approving one act the Operator was asked for by a
  * number alone (yaks.app's operator-approvals.ts). */
 export let APPROVE = '/approve'
@@ -386,7 +387,7 @@ export let managed = (path: string): Managed | null => {
  * ```
  */
 export let spaced = (path: string): Managed | null => {
-  if (path == UPDATES) return { updates: true }
+  if (path == UPDATES || path == UPDATE_APPLY) return { updates: true }
   let [, one, two, ...rest] = path.split('/')
   if (rest.length || !rooted(one)) return null
   if (two == null) return { space: one, view: 'operator', open: 'new' }

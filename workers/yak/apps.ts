@@ -2275,7 +2275,9 @@ let served = async (
       return at ? { space: at.space.slug, slug: at.app.slug } : null
     },
   }, env)
-  if (step.to == 'manage') return (await import('./manage.ts')).manage(req, env)
+  if (step.to == 'manage') {
+    return (await import('./manage.ts')).manage(req, env, c)
+  }
   if (step.to == 'kept') return step.page
   // Its pages tell the browser whose this hostname's storage is now
   // (site-data.ts), on their way out of `fetch` below.

@@ -5,6 +5,36 @@
   "title": "inbox front",
   "description": "The inbox views' own state in their page graph, never synced.",
   "$defs": {
+    "inboxAction": {
+      "component": true,
+      "durable": "connection",
+      "sync": "server",
+      "description": "an action taken on an inbox card",
+      "properties": {
+        "space": { "type": "string" },
+        "kind": { "type": "string" },
+        "target": { "type": "string" },
+        "answer": { "type": "string" }
+      }
+    },
+    "inboxReceipt": {
+      "component": true,
+      "durable": "connection",
+      "sync": "server",
+      "description": "the inbox host's answer to the card action",
+      "properties": {
+        "label": { "type": "string" }
+      }
+    },
+    "inboxActionNote": {
+      "component": true,
+      "durable": "connection",
+      "sync": "none",
+      "description": "an action error shown beside the inbox card",
+      "properties": {
+        "message": { "type": "string" }
+      }
+    },
     "inboxView": {
       "component": true,
       "type": "object",

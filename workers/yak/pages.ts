@@ -250,6 +250,10 @@ ${links(env, 'pages.css', undefined, assets)}${
       ? `<script type="module" src="${file('_sort.js')}"></script>`
       : ''
   }${
+    main.includes('data-inbox-actions=')
+      ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
+      : ''
+  }${
     main.includes('data-chart')
       ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''

@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
-import { managePath, talkPath } from '@yaks/platform/routes'
+import { managePath, talkPath, UPDATE_APPLY } from '@yaks/platform/routes'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -86,7 +86,33 @@ test('a suggestion friends nobody until each says yes, and becomes a request', a
     headers: { cookie: cy.cookie },
   })
   assertStringIncludes(await all.text(), 'Bea Alvarez is on yaks.app too')
-  await answer(cy, cySpace.slug, bo.person, 'approved')
+  let entity = { eid: crypto.randomUUID() }
+  let apply = (p: typeof cy) =>
+    k.at(k.host, UPDATE_APPLY, {
+      method: 'POST',
+      headers: {
+        cookie: p.cookie,
+        'content-type': 'application/json',
+        'x-yak-inbox-person': p.person,
+      },
+      body: JSON.stringify([{
+        entity,
+        inboxAction: {
+          space: cySpace.eid,
+          kind: 'friend',
+          target: bo.person,
+          answer: 'approved',
+        },
+      }]),
+    })
+  assertEquals((await apply(bo)).status, 403)
+  let accepted = await apply(cy)
+  assertEquals(accepted.status, 200)
+  assertEquals(accepted.headers.get('location'), null)
+  assertEquals(await accepted.json(), [{
+    entity,
+    inboxReceipt: { label: 'Request sent' },
+  }])
   assertEquals((await listed(cy))[bo.person], 'asking')
   assertEquals((await listed(bo))[cy.person], 'asked')
   await answer(bo, boSpace.slug, cy.person, 'declined')

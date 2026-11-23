@@ -87,6 +87,7 @@ node_modules
 /workers/yak/public/_settings.js
 /workers/yak/public/_alerts.js
 /workers/yak/public/_sort.js
+/workers/yak/public/_inbox-actions.js
 
 # Temporary standalone platform compiler configs.
 .platform-*.json

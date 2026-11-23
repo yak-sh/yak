@@ -12,6 +12,8 @@
     "./service": "./service.ts",
     "./letters": "./letters.ts",
     "./mail": "./mail.ts",
+    "./actions": "./actions.ts",
+    "./actions-browser": "./actions-browser.ts",
     "./views": "./views.tsx"
   },
   "license": "Apache-2.0",

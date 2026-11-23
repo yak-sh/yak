@@ -2541,6 +2541,13 @@ export let chatPage = async (
   })
 }
 
+let updateColumn = (space: Space, who: Who) => ({
+  class: 'Talk_Column Updates',
+  'data-inbox-actions': ALL,
+  'data-inbox-scope': who.person,
+  'data-inbox-home': space.slug,
+})
+
 /** Updates from the Operator (updates.ts), beside the chat app's side, or
  * with `dismissed` the notices the person dismissed. */
 export let updatesPage = async (
@@ -2575,7 +2582,7 @@ export let updatesPage = async (
       skip: ['#content', 'Skip to content'],
       main: h(
         'div',
-        { class: 'Talk_Column Updates' },
+        updateColumn(space, who),
         dismissedUpdates(env, space, put, beside.apps),
       ),
     })
@@ -2593,7 +2600,7 @@ export let updatesPage = async (
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',
-      { class: 'Talk_Column Updates' },
+      updateColumn(space, who),
       updates(
         env,
         space,
@@ -2639,7 +2646,7 @@ export let allUpdatesPage = async (
     skip: ['#content', 'Skip to content'],
     main: h(
       'div',
-      { class: 'Talk_Column Updates' },
+      updateColumn(space, who),
       allUpdates(env, news, shelves, news.missed.map((m) => m.space)),
     ),
   })

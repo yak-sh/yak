@@ -4,6 +4,7 @@
 // write which side of it, is @yaks/platform/friends.
 import {
   type Request as FriendRequest,
+  side,
   sidesOf,
   type Stand,
   type Standing,
@@ -13,7 +14,6 @@ import {
 import { sendable } from '@yaks/mail'
 import { presence } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
-import { talkPath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
 import { nameOf } from './names.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
@@ -518,11 +518,11 @@ export let friendUpdates = async (
         subject: standing == 'asked' ? 'Friend request' : 'Someone you know?',
         words: standing == 'asked'
           ? `${name} asked to be your friend on yaks.app.`
-          : `${name} is on yaks.app too. Add them as a friend? They see a request only if you do.`,
+          : `${name} is on yaks.app too.`,
         needs: true,
         unread: false,
         dismissed: false,
-        friend: { person },
+        friend: { person, suggested: standing == 'suggested' },
       }]
       : []
   )
@@ -531,19 +531,26 @@ export let friendUpdates = async (
 /** A person's answer to a friend request or suggestion in Updates. */
 export let answerFriend = async (
   env: Env,
-  space: Space,
   who: Who,
   other: string,
   verdict: string,
+  receipt: boolean,
 ) => {
   if (!who.person) throw refuse('access', 'Sign in to answer this.')
   if (!EID.test(other) || !['approved', 'declined'].includes(verdict)) {
     throw refuse('arguments', 'Choose an answer from the request.')
   }
-  await answer(open(env), who, {
+  let dir = open(env)
+  await answer(dir, who, {
     person: who.person,
     other,
     verdict: verdict as Verdict,
   })
-  return talkPath('updates', space.slug)
+  if (!receipt || verdict != 'approved') return
+  let [theirs] = await dir.read(
+    line`.entity.eid=${
+      side(other, who.person)
+    }&.relationship.role=friend&.decided.verdict=approved`,
+  )
+  return theirs ? 'friend' : 'asking'
 }

@@ -48,6 +48,11 @@ export let ASSETS: Asset[] = [
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   { name: '_sort.js', bundle: here('./sort.ts') },
+  {
+    name: '_inbox-actions.js',
+    bundle: of('@yaks/inbox/actions-browser'),
+    named: true,
+  },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A signed-in page's links followed in place (pages.ts `documented`).
