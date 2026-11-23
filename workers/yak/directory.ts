@@ -4238,12 +4238,10 @@ export let directoryRows = (rows: {
         ),
       }
     },
-    // What to call this person anywhere their address must not go: the name
-    // they chose in their settings or were invited under, else the front of
-    // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a
-    // page that shows its bylines shows names (T-32654).
+    // The display name, including for people with no email. Read the same
+    // row as the dashboard's other person lookups so they share one answer.
     nameAt: async (person: string): Promise<string | null> => {
-      let row = await one(line`.entity.eid=${person}&?doc&?email`)
+      let row = await one(line`.entity.eid=${person}`)
       return row
         ? nameOf(row.doc?.title, row.email?.address ?? '') || null
         : null
