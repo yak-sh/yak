@@ -142,13 +142,13 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
 
     assertStringIncludes(
       await tool('number_find', { toll_free: true }),
-      `${FREE} (833) 555-0100 — $1.00 up front and $4.00 a month`,
+      `${FREE} (833) 555-0100 — $1.00 up front and $2.00 a month`,
     )
     assertStringIncludes(
       await tool('number_buy', { number: FREE }),
-      '$5.00 of it from this month',
+      '$3.00 of it from this month',
     )
-    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 5)
+    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 3)
     assertEquals(
       await tool('number_find', { toll_free: true }),
       'No number on offer matches that.',
@@ -164,7 +164,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     assertEquals(filed[0].isvReseller, 'yaks.app')
     assertEquals(
       await tool('number_status'),
-      '(833) 555-0100 — not assigned yet; $1.00 up front and $4.00 a month; ' +
+      '(833) 555-0100 — not assigned yet; $1.00 up front and $2.00 a month; ' +
         'verification needed (Waiting For Customer): Add a picture of the ' +
         'sign-up card; approved for calls, texts to people who know it',
     )
@@ -216,7 +216,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     )
     await assertRejects(() => tool('number_assign', { number: FREE }))
     assertStringIncludes(await readTrash(), '(833) 555-0100')
-    assertStringIncludes(await readTrash(), '$4.00 a month')
+    assertStringIncludes(await readTrash(), '$2.00 a month')
     await assertRejects(
       () => cached.send({ to: '+12695550142', text: 'Queued before release' }),
       Error,
@@ -340,7 +340,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
         wake: { at: new Date().toISOString() },
       }],
     })
-    await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 14, {
+    await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 8, {
       label: 'the next month spent',
     })
     let [after] = await k.dir.read(q`.phone_line.number=${FREE} ?wake`)
@@ -580,7 +580,7 @@ test('a space buys a local voip.ms number by area code at its price and our marg
       agent.tool(name, { space: slug, ...args })
 
     let offer = `${LOCAL} (269) 201-5487 (BATTLE CRK, MI) — ` +
-      '$0.40 up front and $4.10 a month'
+      '$0.40 up front and $2.10 a month'
     assertStringIncludes(await tool('number_find', { area: '269' }), offer)
     assertStringIncludes(
       await tool('number_find', { state: 'MI', city: 'Battle Creek' }),
@@ -589,15 +589,16 @@ test('a space buys a local voip.ms number by area code at its price and our marg
     await assertRejects(
       () => tool('number_buy', { number: '+12695550000' }),
       Error,
-      `On offer in 269: ${LOCAL} ($0.40 up front and $4.10 a month)`,
+      `On offer in 269: ${LOCAL} ($0.40 up front and $2.10 a month)`,
     )
     assertStringIncludes(
       await tool('number_buy', { number: LOCAL }),
-      '$4.50 of it from this month',
+      '$2.50 of it from this month',
     )
-    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 4.5)
+    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 2.5)
     assertEquals(vms.held.get('2692015487')?.routing, 'account:100_y2692015487')
     let [bought] = await k.dir.lines({ eid: eids[slug] })
+    assertEquals(bought.monthly, 2.1)
     await stamp(env, {
       entities: [{
         entity: { eid: bought.eid },
@@ -861,6 +862,10 @@ test('a carrier-confirmed return leaves the trash and stops monthly billing even
   let { k, env, space, line, release, tool, cookie, person, stop } =
     await localLine()
   try {
+    // A line bought at the previous rate keeps that price until returned.
+    await stamp(env, {
+      entities: [{ entity: { eid: line.eid }, phone_line: { monthly: 4.1 } }],
+    })
     let [sub] = vms.accounts.values()
     vms.slowRestriction = true
     await release()
@@ -951,7 +956,7 @@ test('a spent budget and the trash both keep the sign-in a softphone holds', asy
     await orders(env, new Date())
     let [ordered] = await k.dir.lines({ eid: eids[slug] })
     assert(!ordered.ordering)
-    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 4.5)
+    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 2.5)
     // An order and a reveal share the provider submission window.
     await allowed(env, new Date())
     assertEquals(vms.accounts.size, 0)

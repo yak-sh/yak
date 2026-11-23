@@ -4,7 +4,7 @@
 
 /** What we add to what a provider charges us: dollars a month on each
  * number, and a share of every minute and text. */
-export let MARKUP = { monthly: 3, usage: 0.25 }
+export let MARKUP = { monthly: 1, usage: 0.25 }
 
 // Dollars to the cent above.
 let cents = (n: number) => Math.ceil(Number((n * 100).toFixed(6))) / 100
@@ -18,7 +18,7 @@ let cents = (n: number) => Math.ceil(Number((n * 100).toFixed(6))) / 100
  * import { numberPrice } from '@yaks/platform/numbers'
  * equal(numberPrice({ upfront: 0.4, monthly: 1.1 }), {
  *   upfront: 0.4,
- *   monthly: 4.1,
+ *   monthly: 2.1,
  * })
  * ```
  */

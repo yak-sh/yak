@@ -945,7 +945,8 @@ number_find:
     done: 'Found numbers'
   description: >-
     The phone numbers on offer for a space to buy as its own, each with
-    where it is local to and what it costs up front and each month. Local
+    where it is local to and what it costs up front and each month. The
+    monthly price includes $1 over the provider's monthly charge. Local
     numbers by default: by area code ("a 269 number"), by state and city, by
     digits it contains, or any number when none is given. toll_free true
     finds toll-free numbers. A local number takes calls on a softphone and
@@ -961,8 +962,9 @@ number_buy:
   description: >-
     Buy a number number_find offered, for the space to hold. Its price up
     front and its first month are spent from the space's monthly budget at
-    once, and each later month its monthly price is spent on the day of the
-    month it was bought, including while it is in the trash, until its owner
+    once. The monthly price is the provider's monthly charge plus $1 at
+    purchase. Each later month that price is spent on the day of the month
+    it was bought, including while it is in the trash, until its owner
     confirms returning it to the provider. A local number's calls are spent
     from the budget too, each by the minute. Only the space owner may buy;
     tell the person both prices before buying. A bought number texts nothing
@@ -1051,9 +1053,9 @@ number_status:
     done: 'Checked numbers'
   description: >-
     The numbers a space holds: where each texts from (the space, an app, or
-    nowhere yet), what it costs, where its toll-free verification stands,
-    read from the provider now, and what it is approved for: calls, texts to
-    people who know it, and texts to many people. A trashed number shows
+    nowhere yet), the price set at purchase, where its toll-free verification
+    stands, read from the provider now, and what it is approved for: calls,
+    texts to people who know it, and texts to many people. A trashed number shows
     which call directions the provider has shut off. Leave number out for
     every number the space holds. With a number and login true, the space owner
     gets a signed-in page to reveal their own softphone (SIP) username and

@@ -396,14 +396,21 @@ pending state means.
 A space can hold a phone number of its own: `number_find` lists numbers and
 their prices (local ones by area code, state and city, or any; toll-free ones on
 request), `number_buy` buys the one the person chooses from the space's budget,
-and `number_assign` puts it on the space or one of its apps. A local number
-takes calls on a softphone (`number_status` with `login`) and texts people who
-know it. Texts to many people need carrier approval: a toll-free number's
-verification, which `number_verify` files, or a local number's 10DLC campaign,
-which `number_assign` records. `number_status` says what each number is approved
-for. Until then a number is a personal line: a text to it from anyone outside
-the space is told to the space's owners in their Updates and the way they chose
-to be alerted, and nobody answers it.
+and `number_assign` puts it on the space or one of its apps.
+
+A new number costs $1 per month over the provider's monthly charge. For example,
+a voip.ms number with a $1.10 monthly charge costs $2.10 per month. The upfront
+charge is the provider's charge, rounded up to the nearest cent. Calls and texts
+cost 25% over the provider's usage rates. A number keeps the monthly price it
+had at purchase.
+
+A local number takes calls on a softphone (`number_status` with `login`) and
+texts people who know it. Texts to many people need carrier approval: a
+toll-free number's verification, which `number_verify` files, or a local
+number's 10DLC campaign, which `number_assign` records. `number_status` says
+what each number is approved for. Until then a number is a personal line: a text
+to it from anyone outside the space is told to the space's owners in their
+Updates and the way they chose to be alerted, and nobody answers it.
 
 A text to an app's number is a `text` row in its store. To run the app's own
 code for each one (reply, file it, start a workflow), give the app a builder
