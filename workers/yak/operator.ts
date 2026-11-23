@@ -624,6 +624,7 @@ let OWN_WORDS = new Set([
   'library_add',
   'library_remove',
   'connection_attach',
+  'store_attach',
   'connection_lend',
   'connection_need',
   'connection_list',

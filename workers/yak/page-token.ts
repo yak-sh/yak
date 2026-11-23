@@ -17,6 +17,7 @@ import { held } from './browser-sessions.ts'
 type Page = {
   person: string | null
   store: string
+  app?: string
   exp: number
   via?: string
   session?: string
@@ -30,10 +31,12 @@ let DAY = 24 * 60 * 60
 export let lasting = (until: number | undefined, now = Date.now()) =>
   until ?? Math.ceil(now / 1000 / DAY) * DAY + SESSION
 
-/** A page token: this person (or nobody) on this one store, until `exp`. */
+/** A page token: this person (or nobody) on this one app's store, until
+ * `exp`. */
 export let paging = (
   secret: string,
   store: string,
+  app: string,
   person: string | null,
   exp: number,
   via?: string,
@@ -44,6 +47,7 @@ export let paging = (
     {
       person,
       store,
+      app,
       exp,
       ...(via ? { via } : {}),
       ...(session ? { session } : {}),
@@ -51,17 +55,29 @@ export let paging = (
     secret,
   )
 
+/** Whether the app a page token was sealed for is attached to this store
+ * (store_attach), asked only of another app's token. */
+export type Reaches = (app: string) => Promise<boolean>
+
 /** Who a page token says is asking, or null for anything but a live token
- * sealed for this store. Another app's token fails here, whoever holds it. */
+ * sealed for this store, or for an app `reaches` says is attached to it.
+ * Any other app's token fails here, whoever holds it. `attached` says the
+ * token is another app's. */
 export let paged = async (
   sealed: string,
   env: Env,
   store: string,
+  reaches?: Reaches,
   now = Date.now(),
 ) => {
   if (!env.SESSION_SECRET) return null
   let p = await opened<Page>('page', sealed, env.SESSION_SECRET)
-  if (!p || p.store != store || typeof p.exp != 'number') return null
+  if (!p || typeof p.exp != 'number') return null
+  let attached = p.store != store
+  if (
+    attached &&
+    !(typeof p.app == 'string' && reaches && await reaches(p.app))
+  ) return null
   if (p.exp * 1000 <= now) return null
   if (
     p.person && !await held(
@@ -74,6 +90,7 @@ export let paged = async (
   return {
     person: typeof p.person == 'string' ? p.person : null,
     exp: p.exp,
+    ...(attached ? { attached: true as const } : {}),
     ...(p.session ? { session: p.session } : {}),
     via: instrumentEid(
       typeof p.via == 'string' && p.via ? p.via : `page:${sha256(sealed)}`,

@@ -222,7 +222,8 @@ import {
   tokenOf,
   walled,
 } from '@yaks/platform/installs'
-import { lasting, paged, paging } from './page-token.ts'
+import { lasting, paged, paging, type Reaches } from './page-token.ts'
+import { opens, reaching } from './attached.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -2421,7 +2422,6 @@ let served = async (
     if (reads && req.headers.get('sec-fetch-mode') == 'navigate') {
       return redirect(`${bare}${paper.rest.slice(1)}${url.search}`)
     }
-    if (!walls) return nothingHere(env)
     let clean = new URL(url)
     clean.pathname = url.pathname.slice(0, -path.length) + paper.rest
     req = new Request(clean, req)
@@ -2430,10 +2430,17 @@ let served = async (
   }
   let appHandle = storeName(space, app)
   let store = appHandle
-  if (
-    paper && (!env.SESSION_SECRET ||
-      !await paged(paper.token, env, store))
-  ) return json(401, 'not_a_reader', 'This page token does not open this app')
+  // A page token opens its own sandboxed app, and the API of any app its app
+  // is attached to (attached.ts), sandboxed or not. On an app out of the
+  // sandbox, any other token names nothing.
+  let reaches = paper || walls ? reaching(env, app) : undefined
+  let opened = paper && env.SESSION_SECRET
+    ? await paged(paper.token, env, store, reaches)
+    : null
+  if (paper && !walls && !opened?.attached) return nothingHere(env)
+  if (paper && (!opened || (opened.attached && !opens(path)))) {
+    return json(401, 'not_a_reader', 'This page token does not open this app')
+  }
   // A stranger's visit is served from the sample or from a store of their
   // own, so the worker it ran comes back holding grants for that store and
   // not the app's: it is served as the visit was (visit.ts `revisited`).
@@ -2514,7 +2521,7 @@ let served = async (
   // A sandboxed app already accepts its one-app page bearer. Keep that
   // credential on its existing path rather than treating it as a CLI login.
   let pageBearer = walls && env.SESSION_SECRET && bearerOf(req)
-    ? await paged(bearerOf(req)!, env, store)
+    ? await paged(bearerOf(req)!, env, store, reaches)
     : null
   if (
     !itself && !pageBearer && path.startsWith('/api/') &&
@@ -2540,8 +2547,18 @@ let served = async (
     await c.time(
       'who',
       () =>
-        walls
-          ? presented(req, env, seatOf, space!, store, paper?.token, path, dir)
+        walls || paper
+          ? presented(
+            req,
+            env,
+            seatOf,
+            space!,
+            store,
+            paper?.token,
+            path,
+            dir,
+            reaches,
+          )
           : whoIs(req, env, seatOf, space!.eid, dir),
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
@@ -2559,6 +2576,7 @@ let served = async (
     ? `${bare}~${await paging(
       env.SESSION_SECRET,
       store,
+      app.eid,
       who.person,
       lasting(who.until),
       who.via,
@@ -2953,6 +2971,7 @@ let presented = async (
   token: string | undefined,
   path: string,
   dir?: Directory,
+  reaches?: Reaches,
 ): Promise<Who> => {
   let sent = token ?? bearerOf(req)
   if (!sent) {
@@ -2960,7 +2979,8 @@ let presented = async (
       ? nobody
       : whoIs(req, env, roleOf, space.eid, dir)
   }
-  let p = env.SESSION_SECRET ? await paged(sent, env, store) : null
+  let p = env.SESSION_SECRET ? await paged(sent, env, store, reaches) : null
+  if (p?.attached && !opens(path)) return nobody
   if (!p) return whoIs(req, env, roleOf, space.eid, dir)
   if (!p.person) {
     return {

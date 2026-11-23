@@ -224,6 +224,34 @@ export let bearerOf = (req: Request) =>
   /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1] ??
     null
 
+/** A sibling's address as a sandboxed page asks it: with the page's own
+ * token after the sibling's slug, which opens the sibling's `/api/` where the
+ * page's app is attached to it (store_attach). `page` is the page client's
+ * own address, which carries the token as `/<app>/~<token>/`; any other
+ * address, and one on another host, is left as it was.
+ *
+ * ```ts
+ * import { carried } from '@yaks/platform/installs'
+ * import { assertEquals } from '@std/assert'
+ * let page = new URL('https://ada.yaks.app/office/~t0k/api/client.js')
+ * let at = (path: string, from = page) =>
+ *   carried(new URL(path, 'https://ada.yaks.app'), from).pathname
+ * assertEquals(at('/shop/api/'), '/shop/~t0k/api/')
+ * assertEquals(at('/office/~t0k/api/'), '/office/~t0k/api/')
+ * assertEquals(at('/shop/api/', new URL('https://ada.yaks.app/office/api/')), '/shop/api/')
+ * assertEquals(at('/'), '/')
+ * ```
+ */
+export let carried = (at: URL, page: URL): URL => {
+  let token = /^\/[^/]+\/(~[^/]+)\//.exec(page.pathname)?.[1]
+  if (!token || at.host != page.host || /^\/[^/]+\/~/.test(at.pathname)) {
+    return at
+  }
+  let out = new URL(at)
+  out.pathname = at.pathname.replace(/^(\/[^/]+\/)/, `$1${token}/`)
+  return out
+}
+
 /** The tags a sandboxed page is given for storage: the person's saved keys
  * as an inert JSON block, then the classic script that reads it, ahead of
  * every script of the page's own so `localStorage` is there before they run.

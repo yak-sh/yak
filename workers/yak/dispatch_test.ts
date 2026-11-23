@@ -170,7 +170,7 @@ let credentials = (() => {
   return [
     grantToken(grant, 'secret'),
     sign({ person: 'p1', space: null, exp }, 'secret'),
-    paging('secret', 'jeff_recipes', 'p1', exp),
+    paging('secret', 'jeff_recipes', 'recipes', 'p1', exp),
   ]
 })()
 

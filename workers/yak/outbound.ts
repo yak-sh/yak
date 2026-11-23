@@ -39,6 +39,7 @@ import {
 import type { Comp } from '@yaks/graph'
 import { mode, reads } from '@yaks/member'
 import { ctxOf } from './connections.ts'
+import { storesOf } from './attached.ts'
 import { bound, type Env } from './env.ts'
 import type { Answer, Asked } from './apps.ts'
 import { background, caught, defect } from './defects.ts'
@@ -179,15 +180,16 @@ let callerOf = ({ app, who }: Asked): Caller => ({
 // `./api/env`: the sentinel for each connected connection the app uses, by the
 // name its code reads it by (one for each field of several, `S3_REGION`),
 // where this visitor may call out through it: a shared one as its link
-// allows, and their own where the app asks each person.
+// allows, and their own where the app asks each person. Beside them, the
+// address of each store the app is attached to (attached.ts).
 // A direct link's key is for a worker's code and never a page's. Both doors
 // are the app's to those who may read it, as its store doors are: a private
 // app's link opened to anyone is open to anyone it lets in.
 export let envDoor: Answer = async (asked) => {
-  let { env, path, app, who, refuse } = asked
+  let { env, path, space, app, who, refuse } = asked
   if (path != '/env') return null
   if (!reads(mode(app.access), who.role)) return refuse('not_a_reader')
-  let out: Record<string, string> = {}
+  let out: Record<string, string> = await storesOf(env, space, app)
   for (let r of await usable(ctxOf(env), callerOf(asked))) {
     let u = (r.link[USES] ?? {}) as Comp
     if (u.direct || typeof u.binding != 'string') continue

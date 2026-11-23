@@ -2,6 +2,7 @@ import { decode, stringify, unpack } from '@yaks/vocab/wire'
 import { browserDrafts, draftEid } from '@yaks/draft/browser'
 import { durableOutbox } from '@yaks/sync/outbox'
 import { system } from '@yaks/fp'
+import { carried } from './installs.ts'
 import { browserPage, sayTab } from '@yaks/notify/tab'
 export { draftEid }
 export { qr } from './qr.ts'
@@ -195,12 +196,14 @@ let pageVersion = () => {
 let encodedPath = (path) =>
   String(path).split('/').map(encodeURIComponent).join('/')
 
+// A sandboxed page's own address carries its token, and a sibling store its
+// app is attached to opens to that token (@yaks/platform/installs `carried`).
 let based = (base) => {
   if (base instanceof URL) return base
   let here = globalThis.location
   let at = new URL(base, here?.origin == 'null' ? here.href : here?.origin)
   if (!at.pathname.endsWith('/')) at.pathname += '/'
-  return at
+  return carried(at, new URL(import.meta.url))
 }
 
 // The precondition a read-modify-write carries: the SHA-256 of a value as the

@@ -191,6 +191,10 @@ export let ESCALATING: Record<
   service_connect: (a) => `Connect the service ${a.service} to ${a.app}`,
   connection_attach: (a) =>
     `Give the app ${a.app} the connection ${a.connection}`,
+  store_attach: (a) =>
+    a.detach === true
+      ? undefined
+      : `Let the app ${a.app} use the store of ${a.store}`,
   connection_lend: (a) =>
     a.cap == null ? undefined : `Lend ${a.app}'s ${a.integration} connection`,
   mcp_connect: (a) =>

@@ -439,7 +439,7 @@ test('a page and worker visit preserve a browser instrument without turning it i
   assertEquals(await granted(req, SECRET, 'eve/game'), who)
   assertEquals(await granted(req, SECRET, 'eve/other'), null)
   let exp = Math.floor(Date.now() / 1000) + SESSION
-  let page = await paging(SECRET, 'eve/game', null, exp, who.via)
+  let page = await paging(SECRET, 'eve/game', 'game', null, exp, who.via)
   assertEquals(await paged(page, ENV, 'eve/game'), {
     person: null,
     exp,
@@ -449,6 +449,7 @@ test('a page and worker visit preserve a browser instrument without turning it i
   let old = await paging(
     SECRET,
     'eve/game',
+    'game',
     '00000000-0000-4000-8000-000000000011',
     exp,
   )
@@ -515,6 +516,7 @@ let independent = await credential(copies.person)
 let pageCopy = await paging(
   SECRET,
   'copies/app',
+  'app',
   copies.person,
   copies.claims.exp,
   copies.claims.via,

@@ -448,6 +448,7 @@ import { read } from '@yaks/yaml'
 import { viewsTools } from './views-tools.ts'
 import { carried, rebind } from './connections.ts'
 import { connectionTools } from './connection-tools.ts'
+import { attachTools } from './attach-tools.ts'
 import { background, caught, failing } from './defects.ts'
 import { step } from './funnel.ts'
 import { adopt, unadopt, type Visit, visitOf } from '@yaks/platform/visits'
@@ -8588,6 +8589,7 @@ export let TOOLS: Tool[] = [
   ...libraryTools.map(worded),
   ...viewsTools,
   ...connectionTools,
+  ...attachTools,
   worded(mcpConnect),
   worded(mcpRemove),
   ...numberTools.map(worded),

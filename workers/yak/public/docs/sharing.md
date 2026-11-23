@@ -13,7 +13,8 @@ guide:
     app_install(visit: true), and publishing and installing: app_publish,
     app_install, app_update, the gallery, an installed copy's independent data
     and borrowed connections, how it runs like the space's own apps and the
-    sandboxed setting, version pinning, what an update does to the data
+    sandboxed setting, attaching an app to another app's store with
+    store_attach, version pinning, what an update does to the data
     people saved, and sharing a skill: published, reviewed, installed and
     updated with the same tools.
 ---
@@ -669,6 +670,29 @@ the browser runs it in an origin of its own. What changes:
   as a stranger, its `/api/files/` endpoint refuses it, and from its next
   release (`app_deploy`) its vocabulary is installed in its own store only, and
   no other app uses it.
+
+## Attaching an app to another app's store
+
+An app can show, edit or run another app's data without copying it: a back
+office for a shop's orders, a browser for an app's uploads. The space's owner
+attaches it with `store_attach(app, store)`, naming the other app's slug, and
+the app reads that store's address from `./api/env` by its binding (the store's
+slug in capitals unless `binding` names another) and passes it to `store()`:
+
+    import { store } from './api/client.js'
+
+    let env = await (await fetch('./api/env')).json()
+    let shop = store(env.SHOP)
+    let orders = await shop.query('.order')
+
+The app reads and writes there as whoever is using it, with their own role in
+that app, never more. A sandboxed app reaches the store it is attached to, and
+nothing else of the space: its page token opens that store's rows, uploads,
+socket, commands and payments, never its connections (`./api/env`,
+`./api/fetch`), files or pages, and `store()` adds the token to the address by
+itself. An app out of the sandbox already reaches its siblings, so attaching
+only tells it which. `store_attach(app, store, detach: true)` takes the store
+away again, and the app is refused there at its next request.
 
 ## Version pinning
 

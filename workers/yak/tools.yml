@@ -687,6 +687,21 @@ connection_attach:
     renames it. It reaches the running app at once, with no redeploy. Find the
     connection id with store_connection_list. No key or token passes through
     this tool or its answer. Documentation: https://yaks.app/docs/code.
+store_attach:
+  title: Let an app use another app's store
+  description: >-
+    Give an app the store of another app in its space, the way
+    connection_attach gives it a connection: an app that shows, edits or runs
+    another app's data (a back office for a shop, a browser for an app's
+    uploads) without copying it. The app reads the store's address by
+    binding (env.NAME in worker.js, from ./api/env in a page) and passes it
+    to store(), as in `store(env.SHOP)`. It reads and writes there as whoever
+    is using it, with their own role in that app, never more. A sandboxed
+    app reaches that one store and nothing else of the space; an app out of
+    the sandbox already reaches its siblings, so attaching only tells it
+    which. Only the space's owner may do this. detach: true takes the store
+    away, and the app is refused there at its next request. Documentation:
+    https://yaks.app/docs/sharing.
 connection_lend:
   title: Lend a connection to installed copies
   description: >-
