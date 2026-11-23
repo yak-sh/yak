@@ -55,3 +55,51 @@ test('public apply retains and retries a preview edit when IndexedDB is denied',
     else Reflect.deleteProperty(globalThis, 'indexedDB')
   }
 })
+
+test('a store says its words merged by component, asked once', async () => {
+  let asked = 0
+  using _fetch = stub(globalThis, 'fetch', (url) => {
+    equal(String(url), 'https://shop.test/shop/api/vocab.json')
+    asked++
+    return Promise.resolve(Response.json([
+      { $defs: { order: { properties: { email: { type: 'string' } } } } },
+      { $defs: { order: { properties: { status: { type: 'string' } } } } },
+    ]))
+  })
+  let shop = store('https://shop.test/shop/api/')
+  equal(Object.keys((await shop.words()).order.properties), ['email', 'status'])
+  await shop.words()
+  equal(asked, 1)
+})
+
+test('a store posts to its payment doors as JSON and throws a refusal', async () => {
+  let sent: [string, string | undefined, unknown][] = []
+  using _fetch = stub(globalThis, 'fetch', (url, init) => {
+    sent.push([
+      String(url),
+      init?.method,
+      init?.body && JSON.parse(String(init.body)),
+    ])
+    return Promise.resolve(
+      String(url).endsWith('/refunds')
+        ? Response.json({ refund: 'r1', status: 'requested' }, { status: 202 })
+        : Response.json(
+          { error: { code: 'not_an_editor', message: 'Editors only' } },
+          { status: 403 },
+        ),
+    )
+  })
+  let shop = store('https://shop.test/shop/api/')
+  equal(await shop.pay('refunds', { request: 'r1', order: 'o1' }), {
+    refund: 'r1',
+    status: 'requested',
+  })
+  await throws(() => shop.pay('/refunds/r1'), 'Editors only')
+  equal(sent, [
+    ['https://shop.test/shop/api/pay/refunds', 'POST', {
+      request: 'r1',
+      order: 'o1',
+    }],
+    ['https://shop.test/shop/api/pay/refunds/r1', undefined, undefined],
+  ])
+})

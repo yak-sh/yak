@@ -602,9 +602,9 @@ each at the boundary of what it serves:
 - gallery-row.ts is where an app stands in the gallery, what a space's index and
   badge read; gallery.ts reaches admin.ts only for its review.
 - `VERSION` is running.ts's, beside the deploy version it stands in for; `seedy`
-  is files.ts's; data.ts owns `titleOf` and `readOnly`; post.ts, payments.ts and
-  phones.ts load lent.ts (and with it every package's vocabulary) when they
-  first lend.
+  is files.ts's; @yaks/data-editor owns `titleOf` and `readOnly`; post.ts,
+  payments.ts and phones.ts load lent.ts (and with it every package's
+  vocabulary) when they first lend.
 
 Compile and top-level evaluation as above (Node 26, `vm.SourceTextModule`, a
 fresh process each, medians of 8 alternating rounds, Site's of 4), main at

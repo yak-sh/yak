@@ -21,18 +21,18 @@ stop.abort()
 equal(stopped(), true)
 ```
 
-| Export                                        | Provides                                                                                                                                                                          |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every`              |
-| `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                                   |
-| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                                |
-| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Undeliverable`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`, `MailDomains`, `MailDomain`, `DomainRecord` |
-| `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                              |
-| `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract                                                       |
-| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                                            |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`, `numbering`                                                       |
-| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                             |
-| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                                         |
+| Export                                        | Provides                                                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every`                        |
+| `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                                             |
+| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                                          |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Undeliverable`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`, `MailDomains`, `MailDomain`, `DomainRecord`           |
+| `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                                        |
+| `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract; `packed` and `unpacked`, a cart as it rides an order's `items` |
+| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                                                      |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`, `numbering`                                                                 |
+| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                                       |
+| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                                                   |
 
 ## Assembly
 

@@ -100,7 +100,7 @@ import type { Accepts } from '@yaks/blob'
 
 import type { VocabDoc } from '@yaks/vocab'
 
-import { kinds } from './data.ts'
+import { kinds } from '@yaks/data-editor'
 
 export type Kids = ComponentChildren
 
@@ -967,9 +967,9 @@ export let keyBox = (
   ]
 }
 
-/** The data editor's page (public/data.js draws what is in it): what an
- * app's words keep (data.ts `kinds`) and the files it takes, handed to the
- * script as data. */
+/** The data editor's page (@yaks/data-editor/editor, served as data.js,
+ * draws what is in it): what an app's words keep (@yaks/data-editor `kinds`)
+ * and the files it takes, handed to the script as data. */
 export let editor = (
   env: Host,
   at: { app: string; at: string; words: VocabDoc; version: string },

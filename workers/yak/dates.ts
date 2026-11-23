@@ -1,18 +1,6 @@
 // All hosted pages share the kit's date face and delegated tooltips.
-import { time, tips } from '@yaks/ui/parts'
+import { tips } from '@yaks/ui/parts'
 import { said, tip } from '@yaks/ui/relative'
-
-/** A kit timestamp for the data editor's DOM tree. */
-export let stamp = (doc: Document, at: string): HTMLElement => {
-  return time((tag, props, ...children) => {
-    let node = doc.createElement(tag)
-    for (let [key, value] of Object.entries(props ?? {})) {
-      if (value != null) node.setAttribute(key, String(value))
-    }
-    node.textContent = children.join('')
-    return node
-  }, { at }) ?? doc.createElement('span')
-}
 
 // The tip each time was last given here: a time keeps it until the server
 // draws it again, so a page saying its durations every second formats each

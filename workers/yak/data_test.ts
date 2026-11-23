@@ -15,8 +15,8 @@ import {
   unique,
 } from './probe.ts'
 import type { PropSchema } from '@yaks/vocab'
-import { fields, kinds } from './data.ts'
-import { open, patch, title } from './data-editor.js'
+import { fields, kinds } from '@yaks/data-editor'
+import { open, patch, title } from '@yaks/data-editor/editor'
 import { appDoc } from './vocab.ts'
 
 let k = await kernel()

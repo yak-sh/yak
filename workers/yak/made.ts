@@ -8,7 +8,7 @@ import { Notice } from '@yaks/ui/parts'
 import { type ComponentChildren as Node, h } from 'preact'
 import { Button, Empty, Rows } from '@yaks/ui/parts'
 import { read } from '@yaks/yaml'
-import { readOnly, titleOf } from './data.ts'
+import { readOnly, titleOf } from '@yaks/data-editor'
 import type { Step } from '@yaks/builders/workflow'
 
 // How the Operator writes a new app so this column shows it being made, in

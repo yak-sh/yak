@@ -1,12 +1,15 @@
-// What an app's data editor edits (pages.ts `editor`, public/data.js), read
-// from the words its release declares: the kinds of row it keeps, and for
-// each the field a property is written in. Pure data, handed to the page,
-// named the way the column beside the chat names them (made.ts).
+/**
+ * What a store's rows are edited and shown with, read from the words it
+ * declares: the kinds of row it keeps, and for each the field a property is
+ * written in. Pure data, handed to a page: the data editor (`./editor`) and any
+ * app that edits another store's rows (`./form`) draw from it.
+ *
+ * @module
+ */
 import type { PropSchema } from '@yaks/vocab'
 
 /** The words a component, command or property gives itself, which name it
- * for a person ('' for none); the column beside the chat names them by these
- * too (made.ts). */
+ * for a person ('' for none). */
 /// titleOf({ title: ' Address line 2 ' }) -> 'Address line 2'
 /// titleOf({ title: 2 }) -> ''
 export let titleOf = (entry: { title?: unknown }): string =>
@@ -64,12 +67,15 @@ let kept = (def: PropSchema & Record<string, unknown>) =>
   (def.sync == null || def.sync == 'server') &&
   (def.durable == null || def.durable == 'forever')
 
-// A name as a label says it, where its declaration gives no title.
 let spoken = (word: string) => {
   let text = word.replaceAll('_', ' ')
   return text[0].toUpperCase() + text.slice(1)
 }
-let named = (word: string, s: PropSchema) => titleOf(s) || spoken(word)
+/** A word as a label says it: its title, or the word spoken. */
+/// label('price_cents', {}) -> 'Price cents'
+/// label('held', { title: 'Held on' }) -> 'Held on'
+export let label = (word: string, s: PropSchema): string =>
+  titleOf(s) || spoken(word)
 
 let lines = (s: PropSchema) =>
   s.type == 'array' &&
@@ -115,7 +121,7 @@ export let fields = (name: string, def: PropSchema): Field[] => [
     .map(([prop, s]): Field => ({
       comp: name,
       prop,
-      label: named(prop, s),
+      label: label(prop, s),
       control: control(prop, s),
       ...s.description ? { hint: s.description } : {},
       ...s.ref ? { ref: s.ref } : {},
@@ -123,6 +129,24 @@ export let fields = (name: string, def: PropSchema): Field[] => [
       ...readOnly(s) ? { readOnly: true } : {},
     })),
 ]
+
+/** Every property a component holds, each shown and never edited: what a
+ * row says of itself, including what the platform or the app keeps there. */
+/// facts('order', { properties: { total_cents: { type: 'integer', stamped: true }, items: { type: 'string', title: 'Items' } } })
+///   -> [
+///     { comp: 'order', prop: 'total_cents', label: 'Total cents', control: 'number', readOnly: true },
+///     { comp: 'order', prop: 'items', label: 'Items', control: 'text', readOnly: true },
+///   ]
+export let facts = (name: string, def: PropSchema): Field[] =>
+  Object.entries(def.properties ?? {}).map(([prop, s]): Field => ({
+    comp: name,
+    prop,
+    label: label(prop, s),
+    control: control(prop, s),
+    ...s.description ? { hint: s.description } : {},
+    ...s.ref ? { ref: s.ref } : {},
+    readOnly: true,
+  }))
 
 /** What the editor lists: each kind the words keep, then the rows they have
  * no kind for, so an app whose rows are plain docs still has rows to edit. */
@@ -132,7 +156,7 @@ export let kinds = (defs: Record<string, PropSchema> = {}): Kind[] => {
   let own = Object.entries(defs).filter(([, def]) => kept(def))
     .map(([name, def]): Kind => ({
       name,
-      label: named(name, def),
+      label: label(name, def),
       ...def.description ? { hint: def.description } : {},
       line: `.${name}`,
       fields: fields(name, def),

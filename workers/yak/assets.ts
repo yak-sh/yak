@@ -39,7 +39,7 @@ export let ASSETS: Asset[] = [
   { name: '_outbox.js', bundle: of('@yaks/sync/outbox') },
   { name: '_wire.js', bundle: of('@yaks/vocab/wire') },
   { name: 'chart.js', bundle: here('./chart.js'), named: true },
-  { name: 'data.js', bundle: here('./data-editor.js') },
+  { name: 'data.js', bundle: of('@yaks/data-editor/editor') },
   { name: '_dates.js', bundle: here('./dates-browser.ts'), named: true },
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
   { name: '_edit.js', bundle: here('./edit-mode.ts') },

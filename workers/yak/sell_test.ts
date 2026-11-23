@@ -20,7 +20,6 @@ import {
   MARK,
   orderEid,
   orderOf,
-  packed,
   priced,
   type Product,
   quoted,
@@ -29,9 +28,8 @@ import {
   sale,
   sellerOf,
   selling,
-  unpacked,
 } from './sell.ts'
-import type { Paid } from '@yaks/host/payments'
+import { packed, type Paid, unpacked } from '@yaks/host/payments'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import { page as drawn } from './site/mod.ts'

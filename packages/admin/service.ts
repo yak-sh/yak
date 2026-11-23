@@ -132,6 +132,14 @@ let repoApps = (space: string, apps: string[], as?: string): Release[] =>
 export let RELEASED: Release[] = [
   { dir: 'apps/home', app: 'home', space: 'yak', afterWorker: true },
   ...repoApps('yak', ['home-preview']),
+  // Its page imports @yaks/data-editor, which the compiler's catalog holds
+  // once the Worker that carries it is live.
+  {
+    dir: 'apps/back-office',
+    app: 'back-office',
+    space: 'yak',
+    afterWorker: true,
+  },
   {
     dir: 'apps/yak-sh',
     app: 'yak-sh',

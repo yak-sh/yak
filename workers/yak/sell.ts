@@ -69,7 +69,7 @@ import {
   quotedOrder,
   readQuote,
 } from './service-quotes.ts'
-import type { Quote } from '@yaks/host/payments'
+import { type Item, packed, type Quote, unpacked } from '@yaks/host/payments'
 import { protectedSale } from './sale-private.ts'
 import {
   recordRefund,
@@ -255,8 +255,6 @@ export let disconnect = (env: Env, space: Space) => wrote(env, space, null)
  * the seller offers — a size, a colour — appended to the name the buyer reads
  * on the checkout page, and kept on the order so the seller knows what to put in
  * the box. */
-export type Item = { product: string; qty: number; options?: string }
-
 /** The cart, read off a request body. Throws the sentence the caller reads:
  * this is the door a guest reaches, so a refusal has to say what to fix. */
 export let cart = (body: unknown): Item[] => {
@@ -288,21 +286,6 @@ export type Product = {
   doc?: { title?: string | null }
   product?: { price_cents?: number | null }
 }
-
-/** The items as they ride the checkout and come back on the event: the product,
- * how many, and the variant, in the shortest form that survives a round
- * trip. They ride one tag, so its length is what decides how many lines fit
- * in an order ({@link priced}). Dashes come off the uuid to buy back four
- * characters a line: a uuid without them is 32 characters and a line about
- * 45. */
-export let packed = (items: Item[]) =>
-  JSON.stringify(
-    items.map((i) => ({
-      p: i.product.replace(/-/g, ''),
-      q: i.qty,
-      ...(i.options ? { o: i.options } : {}),
-    })),
-  )
 
 /**
  * The cart priced against the store's own rows: the sale's lines, the total
@@ -683,30 +666,6 @@ export let orderEid = (session: string): string => {
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${
     s.slice(16, 20)
   }-${s.slice(20)}`
-}
-
-/** The cart read back out of a checkout's tags — {@link packed}, undone.
- * Junk answers an empty list rather than throwing: an order whose items cannot
- * be read is still an order somebody paid for, and losing the money over the
- * label would be the worse mistake. */
-export let unpacked = (items: unknown): Item[] => {
-  try {
-    let out = JSON.parse(String(items ?? '[]')) as {
-      p?: string
-      q?: number
-      o?: string
-    }[]
-    return (Array.isArray(out) ? out : []).map((i) => ({
-      product: String(i.p ?? '').replace(
-        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
-        '$1-$2-$3-$4-$5',
-      ),
-      qty: Number(i.q ?? 1),
-      ...(i.o ? { options: String(i.o) } : {}),
-    }))
-  } catch {
-    return []
-  }
 }
 
 /**

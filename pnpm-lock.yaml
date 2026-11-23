@@ -1553,6 +1553,22 @@ importers:
         specifier: 0.2.30
         version: link:../testing
 
+  packages/data-editor:
+    dependencies:
+      '@yaks/ui':
+        specifier: 0.2.30
+        version: link:../ui
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
+    devDependencies:
+      '@yaks/testing':
+        specifier: 0.2.30
+        version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+
   packages/design:
     dependencies:
       '@yaks/graph':
@@ -6160,6 +6176,9 @@ importers:
       '@yaks/d1':
         specifier: 0.2.23
         version: link:../../packages/d1
+      '@yaks/data-editor':
+        specifier: 0.2.23
+        version: link:../../packages/data-editor
       '@yaks/design':
         specifier: 0.2.28
         version: link:../../packages/design

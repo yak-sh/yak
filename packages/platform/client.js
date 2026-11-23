@@ -468,11 +468,10 @@ export let store = (base, { clock = system } = {}) => {
   // the connection drops gets its rows once it is back, not an empty page.
   let rawAsk = (path, init, read = READ) =>
     init ? once(path, init) : again(clock, () => once(path), read)
+  // The store's words: each component it declares, by name, its documents
+  // (`vocab.json`) merged. Asked once, and again after a failure.
   let vocabulary
-  let readWire = async (value, payload) => {
-    // No extra request for a page whose answers contain no byte tags. Only
-    // the vocabulary, never a global JSON reviver, gives the tag meaning.
-    if (!payload && !JSON.stringify(value).includes('"$bytes"')) return value
+  let words = () =>
     vocabulary ??= rawAsk('vocab.json').then((docs) => {
       let defs = {}
       for (let doc of docs) {
@@ -484,13 +483,29 @@ export let store = (base, { clock = system } = {}) => {
           }
         }
       }
-      return { def: (name) => defs[name] }
+      return defs
     }).catch((error) => {
       vocabulary = undefined
       throw error
     })
-    return decode(await vocabulary, value, payload)
+  let readWire = async (value, payload) => {
+    // No extra request for a page whose answers contain no byte tags. Only
+    // the vocabulary, never a global JSON reviver, gives the tag meaning.
+    if (!payload && !JSON.stringify(value).includes('"$bytes"')) return value
+    let defs = await words()
+    return decode({ def: (name) => defs[name] }, value, payload)
   }
+  // A payment door (`pay/checkout`, `pay/refunds`, `pay/orders/<eid>`): a
+  // body is posted as JSON, none reads; a refusal throws with its message.
+  let pay = (path, body) =>
+    rawAsk(
+      `pay/${String(path).replace(/^\/+/, '')}`,
+      body === undefined ? undefined : {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    )
   let ask = async (path, init, read) => readWire(await rawAsk(path, init, read))
   // One bundle or many, in; `{ok, aliases, bundles}` back, where `aliases`
   // maps each `$alias` to the eid it minted and `bundles` is the batch as
@@ -878,6 +893,8 @@ export let store = (base, { clock = system } = {}) => {
     outbox,
     me,
     operatorSend,
+    pay,
+    words,
     query,
     search,
     subscribe,
@@ -992,6 +1009,7 @@ export let {
   me,
   operatorSend,
   outbox,
+  pay,
   publicFiles,
   publish,
   query,
@@ -999,6 +1017,7 @@ export let {
   subscribe,
   unpublish,
   upload,
+  words,
 } = store(
   new URL('.', import.meta.url),
 )

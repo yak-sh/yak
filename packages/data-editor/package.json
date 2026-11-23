@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/data-editor",
+  "version": "0.2.23",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./form": "./form.js",
+    "./editor": "./editor.js"
+  },
+  "license": "Apache-2.0",
+  "description": "A store's rows as forms, from the words it declares: the kinds it keeps and a field per property, the row form a row is added, edited and deleted with, what a row holds shown as words, and the data editor page drawn from them.",
+  "dependencies": {
+    "@yaks/ui": "0.2.30",
+    "@yaks/vocab": "0.2.32"
+  },
+  "devDependencies": {
+    "@yaks/testing": "0.2.30",
+    "linkedom": "^0.18.12"
+  }
+}

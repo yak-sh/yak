@@ -331,6 +331,11 @@ grouped approximately by function, **not** by dependency order.
   rendering are implemented once. Its `body` uses `@yaks/blob`'s `store` keyword
   without depending on the package that implements it — content-addressed when
   blob is loaded, plain text otherwise.
+- **[@yaks/data-editor](./data-editor)** — a store's rows as forms, from the
+  words it declares: `kinds` and `fields` (a field per property, `facts` for
+  every property shown), the row form a row is added, edited and deleted with
+  (`./form`), and the data editor page drawn from them (`./editor`), which
+  yaks.app serves for every app and any app can import to edit another store.
 - **[@yaks/domains](./domains)** — domains a person buys through their space:
   `domain_order{name, space, serves, checkout, cents, live}` written by a paid
   checkout, `fulfil()` registering it at a registry and attaching it with every

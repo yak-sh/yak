@@ -49,7 +49,7 @@ at `../api/client.js`.
 
 ## Exports of `client.js`
 
-`client.js` exports seventeen names. These twelve are bound to the app's own
+`client.js` exports nineteen names. These fourteen are bound to the app's own
 store:
 
 - the functions `apply`, `query`, `search`, `subscribe`, `upload`, `me` and
@@ -58,6 +58,15 @@ store:
   ([Realtime Sync and Persistence](./storage.md)).
 - `publish`, `unpublish` and `publicFiles`, which put a file on the public web
   at a path of the app's address ([Files and Uploads](./files.md)).
+- `words()`, which resolves to the store's components by name: each declaration
+  from its `vocab.json` and the platform's, such as
+  `words().then((w) => w.order.properties)`.
+- `pay(path, body)`, which calls the store's payment doors under `./api/pay/`:
+  with a body it posts it as JSON
+  (`pay('refunds', {request, order, amount,
+  reason})`), without one it reads
+  (`pay('orders/' + eid)`). A refusal throws with its message
+  ([Payments](./selling.md)).
 
 These five functions need no store:
 
@@ -69,13 +78,13 @@ These five functions need no store:
 - `qr(text, label)`, an inline SVG QR code, documented below.
 - `store(base)`, described next.
 
-`store(base)` returns an object holding the twelve names bound to a store
+`store(base)` returns an object holding the fourteen names bound to a store
 (`apply`, `query`, `search`, `subscribe`, `upload`, `me`, `operatorSend`,
-`outbox`, `drafts`, `publish`, `unpublish` and `publicFiles`), pointed at the
-store at the address you pass. Every app in a space shares one hostname, so a
-sibling app (another app in the same space) is addressed by its path, with or
-without the trailing slash. The sibling answers according to its own `access`
-setting, whoever is asking:
+`outbox`, `drafts`, `publish`, `unpublish`, `publicFiles`, `words` and `pay`),
+pointed at the store at the address you pass. Every app in a space shares one
+hostname, so a sibling app (another app in the same space) is addressed by its
+path, with or without the trailing slash. The sibling answers according to its
+own `access` setting, whoever is asking:
 
     import { store } from './api/client.js'
 

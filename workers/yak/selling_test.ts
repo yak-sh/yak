@@ -19,6 +19,7 @@ import { added, asked } from './examples/shop/cart.js'
 import { delivered } from '@yaks/stripe/testing'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
+import { packed } from '@yaks/host/payments'
 import { call, type Ctx } from './tools.ts'
 import {
   ADA,
@@ -312,7 +313,7 @@ test('a sale is filed, refunded, disputed and restored on its order', async () =
       customer_details: { email: 'ana@example.com' },
       metadata: {
         ...tags,
-        items: sell.packed([{ product: shirt.entity.eid, qty: 1 }]),
+        items: packed([{ product: shirt.entity.eid, qty: 1 }]),
       },
     }),
     'shop: paid 2800',

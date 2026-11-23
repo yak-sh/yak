@@ -6,6 +6,48 @@
  * provider, so a host's billing keeps its rules and refusals and a second
  * provider has one contract to meet. */
 
+/** One line of a cart: which product, how many, and its variant. */
+export type Item = { product: string; qty: number; options?: string }
+
+/** The items as they ride the checkout and come back on the event: the product,
+ * how many, and the variant, in the shortest form that survives a round
+ * trip. They ride one tag, so its length is what decides how many lines fit
+ * in an order. Dashes come off the uuid to buy back four
+ * characters a line: a uuid without them is 32 characters and a line about
+ * 45. */
+export let packed = (items: Item[]): string =>
+  JSON.stringify(
+    items.map((i) => ({
+      p: i.product.replace(/-/g, ''),
+      q: i.qty,
+      ...(i.options ? { o: i.options } : {}),
+    })),
+  )
+
+/** The cart read back out of a checkout's tags — {@link packed}, undone.
+ * Junk answers an empty list rather than throwing: an order whose items cannot
+ * be read is still an order somebody paid for, and losing the money over the
+ * label would be the worse mistake. */
+export let unpacked = (items: unknown): Item[] => {
+  try {
+    let out = JSON.parse(String(items ?? '[]')) as {
+      p?: string
+      q?: number
+      o?: string
+    }[]
+    return (Array.isArray(out) ? out : []).map((i) => ({
+      product: String(i.p ?? '').replace(
+        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+        '$1-$2-$3-$4-$5',
+      ),
+      qty: Number(i.q ?? 1),
+      ...(i.o ? { options: String(i.o) } : {}),
+    }))
+  } catch {
+    return []
+  }
+}
+
 /** A party's details and tags as a payer is minted with them, and what every
  * object the provider makes for that party carries back: the host's own
  * words, such as whose it is and where it was bought. */

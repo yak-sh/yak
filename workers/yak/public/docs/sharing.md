@@ -674,10 +674,12 @@ the browser runs it in an origin of its own. What changes:
 ## Attaching an app to another app's store
 
 An app can show, edit or run another app's data without copying it: a back
-office for a shop's orders, a browser for an app's uploads. The space's owner
-attaches it with `store_attach(app, store)`, naming the other app's slug, and
-the app reads that store's address from `./api/env` by its binding (the store's
-slug in capitals unless `binding` names another) and passes it to `store()`:
+office for a shop's orders (the published `back-office` app is one,
+<https://yaks.app/docs/selling.md>), a browser for an app's uploads. The space's
+owner attaches it with `store_attach(app, store)`, naming the other app's slug,
+and the app reads that store's address from `./api/env` by its binding (the
+store's slug in capitals unless `binding` names another) and passes it to
+`store()`:
 
     import { store } from './api/client.js'
 

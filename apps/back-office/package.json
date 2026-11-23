@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@yaks/data-editor": "platform",
+    "@yaks/host": "platform",
+    "@yaks/ui": "platform"
+  }
+}

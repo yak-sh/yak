@@ -191,6 +191,19 @@ The whole query syntax works on orders (<https://yaks.app/docs/querying.md>):
 search. An agent runs the same query through `graph_query`, so "what sold this
 week" is one call with no page open.
 
+### The back office
+
+A seller who wants the orders, customers, products and refunds of a shop in one
+place needs no page of their own for it. The back office is a published app
+(`app_install(name: 'back-office')`) that runs any shop's store: install it,
+then attach it to the app that sells with
+`store_attach(app: 'back-office', store: '<shop>', binding: 'STORE')`
+(<https://yaks.app/docs/sharing.md>). It lists the orders newest first with
+every other component the shop's own app keeps on each one, groups the people on
+orders as customers, edits products, and refunds through `/pay/refunds`. It is
+an ordinary app, so a different back office is one more app attached the same
+way.
+
 ## Customer privacy
 
 Orders, quotes and receipt mail are private to the seller's editors and owners,
@@ -284,9 +297,15 @@ the seller's merchant account and never moves a space's included usage budget.
 
 ## Merchant refunds
 
-The seller's worker or an editor posts to `/pay/refunds` through `env.APP`:
+The seller's worker posts to `/pay/refunds` through `env.APP`, and a page an
+editor uses posts the same with the client's `pay`
+(<https://yaks.app/docs/store.md>), on its own store or on one it is attached
+to:
 
     {request: refundId, order: orderId, amount: cents, reason: explanation}
+
+    await pay('refunds', { request: crypto.randomUUID(), order: order.entity.eid,
+                           reason: 'Arrived damaged' })
 
 Both identities are UUIDs. Keep `request` fixed when retrying the same refund.
 Omit `amount` for the remaining payment, or supply a positive amount for a
