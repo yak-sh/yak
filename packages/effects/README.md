@@ -496,11 +496,15 @@ its attempt count after progress, giving a subsequent failure its full retry
 allowance. `attempt.retry(body)` retries a local completion while keeping the
 claim, so the handler need not repeat its external work.
 
-A pooled handler waiting for a dependency calls `await attempt.defer(delayMs)`
-and returns normally. The positive, finite delay leaves the same run pending
-until it is due again, releases its claim and slot, and spends no retry attempt.
-It is waiting work, so no failure is reported. The next invocation comes through
-the pool's ordinary queue selection.
+A pooled handler waiting for a dependency calls
+`await attempt.defer(delayMs, reason)` and returns normally. The positive,
+finite delay leaves the same run pending until it is due again, releases its
+claim and slot, and spends no retry attempt. An optional reason is recorded in
+`effect.waiting` for callers checking progress.
+
+A commit-triggered effect can declare `fifo: true` to run one request at a time
+in `effect.at` order. A running or deferred head keeps its place across workers.
+Other effect handlers continue to run while it waits.
 
 The complete waiting and retry lifecycle is covered by the
 [deferral tests](./defer_test.ts).

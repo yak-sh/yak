@@ -899,6 +899,10 @@
         "idempotent": {
           "type": "boolean"
         },
+        "fifo": {
+          "type": "boolean",
+          "description": "For commit-triggered effects, work only the oldest pending run."
+        },
         "description": {
           "type": "string"
         }

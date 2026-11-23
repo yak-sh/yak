@@ -1,6 +1,31 @@
 // Work discovery asks for eligibility before taking a bounded page. Relative
 // time stays in the query; each pass supplies its clock at the read boundary.
-import { absent, type And, and, eq, le, list, ne, or, time } from '@yaks/query'
+import type { Access, Bundle } from '@yaks/graph'
+import {
+  absent,
+  type And,
+  and,
+  eq,
+  le,
+  limit,
+  list,
+  ne,
+  or,
+  order,
+  time,
+} from '@yaks/query'
+
+/** The first outstanding run in request order, even if held or deferred. */
+export let firstPending = async (
+  g: Pick<Access, 'read'>,
+  handler: string,
+): Promise<Bundle | undefined> =>
+  (await g.read(and(
+    eq('effect.handler', handler),
+    eq('effect.state', 'pending'),
+    order('effect.at'),
+    limit(1),
+  )))[0]
 
 let due = or(absent('effect.next'), le('effect.next', time('now')))
 let free = or(

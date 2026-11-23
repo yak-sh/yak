@@ -18,6 +18,7 @@ import {
 } from '@yaks/graph'
 import { answerOf, keeps, toolEid, worded } from '@yaks/tools'
 import { BEST, loadTools } from '@yaks/graph/tools'
+import { human } from '@yaks/id'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
@@ -35,7 +36,7 @@ let reads = { file: () => '', stdin: () => '' }
 
 // The harness is one plugin among the packages whose words it runs over: its
 // `./vocab` says only its own, so it composes beside them.
-let host = () =>
+let host = (...plugins: string[]) =>
   compose({
     db: ':memory:',
     plugins: [
@@ -48,8 +49,67 @@ let host = () =>
       '@yaks/provenance',
       '@yaks/model',
       '@yaks/harness',
+      ...plugins,
     ],
   }, ['graph'])
+
+test('session_list includes the machine room seen by the queued sessions', async () => {
+  let h = await host('@yaks/effects')
+  try {
+    let sessions = [mint(), mint(), mint()]
+    let requests = sessions.map(() => mint())
+    let provider = identityEid(PROVIDER, ['fake'])
+    await h.graph.apply([
+      {
+        entity: { eid: provider },
+        provider: { name: 'fake', transport: 'process' },
+      },
+      ...sessions.flatMap((eid, i) => [
+        { entity: { eid }, session: { id: eid } },
+        {
+          entity: { eid: requests[i] },
+          entry: { session: eid, seq: 1 },
+          content: { body: 'go' },
+          using: { provider },
+        },
+      ]),
+    ])
+    let waiting =
+      'Waiting for machine room (3.0 GiB available, 0.25% memory pressure (PSI avg10))'
+    await h.graph.apply(
+      requests.slice(0, 2).map((target, i) => ({
+        entity: { eid: mint() },
+        effect: {
+          target,
+          handler: 'spawn_start',
+          state: 'pending',
+          at: new Date(i).toISOString(),
+          ...i == 0 ? { waiting } : {},
+        },
+      })),
+      { trusted: true },
+    )
+    let id = mint()
+    let rows = answerOf(
+      await h.runner.read({
+        entity: { eid: id },
+        call: { to: toolEid('session_list'), args: {} },
+      }),
+      id,
+    ) as Bundle[]
+    let ids = sessions.map((eid) =>
+      human()(rows.find((b) => b.entity.eid == eid)!)
+    )
+    let note = String(
+      (rows.find((b) => b.entity.eid == '$said')?.content as Comp)?.body,
+    )
+    assert(note.includes(waiting), note)
+    assert(ids.slice(0, 2).every((s) => note.includes(s)), note)
+    assert(!note.includes(ids[2]), note)
+  } finally {
+    await h.close()
+  }
+})
 
 test('the harness composes as a plugin, and its words reach a command line and MCP', async () => {
   let h = await host()

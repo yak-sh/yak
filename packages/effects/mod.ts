@@ -89,3 +89,4 @@ export { type Listed, WORKER, type Worker } from './worker.ts'
 export * from './expire.ts'
 
 export { enqueue } from './enqueue.ts'
+export { firstPending } from './ready.ts'

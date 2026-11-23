@@ -1,7 +1,7 @@
 import { machineDoc } from '@yaks/machine/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
@@ -592,37 +592,82 @@ test('a dependency that finishes while the run goes is told as it ends', async (
   assert(p.started[0][2].includes('has finished'), p.started[0][2])
 })
 
-// A start the machine has no room for waits in the pool and launches nothing;
-// asked again with room, it launches.
-test('a start waits for its machine to have room', async () => {
-  let { g } = tracked()
+test('managed starts wait for room and launch in request order', async () => {
   let where = dir()
+  let vocab = loadVocab([...host.docs, effectDoc], [edgeKeywords])
+  let time = clock()
+  let fx = effects(vocab, { clock: time })
+  let peer = effects(vocab, { clock: time })
+  let g = graph({
+    storage: ram(vocab, { number: true }),
+    vocab,
+    plugins: [sessions(), processes(), fx],
+  })
+  let GiB = 1024 ** 3
+  let available = 3 * GiB
+  let starts: string[] = []
+  let launchingFirst = Promise.withResolvers<void>()
+  let pidKnown = Promise.withResolvers<void>()
+  let handlers = spawning({
+    adapters: { fake },
+    cwd: where,
+    dir: where,
+    admit: () => Promise.resolve({ available, pressure: 0.25 }),
+    launch: async (g, spec, opts) => {
+      starts.push(String(opts?.eid))
+      if (opts?.eid == 'S1') {
+        launchingFirst.resolve()
+        await pidKnown.promise
+      }
+      // The next machine reading includes the launch's memory before it
+      // tries to start another run.
+      available -= 2 * GiB
+      return launched(g, spec, opts)
+    },
+  })({ graph: g, stopping: AbortSignal.abort() })
+  fx.handle(handlers)
+  peer.handle(handlers)
+  let pass = () => fx.work(g, undefined, 1)
+  let owing = () => g.read('.effect.handler=spawn_start .order=effect.at')
   try {
-    await g.apply(asking('S1', 'E1', 'do the thing'))
-    let room = false, waits: number[] = []
-    let start = spawning({
-      adapters: { fake },
-      launch: launched,
-      cwd: where,
-      dir: where,
-      admit: () => Promise.resolve(room),
-    })({ graph: g }).spawn_start
-    let ask = () =>
-      start(
-        { entity: { eid: 'E1' } } as never,
-        undefined as never,
-        undefined as never,
-        {
-          last: () => false,
-          progressed: () => Promise.resolve(),
-          defer: (ms) => (waits.push(ms), Promise.resolve()),
-        },
-      )
-    await ask()
-    assertEquals([proc((await g.get(['S1']))[0]), waits], [undefined, [15_000]])
-    room = true
-    await ask()
-    assertEquals(proc((await g.get(['S1']))[0])?.pid, 1)
+    await g.apply([OFFERED, ...asking('S1', 'E1', 'oldest')])
+    await pass()
+    let [first] = await owing()
+    assertEquals(comp(first, 'effect')?.attempts, 0)
+    assertEquals(
+      comp(first, 'effect')?.waiting,
+      'Waiting for machine room (3.0 GiB available, 0.25% memory pressure (PSI avg10))',
+    )
+    await time.advance(1)
+    await g.apply(asking('S2', 'E2', 'second'))
+    await time.advance(1)
+    await g.apply(asking('S3', 'E3', 'newest'))
+    available = 5 * GiB
+    await pass()
+    assertEquals(starts, [])
+    assertEquals(await fx.next(g), 15_000)
+    await time.advance(15_000)
+    let firstPass = pass()
+    try {
+      await Promise.race([firstPass, launchingFirst.promise])
+      await peer.work(g, undefined, 1)
+      assertEquals(starts, ['S1'])
+    } finally {
+      pidKnown.resolve()
+      await firstPass
+    }
+    await pass()
+    assertEquals(starts, ['S1'])
+    for (let i of [2, 3]) {
+      available = 5 * GiB
+      await time.advance(15_000)
+      await pass()
+      assertEquals(starts.length, i)
+      await pass()
+      assertEquals(starts.length, i)
+    }
+    assertEquals(starts, ['S1', 'S2', 'S3'])
+    assertEquals(await owing(), [])
   } finally {
     Deno.removeSync(where, { recursive: true })
   }

@@ -55,6 +55,8 @@ export type EffectDecl = {
   tries?: number
   /** `false` where running it twice is not the same as running it once */
   idempotent?: boolean
+  /** For commit-triggered effects, work only the oldest pending run. */
+  fifo?: boolean
   /** what it does, in one line */
   description?: string
 }
@@ -95,6 +97,7 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
         if (typeof said == 'string') decl[key] = said
       }
       if (entry.start === true) decl.start = true
+      if (entry.fifo === true && !decl.start) decl.fifo = true
       if (typeof entry.tries == 'number') decl.tries = entry.tries
       if (typeof entry.idempotent == 'boolean') {
         decl.idempotent = entry.idempotent

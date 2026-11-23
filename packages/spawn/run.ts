@@ -53,7 +53,8 @@ import * as system from '@yaks/process/system'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { type Built, line, sub } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
-import { sleep } from '@yaks/effects'
+import { enqueue, sleep } from '@yaks/effects'
+import type { Room } from '@yaks/machine/room'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import {
@@ -161,10 +162,9 @@ export type Opts = {
    * place a run touches the machine's processes, so a host that starts them
    * another way, or a test that starts none, lends its own */
   launch?: typeof launch
-  /** whether the machine a run starts on has room for it now (@yaks/machine
-   * `admitter`); a start it refuses waits in the effect pool for room
-   * (default the room of the computer this process runs on) */
-  admit?: () => Promise<boolean>
+  /** The room reading for a queued start, or an admission decision from
+   * a caller supplying its own policy. Defaults to this computer's room. */
+  admit?: () => Promise<Room | boolean>
   /** mint an entry's eid (default a uuid) */
   mint?: () => string
   /** where a failure that has nobody to throw at goes: the host's tracker
@@ -603,13 +603,16 @@ export let start = async (
   g: Graph,
   session: string,
   o: Opts = {},
+  admit?: () => Promise<boolean>,
 ): Promise<Run | null> => {
   let row = await one(g, session)
-  if (row?.stop || going(row)) return null
+  if (!row || row.stop || going(row)) return null
   let job = await asked(g, session)
   if (!job) return null
   let adapter = adapterOf(job, o)
   if (!adapter) return null
+  if (row[PROCESS] && !await requested(g, session)) return null
+  if (admit && !await admit()) return null
   // A run signs in with the account its request records, else is given an
   // offered one. A CLI that runs only on offered accounts (`offeredOnly`)
   // never signs in with the box's default login, the owner's own.
@@ -633,7 +636,6 @@ export let start = async (
     // A session that ran before carries on its provider's thread, given what
     // it was told since. One whose start was cut off before its provider
     // began a thread begins now, given everything it was told.
-    if (!await requested(g, session)) return null
     let thread = comp(row, SESSION)?.id
     // A thread begun before its request recorded an account sits in the
     // box's default login; one just given an account carries on there, so
@@ -818,7 +820,13 @@ let onward = async (
     await trash(emptyOf(session, o))
     await clean(session, o)
   }
-  if (well && await requested(g, session)) await start(g, session, o)
+  if (!well || !await requested(g, session)) return
+  // The original effect may already have seen the live process and settled.
+  // Once the session can launch again, put its request back in the queue.
+  if (g.vocab.comp('effect')) {
+    let request = await latestRequest(g, session)
+    if (request) await enqueue(g, 'spawn_start', request.entity.eid)
+  } else await start(g, session, o)
 }
 
 // Read a run's log on, from where its transcript stands, against the request

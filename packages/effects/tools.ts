@@ -37,6 +37,7 @@ import { checked } from '@yaks/tools/check'
 import { said } from '@yaks/tools/result'
 import { effectsIn, type Vocab } from '@yaks/vocab'
 import { EFFECT } from './pool.ts'
+import { firstPending } from './ready.ts'
 
 /** What configuration this package's check accepts. */
 export type Options = {
@@ -99,6 +100,7 @@ let RETRIED: Comp = {
   attempts: 0,
   next: null,
   error: null,
+  waiting: null,
   lease_owner: null,
   lease_token: null,
   lease_expiry: null,
@@ -150,6 +152,9 @@ export let runs = (
   options: Options = {},
 ): Runs => {
   let settles = dead(host.vocab)
+  let ordered = new Set(
+    effectsIn(host.vocab.docs).filter((e) => e.fifo).map((e) => e.name),
+  )
   return {
     effect_retry: settle(host, 'retry', 'retried'),
     effect_drop: settle(host, 'drop', 'dropped'),
@@ -166,6 +171,13 @@ export let runs = (
       let cutoff = Date.now() - (options.minutes ?? MINUTES) * 60_000
       let failed = await graph.read(and(eq(`${EFFECT}.state`, 'failed')))
       let pending = await graph.read(and(eq(`${EFFECT}.state`, 'pending')))
+      let first = new Set(
+        await Promise.all(
+          [...ordered].map(async (name) =>
+            (await firstPending(graph, name))?.entity.eid
+          ),
+        ),
+      )
       let orphans = pending.filter(settles.orphan)
       let stuck = pending.filter((b) => !settles.orphan(b))
         .filter((b) => {
@@ -177,7 +189,9 @@ export let runs = (
           let row = comp(b)
           let at = Date.parse(String(row?.next ?? row?.at ?? ''))
           let held = Date.parse(String(row?.lease_expiry ?? '')) > Date.now()
-          return !isNaN(at) && at < cutoff && !held
+          let due = !ordered.has(String(row?.handler)) ||
+            first.has(b.entity.eid)
+          return due && !isNaN(at) && at < cutoff && !held
         })
       let found: Finding[] = []
       if (failed.length) {

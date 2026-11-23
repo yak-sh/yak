@@ -237,6 +237,7 @@
     },
     "spawn_start": {
       "effect": true,
+      "fifo": true,
       "target": ".entry !ask !lines",
       "created": [
         "using"

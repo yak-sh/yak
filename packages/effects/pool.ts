@@ -136,7 +136,7 @@ import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { finishedRun } from './cleanup.ts'
-import { except, ready } from './ready.ts'
+import { except, firstPending, ready } from './ready.ts'
 import { lagging, SAY, seconds, SHOWN, WORKER } from './worker.ts'
 
 export { effectDoc } from './docs.ts'
@@ -208,9 +208,9 @@ export type Attempt = {
   /** Whether this attempt is the run's last: if it fails now, it is left
    * failed, so what the handler records about the failure is what stands. */
   last: () => boolean
-  /** Wait for a dependency without spending an attempt. Return after calling
-   * this: the same run remains pending until this positive delay elapses. */
-  defer?: (delay: number) => Promise<void>
+  /** Wait for a dependency without spending an attempt. The same run remains
+   * pending for at least this delay, with the reason alongside it. */
+  defer?: (delay: number, reason?: string) => Promise<void>
   /** The run got somewhere: a failure after this counts as its first attempt,
    * not one more in a row. For a run that does many steps, where one success
    * should give the next failure its full tries back. */
@@ -574,6 +574,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
     let tries = held.attempts
     let deferred: number | undefined
+    let waiting: string | undefined
     let settle = (patch: Comp) =>
       kept
         ? swap(g, eid, { lease_token: held.token, attempts: held.attempts }, {
@@ -588,11 +589,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     // that has failed before has anything to write.
     let attempt: Attempt = {
       last: () => tries >= limit(s),
-      defer: (delay) => {
+      defer: (delay, reason) => {
         if (!Number.isFinite(delay) || delay <= 0) {
           throw new RangeError('an effect deferral needs a positive delay')
         }
         deferred = Math.max(deferred ?? 0, clock() + delay)
+        waiting = reason
         return Promise.resolve()
       },
       progressed: async () => {
@@ -661,11 +663,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         }
         let due = waits ? asked(err) : Math.max(wait(tries), asked(err))
         let patch = last
-          ? { state: 'failed', error: said(err), next: null, ...free }
+          ? {
+            state: 'failed',
+            error: said(err),
+            next: null,
+            waiting: null,
+            ...free,
+          }
           : {
             state: 'pending',
             error: said(err),
             next: stamp(clock() + due),
+            waiting: null,
             ...free,
           }
         return () => settle(patch)
@@ -687,7 +696,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (deferred != null) {
           let next = stamp(deferred)
           tries = Math.max(0, tries - 1)
-          ended = () => settle({ state: 'pending', next, ...free })
+          ended = () =>
+            settle({
+              state: 'pending',
+              next,
+              waiting: waiting ?? null,
+              ...free,
+            })
         } else if (kept) {
           let was = { lease_token: held.token, attempts: held.attempts }
           ended = () => drop(g, eid, was)
@@ -722,7 +737,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         running.delete(eid)
         ran++
         ends.count(clock())
-        if (full) nap?.abort()
+        if (full || s?.effect?.fifo) nap?.abort()
       })
     running.set(eid, held)
     return held.run
@@ -745,12 +760,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let claims: { eid: Eid; row: Comp; mine: Comp }[] = []
     let reserved = 0
     full = false
-    let names = [
-      ...new Set([
-        ...ctx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
-        ...disabled,
-      ]),
-    ]
+    let slots = ctx.slots().filter((s) => s.effect && s.run)
+    let names = [...new Set([...slots.map((s) => s.id), ...disabled])]
     if (!room() || !names.length) {
       full = member && running.size + admitting >= max
       // A thread behind takes its next turn before it looks again.
@@ -760,11 +771,15 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     // Every handler's ready runs but our own live ones, a page of them: what
     // a pass can examine. A page that comes back short holds all there are.
     let live = [...running.keys()]
-    let key = JSON.stringify([names, live])
-    if (key != signature) {
-      signature = key
+    let ordered = new Set(
+      slots.filter((s) => s.effect?.fifo && !disabled.has(s.id))
+        .map((s) => s.id),
+    )
+    let other = names.filter((name) => !ordered.has(name))
+    let key = JSON.stringify([other, live])
+    if (other.length && key != signature) {
       pending = and(
-        ...ready(names, {
+        ...ready(other, {
           singleOwner: opts.singleOwner,
           disabled: [...disabled],
           owner: me,
@@ -772,11 +787,25 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         window(page),
         ...live.length ? [ne('entity.eid', list(...live))] : [],
       )
+      signature = key
     }
-    let found = await g.read(pending, { unordered: true, now })
-    if (!found.length) {
+    let found = other.length
+      ? await g.read(pending, { unordered: true, now })
+      : []
+    let first = new Map(
+      await Promise.all(
+        [...ordered].map(async (name) =>
+          [name, await firstPending(g, name)] as const
+        ),
+      ),
+    )
+    if (!found.length && ![...first.values()].some(Boolean)) {
       return { started, more: false }
     }
+    let eligible = (row: Comp) =>
+      !(Date.parse(String(row.next)) > now) &&
+      (opts.singleOwner || !row.lease_owner ||
+        !(Date.parse(String(row.lease_expiry)) > now))
     let examine = async (b: Bundle) => {
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
@@ -796,11 +825,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       let s = handled(String(row.handler))
       if (!s || running.has(eid)) return
-      let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
-      if (
-        !opts.singleOwner && row.lease_owner && expiry > now
-      ) return
-      if (row.next && Date.parse(String(row.next)) > now) return
+      if (!eligible(row)) return
       let attempts = Number(row.attempts ?? 0)
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first. Started
@@ -864,6 +889,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         next = (next + 1) % names.length
         if (drained.has(name)) continue
         // One candidate, then the next handler's, not the rest of this backlog.
+        if (first.has(name)) {
+          drained.add(name)
+          let b = first.get(name)
+          // A held, deferred or local run is still the head of this queue.
+          if (b && !running.has(b.entity.eid) && eligible(b[EFFECT] as Comp)) {
+            budget--
+            await examine(b)
+          }
+          continue
+        }
         let cached = heads.get(name)
         if (!cached || !cached.rows.length && cached.full) {
           let n = Math.min(budget, max - running.size - admitting)
@@ -1208,15 +1243,30 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           .map((s) => s.id),
       ),
     ]
-    if (!names.length) return null
-    let owed = ready(names, { singleOwner: opts.singleOwner, owner: me })
-    let [due] = await g.read(and(...owed.clauses, window(1)), {
-      unordered: true,
-      now,
-    })
-    if (due) return now
     let at = Infinity
+    let other: string[] = []
     for (let name of names) {
+      if (!handled(name)?.effect?.fifo) {
+        other.push(name)
+        continue
+      }
+      let run = (await firstPending(g, name))?.[EFFECT] as Comp | undefined
+      if (!run) continue
+      let due = Date.parse(String(run.next)) || now
+      let expiry = !opts.singleOwner && run.lease_owner
+        ? Date.parse(String(run.lease_expiry)) || now
+        : now
+      at = Math.min(at, Math.max(due, expiry))
+    }
+    if (other.length) {
+      let owed = ready(other, { singleOwner: opts.singleOwner, owner: me })
+      let [due] = await g.read(and(...owed.clauses, window(1)), {
+        unordered: true,
+        now,
+      })
+      if (due) return now
+    }
+    for (let name of other) {
       let [run] = await g.read(and(
         eq(`${EFFECT}.state`, 'pending'),
         eq(`${EFFECT}.handler`, name),
@@ -1242,7 +1292,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         let key = [s.id, e.entity.eid, e.name, e.kind].join('|')
         if (seen.has(key)) continue
         seen.add(key)
-        let ours = !opts.defer && !!s.run && mine.length < page &&
+        let ours = !opts.defer && !s.effect?.fifo && !!s.run &&
+          mine.length < page &&
           room(mine.length)
         let row: Comp = {
           handler: s.id,

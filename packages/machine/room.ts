@@ -117,6 +117,10 @@ export let admitter = (
   }
 }
 
+/** The room of the computer this process runs on. */
+export let hereRoom = async (): Promise<Room> =>
+  room(await localConnector().connect('local://'))
+
 /** The {@link admitter} of the computer this process runs on. */
 export let here = (need: Need = NEED): () => Promise<boolean> =>
-  admitter(async () => room(await localConnector().connect('local://')), need)
+  admitter(hereRoom, need)

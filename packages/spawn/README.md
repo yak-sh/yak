@@ -56,10 +56,12 @@ applied in one transaction.
 ]
 ```
 
-A run starts only while its machine has room for it (@yaks/machine/room
-`admitter`, `Opts.admit`): without room, `spawn_start` defers its run in the
-effect pool, pending and reported nowhere, and asks again every 15 seconds. The
-fleet slows down instead of taking the machine down.
+The effect pool starts runs in request order. The oldest pending start holds its
+place while it checks machine room (@yaks/machine/room, `Opts.admit`) and while
+its process launches. The next check reads the machine once the launch has
+reported its PID or ended. If the machine has too little available memory or too
+much memory pressure, the start waits 15 seconds before checking again.
+`session_list` shows the room reading for the queued sessions on its page.
 
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
 CLI the provider speaks (`provider.api`, else its `name`), select the matching

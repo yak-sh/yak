@@ -45,11 +45,15 @@ import {
   start,
 } from './run.ts'
 import { complete } from './completion.ts'
-import { here } from '@yaks/machine/room'
+import { fits, hereRoom, type Room } from '@yaks/machine/room'
 
 /** How long a start the machine has no room for waits before it asks again
  * (ms). */
 export let WAIT = 15_000
+
+let describeRoom = (room: Room): string =>
+  `${(room.available / 1024 ** 3).toFixed(1)} GiB available, ` +
+  `${room.pressure}% memory pressure (PSI avg10)`
 
 /** What these handlers are given: the open graph, where a failure is told
  * (@yaks/cli `Host.report`), and where a release the host awaits before its
@@ -125,7 +129,7 @@ export let spawning =
       report,
       detach: detaching(o, host),
     }
-    let admit = o.admit ?? here()
+    let admit = o.admit ?? hereRoom
     return {
       spawn_complete: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
@@ -143,9 +147,26 @@ export let spawning =
         let entry = await one(host.graph, e.entity.eid)
         if (!requestOf(entry)) return
         let session = String(comp(entry, 'entry')?.session ?? '')
-        if (!session || !await one(host.graph, session)) return
-        if (attempt?.defer && !await admit()) return await attempt.defer(WAIT)
-        await start(host.graph, session, opts)
+        if (!session) return
+        let defer = attempt?.defer
+        // The pool holds the head until launch has reported its pid (or
+        // ended). The next read then includes the launched process.
+        await start(
+          host.graph,
+          session,
+          opts,
+          defer && (async () => {
+            let room = await admit()
+            if (typeof room == 'boolean' ? room : fits(room)) return true
+            await defer(
+              WAIT,
+              typeof room == 'boolean'
+                ? 'Waiting for machine room'
+                : `Waiting for machine room (${describeRoom(room)})`,
+            )
+            return false
+          }),
+        )
       },
       // Kill. A `stop` on an entry only marks the end of a transcript; only
       // a `stop` on the entity that is running a process means kill it.

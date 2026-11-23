@@ -25,8 +25,20 @@ import { BEST, type Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
-import { and, conjoin, line, parse, stringify, sub } from '@yaks/query'
+import {
+  and,
+  conjoin,
+  eq,
+  fields,
+  line,
+  list,
+  parse,
+  stringify,
+  sub,
+} from '@yaks/query'
 import { ask, askedOf, handoffOf, newestOf, usingOf } from '@yaks/session'
+import { firstPending } from '@yaks/effects'
+import { human } from '@yaks/id'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing, pin, routing } from './default.ts'
@@ -240,6 +252,33 @@ let LIVE = '.session !session.ended'
 // `*`.
 let SHOWN = line`?created ?spawned ?doc ?exit`
 
+// One room reading applies to the queue, so report it once for the sessions
+// in this page whose start is still owed.
+let waitingStarts = async (graph: Graph, page: Bundle[]): Promise<string> => {
+  let waiting = page.filter((b) =>
+    WORKING.includes(String((b.session as Comp).status)) &&
+    (b.session as Comp).status != 'running'
+  )
+  if (!waiting.length || !graph.vocab.prop('effect', 'waiting')) return ''
+  let first = await firstPending(graph, 'spawn_start')
+  let reason = (first?.effect as Comp | undefined)?.waiting
+  if (typeof reason != 'string') return ''
+  let runs = await graph.read(and(
+    eq('effect.handler', 'spawn_start'),
+    eq('effect.state', 'pending'),
+    eq(
+      'effect.target.entry.session',
+      list(...waiting.map((b) => b.entity.eid)),
+    ),
+    fields('effect.target.entry.session'),
+  ))
+  let pending = new Set(runs.map((b) => (b.entry as Comp | undefined)?.session))
+  let shown = waiting.filter((b) => pending.has(b.entity.eid)).map(
+    human(graph.vocab),
+  )
+  return shown.length ? `${shown.join(', ')} — ${reason}.` : ''
+}
+
 // One page of sessions, newest first unless the query orders them, and a last
 // row saying how to read on when more match. The page reads one row past its
 // size to learn that; a query with a `.limit` of its own has chosen its window
@@ -257,21 +296,27 @@ let sessionList: Runs[string] = async (call, graph) => {
     ...parse(line`.order=-created.at .limit=${size + 1} ${sub(SHOWN)}`)
       .clauses,
   ))
-  if (rows.length <= size) return rows
   let page = rows.slice(0, size)
+  let waiting = await waitingStarts(graph, page)
+  if (rows.length <= size && !waiting) return page
   // The first `.after` of a query is the one it reads from, so the next page's
   // query replaces the cursor this one arrived with.
   let rest = asked.clauses.filter((c) => c.kind != 'after')
-  let next = conjoin(
+  let next = rows.length > size && conjoin(
     stringify(and(...rest)),
-    `.after=${page[size - 1].entity.eid}`,
+    `.after=${page.at(-1)!.entity.eid}`,
   )
   return [...page, {
     entity: { eid: '$said' },
     content: {
-      body: `More sessions match than this page of ${size}. Query ` +
-        `\`${next}\` reads the next page, a larger limit a longer one, and ` +
-        `query \`.session\` every status.`,
+      body: [
+        waiting,
+        next && (
+          `More sessions match than this page of ${size}. Query ` +
+          `\`${next}\` reads the next page, a larger limit a longer one, and ` +
+          `query \`.session\` every status.`
+        ),
+      ].filter(Boolean).join('\n\n'),
     },
     output: { source: call.entity.eid },
   }]

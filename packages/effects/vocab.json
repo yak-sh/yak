@@ -7,6 +7,7 @@
     "effect": {
       "component": true,
       "index": [
+        ["handler", "state", "at"],
         [
           "handler",
           "state",
@@ -110,6 +111,11 @@
           "format": "date-time",
           "stamped": true,
           "description": "when the run next becomes eligible after failure backoff or deferred readiness; absent means a run nobody has started or one in progress"
+        },
+        "waiting": {
+          "type": "string",
+          "stamped": true,
+          "description": "the readiness condition the handler last found unmet when it deferred this run"
         },
         "version": {
           "type": "string",
