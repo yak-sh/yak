@@ -25,6 +25,7 @@
     "./browser-visit": "./browser-visit.ts",
     "./signed-in": "./signed-in.ts",
     "./located": "./located.ts",
+    "./named": "./named.ts",
     "./preview-audit": "./preview-audit.ts",
     "./visits": "./visits.ts",
     "./installs": "./installs.ts",

@@ -163,6 +163,7 @@ import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
 import { kept as kernelDir, whereaboutsShow } from './whereabouts.ts'
 import { placeSet } from '@yaks/platform/located'
+import { nameSet } from '@yaks/platform/named'
 import {
   acquainted,
   approvals,
@@ -686,6 +687,7 @@ let OWN_WORDS = new Set([
   'text_send',
   'whereabouts_show',
   'place_set',
+  'name_set',
   'contact_add',
   'notification_send',
   'mail_send',
@@ -2629,6 +2631,7 @@ export let operating = (
       textSend(env, ctx, space),
       whereaboutsShow(env, ctx.person!, space.eid),
       placeSet(() => kernelDir(env), ctx.person!),
+      nameSet(() => kernelDir(env), ctx.person!),
       contactAdd(env, ctx, space, store),
       notificationSend(ctx, space, store),
       mailSend(env, ctx, space, store),
@@ -2962,12 +2965,17 @@ export let operating = (
         defect(e, { request, session, space: o.space })
         return undefined
       }
-      let [{ whereaboutsItem }, { threadsItem }, { locatedItem }] =
-        await Promise.all([
-          import('./whereabouts.ts'),
-          import('./operator-threads.ts'),
-          import('@yaks/platform/located'),
-        ])
+      let [
+        { whereaboutsItem },
+        { threadsItem },
+        { locatedItem },
+        { nameItem },
+      ] = await Promise.all([
+        import('./whereabouts.ts'),
+        import('./operator-threads.ts'),
+        import('@yaks/platform/located'),
+        import('@yaks/platform/named'),
+      ])
       let member = async () => {
         if (o.administrative) return true
         let seat = await dir().seat(o.space, o.person)
@@ -2989,6 +2997,11 @@ export let operating = (
         kernelDir(env).then((dir) => locatedItem(dir, o.person)).catch(
           failed('operator located'),
         ),
+        // Their name, when nobody has said it (@yaks/platform/named).
+        // Only a member's turn holds name_set.
+        member().then(async (m) =>
+          m ? nameItem(await kernelDir(env), o.person) : undefined
+        ).catch(failed('operator named')),
         member().then((m) => threadsItem(store, session, m)).catch(
           failed('operator threads'),
         ),
