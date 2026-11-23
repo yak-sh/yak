@@ -193,8 +193,10 @@ export let KV: CreateTable = {
 }
 
 // A runtime that names no version (a test, a local run) is named by its
-// process: the code it runs cannot change while it lives.
-let PROCESS = `process ${crypto.randomUUID()}`
+// process: the code it runs cannot change while it lives. Cloudflare can
+// load this module before allowing any randomness, so mint on first use.
+let processVersion: string | undefined
+let localVersion = () => processVersion ??= `process ${crypto.randomUUID()}`
 
 // What a schema pass is remembered by: the Worker version it ran under, the
 // words it fitted and the stamp it left. A wake finding the same three renders
@@ -203,7 +205,7 @@ export let fitOf = (
   version: string | null,
   key: string,
   schema: string | null,
-): string => `${version ?? PROCESS} ${key} ${schema ?? ''}`
+): string => `${version ?? localVersion()} ${key} ${schema ?? ''}`
 export let stands = (held: string | null, fit: string): boolean => held == fit
 
 type Read = (key: string) => string | null
