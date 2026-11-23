@@ -131,6 +131,17 @@ let page = (
       return Promise.resolve()
     },
     goto: () => {
+      // The page's own load, then a sheet it asks for.
+      for (let navigation of [true, false]) {
+        hear.get('request')?.({
+          isNavigationRequest: () => navigation,
+          frame: () => p.mainFrame(),
+          respond: (
+            { body }: { body: string },
+          ) => (log.push(`answer ${body}`), Promise.resolve()),
+          continue: () => (log.push('continue'), Promise.resolve()),
+        })
+      }
       opened = [...cookies]
       hear.get('console')?.(
         { type: () => 'log', text: () => 'page ready' } satisfies Message,
@@ -219,6 +230,20 @@ test('a page opens with the cookies it was sent and answers its visible text', a
   })
   assertEquals(p.opened(), [signIn])
   assertEquals(result.text, 'Meetings\nAgenda')
+})
+
+test('a page brought from a checkout answers its first load, and the site the rest', async () => {
+  let p = page()
+  await capture(p.browsing, {
+    url: 'https://checks.yaks.app/',
+    view,
+    html: '<p>draft</p>',
+  })
+  assertEquals(p.log.slice(1, 4), [
+    'intercept true',
+    'answer <p>draft</p>',
+    'continue',
+  ])
 })
 
 test('a visit takes its steps in order on a phone, and keeps each named screenshot', async () => {

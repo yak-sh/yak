@@ -243,9 +243,12 @@ answer says the status, the page's errors and its text. The window is a phone's,
 390 × 844 with touch, unless named. `browse` defaults to `checks@bot.yak.sh`.
 Use `--as admin` for `/admin` pages. To view an app as a member, invite a test
 bot with the member's role, accept its invitation, and select its account with
-`--as`.
+`--as`. `--html <file>` shows a page as a checkout draws it, before it deploys:
+the browser answers the page's first load with the file (@yaks/platform/still
+makes one), and everything else comes from yaks.app.
 
 ```sh
+yak admin browse /manage/checks/updates --html .scratch/updates.html
 yak admin browse /manage/checks/operator --as checks
 yak admin browse /admin/spending --as admin
 yak admin browse /manage/checks/operator --as checks --steps \

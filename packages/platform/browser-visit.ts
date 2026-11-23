@@ -1,5 +1,6 @@
 // What yak-browser does with a request: a page's address, viewport, the
-// cookies it is opened with and the steps a person takes on it posted in, its
+// cookies it is opened with, the steps a person takes on it and, for a page
+// not yet deployed, the document it answers with posted in, its
 // screenshots, text, console, dialogs, errors, status and accessibility check
 // out, with the browser time it held. Browser control runs on Cloudflare; the small
 // session interface lets the load, steps, diagnostics and cleanup run in
@@ -80,6 +81,11 @@ export type Visit = {
   allow?: string[]
   /** Whether axe-core checks the page's accessibility (default true). */
   audit?: boolean
+  /** The document `url` answers with, in place of the one its site serves:
+   * a page as a checkout renders it, seen before it deploys. Only the first
+   * load of the page is answered so; everything the document asks for, and
+   * every page a step goes on to, comes from the site. */
+  html?: string
 }
 export type Message = { type(): string; text(): string }
 /** An alert, confirm, prompt or beforeunload dialog the page opened. Input
@@ -92,6 +98,12 @@ export type Dialog = {
 type PageRequest = {
   isNavigationRequest(): boolean
   frame(): unknown
+  respond(answer: {
+    status: number
+    contentType: string
+    body: string
+  }): Promise<void>
+  continue(): Promise<void>
 }
 type Events = {
   console: Message
@@ -117,6 +129,7 @@ export type Page = {
     features: { name: string; value: string }[],
   ): Promise<void>
   setCookie(...cookies: Cookie[]): Promise<void>
+  setRequestInterception(on: boolean): Promise<void>
   goto(url: string, options: {
     waitUntil: 'domcontentloaded'
     timeout: number
@@ -498,9 +511,34 @@ let navigating = (page: Page) => {
   return () => pending?.promise
 }
 
+// The page's first load answered with `html`, and every other request let
+// through to the site. Interception holds each request until it is answered,
+// so every one is.
+let answered = async (
+  page: Page,
+  html: string,
+  error: (e: unknown) => void,
+) => {
+  let pending = true
+  page.on('request', (asked) => {
+    let first = pending && asked.isNavigationRequest() &&
+      asked.frame() === page.mainFrame()
+    if (first) pending = false
+    let went = first
+      ? asked.respond({
+        status: 200,
+        contentType: 'text/html; charset=utf-8',
+        body: html,
+      })
+      : asked.continue()
+    went.catch(error)
+  })
+  await page.setRequestInterception(true)
+}
+
 let loaded = async (
   browser: Browser,
-  { url, view, cookies = [], steps = [], allow = [], audit }: Visit,
+  { url, view, cookies = [], steps = [], allow = [], audit, html }: Visit,
   ms: number,
   time: Clock,
 ): Promise<Loaded> => {
@@ -549,6 +587,8 @@ let loaded = async (
           allow,
         )
       }
+      signal.throwIfAborted()
+      if (html != null) await answered(page, html, error)
       signal.throwIfAborted()
       stage = 'loading the page'
       let status = 0

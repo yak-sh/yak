@@ -361,6 +361,43 @@ export let signedIn = async (k: Kernel, person: string) =>
     k.secret,
   )}`
 
+/**
+ * A page as this checkout draws it, written to `file` as one still document
+ * (@yaks/platform/still) for `yak admin browse <path> --html <file>` to show
+ * at its live address in Cloudflare's browser: a UI change seen before it
+ * lands. The site's built files (the kit's `_ui.css` among them) are built
+ * first, as the deploy builds them (assets.ts).
+ *
+ * ```ts ignore
+ * let k = await kernel()
+ * let me = await signIn(k)
+ * let own = (await k.dir.own(me.person))!
+ * await stillPage(k, managePath('updates', own.slug), me.cookie, '.scratch/updates.html')
+ * ```
+ */
+export let stillPage = async (
+  k: Door,
+  path: string,
+  cookie: string,
+  file: string,
+) => {
+  await (building ??= import('./assets.ts').then((a) => a.build()))
+  let get = (url: string) => {
+    let { pathname, search } = new URL(url, 'https://yaks.app')
+    return k.at('yaks.app', pathname + search, {
+      headers: { cookie, accept: 'text/html' },
+    })
+  }
+  let r = await get(path)
+  if (!r.ok) throw new Error(`${path} answered ${r.status}`)
+  let { still } = await import('@yaks/platform/still')
+  await Deno.writeTextFile(
+    file,
+    await still(await r.text(), `https://yaks.app${path}`, get),
+  )
+}
+let building: Promise<void> | undefined
+
 // `num` is optional because a store may not have numbers at all: it is
 // @yaks/id's property, which an app's store does not load and the fleet's does.
 type Row = { entity: { eid: string; num?: number }; [k: string]: unknown }

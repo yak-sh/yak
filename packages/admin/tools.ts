@@ -424,7 +424,18 @@ export let runs = (
       let allow = word(a, 'allow')?.split(',').map((p) => p.trim())
         .filter(Boolean)
       let signedOut = a.stranger === true
-      let got = await browserVisit(at, { url, view, steps, allow, signedOut })
+      let file = word(a, 'html')
+      let html = file
+        ? await fs.readTextFile(within(word(a, 'cwd'), file))
+        : undefined
+      let got = await browserVisit(at, {
+        url,
+        view,
+        steps,
+        allow,
+        signedOut,
+        ...html ? { html } : {},
+      })
       let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
       await fs.mkdir(to, { recursive: true })
       let files: string[] = []
@@ -440,7 +451,7 @@ export let runs = (
       }
       return [
         said(call, [
-          `${url} as ${
+          `${url}${html ? ` showing ${file}` : ''} as ${
             signedOut ? 'a stranger' : at.address
           }: HTTP ${got.status}, ${
             Math.round(got.duration / 100) / 10

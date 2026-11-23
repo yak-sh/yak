@@ -144,6 +144,18 @@ test('a test account opens a page as a stranger, holding no cookie', async () =>
   equal(visits.at(-1)!.cookies, [])
 })
 
+test('a page brought as a checkout renders it goes to the browser as its document, within bounds', async () => {
+  let shown = await browse({ ...manage, html: '<p>draft</p>' }, {
+    cookie: checks.cookie,
+  })
+  equal(shown.status, 200)
+  equal(visits.at(-1)!.html, '<p>draft</p>')
+  let huge = await browse({ ...manage, html: 'x'.repeat(4_000_001) }, {
+    cookie: checks.cookie,
+  })
+  equal(huge.status, 413)
+})
+
 test('a person never lends their sign-in to the browser, not even the platform owner', async () => {
   let r = await browse(manage, { cookie: owner.cookie })
   equal(r.status, 403)

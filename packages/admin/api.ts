@@ -348,6 +348,9 @@ export type Browse = {
   allow?: string[]
   /** Open the page as a stranger, holding no cookie. */
   signedOut?: boolean
+  /** The document the page answers with, as a checkout renders it, to see a
+   * change before it deploys (@yaks/platform/still). */
+  html?: string
 }
 
 /** What the browser saw (@yaks/platform/browser-visit `Rendered`). */

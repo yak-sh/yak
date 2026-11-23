@@ -23,6 +23,7 @@
     "./home/sky": "./home/sky.tsx",
     "./home/assets": "./home/assets.ts",
     "./browser-visit": "./browser-visit.ts",
+    "./still": "./still.ts",
     "./signed-in": "./signed-in.ts",
     "./located": "./located.ts",
     "./named": "./named.ts",

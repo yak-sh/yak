@@ -82,9 +82,9 @@ don't land, and either way it runs in one process and leaves nothing running.
 ## What no longer runs here
 
 - **Chrome.** A screen's behavior is checked on its document, as above. How it
-  lays out, swipes and animates on a phone is seen live with `yak admin
-  browse` once it lands; the owner's review arrives as comments on the task
-  (`ui-building`).
+  lays out is seen in Cloudflare's browser with `yak admin browse`: your
+  checkout's page before it lands (`--html`, below), and how it swipes and
+  animates on a phone once it is live (`ui-building`).
 - **A scratch `yak serve`, `yak work` or units of your own.** Each is a server
   that keeps running beside you, with a worker that outlives it. A change to how
   the box's units start, stop or hand over is checked through
@@ -226,6 +226,35 @@ yak admin browse /manage/checks/operator --as checks
 yak admin browse /manage/checks/operator --as checks --steps @.scratch/say.json
 yak admin browse https://checks.yaks.app/roster/ --width 1280 --height 800 --touch=false --as checks
 yak admin browse /manage/checks/people --dark --as checks   # the dark theme
+```
+
+A page from your checkout is seen the same way before it lands, with no
+deploy. `stillPage(k, path, cookie, file)` (workers/yak/probe.ts), called
+from a scratch test, draws the page through the in-process kernel and writes
+it as one document (@yaks/platform/still): the site's files built as the
+deploy builds them, each stylesheet and what it imports written in, scripts
+dropped, and the kernel's own addresses made relative. `--html <file>` then
+opens the live address, and the browser answers the page's first load with
+that file (packages/platform/browser-visit.ts `html`); its fonts, images and
+everything a step goes on to come from yaks.app.
+
+```ts
+// workers/yak/look_scratch_test.ts, not landed
+import { test } from '@yaks/testing'
+import { kernel, signIn, stillPage } from './probe.ts'
+
+test('look', async () => {
+  let k = await kernel()
+  let me = await signIn(k)
+  let own = (await k.dir.own(me.person))!
+  await stillPage(k, `/manage/${own.slug}/updates`, me.cookie, '.scratch/updates.html')
+})
+```
+
+```sh
+deno test -A --no-check workers/yak/look_scratch_test.ts
+yak admin browse /manage/checks/updates --html .scratch/updates.html
+yak admin browse /manage/checks/updates --html .scratch/updates.html --width 1280 --height 800 --touch=false
 ```
 
 `--steps` is a JSON array, run in order once the page loads:

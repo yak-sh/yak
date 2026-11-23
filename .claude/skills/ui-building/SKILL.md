@@ -325,8 +325,28 @@ A screen is done when it reads well to someone using it. There is no Chrome or
 Chromium on this box and there are no browser tests, locally or in CI. Jeff's
 words: "remove chrome from this box please. no more chrome tests" (453d6a63).
 Page behavior runs in process with linkedom in Deno, terminal behavior with
-@yaks/tui's `lay`; the owner reviews the live page after it lands. There is no
-slow platform tier; checks start no server, workerd or child process.
+@yaks/tui's `lay`. There is no slow platform tier; checks start no server,
+workerd or child process. You still see every page you change, in Cloudflare's
+browser, before you land it and again once it is live. Jeff, 2026-11-23: "how
+come UI stuff ships without looking at it?" Seeing it is part of building the
+screen, the way reading your diff is, not a gate or a check script (#15ce9bf9a5).
+
+1. **Before landing:** draw each changed page from your checkout and look at it
+   at 390 px and 1280 px. In a scratch test (not landed), `stillPage(k, path,
+   cookie, '.scratch/page.html')` from workers/yak/probe.ts draws the page
+   through the in-process kernel, with the kit's sheet built and every
+   stylesheet written in; then
+   `yak admin browse <path> --html .scratch/page.html` shows it at the live
+   page's address, phone width, and again with
+   `--width 1280 --height 800 --touch=false`. Read the screenshots in
+   `.scratch/browse/`, fix what looks wrong, look again. Seconds, no deploy.
+   The file has no scripts, so it shows what the server draws.
+2. **Once it is live:** after the deploy that carries it, open each changed
+   page with `yak admin browse <path>` at both widths, with the steps that
+   reach a changed menu, panel or dialog. Scripts run there, on the owner's
+   kind of data. Fix what looks off, forward.
+3. **Keep the screenshots to yourself.** Jeff looks at the site; he wants no
+   screenshots sent to him (#302292486b).
 
 - **What it does:** mount it in your own process and act on it as a person would
   (`end-to-end-checks`): the web app on a linkedom document, the terminal
@@ -336,7 +356,7 @@ slow platform tier; checks start no server, workerd or child process.
 - **How it looks:** the style guide,
   `/ui?theme=gouache|linen|everforest|rosepine&scheme=light|dark&skin=paper|pencil|ledger|base`,
   and `yak ui` in a terminal (`t` cycles the theme, `s` the skin, `j`/`k` walk),
-  seen on the live box once the change lands. Both themes, light and dark, phone
+  and the page itself in Cloudflare's browser (the steps above). Both themes, light and dark, phone
   width and the terminal: each one catches what the others hide, and faint text
   shows in light before anywhere else.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`,

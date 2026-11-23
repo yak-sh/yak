@@ -5,7 +5,9 @@
 // screenshots, the page's text, console, errors and status.
 //
 // Test accounts browse with their session cookie, or with none, to see a page
-// as a stranger does. The private admin door accepts the admin bot's OAuth
+// as a stranger does. A visit may bring the page's document as a checkout
+// renders it, to see a change before it deploys (browser-visit.ts `html`).
+// The private admin door accepts the admin bot's OAuth
 // grant and issues a short-lived directory credential for the browser.
 //
 // Only the fleet's test accounts may ask. The browser time is the platform's,
@@ -56,7 +58,13 @@ export type Asked = {
   allow?: string[]
   /** Open the page as a stranger, holding no cookie at all. */
   signedOut?: boolean
+  /** The document the page answers with, as a checkout renders it. */
+  html?: string
 }
+
+// A rendered page with its stylesheets written in runs to a few hundred
+// kilobytes; this is room for the biggest with plenty to spare.
+let HTML = 4_000_000
 
 // A phone's window unless the caller names another.
 let PHONE: View = { width: 390, height: 844, wait: 1000, touch: true }
@@ -180,6 +188,16 @@ let visitOf = async (req: Request, env: Env, path: string) => {
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
+  let html = typeof asked.html == 'string' ? asked.html : undefined
+  if (html && html.length > HTML) {
+    return json(
+      413,
+      'html_too_large',
+      `a page's document runs to ${
+        HTML / 1_000_000
+      } million characters at most`,
+    )
+  }
   if (!token && !adminPage(url, env)) {
     return json(403, 'admin_page', `choose an ${ADMIN} page on ${apex(env)}`)
   }
@@ -198,6 +216,7 @@ let visitOf = async (req: Request, env: Env, path: string) => {
     // axe-core belongs to app_preview. A browser visit reads the page and
     // takes the steps it was asked to take.
     audit: false,
+    ...html ? { html } : {},
   }
   if (waiting(visit) >= MOST) {
     return json(
@@ -233,6 +252,7 @@ export let fetch = async (
       browse_page: pageAddress(visit.url),
       browse_caller: person,
       browse_input: visit.view.touch ? 'touch' : 'mouse',
+      browse_document: visit.html ? 'posted' : 'served',
     })
     return Response.json(await seen(env, visit, undefined, where))
   } catch (e) {
