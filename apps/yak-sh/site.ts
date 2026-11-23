@@ -3,6 +3,7 @@
 // site. The page draws itself from these, so changing one redraws it.
 import type { Bundle } from '@yaks/graph'
 import { fileOf } from '@yaks/file'
+import { INSTALLER } from './install.ts'
 
 /** The site: its title, and the layout its page is. */
 export let SITE = '2caade2e-aa23-4fc5-bba3-af9eff4f64a1'
@@ -63,6 +64,7 @@ export let FILES = [
   'shop.ts',
   'outbox.ts',
   'docs.ts',
+  'install.ts',
   'idle.ts',
   'signin.ts',
   'setup.ts',
@@ -96,8 +98,8 @@ let reply = (subject: string, words: string) =>
  * window is what the session is given. */
 let session = (persona: string) => '```session\n' + persona + '\n```'
 
-export let INSTALL = 'deno run -A jsr:@yaks/cli/install'
-/** The install line again, asking jsr.io for the newest release, even one
+export let INSTALL = `curl -fsSL ${INSTALLER} | sh`
+/** yak's own installer, asking jsr.io for the newest release, even one
  * published today: Deno otherwise keeps the release it found before. */
 export let UPDATE =
   'deno run -A --minimum-dependency-age=0 --reload=jsr:@yaks/cli jsr:@yaks/cli/install'
@@ -354,7 +356,7 @@ export let SECTIONS: Section[] = [
     view: 'Part',
     title: 'Install yak, then start your graph',
     body: part(
-      'The installer runs on [Deno](https://deno.com) and puts `yak` on your PATH, at one release with every package it loads.',
+      'yak runs on [Deno](https://deno.com). The installer installs Deno first where it is missing, then puts `yak` on your PATH, at one release with every package it loads.',
       '### Install yak',
       sh(INSTALL),
       'It installs the newest release at least a day old, since Deno waits a day for a new one. To update to the newest, even one published today:',

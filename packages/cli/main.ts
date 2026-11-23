@@ -94,7 +94,9 @@ let applied = async (
 ): Promise<number> => {
   let tool = (await c.all()).find((t) => t.name == 'graph_apply')
   if (!tool) {
-    throw new Usage(`${c.config ?? c.host} has no graph_apply to apply through`)
+    throw new Usage(
+      `${c.config ?? c.host} has no graph_apply to apply through`,
+    )
   }
   // A dry run is the tool's `check`: every phase runs and the transaction is
   // rolled back, so the result is what would have been written.
@@ -157,8 +159,8 @@ export let YAK: Opts = {
     'version',
   ],
   host: HOST,
-  nowhere: 'no graph on this machine yet: `yak init` starts one, ' +
-    'and `yak auth yaks.app` signs in to your yaks.app apps',
+  nowhere: 'not signed in to yaks.app, and no graph on this machine: ' +
+    '`yak auth yaks.app` signs you in, or `yak init` starts a graph here',
   more: table,
   stray: appStray,
 }

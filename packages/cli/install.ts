@@ -211,8 +211,8 @@ if (import.meta.main) {
         code = 1
       } else {
         console.log(
-          `yak ${cli.version} is installed. Next: yak init, ` +
-            'which starts a graph on this machine',
+          `yak ${cli.version} is installed. Next: yak auth yaks.app ` +
+            'signs you in to yaks.app, or yak init starts a graph on this machine',
         )
       }
     }

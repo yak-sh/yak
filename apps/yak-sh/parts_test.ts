@@ -4,7 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
 import { partOf } from './parts.ts'
-import { ANCHORS, SECTIONS } from './site.ts'
+import { ANCHORS, INSTALL, SECTIONS } from './site.ts'
 
 test('a part body is its heading words, then prose, commands, files and items', () => {
   let body = [
@@ -60,10 +60,7 @@ test('the page draws its parts from the graph: numbered steps, package tables, t
     all('#install .Part_List > li h3').map((h) => h.textContent),
     [...install.body.matchAll(/^### (.+)$/gm)].map((m) => m[1]),
   )
-  equal(
-    all('#install .Copy code')[0].textContent?.includes('jsr:@yaks/cli'),
-    true,
-  )
+  equal(all('#install .Copy code')[0].textContent, `$ ${INSTALL}`)
   equal(all('#packages table').length, 4)
   equal(all('#packages .File_Bar').map((b) => b.textContent), ['main.ts'])
   equal(all('.Block dt').map((d) => d.textContent)[0], 'runs on')

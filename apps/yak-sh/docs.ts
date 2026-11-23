@@ -5,8 +5,10 @@
 // guides on yaks.app and the READMEs in the repository say is linked, not
 // copied. For a search engine, `robots.txt` welcomes every crawler and names
 // `sitemap.xml`, which lists the page and each of these that is its own
-// canonical address.
+// canonical address. `install` is the script `curl … | sh` runs
+// (install.ts).
 import { ANCHORS, SECTIONS } from './site.ts'
+import { SCRIPT } from './install.ts'
 
 type Section = (typeof SECTIONS)[number]
 
@@ -121,8 +123,6 @@ let setup = (base: string) =>
     '# Set up yak and yaks.app',
     `> ${hero.body}`,
     'This page is for an agent setting up yak and yaks.app, for itself or for the person it works for. Run each command as written, in order; `yak serve` keeps running, so start it in the background. Two steps need the person: signing in to yaks.app opens a page in their browser, and adding a connector to Claude or ChatGPT on the web is done in their settings. For those, tell them the one thing to open, click or paste.',
-    "yak runs on [Deno](https://deno.com). If `deno --version` fails, install Deno first, then put it on this shell's PATH, where the installer below puts `yak` too:",
-    '```sh\ncurl -fsSL https://deno.land/install.sh | sh -s -- -y\nexport PATH="$HOME/.deno/bin:$PATH"\n```',
     section(part('yak')),
     section(part('yaks-app')),
     section(part('install')),
@@ -162,6 +162,7 @@ export let pages = (base: string): Record<string, Doc> => {
   }
   return {
     ...docs,
+    install: { type: 'text/plain', text: SCRIPT },
     'robots.txt': { type: 'text/plain', text: robots(base) },
     'sitemap.xml': { type: 'application/xml', text: sitemap(base, docs) },
   }

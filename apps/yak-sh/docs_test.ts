@@ -2,6 +2,7 @@
 import { equal, match, test } from '@yaks/testing'
 import worker from './worker.ts'
 import { INSTALL, SECTIONS } from './site.ts'
+import { INSTALLER } from './install.ts'
 
 let get = async (url: string, headers: HeadersInit = {}) => {
   let res = await worker.fetch(new Request(url, { headers }))
@@ -90,4 +91,17 @@ test('opening an agent document in a browser wraps its source without changing t
   match(shown.text, /name="viewport"/)
   match(shown.text, /&lt;loc&gt;https:\/\/yak\.sh\/&lt;\/loc&gt;/)
   equal(await get(`${url}?raw=1`, browser), await get(url))
+})
+
+test('the install line fetches a shell script that installs yak from jsr.io', async () => {
+  match(INSTALL, new RegExp(`^curl -fsSL ${RegExp.escape(INSTALLER)} \\| sh$`))
+  let { status, type, text } = await get(INSTALLER)
+  equal([status, type], [200, 'text/plain; charset=utf-8'])
+  match(text, /^#!\/bin\/sh\n/)
+  match(text, /\n"\$deno" run -A jsr:@yaks\/cli\/install\n/)
+  let sh = new Deno.Command('sh', { args: ['-n'], stdin: 'piped' }).spawn()
+  let writer = sh.stdin.getWriter()
+  await writer.write(new TextEncoder().encode(text))
+  await writer.close()
+  equal((await sh.status).code, 0)
 })
