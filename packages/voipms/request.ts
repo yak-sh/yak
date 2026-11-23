@@ -134,9 +134,11 @@ export class TimedOut extends Unsent {
 }
 
 /** The voip.ms methods that may be asked twice: those that read, and the
- * settings that say the whole of what they set. Any other may have acted
+ * settings that say the whole of what they set (`setSubAccount` is sent
+ * every field the account has). Any other may have acted
  * however its first asking ended, so it is never asked again. */
-export let REPEATABLE = /^(get|search)[A-Z]|^(setSMS|setDIDRouting)$/
+export let REPEATABLE =
+  /^(get|search)[A-Z]|^(setSMS|setDIDRouting|setSubAccount)$/
 
 /**
  * Every voip.ms call, under one policy: each asking ends by `by` and within

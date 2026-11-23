@@ -92,6 +92,16 @@ let blocking = async (call: Call, account: Fields, out: boolean) => {
   })
 }
 
+// Every step runs, and any failure fails the whole once all have ended.
+let settled = async (steps: Promise<unknown>[]) => {
+  let ends = await Promise.allSettled(steps)
+  let errors = ends.flatMap((r) => r.status == 'rejected' ? [r.reason] : [])
+  if (errors.length == 1) throw errors[0]
+  if (errors.length) throw new AggregateError(errors, 'voip.ms refused a step')
+}
+
+let twice = <T>(step: () => Promise<T>) => step().catch(() => step())
+
 let groupOf = async (call: Call, digits: string) => {
   let groups = await call('getRingGroups').catch((error) => {
     if (/no_ringgroup/.test(String(error))) return { ring_groups: [] }
@@ -186,27 +196,30 @@ export let allow = async (
     requested.has(seat) && !voice.revoked?.includes(seat)
   )
   // A shut line keeps its sign-ins, restricted, so a restore brings back
-  // the passwords people's softphones hold.
+  // the passwords people's softphones hold. Restricting comes before
+  // dropping departed owners' accounts, so calls out stop first.
   let keep = async () => {
     let kept = new Map<string, Fields>()
+    let gone: Fields[] = []
     for (let account of await accountsOf(call, digits)) {
       let username = String(account.account)
-      if (
-        !kept.has(username) &&
-        seats.some((seat) => belongs(account, digits, seat, voice.legacy))
-      ) {
-        await blocking(call, account, voice.in && voice.out)
-        kept.set(username, account)
-      } else {
-        await drop(call, account)
-      }
+      let mine = seats.some((seat) =>
+        belongs(account, digits, seat, voice.legacy)
+      )
+      if (mine && !kept.has(username)) kept.set(username, account)
+      else gone.push(account)
     }
+    let out = voice.in && voice.out
+    await settled([...kept.values()].map((a) => blocking(call, a, out)))
+    await settled(gone.map((account) => drop(call, account)))
     return kept
   }
   if (!voice.in) {
-    // Try both stops even if the carrier fails to apply one of them.
-    let ends = await Promise.allSettled([route(call, digits, []), keep()])
-    let errors = ends.flatMap((r) => r.status == 'rejected' ? [r.reason] : [])
+    // Calls out stop first, asked again on their own before the DID is
+    // routed to a hang-up; the hang-up is tried whatever that answered.
+    let shut = await twice(keep).then(() => [], (e) => [e])
+    let routed = await route(call, digits, []).then(() => [], (e) => [e])
+    let errors = [...shut, ...routed]
     if (errors.length) {
       throw new AggregateError(errors, 'voip.ms could not shut all calls')
     }

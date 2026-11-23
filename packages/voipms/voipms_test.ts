@@ -402,6 +402,55 @@ test('a spent budget stops outbound calls and leaves the sign-in and inbound rou
   ]])
 })
 
+test('a trashed line stops calls out first, asking again on its own, then hangs up its calls in', async () => {
+  let sub = {
+    id: '7',
+    account: '100_y2695550100',
+    username: 'y2695550100',
+    password: 'sip-pw',
+    enable_ip_restriction: '0',
+    ip_restriction: '',
+  }
+  let did = { did: '2695550100', routing: 'account:100_y2695550100' }
+  let asked: string[] = []
+  let refusals = 0
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let q = Object.fromEntries(new URL(String(url)).searchParams)
+      asked.push(q.method)
+      if (q.method == 'setSubAccount' && refusals-- > 0) {
+        return Promise.resolve(Response.json({ status: 'busy' }))
+      }
+      if (q.method == 'setSubAccount') Object.assign(sub, q)
+      if (q.method == 'setDIDRouting') did.routing = q.routing
+      return Promise.resolve(Response.json({
+        status: 'success',
+        accounts: [sub],
+        dids: [did],
+      }))
+    },
+  })
+  let shut = { in: false, out: false, seats: ['first'], legacy: 'first' }
+  let writes = () => asked.filter((m) => m.startsWith('set'))
+
+  refusals = 1
+  await shop.allow!('+12695550100', shut)
+  assertEquals(writes(), ['setSubAccount', 'setSubAccount', 'setDIDRouting'])
+  assertEquals([sub.enable_ip_restriction, sub.password], ['1', 'sip-pw'])
+  assertEquals(did.routing, 'sys:hangup')
+
+  // Refused both times, calls in are still hung up.
+  Object.assign(sub, { enable_ip_restriction: '0', ip_restriction: '' })
+  did.routing = 'account:100_y2695550100'
+  asked = []
+  refusals = 2
+  await assertRejects(() => shop.allow!('+12695550100', shut), AggregateError)
+  assertEquals(writes(), ['setSubAccount', 'setSubAccount', 'setDIDRouting'])
+  assertEquals(did.routing, 'sys:hangup')
+})
+
 test('a late duplicate SIP account leaves the earlier sign-in in place', async () => {
   let first = {
     id: '1',
