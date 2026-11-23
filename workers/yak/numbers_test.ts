@@ -433,7 +433,7 @@ let vms = {
   slowHangup: 0,
   slowRestriction: false,
   slowGroups: 0,
-  slowCancel: false,
+  slowCancel: null as 'held' | 'returned' | null,
 }
 let voipmsApi = endpoints(globalThis).open((req) => {
   let q = new URL(req.url).searchParams
@@ -547,6 +547,7 @@ let voipmsApi = endpoints(globalThis).open((req) => {
       vms.held.get(q.get('did')!)!.callback = q.get('url_callback')!
       return ok()
     case 'cancelDID':
+      if (vms.slowCancel == 'held') return new Response('', { status: 522 })
       vms.held.delete(q.get('did')!)
       if (vms.slowCancel) return new Response('', { status: 522 })
       return ok()
@@ -804,7 +805,8 @@ let localLine = async () => {
     vms.held.clear()
     vms.accounts.clear()
     vms.groups.clear()
-    vms.slowRestriction = vms.slowCancel = false
+    vms.slowRestriction = false
+    vms.slowCancel = null
     vms.slowGroups = 0
   }
   return { k, env, space, line, release, tool, cookie, person, stop }
@@ -859,13 +861,9 @@ test('a carrier-confirmed return leaves the trash and stops monthly billing even
   let { k, env, space, line, release, tool, cookie, person, stop } =
     await localLine()
   try {
+    let [sub] = vms.accounts.values()
+    vms.slowRestriction = true
     await release()
-    vms.groups.set('1', { ring_group: '1', name: 'y2692015487', members: '' })
-    vms.slowGroups = 2
-    vms.slowCancel = true
-    let cancellations = () =>
-      vms.asked.filter((p) => p.get('method') == 'cancelDID').length
-    let before = cancellations()
     let t = await ticket(
       'numbererase',
       space,
@@ -873,15 +871,30 @@ test('a carrier-confirmed return leaves the trash and stops monthly billing even
       person,
       env.SESSION_SECRET!,
     )
-    let response = await k.at(
-      'yaks.app',
-      new URL(door(space.slug, 'numbererase', line.eid)).pathname,
-      {
-        method: 'POST',
-        headers: { cookie },
-        body: new URLSearchParams({ t }),
-      },
-    )
+    let press = () =>
+      k.at(
+        'yaks.app',
+        new URL(door(space.slug, 'numbererase', line.eid)).pathname,
+        {
+          method: 'POST',
+          headers: { cookie },
+          body: new URLSearchParams({ t }),
+        },
+      )
+    vms.slowRestriction = false
+    vms.slowCancel = 'held'
+    assertStringIncludes(await (await press()).text(), 'still returning')
+    assertEquals(vms.held.size, 1)
+    assertEquals(sub.only, '192.0.2.1')
+    assertStringIncludes(await tool('number_status'), '$4.10 a month')
+
+    vms.groups.set('1', { ring_group: '1', name: 'y2692015487', members: '' })
+    vms.slowGroups = 2
+    vms.slowCancel = 'returned'
+    let cancellations = () =>
+      vms.asked.filter((p) => p.get('method') == 'cancelDID').length
+    let before = cancellations()
+    let response = await press()
     assertEquals(response.status, 200)
     let answer = await response.text()
     assertEquals(vms.held.size, 0)

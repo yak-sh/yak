@@ -2,7 +2,7 @@
 import { type Bundle, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
-import { CallStopError } from '@yaks/phone'
+import { CallStopError, type Ways } from '@yaks/phone'
 import { Unsent } from '@yaks/host/senders'
 import { line as q } from '@yaks/query'
 import { caught } from './defects.ts'
@@ -51,8 +51,10 @@ let read = async (env: Env, eid: string) => {
 export let returning = async (env: Env, line: string) =>
   !!(await read(env, eidOf(line)))?.permanent
 
+let bothStopped = (work: Release) => work.stopped_in && work.stopped_out
+
 let describeCalls = (work?: Release) => {
-  if (!work || work.stopped_in && work.stopped_out) {
+  if (!work || bothStopped(work)) {
     return 'Incoming and outgoing calls have stopped.'
   }
   let incoming = work.stopped_in
@@ -116,6 +118,27 @@ let patch = async (
   }
 }
 
+let failures = (error: unknown): unknown[] =>
+  error instanceof AggregateError ? error.errors.flatMap(failures) : [error]
+
+// A permanent return can take over a trash retry before calls have stopped.
+// Keep restricting them if the carrier still holds the DID after cancellation.
+let stillStopping = async (env: Env, work: Release): Promise<{
+  stopped?: Ways
+  errors?: unknown[]
+}> => {
+  if (!work.permanent || bothStopped(work)) return {}
+  let line = await held(env, idOf(work.line))
+  if (!line?.trashed || line.returned) return {}
+  return await syncVoice(env, line, { in: false, out: false }).then(
+    () => ({ stopped: { in: true, out: true } }),
+    (error) => ({
+      stopped: error instanceof CallStopError ? error.stopped : undefined,
+      errors: failures(error),
+    }),
+  )
+}
+
 let retrying = async (
   env: Env,
   eid: string,
@@ -124,28 +147,30 @@ let retrying = async (
   now: Date,
 ) => {
   if (error instanceof Stale) return
-  let reasons: unknown[] = error instanceof CallStopError
-    ? error.errors
-    : [error]
+  let { stopped, errors = [] } = error instanceof CallStopError
+    ? { stopped: error.stopped }
+    : await stillStopping(env, work)
+  let reasons = [...failures(error), ...errors]
+  let slow = reasons.every((e) => e instanceof Unsent)
   let due = now.getTime() - Date.parse(work.at) >= 3_600_000
-  let report = !work.reported &&
-    (due || reasons.some((e) => !(e instanceof Unsent)))
-  let at = now.toISOString()
+  let report = !work.reported && (due || !slow)
+  let at = nowOf(env).toISOString()
   let progress = {
-    ...error instanceof CallStopError && error.stopped.in && !work.stopped_in
-      ? { stopped_in: at }
-      : {},
-    ...error instanceof CallStopError && error.stopped.out && !work.stopped_out
-      ? { stopped_out: at }
-      : {},
+    ...stopped?.in && !work.stopped_in ? { stopped_in: at } : {},
+    ...stopped?.out && !work.stopped_out ? { stopped_out: at } : {},
     ...report ? { reported: at } : {},
   }
   if (report) {
     caught(
-      error instanceof Unsent
+      slow
         ? new Error(
           'The phone company has not finished releasing the number for an hour',
           { cause: error },
+        )
+        : errors.length
+        ? new AggregateError(
+          reasons,
+          'The phone company could not release the number',
         )
         : error,
       { request: 'finish phone release' },
