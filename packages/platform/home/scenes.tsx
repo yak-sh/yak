@@ -22,6 +22,9 @@ let SERVICES = [
   ['hubspot', 'HubSpot'],
 ]
 
+/** A part of a scene that comes in as its section is read, `i` steps after the first. */
+let In = (i: number) => ({ style: `--i:${i}` })
+
 export let ServiceLogo = (
   { slug, title }: { slug: string; title?: string },
 ) => (
@@ -39,8 +42,8 @@ export let ServiceLogo = (
 
 export let Services = ({ short = false }: { short?: boolean }) => (
   <ul class={short ? 'Home_Services Home_Services-short' : 'Home_Services'}>
-    {SERVICES.slice(0, short ? 7 : undefined).map(([slug, name]) => (
-      <li class='Home_Service'>
+    {SERVICES.slice(0, short ? 7 : undefined).map(([slug, name], i) => (
+      <li class={short ? 'Home_Service' : 'Home_Service Home_In'} {...In(i)}>
         <button
           type='button'
           class='Home_ServicePick'
@@ -64,8 +67,8 @@ let CHANNELS = [
 export let Change = ({ copy }: { copy: Copy }) => (
   <Card class='Home_Illustration'>
     <ul class='Home_IllustrationRows'>
-      {CHANNELS.map(([channel, icon]) => (
-        <li class='Home_IllustrationRow'>
+      {CHANNELS.map(([channel, icon], i) => (
+        <li class='Home_IllustrationRow Home_In' {...In(i)}>
           <Icon of={icon} />
           <div class='Home_IllustrationCopy'>
             <b {...copy.text(`home.story.change.${channel}.name`)} />
@@ -84,8 +87,8 @@ export let People = ({ copy }: { copy: Copy }) => (
   <Card class='Home_Illustration'>
     <b {...copy.text('home.story.people.roles')} />
     <ul class='Home_IllustrationRows'>
-      {['owner', 'editor', 'viewer'].map((role) => (
-        <li class='Home_IllustrationRow'>
+      {['owner', 'editor', 'viewer'].map((role, i) => (
+        <li class='Home_IllustrationRow Home_In' {...In(i)}>
           <Icon of={ICONS.team} />
           <div class='Home_IllustrationCopy'>
             <b {...copy.text(`home.story.people.${role}.name`)} />
@@ -100,12 +103,13 @@ export let People = ({ copy }: { copy: Copy }) => (
   </Card>
 )
 
-let Envelope = ({ box, subject, children }: {
+let Envelope = ({ box, subject, at, children }: {
   box: string
   subject: string
+  at: number
   children: ComponentChildren
 }) => (
-  <figure class='Home_Mail'>
+  <figure class='Home_Mail Home_In' {...In(at)}>
     <figcaption class='Home_WindowBar'>{box}</figcaption>
     <div class='Home_MailBody'>
       <b>{subject}</b>
@@ -117,7 +121,7 @@ let Envelope = ({ box, subject, children }: {
 let Scenes = {
   email: ({ letter, mail }: typeof SCENES[string], slug: string) => (
     <div class='Home_MailPair'>
-      <Envelope box='Inbox' subject={letter[0]}>
+      <Envelope box='Inbox' subject={letter[0]} at={0}>
         <p class='Home_MailFrom'>
           <b>From</b> yourname.{slug}@yaks.app
         </p>
@@ -125,7 +129,7 @@ let Scenes = {
         <p>{letter[1]}</p>
         <span class='Home_MailFrom'>Unsubscribe</span>
       </Envelope>
-      <Envelope box='Forward' subject={`Fwd: ${mail[0]}`}>
+      <Envelope box='Forward' subject={`Fwd: ${mail[0]}`} at={1}>
         <span class='Home_MailFrom'>To yourname.{slug}@yaks.app</span>
         <span class='Home_Attachment'>{mail[1]}</span>
         <span class='Home_MailSend' aria-hidden='true'>Send</span>
@@ -134,7 +138,7 @@ let Scenes = {
   ),
   sell: ({ sale }: typeof SCENES[string]) => (
     <div class='Home_Checkout'>
-      <figure class='Home_Payment'>
+      <figure class='Home_Payment Home_In' {...In(0)}>
         <figcaption class='Home_WindowBar'>
           <ServiceLogo slug='stripe' /> Checkout by Stripe
         </figcaption>
@@ -144,11 +148,12 @@ let Scenes = {
           <span class='Home_PaymentAction'>Pay ${sale[1]}.00</span>
         </div>
       </figure>
+      <div class='Home_Pipe' aria-hidden='true' />
       <figure class='Home_Payment'>
         <figcaption class='Home_WindowBar'>Orders</figcaption>
         <ul class='Home_MailBody'>
-          {['Ana P.', 'Tom R.', 'Mae L.'].map((name) => (
-            <li class='Home_Order'>
+          {['Ana P.', 'Tom R.', 'Mae L.'].map((name, i) => (
+            <li class='Home_Order Home_In' {...In(i + 3)}>
               <span>{name}</span> <b>${sale[1]}.00</b> <span>Paid</span>
             </li>
           ))}
@@ -158,8 +163,10 @@ let Scenes = {
   ),
   helper: ({ ask }: typeof SCENES[string]) => (
     <Card class='Home_Helper'>
-      <p class='Chat_Bubble Chat_Bubble-you'>{ask[0]}</p>
-      <p class='Chat_Bubble Chat_Bubble-them'>{ask[1]}</p>
+      <p class='Chat_Bubble Chat_Bubble-you Home_In' {...In(0)}>{ask[0]}</p>
+      <p class='Chat_Bubble Chat_Bubble-them Home_In' {...In(1.5)}>
+        {ask[1]}
+      </p>
     </Card>
   ),
   domain: ({ domain }: typeof SCENES[string], slug: string) => (
@@ -172,7 +179,7 @@ let Scenes = {
 }
 
 export let Scene = ({ id }: { id: keyof typeof Scenes }) => (
-  <div class='Home_Scene'>
+  <div class={`Home_Scene Home_Scene-${id}`}>
     {DEMOS.map(({ slug }, i) => (
       <div data-demo-scene={slug} hidden={i != 0}>
         {Scenes[id](SCENES[slug], slug)}

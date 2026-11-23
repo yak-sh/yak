@@ -710,6 +710,67 @@
   gap: .55rem;
 }
 
+/* The section under the reading line (story.js) is in full ink, the others
+   in the muted one, and a scene is dimmed until its section is read. */
+.Home_Feature:is([data-state='past'], [data-state='next']) :is(.Home_FeatureTitle, .Home_FeatureWords .Note) {
+  color: var(--muted);
+}
+
+.Home_Feature[data-state='now'] .Home_FeatureList {
+  color: var(--text);
+}
+
+.Home_Feature[data-state='next'] > :is(.Home_Illustration, .Home_Connection, .Home_Scene) {
+  opacity: .55;
+}
+
+/* A scene's parts come in one after another as the reading line crosses
+   their section: --v is how far it is read, --k how quickly the parts
+   follow, --i how many come before. It moves with the scroll alone. */
+.Home_Feature .Home_In {
+  --in: clamp(0, calc(var(--v, 1) * var(--k, 10) - var(--i, 0)), 1);
+  opacity: calc(.2 + .8 * var(--in));
+  translate: 0 calc((1 - var(--in)) * .6rem);
+}
+
+.Home_Illustration,
+.Home_Scene-email {
+  --k: 6;
+}
+
+.Home_Connection {
+  --k: 20;
+}
+
+.Home_Scene-helper {
+  --k: 5;
+}
+
+.Home_Pipe {
+  position: relative;
+  justify-self: center;
+  width: .3rem;
+  height: 1.5rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--muted) 22%, transparent);
+}
+
+.Home_Pipe::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: calc(clamp(0, var(--v, 1) * 2.5, 1) * 100%);
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .Home_Feature .Home_In,
+  .Home_Pipe::after {
+    --v: 1;
+  }
+}
+
 .Home_IllustrationRows {
   display: grid;
   gap: .55rem;
@@ -782,11 +843,39 @@
   font-weight: 650;
 }
 
-.Home_MailPair,
-.Home_Checkout {
+.Home_MailPair {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
   gap: .65rem;
+}
+
+.Home_Scene-sell {
+  container-type: inline-size;
+}
+
+/* A payment becomes an order: the pipe between them fills as it is read. */
+.Home_Checkout {
+  --k: 10;
+  display: grid;
+  gap: .4rem;
+}
+
+@container (min-width: 24rem) {
+  .Home_Checkout {
+    grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .Home_Pipe {
+    width: auto;
+    height: .3rem;
+  }
+
+  .Home_Pipe::after {
+    inset: 0 auto 0 0;
+    width: calc(clamp(0, var(--v, 1) * 2.5, 1) * 100%);
+    height: auto;
+  }
 }
 
 .Home_PaymentAction {

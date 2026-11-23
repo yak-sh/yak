@@ -11,6 +11,10 @@ export let reading = (rects, line) => {
   return { step, through: clamp((line - top) / Math.max(1, bottom - top)) }
 }
 
+/** Where a step stands to the reading line, and how much of it is read. */
+export let stance = (turn, { step, through }) =>
+  turn < step ? ['past', 1] : turn > step ? ['next', 0] : ['now', through]
+
 const REVEAL = .6
 
 /** Lines share the first 60% of their turn. Each starts just after the previous line finishes. */
@@ -35,6 +39,15 @@ let reveal = (lines, at, calm) => {
     el.style.setProperty('--sat', Math.max(.25, 1 - (at.step - turn) * .24))
   }
 }
+
+// Each section is past, now or next, and its --v says how far it is read,
+// so its scene comes in with the scroll alone, backwards too.
+let mark = (steps, at) =>
+  steps.forEach((el, turn) => {
+    let [state, v] = stance(turn, at)
+    if (el.dataset.state != state) el.dataset.state = state
+    el.style.setProperty('--v', v.toFixed(3))
+  })
 
 let swipe = (old, log, backwards) => {
   let ghost = old.cloneNode(true)
@@ -215,6 +228,7 @@ let mount = (root) => {
       readingLine(),
     )
     reveal(lines[i], at, calm.matches)
+    mark(steps, at)
     demo.inert = narrow.matches && at.step == 0
     if (active == at.step) return
     active = at.step

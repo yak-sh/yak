@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { progress, reading } from './story.js'
+import { progress, reading, stance } from './story.js'
 
 test('a conversation line follows the reading position in both directions', () => {
   let at = (through: number) =>
@@ -30,5 +30,14 @@ test('the opening and completed exchanges stay while later lines wait', () => {
     1,
     0,
     0,
+  ])
+})
+
+test('a section is past, now or next to the reading position, with how much is read', () => {
+  let at = { step: 2, through: .25 }
+  assertEquals([1, 2, 3].map((turn) => stance(turn, at)), [
+    ['past', 1],
+    ['now', .25],
+    ['next', 0],
   ])
 })
