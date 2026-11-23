@@ -62,7 +62,7 @@ import {
   chatPath,
   integrationLogo,
   managePath,
-  type ManageView,
+  type Setting,
 } from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
@@ -744,7 +744,7 @@ export type DeskPage = {
   fee?: string
   say?: string
   no?: boolean
-  view?: ManageView
+  view?: Setting
   connections?: Connections
   /** who is in the space and its apps, and who has yet to accept */
   people?: People

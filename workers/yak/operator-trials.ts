@@ -38,7 +38,7 @@ import { render } from '@yaks/text'
 import { running } from '@yaks/trial/effects'
 import { measured, places } from '@yaks/trial/match'
 import { r2RawObjects } from './lib/objects.ts'
-import { managePath } from '@yaks/platform/routes'
+import { talkPath } from '@yaks/platform/routes'
 import { url as hostUrl } from '@yaks/platform/host'
 import type { Directory } from './directory.ts'
 import { directoryOf } from './directory.ts'
@@ -170,7 +170,7 @@ export let tappingAt = async (
   let space = await dir.at(String(await spaceOf(store) ?? ''))
   return space
     ? `${
-      hostUrl(env, managePath('matches', space.slug))
+      hostUrl(env, talkPath('matches', space.slug))
     }?round=${round.entity.eid}`
     : undefined
 }

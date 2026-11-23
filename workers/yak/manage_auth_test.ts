@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { bearerFor, connector, fresh, meta, seed, unique } from './probe.ts'
-import { managePath } from '@yaks/platform/routes'
+import { chatPath, managePath } from '@yaks/platform/routes'
 
 let k = await fresh()
 let slug = unique('manage-auth')
@@ -44,7 +44,7 @@ for (let [i, token] of tokens.entries()) {
         [`${profile}?browser=1`, 'GET'],
         [`${operator}?browser=1`, 'POST'],
         [`${operator}/query?browser=1`, 'GET'],
-        [`${operator}/new?browser=1`, 'GET'],
+        [`${chatPath(slug)}?browser=1`, 'GET'],
         [`${operator}?browser=1&live=1`, 'GET'],
         [`${operator}?browser=1&settings-draft=1`, 'GET'],
       ]

@@ -27,7 +27,7 @@ import {
 } from './probe.ts'
 import type { Env } from './env.ts'
 import { carrying } from './support-reply.ts'
-import { managePath } from '@yaks/platform/routes'
+import { talkPath } from '@yaks/platform/routes'
 import { parseHTML } from 'linkedom'
 import { short } from '@yaks/id'
 
@@ -457,7 +457,7 @@ test("an answer rides the agent's next result once, and the person's Updates lea
   ok(!(await carried(me.agent, 'about')).includes(reply), 'carried once')
   ok(!(await carried(agent, 'about')).includes(reply), 'nobody else hears it')
 
-  let updates = await opened(managePath('updates', me.slug), me.cookie)
+  let updates = await opened(talkPath('updates', me.slug), me.cookie)
   let link = [...updates.document.querySelectorAll('a')]
     .map((a) => a.getAttribute('href') ?? '')
     .find((href) => href.endsWith(`/support/${thread}`))
@@ -484,7 +484,7 @@ test('an answer on a thread said in no space reaches the Updates of their own sp
   equal((await support({ thread, text: reply })).status, 200)
   await k.settled()
   let linked = async (slug: string) =>
-    [...(await opened(managePath('updates', slug), me.cookie)).document
+    [...(await opened(talkPath('updates', slug), me.cookie)).document
       .querySelectorAll('a')]
       .some((a) =>
         (a.getAttribute('href') ?? '').endsWith(`/support/${thread}`)
@@ -525,7 +525,7 @@ test('a fix that is a commit links to it in the public repository, and any other
     ['Fix: Dates read in your zone', null],
     [`Fix: ${bare}`, null],
   ])
-  let updates = await opened(managePath('updates', me.slug), me.cookie)
+  let updates = await opened(talkPath('updates', me.slug), me.cookie)
   ok(
     [...updates.document.querySelectorAll('a')].some((a) =>
       a.getAttribute('href')?.endsWith(`/commit/${sha}`)

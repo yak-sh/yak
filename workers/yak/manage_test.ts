@@ -4,7 +4,12 @@
 // use the browser's cookie and form paths, including the boundaries that keep
 // another person, and another page, from changing this account.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import {
   client,
   connector,
@@ -15,7 +20,13 @@ import {
   owned,
   signIn,
 } from './probe.ts'
-import { chatPath, LOGOUT, MANAGE, managePath } from '@yaks/platform/routes'
+import {
+  chatPath,
+  LOGOUT,
+  MANAGE,
+  managePath,
+  talkPath,
+} from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { parseHTML } from 'linkedom'
 
@@ -124,25 +135,32 @@ test('the apex opens a chat with the space’s Operator, whose Manage opens its 
   let first = await get(MANAGE)
   assertEquals(first.status, 302)
   assertEquals(first.headers.get('location'), to(home))
-  // The space's own address is a new chat with its Operator, as its old
-  // address for one still is.
-  assertEquals(home, `${MANAGE}/${slug}`)
-  for (let path of [home, `${home}/operator/new`]) {
-    let landed = await get(path)
-    assertEquals(landed.status, 200)
-    let { document } = parseHTML(await landed.text())
-    assert(document.querySelector('.Talk [data-conversation]'), path)
-    assertEquals(
-      [...document.querySelectorAll('a')].find((a) => a.textContent == 'Manage')
-        ?.getAttribute('href'),
-      managePath('operator', slug),
-    )
-  }
+  // The space's own address is a new chat with its Operator, and Manage its
+  // settings (D-473).
+  assertEquals(home, `/${slug}`)
+  let landed = await get(home)
+  assertEquals(landed.status, 200)
+  let { document } = parseHTML(await landed.text())
+  assert(document.querySelector('.Talk [data-conversation]'))
+  assertEquals(
+    [...document.querySelectorAll('a')].find((a) => a.textContent == 'Manage')
+      ?.getAttribute('href'),
+    apps,
+  )
   assertStringIncludes(
     await (await get(apps)).text(),
     `href="https://${host}/private-notes/"`,
   )
   assertEquals((await get(`${MANAGE}/${slug}/missing`)).status, 404)
+  // A name no space holds is nothing, and none may take a name the apex
+  // serves a page at.
+  assertEquals((await get('/no-such-space')).status, 404)
+  assertEquals((await get(`/${slug}/apps`)).status, 404)
+  await assertRejects(
+    () => agent.answer('space_new', { slug: 'gallery', title: 'Gallery' }),
+    Error,
+    'kept for yaks.app itself',
+  )
   let login = await k.at('yaks.app', MANAGE, { redirect: 'manual' })
   assertEquals(login.status, 303)
   assertEquals(
@@ -175,6 +193,7 @@ test('the apex and a space’s pages wake its Operator for the chat opened next'
 // Where the dashboard was, letters and answers still send people: each page
 // moves to its own, the space in the path, the rest of the query kept, and a
 // form posted there kept a form.
+let ID = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
 test('the dashboard’s old addresses move to their pages', async () => {
   let billing = `/manage/${slug}/billing?paid=1`
   for (
@@ -191,6 +210,14 @@ test('the dashboard’s old addresses move to their pages', async () => {
         `/manage/${slug}/people`,
         'POST',
       ],
+      // The Operator's pages moved to the space's own address (D-473).
+      ['yaks.app', `/manage/${slug}?app=site`, `${home}?app=site`],
+      ['yaks.app', `/manage/${slug}/operator/new`, home],
+      ['yaks.app', `/manage/${slug}/operator/${ID}`, `${home}/${ID}`],
+      ['yaks.app', `/manage/${slug}/updates`, `${home}/updates`, 'POST'],
+      ['yaks.app', '/manage/updates?waiting', '/updates?waiting'],
+      ['yaks.app', `/manage/updates?space=${slug}`, `/updates?space=${slug}`],
+      ['yaks.app', `/updates?space=${slug}`, `${home}/updates`],
     ]
   ) {
     let res = await k.at(from, was, {
@@ -387,7 +414,7 @@ test('the chat’s side opens each app beside it, and Updates', async () => {
       ?.getAttribute('src'),
     `https://${host}/site/`,
   )
-  let updates = await get(managePath('updates', slug))
+  let updates = await get(talkPath('updates', slug))
   assertEquals(updates.status, 200)
   assertStringIncludes(await updates.text(), 'aria-current="page"')
 })
@@ -407,7 +434,7 @@ test('nobody else sees or changes the space', async () => {
   }
   assertEquals((await get(home, other.cookie)).status, 404)
   assertEquals(
-    (await get(managePath('updates', slug), other.cookie)).status,
+    (await get(talkPath('updates', slug), other.cookie)).status,
     404,
   )
   assertEquals(

@@ -37,6 +37,8 @@ import {
   managed,
   managePath,
   manifestPath,
+  spaced,
+  talkPath,
 } from '@yaks/platform/routes'
 
 let p = platform('operator-chat')
@@ -361,14 +363,14 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     'yaks.app': chatPath('clerk'),
     Township: null,
     [op]: chatPath('clerk'),
-    Updates: managePath('updates', 'clerk'),
+    Updates: talkPath('updates', 'clerk'),
     'Your apps': null,
     'Recipe box': aboutPath('clerk', 'app0'),
     Holdfast: aboutPath('clerk', 'app1'),
     'Book club': aboutPath('clerk', 'app2'),
     Chores: aboutPath('clerk', 'app3'),
     'All 6 apps': managePath('apps', 'clerk'),
-    Manage: managePath('operator', 'clerk'),
+    Manage: managePath('apps', 'clerk'),
   })
   // The conversation on screen is the side's current tab, and the apps say
   // they open beside it.
@@ -622,9 +624,9 @@ test('Updates from the Operator opens beside the same side', async () => {
   assertEquals(
     document.querySelector('.SideNav [aria-current="page"]')
       ?.getAttribute('href'),
-    managePath('updates', 'clerk'),
+    talkPath('updates', 'clerk'),
   )
-  assertEquals(managed(managePath('updates', 'clerk')), {
+  assertEquals(spaced(talkPath('updates', 'clerk')), {
     space: 'clerk',
     view: 'updates',
   })
@@ -704,12 +706,12 @@ test('an address from before the chat app is sent to its conversation there', ()
     new URL(moved.headers.get('location')!).pathname,
     chatPath('clerk', task),
   )
-  assertEquals(managed(chatPath('clerk', task)), {
+  assertEquals(spaced(chatPath('clerk', task)), {
     space: 'clerk',
     view: 'operator',
     open: task,
   })
-  assertEquals(managed(chatPath('clerk')), {
+  assertEquals(spaced(chatPath('clerk')), {
     space: 'clerk',
     view: 'operator',
     open: 'new',

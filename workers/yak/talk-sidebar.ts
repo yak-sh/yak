@@ -9,7 +9,13 @@ import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import type { Beside } from './operator-page.ts'
 import { spaceHost, url } from '@yaks/platform/host'
-import { ADMIN, chatPath, logoPath, managePath } from '@yaks/platform/routes'
+import {
+  ADMIN,
+  chatPath,
+  logoPath,
+  managePath,
+  talkPath,
+} from '@yaks/platform/routes'
 
 /** An app beside the conversation already open: every app shares the one
  * conversation, so the side keeps it lit and marks the app only Open. */
@@ -66,9 +72,7 @@ export let talkSide = (
         label: 'Across your spaces',
         items: [
           {
-            href: `${managePath('updates')}?in=${
-              encodeURIComponent(space.slug)
-            }`,
+            href: `${talkPath('updates')}?in=${encodeURIComponent(space.slug)}`,
             current: at.current.includes('all'),
             icon: 'inbox',
             label: 'All updates',
@@ -100,7 +104,7 @@ export let talkSide = (
               label: space.operator,
             },
             {
-              href: managePath('updates', space.slug),
+              href: talkPath('updates', space.slug),
               current: at.current.includes('updates'),
               icon: 'bell',
               label: 'Updates',
@@ -119,8 +123,10 @@ export let talkSide = (
         {
           id: 'side-settings',
           label: 'Settings',
+          // Manage is the space's settings; a member who does not own it
+          // has its Operator's alone.
           items: [{
-            href: managePath('operator', space.slug),
+            href: managePath(owner ? 'apps' : 'operator', space.slug),
             icon: 'sliders-horizontal',
             label: 'Manage',
           }],

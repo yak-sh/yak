@@ -13,7 +13,7 @@ import {
 import { sendable } from '@yaks/mail'
 import { presence } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
-import { managePath } from '@yaks/platform/routes'
+import { talkPath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
 import { nameOf } from './names.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
@@ -545,5 +545,5 @@ export let answerFriend = async (
     other,
     verdict: verdict as Verdict,
   })
-  return managePath('updates', space.slug)
+  return talkPath('updates', space.slug)
 }

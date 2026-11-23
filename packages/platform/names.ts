@@ -26,3 +26,136 @@ export let LINK = '/login/link'
 
 /** Where an invitation is accepted, on the platform's own host. */
 export let INVITE = '/invite'
+
+// The slugs no space or app may take, because at `<slug>.yaks.app` and at
+// `<slug>@yaks.app` they would read as the platform speaking (T-37886): a
+// sign-in page at `login.yaks.app`, a letter from `security@yaks.app`. The
+// doors that mint an address check it (workers/yak directory.ts `RESERVED`,
+// which adds the payment provider's name); an address already held keeps
+// working. `yak` is the platform's own space, and `origin` and `saas` its
+// custom-hostname origin. `sha` and `git` are the platform's own key prefixes
+// in the files bucket: a space's files are kept under its slug, so a space by
+// either name would share storage with the platform's.
+export let RESERVED: Set<string> = new Set([
+  'abuse',
+  'account',
+  'accounts',
+  'admin',
+  'administrator',
+  'api',
+  'app',
+  'apps',
+  'auth',
+  'billing',
+  'cf-bounce',
+  'checkout',
+  'connect',
+  'dashboard',
+  'docs',
+  'email',
+  'git',
+  'hello',
+  'help',
+  'hostmaster',
+  'login',
+  'logout',
+  'mail',
+  'manage',
+  'mcp',
+  'mx',
+  'no-reply',
+  'noreply',
+  'oauth',
+  'official',
+  'origin',
+  'password',
+  'pay',
+  'payment',
+  'payments',
+  'postmaster',
+  'pricing',
+  'privacy',
+  'root',
+  'saas',
+  'secure',
+  'security',
+  'settings',
+  'sha',
+  'sign-in',
+  'sign-up',
+  'signin',
+  'signup',
+  'staff',
+  'status',
+  'support',
+  'system',
+  'terms',
+  'verify',
+  'webmaster',
+  'www',
+  'yak',
+  'yaks',
+])
+
+// The names no space may take beyond those (D-473): a space's own address is
+// `yaks.app/<space>`, so every first path segment the apex serves a page or a
+// door at is kept from spaces, with the words that read as a platform's page
+// and the HTTP statuses. An app may take one, since it is addressed under its
+// space. The apex routes a name here, or in `RESERVED`, as its own and never
+// as a space (./routes.ts `rooted`).
+export let ROOT: Set<string> = new Set([
+  // The apex's own pages and doors (workers/yak apex.ts).
+  'acceptable-use',
+  'approve',
+  'build',
+  'churches',
+  'connections',
+  'cookies',
+  'gallery',
+  'guide',
+  'install',
+  'integrations',
+  'invite',
+  'operator',
+  'organizations',
+  'skills',
+  'space',
+  'spaces',
+  'start',
+  'technical',
+  'townships',
+  'tv',
+  'updates',
+  // Words a platform's own page would be at.
+  'about',
+  'assets',
+  'blog',
+  'careers',
+  'contact',
+  'download',
+  'downloads',
+  'faq',
+  'features',
+  'home',
+  'images',
+  'jobs',
+  'legal',
+  'news',
+  'press',
+  'public',
+  'robots',
+  'search',
+  'sitemap',
+  'static',
+  // HTTP statuses a page could be named for.
+  '400',
+  '401',
+  '403',
+  '404',
+  '410',
+  '429',
+  '500',
+  '502',
+  '503',
+  '504',
+])

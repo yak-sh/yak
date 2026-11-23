@@ -37,7 +37,7 @@ let read = await k.at(host, `/site/api/query?.draft.by=${person}`, {
 
 test("an owner's page wears the pencil, and a stranger's does not", () => {
   ok(owned.includes('data-yak-edit="'))
-  ok(owned.includes(`/manage/${space}?app=site`))
+  ok(owned.includes(`/${space}?app=site`))
   ok(!strangers.includes('data-yak-edit'))
 })
 

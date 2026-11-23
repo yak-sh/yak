@@ -34,7 +34,8 @@
 //     /home/api/*             the home app's own doors (site.ts `HOME_API`),
 //                             which its pencil uses
 //     /login, /login/code     identity.ts: the email-code sign-in
-//     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
+//     /manage, /manage/*      apps.ts: a space's settings and the account
+//     /updates, /<space>/*    apps.ts: a space's Operator (D-473), after the rest
 //     /admin, /admin/*        admin.ts: the directory, for the platform admin
 //     /invite                identity.ts: an invitation's one click (invite.ts)
 //     /support/<thread>       support-page.ts: a support thread, signed in

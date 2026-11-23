@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
-import { managePath } from '@yaks/platform/routes'
+import { managePath, talkPath } from '@yaks/platform/routes'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -34,7 +34,7 @@ await agent.tool('app_deploy', { space: slug, app: 'notes' })
 await k.settled()
 
 let said = async (as: string) => {
-  let page = await k.at('yaks.app', managePath('updates', slug), {
+  let page = await k.at('yaks.app', talkPath('updates', slug), {
     headers: { cookie: as },
   })
   return [
@@ -114,14 +114,14 @@ let across = async () => {
       headers: { cookie: other.cookie, accept },
     })
   let waiting = async () =>
-    await (await get(`${managePath('updates')}?waiting`, 'application/json'))
+    await (await get(`${talkPath('updates')}?waiting`, 'application/json'))
       .json() as Record<string, number>
   // What the space's own Updates badge says, beside its chat.
   let badge = async (space: Space) => {
     let d = parseHTML(await (await get(chatPath(space.slug))).text()).document
     return Number(
       d.querySelector(
-        `a[href="${managePath('updates', space.slug)}"] [data-waiting]`,
+        `a[href="${talkPath('updates', space.slug)}"] [data-waiting]`,
       )
         ?.getAttribute('data-waiting'),
     )
@@ -154,7 +154,7 @@ test('every space’s Updates in one place: labelled, counted from each space’
   assertEquals(counted[club.slug] >= 1 && counted[own.slug] >= 1, true)
   assertEquals(counted[club.slug], await badge(club))
   assertEquals(counted[own.slug], await badge(own))
-  let page = parseHTML(await (await get(managePath('updates'))).text())
+  let page = parseHTML(await (await get(talkPath('updates'))).text())
     .document
   let cards = [...page.querySelectorAll('.Update')].map((c) => ({
     where: c.querySelector('.Update_Where')?.textContent,
@@ -164,7 +164,7 @@ test('every space’s Updates in one place: labelled, counted from each space’
   let of = (words: string) => cards.find((c) => c.words == words)
   assertEquals(of('The club met.')?.where?.startsWith(club.title || slug), true)
   assertEquals(of('Your barn is up.')?.where?.startsWith(own.title), true)
-  assertEquals(of('Your barn is up.')?.back, managePath('updates'))
+  assertEquals(of('Your barn is up.')?.back, talkPath('updates'))
   // The newer first.
   assertEquals(
     cards.findIndex((c) => c.words == 'Your barn is up.') <
@@ -176,7 +176,7 @@ test('every space’s Updates in one place: labelled, counted from each space’
 
 test('All updates sits above the space picker and opens with that space still selected', async () => {
   let { own, club, get } = await across()
-  let updates = managePath('updates', club.slug)
+  let updates = talkPath('updates', club.slug)
   let page = await (await get(updates)).text()
   let { document } = parseHTML(page)
   let picker = document.querySelector('.Sidebar_Whose')!
@@ -184,7 +184,7 @@ test('All updates sits above the space picker and opens with that space still se
   let badges = [...picker.querySelectorAll('[data-across]')]
     .map((b) => b.getAttribute('data-across'))
   assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
-  assertEquals(page.includes(`${managePath('updates')}?waiting`), true)
+  assertEquals(page.includes(`${talkPath('updates')}?waiting`), true)
   let all = group.previousElementSibling?.querySelector('a')
   assert(all?.querySelector('[data-across=""]'))
   let current = group.querySelector('[aria-current="page"]')
@@ -204,7 +204,7 @@ test('All updates sits above the space picker and opens with that space still se
   assertEquals(
     acrossPage.querySelector('#menu [aria-current="page"]')
       ?.getAttribute('href'),
-    `${managePath('updates')}?in=${club.slug}`,
+    `${talkPath('updates')}?in=${club.slug}`,
   )
   assertEquals(
     acrossPage.querySelector('.Sidebar_Whose .Menu_Item[aria-current="true"]')
@@ -215,10 +215,10 @@ test('All updates sits above the space picker and opens with that space still se
 
 test('an address from before the space was in the path still opens that space’s Updates', async () => {
   let { get } = await across()
-  let sent = await get(`${managePath('updates')}?space=${slug}`)
+  let sent = await get(`${talkPath('updates')}?space=${slug}`)
   await sent.body?.cancel()
   assertEquals(
     new URL(sent.headers.get('location')!).pathname,
-    managePath('updates', slug),
+    talkPath('updates', slug),
   )
 })

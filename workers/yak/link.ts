@@ -104,11 +104,11 @@ let HREF = /https:\/\/[^\s<>"']*[^\s<>"'.,!?;:)\]]/g
  * import { relink } from './link.ts'
  * assertEquals(
  *   await relink(
- *     'See https://yaks.app/manage/ada. Or https://example.com/x, https://ada.yaks.app/',
+ *     'See https://yaks.app/ada. Or https://example.com/x, https://ada.yaks.app/',
  *     {},
  *     async (href) => `<${href}>`,
  *   ),
- *   'See <https://yaks.app/manage/ada>. Or https://example.com/x, <https://ada.yaks.app/>',
+ *   'See <https://yaks.app/ada>. Or https://example.com/x, <https://ada.yaks.app/>',
  * )
  * ```
  */

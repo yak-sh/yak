@@ -8,7 +8,7 @@ import {
   chatPath,
   LOGOUT,
   managePath,
-  type ManageView,
+  type Setting,
 } from '@yaks/platform/routes'
 
 let icons = {
@@ -27,7 +27,7 @@ let icons = {
   trash: 'trash-2',
 } satisfies Record<string, Item['icon']>
 
-export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
+export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
   let here = at.spaces?.find((s) => s.slug == at.space) ?? {
     slug: at.space,
     title: '',

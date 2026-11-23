@@ -325,6 +325,6 @@ test('pages draw without lists their machine has not answered, saying nothing wh
   // a choice there comes back to the Updates
   assertEquals(
     new URL(from!, 'https://yaks.app').searchParams.get('back'),
-    `/manage/${space.slug}/updates`,
+    `/${space.slug}/updates`,
   )
 })

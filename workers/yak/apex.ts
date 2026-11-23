@@ -33,6 +33,7 @@ import {
   MANAGE,
   PAGE,
   PUBLISHER,
+  spaced,
 } from '@yaks/platform/routes'
 import { apex } from '@yaks/platform/host'
 import { START } from './newcomer.ts'
@@ -81,10 +82,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
       },
     })
   }
-  // The dashboard (apps.ts `manage`): the part that draws a space's pages.
   if (path == '/connect/service') {
     return (await import('./service-consent.ts')).serviceConsent(req, env)
   }
+  // A person's spaces and account (apps.ts `manage`).
   if (path == MANAGE || path.startsWith(`${MANAGE}/`)) {
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }
@@ -274,6 +275,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // The platform admin's directory, signed in and uncached like the review.
   let directed = await admin.answer(req, env, path, dir)
   if (directed) return directed
+  // A space's own address, its Operator (D-473): last but the site's files,
+  // so a space never stands where the apex serves anything of its own.
+  if (spaced(path)) return bound(env.APPS, apps.fetch, env).fetch(req)
   return site.statics(req, env, path, dir)
 }
 

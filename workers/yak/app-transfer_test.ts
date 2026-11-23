@@ -14,7 +14,7 @@ let hers = connector(k, recipient.cookie)
 let slug = unique('transfer')
 let original = { space: source.slug, app: slug }
 let moved = { space: target.slug, app: slug }
-let updates = `/manage/${target.slug}/updates`
+let updates = `/${target.slug}/updates`
 let html =
   '<!doctype html><h1>Transfer fixture</h1><script src="./app.js"></script>'
 let code = 'console.log("kept release")'
@@ -74,7 +74,7 @@ test('an owner transfers the same private app on the named recipient’s accepta
   let outsider = await accept(
     bystander.cookie,
     'accept',
-    `/manage/${unrelated.slug}/updates`,
+    `/${unrelated.slug}/updates`,
   )
   assertEquals(
     outsider.status >= 400 && outsider.status < 500,

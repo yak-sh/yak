@@ -210,11 +210,11 @@ export let mcpUnshared = (
  * import { assertStringIncludes } from '@std/assert'
  * import { alerted } from '@yaks/platform/letters'
  * let ada = { slug: 'ada', operator: 'Nova' }
- * let body = alerted(ada, 'Your report is ready.', 'https://yaks.app/manage/ada/updates')
+ * let body = alerted(ada, 'Your report is ready.', 'https://yaks.app/ada/updates')
  * assertStringIncludes(body, 'Reply to this email to answer me')
  * assertStringIncludes(
- *   alerted(ada, 'Email bo@x.com?', 'https://yaks.app/manage/ada/updates#u-1', true),
- *   'Answer it in your Updates: https://yaks.app/manage/ada/updates#u-1',
+ *   alerted(ada, 'Email bo@x.com?', 'https://yaks.app/ada/updates#u-1', true),
+ *   'Answer it in your Updates: https://yaks.app/ada/updates#u-1',
  * )
  * ```
  */

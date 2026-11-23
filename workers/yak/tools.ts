@@ -146,6 +146,7 @@ import {
   type Space,
   stamp,
   TITLE,
+  unspaced,
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -1042,8 +1043,8 @@ let slug = (v: unknown, what: string) => {
 
 // A slug about to become an address, which may not be one the platform keeps
 // for itself (directory.ts `RESERVED`).
-let unreserved = (s: string, what: string) => {
-  if (RESERVED.has(s)) {
+let unreserved = (s: string, what: string, kept = RESERVED.has(s)) => {
+  if (kept) {
     throw refuse(
       'conflict',
       `${what}: ${s} is kept for yaks.app itself, so that nobody reads an ` +
@@ -1054,6 +1055,12 @@ let unreserved = (s: string, what: string) => {
 }
 
 let fresh = (v: unknown, what: string) => unreserved(slug(v, what), what)
+// A space's, which no address the apex serves a page at may be either, since
+// a space's own is `yaks.app/<space>` (directory.ts `unspaced`).
+let freshSpace = (v: unknown, what: string) => {
+  let s = slug(v, what)
+  return unreserved(s, what, unspaced(s))
+}
 
 // A space's or an app's title: folded to one line, and refused over the cap
 // with the number rather than cut, so the person's name is never half kept
@@ -3743,7 +3750,7 @@ let OURS: Row[] = [
     // reaches (grants.ts `narrowed`).
     account: true,
     run: async (ctx, args) => {
-      let s = fresh(args.slug, 'slug')
+      let s = freshSpace(args.slug, 'slug')
       let taken = await ctx.dir.space(s)
       if (taken) {
         // Shared space addresses remain held while in trash.
@@ -3832,7 +3839,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
       let logo = await logoSent(ctx, space, args, who)
-      let to = args.slug == null ? null : fresh(args.slug, 'slug')
+      let to = args.slug == null ? null : freshSpace(args.slug, 'slug')
       let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       let share = args.visitors == null ? null : Number(args.visitors)

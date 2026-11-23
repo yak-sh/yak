@@ -34,7 +34,7 @@ export let acrossBadge = (slug: string, cls?: string) =>
   h(Badge, { class: cls, hidden: true, 'data-across': slug })
 
 /** The script filling every `acrossBadge` on a page from `from`
- * (`/manage/updates?waiting`): how many wait on the person in each space, by
+ * (`/updates?waiting`): how many wait on the person in each space, by
  * slug, and their sum where a badge names none. */
 export let acrossScript = (from: string) =>
   `<script type="module">

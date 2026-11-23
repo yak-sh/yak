@@ -3,7 +3,7 @@
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { type Host, url } from '@yaks/platform/host'
-import { managed, onZone, route } from '@yaks/platform/routes'
+import { managed, onZone, route, spaced } from '@yaks/platform/routes'
 
 export type Preview = {
   title: string
@@ -108,10 +108,14 @@ export let destination = (
   let at = new URL(back, url(env, '/'))
   let r = route(at.hostname, at.pathname, env)
   if (r.space) return APP
-  let view = managed(r.path)
-  if (view) {
+  let page = (path: string) => managed(path) ?? spaced(path)
+  let view = page(r.path)
+  if (view && 'moved' in view) view = page(view.moved)
+  if (view && !('moved' in view)) {
     let name = 'account' in view
       ? view.account
+      : 'updates' in view
+      ? 'updates'
       : 'legacy' in view
       ? view.legacy
       : 'view' in view

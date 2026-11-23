@@ -1,6 +1,6 @@
 // A space's Matches (D-453, T-160577): where its members tap between the
 // sides of a round of pair matches, most often drafts of one of its apps, at
-// `/manage/<space>/matches` (@yaks/platform/routes `managePath('matches', …)`).
+// `/<space>/matches` (@yaks/platform/routes `talkPath('matches', …)`).
 // The rounds and every pick are @yaks/trial's, in the space's Operator store
 // (operator-trials.ts `matching`); this draws them and sends a pick back.
 //
@@ -12,7 +12,7 @@
 // it: what the Operator's decision carries into each choice.
 import { type ComponentChildren, h } from 'preact'
 import { Button, Card, Empty, Field, Form, Preview } from '@yaks/ui/parts'
-import { managePath } from '@yaks/platform/routes'
+import { talkPath } from '@yaks/platform/routes'
 import { markdown } from '@yaks/session/conversation'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -36,7 +36,7 @@ export let matchesOf = (
 ) => operatorDoor(env, space, who, 'matches', args)
 
 let here = (space: Space, round?: string) =>
-  `${managePath('matches', space.slug)}${
+  `${talkPath('matches', space.slug)}${
     round ? `?round=${encodeURIComponent(round)}` : ''
   }`
 

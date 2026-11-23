@@ -62,12 +62,13 @@ let stop = async (
   return [to, rest]
 }
 
-test('rung: the apex has the dashboard and nothing else', async () => {
-  assertEquals(await stop('/manage/ada', {}, { host: 'yaks.app' }), [
-    'manage',
-    {},
-  ])
-  assertEquals(await stop('/x', {}, { host: 'yaks.app' }), ['nothing', {}])
+test('rung: the apex has a person’s spaces and nothing else', async () => {
+  for (let path of ['/manage/ada', '/ada', '/ada/updates', '/updates']) {
+    assertEquals(await stop(path, {}, { host: 'yaks.app' }), ['manage', {}])
+  }
+  for (let path of ['/x/y', '/pricing']) {
+    assertEquals(await stop(path, {}, { host: 'yaks.app' }), ['nothing', {}])
+  }
 })
 
 test('rung: a page the cache keeps is answered before any read', async () => {
@@ -107,11 +108,11 @@ test('rung: the directory and a trashed space answer nothing', async () => {
 test('rung: the old dashboard is sent to its new address', async () => {
   assertEquals(await stop('/_yaks', {}, { search: '?a=1' }), [
     'sent',
-    { href: 'https://yaks.app/manage/ada?a=1', status: 301 },
+    { href: 'https://yaks.app/ada?a=1', status: 301 },
   ])
   assertEquals(await stop('/_yaks', {}, { method: 'POST' }), [
     'sent',
-    { href: 'https://yaks.app/manage/ada', status: 303 },
+    { href: 'https://yaks.app/ada', status: 303 },
   ])
   assertEquals(await stop('/_yaks/nowhere'), ['nothing', {}])
 })

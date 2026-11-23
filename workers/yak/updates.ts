@@ -7,13 +7,13 @@ import {
 } from './friends.ts'
 import { Empty, Form } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
-// from its Operator a person can reply to, at `/manage/<space>/updates`
-// (@yaks/platform/routes `managePath('updates', …)`), beside the chat app's side
+// from its Operator a person can reply to, at `/<space>/updates`
+// (@yaks/platform/routes `talkPath('updates', …)`), beside the chat app's side
 // (operator-page.ts `updatesPage`). They are @yaks/inbox's, read in the
 // Operator's store (operator-updates.ts): what needs the person first, with a
 // button for each choice, then what happened, newest first. A choice, or
 // words about one, go into their conversation, and the chat they went to
-// opens. Every space's together are at `/manage/updates` (`allUpdates`), the
+// opens. Every space's together are at `/updates` (`allUpdates`), the
 // same read across the spaces a person talks with an Operator in
 // (`updatesAcross`), and how many wait in each badges the Operator switcher
 // (`waitingAcross`, space-picker.ts `acrossBadge`).
@@ -24,7 +24,7 @@ import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
 import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
-import { backTo, chatPath, managePath } from '@yaks/platform/routes'
+import { backTo, chatPath, talkPath } from '@yaks/platform/routes'
 import { spaceHost } from '@yaks/platform/host'
 import type { Shown, Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
@@ -214,7 +214,7 @@ let form = (
     {
       class: 'Update_Form Page_Form',
       method: 'post',
-      action: managePath('updates', space.slug),
+      action: talkPath('updates', space.slug),
     },
     [
       ...fields,
@@ -236,7 +236,7 @@ let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 // link (`shownAnswer`).
 let shownAt = (space: Space, u: Update, s: Shown) =>
   s.artifact
-    ? `${managePath('updates', space.slug)}?shown=${
+    ? `${talkPath('updates', space.slug)}?shown=${
       encodeURIComponent(u.eid)
     }&eid=${encodeURIComponent(s.eid)}`
     : draftAt(space, s.eid)
@@ -578,7 +578,7 @@ export let dismissedUpdates = (
       'p',
       { class: 'Note Update_About' },
       'What you dismissed. Each comes back to your Updates when something new happens on it. ',
-      h('a', { href: managePath('updates', space.slug) }, 'Back to Updates'),
+      h('a', { href: talkPath('updates', space.slug) }, 'Back to Updates'),
     ),
     updates.length
       ? updates.map((u) => card(env, { space }, u, apps))
@@ -694,15 +694,15 @@ export let updates = (
       { class: 'Update_Meta' },
       h(
         'a',
-        { href: managePath('updates', space.slug) + '?dismissed' },
+        { href: talkPath('updates', space.slug) + '?dismissed' },
         'See what you dismissed',
       ),
     ),
   )
 }
 
-/** The person's Updates from every space's Operator, at `/manage/updates`. */
-export let ALL = managePath('updates')
+/** The person's Updates from every space's Operator, at `/updates`. */
+export let ALL = talkPath('updates')
 
 // Which space and Operator an update came from, leading to that space's own
 // Updates.
@@ -712,7 +712,7 @@ let whereFrom = (space: Space) =>
     { class: 'Update_Meta Update_Where' },
     h(
       'a',
-      { href: managePath('updates', space.slug) },
+      { href: talkPath('updates', space.slug) },
       `${space.title || space.slug} · ${space.operator}`,
     ),
   )
@@ -777,7 +777,7 @@ export let updatesAnswer = async (
   let field = (name: string) => String(form.get(name) ?? '')
   // Back to the page the card was on: the space's Updates, or every space's.
   let to = new URL(
-    backTo(env, field('back'), managePath('updates', space.slug)),
+    backTo(env, field('back'), talkPath('updates', space.slug)),
   )
   let back = to.pathname + to.search
   if (form.has('transfer')) {
@@ -839,7 +839,7 @@ export let fileAnswer = async (
 /** Where a draft of one of the space's apps is read in a page's frame: the
  * reader's own preview link of it (`shownAnswer`). */
 export let draftAt = (space: Space, draft: string) =>
-  `${managePath('updates', space.slug)}?draft=${encodeURIComponent(draft)}`
+  `${talkPath('updates', space.slug)}?draft=${encodeURIComponent(draft)}`
 
 /** What a choice of a person's question shows, read from their Updates
  * (`?shown=<question>&eid=<file>`): a file kept in the space, a picture

@@ -116,10 +116,10 @@ import {
   directory,
   META,
   newcomerIs,
-  RESERVED,
   type Row,
   type Space,
   testIs,
+  unspaced,
 } from './directory.ts'
 import { type Book, listing, through } from './grant-rows.ts'
 import {
@@ -682,7 +682,7 @@ export let choose = async (
         'starting with a letter or a number — like dana or dana-notes.',
     }
   }
-  if (RESERVED.has(want)) {
+  if (unspaced(want)) {
     return {
       error: `${want}.${apex(env)} is kept for yaks.app itself. Try another?`,
     }

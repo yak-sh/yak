@@ -26,9 +26,9 @@ let listed = async (p: typeof ann) =>
     }[]).map((f) => [f.person, f.standing]),
   )
 let updates = (p: typeof ann, slug: string) =>
-  k.at(k.host, `/manage/${slug}/updates`, { headers: { cookie: p.cookie } })
+  k.at(k.host, `/${slug}/updates`, { headers: { cookie: p.cookie } })
 let answer = (p: typeof ann, slug: string, friend: string, verdict: string) =>
-  k.at(k.host, `/manage/${slug}/updates`, {
+  k.at(k.host, `/${slug}/updates`, {
     method: 'POST',
     headers: {
       cookie: p.cookie,
@@ -208,7 +208,7 @@ test('a friend’s message lands in their Updates, and a reply there comes back'
     ?.messages as { outgoing: boolean; read: boolean; friend: string }[]
   assertEquals(mine[0].friend, eve.person)
   assertEquals(mine[0].read, true)
-  let replied = await k.at(k.host, `/manage/${faySpace.slug}/updates`, {
+  let replied = await k.at(k.host, `/${faySpace.slug}/updates`, {
     method: 'POST',
     headers: {
       cookie: fay.cookie,

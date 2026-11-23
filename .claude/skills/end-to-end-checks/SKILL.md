@@ -250,7 +250,7 @@ who allowed them. A headless browser has no on-screen keyboard, so `keyboard`
 shrinks the window by its height, which is what a phone does for our pages:
 they ask for `interactive-widget=resizes-content` (workers/yak/pages.ts).
 
-Saying something in checks' own chat (`/manage/checks`), as the person, with
+Saying something in checks' own chat (`/checks`), as the person, with
 the keyboard open. A draft is kept across visits, so clear the field first:
 
 ```json

@@ -7,7 +7,7 @@ import {
 import { mint } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import { sendable } from '@yaks/mail'
-import { managePath } from '@yaks/platform/routes'
+import { talkPath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
 import {
   type Directory,
@@ -155,5 +155,5 @@ export let answerTransfer = async (
     transfer,
     answer: answer as Answer,
   })
-  return managePath('updates', space.slug)
+  return talkPath('updates', space.slug)
 }

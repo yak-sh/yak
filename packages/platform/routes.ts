@@ -20,7 +20,7 @@
  */
 import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { PLATFORM, SLUG } from './names.ts'
+import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
 
 /** A request before the router splits the hostname into an app path, in
  * the env `E` of whatever serves it. */
@@ -36,14 +36,18 @@ export type Door<E = unknown> = (
   at: Arrived<E>,
 ) => Promise<Response | null> | Response | null
 
-// The dashboard: a person's account and the spaces they work in, at the apex
-// rather than on any space's hostname, so no app sharing a space's origin can
-// reach them (T-39354). A space's own address, `/manage/<space>`, is where a
-// person lands in it: a new chat with its Operator (T-140507). Its settings
-// are its other pages, `/manage/<space>/<page>`, behind Manage; the
-// person's own, wherever they are, are `/manage/account/<page>` (T-136122),
-// which no space can be named (directory.ts `RESERVED` holds `account`).
+// A person's spaces and account live at the apex rather than on any space's
+// hostname, so no app sharing a space's origin can reach them (T-39354). A
+// space's own address, `/<space>`, is its Operator (D-473): a new chat, each
+// conversation at `/<space>/<id>`, its Updates at `/<space>/updates` and its
+// Matches at `/<space>/matches`; the person's Updates from every space are
+// `/updates`. Manage is the settings: a space's at `/manage/<space>/<page>`,
+// and the person's own, wherever they are, at `/manage/account/<page>`
+// (T-136122), which no space can be named (./names.ts `RESERVED` holds
+// `account`).
 export let MANAGE = '/manage'
+/** The person's Updates from every space's Operator. */
+export let UPDATES = '/updates'
 /** A texted link's page approving one act the Operator was asked for by a
  * number alone (yaks.app's operator-approvals.ts). */
 export let APPROVE = '/approve'
@@ -65,6 +69,12 @@ export type SpaceView =
 /** A page of the person's own, the same in every space. `space` makes one. */
 export type AccountView = 'profile' | 'invite' | 'agents' | 'shared' | 'space'
 export type ManageView = SpaceView | AccountView
+/** A page of a space's Operator, at the space's own address. */
+export type Talk = 'updates' | 'matches'
+let TALK: string[] = ['updates', 'matches'] satisfies Talk[]
+let talks = (view: string): view is Talk => TALK.includes(view)
+/** A settings page: every page of a person's spaces but their Operator's. */
+export type Setting = Exclude<ManageView, Talk>
 let SPACE_VIEWS: SpaceView[] = [
   'apps',
   'new',
@@ -95,9 +105,41 @@ let LEGACY: Record<string, ManageView> = {
   ...Object.fromEntries(SPACE_VIEWS.map((v) => [v, v])),
   connect: 'agents',
 }
+/** Whether a space named `slug` stands at the apex's root, `/<slug>`: every
+ * space but one holding a name the apex keeps for itself (./names.ts
+ * `RESERVED`, `ROOT`), whose Operator stays at `/manage/<slug>`.
+ *
+ * ```ts
+ * import { rooted } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([rooted('ada'), rooted('admin'), rooted('gallery')], [true, false, false])
+ * ```
+ */
+export let rooted = (slug: string): boolean =>
+  SLUG.test(slug) && !RESERVED.has(slug) && !ROOT.has(slug)
+// Where a space's Operator stands: its own address, else its old one under
+// Manage.
+let home = (space: string) =>
+  rooted(space) ? `/${space}` : `${MANAGE}/${encodeURIComponent(space)}`
+/** A page of a space's Operator: its Updates or its Matches. Without a
+ * space, Updates from every space the person talks to.
+ *
+ * ```ts
+ * import { talkPath } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(talkPath('updates', 'ada'), '/ada/updates')
+ * assertEquals(talkPath('updates'), '/updates')
+ * assertEquals(talkPath('matches', 'yak'), '/manage/yak/matches')
+ * ```
+ */
+export let talkPath = (view: Talk, space?: string): string =>
+  space ? `${home(space)}/${view}` : UPDATES
 /** A settings page's path. A space's page without a space names the one the
  * person opens first, whichever that is when they follow it. */
-export let managePath = (view: ManageView, space?: string): string =>
+export let managePath = (
+  view: Setting,
+  space?: string,
+): string =>
   accountView(view)
     ? `${MANAGE}/${ACCOUNT}/${view}`
     : space
@@ -115,24 +157,39 @@ export let accountLink = (
   if (space) link.searchParams.set('back', space)
   return link
 }
-/** Where a dashboard form lands back: the page under /manage it names, at
- * the apex, else `fallback`; a form never sends the person off yaks.app. */
+/** Where a form lands back: the page under /manage or of a space's Operator
+ * it names, at the apex, else `fallback`; a form never sends the person off
+ * yaks.app. */
 export let backTo = (env: Host, back: string, fallback: string): string => {
-  let home = new URL(url(env))
-  let to = new URL(back || fallback, home)
-  return to.origin == home.origin &&
-      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`))
+  let apex = new URL(url(env))
+  let to = new URL(back || fallback, apex)
+  return to.origin == apex.origin &&
+      (to.pathname == MANAGE || to.pathname.startsWith(`${MANAGE}/`) ||
+        !!spaced(to.pathname))
     ? to.href
-    : new URL(fallback, home).href
+    : new URL(fallback, apex).href
 }
 // What a conversation opens by: a task's or a request's eid, or `new`.
 let OPEN = /^(new|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/
 /** An Operator conversation's own page, the chat app (operator-page.ts
  * `chatPage`): one opened by its task or request, or a new one, which is the
- * space's own address (`/manage/<space>/operator/new` opens it too). */
+ * space's own address. Its other conversations are under it, so `open` empty
+ * is the prefix they share.
+ *
+ * ```ts
+ * import { chatPath } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * let id = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
+ * assertEquals(chatPath('ada'), '/ada')
+ * assertEquals(chatPath('ada', id), `/ada/${id}`)
+ * assertEquals(chatPath('yak', id), `/manage/yak/operator/${id}`)
+ * ```
+ */
 export let chatPath = (space: string, open = 'new'): string =>
   open == 'new'
-    ? `${MANAGE}/${encodeURIComponent(space)}`
+    ? home(space)
+    : rooted(space)
+    ? `/${space}/${open}`
     : `${managePath('operator', space)}/${open}`
 /** Where a space's logo is drawn from, or none where it has none: its bytes'
  * own address, so the address changes with the picture and nothing is ever
@@ -220,11 +277,12 @@ export let publisherAt = (slug: string, env: Host = {}): string =>
  */
 export type StoreDoor = 'apply' | 'query' | 'ws'
 let STORE_DOORS: string[] = ['apply', 'query', 'ws'] satisfies StoreDoor[]
-/** What a manage path asks for: an account page, the person's Updates from
- * every space's Operator (`updates`, at `/manage/updates`), a space's page (a
+/** What an address of a person's spaces asks for: an account page, the
+ * person's Updates from every space's Operator (`updates`), a space's page (a
  * new chat with its Operator when none is named), a door of its Operator's
- * store, its logo's bytes, or an address from before T-136122 (`legacy`), to
- * be sent on. Null is no page. */
+ * store, its logo's bytes, an address from before T-136122 (`legacy`), or one
+ * whose page has moved (`moved`, D-473), each to be sent on. Null is no page.
+ */
 export type Managed =
   | { account: AccountView }
   | { updates: true }
@@ -238,6 +296,16 @@ export type Managed =
   }
   | { legacy: ManageView }
   | { first: true }
+  | { moved: string }
+// A page of a space's Operator under Manage, where it was before D-473: sent
+// on to the space's own address, unless the space holds a name the apex keeps
+// (`rooted`), whose Operator is still served there.
+let talked = (space: string, view: 'operator' | Talk, open = 'new') =>
+  !rooted(space) ? { space, view, ...view == 'operator' ? { open } : {} } : {
+    moved: view == 'operator' ? chatPath(space, open) : talkPath(view, space),
+  }
+/** What a path under `/manage` asks for (`Managed`), or null where it is not
+ * one. */
 export let managed = (path: string): Managed | null => {
   if (!(path == MANAGE || path.startsWith(`${MANAGE}/`))) return null
   let [one, two, ...rest] = path.slice(MANAGE.length).split('/')
@@ -248,9 +316,7 @@ export let managed = (path: string): Managed | null => {
     if (STORE_DOORS.includes(rest[0])) {
       return { space: one, view: 'operator', door: rest[0] as StoreDoor }
     }
-    return OPEN.test(rest[0])
-      ? { space: one, view: 'operator', open: rest[0] }
-      : null
+    return OPEN.test(rest[0]) ? talked(one, 'operator', rest[0]) : null
   }
   if (two == MANIFEST && !rest.length && SLUG.test(one)) {
     return { space: one, view: 'operator', manifest: true }
@@ -269,17 +335,36 @@ export let managed = (path: string): Managed | null => {
       ? { account: two as AccountView }
       : null
   }
-  if (one == 'updates' && !two) return { updates: true }
+  if (one == 'updates' && !two) return { moved: UPDATES }
   if (!two) {
     return Object.hasOwn(LEGACY, one)
       ? { legacy: LEGACY[one] }
       : SLUG.test(one)
-      ? { space: one, view: 'operator', open: 'new' }
+      ? talked(one, 'operator')
       : null
   }
-  return SLUG.test(one) && (SPACE_VIEWS as string[]).includes(two)
-    ? { space: one, view: two as SpaceView }
-    : null
+  if (!SLUG.test(one) || !(SPACE_VIEWS as string[]).includes(two)) return null
+  return talks(two) ? talked(one, two) : { space: one, view: two as SpaceView }
+}
+/** What an address at the apex's root asks for: the person's Updates from
+ * every space (`/updates`), or a page of a space's Operator at the space's
+ * own address (`rooted`), or null where it is neither.
+ *
+ * ```ts
+ * import { spaced } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(spaced('/ada'), { space: 'ada', view: 'operator', open: 'new' })
+ * assertEquals(spaced('/ada/updates'), { space: 'ada', view: 'updates' })
+ * assertEquals(spaced('/pricing'), null)
+ * ```
+ */
+export let spaced = (path: string): Managed | null => {
+  if (path == UPDATES) return { updates: true }
+  let [, one, two, ...rest] = path.split('/')
+  if (rest.length || !rooted(one)) return null
+  if (two == null) return { space: one, view: 'operator', open: 'new' }
+  if (talks(two)) return { space: one, view: two }
+  return OPEN.test(two) ? { space: one, view: 'operator', open: two } : null
 }
 /** Where an address that names no space (`/manage`, or one from before the
  * space was in the path) is now, for `space`: a page names its own, and none
@@ -287,19 +372,36 @@ export let managed = (path: string): Managed | null => {
 export let landing = (
   at: { first: true } | { legacy: ManageView },
   space: string,
-): string => 'first' in at ? chatPath(space) : managePath(at.legacy, space)
+): string =>
+  'first' in at
+    ? chatPath(space)
+    : talks(at.legacy)
+    ? talkPath(at.legacy, space)
+    : managePath(at.legacy, space)
 /** The path an address from before the dashboard named its space in the path
  * (`/_yaks/<page>`, `/manage/<page>`) stands for in `space`, or null. */
 export let movedFor = (path: string, space: string): string | null => {
   let at = managed(path)
-  if (at && 'updates' in at) return managePath('updates', space)
+  if (at && 'moved' in at && at.moved == UPDATES) {
+    return talkPath('updates', space)
+  }
   return at && ('first' in at || 'legacy' in at) ? landing(at, space) : null
 }
+/** The same page of a space's at another name, where a rename moved it. */
+export let renamed = (
+  at: { view: SpaceView; open?: string },
+  slug: string,
+): string =>
+  at.open
+    ? chatPath(slug, at.open)
+    : talks(at.view)
+    ? talkPath(at.view, slug)
+    : managePath(at.view, slug)
 /** One space's settings page, as an address to put in a letter or an
  * answer. */
 export let manageAt = (
   space: string,
-  view: ManageView,
+  view: Setting,
   env: Host = {},
 ): string => url(env, managePath(view, space))
 /** A connections page's address, still naming the testing integrations it

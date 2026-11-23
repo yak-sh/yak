@@ -8,6 +8,7 @@ import {
   foreign,
   guarded,
   hostOf,
+  managed,
   onZone,
   ORIGIN,
   paged,
@@ -15,6 +16,7 @@ import {
   route,
   sameOrigin,
   shared,
+  spaced,
 } from './routes.ts'
 
 let cases: [string, string, ReturnType<typeof route>][] = [
@@ -397,3 +399,41 @@ test('testing integration context stays in the query before the modal hash', () 
     '/manage/ada/connections?q=crm&enable=hubspot#hubspot',
   )
 })
+
+// A space's Operator is at its own address, and its old addresses under
+// Manage send a person there; settings stay under Manage (D-473).
+let ID = '0b5e6a52-3c1d-4f2e-9a8b-7c6d5e4f3a2b'
+let addresses: [string, ReturnType<typeof managed>][] = [
+  ['/ada', { space: 'ada', view: 'operator', open: 'new' }],
+  [`/ada/${ID}`, { space: 'ada', view: 'operator', open: ID }],
+  ['/ada/updates', { space: 'ada', view: 'updates' }],
+  ['/ada/matches', { space: 'ada', view: 'matches' }],
+  ['/updates', { updates: true }],
+  ['/ada/apps', null],
+  ['/ada/updates/x', null],
+  ['/gallery', null],
+  ['/admin', null],
+  ['/404', null],
+  ['/manage/ada', { moved: '/ada' }],
+  [`/manage/ada/operator/${ID}`, { moved: `/ada/${ID}` }],
+  ['/manage/ada/operator/new', { moved: '/ada' }],
+  ['/manage/ada/updates', { moved: '/ada/updates' }],
+  ['/manage/ada/matches', { moved: '/ada/matches' }],
+  ['/manage/updates', { moved: '/updates' }],
+  ['/manage/ada/apps', { space: 'ada', view: 'apps' }],
+  ['/manage/ada/operator', { space: 'ada', view: 'operator' }],
+  ['/manage/ada/operator/ws', { space: 'ada', view: 'operator', door: 'ws' }],
+  // A space holding a name the apex keeps is still served under Manage.
+  ['/manage/yak', { space: 'yak', view: 'operator', open: 'new' }],
+  ['/manage/yak/updates', { space: 'yak', view: 'updates' }],
+  [`/manage/admin/operator/${ID}`, {
+    space: 'admin',
+    view: 'operator',
+    open: ID,
+  }],
+]
+for (let [path, at] of addresses) {
+  test(`${path} asks for ${JSON.stringify(at)}`, () => {
+    assertEquals(managed(path) ?? spaced(path), at)
+  })
+}

@@ -70,8 +70,12 @@ import {
   managed,
   managePath,
   type ManageView,
+  renamed,
   signInAt,
+  spaced,
   type SpaceView,
+  type Talk,
+  talkPath,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
@@ -167,14 +171,17 @@ let saying = (req: Request, said?: Said) =>
 let spend = (req: Request, res: Response) =>
   heard(req.headers.get('cookie')) ? unsaid(res, MANAGE) : res
 
-// The dashboard, at the apex (T-39354): the person's own pages at
-// `/manage/account/<page>`, and each space's at `/manage/<space>/<page>`
-// (T-136122). A space's owner is shown all of its pages and a member who may
-// change it its Operator; anybody else is answered what a wrong address is.
+// A person's spaces and account, at the apex (T-39354): the person's own
+// pages at `/manage/account/<page>`, each space's settings at
+// `/manage/<space>/<page>` (T-136122), and its Operator at its own address,
+// `/<space>` (D-473), where its old addresses under Manage are sent on. A
+// space's owner is shown all of its pages and a member who may change it its
+// Operator; anybody else is answered what a wrong address is.
 export let manage = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
-  let at = managed(url.pathname)
+  let at = managed(url.pathname) ?? spaced(url.pathname)
   if (!at) return nothingHere(env)
+  if ('moved' in at) return moved(req, hostUrl(env, at.moved) + url.search)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -324,7 +331,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     // A link written before the space moved to another name (T-34658).
     let was = await dir.formerly(at.space)
     if (!was) return nothingHere(env)
-    return moved(req, hostUrl(env, managePath(view, was.slug)) + url.search)
+    return moved(req, hostUrl(env, renamed(at, was.slug)) + url.search)
   }
   let who: Owner = {
     person,
@@ -418,6 +425,8 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   if (space.trashed) {
     return redirect(`https://${spaceHost(env, space.slug)}/`, 303)
   }
+  // The Operator's own pages were answered above; the rest are settings.
+  if (view == 'updates' || view == 'matches') return nothingHere(env)
   let softphone = url.searchParams.get('softphone')
   if (softphone && view == 'settings') {
     if (role != 'owner') return nothingHere(env)
@@ -627,7 +636,7 @@ let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
 }
 
 // The person's Updates from every space's Operator they talk with, at
-// `/manage/updates` (operator-page.ts `allUpdatesPage`), beside the side of
+// `/updates` (operator-page.ts `allUpdatesPage`), beside the side of
 // the space they came from (`?in=`), else their own; with `?waiting`, how
 // many wait on them in each space, which the Operator switcher badges
 // (space-picker.ts `acrossScript`). An address from before the space was in
@@ -642,7 +651,7 @@ let everyUpdate = async (
 ): Promise<Response> => {
   let url = new URL(req.url)
   if (asked) {
-    let to = new URL(managePath('updates', asked), hostUrl(env))
+    let to = new URL(talkPath('updates', asked), hostUrl(env))
     for (let [k, v] of url.searchParams) {
       if (k != 'space') to.searchParams.append(k, v)
     }
@@ -728,7 +737,7 @@ let desk = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
-  view: SpaceView,
+  view: Exclude<SpaceView, Talk>,
   said?: Said,
   typed?: Pick<DeskPage, 'invite' | 'typed'>,
 ): Promise<Response> => {
@@ -1222,11 +1231,11 @@ let saved = async (
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
-  view: SpaceView,
+  view: Exclude<SpaceView, Talk>,
 ): Promise<Response> => {
   let form = await req.formData().catch(() => new FormData())
   let refused = (
-    view: SpaceView,
+    view: Exclude<SpaceView, Talk>,
     said: Said,
     typed?: Pick<DeskPage, 'invite' | 'typed'>,
   ) =>

@@ -746,7 +746,7 @@ directly from `curl`, from another page, or from your own `worker.js` through
     content-type: application/json
     {"say": "Is this still true?", "context": {"selection": "Dues are paid in May."}}
     → 202 {"request": "7d1e…",
-           "conversation": "https://yaks.app/manage/clerk/operator/7d1e…"}
+           "conversation": "https://yaks.app/clerk/7d1e…"}
 
     GET ./api/vocab.json
     → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,

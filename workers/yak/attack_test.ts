@@ -243,7 +243,7 @@ test("a page in another space opens none of the Operator's sockets (T-704)", asy
     for (
       let path of [
         `/manage/${me.name}/operator/ws`,
-        `/manage/${me.name}?live=1`,
+        `/${me.name}?live=1`,
       ]
     ) {
       let r = await socket(path, 'https://eve.yaks.app')

@@ -49,6 +49,7 @@ import {
   managePath,
   manifestPath,
   type StoreDoor,
+  talkPath,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { CONTEXT } from './app-operator.ts'
@@ -2558,7 +2559,7 @@ export let updatesPage = async (
       waiting: news.updates.filter((u) => u.needs).length,
       listed: await lists.drawn(),
       current: ['updates'],
-      here: managePath('updates', space.slug) + '?dismissed',
+      here: talkPath('updates', space.slug) + '?dismissed',
       skip: ['#content', 'Skip to content'],
       main: h(
         'div',
@@ -2568,7 +2569,7 @@ export let updatesPage = async (
     })
   }
   let listed = await lists.drawn()
-  let here = managePath('updates', space.slug)
+  let here = talkPath('updates', space.slug)
   let at = managePath('operator', space.slug)
   return talkPage(env, space, who, beside, {
     title: 'Updates',
@@ -2655,7 +2656,7 @@ export let matchesPage = async (
     waiting: news.updates.filter((u) => u.needs).length,
     listed: await lists.drawn(),
     current: ['updates'],
-    here: managePath('matches', space.slug) +
+    here: talkPath('matches', space.slug) +
       (round ? `?round=${encodeURIComponent(round)}` : ''),
     skip: ['#content', 'Skip to content'],
     main: h(

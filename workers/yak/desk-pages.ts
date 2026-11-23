@@ -51,7 +51,7 @@ import {
   enabling,
   MANAGE,
   managePath,
-  type ManageView,
+  type Setting,
 } from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { size } from '@yaks/fp'
@@ -2779,8 +2779,6 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     shared: 'Shared with you',
     space: 'New space',
     operator: 'Operator',
-    updates: 'Updates',
-    matches: 'Matches',
     apps: 'Apps',
     people: 'People',
     connections: 'Connections',
@@ -2790,7 +2788,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     settings: 'Space settings',
     billing: 'Billing',
     trash: 'Trash',
-  } satisfies Record<ManageView, string>
+  } satisfies Record<Setting, string>
   // The line over the title names whose the page is: the person's own, or
   // the space it changes.
   let whose = accountView(view) ? 'Your account' : named(picked(at))

@@ -18,7 +18,7 @@ import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
 import { attachmentKey } from './attachments.ts'
-import { managed, managePath } from '@yaks/platform/routes'
+import { spaced, talkPath } from '@yaks/platform/routes'
 import { present } from './whereabouts.ts'
 
 let p = platform('operator-updates')
@@ -267,7 +267,7 @@ test('the Updates page shows what needs the person, counts it in the side, and a
   // Reading them reads them: only what needs Ada is counted now.
   assertEquals(count(await page(updatesPage(p.env, space, who))), '1')
   let sent = await updatesAnswer(
-    new Request('https://yaks.app' + managePath('updates', 'club'), {
+    new Request('https://yaks.app' + talkPath('updates', 'club'), {
       method: 'POST',
       body: new URLSearchParams({ choose: 'ask', choice: 'Send', id: 'r1' }),
     }),
@@ -276,7 +276,7 @@ test('the Updates page shows what needs the person, counts it in the side, and a
     who,
   )
   assertEquals(sent.status, 303)
-  assertEquals(sent.headers.get('location'), managePath('updates', 'club'))
+  assertEquals(sent.headers.get('location'), talkPath('updates', 'club'))
   assertEquals(buttons(await page(updatesPage(p.env, space, who))), [])
   script.push(said('The invitations are sent.'))
   await service.drain()
@@ -308,7 +308,7 @@ test('"Other" answers a question in the person\'s own words, which the Operator 
     'Your own answer…',
   )
   let sent = await updatesAnswer(
-    new Request('https://yaks.app' + managePath('updates', 'club'), {
+    new Request('https://yaks.app' + talkPath('updates', 'club'), {
       method: 'POST',
       body: new URLSearchParams({
         choose: 'when',
@@ -416,7 +416,7 @@ test('a choice shows a picture, prose or a draft, and only its asker reads the p
   )
   let get = (query: string) =>
     shownAnswer(
-      new Request(`https://yaks.app${managePath('updates', 'club')}?${query}`),
+      new Request(`https://yaks.app${talkPath('updates', 'club')}?${query}`),
       p.env,
       space,
       who,
@@ -442,7 +442,7 @@ let lands = async (u: Update) => {
   let href = new URL(chatAt(space, u), 'https://yaks.app')
   let page = async (at: URL): Promise<Response> => {
     let from = at.searchParams.get('from')
-    let route = managed(at.pathname)
+    let route = spaced(at.pathname)
     let answer = await chatPage(
       p.env,
       space,
@@ -698,7 +698,7 @@ test('dismissing from every space’s Updates comes back there, and never off ya
     })
     let [u] = (await read(ada)).updates.filter((u) => u.words == back)
     let sent = await updatesAnswer(
-      new Request('https://yaks.app' + managePath('updates', 'club'), {
+      new Request('https://yaks.app' + talkPath('updates', 'club'), {
         method: 'POST',
         body: new URLSearchParams({ dismiss: u.eid, back }),
       }),
@@ -708,9 +708,9 @@ test('dismissing from every space’s Updates comes back there, and never off ya
     )
     return sent.headers.get('location')
   }
-  assertEquals(await dismiss(managePath('updates')), managePath('updates'))
+  assertEquals(await dismiss(talkPath('updates')), talkPath('updates'))
   assertEquals(
     await dismiss('https://elsewhere.example/'),
-    managePath('updates', 'club'),
+    talkPath('updates', 'club'),
   )
 })

@@ -90,7 +90,7 @@ let spaces = await k.dir.seats(person, 'owner')
 // somewhere else. A copy of its pass bound to another number is followed
 // first, then the link twice.
 let mine = spaces[0].space
-let PAGE = `https://yaks.app/manage/${mine.slug}`
+let PAGE = `https://yaks.app/${mine.slug}`
 await channels(env).text(
   {
     space: mine.eid,

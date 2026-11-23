@@ -29,7 +29,7 @@ import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { alerted } from '@yaks/platform/letters'
-import { chatPath, managePath } from '@yaks/platform/routes'
+import { chatPath, talkPath } from '@yaks/platform/routes'
 import {
   askAnchor,
   listsOf,
@@ -232,7 +232,7 @@ let subjectOf = (words: string) => lineOf(words, 60)
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { openAt } from './operator-alerts.ts'
- * let [chat, updates] = ['https://yaks.app/ana', 'https://yaks.app/manage/ana/updates']
+ * let [chat, updates] = ['https://yaks.app/ana', 'https://yaks.app/ana/updates']
  * equal(openAt(chat, updates, 'e1'), `${updates}#ask-e1`)
  * equal(openAt(chat, updates), chat)
  * ```
@@ -395,7 +395,7 @@ let sent = async (
   note: Note,
 ): Promise<Bundle[] | undefined> => {
   let { words, subject, id } = note
-  let updates = url(env, managePath('updates', space.slug))
+  let updates = url(env, talkPath('updates', space.slug))
   // What asks them opens at itself in their Updates, answered there.
   let answer = note.asks ? `${updates}#${updateAnchor(id)}` : undefined
   if (route.by == 'push') {

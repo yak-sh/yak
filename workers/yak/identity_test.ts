@@ -453,7 +453,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     // straight, with no /manage between to find it again (T-149706).
     assertEquals(
       inn.headers.get('location'),
-      `https://yaks.app/manage/${email.split('@')[0]}`,
+      `https://yaks.app/${email.split('@')[0]}`,
     )
     let set = inn.headers.get('set-cookie') ?? ''
     assertMatch(set, /^yak_session=/)
@@ -529,7 +529,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
       assertEquals(r.status, 303)
       return {
         to: r.headers.get('location'),
-        home: `https://yaks.app/manage/${addr.split('@')[0]}`,
+        home: `https://yaks.app/${addr.split('@')[0]}`,
       }
     }
     let notes = 'https://someone.yaks.app/notes/'
@@ -813,7 +813,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     assertEquals(over.status, 303)
     assertEquals(
       over.headers.get('location'),
-      `https://yaks.app/manage/${email.split('@')[0]}`,
+      `https://yaks.app/${email.split('@')[0]}`,
     )
     await over.body?.cancel()
 
@@ -1128,7 +1128,7 @@ test('/login never draws the box for a browser already signed in', async () => {
     }
     let aimed = (back: string) => `/login?return=${encodeURIComponent(back)}`
     let { cookie, person, name } = await signIn(k)
-    let home = `https://yaks.app/manage/${name}`
+    let home = `https://yaks.app/${name}`
 
     // Aimed nowhere: their own space, which is where a fresh sign-in with no
     // return goes too.
@@ -1200,7 +1200,7 @@ test(
       assertEquals(inn.status, 303)
       assertEquals(
         inn.headers.get('location'),
-        `https://yaks.app/manage/${slug}`,
+        `https://yaks.app/${slug}`,
       )
       let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
@@ -1526,7 +1526,7 @@ test("a new person's first page works right after the code", async () => {
     })
     await inn.body?.cancel()
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
-    let at = `https://yaks.app/manage/${email.split('@')[0]}`
+    let at = `https://yaks.app/${email.split('@')[0]}`
     let page = await k.at('yaks.app', new URL(at).pathname, {
       redirect: 'manual',
       headers: { cookie },
@@ -1561,7 +1561,7 @@ test('a code lands somebody on their own space in one trip', async () => {
       inn.headers.get('server-timing')!.match(/\bhops;dur=(\d+)/)?.[1],
     ]
   }
-  equal(await code(), [`https://yaks.app/manage/${email.split('@')[0]}`, '1'])
+  equal(await code(), [`https://yaks.app/${email.split('@')[0]}`, '1'])
   let [them] = await meta(k).query(`.person&.email.address=${email}`)
   let [space] = await k.dir.spaces(them.entity.eid)
   let renamed = unique('renamed')
@@ -1569,7 +1569,7 @@ test('a code lands somebody on their own space in one trip', async () => {
     'x-yak-person': them.entity.eid,
     'x-yak-role': 'owner',
   })
-  equal(await code(), [`https://yaks.app/manage/${renamed}`, '1'])
+  equal(await code(), [`https://yaks.app/${renamed}`, '1'])
 })
 
 // One click instead of six digits (link.ts, T-34351), and the standing link an
@@ -1612,7 +1612,7 @@ test('a link signs a person in, once or until it is revoked', async () => {
     await inn.body?.cancel()
     assertEquals(
       inn.headers.get('location'),
-      `https://yaks.app/manage/${email.split('@')[0]}`,
+      `https://yaks.app/${email.split('@')[0]}`,
     )
     assertEquals(inn.headers.get('referrer-policy'), 'no-referrer')
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]

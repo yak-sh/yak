@@ -59,7 +59,7 @@ import { decoded } from './files.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { PLATFORM_STORE } from './names.ts'
 import { MEMBER } from './refused.ts'
-import { MANAGE, movedFor, OURS, route } from './routes.ts'
+import { MANAGE, movedFor, OURS, route, spaced } from './routes.ts'
 
 /** A space as the ladder reads it. */
 export type Spaced = { slug: string; trashed?: unknown }
@@ -110,7 +110,8 @@ type At<R extends Reading> = { space: Space<R>; read: R }
 
 /** Where an address stops. */
 export type Rung<R extends Reading> =
-  /** the dashboard, at the apex */
+  /** a person's spaces and account, at the apex (./routes.ts `managed`,
+   * `spaced`) */
   | { to: 'manage' }
   /** what the cache keeps for it */
   | { to: 'kept'; page: Response }
@@ -202,7 +203,8 @@ export let rung = async <R extends Reading>(
 ): Promise<Rung<R>> => {
   let r = route(host, pathname, env)
   if (r.space == null) {
-    return pathname == MANAGE || pathname.startsWith(`${MANAGE}/`)
+    return pathname == MANAGE || pathname.startsWith(`${MANAGE}/`) ||
+        spaced(pathname)
       ? { to: 'manage' }
       : { to: 'nothing' }
   }
