@@ -8,6 +8,8 @@
     "strict": true
   },
   "entries": [
-    "."
+    ".",
+    "./form",
+    "./editor"
   ]
 }
