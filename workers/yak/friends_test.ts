@@ -4,10 +4,17 @@ import { suggestion } from '@yaks/platform/friends'
 import { connector, kernel, signIn } from './probe.ts'
 
 let k = await kernel()
-let [ann, bo, cy] = await Promise.all([signIn(k), signIn(k), signIn(k)])
-let [annSpace, boSpace, cySpace] = await Promise.all(
-  [ann, bo, cy].map((p) => k.dir.own(p.person)),
+let [ann, bo, cy, dee] = await Promise.all(
+  [1, 2, 3, 4].map(() => signIn(k)),
 )
+let [annSpace, boSpace, cySpace, deeSpace] = await Promise.all(
+  [ann, bo, cy, dee].map((p) => k.dir.own(p.person)),
+)
+// Dee's one space is theirs, as a space born before `member.own` is.
+let [deeSeat] = await k.dir.seats(dee.person, 'owner')
+await k.dir.apply({
+  entities: [{ entity: { eid: deeSeat.seat }, member: { own: null } }],
+})
 let tools = (p: typeof ann) => connector(k, p.cookie)
 let listed = async (p: typeof ann) =>
   Object.fromEntries(
@@ -66,6 +73,12 @@ test('a suggestion friends nobody until each says yes, and becomes a request', a
   assertEquals((await listed(bo))[cy.person], 'asked')
   await answer(bo, boSpace.slug, cy.person, 'declined')
   assertEquals((await listed(bo))[cy.person], undefined)
+})
+
+test('a request reaches a person whose own space was never marked', async () => {
+  await tools(ann).answer('friend_add', { email: dee.email })
+  let page = await (await updates(dee, deeSpace.slug)).text()
+  assertStringIncludes(page, 'Friend request')
 })
 
 test('nobody friends themselves or a person who is not on yaks.app', async () => {

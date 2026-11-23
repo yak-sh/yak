@@ -151,11 +151,11 @@ export let friendUpdates = async (
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
   let dir = open(env)
-  let [seats, friends] = await Promise.all([
-    dir.seats(who.person, 'owner'),
+  let [own, friends] = await Promise.all([
+    dir.own(who.person),
     friendsOf(dir, who.person),
   ])
-  if (!seats.some((s) => s.own && s.space.eid == space.eid)) return []
+  if (own.eid != space.eid) return []
   return friends.flatMap(({ person, name, standing, at }): Update[] =>
     standing == 'asked' || standing == 'suggested'
       ? [{
