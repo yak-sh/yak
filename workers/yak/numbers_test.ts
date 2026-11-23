@@ -457,6 +457,9 @@ let voipmsApi = endpoints(globalThis).open((req) => {
     case 'orderDID':
       vms.held.set(q.get('did')!, { routing: q.get('routing')! })
       return ok()
+    case 'setDIDRouting':
+      vms.held.get(q.get('did')!)!.routing = q.get('routing')!
+      return ok()
     case 'getDIDsInfo':
       return ok({
         dids: [...vms.held.keys()].map((d) => ({ did: d, sms_enabled: '1' })),

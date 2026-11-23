@@ -390,32 +390,41 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
     },
     buy: async (number, callback) => {
       let digits = ten(number)
-      let made = await call('createSubAccount', {
-        username: accountFor(digits),
-        protocol: '1',
-        description: number,
-        auth_type: '1',
-        password: `Y${crypto.randomUUID().replaceAll('-', '')}`,
-        device_type: '2',
-        callerid_number: digits,
-        lock_international: '1',
-        international_route: '1',
-        music_on_hold: 'default',
-        allowed_codecs: 'ulaw;g729;gsm',
-        dtmf_mode: 'AUTO',
-        nat: 'yes',
+      // A sub-account calls out as a number the account already holds, so
+      // the number is ordered first, hanging up on calls until the
+      // sub-account it rings is made.
+      await call('orderDID', {
+        did: digits,
+        routing: 'sys:hangup',
+        pop: VOIPMS.pop,
+        dialtime: '60',
+        cnam: '1',
+        billing_type: VOIPMS.billing,
       })
       try {
-        await call('orderDID', {
+        let made = await call('createSubAccount', {
+          username: accountFor(digits),
+          protocol: '1',
+          description: number,
+          auth_type: '1',
+          password: `Y${crypto.randomUUID().replaceAll('-', '')}`,
+          device_type: '2',
+          callerid_number: digits,
+          lock_international: '1',
+          international_route: '1',
+          music_on_hold: 'default',
+          allowed_codecs: 'ulaw;g729;gsm',
+          dtmf_mode: 'AUTO',
+          nat: 'yes',
+        })
+        await call('setDIDRouting', {
           did: digits,
           routing: `account:${made.account}`,
-          pop: VOIPMS.pop,
-          dialtime: '60',
-          cnam: '1',
-          billing_type: VOIPMS.billing,
         })
       } catch (error) {
-        await call('delSubAccount', { id: String(made.id) })
+        let account = await subaccount(digits).catch(() => undefined)
+        if (account) await call('delSubAccount', { id: String(account.id) })
+        await call('cancelDID', { did: digits })
         throw error
       }
       if (callback) {

@@ -62,7 +62,7 @@ test("voip.ms's refusals are told apart: a limit is Blocked, a key it refuses De
   }
 })
 
-test('a number voip.ms will not sell takes back the sub-account made to ring it', async () => {
+test('a number whose sub-account voip.ms will not make is given back', async () => {
   let asked: string[] = []
   let shop = numbers({
     user: 'u',
@@ -71,12 +71,17 @@ test('a number voip.ms will not sell takes back the sub-account made to ring it'
       let method = new URL(String(url)).searchParams.get('method')!
       asked.push(method)
       return Promise.resolve(Response.json(
-        method == 'orderDID'
-          ? { status: 'did_unavailable' }
-          : { status: 'success', id: 9, account: '100_y2695550100' },
+        method == 'createSubAccount'
+          ? { status: 'invalid_callerid' }
+          : { status: 'success', accounts: [] },
       ))
     },
   })
-  await assertRejects(() => shop.buy('+12695550100'), Error, 'did_unavailable')
-  assertEquals(asked, ['createSubAccount', 'orderDID', 'delSubAccount'])
+  await assertRejects(() => shop.buy('+12695550100'), Error, 'invalid_callerid')
+  assertEquals(asked, [
+    'orderDID',
+    'createSubAccount',
+    'getSubAccounts',
+    'cancelDID',
+  ])
 })
