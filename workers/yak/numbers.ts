@@ -24,6 +24,7 @@
 import { type Numbers, type Offer, shown, type TollFree } from '@yaks/phone'
 import { numberPrice, uses } from '@yaks/platform/numbers'
 import { ModelError } from '@yaks/model'
+import { Unsent } from '@yaks/host/senders'
 import { next } from '@yaks/wake'
 import {
   type App,
@@ -285,6 +286,12 @@ export let numberTools: Row[] = [
         city: maybe('city'),
         contains: maybe('contains'),
         limit: Math.min(Number(args.limit ?? 5) || 5, 20),
+      }).catch((error) => {
+        if (!(error instanceof Unsent)) throw error
+        throw refuse(
+          'unavailable',
+          'The phone company is slow to answer right now. Try again in a minute.',
+        )
       })).map(priceOf)
       if (!offers.length) {
         return { text: 'No number on offer matches that.', space }

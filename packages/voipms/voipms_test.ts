@@ -221,3 +221,49 @@ test('buying a number already held on the sub-account made for it completes it, 
   assertEquals((await shop.buy('+12695550100')).status, 'held')
   assertEquals(asked.includes('orderDID'), false)
 })
+
+// A shop whose search hangs until aborted the first `slow` times it is asked.
+let slowShop = (slow: number) => {
+  let time = clock()
+  let asked = 0
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (_url, init) => {
+      if (asked++ >= slow) {
+        return Promise.resolve(Response.json({
+          status: 'success',
+          dids: [{ did: '2692015487', state: 'MI', ratecenter: 'X', sms: 1 }],
+        }))
+      }
+      let signal = init!.signal!
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start: (body) =>
+              signal.addEventListener('abort', () => body.error(signal.reason)),
+          }),
+        ),
+      )
+    },
+  }, time)
+  return { shop, time }
+}
+
+test('a search voip.ms is slow to answer is asked once more, and a second slow answer is Unsent', async () => {
+  let once = slowShop(1)
+  let found = once.shop.find({ area: '269' })
+  await once.time.advance(8_000)
+  assertEquals((await found).map((o) => o.number), ['+12692015487'])
+
+  let twice = slowShop(2)
+  let refused = assertRejects(
+    () => twice.shop.find({ area: '269' }),
+    Unsent,
+    'voip.ms is slow to answer searchDIDsUSA',
+  )
+  await twice.time.advance(8_000)
+  await twice.time.advance(8_000)
+  await refused
+  assertEquals(twice.time.pending(), 0)
+})

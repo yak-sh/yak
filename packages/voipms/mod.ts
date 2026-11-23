@@ -19,6 +19,7 @@ import {
   type Text,
 } from '@yaks/phone'
 
+import { Unsent } from '@yaks/host/senders'
 import {
   bounded,
   type Call,
@@ -312,7 +313,25 @@ export let numbers = (
   return {
     find: async (s) => {
       if (s.tollFree || (s.country ?? 'US') != 'US') return []
-      let search = bounded(request, time, time.now() + FIND)
+      // A search only reads, so one voip.ms is slow to answer is asked once
+      // more, each try with half the time; a second slow answer is Unsent.
+      let deadline = time.now() + FIND
+      let search: Call = async (method, params) => {
+        let tried = (by: number) => bounded(request, time, by)(method, params)
+        try {
+          return await tried(Math.min(deadline, time.now() + FIND / 2))
+        } catch (error) {
+          if (!(error instanceof TimedOut || error instanceof Unsent)) {
+            throw error
+          }
+          return await tried(deadline).catch((again) => {
+            if (!(again instanceof TimedOut || again instanceof Unsent)) {
+              throw again
+            }
+            throw new Unsent(`voip.ms is slow to answer ${method} right now`)
+          })
+        }
+      }
       let limit = s.limit ?? 5
       let all: Available[]
       if (s.number) {
