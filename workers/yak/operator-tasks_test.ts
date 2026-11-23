@@ -77,6 +77,10 @@ test('a question the Operator asks the person is not a shared tool', async () =>
 let body = (rows: Bundle[]) => String((rows[0].content as Comp).body)
 
 test("a session asked of a developer's machine runs there and reports on its task", async () => {
+  // The store a space keeps, over SQLite as on yaks.app.
+  let store = await operatorStore(durable())
+  let work = (name: string, args: Record<string, unknown>) =>
+    working(store, { person, member: true }, name, args)
   let [made] = await work('task_new', { title: 'Tune the organ' })
   let machine = JSON.parse(
     body(await work('machine_register', { machine: 'mbp', clis: ['claude'] })),

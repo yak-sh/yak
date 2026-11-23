@@ -121,7 +121,7 @@ let askedOf = async (g: Graph, machine: string): Promise<string[]> => {
   let seen = new Set<string>()
   for (let p of providers) {
     let entries = await g.read(
-      line`.entry&.using.provider=${p.entity.eid}&!ask&!lines&.fields=entry`,
+      line`.entry&.using.provider=${p.entity.eid}&!ask&.fields=entry`,
     )
     for (let e of entries) seen.add(str(comp(e, 'entry')?.session))
   }
