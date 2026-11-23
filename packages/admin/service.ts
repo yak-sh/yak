@@ -147,6 +147,7 @@ export let RELEASED: Release[] = [
     'orbits',
     'settlement',
     'sound',
+    'voiced-video',
   ], 'jeff@yak.sh'),
   ...repoApps('yourname', [
     'handouts',

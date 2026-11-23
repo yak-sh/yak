@@ -1,0 +1,89 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.5 system-ui, sans-serif;
+  --line: color-mix(in srgb, currentColor 18%, transparent);
+  --soft: color-mix(in srgb, currentColor 65%, transparent);
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+h1 {
+  margin: 0 0 .25rem;
+}
+h2 {
+  margin: 1.5rem 0 .5rem;
+  font-size: 1.1rem;
+}
+p {
+  margin: .25rem 0;
+}
+.soft {
+  color: var(--soft);
+}
+form {
+  display: grid;
+  gap: .5rem;
+  margin: 1rem 0;
+}
+label {
+  display: grid;
+  gap: .25rem;
+}
+input,
+textarea,
+button {
+  font: inherit;
+  padding: .4rem .6rem;
+}
+button {
+  cursor: pointer;
+  justify-self: start;
+}
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+nav button[aria-current="true"] {
+  font-weight: 600;
+}
+.step {
+  border-top: 1px solid var(--line);
+  padding: .5rem 0;
+}
+.role {
+  margin: .75rem 0;
+}
+.take {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin: .25rem 0;
+}
+.take audio {
+  height: 2rem;
+  max-width: 100%;
+}
+.chosen {
+  font-weight: 600;
+}
+ol {
+  padding-left: 1.5rem;
+}
+li.voiced::marker {
+  content: "✓ ";
+}
+.failed {
+  color: #b3261e;
+}
+.caption {
+  font-size: 1.25rem;
+  min-height: 3rem;
+  margin: .5rem 0;
+}

@@ -1,0 +1,144 @@
+{
+  "$defs": {
+    "video": {
+      "description": "A video to make: its title is doc.title and what it should be about is doc.body.",
+      "properties": {}
+    },
+    "role": {
+      "description": "A character the script gives lines to; its name is doc.title.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "about": {
+          "type": "string",
+          "description": "How the character sounds, in words a voice can be picked by."
+        }
+      }
+    },
+    "line": {
+      "description": "One line of the script, said by a character; its words are doc.body.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "role": {
+          "type": "string",
+          "ref": "role",
+          "death": "cascade",
+          "index": true
+        },
+        "n": {
+          "type": "integer",
+          "description": "Where the line comes in the script, from 1."
+        }
+      }
+    },
+    "audition": {
+      "description": "A candidate voice saying a character's first line.",
+      "properties": {
+        "role": {
+          "type": "string",
+          "ref": "role",
+          "death": "cascade",
+          "index": true
+        },
+        "voice": {
+          "type": "string",
+          "description": "The ElevenLabs voice's id."
+        },
+        "name": {
+          "type": "string",
+          "description": "The voice's name, the label the person chooses it by."
+        },
+        "audio": {
+          "type": "string",
+          "description": "The kept MP3, played at ./api/blob/<audio>."
+        }
+      }
+    },
+    "cast": {
+      "description": "On a decision, the character whose voice it chooses.",
+      "properties": {
+        "role": {
+          "type": "string",
+          "ref": "role",
+          "death": "cascade",
+          "index": true
+        }
+      }
+    },
+    "voicing": {
+      "description": "A line said in its character's chosen voice; doc.title names the character and doc.body says the line.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "line": {
+          "type": "string",
+          "ref": "line",
+          "death": "cascade",
+          "index": true
+        },
+        "n": { "type": "integer" },
+        "audio": {
+          "type": "string",
+          "description": "The kept MP3, played at ./api/blob/<audio>."
+        }
+      }
+    },
+    "cut": {
+      "description": "The assembled video: every voiced line in script order.",
+      "properties": {
+        "video": {
+          "type": "string",
+          "ref": "video",
+          "death": "cascade",
+          "index": true
+        },
+        "clips": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "n": { "type": "integer" },
+              "who": { "type": "string" },
+              "text": { "type": "string" },
+              "audio": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "audition_voices": {
+      "tool": true,
+      "description": "Audition voices for one character: three candidate voices each say its first line, and the person is asked which to use",
+      "worker": "/audition",
+      "input": { "binding": { "type": "object" } },
+      "discoverable": false
+    },
+    "voice_line": {
+      "tool": true,
+      "description": "Say one line of the script in its character's chosen voice",
+      "worker": "/voice",
+      "input": { "binding": { "type": "object" } },
+      "discoverable": false
+    },
+    "assemble_cut": {
+      "tool": true,
+      "description": "Put a video's voiced lines in script order, once every line is voiced",
+      "worker": "/assemble",
+      "input": { "binding": { "type": "object" } },
+      "discoverable": false
+    }
+  }
+}

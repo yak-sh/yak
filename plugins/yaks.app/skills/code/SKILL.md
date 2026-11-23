@@ -878,10 +878,28 @@ draws the workflow under "How it runs": each step after the steps it requires,
 side by side where none requires another. A chain runs to its last step however
 many steps it has.
 
-For example, a video made from a request: a script (a model step), then voice
-auditions, one take for each candidate voice, then each line voiced once its
-character's voice is chosen (`builder_choose` picks a take), then the video
-assembled by the app's worker, which calls a renderer through a connection.
+For example, a Voiced Video app makes a video from a request in four steps,
+which its `seed.json` writes:
+
+1. **Script**, a model step: `$v .video, doc.title=$title, doc.body=$brief`
+   answers each character as a `role` row and each line as a `line` row.
+2. **Voice auditions**, a worker step for each character: three ElevenLabs
+   voices each say its first line, kept as files, and one more output is a
+   `decision` asking which voice to use, each voice's name a choice, with
+   `filed.assignee` the person who asked for the video (its `created.by`, which
+   the step's query reads).
+3. **Voice lines**, a worker step for each line, whose query joins the line to
+   its character's answered decision and the audition it chose:
+   `…; $d .decision, built.current=true, cast.role=$role, decided.choice=$name; $a .audition.role=$role, built.current=true, audition.name=$name, audition.voice=$voice`.
+   A character's lines are voiced the moment its voice is chosen, side by side
+   and without waiting on the other characters.
+4. **Assemble**, a worker step for each video, gathering its lines and their
+   voicings in brackets. It answers no outputs until every line is voiced, then
+   the cut: the voiced lines in script order.
+
+The person chooses a voice by answering the decision in their Updates, or on the
+app's page, which writes `decided{choice}` on it; the third step's query matches
+it then (see the next section).
 
 ### A step the person takes
 

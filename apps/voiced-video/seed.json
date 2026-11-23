@@ -1,0 +1,115 @@
+[
+  {
+    "entity": {
+      "eid": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    },
+    "doc": {
+      "title": "Script",
+      "body": "A model writes the characters and their lines from the video's title and what it is about."
+    },
+    "builder": {
+      "query": "$v .video, doc.title=$title, doc.body=$brief",
+      "to": "5663fa91-2d32-8dd0-82d1-95402b2e82c4",
+      "immediate": true
+    },
+    "content": {
+      "body": "Write the script for a short voiced video.\nTitle: $title\nWhat it is about: $brief\n\nGive it two to four characters and eight to sixteen lines, each line one or two sentences a voice actor can say.\nAnswer one output per character, slots \"role 1\", \"role 2\" and so on: components role {\"video\": the video's input id, \"about\": how the character sounds, in a few plain words such as \"old man, gravelly, warm\"} and doc {\"title\": the character's name}.\nAnswer one output per line, slots \"line 1\", \"line 2\" and so on in script order: components line {\"video\": the video's input id, \"role\": \"$role N\" naming the slot of the character who says it, \"n\": its number from 1} and doc {\"body\": the words said, with no stage directions}.\nEvery output lists the video's input id in its inputs."
+    },
+    "using": {
+      "provider": "workers-ai",
+      "model": "@cf/zai-org/glm-5.3"
+    }
+  },
+  {
+    "entity": {
+      "eid": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86"
+    },
+    "doc": {
+      "title": "Voice auditions",
+      "body": "Three candidate voices each say a character's first line, and the person who asked for the video is asked which voice to use."
+    },
+    "builder": {
+      "query": "$r .role, built.current=true, role.video=$v, role.about=$about, doc.title=$name; $v .video, created.by=$asker; [$l .line.role=$r, built.current=true, line.n=$n, doc.body=$said]",
+      "to": "d9293ae8-c59b-8ec4-87ef-470c95e2eb3a",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "3d3c75ba-8309-4e7f-9e90-10c103e3c975"
+    },
+    "doc": {
+      "title": "Voice lines",
+      "body": "Each line is said in its character's chosen voice, as soon as that voice is chosen."
+    },
+    "builder": {
+      "query": "$l .line, built.current=true, line.video=$video, line.role=$role, line.n=$n, doc.body=$text; $role .role, built.current=true, doc.title=$who; $d .decision, built.current=true, cast.role=$role, decided.choice=$name; $a .audition.role=$role, built.current=true, audition.name=$name, audition.voice=$voice",
+      "to": "4c028988-1e22-8904-adb4-3a9c7877b70e",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080"
+    },
+    "doc": {
+      "title": "Assemble",
+      "body": "Once every line is voiced, the lines are put in script order as the video's cut."
+    },
+    "builder": {
+      "query": "$v .video, doc.title=$title; [$l .line.video=$v, built.current=true]; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio, doc.title=$who, doc.body=$text]",
+      "to": "842b3768-998b-8265-83bf-6cf771624c20",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "c9951739-5d7e-41fe-bbed-465450a91916"
+    },
+    "edge": {
+      "from": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86",
+      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    },
+    "requires": {}
+  },
+  {
+    "entity": {
+      "eid": "90b60f99-d05b-4d98-a63d-ad1957975fae"
+    },
+    "edge": {
+      "from": "3d3c75ba-8309-4e7f-9e90-10c103e3c975",
+      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    },
+    "requires": {}
+  },
+  {
+    "entity": {
+      "eid": "507e6b41-3bb2-44a9-bf64-6bee9b20a47b"
+    },
+    "edge": {
+      "from": "3d3c75ba-8309-4e7f-9e90-10c103e3c975",
+      "to": "f20c2eac-bff4-47a2-a5ab-c99f3d445f86"
+    },
+    "requires": {}
+  },
+  {
+    "entity": {
+      "eid": "460105f9-5a2f-43bb-ac7b-2b40b0519b40"
+    },
+    "edge": {
+      "from": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080",
+      "to": "066bd606-f5d4-45dd-9e2a-9fb158c4a175"
+    },
+    "requires": {}
+  },
+  {
+    "entity": {
+      "eid": "c8a06b28-bf22-4bd3-813c-832821bfc66c"
+    },
+    "edge": {
+      "from": "7a0025f5-6fa5-4394-b1c1-5bdc3f250080",
+      "to": "3d3c75ba-8309-4e7f-9e90-10c103e3c975"
+    },
+    "requires": {}
+  }
+]

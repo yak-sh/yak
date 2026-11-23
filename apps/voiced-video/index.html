@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Voiced Video</title>
+  <link rel="stylesheet" href="style.css">
+  <main>
+    <header>
+      <h1>Voiced Video</h1>
+      <p>Describe a short video. A script is written, voices audition for each
+        character, you choose the voices, and every line is voiced.</p>
+    </header>
+    <form id="start">
+      <label>Title <input name="title" required maxlength="120"></label>
+      <label>What it is about
+        <textarea name="brief" required rows="3" maxlength="2000"></textarea>
+      </label>
+      <button>Make it</button>
+    </form>
+    <nav id="videos" aria-label="Videos"></nav>
+    <section id="video" aria-live="polite"></section>
+  </main>
+  <script type="module" src="main.js"></script>
+</html>
