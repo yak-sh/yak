@@ -5,7 +5,7 @@ import { durable as raw } from '../../packages/durable-object/testing.ts'
 import { imaged, type Snapshot } from '../../packages/sqlite/testing.ts'
 import { GIT_STORE, PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { KV, passed, shapeOf } from './store-schema.ts'
+import { fitOf, KV, passed, shapeOf } from './store-schema.ts'
 import { schema as writeSchema } from '@yaks/api/log'
 
 // A new test object's installed schema is what a store's first wake leaves:
@@ -26,6 +26,7 @@ export let durable = (at = '', declaration: string | null = null) => {
   if (!from) {
     let values = {
       schema: shape.stamp,
+      fitted: fitOf(null, shape.key, shape.stamp),
       ...(declaration ? { vocab: declaration } : {}),
     }
     if (name == PLATFORM_STORE || name == GIT_STORE) {

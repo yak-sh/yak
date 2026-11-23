@@ -1,15 +1,15 @@
 // An app store's branches through its kernel doors: its first branch turns
 // its versions on, a branch reads main as of its fork under its own writes,
 // and a later incarnation composes the versions its data requires.
-import { equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
 import { requirements } from '@yaks/sqlite'
 import { driver } from '@yaks/durable-object'
 import { ownedBy } from './directory-fixture.ts'
 import { directory, fetch as directoryFetch, storeName } from './directory.ts'
-import { storeOf } from './door.ts'
+import { doorOf, storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { Store } from './graph.ts'
-import { declared, platform } from './testing.ts'
+import { declared, platform, state } from './testing.ts'
 
 let p = platform('branch probe')
 let dir = directory({ fetch: (r) => directoryFetch(r, p.env) })
@@ -111,38 +111,29 @@ test('a trashed branch is hidden and returns with its writes on restore', () => 
 })
 
 test('a store with more live rows than one pass takes still makes its first branch in one call', async () => {
-  let big = await ownedBy(dir, 'branch-owner', 'branching-big')
-  await dir.apply({
-    entities: [{
-      entity: { eid: '$app' },
-      app: {
-        slug: 'big',
-        version: 1,
-        space: big.eid,
-        store: 'branching-big/big.123456',
-        access: 'public',
-      },
-      doc: { title: 'Big' },
-    }],
-  })
-  let bigApp = (await dir.app(big, 'big'))!
-  await declared(p.env, big, bigApp)
-  let at = storeOf(p.env.STORE, storeName(big, bigApp), {
-    eid: bigApp.eid,
-    access: 'public',
-  })
-  // More than one pass takes: SEEDS pages of 512 (graph.ts `#seeding`).
-  let rows = Array.from({ length: 4_200 }, (_, n) => ({
+  let time = clock(Date.now())
+  let ctx = { ...state(), work: { seedRows: 8, seedPages: 1 } }
+  using _ = ctx.storage
+  let store = new Store(ctx, { CLOCK: time })
+  let at = doorOf((r) => store.fetch(r), 'branching/many')
+  let send = (path: string, body: unknown) =>
+    at(path, { method: 'POST', body: JSON.stringify(body) }, KERNEL)
+  let deployed = await send('/vocab', {})
+  equal(deployed.status, 200, await deployed.text())
+  let rows = Array.from({ length: 9 }, (_, n) => ({
     entity: { eid: crypto.randomUUID() },
     doc: { title: `row ${n}` },
   }))
-  let wrote = await at('/apply', {
-    method: 'POST',
-    body: JSON.stringify(rows),
-  }, KERNEL)
+  let wrote = await send('/apply', rows)
   equal(wrote.status, 200, await wrote.text())
-  let made = await at('/branches', { method: 'POST', body: '{}' }, KERNEL)
-  equal(made.status, 201, await made.text())
+  let pending = send('/branches', {})
+  await time.advance(10_000)
+  let made = await pending
+  let body = await made.json()
+  equal(made.status, 201, JSON.stringify(body))
+  let fork = await send(`/branches/${body.branch.id}/query`, { query: '.doc' })
+  equal(titles((await fork.json()).rows), titles(rows))
+  await ctx.settled()
 })
 
 test('a branch door is the kernel’s alone', async () => {

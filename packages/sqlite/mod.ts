@@ -415,7 +415,7 @@ export type Store = {
    * index those rows break (./owe.ts `build`) */
   install: (beside?: Stmt[]) => Error[]
   /** Advance one deferred schema window admitted by its estimated writes. */
-  maintain: (admit: (written: number) => boolean) => boolean
+  maintain: (admit: (written: number) => boolean, seedRows?: number) => boolean
   /** make the tables of `comps` (every component of the vocabulary, left
    * out), with all that rests on them, as a first write naming them would
    * (./raise.ts): for a writer that fills a table in raw SQL rather than

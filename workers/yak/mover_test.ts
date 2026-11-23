@@ -36,6 +36,7 @@ import { driver } from '@yaks/durable-object'
 import { bounded, type Options } from '@yaks/durable-object/ceiling'
 
 let NAME = 'ada/notes'
+let BATCH = 3
 
 // An app whose rows say a word two ways, the way a rename leaves them.
 let WORDS = JSON.stringify({
@@ -105,8 +106,11 @@ let movingStore = async (
 ) => {
   // The ceiling case measures what the initial writes spend in its window.
   let ctx = ceiling ? state() : n ? await holding(n) : await deployed()
+  let work = Object.assign(ctx, {
+    work: ceiling ? undefined : { moveRows: BATCH },
+  })
   let bound = bounded(ctx.storage, ceiling ?? {})
-  let o = new Store(ctx, env, rules)
+  let o = new Store(work, env, rules)
   let fetch = (r: Request) => o.fetch(r)
   let door = doorOf(fetch, NAME)
   let meta = metaOf(door)
@@ -117,7 +121,7 @@ let movingStore = async (
   await ctx.settled()
   if (ceiling) await fill(meta, n)
   return {
-    wake: (...rules: Rule[]) => o = new Store(ctx, env, rules),
+    wake: (...rules: Rule[]) => o = new Store(work, env, rules),
     schema: () => revision(driver(ctx.storage), 'schema'),
     columns: (name: string) =>
       driver(ctx.storage).query({ t: 'pragma', name: 'table_info', arg: name })
@@ -265,7 +269,8 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
 })
 
 test('a live rule moves every row from the alarm, and says it is done', async () => {
-  let s = await store(250, rule())
+  let rows = 5 * BATCH
+  let s = await store(rows, rule())
   // Woken, a store owing rows says the alarm it will move them from.
   assert(Date.parse(String(await s.held())) <= Date.now())
   let [first] = await s.query('.was')
@@ -274,22 +279,23 @@ test('a live rule moves every row from the alarm, and says it is done', async ()
   }
   let [said] = await s.moves()
   assertEquals([said.moved, said.forwarded, !!said.done], [
-    250,
+    rows,
     undefined,
     true,
   ])
   assertEquals(await count(s, '.was'), 0)
-  assertEquals(await count(s, '.now'), 250)
+  assertEquals(await count(s, '.now'), rows)
   let [moved] = await s.query(`.entity.eid=${first.entity.eid}&.now`)
   assertEquals(moved.now, first.was)
 })
 
 test('a rehearsal says what a rule would move, and moves nothing', async () => {
-  let s = await store(250, rule({ live: undefined }))
+  let rows = 5 * BATCH
+  let s = await store(rows, rule({ live: undefined }))
   let [r] = await s.rehearse()
-  assertEquals([r.rows, r.moved, r.failed], [250, 250, undefined])
+  assertEquals([r.rows, r.moved, r.failed], [rows, rows, undefined])
   await s.alarm()
-  assertEquals(await count(s, '.was'), 250)
+  assertEquals(await count(s, '.was'), rows)
   let [said] = await s.moves()
   assertEquals([said.live, said.done], [false, undefined])
 })
@@ -530,20 +536,26 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
       }]
     },
   })
-  let s = await store(51, reading)
+  let rows = BATCH + 1
+  let s = await store(rows, reading)
   await s.apply([{ entity: { eid: source }, now: { word: 'source' } }])
   let before = await s.query(`.entity.eid=${source}`)
   let [r] = await s.rehearse()
-  assertEquals([r.rows, r.moved, r.batches, r.failed], [51, 51, 2, undefined])
-  assertEquals(await count(s, '.was'), 51)
+  assertEquals([r.rows, r.moved, r.batches, r.failed], [
+    rows,
+    rows,
+    2,
+    undefined,
+  ])
+  assertEquals(await count(s, '.was'), rows)
   assertEquals(await count(s, '.now'), 1)
   assertEquals(await s.query(`.entity.eid=${source}`), before)
   s.wake({ ...reading, live: 'apps' })
   await s.alarm()
   let [said] = await s.moves()
-  assertEquals([said.moved, !!said.done], [51, true])
+  assertEquals([said.moved, !!said.done], [rows, true])
   assertEquals(await count(s, '.was'), 0)
-  assertEquals(await count(s, '.now.word=source'), 52)
+  assertEquals(await count(s, '.now.word=source'), rows + 1)
   assertEquals(await s.query(`.entity.eid=${source}`), before)
 })
 
@@ -561,24 +573,25 @@ let contracting = () =>
   })
 
 test('mover contraction waits for the last value and rehearsal restores the column', async () => {
-  let s = await store(300, contracting())
+  let rows = 6 * BATCH
+  let s = await store(rows, contracting())
   let [rehearsed] = await s.rehearse()
-  assertEquals([rehearsed.moved, rehearsed.failed], [300, undefined])
+  assertEquals([rehearsed.moved, rehearsed.failed], [rows, undefined])
   assert(s.columns('was').includes('word'))
-  assertEquals(await count(s, '.was.word'), 300)
+  assertEquals(await count(s, '.was.word'), rows)
   await s.alarm()
   assert(s.columns('was').includes('word'))
-  assertEquals(await count(s, '.was.word'), 50)
+  assertEquals(await count(s, '.was.word'), BATCH)
   await s.alarm()
   assert(!s.columns('was').includes('word'))
-  assertEquals(await count(s, '.now'), 300)
-  assertEquals(await count(s, '.was'), 300)
+  assertEquals(await count(s, '.now'), rows)
+  assertEquals(await count(s, '.was'), rows)
   let [said] = await s.moves()
-  assertEquals([said.moved, !!said.done], [300, true])
+  assertEquals([said.moved, !!said.done], [rows, true])
   s.wake(contracting())
   await s.alarm()
   assert(!s.columns('was').includes('word'))
-  assertEquals((await s.moves())[0].moved, 300)
+  assertEquals((await s.moves())[0].moved, rows)
 
   // A core word has already contracted its declaration. Its retired column
   // must contract through the mover without giving that column back to callers.
@@ -646,8 +659,8 @@ test('a refused contraction unwinds its data batch and retries after wake', asyn
   assert(!s.columns('was').includes('word'))
 })
 
-// Synthetic only: 141 matches is the owner's measured count, not a read of
-// Vale. Near misses deliberately include work that could still be legitimate.
+// Near misses include work that could still be legitimate.
+let DEAD = 2 * BATCH + 2
 let deadMail = (eid: string, props: Comp = {}): Bundle => ({
   entity: { eid },
   effect: {
@@ -670,7 +683,7 @@ let deadEid = (i: number) =>
 let deadMailStore = async () => {
   let s = await store(0, deadMailInboxRule)
   let dead = Array.from(
-    { length: 141 },
+    { length: DEAD },
     (_, i) => deadMail(deadEid(i)),
   )
   // A run carrying another component keeps it; only effect is removed.
@@ -696,35 +709,33 @@ let deadMailStore = async () => {
     },
     { entity: { eid: 'other-target' }, doc: { title: 'Do not touch' } },
   ]
-  for (let rows of [kept, dead.slice(0, 100), dead.slice(100)]) {
-    await s.apply(rows)
-  }
+  await s.apply([...kept, ...dead])
   return s
 }
 
 let remainingEffects = async (s: Awaited<ReturnType<typeof store>>) =>
   await count(s, '.effect')
 
-test('dead mail rehearsal rolls back 141 rows before explicit activation', async () => {
+test('dead mail rehearsal rolls back all its batches before explicit activation', async () => {
   let s = await deadMailStore()
   let before = await s.query('*')
   let [r] = await s.rehearse()
   assertEquals([r.rows, r.moved, r.batches, r.failed], [
-    141,
-    141,
+    DEAD,
+    DEAD,
     3,
     undefined,
   ])
   assertEquals(await s.query('*'), before)
-  assertEquals(await remainingEffects(s), 154)
-  assertEquals(await count(s, '.effect.state=pending'), 152)
+  assertEquals(await remainingEffects(s), DEAD + 13)
+  assertEquals(await count(s, '.effect.state=pending'), DEAD + 11)
   assertEquals((await s.moves())[0].live, true)
 })
 
-test('synthetic cleanup removes 141 dead runs only and a second pass moves zero', async () => {
+test('synthetic cleanup removes only dead runs and a second pass moves zero', async () => {
   let s = await deadMailStore()
   let candidates = await s.query(deadMailInboxRule.find)
-  assertEquals(candidates.length, 141)
+  assertEquals(candidates.length, DEAD)
   let ids = new Set(candidates.map((b) => b.entity.eid))
   let before = (await s.query('*')).filter((b) => !ids.has(b.entity.eid))
   let preserved = new Set(before.map((b) => b.entity.eid))
@@ -744,7 +755,7 @@ test('synthetic cleanup removes 141 dead runs only and a second pass moves zero'
   assertEquals(after.doc, attached.doc)
   assertEquals(after.effect, undefined)
   assertEquals([(await s.moves())[0].moved, !!(await s.moves())[0].done], [
-    141,
+    DEAD,
     true,
   ])
   let once = await s.query('*')

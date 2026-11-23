@@ -356,10 +356,19 @@ export let finite = (r: Response): boolean =>
   !/ndjson|event-stream/.test(r.headers.get('content-type') ?? '') &&
   Number(r.headers.get('content-length') ?? 0) <= WHOLE
 
+let local = new WeakSet<Response>()
+
+/** Mark an answer made in this process. It has no remote hop whose reset
+ * could cut off its body after the headers arrived. */
+export let inProcess = (r: Response): Response => {
+  local.add(r)
+  return r
+}
+
 /** Read a {@link finite} answer whole inside the retry that sent it, so a
  * restart cutting off its body is sent again. */
 export let received = async (r: Response): Promise<Response> =>
-  finite(r) ? new Response(await r.arrayBuffer(), r) : r
+  !local.has(r) && finite(r) ? new Response(await r.arrayBuffer(), r) : r
 
 // A request can be built twice from its init only while the body is a value:
 // a stream, or a Request whose body the first build took, is spent.

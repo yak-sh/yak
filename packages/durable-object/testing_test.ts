@@ -94,18 +94,19 @@ test('eviction, schema changes and deleteAll leave reusable storage', async () =
   assertEquals(all(), [{ value: 42 }])
 })
 
-test('a statement naming a CTE once it holds 100 cursors is refused', () => {
-  let d = durable()
+test('a statement naming a CTE once it reaches the cursor limit is refused', () => {
+  let limit = 16
+  using d = durable(undefined, { exprDepth: limit })
   // `n` subqueries in FROM, each a cursor, before the naming of "c".
   let naming = (n: number, c = 'select 1 from "c"') =>
     `with "c" as (select 1 as "x") select 1 as "v" where 1 in (${
       Array(n).fill('(select "x" from (select 1 as "x"))').join(', ')
     }) and exists (${c})`
-  assertEquals([...d.sql.exec(naming(98))], [{ v: 1 }])
-  assertThrows(() => d.sql.exec(naming(99)), Error, 'nested too deep')
+  assertEquals([...d.sql.exec(naming(limit - 2))], [{ v: 1 }])
+  assertThrows(() => d.sql.exec(naming(limit - 1)), Error, 'nested too deep')
   // A statement that names none is answered, however many it holds.
   assertEquals([
-    ...d.sql.exec(naming(150, 'select 1 from (select 1 as "x")')),
+    ...d.sql.exec(naming(limit + 1, 'select 1 from (select 1 as "x")')),
   ], [{ v: 1 }])
 })
 

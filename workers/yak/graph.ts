@@ -563,6 +563,8 @@ export type State = Held & {
   // it, which work behind the answer waits out (running.ts `BEAT`, workerd's
   // when unset). A stand-in that has sent it by then says 0.
   beat?: number
+  // A host's page sizes for deferred work, and pages per seeding pass.
+  work?: { seedRows?: number; seedPages?: number; moveRows?: number }
   storage: DurableStorage & {
     sql: DurableSql & { databaseSize: number }
     deleteAll(): Promise<void>
@@ -1595,7 +1597,7 @@ export class Store extends Durable {
       screen: (line, opts) => store.screen(line, opts),
     }
     this.#analyze = (tables) => store.analyze(tables)
-    this.#maintain = (admit) => store.maintain(admit)
+    this.#maintain = (admit) => store.maintain(admit, ctx.work?.seedRows)
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -3670,7 +3672,8 @@ export class Store extends Durable {
   #seeding = async (): Promise<number | null> => {
     if (!this.#versioned || !seeding(this.#sql)) return null
     let wait = 0
-    for (let n = 0; n < SEEDS && seeding(this.#sql); n++) {
+    let pages = this.#ctx.work?.seedPages ?? SEEDS
+    for (let n = 0; n < pages && seeding(this.#sql); n++) {
       if (n) await yielded()
       let fits = (written: number) =>
         !(wait = this.ceiling.under(SHARE, written))
@@ -4184,6 +4187,7 @@ export class Store extends Durable {
     // The bound is in batches that found rows: a rule with none left to move
     // is one read, and finishes without spending one.
     let left = BATCHES
+    let size = this.#ctx.work?.moveRows ?? SIZE
     let name = this.#get('name') ?? ''
     // How long until the store spent under its mover's share of its windows.
     let wait = 0
@@ -4200,7 +4204,7 @@ export class Store extends Durable {
         try {
           let m = this.#mover(held, rule)
           let copy = name == PLATFORM_STORE ? this.#copy() : undefined
-          let plan = this.#tx(() => batch(m, rule, was, SIZE))
+          let plan = this.#tx(() => batch(m, rule, was, size))
           if (plan.rows.length) left--
           if (plan.forward.length) {
             if (!this.#bind.ERRORS) {
@@ -4219,7 +4223,7 @@ export class Store extends Durable {
                   ) throw new Unfenced('Mover')
                   this.#put('directory-revision', String(revision))
                 }
-                let s = step(m, rule, was, SIZE, now, plan)
+                let s = step(m, rule, was, size, now, plan)
                 this.#put(rule.mark, JSON.stringify(s))
                 return s
               }))
@@ -5712,7 +5716,12 @@ export class Store extends Durable {
         let rules = this.#moves().flatMap((rule) =>
           this.#copyBatch.run(
             -1,
-            () => rehearse(this.#mover([], rule), [rule], SIZE),
+            () =>
+              rehearse(
+                this.#mover([], rule),
+                [rule],
+                this.#ctx.work?.moveRows ?? SIZE,
+              ),
           )
         )
         this.#kv.clear()

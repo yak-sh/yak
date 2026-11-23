@@ -70,6 +70,7 @@ import type { Load } from '@yaks/host'
 import { cleanup, type Clock as Virtual, tick } from '@yaks/testing'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
+import { inProcess } from '@yaks/durable-object/door'
 import { PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 
@@ -461,7 +462,7 @@ export let lasting = (
           if (String(n) == PLATFORM_OBJECT) {
             await (initialized ??= initialize())
           }
-          return object(String(n)).fetch(r)
+          return inProcess(await object(String(n)).fetch(r))
         },
       }),
     },

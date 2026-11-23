@@ -143,13 +143,19 @@ type StandIn = DurableStorage & {
 
 export let durable = (
   from?: Snapshot,
+  limits: Limits = {},
+): StandIn => restored(from, { ...LIMITS, ...limits })
+
+let restored = (
+  from: Snapshot | undefined,
+  limits: Limits,
   saved?: { alarm: number | null; kept: Map<string, unknown> },
 ): StandIn => {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
   let alarm = saved?.alarm ?? null
   let kept = saved ? structuredClone(saved.kept) : new Map<string, unknown>()
-  let db = textual(LIMITS, from)
+  let db = textual(limits, from)
   let closed = false
   let depth = 0
   // The runtime takes an ArrayBuffer; the engine underneath takes bytes.
@@ -172,7 +178,7 @@ export let durable = (
       if (closed || depth) throw new Error('storage must be open and settled')
       let from = db.snapshot()
       let saved = { alarm, kept: structuredClone(kept) }
-      return () => durable(from, saved)
+      return () => restored(from, limits, saved)
     },
     // Native SQLite allocations are invisible to the JS heap's GC pressure.
     // A scenario that owns this storage can release it at the end of the test.

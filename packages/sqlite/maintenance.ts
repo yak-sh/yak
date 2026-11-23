@@ -85,7 +85,10 @@ export let maintenance = (driver: Driver, vocab: Vocab) => {
       new Map(ids.map((id) => [id, [] as string[]])),
       (c) => ({ where: oneOf(c, ids) }),
     )
-  let work = (admit: (written: number) => boolean): boolean => {
+  let work = (
+    admit: (written: number) => boolean,
+    seedRows = PAGE,
+  ): boolean => {
     if (classifying()) {
       let at = marks.get(CLASSIFYING)
       let indexes =
@@ -127,9 +130,9 @@ export let maintenance = (driver: Driver, vocab: Vocab) => {
       // unit takes a page of rows, across as many components as it reaches.
       let indexes =
         objects(driver, { type: 'index', tbl_name: beside(comps[0]) }).length
-      if (!admit((PAGE + 2) * (indexes + 3))) return false
+      if (!admit((seedRows + 2) * (indexes + 3))) return false
       unit(driver, () => {
-        let left = PAGE
+        let left = seedRows
         while (left > 0 && comps.length) {
           let { taken, last } = seedPage(driver, vocab, comps[0], after, left)
           left -= taken
