@@ -3,9 +3,10 @@
 // his home poses (parts.ts `RUN`), played once over his seat, and a line in
 // a speech bubble beside him. The run leads to the idea box: the step marked
 // `start` puts the caret in it and types the start of a sentence there, and
-// the last step, which every click after the run plays again, nudges the
-// Build it button. A person's own words in the box are never touched: then
-// he says the step's other line and nudges the button instead.
+// the last step, which every click after the run plays again, puts the caret
+// back in the box and nudges the Build it button. A person's own words in
+// the box are never touched: then he says the step's other line and points
+// at the box instead.
 //
 // He answers only in the hero: out in the margin he lets clicks through
 // (wander.js). The click is his, so wander.js leaves it be (its nose lick
@@ -96,6 +97,12 @@ export let run = (root) => {
     go.dataset.nudge = ''
   }
   go?.addEventListener('animationend', () => delete go.dataset.nudge)
+  // the box, its caret after its words, and its button nudged
+  let point = () => {
+    box.focus()
+    box.setSelectionRange(box.value.length, box.value.length)
+    nudge()
+  }
   // `words` typed into the box a letter at a time, stopping if the person
   // takes over
   let type = (words) => {
@@ -120,11 +127,8 @@ export let run = (root) => {
     })
     let own = step.act == 'start' && box.value.trim()
     say(own && step.had || step.say, step.ms)
-    if (step.act == 'start') {
-      if (own) box.focus(), nudge()
-      else type(step.type)
-    }
-    if (step.act == 'point') nudge()
+    if (step.act == 'start' && !own) type(step.type)
+    else if (step.act) point()
   }
 
   // his click, before wander.js hears it; only while he sits in his place
@@ -136,7 +140,7 @@ export let run = (root) => {
     play(steps[at])
     ahead(steps[next(at, steps.length)])
   }, true)
-  // back from the margin, he starts over where he was, quietly
+  // back from the margin he sits quietly, his run where he left it
   slot.addEventListener('home', () => (rest(), hush()), true)
   addEventListener('load', () => ahead(steps[0]), { once: true })
 }
