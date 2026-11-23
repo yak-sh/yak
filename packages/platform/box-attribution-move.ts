@@ -108,7 +108,7 @@ export let boxAttributionMoves = [
   ),
   // cca4d4b3-dae imported the church site's events, sermons and forms.
   correction(
-    'yak/store/box-attribution-church/1',
+    'yak/store/box-attribution-church/2',
     'locustgrove/church.955100',
     'created',
     [
@@ -117,6 +117,7 @@ export let boxAttributionMoves = [
       '2026-11-09T02:27:06.019Z',
       '2026-11-09T02:27:07.434Z',
       '2026-11-09T02:27:42.955Z',
+      '2026-11-09T02:38:30.804Z', // d6afd9e4, all seven rows match this call
     ],
   ),
   correction(
