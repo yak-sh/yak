@@ -136,6 +136,29 @@ test('a run names its session to each server it is connected to', () => {
   assert(!told.some((a) => a.startsWith('mcp_servers.')))
 })
 
+test('a run sends a server the token its environment holds, never on its command line', () => {
+  let mcp = { yaks: 'https://yaks.app/mcp' }
+  let keys = { yaks: 'YAKS_TOKEN' }
+  let said = claude.argv({ ...job, mcp, keys })
+  assertEquals(
+    JSON.parse(said[said.indexOf('--mcp-config') + 1]).mcpServers.yaks.headers,
+    { 'x-via': 'S1', authorization: 'Bearer ${YAKS_TOKEN}' },
+  )
+  assertEquals(setting(codex.argv({ ...job, mcp, keys }), 'mcp_servers'), {
+    yaks: {
+      url: mcp.yaks,
+      http_headers: { 'x-via': 'S1' },
+      bearer_token_env_var: 'YAKS_TOKEN',
+    },
+  })
+})
+
+test("a run that names no model runs its CLI's own default", () => {
+  let { model: _, ...unnamed } = job
+  assert(!claude.argv(unnamed).includes('--model'))
+  assert(!codex.argv(unnamed).includes('-m'))
+})
+
 test("a bare run is given none of its provider's tools, settings or servers", () => {
   let said = claude.argv({
     ...job,

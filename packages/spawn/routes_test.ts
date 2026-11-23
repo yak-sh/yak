@@ -88,7 +88,7 @@ let hosting = async (
   ], { trusted: true })
   let tools = [
     ...loadTools(taskDoc, taskRuns()),
-    ...loadTools(spawnDoc, runs({ graph: g })),
+    ...loadTools(spawnDoc, runs()),
   ]
   let served = routes({
     graph: g,

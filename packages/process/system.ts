@@ -1,6 +1,6 @@
 // This program's operating-system boundary. Callers do not depend on its runtime.
 import process from 'node:process'
-import { cpus, loadavg, release } from 'node:os'
+import { cpus, hostname as host, loadavg, release } from 'node:os'
 import { format, inspect } from 'node:util'
 import { readSync, writeSync } from 'node:fs'
 import { Readable, Writable } from 'node:stream'
@@ -60,6 +60,8 @@ export let runtimeName = process.versions.deno ? 'deno' : 'node'
 export let runtimeVersion = process.versions.deno ?? process.versions.node
 export let osRelease = release
 export let uid = (): number | null => process.getuid?.() ?? null
+/** What this machine calls itself. */
+export let hostname = (): string => host()
 export let exit = (code?: number): never => process.exit(code)
 export let setExitCode = (code: number): void => {
   process.exitCode = code

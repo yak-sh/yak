@@ -26,6 +26,7 @@ import { type launch, processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
 import { played } from './standin.ts'
 import { spawnDoc } from './vocab.ts'
+import { lent, machineOf, register } from './machines.ts'
 import type { Adapter } from './adapters.ts'
 
 /** Every component a managed session uses, and what this package declares. */
@@ -232,3 +233,47 @@ export let launching = (): {
     },
   }
 }
+
+/** The person whose machine a {@link space} registers. */
+export let ME = { by: 'person-me' }
+/** The task a {@link space}'s session holds. */
+export let TASK = 'task-1'
+
+/** A space holding a task, and a session (`S1`) asked of `cli` on `name`, a
+ * machine `person` registered, as `session_spawn` writes it. */
+export let space = async (
+  o: { cli?: string; person?: string; name?: string; model?: string } = {},
+) => {
+  let { cli = 'claude', person = ME.by, name = 'mbp' } = o
+  let g = bare([
+    { entity: { eid: ME.by }, doc: { title: 'Me' } },
+    { entity: { eid: 'person-else' }, doc: { title: 'Else' } },
+  ])
+  await g.apply(register(person, name, [cli]), { trusted: true })
+  let provider = identityEid('provider', [lent(cli, name)])
+  await g.apply([
+    { entity: { eid: TASK }, task: {}, doc: { title: 'Fix the parser' } },
+    { entity: { eid: 'S1' }, session: { operator: false } },
+    {
+      entity: { eid: 'E1' },
+      entry: { session: 'S1' },
+      content: { body: 'Work T-1' },
+      using: { provider },
+    },
+    { entity: { eid: TASK }, claim: { session: 'S1' } },
+  ], { trusted: true })
+  return { g, machine: machineOf(person, name) }
+}
+
+/** The line a claude run opens with, naming its thread. */
+export let INIT = JSON.stringify({
+  type: 'system',
+  subtype: 'init',
+  session_id: 'thread-1',
+})
+/** A line of claude saying `text`. */
+export let say = (text: string) =>
+  JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text }] },
+  })

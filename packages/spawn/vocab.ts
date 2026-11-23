@@ -1,16 +1,17 @@
 // What this package declares, and nothing more, exported as
-// `@yaks/spawn/vocab`. It declares three tools, two effects and no components
-// at all: a managed session uses nothing of this package's own, since the
-// session belongs to @yaks/session, the running child process is
-// @yaks/process's `process`, and the request is the `using` component on the
-// first entry. All that is new here is the three tools a person can call
-// (./tools.ts), and what a `using` or a `stop` owes (./effects.ts).
+// `@yaks/spawn/vocab`. It declares tools and effects and no components at all:
+// a managed session uses nothing of this package's own, since the session
+// belongs to @yaks/session, the running child process is @yaks/process's
+// `process`, and the request is the `using` component on the first entry. All
+// that is new here is the tools a person calls (./tools.ts), the tools a
+// developer's machine calls to run what its space asks of it
+// (./machines.ts), and what a `using` or a `stop` owes (./effects.ts).
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
-/** The three tools a managed session answers to, and the two effects. */
+/** The tools a managed session answers to, and its effects. */
 export let spawnDoc: VocabDoc = doc
 
 /** What this package is: its manifest's description, the one place it is

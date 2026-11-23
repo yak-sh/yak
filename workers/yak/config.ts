@@ -223,6 +223,11 @@ export let operatorConfig: Config = {
     { use: '@yaks/project', facets: ['vocab'] },
     { use: '@yaks/persona', facets: ['vocab'] },
     { use: '@yaks/session', facets: ['vocab', 'graph'] },
+    // The sessions a developer's own machine takes and runs for the space
+    // (@yaks/spawn/machines): the machine, and each run's process and how it
+    // ended.
+    { use: '@yaks/machine', facets: ['vocab'], words: ['machine'] },
+    { use: '@yaks/process', facets: ['vocab'], words: ['process', 'exit'] },
     // Its model calls, and the replies of the providers that answer them
     // (`operatorProviders`); a model an input names is a row from then on
     // (`requesting`).

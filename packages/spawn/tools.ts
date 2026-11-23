@@ -1,4 +1,3 @@
-import * as disk from '@yaks/file/io'
 // The implementations of the tools declared with `tool: true` in
 // ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, stop it,
 // wait for it to finish, and read what it has said so far.
@@ -28,7 +27,7 @@ import { Stale } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { EXIT, PROCESS } from '@yaks/process'
+import { EXIT, PROCESS } from '@yaks/process/vocab'
 import {
   carrying,
   CONTENT,
@@ -46,12 +45,13 @@ import {
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
-import { offeredTo, spelling } from './run.ts'
+import { offeredTo, spelling } from './asked.ts'
 import { adapters } from './adapters.ts'
 import { briefs } from './brief.ts'
-import * as system from '@yaks/process/system'
+import { importing } from '@yaks/fp/imports'
 import { reportOf } from './completion.ts'
 import { ENDED, over } from './over.ts'
+import { runs as machineRuns } from './machines.ts'
 
 /** What config can set for these tools. */
 export type Options = {
@@ -80,6 +80,19 @@ let PREVIEW = {
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
+
+// The disk and the environment are a box's. A host with neither (yaks.app's
+// connector, which runs these tools for the sessions a developer's machine
+// takes, ./machines.ts) never reads a log left on disk or an account's
+// directory, so they are loaded where they are read.
+let box = (): Promise<{
+  disk: typeof import('@yaks/file/io')
+  env: typeof import('@yaks/process/env')['env']
+}> =>
+  Promise.all([
+    importing(import.meta.resolve('@yaks/file/io')),
+    importing(import.meta.resolve('@yaks/process/env')),
+  ]).then(([disk, { env }]) => ({ disk, env }))
 
 /**
  * A duration written the way a person writes one: `45m`, `2h`, or bare
@@ -148,6 +161,7 @@ let cleaned = async (graph: Graph, row: Bundle, status: string) => {
   let [source] = await graph.get([String(file)], ['file'])
   let path = comp(source, 'file')?.path
   if (typeof path != 'string' || !path.endsWith('.out')) return false
+  let { disk } = await box()
   try {
     await disk.stat(path)
     return false
@@ -157,7 +171,10 @@ let cleaned = async (graph: Graph, row: Bundle, status: string) => {
   }
 }
 
-export let runs = (host: Host, options: Options = {}): Runs => {
+export let runs = (
+  host: Pick<Host, 'stopping'> = {},
+  options: Options = {},
+): Runs => {
   let beat = Number(options.poll ?? 1000)
   let patience = (said: unknown) =>
     every(said, every(options.timeout, 30 * 60_000))
@@ -224,7 +241,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     said: string,
     cli: string,
   ): Promise<string> => {
-    let home = system.env.get('HOME')
+    let home = (await box()).env.get('HOME')
     let dir = home ? said.replace(/^~(?=\/|$)/, home) : said
     let rows = await offeredTo(graph, cli)
     let found = rows.find((b) => {
@@ -242,6 +259,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
   }
 
   return {
+    ...machineRuns(),
     session_spawn: async (call, graph): Promise<Bundle[]> => {
       // The task, the provider and the model arrive as the eids they name,
       // each already found to be one (@yaks/tools resolves every declared
@@ -318,9 +336,11 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         ? undefined
         : await named(graph, str(args.account), cli)
       // A CLI that runs only on an offered account never falls back to the
-      // box's default login: with none offered, nothing starts.
+      // box's default login: with none offered, nothing starts. One a
+      // developer's machine lends signs in as that machine does
+      // (./machines.ts).
       if (
-        !account && adapters[cli]?.offeredOnly &&
+        !account && !served.machine && adapters[cli]?.offeredOnly &&
         !(await offeredTo(graph, cli)).length
       ) {
         throw new CallError(

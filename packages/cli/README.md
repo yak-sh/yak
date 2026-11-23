@@ -63,6 +63,35 @@ The package has two main responsibilities:
   door carries that host's own connection token. `$YAKS_TOKEN` and `--as` reach
   only the host the line aims at.
 
+## Running sessions on your own machine
+
+`yak start` makes this machine run the sessions its space on yaks.app asks of
+it, with your own `claude` or `codex`:
+
+```sh
+cd ~/code/my-app
+yak start
+yak session spawn T-1 --provider 'claude on my-laptop'
+```
+
+It signs you in to yaks.app if this machine has not, finds `claude` and `codex`
+on the PATH, and adds yaks.app's MCP server to each as `yaks`. It registers the
+machine in your space under its hostname (`--machine` names it otherwise),
+lending each CLI it found as a provider, `<cli> on <machine>`
+([@yaks/spawn/machines](../spawn/README.md#a-developers-own-machine)). Then it
+installs a user service that keeps the runner going: the LaunchAgent
+`app.yaks.runner` on macOS, which writes to `~/Library/Logs/yak-runner.log`, and
+the systemd user unit `yak-runner` on Linux. Running it again replaces the
+service.
+
+The service runs `yak start --foreground`, which is the runner itself. It dials
+out to yaks.app, so there is no tunnel and no open port. Each session asked of
+one of the machine's providers runs in a worktree of the checkout `yak start`
+was run in (`--dir`), on a branch of its own, under the state directory's
+`runs/`. The run is connected to yaks.app's MCP server with this machine's
+yaks.app token, and its transcript and final report go back to the space. The
+runner reads no CLI's sign-in: each CLI uses its own.
+
 ## Roles
 
 A plugin says what it contributes, one facet per subpath, and never where it

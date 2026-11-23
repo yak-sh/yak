@@ -103,7 +103,7 @@ let asked = (g: Graph, args: Record<string, unknown>): [Bundle, Graph] => [
   g,
 ]
 
-let tools = runs({ graph: undefined as unknown as Graph }, { poll: 5 })
+let tools = runs({}, { poll: 5 })
 
 // A call the way a host makes one: through the runner, which resolves every
 // argument the declaration marks a reference before the tool is handed it.
@@ -677,7 +677,7 @@ test('a wait answers when the server answering it starts to stop', async () => {
     { entity: { eid: 'e1' }, entry: { session: 's' }, content: { body: 'go' } },
   ])
   let stopping = new AbortController()
-  let wait = runs({ graph: g, stopping: stopping.signal }, { poll: 5 })
+  let wait = runs({ stopping: stopping.signal }, { poll: 5 })
     .session_wait!(...asked(g, { session: 's' }))
   stopping.abort()
   let said = body(await wait)

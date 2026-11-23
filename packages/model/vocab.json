@@ -46,7 +46,7 @@
           "type": "string",
           "ref": "machine",
           "death": "keep",
-          "description": "the machine whose providers answer, where `transport` is `machine`; a row naming none is served by nobody"
+          "description": "the machine whose providers answer, where `transport` is `machine`, and a row naming none is served by nobody; where it is `process`, the developer's machine that runs its command line, whose runner takes each session asked of it (@yaks/spawn/machines)"
         },
         "credential": {
           "type": "string"

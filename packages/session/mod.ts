@@ -95,6 +95,7 @@ export * from './answer.ts'
 export { calledIn, noticeParent, raiseNotice } from './child-notice.ts'
 
 export { appendEntry } from './append.ts'
+export { imported } from './imported.ts'
 export { grafted } from './graft.ts'
 export { handoff, handoffOf, touched } from './handoff.ts'
 export * from './timing.ts'

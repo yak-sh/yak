@@ -74,6 +74,43 @@ test('a question the Operator asks the person is not a shared tool', async () =>
   }
 })
 
+let body = (rows: Bundle[]) => String((rows[0].content as Comp).body)
+
+test("a session asked of a developer's machine runs there and reports on its task", async () => {
+  let [made] = await work('task_new', { title: 'Tune the organ' })
+  let machine = JSON.parse(
+    body(await work('machine_register', { machine: 'mbp', clis: ['claude'] })),
+  )
+  equal(typeof machine.providers.claude, 'string')
+  // Named as a person types them: the task by its id, the provider by name.
+  await work('session_spawn', { task: id(made), provider: 'claude on mbp' })
+  let job = JSON.parse(body(await work('session_take', { machine: 'mbp' })))
+  equal(job.cli, 'claude')
+  equal(body(await work('session_take', { machine: 'mbp' })), '')
+  let said = (text: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text }] },
+    })
+  await work('session_log', {
+    machine: 'mbp',
+    session: job.session,
+    lines: [said('Tuned.')],
+    pid: 9,
+    exit: 0,
+  })
+  let peeked = body(await work('session_peek', { session: job.session }))
+  equal(peeked.includes('Tuned.'), true)
+  let notes = await store.g.read(line`.comment.target=${made.entity.eid}&*`)
+  equal(notes.length, 1)
+  equal(String((notes[0].doc as Comp).body).includes('Tuned.'), true)
+  await work('comment_new', { target: made.entity.eid, body: 'Sounds right.' })
+  equal(
+    (await store.g.read(line`.comment.target=${made.entity.eid}`)).length,
+    2,
+  )
+})
+
 let approvals = await operatorStore(durable())
 let requester = crypto.randomUUID(), approver = crypto.randomUUID()
 let approval = crypto.randomUUID(), approvalSpace = crypto.randomUUID()

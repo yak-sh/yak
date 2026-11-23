@@ -4,6 +4,13 @@
 // Operator holds these tools (operator.ts `operatorRoster`) and the connector
 // lists the same declarations (package-tools.ts), so a task or a goal made
 // through either is kept in one place, the space's Operator store.
+//
+// The connector also lists the sessions that work the space's tasks and the
+// comments on them (@yaks/spawn, @yaks/kernel's `comment_new`): a session is
+// asked of a provider a developer's machine lends, and that machine's runner
+// takes it, runs it and hands it back (@yaks/spawn/machines). These are the
+// person's own, called through the connector; the Operator holds none of
+// them.
 import type { Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import type { Meta } from '@yaks/sqlite'
@@ -16,9 +23,13 @@ import { taskDoc } from '@yaks/task/vocab'
 import { runs as taskRuns } from '@yaks/task/tools'
 import { goalDoc } from '@yaks/goal/vocab'
 import { runs as goalRuns } from '@yaks/goal/tools'
+import { spawnDoc } from '@yaks/spawn/vocab'
+import { runs as spawnRuns } from '@yaks/spawn/tools'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { runs as commentRuns } from '@yaks/kernel/tools'
 
 /** The declarations of the work the Operator's store keeps. */
-export let workDocs = [taskDoc, goalDoc]
+export let workDocs = [taskDoc, goalDoc, spawnDoc, kernelDoc]
 
 // A decision is the Operator's question to the person it works for: it asks
 // with decision_new, and the person answers in their Updates, whose answer
@@ -26,7 +37,10 @@ export let workDocs = [taskDoc, goalDoc]
 // words to it, which it records as theirs (operator-relay.ts
 // `decisionRelay`). So the Operator never answers one itself, and the
 // connector, whose caller is that person, offers neither half.
-let asking = new Set(['decision_new', 'decision_answer'])
+//
+// A wait holds its request open until a run ends, and a Worker answers at
+// once: `session_peek` says where a run stands.
+let unlisted = new Set(['decision_new', 'decision_answer', 'session_wait'])
 
 /** The work tools the Operator holds. */
 export let held = (): NamedTool[] =>
@@ -35,8 +49,17 @@ export let held = (): NamedTool[] =>
     ...loadTools([goalDoc], goalRuns()),
   ].filter((t) => t.name != 'decision_answer')
 
+// Every work tool, the connector's sessions and comments beside the
+// Operator's own.
+let all = (): NamedTool[] => [
+  ...held(),
+  ...loadTools([spawnDoc], spawnRuns()),
+  ...loadTools([kernelDoc], commentRuns()),
+]
+
 /** The declarations the connector lists, and runs in the Operator's store. */
-export let shared = () => toolsIn(workDocs).filter((d) => !asking.has(d.name!))
+export let shared = () =>
+  toolsIn(workDocs).filter((d) => !unlisted.has(d.name!))
 
 /** Every name the work's packages declare. */
 export let workNames: Set<string> = new Set(
@@ -55,7 +78,7 @@ export let working = async (
   args: unknown,
 ): Promise<Bundle[]> => {
   let tool = shared().some((d) => d.name == name)
-    ? held().find((t) => t.name == name)
+    ? all().find((t) => t.name == name)
     : undefined
   if (!tool) throw refuse('missing', `no Operator work tool ${name}`)
   let self = seenBy(store, reader)

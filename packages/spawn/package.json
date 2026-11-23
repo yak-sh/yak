@@ -9,7 +9,9 @@
     "./over": "./over.ts",
     "./effects": "./effects.ts",
     "./service": "./service.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./machines": "./machines.ts",
+    "./runner": "./runner.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs an agent CLI as a detached child process and reads its JSON-lines stdout back into the graph as a session transcript.",

@@ -134,6 +134,83 @@
         "session"
       ]
     },
+    "machine_register": {
+      "tool": true,
+      "noun": "machine",
+      "verb": "register",
+      "title": "Register a machine that runs sessions",
+      "description": "Register one of your own machines in this space, lending the agent CLIs it has (claude, codex): the machine, and a provider for each CLI, named `<cli> on <machine>`. A session spawned on one of those providers runs on that machine, with your own sign-in to the CLI, once its runner takes it (`yak start` registers the machine and keeps the runner going). Registering again changes nothing. Returns the machine and provider ids as JSON in content.body.",
+      "input": {
+        "machine": {
+          "type": "string",
+          "description": "the machine, by the name it was registered under (its hostname, unless `yak start` was given another)"
+        },
+        "clis": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the CLIs the machine lends: claude, codex"
+        }
+      },
+      "required": ["machine", "clis"],
+      "idempotent": true
+    },
+    "session_take": {
+      "tool": true,
+      "noun": "session",
+      "verb": "take",
+      "title": "Take the next session asked of a machine",
+      "description": "Take the oldest session asked of one of your machines' providers that has not run yet, or whose run ended and was asked to carry on, and mark it taken. Returns what to run as JSON in content.body (session, name, cli, instruction, and model, effort and thread where set), or an empty body when nothing is asked. A machine's runner calls it; `session_log` hands back the run.",
+      "input": {
+        "machine": {
+          "type": "string",
+          "description": "the machine, by the name it was registered under (its hostname, unless `yak start` was given another)"
+        }
+      },
+      "required": ["machine"]
+    },
+    "session_log": {
+      "tool": true,
+      "noun": "session",
+      "verb": "log",
+      "title": "Hand back a machine's run of a session",
+      "description": "Read lines a machine's CLI printed for a session it took into the session's transcript, numbered from `from`; with `pid`, record the process; with `exit`, end the run: the exit code (null when it was not seen), an ending entry, and the run's report as a comment on its task. Only the owner of the machine a session was asked of hands back its lines. Returns text in content.body.",
+      "input": {
+        "machine": {
+          "type": "string",
+          "description": "the machine, by the name it was registered under (its hostname, unless `yak start` was given another)"
+        },
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session the machine took"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the CLI's output lines, each one JSON object, as printed"
+        },
+        "from": {
+          "type": "integer",
+          "description": "the number of the first of `lines` in the run's output, from 0"
+        },
+        "pid": {
+          "type": "integer",
+          "description": "the CLI's process id on the machine"
+        },
+        "exit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "the CLI's exit code, once it ended; null when its end was seen and its code was not"
+        }
+      },
+      "required": ["machine", "session"]
+    },
     "spawn_complete": {
       "effect": true,
       "target": ".entry .ask.through !lines",

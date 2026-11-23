@@ -349,6 +349,42 @@ path:
 }
 ```
 
+## A developer's own machine
+
+A space on yaks.app runs sessions on a developer's own machine, with their own
+CLI and its own sign-in (`yak start`, @yaks/cli). The space keeps the machine
+(`machine{}` with its name as `doc{title}`) and a provider for each CLI it
+lends:
+`provider{name: "claude on mbp", transport: "process", api: "claude",
+machine}`.
+A session asked of one is what `session_spawn` writes for any provider. A
+request that names no model leaves it to the CLI's own default.
+
+The machine's runner (`@yaks/spawn/runner`) dials out to the space and calls
+three tools as the machine's owner:
+
+- `machine_register {machine, clis}` registers the machine and its providers.
+  The machine's eid is derived from its owner and its name, so a caller names
+  only machines of their own.
+- `session_take {machine}` answers the oldest session asked of the machine that
+  has not run, or whose run ended and was asked to carry on, as JSON: the
+  session, the CLI, the instruction, and the model, effort and thread where set.
+  It marks the session taken (`process{command}`).
+- `session_log {machine, session, lines, from, pid, exit}` reads the CLI's
+  output lines into the transcript as the importer reads a log (@yaks/session
+  `imported`), without a file. With `exit`, it ends the run as a host that runs
+  the CLI itself does: the exit, an ending entry after the request it answered,
+  and the report on the task (./completion.ts).
+
+The runner runs each session in a worktree of its own, cut from the checkout it
+was given, with the space's MCP server attached. The server's token goes in the
+run's environment (`Job.keys`): claude's `--mcp-config` names it as `${VAR}` in
+the authorization header, and codex as `bearer_token_env_var`. `run()` takes the
+space's tools, the child process and the checkout as functions; `launching` and
+`checkouts` are the defaults that touch the machine. `@yaks/spawn/machines`
+reads no disk and starts no process, so yaks.app imports it, and
+`@yaks/spawn/tools` loads the disk only where a box reads one.
+
 ## Exports
 
 The main module exports the built-in `claude` and `codex` adapters, the
@@ -364,6 +400,11 @@ Additional entry points are:
 - `@yaks/spawn/routes`: `routes()`, `PATH` (`/session/spawn`) and `STOP`
   (`/session/stop`);
 - `@yaks/spawn/over`: `over()`, whether a session's run is over, read from the
-  graph alone, so a Worker can import it.
+  graph alone, so a Worker can import it;
+- `@yaks/spawn/machines`: the tools a developer's machine calls, and
+  `register()`, `take()` and `log()` behind them;
+- `@yaks/spawn/runner`: `run()`, the loop on that machine, with `launching` and
+  `checkouts`.
 
-The launcher requires Linux, `setsid`, and a systemd user manager.
+The launcher requires Linux, `setsid`, and a systemd user manager. The runner on
+a developer's machine needs neither.

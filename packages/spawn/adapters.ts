@@ -38,8 +38,9 @@ export type Job = {
   /** the session entity — the transcript this run writes, and the id the
    * provider is asked to give its own thread */
   session: string
-  /** the model, by the name its provider knows it by */
-  model: string
+  /** the model, by the name its provider knows it by; none leaves it to the
+   * CLI's own default */
+  model?: string
   /** how hard to think, where the provider accepts such a setting */
   effort?: string
   /** what it was asked to do */
@@ -53,6 +54,10 @@ export type Job = {
   /** the MCP servers it is connected to, by name to URL, each told the
    * session in `x-via`; a name the provider already has is replaced */
   mcp?: Record<string, string>
+  /** the environment variable each of `mcp` is sent a bearer token from, by
+   * the server's name: the CLI reads the token from its own environment, so
+   * the command line never holds it */
+  keys?: Record<string, string>
   /** the MCP servers of its provider's own configuration it goes without, each
    * by the name the provider lists it under (`claude mcp list`, `codex mcp
    * list`) */
@@ -117,7 +122,12 @@ let connected = (j: Job): string[] =>
             local(url, j.session) ?? {
               type: 'http',
               url,
-              headers: { [VIA]: j.session },
+              headers: {
+                [VIA]: j.session,
+                ...j.keys?.[name]
+                  ? { authorization: `Bearer \${${j.keys[name]}}` }
+                  : {},
+              },
             },
           ]),
         ),
@@ -169,8 +179,7 @@ export let claude: Adapter = {
     '--output-format',
     'stream-json',
     '--verbose', // stream-json in print mode requires it
-    '--model',
-    j.model,
+    ...(j.model ? ['--model', j.model] : []),
     ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
     ...working(j),
@@ -231,6 +240,7 @@ let configured = (j: Job): string[] => {
       local(url, j.session) ?? {
         url,
         http_headers: { [VIA]: j.session },
+        ...j.keys?.[name] ? { bearer_token_env_var: j.keys[name] } : {},
       },
     ]),
   ])
@@ -251,8 +261,7 @@ export let codex: Adapter = {
       // No approvals and no sandbox: a headless exec has nobody to approve, and
       // the run's worktree is its blast radius (the fleet's posture, 2026-07-17).
       '--dangerously-bypass-approvals-and-sandbox',
-      '-m',
-      j.model,
+      ...(j.model ? ['-m', j.model] : []),
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
       '-c',
       `project_doc_max_bytes=${WHOLE}`,
