@@ -286,6 +286,10 @@ A base version ahead of the live version means live went back since this
 checkout deployed (a rollback through another door). The push then writes
 nothing; `--confirm` deploys the directory over what is live.
 
+A file the app holds that matches no text git has of it was changed on the
+platform. The push merges it over the checkout's file and writes the result into
+the checkout, or refuses when both changed the same lines (apps/README.md).
+
 Pictures, fonts and sounds other than `icon.png` are released like any file, so
 an installed copy carries them, but a push leaves one the directory lacks as the
 app holds it rather than deleting it. A checkout without their bytes
@@ -358,11 +362,13 @@ name a release account, linked files outside the directory, and files to carry
 forward from the live app.
 
 Publishing uses the same machinery as `yak admin push`. The service keeps the
-base beside the graph, preserves a deliberate rollback, and merges edits made to
-`copy.json` on the app's page. The service pushes on startup and when the source
-tree or a linked file changes. The push deploys only when files need releasing.
-A failure is reported under `release:<space>/<app>` and retried at the next
-look.
+base beside the graph, preserves a deliberate rollback, and carries a change
+made on the platform (the space's Operator fixing the app, or its `copy.json`
+edited on the page) into the release, merged with git's, and lands it on main as
+its own commit before releasing. The service pushes on startup and when the
+source tree or a linked file changes. The push deploys only when files need
+releasing. A failure is reported under `release:<space>/<app>` and retried at
+the next look.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }

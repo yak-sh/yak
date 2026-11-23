@@ -1,16 +1,20 @@
 // A directory as an app: `yak admin push apps/mail` makes the app hold exactly
 // the files in that directory, through the connector's own tools (app_new,
-// app_files, app_deploy), the ones any assistant calls. Git is the app's only
+// app_files, app_deploy), the ones any assistant calls. Git is the app's
 // source of code, so a file the directory no longer has is deleted from the
-// app too, and an app pushed from here is never edited on the platform.
+// app too.
 //
-// Its copy is the exception: `copy.json` is edited on the app's page
-// (@yaks/copy), so a push never undoes that. Before it writes, it reads the
-// live copy.json and merges it by key over the checkout's (@yaks/copy
-// `merge`): a key edited on the page keeps the page's text, and a key new in
-// the checkout is added. The base is the newest version git has of the file
-// that the app has held too. The merged file is written into the checkout, so
-// the page's edits show in `git diff` and are committed with the change.
+// A change made on the platform is carried into git, never pushed over: the
+// space's Operator fixing the app, or its copy edited on the app's page
+// (@yaks/copy). A file the app holds that matches no text git has of it is
+// such a change. The push merges it over the checkout's file, against the
+// newest text git has that the app held too: copy.json by key (@yaks/copy
+// `merge`, where a key edited on the page keeps the page's text), every other
+// file by line. The merged files go into the release and into the checkout,
+// which writes them into its working tree or lands them as a commit on main,
+// so git holds them before the next push. Where git and the platform changed
+// the same lines, the push refuses before writing anything, and the app keeps
+// what is live until someone merges the two by hand.
 //
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
@@ -31,7 +35,8 @@ import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import { dirname } from 'node:path'
 
-import { merge } from '@yaks/copy'
+import { merge as byKey } from '@yaks/copy'
+import { merge as byLine } from 'node-diff3'
 import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
 
@@ -77,16 +82,21 @@ export type PushProgress =
     path: string
   }
 
+/** A text the app holds that git does not, merged with git's. */
+export type Carried = { path: string; content: string }
+
 /** The checkout a push reads from: each earlier text git has of a file,
- * newest first, and writing a file back into it where it has a working tree
- * (a release from a commit has none). */
+ * newest first, and how the changes made on the platform reach git: written
+ * into a working tree, or landed as a commit on main by a release from one. A
+ * checkout that cannot keep them still carries them into the release. */
 export type Checkout = {
   earlier: (path: string) => AsyncIterable<string>
-  write?: (path: string, content: string) => Promise<void>
+  write?: (files: Carried[]) => Promise<void>
 }
 
 /** A push's base version, confirmation and progress, its bounded wait for
- * the connector's file data contract, and the checkout its copy merges into.
+ * the connector's file data contract, and the checkout the platform's changes
+ * merge into.
  * `review: false` is a push from the app's source (the deploy catch-up's
  * release of main): a base behind live deploys from live without asking, since
  * what was deployed since (a copy edit saved on the page, another push from the
@@ -281,43 +291,90 @@ let listed = async (
 
 let COPY = 'copy.json'
 
-// The live copy.json merged over the checkout's, or the checkout's own when
-// the page changed nothing since they last agreed. The base is the newest
-// text the checkout has of it, git's or its own, that the app held too.
-let copied = async (
+/** A file git and the platform both changed in the same lines. */
+export class Unmerged extends Error {
+  override name = 'Unmerged'
+}
+
+let lines = (text: string) => text.split(/(?<=\n)/)
+
+/// merged('a.ts', 'a\nB\nc\nd\n', 'a\nb\nc\nD\n', 'a\nb\nc\nd\n') -> 'a\nB\nc\nD\n'
+/// merged('a.ts', '', 'x\n', '') -> 'x\n'
+/** The platform's text of a file merged over git's, against the newest text
+ * both held: copy.json by key, any other file by line. */
+export let merged = (
+  path: string,
+  ours: string,
+  live: string,
+  base: string,
+): string => {
+  if (path == COPY) return byKey(ours, live, base)
+  let { conflict, result } = byLine(lines(live), lines(base), lines(ours))
+  if (conflict) {
+    throw new Unmerged(
+      `${path} was changed on the platform and in git in the same lines; ` +
+        'nothing was written: merge the live file into git by hand, then push',
+    )
+  }
+  return result.join('')
+}
+
+// The file at `path` the app holds as `sha`, as the platform changed it and
+// merged over the checkout's (`ours`, empty where git no longer has it), or
+// nothing when the app holds a text git has had.
+let carried = async (
   ask: Ask,
   at: Record<string, string>,
+  path: string,
+  sha: string,
   ours: string,
-  checkout?: Checkout,
-) => {
-  let live = valueOf(
-    await reply(ask, 'app_files', { ...at, op: 'read', path: COPY }),
-  )
-  if (typeof live?.content != 'string' || typeof live.sha != 'string') {
-    throw new Error('app_files answered no copy.json content')
-  }
+  checkout: Checkout,
+): Promise<string | undefined> => {
+  let texts = [ours]
+  for await (let text of checkout.earlier(path)) texts.push(text)
+  let shas = await Promise.all(texts.map((content) => shaOf({ path, content })))
+  if (shas.includes(sha)) return
+  let live = valueOf(await reply(ask, 'app_files', { ...at, op: 'read', path }))
+  if (typeof live?.content != 'string') return
   let past = valueOf(
-    await reply(ask, 'app_files', { ...at, op: 'history', path: COPY }),
+    await reply(ask, 'app_files', { ...at, op: 'history', path }),
   )
   if (!Array.isArray(past?.replaced)) {
-    throw new Error('app_files answered no copy.json history')
+    throw new Error(`app_files answered no ${path} history`)
   }
-  let held = new Set([
-    live.sha,
-    ...past.replaced.map((w) => (w as { sha?: unknown }).sha),
-  ])
-  let base = ''
-  let candidates = async function* () {
-    yield ours
-    if (checkout) yield* checkout.earlier(COPY)
+  let held = new Set(past.replaced.map((w) => (w as { sha?: unknown }).sha))
+  let base = texts[shas.findIndex((s) => held.has(s))] ?? ''
+  let content = merged(path, ours, live.content, base)
+  return content == ours ? undefined : content
+}
+
+// Each file the app holds as the platform changed it, merged over the
+// checkout's: one `local` holds with other bytes, or one it lacks that the
+// push would delete.
+let changes = async (
+  ask: Ask,
+  at: Record<string, string>,
+  local: File[],
+  hashes: string[],
+  held: Map<string, string>,
+  checkout: Checkout,
+  kept: string[] = [],
+): Promise<Carried[]> => {
+  let keep = new Set([...local.map((f) => f.path), ...kept])
+  let ours = new Map(local.map((f, i) => [f.path, { f, sha: hashes[i] }]))
+  let out: Carried[] = []
+  for (let [path, sha] of held) {
+    let mine = ours.get(path)
+    if (
+      mine
+        ? mine.sha == sha || !('content' in mine.f)
+        : keep.has(path) || pinned(path, keep) || asset(path)
+    ) continue
+    let text = mine && 'content' in mine.f ? mine.f.content : ''
+    let content = await carried(ask, at, path, sha, text, checkout)
+    if (content != null) out.push({ path, content })
   }
-  for await (let text of candidates()) {
-    if (held.has(await shaOf({ path: COPY, content: text }))) {
-      base = text
-      break
-    }
-  }
-  return merge(ours, live.content, base)
+  return out
 }
 
 /**
@@ -391,26 +448,28 @@ let pushing = async (
   if (base != opts.base) await opts.remember?.(base)
   opts.progress?.({ phase: 'hash', state: 'start', count: local.length })
   let hashes = await Promise.all(local.map(shaOf))
-  let copyAt = local.findIndex((f) => f.path == COPY)
-  let ours = local[copyAt]
-  if (
-    ours && 'content' in ours && held.held.has(COPY) &&
-    held.held.get(COPY) != hashes[copyAt]
-  ) {
-    let content = await copied(ask, at, ours.content, opts.checkout)
-    if (content != ours.content) {
-      let write = opts.checkout?.write
-      await write?.(COPY, content)
-      local = local.with(copyAt, { path: COPY, content })
-      hashes[copyAt] = await shaOf(local[copyAt])
-      said.push(
-        `${COPY}: kept the edits made on the page` +
-          (write ? ', in the checkout too' : ''),
-      )
-    }
+  let checkout = opts.checkout
+  let carry = checkout
+    ? await changes(ask, at, local, hashes, held.held, checkout, opts.keep)
+    : []
+  if (carry.length) {
+    await checkout?.write?.(carry)
+    let by = new Map(carry.map((f) => [f.path, f]))
+    let had = new Set(local.map((f) => f.path))
+    local = [
+      ...local.map((f) => by.get(f.path) ?? f),
+      ...carry.filter((f) => !had.has(f.path)),
+    ]
+    hashes = await Promise.all(local.map(shaOf))
+    said.push(
+      ...carry.map((f) =>
+        `${f.path}: kept the change made on the platform` +
+        (checkout?.write ? ', in git too' : '')
+      ),
+    )
   }
-  let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
   let keep = new Set([...local.map((f) => f.path), ...opts.keep ?? []])
+  let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
   let gone = [...held.held.keys()].filter((p) =>
     !keep.has(p) && !pinned(p, keep) && !asset(p)
   )

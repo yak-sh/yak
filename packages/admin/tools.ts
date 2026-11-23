@@ -856,7 +856,12 @@ export let runs = (
               if (shown.ok) yield shown.out
             }
           },
-          write: (path, content) => fs.writeTextFile(`${dir}/${path}`, content),
+          write: async (files) => {
+            for (let f of files) {
+              await fs.mkdir(dirname(`${dir}/${f.path}`), { recursive: true })
+              await fs.writeTextFile(`${dir}/${f.path}`, f.content)
+            }
+          },
         },
         confirm: a.confirm === true,
         progress: pushNote,

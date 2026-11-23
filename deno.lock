@@ -2816,6 +2816,7 @@
         "npm:lucide@1.31.0",
         "npm:marked@18.2.0",
         "npm:mime-types@^3.0.2",
+        "npm:node-diff3@4.0.0",
         "npm:pdf-lib@1.17.1",
         "npm:postal-mime@3.0.0",
         "npm:preact-render-to-string@6.7.0",
@@ -2871,7 +2872,8 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/tracker@0.2.33",
-            "npm:@yaks/vocab@0.2.32"
+            "npm:@yaks/vocab@0.2.32",
+            "npm:node-diff3@4.0.0"
           ]
         }
       },

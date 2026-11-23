@@ -34,7 +34,8 @@
     "@yaks/sync": "0.2.24",
     "@yaks/tools": "0.2.30",
     "@yaks/tracker": "0.2.33",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/vocab": "0.2.32",
+    "node-diff3": "4.0.0"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

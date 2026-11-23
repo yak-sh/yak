@@ -17,13 +17,16 @@ It creates the app when it does not exist yet (`app_new`), writes every file
 version (`app_deploy`). The app's slug is the directory's name unless `--app`
 names another, and `--space` picks the space when the account has several.
 
-An app kept here is never edited on the platform, since the next push would undo
-the edit. Its copy is the exception. `copy.json` (@yaks/copy) is edited on the
-app's page, and a push never undoes that edit. Before it writes, the push reads
-the live `copy.json` and merges it into the checkout's by key: a key edited on
-the page keeps the page's text, and a key new in the checkout is added. The
-merged file is written into the checkout, so the page's edits show in
-`git diff`. Commit them with the change you pushed.
+A change made to an app on the platform is carried into git, never pushed over:
+its space's Operator fixing it, or its `copy.json` (@yaks/copy) edited on the
+app's page. A file the app holds that matches no text git has of it is such a
+change. Before it writes, the push merges it over the checkout's file, against
+the newest text git has that the app held too: `copy.json` by key (a key edited
+on the page keeps the page's text), every other file by line. A push from a
+checkout writes the merged files into it, so they show in `git diff`; commit
+them with the change you pushed. The deploy catch-up's release lands them on
+main as their own commit. Where git and the platform changed the same lines, the
+push writes nothing and says which file to merge by hand.
 
 An app with a `package.json` of its own is formatted with the repository's
 settings only when they are named: `deno fmt --config deno.json apps/<name>`.

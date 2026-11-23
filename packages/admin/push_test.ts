@@ -4,11 +4,13 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Ask,
+  type Carried,
   type File,
   fileOf,
   push,
   type PushProgress,
   read,
+  Unmerged,
   versions,
 } from './push.ts'
 
@@ -695,7 +697,8 @@ let copied = async (
       earlier: async function* () {
         for (let e of earlier) yield text(e)
       },
-      write: (_path, content) => Promise.resolve(void wrote.push(content)),
+      write: (files) =>
+        Promise.resolve(void wrote.push(...files.map((f) => f.content))),
     },
   })
   let live = (await p.ask('tools/call', {
@@ -705,7 +708,7 @@ let copied = async (
   return {
     live: JSON.parse(live.content[0].text),
     wrote: wrote.map((text) => JSON.parse(text)),
-    kept: said.some((line) => line.includes('edits made on the page')),
+    kept: said.some((line) => line.includes('change made on the platform')),
   }
 }
 
@@ -745,4 +748,111 @@ test('a push of copy the page never touched sends the checkout’s as it is', as
     wrote: [],
     kept: false,
   })
+})
+
+// A git-backed app its Operator fixed on the platform: git's texts of each
+// file, newest first, and the app as the Operator's release left it.
+let fixed = async (
+  live: Record<string, string>,
+  git: Record<string, string[]>,
+  ours: Record<string, string>,
+) => {
+  let p = platform({
+    app: new Map(
+      Object.keys(git).map((path) => [path, {
+        path,
+        content: git[path][0],
+      }]),
+    ),
+  })
+  // The Operator's fix: its files written over what the last push left.
+  await p.ask('tools/call', {
+    name: 'app_files',
+    arguments: {
+      app: 'app',
+      files: Object.entries(live).map(([path, content]) => ({ path, content })),
+    },
+  })
+  let wrote: Carried[] = []
+  let said = await push(
+    p.ask,
+    Object.entries(ours).map(([path, content]) => ({ path, content })),
+    { app: 'app' },
+    {
+      checkout: {
+        earlier: async function* (path) {
+          yield* git[path] ?? []
+        },
+        write: (files) => Promise.resolve(void wrote.push(...files)),
+      },
+    },
+  )
+  let read = async (path: string) =>
+    ((await p.ask('tools/call', {
+      name: 'app_files',
+      arguments: { app: 'app', op: 'read', path },
+    })) as { content: { text: string }[] }).content[0].text
+  return { said, wrote, read, held: p.held('app') }
+}
+
+test('a release from git keeps a fix made on the platform, merged with git’s change, and hands it to git', async () => {
+  let r = await fixed(
+    { 'lulu.ts': 'auth = basic\n\nquote\n' },
+    { 'lulu.ts': ['auth = form\n\nquote\n'] },
+    { 'lulu.ts': 'auth = form\n\nquote twice\n' },
+  )
+  assertEquals(await r.read('lulu.ts'), 'auth = basic\n\nquote twice\n')
+  assertEquals(r.wrote, [{
+    path: 'lulu.ts',
+    content: 'auth = basic\n\nquote twice\n',
+  }])
+  assert(
+    r.said.includes(
+      'lulu.ts: kept the change made on the platform, in git too',
+    ),
+  )
+})
+
+test('a release keeps a file added on the platform', async () => {
+  let r = await fixed(
+    { 'auth.ts': 'basic\n' },
+    { 'app.ts': ['app\n'] },
+    { 'app.ts': 'app\n' },
+  )
+  assertEquals(r.held, ['app.ts', 'auth.ts'])
+  assertEquals(r.wrote, [{ path: 'auth.ts', content: 'basic\n' }])
+})
+
+test('a release over a text git had replaces it and hands git nothing', async () => {
+  let r = await fixed(
+    { 'app.ts': 'older\n' },
+    { 'app.ts': ['old\n', 'older\n'] },
+    { 'app.ts': 'new\n' },
+  )
+  assertEquals(await r.read('app.ts'), 'new\n')
+  assertEquals(r.wrote, [])
+})
+
+test('a release whose git changed the lines the platform changed writes nothing', async () => {
+  let p = platform({
+    app: new Map([['a.ts', { path: 'a.ts', content: 'x\n' }]]),
+  })
+  await p.ask('tools/call', {
+    name: 'app_files',
+    arguments: { app: 'app', files: [{ path: 'a.ts', content: 'live\n' }] },
+  })
+  let writes = p.writes.length
+  await assertRejects(
+    () =>
+      push(p.ask, [{ path: 'a.ts', content: 'ours\n' }], { app: 'app' }, {
+        checkout: {
+          earlier: async function* () {
+            yield 'x\n'
+          },
+        },
+      }),
+    Unmerged,
+    'a.ts was changed on the platform and in git in the same lines',
+  )
+  assertEquals([p.writes.length, p.deployed], [writes, []])
 })
