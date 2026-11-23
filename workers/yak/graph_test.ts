@@ -2340,12 +2340,22 @@ test('Store policy retains its durable floor across wake', async () => {
 // The kernel read what it vouches from the directory at a revision, and the
 // store takes it at that word: a current request asks the serving copy
 // nothing, however often it comes.
+// A private cookbook the kernel last vouched for at `policy`, deployed once.
+let privateAt = new Map<number, ReturnType<typeof seededState>>()
 let authority = async (
   policy: number,
   directory?: (req: Request) => Promise<Response>,
 ) => {
-  let ctx = state()
-  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy })
+  let seeded = privateAt.get(policy) ??
+    seededState((ctx) =>
+      cookbook(withSockets(ctx), SCHEMA, {
+        ...owner,
+        access: 'private',
+        policy,
+      })
+    )
+  privateAt.set(policy, seeded)
+  let ctx = withSockets(await seeded())
   let checks = 0, reads = 0
   let copy = {
     valid: () => {
