@@ -121,6 +121,28 @@ let requestBody = (req: Request) => {
   }
 }
 
+// What a receipt keeps of a request: everything but the reference pixels,
+// each said by its type and size. A 2400×3040 reference is megabytes of
+// base64, and a store keeping, writing and reading back copies of several
+// went over its memory (T-2685).
+let recorded = (body: ReturnType<typeof requestBody>, req: Request) =>
+  body.images
+    ? {
+      ...body,
+      images: references(req).map((item) => ({
+        media_type: item.mediaType,
+        bytes: item.bytes.length,
+      })),
+    }
+    : body
+
+// What a receipt keeps of an answer once its image is kept as an artifact the
+// reply names: the answer without its base64.
+let delivered = (answer: Answer): Answer => ({
+  ...answer,
+  data: answer.data?.map(({ b64_json: _, ...rest }) => rest),
+})
+
 let settings = (req: Request): Record<string, unknown> => {
   let input = req.input ?? {}
   let extra = Object.keys(input).filter((k) => !OPTIONS.includes(k))
@@ -318,14 +340,18 @@ export let generations = (options: Generations) => {
       call: id,
       id,
       model: req.model,
-      input: body,
+      input: recorded(body, req),
       response: answer,
       cost: imageCost(answer.usage),
       costReported: false,
     }
     await receivedMedia(req, receipt, options.receipts)
     let reply = await deliver(receipt, options.media)
-    await options.receipts?.save({ ...receipt, reply })
+    await options.receipts?.save({
+      ...receipt,
+      response: delivered(answer),
+      reply,
+    })
     return reply
   }
   return Object.assign(ask, {

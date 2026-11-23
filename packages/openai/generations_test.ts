@@ -35,6 +35,9 @@ let harness = (
   let sent: { url: string; body: Record<string, unknown> }[] = []
   let stored: { bytes: Uint8Array; type: string }[] = []
   let receipts = new Map<string, MediaReceipt>()
+  // Every receipt as it was saved, in order: a process that died between
+  // two saves left the earlier one.
+  let saves: MediaReceipt[] = []
   let lent: Lent = {
     fetch: (url, init) => {
       let request = new globalThis.Request(url, init)
@@ -57,10 +60,13 @@ let harness = (
     env: (name) => name == 'OPENAI_API_KEY' ? 'sk-test' : undefined,
     receipts: {
       read: (call) => Promise.resolve(receipts.get(call)),
-      save: (r) => Promise.resolve(void receipts.set(r.call, r)),
+      save: (r) => {
+        saves.push(r)
+        return Promise.resolve(void receipts.set(r.call, r))
+      },
     },
   }
-  return { model: providers(lent).openai, sent, stored, receipts }
+  return { model: providers(lent).openai, sent, stored, receipts, saves }
 }
 let ok = () =>
   new Response(
@@ -115,10 +121,32 @@ test('the hold bounds the cost; an unset size and quality hold the largest', () 
 test('a recovered image is delivered from its receipt without asking again', async () => {
   let h = harness(ok)
   await h.model(ask('gpt-image-2.5-flare'))
-  h.receipts.set('c1', { ...h.receipts.get('c1')!, reply: undefined })
+  // The process died after the image came back, before it was delivered.
+  h.receipts.set('c1', h.saves[0])
   let reply = await h.model.recover!('c1')
   assertEquals(h.sent.length, 1)
   assertEquals(reply.artifacts?.length, 1)
+})
+
+test('a receipt keeps no reference pixels, and no base64 once its image is delivered', async () => {
+  let h = harness(ok)
+  let reference = Uint8Array.from(atob(png), (c) => c.charCodeAt(0))
+  let req = ask('gpt-image-2.5-flare')
+  await h.model({
+    ...req,
+    items: [
+      { kind: 'image', bytes: reference, mediaType: 'image/png', label: 'Ada' },
+      ...req.items,
+    ],
+  })
+  assert(String(h.sent[0].body.images).length > 0)
+  let [first, last] = h.saves
+  assertEquals((first.input as { images: unknown }).images, [
+    { media_type: 'image/png', bytes: reference.length },
+  ])
+  assertEquals(JSON.stringify(first).includes(png), true)
+  assertEquals(JSON.stringify(last).includes(png), false)
+  assertEquals(last.reply?.artifacts?.length, 1)
 })
 
 test('settings an image model does not take, and a refused prompt, are bad requests', async () => {
