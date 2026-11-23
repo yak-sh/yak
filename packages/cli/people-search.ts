@@ -102,6 +102,34 @@ let accounts = async (
   })
 }
 
+let onYaks = async (graph: Directory, matches: Match[], hidden: string[]) => {
+  if (!matches.length || !graph.vocab.comp('yaks_account')) return []
+  let rows = await graph.read(and(
+    eq('yaks_account.holder', list(...new Set(matches.map((h) => h.entity)))),
+    fields('yaks_account.holder', 'yaks_account.handle'),
+    ...hidden.map(absent),
+  ))
+  let spaces = new Map<Eid, string[]>()
+  for (let row of rows) {
+    let holder = value(row, 'yaks_account', 'holder')
+    let handle = value(row, 'yaks_account', 'handle')
+    if (handle) {
+      spaces.set(holder, [...spaces.get(holder) ?? [], `${handle}.yaks.app`])
+    }
+  }
+  return matches.flatMap((match) => {
+    let urls = spaces.get(match.entity)
+    return urls?.length
+      ? [{
+        ...match,
+        snippet: [match.snippet, urls.sort().join(', ')].filter(Boolean).join(
+          ' · ',
+        ),
+      }]
+      : []
+  })
+}
+
 // Resolve short name and relationship lookups from the graph before merging
 // the general full-text and meaning ranks of documents and transcripts.
 export let peopleSearch = async (
@@ -109,21 +137,26 @@ export let peopleSearch = async (
   words: string,
   n: number,
 ): Promise<Match[]> => {
-  if (!graph.vocab.comp('person')) return []
+  if (!graph.vocab.comp('person') || !graph.vocab.prop('doc', 'title')) {
+    return []
+  }
   let phrase = words.trim().replace(/^"(.*)"$/, '$1').replace(/\s+/g, ' ')
+  let withAccount = / yaks\.app(?: (?:account|space))?$/iu
+  let subject = phrase.replace(withAccount, '')
   if (
     !/^[\p{L}\p{N}][\p{L}\p{N} .&'’_-]{0,79}$/u.test(phrase) ||
-    phrase.split(' ').length > 5
+    subject.split(' ').length > 5
   ) return []
   let hidden = unfound(graph.vocab).not ?? []
   let [names, relations, handles] = await Promise.all([
-    people(graph, phrase, hidden, n),
-    relatives(graph, phrase, hidden, n),
-    accounts(graph, phrase, hidden, n),
+    people(graph, subject, hidden, n),
+    relatives(graph, subject, hidden, n),
+    accounts(graph, subject, hidden, n),
   ])
-  return [
+  let matches = [
     ...names.map((row) => ({ entity: row.entity.eid, snippet: '' })),
     ...relations,
     ...handles,
   ]
+  return subject == phrase ? matches : onYaks(graph, matches, hidden)
 }

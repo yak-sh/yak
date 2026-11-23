@@ -58,6 +58,7 @@ test('search finds people by name, related person and hosted account', async () 
         'Avery Rao',
         "Cameron's sister",
         'Avery sister',
+        'Avery sister yaks.app space',
         'studio',
         'Craft & Design',
       ]
@@ -65,6 +66,7 @@ test('search finds people by name, related person and hosted account', async () 
       equal(await first(words), sibling)
     }
     equal(await first('Avery’s friend'), friend)
+    equal(await first('Avery’s friend yaks.app space') == friend, false)
     await host.graph.apply([{ entity: { eid: sibling }, quarantined: {} }])
     equal(await first("Cameron's sister") == sibling, false)
     equal(await first('studio') == sibling, false)
