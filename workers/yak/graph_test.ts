@@ -266,14 +266,9 @@ let appOwned = await (async () => {
   let ctx = state()
   using _db = ctx.storage
   let manifest = JSON.stringify({
-    $defs: Object.fromEntries([
-      ['decision', 'question'],
-      ['decided', 'choice'],
-      ['board', 'query'],
-    ].map(([name, prop]) => [name, {
-      component: true,
-      properties: { [prop]: { type: 'string' } },
-    }])),
+    $defs: {
+      board: { component: true, properties: { query: { type: 'string' } } },
+    },
   })
   let store = await cookbook(ctx, manifest)
   let wrote = await post(store, '/apply', [{
@@ -286,10 +281,13 @@ let appOwned = await (async () => {
   let rows = await (await get(store, '/query?q=.decision%26*', owner)).json()
   return { status: wrote.status, rows }
 })()
-test('app-owned decision and board words keep their own write behavior', () => {
+// An app's store speaks @yaks/task's words without its rules: an answered
+// decision is written as it was, and no rule completes it.
+test('a decision and an app-owned board word keep their own write behavior', () => {
   assertEquals(appOwned.status, 200)
   assertEquals(appOwned.rows[0].decision, { question: 'Dinner?' })
-  assertEquals(appOwned.rows[0].decided, { choice: 'Cake' })
+  assertEquals(appOwned.rows[0].decided.choice, 'Cake')
+  assertEquals(appOwned.rows[0].completed, undefined)
   assertEquals(appOwned.rows[0].board, { query: '.unfamiliar.word' })
 })
 

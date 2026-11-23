@@ -353,30 +353,31 @@ let needsCard = (at: At, u: Update, where: ComponentChildren = null) => {
 
 // The last choice, always there: "Other", opened in place, a box for the
 // person's own words, which answer the question as theirs and reach the
-// Operator as the answer.
-let other = (at: At, u: Update) =>
-  u.choices && h(
-    More,
-    { class: 'Update_Other' },
-    h(More.Summary, {}, 'Other'),
-    h(
-      More.Body,
-      {},
-      form(
-        at,
-        [['choose', u.eid]],
-        h(Field, {
-          class: 'Update_Input',
-          lines: true,
-          name: 'choice',
-          required: true,
-          placeholder: 'Your own answer…',
-          'aria-label': 'Your own answer',
-        }),
-        h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
-      ),
-    ),
+// Operator as the answer. A question with no choices asks for their words
+// alone, so its box is open.
+let other = (at: At, u: Update) => {
+  let box = form(
+    at,
+    [['choose', u.eid]],
+    h(Field, {
+      class: 'Update_Input',
+      lines: true,
+      name: 'choice',
+      required: true,
+      placeholder: 'Your own answer…',
+      'aria-label': 'Your own answer',
+    }),
+    h(Button, { mod: 'go', type: 'submit' }, 'Answer'),
   )
+  return u.choices?.length
+    ? h(
+      More,
+      { class: 'Update_Other' },
+      h(More.Summary, {}, 'Other'),
+      h(More.Body, {}, box),
+    )
+    : box
+}
 
 // A way to send the Operator words about an update, opened in place.
 let replying = (at: At, u: Update) =>

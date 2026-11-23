@@ -13,7 +13,10 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { Dispatch } from './door.ts'
 import { appStore, storeName } from './directory.ts'
 import { appArrived } from './app-texts.ts'
-import { ADA_OWNS, platform, seeded } from './serving-probe.ts'
+import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
+import type { Env } from './env.ts'
+import { operatorMemory } from './operator-testing.ts'
+import { answered, type AppAsking, appDecision } from './app-decisions.ts'
 
 let NUMBER = '+12695550100'
 let words = {
@@ -27,16 +30,23 @@ let words = {
   },
 }
 
-type Binding = { entities: string[]; vars: { body: string } }
-type Step = { slot: string; reads?: string }
+type Comps = Record<string, Comp>
+type Vars = { body: string; [name: string]: string }
+type Binding = { entities: string[]; vars: Vars }
+type Step = { slot: string; reads?: string; query?: string }
 
 // An app whose worker answers each step with `step(slot, body)`'s words in its
-// step's slot, and whose builders are `steps`: one reading each text to
-// NUMBER, or the current take in the slot it `reads`, joined to it by a
-// `requires` edge.
+// step's slot, or the components it gives, and whose builders are `steps`: one
+// reading each text to NUMBER, or the current take in the slot it `reads`
+// (by `query` where it gives one), joined to it by a `requires` edge. What the
+// space's Operator was asked (build.ts `/operator/app-decision`) is `asks`.
 let workflow = async (
   steps: Step[],
-  step: (slot: string, body: string) => string | Promise<string>,
+  step: (
+    slot: string,
+    body: string,
+    vars: Vars,
+  ) => string | Comps | Promise<string | Comps>,
 ) => {
   let p = platform()
   let { env } = p
@@ -49,16 +59,34 @@ let workflow = async (
           binding: Binding
           template: string
         }
+        let said = await step(slot, binding.vars.body, binding.vars)
         return Response.json({
           outputs: [{
             slot,
             inputs: [binding.entities[0]],
-            components: { doc: { body: await step(slot, binding.vars.body) } },
+            components: typeof said == 'string'
+              ? { doc: { body: said } }
+              : said,
           }],
         })
       },
     }),
   } as Dispatch
+  let asks: AppAsking[] = []
+  let builder = env.BUILDER
+  env.BUILDER = {
+    ...builder,
+    idFromName: (name: string) => builder.idFromName(name),
+    get: (id: never) => ({
+      fetch: async (req: Request) => {
+        if (new URL(req.url).pathname != '/operator/app-decision') {
+          return builder.get(id).fetch(req)
+        }
+        asks.push(await req.json())
+        return Response.json({ ok: true })
+      },
+    }),
+  } as Env['BUILDER']
   let store = appStore(env.STORE, space, app)
   let send = async (path: string, body: unknown) => {
     let res = await store(path, {
@@ -85,9 +113,10 @@ let workflow = async (
       doc: { title: s.slot },
       content: { body: s.slot },
       builder: {
-        query: s.reads
-          ? `$o .built.slot=${s.reads}, built.current=true, doc.body=$body`
-          : `$t .text.to=${NUMBER}, doc.body=$body`,
+        query: s.query ??
+          (s.reads
+            ? `$o .built.slot=${s.reads}, built.current=true, doc.body=$body`
+            : `$t .text.to=${NUMBER}, doc.body=$body`),
         to: toolEid('step'),
         immediate: true,
       },
@@ -118,6 +147,8 @@ let workflow = async (
         : null
     }, { label: `${slot}'s takes`, timeout: 10_000 })
   return {
+    env,
+    asks,
     text,
     takes,
     rows,
@@ -172,4 +203,63 @@ test('steps that require none of each other run at once', async () => {
     assertEquals(await w.takes(`side${i}`, 1), [`go side${i}`])
   }
   assertEquals(most, wide)
+})
+
+// A person's step: the first step asks whoever set the workflow up with a
+// decision among its outputs, which reaches their Updates through the
+// space's Operator, and the next step builds once they answer there.
+test("a person's step asks them in their Updates, and the workflow goes on with their answer", async () => {
+  await using w = await workflow([
+    { slot: 'ask' },
+    {
+      slot: 'reply',
+      reads: 'ask',
+      query:
+        '$d .built.slot=ask, built.current=true, decided.choice=$choice, decision.question=$body',
+    },
+  ], (slot, body, vars) =>
+    slot == 'reply' ? `${vars.choice}: ${body}` : {
+      task: {},
+      doc: { title: `Reply to “${body}”?` },
+      decision: {
+        question: `A text says “${body}”. Reply?`,
+        choices: [
+          { label: 'Reply', description: 'Text them back.' },
+          { label: 'Ignore', description: 'Send nothing.' },
+        ],
+        recommended: 'Reply',
+      },
+    })
+  await w.text('msg-1', 'lunch?')
+  let [asked] = await until(async () => {
+    await w.rows('.decision')
+    return w.asks.length ? w.asks : null
+  }, { label: 'the question asked' })
+  // Asked of whoever wrote the builders.
+  assertEquals([asked.to, asked.title], [ADA, 'Reply to “lunch?”?'])
+  assertEquals(await w.rows('.built.slot=reply'), [])
+  let operator = operatorMemory()
+  operator.fx.handle({
+    app_decision_answer: (event) =>
+      answered(w.env, operator.g, event.entity.eid),
+  })
+  let [question] = await operator.g.apply([appDecision(asked)], {
+    trusted: true,
+  })
+  // Answered as their Updates answer it (operator-updates.ts `choose`).
+  await operator.g.apply([{
+    entity: question.entity,
+    decided: { choice: 'Reply' },
+    $actor: { by: ADA },
+  }], { trusted: true })
+  await operator.fx.work(operator.g, undefined, { passes: 1 })
+  assertEquals(await w.takes('reply', 1), [
+    'Reply: A text says “lunch?”. Reply?',
+  ])
+  let [row] = await w.rows(`.entity.eid=${asked.row}&.decided`)
+  assertEquals(row.decided, {
+    ...row.decided as Comp,
+    choice: 'Reply',
+    by: ADA,
+  })
 })

@@ -902,6 +902,51 @@ auditions, one take for each candidate voice, then each line voiced once its
 character's voice is chosen (`builder_choose` picks a take), then the video
 assembled by the app's worker, which calls a renderer through a connection.
 
+### A step the person takes
+
+A step can be the person's: a choice, an approval, words only they can give, or
+something they do away from the screen (mail a letter, go to a meeting). The
+step before it writes a decision among its outputs, and the person answers it in
+their Updates, under Needs you, the way they answer their Operator's questions.
+Their answer is written on that decision as `decided{choice}`, and the next
+step's query matches it:
+
+    {
+      slot: 'approve',
+      inputs: [binding.entities[0]],
+      components: {
+        task: {},
+        doc: { title: 'Send the reply?' },
+        decision: {
+          question: 'Ana texted “Can you do Tuesday?”. Send “Tuesday works”?',
+          choices: [
+            { label: 'Send', description: 'Text Ana “Tuesday works”.' },
+            { label: "Don't send", description: 'Send nothing.' },
+          ],
+          recommended: 'Send',
+        },
+      },
+    }
+
+    $d .built.slot=approve, built.current=true, decided.choice=Send
+
+- **Who is asked**: whoever wrote the step's builder, the person who asked for
+  the workflow. Name someone else in the space with `filed: { assignee }`.
+- **The question** is shown alone in their Updates, read later and apart from
+  any chat, so it says in plain words what it is about and what each choice
+  does.
+- **Choices**: two to four, each a label and a line saying what it means.
+  "Other" is always there for an answer in their own words, and `choice` is then
+  those words. A question with no `choices` asks for their words alone, such as
+  a name or an address.
+- **Something to do**: a real-world task is a decision whose choices are its
+  outcomes, such as `Done` and `Couldn't`, and the next step matches the one it
+  goes on from.
+- The next step reads `decided.choice` as a variable (`decided.choice=$choice`)
+  to act on any answer, or matches one label to go on only from that one.
+- A decision any row of the app holds is asked the same way, so the app's own
+  code can ask too, by writing one.
+
 ## CPU and subrequest limits
 
 Each ordinary request is limited to **50ms of CPU time and 50 subrequests**. A

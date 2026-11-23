@@ -337,6 +337,29 @@ test('"Other" answers a question in the person\'s own words, which the Operator 
   )
 })
 
+test('a question with no choices asks for their words, in a box already open', async () => {
+  await store.g.apply([{
+    entity: { eid: 'subject' },
+    task: {},
+    doc: { title: 'What should the subject say?' },
+    decision: { question: 'What should the subject say?' },
+    filed: { project: eid, assignee: ada },
+  }], { trusted: true })
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let card = parseHTML(await (await updatesPage(p.env, space, who)).text())
+    .document.querySelector('#u-subject')!
+  assertEquals(card.querySelector('.Update_Other'), null)
+  assertEquals(
+    card.querySelector('form:has(textarea[name=choice]) input[name=choose]')
+      ?.getAttribute('value'),
+    'subject',
+  )
+  await store.g.apply([{ entity: { eid: 'subject' }, $delete: true }], {
+    trusted: true,
+  })
+})
+
 test('a choice shows a picture, prose or a draft, and only its asker reads the picture', async () => {
   let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])
   let sha = 'ab'.repeat(32)

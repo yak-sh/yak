@@ -156,6 +156,17 @@ export let kernelDoc: VocabDoc = {
       description:
         'tell the platform an upload is no longer served, retaining its bytes in trash',
     },
+    // A decision written here, by a workflow's step or the app's code, is
+    // asked in its person's Updates, and their answer comes back on it as
+    // `decided{choice}` (workers/yak app-decisions.ts).
+    decision_ask: {
+      effect: true,
+      created: ['decision'],
+      target: '.decision !decided !cancelled',
+      tries: 3,
+      description:
+        'ask the person a decision here is for in their Updates, through the space’s Operator',
+    },
     // Every entity here carries `created`, so its removal is the entity's
     // death (deaths.ts).
     notify_deaths: {

@@ -791,6 +791,31 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    app_decision: {
+      component: true,
+      description:
+        "A decision of an app's, asked here in its person's Updates: their answer is written on the app's row as `decided{choice}` (app-decisions.ts).",
+      properties: {
+        app: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description: 'The app whose store holds the decision.',
+        },
+        row: {
+          type: 'string',
+          description: "The decision's eid in the app's store.",
+        },
+      },
+    },
+    app_decision_answer: {
+      effect: true,
+      target: '.app_decision',
+      created: ['decided'],
+      tries: 3,
+      description:
+        "Write the person's answer on the app's decision, where its workflow's next step reads it (app-decisions.ts `answered`).",
+    },
     draft_merge: {
       effect: true,
       target: '.draft_conflict',
@@ -809,7 +834,8 @@ export let operatorDoc: VocabDoc = {
     },
     operator_decision_answer: {
       effect: true,
-      target: '.decision !operator_approval !approval_ask !operator_escalation',
+      target:
+        '.decision !operator_approval !approval_ask !operator_escalation !app_decision',
       created: ['decided'],
       tries: 3,
       description:

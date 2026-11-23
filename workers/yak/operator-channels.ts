@@ -1613,6 +1613,12 @@ export let handleChannels = (
       let { answered } = await import('./operator-approvals.ts')
       await answered(operator.store, operator.approve, event.entity.eid)
     },
+    // An app's question answered: written on the app's row as theirs
+    // (app-decisions.ts).
+    app_decision_answer: async (event) => {
+      let { answered } = await import('./app-decisions.ts')
+      await answered(env, g, event.entity.eid)
+    },
     // A question of a released draft's merge answered: once all are, the
     // merge runs with their picks (draft-merge.ts `settled`).
     draft_merge: async (event) => {

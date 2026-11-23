@@ -87,6 +87,7 @@ export let appConfig: Config = {
         'completed',
         'cancelled',
         'favorite',
+        'decided',
       ],
     },
     provenance,
@@ -107,7 +108,7 @@ export let appConfig: Config = {
     {
       use: '@yaks/task',
       facets: ['vocab'],
-      words: ['contains', 'requires', 'task'],
+      words: ['contains', 'requires', 'task', 'decision'],
     },
     { use: '@yaks/project', facets: ['vocab'], words: ['filed', 'project'] },
     ...links,

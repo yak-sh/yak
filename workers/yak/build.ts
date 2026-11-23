@@ -350,6 +350,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/tell' ||
           url.pathname == '/operator/write' ||
           url.pathname == '/operator/ask' ||
+          url.pathname == '/operator/app-decision' ||
           url.pathname == '/operator/rerun' ||
           url.pathname == '/operator/chat' ||
           url.pathname == '/operator/call' ||
@@ -489,6 +490,15 @@ export class Builder extends Durable {
             let { asked } = await import('./draft-merge.ts')
             let { store } = await this.#stored()
             await store.g.apply(asked(await request.json()), { trusted: true })
+            return Response.json({ ok: true })
+          }
+          // An app's question for a person's Updates (app-decisions.ts).
+          if (url.pathname == '/operator/app-decision') {
+            let { appDecision } = await import('./app-decisions.ts')
+            let { store } = await this.#stored()
+            await store.g.apply([appDecision(await request.json())], {
+              trusted: true,
+            })
             return Response.json({ ok: true })
           }
           if (url.pathname == '/operator/receipt') {
