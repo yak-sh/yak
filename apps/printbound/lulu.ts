@@ -68,6 +68,11 @@ type Wire = {
 }
 export class ProviderError extends Error {}
 
+/** What a failed answer said, short: Lulu's error, or the egress's refusal,
+ * neither of which holds a credential. */
+let said = async (response: Response) =>
+  (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 300)
+
 export let cents = (value: unknown): number => {
   if (typeof value != 'string' || !/^\d+(\.\d{1,2})?$/.test(value)) {
     throw new ProviderError('Lulu returned an invalid monetary amount')
@@ -155,7 +160,9 @@ export let lulu = (config: {
       },
     )
     if (!token.ok) {
-      throw new ProviderError(`Lulu authentication failed (${token.status})`)
+      throw new ProviderError(
+        `Lulu authentication failed (${token.status}): ${await said(token)}`,
+      )
     }
     let auth = await token.json()
     if (!auth.access_token) {
@@ -171,7 +178,11 @@ export let lulu = (config: {
     })
     if (!response.ok) {
       throw new ProviderError(
-        `Lulu ${method} ${path.split('?')[0]} failed (${response.status})`,
+        `Lulu ${method} ${
+          path.split('?')[0]
+        } failed (${response.status}): ${await said(
+          response,
+        )}`,
       )
     }
     return response.json()
