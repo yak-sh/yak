@@ -1161,7 +1161,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the account to use, matched by full address or the part before @. Answers and edits default to admin@bot.yak.sh. Reads default to your own email, then the oldest connection"
         }
       },
       "openWorld": true,

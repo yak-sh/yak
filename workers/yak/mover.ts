@@ -78,7 +78,6 @@ import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
 import { draftRule } from './draft-move.ts'
 import { checkNewcomerRule } from './check-newcomer-move.ts'
-import { boxAttributionMoves } from '../../packages/platform/box-attribution-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
@@ -104,8 +103,6 @@ export type Rule = {
   ) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
-  /** A provenance repair keeps the time and the editor of the content. */
-  stamp?: false
   /** Source properties to shed with the final batch, once the rule is drained. */
   drop?: string[]
 }
@@ -201,7 +198,6 @@ export let takeRule: Rule = {
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
 export let RULES: Rule[] = [
-  ...boxAttributionMoves,
   deadMailInboxRule,
   doneEffectsRule,
   takeRule,
@@ -234,7 +230,7 @@ export type Moving = {
   context?: MoveContext
   read: (line: Line | Query) => Bundle[] | Promise<Bundle[]>
   rows: (line: Line | Query) => Row[] | Promise<Row[]>
-  apply: (patch: Bundle[], stamp?: false) => Bundle[] | Promise<Bundle[]>
+  apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
   tx: <T extends Settled>(body: () => T) => T
   drop?: (paths: string[]) => void
   /** Whether the store's words declare this component, or its property. */
@@ -356,7 +352,7 @@ export let step = (
       unspoken,
     }
   }
-  if (patch.length) sync(m.apply(patch, rule.stamp))
+  if (patch.length) sync(m.apply(patch))
   if (rows.length < n && rule.drop?.length) {
     if (!m.drop) {
       throw new Error('a store mover must support property contraction')

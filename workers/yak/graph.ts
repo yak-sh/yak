@@ -4103,13 +4103,12 @@ export class Store extends Durable {
       speaks: (comp, prop) =>
         prop ? !!words.prop(comp, prop) : !!words.comp(comp) ||
           !!words.assoc(comp),
-      apply: (patch, stamp) => {
+      apply: (patch) => {
         let was = this.#kernelling
         this.#kernelling = true
         try {
           return g.apply(signed(patch, null), {
             trusted: true,
-            stamp,
             deferEffects: (run) => void held.push(run),
           })
         } finally {
