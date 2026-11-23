@@ -111,3 +111,17 @@ test('a visit with actions reports an incomplete answer without replaying or pub
       'end.png',
     ])
   }))
+
+test('a gateway failure before the screenshot stream retries once with the same read-only visit', () =>
+  inDir(async (dir) => {
+    let calls = 0
+    let send: typeof fetch = () =>
+      Promise.resolve(
+        ++calls == 1
+          ? new Response('Admin forwarding failed', { status: 502 })
+          : answer([shot('end', 1), new Uint8Array([1]), end]),
+      )
+    let got = await visit('session', asked, dir, undefined, send)
+    equal(got.text, 'Seen')
+    equal(calls, 2)
+  }))

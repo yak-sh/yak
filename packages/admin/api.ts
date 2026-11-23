@@ -38,7 +38,12 @@ import type { Asked } from './move.ts'
 import { COOKIE } from '@yaks/platform/cookie'
 import { BROWSE } from '@yaks/platform/routes'
 import { forwarded } from './forward.ts'
-import { type Frame, packet, WIRE } from '@yaks/platform/browser-wire'
+import {
+  type Frame,
+  IncompleteBrowse,
+  packet,
+  WIRE,
+} from '@yaks/platform/browser-wire'
 import type { Result, Step } from '@yaks/platform/browser-visit'
 export type { Step } from '@yaks/platform/browser-visit'
 export { BROWSE } from '@yaks/platform/routes'
@@ -358,14 +363,14 @@ export let replayBrowse = (asked: Browse) =>
   asked.steps?.every((step) => 'wait' in step || 'shot' in step) ?? true
 
 // A page of ours opened in Cloudflare's browser with the account's session.
-export let browse = async (
+export let browse = (
   session: string,
   asked: Browse,
   file?: BrowseFile,
   signal?: AbortSignal,
   transport?: typeof fetch,
-) => {
-  let answer = await sent(
+) =>
+  sent(
     apex(BROWSE),
     session,
     {
@@ -386,7 +391,13 @@ export let browse = async (
     false,
     true,
   )
-  if (answer.ok && answer.headers.get('content-type') == WIRE) return answer
+export let browseAnswer = async (answer: Response) => {
+  let type = answer.headers.get('content-type') ?? ''
+  if (answer.ok && type == WIRE) return
+  if ([502, 503, 504].includes(answer.status) && !type.includes('json')) {
+    await answer.body?.cancel()
+    throw new IncompleteBrowse('the gateway could not deliver a browser answer')
+  }
   if (!answer.ok) await said(Promise.resolve(answer))
   await answer.body?.cancel()
   throw new Error(

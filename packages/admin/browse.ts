@@ -15,6 +15,7 @@ import {
 import {
   type Browse,
   browse,
+  browseAnswer,
   type Browsed,
   type BrowseFile,
   replayBrowse,
@@ -133,6 +134,7 @@ let attempt = async (
   let response: Response | undefined
   try {
     response = await browse(session, asked, file, signal, fetch)
+    await browseAnswer(response)
     return await screenshots(response, to, signal)
   } catch (cause) {
     if (
