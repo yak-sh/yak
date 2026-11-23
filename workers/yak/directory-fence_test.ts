@@ -6,10 +6,11 @@ import { enqueue } from '@yaks/effects'
 import { type Bundle, graph } from '@yaks/graph'
 import { storage as sqliteStorage } from '@yaks/sqlite'
 import { select, table } from '@yaks/sql'
-import { type Clock, clock, equal, ok, test } from '@yaks/testing'
+import { cleanup, type Clock, clock, equal, ok, test } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { doorOf } from './door.ts'
 import { IDEMPOTENCY } from '@yaks/durable-object/door'
+import type { Checkpoint } from '../../packages/durable-object/testing.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rehearsal } from '@yaks/platform/mover'
 import { EPOCH, type ServingCopyDoor } from './directory-copy.ts'
@@ -26,8 +27,15 @@ import { db, slot, state } from './testing.ts'
 import { mint, spend } from './signin.ts'
 import { metaKeywords } from './vocab.ts'
 
+let baseline: {
+  open: Checkpoint
+  copy: ServingCopyState | undefined
+  revision: number
+} | undefined
+
 let fixture = async (rules: Rule[] = [], time?: Clock) => {
-  let saved: ServingCopyState | undefined
+  let from = time ? undefined : baseline
+  let saved = structuredClone(from?.copy)
   let persistence = {
     read: () => saved,
     write: (next: ServingCopyState) => {
@@ -35,6 +43,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     },
   }
   let core = new ServingCopy({ persistence })
+  if (from) ok(core.settle(core.revision, from.revision))
   let begins: number[] = [], finishes: number[] = []
   // Each fence raised and each transaction opened, in order.
   let trail: string[] = []
@@ -64,7 +73,11 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
     put: (...args) => Promise.resolve().then(() => core.put(...args)),
     get: (key) => Promise.resolve().then(() => core.get(key)),
   }
-  let ctx = state(PLATFORM_STORE)
+  let ctx = state(PLATFORM_STORE, from?.open ?? true)
+  cleanup(async () => {
+    await ctx.settled()
+    ctx.storage[Symbol.dispose]()
+  })
   let open = ctx.storage.transactionSync.bind(ctx.storage), depth = 0
   ctx.storage.transactionSync = <T>(body: () => T) => {
     if (!depth) trail.push('tx')
@@ -85,7 +98,7 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
       get: () => ({ fetch: (req: Request) => store.fetch(req) }),
     },
   } as Partial<Env>
-  store = new Store(ctx, env, [])
+  store = new Store(ctx, env, from ? rules : [])
   let at = metaOf(doorOf((req) => store.fetch(req), PLATFORM_STORE))
   let read = (mend = false) =>
     store.fetch(
@@ -93,20 +106,6 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
         headers: { 'x-store': PLATFORM_STORE, [EPOCH]: '1', ...KERNEL },
       }),
     )
-  await at.apply([
-    { entity: { eid: 'space' }, space: { slug: 'fence', store: 'fence' } },
-    {
-      entity: { eid: 'app' },
-      app: {
-        space: 'space',
-        slug: 'page',
-        access: 'public',
-        store: 'fence/page',
-        version: 1,
-      },
-      doc: { title: 'Before' },
-    },
-  ], KERNEL)
   // The app made owes its effects (reward.ts `reward_referral`), and each
   // settles with a directory write that fences: wait them out, so a proof's
   // fences are its own however long they take. On a clock of its own, the
@@ -121,14 +120,38 @@ let fixture = async (rules: Rule[] = [], time?: Clock) => {
       await (time?.advance(0) ?? Promise.allSettled([...ctx.pending]))
     }
   }
-  await ctx.storage.deleteAlarm()
-  await store.alarm()
-  await settle()
-  if (rules.length) store = new Store(ctx, env, rules)
+  if (!from) {
+    await at.apply([
+      { entity: { eid: 'space' }, space: { slug: 'fence', store: 'fence' } },
+      {
+        entity: { eid: 'app' },
+        app: {
+          space: 'space',
+          slug: 'page',
+          access: 'public',
+          store: 'fence/page',
+          version: 1,
+        },
+        doc: { title: 'Before' },
+      },
+    ], KERNEL)
+    await ctx.storage.deleteAlarm()
+    await store.alarm()
+    await settle()
+    if (rules.length) store = new Store(ctx, env, rules)
+  }
   let answer = await read()
   let initial = Number(answer.headers.get(EPOCH))
   let body = await answer.text()
   ok(core.put(initial, '.app', body))
+  if (!time && !from) {
+    await ctx.settled()
+    baseline = {
+      open: ctx.storage.checkpoint(),
+      copy: structuredClone(saved),
+      revision: initial,
+    }
+  }
   begins.length = finishes.length = 0
   return {
     at,

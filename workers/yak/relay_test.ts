@@ -13,7 +13,7 @@ import type { Frame } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import type { Level } from '@yaks/member'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from './testing.ts'
+import { seededState, state } from './testing.ts'
 import { socketDirectory } from './socket-fixture.ts'
 import { Store, type Time } from './graph.ts'
 import { clock, test, until } from '@yaks/testing'
@@ -35,10 +35,11 @@ let wire = (actor: Actor | null = { by: ADA }) => {
   }
 }
 
-let state = () => {
+let withSockets = ({ storage, waitUntil }: ReturnType<typeof state>) => {
   let live: Wire[] = []
   return {
-    storage: durable(),
+    storage,
+    waitUntil,
     live,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
@@ -107,18 +108,19 @@ let subscribe = async (
   return ws
 }
 
-// A cookbook with one recipe in it, and cooks watching it.
-let watching = async (
-  ctx = state(),
-  access = 'private',
-  schema = SCHEMA,
+let kitchen = (
+  ctx: ReturnType<typeof withSockets>,
+  access: string,
   time?: Time,
 ) => {
   let members: Record<string, Level> = { [ADA]: 'owner' }
   let env = { STORE: socketDirectory(APP, members, { access }) }
   let wake = () => new Store(ctx, env, undefined, time)
-  let store = wake()
-  assertEquals((await post(store, '/vocab', schema)).status, 200)
+  return { wake, members }
+}
+
+let stock = async (store: Store, access: string) => {
+  assertEquals((await post(store, '/vocab', SCHEMA)).status, 200)
   assertEquals(
     (await store.fetch(
       new Request('http://store/vocab', {
@@ -132,6 +134,22 @@ let watching = async (
     doc: { title: 'Lemon drizzle' },
     recipe: { serves: 8 },
   }])
+}
+
+let stocked = (access: string) =>
+  seededState((ctx) => stock(kitchen(withSockets(ctx), access).wake(), access))
+let cookbooks = { private: stocked('private'), open: stocked('open') }
+
+// A cookbook with one recipe in it, and cooks watching it.
+let watching = async (
+  access: keyof typeof cookbooks = 'private',
+  time?: Time,
+) => {
+  let ctx = withSockets(time ? state() : await cookbooks[access]())
+  let { wake, members } = kitchen(ctx, access, time)
+  let store = wake()
+  if (time) await stock(store, access)
+  else await store.door
   let watch = async (actor: Actor | null = { by: ADA }, opening = false) => {
     let ws = wire(actor)
     ctx.live.push(ws)
@@ -169,7 +187,7 @@ test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
   // The pace is read on the Store's clock, which only this case moves; its
   // timers stay the runtime's.
   let time = clock(Date.now())
-  let { store, watch } = await watching(state(), 'private', SCHEMA, {
+  let { store, watch } = await watching('private', {
     now: time.now,
   })
   let ada = await watch(), bert = await watch()
@@ -296,7 +314,7 @@ test('a durable component sent to the relay door is not stored by it', async () 
 })
 
 test('an open-app visitor cannot take or clear another cook’s relayed value', async () => {
-  let { store, watch } = await watching(state(), 'open')
+  let { store, watch } = await watching('open')
   let ada = await watch(),
     guest = await watch({ via: 'guest-browser' }),
     bert = await watch()
@@ -327,7 +345,7 @@ test('an open-app visitor cannot take or clear another cook’s relayed value', 
 })
 
 test('relay admission uses the vouched socket actor, ignoring a bundle’s claim', async () => {
-  let { store, watch } = await watching(state(), 'open')
+  let { store, watch } = await watching('open')
   let guest = await watch({ via: 'guest-browser' }), bert = await watch()
   await store.webSocketMessage(
     guest,
@@ -412,7 +430,7 @@ test('a hibernated editor loses their socket when their seat is removed', async 
 })
 
 test('an open-app guest can keep moving a new ephemeral entity without storing it', async () => {
-  let { ctx, store, watch } = await watching(state(), 'open')
+  let { ctx, store, watch } = await watching('open')
   let guest = await watch({ via: 'guest-browser' }), observer = wire()
   ctx.live.push(observer)
   await subscribe(store, observer, '.presence')

@@ -3,7 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { test, tick, until } from '@yaks/testing'
 import { Store } from './graph.ts'
-import { platform, state } from './testing.ts'
+import { platform, seededState, state } from './testing.ts'
 import type { Handler } from '@yaks/effects'
 import type { Load } from '@yaks/host'
 import { load } from './load.ts'
@@ -22,7 +22,7 @@ let alarm = async (store: Store) => {
   await tick()
 }
 
-let idle = async (ctx: ReturnType<typeof state>) => {
+let app = (ctx: ReturnType<typeof state>) => {
   let store = new Store(ctx)
   let post = (path: string, body: unknown) =>
     store.fetch(
@@ -32,6 +32,11 @@ let idle = async (ctx: ReturnType<typeof state>) => {
         body: JSON.stringify(body),
       }),
     )
+  return { store, post }
+}
+
+let idle = async (ctx: ReturnType<typeof state>) => {
+  let { store, post } = app(ctx)
   assertEquals((await post('/vocab', words)).status, 200)
   await ctx.storage.deleteAlarm()
   await alarm(store)
@@ -52,10 +57,11 @@ let idle = async (ctx: ReturnType<typeof state>) => {
   return { store, post }
 }
 
+let sleeping = seededState(idle)
+
 test('an idle Vale-shaped store sleeps after the initial lens pass', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let { store } = await idle(ctx)
+  let ctx = await sleeping()
+  let { store } = app(ctx)
   assertEquals(await ctx.storage.getAlarm(), null)
   await alarm(store)
   assertEquals(await ctx.storage.getAlarm(), null)
@@ -65,9 +71,8 @@ test('an idle Vale-shaped store sleeps after the initial lens pass', async () =>
 })
 
 test('a comment owes no unhandled effect and leaves its app store asleep', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let { store, post } = await idle(ctx)
+  let ctx = await sleeping()
+  let { store, post } = app(ctx)
   let target = crypto.randomUUID()
   assertEquals(
     (await post('/apply', [
@@ -92,9 +97,8 @@ test('a comment owes no unhandled effect and leaves its app store asleep', async
 })
 
 test('old unhandled pending effects stay stored without waking an app', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let { store } = await idle(ctx)
+  let ctx = await sleeping()
+  let { store } = app(ctx)
   let eid = crypto.randomUUID()
   let wrote = await store.fetch(
     new Request('http://store/apply', {
@@ -128,9 +132,8 @@ test('old unhandled pending effects stay stored without waking an app', async ()
 })
 
 test('a handled pending effect arms the app alarm for its next attempt', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let { store } = await idle(ctx)
+  let ctx = await sleeping()
+  let { store } = app(ctx)
   let next = Date.now() + 120_000
   let wrote = await store.fetch(
     new Request('http://store/apply', {
@@ -175,9 +178,8 @@ let kernel = (store: Store, body: unknown) =>
   )
 
 test('a new incarnation re-arms the alarm its pending effects owe', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let { store } = await idle(ctx)
+  let ctx = await sleeping()
+  let { store } = app(ctx)
   let next = Date.now() + 120_000
   assertEquals((await kernel(store, [effect(next)])).status, 200)
   await ctx.storage.deleteAlarm()

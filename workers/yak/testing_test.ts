@@ -1,4 +1,4 @@
-import { lasting } from './testing.ts'
+import { lasting, seededState } from './testing.ts'
 // The in-memory runtime keeps a store's native storage alive for background
 // work, just as a Durable Object retains its waitUntil context.
 import { assertEquals, assertThrows } from '@std/assert'
@@ -6,6 +6,28 @@ import { clock, test, until } from '@yaks/testing'
 import { DIM } from './embedding.ts'
 import { bucket, platform } from './testing.ts'
 import { digest } from '@yaks/graph/sha256'
+
+test('a seeded Store fixture resets rows, values and alarms between callers', async () => {
+  let seeds = 0
+  let fixture = seededState(async ({ storage }) => {
+    seeds++
+    storage.sql.exec('create table fixture (n integer)')
+    storage.sql.exec('insert into fixture values (1)')
+    await storage.put('marker', { n: 1 })
+    await storage.setAlarm(100)
+  })
+  let { storage: first } = await fixture()
+  first.sql.exec('update fixture set n = 2')
+  await first.put('marker', { n: 2 })
+  await first.deleteAlarm()
+
+  let { storage: second } = await fixture()
+  assertEquals(second.sql.exec('select n from fixture').toArray(), [{ n: 1 }])
+  assertEquals(await second.get('marker'), { n: 1 })
+  assertEquals(await second.getAlarm(), 100)
+  assertEquals(first.sql.exec('select n from fixture').toArray(), [{ n: 2 }])
+  assertEquals(seeds, 1)
+})
 
 test('platform disposal waits for store work before releasing storage', async () => {
   let release!: () => void

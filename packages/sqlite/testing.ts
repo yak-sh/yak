@@ -256,7 +256,11 @@ export let textual = (limits: Limits = {}, from?: Snapshot) => {
   let run = prepared(db)
   let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   run(keys.sql, keys.params)
-  return { run, close: () => db.close() }
+  return {
+    run,
+    snapshot: (): Snapshot => ({ [image]: serialize(db) }),
+    close: () => db.close(),
+  }
 }
 
 // The shop vocabulary, authored as JSON Schema plus the yaks keywords.

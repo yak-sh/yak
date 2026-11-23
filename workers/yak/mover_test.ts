@@ -31,7 +31,7 @@ import { toolEid } from '@yaks/tools'
 import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
 import { importedRule, importedSource } from './imported-move.ts'
 import { type Rule } from './mover.ts'
-import { state } from './testing.ts'
+import { seededState, state } from './testing.ts'
 import { driver } from '@yaks/durable-object'
 import { bounded, type Options } from '@yaks/durable-object/ceiling'
 
@@ -62,13 +62,24 @@ let store = async (n: number, ...rules: Rule[]) => {
   return await movingStore(n, {}, rules)
 }
 
+let deploy = async (door: ReturnType<typeof doorOf>) => {
+  let response = await door('/vocab', { method: 'POST', body: WORDS }, KERNEL)
+  assertEquals(response.status, 200, await response.text())
+}
+
+let deployed = seededState(async (ctx) => {
+  let store = new Store(ctx, {}, [])
+  await deploy(doorOf((r) => store.fetch(r), NAME))
+})
+
 let movingStore = async (
   n: number,
   env: ConstructorParameters<typeof Store>[1],
   rules: Rule[],
   ceiling?: Options,
 ) => {
-  let ctx = state()
+  // The ceiling case measures what the initial writes spend in its window.
+  let ctx = ceiling ? state() : await deployed()
   let bound = bounded(ctx.storage, ceiling ?? {})
   let o = new Store(ctx, env, rules)
   let fetch = (r: Request) => o.fetch(r)
@@ -76,7 +87,9 @@ let movingStore = async (
   let meta = metaOf(door)
   let post = async (path: string, body?: string) =>
     await (await door(path, { method: 'POST', body }, KERNEL)).json()
-  await post('/vocab', WORDS)
+  if (ceiling) await deploy(door)
+  await o.door
+  await ctx.settled()
   let rows = Array.from({ length: n }, (_, i) => ({
     entity: { eid: crypto.randomUUID() },
     was: { word: `w${i}` },

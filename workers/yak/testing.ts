@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { system } from '@yaks/fp'
 import { durable } from './store-state-probe.ts'
 export { durable } from './store-state-probe.ts'
-import { bindings, kvStorage } from './binding-probe.ts'
+import { bindings } from './binding-probe.ts'
 export {
   analytics,
   assets,
@@ -60,7 +60,10 @@ import {
   val,
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
-import { durable as raw } from '../../packages/durable-object/testing.ts'
+import {
+  type Checkpoint,
+  durable as raw,
+} from '../../packages/durable-object/testing.ts'
 import { dropDdl } from '@yaks/journal'
 import { builders } from './builder-probe.ts'
 import type { Load } from '@yaks/host'
@@ -96,7 +99,10 @@ export type Pitr = {
 }
 
 /** One Durable Object's state, as the Store constructor takes it. */
-export let state = (name = '', prepared = true) => {
+export let state = (
+  name = '',
+  prepared: boolean | Checkpoint = true,
+) => {
   let live: Wire[] = []
   let tagged = new WeakMap<Wire, string[]>()
   let pending = new Set<Promise<unknown>>()
@@ -107,28 +113,38 @@ export let state = (name = '', prepared = true) => {
   }
   return {
     pending,
+    settled: async () => {
+      while (pending.size) await Promise.allSettled([...pending])
+    },
     // The answer has gone once read: nothing behind it waits a beat.
     beat: 0,
     waitUntil: (work: Promise<unknown>) => {
       pending.add(work)
       work.then(() => pending.delete(work), () => pending.delete(work))
     },
-    storage: Object.assign(prepared ? durable(name) : raw(), kvStorage(), {
-      getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
-      getBookmarkForTime: (at: number | Date) => {
-        let t = at instanceof Date ? at.getTime() : at
-        if (Date.now() - t > 30 * 24 * 60 * 60_000) {
-          return Promise.reject(
-            new Error('the bookmark is outside the 30-day window'),
-          )
-        }
-        return bookmark(`at-${new Date(t).toISOString()}`)
+    storage: Object.assign(
+      typeof prepared == 'function'
+        ? prepared()
+        : prepared
+        ? durable(name)
+        : raw(),
+      {
+        getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
+        getBookmarkForTime: (at: number | Date) => {
+          let t = at instanceof Date ? at.getTime() : at
+          if (Date.now() - t > 30 * 24 * 60 * 60_000) {
+            return Promise.reject(
+              new Error('the bookmark is outside the 30-day window'),
+            )
+          }
+          return bookmark(`at-${new Date(t).toISOString()}`)
+        },
+        onNextSessionRestoreBookmark: (b: string) => {
+          pitr.restore = b
+          return Promise.resolve(`undo-${b}`)
+        },
       },
-      onNextSessionRestoreBookmark: (b: string) => {
-        pitr.restore = b
-        return Promise.resolve(`undo-${b}`)
-      },
-    }),
+    ),
     live,
     pitr,
     abort: () => void pitr.aborts++,
@@ -157,6 +173,29 @@ export let state = (name = '', prepared = true) => {
       }
       return tagged.get(ws) ?? []
     },
+  }
+}
+
+/** Build a fixture once, then give each caller private storage and runtime state. */
+export let seededState = (
+  seed: (ctx: ReturnType<typeof state>) => Promise<unknown>,
+  name = '',
+) => {
+  let saved: Promise<Checkpoint> | undefined
+  let build = async () => {
+    let ctx = state(name)
+    using _storage = ctx.storage
+    await seed(ctx)
+    await ctx.settled()
+    return ctx.storage.checkpoint()
+  }
+  return async () => {
+    let ctx = state(name, await (saved ??= build()))
+    cleanup(async () => {
+      await ctx.settled()
+      ctx.storage[Symbol.dispose]()
+    })
+    return ctx
   }
 }
 
@@ -242,10 +281,35 @@ export let platform = (
   vars: Partial<Env> = {},
   load?: Load,
 ) => {
-  let p = lasting(secret, vars, load)
+  let p = lasting(secret, vars, load, !load && !Object.keys(vars).length)
   cleanup(p[Symbol.asyncDispose])
   return p
 }
+
+let deployDirectory = (store: Store) =>
+  store.fetch(
+    new Request('http://store/vocab', {
+      method: 'POST',
+      headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+      body: '{}',
+    }),
+  ).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(
+        `fixture directory deployment failed: ${await response.text()}`,
+      )
+    }
+    await response.body?.cancel()
+  })
+
+let directoryImage: Promise<Checkpoint> | undefined
+let seededDirectory = (): Promise<Checkpoint> =>
+  directoryImage ??= (async () => {
+    await using p = lasting('directory fixture')
+    await deployDirectory(p.object(PLATFORM_OBJECT))
+    await p.settled()
+    return p.states.get(PLATFORM_OBJECT)!.storage.checkpoint()
+  })()
 
 /** A platform that lasts until its holder closes it, as the kernel a test
  * process shares does (probe.ts). */
@@ -253,15 +317,16 @@ export let lasting = (
   secret: string,
   vars: Partial<Env> = {},
   load?: Load,
+  prepared = false,
 ) => {
   let stores: ReturnType<typeof state>[] = []
-  let ownedState = (name?: string) => {
-    let ctx = state(name ?? '', name !== undefined)
+  let ownedState = (name?: string, open?: Checkpoint) => {
+    let ctx = state(name ?? '', open ?? (name !== undefined))
     stores.push(ctx)
     return ctx
   }
   let objects = new Map<string, Store>()
-  let initialized: Promise<Response> | undefined
+  let initialized: Promise<void> | undefined
   let sockets = new Map<string, Wire[]>()
   // What the runtime did to each object, beside what the object did: the
   // restore it was told to wake at and the restart it was asked for, which
@@ -337,10 +402,10 @@ export let lasting = (
     objects.set(name, store)
     return store
   }
-  let object = (name: string) => {
+  let object = (name: string, open?: Checkpoint) => {
     let held = objects.get(name)
     if (!held) {
-      let ctx = Object.assign(ownedState(name), {
+      let ctx = Object.assign(ownedState(name, open), {
         id: { toString: () => name },
       })
       // It refuses past its windows on the platform's clock, as the
@@ -353,6 +418,21 @@ export let lasting = (
       )
     }
     return held
+  }
+  let initialize = async () => {
+    if (!prepared || objects.has(PLATFORM_OBJECT)) {
+      await deployDirectory(object(PLATFORM_OBJECT))
+      return
+    }
+    let open: Checkpoint = await seededDirectory()
+    if (objects.has(PLATFORM_OBJECT)) {
+      await deployDirectory(object(PLATFORM_OBJECT))
+      return
+    }
+    object(PLATFORM_OBJECT, open)
+    let ctx = states.get(PLATFORM_OBJECT)!
+    let alarm = await ctx.storage.getAlarm()
+    if (alarm != null) await ctx.storage.setAlarm(alarm)
   }
   // The object evicted, as the runtime may at any moment: its storage and its
   // hibernated sockets stay, and what reaches it next reaches a new instance.
@@ -376,21 +456,12 @@ export let lasting = (
       idFromName: (n: string) => n,
       get: (n: unknown) => ({
         fetch: async (r: Request) => {
-          let store = object(String(n))
           // The deployed directory carries the platform's shipped integrations
           // and wakes. The fixture supplies that deployment once, before reads.
           if (String(n) == PLATFORM_OBJECT) {
-            initialized ??= store.fetch(
-              new Request('http://store/vocab', {
-                method: 'POST',
-                headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
-                body: '{}',
-              }),
-            )
-            let deployed = await initialized
-            if (!deployed.ok) throw Error('fixture directory deployment failed')
+            await (initialized ??= initialize())
           }
-          return store.fetch(r)
+          return object(String(n)).fetch(r)
         },
       }),
     },

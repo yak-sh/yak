@@ -123,7 +123,9 @@ let out = (row: Record<string, unknown>) => {
  * `Symbol.dispose` lets the fixture owner release native allocations without
  * waiting for JS GC.
  */
-export let durable = (from?: Snapshot): DurableStorage & {
+export type Checkpoint = () => StandIn
+
+type StandIn = DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
   get<T>(key: string): Promise<T | undefined>
@@ -135,12 +137,18 @@ export let durable = (from?: Snapshot): DurableStorage & {
   setAlarm(at: number): Promise<void>
   deleteAlarm(): Promise<void>
   beneath(statement: Stmt): Record<string, unknown>[]
+  checkpoint(): Checkpoint
   [Symbol.dispose](): void
-} => {
+}
+
+export let durable = (
+  from?: Snapshot,
+  saved?: { alarm: number | null; kept: Map<string, unknown> },
+): StandIn => {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
-  let alarm: number | null = null
-  let kept = new Map<string, unknown>()
+  let alarm = saved?.alarm ?? null
+  let kept = saved ? structuredClone(saved.kept) : new Map<string, unknown>()
   let db = textual(LIMITS, from)
   let closed = false
   let depth = 0
@@ -158,6 +166,14 @@ export let durable = (from?: Snapshot): DurableStorage & {
     return run(sql, params)
   }
   return {
+    // A settled fixture's durable rows, values and alarm. Each call opens
+    // private storage with its own lineage, ready for a fresh incarnation.
+    checkpoint: () => {
+      if (closed || depth) throw new Error('storage must be open and settled')
+      let from = db.snapshot()
+      let saved = { alarm, kept: structuredClone(kept) }
+      return () => durable(from, saved)
+    },
     // Native SQLite allocations are invisible to the JS heap's GC pressure.
     // A scenario that owns this storage can release it at the end of the test.
     [Symbol.dispose]: () => {

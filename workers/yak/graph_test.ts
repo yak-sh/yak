@@ -25,6 +25,7 @@ import { faults, type Frame } from '@yaks/api'
 import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
+import type { Checkpoint } from '../../packages/durable-object/testing.ts'
 import { durable } from './testing.ts'
 import { within } from './defects.ts'
 import { doorOf } from './door.ts'
@@ -42,7 +43,14 @@ import { load } from './load.ts'
 import { named as spoken, type Names } from '@yaks/platform/listing'
 import { col, isNull, lit, select, table, tally } from '@yaks/sql'
 import { ddl as journalDdl } from '@yaks/journal'
-import { db, keep, slot, unclassified } from './testing.ts'
+import {
+  db,
+  keep,
+  seededState,
+  slot,
+  state as probeState,
+  unclassified,
+} from './testing.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
 // its only memory across an eviction.
@@ -71,15 +79,21 @@ let wire = () => {
 
 // One object's whole state: storage that outlives an incarnation, and the
 // socket list the runtime holds for it.
-let state = (name = '') => {
+let withSockets = (
+  { storage, waitUntil }: ReturnType<typeof probeState>,
+  retain = false,
+) => {
   let live: Wire[] = []
   return {
-    storage: durable(name),
+    storage,
+    ...(retain ? { waitUntil } : {}),
     live,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
 }
+let state = (name = '', open?: Checkpoint) =>
+  withSockets(probeState(name, open ?? true))
 
 // The headers the kernel puts on a request to a store. A client never sends
 // one: every request to an object is built from scratch by the Worker.
@@ -258,6 +272,14 @@ let cookbook = async (
   return store
 }
 
+let recipeState = seededState((ctx) => cookbook(withSockets(ctx, true)))
+let recipe = async (bindings = {}) => {
+  let ctx = withSockets(await recipeState(), true)
+  let store = new Store(ctx, bindings)
+  await store.door
+  return { ctx, store }
+}
+
 // A cookbook whose sockets stand by what the directory says of them.
 let watched = (ctx = state(), manifest = SCHEMA, v = owner, time?: Time) =>
   cookbook(ctx, manifest, v, time, env)
@@ -400,7 +422,7 @@ for (let name of ['draft', 'typed']) {
         },
       },
     })
-    let ctx = { ...state(), storage: durable('ada/cookbook', declaration) }
+    let ctx = state('', () => durable('ada/cookbook', declaration))
     using _db = ctx.storage
     let store = await cookbook(ctx, declaration)
     let write = (text: string) =>
@@ -447,9 +469,7 @@ test('a newborn directory reads without importing an app’s runtime facets', ()
 })
 
 test('erasing a Store closes its subscribers and serves the empty Store', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = await watched(ctx)
+  let { ctx, store } = await recipe(env)
   let ws = await watcher(store)
   ctx.live.push(ws)
   await store.webSocketMessage(
@@ -773,7 +793,7 @@ let failed = async (
   method: 'rows' | 'read' | 'apply',
   send: (s: Store) => Promise<Response>,
 ) => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let error = new Error('storage failed')
   using _broken = stub((await store.door).graph, method, () => {
     throw error
@@ -821,7 +841,7 @@ test('a write the graph fails is kept, and its failure logs the door and the sto
 // declare, is the caller's mistake: a 400 in the store's own words, and
 // nothing logged as the store's failure.
 test('a malformed query is a 400 to the caller, not a failure', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   using logged = stub(console, 'error')
   for (
     let [q, error, said] of [
@@ -872,7 +892,7 @@ let words = async (store: Store, v?: Vouch) =>
 // on it when the kernel reads the manifest back (T-37546).
 test("an app's vocab.json is read back as the document it means", async () => {
   assertEquals(
-    (await words(await cookbook())).recipe.properties,
+    (await words((await recipe()).store)).recipe.properties,
     { serves: { type: 'number' } },
   )
   let searched = await cookbook(
@@ -930,7 +950,7 @@ test('stores holding different words each wake speaking their own', async () => 
 })
 
 test('a manifest the vocabulary refuses leaves the store as it was', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let was = await words(store)
   let no = await post(
     store,
@@ -989,7 +1009,7 @@ test('an app store refuses a malformed score declaration', async () => {
 })
 
 test('a property says its type', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let was = await words(store)
   let no = await post(
     store,
@@ -1154,7 +1174,7 @@ test('a property that holds nothing may change its type', async () => {
 
 {
   test('a bundle applies and queries back', async () => {
-    let store = await cookbook()
+    let { store } = await recipe()
 
     let wrote = await post(store, '/apply', [{
       entity: { eid: CAKE },
@@ -1200,7 +1220,7 @@ test('a property that holds nothing may change its type', async () => {
 }
 
 test('the writer the kernel vouched for is a person here, by name', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
@@ -1215,7 +1235,7 @@ test('the writer the kernel vouched for is a person here, by name', async () => 
 })
 
 test('an edge is a sentence, and the relation is a word the store knows', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let wrote = await post(store, '/apply', [
     { entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } },
     { entity: { eid: APP }, doc: { title: 'Cookbook' } },
@@ -1234,7 +1254,7 @@ test('an edge is a sentence, and the relation is a word the store knows', async 
 })
 
 test('/ws without an upgrade is not a door', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   assertEquals((await get(store, '/ws', owner)).status, 405)
 })
 
@@ -1282,8 +1302,7 @@ test('a Store live query sees only connected peer positions', async () => {
 })
 
 test('a subscription is answered, and a commit reaches the socket', async () => {
-  let ctx = state()
-  let store = await watched(ctx)
+  let { ctx, store } = await recipe(env)
   let ws = await watcher(store)
   ctx.live.push(ws)
 
@@ -1354,8 +1373,7 @@ test('a viewer subscribed to rows kept by conditions is sent the others, and no 
 })
 
 test("a page's subscription leaves out the platform's rows unless it names one", async () => {
-  let ctx = state()
-  let store = await watched(ctx)
+  let { ctx, store } = await recipe(env)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
@@ -1383,8 +1401,7 @@ test("a page's subscription leaves out the platform's rows unless it names one",
 // `subs.open` whole, where it reached @yaks/match as a full-text term nothing
 // matches — the subscription answered empty and stayed silent forever (T-34070).
 test('a subscription asking `*` answers what /query answers', async () => {
-  let ctx = state()
-  let store = await watched(ctx)
+  let { ctx, store } = await recipe(env)
   let ws = await watcher(store)
   ctx.live.push(ws)
   let line = '.recipe&*'
@@ -1459,8 +1476,7 @@ test('a subscription asking `*` answers what /query answers', async () => {
 })
 
 test('a woken object serves the same app, and the same sockets', async () => {
-  let ctx = state()
-  let store = await watched(ctx)
+  let { ctx, store } = await recipe(env)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
@@ -1700,7 +1716,7 @@ test('a stored component holds its floor and a pace per entity and vouched instr
 })
 
 test('a readers condition that names no floor, parses no query or names no property is refused with its component', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let refused = async (readers: unknown) =>
     (await (await post(
       store,
@@ -1730,7 +1746,7 @@ test('a readers condition that names no floor, parses no query or names no prope
 // resolves it, and both are composed into every store — so the same seed
 // written twice is one entity, and the name stands where an eid does.
 test('a named row written twice is one entity, and answers to its name', async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let seed = async (title: string) => {
     let out = await post(store, '/apply', [{
       entity: { eid: '$r' },
@@ -1764,7 +1780,7 @@ test('a named row written twice is one entity, and answers to its name', async (
 // An app's store answers its own vocabulary and refuses a directory-only
 // component without disturbing an accepted row.
 test("an app's store keeps its words apart from the directory's", async () => {
-  let store = await cookbook()
+  let { store } = await recipe()
   let wrote = await post(store, '/apply', [
     { entity: { eid: CAKE }, recipe: { serves: 8 } },
   ], owner)

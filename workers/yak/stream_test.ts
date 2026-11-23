@@ -101,7 +101,7 @@ test('a stream resuming across a release hears the lists moved', async () => {
   let ctx = state('', false), storage = ctx.storage
   let wire = new Wire(ctx, {})
   // The session last spoke under another release.
-  storage.map.set('spoke', { abc: '0.0.0-before' })
+  await storage.put('spoke', { abc: '0.0.0-before' })
   try {
     let ear = await attached(wire, 'abc')
     assertStringIncludes(await ear.read(), ': open')
@@ -112,7 +112,7 @@ test('a stream resuming across a release hears the lists moved', async () => {
       assertEquals(frame.includes('id:'), false)
     }
     assertEquals(
-      (storage.map.get('spoke') as Record<string, string>).abc,
+      (await storage.get<Record<string, string>>('spoke'))?.abc,
       VERSION,
     )
     // Once per session: the next attach is quiet — the probe line sent
@@ -136,7 +136,7 @@ test('a session never spoken for is remembered silently', async () => {
     // No release news intervened: it just initialized and listed fresh.
     assertStringIncludes(await ear.read(), 'probe')
     assertEquals(
-      (storage.map.get('spoke') as Record<string, string>).fresh,
+      (await storage.get<Record<string, string>>('spoke'))?.fresh,
       VERSION,
     )
   } finally {
@@ -147,7 +147,7 @@ test('a session never spoken for is remembered silently', async () => {
 test('the deploy id drives the marker, not the human VERSION', async () => {
   let ctx = state('', false), storage = ctx.storage
   // Last spoke under an earlier deploy; VERSION never moved between them.
-  storage.map.set('spoke', { abc: 'deploy-1' })
+  await storage.put('spoke', { abc: 'deploy-1' })
   let wire = new Wire(ctx, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {
     let ear = await attached(wire, 'abc')
@@ -159,7 +159,7 @@ test('the deploy id drives the marker, not the human VERSION', async () => {
     }
     // The marker is the deploy id, not VERSION.
     assertEquals(
-      (storage.map.get('spoke') as Record<string, string>).abc,
+      (await storage.get<Record<string, string>>('spoke'))?.abc,
       'deploy-2',
     )
   } finally {
@@ -208,7 +208,7 @@ test('a session is told which tools moved, once per changed set', async () => {
 
 test('the same deploy id stays quiet', async () => {
   let ctx = state('', false), storage = ctx.storage
-  storage.map.set('spoke', { abc: 'deploy-2' })
+  await storage.put('spoke', { abc: 'deploy-2' })
   let wire = new Wire(ctx, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {
     let ear = await attached(wire, 'abc')

@@ -1347,15 +1347,14 @@ export class Store extends Durable {
       // recovered behind the answer that woke this object, which would
       // otherwise wait on this query, the first an isolate compiles, before
       // its own (T-148354).
-      setTimeout(
-        () =>
+      let owed = new Promise<void>((turn) => setTimeout(turn, 0))
+        .then(() =>
           this.#maintenance(async () =>
             this.#arm(await this.#owed(this.#now()))
-          ).catch((e) =>
-            defect(e, { request: 'owed alarm', store: this.#name() })
-          ),
-        0,
-      )
+          )
+        )
+        .catch((e) => defect(e, { request: 'owed alarm', store: this.#name() }))
+      this.#ctx.waitUntil?.(owed)
       // A lexicon not yet read is the alarm's to read, never this request's.
       if (this.#unread()) await this.#arm(this.#soon(), 'lexicon')
     }
