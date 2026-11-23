@@ -948,7 +948,9 @@ number_find:
     where it is local to and what it costs up front and each month. The
     monthly price includes $1 over the provider's monthly charge. Local
     numbers by default: by area code ("a 269 number"), by state and city, by
-    digits it contains, or any number when none is given. toll_free true
+    digits it contains, or, when no area or state is named, near the person
+    asking (their home, else their work, else where they are now), saying
+    why there. toll_free true
     finds toll-free numbers. A local number takes calls on a softphone and
     texts people who know it, for personal use or the space's; a space's
     own number is how it texts the public as itself, such as a church

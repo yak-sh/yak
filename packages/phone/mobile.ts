@@ -47,3 +47,26 @@ export let mobile = (typed: string): string | null => {
 // assigned. A text to the Caribbean or to 900 costs many times a US text and
 // is what SMS pumping walks.
 let US = new Set<string | undefined>(['US', 'PR', 'VI', 'GU', 'AS', 'MP'])
+
+/**
+ * Where a number is from, as its numbering plan says: its country, and its
+ * area code where the plan has them (+1, the North American plan). Nothing
+ * for a number with no place, a toll-free one say.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { dialing } from '@yaks/phone/mobile'
+ * equal(dialing('+12695550142'), { country: 'US', area: '269' })
+ * equal(dialing('+14165550142'), { country: 'CA', area: '416' })
+ * equal(dialing('+18005550142'), {})
+ * equal(dialing('+33612345678'), { country: 'FR' })
+ * ```
+ */
+export let dialing = (number: string): { country?: string; area?: string } => {
+  let parsed = parsePhoneNumberFromString(number)
+  let country = parsed?.country
+  if (!parsed || !country) return {}
+  return parsed.countryCallingCode == '1'
+    ? { country, area: parsed.nationalNumber.slice(0, 3) }
+    : { country }
+}

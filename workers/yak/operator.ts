@@ -161,7 +161,8 @@ import {
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
-import { whereaboutsShow } from './whereabouts.ts'
+import { kept as kernelDir, whereaboutsShow } from './whereabouts.ts'
+import { placeSet } from '@yaks/platform/located'
 import {
   acquainted,
   approvals,
@@ -683,6 +684,7 @@ let OWN_WORDS = new Set([
   'platform_bug',
   'text_send',
   'whereabouts_show',
+  'place_set',
   'contact_add',
   'notification_send',
   'mail_send',
@@ -2625,6 +2627,7 @@ export let operating = (
       platformBug(ctx, space),
       textSend(env, ctx, space),
       whereaboutsShow(env, ctx.person!, space.eid),
+      placeSet(() => kernelDir(env), ctx.person!),
       contactAdd(env, ctx, space, store),
       notificationSend(ctx, space, store),
       mailSend(env, ctx, space, store),
@@ -2958,10 +2961,12 @@ export let operating = (
         defect(e, { request, session, space: o.space })
         return undefined
       }
-      let [{ whereaboutsItem }, { threadsItem }] = await Promise.all([
-        import('./whereabouts.ts'),
-        import('./operator-threads.ts'),
-      ])
+      let [{ whereaboutsItem }, { threadsItem }, { locatedItem }] =
+        await Promise.all([
+          import('./whereabouts.ts'),
+          import('./operator-threads.ts'),
+          import('@yaks/platform/located'),
+        ])
       let member = async () => {
         if (o.administrative) return true
         let seat = await dir().seat(o.space, o.person)
@@ -2978,6 +2983,10 @@ export let operating = (
           : ctx.then((c) => writes(c.role) ? oracleMap(c, g) : undefined),
         whereaboutsItem(env, o.person, o.space).catch(
           failed('operator whereabouts'),
+        ),
+        // Where they are, roughly: home, work, now (located.ts).
+        kernelDir(env).then((dir) => locatedItem(dir, o.person)).catch(
+          failed('operator located'),
         ),
         member().then((m) => threadsItem(store, session, m)).catch(
           failed('operator threads'),

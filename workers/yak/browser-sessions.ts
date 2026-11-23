@@ -7,6 +7,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Claims } from './lib/token.ts'
 import type { Bundle } from '@yaks/graph'
+import { background, caught } from './defects.ts'
 
 export type BrowserSession = {
   eid: string
@@ -74,6 +75,12 @@ export let keep = async (
   req: Request,
   claims: Claims & { via: string; session: string },
 ) => {
+  // Where their connection places them as they sign in (located.ts).
+  background(
+    import('./located.ts').then(({ connected }) =>
+      connected(env, claims.person, req)
+    ).catch((e) => caught(e, { request: 'sign-in located' })),
+  )
   await sessions(env).stamp({
     entities: [
       sessionRow({

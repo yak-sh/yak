@@ -228,6 +228,12 @@ let tagsOf = (o: Record<string, unknown>): Tags => {
   }
 }
 
+type Address = {
+  city?: string | null
+  state?: string | null
+  country?: string | null
+}
+
 type Event = {
   type?: string
   created?: number
@@ -469,12 +475,24 @@ export let changed =
         : (o.subscription as string | { id?: string } | undefined) ??
           parent.subscription_details?.subscription,
     )
+    // A completed checkout says where its payer is billed, when Stripe asked
+    // (under Managed Payments, what tax needs: at least the country). Only
+    // the town, state and country are read of it.
+    let address = e.type == 'checkout.session.completed'
+      ? (o.customer_details as { address?: Address } | undefined)?.address
+      : undefined
+    let billed = address && Object.fromEntries(
+      (['city', 'state', 'country'] as const).flatMap((k) =>
+        address[k] ? [[k, String(address[k])]] : []
+      ),
+    )
     return {
       about: 'subscription',
       at,
       live,
       tags: tagsOf(o),
       ...referred,
+      ...billed && Object.keys(billed).length ? { billed } : {},
       subscription: () =>
         whole
           ? Promise.resolve(read(o as Sub, options))

@@ -28,7 +28,8 @@ export type Kept = {
   apply: (bundles: Bundle[]) => unknown
 }
 
-let kept = async (env: Pick<Env, 'STORE'>): Promise<Kept> => {
+/** The directory, read and written as the kernel. */
+export let kept = async (env: Pick<Env, 'STORE'>): Promise<Kept> => {
   let { ctxOf } = await import('./connections.ts')
   let { graph } = ctxOf(env)
   return { read: (q) => graph.read(q as never), apply: graph.apply }

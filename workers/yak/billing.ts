@@ -412,7 +412,9 @@ export let checkout = async (
       done: `${planSettings(space.slug, env)}?paid=1`,
       cancel: `${planSettings(space.slug, env)}?paid=0`,
       reference: space.eid,
-      tags: tagsOf(env, space),
+      // Whose checkout it is, so the billing address it asks for is
+      // theirs (located.ts `billedTo`).
+      tags: { ...tagsOf(env, space), person },
       trial: free,
     })
     step(env, 'checkout', req, { who: email })
@@ -707,6 +709,14 @@ export let apply = async (env: Env, heard: Changed) => {
   // is let go before a read that our key may not even be able to answer.
   let here = apex(env)
   if (elsewhere(heard.tags, here)) return 'elsewhere'
+  // A checkout says where the person who paid is billed: their home, as
+  // that address puts it. The plan never waits on it.
+  if (heard.billed && heard.tags.person) {
+    let { billedTo } = await import('./located.ts')
+    await billedTo(env, heard.tags.person, heard.billed).catch((e) =>
+      defect(e, { request: 'a billing address heard' })
+    )
+  }
   let sub = await heard.subscription()
   if (sub === undefined) return 'nothing to do'
   // Every subscription bought through this deployment is made with its own

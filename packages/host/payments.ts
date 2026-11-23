@@ -126,6 +126,10 @@ export type Changed = {
   tags: Tags
   /** the reference a checkout it is about carried */
   reference?: string
+  /** where the payer said they are billed, from a checkout it is about that
+   * asked: never the street or postal code, only the town, its state or
+   * province, and the two-letter country */
+  billed?: { city?: string; state?: string; country?: string }
   /** the subscription it is about, read off it or asked for: undefined
    * where it is about none, null where the provider holds none by the name
    * it gives */

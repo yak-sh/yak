@@ -36,6 +36,7 @@ import { allowed, minutes, orders, pointed } from './number-upkeep.ts'
 import { restoredNumber } from './number-trash.ts'
 import { GRACE, stamp } from './directory.ts'
 import { usage } from '@yaks/platform/numbers'
+import { locatedEid } from '@yaks/platform/located'
 import type { Env } from './env.ts'
 
 let FREE = '+18335550100'
@@ -574,7 +575,7 @@ test('a space buys a local voip.ms number by area code at its price and our marg
   })
   try {
     let slug = unique('home')
-    let { cookie, eids } = await seed(k, [{ slug, apps: [] }])
+    let { cookie, eids, person: me } = await seed(k, [{ slug, apps: [] }])
     let agent = connector(k, cookie)
     let tool = (name: string, args: Record<string, unknown> = {}) =>
       agent.tool(name, { space: slug, ...args })
@@ -586,6 +587,35 @@ test('a space buys a local voip.ms number by area code at its price and our marg
       await tool('number_find', { state: 'MI', city: 'Battle Creek' }),
       offer,
     )
+    // Named nowhere, a number is looked for near the person: their phone's
+    // area code, until their own word on their home outranks it.
+    await stamp(env, {
+      entities: [{ entity: { eid: me }, phone: { number: '+12695550142' } }],
+    })
+    let near = await tool('number_find')
+    assertStringIncludes(
+      near,
+      'On offer near area code 269 (home, from your phone)',
+    )
+    assertStringIncludes(near, offer)
+    await stamp(env, {
+      entities: [{
+        entity: { eid: locatedEid(me, 'home', 'said') },
+        located: {
+          person: me,
+          kind: 'home',
+          source: 'said',
+          city: 'Battle Creek',
+          region: 'MI',
+          country: 'US',
+        },
+      }],
+    })
+    assertStringIncludes(
+      await tool('number_find'),
+      'On offer near Battle Creek, MI (home, as you said)',
+    )
+    await stamp(env, { entities: [{ entity: { eid: me }, phone: null }] })
     await assertRejects(
       () => tool('number_buy', { number: '+12695550000' }),
       Error,

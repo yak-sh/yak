@@ -55,6 +55,7 @@ import {
 import { type Row } from './tool-words.ts'
 import { binnedNumber, trashedNumber } from './number-trash.ts'
 import { releaseStatus } from './number-release.ts'
+import { caught } from './defects.ts'
 import { searched, slowPhone } from './number-search.ts'
 import { claimVoice, legacySeat, ownerSeats } from './number-voice.ts'
 export { heldNumber, trashedNumber } from './number-trash.ts'
@@ -291,6 +292,21 @@ let signIn = async (ctx: Ctx, args: Args) => {
   }
 }
 
+// Where a local number near the person calling would be looked for, none
+// when nothing places them (located.ts). Reading it never fails the search.
+let nearPerson = async (ctx: Ctx) => {
+  if (!ctx.person) return
+  let [{ near, placesOf }, { kept }] = await Promise.all([
+    import('@yaks/platform/located'),
+    import('./whereabouts.ts'),
+  ])
+  let close = await placesOf(await kept(ctx.env), ctx.person).then(near)
+    .catch((e) => void caught(e, { request: 'number_find near' }))
+  if (!close) return
+  let { area, state, city, why } = close
+  return { where: { area, region: state, city }, why }
+}
+
 /** The number tools, worded in tools.yml. */
 export let numberTools: Row[] = [
   {
@@ -327,20 +343,46 @@ export let numberTools: Row[] = [
         ctx.env,
         tollFree ? 'toll_free' : 'local',
       )
-      let offers = (await searched(ctx.env, via, () =>
-        numbers.find({
-          tollFree,
-          area: maybe('area'),
-          region: maybe('state')?.toUpperCase(),
-          city: maybe('city'),
-          contains: maybe('contains'),
-          limit: Math.min(Number(args.limit ?? 5) || 5, 20),
-        }))).map(priceOf)
+      let asked = {
+        area: maybe('area'),
+        region: maybe('state')?.toUpperCase(),
+        city: maybe('city'),
+      }
+      // A local number named nowhere is looked for near the person, and
+      // says why there (@yaks/platform/located `near`).
+      let close = tollFree || asked.area || asked.region
+        ? undefined
+        : await nearPerson(ctx)
+      let find = (where: Partial<typeof asked>) =>
+        searched(ctx.env, via, () =>
+          numbers.find({
+            tollFree,
+            ...where,
+            contains: maybe('contains'),
+            limit: Math.min(Number(args.limit ?? 5) || 5, 20),
+          }))
+      // A city with nothing on offer widens to its state.
+      let offers =
+        (close
+          ? await find(close.where).then((o) =>
+            o.length || !close.where.city
+              ? o
+              : find({ region: close.where.region })
+          )
+          : await find(asked)).map(priceOf)
       if (!offers.length) {
-        return { text: 'No number on offer matches that.', space }
+        return {
+          text: close
+            ? `No number on offer ${close.why}; name an area, state or city.`
+            : 'No number on offer matches that.',
+          space,
+        }
       }
       return {
         text:
+          (close
+            ? `On offer ${close.why}; name an area, state or city for others.\n\n`
+            : '') +
           offers.map((o) =>
             `${o.number} ${shown(o.number)}${
               o.place ? ` (${o.place})` : ''

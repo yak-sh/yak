@@ -363,6 +363,26 @@ test('a checkout in payment mode is a purchase, paid once its money is there', (
     }).about,
     'subscription',
   )
+  // It says where its payer is billed: the town, state and country alone.
+  let billed = (address?: Record<string, string | null>) =>
+    (heard({
+      type: 'checkout.session.completed',
+      data: {
+        object: { mode: 'subscription', customer_details: { address } },
+      },
+    }) as { billed?: unknown }).billed
+  equal(
+    billed({
+      line1: '1 Main St',
+      postal_code: '49007',
+      city: 'Kalamazoo',
+      state: 'MI',
+      country: 'US',
+    }),
+    { city: 'Kalamazoo', state: 'MI', country: 'US' },
+  )
+  equal(billed({ country: 'US', city: null }), { country: 'US' })
+  equal(billed(), undefined)
 })
 
 test('a subscription Stripe cannot find reads as none', async () => {

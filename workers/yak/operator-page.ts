@@ -25,7 +25,7 @@ import {
 } from './directory.ts'
 import { chatRows } from './connections.ts'
 import { reachOf } from './operator-reach.ts'
-import { caught } from './defects.ts'
+import { background, caught } from './defects.ts'
 import {
   builderOf,
   carried,
@@ -1151,6 +1151,16 @@ export let operatorAnswer = async (
     )
   }
   if (req.method == 'POST') {
+    // Where their connection places them now, for their own Operator
+    // (located.ts), noted beside the answer, never before it.
+    if (who.person) {
+      let person = who.person
+      background(
+        import('./located.ts').then(({ connected }) =>
+          connected(env, person, req)
+        ).catch((e) => caught(e, { request: 'operator located' })),
+      )
+    }
     let form = new FormData()
     let files = []
     for await (let part of parts(req)) {

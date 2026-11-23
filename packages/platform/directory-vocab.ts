@@ -1,8 +1,13 @@
 // The directory's store words, beside platformDoc's.
-import { CORE_URI, type VocabDoc } from '@yaks/vocab'
+import { CORE_URI, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
 import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
+// A server-owned property and what it holds.
+let described = (s: PropSchema, description: string) => ({
+  ...owned(s),
+  description,
+})
 export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
@@ -28,6 +33,37 @@ export let directoryDoc: VocabDoc = {
         agent: owned(text),
         // Where its network placed it when it signed in or last renewed.
         place: owned(text),
+      },
+    },
+    // Where one source puts one of a person's places, roughly
+    // (@yaks/platform/located): their home, their work, where they are now
+    // or a place they named, as their own words, their billing address or
+    // their connection said it. Their phone's area code is read off their
+    // `phone{number}` instead, so it is never kept twice. Never a street or
+    // coordinates; read only for the person and their own Operator.
+    located: {
+      description:
+        "Where one source puts one of a person's places, roughly: home, work, current (where they are now) or a place they named, as their own words (said), their billing address (billing) or their connection (network) put it. One row per person, place and source; never a street address or coordinates.",
+      component: true,
+      type: 'object',
+      journal: false,
+      identity: ['person', 'kind', 'source'],
+      properties: {
+        person: owned(ref('cascade')),
+        kind: described(
+          text,
+          'home, work, current, or the name they gave a place',
+        ),
+        source: described(
+          { type: 'string', enum: ['said', 'billing', 'network'] },
+          'what put them there',
+        ),
+        city: owned(text),
+        region: described(text, 'its state or province as a code, such as MI'),
+        country: described(text, 'its two-letter country code, such as US'),
+        zone: described(text, 'its IANA time zone, such as America/Detroit'),
+        area: described(text, 'a three-digit telephone area code, such as 269'),
+        at: described(time, 'when the source said so'),
       },
     },
     // One CLI grant (workers/yak/grants.ts): whose it is, its id, the space
