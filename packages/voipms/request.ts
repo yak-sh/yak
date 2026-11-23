@@ -120,19 +120,47 @@ export class TimedOut extends Error {
   }
 }
 
+/** The voip.ms methods that may be asked twice: those that read, and the
+ * settings that say the whole of what they set. Any other may have acted
+ * however its first asking ended, so it is never asked again. */
+export let REPEATABLE = /^(get|search)[A-Z]|^(setSMS|setDIDRouting)$/
+
+/**
+ * Every voip.ms call, under one policy: each asking ends by `by` and within
+ * {@link CALL}; a {@link REPEATABLE} method that voip.ms is slow to answer,
+ * or answers with a 5xx, is asked once more, each asking with half the
+ * time, and a second such answer is Unsent, for the caller to ask again
+ * later. Any other method is asked once, and its timeout is
+ * {@link TimedOut}.
+ */
 export let bounded = (
   request: ReturnType<typeof requester>,
   time: Clock,
   by = Infinity,
 ): Call =>
 async (method, params) => {
-  let ms = Math.min(CALL, by - time.now())
-  if (ms <= 0) throw new TimedOut(method)
-  let stop = new AbortController()
-  let cancel = time.after(ms, () => stop.abort(new TimedOut(method)))
+  let once = async (until: number) => {
+    let ms = until - time.now()
+    if (ms <= 0) throw new TimedOut(method)
+    let stop = new AbortController()
+    let cancel = time.after(ms, () => stop.abort(new TimedOut(method)))
+    try {
+      return await request(method, params, stop.signal)
+    } finally {
+      cancel()
+    }
+  }
+  let end = () => Math.min(by, time.now() + CALL)
+  if (!REPEATABLE.test(method)) return await once(end())
+  let slow = (e: unknown) => e instanceof TimedOut || e instanceof Unsent
+  let last = end()
   try {
-    return await request(method, params, stop.signal)
-  } finally {
-    cancel()
+    return await once(Math.min(last, time.now() + CALL / 2))
+  } catch (error) {
+    if (!slow(error)) throw error
+    return await once(last).catch((again) => {
+      if (!slow(again)) throw again
+      throw new Unsent(`voip.ms is slow to answer ${method} right now`)
+    })
   }
 }

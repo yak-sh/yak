@@ -6,7 +6,8 @@
 //   provider charged us with our share (@yaks/platform/numbers `usage`). The
 //   line keeps when its last charged call began (`phone_line.called`), so
 //   each call is charged once. A provider that bills no calls
-//   (@yaks/phone `Numbers.calls`) is read for none.
+//   (@yaks/phone `Numbers.calls`) is read for none, and one slow to answer
+//   (Unsent) is read the next hour from where it stood.
 // - `pointed`: every number of a provider that sends each number's texts to
 //   a URL is pointed at its door here (number-door.ts) again, which asks the
 //   provider nothing where it already is, and finishes an assignment the
@@ -63,7 +64,11 @@ export let minutes = async (env: Env, now: Date): Promise<number> => {
     let calls = (await phoneNamed(env, line.via))?.numbers?.().calls
     if (!calls) continue
     let since = line.called ?? line.at ?? now.toISOString()
-    let took = await calls(line.number, since)
+    // A provider slow this hour is read again the next, from the same call.
+    let took = await calls(line.number, since).catch((error) => {
+      if (error instanceof Unsent) return []
+      throw error
+    })
     if (!took.length) continue
     await stamp(env, {
       entities: [

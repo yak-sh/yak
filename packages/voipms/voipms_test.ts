@@ -291,3 +291,24 @@ test("pointing a number's texts where they already go asks voip.ms nothing more"
   await shop.point!('+12695550100', 'https://host/voipms/other')
   assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'setSMS'])
 })
+
+test('a read voip.ms is slow to answer is asked once more, and a text is never sent twice', async () => {
+  let time = clock()
+  let asked: string[] = []
+  let line = voipms({
+    user: 'u',
+    key: 'k',
+    number: '+12695550100',
+    fetch: (url) => {
+      asked.push(new URL(String(url)).searchParams.get('method')!)
+      return Promise.resolve(new Response('', { status: 503 }))
+    },
+  }, time)
+  await assertRejects(() => line.lines(), Unsent, 'slow to answer getDIDsInfo')
+  await assertRejects(
+    () => line.send({ to: '+12695550142', text: 'Hi' }),
+    Unsent,
+  )
+  assertEquals(asked, ['getDIDsInfo', 'getDIDsInfo', 'sendSMS'])
+  assertEquals(time.pending(), 0)
+})

@@ -512,6 +512,11 @@ test('a space buys a local voip.ms number by area code at its price and our marg
       await tool('number_find', { state: 'MI', city: 'Battle Creek' }),
       offer,
     )
+    await assertRejects(
+      () => tool('number_buy', { number: '+12695550000' }),
+      Error,
+      `On offer in 269: ${LOCAL} ($0.40 up front and $4.10 a month)`,
+    )
     assertStringIncludes(
       await tool('number_buy', { number: LOCAL }),
       '$4.50 of it from this month',

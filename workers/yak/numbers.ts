@@ -329,9 +329,19 @@ export let numberTools: Row[] = [
       let [found] = await numbers.find({ number, tollFree: free(number) })
       let offer = found && priceOf(found)
       if (!offer) {
+        // Its neighbours on offer, by its area code, to choose from instead.
+        let area = /^\+1(\d{3})/.exec(number)?.[1]
+        let near = area && !free(number)
+          ? await numbers.find({ area, limit: 3 }).catch(() => [])
+          : []
         throw refuse(
           'missing',
-          `${number} is not on offer; number_find lists what is`,
+          `${number} is not on offer any longer` +
+            (near.length
+              ? `. On offer in ${area}: ` +
+                near.map(priceOf).map((o) => `${o.number} (${priced(o)})`)
+                  .join(', ')
+              : '; number_find lists what is'),
         )
       }
       if (offer.currency != 'USD') {

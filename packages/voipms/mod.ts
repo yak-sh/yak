@@ -19,7 +19,6 @@ import {
   type Text,
 } from '@yaks/phone'
 
-import { Unsent } from '@yaks/host/senders'
 import {
   bounded,
   type Call,
@@ -101,8 +100,11 @@ let point = async (call: Call, at: string, url?: string) => {
  * equal(asked[0].searchParams.get('dst'), '2695550142')
  * ```
  */
-export let voipms = ({ number, ...account }: Voipms): Account => {
-  let call = requester(account)
+export let voipms = (
+  { number, ...account }: Voipms,
+  time: Clock = system,
+): Account => {
+  let call = bounded(requester(account), time)
   let lines = async (): Promise<Held[]> =>
     (await didsOf(call)).map((d) => ({
       number: e164(String(d.did ?? '')),
@@ -318,25 +320,7 @@ export let numbers = (
   return {
     find: async (s) => {
       if (s.tollFree || (s.country ?? 'US') != 'US') return []
-      // A search only reads, so one voip.ms is slow to answer is asked once
-      // more, each try with half the time; a second slow answer is Unsent.
-      let deadline = time.now() + FIND
-      let search: Call = async (method, params) => {
-        let tried = (by: number) => bounded(request, time, by)(method, params)
-        try {
-          return await tried(Math.min(deadline, time.now() + FIND / 2))
-        } catch (error) {
-          if (!(error instanceof TimedOut || error instanceof Unsent)) {
-            throw error
-          }
-          return await tried(deadline).catch((again) => {
-            if (!(again instanceof TimedOut || again instanceof Unsent)) {
-              throw again
-            }
-            throw new Unsent(`voip.ms is slow to answer ${method} right now`)
-          })
-        }
-      }
+      let search = bounded(request, time, time.now() + FIND)
       let limit = s.limit ?? 5
       let all: Available[]
       if (s.number) {
@@ -458,22 +442,7 @@ export let numbers = (
     },
     // voip.ms takes a number's texting settings only a while after it is
     // ordered, so a host points it once it puts the number to use.
-    // setSMS only sets, so one voip.ms is slow to answer is asked once more;
-    // a second slow answer is Unsent, for the host to point it again later.
-    point: async (number, callback) => {
-      let slow = (e: unknown) => e instanceof TimedOut || e instanceof Unsent
-      try {
-        await point(call, number, callback)
-      } catch (error) {
-        if (!slow(error)) throw error
-        await point(call, number, callback).catch((again) => {
-          if (!slow(again)) throw again
-          throw new Unsent(
-            `voip.ms is slow to set where texts to ${number} go right now`,
-          )
-        })
-      }
-    },
+    point: (number, callback) => point(call, number, callback),
     release: (number) => release(call, ten(number)),
     verify: () =>
       Promise.reject(new Error('voip.ms sells no toll-free number to verify')),
