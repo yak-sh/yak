@@ -130,6 +130,8 @@ let movingStore = async (
         plugins: [blobs(vocab, sqliteBlobs(statements(driver(ctx.storage))))],
         storage: sqliteStorage(driver(ctx.storage), vocab, {
           derived: blobRead(vocab),
+          // A table comes with its search index, as the Store's own does.
+          over: () => shapeOf(NAME, WORDS).over,
         }),
       })
       return g.apply(rows, { trusted: true })

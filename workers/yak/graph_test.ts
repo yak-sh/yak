@@ -46,6 +46,7 @@ import { ddl as journalDdl } from '@yaks/journal'
 import {
   db,
   keep,
+  named,
   seededState,
   slot,
   state as probeState,
@@ -2093,7 +2094,10 @@ let journaled = await (async () => {
   let [schema] = await query('._comp.name=recipe&?doc')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
   let packages = rows('_package').map((row) => row.name)
-  let described = ['_comp', '_prop', '_vocab'].flatMap(rows)
+  // A table no write has raised holds nothing either.
+  let described = ['_comp', '_prop', '_vocab'].flatMap((name) =>
+    named(ctx, { type: 'table', name }).length ? rows(name) : []
+  )
   for (let serves of [2, 7]) {
     await post(
       store,

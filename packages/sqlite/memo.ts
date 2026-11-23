@@ -568,6 +568,11 @@ let tell = (driver: Driver, c: Connection) => {
   // driver was bound to another mode (./mode.ts, `turned`).
   let moved = c.moved = () => {
     forget()
+    grew()
+  }
+  // A table or index made now holds no row: what memory holds of each entity
+  // stands, while what was answered or learned of the schema may not.
+  let grew = () => {
     unspine()
     c.classes.clear()
     c.learned.clear()
@@ -595,7 +600,8 @@ let tell = (driver: Driver, c: Connection) => {
         if (table == 'entity') { for (let k of c.kept) k.answers.clear() }
       }
       if (!c.writing && !adds(s)) forget(table)
-    } else if (
+    } else if (s.t == 'create table' || s.t == 'create index') grew()
+    else if (
       s.t.startsWith('create ') || s.t == 'alter table' || s.t == 'drop'
     ) moved()
   }

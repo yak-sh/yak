@@ -407,22 +407,21 @@ test('erasing a space buries everything that named it', async () => {
   assertEquals((await space(dir, other, 'ada')).slug, 'ada')
 })
 
-test('the directory plants the platform, and not one app word', async () => {
-  let ctx = state()
-  let store = new Store(ctx)
-  await store.fetch(
-    new Request('http://store/query?q=.space', {
-      headers: { 'x-store': PLATFORM_STORE },
-    }),
-  )
-  let tables = named(ctx, { type: 'table' })
-    .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
+test('the directory speaks the platform, and not one app word', async () => {
+  let store = new Store(state())
+  let asked = (q: string) =>
+    store.fetch(
+      new Request(`http://store/query?q=${encodeURIComponent(q)}`, {
+        headers: { 'x-store': PLATFORM_STORE, ...KERNEL },
+      }),
+    )
   // @yaks/member's document is not loaded here: the platform declares the two
   // rungs of its own ladder — `member`, with three seats instead of two, and
   // `grant`, one app rather than a space (T-37615) — and the kernel is the
   // directory's guard. An app's own mode is a word on its `app` row, so
-  // `access` is a table the directory has no use for.
-  assertEquals(tables.includes('access'), false)
+  // `access` is a word the directory has no use for.
+  let access = await asked('.access')
+  assertEquals(access.status, 400, await access.text())
   for (
     let name of [
       'space',
@@ -442,11 +441,15 @@ test('the directory plants the platform, and not one app word', async () => {
       'report',
       'exception',
     ]
-  ) assert(tables.includes(name), `no ${name} table`)
+  ) {
+    let read = await asked(`.${name}`)
+    assertEquals([name, read.status], [name, 200], await read.text())
+  }
   // And the uniques the directory's races are decided by.
-  let uniques = named(ctx, { type: 'index' })
-  assert(uniques.includes('space_slug'))
-  assert(uniques.includes('hostname_name'))
+  let { dir } = platform()
+  let ada = crypto.randomUUID(), bo = crypto.randomUUID()
+  await space(dir, ada, 'ada')
+  await assertRejects(() => space(dir, bo, 'ada'))
 })
 
 // The one bundle the app half writes to its own store today, proving the
