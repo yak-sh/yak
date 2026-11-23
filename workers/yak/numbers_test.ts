@@ -26,7 +26,7 @@ import { appTexter } from './app-texts.ts'
 import { phoneOf } from './phones.ts'
 import { rang } from './operator-calls.ts'
 import { monthly, released } from './numbers.ts'
-import { minutes } from './number-minutes.ts'
+import { minutes, pointed } from './number-upkeep.ts'
 import { usage } from '@yaks/platform/numbers'
 import type { Env } from './env.ts'
 
@@ -406,6 +406,7 @@ let vms = {
   accounts: new Map<string, string>(),
   asked: [] as URLSearchParams[],
   cdr: [] as Record<string, string>[],
+  slow: 0,
 }
 let voipmsApi = endpoints(globalThis).open((req) => {
   let q = new URL(req.url).searchParams
@@ -470,6 +471,7 @@ let voipmsApi = endpoints(globalThis).open((req) => {
         : Response.json({ status: 'invalid_did' })
     }
     case 'setSMS':
+      if (vms.slow > 0 && vms.slow--) return new Response('', { status: 503 })
       vms.held.get(q.get('did')!)!.callback = q.get('url_callback')!
       return ok()
     case 'cancelDID':
@@ -517,7 +519,16 @@ test('a space buys a local voip.ms number by area code at its price and our marg
     assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 4.5)
     assertEquals(vms.held.get('2692015487')?.routing, 'account:100_y2692015487')
 
-    await tool('number_assign', { number: LOCAL })
+    // voip.ms slow to set its texts: assigned all the same, and pointed by
+    // the next hour's upkeep.
+    vms.slow = 2
+    assertStringIncludes(
+      await tool('number_assign', { number: LOCAL }),
+      'arrive once it has, within the hour',
+    )
+    assertEquals(vms.held.get('2692015487')?.callback, undefined)
+    assertEquals(await pointed(env), 1)
+    assert(vms.held.get('2692015487')?.callback)
     assertEquals((await k.dir.textSpace(LOCAL))?.sender, {
       via: 'voipms',
       number: LOCAL,

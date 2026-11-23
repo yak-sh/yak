@@ -458,7 +458,22 @@ export let numbers = (
     },
     // voip.ms takes a number's texting settings only a while after it is
     // ordered, so a host points it once it puts the number to use.
-    point: (number, callback) => point(call, number, callback),
+    // setSMS only sets, so one voip.ms is slow to answer is asked once more;
+    // a second slow answer is Unsent, for the host to point it again later.
+    point: async (number, callback) => {
+      let slow = (e: unknown) => e instanceof TimedOut || e instanceof Unsent
+      try {
+        await point(call, number, callback)
+      } catch (error) {
+        if (!slow(error)) throw error
+        await point(call, number, callback).catch((again) => {
+          if (!slow(again)) throw again
+          throw new Unsent(
+            `voip.ms is slow to set where texts to ${number} go right now`,
+          )
+        })
+      }
+    },
     release: (number) => release(call, ten(number)),
     verify: () =>
       Promise.reject(new Error('voip.ms sells no toll-free number to verify')),

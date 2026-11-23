@@ -6,7 +6,7 @@
 // toll-free, so nothing here names a provider. A space pays the provider's
 // price and our markup (@yaks/platform/numbers `numberPrice`), and each
 // minute a number's calls take as its provider charged them, with our share
-// (number-minutes.ts).
+// (number-upkeep.ts).
 //
 // A number bought is a `phone_line{number, via, space, upfront, monthly, at,
 // verification, sms, voice, campaign}` row (facets/directory-vocab.ts), which
@@ -437,11 +437,16 @@ export let numberTools: Row[] = [
       // Its texts come here, for a provider that sends them to a URL.
       let phone = await phoneNamed(ctx.env, line.via)
       let point = phone?.numbers?.().point
+      let pending = false
       if (phone?.own && point) {
         await point(
           line.number,
           await callbackOf(ctx.env, line.via, phone.own, line.number),
-        )
+        ).catch((error) => {
+          // The hourly upkeep points it again (number-upkeep.ts `pointed`).
+          if (!(error instanceof Unsent)) throw error
+          pending = true
+        })
       }
       await unworn(ctx.env, ctx.dir, line.number)
       await stamp(ctx.env, {
@@ -457,7 +462,11 @@ export let numberTools: Row[] = [
       return {
         text: `${on} texts from ${shown(line.number)}, and texts to it reach ` +
           `${app ? 'the app' : "the space's Operator"}. It texts only people ` +
-          'who agreed to its texts.',
+          'who agreed to its texts.' +
+          (pending
+            ? ' The phone company is still setting it to bring texts here; ' +
+              'texts sent to it arrive once it has, within the hour.'
+            : ''),
         space,
       }
     },
