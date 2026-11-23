@@ -125,7 +125,7 @@ export type Input = {
   isTerminal: () => boolean
   setRaw: (raw: boolean, options?: { cbreak?: boolean }) => void
   readable: ReadableStream<Uint8Array<ArrayBuffer>>
-  read: (buffer: Uint8Array) => Promise<number | null>
+  read: (buffer: Uint8Array, signal?: AbortSignal) => Promise<number | null>
   readSync: (buffer: Uint8Array) => number | null
 }
 export type Output = {
@@ -145,7 +145,8 @@ export let stdin: Input = {
       Uint8Array<ArrayBuffer>
     >
   },
-  read: async (buffer: Uint8Array): Promise<number | null> => {
+  read: async (buffer, signal): Promise<number | null> => {
+    signal?.throwIfAborted()
     let stream = process.stdin
     let chunk: Buffer | null = stream.read(buffer.length)
     if (!chunk) {
@@ -155,6 +156,7 @@ export let stdin: Input = {
           stream.off('readable', ready)
           stream.off('error', failed)
           stream.off('end', ready)
+          signal?.removeEventListener('abort', aborted)
         }
         let ready = () => {
           clear()
@@ -164,10 +166,16 @@ export let stdin: Input = {
           clear()
           reject(error)
         }
+        let aborted = () => {
+          clear()
+          reject(signal?.reason)
+        }
         stream.once('readable', ready)
         stream.once('error', failed)
         stream.once('end', ready)
+        signal?.addEventListener('abort', aborted, { once: true })
       })
+      signal?.throwIfAborted()
       chunk = stream.read(buffer.length) ?? stream.read()
     }
     if (!chunk) return null

@@ -495,7 +495,10 @@ console.log(await authorizeCLI(auth, 'openai'))
 ### yaks.app
 
 `yak auth yaks.app` discovers the MCP resource at `https://yaks.app/mcp`,
-registers a public OAuth client, and uses the same masked paste-back flow. The
+registers a public OAuth client, and accepts the browser's return at
+`http://localhost:8765/oauth/callback`. If the browser runs on another machine
+or can't reach the listener, paste the whole return address into the terminal.
+The input is masked, and the first valid return completes the sign-in. The
 account's address comes from the discovered `userinfo` endpoint.
 
 ```sh

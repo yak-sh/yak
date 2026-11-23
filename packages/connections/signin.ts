@@ -14,8 +14,7 @@ import type { Eid, Graph } from '@yaks/graph'
 import type { Vault } from '@yaks/secrets'
 import type { Attempt } from '@yaks/oauth'
 
-/** Where a service sends the person back. Nothing listens there: they paste
- * the address the browser shows. */
+/** The registered browser return address for a local sign-in. */
 export const REDIRECT = 'http://localhost:8765/oauth/callback'
 
 export type SignIns = {
