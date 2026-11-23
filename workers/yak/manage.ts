@@ -93,7 +93,7 @@ import { invitation } from './referral.ts'
 import { budget, spent } from '@yaks/platform/meter'
 import { gauges } from '@yaks/platform/standing'
 import { DAYS, NOT_ON, statsFor } from './views.ts'
-import { refuse } from './tool.ts'
+import { admin, refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
@@ -696,15 +696,16 @@ let everyUpdate = async (
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:
 // the spaces its selector offers, the apps here this person may open, what
-// they are called, whether they are the platform's admin, which the page's
-// read said (`administrative`), and every way to reach its Operator.
+// they are called, whether they are the platform's admin, and every way to
+// reach its Operator. All Updates reads seats across spaces without the
+// page read that normally answers `administrative`.
 let beside = async (
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name, panes, ways] = await Promise.all([
+  let [spaces, { mine }, name, panes, ways, platformAdmin] = await Promise.all([
     pickable(dir, who.person),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
@@ -718,6 +719,7 @@ let beside = async (
         rows,
       )
     ),
+    who.administrative ?? admin({ dir, person: who.person }),
   ])
   return {
     spaces,
@@ -728,7 +730,7 @@ let beside = async (
       source: a.source,
     })),
     name,
-    admin: !!who.administrative,
+    admin: platformAdmin,
     panes,
     ways,
   }

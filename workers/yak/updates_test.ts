@@ -5,14 +5,13 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
-import { managePath, talkPath } from '@yaks/platform/routes'
+import { ADMIN, chatPath, managePath, talkPath } from '@yaks/platform/routes'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { lastDayLine, updates } from './updates.ts'
 import type { Telling } from './operator-updates.ts'
 import { SPACE } from './build-door.ts'
-import { chatPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let slug = unique('told')
@@ -189,7 +188,7 @@ test('All updates sits above the space picker and opens with that space still se
   assert(all?.querySelector('[data-across=""]'))
   let current = group.querySelector('[aria-current="page"]')
   assertEquals(current?.getAttribute('href'), updates)
-  let links = [...group.querySelectorAll('.SideNav_Link')].map((a) =>
+  let links = [...group.querySelectorAll('a.SideNav_Link')].map((a) =>
     a.getAttribute('href')
   )
   assertEquals(links, [
@@ -211,6 +210,22 @@ test('All updates sits above the space picker and opens with that space still se
       ?.getAttribute('href'),
     chatPath(club.slug),
   )
+})
+
+test('the chat and All updates sidebars link to Admin only for the platform admin', async () => {
+  let link = async (path: string, cookie: string) => {
+    let res = await k.at(k.host, path, { headers: { cookie } })
+    let { document } = parseHTML(await res.text())
+    assertEquals(res.status, 200, path)
+    return document.querySelector(`#menu a[href="${ADMIN}"]`)?.textContent
+      ?.trim() ?? null
+  }
+  for (let [person, expected] of [[k.owner, 'Admin'], [other, null]] as const) {
+    let own = (await k.dir.own(person.person))!
+    for (let path of [chatPath(own.slug), talkPath('updates')]) {
+      assertEquals(await link(path, person.cookie), expected, path)
+    }
+  }
 })
 
 test('an address from before the space was in the path still opens that space’s Updates', async () => {

@@ -1146,9 +1146,13 @@
     flex: none;
     margin-right: calc(-1 * var(--sidebar-padding));
   }
+  .Sidebar_Nav .SideNav_Link[hidden] {
+    display: none;
+  }
 
   .Sidebar_Space {
     display: grid;
+    flex: none;
     gap: .75rem;
     padding-block: .5rem;
     border-radius: var(--radius);
@@ -1328,7 +1332,8 @@
       display: flex;
       height: auto;
     }
-    .Sidebar_Nav {
+    .Sidebar .Sidebar_Nav {
+      display: grid;
       margin-right: 0;
     }
     .Sidebar_Scroll {

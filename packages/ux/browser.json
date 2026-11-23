@@ -12,6 +12,7 @@
     ".",
     "./keys",
     "./save",
-    "./sort"
+    "./sort",
+    "./fit-list"
   ]
 }

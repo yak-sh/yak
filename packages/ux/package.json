@@ -11,7 +11,8 @@
     "./completion": "./completion.ts",
     "./keys": "./keys.ts",
     "./save": "./save-browser.ts",
-    "./sort": "./sort-browser.ts"
+    "./sort": "./sort-browser.ts",
+    "./fit-list": "./fit-list.ts"
   },
   "license": "Apache-2.0",
   "description": "Controlled Preact components for editing, navigation, fields and submissions. Page state lives in graph bundles; durable drafts belong to the host.",

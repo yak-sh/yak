@@ -23,8 +23,6 @@ import {
 export let aboutPath = (space: string, app: string, open = 'new') =>
   `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
 
-let APPS = 4
-
 export let talkSide = (
   env: Env,
   space: Space,
@@ -47,21 +45,13 @@ export let talkSide = (
   let reading = at.current.some((c) => c == 'updates' || c == 'all')
   let open = at.current.find((c) => c && c != 'updates' && c != 'all') ??
     'new'
-  let items: Item[] = apps.slice(0, APPS).map((a) => ({
+  let items: Item[] = apps.map((a) => ({
     href: aboutPath(space.slug, a.slug, open),
     beside: a.slug == at.app,
     icon: 'layout-grid',
     image: iconAt(`https://${spaceHost(env, space.slug)}/${a.slug}/`, a, space),
     label: a.title || a.slug,
   }))
-  if (owner && apps.length > APPS) {
-    items.push({
-      href: managePath('apps', space.slug),
-      icon: 'layout-grid',
-      label: `All ${apps.length} apps`,
-      more: true,
-    })
-  }
   return h(Sidebar, {
     base: url(env),
     home: chatPath(space.slug),
@@ -118,6 +108,7 @@ export let talkSide = (
           label: 'Your apps',
           heading: true,
           note: `Each opens beside your one chat with ${space.operator}.`,
+          fit: true,
           items,
           empty: `None yet. Ask ${space.operator} to make one.`,
         },

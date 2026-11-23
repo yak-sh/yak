@@ -49,6 +49,7 @@ export let ASSETS: Asset[] = [
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   { name: '_sort.js', bundle: here('./sort.ts') },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
+  { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A signed-in page's links followed in place (pages.ts `documented`).
   { name: '_navigate.js', bundle: of('@yaks/web/navigate'), named: true },
   { name: '_home.css', file: homeStyle, named: true },

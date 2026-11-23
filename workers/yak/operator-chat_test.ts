@@ -157,7 +157,7 @@ let sided = async (
   )
   let lines = [
     ...document.querySelectorAll(
-      '.Sidebar :is(.Sidebar_Brand, .Identity b, .SideNav_Link, .Sidebar_Group)',
+      '.Sidebar :is(.Sidebar_Brand, .Identity b, .SideNav_Link:not([hidden]), .Sidebar_Group)',
     ),
   ]
   // A link says its label; a mark beside it (Open, a count) is not its name.
@@ -343,7 +343,7 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
 let owner = await sided('owner')
 let member = await sided('editor')
 let admin = await sided('owner', 'new', undefined, true)
-test('the side holds the space, the Operator, Updates, a few apps and Manage', () => {
+test('the side holds the space, the Operator, Updates, the apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
     'yaks.app',
@@ -355,7 +355,8 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     'Holdfast',
     'Book club',
     'Chores',
-    'All 6 apps',
+    'Garden log',
+    'RSVP',
     'Manage',
   ])
   // Each app opens beside the conversation on screen.
@@ -369,7 +370,8 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     Holdfast: aboutPath('clerk', 'app1'),
     'Book club': aboutPath('clerk', 'app2'),
     Chores: aboutPath('clerk', 'app3'),
-    'All 6 apps': managePath('apps', 'clerk'),
+    'Garden log': aboutPath('clerk', 'app4'),
+    RSVP: aboutPath('clerk', 'app5'),
     Manage: managePath('apps', 'clerk'),
   })
   // The conversation on screen is the side's current tab, and the apps say
@@ -383,7 +385,7 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     `Each opens beside your one chat with ${op}.`,
   )
   // A member may open none of the settings but the Operator's.
-  assertEquals(member.said.includes('All 6 apps'), false)
+  assertEquals(member.said, owner.said)
   assertEquals(member.to.Manage, managePath('operator', 'clerk'))
   // The platform's admin alone has Admin, after Manage.
   assertEquals(admin.said, [...owner.said, 'Admin'])

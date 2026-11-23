@@ -25,7 +25,6 @@ export type Item = {
   /** How many of the person's Updates wait on them across their spaces,
    * filled once the page has asked (space-picker.ts `acrossBadge`). */
   across?: boolean
-  more?: boolean
   submit?: boolean
   /** What a `submit` item's form posts besides its press. */
   fields?: Record<string, string>
@@ -43,6 +42,7 @@ export type Section = {
   heading?: boolean
   /** A line under the heading saying what its links open. */
   note?: string
+  fit?: boolean
   items: Item[]
   empty?: string
 }
@@ -102,7 +102,6 @@ export let link = (at: Item) => {
       href: at.submit ? undefined : at.href,
       as: at.submit ? 'button' : 'a',
       type: at.submit ? 'submit' : undefined,
-      class: at.more ? 'Sidebar_More' : undefined,
       title: at.label,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
@@ -142,6 +141,22 @@ export let link = (at: Item) => {
     : node
 }
 
+let more = () =>
+  h(
+    SideNav.Link,
+    {
+      as: 'button',
+      type: 'button',
+      class: 'Sidebar_More',
+      title: 'More',
+      'aria-expanded': 'false',
+      'data-fit-more': '',
+      hidden: true,
+    },
+    glyph('ellipsis'),
+    h(SideNav.Label, { 'data-fit-label': '' }, 'More'),
+  )
+
 let section = (at: Section, collapsed: boolean) =>
   h(
     'div',
@@ -153,12 +168,18 @@ let section = (at: Section, collapsed: boolean) =>
       ? h('p', { class: 'Sidebar_Note' }, at.note)
       : null,
     at.items.length
-      ? h(SideNav, {
-        class: 'Sidebar_Nav',
-        mod: collapsed && 'rail',
-        'aria-labelledby': at.heading ? at.id : undefined,
-        'aria-label': at.heading ? undefined : at.label,
-      }, at.items.map(link))
+      ? h(
+        SideNav,
+        {
+          class: 'Sidebar_Nav',
+          mod: collapsed && 'rail',
+          'data-fit-list': at.fit ? '' : undefined,
+          'aria-labelledby': at.heading ? at.id : undefined,
+          'aria-label': at.heading ? undefined : at.label,
+        },
+        at.items.map(link),
+        at.fit ? more() : null,
+      )
       : h('p', { class: 'Sidebar_None' }, at.empty),
   )
 
@@ -173,7 +194,7 @@ export let Sidebar = (at: Sidebar) => {
     },
     h(
       'div',
-      { class: 'Sidebar_Scroll' },
+      { class: 'Sidebar_Scroll', 'data-fit-scroll': '' },
       h(
         'div',
         { class: 'Sidebar_Top' },

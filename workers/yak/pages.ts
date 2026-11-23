@@ -258,6 +258,10 @@ ${links(env, 'pages.css', undefined, assets)}${
       ? `<script type="module" src="${file('_contents.js')}"></script>`
       : ''
   }${
+    main.includes('data-fit-list')
+      ? `<script type="module" src="${file('_fit-list.js')}"></script>`
+      : ''
+  }${
     main.includes('data-menu')
       ? `<script src="${file('menu.js')}" defer></script>`
       : ''
