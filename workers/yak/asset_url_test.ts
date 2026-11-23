@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { apiOut, assetMaps, assetUrl, unfound } from './asset_url.ts'
+import { apiOut, assetMaps, assetUrl, unfound } from '@yaks/platform/asset-url'
 import { assetPath, releaseId } from '@yaks/platform/versions'
 import { platformPath } from './router.ts'
 

@@ -82,6 +82,7 @@
     "./standing": "./standing.ts",
     "./meter-graph": "./meter-graph.ts",
     "./files": "./files.ts",
+    "./asset-url": "./asset-url.ts",
     "./files-routes": "./files-routes.ts",
     "./blob-routes": "./blob-routes.ts",
     "./uploads": "./uploads.ts",

@@ -13,7 +13,7 @@ import { ADA, ADA_OWNS as OWNS, as, platform } from './serving-probe.ts'
 import { fetch as siteFetch, forward, HOME } from './site.ts'
 import { answer } from './apex.ts'
 import { edged, fetch as appsFetch } from './apps.ts'
-import { unfound } from './asset_url.ts'
+import { unfound } from '@yaks/platform/asset-url'
 import { aim } from '@yaks/platform/routes'
 
 // A page, of the drawing `drawn` where one is given (drawing.ts).

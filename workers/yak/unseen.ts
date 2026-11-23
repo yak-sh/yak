@@ -553,7 +553,7 @@ let fixings = async (
 // which for a route that threw is the useful half anyway.
 let AT = /([^\s()]+?):(\d+)(?::\d+)?(?=[^\d/]|$)/
 
-// A release serves its files below `api/assets/<release>/` (asset_url.ts), and
+// A release serves its files below `api/assets/<release>/` (@yaks/platform/asset-url), and
 // the person wrote `app.js`, not that: the place names the file they open.
 let RELEASED = /\/api\/assets\/[0-9a-f-]{36}\//
 

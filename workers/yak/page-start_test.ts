@@ -74,7 +74,7 @@ test('a page whose module will not link or load reports it, tagged with the page
     await files.put('/main.js', 'import { show } from "./answer.js"\nshow()\n')
     await files.put('/answer.js', 'export let said = 1\n')
     // A page adding a script the release never shipped, by an address it
-    // computes, which the deploy cannot read (asset_url.ts `unfound`).
+    // computes, which the deploy cannot read (@yaks/platform/asset-url `unfound`).
     await files.put(
       '/gone.html',
       '<!doctype html><script>document.head.append(Object.assign(' +

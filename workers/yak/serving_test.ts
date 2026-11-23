@@ -226,7 +226,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
   assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
 })
 
-// A deployed page names its module under its release (asset_url.ts), and the
+// A deployed page names its module under its release (@yaks/platform/asset-url), and the
 // module imports the client the way the guide writes it. The browser resolves
 // that import against the module's own address, so it has to arrive at the
 // client, and at the client's own address, which is where the client reads its

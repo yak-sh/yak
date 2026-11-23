@@ -443,7 +443,7 @@ test('a page that dies on its first import says so', async () => {
 
     // The installed copy's own shape: a shell, and a module beside it that is
     // not there, named by an address the page computes, which the deploy
-    // cannot read (asset_url.ts `unfound`).
+    // cannot read (@yaks/platform/asset-url `unfound`).
     await files.put(
       '/index.html',
       '<!doctype html><html><head><title>W</title></head><body>' +

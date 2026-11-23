@@ -45,7 +45,13 @@ import { logoIcon } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
-import { apiOut, assetMaps, assetUrl, linked, LOADS } from './asset_url.ts'
+import {
+  apiOut,
+  assetMaps,
+  assetUrl,
+  linked,
+  LOADS,
+} from '@yaks/platform/asset-url'
 import { assetPath, releaseId } from '@yaks/platform/versions'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'

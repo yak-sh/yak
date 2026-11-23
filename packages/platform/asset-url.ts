@@ -7,7 +7,7 @@
  * resolves against the module's own address, below the release. The answer
  * climbs back out relatively, so it keeps whatever mount the browser asked
  * through: a prefix, a front page's root, a sandbox's token. */
-export let apiOut = (asset: string) =>
+export let apiOut = (asset: string): string | null =>
   asset.startsWith('/api/')
     ? '../'.repeat(asset.split('/').length) + asset.slice('/api/'.length)
     : null
@@ -58,7 +58,7 @@ export let assetUrl = (
   release: string,
   reserved: (path: string) => boolean = () => false,
   base = mount,
-) => {
+): string => {
   let found = local(ref, mount, bare, reserved, base)
   return found && /\.[a-z0-9]+$/i.test(found.path) &&
       !/\.html?$/i.test(found.path)
@@ -182,7 +182,7 @@ export let assetMaps = (
   reserved: (path: string) => boolean = () => false,
   base = mount,
   client: string | null = null,
-) => {
+): string => {
   let imports = imported(html, mount, bare, release, reserved, base, client)
   let named = imports[`${mount}api/client.js`]
   let preload = (map: Record<string, unknown>) =>
@@ -244,17 +244,17 @@ export let assetMaps = (
  * attribute naming it: what the page's serving points at its release (apps.ts
  * `released`), and what a deploy finds missing (`unfound`). A `<link>` loads
  * one when `linked` says so. */
-export let LOADS = [
+export let LOADS: readonly (readonly [tag: string, attribute: string])[] = [
   ['script', 'src'],
   ['img', 'src'],
   ['audio', 'src'],
   ['video', 'src'],
   ['video', 'poster'],
   ['source', 'src'],
-] as const
+]
 
 /** Whether a `<link>` of this rel and `as` loads the file it names. */
-export let linked = (rel: string, as: string) => {
+export let linked = (rel: string, as: string): boolean => {
   let rels = rel.split(/\s+/)
   return rels.includes('stylesheet') || rels.includes('modulepreload') ||
     rels.includes('preload') &&
@@ -310,7 +310,7 @@ let imports = (code: string): [string, boolean][] =>
 /** Every reference the release's pages make to a file it does not hold, and
  * those its modules make in turn: an element's file (`LOADS`, `linked`) and a
  * module imported by address, each resolved the way the browser resolves it
- * from the page's `<base>`, or its folder (the root when `rooted`, files.ts
+ * from the page's `<base>`, or its folder (the root when `rooted`, woven.ts
  * `baseOf`), or the module's own. `paths` are the release's files from the app's root and
  * `text` reads one; `folder` is the one the app serves (wrangler's
  * `assets.directory`), and `reserved` the addresses the platform answers. A

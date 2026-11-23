@@ -106,7 +106,7 @@ import { seedy } from '@yaks/platform/files'
 import { linkFor } from '@yaks/platform/preview'
 import { glance, perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { type Unfound, unfound } from './asset_url.ts'
+import { type Unfound, unfound } from '@yaks/platform/asset-url'
 import {
   type Access,
   addresses,
