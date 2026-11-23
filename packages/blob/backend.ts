@@ -13,7 +13,7 @@ export type Backend =
   | { via: 'file'; dir: string }
   | {
     via: 'object'
-    bucket: Pick<Bucket, 'head' | 'get' | 'put'>
+    bucket: Pick<Bucket, 'head' | 'get' | 'put' | 'delete'>
     prefix?: string
   }
 

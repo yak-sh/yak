@@ -9,6 +9,7 @@ import { blobPrefix } from './blob-key.ts'
 import { blobBytes } from './files.ts'
 import { uploaded } from './uploads.ts'
 import { Untaken, useOf } from '@yaks/blob/upload'
+import { bodyOf } from '@yaks/blob'
 import { quoteDoor, refundDoor } from './sell.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import {
@@ -110,8 +111,8 @@ let upload = async (at: Asked) => {
   let buyer = url.searchParams.get('buyer')
   let via = url.searchParams.get('via')
   if (!buyer && !via) return at.json(400, 'missing_customer')
-  let bytes = new Uint8Array(await at.req.arrayBuffer())
-  if (!bytes.byteLength) return at.json(400, 'no_bytes')
+  let bytes = bodyOf(at.req)
+  if (bytes.size === 0) return at.json(400, 'no_bytes')
   let name = at.req.headers.get('x-yak-name') ?? ''
   try {
     name = decodeURIComponent(name)
@@ -125,9 +126,9 @@ let upload = async (at: Asked) => {
     {
       mime: at.req.headers.get('content-type') ?? 'application/octet-stream',
       name,
-      protect: (rows, sha) =>
+      protect: (rows, sha, size) =>
         protectedArtifact(
-          artifactRows(rows, sha, bytes.byteLength),
+          artifactRows(rows, sha, size),
           sha,
           { buyer, via },
         ),
@@ -138,7 +139,7 @@ let upload = async (at: Asked) => {
     attachment: file.use,
     url: `/${at.app.slug}/api/pay/artifacts/${file.sha}`,
     mime: file.mime,
-    bytes: bytes.byteLength,
+    bytes: file.bytes,
     ...file.size,
   })
 }

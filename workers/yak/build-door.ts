@@ -11,7 +11,7 @@ import { vouched, type Who } from './session.ts'
 import { url } from '@yaks/platform/host'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { answered } from './meta.ts'
-import type { Call, Door } from '@yaks/durable-object/door'
+import { type Call, type Door, finite } from '@yaks/durable-object/door'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -88,19 +88,32 @@ export let OWED = 'x-yak-owed'
  * object woken behind it (`woken`): the runtime sends an answer on in turns
  * of the object's event loop, so work the object began as its code let the
  * answer go held a first chat page 81-140 ms (T-149700), and only the caller
- * knows when the answer has arrived. A socket's 101, or a stream, has arrived
- * as it is answered. */
+ * knows when the answer has arrived. A socket's 101, or a live stream, has
+ * arrived as it is answered; a file, never held whole (door.ts `finite`),
+ * once its last byte has passed. */
 export let builderOf = (env: Env, space: string) => {
   let ask = fetchOf(env.BUILDER, space, jittered(env.CLOCK), 'operator_wait')
   return async (make: () => Request, options?: Call): Promise<Response> => {
     let answer = await ask(make, options)
     if (!answer.headers.has(OWED)) return answer
-    let had = !answer.body || answer.status == 101 ||
-        /ndjson|event-stream/.test(answer.headers.get('content-type') ?? '')
-      ? answer
-      : new Response(await answer.arrayBuffer(), answer)
-    woken(env, space)
-    return had
+    let live = !answer.body || answer.status == 101 ||
+      /ndjson|event-stream/.test(answer.headers.get('content-type') ?? '')
+    if (live) {
+      woken(env, space)
+      return answer
+    }
+    if (finite(answer)) {
+      let had = new Response(await answer.arrayBuffer(), answer)
+      woken(env, space)
+      return had
+    }
+    // A file has arrived once its last byte has passed.
+    return new Response(
+      answer.body!.pipeThrough(
+        new TransformStream({ flush: () => woken(env, space) }),
+      ),
+      answer,
+    )
   }
 }
 

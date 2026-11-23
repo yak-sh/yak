@@ -7,6 +7,8 @@
 // an app too, the same name again is an UPDATE and a version later, and the
 // three refusals are sentences on a page rather than a stack trace — a path
 // out of the app, more than the ceiling, and nobody signed in.
+import { bucketObjects } from '@yaks/blob'
+import { memoryBucket } from '../../packages/blob/testing.ts'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { received } from './drop.ts'
@@ -319,7 +321,12 @@ let expectedDrop = files.map((f) => [f.path.slice('site/'.length), f.content])
 
 test('a drop many times what is held at once lands file by file', async () => {
   let { req, stored, put } = streamedDrop
-  let got = await received(req, { put }, Infinity, held)
+  let got = await received(
+    req,
+    { ...bucketObjects(memoryBucket().bucket), put },
+    Infinity,
+    held,
+  )
   assertEquals(got.asked, 'site')
   assertEquals(
     got.files.map((f) => [f.path, stored.get(addressed(f.sha ?? ''))]),

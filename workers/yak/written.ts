@@ -29,7 +29,7 @@ import { releasesPrefix } from '@yaks/platform/file-root'
 // on the app row sends a write that crossed a deploy back to read the live
 // files the deploy left, and the guard on the draft's row sends one whose
 // draft a release closed back to choose again.
-import type { Objects } from '@yaks/blob'
+import { type Objects, STAGING } from '@yaks/blob'
 import { groupBy, lanes } from '@yaks/fp'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid, mint } from '@yaks/graph/identity'
@@ -979,7 +979,7 @@ export let kept = (
  * named by a row still in flight; anything younger than a day is left alone.
  *
  * An upload's bytes live under the app's own `blobs/` prefix, which this
- * sweep does not list.
+ * sweep does not list. A staged stream a day old is retired too.
  */
 export let pruned = async (
   dir: Directory,
@@ -1075,7 +1075,11 @@ export let pruned = async (
     [key, landed],
   ) => !named.has(key.slice(SHA.length)) && now - landed >= GRACE)
     .map(([key]) => key)
-  let keys = [...unindexed, ...unnamed]
+  // A stream staged until its address was known (@yaks/blob `STAGING`) and
+  // still there a day on is one whose process ended before letting it go.
+  let dropped = Object.entries(await blobs.uploaded(STAGING))
+    .filter(([, landed]) => now - landed >= GRACE).map(([key]) => key)
+  let keys = [...unindexed, ...unnamed, ...dropped]
   await retire(keys)
   return keys.length
 }

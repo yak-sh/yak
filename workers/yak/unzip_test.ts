@@ -10,7 +10,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { zipped } from './probe.ts'
-import { type Entry, escapes, unfolded, unzip } from './unzip.ts'
+import { gathered } from '@yaks/blob'
+import { escapes, unfolded, unzip } from './unzip.ts'
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
@@ -21,8 +22,10 @@ async function* chunked(bytes: Uint8Array<ArrayBuffer>) {
 }
 
 let unpacked = async (bytes: Uint8Array<ArrayBuffer>, max = Infinity) => {
-  let out: Entry[] = []
-  for await (let entry of unzip(chunked(bytes), max)) out.push(entry)
+  let out: { path: string; bytes: Uint8Array }[] = []
+  for await (let entry of unzip(chunked(bytes), max)) {
+    out.push({ path: entry.path, bytes: await gathered(entry.bytes) })
+  }
   return unfolded(out)
 }
 

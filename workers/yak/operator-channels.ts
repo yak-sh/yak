@@ -16,7 +16,7 @@ import { isPdf, supported } from '@yaks/platform/documents'
 import { envelope, signed, signedFor } from '@yaks/platform/letters'
 import { digest, sha256 } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
-import { keep } from '@yaks/blob'
+import { holding, keep, type Put } from '@yaks/blob'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
@@ -223,14 +223,21 @@ let fileOf = async (
   size: bytes.byteLength,
 })
 
+/** The most bytes an Operator attachment is. */
+export let ATTACHED = 16 * 1024 * 1024
+
 export let keepFile = async (
   env: Env,
   space: Space,
   name: string,
   mime: string,
-  bytes: Uint8Array<ArrayBuffer>,
+  sent: Put,
 ): Promise<File> => {
-  if (bytes.byteLength > 16 * 1024 * 1024) {
+  // Read whole as a model's input (`fileText`), so held to `ATTACHED` and
+  // never read past it.
+  let bytes = await holding(sent, ATTACHED)
+  if (!(bytes instanceof Uint8Array)) {
+    await bytes.stream.cancel()
     throw refuse(
       'arguments',
       'Operator attachments support files up to 16 MiB.',
@@ -1436,7 +1443,7 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
           space,
           app,
           graph,
-          new Uint8Array(await kept.arrayBuffer()),
+          { stream: kept.body, size: file.size },
           file.mime,
           file.name,
           await acceptsOf(env, space, app),

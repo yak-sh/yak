@@ -3,7 +3,14 @@
 // only while that is safe; anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { doorOf, IDEMPOTENCY, resending, stubOf } from './door.ts'
+import {
+  doorOf,
+  IDEMPOTENCY,
+  received,
+  resending,
+  stubOf,
+  WHOLE,
+} from './door.ts'
 import { backoff } from './resets.ts'
 import { type Answer, namespace } from './testing.ts'
 
@@ -167,4 +174,26 @@ test('a stream, or a call that cannot be sent again, is handed on as it comes', 
     await assertRejects(() => r.text(), Error, 'newer deploy')
     assertEquals(d.ns.sent.length, 1)
   }
+})
+
+test('a finite answer is read whole, a file is handed on as it comes', async () => {
+  let pulls = 0
+  let answer = (length: number) =>
+    new Response(
+      new ReadableStream({
+        pull: (c) => {
+          pulls++
+          c.enqueue(new Uint8Array(1))
+          c.close()
+        },
+      }, { highWaterMark: 0 }),
+      { headers: { 'content-length': String(length) } },
+    )
+  pulls = 0
+  await received(answer(WHOLE))
+  assertEquals(pulls, 1)
+  pulls = 0
+  let file = await received(answer(WHOLE + 1))
+  assertEquals(pulls, 0)
+  await file.body?.cancel()
 })

@@ -10,7 +10,7 @@
 import { type Line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Read } from '@yaks/blob/upload'
-import { type Accepts, prefixed } from '@yaks/blob'
+import { type Accepts, prefixed, type Put } from '@yaks/blob'
 import {
   type File as Filed,
   filed as kept,
@@ -95,7 +95,7 @@ export let filed = async (
   space: Space,
   app: App,
   graph: Pick<Meta, 'query'>,
-  bytes: Uint8Array<ArrayBuffer>,
+  bytes: Put,
   mime: string,
   name: string,
   accepts?: Accepts,
@@ -140,13 +140,13 @@ export let uploaded = async (
   space: Space,
   app: App,
   graph: Meta,
-  bytes: Uint8Array<ArrayBuffer>,
+  bytes: Put,
   o: {
     mime: string
     name: string
     source?: string
     accepts?: Accepts
-    protect?: (rows: Bundle[], sha: string) => Bundle[]
+    protect?: (rows: Bundle[], sha: string, size: number) => Bundle[]
   },
 ): Promise<File> => {
   let file = await filed(
@@ -166,7 +166,7 @@ export let uploaded = async (
         : b
     )
   }
-  if (o.protect) file.bundles = o.protect(file.bundles, file.sha)
+  if (o.protect) file.bundles = o.protect(file.bundles, file.sha, file.bytes)
   try {
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {

@@ -11,13 +11,24 @@
 //
 // Two stores are built on it. `objectBlobs` is content-addressed: the object's
 // key is its address, so a write is idempotent and a stored object can never
-// be the wrong one for its key, and it needs only `head`, `get` and `put`.
+// be the wrong one for its key, and it needs only `head`, `get` and `put`, and
+// `delete` to let go of a stream staged until its address was known.
 // `bucketObjects` is keyed by name, the way a host keeps an app's files: the
 // caller chooses the key, and it also deletes and lists, since files are
 // replaced and swept where content-addressed bytes are not.
 
 import { sleep } from '@yaks/fp'
+import { fixed } from './fixed.ts'
+import type { Multipart } from './parts.ts'
 import type { Blobs } from './store.ts'
+import {
+  gathered,
+  hashing,
+  PIECE,
+  type Put,
+  type Staged,
+  type Streamed,
+} from './stream.ts'
 
 /**
  * The bucket these stores call, keyed by string. Cloudflare R2's `R2Bucket` is
@@ -37,7 +48,8 @@ export type Bucket = {
       arrayBuffer: () => Promise<ArrayBuffer>
     } | null
   >
-  /** write an object under this key */
+  /** write an object under this key; a stream must be of a known length,
+   * which {@link bucketObjects} gives it */
   put: (
     key: string,
     value: ArrayBuffer | ArrayBufferView | string | ReadableStream<Uint8Array>,
@@ -105,7 +117,8 @@ export class BucketUnavailable extends Error {
  * file that opens late is better than one that fails. Other failures are
  * thrown at once. `pause` spends each wait, a timer unless the caller brings
  * its own. Every call the stores below make to a bucket goes through it; a
- * stream is read once, so a caller putting one cannot.
+ * stream is read once, so a put of one is sent again only by a caller that
+ * can open its source again (`staging`).
  *
  * ```ts
  * import { patient } from '@yaks/blob'
@@ -264,7 +277,7 @@ let open = async (
  * Asynchronous, so a graph writing through it applies asynchronously.
  */
 export let objectBlobs = (
-  bucket: Pick<Bucket, 'head' | 'get' | 'put'>,
+  bucket: Pick<Bucket, 'head' | 'get' | 'put' | 'delete'> & Partial<Multipart>,
   prefix = '',
   pause: Pause = sleep,
 ): Blobs => ({
@@ -279,7 +292,144 @@ export let objectBlobs = (
   put: async (sha, bytes) => {
     await patient(() => bucket.put(prefix + sha, bytes), pause)
   },
+  stage: staging(
+    {
+      put: (key, sent) => streamed(bucket, key, sent, pause),
+      open: (key) => open(bucket, key, pause),
+      has: async (key) =>
+        (await patient(() => bucket.head(key), pause)) != null,
+      delete: (key) => patient(() => bucket.delete(key), pause).then(() => {}),
+    },
+    prefix,
+    pause,
+  ),
 })
+
+/** Where a stream waits, under a key of its own, until its address is known
+ * (`staging`). Whatever is left here was dropped by a process that ended
+ * before it could let it go. */
+export let STAGING = 'staging/'
+
+// A stream put to a bucket. A stream is read once, so it is sent once, and a
+// failure cancels it. One of a known length goes as it is; one of unknown
+// length, which a bucket will not take as a stream, goes up in pieces of
+// `PIECE` bytes, each held while it is sent, as the bucket's multipart upload
+// where it has one. Only a bucket without one (a test's, in memory) is given
+// it whole.
+let streamed = async (
+  bucket: Pick<Bucket, 'put'> & Partial<Multipart>,
+  key: string,
+  sent: Streamed,
+  pause: Pause,
+) => {
+  if (sent.size != null) {
+    let upload = fixed(sent.stream, sent.size)
+    try {
+      await bucket.put(key, upload.body)
+      await upload.done
+    } catch (e) {
+      await upload.cancel(e)
+      throw e
+    }
+    return
+  }
+  if (!bucket.createMultipartUpload || !bucket.resumeMultipartUpload) {
+    return void await bucket.put(key, await gathered(sent))
+  }
+  let next = pieces(sent.stream)
+  let first = await next.next()
+  let second = await next.next()
+  if (second.done) {
+    let bytes = first.done ? new Uint8Array() : first.value
+    return void await patient(() => bucket.put(key, bytes), pause)
+  }
+  let { uploadId } = await patient(
+    () => bucket.createMultipartUpload!(key),
+    pause,
+  )
+  let up = bucket.resumeMultipartUpload(key, uploadId)
+  let done: { partNumber: number; etag: string }[] = []
+  let send = (piece: Uint8Array) =>
+    patient(() => {
+      let part = fixed(
+        new Blob([piece as Uint8Array<ArrayBuffer>]).stream(),
+        piece.byteLength,
+      )
+      return up.uploadPart(done.length + 1, part.body)
+        .finally(() => part.done.catch(() => {}))
+    }, pause)
+  try {
+    done.push(await send(first.value!))
+    done.push(await send(second.value))
+    for await (let piece of next) done.push(await send(piece))
+    await patient(() => up.complete(done), pause)
+  } catch (e) {
+    await next.return(undefined)
+    await up.abort().catch(() => {})
+    throw e
+  }
+}
+
+// A stream as pieces of `PIECE` bytes, the last as many as are left.
+async function* pieces(stream: ReadableStream<Uint8Array>) {
+  let piece = new Uint8Array(PIECE), at = 0
+  for await (let chunk of stream) {
+    for (let from = 0; from < chunk.byteLength;) {
+      let n = Math.min(PIECE - at, chunk.byteLength - from)
+      piece.set(chunk.subarray(from, from + n), at)
+      at += n
+      from += n
+      if (at == PIECE) {
+        yield piece
+        piece = new Uint8Array(PIECE)
+        at = 0
+      }
+    }
+  }
+  if (at) yield piece.subarray(0, at)
+}
+
+/**
+ * A content-addressed store's `stage` over a store keyed by name: the stream
+ * lands at a key under {@link STAGING}, hashed as it passes, and `keep` moves
+ * it to `prefix` and its address. A bucket has no copy, so the move streams
+ * the staged object into the put, and is sent again, from a fresh read, while
+ * the bucket answers that it is busy.
+ */
+export let staging = (
+  objects: Pick<Objects, 'open' | 'has' | 'delete'> & {
+    put: (key: string, sent: Streamed) => Promise<void>
+  },
+  prefix: string,
+  pause: Pause = sleep,
+) =>
+async (sent: Streamed, most = Infinity): Promise<Staged> => {
+  let key = `${STAGING}${Date.now()}.${crypto.randomUUID()}`
+  let drop = () => objects.delete(key)
+  let { through, seen } = hashing(sent.size, most)
+  try {
+    await objects.put(key, {
+      stream: sent.stream.pipeThrough(through),
+      size: sent.size,
+    })
+    let { sha, size, head } = await seen
+    let keep = async () => {
+      if (await objects.has(prefix + sha)) return
+      await patient(async () => {
+        let held = await objects.open(key)
+        if (!held) throw new Error(`no object at ${key}`)
+        await objects.put(prefix + sha, {
+          stream: await held.read(),
+          size: held.size,
+        })
+      }, pause)
+    }
+    return { sha, size, head, keep, drop }
+  } catch (e) {
+    await drop().catch(() => {})
+    throw e
+  }
+}
 
 /**
  * The {@link Blobs} kept in `objects` under `prefix`, each by its address
@@ -299,6 +449,7 @@ export let prefixed = (objects: Objects, prefix: string): Blobs => ({
   get: async (sha) => (await objects.read(prefix + sha)) ?? undefined,
   open: (sha) => objects.open(prefix + sha),
   put: (sha, bytes) => objects.put(prefix + sha, bytes),
+  stage: staging(objects, prefix),
 })
 
 /**
@@ -309,8 +460,9 @@ export let prefixed = (objects: Objects, prefix: string): Blobs => ({
 export type Objects = {
   /** whether an object is stored under this key */
   has(key: string): Promise<boolean>
-  /** store these bytes under this key, replacing what was there */
-  put(key: string, bytes: Uint8Array): Promise<void>
+  /** store these bytes under this key, replacing what was there: held
+   * whole, or streamed ({@link Streamed}) */
+  put(key: string, bytes: Put): Promise<void>
   /** the bytes under this key, or null; a miss is one round trip, like a hit,
    * where `has` then `get` is two */
   read(key: string): Promise<Uint8Array<ArrayBuffer> | null>
@@ -359,9 +511,15 @@ let walk = async (bucket: Bucket, prefix: string, pause: Pause) => {
  * // let files = bucketObjects(env.BLOBS)
  * ```
  */
-export let bucketObjects = (bucket: Bucket, pause: Pause = sleep): Objects => ({
+export let bucketObjects = (
+  bucket: Bucket & Partial<Multipart>,
+  pause: Pause = sleep,
+): Objects => ({
   has: async (key) => (await patient(() => bucket.head(key), pause)) != null,
   put: async (key, bytes) => {
+    if (!(bytes instanceof Uint8Array)) {
+      return streamed(bucket, key, bytes, pause)
+    }
     await patient(() => bucket.put(key, bytes), pause)
   },
   read: async (key) => (await load(bucket, key, pause))?.bytes ?? null,

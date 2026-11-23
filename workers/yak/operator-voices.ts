@@ -8,6 +8,7 @@
 // (operator-channels.ts `keepFile`) and attached beside the call that made
 // them (`madeFiles`), as an image made is (operator-images.ts): shown to the
 // person, listed among their files, and put in an app by library_add.
+import type { Put } from '@yaks/blob'
 import {
   clone,
   design,
@@ -61,8 +62,8 @@ export let voiceTools = (
       throw e
     }
   }
-  let kept = (name: string, mime: string, bytes: Uint8Array) =>
-    keepFile(env, space, name, mime, new Uint8Array(bytes))
+  let kept = (name: string, mime: string, bytes: Put) =>
+    keepFile(env, space, name, mime, bytes)
 
   return [
     {
@@ -135,10 +136,7 @@ export let voiceTools = (
             voice,
             ...typeof args.speed == 'number' ? { speed: args.speed } : {},
           })
-          let bytes = new Uint8Array(
-            await new Response(said.body).arrayBuffer(),
-          )
-          return await kept('line.mp3', said.type, bytes)
+          return await kept('line.mp3', said.type, { stream: said.body })
         })
         return madeFiles(
           store,

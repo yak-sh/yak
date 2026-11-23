@@ -739,7 +739,7 @@ export let fileAnswer = async (
   let kept = await env.BLOBS.get(attachmentKey(space, file.address))
   if (!kept) return new Response('That file is missing.', { status: 404 })
   let shows = PICTURES.includes(file.media_type)
-  return new Response(await kept.arrayBuffer(), {
+  return new Response(kept.body, {
     headers: {
       'content-type': shows ? file.media_type : 'application/octet-stream',
       'content-disposition': shows ? 'inline' : 'attachment',

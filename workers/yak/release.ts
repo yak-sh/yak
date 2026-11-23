@@ -1,11 +1,10 @@
 // A release names immutable bytes already stored: its index maps each path to
 // the bytes' content address (@yaks/platform/versions `addressed`), and a deploy writes
 // that index, beside what its compile made, before the app row selects it.
-import type { Objects } from '@yaks/blob'
+import { type Objects, prefixed, type Put, stored } from '@yaks/blob'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
-import { addressed, type Files, own } from '@yaks/platform/versions'
-import { digest } from '@yaks/graph/sha256'
+import { addressed, type Files, own, SHA } from '@yaks/platform/versions'
 import { decode, encode, type File, type Index, META } from './release_index.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
@@ -204,7 +203,7 @@ export let viewOf = (
   raw: Objects,
   root: string,
   files: Files,
-  put: (path: string, bytes: Uint8Array) => Promise<void> = (path) =>
+  put: (path: string, bytes: Put) => Promise<void> = (path) =>
     Promise.reject(new Error(`${root}/${path} is read-only`)),
   drop: (path: string) => void = (path) => {
     throw new Error(`${root}/${path} is read-only`)
@@ -281,9 +280,7 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
   // A put at the content address is the whole write: bytes already there are
   // these bytes, so one call, never a look first.
   let view = viewOf(raw, prefix, files, async (path, bytes) => {
-    let sha = await digest(new Uint8Array(bytes))
-    await raw.put(addressed(sha), bytes)
-    files[path] = sha
+    files[path] = (await stored(prefixed(raw, SHA), bytes)).sha
   }, (path) => void delete files[path])
   let manifest = (): Files =>
     Object.fromEntries(

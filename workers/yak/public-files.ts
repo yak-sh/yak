@@ -27,7 +27,15 @@ import { ownedPrefix } from '@yaks/platform/file-root'
 //
 // Each answers `{path, url, sha, mime, size}`, `url` being where the file
 // answers for the address the request came in on.
-import { carried, mimeOf } from '@yaks/blob'
+import {
+  bodyOf,
+  carried,
+  mimeOf,
+  prefixed,
+  stage,
+  type Staged,
+  TooMany,
+} from '@yaks/blob'
 import { identityEid } from '@yaks/graph/identity'
 import { caught } from './defects.ts'
 import type { App, Directory, PublicFile, Space } from './directory.ts'
@@ -35,7 +43,6 @@ import type { Env } from './env.ts'
 import { blobBytes } from './files.ts'
 import { r2Objects } from './lib/objects.ts'
 import { fullFiles } from './usage.ts'
-import { digest } from '@yaks/graph/sha256'
 
 // The largest file one request publishes: Cloudflare's own limit on a static
 // asset, which is what a published file is.
@@ -169,23 +176,35 @@ let published = async (ask: Ask, path: string) => {
     await req.body?.cancel()
     return no(413, 'too_large', 'a published file is 25 MiB at most')
   }
-  let bytes = new Uint8Array(await req.arrayBuffer())
-  if (!bytes.byteLength) return no(400, 'no_bytes', 'nothing was sent')
-  if (bytes.byteLength > MOST) {
-    return no(413, 'too_large', 'a published file is 25 MiB at most')
+  let staged: Staged
+  try {
+    staged = await stage(
+      prefixed(r2Objects(env.BLOBS), publicPrefix(space, app)),
+      bodyOf(req),
+      MOST,
+    )
+  } catch (e) {
+    if (e instanceof TooMany) {
+      return no(413, 'too_large', 'a published file is 25 MiB at most')
+    }
+    throw e
   }
-  let sha = await digest(bytes)
-  let key = publicPrefix(space, app) + sha
-  let stopped = await fullFiles(env, space, [{ key, bytes: bytes.byteLength }])
-  if (stopped) return no(413, 'space_full', stopped)
-  let blobs = r2Objects(env.BLOBS)
-  if (!(await blobs.has(key))) await blobs.put(key, bytes)
+  let { sha, size } = staged
+  try {
+    if (!size) return no(400, 'no_bytes', 'nothing was sent')
+    let key = publicPrefix(space, app) + sha
+    let stopped = await fullFiles(env, space, [{ key, bytes: size }])
+    if (stopped) return no(413, 'space_full', stopped)
+    await staged.keep()
+  } finally {
+    await staged.drop()
+  }
   let file = {
     app: app.eid,
     path,
     sha,
     mime: typeOf(req.headers.get('content-type') ?? '', path),
-    size: bytes.byteLength,
+    size,
   }
   // The directory lists the path on the app's row as it writes the file
   // (@yaks/platform/publishing-graph), and that write purges the app's kept pages

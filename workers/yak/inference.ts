@@ -1,8 +1,7 @@
 // The kernel lends hosted execution and authenticates each callback against
 // the original ask. Private inputs contain app identity and credential sentinels.
 import { line } from '@yaks/query'
-import { type Bucket, objectBlobs } from '@yaks/blob'
-import { artifactStore } from '@yaks/blob/identify'
+import { type Bucket, objectBlobs, stored } from '@yaks/blob'
 import { type Grant, grants as authorized } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -439,14 +438,16 @@ export let hosting = (env: Bindings): Kernel => ({
     // namespace before any subscription can advertise its download address.
     for (let artifact of receipt.reply?.artifacts ?? []) {
       if (!env.BLOBS) throw new ModelError('media_storage')
-      let source = await objectBlobs(bucket(env), 'artifacts/').get(
+      // Streamed across, never held: generated media can be long.
+      let source = await objectBlobs(bucket(env), 'artifacts/').open!(
         artifact.address,
       )
       if (!source) throw new ModelError('inference_artifact')
-      let saved = await artifactStore(
+      let saved = await stored(
         objectBlobs(env.BLOBS, blobPrefix(found.space, found.app)),
-      )(source, artifact.media_type)
-      if (saved.address !== artifact.address || saved.size !== artifact.size) {
+        { stream: await source.read(), size: source.size },
+      )
+      if (saved.sha !== artifact.address || saved.size !== artifact.size) {
         throw new ModelError('inference_artifact')
       }
     }

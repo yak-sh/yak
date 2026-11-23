@@ -35,8 +35,8 @@ import { unfolded, unzip } from './unzip.ts'
 import { FILES } from '@yaks/platform/plans'
 import { writes } from '@yaks/member'
 import { caught } from './defects.ts'
-import type { Objects } from '@yaks/blob'
-import { gathered } from './bytes.ts'
+import { holding, type Objects } from '@yaks/blob'
+import { type Bytes, gathered } from './bytes.ts'
 import { type Part, parts } from './form.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { refuse } from './tool.ts'
@@ -72,6 +72,25 @@ export let slugged = (name: string) => {
 let titled = (slug: string) =>
   slug.replace(/-+/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
+// A part's body as a stream, refused past the room the space has.
+let roomy = (body: AsyncGenerator<Bytes>, room: number) => {
+  let held = 0
+  return new ReadableStream<Uint8Array>({
+    pull: async (c) => {
+      let got = await body.next()
+      if (got.done) return c.close()
+      held += got.value.byteLength
+      if (held > room) {
+        return c.error(
+          refuse('limit', 'That file is more than this space has room for.'),
+        )
+      }
+      c.enqueue(got.value)
+    },
+    cancel: () => void body.return(undefined),
+  })
+}
+
 // The files a drop carries, pinned one by one as they arrive: a zip is its
 // entries, and anything else is itself, at its own name.
 let opened = async (
@@ -81,12 +100,11 @@ let opened = async (
 ) => {
   let name = file.filename ?? ''
   if (!/\.zip$/i.test(name) && file.type != 'application/zip') {
-    let bytes = await gathered(
-      file.body,
-      room,
-      () => refuse('limit', 'That file is more than this space has room for.'),
-    )
-    if (bytes.length) await pins.pin({ path: basename(name), bytes })
+    // Held only until a first byte comes: an empty file is no file.
+    let bytes = await holding({ stream: roomy(file.body, room) }, 0)
+    if (!(bytes instanceof Uint8Array) || bytes.length) {
+      await pins.pin({ path: basename(name), bytes })
+    }
     return await pins.pinned()
   }
   for await (let entry of unzip(file.body, room)) await pins.pin(entry)
@@ -101,7 +119,7 @@ let opened = async (
  */
 export let received = async (
   req: Request,
-  blobs: Pick<Objects, 'put'>,
+  blobs: Objects,
   room: number,
   held = HELD,
 ) => {

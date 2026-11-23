@@ -47,7 +47,6 @@ import {
 import { Pending } from '@yaks/api/log'
 import type { Bundle, Taken } from '@yaks/graph'
 import { Stale, status } from '@yaks/graph/errors'
-import { addressOf } from './artifact.ts'
 import { mediaType } from './content_type.ts'
 import { contentType } from './identify.ts'
 import { mimeOf } from './mime.ts'
@@ -60,16 +59,18 @@ import {
 } from './representation.ts'
 import { type Served, served, servedOpen, servedVia } from './serve.ts'
 import type { Blobs } from './store.ts'
+import { bodyOf, HEAD } from './stream.ts'
 import {
   admit,
+  admitted,
   artifacts,
   described,
   type File,
-  filed,
   type Read,
   roomFor,
   SCOPE,
   servable,
+  settled,
   Untaken,
   type Upload,
   useOf,
@@ -137,33 +138,6 @@ let missing = () =>
   no('NotFound', 'no object at that address', 404, 'no_such_file')
 
 let UNKNOWN = 'application/octet-stream'
-
-// The request body, counted as it arrives: `null` where it ran past `most`.
-// A caller that declares no length must not be able to make the server hold
-// an unbounded body, so the bound is on the bytes themselves and never on
-// what a `content-length` header claimed — and the remainder is read and
-// discarded rather than cut off, so the refusal reaches the caller instead
-// of a reset connection.
-let bounded = async (
-  request: Request,
-  most: number,
-): Promise<Uint8Array | null> => {
-  let reader = request.body?.getReader()
-  if (!reader) return new Uint8Array()
-  let parts: Uint8Array[] = [], size = 0, over = false
-  while (true) {
-    let { done, value } = await reader.read()
-    if (done || !value) break
-    size += value.length
-    if (over) continue
-    if (size > most) (over = true), (parts = [])
-    else parts.push(value)
-  }
-  if (over) return null
-  let bytes = new Uint8Array(size), at = 0
-  for (let part of parts) bytes.set(part, at), at += part.length
-  return bytes
-}
 
 // What an upload calls its bytes, percent-encoded since a header is ASCII and
 // a file's name is not (@yaks/platform/client.js encodes it).
@@ -245,33 +219,41 @@ export let routes = (
     return response
   }
 
-  // Bytes sent whole: the address the caller states, or none.
+  // Bytes sent whole, streamed as they arrive: the address the caller
+  // states, or none.
   let whole = async (request: Request, sha?: string) => {
-    let most = Math.min(upload.limit!, upload.accepts?.maxLength ?? Infinity)
-    let bytes = await bounded(request, most)
-    // One byte more than `most` is refused as these were.
-    if (!bytes) admit(upload, most + 1)
-    if (!bytes!.length && !sha) {
+    let body = bodyOf(request)
+    if (body.size === 0 && !sha) {
       return no('Refused', 'an upload is some bytes', 400, 'no_bytes')
     }
-    if (sha) {
-      let got = await addressOf(bytes!)
-      if (got != sha) {
-        return no('Refused', `these bytes address ${got}`, 400, 'refused')
+    let staged = await admitted(upload, body)
+    try {
+      if (!staged.size && !sha) {
+        return no('Refused', 'an upload is some bytes', 400, 'no_bytes')
       }
+      if (sha && staged.sha != sha) {
+        return no(
+          'Refused',
+          `these bytes address ${staged.sha}`,
+          400,
+          'refused',
+        )
+      }
+      let name = nameOf(request.headers.get('x-yak-name'))
+      let as = await writer(request)
+      let file = await settled(
+        read,
+        upload,
+        staged,
+        typeOf(request.headers.get('content-type'), name),
+        name,
+        as.check,
+      )
+      await as.write(file.bundles)
+      return answer(file)
+    } finally {
+      await staged.drop()
     }
-    let name = nameOf(request.headers.get('x-yak-name'))
-    let as = await writer(request)
-    let file = await filed(
-      read,
-      upload,
-      bytes!,
-      typeOf(request.headers.get('content-type'), name),
-      name,
-      as.check,
-    )
-    await as.write(file.bundles)
-    return answer(file)
   }
 
   // An upload in parts, where its bucket takes them.
@@ -336,7 +318,6 @@ export let routes = (
     return json({ n: Number(n) })
   }
 
-  // Every write's refusals, in the door's words.
   let writing =
     (handle: (request: Request) => Promise<Response>) =>
     async (request: Request) => {
@@ -354,6 +335,22 @@ export let routes = (
       }
     }
 
+  // The first bytes at `sha`, all a type is read off: only those are read
+  // from a store that streams.
+  let headOf = async (sha: string) => {
+    let object = await store.open?.(sha)
+    if (store.open && !object) return null
+    if (!object) {
+      let bytes = await store.get(sha)
+      return bytes ? { bytes: bytes.subarray(0, HEAD), whole: true } : null
+    }
+    let to = Math.min(HEAD, object.size) - 1
+    let bytes = to < 0 ? new Uint8Array() : new Uint8Array(
+      await new Response(await object.read({ from: 0, to })).arrayBuffer(),
+    )
+    return { bytes, whole: object.size <= HEAD }
+  }
+
   // The representation the rows at `sha` say now, fixed once and kept.
   let current = async (sha: string) => {
     let use = await useOf(sha)
@@ -364,9 +361,9 @@ export let routes = (
     if (!said) return null
     let rep = representation(scope, sha, said.mime, said.name)
     if ((await read(line`.entity.eid=${rep.eid}`)).length) return rep
-    let bytes = await store.get(sha)
-    if (!bytes) return null
-    let fixed = await contentType(bytes, said.mime)
+    let head = await headOf(sha)
+    if (!head) return null
+    let fixed = await contentType(head.bytes, said.mime, head.whole)
     rep = representation(scope, sha, fixed, said.name)
     let applied = await host.graph.apply([
       { entity: { eid: rep.eid }, representation: rep.row },
@@ -397,10 +394,8 @@ export let routes = (
       }
       return got
     }
-    let partial = request.method == 'HEAD' ||
-      request.headers.has('range') || request.headers.has('if-none-match')
-    let object = partial ? await store.open?.(sha) : null
-    if (partial && store.open && !object) return null
+    let object = await store.open?.(sha)
+    if (store.open && !object) return null
     let bytes = object ? null : await store.get(sha)
     if (!object && !bytes) return null
     return object

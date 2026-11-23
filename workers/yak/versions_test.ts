@@ -8,7 +8,7 @@
 // uses.
 import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Objects } from '@yaks/blob'
+import { gathered, type Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import { releaseFiles, staged } from './release.ts'
 import type { Tally } from './lib/hops.ts'
@@ -66,10 +66,9 @@ let memory = () => {
   let blobs = counted(
     {
       has: (k) => Promise.resolve(m.has(k)),
-      put: (k, bytes) => {
-        m.set(k, bytes)
+      put: async (k, bytes) => {
+        m.set(k, await gathered(bytes))
         at.set(k, clock.now)
-        return Promise.resolve()
       },
       read: (k) =>
         Promise.resolve((m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null),
@@ -529,9 +528,10 @@ test('a blob lives while anything names it, and a day besides', async () => {
   )
 
   // What the sweep costs an app: a listing of its staged releases and one of
-  // the stored blobs; no read at all.
+  // the stored blobs, and once a sweep, one of the staged streams; no read at
+  // all.
   let cost = trips()
-  assertEquals(cost.list - before.list, 2)
+  assertEquals(cost.list - before.list, 3)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
 })

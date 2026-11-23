@@ -43,7 +43,8 @@ let fixture = () => {
         objects.set(key, String(body))
         return Promise.resolve()
       },
-    } as Pick<Bucket, 'head' | 'get' | 'put'>,
+      delete: (key) => Promise.resolve(void objects.delete(String(key))),
+    } as Pick<Bucket, 'head' | 'get' | 'put' | 'delete'>,
     INFERENCES: {
       create: ({ id }) => {
         if (created.has(id)) return Promise.reject(Error('exists'))

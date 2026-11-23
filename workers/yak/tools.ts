@@ -55,7 +55,17 @@ import { retirementLetter } from './durable-retirement.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, boundOf } from './bindings.ts'
-import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
+import {
+  bodyOf,
+  broken,
+  holding as heldUpTo,
+  mediaTypeOf,
+  type Objects,
+  PIECE,
+  prefixed,
+  type Put,
+  stored as streamedTo,
+} from '@yaks/blob'
 import { blobPrefix, shaOf } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
@@ -358,6 +368,7 @@ import {
   pins,
   recent,
   releases,
+  SHA,
   type Version,
   whatChanged,
 } from '@yaks/platform/versions'
@@ -3017,34 +3028,44 @@ export let fannedAt = async (
  * A stream's files pinned as they arrive (drop.ts): `pin` checks a file as
  * any write does, names it by its sha and puts it at its content address,
  * then answers once no more than `held` bytes wait on their puts, so however
- * long the stream, its files hold that much and the one in hand. A file
- * larger than `held` is put alone. `pinned` answers each file as a write
+ * long the stream, its files hold that much and the one in hand. A file is
+ * held whole only up to {@link PIECE} bytes, so small files go up several at
+ * once; a larger one streams to its address alone (`stored`), and is not read
+ * whole to check that it decodes. `pinned` answers each file as a write
  * records it, bytes let go, once the last put is done, and `wrotePinned`
  * records them. A put that failed fails whichever of the two comes next.
  */
-export let pinning = (blobs: Pick<Objects, 'put'>, held: number) => {
+export let pinning = (blobs: Objects, held: number) => {
   let sent: Change[] = []
   let flying = new Set<Promise<void>>()
-  let holding = 0
+  let waiting = 0
   let failed: { error: unknown } | null = null
   let fail = () => {
     if (failed) throw failed.error
   }
   return {
-    pin: async (file: { path: string; bytes: Uint8Array }) => {
+    pin: async (file: { path: string; bytes: Put }) => {
       fail()
-      await pictured([file])
-      let [{ bytes, ...f }] = await hashed([file])
+      let bytes = await heldUpTo(file.bytes, PIECE)
+      if (!(bytes instanceof Uint8Array)) {
+        await Promise.all(flying)
+        let { sha, size } = await streamedTo(prefixed(blobs, SHA), bytes)
+        sent.push({ path: file.path.replace(/^\/+/, ''), sha, size })
+        return fail()
+      }
+      await pictured([{ path: file.path, bytes }])
+      let [{ path, sha, size }] = await hashed([{ path: file.path, bytes }])
+      let f = { path, sha, size }
       sent.push(f)
-      holding += f.size
+      waiting += f.size
       let put: Promise<void> = blobs.put(addressed(f.sha), bytes)
         .catch((error) => void (failed ??= { error }))
         .finally(() => {
-          holding -= f.size
+          waiting -= f.size
           flying.delete(put)
         })
       flying.add(put)
-      while (holding > held) await Promise.race(flying)
+      while (waiting > held) await Promise.race(flying)
       fail()
     },
     pinned: async () => {
@@ -3163,9 +3184,17 @@ let sizes =
  * once the app is served broken (T-34337). The sha is what a second write
  * is compared against, and the byte count is what a hand-counted file is.
  */
-export let stored = (path: string, bytes: Uint8Array, sha: string) =>
-  `${bytes.byteLength} bytes, sha256 ${sha}` +
-  (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '') +
+export let stored = (
+  path: string,
+  bytes: Uint8Array | number,
+  sha: string,
+) =>
+  `${
+    typeof bytes == 'number' ? bytes : bytes.byteLength
+  } bytes, sha256 ${sha}` +
+  (/\.(json|yml)$/.test(path) && typeof bytes != 'number'
+    ? `, ${parses(path, bytes)}`
+    : '') +
   (path == ICON_SVG
     ? ', drawn as the 512×512 icon.png the app wears on yaks.app and a ' +
       'home screen, unless the app has an icon.png of its own'
@@ -3302,9 +3331,9 @@ export let fetched = async (said: string, send: typeof fetch = fetch) => {
   }
   let r = await send(at)
   if (!r.ok) throw refuse('arguments', `${at} answered ${r.status}`)
-  let bytes = new Uint8Array(await r.arrayBuffer())
   return {
-    bytes,
+    // As it arrives: a file larger than a write holds streams to its address.
+    body: bodyOf(r),
     // What the response said it is, without its parameters. An app serves
     // the file by its path (files.ts mimeOf), so this is a fact about where
     // the bytes came from — and the sentence to read when a `.js` written to
@@ -4707,25 +4736,44 @@ let OURS: Row[] = [
       if (op == 'fetch') {
         let path = text(args.path, 'path')
         let got = await c.time('fetch', () => fetched(text(args.url, 'url')))
-        let { paths: [p], config, draft: into, drafts: open } = await wroteAt(
-          ctx.env,
-          space,
-          app,
-          who,
-          [{ path, bytes: got.bytes }],
-          c,
-          asked,
+        let bytes = await heldUpTo(got.body, PIECE)
+        let pinned = bytes instanceof Uint8Array ? null : await c.time(
+          'pin',
+          () => streamedTo(prefixed(r2RawObjects(ctx.env.BLOBS), SHA), bytes),
         )
-        let sha = await digest(got.bytes)
+        let { paths: [p], config, draft: into, drafts: open } = pinned
+          ? await wrotePinned(
+            ctx.env,
+            space,
+            app,
+            who,
+            [{
+              path: path.replace(/^\/+/, ''),
+              sha: pinned.sha,
+              size: pinned.size,
+            }],
+            c,
+            asked,
+          )
+          : await wroteAt(
+            ctx.env,
+            space,
+            app,
+            who,
+            [{ path, bytes: bytes as Uint8Array }],
+            c,
+            asked,
+          )
+        let sha = pinned?.sha ?? await digest(bytes as Uint8Array<ArrayBuffer>)
         let where = placing(ctx, space, app, config)
         return {
           // The integrity hash so a page that goes on loading this from a
           // CDN can be pinned to the very bytes we got; the mime is what the
           // response claimed, and mimeOf(path) is what the app will serve.
           text:
-            `fetched ${args.url} → ${where(p)} — ${stored(p, got.bytes, sha)}${
-              got.mime ? `, ${got.mime}` : ''
-            }, integrity sha256-${sri(sha)}` +
+            `fetched ${args.url} → ${where(p)} — ${
+              stored(p, pinned?.size ?? bytes as Uint8Array, sha)
+            }${got.mime ? `, ${got.mime}` : ''}, integrity sha256-${sri(sha)}` +
             (mimeOf(p) == 'application/octet-stream'
               ? ' — the app serves it as application/octet-stream; give the ' +
                 'path a known extension to serve it as anything else'

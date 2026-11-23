@@ -344,14 +344,22 @@ export let thrown = async (r: Response): Promise<Response> => {
   return r
 }
 
-/** Read a finite answer whole inside the retry that sent it, so a restart
- * cutting off its body is sent again. A live stream (ndjson, SSE or a socket)
- * is handed on as it comes, since its reader owns its lifetime. */
+/** The most bytes of an answer {@link received} reads whole. */
+export let WHOLE = 1024 * 1024
+
+/** Whether an answer is read whole where it arrives: a finite one, no larger
+ * than {@link WHOLE} by the length it declares. A live stream (ndjson, SSE or
+ * a socket) is handed on as it comes, since its reader owns its lifetime, and
+ * so is a file, which declares more: it is never held whole. */
+export let finite = (r: Response): boolean =>
+  !!r.body && r.status != 101 &&
+  !/ndjson|event-stream/.test(r.headers.get('content-type') ?? '') &&
+  Number(r.headers.get('content-length') ?? 0) <= WHOLE
+
+/** Read a {@link finite} answer whole inside the retry that sent it, so a
+ * restart cutting off its body is sent again. */
 export let received = async (r: Response): Promise<Response> =>
-  !r.body || r.status == 101 ||
-    /ndjson|event-stream/.test(r.headers.get('content-type') ?? '')
-    ? r
-    : new Response(await r.arrayBuffer(), r)
+  finite(r) ? new Response(await r.arrayBuffer(), r) : r
 
 // A request can be built twice from its init only while the body is a value:
 // a stream, or a Request whose body the first build took, is spent.

@@ -2,7 +2,7 @@
 // the keys it was made from are gone.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Objects } from '@yaks/blob'
+import { gathered, type Objects } from '@yaks/blob'
 import { filesAt, releaseFiles, staged } from './release.ts'
 import { fileBytes } from './files.ts'
 import { bucket } from './binding-probe.ts'
@@ -19,10 +19,7 @@ let memory = () => {
     [...held.keys()].filter((key) => key.startsWith(prefix)).sort()
   let files: Objects = {
     has: (key) => Promise.resolve(held.has(key)),
-    put: (key, bytes) => {
-      held.set(key, new Uint8Array(bytes))
-      return Promise.resolve()
-    },
+    put: async (key, bytes) => void held.set(key, await gathered(bytes)),
     read: (key) => Promise.resolve(held.get(key) ?? null),
     load: async (key) => {
       let bytes = held.get(key)

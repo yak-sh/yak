@@ -41,7 +41,7 @@ import { previewed } from './preview-html.ts'
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { type Host, url as hostUrl } from '@yaks/platform/host'
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { logoIcon } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
@@ -53,7 +53,7 @@ import {
   linked,
   LOADS,
 } from '@yaks/platform/asset-url'
-import { assetPath, releaseId } from '@yaks/platform/versions'
+import { assetPath, releaseId, SHA } from '@yaks/platform/versions'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
@@ -84,7 +84,7 @@ import {
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery-row.ts'
 import { buying } from './sell.ts'
-import { addressed } from '@yaks/blob'
+import { addressed, bodyOf, prefixed, stage } from '@yaks/blob'
 import { declarationOf } from './declaration.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { Pending } from '@yaks/api/log'
@@ -1440,13 +1440,24 @@ let appDoor = async (
     let file = decodedPath(path.slice('/files/'.length))
     if (file == null) return nothingHere(env)
     try {
-      let { drafted, fullAt, hashed } = await import('./tools.ts')
-      let sent = await hashed([{
-        path: file,
-        bytes: new Uint8Array(await req.arrayBuffer()),
-      }])
-      let stopped = await fullAt(env, space, sent)
-      if (stopped) return json(413, 'space_full', stopped)
+      let { drafted, fullAt } = await import('./tools.ts')
+      // Streamed to the file's content address as it arrives, never held.
+      let staged = await stage(
+        prefixed(r2RawObjects(env.BLOBS), SHA),
+        bodyOf(req),
+      )
+      let sent = [{
+        path: file.replace(/^\/+/, ''),
+        sha: staged.sha,
+        size: staged.size,
+      }]
+      try {
+        let stopped = await fullAt(env, space, sent)
+        if (stopped) return json(413, 'space_full', stopped)
+        await staged.keep()
+      } finally {
+        await staged.drop()
+      }
       await drafted(env, space, app, who, sent)
     } catch (e) {
       return rejection(e, {

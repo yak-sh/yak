@@ -22,7 +22,6 @@ import type { Bundle, Comp, Reads } from '@yaks/graph'
 import { digest, token } from '@yaks/graph/sha256'
 import { size as said } from '@yaks/fp'
 import { type Accepts, fits, taken, takes } from './accepts.ts'
-import { addressOf, keep } from './artifact.ts'
 import { contentType } from './identify.ts'
 import { type Size, sizeOf } from './image.ts'
 import {
@@ -31,6 +30,7 @@ import {
   represents,
 } from './representation.ts'
 import type { Blobs } from './store.ts'
+import { lengthOf, type Put, stage, type Staged, TooMany } from './stream.ts'
 
 let UNKNOWN = 'application/octet-stream'
 
@@ -248,10 +248,11 @@ export let described = async (
 
 /**
  * Bytes kept under their address, held to what `at` takes, and the rows that
- * name them, for the caller to write as whoever it decided is writing. Bytes
- * not taken throw {@link Untaken} before any are kept. `check` is asked of the
- * rows before the bytes are kept, so whatever would refuse the write refuses
- * the upload.
+ * name them, for the caller to write as whoever it decided is writing. A
+ * stream ({@link Put}) is kept as it arrives, never held whole (./stream.ts
+ * `stage`). Bytes not taken throw {@link Untaken} before any are kept at their
+ * address. `check` is asked of the rows before the bytes are kept, so
+ * whatever would refuse the write refuses the upload.
  *
  * The bytes land before their rows: a row naming nothing is what a reader
  * sees, while bytes nobody has named yet are invisible until the same file
@@ -260,18 +261,49 @@ export let described = async (
 export let filed = async (
   read: Read,
   at: Upload,
-  bytes: Uint8Array,
+  bytes: Put,
   mime: string,
   name: string,
   check?: (rows: Bundle[]) => unknown,
 ): Promise<File> => {
-  admit(at, bytes.byteLength)
-  let sha = await addressOf(bytes)
-  await roomFor(at, sha, bytes.byteLength)
-  let file = await described(read, at, sha, bytes, mime, name)
-  admit(at, bytes.byteLength, file.mime)
+  let staged = await admitted(at, bytes)
+  try {
+    return await settled(read, at, staged, mime, name, check)
+  } finally {
+    await staged.drop()
+  }
+}
+
+/** Bytes staged in `at`'s store as they arrive, refused with {@link Untaken}
+ * past the most it takes: before any are read where their length is said,
+ * and as they pass where it is not. The caller drops them. */
+export let admitted = async (at: Upload, bytes: Put): Promise<Staged> => {
+  let size = lengthOf(bytes)
+  if (size != null) admit(at, size)
+  let most = Math.min(at.limit ?? Infinity, at.accepts?.maxLength ?? Infinity)
+  try {
+    return await stage(at.store, bytes, most)
+  } catch (e) {
+    if (e instanceof TooMany) admit(at, e.most + 1)
+    throw e
+  }
+}
+
+/** {@link filed}, for bytes already staged: the caller drops them. */
+export let settled = async (
+  read: Read,
+  at: Upload,
+  staged: Staged,
+  mime: string,
+  name: string,
+  check?: (rows: Bundle[]) => unknown,
+): Promise<File> => {
+  let { sha, head, size } = staged
+  await roomFor(at, sha, size)
+  let file = await described(read, at, sha, head, mime, name, size)
+  admit(at, size, file.mime)
   await check?.(file.bundles)
-  await keep(at.store, sha, bytes)
+  await staged.keep()
   return file
 }
 

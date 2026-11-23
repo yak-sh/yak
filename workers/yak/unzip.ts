@@ -33,18 +33,14 @@
 // `recipes`), and macOS's own leavings — `__MACOSX/` and `.DS_Store` — are
 // dropped rather than deployed.
 
+import type { Streamed } from '@yaks/blob'
 import { CallError } from '@yaks/tools/errors'
-import {
-  type Bytes,
-  exactly,
-  gathered,
-  type Reader,
-  reader,
-  until,
-} from './bytes.ts'
+import { type Bytes, exactly, type Reader, reader, until } from './bytes.ts'
 import { refuse } from './tool.ts'
 
-export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
+/** A file in a zip: its path, and its bytes as they unpack, which are read to
+ * their end before the next file is. */
+export type Entry = { path: string; bytes: Streamed }
 
 let LOCAL = 0x04034b50
 let CENTRAL = 0x02014b50
@@ -179,18 +175,21 @@ async function* described(r: Reader, width: number, path: string) {
   r.skip(signed ? look : look - 4)
 }
 
-// An entry's packed bytes through the runtime's inflate. A failure of the
-// bytes it was handed is the zip's, said as a sentence; one in handing them
-// over (a stream cut off) is passed on as it was.
-let inflated = async (
+// An entry's bytes as a stream, through the runtime's inflate where they are
+// packed, counted against `room` as they come out. A failure of the bytes the
+// inflate was handed is the zip's, said as a sentence; one in handing them
+// over (a stream cut off) is passed on as it was. `count` is how many came
+// out, once they all have.
+let flowing = (
   packed: AsyncIterable<Bytes>,
+  deflated: boolean,
   room: number,
   path: string,
 ) => {
   let from = packed[Symbol.asyncIterator]()
   let failed: unknown
   let stopped = false
-  let out = new ReadableStream<Bytes>({
+  let raw = new ReadableStream<Bytes>({
     pull: async (c) => {
       let got = await from.next().catch((e) => {
         failed = e
@@ -202,12 +201,29 @@ let inflated = async (
     },
     // The inflate gave up on what it was handed while the next was coming.
     cancel: () => void (stopped = true),
-  }).pipeThrough(new DecompressionStream('deflate-raw'))
-  try {
-    return await gathered(out, room, big)
-  } catch (e) {
-    throw failed ?? (e instanceof CallError ? e : damaged(path))
-  }
+  })
+  let out =
+    (deflated ? raw.pipeThrough(new DecompressionStream('deflate-raw')) : raw)
+      .getReader()
+  let count = 0
+  let stream = new ReadableStream<Uint8Array>({
+    pull: async (c) => {
+      try {
+        let got = await out.read()
+        if (got.done) return c.close()
+        count += got.value.byteLength
+        if (count > room) throw big()
+        c.enqueue(got.value)
+      } catch (e) {
+        let why = failed ??
+          (e instanceof CallError || !deflated ? e : damaged(path))
+        c.error(why)
+        await out.cancel(why).catch(() => {})
+      }
+    },
+    cancel: (why) => out.cancel(why),
+  })
+  return { stream, count: () => count }
 }
 
 /**
@@ -285,12 +301,13 @@ export async function* unzip(
     }
     let room = max - total
     if (!streamed && size > room) throw big()
-    let bytes = method == 0
-      ? await gathered(data, room, big)
-      : await inflated(data, room, path)
-    total += bytes.length
+    let flow = flowing(data, method != 0, room, path)
     any = true
-    yield { path, bytes }
+    yield {
+      path,
+      bytes: { stream: flow.stream, ...streamed ? {} : { size } },
+    }
+    total += flow.count()
   }
   if (!any) throw refuse('arguments', 'There are no files in that zip.')
 }

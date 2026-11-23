@@ -3,7 +3,7 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, pick } from '@yaks/vocab'
 import { sweepDoc } from '@yaks/platform/sweep-vocab'
-import { bucketObjects } from '@yaks/blob'
+import { bucketObjects, STAGING } from '@yaks/blob'
 import { memoryBucket } from '../../packages/blob/testing.ts'
 import type { Directory } from './directory.ts'
 import {
@@ -15,6 +15,7 @@ import {
   retiringPrefix,
 } from './file-retirement.ts'
 import { pruned } from './written.ts'
+import { GRACE } from './versions.ts'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { reclaimFiles } from './file-retirement-graph.ts'
 import { WINDOW } from './recover.ts'
@@ -292,6 +293,18 @@ test('the app sweep leaves immutable workbench snapshots outside its namespaces'
   })
   equal(candidates, [])
   equal(await Promise.all(keys.map((key) => blobs.has(key))), [true, true])
+})
+
+test('the app sweep retires a staged stream its process left a day ago', async () => {
+  let blobs = bucketObjects(memoryBucket().bucket)
+  await blobs.put(`${STAGING}left`, bytes)
+  let candidates: string[] = []
+  let retire = (keys: string[]) => (candidates.push(...keys), Promise.resolve())
+  // The memory bucket's clock lands its first object at 1.
+  await pruned(dir, blobs, [], 1, retire)
+  equal(candidates, [])
+  await pruned(dir, blobs, [], 1 + GRACE, retire)
+  equal(candidates, [`${STAGING}left`])
 })
 
 // Both apps' immutable release manifests name the same global content object.

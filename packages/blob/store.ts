@@ -18,6 +18,7 @@
 import { sha256 } from '@yaks/graph/sha256'
 import type { Opened } from './object.ts'
 import type { Body } from './props.ts'
+import type { Staged, Streamed } from './stream.ts'
 
 /**
  * A content-addressed byte store. `sha` is always the lowercase-hex SHA-256 of
@@ -44,6 +45,10 @@ export type Blobs = {
   /** store these bytes under this hash; storing the same pair twice is a
    * no-op, because the second copy is the first one */
   put: (sha: string, bytes: Uint8Array) => void | Promise<void>
+  /** Stores that take a stream without holding it land it here, hashed as it
+   * passes and refused past `most`, for the caller to keep at its address or
+   * drop (./stream.ts `stage`). */
+  stage?: (sent: Streamed, most?: number) => Promise<Staged>
   /** Let go of these objects, keeping each one a row of `held` still names:
    * what an expired value leaves behind. A store that cannot tell which rows
    * name an object leaves this out and keeps everything. */

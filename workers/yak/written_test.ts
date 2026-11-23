@@ -4,7 +4,7 @@
 // app_files tests in mcp_deploy_test.ts and files_read_test.ts.
 import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import type { Objects } from '@yaks/blob'
+import { gathered, type Objects } from '@yaks/blob'
 import { guard } from '@yaks/graph/guard'
 import { digest, token } from '@yaks/graph/sha256'
 import { Stale } from '@yaks/graph/errors'
@@ -202,11 +202,13 @@ let made = () => {
   let heard: Drafted[] = []
   let raw: Objects = {
     has: (key) => Promise.resolve(bytes.has(key)),
-    put: (key, value) =>
-      answer(() => {
+    put: async (key, value) => {
+      let got = await gathered(value)
+      return answer(() => {
         puts.push(key)
-        bytes.set(key, new Uint8Array(value))
-      }),
+        bytes.set(key, got)
+      })
+    },
     read: (key) => Promise.resolve(bytes.get(key) ?? null),
     get: (key) =>
       answer(() => {

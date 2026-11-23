@@ -65,6 +65,13 @@ its callers, never by adding a hop between them.
   `deno lint` runs with `prefer-const` turned off on purpose: `let` is the
   default here, and `const` is for true module constants.
 - Doctests and fenced examples run with the package's tests (`testing`).
+- Files stream. A file's bytes go from where they arrive to where they are
+  kept or served as a stream: @yaks/blob's `bodyOf`, `stage` and `stored`,
+  `Objects.put` of a `Streamed`, `open().read()`, an R2 object's `body`.
+  Never `arrayBuffer()`, `.bytes()`, `formData()` or `Deno.readFile` on a
+  file. Where bytes are needed whole (a model's input, a resize, a parse),
+  hold them to a stated bound with `holding` and refuse past it; what reads
+  whole, and its bound, is listed in packages/blob/README.md.
 
 ## Component CSS
 

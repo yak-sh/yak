@@ -107,6 +107,7 @@ export {
   type Call,
   type Door,
   doorOf,
+  finite,
   IDEMPOTENCY,
   type Namespace,
   received,
@@ -117,6 +118,7 @@ export {
   type Stub,
   stubOf,
   thrown,
+  WHOLE,
 } from './door.ts'
 export {
   backoff,

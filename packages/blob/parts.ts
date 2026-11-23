@@ -24,6 +24,7 @@ import { bucketCode, busy, type Objects, patient } from './object.ts'
 import { sleep } from '@yaks/fp'
 import { fixed } from './fixed.ts'
 import { hasher, START } from './sha256.ts'
+import { HEAD } from './stream.ts'
 
 /** A bucket's multipart upload, as R2's Workers binding offers it. */
 export type Multipart = {
@@ -49,10 +50,6 @@ export let MOST = 10_000
 /** Every part size is a whole number of these, so a sender records its hash
  * state once per MiB and holds the state at every part's start. */
 export let MiB = 1024 * 1024
-
-/** How many of the whole's first bytes `post` hands back: enough for a
- * picture's header and a file's signature (`sizeOf`, `contentType`). */
-export let HEAD = 256 * 1024
 
 /** An upload that is not under way, never begun or aborted: begin again. */
 export class Gone extends Error {}

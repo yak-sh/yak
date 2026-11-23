@@ -204,6 +204,10 @@ let titled = (title: string, ...inside: Node[]) =>
 let field = (id: string, label: string, control: Node) =>
   h(Form.Field, null, h(Form.Label, { for: id }, label), control)
 
+/** The most bytes of words drawn in place as a page (`wordsPage`), which
+ * reads them whole. */
+let WORDS = 1024 * 1024
+
 /** Over a newcomer's chat (newcomer.ts): their address, which signs them in
  * by a code and keeps the space, its apps and this chat as theirs, back on
  * this page (identity.ts `landed`, newcomer.ts `keep`). */
@@ -859,20 +863,21 @@ export let operatorAnswer = async (
     if (!file) {
       return new Response('That attachment is missing.', { status: 404 })
     }
-    let kept = await env.BLOBS.get(attachmentKey(space, file.address))
-    if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
     // A picture opens in place, as the conversation draws it, and words as
     // plain text; anything else is saved. None is ever read as a page of
     // yaks.app.
     // Words drawn in place (`&shown`) come as a page of their own in the
-    // colors of the conversation around them (@yaks/ui `wordsPage`).
+    // colors of the conversation around them (@yaks/ui `wordsPage`), read
+    // whole to be, so only up to `WORDS`; longer ones stream as plain text.
+    let key = attachmentKey(space, file.address)
     let shows = PICTURES.includes(file.mime)
     let reads = textual(file.mime)
-    let framing = reads && q.has('shown')
+    let framing = reads && q.has('shown') &&
+      (await env.BLOBS.head(key) ?? { size: Infinity }).size <= WORDS
+    let kept = await env.BLOBS.get(key)
+    if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
     return new Response(
-      framing
-        ? wordsPage(new TextDecoder().decode(await kept.arrayBuffer()))
-        : await kept.arrayBuffer(),
+      framing ? wordsPage(await new Response(kept.body).text()) : kept.body,
       {
         headers: {
           'content-type': shows

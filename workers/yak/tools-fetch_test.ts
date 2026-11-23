@@ -31,7 +31,10 @@ test('a fetch takes https, a live answer, and nothing over the ceiling', async (
     assertEquals(String(at), 'https://cdnjs.example/chess.js')
     return Promise.resolve(library)
   })
-  assertEquals(new TextDecoder().decode(got.bytes), 'export let go = () => {}')
+  assertEquals(
+    await new Response(got.body.stream).text(),
+    'export let go = () => {}',
+  )
   assertEquals(got.mime, 'text/javascript')
 })
 

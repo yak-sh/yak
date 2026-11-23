@@ -194,12 +194,12 @@ addresses, while `blobRead()` resolves the keys in its Layout.
 Methods can return values or promises. Synchronous storage preserves synchronous
 graph writes; an asynchronous backend makes those writes asynchronous.
 
-| Backend                            | Storage                                       | Return style  |
-| ---------------------------------- | --------------------------------------------- | ------------- |
-| `sqliteBlobs(statements, layout?)` | A SQL table, default `blob_text(sha, value)`  | Sync or async |
-| `fileBlobs(dir)`                   | One file per address at `<dir>/<sha>`         | Asynchronous  |
-| `objectBlobs(bucket, prefix?)`     | Objects accessed through `head`, `get`, `put` | Asynchronous  |
-| `memoryBlobs()`                    | This process's memory, while it runs          | Synchronous   |
+| Backend                            | Storage                                                    | Return style  |
+| ---------------------------------- | ---------------------------------------------------------- | ------------- |
+| `sqliteBlobs(statements, layout?)` | A SQL table, default `blob_text(sha, value)`               | Sync or async |
+| `fileBlobs(dir)`                   | One file per address at `<dir>/<sha>`                      | Asynchronous  |
+| `objectBlobs(bucket, prefix?)`     | Objects accessed through `head`, `get`, `put` and `delete` | Asynchronous  |
+| `memoryBlobs()`                    | This process's memory, while it runs                       | Synchronous   |
 
 `sqliteBlobs` stores text and rejects bytes that are not valid UTF-8. Its
 inserts use `insert or ignore`. Writes use the SQL store's atomic boundary,
@@ -302,6 +302,64 @@ equal(await new Response(await opened.read({ from: 1, to: 3 })).text(), 'ell')
 await files.delete('page.txt')
 equal(await files.read('page.txt'), null)
 ```
+
+## Streaming files
+
+A file is never read whole into memory to be kept or served. Its bytes pass as a
+`ReadableStream`, a chunk at a time, from where they arrive to where they are
+kept, and from there to whoever reads them.
+
+- `bodyOf(request)` is a request's or a response's body as a **Streamed**:
+  `{ stream, size? }`, with the length it declares.
+- `Objects.put(key, streamed)` puts a stream. One of known length goes as it is;
+  one of unknown length goes up in `PIECE` (8 MiB) parts of the bucket's
+  multipart upload, so a put holds one part at most.
+- `stage(store, put, most?)` lands bytes in a content-addressed store, hashed as
+  they pass, and answers their address, length and first `HEAD` bytes, with
+  `keep` and `drop`. A bucket store stages under `STAGING` and moves the object
+  to its address on `keep`. `stored` stages and keeps in one call. `filed` and
+  the upload door stage their bytes this way, and a stream past `most` fails
+  with `TooMany`.
+- `open(key).read(range?)` streams an object back, a range or all of it.
+- `holding(put, most)` holds bytes whole only up to `most`, for a caller that
+  does better with small files whole.
+
+```ts
+import { equal } from '@yaks/testing'
+import { address, bucketObjects, prefixed, stored } from '@yaks/blob'
+import { memoryBucket } from './testing.ts'
+
+let { bucket, held } = memoryBucket()
+let blobs = prefixed(bucketObjects(bucket), 'files/')
+let body = new Response('a photo').body!
+let { sha, size } = await stored(blobs, { stream: body })
+equal([sha, size], [address('a photo'), 7])
+equal([...held.keys()], [`files/${sha}`])
+```
+
+### What reads whole, and its bound
+
+Some work needs the bytes whole. Each holds them to a stated bound and refuses
+what is past it, rather than loading it:
+
+| What                                                                  | Why whole                                          | Bound                                                 |
+| --------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| A file a write or a drop holds (workers/yak tools.ts `pinning`)       | puts several at once; a PNG is decoded to check it | `PIECE`, 8 MiB; larger streams, unchecked             |
+| A part of an upload in parts (`parts`)                                | kept again as its recovery copy                    | the part size, 8 MiB by default                       |
+| An upload's type and picture size (`described`)                       | read off the first bytes                           | `HEAD`, 256 KiB                                       |
+| An Operator attachment (workers/yak `keepFile`)                       | a model's input, OCR, base64                       | 16 MiB, refused past it                               |
+| A document's text extracted (workers/yak documents.ts)                | parsed by its extractor                            | 16 MiB, refused past it                               |
+| A logo (workers/yak logo.ts)                                          | drawn into an SVG                                  | 1 MB, refused past it                                 |
+| A published file's request (workers/yak public-files.ts)              | none: it streams                                   | 25 MiB, refused past it                               |
+| Words framed in place (workers/yak operator-page.ts)                  | drawn as a page                                    | 1 MiB; longer ones stream as text                     |
+| A Durable Object's answer (@yaks/durable-object `received`)           | sent again if a restart cuts it off                | `WHOLE`, 1 MiB; a larger one streams                  |
+| An outbound call's body (@yaks/egress, @yaks/connections)             | secrets substituted, sent again on an OAuth retry  | none yet: T-2794                                      |
+| A store's sandbox `/apply` or a form's fields                         | parsed as rows                                     | the store's own limits; files go through `./api/blob` |
+| A body read in a box's tools (git packs, npm tarballs, model weights) | parsed whole by their libraries                    | the box's memory, not a Worker's                      |
+| A fixed sample sentence spoken (workers/yak speech.ts `sampled`)      | kept and served as one MP3                         | one sentence of audio                                 |
+
+A store that holds bytes in this process anyway (`memoryBlobs`, `sqliteBlobs`,
+`fileBlobs`) is given a stream whole.
 
 ## Uploads in parts
 

@@ -116,9 +116,14 @@ export let memoryBucket = (): {
         arrayBuffer: () => now(part.buffer),
       })
     },
-    put: (key, value) => {
-      held.set(key, new Uint8Array(value as Uint8Array))
-      return now(at.set(key, ++clock))
+    put: async (key, value) => {
+      held.set(
+        key,
+        value instanceof ReadableStream
+          ? new Uint8Array(await new Response(value).arrayBuffer())
+          : new Uint8Array(value as Uint8Array),
+      )
+      return at.set(key, ++clock)
     },
     delete: (keys) => now([keys].flat().forEach((key) => held.delete(key))),
     list: ({ prefix }) =>

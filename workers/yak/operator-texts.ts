@@ -3,6 +3,7 @@
 // directory (@yaks/phone); the provider webhook door; and the campaign's
 // replies (T-134538). The Operator answers by text as one of its channels
 // (operator-channels.ts).
+import { bodyOf } from '@yaks/blob'
 import type { Bundle } from '@yaks/graph'
 import {
   type Arrival,
@@ -203,7 +204,7 @@ export let pictures = async (env: Env, space: Space, arrival: Arrival) => {
           space,
           name,
           m.type || 'application/octet-stream',
-          new Uint8Array(await got.arrayBuffer()),
+          bodyOf(got),
         ),
       )
     } catch (error) {

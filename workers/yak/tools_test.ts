@@ -3,6 +3,8 @@
 // here is the four pieces a caller actually gets wrong — the op it did not
 // say, the file it miscounted, the patch that matched twice, the URL it
 // reached for — each a function, so a case is a line.
+import { addressOf, bucketObjects, PIECE, streamOf } from '@yaks/blob'
+import { memoryBucket } from '../../packages/blob/testing.ts'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -908,6 +910,7 @@ let boundedPins = await (async () => {
   let gates: (() => void)[] = []
   let second = Promise.withResolvers<void>()
   let pins = pinning({
+    ...bucketObjects(memoryBucket().bucket),
     put: () =>
       new Promise<void>((go) => {
         if (gates.push(go) == 2) second.resolve()
@@ -933,4 +936,28 @@ let boundedPins = await (async () => {
 test('a pin answers once no more than its bound waits on puts', () => {
   assertEquals(boundedPins.early, false)
   assertEquals(boundedPins.paths, ['ab', 'cd'])
+})
+
+test('a file larger than a pin holds streams to its address', async () => {
+  let { bucket, held } = memoryBucket()
+  let streams: string[] = []
+  let objects = bucketObjects({
+    ...bucket,
+    put: (key, value) => {
+      if (value instanceof ReadableStream) streams.push(key.split('/')[0])
+      return bucket.put(key, value)
+    },
+  })
+  let bytes = new Uint8Array(PIECE + 1).fill(7)
+  let pins = pinning(objects, 2)
+  await pins.pin({ path: '/big.bin', bytes: streamOf(bytes) })
+  let [file] = await pins.pinned()
+  assertEquals(file, {
+    path: 'big.bin',
+    sha: await addressOf(bytes),
+    size: PIECE + 1,
+  })
+  assertEquals(held.get(`sha/${file.sha}`)?.length, PIECE + 1)
+  assertEquals([...held.keys()].length, 1)
+  assertEquals(streams, ['staging', 'sha'])
 })

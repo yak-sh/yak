@@ -54,7 +54,7 @@ export type Kernel = {
 }
 export type Env = {
   INFERENCES: WorkflowBinding
-  RECEIPTS: Pick<Bucket, 'head' | 'get' | 'put'>
+  RECEIPTS: Pick<Bucket, 'head' | 'get' | 'put' | 'delete'>
   KERNEL?: Kernel
   VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
 }
