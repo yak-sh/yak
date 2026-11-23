@@ -8,8 +8,9 @@
 import { line as q } from '@yaks/query'
 import { monthOf } from '@yaks/platform/meter'
 import { usage } from '@yaks/platform/numbers'
-import { directoryOf, idOf, stamp } from './directory.ts'
+import { idOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'
+import { meta } from './meta.ts'
 import { phoneNamed } from './phones.ts'
 
 type Line = {
@@ -23,7 +24,7 @@ type Line = {
 /** Charge every number's calls since its last charged one, at `now`; the
  * number of calls charged. */
 export let minutes = async (env: Env, now: Date): Promise<number> => {
-  let rows = await directoryOf(env.STORE).read(q`.phone_line ?trashed`)
+  let rows = await meta(env).query(q`.phone_line ?trashed`)
   let charged = 0
   for (let row of rows) {
     let line = row.phone_line as Line
