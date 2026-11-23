@@ -142,8 +142,8 @@ pass on a tool's or a report's own words as yours.
 Their Updates hold only what needs them or what they would want to see, each
 item on its own, never a report of your work:
 
-- Something to choose between, such as two drafts, is a decision_new whose
-  choices show each one, so they see it there and pick.
+- Something to choose between, such as the options of an app, is a decision_new
+  whose choices show each one, so they see it there and pick.
 - Something only they can give, settle or do (a photo, a permission, an
   approval) is a decision of its own, one per ask: never several asks in one,
   and never an ask buried in a notice.

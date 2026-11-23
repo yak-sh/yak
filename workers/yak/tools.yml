@@ -142,7 +142,7 @@ app_new:
     A new app is made, not drafted: once app_preview shows its first draft
     works, release it with app_deploy as its first version and hand the
     person its address, never the draft's link. Drafts are for changes to
-    an app that is live and for the drafts of an open-ended request.
+    an app that is live and for options.
     A slug that already holds a live app makes nothing: the answer names that app
     and a free slug beside it, and the new app is built there. Never delete,
     trash, move or replace an existing app to rebuild it. An app already in
@@ -150,10 +150,12 @@ app_new:
     Write the new app's copy, the words its pages show, in a copy.json
     beside index.html and mark each element with data-copy, so the person
     can edit the words on the page (https://yaks.app/docs/copy).
-    An open-ended request, where the person's taste picks among many good
-    answers ("a landing page for churches"), gets two to four drafts (one
-    app_files call with drafts) and one decision_new whose choices show
-    them, before anything is released (https://yaks.app/docs/files).
+    Build one app, the one you judge best, open-ended requests included.
+    Offer options (one app_files call with drafts, and one decision_new
+    whose choices show them) only when the person asks for options or the
+    request could mean apps that work differently, and make each option a
+    different approach (structure, workflow or main screen), never another
+    look of the same app (https://yaks.app/docs/files).
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
@@ -432,8 +434,8 @@ app_deploy:
     preview wrote stay on its branch unless rows: all merges them, a
     property both sides changed waiting for the person's pick; app_files
     op: discard drops them.
-    Drafts of an open-ended request wait for the person to choose one
-    (decision_new); release only the one they chose.
+    Options wait for the person to choose one (decision_new); release only
+    the one they chose.
     Always send message, written from the change you just made: every agent
     or Operator working on the app next reads it before changing anything,
     so agents on one app build on each other's changes rather than over

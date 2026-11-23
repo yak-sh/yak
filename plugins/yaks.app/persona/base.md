@@ -14,7 +14,7 @@ contains:
 reads:
   - work
   - building
-  - directions
+  - options
   - decisions
   - texts
   - starting

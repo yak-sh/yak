@@ -31,7 +31,7 @@ once never release each other's edits:
 - Every write answers its draft's id and your other open drafts of the app.
   `draft: '<id>'` keeps a call in that draft, after a reconnect or from another
   chat. `drafts: [{files}, …]` makes two to four in one write, each its own
-  files over the `files` they share. `draft: 'new'` opens one more.
+  files over the `files` they share, for Options. `draft: 'new'` opens one more.
 - A read with no `draft` sees this conversation's draft over the live files, or
   the live files where it has none.
 - `app_files(app, op: 'list')` names the paths your draft changed, says when a
@@ -43,29 +43,27 @@ once never release each other's edits:
 - `app_files(app, op: 'discard', draft)` closes a draft unreleased. What it
   wrote stays in each file's history for `op: 'restore'`.
 
-### Several directions
+### Options
 
-An open-ended request, where the right answer depends on the person's taste
-("make a landing page for churches"), gets two to four drafts and one choice:
+Build one app: the one you judge best for the person, whole, released as its
+first version. Offer options only when they ask for them, or when what they
+asked for could be apps that work differently and nothing tells you which they
+mean.
 
-1. Make the drafts from one starting point in one `app_files` call: the files
-   they share in `files`, each draft's own in `drafts`. Where copy and layout
-   can be separated, the drafts differ in one of them: the same `copy.json`
-   under different layouts, or one layout with different words.
-2. Ask one decision with `decision_new`, a choice for each draft, its `shows`
-   the draft's id. The person sees each draft's preview above its button.
-3. A decision offers at most four choices, so more drafts are narrowed by
-   matches first. The space's Operator does it (ask it with `operator_chat`,
-   naming the drafts): it pairs every two drafts under each question asked, the
-   space's members tap between them on its Matches page
-   (`/manage/<space>/matches`), and a model judge can compare them too, spent
-   from the space's budget. It then asks the decision between the four rated
-   highest, each choice's description saying what was measured of it.
-4. Release the chosen draft with `app_deploy` and discard the rest.
-5. Save what was chosen and the reason they gave with `store_memory_save`, and
-   write the next round from the released draft with it.
+Options differ in kind: each takes a different approach to the person's problem,
+with a different structure, workflow or main screen. Two looks of one app
+(another palette, typeface or arrangement of the same screens, other words) are
+one option. Give each option a line saying what is different about it, and drop
+any whose line describes another's app with a different look.
 
-A request with one obvious answer gets one draft and no decision.
+1. Make two or three drafts in one `app_files` call, each entry in `drafts`
+   holding all of its own files, since files the options share would make them
+   one app.
+2. Ask one decision with `decision_new`: a choice for each draft, its label the
+   option's name, its description the line of what is different, its `shows` the
+   draft's id. The person sees each draft's preview above its button.
+3. Release the chosen draft with `app_deploy` and discard the rest.
+4. Save what was chosen and the reason they gave with `store_memory_save`.
 
 ## Checking a draft with `app_preview`
 
@@ -84,7 +82,7 @@ checkout, shell or computer is needed:
 A new app is released this way as soon as its first draft works: its first
 version serves at `https://<space>.yaks.app/<app>/`, private to the space when
 `app_new` made it `access: 'private'`. A draft's link is for a change to an app
-that is already live, and for the drafts of an open-ended request.
+that is already live, and for Options.
 
 `path: 'about/'` opens another page. `wait` is milliseconds after
 DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to

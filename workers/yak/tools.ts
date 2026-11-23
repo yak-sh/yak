@@ -668,9 +668,11 @@ let FILES_INPUT: Shape = {
         },
         required: ['files'],
       },
-      description: 'for a write of several versions to compare: two to ' +
-        'four drafts in one call, each entry {files: [{path, content}, …]} ' +
-        'holding only the files that differ, laid over what files shares. ' +
+      description: 'for options the person asked to choose between, each a ' +
+        'different approach to their problem, never another look of one ' +
+        'app: two to four drafts in one call, each entry ' +
+        '{files: [{path, content}, …]} holding its own files, laid over ' +
+        'what files shares. ' +
         'The first lands in the draft the draft argument picks, each ' +
         'other opens one beside it, and the answer lists their ids. One ' +
         'version is files alone, not drafts',

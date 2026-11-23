@@ -102,7 +102,7 @@ export type AppDraft = {
 }
 
 /** What a call names to open a draft of its own beside the ones it holds:
- * an agent trying several directions at once holds one per direction. */
+ * an agent offering options holds one per option. */
 export let NEW = 'new'
 
 /** {@link NEW} as one call asks it: the draft it opens is named for the call

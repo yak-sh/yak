@@ -14,6 +14,10 @@ When the person has said how the app should look (a color, a style, a site to
 match), do what they said, even where it is one of the defaults listed below.
 Everything here applies where they have left it to you.
 
+Work as a designer whose client has already turned down proposals that looked
+templated: make deliberate choices of color, type and layout that belong to this
+person and this subject, and would look out of place on anyone else's app.
+
 ## Start from the subject
 
 Before writing a page, settle three things and use them for every choice that
@@ -35,13 +39,16 @@ above:
 - four to six colors, each named for its role (background, surface, text, muted
   text, accent, danger) with its hex value;
 - one typeface, or two that are clearly different, and what each is used for;
-- the layout of the first screen at 390 and at 1280 pixels wide;
-- what the first screen shows first.
+- the layout of the first screen at 390 and at 1280 pixels wide, drawn as a
+  small text wireframe;
+- what the first screen shows first, and the one thing on it that is memorable.
 
-Then read the plan back and replace any part that would look the same on an
-unrelated app. Put the colors and sizes in CSS custom properties at the top of
-the stylesheet (`--bg`, `--text`, `--accent`, `--step-1`), so every page shares
-them and a later change is one line.
+Then review the plan against the request. Picture the app you would make for a
+similar request from someone else (a different sport, a different bread): any
+part of the plan that would be the same there is a default, so replace it with a
+choice made for this one. Put the colors and sizes in CSS custom properties at
+the top of the stylesheet (`--bg`, `--text`, `--accent`, `--step-1`), so every
+page shares them and a later change is one line.
 
 ## The first screen
 
@@ -51,15 +58,22 @@ on a phone. A large hero, a headline about the app or a row of statistics
 belongs only on a page whose job is to explain something to a stranger.
 
 Put emphasis in one place per screen: one large element, one accent color on the
-main action. Everything else stays quiet. When a screen feels busy, take
-something away before adding anything.
+main action. Spend the design's boldness there and keep everything around it
+quiet. When a screen feels busy, take something away before adding anything.
+
+Include a piece of text only when it tells the person something they need, helps
+them act, or is content they asked for. A heading that names what is plainly
+below it, a subtitle restating the title, a badge or a number that decorates
+nothing: leave them out.
 
 ## Type
 
 - Choose typefaces on purpose. The system stack (`system-ui, sans-serif`) is a
   fine choice for a tool; a typeface with character suits a page whose voice
-  matters. A web font is a request to another server on every first visit, so
-  use at most two families and `font-display: swap`.
+  matters. Where type is the page's main visual, treat it as part of the design
+  (its weight, width and spacing), not only as a carrier for the words. A web
+  font is a request to another server on every first visit, so use at most two
+  families and `font-display: swap`.
 - Set a type scale of a few steps (for example 0.875, 1, 1.25, 1.6 and 2.25 rem)
   and use only those sizes. Body text is at least 16 px on a phone.
 - Keep lines of body text under about 75 characters (`max-width: 65ch`), with a
@@ -89,6 +103,13 @@ something away before adding anything.
   numbered steps for a sequence, a divider between groups that differ.
 - Keep CSS specific enough that a rule for one part does not undo another's
   spacing: a class for each component, and spacing set in one place.
+
+## Pictures
+
+Where the subject has pictures (a dish, a place, a product, a person), show real
+ones: the person's own photos, pictures from their site, or one made with a
+picture model. A picture says more than a hand-drawn SVG illustration of it, so
+keep SVG for icons, diagrams and what the person asked to have drawn.
 
 ## Motion
 
@@ -141,6 +162,11 @@ them. Use one only when the person asked for it or the subject calls for it:
 - an arrow (→) after every link and button label;
 - a big number with a small caption and a row of statistics under it;
 - small monospace text for dates and counts;
+- details joined with middle dots (`Ginger · Classic · Meadow`), or a label
+  written `WORD — fragment`;
+- an off-black such as `#111` standing in for black;
+- hairline rules, square corners and dense columns, like a newspaper;
+- one border radius on everything, whatever its place in the hierarchy;
 - emoji as icons for every item.
 
 An app's icon has the same aim: something from the subject, drawn simply, as the
@@ -149,6 +175,7 @@ overview's `icon.svg` paragraph says.
 ## Check the result
 
 Look at the screenshots `app_preview` returns at both widths before deploying,
-as a visitor would: is the main job obvious on the first screen, does anything
-look like the list above, is any text hard to read. Fix what you find, preview
-again, then `app_deploy`.
+as the person who asked would: does the first screen do what they asked for,
+with their own content; does anything look like the list above; is any text hard
+to read. Then take one thing away. Fix what you find, preview again, then
+`app_deploy`.

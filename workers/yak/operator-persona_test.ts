@@ -129,7 +129,7 @@ test('what only some turns need is named under Reads, by id and when to open it,
     let title of [
       'Working in the apps: open before',
       'Making a new app: open before',
-      'Several directions: open when',
+      'Options: open when',
       'Someone signing up: open on',
       'Your name and voice: open when',
     ]
