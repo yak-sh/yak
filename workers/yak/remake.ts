@@ -61,7 +61,9 @@ export let ask = async (env: Env, job: Remake) => {
   }], KERNEL)
 }
 
-/** Make the release again, unless the app serves another one by now. */
+/** Make the release again, unless the app serves another one by now, or the
+ * toolkit making it is the one it was compiled with (tools.ts
+ * `recompileRelease`). */
 export let remade = async (env: Env, job: Remake) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
@@ -83,6 +85,7 @@ export let remade = async (env: Env, job: Remake) => {
     await recompileRelease({ env, dir, person: '' }, at!.space, at!.app, {
       left: job.fence,
       take: fence,
+      behind: true,
     })
   } catch (e) {
     if (e instanceof CallError && EXPECTED.includes(e.code)) return

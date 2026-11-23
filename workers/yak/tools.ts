@@ -2447,7 +2447,12 @@ export let recompileRelease = async (
   ctx: Ctx,
   space: Space,
   app: App,
-  { left, take }: { left?: string | null; take?: string } = {},
+  { left, take, behind }: {
+    left?: string | null
+    take?: string
+    /** only when its toolkit moved on: a remake's (remake.ts) */
+    behind?: boolean
+  } = {},
 ) => {
   let current = await ctx.dir.app(space, app.slug)
   if (!current || current.eid != app.eid || current.source != app.source) {
@@ -2456,6 +2461,15 @@ export let recompileRelease = async (
   let who: Who = { person: null, role: 'owner', administrative: true }
   if (left && current.fence == left) {
     await unfenced(ctx.dir, current, left, who)
+  }
+  // A remake's page was served by a kernel whose toolkit had moved on; the
+  // directory whose alarm runs this can still be on the deploy before,
+  // with that deploy's catalog. A remake there compiled the old source again
+  // and recorded it, so every later page asked again (T-2720). It waits for a
+  // page served once the toolkit here is the new one.
+  if (behind) {
+    let { stale } = await import('./toolkit.ts')
+    if (!await stale(ctx.env, current.source!)) return
   }
   let live = (await versions(ctx.dir, current))
     .find((v) => v.version == current.version)

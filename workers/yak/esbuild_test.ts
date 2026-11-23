@@ -412,6 +412,62 @@ test('a lazy image from an open page loads after another toolkit remake', () => 
   assertEquals(remadeAssets.body, remadeAssets.image)
 })
 
+// A later kernel's toolkit, with other source for @yaks/client, as its own
+// assets binding reads it; `back` returns to the toolkit before it, as a
+// process still on the earlier deploy reads it.
+let later = (s: { env: Awaited<ReturnType<typeof scenario>>['env'] }) => {
+  let was = catalog['@yaks/client'].version
+  let assets = s.env.ASSETS
+  catalog['@yaks/client'].version = 'client-source-sha-2'
+  s.env.ASSETS = { fetch: (req) => assets.fetch(req) } as typeof assets
+  s.env.CF_VERSION_METADATA = { id: 'a later kernel' }
+  return () => {
+    catalog['@yaks/client'].version = was
+    s.env.ASSETS = assets
+  }
+}
+
+// A page served by a kernel whose toolkit moved on asks for a remake, and the
+// directory whose alarm makes it can still be on the deploy before. A remake
+// there would compile the old source again and leave the release behind, so
+// every later page asked again; it waits for the toolkit instead.
+let behindDirectory = await (async () => {
+  await using s = await scenario(compiles)
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'package.json': '{"dependencies": {"@yaks/client": "platform"}}',
+  })
+  await s.tool('app_deploy')
+  let space = (await s.dir.space('ada'))!
+  let app = (await s.dir.app(space, 'cookbook'))!
+  let release = await s.release()
+  let asks = s.asks.length
+  let job = { app: app.eid, source: app.source! }
+  let back = later(s)
+  await apps.refresh(s.env, space, app)
+  back()
+  await remade(s.env, job)
+  let kept = { asked: s.asks.length - asks, same: await s.release() == release }
+  back = later(s)
+  try {
+    await remade(s.env, job)
+  } finally {
+    back()
+  }
+  return {
+    asked: (await meta(s.env).query('.release_remake')).length,
+    kept,
+    remade: await s.release() != release,
+  }
+})()
+
+test('a remake from a directory still on the release’s own toolkit waits for the new one', () => {
+  assertEquals(behindDirectory.asked, 1)
+  assertEquals(behindDirectory.kept, { asked: 0, same: true })
+  assert(behindDirectory.remade)
+})
+
 // A remake whose compile pins other versions writes its own lock into the
 // release it makes, and nobody's draft holds anything unreleased for it.
 test('a remake that writes a new lock leaves nothing unreleased', async () => {
@@ -423,12 +479,18 @@ test('a remake that writes a new lock leaves nothing unreleased', async () => {
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
-    'package.json': '{"dependencies": {"three": "^0.186.0"}}',
+    'package.json':
+      '{"dependencies": {"three": "^0.186.0", "@yaks/client": "platform"}}',
   })
   await s.tool('app_deploy')
   let space = (await s.dir.space('ada'))!
   let app = (await s.dir.app(space, 'cookbook'))!
-  await remade(s.env, { app: app.eid, source: app.source! })
+  let back = later(s)
+  try {
+    await remade(s.env, { app: app.eid, source: app.source! })
+  } finally {
+    back()
+  }
   assertEquals(
     await s.tool('app_files', { op: 'read', path: 'package-lock.json' }),
     '{"lockfileVersion": 2}\n',
@@ -533,7 +595,11 @@ test('a remake leaves a release under way to its deploy', () => {
 // kept on its row before it took it, rather than wait it out or leave it.
 let lifted = await (async () => {
   await using s = await scenario(compiles)
-  await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'package.json': '{"dependencies": {"@yaks/client": "platform"}}',
+  })
   await s.tool('app_deploy')
   let space = (await s.dir.space('ada'))!
   let app = (await s.dir.app(space, 'cookbook'))!
@@ -547,7 +613,12 @@ let lifted = await (async () => {
   }], KERNEL)
   await fenced(s.dir, app, null, OWNER, left)
   ;[row] = await meta(s.env).query('.release_remake')
-  await remade(s.env, row.release_remake as Remake)
+  let back = later(s)
+  try {
+    await remade(s.env, row.release_remake as Remake)
+  } finally {
+    back()
+  }
   return {
     fence: (await s.dir.app(space, 'cookbook'))!.fence,
     remade: await s.release() != release,
