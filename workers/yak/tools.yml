@@ -1133,7 +1133,9 @@ app_transfer:
   description: >-
     Offer to give an app you own to another yaks.app user. Use when the person
     asks to give or transfer their app. Ask for the recipient’s sign-in email
-    if it is unclear. The app stays where it is until that person accepts in
+    if it is unclear. When the owner asks to give a named app to a named
+    recipient, call this tool directly to send the offer. The app stays
+    where it is until that person accepts in
     their Updates. Acceptance moves the app, its data, files, releases and
     future billing to their space. Offer to keep editing access only if the
     giver asks for it. The recipient chooses whether to allow it.
