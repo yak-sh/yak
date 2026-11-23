@@ -1,3 +1,4 @@
+import { declarationsPrefix } from '@yaks/platform/file-root'
 // Discovery reads release metadata in R2, never the app's Durable Object.
 // Deploy writes the accepted (including retained/borrowed words) declaration
 // before its directory pointer commits, so every release a pointer selects has
@@ -13,8 +14,7 @@ import { sharing } from './lib/shared.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
 // Where an app's declarations are kept, and each one's name there.
-let prefix = (space: Space, app: App) =>
-  `${space.store}/.declarations/${app.eid}/`
+let prefix = declarationsPrefix
 let name = (app: App, release: string) =>
   `${app.source?.split('/').pop() ?? 'legacy'}/${release}.json`
 

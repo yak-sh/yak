@@ -1,3 +1,4 @@
+import { answerTransfer, transferUpdates } from './app-transfer.ts'
 import { Empty, Form } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
@@ -67,14 +68,17 @@ export let updatesAcross = async (
   let missed: Missed[] = []
   let read = await Promise.all(seats.map(async ({ space, who }) => {
     try {
-      let { updates, waiting } = await operatorDoor(
-        env,
+      let [{ updates, waiting }, transfers] = await Promise.all([
+        operatorDoor(env, space, who, 'updates', args) as Promise<
+          { updates: Update[]; waiting: number }
+        >,
+        dismissed ? [] : transferUpdates(env, space, who),
+      ])
+      return {
         space,
-        who,
-        'updates',
-        args,
-      ) as { updates: Update[]; waiting: number }
-      return { space, waiting, updates: updates.map((u) => ({ ...u, space })) }
+        waiting: waiting + transfers.filter((u) => u.needs).length,
+        updates: [...updates, ...transfers].map((u) => ({ ...u, space })),
+      }
     } catch (error) {
       missed.push({ space, error })
       return { space, waiting: 0, updates: [] }
@@ -131,10 +135,13 @@ export let waitingAcross = async (
   Object.fromEntries(
     (await Promise.all(seats.map(async ({ space, who }) => {
       try {
-        let { waiting } = await operatorDoor(env, space, who, 'updates', {
-          count: true,
-        }) as { waiting: number }
-        return [[space.slug, waiting]]
+        let [{ waiting }, transfers] = await Promise.all([
+          operatorDoor(env, space, who, 'updates', { count: true }) as Promise<
+            { waiting: number }
+          >,
+          transferUpdates(env, space, who),
+        ])
+        return [[space.slug, waiting + transfers.filter((u) => u.needs).length]]
       } catch (e) {
         caught(e, { request: 'updates waiting', space: space.slug })
         return []
@@ -422,6 +429,38 @@ let card = (
   where: ComponentChildren = null,
 ) => {
   let { space } = at
+  if (u.transfer) {
+    return h(
+      Card,
+      { class: 'Update', id: updateAnchor(u.eid) },
+      where,
+      h(Card.Head, null, h(Card.Title, null, u.subject), stamp(u)),
+      h('p', { class: 'Update_Words' }, u.words),
+      u.needs
+        ? form(
+          at,
+          [['transfer', u.eid]],
+          h(
+            Card.Actions,
+            null,
+            h(
+              Button,
+              { mod: 'go', name: 'answer', value: 'accept' },
+              'Accept app',
+            ),
+            u.transfer.editor
+              ? h(
+                Button,
+                { name: 'answer', value: 'accept-with-editor' },
+                'Accept and keep editor',
+              )
+              : null,
+            h(Button, { name: 'answer', value: 'decline' }, 'Decline'),
+          ),
+        )
+        : null,
+    )
+  }
   if (u.needs) return needsCard(at, u, where)
   let away = u.dismissed ? null : h(Card.Actions, null, dismissing(at, u))
   return h(
@@ -663,6 +702,10 @@ export let updatesAnswer = async (
     backTo(env, field('back'), managePath('updates', space.slug)),
   )
   let back = to.pathname + to.search
+  if (form.has('transfer')) {
+    await answerTransfer(env, space, who, field('transfer'), field('answer'))
+    return new Response(null, { status: 303, headers: { location: back } })
+  }
   if (form.has('dismiss')) {
     await operatorDoor(env, space, who, 'updates', {
       dismiss: field('dismiss'),

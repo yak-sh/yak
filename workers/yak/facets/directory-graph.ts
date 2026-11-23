@@ -30,6 +30,10 @@ import { line } from '@yaks/query'
 import { sharing } from '@yaks/connections/mcp'
 import { spaceHost } from '@yaks/platform/host'
 import { mcpUnshared } from '@yaks/platform/letters'
+import {
+  decide,
+  type Request as AppTransfer,
+} from '@yaks/platform/app-transfer'
 import { idOf, inside, type Row } from '../directory.ts'
 import { reclaimFiles } from '../file-retirement-graph.ts'
 import { caught } from '../defects.ts'
@@ -307,6 +311,22 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [
           )
         },
       )
+    }),
+  },
+  {
+    name: 'yak/app-transfer',
+    requests: ['$appTransfer'],
+    authorize: hook(['$appTransfer'], (bundles, tx, _err, context) => {
+      return each(bundles, [] as Bundle[], (out, b) => {
+        if (!b.$appTransfer) return [...out, b]
+        if (!context?.trusted) {
+          throw new Refused('Use the app transfer tools or Updates.')
+        }
+        return after(
+          decide(tx, b.$appTransfer as AppTransfer),
+          (rows) => [...out, ...rows],
+        )
+      })
     }),
   },
   reclaimFiles(),

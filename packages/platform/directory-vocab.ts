@@ -195,6 +195,35 @@ export let directoryDoc: VocabDoc = {
         app: ref('cascade'),
         person: ref('cascade'),
         access: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
+        build: described(bool, 'May edit and release the files of this app.'),
+      },
+    },
+    app_transfer: {
+      description:
+        'An owner offers an app to another person in the space they own.',
+      component: true,
+      type: 'object',
+      properties: {
+        app: owned(ref('cascade')),
+        from: { ...owned(ref('keep')), index: true },
+        to: owned(ref('keep')),
+        giver: owned(ref('keep')),
+        recipient: { ...owned(ref('cascade')), index: true },
+        editor: owned(bool),
+      },
+    },
+    app_transfer_answer: {
+      description:
+        'The recipient’s answer to an app transfer, with the addresses left behind on acceptance.',
+      component: true,
+      type: 'object',
+      properties: {
+        at: owned(time),
+        answer: owned({
+          type: 'string',
+          enum: ['accept', 'accept-with-editor', 'decline'],
+        }),
+        slugs: owned(text),
       },
     },
     // Another space's Operator let into this one (T-136179): the Operator of

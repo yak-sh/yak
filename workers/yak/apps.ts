@@ -1,3 +1,4 @@
+import { releasesPrefix } from '@yaks/platform/file-root'
 import { browsersOf } from './attribution.ts'
 import {
   refuse as refusedOptions,
@@ -1287,7 +1288,7 @@ let appDoor = async (
         },
       })
     }
-    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
+    let source = releasesPrefix(space, app) + versioned.release
     // On a private app the worker is the gatekeeper (T-34303): a page it
     // serves to someone who may not read the app was woven these addresses,
     // and its files are the worker's to give or refuse at their own path, as
@@ -2242,6 +2243,10 @@ let served = async (
     },
     formerly: (space) => c.time('moved', () => dir.formerly(space)),
     former: (space, app) => dir.former(space, app),
+    transferred: async (space, slug) => {
+      let at = await dir.transferredApp(space, slug)
+      return at ? { space: at.space.slug, slug: at.app.slug } : null
+    },
   }, env)
   if (step.to == 'manage') return (await import('./manage.ts')).manage(req, env)
   if (step.to == 'kept') return step.page

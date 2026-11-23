@@ -1,4 +1,4 @@
-import { ownedPrefix } from './file-root.ts'
+import { ownedPrefix } from '@yaks/platform/file-root'
 import { sha256 } from '@yaks/graph/sha256'
 import { addressed } from '@yaks/blob'
 /** Where an app keeps its uploads: the prefix its row was born with

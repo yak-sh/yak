@@ -104,6 +104,7 @@ export type Ctx = {
   // roster for the length of its call (tools.ts `TOOLS`): admitting the
   // caller to a space refuses a seat below it (`callerIn`).
   need?: Need
+  buildApp?: boolean
 }
 
 /** Where a call was admitted, as {@link Ctx} `entered` keeps it. */
@@ -572,6 +573,7 @@ let callerIn = async (
   over: boolean,
   seat?: Role | null,
   administrative?: boolean,
+  app?: App | null,
 ) => {
   if (
     ctx.who?.spaceEid
@@ -589,6 +591,13 @@ let callerIn = async (
       : seat ?? null,
   )
   if (administrative ?? (over && await admin(ctx))) who.administrative = true
+  if (app && ctx.buildApp && !writes(who.role)) {
+    let grant = await ctx.dir.grant(app, ctx.person)
+    if (grant?.build && grant.access == 'editor') {
+      who.role = 'editor'
+      who.guest = true
+    }
+  }
   if (!who.role) throw await notMember(ctx, space)
   if (write && !writes(who.role)) throw below(space, 'editor')
   if (ctx.need && ctx.need != 'self' && !allows(who.role, ctx.need)) {
@@ -704,7 +713,15 @@ export let reacquire = async (
       if (!space || held && !app) {
         throw refuse('missing', 'the authorized target no longer exists')
       }
-      let who = await callerIn(scope, space, write, over, now.role)
+      let who = await callerIn(
+        scope,
+        space,
+        write,
+        over,
+        now.role,
+        undefined,
+        app,
+      )
       if (!trash) awake(space, app)
       ctx.dir = scope.dir
       return {
@@ -810,6 +827,7 @@ let reached = async (
         over,
         page?.role,
         page?.administrative,
+        app?.space == space.eid ? app : null,
       )
       if (!app || app.space != space.eid) {
         throw trash
@@ -820,8 +838,8 @@ let reached = async (
           : await noApp(scope, space, slug)
       }
       awake(space, trash ? undefined : app)
-      admitted(ctx, space, who, page?.roster)
-      if (write) ctx.ahead?.(space, who)
+      admitted(ctx, space, who, who.guest ? [app] : page?.roster)
+      if (write && !who.guest) ctx.ahead?.(space, who)
       return {
         space,
         app,

@@ -1,4 +1,8 @@
-import { ownedPrefix } from './file-root.ts'
+import {
+  declarationsPrefix,
+  ownedPrefix,
+  releasesPrefix,
+} from '@yaks/platform/file-root'
 // What a space holds and how it divides across its apps (T-124320): the two
 // stored ceilings a plan sets, app data and photos and files, for the space
 // whole and for each app. Every reader takes it from here: the hourly sweep
@@ -43,10 +47,17 @@ export let prefixes = (
   return app.blobs && !app.blobs.startsWith(own) ? [own, app.blobs] : [own]
 }
 
+/** All app-owned roots, including the release and declaration history. */
+export let storagePrefixes = (space: Pick<Space, 'store'>, app: Owner) => [
+  ...prefixes(space, app),
+  releasesPrefix(space, app),
+  declarationsPrefix(space, app),
+]
+
 /** The prefixes outside the space's own that its apps keep bytes under, which
  * a listing of `<handle>/` does not reach (usage.ts `fileSizes`). */
 export let outside = (space: Pick<Space, 'store'>, apps: Owner[]) =>
-  apps.flatMap((app) => prefixes(space, app))
+  apps.flatMap((app) => storagePrefixes(space, app))
     .filter((p) => !p.startsWith(`${space.store}/`))
 
 // The bucket's objects under a space, totalled by the app whose prefix holds
@@ -87,7 +98,7 @@ export let holding = (
     files: sizes
       ? sum(
         [...sizes].filter(([key]) =>
-          prefixes(space, a).some((p) => key.startsWith(p))
+          storagePrefixes(space, a).some((p) => key.startsWith(p))
         ).map(([, n]) => n),
       )
       : a.meter?.files ?? 0,

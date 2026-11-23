@@ -1,3 +1,4 @@
+import { releasesPrefix } from '@yaks/platform/file-root'
 // An app's versions as yaks.app's directory keeps them: the `deploy` row each
 // release writes and the `switched` row each move of the live pointer writes,
 // in one batch (`record`), and the fence that holds edits while a release
@@ -37,7 +38,7 @@ export let GRACE = 24 * 60 * 60_000
 export let LANES = 6
 
 export let releaseOf = (space: { store: string }, app: App) =>
-  `${space.store}/.releases/${app.eid}/${crypto.randomUUID()}`
+  releasesPrefix(space, app) + crypto.randomUUID()
 
 /** The app's newest row, from the request-local read `waiting` reuses. */
 export let latest = async (dir: Directory, space: Space, app: App) => {
@@ -129,6 +130,7 @@ export let fenced = async (
         $was: {
           app: {
             fence: token(app.fence),
+            space: token(app.space),
             ...taken?.legacy ? { draft: token(taken.eid) } : {},
             source: token(app.source),
             version: token(app.version),

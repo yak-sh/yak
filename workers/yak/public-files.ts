@@ -1,4 +1,4 @@
-import { ownedPrefix } from './file-root.ts'
+import { ownedPrefix } from '@yaks/platform/file-root'
 // Public files (D-132641): an app publishes a file at a path of its own
 // address, and from then on that address answers those bytes to anyone,
 // before the app's worker runs and whatever the app's access says. A private

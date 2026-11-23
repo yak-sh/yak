@@ -57,7 +57,7 @@ import {
   thisMonth,
 } from '@yaks/platform/meter'
 import { bound, type Env } from './env.ts'
-import { holding, outside } from './held.ts'
+import { holding, outside, storagePrefixes } from './held.ts'
 import { atStored, capLine, level } from '@yaks/platform/standing'
 import { ceilings, FILES, WARN } from '@yaks/platform/plans'
 import { INTERNAL, letterRows } from './mail.ts'
@@ -484,7 +484,12 @@ export let sweep = async (env: Env, now = new Date()) => {
   // runs inside the directory's own object, and each read is a request it
   // answers while the sweep holds it.
   let all = await dir.all()
-  let apps = Map.groupBy(await dir.apps(all), (a) => a.space)
+  let every = await dir.apps(all)
+  let apps = Map.groupBy(every, (a) => a.space)
+  let elsewhere = Map.groupBy(
+    every.filter((app) => app.files),
+    (app) => app.files!.split('/')[0],
+  )
   let spaces = all.map((space) => ({ space, apps: apps.get(space.eid) ?? [] }))
   // Visits are read beside the bill and never hold it up: a reading that
   // fails leaves each app's last figure where it is.
@@ -497,7 +502,14 @@ export let sweep = async (env: Env, now = new Date()) => {
     : null
   let { entities, turned, refused } = await measured(spaces, {
     sizesOf: (space, apps) =>
-      fileSizes(env, space, apps, SWEEP.tries, SWEEP.wait),
+      fileSizes(
+        env,
+        space,
+        apps,
+        SWEEP.tries,
+        SWEEP.wait,
+        elsewhere.get(space.store)?.filter((app) => app.space != space.eid),
+      ),
     counts: counts &&
       ((space, app) => ({
         ...counts.get(String(env.STORE.idFromName(storeName(space, app)))) ??
@@ -564,8 +576,10 @@ export let fileSizes = async (
   apps: Parameters<typeof outside>[1] = [],
   tries?: number,
   wait?: number,
+  departed: App[] = [],
 ) => {
   let sizes = new Map<string, number>()
+  let except = departed.flatMap((app) => storagePrefixes(space, app))
   for (let prefix of [`${space.store}/`, ...outside(space, apps)]) {
     let cursor: string | undefined
     do {
@@ -575,7 +589,11 @@ export let fileSizes = async (
         tries,
         wait,
       )
-      for (let object of page.objects) sizes.set(object.key, object.size)
+      for (let object of page.objects) {
+        if (!except.some((prefix) => object.key.startsWith(prefix))) {
+          sizes.set(object.key, object.size)
+        }
+      }
       cursor = page.truncated ? page.cursor : undefined
     } while (cursor)
   }
@@ -599,8 +617,11 @@ export let fullFiles = async (
   let arriving = writes.reduce((sum, w) => sum + w.bytes, 0)
   if ((spent(space, now).files ?? 0) + arriving < ceiling * WARN) return ''
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let apps = await dir.apps(space)
-  let sizes = await fileSizes(env, space, apps)
+  let [apps, departed] = await Promise.all([
+    dir.apps(space),
+    dir.departedApps(space),
+  ])
+  let sizes = await fileSizes(env, space, apps, undefined, undefined, departed)
   let held = holding(space, apps, sizes)
   let delta = 0
   // A batch may repeat a path; parallel puts can finish in either order.

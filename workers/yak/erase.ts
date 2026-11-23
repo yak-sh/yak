@@ -1,5 +1,7 @@
+import { declarationsPrefix, releasesPrefix } from '@yaks/platform/file-root'
 import { planSettings } from '@yaks/platform/routes'
-import { ownedPrefix } from './file-root.ts'
+import { ownedPrefix } from '@yaks/platform/file-root'
+import { storagePrefixes } from './held.ts'
 // Deletion first keeps a recoverable trash mark. Only an owner's confirmed
 // purge removes app stores, files or shared names; the daily sweep never does.
 import { r2RawObjects } from './lib/objects.ts'
@@ -320,7 +322,13 @@ export let letter = (
 }
 
 // Ordinary cleanup retains bytes. Only a person's confirmed purge removes them.
-let swept = (env: Env, prefix: string, owner: string, purge = false) => {
+let swept = (
+  env: Env,
+  prefix: string,
+  owner: string,
+  purge = false,
+  except: string[] = [],
+) => {
   let ledger = {
     read: (query: Parameters<ReturnType<typeof meta>['query']>[0]) =>
       meta(env).query(query),
@@ -328,7 +336,7 @@ let swept = (env: Env, prefix: string, owner: string, purge = false) => {
   }
   let blobs = r2RawObjects(env.BLOBS)
   return purge
-    ? purgedPrefix(ledger, blobs, prefix)
+    ? purgedPrefix(ledger, blobs, prefix, except)
     : retiringPrefix(ledger, blobs, prefix, owner)
 }
 
@@ -397,8 +405,8 @@ export let emptied = async (
   if (!blobPrefix(space, app).startsWith(under(space, app))) {
     await swept(env, blobPrefix(space, app), app.eid, purge)
   }
-  await swept(env, `${space.store}/.releases/${app.eid}/`, app.eid, purge)
-  await swept(env, `${space.store}/.declarations/${app.eid}/`, app.eid, purge)
+  await swept(env, releasesPrefix(space, app), app.eid, purge)
+  await swept(env, declarationsPrefix(space, app), app.eid, purge)
   await swept(env, receiptPrefix(app), app.eid, purge)
   await swept(env, uploadPrefix(blobPrefix(space, app)), app.eid, purge)
   // The store is named for where the app was born (directory.ts storeName),
@@ -472,7 +480,10 @@ export let erase = async (
   // was deleted before this tool existed left behind, or a delete that died
   // halfway and is being finished now. The slug is about to be somebody
   // else's; this is the owner's confirmed permanent purge.
-  await swept(env, under(d.space), d.space.eid, true)
+  let departed = (await dir.departedApps(d.space)).flatMap((app) =>
+    storagePrefixes(d.space, app)
+  )
+  await swept(env, under(d.space), d.space.eid, true, departed)
   // What the space kept outside the graph, and therefore outside the cascade
   // below: the Operator's store, in an object of its own keyed by the eid
   // (build.ts), and each member's workbench (sandbox.ts, same key). `/privacy` says both go with the space. Before the

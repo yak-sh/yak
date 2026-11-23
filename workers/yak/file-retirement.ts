@@ -87,8 +87,11 @@ export let purgedPrefix = async (
   graph: Ledger,
   blobs: Objects,
   prefix: string,
+  except: string[] = [],
 ) => {
-  let keys = (await blobs.list(prefix)).filter((key) => !key.startsWith('sha/'))
+  let keys = (await blobs.list(prefix)).filter((key) =>
+    !key.startsWith('sha/') && !except.some((root) => key.startsWith(root))
+  )
   await blobs.delete(keys)
   await reclaimed(graph, keys)
   return keys

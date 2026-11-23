@@ -600,6 +600,7 @@ let OWN_WORDS = new Set([
   'app_erase',
   'app_list',
   'app_publish',
+  'app_transfer',
   'app_unpublish',
   'app_published',
   'app_rate',

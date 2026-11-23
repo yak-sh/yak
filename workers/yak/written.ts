@@ -1,3 +1,4 @@
+import { releasesPrefix } from '@yaks/platform/file-root'
 // What an app's files hold between deploys, and what each path has held
 // (T-124791, D-124238). Bytes are stored once, under their SHA-256 (`sha/`,
 // @yaks/platform/versions `addressed`), and a path names a sha: every write
@@ -998,8 +999,7 @@ export let pruned = async (
     dir.draftsOf(each),
   ])
   for (let { prefix, app } of apps) {
-    let space = `${prefix.split('/')[0]}/`
-    let stage = `${space}.releases/${app.eid}/`
+    let stage = releasesPrefix({ store: prefix.split('/')[0] }, app)
     let releases = deploys.get(app.eid) ?? []
     let moves = switches.get(app.eid) ?? []
     let sources = new Set(
@@ -1011,7 +1011,7 @@ export let pruned = async (
         .filter((source): source is string =>
           typeof source == 'string' && !!source
         )
-        .map((source) => space + source.slice(source.indexOf('/') + 1)),
+        .map((source) => stage + source.slice(source.lastIndexOf('/') + 1)),
     )
     let erased = false
     await lanes(LANES)([...sources], async (source) => {

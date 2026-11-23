@@ -1,3 +1,7 @@
+import type {
+  Answer as TransferAnswer,
+  Offer as TransferOffer,
+} from '@yaks/platform/app-transfer'
 import type { ByDay } from '@yaks/ui/chart'
 import {
   type Asked,
@@ -711,6 +715,8 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
  * each optional, since a row is whichever of them it wears, a space's plan
  * and meter among them (@yaks/platform/meter `MeteredRow`). */
 export type Row = MeteredRow & {
+  app_transfer?: TransferOffer
+  app_transfer_answer?: { answer: TransferAnswer; at: string; slugs?: string }
   policy?: { revision: number }
   withdrawn?: { at?: string | null; mark?: string | null }
   switched?: {
@@ -902,7 +908,7 @@ export type Row = MeteredRow & {
   last_deploy?: { at?: string; by?: Id | null; via?: Id | null }
   acts_for?: { person?: Id | null }
   member?: { space: Id; person: Id; role: Role; own?: boolean }
-  grant?: { app: Id; person: Id; access: Role }
+  grant?: { app: Id; person: Id; access: Role; build?: boolean }
   operator_reach?: { space: Id; operator: Id; role: Role; by?: Id | null }
   invite?: {
     to: Id
@@ -3256,6 +3262,34 @@ export let directoryRows = (rows: {
         .find((a) => !a.trashed && a.slug != slug && a.slugs.includes(slug))
       return app ?? null
     },
+    departedApps: async (space: Space) => {
+      let receipts = await query(
+        line`.app_transfer.from=${space.eid}&.app_transfer_answer&.app_transfer_answer.slugs`,
+      )
+      let apps = [...new Set(receipts.map((r) => idOf(r.app_transfer!.app)))]
+        .filter(Boolean)
+      return apps.length
+        ? (await query(line`.entity.eid=${apps}&.app&${sub(ABOUT)}`)).map(appOf)
+          .filter((a) => a.space != space.eid)
+        : []
+    },
+    transferredApp: async (space: Space, slug: string) => {
+      let receipts = await query(
+        line`.app_transfer.from=${space.eid}&.app_transfer_answer&.app_transfer_answer.slugs`,
+      )
+      let receipt =
+        receipts.filter((r) =>
+          r.app_transfer_answer?.slugs?.split(' ').includes(slug)
+        )
+          .sort((a, b) =>
+            b.app_transfer_answer!.at.localeCompare(a.app_transfer_answer!.at)
+          )[0]
+      let found = receipt && await self.appAt(idOf(receipt.app_transfer!.app))
+      return found && !found.app.trashed && !found.space.trashed &&
+          found.space.eid != space.eid
+        ? found
+        : null
+    },
     // Every app in a space, oldest first — the order they were made. Many
     // spaces is one read rather than one per space, because a person's whole
     // listing is one question (tools.ts `app_list`, T-35431); the answer is
@@ -3907,7 +3941,11 @@ export let directoryRows = (rows: {
         line`.grant.app=${app.eid}&.grant.person=${person}`,
       )
       return row?.grant
-        ? { eid: row.entity.eid, access: row.grant.access }
+        ? {
+          eid: row.entity.eid,
+          access: row.grant.access,
+          ...row.grant.build ? { build: true } : {},
+        }
         : null
     },
     // The invitation standing for this person on a space or an app (invite.ts,

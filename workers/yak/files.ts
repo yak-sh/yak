@@ -85,7 +85,7 @@ export let keyed = (prefix: string, path: string) =>
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
   }`
 
-import { ownedPrefix } from './file-root.ts'
+import { ownedPrefix } from '@yaks/platform/file-root'
 
 export let prefixOf = (
   space: { store: string },

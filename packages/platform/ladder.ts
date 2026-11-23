@@ -86,6 +86,10 @@ export type Looks<R extends Reading> = {
   formerly: (space: string) => Promise<{ slug: string } | null>
   /** the app of `space` that answered at this slug before a rename moved it */
   former: (space: Space<R>, app: string) => Promise<{ slug: string } | null>
+  transferred?: (
+    space: Space<R>,
+    app: string,
+  ) => Promise<{ space: string; slug: string } | null>
 }
 
 /** A request as the ladder reads it. `mount` is the root a custom domain
@@ -261,6 +265,19 @@ export let rung = async <R extends Reading>(
     if (was) {
       return {
         ...moving(method, `/${was.slug}${r.path || '/'}${search}`),
+        ...at,
+      }
+    }
+  }
+  if (!app && r.app && reading(method)) {
+    let moved = await looks.transferred?.(space, r.app)
+    if (moved) {
+      return {
+        to: 'sent',
+        href: `https://${spaceHost(env, moved.space)}/${moved.slug}${
+          r.path || '/'
+        }${search}`,
+        status: 302,
         ...at,
       }
     }

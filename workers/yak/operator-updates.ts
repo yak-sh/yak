@@ -56,6 +56,7 @@ export type Update = {
   from?: Place
   /** They dismissed it, and nothing has happened on it since. */
   dismissed: boolean
+  transfer?: { editor: boolean }
   choices?: Choice[]
   recommended?: string
   /** What its choices show, in the order they show it. */

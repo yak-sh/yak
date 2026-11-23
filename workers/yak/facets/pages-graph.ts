@@ -244,6 +244,19 @@ export let owed = async (
   quiet: ReadonlySet<string> = new Set(),
 ): Promise<string[]> => {
   let tags = new Set<string>()
+  let transfers = applied.filter((b) =>
+    b.app_transfer_answer && (b.app_transfer_answer as { slugs?: string }).slugs
+  )
+  for (
+    let row of transfers.length
+      ? await rows(transfers.map((b) => b.entity.eid))
+      : []
+  ) {
+    let transfer = row.app_transfer as { from: string; app: string } | undefined
+    if (!transfer) continue
+    tags.add(spaceTag(idOf(transfer.from)))
+    tags.add(appTag(idOf(transfer.app)))
+  }
   let gone = applied.filter((b) => b.tombstone && !quiet.has(b.entity.eid))
   if (gone.length || applied.some((b) => has(b, LISTED))) tags.add(SITE_TAG)
   for (let b of gone) {

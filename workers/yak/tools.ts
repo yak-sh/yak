@@ -1,3 +1,4 @@
+import { transferTool } from './app-transfer.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { type Line, line as ql } from '@yaks/query'
@@ -11,7 +12,7 @@ import { mcpConnect, mcpRemove } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
 import { searchConsoleTools } from './search-console.ts'
-import { ownedPrefix, rootedPrefix } from './file-root.ts'
+import { ownedPrefix, rootedPrefix } from '@yaks/platform/file-root'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
 // brings graph_apply, graph_query, graph_show, graph_schema and search over
@@ -8581,9 +8582,18 @@ let OURS: Row[] = [
   },
 ]
 
+let appBuildTools = new Set([
+  'app_files',
+  'app_preview',
+  'app_deploy',
+  'app_versions',
+  'app_rollback',
+])
+
 /** The fixed public roster, named once per release (T-34541). */
 export let TOOLS: Tool[] = [
   ...previewTools,
+  transferTool,
   ...OURS.map(worded),
   ...operatorTools.map(worded),
   ...libraryTools.map(worded),
@@ -8600,12 +8610,14 @@ export let TOOLS: Tool[] = [
     await permit(ctx, tool.name)
     // The call's ctx is its own (agent.ts `running`); its role holds for
     // this call alone, whatever else it calls.
-    let was = ctx.need
+    let was = ctx.need, building = ctx.buildApp
     ctx.need = tool.role
+    ctx.buildApp = appBuildTools.has(tool.name)
     try {
       return await tool.run(ctx, args)
     } finally {
       ctx.need = was
+      ctx.buildApp = building
     }
   },
 }))
