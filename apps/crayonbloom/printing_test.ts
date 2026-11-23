@@ -4,9 +4,27 @@ import { memory } from '../printbound/storefront_fixture.ts'
 import manifest from './vocab.json' with { type: 'json' }
 import { type Book, fingerprint, type Page } from './model.ts'
 import { edition, printer, printing } from './printing.ts'
+import { APPROVE } from './approve.ts'
+
+// The words the workflow's approval step writes beside the app's own.
+let words = {
+  $defs: {
+    ...manifest.$defs,
+    built: {
+      component: true,
+      type: 'object',
+      properties: { current: { type: 'boolean' } },
+    },
+    decided: {
+      component: true,
+      type: 'object',
+      properties: { choice: { type: 'string' } },
+    },
+  },
+}
 
 let fixture = async () => {
-  let { db } = memory(manifest)
+  let { db } = memory(words)
   let book: Book = {
     entity: { eid: crypto.randomUUID() },
     doc: { title: 'The bridge', body: '' },
@@ -46,7 +64,7 @@ let fixture = async () => {
   return { db, book, page, read }
 }
 
-test('the consumer renews original artwork tickets on resume and only reviews a complete composed document', async () => {
+test('the consumer renews original artwork tickets on resume, only reviews a complete composed document, and quotes it once approved', async () => {
   let f = await fixture(),
     job = crypto.randomUUID(),
     requests: [string, Record<string, unknown>][] = [],
@@ -122,6 +140,17 @@ test('the consumer renews original artwork tickets on resume and only reviews a 
     reviewed.print_review?.document.source,
     edition(f.book, [f.page]),
   )
+  await assertRejects(
+    () => press.quote(reviewed, [f.page], { quantity: 1 }),
+    Error,
+    'Approve the print document',
+  )
+  await f.db.apply([{
+    entity: { eid: crypto.randomUUID() },
+    print_approval: { book: f.book.entity.eid, revision: job },
+    built: { current: true },
+    decided: { choice: APPROVE },
+  }])
   await press.quote(reviewed, [f.page], { quantity: 1 })
   assertEquals(requests.at(-1)![1].document, job)
 })

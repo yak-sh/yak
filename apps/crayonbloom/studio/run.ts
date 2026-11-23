@@ -289,6 +289,10 @@ export let run = async (world: World): Promise<void> => {
     }
     if (act === 'freebook') return freebook()
     if (act === 'connect') return connect()
+    if (act === 'approve') {
+      await request('approve', { id, choice: button.dataset.choice })
+      return open()
+    }
     if (act === 'retry' && page) {
       await request('edit', { ...filled(button.closest('form')!), id, page })
     }

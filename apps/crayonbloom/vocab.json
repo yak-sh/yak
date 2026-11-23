@@ -160,14 +160,41 @@
       "type": "object"
     },
     "print_review": {
-      "description": "The immutable PrintBound document returned for the selected page order.",
+      "description": "The immutable PrintBound document returned for the selected page order; revision is its id, which the approval step asks about.",
       "properties": {
         "document": {
           "type": "object"
+        },
+        "revision": {
+          "type": "string"
         }
       },
       "component": true,
       "type": "object"
+    },
+    "print_approval": {
+      "description": "Marks a decision as the owner's approval of one prepared print document of a book: what the workflow's approval step asks before the document is quoted.",
+      "properties": {
+        "book": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "component": true,
+      "type": "object"
+    },
+    "ask_print_approval": {
+      "tool": true,
+      "description": "Ask a book's owner to approve its prepared print document before it is quoted",
+      "worker": "/studio/approval",
+      "input": {
+        "binding": {
+          "type": "object"
+        }
+      },
+      "discoverable": false
     },
     "print_quote": {
       "description": "The selected PrintBound destination quote for the reviewed document.",

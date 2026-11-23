@@ -6,6 +6,7 @@ import { atelier } from './atelier.ts'
 import { type Binding, guard, identifier, Refusal, store, who } from './db.ts'
 import { generation, put, puzzle, settings } from './generation.ts'
 import { printer, printing } from './printing.ts'
+import { answer, approval, ask } from './approval.ts'
 import { publicPage } from './public.ts'
 import { legacyPage } from './legacy.ts'
 import type { Book } from './model.ts'
@@ -98,6 +99,12 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
         identifier(url.searchParams.get('id')),
       )
     }
+    if (action === 'approval') {
+      if (
+        request.method !== 'POST' || !request.headers.get('x-yak-command-call')
+      ) throw new Refusal('A workflow step is required.', 403)
+      return reply(ask((await request.json()).binding))
+    }
     if (action === 'drafts') {
       return await env.STORE.fetch('/drafts', {
         method: request.method,
@@ -143,7 +150,10 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
     if (action === 'shelf') return reply(await engine.shelf(caller))
     if (action === 'book') {
       let book = await engine.owned(url.searchParams.get('id'), caller)
-      return reply({ book, pages: await engine.pages(book) })
+      return reply({
+        book: { ...book, approval: await approval(db, book) },
+        pages: await engine.pages(book),
+      })
     }
     if (action === 'printable') {
       let book = await engine.owned(url.searchParams.get('id'), caller),
@@ -269,6 +279,8 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
     } else if (action === 'prepare') result = await press.prepare(book, pages)
     else if (action === 'preparation') {
       result = await press.preparation(book, pages)
+    } else if (action === 'approve') {
+      result = await answer(db, book, value.choice)
     } else if (action === 'quote') {
       result = await press.quote(book, pages, value)
     } else if (action === 'purchase') {

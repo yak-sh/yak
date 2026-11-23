@@ -6,6 +6,15 @@ style library, character reference prompts and age profiles are ported from
 printables are free. A finished print edition is prepared by PrintBound, then
 reviewed before its destination quote and single seller checkout.
 
+Approving the print document is a workflow step (D-467): the "Approve the print
+document" builder in `seed.json` matches a book whose `print_review.revision`
+(the prepared document's id) is set, and its worker command (`/studio/approval`,
+`approval.ts`) writes a decision assigned to the book's owner, marked
+`print_approval{book, revision}`. The owner answers it on the book's print card
+or in their Updates. Only an approved document is quoted; preparing the book
+again asks again. A store is seeded once, so an existing store gets the builder
+row by `yak admin apply`.
+
 The app is private. Its Worker serves the home page, public guides, blog, RSS,
 curated theme art and the studio; customer routes check the platform-vouched
 person or guest instrument before reading any book or artifact. Gallery exposure

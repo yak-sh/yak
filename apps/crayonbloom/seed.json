@@ -187,5 +187,19 @@
       "edge_direction": "Sit the composition on a clean rectangular field that stops short of the canvas, the way a mid-century record sleeve keeps its border.",
       "page_band": "rule"
     }
+  },
+  {
+    "entity": {
+      "eid": "5f7f4f1e-3c1d-4f43-9a54-0b6f2a9d6c21"
+    },
+    "doc": {
+      "title": "Approve the print document",
+      "body": "Once PrintBound has composed a book's print document, its owner is asked in their Updates and on the book's print card whether to print it as the preview shows it. Only an approved document is quoted."
+    },
+    "builder": {
+      "query": "$b .coloring_book, coloring_book.owner=$owner, doc.title=$title, print_review.revision=$revision",
+      "to": "b7ff69dc-a884-81bf-9b5c-f1faae5b8be8",
+      "immediate": true
+    }
   }
 ]

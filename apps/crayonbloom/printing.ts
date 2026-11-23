@@ -8,6 +8,7 @@ import {
   type Page,
 } from './model.ts'
 import type { Runtime } from './generation.ts'
+import { approved } from './approval.ts'
 
 export type Printer = (
   name: string,
@@ -125,7 +126,10 @@ export let printing = (
     reviewable(document)
     await db.apply([{
       entity: book.entity,
-      print_review: { document: { ...document, source: edition(book, pages) } },
+      print_review: {
+        document: { ...document, source: edition(book, pages) },
+        revision: String(document.id),
+      },
       print_quote: null,
       $was: guard(book, ['doc', 'coloring_book']),
     }])
@@ -171,20 +175,28 @@ export let printing = (
       await db.apply([{
         entity: book.entity,
         print_preparation: null,
-        print_review: { document: { ...doc, source: pending.source } },
+        print_review: {
+          document: { ...doc, source: pending.source },
+          revision: String(doc.id),
+        },
         print_quote: null,
         $was: guard(book, ['print_preparation', 'doc', 'coloring_book']),
       }])
       return doc
     },
     async quote(book: Book, pages: Page[], value: Record<string, unknown>) {
-      let doc = document(book, pages),
-        quote = await service('quote', {
-          document: doc.id,
-          quantity: value.quantity,
-          address: value.address,
-          shipping: value.shipping,
-        })
+      let doc = document(book, pages)
+      if (!await approved(db, book)) {
+        throw new Refusal(
+          'Approve the print document on this card before asking for its price.',
+        )
+      }
+      let quote = await service('quote', {
+        document: doc.id,
+        quantity: value.quantity,
+        address: value.address,
+        shipping: value.shipping,
+      })
       await db.apply([{
         entity: book.entity,
         print_quote: { quote },

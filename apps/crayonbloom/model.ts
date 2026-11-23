@@ -17,7 +17,7 @@ export type Book = Bundle & {
   character_art?: Art
   page_drawing?: { job: string }
   page_failed?: { message: string }
-  print_review?: { document: Record<string, unknown> }
+  print_review?: { document: Record<string, unknown>; revision?: string }
   print_quote?: { quote: Record<string, unknown> }
   print_receipt?: { receipt: Record<string, unknown> }
 }

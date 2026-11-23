@@ -8,6 +8,7 @@ import { Tray } from '../look/parts/Tray.ts'
 import type { Place } from '../pages/chrome.ts'
 import { filed, Labeled, options, press } from './kit.ts'
 import type { Book, Edition, Quote, Receipt } from './rows.ts'
+import { APPROVE, CHANGE } from '../approve.ts'
 
 type Told = [title: string, held: ComponentChildren]
 
@@ -227,10 +228,51 @@ let Answers = ({ book }: { book: Book }) => {
  * prepared. */
 export let Print = ({ place, book }: { place: Place; book: Book | null }) => {
   let edition = book?.print_review?.document
-  return book && edition
-    ? [
-      h(Review, { edition, file: filed(place, book) }),
-      h(Desk.Pair, {}, h(Destination, {}), h(Answers, { book })),
-    ]
-    : null
+  if (!book || !edition) return null
+  let approved = book.approval?.choice === APPROVE
+  return [
+    h(Review, { edition, file: filed(place, book) }),
+    h(Approve, { book }),
+    approved && h(Desk.Pair, {}, h(Destination, {}), h(Answers, { book })),
+  ]
+}
+
+/** The workflow's person step: the owner approves the document they just
+ * reviewed, or goes back to change pages. Asked in their Updates too. */
+let Approve = ({ book }: { book: Book }) => {
+  let choice = book.approval?.choice
+  return h(
+    Card,
+    {},
+    h(
+      Card.Head,
+      {},
+      h(
+        Card.Title,
+        {},
+        choice === APPROVE
+          ? 'Approved for print'
+          : 'Print it as the preview shows it?',
+      ),
+    ),
+    !book.approval
+      ? h(
+        Card.Sub,
+        {},
+        'Asking you to approve this document… it shows here and in your Updates in a moment.',
+      )
+      : choice === CHANGE
+      ? h(
+        Card.Sub,
+        {},
+        'Edit, redraw or reorder pages above, then prepare the book again to approve the new document.',
+      )
+      : choice !== APPROVE &&
+        h(
+          Desk.Row,
+          {},
+          press('approve', APPROVE, { mod: 'go', 'data-choice': APPROVE }),
+          press('approve', CHANGE, { mod: 'quiet', 'data-choice': CHANGE }),
+        ),
+  )
 }

@@ -42,6 +42,8 @@ export type Book = Row & {
   page_drawing?: unknown
   page_failed?: { message: string }
   print_review?: { document?: Edition }
+  /** The owner's approval asked of the reviewed document, and their answer. */
+  approval?: { decision: string; choice?: string } | null
   print_quote?: { quote?: Quote }
   print_receipt?: { receipt?: Receipt }
   gallery_consent?: unknown
