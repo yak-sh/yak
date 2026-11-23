@@ -169,7 +169,11 @@ export let route = (asked: Asked): Routed | undefined => {
  * ```
  */
 export let onward = (
-  asked: Asked & { from: { provider: Eid; model?: Eid } },
+  asked: Asked & {
+    from: { provider: Eid; model?: Eid }
+    passed?: ReadonlySet<Eid>
+    available?: ReadonlySet<Eid>
+  },
 ): Routed | undefined => {
   let { routes, readings, now, from } = asked
   let was =
@@ -177,12 +181,17 @@ export let onward = (
       r.provider == from.provider && (!from.model || r.model == from.model)
     ) ?? routes.find((r) => r.provider == from.provider)
   let plan = was?.plan ?? from.provider
+  let passed = new Set([plan, ...asked.passed ?? []])
+  for (let r of routes) if (asked.passed?.has(r.provider)) passed.add(r.plan)
   let full = (plan: Eid) =>
     readings.some((r) =>
       r.provider == plan && r.used >= 100 &&
       !(r.resets && Date.parse(r.resets) <= now)
     )
-  let open = routes.filter((r) => r.plan != plan && !full(r.plan))
+  let open = routes.filter((r) =>
+    (!asked.available || asked.available.has(r.provider)) &&
+    !passed.has(r.plan) && !full(r.plan)
+  )
   if (!open.length) return undefined
   let chosen = route({ ...asked, routes: open }) ??
     {

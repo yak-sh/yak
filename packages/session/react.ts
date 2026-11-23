@@ -323,7 +323,11 @@ export type Deps = {
   /** Where a conversation goes on once the plan of the model it asked
    * (`using`) is spent (@yaks/model `spent`): the `using{provider, model,
    * why}` to ask instead, or nothing to let it wait for the plan to reset. */
-  onward?: (using: Comp | undefined, error: ModelError) => Promise<
+  onward?: (
+    using: Comp | undefined,
+    error: ModelError,
+    passed: ReadonlySet<Eid>,
+  ) => Promise<
     Comp | undefined
   >
   tools: Tool[]
@@ -643,6 +647,30 @@ let passing = (e: unknown): e is ModelError =>
 // however many times it comes, and no incident.
 let deferring = (e: unknown): e is ModelError =>
   e instanceof ModelError && e.retry?.defer === true
+
+// Move through each plan once per chain of immediate retries. An ask that
+// waited or a new transcript input starts another chain.
+let movedFrom = (entries: Bundle[], session: Eid): Set<Eid> => {
+  let passed = new Set<Eid>()
+  let moved = false
+  for (let entry of entries.toReversed()) {
+    if (comp(entry, 'entry')?.session != session) break
+    let from = comp(entry, 'notice')?.moved_from
+    if (typeof from == 'string') {
+      passed.add(from)
+      moved = true
+    } else if (entry.ask) {
+      if (!moved) break
+      moved = false
+    } else if (
+      !entry.notice &&
+      ['input', 'output', 'call', 'result'].includes(kindOf(entry) ?? '')
+    ) {
+      break
+    }
+  }
+  return passed
+}
 
 // What a failed request's line carries: the provider's code, and what it sent
 // where this graph keeps it (@yaks/model `response{body, headers}`).
@@ -2522,9 +2550,14 @@ export let react = async (
     // A plan spent moves the conversation on to the next one with room, as
     // a line saying so: the attempt asked again reads it, and so does every
     // turn after, until a person chooses another.
+    let from = resolved.provider ?? using?.provider
     let moved = e instanceof ModelError && !overflow && !stream.size &&
         !modalities?.includes('audio') && spent(e) && deps.onward
-      ? await deps.onward(using, e)
+      ? await deps.onward(
+        from ? { ...using, provider: from } : using,
+        e,
+        movedFrom(entries, session),
+      )
       : undefined
     // Asked again at once, on the plan it moved to.
     if (moved) {
@@ -2593,7 +2626,7 @@ export let react = async (
         ),
         ...moved
           ? [line(
-            { notice: {}, [USING]: moved },
+            { notice: from ? { moved_from: from } : {}, [USING]: moved },
             `Moved on: ${moved.why}.`,
           )]
           : [],

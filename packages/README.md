@@ -445,6 +445,8 @@ grouped approximately by function, **not** by dependency order.
   `provider` and `model` entities. It exports the `Tool` TypeScript type; stored
   `tool` declarations belong to @yaks/tools.
 
+- **[@yaks/model-cli](./model-cli)** — Native harness models through the local,
+  subscription-signed-in Grok Build and Google Antigravity CLIs.
 - **[@yaks/openai](./openai)** — that interface implemented over OpenAI's
   Responses API: one streamed exchange over `fetch`, a bearer token from
   `OPENAI_API_KEY` or from the Codex sign-in, and the two endpoints those tokens

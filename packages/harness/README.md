@@ -367,6 +367,11 @@ with the same conversation; every later turn stays there until a person chooses
 another model. Where the default routes nothing else, or every other plan is
 spent too, the request waits for its plan to reset as before.
 
+Grok Build and Google Antigravity are subscription-backed providers on a local
+effects host. Configure `grok` and `gemini` and add their offerings to this
+default as shown in [@yaks/model-cli](../model-cli/README.md). A host can move
+onto the provider implementations it has configured.
+
 Deleting a `routes` edge takes its model out, and with none left the row's
 `using` is the default again. A project routes its own work the same way, by
 `routes` edges from the project.

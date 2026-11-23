@@ -1,12 +1,14 @@
-// A session whose provider's plan runs out goes on, with its conversation, on
-// the next provider the default routes, and says so in its transcript.
+// A session carries its conversation through spent CLI plans and keeps
+// running its own tools on the next routed provider.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { ModelError, type Request } from '@yaks/model'
+import { ModelError } from '@yaks/model'
+import { cliModel } from '@yaks/model-cli'
 import { line } from '@yaks/query'
 import { textOf } from '@yaks/session'
+import { seed } from './agent.ts'
 import { HARNESS } from './default.ts'
 import { harness } from './testing.ts'
 import { local } from './local.ts'
@@ -14,52 +16,94 @@ import { runs } from './runs.ts'
 
 let mint = () => crypto.randomUUID()
 let asked: string[] = []
-let answer = (who: string) => (req: Request) => {
-  asked.push(`${who} ${req.items.length}`)
-  return who == 'openai'
-    ? Promise.reject(
-      new ModelError('usage_limit_reached', 'You have hit your usage limit.'),
-    )
-    : Promise.resolve({
-      id: mint(),
-      model: req.model,
-      items: [{ kind: 'assistant' as const, text: 'Done on grok.' }],
-    })
-}
+let env = () => undefined
 
 let { reply, lines, using } = await (async () => {
   let h = await harness()
-  let grok = identityEid('provider', ['grok'])
-  let model = identityEid('model', ['grok-5'])
-  await h.g.apply([
-    { entity: { eid: grok }, provider: { name: 'grok' } },
-    { entity: { eid: model }, model: { name: 'grok-5' } },
-    {
-      entity: { eid: '$serves' },
-      edge: { from: grok, to: model },
-      serves: { name: 'grok-5' },
-    },
-  ], { trusted: true })
-  let offers = await h.g.read('.serves *')
-  let first = (name: string) =>
-    offers.find((b) => (b.serves as Comp).name == name)!.entity.eid
+  let routes = [
+    ['openai', 'gpt-6-astra'],
+    ['grok', 'grok-4.6'],
+    ['gemini', 'gemini-3.8-flash-medium'],
+  ]
   await h.g.apply(
-    ['gpt-6-astra', 'grok-5'].map((name, ord) => ({
-      entity: { eid: mint() },
-      edge: { from: HARNESS, to: first(name), ord },
-      routes: {},
-    })),
+    routes.flatMap(([provider, model], ord) => {
+      let rows = seed({ provider, model })
+      return [...rows, {
+        entity: { eid: mint() },
+        edge: {
+          from: HARNESS,
+          to: rows.find((b) => b.serves)!.entity.eid,
+          ord,
+        },
+        routes: {},
+      }]
+    }),
     { trusted: true },
   )
   let a = await local({
     h,
-    providers: { openai: answer('openai'), grok: answer('grok') },
+    providers: {
+      openai: () => {
+        asked.push('openai')
+        return Promise.reject(
+          new ModelError(
+            'usage_limit_reached',
+            'You have hit your usage limit.',
+          ),
+        )
+      },
+      grok: cliModel('grok', {}, env, () => {
+        asked.push('grok')
+        return Promise.resolve({
+          code: 1,
+          stdout: '',
+          stderr: 'You’ve hit the rate limit for your plan.',
+        })
+      }),
+      gemini: cliModel('gemini', {}, env, (job) => {
+        asked.push('gemini')
+        let { items } = JSON.parse(JSON.parse(job.stdin!).message.content)
+        assertEquals(
+          items.some((i: { text?: string }) =>
+            i.text?.endsWith('Read the task.')
+          ),
+          true,
+          JSON.stringify(items),
+        )
+        let result = items.find((i: { kind: string }) => i.kind == 'result')
+        let turn = result
+          ? { text: result.output, calls: [] }
+          : { text: '', calls: [{ name: 'task_read', args: '{}' }] }
+        return Promise.resolve({
+          code: 0,
+          stderr: '',
+          stdout: JSON.stringify({
+            event: 'result',
+            result: {
+              conversation_id: mint(),
+              status: 'SUCCESS',
+              structured_output: turn,
+            },
+          }),
+        })
+      }),
+    },
+    tools: [{
+      name: 'task_read',
+      description: 'Read the task.',
+      parameters: { type: 'object' },
+      run: () => 'Task found.',
+    }],
   })
   try {
     let [session] = await runs().session_new!({
       entity: { eid: mint() },
       call: {
-        args: { prompt: 'Fix it', provider: 'openai', model: 'gpt-6-astra' },
+        args: {
+          prompt: 'Read the task.',
+          provider: 'openai',
+          model: 'gpt-6-astra',
+        },
       },
     }, h.g)
     let s = String((session.entry as Comp).session)
@@ -76,12 +120,17 @@ let { reply, lines, using } = await (async () => {
   }
 })()
 
-test('a session whose plan is spent goes on with the next provider routed', () => {
-  // Grok is asked with the conversation and the line saying it moved.
-  assertEquals(asked, ['openai 1', 'grok 2'])
-  assertEquals(reply, 'Done on grok.')
-  assertEquals(using.provider, identityEid('provider', ['grok']))
-  assertEquals(using.model, identityEid('model', ['grok-5']))
-  let moved = lines.find((l) => l.startsWith('Moved on'))!
-  assertStringIncludes(moved, "gpt-6-astra's plan is spent; grok-5 is next")
+test('spent plans move the conversation once through each routed provider', () => {
+  assertEquals(
+    asked,
+    ['openai', 'grok', 'gemini', 'gemini'],
+    JSON.stringify({ lines, reply }),
+  )
+  assertStringIncludes(reply, 'Task found.')
+  assertEquals(using.provider, identityEid('provider', ['gemini']))
+  assertEquals(using.model, identityEid('model', ['gemini-3.8-flash-medium']))
+  assertEquals(lines.filter((l) => l.startsWith('Moved on')), [
+    "Moved on: gpt-6-astra's plan is spent; grok-4.6 is next.",
+    "Moved on: grok-4.6's plan is spent; gemini-3.8-flash-medium is next.",
+  ])
 })

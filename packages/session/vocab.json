@@ -498,6 +498,12 @@
         "own": {
           "type": "boolean",
           "description": "words spoken outside this model's turn by its voice on a call; prompt assembly labels the voice as their source rather than presenting them as this model's output"
+        },
+        "moved_from": {
+          "type": "string",
+          "ref": "provider",
+          "death": "keep",
+          "description": "the provider whose plan ran out during this turn"
         }
       }
     },

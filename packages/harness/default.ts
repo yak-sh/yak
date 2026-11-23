@@ -84,6 +84,7 @@ let routed = async (g: Graph, of: Eid): Promise<Comp | undefined> => {
 export let movedOn = async (
   g: Graph,
   using: Comp | undefined,
+  options: { passed?: ReadonlySet<Eid>; available?: ReadonlySet<Eid> } = {},
 ): Promise<Comp | undefined> => {
   if (!using?.provider) return undefined
   let routes = await routing(g, HARNESS)
@@ -92,6 +93,7 @@ export let movedOn = async (
     b.rate_limit as Reading
   )
   let next = onward({
+    ...options,
     routes,
     readings,
     now: Date.now(),

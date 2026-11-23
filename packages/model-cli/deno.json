@@ -1,0 +1,7 @@
+{
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

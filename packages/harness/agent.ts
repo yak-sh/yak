@@ -446,6 +446,9 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   const provider = opts.provider
   let name = opts.name ?? ''
   const implementations = served(opts)
+  let available = opts.model ? undefined : new Set(
+    Object.keys(implementations).map((name) => identityEid(PROVIDER, [name])),
+  )
   let model = opts.model ?? implementations[provider ?? ''] ?? unserved
   let tools = opts.resultText ? opts.tools ?? [] : [
     ...opts.tools ?? [],
@@ -503,7 +506,8 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     prepareChild,
     model,
     resolveModel,
-    onward: (using) => movedOn(h.g, using),
+    onward: (using, _error, passed) =>
+      movedOn(h.g, using, { available, passed }),
     compactModel: compact,
     elideCold: opts.elideCold,
     answers: answers(h.g, implementations, opts.model),
