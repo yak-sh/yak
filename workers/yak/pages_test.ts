@@ -91,7 +91,7 @@ let reads = async (response: Response) => {
   let main = document.querySelector('main')!
   return {
     says: [...main.querySelectorAll('h1, p')].map((p) => p.textContent),
-    picture: main.querySelector('img.Copy_Image')?.getAttribute('src'),
+    picture: main.querySelector('img.Pictured_Image')?.getAttribute('src'),
   }
 }
 

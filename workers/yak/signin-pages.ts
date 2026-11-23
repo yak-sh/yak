@@ -108,9 +108,9 @@ let copying = (copy: Copy) => ({
   picture: copy.image
     ? h(
       'figure',
-      { class: 'Copy' },
+      { class: 'Pictured' },
       h('img', {
-        class: 'Copy_Image',
+        class: 'Pictured_Image',
         src: copy.image,
         alt: copy.title,
         width: 1200,

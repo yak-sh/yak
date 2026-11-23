@@ -304,7 +304,10 @@
   }
   /* WebKit extends the solid colour of an edge-pinned bar into the status
      area. Keep the controls below any inset the viewport exposes. */
+  /* As tall as a card's head beside it: its padding and its presses. */
   .Frame_Bar {
+    --toolbar-padding-block: .5rem;
+    --control-height: 2rem;
     anchor-name: --frame-bar;
     position: sticky;
     top: 0;
@@ -340,6 +343,11 @@
   .Frame_AsideTools {
     flex: none;
     margin-inline-start: auto;
+  }
+  /* The toggle posts its form, which lays out as the button alone, so the
+     bar stands a button tall rather than a page's form tall. */
+  .Frame_AsideFold {
+    display: contents;
   }
   .Frame_AsideOpen,
   .Frame_AsideClose,
@@ -487,7 +495,7 @@
 
   /* The picture of the app a stranger signs in to copy (signin-pages.ts
      `copying`): its card's picture, cropped from its top as the gallery's. */
-  .Copy {
+  .Pictured {
     margin: 1.5rem 0 0;
     aspect-ratio: 1200 / 630;
     overflow: hidden;
@@ -495,7 +503,7 @@
     border-radius: var(--radius);
     background: var(--bg);
   }
-  .Copy_Image {
+  .Pictured_Image {
     display: block;
     width: 100%;
     height: 100%;
