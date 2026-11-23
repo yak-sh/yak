@@ -27,6 +27,8 @@ let fixture = async () => {
   let { db, g } = memory(manifest),
     failed = new Set<string>(),
     pending = new Set<string>(),
+    // How many more attempts a restart cuts off, by page.
+    cut = new Map<string, number>(),
     drawn: string[] = []
   await db.apply([{
     entity: { eid: style },
@@ -46,6 +48,14 @@ let fixture = async () => {
     async result(job) {
       if (pending.has(job)) return {}
       let [row] = await db.query(`.entity.eid=${job}&?page_job`) as Job[]
+      let left = cut.get(row.page_job.page)
+      if (left) {
+        cut.set(row.page_job.page, left - 1)
+        return {
+          error: 'This artwork attempt was interrupted.',
+          interrupted: true,
+        }
+      }
       if (failed.has(row.page_job.page)) {
         return { error: 'The artwork failed. Your other pages are kept.' }
       }
@@ -64,7 +74,7 @@ let fixture = async () => {
         mime: 'application/pdf',
       }),
   }
-  return { db, g, io, failed, pending, drawn, desk: atelier(db, io) }
+  return { db, g, io, failed, pending, cut, drawn, desk: atelier(db, io) }
 }
 
 test('saved idea, story, style and guest identity survive reopening and bind on sign-in', async () => {
@@ -109,6 +119,23 @@ test('bounded page jobs resume after interruption and keep completed artwork thr
   let completed = await restarted.advance(book.entity.eid, alice)
   assertEquals(completed.complete, true)
   assertEquals(completed.pages[0].artwork, first)
+})
+
+test('an attempt a restart cuts off is drawn again, and shows as failed only after three', async () => {
+  let f = await fixture(), book = await f.desk.save(input, alice)
+  await f.desk.outline(book.entity.eid, alice)
+  let [first, second] = await f.desk.pages(book)
+  f.cut.set(first.entity.eid, 2)
+  f.cut.set(second.entity.eid, 3)
+  for (let i = 0; i < 8; i++) await f.desk.advance(book.entity.eid, alice)
+  let [drawn, failed] = await f.desk.pages(book)
+  assertEquals(drawn.page_failed, undefined)
+  assertEquals(drawn.artwork?.input, fingerprint(book, drawn))
+  assertEquals(failed.artwork, undefined)
+  assertEquals(
+    failed.page_failed?.message,
+    'This artwork attempt was interrupted.',
+  )
 })
 
 test('reordering pages preserves their completed artwork and only changes print order', async () => {

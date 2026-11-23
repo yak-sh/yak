@@ -130,8 +130,18 @@ export let generation = (
       }
     }
     let rows = await db.query(
-      `.entry.session=${job}&?attachment&?refusal&?output`,
+      `.entry.session=${job}&?attachment&?refusal&?output&?failed&?interrupted`,
     )
+    // A model call the store's restart cut off (a deploy reaching it) fails
+    // its transcript at an entry; it was never the person's to see.
+    let cut = rows.find((row) => row.failed)
+    if (cut) {
+      return {
+        error:
+          'This artwork attempt was interrupted. Your completed pages are kept.',
+        ...cut.interrupted ? { interrupted: true } : {},
+      }
+    }
     let declined = rows.find((row) => row.refusal)
     if (declined) {
       return {

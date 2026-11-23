@@ -24,7 +24,15 @@ import {
 import { characterPrompt, pagePrompt, singlePrompt } from './prompts.ts'
 import { profile } from './puzzles.ts'
 
-export type Outcome = { artwork?: Omit<Art, 'input'>; error?: string }
+export type Outcome = {
+  artwork?: Omit<Art, 'input'>
+  error?: string
+  /** The attempt was cut off by a restart rather than refused. */
+  interrupted?: boolean
+}
+/** How many attempts at one input a restart may cut off before the page shows
+ * the failure. */
+let ATTEMPTS = 3
 export type Generator = {
   request(
     job: string,
@@ -141,10 +149,18 @@ export let atelier = (db: Store, io: AtelierIO) => {
     if (!result.artwork && !result.error) return
     let page = 'coloring_page' in target ? target as Page : undefined
     let matches = fingerprint(book, page) === job.page_job.input
+    // An interrupted attempt is drawn again by the next advance, unless this
+    // input has been tried ATTEMPTS times.
+    let again = result.interrupted &&
+      (await db.query(
+          `.page_job.page=${job.page_job.page}&.page_job.input=${job.page_job.input}`,
+        )).length < ATTEMPTS
     await db.apply([{
       entity: target.entity,
       page_drawing: null,
-      ...(result.error
+      ...(again
+        ? {}
+        : result.error
         ? { page_failed: { message: result.error } }
         : matches
         ? {
