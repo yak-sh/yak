@@ -323,6 +323,16 @@ export type Log = {
   refs: (target: Eid) => number
   /** Repair a malformed identity in journal metadata, preserving every entry. */
   retarget: (from: Eid, to: Eid) => void
+  /** Correct one verified writer, retaining the original attribution in its note. */
+  correctActor: (correction: ActorCorrection, by: Eid) => void
+}
+
+type ActorCorrection = {
+  seq: number
+  at: string
+  by: Eid
+  via: Eid
+  why: string
 }
 
 /**
@@ -776,6 +786,40 @@ export let log = (opts: LogOpts): Log => {
       ...s,
     })
 
+  let correctActor = (correction: ActorCorrection, by: Eid) => {
+    if (
+      !one(
+        select({
+          cols: [col(idCol)],
+          from: table(spine),
+          where: eq(col(eidCol), val(by)),
+        }),
+      )
+    ) {
+      throw new Refused('The corrected journal actor must exist')
+    }
+    let where = and(
+      eq(col('id'), val(correction.seq)),
+      eq(col('ts'), val(correction.at)),
+      eq(col('actor'), idOf(correction.by)),
+      eq(col('via'), idOf(correction.via)),
+    )
+    let held = one(
+      select({ cols: [col('trace')], from: table('journal_tx'), where }),
+    )
+    if (!held) return
+    let trace = [
+      held.trace,
+      `Actor corrected from ${correction.by}. ${correction.why}`,
+    ].filter(Boolean).join('\n')
+    rows({
+      t: 'update',
+      table: 'journal_tx',
+      set: { actor: idOf(by), trace: val(trace) },
+      where,
+    })
+  }
+
   /** Every transaction that touched one entity, newest first, cut to that
    * entity. */
   let entries = (target: Eid, n = 50): Entry[] =>
@@ -1087,6 +1131,7 @@ export let log = (opts: LogOpts): Log => {
     scrubRef,
     refs,
     retarget,
+    correctActor,
   }
 }
 
@@ -1149,7 +1194,7 @@ export let journal = (
     purge: (_graph, eids) => n.purge(eids),
     retained: (_graph, values) => n.retained(values),
     admission: () => true,
-    requests: ['$journal_from'],
+    requests: ['$journal_from', '$journal_actor'],
     wants: (bundles) => {
       let eids = deleting(bundles)
       return eids.length ? [{ eids }] : []
@@ -1162,6 +1207,22 @@ export let journal = (
         context?: HookContext,
       ) => {
         for (let b of bundles) {
+          if ('$journal_actor' in b) {
+            let fixes = (b.$journal_actor as Comp | undefined)?.corrections
+            if (
+              !context?.trusted || !Array.isArray(fixes) ||
+              !minted(b.entity.eid) ||
+              fixes.some((fix) =>
+                !fix || !Number.isSafeInteger(fix.seq) || fix.seq <= 0 ||
+                typeof fix.at != 'string' || !minted(fix.by) ||
+                !minted(fix.via) || typeof fix.why != 'string' || !fix.why
+              )
+            ) {
+              throw new Refused(
+                'Journal attribution needs a trusted, exact correction',
+              )
+            }
+          }
           if (!('$journal_from' in b)) continue
           if (!context?.trusted) {
             throw new Refused(
@@ -1206,6 +1267,10 @@ export let journal = (
         for (let b of bundles) {
           if (typeof b.$journal_from == 'string') {
             n.retarget(b.$journal_from, b.entity.eid)
+          }
+          let fixes = (b.$journal_actor as Comp | undefined)?.corrections
+          for (let fix of (fixes ?? []) as ActorCorrection[]) {
+            n.correctActor(fix, b.entity.eid)
           }
         }
         return bundles

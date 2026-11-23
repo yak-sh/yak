@@ -62,6 +62,44 @@ test('history lists a create, two patches and a death, in order', () => {
   ])
 })
 
+test('a trusted correction changes only the verified journal actor', () => {
+  let { g, j, apply } = fixture()
+  let by = mint(), via = mint(), agent = mint(), target = mint()
+  apply([agent, by, via].map((eid) => ({
+    entity: { eid },
+    render: { state: 'identity' },
+  })))
+  apply([{
+    entity: { eid: target },
+    page: { title: 'One' },
+    $actor: { by, via },
+  }])
+  apply([{
+    entity: { eid: target },
+    page: { title: 'Two' },
+    $actor: { by, via },
+  }])
+  let [before, later] = j.history(target)
+  let bundles: Bundle[] = [{
+    entity: { eid: agent },
+    $journal_actor: {
+      corrections: [{
+        seq: before.seq,
+        at: before.at,
+        by,
+        via,
+        why: 'T-2943',
+      }],
+    },
+  }]
+  assertThrows(() => g.apply(bundles), Error, 'trusted')
+  sync(g.apply(bundles, { trusted: true, check: true }))
+  assertEquals(j.history(target), [before, later])
+  for (let i = 0; i < 2; i++) sync(g.apply(bundles, { trusted: true }))
+  assertEquals(j.history(target), [{ ...before, by: agent }, later])
+  assertEquals(j.entries(target)[1].note, `Actor corrected from ${by}. T-2943`)
+})
+
 test('a batch row carries the actor, the instrument and the moment', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' }, $actor: bob }])

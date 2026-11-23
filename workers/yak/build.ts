@@ -969,6 +969,18 @@ export class Builder extends Durable {
             this.#resume()
             return null
           },
+          boxAttribution: async () => {
+            let { concept, repairConceptReplies } = await import(
+              '../../packages/platform/box-attribution-move.ts'
+            )
+            if (this.ctx.id?.name != concept) return null
+            let mark = 'T-2943:boxAttribution'
+            if (store.marks?.get(mark)) return null
+            if (store.waiting?.()) return waiting()
+            await repairConceptReplies(store.g)
+            store.marks?.set(mark, 'done')
+            return null
+          },
           contacts: async () => {
             let { contactBackfill } = await import('./contact-move.ts')
             return backfill(contactBackfill(store, this.#env))

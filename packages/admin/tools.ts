@@ -594,7 +594,8 @@ export let runs = (
       if (!thread && (text || reply_to || named || complete)) {
         throw new CallError('thread', 'name the thread to answer')
       }
-      let at = await acting(a)
+      let writes = !!(text || reply_to || named || complete)
+      let at = await (writes ? writing(a) : acting(a))
       if (!thread) {
         let { threads } = await supportWaiting(at.bearer)
         return [said(
@@ -608,7 +609,7 @@ export let runs = (
         ? (await graph.address([named])).get(named) ?? named
         : undefined
       let [row] = fix ? await graph.get([fix]) : []
-      let t = text || reply_to || fix || complete
+      let t = writes
         ? await supportAnswer(at.bearer, thread, {
           text,
           reply_to,

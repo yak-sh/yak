@@ -232,6 +232,7 @@ test('support lists waiting threads and answers one, its fix named by this graph
   let { host, kept, ask } = await box()
   try {
     await kept('own@example.com', 'own-bearer')
+    await kept(ADMIN, 'admin-bearer')
     let [fix] = await host.graph.apply([{
       entity: { eid: '$fix' },
       doc: { title: 'Wrap the board' },
@@ -241,9 +242,11 @@ test('support lists waiting threads and answers one, its fix named by this graph
       commit: { message: 'T-1 Wrap the board\n\nWhy.' },
     }])
     let asked: (string | null)[] = []
+    let accounts: (string | null)[] = []
     let thread = { eid: 't1', title: 'It scrolls', link: 'L', text: 'T' }
     await answering((url, init) => {
       asked.push(init?.body ? String(init.body) : new URL(url).search)
+      accounts.push(new Headers(init?.headers).get('authorization'))
       return Response.json(
         new URL(url).search || init?.body ? thread : { threads: [thread] },
       )
@@ -256,7 +259,11 @@ test('support lists waiting threads and answers one, its fix named by this graph
         fix: 'fix:wrap',
         complete: true,
       })
-      await ask('admin_support', { thread: 't1', fix: 'abc123' })
+      await ask('admin_support', {
+        thread: 't1',
+        fix: 'abc123',
+        as: 'own@example.com',
+      })
       await assertRejects(
         () => ask('admin_support', { text: 'To whom?' }),
         CallError,
@@ -267,6 +274,12 @@ test('support lists waiting threads and answers one, its fix named by this graph
       '?thread=t1',
       `thread=t1&text=Wrapped.&fix=${fix.entity.eid}&fix_title=Wrap+the+board&complete=true`,
       'thread=t1&fix=abc123&fix_message=T-1+Wrap+the+board%0A%0AWhy.',
+    ])
+    equal(accounts, [
+      'Bearer own-bearer',
+      'Bearer own-bearer',
+      'Bearer admin-bearer',
+      'Bearer own-bearer',
     ])
   } finally {
     await host.close()

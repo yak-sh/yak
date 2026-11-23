@@ -805,10 +805,11 @@ configured graph, which needs @yaks/connections among its plugins; `yak init`'s
 config has it. A machine with no graph creates a small personal graph in its CLI
 state directory on its first `yak auth`.
 
-`--as <account>` is optional on commands that reach yaks.app. Without it, the
-connection whose account matches the configured person's own address wins,
-otherwise the oldest connection. The default is computed, never stored.
-`YAKS_TOKEN` still supplies a sandbox bearer without opening a graph.
+`--as <account>` is optional on commands that reach yaks.app. An agent session
+on a box with an admin forwarder uses that account by default. For other CLI
+calls, the connection whose account matches the configured person's own address
+wins, with the oldest connection as fallback. `YAKS_TOKEN` still supplies a
+sandbox bearer without opening a graph.
 
 Global flags stay separate from tool arguments. For a tool property with the
 same name, use `name=value`. This selects the installer's account and names the
