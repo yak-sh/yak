@@ -1453,7 +1453,7 @@ let trashedOf = (r: Row) =>
     ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
     : null
 
-let lineOf = (r: Row): PhoneLine => {
+export let lineOf = (r: Row): PhoneLine => {
   let l = r.phone_line!
   return {
     eid: r.entity.eid,

@@ -292,7 +292,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     assertEquals(held.size, 1)
     assertEquals((await post(page[1], { confirm: 'wrong' })).status, 400)
     let pressed = await post(page[1], { t: decodeURIComponent(page[2]) })
-    assertStringIncludes(await pressed.text(), 'it costs nothing from now on')
+    assertStringIncludes(await pressed.text(), 'costs nothing from now on')
     assertEquals(held.size, 0)
     assertEquals(await k.dir.lined(FREE), null)
     assertEquals(await k.dir.trash([owned.eid]), [])
@@ -430,6 +430,7 @@ let vms = {
   cdr: [] as Record<string, string>[],
   slow: 0,
   unansweredOrder: false,
+  slowHangup: 0,
 }
 let voipmsApi = endpoints(globalThis).open((req) => {
   let q = new URL(req.url).searchParams
@@ -516,6 +517,10 @@ let voipmsApi = endpoints(globalThis).open((req) => {
       vms.held.set(q.get('did')!, { routing: q.get('routing')! })
       return ok()
     case 'setDIDRouting':
+      if (q.get('routing') == 'sys:hangup' && vms.slowHangup > 0) {
+        vms.slowHangup--
+        return new Response('', { status: 522 })
+      }
       vms.held.get(q.get('did')!)!.routing = q.get('routing')!
       return ok()
     case 'getDIDsInfo': {
@@ -832,12 +837,30 @@ test('a spent budget keeps the sign-in and trash removes it until restore issues
     assertEquals(await hour(), { in: true, out: true })
 
     // In the trash it takes and makes no call, and restored, it does again.
-    await tool('number_release', { number: LOCAL })
-    assertEquals(ways(), { in: false, out: false })
+    let space = (await k.dir.space(slug))!
+    vms.slowHangup = 2
+    assertStringIncludes(
+      await tool('number_release', { number: LOCAL }),
+      'will retry automatically',
+    )
+    let [line] = await k.dir.lines(space)
+    assert(line.trashed)
+    let [release] = await k.dir.read(q`.phone_release.line=${line.eid}&?wake`)
+    assert(release.wake)
+    await stamp(env, {
+      entities: [{
+        entity: release.entity,
+        wake: { at: new Date().toISOString() },
+      }],
+    })
+    await until(
+      async () =>
+        !(await k.dir.read(q`.phone_release.line=${line.eid}`)).length,
+      { label: 'the carrier release retried from its wake' },
+    )
+    assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
     assertEquals(vms.accounts.size, 0)
     assertEquals(await hour(), { in: false, out: false })
-    let space = (await k.dir.space(slug))!
-    let [line] = await k.dir.lines(space)
     await restoredNumber(env, k.dir, line, { person, role: 'owner' })
     assertEquals(ways(), { in: true, out: true })
 

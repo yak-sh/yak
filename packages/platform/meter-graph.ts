@@ -77,6 +77,11 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
     match: '.wake, *fired, .sweep, sweep.kind=meter, #Now',
     run: (row) => store.job?.('meter', row),
   }, {
+    name: 'phone-release',
+    phase: 'effect',
+    match: '.wake, *fired, .phone_release, #Now',
+    run: (row) => store.job?.('phone_release', row),
+  }, {
     // A held number's month, spent from its space's budget: the platform's
     // job `lines`.
     name: 'lines',

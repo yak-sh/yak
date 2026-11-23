@@ -150,7 +150,13 @@ export let minutes = async (env: Env, now: Date): Promise<number> => {
 
 /** Let every number's calls go only the ways its space allows at `now`. */
 export let allowed = async (env: Env, now: Date): Promise<void> => {
+  let pending = new Set(
+    (await meta(env).query(q`.phone_release`)).map((r) =>
+      idOf((r.phone_release as { line: string }).line)
+    ),
+  )
   for (let row of await lines(env)) {
+    if (pending.has(row.entity.eid)) continue
     let line = row.phone_line as Line
     let space = await spaceNow(env, idOf(line.space))
     await syncVoice(

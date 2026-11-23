@@ -576,7 +576,9 @@ export let trashNumber = (
   dir: Directory,
   line: PhoneLine,
   who: Who,
-) => line.trashed ? Promise.resolve() : mark(dir, line.eid, who, {})
+  declarations: Bundle[] = [],
+) =>
+  line.trashed ? Promise.resolve() : mark(dir, line.eid, who, {}, declarations)
 
 /** Restore the held number at its retained assignment. */
 export let untrashNumber = (dir: Directory, line: PhoneLine, who: Who) =>

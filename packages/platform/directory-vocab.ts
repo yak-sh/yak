@@ -537,6 +537,18 @@ export let directoryDoc: VocabDoc = {
         reported: owned(bool),
       },
     },
+    phone_release: {
+      description:
+        'Carrier work to stop or permanently return a number already in the trash.',
+      component: true,
+      type: 'object',
+      properties: {
+        line: owned(ref('keep')),
+        at: owned(time),
+        permanent: owned(bool),
+        reported: owned(time),
+      },
+    },
     // What the platform takes from one sale, in basis points (sell.ts `fee`),
     // on the platform's own space row — `yak`, the one row in this directory
     // that is the platform rather than a customer. Unset reads as 0, which is

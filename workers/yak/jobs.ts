@@ -48,6 +48,10 @@ export let jobs: Record<string, Job> = {
       await allowed(env, now)
       await pointed(env)
     }),
+  phone_release: async (env, row) => {
+    let { finishRelease } = await import('./number-release.ts')
+    await finishRelease(env, row.entity.eid, new Date(row.Now.at))
+  },
   // Each month after the first that a space holds a number (numbers.ts
   // `number_buy`), its monthly price spent from the space's budget under
   // its texts. Never refused: the provider bills the platform for the month

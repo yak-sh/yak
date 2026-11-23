@@ -869,14 +869,14 @@ The complete list of reserved names:
     offer openai opened openrouter operator operator_alerts operator_reach
     order output output_of outreach_batch outreach_letter outreach_read
     outreach_trial outreach_write outreach_written own_number parent pending
-    person persona phone phone_line phone_login phone_search plan preview
-    price pro_grant product project provider provisional public_file
-    published push_subscription quarantined question questions rating reads
-    recalled recipient reconnecting ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    refusal_report register_writes registration release_remake report
-    report_refusals repository representation requires restored result
-    retired revision role_free_spaces rtc rtc_lapse sale_access
+    person persona phone phone_line phone_login phone_release phone_search
+    plan preview price pro_grant product project provider provisional
+    public_file published push_subscription quarantined question questions
+    rating reads recalled recipient reconnecting ref referenced
+    refund_failed refund_request refund_retry refund_sale refund_sent
+    refusal refusal_report register_writes registration release_remake
+    report report_refusals repository representation requires restored
+    result retired revision role_free_spaces rtc rtc_lapse sale_access
     sale_artifact satisfies screen screenshot secret seeded seller sender
     sending serves service_checkout service_quote session session_input
     session_result session_resume session_run sessions_ended sfu shared

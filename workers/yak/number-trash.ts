@@ -7,8 +7,14 @@ import { type Directory, type PhoneLine } from './directory.ts'
 import type { Env } from './env.ts'
 import { trashNumber, untrashNumber } from './erase.ts'
 import { spaceNow } from './model-spend.ts'
-import { forgetVoiceAttempts, syncVoice, voiceOf } from './number-voice.ts'
-import { dollars, released } from './numbers.ts'
+import {
+  releaseWork,
+  returning,
+  returnNumber,
+  stopCalls,
+} from './number-release.ts'
+import { syncVoice, voiceOf } from './number-voice.ts'
+import { dollars } from './numbers.ts'
 import type { Who } from './session.ts'
 
 /** Keep its assignment for an exact restore; phone boundaries read the mark,
@@ -19,11 +25,14 @@ export let binnedNumber = async (
   line: PhoneLine,
   who: Who,
 ) => {
-  await trashNumber(dir, line, who)
-  await syncVoice(env, line, { in: false, out: false })
-  await forgetVoiceAttempts(env, line.eid)
-  return `${shown(line.number)} is in the trash. It stops taking ` +
-    `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
+  let now = new Date(env.CLOCK?.now() ?? Date.now())
+  await trashNumber(dir, line, who, [releaseWork(line.eid, false, now)])
+  let stopped = await stopCalls(env, line.eid)
+  return `${shown(line.number)} is in the trash. ` +
+    (stopped
+      ? 'It stops taking calls and texts. '
+      : 'Texts are stopped. The phone company is still shutting off calls and we will retry automatically. ') +
+    `It still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +
     'Only your confirmation returns it to the phone company.'
 }
@@ -36,6 +45,7 @@ export let restoredNumber = async (
   line: PhoneLine,
   who: Who,
 ) => {
+  if (await returning(env, line.eid)) return
   await untrashNumber(dir, line, who)
   let space = await spaceNow(env, line.space)
   await syncVoice(env, line, voiceOf(false, space, new Date()))
@@ -85,11 +95,14 @@ export let trashedNumber: Kind<PhoneLine> = {
     'the chance to restore it from the trash',
   ],
   press: (l) => `Return ${shown(l.number)} forever`,
-  act: async (env, dir, _space, l) => {
-    await released(env, l)
-    await dir.purgeTrashEntities([l.eid])
-    return `${
-      shown(l.number)
-    } is returned to the phone company: it costs nothing from now on.`
+  act: async (env, _dir, _space, l) => {
+    let done = await returnNumber(env, l.eid)
+    return done
+      ? `${
+        shown(l.number)
+      } is returned to the phone company. It costs nothing from now on.`
+      : `The phone company is still returning ${
+        shown(l.number)
+      }. We will retry automatically.`
   },
 }
