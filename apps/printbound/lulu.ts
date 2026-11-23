@@ -1,6 +1,6 @@
 // Lulu's wire adapter. HTTP and credential sentinels are supplied by the app;
 // quoting never submits a job. https://api.lulu.com/api-docs/openapi-specs/openapi_public.yml
-import { InputError } from './refusal.ts'
+import { AccessError, InputError } from './refusal.ts'
 
 export type Address = {
   name: string
@@ -72,6 +72,16 @@ export class ProviderError extends Error {}
  * neither of which holds a credential. */
 let said = async (response: Response) =>
   (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 300)
+
+// A failed answer as what to throw: the egress refusing this caller is said
+// to them; anything else is Lulu's failure.
+let failure = async (response: Response, what: string) => {
+  let text = await said(response)
+  return response.status == 403 &&
+      text.startsWith('yaks.app refused this call:')
+    ? new AccessError(`PrintBound cannot reach Lulu for you: ${text}`)
+    : new ProviderError(`${what} failed (${response.status}): ${text}`)
+}
 
 export let cents = (value: unknown): number => {
   if (typeof value != 'string' || !/^\d+(\.\d{1,2})?$/.test(value)) {
@@ -159,11 +169,7 @@ export let lulu = (config: {
         }),
       },
     )
-    if (!token.ok) {
-      throw new ProviderError(
-        `Lulu authentication failed (${token.status}): ${await said(token)}`,
-      )
-    }
+    if (!token.ok) throw await failure(token, 'Lulu authentication')
     let auth = await token.json()
     if (!auth.access_token) {
       throw new ProviderError('Lulu authentication returned no token')
@@ -177,13 +183,7 @@ export let lulu = (config: {
       ...(body ? { body: JSON.stringify(body) } : {}),
     })
     if (!response.ok) {
-      throw new ProviderError(
-        `Lulu ${method} ${
-          path.split('?')[0]
-        } failed (${response.status}): ${await said(
-          response,
-        )}`,
-      )
+      throw await failure(response, `Lulu ${method} ${path.split('?')[0]}`)
     }
     return response.json()
   }

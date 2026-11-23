@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
-import { lulu, type Print } from './lulu.ts'
+import { lulu, type Print, ProviderError } from './lulu.ts'
+import { AccessError } from './refusal.ts'
 
 let print: Print = {
   title: 'Book',
@@ -162,4 +163,28 @@ test('missing shipping phone fails before a provider call', async () => {
   await failed(() =>
     printer.quote({ ...print, address: { ...print.address, phone_number: '' } })
   )
+})
+
+test("yaks.app refusing the caller is a refusal to say to them, and Lulu's own 403 a failure", async () => {
+  let thrown = async (answer: Response) => {
+    try {
+      await adapter(() => answer).quote(print)
+    } catch (e) {
+      return e as Error
+    }
+    throw new Error('Expected failure')
+  }
+  let refused = await thrown(
+    new Response(
+      'yaks.app refused this call: the caller may not call out through lulu',
+      { status: 403 },
+    ),
+  )
+  equal(refused instanceof AccessError, true)
+  equal(
+    refused.message,
+    'PrintBound cannot reach Lulu for you: yaks.app refused this call: the caller may not call out through lulu',
+  )
+  let lulus = await thrown(new Response('Forbidden', { status: 403 }))
+  equal(lulus instanceof ProviderError, true)
 })

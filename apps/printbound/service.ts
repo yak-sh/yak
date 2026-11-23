@@ -1,6 +1,6 @@
 // App commands share this interface with the storefront and connected callers.
 // The worker constructs Who from vouched headers; arguments carry no identity.
-import { InputError } from './refusal.ts'
+import { AccessError, InputError } from './refusal.ts'
 import { DocumentInputError, type Preparation } from './document.ts'
 import {
   documentStatus,
@@ -427,6 +427,11 @@ export let printService = async (
     if (error instanceof InputError || error instanceof DocumentInputError) {
       return Response.json({ error: { message: error.message } }, {
         status: 400,
+      })
+    }
+    if (error instanceof AccessError) {
+      return Response.json({ error: { message: error.message } }, {
+        status: 403,
       })
     }
     throw error
