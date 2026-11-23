@@ -231,6 +231,26 @@ test('a push from the source deploys from live over a base behind it, and holds 
   assert(said.at(-1)?.includes('--confirm'))
 })
 
+test('a push from the source pushes again when another release goes live while it writes', async () => {
+  let p = platform({ mail: held('index.html') })
+  let raced = false
+  let ask: Ask = async (method, params) => {
+    let { name, arguments: a } = params as { name: string; arguments: Args }
+    if (name == 'app_deploy' && !raced) {
+      raced = true
+      await p.ask(method, { name, arguments: { ...a, confirm: true } })
+    }
+    return await p.ask(method, params)
+  }
+  let said = await push(ask, [file('new.js')], { app: 'mail' }, {
+    review: false,
+  })
+  assertEquals(said, [
+    'live moved to v2 during this release; pushed again',
+    'no files changed',
+  ])
+})
+
 test('a base past live writes nothing until confirmed, then pushes from live', async () => {
   let p = platform({ mail: held('index.html') })
   let seen: number[] = []

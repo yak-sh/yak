@@ -90,8 +90,10 @@ export type Checkout = {
  * `review: false` is a push from the app's source (the deploy catch-up's
  * release of main): a base behind live deploys from live without asking, since
  * what was deployed since (a copy edit saved on the page, another push from the
- * same source) is not lost to it, and a deploy that answers it deployed nothing
- * is an error. A base ahead of live still waits for `confirm`. */
+ * same source) is not lost to it. Another release going live while it writes
+ * its files sends it again from that live, and a deploy that still answers it
+ * deployed nothing is an error. A base ahead of live still waits for
+ * `confirm`. */
 export type PushOptions = {
   checkout?: Checkout
   base?: number
@@ -326,12 +328,25 @@ let copied = async (
  * why when that fails too. A list that answers without its files is a broken
  * platform, and says so rather than trying to make the app again.
  */
-export let push = async (
+export let push = (
   ask: Ask,
   local: File[],
   to: Target,
   opts: PushOptions = {},
+): Promise<string[]> => pushing(ask, local, to, opts, RACES)
+
+/** How many times a release from the source pushes again when another
+ * release went live while it wrote its files. */
+let RACES = 3
+
+let pushing = async (
+  ask: Ask,
+  local: File[],
+  to: Target,
+  opts: PushOptions,
+  races: number,
 ): Promise<string[]> => {
+  let given = local
   if (!local.length) throw new CallError('dir', 'no files to push')
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
@@ -467,6 +482,15 @@ export let push = async (
   said.push(saidBy(deployed))
   if (value.deployed) await opts.remember?.(value.version)
   else if (opts.review === false) {
+    // Another release went live while this one wrote its files (a person's
+    // push, or a copy edit): the source is still what goes live, so push it
+    // again from the live it moved to.
+    if (value.version > base && races > 0) {
+      return [
+        `live moved to v${value.version} during this release; pushed again`,
+        ...await pushing(ask, given, to, opts, races - 1),
+      ]
+    }
     throw new Error(`app_deploy deployed nothing: ${said.join('; ')}`)
   } else said.push('confirm with --confirm to deploy these files')
   opts.progress?.({ phase: 'deploy', state: 'done', deployed: value.deployed })
