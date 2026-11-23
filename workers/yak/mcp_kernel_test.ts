@@ -25,6 +25,37 @@ test('the hosted connector writes and lists an app file', async () => {
   )
 })
 
+test('the hosted connection list defaults to the selected space', async () => {
+  let k = await kernel()
+  let space = unique('connections'), other = unique('other')
+  let { cookie, person, eids } = await seed(k, [
+    { slug: space, apps: [] },
+    { slug: other, apps: [] },
+  ])
+  let connections = [eids[space], person, eids[other]].map((owner) => ({
+    entity: { eid: crypto.randomUUID() },
+    connection: { integration: 'openai', owner, status: 'needed' },
+  }))
+  await meta(k).apply(connections)
+  let [shared, personal] = connections.map((row) => row.entity.eid)
+  let agent = connector(k, cookie)
+  let list = async (owner?: string) => {
+    let { rows } = await agent.answer('store_connection_list', {
+      space,
+      ...owner == null ? {} : { owner },
+    })
+    return rows.filter((row) => row.connection).map((row) => row.entity.eid)
+  }
+
+  assertEquals(await list(), [shared])
+  assertEquals(await list(space), [shared])
+  assertEquals(await list(eids[space]), [shared])
+  assertEquals(await list(person), [personal])
+  let error = await assertRejects(() => list(eids[other]), Error)
+  assertStringIncludes(error.message, 'slug or entity ID')
+  assertStringIncludes(error.message, 'your own person entity ID')
+})
+
 // A connector call validates arguments before the package runs as the caller.
 test('hosted memory calls use package arguments and preserve published reads', async () => {
   let k = await kernel()

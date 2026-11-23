@@ -127,29 +127,42 @@ let routed = (schema: Record<string, unknown>): Record<string, unknown> => {
   }
   return out
 }
+let ownerChoices =
+  'Pass the selected space’s slug or entity ID, or your own person entity ID.'
+let listOwner =
+  `Omit owner to list connections in the selected space. ${ownerChoices}`
+
 let listed = once(() =>
-  declarations().map(({ kind, definition, name }) => ({
-    ...definition,
-    name: packageName(name),
-    description: listedIn(definition.description),
-    inputSchema: {
-      ...routed(definition.inputSchema ?? {}),
-      properties: {
-        ...routed(definition.inputSchema ?? {}).properties as Record<
-          string,
-          unknown
-        >,
-        space: SPACE,
-        // A directory connection's app is already a package argument. It accepts
-        // its slug or id; every app-store tool adds this routing argument.
-        ...(kind == 'app' ? { app: APP } : {}),
+  declarations().map(({ kind, definition, name }) => {
+    let schema = routed(definition.inputSchema ?? {})
+    let properties = schema.properties as Record<string, object> | undefined
+    let required = schema.required as string[] | undefined ?? []
+    let listsConnections = kind == 'directory' && name == 'connection_list'
+    let description = listedIn(definition.description)
+    return {
+      ...definition,
+      name: packageName(name),
+      description: listsConnections
+        ? `${listOwner} ${description}`
+        : description,
+      inputSchema: {
+        ...schema,
+        properties: {
+          ...properties,
+          space: SPACE,
+          // A directory connection's app is already a package argument. It accepts
+          // its slug or id; every app-store tool adds this routing argument.
+          ...(kind == 'app' ? { app: APP } : {}),
+          ...(listsConnections
+            ? { owner: { ...properties?.owner, description: listOwner } }
+            : {}),
+        },
+        required: listsConnections
+          ? required.filter((arg) => arg != 'owner')
+          : [...required, ...(kind == 'app' ? ['app'] : [])],
       },
-      required: [
-        ...definition.inputSchema?.required as string[] ?? [],
-        ...(kind == 'app' ? ['app'] : []),
-      ],
-    },
-  }))
+    }
+  })
 )
 
 /** One declared tool, through the store's own call ledger and runner. */
@@ -174,7 +187,12 @@ export let invokePackage = async (
       input.owner != null && input.owner != space.eid &&
       input.owner != ctx.person && input.owner != space.slug
     ) {
-      throw refuse('access', 'owner must be the selected space or the caller')
+      throw refuse(
+        'access',
+        name == 'connection_list'
+          ? listOwner
+          : 'owner must be the selected space or the caller',
+      )
     }
     if ('owner' in (definition.inputSchema?.properties as object ?? {})) {
       if (input.owner == null || input.owner == space.slug) {

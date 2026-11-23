@@ -562,7 +562,7 @@ What they do not guarantee:
 
     store_connection_need(app, owner: space, integration: 'ESV',
       hosts: ['api.esv.org'])
-    store_connection_list(owner: space)  → what is connected, and to which apps
+    store_connection_list()  → what is connected in the selected space, and to which apps
 
 An app never holds a key. `store_connection_need` declares what it needs (a
 built-in integration by name, or a name you choose with the hosts its key may be
