@@ -19,6 +19,7 @@ test('a fitted list leaves room for the rest of the sidebar and reveals overflow
   let more = list.querySelector<HTMLButtonElement>('button')!
   let rows = [...list.querySelectorAll('a')]
   let height = 380
+  let scroll = 0
   let changed = () => {}
   let win = {
     getComputedStyle: () => ({ paddingBottom: '10px' }),
@@ -35,13 +36,14 @@ test('a fitted list leaves room for the rest of the sidebar and reveals overflow
   Object.defineProperties(view, {
     clientHeight: { get: () => height },
     clientTop: { value: 0 },
-    scrollTop: { value: 0 },
+    scrollTop: { get: () => scroll },
     getBoundingClientRect: { value: () => box(height) },
   })
   for (let row of [...rows, more]) {
-    row.getBoundingClientRect = () => box(130 + visible().indexOf(row) * 32)
+    row.getBoundingClientRect = () =>
+      box(130 + visible().indexOf(row) * 32 - scroll)
   }
-  footer.getBoundingClientRect = () => box(148 + visible().length * 32)
+  footer.getBoundingClientRect = () => box(148 + visible().length * 32 - scroll)
   let stop = fitList(list, win)
   let said = () => visible().map((row) => row.textContent)
   let press = () => more.dispatchEvent(new window.Event('click'))
@@ -50,6 +52,7 @@ test('a fitted list leaves room for the rest of the sidebar and reveals overflow
   assertEquals(said(), [...rows.map((row) => row.textContent), 'Less'])
   assertEquals(more.getAttribute('aria-expanded'), 'true')
   height = 280
+  scroll = 115
   changed()
   press()
   assertEquals(said(), ['App 1', 'App 2', 'More'])

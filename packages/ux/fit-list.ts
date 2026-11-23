@@ -1,8 +1,8 @@
 type Browser = Pick<typeof globalThis, 'getComputedStyle' | 'ResizeObserver'>
 
 let bottom = (view: HTMLElement, win: Browser) =>
-  view.getBoundingClientRect().top + view.clientTop + view.clientHeight +
-  view.scrollTop - parseFloat(win.getComputedStyle(view).paddingBottom)
+  view.getBoundingClientRect().top + view.clientTop + view.clientHeight -
+  parseFloat(win.getComputedStyle(view).paddingBottom)
 
 /** Keep whole rows in view, leaving room for the disclosure and everything
  * after the list. Without the browser enhancement, every row is shown. */
@@ -22,7 +22,7 @@ export let fitList = (list: HTMLElement, win: Browser): () => void => {
     more.hidden = false
 
     let end = view.lastElementChild!.getBoundingClientRect().bottom
-    let overflow = end - bottom(view, win)
+    let overflow = end + view.scrollTop - bottom(view, win)
     let last = rows.at(-1)!.getBoundingClientRect().bottom
     let reserve = more.getBoundingClientRect().bottom - last
     if (overflow <= reserve) {
