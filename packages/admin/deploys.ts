@@ -378,6 +378,12 @@ export let command = async (
   stopping: AbortSignal,
 ) => answer(cmd, args, await ran(cwd, cmd, args, stopping))
 
+export class GitFailure extends Error {
+  constructor(readonly command: string, readonly result: Ran) {
+    super(`git ${command} exited ${result.code}: ${result.err.trim()}`)
+  }
+}
+
 export let needGit = async (
   root: string,
   args: string[],
@@ -386,9 +392,9 @@ export let needGit = async (
 ) => {
   let r = await git(root, args, stopping)
   if (!r.ok) {
-    let message = `git ${args[0]} exited ${r.code}: ${r.err.trim()}`
-    if (refusal) throw new CallError(refusal, message)
-    throw new Error(message)
+    let error = new GitFailure(args[0], r)
+    if (refusal) throw new CallError(refusal, error.message)
+    throw error
   }
   return r.out.trim()
 }

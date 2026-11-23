@@ -7,7 +7,7 @@ import { identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
-import { human } from '@yaks/id'
+import { human, short } from '@yaks/id'
 import { absent, and, eq, fields, list, present } from '@yaks/query'
 import { remoteBug, reopened } from '@yaks/tracker'
 import { active, fixing, live, type Options } from './fix.ts'
@@ -142,31 +142,35 @@ export let follow = (
   // without one they are read with a command.
   let base = (at: string) => at.replace(/\/$/, '')
   let web = options.trackers?.find((at) => /^https?:/.test(at))
+  // Both reads and marks name their owning tracker explicitly. A harness's
+  // inherited remote host must not redirect a command.
+  let command = (
+    verb: 'show' | 'resolve',
+    bug: string,
+    url: string,
+    scope?: string,
+  ) => {
+    let cli = `env -u YAKS_HOST ${options.cli ?? 'yak'}`
+    let source = url == 'yaks.app'
+      ? `yaks.app${scope ? ` --scope ${scope}` : ''}`
+      : 'box'
+    return `${cli} bug ${verb} ${bug} --source ${source}`
+  }
   // What a fixer does last: resolve its bug in the tracker, explained, which
   // completes the task once the follower hears it. A bug is resolved only
   // with its explanation, so the fixer, who knows why, writes it.
-  let last = (bug: string, url: string, scope?: string) => {
-    // A harness's remote host must not redirect a bare box command. Keep the
-    // configured command/config; only the platform tracker takes a source
-    // flag, and a space's tracker its scope beside it.
-    let cli = `env -u YAKS_HOST ${options.cli ?? 'yak'}`
-    let source = url == 'yaks.app'
-      ? ` --source yaks.app${scope ? ` --scope ${scope}` : ''}`
-      : ''
-    return [
-      `The authoritative tracker for this task is ${url}${
-        scope ? `, in the tracker of the space ${scope}` : ''
-      }. ` +
-      (source
-        ? 'Use its explicit platform source below.'
-        : 'Use the configured box tracker below, not the platform source. ' +
-          'A resolution in another tracker does not complete this bug.'),
+  let last = (bug: string, url: string, scope?: string) =>
+    [
+      `Read this bug from its tracker at ${url}${
+        scope ? `, in space ${scope}` : ''
+      }.`,
+      `\`${command('show', bug, url, scope)}\``,
       'Once the fix is live, your last step is to resolve the bug with its ' +
-      'explanation, which completes this task:',
-      `${cli} bug resolve ${bug}${source} --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'`,
-      'Read back the resolved state from this same tracker before reporting completion:',
-      `${cli} bug show ${bug}${source}`,
-      'The commands remove inherited YAKS_HOST defensively for a bare yak; an explicit --config already selects its graph.',
+      'explanation, which completes this task.',
+      `\`${
+        command('resolve', bug, url, scope)
+      } --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'\``,
+      'Run the read command again to verify the resolution.',
       'Write each for the owner in plain words, a sentence or two: what ' +
       'broke and whom it reached, why it broke, and whether it can come ' +
       'back. --since is the full sha of the commit that introduced it, left ' +
@@ -175,7 +179,6 @@ export let follow = (
       'A bug that stopped, went quiet or passed on a rerun is not fixed: ' +
       'find why it happened and fix that.',
     ].join('\n\n')
-  }
   return async (bugs, url, mutate, scope) => {
     bugs = bugs.filter((bug) => bug.bug)
     let { fix, home, fixers } = decide(
@@ -230,11 +233,11 @@ export let follow = (
       let page = /^https?:/.test(url)
         ? `${base(url)}/${encodeURIComponent(evidence)}`
         : web && `${base(web)}${remoteBug(url, evidence, { scope })}`
+      let label = `bug ${short(evidence)}`
       let where = page
-        ? `[the tracker](${page})`
-        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}${
-          scope ? ` --scope ${scope}` : ''
-        }\``
+        ? `[${label}](${page})`
+        : `${label} in the ${url} tracker`
+      let read = `Read it with \`${command('show', evidence, url, scope)}\`.`
       let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
         'Fix tracker bug'
       let what = bug.regressed ? reopened(bug) : title
@@ -244,9 +247,9 @@ export let follow = (
         ? `${kind} your work raised${
           owner.task ? ` on ${human(g.vocab)(owner.task)}` : ''
         }: ${what} (${where})\n\n${last(evidence, url, scope)}`
-        : `${kind}: ${
+        : `${kind}: ${where} — ${
           what.length > 240 ? `${what.slice(0, 240)}…` : what
-        } (${where})`
+        }\n\n${read}`
       // An opening already told is not told again: a close that restored
       // the completion this reopening undid (a tracker answering with an
       // older resolution) names the same opening, and its knock's guard
@@ -261,6 +264,7 @@ export let follow = (
       return {
         project,
         where,
+        read,
         title,
         knocks: knocks.filter((k) => !told.has(k.entity.eid)),
       }
@@ -336,7 +340,7 @@ export let follow = (
         }
         if (bug.resolved || bug.archived) return
         let owner = await whose(bug)
-        let { project, where, title, knocks } = await news(bug, owner)
+        let { project, where, read, title, knocks } = await news(bug, owner)
         // The session at work holds what its work raised, so no fixer starts
         // beside it; once it ends, a fixer may take the work over. The task
         // its work was on is not the bug's: a regression is work of its own.
@@ -346,9 +350,7 @@ export let follow = (
           task: {},
           doc: {
             title,
-            body: `Fix the bug recorded at ${where}.${
-              /^https?:/.test(url) ? '' : APP
-            }`,
+            body: `Fix ${where}. ${read}${/^https?:/.test(url) ? '' : APP}`,
           },
           filed: { ...(project ? { project } : {}), priority: 1 },
           ...held,

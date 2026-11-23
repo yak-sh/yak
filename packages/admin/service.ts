@@ -17,8 +17,8 @@
 // The build is started through main's deploy hook, a URL that can do nothing
 // but start that build, kept in the vault and named by the config. The
 // commit's `rebuilt` mark is written before the hook is asked, so a crash
-// between the two never starts a second build; a look that fails is reported
-// once until a look succeeds again.
+// between the two never starts a second build. Origin connection failures
+// are retried at the next look and reported if they persist.
 //
 // A deploy is timed from the same reads: wrangler's deployments say when each
 // commit went live, and the version that went live says when the deploy door
@@ -72,6 +72,7 @@ import {
   debuts,
   type Deployment,
   git,
+  GitFailure,
   needGit,
   rowsIn,
   sourceOf,
@@ -218,6 +219,12 @@ type Report = NonNullable<Host['report']>
 
 let SHA = /^[0-9a-f]{40}\b/
 let SHAS = /^[0-9a-f]{40}$/gm
+let NO_CONNECTION =
+  /^fatal: unable to access .+: (?:Could not resolve (?:host|proxy)|Failed to connect to|Connection timed out|Could not connect to server)\b/im
+
+let originDown = (error: unknown) =>
+  error instanceof GitFailure && error.command == 'ls-remote' &&
+  error.result.code == 128 && NO_CONNECTION.test(error.result.err)
 
 /** The check run Workers Builds keeps on a commit it builds for `yak`. */
 let CHECK = 'Workers Builds: yak'
@@ -649,6 +656,7 @@ let catchUp = async (
   let settled: string | undefined
   let live: string | undefined
   let failing = false
+  let unanswered = 0
   let landed = releases(doors, report, RELEASED.filter((to) => !to.afterWorker))
   let deployed = releases(
     doors,
@@ -658,6 +666,7 @@ let catchUp = async (
   for (;;) {
     try {
       let tip = await doors.main()
+      unanswered = 0
       await landed(tip.sha)
       let done = await pass(g, doors, report, options, settled, tip)
       if (SETTLED.includes(done.step)) settled = done.sha
@@ -665,13 +674,15 @@ let catchUp = async (
       if (live) await deployed(live)
       failing = false
     } catch (error) {
-      // A look cut off by shutdown has not failed. A dead wrangler sign-in is
-      // one report, not one a minute.
       if (!(error instanceof Interrupted)) {
-        if (!failing) {
+        let down = originDown(error)
+        if (down ? ++unanswered == 2 : !failing) {
           await report(error, { tags: { duty: 'deploy catch-up' } })
         }
-        failing = true
+        if (!down) {
+          unanswered = 0
+          failing = true
+        }
       }
     }
     if (signal.aborted) return

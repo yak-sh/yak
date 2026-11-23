@@ -31,8 +31,10 @@ import { apiDoc } from '@yaks/api/vocab'
 import { and, every, present } from '@yaks/query'
 import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
+import { runs as trackerTools } from '@yaks/tracker/tools'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
 import { Unavailable } from '@yaks/tracker/remote'
+import { valueIn } from '@yaks/tools/value'
 import { HARNESS } from '@yaks/harness/default'
 import { healDoc } from './vocab.ts'
 import { fixing } from './fix.ts'
@@ -283,6 +285,31 @@ test('the tracker follower files task, evidence edge and fixer atomically', asyn
   ok(String(comp(knock, 'doc').body).includes('TypeError: missing row'))
   ok(String(comp(knock, 'doc').body).endsWith('\n\nA fixer starts on it.'))
   fresh.close()
+})
+
+let muted = await off()
+await muted.replay()
+test('a new box bug can be read with the command given to its task and knock', async () => {
+  let [task] = await muted.g.get([taskEid(bug)])
+  let [knock] = await rows(muted.g, 'knock')
+  let tools = trackerTools(
+    {},
+    { source: 'yaks.app' },
+    () => Promise.resolve(new Response(null, { status: 404 })),
+  )
+  for (let row of [task, knock]) {
+    let body = String(comp(row, 'doc').body)
+    let cmd = ok(body.match(/\bbug show (\S+) --source (\w+)`/))
+    let answer = valueIn(
+      await tools.bug_show({
+        entity: row.entity,
+        call: { args: { bug: cmd[1], source: cmd[2] } },
+      }, muted.tracker),
+    )
+    equal(answer?.source, 'box')
+    equal((answer?.rows as Bundle[])[0].entity.eid, bug)
+  }
+  muted.close()
 })
 
 let took = await fixture()
@@ -1686,7 +1713,7 @@ for (
     let command = `env -u YAKS_HOST yak --config /srv/tracker.json bug`
     let suffix = source == 'yaks.app'
       ? ` --source yaks.app${scope ? ` --scope ${scope}` : ''}`
-      : ''
+      : ' --source box'
     ok(body.includes(`${command} resolve ${bug}${suffix} --broke`))
     ok(body.includes(`${command} show ${bug}${suffix}`))
     equal(body.includes('--source yaks.app'), source == 'yaks.app')

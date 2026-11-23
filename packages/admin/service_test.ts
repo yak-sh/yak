@@ -13,6 +13,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
 import { BOUND, type Build, firstShown, LATE, SLOW, WINDOW } from './catchup.ts'
+import { GitFailure } from './deploys.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, releases, service } from './service.ts'
 import { Unavailable } from '@yaks/cloudflare/api'
@@ -354,7 +355,7 @@ test('the service reads a settled head no more, and a failing look once', async 
   let main = f.doors.main
   f.doors.main = () => {
     if (++passes == 6) stop.abort()
-    if (broken) return Promise.reject(new Error('origin is unreachable'))
+    if (broken) return Promise.reject(new Error('origin has no main'))
     if (passes == 3) broken = true
     return main()
   }
@@ -366,7 +367,67 @@ test('the service reads a settled head no more, and a failing look once', async 
   )
   equal(f.looked, 1)
   equal(reports.length, 1)
-  match(String(reports[0]), /origin is unreachable/)
+  match(String(reports[0]), /origin has no main/)
+})
+
+let failedRemote = (why: string) =>
+  new GitFailure('ls-remote', {
+    ok: false,
+    code: 128,
+    out: '',
+    err: `fatal: unable to access 'https://github.com/yak-sh/yak.git/': ${why}`,
+  })
+
+let connection = failedRemote(
+  'Failed to connect to github.com port 443 after 2169 ms: Could not connect to server',
+)
+let dns = failedRemote('Could not resolve host: github.com')
+let auth = failedRemote('The requested URL returned error: 403')
+
+let remoteLooks = async (looks: (Error | undefined)[]) => {
+  let f = fixture()
+  let stop = new AbortController()
+  let next = 0
+  let waits: number[] = []
+  let reports: [number, unknown, unknown][] = []
+  let main = f.doors.main
+  f.doors.main = () => {
+    let error = looks[next++]
+    return error ? Promise.reject(error) : main()
+  }
+  f.doors.wait = (ms) => {
+    if (next == looks.length) stop.abort()
+    else waits.push(ms)
+    return Promise.resolve()
+  }
+  await service(
+    host(
+      f.g,
+      (error, context) => void reports.push([next, error, context?.tags?.duty]),
+    ),
+    { every: MIN },
+    stop.signal,
+    f.doors,
+  )
+  equal(waits, looks.slice(1).map(() => MIN))
+  return reports
+}
+
+test('a deploy look retries a single Git connection failure on its next tick', async () => {
+  equal(await remoteLooks([connection, undefined, dns, undefined]), [])
+})
+
+test('a deploy look reports a lasting Git outage once until origin answers again', async () => {
+  equal(
+    await remoteLooks([connection, dns, connection, undefined, dns, dns]),
+    [[2, dns, 'deploy catch-up'], [6, dns, 'deploy catch-up']],
+  )
+})
+
+test('a Git refusal still reports on its first tick', async () => {
+  equal(await remoteLooks([connection, auth, auth]), [
+    [2, auth, 'deploy catch-up'],
+  ])
 })
 
 // The usage watch's looks, five minutes apart, each failing as `fails` says
