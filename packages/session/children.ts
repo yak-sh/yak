@@ -147,6 +147,7 @@ let delegation = (
   submitted = false,
 ): Tool => ({
   name: fork ? 'fork' : 'spawn',
+  ...fork ? { excludeFromForks: true } : {},
   step: { doing: 'Starting a helper…', done: 'Started a helper' },
   description: fork
     ? 'Fork your transcript before this tool turn with a prompt OR atomically claimed task (original title/body). Returns the concurrent child session id; completion is delivered automatically. For work of many steps or parts that run side by side; do what takes a call or two yourself.'
@@ -193,10 +194,7 @@ let delegation = (
     }
     let eid = childOf(ctx.call.entity.eid)
     if (await row(g, eid)) return eid
-    // A fork is offered its parent's tools, so its cached prefix is the
-    // parent's, fork among them; one that forked again forked its task down
-    // a chain, each level saying it was on it (T-145495). Its answer is to do
-    // the task itself.
+    // An older request or a model guessing the tool name can still call it.
     if (fork && !minted && (await row(g, ctx.session))?.fork) {
       throw new ToolError(
         'fork',

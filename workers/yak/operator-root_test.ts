@@ -159,12 +159,12 @@ test("a person's message forks, and is answered at once and again when the fork 
   )
 })
 
-test('the fork reads the conversation with the same instructions and tools, so it starts from its cached prefix', () => {
+test('the fork reads the conversation and can start a fresh helper', () => {
   assertEquals(atFork.instructions, atRoot.instructions)
-  assertEquals(
-    atFork.tools.map((t) => t.name),
-    atRoot.tools.map((t) => t.name),
-  )
+  let root = atRoot.tools.map((t) => t.name)
+  assertEquals(root.includes('fork'), true)
+  assertEquals(atFork.tools.map((t) => t.name), root.filter((n) => n != 'fork'))
+  assertEquals(atFork.tools.some((t) => t.name == 'spawn'), true)
   assertStringIncludes(JSON.stringify(atFork.items), 'dentist Tuesday at 3')
 })
 

@@ -530,8 +530,9 @@ keep working unchanged. It checks:
 
 - the command name and every argument name (`a-z`, `0-9`, `_`, starting with a
   letter)
-- an entry has no keys but those eight, a `description` that is a sentence, an
-  `input` whose every argument is a JSON Schema, and a `required` naming only
+- a `description` that says what the command does, or a `title` used as its
+  description when `description` is omitted
+- an `input` whose every argument is a JSON Schema, and a `required` naming only
   its inputs
 - exactly one action; `query` a string, `apply` an object or a list of them
 - every `$var` names a declared input, or an entity the template creates

@@ -472,8 +472,10 @@ test('a fork that forks again is told to do the task itself, and starts no child
     req.items.some((i) => i.kind == 'user' && i.text.endsWith(text))
   let ran = (req: Request, id: string) =>
     req.items.some((i) => i.kind == 'result' && i.id == id)
+  let asks: Request[] = []
   let model: Model = (req) => {
     if (said(req, 'fork work')) {
+      asks.push(req)
       return Promise.resolve(
         ran(req, 'again')
           ? reply('fork final')
@@ -492,6 +494,11 @@ test('a fork that forks again is told to do the task itself, and starts no child
   })
   await a.idle(fork.entity.eid)
   await a.idle(parent)
+  assert(asks.length > 0)
+  for (let req of asks) {
+    assert(!req.tools.some((t) => t.name == 'fork'))
+    assert(req.tools.some((t) => t.name == 'spawn'))
+  }
   assertEquals(await a.children(fork.entity.eid), [])
   let told = (await a.transcript(fork.entity.eid))
     .filter((b) => b.result)

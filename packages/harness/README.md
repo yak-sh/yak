@@ -567,6 +567,7 @@ The default tool table includes `fork`, `spawn`, and `wait`:
 - `fork({prompt, instructions?, model?, effort?})` continues the caller's
   transcript prefix **before the current tool turn**, then adds the prompt.
   Unanswered calls are not inherited. It returns a concurrent child session id.
+  A fork is offered `spawn` for fresh helpers.
 - `spawn({prompt, instructions?, model?, effort?})` returns a fresh child
   session id. It inherits the serving configuration, not the transcript. `model`
   accepts a model name or an existing model entity id; the inherited provider

@@ -92,10 +92,9 @@ test('root and fork offer the same code mode; the fork discovers and runs connec
   let forked = asked.filter((r) =>
     JSON.stringify(r.items).includes('fork of the')
   )
-  // Both may load it, and the fork starts on the root's tools.
+  // Both may load and use code_mode.
   ok(callable(asked[0]).includes('code_mode'))
   ok(callable(forked[0]).includes('code_mode'))
-  equal(forked[0].tools.map((t) => t.name), asked[0].tools.map((t) => t.name))
   let sent = forked.find((r) => r.tools.some((t) => t.name == 'code_mode'))!
   ok(sent)
   ok(answers[0]?.includes('"app_new"'))

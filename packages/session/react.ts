@@ -90,6 +90,7 @@ import {
   CONTENT,
   ENTRY,
   EXCEPTION,
+  FORK,
   OUTPUT,
   REFUSAL,
   USING,
@@ -238,6 +239,8 @@ export type Tool = Declared & {
   /** Its schema is sent only once a `tool_load` call names it; until then
    * that tool lists it by name and title (./deferred.ts). */
   deferred?: boolean
+  /** Omit this tool from new model requests in a forked transcript. */
+  excludeFromForks?: boolean
   /** The runner holds it, but this turn does not, for this reason: it is
    * neither listed, sent nor run, and a `tool_load` naming it is told the
    * reason (./deferred.ts). */
@@ -477,6 +480,7 @@ export type Reading = {
   entries: Bundle[]
   bodies: boolean
   ended: boolean
+  forked?: boolean
   session?: Eid
   anchored?: Eid
 }
@@ -494,7 +498,11 @@ export let reading = async (
   let prose = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
   let [row] = await g.rows(
-    query`.entity.eid=${session}&.fields=entity.eid,session.ended`,
+    query`.entity.eid=${session}&.fields=${[
+      'entity.eid',
+      'session.ended',
+      ...g.vocab.comp(FORK) ? [`${FORK}.from`] : [],
+    ]}`,
   )
   session = String(row?.['entity.eid'] ?? session)
   // A turn's prose is loaded once its reading says what the turn sends: only
@@ -522,6 +530,7 @@ export let reading = async (
     session,
     bodies: prose && !anchored,
     ended: row?.['session.ended'] === true,
+    forked: row?.[`${FORK}.from`] != null,
     ...anchored ? { anchored } : {},
   }
 }
@@ -949,7 +958,7 @@ export let react = async (
   session = read?.session ?? session
   let stands = read &&
     !await moved(g, session, ownNewest(read.entries, session))
-  let { entries, bodies, ended, session: receiver, anchored } = stands
+  let { entries, bodies, ended, forked, session: receiver, anchored } = stands
     ? read!
     : await reading(g, session, deps)
   // A turn that reached only from an ask it cannot continue from after all
@@ -1516,10 +1525,18 @@ export let react = async (
       { error, phase: 'tools' },
     )
   }
+  let selected = offered(assembled, deps.named ?? (() => []), sending?.tools)
+  let hidden = forked && !(unfinished && executor)
+    ? selected.filter((t) => t.excludeFromForks)
+    : []
   const tools = loading(
-    offered(assembled, deps.named ?? (() => []), sending?.tools),
+    hidden.length ? selected.filter((t) => !hidden.includes(t)) : selected,
     !!deps.requestInstructions,
   )
+  // Keep names for transcript history and handlers for calls already recorded.
+  let known = hidden.length
+    ? [...tools, ...hidden.filter((t) => !t.withheld)]
+    : tools
   // Legacy synchronous calls are run here. Native async calls are owned by
   // their separate session_tool effect; only that effect enters this branch
   // with runCall naming one invocation.
@@ -1527,11 +1544,11 @@ export let react = async (
   // store. Canonical tools are named by their declaration; retained calls
   // may name an older stored identity and still resolve from that row.
   let toolEntities = new Map<Eid, Tool>(
-    tools.map((tool) => [toolEid(tool.name), tool]),
+    known.map((tool) => [toolEid(tool.name), tool]),
   )
   let targets = [
     ...new Set([
-      ...tools.map((t) => toolEid(t.name)),
+      ...known.map((t) => toolEid(t.name)),
       ...entries.flatMap((b) => {
         let to = comp(b, CALL)?.to
         return typeof to == 'string' ? [to] : []
@@ -1539,7 +1556,7 @@ export let react = async (
     ]),
   ]
   for (let b of targets.length ? await g.get(targets, [TOOL]) : []) {
-    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
+    let t = known.find((t) => t.name == comp(b, TOOL)?.name)
     if (t) toolEntities.set(b.entity.eid, t)
   }
   if (open.length) {
@@ -1858,6 +1875,9 @@ export let react = async (
       !refused
       ? providerModel.anchor(asked)
       : undefined
+  let heldTools = anchorId ? await toolsSent(g, asked) : undefined
+  // A provider may keep inline tool declarations from the anchored request.
+  if (hidden.some((t) => heldTools?.includes(t.name))) anchorId = undefined
   if (anchored && !anchorId) return whole()
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
@@ -2019,7 +2039,7 @@ export let react = async (
       { name, description, parameters },
     ) => ({ name, description, parameters })),
     anchor: anchorId,
-    ...anchorId ? { held: await toolsSent(g, asked) } : {},
+    ...anchorId ? { held: heldTools } : {},
     conversation: session,
   }
   // Compact once the next request would fill `compactAt` of the model's

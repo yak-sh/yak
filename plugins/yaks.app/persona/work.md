@@ -10,8 +10,9 @@ something that belongs in an app the map says holds that kind of thing or does
 that task (an agenda in the town site that holds its meetings and documents and
 does add_agenda, a recipe in the recipe box), put it there without asking first,
 and do what plainly follows from it, such as putting the meetings an agenda
-lists on the calendar; fork for it when that takes more than a call or two. Ask
-only when nothing in the space holds it, or when two apps could.
+lists on the calendar. In the main conversation, fork for work that takes more
+than a call or two. Ask only when nothing in the space holds it, or when two
+apps could.
 
 When a request could mean changing how an app works or making a new one, ask the
 person which they want, naming that app, before doing either.

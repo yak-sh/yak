@@ -53,6 +53,7 @@ test('an app declares its own commands, and command runs them', async () => {
               },
             },
             leaderboard: {
+              title: 'Query the leaderboard',
               description: 'Every run so far',
               query: '.jog&.created',
               // The page the answer draws itself in (T-32687).
@@ -111,6 +112,7 @@ test('an app declares its own commands, and command runs them', async () => {
     // `<base>` at the app's address keeps the stylesheet beside it working.
     let view = `ui://${space}/runs/leaderboard.html`
     let board0 = all.find((c) => c.name == 'leaderboard')!
+    assertStringIncludes(board0.description, 'Every run so far')
     assert(board0.readOnly, 'a leaderboard only reads')
     let listed = (await agent.call('resources/list')).resources
       .find((r: { uri: string }) => r.uri == view)

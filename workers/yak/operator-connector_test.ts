@@ -80,7 +80,7 @@ test('a fork does what the connector does, with a tool the old workbench lacked'
 })
 
 test('the conversation and its forks are offered every tool the connector lists, but those the Operator holds itself', () => {
-  assertEquals(atFork, atRoot)
+  assertEquals(atFork, atRoot.filter((name) => name != 'fork'))
   assertEquals(new Set(atRoot).size, atRoot.length)
   let has = (name: string) => atRoot.includes(name)
   assertEquals(

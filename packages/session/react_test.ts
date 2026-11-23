@@ -1,8 +1,8 @@
 import { test } from '@yaks/testing'
 import { seedIdentities } from './testing.ts'
 // The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
-// call is run, the transcript settles; a stop is obeyed; a fork continues from
-// its anchor with only what followed; failed provider asks stop;
+// call is run, the transcript settles; a stop is obeyed; a fork reads its
+// parent's visible history; failed provider asks stop;
 // and the same steps run themselves as `session_run`.
 
 import { assertEquals } from '@std/assert'
@@ -36,6 +36,7 @@ import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { docDoc } from '@yaks/doc/vocab'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
+import { sessionTools } from './children.ts'
 import { sessions } from './plugin.ts'
 import { type Deps, react, recent, ToolError, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
@@ -742,6 +743,35 @@ test('a fork replays visible history instead of inheriting its parent’s hidden
   }])
   // the parent is untouched
   assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
+})
+
+test('a fork replays an older request that offered fork, then continues from its own reply', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    says('old', 'first reply'),
+    says('current', 'second reply'),
+    says('next', 'third reply'),
+  ])
+  await g.apply([{
+    entity: { eid: ids.f },
+    session: {},
+    fork: { from: 'e1' },
+  }])
+  let tools = sessionTools(g)
+  let old = tools.map((t) => ({ ...t, excludeFromForks: false }))
+  await appendEntry(g, ids.f, 'first request')
+  await rest(g, ids.f, { model, tools: old, mint })
+  await appendEntry(g, ids.f, 'second request')
+  await rest(g, ids.f, { model, tools, mint })
+  await appendEntry(g, ids.f, 'third request')
+  await rest(g, ids.f, { model, tools, mint })
+
+  assertEquals(asked.map((r) => r.tools.some((t) => t.name == 'fork')), [
+    true,
+    false,
+    false,
+  ])
+  assertEquals(asked.map((r) => r.anchor), [undefined, undefined, 'current'])
 })
 
 test('a provider that keeps nothing replays the whole transcript', async () => {

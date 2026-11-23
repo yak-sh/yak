@@ -22,7 +22,7 @@ let words = {
   $defs: {
     step: {
       tool: true,
-      description: 'One step of a workflow',
+      title: 'Run a workflow step',
       worker: '/step',
       input: { binding: { type: 'object' }, template: { type: 'string' } },
     },
