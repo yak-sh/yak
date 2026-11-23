@@ -2876,7 +2876,7 @@ document.addEventListener('click', async (event) => {
     })
     let answer = await response.json()
     if (!response.ok) throw new Error(answer?.message ?? 'That could not be answered. Try again.')
-    said.textContent = [APPROVAL[answer.state], answer.state == 'failed' && answer.said].filter(Boolean).join(' ')
+    said.textContent = [APPROVAL[answer.state], (answer.state == 'failed' || answer.state == 'forbidden') && answer.said].filter(Boolean).join(' ')
     for (let b of buttons) b.hidden = true
   } catch (error) {
     said.textContent = error.message

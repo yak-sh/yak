@@ -68,6 +68,7 @@ import {
   allows,
   type Member,
   type Need,
+  needOf,
   route,
   type Routed,
 } from './operator-route.ts'
@@ -534,6 +535,7 @@ export type Standing = {
     | 'failed'
     | 'declined'
     | 'theirs'
+    | 'forbidden'
   say?: string
   said?: string
   /** where the logo of the integration its act names is drawn from
@@ -557,6 +559,44 @@ export type Press = {
   room?: boolean
 }
 
+let NO_SEAT = 'Your role in this space does not let you answer this approval.'
+
+let canPress = (a: Approval, role: Role | null | undefined) => {
+  let need = needOf(needed(a.tool))
+  // A personal act or a first tap establishing identity needs a writer.
+  return allows(role, a.then || need == 'self' ? 'editor' : need)
+}
+
+let approvalOf = async (store: Store, row: Bundle) => {
+  let of = (row.approval_ask as { approval?: string } | undefined)?.approval
+  return of ? (await store.g.get([of]))[0] : row
+}
+
+let spaceOf = (row: Bundle) =>
+  String(
+    (row.filed as Comp | undefined)?.project ??
+      (row.created as Comp | undefined)?.by ?? '',
+  )
+
+/** A decision about an approval checks the seat before writing its answer.
+ * Its effect carries out the answer that was accepted at that point. */
+export let checkApproval = async (
+  store: Store,
+  row: Bundle,
+  person: string,
+  roleAt: (space: string) => Promise<Role | null>,
+) => {
+  let held = await approvalOf(store, row)
+  let a = held?.operator_approval as Approval | undefined
+  if (!a) return
+  if (
+    !approversOf(a).includes(person) ||
+    !canPress(a, await roleAt(spaceOf(held)))
+  ) {
+    throw refuse('access', NO_SEAT)
+  }
+}
+
 /** An Operator's side of its links and cards: what one's approval says, and
  * its press, which spends it, runs its act with `run`, and says what came of
  * it in the person's conversation. A link the Operator gave in its answer
@@ -567,6 +607,7 @@ export let approvals = (
   run: (a: Approval, by: { who: string | null; space: string }) => Promise<
     string
   >,
+  roleAt: (space: string, person: string) => Promise<Role | null>,
   now = Date.now,
   named: (person: string) => Promise<string> = () => Promise.resolve('someone'),
 ) => {
@@ -608,8 +649,9 @@ export let approvals = (
     own ||= !!updates || !!room
     // A texted link is the person's, whoever holds the phone; anything
     // else opens for whoever may answer it (operator-route.ts).
+    let presser = own || !a.number ? who : a.person
     let may = approversOf(a)
-    if ((own || !a.number) && !may.includes(String(who))) {
+    if (!presser || !may.includes(presser)) {
       return { state: 'theirs' }
     }
     // The decisions asking the others who may answer it.
@@ -650,16 +692,24 @@ export let approvals = (
     if ((row.decided || asks.some((b) => b.decided)) && !updates) {
       return { state: 'used', ...about }
     }
-    let space = String(
-      (row.filed as Comp | undefined)?.project ??
-        (row.created as Comp | undefined)?.by ?? '',
-    )
+    let space = spaceOf(row)
+    // A texted link confirms its person's identity through possession.
+    // Updates already checked the seat when recording the decision.
+    if (!updates && !canPress(a, await roleAt(space, presser))) {
+      return { state: 'forbidden', said: NO_SEAT }
+    }
+    if (pressing.has(eid)) return { state: 'used', ...about }
     pressing.add(eid)
     try {
       await store.g.apply([
-        decline ? { entity: { eid }, declined: {} } : {
+        {
           entity: { eid },
-          verified: {},
+          ...decline ? { declined: {} } : { verified: {} },
+          $was: {
+            verified: { '': null },
+            declined: { '': null },
+            cancelled: { '': null },
+          },
         },
         ...answered(decline ? CHOICE.decline : CHOICE.approve),
       ], { trusted: true })
@@ -689,7 +739,10 @@ export let approvals = (
       }
       return came
     } catch (error) {
-      if (error instanceof Stale && error.eid == eid) {
+      if (
+        error instanceof Stale &&
+        (error.eid == eid || asks.some((b) => b.entity.eid == error.eid))
+      ) {
         return { state: 'used', ...about }
       }
       throw error
@@ -712,10 +765,10 @@ export let answered = async (
 ) => {
   let [asked] = await store.g.get([eid])
   let decided = asked?.decided as { choice?: string; by?: string } | undefined
-  let of = (asked?.approval_ask as { approval?: string } | undefined)?.approval
-  let [row] = of ? await store.g.get([of]) : [asked]
+  if (!decided) return
+  let row = await approvalOf(store, asked)
   let a = row?.operator_approval as Approval | undefined
-  if (!a || !decided || row.verified || row.declined || row.cancelled) {
+  if (!a || row.verified || row.declined || row.cancelled) {
     return
   }
   let approve = decided.choice == CHOICE.approve
@@ -798,6 +851,7 @@ let PAGE = {
     title: 'This link is for someone else',
     lead: 'Sign in as the person it was given to, then open it again.',
   }),
+  forbidden: () => ({ title: 'You can’t answer this approval', lead: NO_SEAT }),
 }
 
 // Where a link's person goes back to: their conversation with its Operator.

@@ -41,6 +41,8 @@ let standing = (s: Standing, who?: string | null): string => {
       return `${say}: this waited too long. Ask again if you still want it.`
     case 'failed':
       return `${say}: it did not go through. ${s.said ?? ''}`.trim()
+    case 'forbidden':
+      return s.said!
     case 'theirs':
       return who
         ? 'Only the person this was asked of can answer it.'

@@ -453,6 +453,16 @@ export let decisionRelay = (
         }. For an answer in their own words, leave choice out.`,
       )
     }
+    if (row.operator_approval || row.approval_ask) {
+      let { checkApproval } = await import('./operator-approvals.ts')
+      await checkApproval(
+        work,
+        row,
+        ctx.person,
+        (space) =>
+          (ctx.reopen?.(true) ?? ctx.dir).role({ eid: space }, ctx.person),
+      )
+    }
     let actor = { by: ctx.person, via: context!.session }
     try {
       await work.g.apply([

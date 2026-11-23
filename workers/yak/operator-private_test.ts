@@ -9,7 +9,7 @@ import { approvals, asker, ROOM } from './operator-approvals.ts'
 import { pressAnswer } from './operator-private.ts'
 import { chatRows } from './operator-rooms.ts'
 import type { Env } from './env.ts'
-import type { Space } from './directory.ts'
+import type { Role, Space } from './directory.ts'
 
 let store = operatorMemory()
 let person = crypto.randomUUID(), session = crypto.randomUUID()
@@ -17,10 +17,15 @@ await store.g.apply([{ entity: { eid: session }, session: {} }], {
   trusted: true,
 })
 let ran: string[] = []
-let approve = approvals(store, (a) => {
-  ran.push(a.tool)
-  return Promise.resolve('ran')
-})
+let role: Role = 'owner'
+let approve = approvals(
+  store,
+  (a) => {
+    ran.push(a.tool)
+    return Promise.resolve('ran')
+  },
+  () => Promise.resolve(role),
+)
 let press = (control: string, id = 'ann'): Press => ({
   id: 'i1',
   token: 'tok',
@@ -93,6 +98,11 @@ test("an approval's Approve counts only from the account linked to its person, o
     true,
   )
   equal(ran, [])
+  role = 'viewer'
+  equal(await answer(ROOM.decline + add, 'ann', person), {
+    text: 'Your role in this space does not let you answer this approval.',
+  })
+  role = 'owner'
   equal(await answer(ROOM.approve + add, 'ann', person), {
     text: 'Done: Add bo@x.com.',
   })

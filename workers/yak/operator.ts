@@ -3702,6 +3702,7 @@ export let operating = (
       options.tell?.(await topOf(g, a.session))
       return typeof told == 'string' ? told : told.text
     },
+    (space, person) => dir().role({ eid: space }, person),
     Date.now,
     async (person) => await named(person) ?? 'someone',
   )

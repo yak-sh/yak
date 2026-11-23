@@ -2,7 +2,7 @@
 // on a link texted to their number (T-1864), or given in the answer where
 // only they, signed in, open it. The link is spent once, lives LIFE, and is
 // bound to the one act and its arguments.
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { line } from '@yaks/query'
 import { decisionRequestId } from '@yaks/platform/operator-decisions'
 import type { Tool } from '@yaks/session'
@@ -21,11 +21,12 @@ import {
   LIFE,
 } from './operator-approvals.ts'
 import { approvalCard } from './operator-approval-card.ts'
+import type { Member } from './operator-route.ts'
 import { updatesOf, updating } from './operator-updates.ts'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { OperatorStore } from './operator-store.ts'
-import type { Space } from './directory.ts'
+import type { Role, Space } from './directory.ts'
 
 let SECRET = 'secret'
 let place = crypto.randomUUID()
@@ -92,6 +93,7 @@ let press = approvals(
     (await tools.find((t) => t.name == 'app_files')!.run(
       { [a.tool]: a.args },
     )) as string,
+  () => Promise.resolve('owner'),
   () => clock,
 )
 
@@ -325,7 +327,12 @@ test('an approval of an act naming an integration carries its logo', async () =>
   await logos.g.apply([{ entity: { eid }, operator_approval: row }], {
     trusted: true,
   })
-  let standing = await approvals(logos, () => Promise.resolve(''), () => clock)(
+  let standing = await approvals(
+    logos,
+    () => Promise.resolve(''),
+    () => Promise.resolve('owner'),
+    () => clock,
+  )(
     eid,
     digestOf(row),
   )
@@ -397,7 +404,7 @@ test('an approval waits in their Updates, is answered there, and shows answered 
   let [shown] = (await updatesOf(store, person, place)).updates
   equal(shown.choices?.map((c) => c.label), ['Approve', 'Decline'])
   ran.length = 0
-  let did = await updating(store, { person, space: place }, {
+  let did = await updating(store, { person, space: place, role: 'owner' }, {
     choose: row.entity.eid,
     choice: 'Approve',
   })
@@ -444,10 +451,16 @@ test('an approval answered on its card or link leaves their Updates; one that la
 // not allow, or vouch for them in a private room (operator-route.ts).
 let jeff = crypto.randomUUID(), matt = crypto.randomUUID()
 let NAMES: Record<string, string> = { [jeff]: 'Jeff', [matt]: 'Matt' }
+let members = (role: Role, other: Role | null = 'owner'): Member[] => [
+  { person, role },
+  ...other ? [{ person: jeff, role: other }] : [],
+  { person: matt, role: 'owner' },
+]
 let room = (
   role: 'editor' | 'owner',
   at: Partial<At> = {},
   t: Tool = tool('member_add'),
+  seats = () => members(role),
 ) =>
   confirming(
     [t],
@@ -459,12 +472,7 @@ let room = (
       () => Promise.reject(new Error('nothing is texted')),
       () => clock,
       {
-        seats: () =>
-          Promise.resolve([
-            { person, role },
-            { person: jeff, role: 'owner' as const },
-            { person: matt, role: 'owner' as const },
-          ]),
+        seats: () => Promise.resolve(seats()),
         names: (people) =>
           Promise.resolve(people.map((p) => NAMES[p]).join(' or ')),
       },
@@ -475,6 +483,7 @@ let by: (string | null)[] = []
 let pressAs = approvals(
   store,
   (a, { who }) => (by.push(who), Promise.resolve(`added ${a.args.email}`)),
+  () => Promise.resolve('owner'),
   () => clock,
   (p) => Promise.resolve(NAMES[p] ?? 'someone'),
 )
@@ -504,7 +513,7 @@ test("an act beyond the person's role waits for everyone whose role allows it, a
       .state,
     'theirs',
   )
-  await updating(store, { person: matt, space: place }, {
+  await updating(store, { person: matt, space: place, role: 'owner' }, {
     choose: askOf(row.entity.eid, matt),
     choice: 'Approve',
   })
@@ -534,7 +543,7 @@ test('in a private room anyone whose role allows an act may vouch for the person
   let a = row.operator_approval as Approval
   equal([a.why, a.approvers], [undefined, [person, jeff, matt]])
   equal(renderToString(approvalCard(row, clock)).includes('data-act'), true)
-  await updating(store, { person: jeff, space: place }, {
+  await updating(store, { person: jeff, space: place, role: 'owner' }, {
     choose: askOf(row.entity.eid, jeff),
     choice: 'Approve',
   })
@@ -543,6 +552,71 @@ test('in a private room anyone whose role allows an act may vouch for the person
   ;[row] = await store.g.get([row.entity.eid])
   equal((row.decided as { choice: string }).choice, 'Approve')
   equal(await waits(matt), [])
+})
+
+for (
+  let [door, role, act] of [
+    ['link', null, { press: true }],
+    ['room', 'editor', { decline: true, room: true }],
+    ['card', 'viewer', { press: true, own: true }],
+  ] as const
+) {
+  test(`a stale approver's press from the ${door} leaves the approval open`, async () => {
+    let seat: Role | null = 'owner'
+    let seats = () => members('owner', seat)
+    await room('owner', { private: true }, tool('member_add'), seats)
+      .run({ email: 'zo@x.com' })
+    let row = await newest()
+    let eid = row.entity.eid
+    let digest = digestOf(row.operator_approval as Approval)
+    let ran: (string | null)[] = []
+    let press = approvals(
+      store,
+      (_, { who }) => (ran.push(who), Promise.resolve('added')),
+      (space, who) => {
+        equal(space, place)
+        return Promise.resolve(
+          seats().find((s) => s.person == who)?.role ?? null,
+        )
+      },
+      () => clock,
+    )
+
+    seat = role
+    let refused = await press(eid, digest, { ...act, who: jeff })
+    equal(refused.state, 'forbidden')
+    equal(refused.said?.includes('Your role in this space'), true)
+    equal(ran, [])
+    equal(
+      (await press(eid, digest, { press: true, who: person })).state,
+      'done',
+    )
+    equal(
+      (await press(eid, digest, { decline: true, who: matt })).state,
+      'used',
+    )
+    equal(ran, [person])
+  })
+}
+
+test('Updates refuses a demoted approver before recording their answer', async () => {
+  await room('owner', { private: true }).run({ email: 'ax@x.com' })
+  let row = await newest()
+  let ask = askOf(row.entity.eid, jeff)
+  await throws(
+    () =>
+      updating(store, { person: jeff, space: place, role: 'editor' }, {
+        choose: ask,
+        choice: 'Decline',
+      }),
+    /Your role in this space/,
+  )
+  equal((await store.g.get([ask]))[0].decided, undefined)
+  let digest = digestOf(row.operator_approval as Approval)
+  equal(
+    (await pressAs(row.entity.eid, digest, { decline: true, who: matt })).state,
+    'declined',
+  )
 })
 
 test('an act needs what its tool declares: one only the person may do is theirs to confirm, even in a private room', async () => {

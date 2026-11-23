@@ -26,7 +26,7 @@ import { type Choice, showing, shown as shownBy } from '@yaks/task'
 import { refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
-import type { Space } from './directory.ts'
+import type { Role, Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { rootAt } from './operator-root.ts'
 import { builderOf, SPACE } from './build-door.ts'
@@ -473,7 +473,12 @@ export let openedIn = async (
  */
 export let updating = async (
   store: Store,
-  held: { person: string; space: string; administrative?: boolean },
+  held: {
+    person: string
+    space: string
+    role?: Role | null
+    administrative?: boolean
+  },
   args: Record<string, unknown>,
 ) => {
   let { person, space } = held
@@ -534,9 +539,23 @@ export let updating = async (
   // Words on what a stranger's conversation raised answer it, in their own
   // words: only an answer starts their conversation on it
   // (operator-escalate.ts `taken`).
-  let raised = found.lane == 'Needs you' &&
-    !!(await store.g.get([about], ['operator_escalation']))[0]
-      ?.operator_escalation
+  let [row] = found.lane == 'Needs you'
+    ? await store.g.get([about], [
+      'operator_escalation',
+      'operator_approval',
+      'approval_ask',
+    ])
+    : []
+  if (str('choose') && (row?.operator_approval || row?.approval_ask)) {
+    let { checkApproval } = await import('./operator-approvals.ts')
+    await checkApproval(
+      store,
+      row,
+      person,
+      () => Promise.resolve(held.role ?? null),
+    )
+  }
+  let raised = !!row?.operator_escalation
   if (str('choose') || raised) {
     await store.g.apply([
       ...opened,
