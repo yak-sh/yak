@@ -125,7 +125,9 @@ async (
 
 let CALL = 15_000
 
-export class TimedOut extends Error {
+/** A voip.ms method not answered in time: as every slow answer, `Unsent`,
+ * asked again later, though one that acts may have acted all the same. */
+export class TimedOut extends Unsent {
   constructor(method: string) {
     super(`voip.ms did not answer ${method} in time`)
   }
@@ -140,9 +142,9 @@ export let REPEATABLE = /^(get|search)[A-Z]|^(setSMS|setDIDRouting)$/
  * Every voip.ms call, under one policy: each asking ends by `by` and within
  * {@link CALL}; a {@link REPEATABLE} method that voip.ms is slow to answer,
  * or answers with a 5xx, is asked once more, each asking with half the
- * time, and a second such answer is Unsent, for the caller to ask again
- * later. Any other method is asked once, and its timeout is
- * {@link TimedOut}.
+ * time. A slow answer is always `Unsent`, for the caller to ask again later:
+ * a second one of a repeatable method, and the timeout of any other, which is
+ * asked once ({@link TimedOut}).
  */
 export let bounded = (
   request: ReturnType<typeof requester>,
@@ -163,7 +165,7 @@ async (method, params) => {
   }
   let end = () => Math.min(by, time.now() + CALL)
   if (!REPEATABLE.test(method)) return await once(end())
-  let slow = (e: unknown) => e instanceof TimedOut || e instanceof Unsent
+  let slow = (e: unknown) => e instanceof Unsent
   let last = end()
   try {
     return await once(Math.min(last, time.now() + CALL / 2))

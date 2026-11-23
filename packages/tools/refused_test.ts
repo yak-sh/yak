@@ -28,6 +28,13 @@ let tools = [
   tool('broken', () => {
     throw new TypeError('undefined is not a function')
   }),
+  // A service out in the world that did not answer for now (@yaks/host's
+  // `Unsent`, joined by its name).
+  tool('slow', () => {
+    throw Object.assign(new Error('The phone company is slow.'), {
+      name: 'Unsent',
+    })
+  }),
 ]
 let unserved = tool('unserved', () => {
   throw new CallError('tool', 'no such tool')
@@ -81,6 +88,14 @@ test('a defect is reported and never heard as a refusal', async () => {
   await asking('broken')
   equal(heard, [])
   equal(told.length, 1)
+})
+
+test('a service slow to answer is said plainly as unavailable, and neither heard nor reported', async () => {
+  let { answer } = await asking('slow')
+  equal(
+    [codeOf(answer), answer.find((b) => b.refusal)?.content, heard, told],
+    ['unavailable', { body: 'The phone company is slow.' }, [], []],
+  )
 })
 
 test('an answered call is heard by nobody', async () => {

@@ -526,20 +526,21 @@ export let directoryDoc: VocabDoc = {
         attempted: owned(time),
       },
     },
-    phone_search: {
-      description: 'A phone provider’s run of unanswered number searches.',
+    phone_slow: {
+      description:
+        'A phone provider’s run of slow answers, reported once it lasts an hour.',
       component: true,
       type: 'object',
       properties: {
         since: owned(time),
         last: owned(time),
-        count: owned(num),
-        reported: owned(bool),
+        told: owned(bool),
       },
     },
     phone_release: {
       description:
-        'Carrier work to stop or permanently return a number already in the trash.',
+        'Carrier work to stop or permanently return a number already in the trash. ' +
+        'Its line is the phone_line, which holds the number (phone_line.number).',
       component: true,
       type: 'object',
       properties: {

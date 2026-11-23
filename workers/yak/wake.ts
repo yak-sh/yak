@@ -30,7 +30,8 @@
 // this one left (T-440).
 //
 // A run Cloudflare could not answer for now (@yaks/cloudflare/api `Unavailable`:
-// its own failure, through every resend) is the same: no fault of the job's,
+// its own failure, through every resend), or a service out in the world could
+// not (@yaks/graph `unheard`, a phone provider's `Unsent`), is the same: no fault of the job's,
 // and the next run does what it could not. It is a line in the log and the
 // streak goes on; once no run has finished for `STUCK`, the outage is
 // reported once (`sweep.reported`), with the failure as its cause. Any other
@@ -40,7 +41,7 @@
 // undo a schedule someone deliberately paused. A new recurring seed starts
 // at its first calendar instant at or after the moment it was discovered.
 import type { Bundle, Graph } from '@yaks/graph'
-import { Stale } from '@yaks/graph/errors'
+import { Stale, unheard } from '@yaks/graph/errors'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -157,7 +158,8 @@ export let reporting = async (
     more = await run(() => now() - Date.parse(began) >= STEP) === MORE
   } catch (error) {
     if (
-      !(error instanceof Unavailable) && !(error instanceof BucketUnavailable)
+      !(error instanceof Unavailable) &&
+      !(error instanceof BucketUnavailable) && !unheard(error)
     ) {
       await report(job, error)
       throw error
@@ -190,7 +192,7 @@ let unanswered = async (
       job,
       new Error(
         `wake ${job}: no run has finished since ${since}; ` +
-          `Cloudflare could not answer the run begun ${began}`,
+          `the run begun ${began} was not answered`,
         { cause: error },
       ),
     )

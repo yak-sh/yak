@@ -17,6 +17,7 @@ import {
   within,
 } from './defects.ts'
 import { Pending } from '@yaks/api/log'
+import { Unsent } from '@yaks/host/senders'
 import { written } from './meta.ts'
 import { faults, refuse as answer } from '@yaks/api/refuse'
 import { type Own, replaced } from '@yaks/durable-object'
@@ -109,12 +110,13 @@ test('nested catches retain runtime origin and its request companion', async () 
   })
 })
 
-test('a caught failure counts once per invocation and refusals stay back', async () => {
+test('a caught failure counts once per invocation, and refusals and slow services stay back', async () => {
   let { rows, time, env } = recorded()
   let error = reused
   for (let i = 0; i < 4; i++) {
     await within(env, { request_id: 'invocation' }, () => {
       caught(new Refused('no'), {})
+      caught(new Unsent('voip.ms is slow to answer getSubAccounts'), {})
       defect(error, { store: 'ada/notes' })
       caught(error, { request: 'outer catch' })
     }, time)

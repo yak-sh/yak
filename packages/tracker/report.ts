@@ -2,7 +2,7 @@
 // failed sink can change the caller's result; fallback never calls the reporter.
 
 import type { Actor, Bundle } from '@yaks/graph'
-import { status } from '@yaks/graph/errors'
+import { status, unheard } from '@yaks/graph/errors'
 import { comp, type Crumb, type Level, str } from './model.ts'
 import { faultOf, rerunOf } from './fault.ts'
 export { faultOf, normalize } from './fault.ts'
@@ -94,13 +94,15 @@ export let disconnected = (error: unknown): boolean =>
     "Can't read from request stream because client disconnected."
 
 /** Refusals are control flow, not tracked mistakes, and neither is a caller
- * that hung up. Hosts can exclude their own accepted/deferred operation
- * before calling caught. */
+ * that hung up, nor a service that did not answer for now (@yaks/graph
+ * `unheard`), which is asked again: only one that stays slow is reported,
+ * by whoever watches it. Hosts can exclude their own accepted/deferred
+ * operation before calling caught. */
 export let refused = (error: unknown): boolean => {
   let e = error && typeof error == 'object' ? error : {}
   let named = 'name' in e ? e.name : ''
   let code = 'status' in e ? e.status : undefined
-  return named == 'CallError' || status(error) < 500 ||
+  return named == 'CallError' || status(error) < 500 || unheard(error) ||
     (typeof code == 'number' && code >= 400 && code < 500) ||
     disconnected(error)
 }

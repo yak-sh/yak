@@ -260,7 +260,7 @@ test('a run Cloudflare could not answer is reported once no run has finished for
     ended: { began: null, since, reported: began },
     reported: [[
       `wake kills: no run has finished since ${since}; ` +
-      `Cloudflare could not answer the run begun ${began}`,
+      `the run begun ${began} was not answered`,
       down.message,
     ]],
   })

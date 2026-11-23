@@ -41,9 +41,18 @@ export let STATUS: Record<string, number> = {
   UnknownSession: 400,
   Unnamed: 400,
   Bounced: 409,
+  // @yaks/host/senders' `Unsent`: a service out in the world that did not
+  // answer for now (slow, a 5xx, a 429). Neither the caller's fault nor ours:
+  // the same call is taken later, so it is answered and retried, never
+  // reported. Only a service that stays slow is, by whoever watches it.
+  Unsent: 503,
 }
 
 /** The HTTP status an error answers with (default 500). Below 500 is the
  * caller's own no. */
 export let status = (err: unknown): number =>
   (err instanceof Error ? STATUS[err.name] : undefined) ?? 500
+
+/** Whether an error is a service that did not answer for now (status 503):
+ * asked again later, and never a defect on its own. */
+export let unheard = (err: unknown): boolean => status(err) == 503

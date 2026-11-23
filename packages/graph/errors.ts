@@ -1,7 +1,7 @@
 // Graph refusals and their public status, shared by readers and writers.
 import type { Eid } from './bundle.ts'
 import { token } from './sha256.ts'
-export { STATUS, status } from './status.ts'
+export { STATUS, status, unheard } from './status.ts'
 
 /** Where a refusal points: the entity as the batch named it (its `$alias`
  * when the batch made it), and the component and property at fault. A form

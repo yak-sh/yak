@@ -6,8 +6,7 @@
 //   provider charged us with our share (@yaks/platform/numbers `usage`). The
 //   line keeps when its last charged call began (`phone_line.called`), so
 //   each call is charged once. A provider that bills no calls
-//   (@yaks/phone `Numbers.calls`) is read for none, and one slow to answer
-//   (Unsent) is read the next hour from where it stood.
+//   (@yaks/phone `Numbers.calls`) is read for none.
 // - `allowed`: every number's calls let go only the ways its space allows
 //   (`waysOf`), after `minutes` has charged the hour's calls. A number in the
 //   trash, or of a space in the trash, takes and makes no call; one whose
@@ -21,6 +20,11 @@
 //   a URL is pointed at its door here (number-door.ts) again, which asks the
 //   provider nothing where it already is, and finishes an assignment the
 //   provider was too slow to set.
+//
+// A provider slow to answer any of them (Unsent) is asked again the next hour,
+// from where each stood, and nothing reports it: each step tallies what its
+// provider answered (phone-slow.ts `tally`), and the meter notes each
+// provider's hour once, so only one that stays slow is reported.
 import { line as q } from '@yaks/query'
 import { Unsent } from '@yaks/host/senders'
 import { monthOf } from '@yaks/platform/meter'
@@ -34,6 +38,7 @@ import { spaceNow } from './model-spend.ts'
 import { purchaseConfirmed } from './numbers.ts'
 import { syncVoice, voiceOf } from './number-voice.ts'
 import { caught } from './defects.ts'
+import { type Tally, tally } from './phone-slow.ts'
 
 type Line = {
   number: string
@@ -51,13 +56,15 @@ let lines = async (env: Env) =>
 
 /** Confirm the carrier's result for a submitted order. The existing budget
  * hold and line stay in place while the carrier has yet to show the DID. */
-export let orders = async (env: Env, now: Date) => {
+export let orders = async (env: Env, now: Date, met: Tally = tally()) => {
   for (let row of await meta(env).query(q`.phone_line.ordering`)) {
     let l = row.phone_line as Line & { upfront: number; monthly: number }
     let ordered = (await phoneNamed(env, l.via))?.numbers?.().ordered
     if (!ordered) continue
     try {
-      if (await ordered(l.number)) {
+      let confirmed = await ordered(l.number)
+      met.answered(l.via)
+      if (confirmed) {
         await purchaseConfirmed(env, { ...l, eid: row.entity.eid }, true)
         continue
       }
@@ -77,22 +84,22 @@ export let orders = async (env: Env, now: Date) => {
         }],
       })
     } catch (error) {
-      if (
-        !(error instanceof Unsent) ||
-        now.getTime() - Date.parse(l.ordering!) >= 3_600_000
-      ) {
+      if (!(error instanceof Unsent)) {
         caught(error, {
           request: 'confirm phone number order',
           provider: l.via,
         })
-      }
+      } else met.slow(l.via, error)
     }
   }
 }
 
 /** Point every number's texts here again, where its provider takes a URL
  * for them; how many it pointed. A number in the trash takes no texts. */
-export let pointed = async (env: Env): Promise<number> => {
+export let pointed = async (
+  env: Env,
+  met: Tally = tally(),
+): Promise<number> => {
   let n = 0
   for (let row of await lines(env)) {
     if (row.trashed) continue
@@ -100,32 +107,41 @@ export let pointed = async (env: Env): Promise<number> => {
     let phone = await phoneNamed(env, line.via)
     let point = phone?.numbers?.().point
     if (!phone?.own || !point) continue
-    // A provider slow this hour is asked again the next.
     let slow = await point(
       line.number,
       await callbackOf(env, line.via, phone.own, line.number),
     ).then(() => false, (error) => {
-      if (error instanceof Unsent) return true
-      throw error
+      if (!(error instanceof Unsent)) throw error
+      met.slow(line.via, error)
+      return true
     })
-    if (!slow) n++
+    if (slow) continue
+    met.answered(line.via)
+    n++
   }
   return n
 }
 
 /** Charge every number's calls since its last charged one, at `now`; the
  * number of calls charged. */
-export let minutes = async (env: Env, now: Date): Promise<number> => {
+export let minutes = async (
+  env: Env,
+  now: Date,
+  met: Tally = tally(),
+): Promise<number> => {
   let charged = 0
   for (let row of await lines(env)) {
     let line = row.phone_line as Line
     let calls = (await phoneNamed(env, line.via))?.numbers?.().calls
     if (!calls) continue
     let since = line.called ?? line.at ?? now.toISOString()
-    // A provider slow this hour is read again the next, from the same call.
-    let took = await calls(line.number, since).catch((error) => {
-      if (error instanceof Unsent) return []
-      throw error
+    let took = await calls(line.number, since).then((took) => {
+      met.answered(line.via)
+      return took
+    }, (error) => {
+      if (!(error instanceof Unsent)) throw error
+      met.slow(line.via, error)
+      return []
     })
     if (!took.length) continue
     await stamp(env, {
@@ -149,7 +165,11 @@ export let minutes = async (env: Env, now: Date): Promise<number> => {
 }
 
 /** Let every number's calls go only the ways its space allows at `now`. */
-export let allowed = async (env: Env, now: Date): Promise<void> => {
+export let allowed = async (
+  env: Env,
+  now: Date,
+  met: Tally = tally(),
+): Promise<void> => {
   let pending = new Set(
     (await meta(env).query(q`.phone_release`)).map((r) =>
       idOf((r.phone_release as { line: string }).line)
@@ -163,8 +183,9 @@ export let allowed = async (env: Env, now: Date): Promise<void> => {
       env,
       { ...line, eid: row.entity.eid, space: space.eid },
       voiceOf(!!row.trashed, space, now),
-    ).catch((e) =>
-      caught(e, { request: 'apply phone call policy', space: space.eid })
-    )
+    ).then(() => met.answered(line.via), (e) => {
+      if (e instanceof Unsent) met.slow(line.via, e)
+      else caught(e, { request: 'apply phone call policy', space: space.eid })
+    })
   }
 }

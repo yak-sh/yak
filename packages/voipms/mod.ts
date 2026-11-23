@@ -153,10 +153,18 @@ export let voipms = (
         throw new Blocked(VOIPMS.blocked.sms_toolong, 'sms_toolong')
       }
       let sms = text.length <= VOIPMS.sms
-      let said = await call(sms ? 'sendSMS' : 'sendMMS', {
+      let method = sms ? 'sendSMS' : 'sendMMS'
+      // A text goes at most once: one voip.ms may have taken before its
+      // answer timed out is never handed over again, so it is no Unsent.
+      let said = await call(method, {
         did: ten(given ?? await from()),
         dst: ten(to),
         message: text,
+      }).catch((error) => {
+        if (error instanceof TimedOut) {
+          throw new Error(`voip.ms did not answer ${method} in time`)
+        }
+        throw error
       })
       let id = said[sms ? 'sms' : 'mms']
       return id == null ? {} : { id: String(id) }
@@ -246,8 +254,7 @@ let some = <T>(all: T[], n: number) =>
 let FIND = 16_000
 let BUY = 28_000
 let CLEANUP = 10_000
-let uncertain = (error: unknown) =>
-  error instanceof TimedOut || error instanceof Unsent
+let uncertain = (error: unknown) => error instanceof Unsent
 
 // A number this account routed to the sub-account made for it.
 let routed = (did: Available, digits: string) =>

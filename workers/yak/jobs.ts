@@ -43,10 +43,12 @@ export let jobs: Record<string, Job> = {
       let { allowed, minutes, orders, pointed } = await import(
         './number-upkeep.ts'
       )
-      await orders(env, now)
-      await minutes(env, now)
-      await allowed(env, now)
-      await pointed(env)
+      let met = (await import('./phone-slow.ts')).tally()
+      await orders(env, now, met)
+      await minutes(env, now, met)
+      await allowed(env, now, met)
+      await pointed(env, met)
+      await met.settle(env, now.getTime())
     }),
   phone_release: async (env, row) => {
     let { finishRelease } = await import('./number-release.ts')

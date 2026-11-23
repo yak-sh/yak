@@ -2,7 +2,7 @@
 import type { Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
 import { who } from '@yaks/graph/call'
 import { signed } from '@yaks/graph/provenance'
-import { status } from '@yaks/graph/errors'
+import { status, unheard } from '@yaks/graph/errors'
 import { asking } from '@yaks/graph/asker'
 import type { Opts, Refusal } from './runner.ts'
 import { CallError, parsed, resolved, validated } from './args.ts'
@@ -100,6 +100,17 @@ export let invoke = async (
         content: { body: String(error) },
         output: { source: id },
         ...(g.vocab.comp('notice') ? { notice: {} } : {}),
+      }]
+    }
+    // A service that did not answer for now is said plainly, as
+    // `unavailable`: neither a defect nor a refusal of the tool's, so it is
+    // neither reported nor told to whoever hears refusals.
+    if (unheard(error)) {
+      return [{
+        entity: { eid: '$fault' },
+        content: { body: (error as Error).message },
+        output: { source: id },
+        refusal: { code: 'unavailable' },
       }]
     }
     let refusal = refusalOf(error)

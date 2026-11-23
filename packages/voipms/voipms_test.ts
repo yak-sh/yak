@@ -291,6 +291,40 @@ test('a search voip.ms is slow to answer is asked once more, and a second slow a
   assertEquals(twice.time.pending(), 0)
 })
 
+// An account whose API never answers, on a clock the test holds.
+let silent = () => {
+  let time = clock()
+  let line = voipms({
+    user: 'u',
+    key: 'k',
+    number: '+12695550100',
+    fetch: (_url, init) => {
+      let signal = init!.signal!
+      return new Promise((_, no) =>
+        signal.addEventListener('abort', () => no(signal.reason))
+      )
+    },
+  }, time)
+  return { line, time }
+}
+
+test('a method voip.ms is slow to answer is Unsent, but a text it may have taken is not', async () => {
+  let reading = silent()
+  let read = assertRejects(() => reading.line.lines(), Unsent)
+  await reading.time.advance(16_000)
+  await read
+
+  let sending = silent()
+  let sent = sending.line.send({ to: '+12695550142', text: 'Hi' })
+    .then(() => null, (e) => e)
+  await sending.time.advance(16_000)
+  let error = await sent
+  assertEquals(
+    [error instanceof Unsent, error.message],
+    [false, 'voip.ms did not answer sendSMS in time'],
+  )
+})
+
 test("pointing a number's texts where they already go asks voip.ms nothing more", async () => {
   let asked: string[] = []
   let shop = numbers({
