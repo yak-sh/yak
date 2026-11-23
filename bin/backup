@@ -36,12 +36,12 @@
 # A page copy by bin/copy-db, not VACUUM INTO. VACUUM INTO rebuilds every table
 # and index: on the 10 GB graph it had written 3 GB in 11 minutes, keeping the
 # WAL from resetting the whole time. A copy holds its read transaction for about
-# 5 minutes, at the box's disk cap (bin/limits). quick_check and the
-# counts then read the copy, however long they take, with nothing held on the
-# live database, and the copy is what gets compressed, so the night is exactly
-# the database that passed. The disk holds one uncompressed copy at a time. A
-# page copy also keeps damage where quick_check finds it: VACUUM INTO rebuilt a
-# torn freelist into a clean snapshot (T-34578) and hid it for two days.
+# 11 minutes for the 16 GB graph, at the box's disk cap (bin/limits). After the
+# read transaction closes, SQLite checks and counts the copy while zstd
+# compresses it. Both must finish before upload. The disk holds one
+# uncompressed copy at a time. A page copy also keeps damage where quick_check
+# finds it: VACUUM INTO rebuilt a torn freelist into a clean snapshot (T-34578)
+# and hid it for two days.
 #
 # The whole run is memory capped (bin/capped, from bin/backup-run.ts), and its disk
 # is capped with the rest of the box's bulk work (bin/limits). A whole night to
@@ -160,11 +160,24 @@ kept() {
   return 1
 }
 
-# A database's night: copied, refused when the copy is damaged, and proved whole
-# (every page decompresses back) before it counts. quick_check walks every
-# page's structure: with the counts, about 7 minutes on the 10 GB graph.
-# integrity_check also matches every index against its table, and took 26
-# minutes on 10 GB for nothing a backup needs.
+# quick_check walks every page's structure. The counts also check that each
+# ordinary table can be read and give restore the rows it should find.
+check_copy() {
+  check=$(sq -readonly "$2" "PRAGMA quick_check") && [ "$check" = ok ] ||
+    die "$1 failed quick_check: ${check:-could not check the database}"
+  lap "quick_check $1"
+  counts "$1" "$2" >> "$work/counts"
+  lap "count $1"
+}
+
+compress_copy() {
+  kept "$3" zstd -q -T2 -c "$2" || die "$1: compressing the copy failed"
+  # One decode checks zstd's frame checksum and that every page came back.
+  decoded=$(zstd -dcq "$3" | wc -c) && [ "$decoded" -eq "$(stat -c %s "$2")" ] ||
+    die "$1: the compressed copy could not be decoded in full"
+  lap "compress $1"
+}
+
 snapshot() {
   copy="$work/$1"
   z="$work/night/$1.zst"
@@ -174,16 +187,18 @@ snapshot() {
   mark=$(date +%s)
   "$here/copy-db" "$copy" "$data/$1"
   lap "copy $1"
-  [ "$(sq -readonly "$copy" "PRAGMA quick_check")" = ok ] ||
-    die "$1 failed quick_check: the database is damaged"
-  lap "quick_check $1"
-  counts "$1" "$copy" >> "$work/counts"
-  lap "count $1"
-  kept "$z" "$here/capped" zstd -q -T0 -c "$copy" ||
-    die "$1: compressing the copy failed"
-  [ "$(zstd -dcq "$z" | wc -c)" -eq "$(stat -c %s "$copy")" ] ||
-    die "$1: the compressed copy is missing pages"
-  lap "compress $1"
+  # SQLite's page walk and zstd's sequential read share this job's I/O and
+  # memory limits. Join both before upload or moving failed work to trash.
+  check_copy "$1" "$copy" &
+  checking=$!
+  compress_copy "$1" "$copy" "$z" &
+  compressing=$!
+  failed=0
+  wait "$checking" || failed=1
+  wait "$compressing" || failed=1
+  unset checking compressing
+  [ "$failed" = 0 ] || return 1
+  lap "prepare $1"
   rm -f "$copy" "$copy-wal" "$copy-shm"
 }
 
@@ -222,13 +237,11 @@ restore() {
   say "restored $night in $(( $(date +%s) - started ))s"
 }
 
-# Prove the bucket holds each file's bytes, and that zstd can decode them,
-# before releasing local space. A later failure leaves no counts marker, so
-# none of this night's partial uploads can be mistaken for a recovery point.
+# Prove the bucket holds the checked bytes before releasing local space.
+# Only a complete night gets a counts marker and can be restored.
 uploaded() {
   rclone copy "$work/night" "$remote/snapshots/$night"
   rclone check -q --one-way --download "$work/night" "$remote/snapshots/$night"
-  zstd -tq "$work/night"/*.zst
   rm "$work/night"/*.zst
   lap upload
 }
@@ -236,6 +249,10 @@ uploaded() {
 # An upload that failed can leave the only snapshot of an older graph here.
 # Successful runs have verified all their bytes remotely before cleanup.
 cleanup() {
+  # A signal can interrupt the join. Keep the work directory in place until
+  # its writers have exited, or leave it for the next run after a hard kill.
+  [ -z "${checking:-}" ] || wait "$checking" || :
+  [ -z "${compressing:-}" ] || wait "$compressing" || :
   if [ "$1" -eq 0 ] && [ "${finished:-0}" -eq 1 ]; then
     rm -rf "$work"
   else
@@ -298,6 +315,7 @@ backup() {
   if [ $# != 0 ]; then
     kept "$work/night/files.tar.zst" tar -C "$data" --zstd -cf - "$@" ||
       die "files.tar.zst: tar failed"
+    zstd -tq "$work/night/files.tar.zst"
     lap "tar files"
     uploaded
   fi
