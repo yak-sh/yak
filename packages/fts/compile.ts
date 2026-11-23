@@ -49,6 +49,7 @@ import {
   type Raw,
   type Screen,
   select,
+  type Selection,
   type Site,
   type Source,
   table,
@@ -56,7 +57,14 @@ import {
   Unsupported,
   val,
 } from '@yaks/sql'
-import { permitted, ranked, screens, unworn } from './search.ts'
+import {
+  FEW,
+  permitted,
+  ranked,
+  screens,
+  unworn,
+  withinOwners,
+} from './search.ts'
 import {
   type Field,
   indexes,
@@ -118,9 +126,20 @@ export let reach = (q: And): number | null => {
 // that many hold is found within about 4,400 texts in order.
 export let FEW_TEXTS = 4000
 
-// MATCH opens a cursor per keyed candidate. Keep seeks to a handful of owners;
-// larger screens retain the single walk through a term's postings.
-let FEW = 4
+// Try the indexed screen first for a filtered ranking. Keep only a bounded
+// set in the compiler, falling back to keyed probes for a wide screen.
+let SCREEN = 4096
+
+let candidates = (db: Driver, screen: Selection): number[] | undefined => {
+  let seek = screen.seek?.()
+  if (!seek) return
+  let ids = db.query(select({
+    cols: [col('id')],
+    from: from(seek),
+    limit: lit(SCREEN + 1),
+  })).map((r) => Number(r.id))
+  return ids.length <= SCREEN ? ids : undefined
+}
 
 // The @yaks/sql extension that resolves bare words against the search indexes.
 // It handles the `text` clause, covering every indexed field, and orders by
@@ -161,6 +180,7 @@ export let search = (
   let asked: Screen | null = null
   // The owners in relevance order, resolved once a query.
   let held: number[] | null = null
+  let scoped: number[] | undefined
   let sources: ReturnType<typeof screens> = {}
   let membership = new Map<Screen, Raw | null>()
   let shared = new Map<Screen, Source>()
@@ -189,8 +209,13 @@ export let search = (
     let screen = asked?.() ?? undefined
     ranking = true
     try {
+      // A session's indexed entries can be read once before MATCH. Probing
+      // the full screen per posting seeks dates and transcript text for hits
+      // from unrelated sessions, long before LIMIT can take effect.
+      scoped = screen && db!.file ? candidates(db!, screen) : undefined
       held = ranked(db!, live, words.join(' '), {
         screen,
+        owners: scoped,
         // The query's screen already admits the owner through entity visibility.
         // Repeating it for each text source multiplies the ranking's VM program.
         screens: screen ? aspects : sources,
@@ -210,6 +235,7 @@ export let search = (
       standing.clear()
       asked = screen
       held = null
+      scoped = undefined
       sources = {}
       membership.clear()
       shared.clear()
@@ -260,7 +286,8 @@ export let search = (
         })
         let screen = site.screen
         let allowed: Source | undefined
-        if (screen?.maximum != null && screen.maximum <= FEW) {
+        let scope = page != null && !ranking ? scoped : undefined
+        if (!scope && screen?.maximum != null && screen.maximum <= FEW) {
           if (!membership.has(screen)) membership.set(screen, screen())
           let within = membership.get(screen)
           if (within) {
@@ -285,6 +312,7 @@ export let search = (
                   op('match', col(fts), val(t)),
                   permitted(name, col('rowid', fts), aspects),
                   ...unworn(not, col('rowid', fts)),
+                  ...scope ? [withinOwners(col('rowid', fts), scope)] : [],
                   ...allowed
                     ? [among(
                       col('rowid', fts),

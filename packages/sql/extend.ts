@@ -62,6 +62,8 @@ import type { BindOpts } from './bind.ts'
 export type Selection = Raw & {
   keyed?: Select
   probe?: (owner: Expr) => Expr
+  /** An indexed subset of the filters, returning candidates to probe. */
+  seek?: () => Raw
 }
 
 /** Test one owner without enumerating an iterable selection when the compiler

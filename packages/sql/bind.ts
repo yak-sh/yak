@@ -2990,6 +2990,21 @@ let selectionScreen = (
   let query = { ...ast, clauses: rest }
   let frozen = { ...opts, now: opts.now ?? Date.now() }
   let admits = bound(query, vocab, frozen, d, [], { screening })
+  let indexed = flattened(rest).filter((c): c is Pred => {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+      !['', '<', '<=', '>', '>='].includes(opOf(c)) || blank(c.value)
+    ) return false
+    let [comp, prop] = c.path
+    return comp == 'entity' && prop == 'eid' ||
+      !computed(vocab, comp) && !vocab.prop(comp, prop)?.computed &&
+        !opts.derived?.[c.path.join('.')] && !opts.backed?.[comp] &&
+        vocab.indexes(comp).some(({ props, present }) =>
+          !present && props[0] == prop &&
+          !opts.missingIndexes?.includes(indexName(vocab, comp, props))
+        )
+  })
+  let seek = indexed.some((c) => opOf(c) == '' && literals(c.value)?.length)
   let quiet = (frozen.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
   // Extensions may retain values resolved for this query. Capture both forms
   // before a later query begins on those same compiler instances.
@@ -3008,6 +3023,16 @@ let selectionScreen = (
       order: [],
     }),
     keyed,
+    seek: seek && d.indexed
+      ? () =>
+        render({
+          ...bound({ ...query, clauses: indexed }, vocab, frozen, d, [], {
+            screening,
+          }),
+          cols: [raw(`${d.ownerKey('entity')} as id`)],
+          order: [],
+        })
+      : undefined,
     probe: (owner) =>
       exists({
         ...keyed,

@@ -16,6 +16,7 @@ import {
   absentFrom,
   among,
   and,
+  array,
   as,
   at,
   type BindOpts,
@@ -30,7 +31,6 @@ import {
   fn,
   from,
   type Join,
-  join,
   lit,
   member,
   not,
@@ -90,6 +90,11 @@ export type SearchOpts = {
   name?: string
 }
 
+type RankOpts = SearchOpts & {
+  // Candidate owner ids when the compiler could seek a subset of the filters.
+  owners?: readonly number[]
+}
+
 // Each index has one text source and may be gated by another component.
 // Restrict both before matching, so a public owner cannot reveal private text.
 export let screens = (
@@ -124,6 +129,18 @@ export let permitted = (
 export let unworn = (comps: string[] = [], owner: Expr): Expr[] =>
   comps.map((comp) =>
     not(among(owner, select({ cols: [col('entity')], from: table(comp) })))
+  )
+
+// A prefix match can reopen and merge its postings for each keyed seek.
+export let FEW = 4
+
+// Seek into the postings' rowid range once, then test membership without
+// asking FTS5 to reopen and merge a prefix's postings for each owner.
+export let withinOwners = (owner: Expr, ids: readonly number[]): Expr =>
+  ids.length <= FEW ? among(owner, ids.map((id) => lit(id))) : and(
+    op('>=', owner, lit(Math.min(...ids))),
+    op('<=', owner, lit(Math.max(...ids))),
+    among(op('+', owner, lit(0)), array(ids)),
   )
 
 // The ranked hits for a search, best first, or null when the text contains no
@@ -216,7 +233,7 @@ export let ranked = (
   db: Driver,
   fields: Field[],
   t: string,
-  opts: SearchOpts = {},
+  opts: RankOpts = {},
 ): number[] => (best(db, fields, t, opts) ?? []).map((r) => r.owner)
 
 // A ranked entity: its integer owner, its bm25 rank, the index it ranked best
@@ -261,18 +278,20 @@ let best = (
   db: Driver,
   fields: Field[],
   t: string,
-  opts: SearchOpts,
+  opts: RankOpts,
 ): Candidate[] | null => {
   let arms = indexes(worded(fields))
   if (!t || !arms.length) return null
+  if (opts.owners?.length == 0) return []
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'
   // A compiler screen can join the postings by owner ID. Keep the FTS cursor
   // first so a sparse term never walks the visibility relation to find its
   // matches. A bare screen on the CPU sort is read once per statement.
-  let keyed = opts.screen?.keyed
+  let keyed = opts.owners ? undefined : opts.screen?.keyed
   let probed = !!opts.screen?.probe
-  let screen: Cte[] = opts.screen && (sorting || !keyed && !probed)
+  let screen: Cte[] = opts.screen &&
+      (sorting && !opts.owners || !keyed && !probed)
     ? [{
       name: '__fts_screen',
       cols: ['id'],
@@ -309,16 +328,23 @@ let best = (
   // Joined, not crossed: SQLite drives from the smaller side, so a broad
   // screen seeks a rare component's few owners rather than walking the graph
   // in id order to find one.
+  let candidates = opts.owners
+    ? from(array(opts.owners), '__fts_screen')
+    : table('__fts_screen')
   let take = (arm: Index, n: number): Expr =>
-    sorting && opts.screen
+    opts.owners || sorting && opts.screen
       ? when([[
         exists(select({
           cols: [lit(1)],
-          from: table('__fts_screen'),
-          joins: [join(
-            table(arm.on ?? arm.comp, '__source'),
-            eq(col('entity', '__source'), col('id', '__fts_screen')),
-          )],
+          from: candidates,
+          joins: [{
+            how: opts.owners ? 'cross' : 'join',
+            src: table(arm.on ?? arm.comp, '__source'),
+            on: eq(
+              col('entity', '__source'),
+              col(opts.owners ? 'value' : 'id', '__fts_screen'),
+            ),
+          }],
         })),
         lit(n),
       ]], lit(0))
@@ -329,6 +355,7 @@ let best = (
     let owner = col('rowid', fts)
     return and(
       op('match', col(fts), val(expr)),
+      ...opts.owners ? [withinOwners(owner, opts.owners)] : [],
       permitted(name, owner, opts.screens),
       ...unworn(
         ['tombstone', ...arms.find((arm) => arm.name == name)!.not ?? []],
