@@ -11,6 +11,8 @@ import {
   type Verdict,
 } from '@yaks/platform/friends'
 import { sendable } from '@yaks/mail'
+import { presence } from '@yaks/notify/whereabouts'
+import { line } from '@yaks/query'
 import { managePath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
@@ -51,6 +53,95 @@ export let friendsOf = async (
     a.name.localeCompare(b.name)
   )
 }
+
+/** Where a friend is on yaks.app now, as one reader may see it: building
+ * or online, and the spaces and apps they have open that the reader can
+ * already open themselves. */
+export type Seen = {
+  state: 'building' | 'online'
+  spaces: { slug: string; title: string }[]
+  apps: { slug: string; title: string; space: string }[]
+}
+
+/** What `reader` may see of `friend`'s presence (@yaks/notify/whereabouts
+ * `presence`), none when no page of theirs is open. Call it for a confirmed
+ * friend alone. */
+export let presenceOf = async (
+  dir: Directory,
+  reader: string,
+  friend: string,
+  now: number = Date.now(),
+): Promise<Seen | undefined> => {
+  let said = presence(
+    await dir.read(line`.whereabouts.person=${friend}&*`),
+    now,
+  )
+  if (!said) return
+  let [spaces, apps] = await Promise.all([
+    Promise.all(said.spaces.map(async (eid) => {
+      let space = await dir.at(eid)
+      return space && await dir.role(space, reader) ? [space] : []
+    })),
+    Promise.all(said.apps.map(async (eid) => {
+      let held = await dir.appAt(eid)
+      if (!held || held.app.trashed) return []
+      let { app, space } = held
+      let opens = app.access != 'private' ||
+        !!await dir.role(space, reader) || !!await dir.grant(app, reader)
+      return opens ? [{ app, space }] : []
+    })),
+  ])
+  return {
+    state: said.state,
+    spaces: spaces.flat().map((s) => ({ slug: s.slug, title: s.title })),
+    apps: apps.flat().map(({ app, space }) => ({
+      slug: app.slug,
+      title: app.title || app.slug,
+      space: space.slug,
+    })),
+  }
+}
+
+// One friend's presence in words: "Fay is building in gift-shop".
+let presenceLine = (name: string, s: Seen) =>
+  s.state == 'building'
+    ? `${name} is building${
+      s.spaces.length ? ` in ${s.spaces.map((x) => x.title).join(', ')}` : ''
+    }`
+    : s.apps.length
+    ? `${name} has ${s.apps.map((a) => a.title).join(', ')} open`
+    : `${name} is online`
+
+/** Which of a person's friends are on yaks.app now, in a line for their
+ * Updates in their own space; none when nobody is. */
+export let friendsHere = async (
+  env: Env,
+  space: Space,
+  who: Who,
+): Promise<string | undefined> => {
+  if (!who.person || who.role != 'owner') return
+  let dir = open(env)
+  let [seats, friends] = await Promise.all([
+    dir.seats(who.person, 'owner'),
+    friendsOf(dir, who.person),
+  ])
+  if (ownOf(seats)?.space.eid != space.eid) return
+  let here = (await Promise.all(
+    friends.filter((f) => f.standing == 'friend').map(async (f) => {
+      let seen = await presenceOf(dir, who.person!, f.person)
+      return seen ? [presenceLine(f.name, seen)] : []
+    }),
+  )).flat()
+  return here.length
+    ? `Friends on yaks.app now: ${here.join('. ')}.`
+    : undefined
+}
+
+// A person's own space among their owner seats, as `dir.own` chooses it
+// (the one marked theirs, else the first they own), read without the
+// marking or minting it does.
+let ownOf = (seats: { own: boolean; space: Space }[]) =>
+  seats.find((s) => s.own) ?? seats[0]
 
 /** The sign-in email of one of `person`'s confirmed friends, for the tools
  * that take a friend (`FRIEND`) where they would take an address. */
@@ -154,7 +245,14 @@ export let friendTools: ToolRow[] = [
     idempotent: true,
     input: { type: 'object', properties: {} },
     run: async (ctx) => {
-      let friends = await friendsOf(open(ctx.env), ctx.person)
+      let dir = open(ctx.env)
+      let friends = await Promise.all(
+        (await friendsOf(dir, ctx.person)).map(async (f) =>
+          f.standing == 'friend'
+            ? { ...f, presence: await presenceOf(dir, ctx.person, f.person) }
+            : f
+        ),
+      )
       return { text: '', value: { friends } }
     },
   },
@@ -199,14 +297,11 @@ export let friendUpdates = async (
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
   let dir = open(env)
-  // Their own space as `dir.own` chooses it (the one marked theirs, else
-  // the first they own), read without the marking or minting it does.
   let [seats, friends] = await Promise.all([
     dir.seats(who.person, 'owner'),
     friendsOf(dir, who.person),
   ])
-  let own = seats.find((s) => s.own) ?? seats[0]
-  if (own?.space.eid != space.eid) return []
+  if (ownOf(seats)?.space.eid != space.eid) return []
   return friends.flatMap(({ person, name, standing, at }): Update[] =>
     standing == 'asked' || standing == 'suggested'
       ? [{

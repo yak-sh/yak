@@ -1273,7 +1273,9 @@ friend_list:
     The person's friends on yaks.app, and everyone waiting on an answer: who
     asked them (asked), who yaks.app suggests they may know (suggested), and
     whom they asked (asking). Each has a person id for friend_add and
-    friend_remove.
+    friend_remove. A friend on yaks.app now has presence: building (an
+    Operator page open) or online, with the spaces and apps they have open
+    that the person can open too.
 friend_remove:
   title: Remove a friend
   description: >-

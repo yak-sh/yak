@@ -3,6 +3,7 @@ import {
   type Channel,
   glance,
   noted,
+  presence,
   reachBy,
   type Row,
   type State,
@@ -97,4 +98,35 @@ test('the line and the reach, from the rows still standing', () => {
     let g = glance(rows, { place: 'home', now: T })
     equal([whereaboutsLine('Jeff', g), reachBy(g)], [line, reach])
   }
+})
+
+test('an open Operator page is building in its space, an open app page online in it', () => {
+  equal(presence([row('operator', 'here', 0, 'home')], T), {
+    state: 'building',
+    spaces: ['home'],
+    apps: [],
+  })
+  equal(presence([row('apps', 'open', MIN, 'gift')], T), {
+    state: 'online',
+    spaces: [],
+    apps: ['gift'],
+  })
+  equal(
+    presence([
+      row('operator', 'background', 0, 'home'),
+      row('apps', 'open', 0, 'gift'),
+    ], T)?.state,
+    'building',
+  )
+})
+
+test('a closed, faded or other channel says nobody is on yaks.app', () => {
+  for (
+    let rows of [
+      [],
+      [row('operator', 'away', 0, 'home')],
+      [row('apps', 'open', 16 * MIN, 'gift')],
+      [row('discord', 'online'), row('text', 'used')],
+    ]
+  ) equal(presence(rows, T), undefined)
 })

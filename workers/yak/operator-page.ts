@@ -144,6 +144,7 @@ import {
   updatesOf,
   visitsOf,
 } from './updates.ts'
+import { friendsHere } from './friends.ts'
 import { acrossScript } from './space-picker.ts'
 import {
   answered,
@@ -2540,11 +2541,15 @@ export let updatesPage = async (
   // rows of their servers' lists that wait on them are here too, before
   // their Updates.
   let lists = reading(env, space, who)
-  let [news, views, , put] = await Promise.all([
+  let [news, views, , put, friends] = await Promise.all([
     updatesOf(env, space, who, !dismissed),
     visitsOf(env, beside.apps ?? []),
     lists.listing,
     dismissed ? dismissedOf(env, space, who) : undefined,
+    dismissed ? undefined : friendsHere(env, space, who).catch((e) => {
+      caught(e, { request: 'friends here', space: space.slug })
+      return undefined
+    }),
   ])
   if (put) {
     return talkPage(env, space, who, beside, {
@@ -2583,6 +2588,7 @@ export let updatesPage = async (
         listed ? besides(listed, at, here, true) : later('waits'),
         beside.apps,
         views,
+        friends,
       ),
     ),
   })

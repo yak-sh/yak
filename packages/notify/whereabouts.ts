@@ -175,6 +175,40 @@ export let glance = (
   return seen
 }
 
+/** Where a person is on yaks.app now, as their friends see it: `building`
+ * while an Operator's page of theirs is open, else `online` while an app's
+ * page or another yaks.app page is; `spaces` and `apps` are the places those
+ * pages name, the Operator's space and the app. */
+export type Presence = {
+  state: 'building' | 'online'
+  spaces: string[]
+  apps: string[]
+}
+
+/** The presence the rows still standing say, none when no page of the
+ * person's is open. Never stored: it is read off the rows each time. */
+export let presence = (
+  rows: Row[],
+  now: number = Date.now(),
+): Presence | undefined => {
+  let spaces = new Set<string>(), apps = new Set<string>()
+  let open = false
+  for (let { whereabouts: p } of rows) {
+    let channel = p?.channel
+    if (channel != 'operator' && channel != 'apps') continue
+    if (!p?.state || gone(p.state) || !p.at) continue
+    if (!(now - Date.parse(p.at) < FADE[channel])) continue
+    open = true
+    if (p.place) (channel == 'operator' ? spaces : apps).add(p.place)
+  }
+  if (!open) return
+  return {
+    state: spaces.size ? 'building' : 'online',
+    spaces: [...spaces],
+    apps: [...apps],
+  }
+}
+
 let latest = (a: string | undefined, b: string) => !a || b > a ? b : a
 
 /** How long ago `at` was, as a person says it: 4m, 2h, 1d. */

@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
+import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
 
 let k = await kernel()
@@ -143,4 +144,54 @@ test('only a confirmed friend can be picked', async () => {
     Error,
     'friend list',
   )
+})
+
+// Fay has her Operator open in her own space, Eve's public Gift app, and a
+// private app of her own.
+let faySpace = await k.dir.own(fay.person)
+await connector(k, fay.cookie).tool('app_new', {
+  space: faySpace.slug,
+  slug: 'secret',
+  title: 'Secret',
+  access: 'private',
+})
+let [gift, secret] = await Promise.all([
+  k.dir.app(eveSpace, 'gift'),
+  k.dir.app(faySpace, 'secret'),
+])
+await k.dir.apply({
+  entities: [
+    noted(undefined, {
+      person: fay.person,
+      channel: 'operator',
+      place: faySpace.eid,
+      state: 'here',
+    }),
+    ...[gift!, secret!].map((app) =>
+      noted(undefined, {
+        person: fay.person,
+        channel: 'apps',
+        place: app.eid,
+        state: 'open',
+      })
+    ),
+  ].map((b) => b!),
+})
+
+test('a friend building shows only the apps and spaces you can already open', async () => {
+  let fays = ((await tools(eve).answer('friend_list', {})).value?.friends as {
+    person: string
+    presence?: { state: string; spaces: unknown[]; apps: { slug: string }[] }
+  }[]).find((f) => f.person == fay.person)
+  assertEquals(fays?.presence?.state, 'building')
+  assertEquals(fays?.presence?.spaces, [])
+  assertEquals(fays?.presence?.apps.map((a) => a.slug), ['gift'])
+  let page = await (await updates(eve, eveSpace.slug)).text()
+  assertStringIncludes(page, 'Friends on yaks.app now')
+  assertEquals(page.includes('Secret'), false)
+})
+
+test('nobody but a friend sees where someone is', async () => {
+  let page = await (await updates(ann, annSpace.slug)).text()
+  assertEquals(page.includes('Friends on yaks.app now'), false)
 })

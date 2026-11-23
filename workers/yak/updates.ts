@@ -607,6 +607,7 @@ export let updates = (
   lists: ComponentChildren = null,
   apps: Apps = [],
   views?: Map<string, number>,
+  friends?: string,
 ) => {
   let day = lastDayLine(apps, views)
   return h(
@@ -624,6 +625,13 @@ export let updates = (
         h('p', {
           class: 'Update_Words',
         }, day),
+      )
+      : null,
+    friends
+      ? h(
+        Card,
+        { class: 'Update Update-day' },
+        h('p', { class: 'Update_Words' }, friends),
       )
       : null,
     lists,
