@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./access": "./access.ts",
+    "./app-view": "./app-view.ts",
     "./declared": "./declared.ts",
     "./errors": "./errors.ts",
     "./routes": "./routes.ts",
