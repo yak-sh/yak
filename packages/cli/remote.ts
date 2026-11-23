@@ -71,7 +71,10 @@ export let remote = async (
     as?: string
     via?: string
     url?: string
+    mixedAuth?: boolean
     credential?: Selection['credential']
+    state?: string
+    config?: string
   } = {},
 ): Promise<Bundle[]> => {
   let origin = new URL(options.url ?? 'https://yaks.app')
@@ -84,12 +87,17 @@ export let remote = async (
       'Choose an HTTP(S) origin without credentials',
     )
   }
+  let door = new URL(doorUrl(origin.origin))
+  if (options.mixedAuth) door.searchParams.set('auth', 'mixed')
   let ask = rpc({
-    url: doorUrl(origin.origin),
+    url: door.href,
     token: () =>
       options.credential
         ? options.credential(origin.origin, options.as)
-        : tokenFor(origin.origin, undefined, { as: options.as }),
+        : tokenFor(origin.origin, options.state, {
+          as: options.as,
+          config: options.config,
+        }),
     via: options.via,
   })
   let reply = await ask('tools/call', { name, arguments: args }) as Result

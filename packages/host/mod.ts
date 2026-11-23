@@ -183,11 +183,12 @@ export interface Host {
   tools: NamedTool[]
   /** Runtime provider catalogs shared by discovery and the runner. */
   registry: Registry
-  /** Authenticated calls to another graph, supplied by a host with accounts. */
+  /** Calls to another graph, supplied by a host with accounts. Mixed auth
+   * also admits tools the remote host offers signed out. */
   remote?: (
     name: string,
     args: Record<string, unknown>,
-    options?: { as?: string; via?: string; url?: string },
+    options?: { as?: string; via?: string; url?: string; mixedAuth?: boolean },
   ) => Promise<Bundle[]>
   /** Read authenticated JSON from another origin without exposing credentials. */
   readJson?: (url: string | URL, options?: { via?: string }) => Promise<unknown>

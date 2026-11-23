@@ -64,6 +64,7 @@ export type Standing = {
   app?: string | null
   version?: number | null
   release: string
+  yak?: string
   at: string
 }
 
@@ -101,6 +102,7 @@ export type Thread = {
   app: string | null
   version: number | null
   release: string | null
+  yak: string | null
   at: string | null
   completed: { at: string | null; by: string | null } | null
   messages: Message[]
@@ -182,6 +184,7 @@ export let opening = (
       space: where.space ?? null,
       version: where.version ?? null,
       release: where.release,
+      ...where.yak ? { yak: where.yak } : {},
       at: where.at,
     },
     support: supportOf(said),
@@ -313,6 +316,7 @@ export let threadOf = (
     app: ref(report.app),
     version: typeof report.version == 'number' ? report.version : null,
     release: str(report.release),
+    yak: str(report.yak),
     at: str(report.at),
     completed: done ? { at: str(done.at), by: ref(done.by) } : null,
     messages: messages.map((m) => {
@@ -497,6 +501,7 @@ export let context = (t: Thread): string =>
     ['space', t.space],
     ['app', t.app && `${t.app}${t.version ? ` v${t.version}` : ''}`],
     ['release', t.release],
+    ['yak', t.yak],
     ['session', t.session],
     ['agent', t.agent],
     ['call', t.call],
@@ -582,11 +587,6 @@ export let asking = (
   },
   admin: () => admin({ dir, person }),
 })
-
-/** How many messages one person adds to threads in an hour. A conversation
- * needs more turns than reports need openings, and each one still mails a
- * person. */
-export let SAYS = 12
 
 /** What `person` has added to threads this hour, out of the store itself.
  * A store that cannot answer counts nothing: a limit is never the reason

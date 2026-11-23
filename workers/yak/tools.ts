@@ -1,7 +1,7 @@
 import { transferTool } from './app-transfer.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
-import { type Line, line as ql } from '@yaks/query'
+import { hostedFeedback } from './feedback.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { base64, unbase64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
@@ -63,7 +63,6 @@ import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import { CallError } from '@yaks/tools'
 import type { Actor, Bundle } from '@yaks/graph'
-import { VERSION } from './running.ts'
 import { unlike } from '@yaks/people'
 import {
   appDoc,
@@ -259,21 +258,6 @@ import {
   mint,
   revoke,
 } from './grants.ts'
-import {
-  adding,
-  asking,
-  lately,
-  link,
-  open,
-  opens,
-  read as readThread,
-  SAYS,
-  signer,
-  type Thread,
-  title,
-  transcript,
-  valueOf,
-} from './support.ts'
 import { mail } from './mail.ts'
 import { requested } from './confirm.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
@@ -302,7 +286,6 @@ import { pair } from './screen.ts'
 import { mailFrom } from '@yaks/platform/host'
 import {
   apex as platformHost,
-  replyTo,
   spaceHost,
   url as hostUrl,
 } from '@yaks/platform/host'
@@ -312,7 +295,7 @@ import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { applying, seeding } from './release-seed.ts'
 import { sampled, unsampled } from './sample.ts'
-import { acting, titling, vouched, type Who } from './session.ts'
+import { acting, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { addressee, canon } from './signin.ts'
 import { nameOf } from './names.ts'
@@ -410,7 +393,6 @@ import {
 } from './written.ts'
 import { purge } from '@yaks/workerd/purge'
 import { appTag, keepable, spaceTag } from '@yaks/platform/kept'
-import { within } from '@yaks/workerd/rate'
 import {
   accounted,
   admin,
@@ -450,7 +432,7 @@ import { viewsTools } from './views-tools.ts'
 import { carried, rebind } from './connections.ts'
 import { connectionTools } from './connection-tools.ts'
 import { attachTools } from './attach-tools.ts'
-import { background, caught, failing } from './defects.ts'
+import { background, caught } from './defects.ts'
 import { step } from './funnel.ts'
 import { adopt, unadopt, type Visit, visitOf } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
@@ -3560,31 +3542,6 @@ let noteOf = (v: unknown) => {
   }
   return said
 }
-
-// How many of these one person gets in an hour. A few is plenty: feedback is
-// a person noticing something, not a stream, and the fourth in an hour is
-// far likelier to be an agent in a loop than a fourth thing wrong.
-let HOURLY = 3
-
-// A caller who has not signed in has no identity to hand an allowance to, so
-// theirs is per source instead (@yaks/workerd/rate `FEEDBACK_RATE`, one a minute): a
-// stranger's report is wanted, a loop's is a mailbox full, and one stranger's
-// loop must not silence every other stranger, which a shared count did.
-
-// What this person has already said this hour, out of the meta store itself
-// rather than a counter in some isolate — three per hour only means anything
-// if it holds across the isolate a call lands in. A store that cannot answer
-// counts nothing: a rate limit is never the reason feedback is lost.
-let counted = async (ctx: Ctx, asked: Line) => {
-  try {
-    return (await meta(ctx.env).query(asked)).length
-  } catch (e) {
-    caught(e, { tool: 'feedback' })
-    return 0
-  }
-}
-let recently = (ctx: Ctx) =>
-  counted(ctx, ql`.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`)
 
 /** Refused where the caller already owns as many free spaces as they get:
  * their own allowance, else one person's (@yaks/platform/plans `freeSpaces`,
@@ -8046,202 +8003,7 @@ let OURS: Row[] = [
       }
     },
   },
-  {
-    name: 'feedback',
-    destructive: false,
-    openWorld: true,
-    // The one door that takes something from a stranger (anon.ts). What it
-    // writes is the platform's own store and nobody's graph, so it is no more
-    // an anonymous write than a letter is: harder-limited, and unsigned. A
-    // stranger may open a thread and never read one: only a credential says
-    // whose a thread is (support.ts `opens`).
-    security: EITHER,
-    input: {
-      type: 'object',
-      properties: {
-        text: str(
-          'the feedback itself: what is wrong, clumsy, missing, wished for ' +
-            'or good, in the words the person used, and what you tried; ' +
-            'with thread, what to add to it, or leave it out to read it',
-        ),
-        app: str(
-          'the slug or <space>/<app> of the app they were using, if any',
-        ),
-        space: SPACE,
-        thread: str(
-          'the thread id an earlier feedback answered with, to add words to ' +
-            'it or read its replies',
-        ),
-      },
-    },
-    run: async (ctx, args) => {
-      let said = args.text == null ? '' : text(args.text, 'text').trim()
-      let pause = `every one of them is kept and will be read — so this is ` +
-        `a pause, not a no. Save the rest for later, or write to ${
-          replyTo(ctx.env)
-        } directly if it cannot wait.`
-      let store = meta(ctx.env)
-      let headers = async () => ({
-        ...vouched(asCaller(ctx, null)),
-        ...await titling(ctx.dir, ctx.person),
-      })
-      // What the credential says about where this was said from: the person,
-      // the run it vouched for, the call the door recorded and the client
-      // whose next result hears the answers. Never an id the caller typed.
-      let evidence = {
-        person: ctx.person || null,
-        session: ctx.who?.instrument ?? null,
-        call: ctx.call ?? null,
-        agent: ctx.who?.agent ?? null,
-      }
-      let answer = (t: Thread, lead: string): Out => ({
-        text: `${lead}\n\n${transcript(t, ctx.person)}\n\n` +
-          `Read it again with feedback(thread: '${t.eid}'), or at ` +
-          link(ctx.env, t.eid),
-        value: valueOf(t, ctx.env),
-      })
-
-      if (args.thread != null) {
-        let eid = text(args.thread, 'thread')
-        if (!ctx.person) {
-          throw refuse(
-            'access',
-            'A thread is read and answered signed in, by the person who ' +
-              `opened it or a member of its space. Sign in at ${
-                hostUrl(ctx.env, '/login')
-              }, or call feedback without thread to open a new one.`,
-          )
-        }
-        let t = await readThread(store, eid)
-        let narrowed = ctx.who?.spaceEid ??
-          (ctx.who?.space
-            ? (await ctx.dir.space(ctx.who.space))?.eid ?? ctx.who.space
-            : null)
-        // One sentence for a thread that is not there and one that is not
-        // theirs: an id says nothing about somebody else's thread.
-        if (!t || !await opens(t, asking(ctx.dir, ctx.person, narrowed))) {
-          throw refuse('missing', `no thread ${eid} that you can read`)
-        }
-        if (!said) return answer(t, 'The thread as it stands:')
-        let held = await lately(store, ctx.person)
-        if (held >= SAYS) {
-          throw refuse(
-            'limit',
-            `That is ${held} already this hour, and ${pause}`,
-          )
-        }
-        await adding(
-          store,
-          ctx.env,
-          ctx.dir,
-          t,
-          { words: said, ...evidence },
-          await headers(),
-        )
-        return answer(
-          (await readThread(store, t.eid))!,
-          'Added to the thread; the people who run yaks.app are told.',
-        )
-      }
-
-      if (!said) {
-        throw refuse(
-          'arguments',
-          'text: say what is wrong or wished for, or name a thread to read it',
-        )
-      }
-      // Where they were, as far as it can be worked out — and never a
-      // question. A person in two spaces who named no app still gets to say
-      // what is wrong: the report simply names no space, which is a smaller
-      // loss than a refusal on plumbing at the moment someone is already
-      // annoyed. No membership check either: this is attribution, not
-      // authorization, and being signed in is the whole of it.
-      let atApp: Args = { app: args.app }
-      apart(atApp)
-      let atSpace = atApp.space ?? args.space
-      let space = !ctx.person
-        ? null
-        : atSpace != null
-        ? await ctx.dir.space(text(atSpace, 'space'))
-        : await ownSpace(ctx, atApp.app).catch((e) => {
-          caught(e, { tool: 'feedback' })
-          return null
-        })
-      let app = space && atApp.app != null
-        ? await ctx.dir.app(space, text(atApp.app, 'app'))
-        : null
-      if (!ctx.person) {
-        if (
-          !await within(
-            ctx.env.FEEDBACK_RATE,
-            ctx.source ?? '',
-            failing('rate limit'),
-          )
-        ) {
-          throw refuse(
-            'limit',
-            `That is one already this minute from here, and ${pause} ` +
-              `Signing in at ${hostUrl(ctx.env, '/login')} raises it.`,
-          )
-        }
-      } else {
-        let held = await recently(ctx)
-        if (held >= HOURLY) {
-          throw refuse(
-            'limit',
-            `That is ${held} already this hour, and ${pause}`,
-          )
-        }
-      }
-      let at = new Date().toISOString()
-      let me = await signer(ctx.dir, ctx.person)
-      let where = app && space
-        ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
-        : space?.slug ?? ''
-      // The letter leads with the words: what was said is the report, and
-      // everything else is a line of context under a rule, so a person takes
-      // it in at a glance. It goes to the platform's own address (mail.ts
-      // REPLY_TO), which the box pulls into the yaks.app project.
-      let eid = await open(
-        store,
-        ctx.env,
-        { words: said, ...evidence },
-        {
-          app: app?.eid ?? null,
-          space: space?.eid ?? null,
-          version: app?.version ?? null,
-          release: VERSION,
-          at,
-        },
-        {
-          subject: `feedback: ${title(said)}`,
-          lines: [
-            me.from,
-            ...where ? [`space ${where}`] : [],
-            ...app && space ? [url(space, app, ctx.env)] : [],
-            `yaks.app ${VERSION} · ${at}`,
-          ],
-          ...me.to ? { to: me.to } : {},
-        },
-        await headers(),
-      )
-      let t = (await readThread(store, eid))!
-      // Never loud about the mail: the letter waits in the store until it
-      // goes, so nothing here can fail after the words are kept, and an
-      // agent told "that failed" says it again and the person says it twice.
-      return answer(
-        t,
-        'Kept as a thread for the people who run yaks.app' +
-          (where ? `, with ${where} and the versions` : '') +
-          '; they are told by mail and answer in the thread.' +
-          (ctx.person
-            ? ''
-            : ' It was said signed out, so nobody can read it back or be ' +
-              'answered in it — say an address in the words if a reply is ' +
-              'wanted.'),
-      )
-    },
-  },
+  hostedFeedback,
   // The guide, handed over rather than linked (T-34284). Every description
   // here points at a page of it, and an agent that cannot fetch yaks.app —
   // which is most of them, on their default allowlists — could not follow one.

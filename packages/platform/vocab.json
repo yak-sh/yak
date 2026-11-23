@@ -781,12 +781,16 @@
         "release": {
           "type": "string"
         },
+        "yak": {
+          "type": "string",
+          "description": "the yak CLI release, when feedback was sent from a local stack"
+        },
         "at": {
           "type": "string",
           "format": "date-time"
         }
       },
-      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened"
+      "description": "where somebody stood when they said something was wrong: the app, its deployed version, the platform's release, and the yak CLI release when supplied, on a report an app filed about itself or a support thread feedback opened"
     },
     "tool_refusal": {
       "component": true,
@@ -1336,7 +1340,7 @@
       ]
     },
     "report": {
-      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened",
+      "description": "where somebody stood when they said something was wrong: the app, its deployed version, the platform's release, and the yak CLI release when supplied, on a report an app filed about itself or a support thread feedback opened",
       "before": [
         "doc"
       ]

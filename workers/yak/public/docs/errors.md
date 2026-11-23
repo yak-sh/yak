@@ -474,12 +474,15 @@ message since, the fix an answer links and whether the thread is completed. With
 `thread` and `text`, it adds the text to the thread first, and they are told of
 that too. Ask again later for a reply; it stays in the thread.
 
-A thread is read and added to only by the person who opened it, a member of the
-space it was said in, or the platform, and only with a credential that reaches
-that space. Anyone else naming its id is told there is no thread they can read.
-Feedback works signed out too, but a thread opened signed out belongs to nobody:
-it cannot be read back or answered in, so put an address in the words if a reply
-is wanted.
+The person who opened a thread, a member of its space, or the platform can read
+and add to it with a credential that reaches that space.
+
+From a local stack, run `yak feedback "..."` or use the local `feedback` MCP
+tool. With `yak auth yaks.app`, the thread belongs to your account. Signed-out
+submissions go straight to yaks.app with the feedback you enter and the yak
+version. Save the private receipt and use `yak feedback --thread <receipt>` to
+read replies in the same thread. Signed-out feedback sent directly through the
+hosted connector without a receipt can include an email address for a reply.
 
 Opening a thread is limited to three an hour, per person; adding to threads to
 twelve an hour. Past either, the call is deferred, not refused: the reply says

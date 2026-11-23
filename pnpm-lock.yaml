@@ -1112,6 +1112,9 @@ importers:
       '@yaks/effects':
         specifier: 0.2.33
         version: link:../effects
+      '@yaks/feedback':
+        specifier: 0.2.33
+        version: link:../feedback
       '@yaks/file':
         specifier: 0.2.28
         version: link:../file
@@ -2088,6 +2091,12 @@ importers:
       linkedom:
         specifier: ^0.18.12
         version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
+
+  packages/feedback:
+    dependencies:
+      '@yaks/tools':
+        specifier: 0.2.30
+        version: link:../tools
 
   packages/file:
     dependencies:
@@ -6243,6 +6252,9 @@ importers:
       '@yaks/extension':
         specifier: 0.2.30
         version: link:../../packages/extension
+      '@yaks/feedback':
+        specifier: 0.2.33
+        version: link:../../packages/feedback
       '@yaks/file':
         specifier: 0.2.28
         version: link:../../packages/file

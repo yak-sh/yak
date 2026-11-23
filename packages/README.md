@@ -265,6 +265,8 @@ grouped approximately by function, **not** by dependency order.
   an entity, expanded into a separate key entity, so seed data written twice
   updates one entity rather than creating two — and a name can be used anywhere
   an eid can, in a reference property and in an API request.
+- **[@yaks/feedback](./feedback)** — feedback from yak and yaks.app, with
+  replies in the platform's support threads.
 - **[@yaks/file](./file)** — files as entities: `file{path, root}`, a path read
   in a root (a repository's tree, abstract, or a `volume{machine, mount}`, a
   filesystem a machine mounts), and `lines{file, start, end}`, where in a file

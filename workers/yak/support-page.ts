@@ -1,3 +1,4 @@
+import { SAYS } from '@yaks/feedback/hosted'
 // A support thread's page (support.ts), at `/support/<thread>`, the link the
 // feedback tool answers with and the person's Updates lead to
 // (support-reply.ts): what was told yaks.app, every answer after it with the
@@ -29,7 +30,6 @@ import {
   named,
   opens,
   read,
-  SAYS,
   SUPPORT,
   type Thread,
 } from './support.ts'

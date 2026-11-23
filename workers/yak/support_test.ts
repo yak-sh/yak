@@ -45,6 +45,7 @@ let thread = (person: string | null, space: string | null): Thread => ({
   app: null,
   version: null,
   release: null,
+  yak: null,
   at: null,
   completed: null,
   messages: [],
@@ -279,6 +280,7 @@ let carried = async (who: ReturnType<typeof connector>, name: string) => {
 }
 
 type Value = {
+  receipt?: string
   thread: string
   link: string
   completed: unknown
@@ -414,6 +416,31 @@ test('a stranger still opens a thread, and cannot read it back', async () => {
     Error,
   )
   assertStringIncludes(no.message, 'signed in')
+})
+
+test('a private receipt reads only its signed-out yak support thread', async () => {
+  let stranger = connector(k, undefined, undefined, '/mcp?auth=mixed')
+  let { value: { thread, receipt } } = await feedback(stranger, {
+    text: 'Please make yak feedback available from the terminal.',
+    yak_version: '0.2.33',
+  })
+  ok(receipt)
+  assertStringIncludes(String((await letterOf(thread))?.doc.body), 'yak 0.2.33')
+  let admin = await (await k.at(k.host, `/api/support?thread=${thread}`, {
+    headers: { cookie: k.owner.cookie },
+  })).json()
+  assertStringIncludes(JSON.stringify(admin), 'yak 0.2.33')
+  equal(
+    (await support({ thread, text: 'Thanks, it is available now.' })).status,
+    200,
+  )
+  await assertRejects(() => stranger.answer('feedback', { thread }))
+  await assertRejects(() =>
+    stranger.answer('feedback', { thread: receipt + 'edit' })
+  )
+  let read = await feedback(stranger, { thread: receipt })
+  equal(read.value.thread, thread)
+  equal(read.value.messages.at(-1)?.words, 'Thanks, it is available now.')
 })
 
 test("an answer rides the agent's next result once, and the person's Updates lead to the thread and its outcome", async () => {

@@ -52,6 +52,7 @@ import { restorable } from './restore.ts'
 import { pinned } from './release.ts'
 import { unitFailureCommand } from './unit_failure.ts'
 import { startCommand } from './start.ts'
+import { feedbackCommand } from './feedback.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -290,6 +291,7 @@ let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
 export let own: Command[] = [
   unitFailureCommand,
   startCommand,
+  feedbackCommand,
   {
     name: 'mcp',
     description:

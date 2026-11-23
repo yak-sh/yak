@@ -142,6 +142,7 @@ import { type Asker, installAsker } from '@yaks/graph/asker'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
 import { persist } from '@yaks/tools/persist'
+import { feedbackTool } from './feedback.ts'
 import { operations } from './operations.ts'
 import { delivery } from './remote.ts'
 import { type Clock, system } from '@yaks/fp'
@@ -767,6 +768,7 @@ let composed = async (
         package: '@yaks/cli',
         offer: (host) => [
           ...operations(host, { config: opts.path }),
+          feedbackTool(host),
           ...opts.tools?.(host) ?? [],
         ],
       },

@@ -60,6 +60,7 @@ export type Use =
   | 'artifact' // one private app artifact, expiring provider fetch authority
   | 'preview' // private draft snapshot, isolated store and expiry
   | 'notice' // an email subscription's confirmation or unsubscribe link
+  | 'feedback' // a private receipt for one signed-out support thread
   | 'tracker' // short-lived authorization for one independent tracker store
   | 'session' // the platform cookie (`sign`, `verify` below)
   | 'admin-browse' // one browser visit to the platform's admin pages

@@ -1,0 +1,14 @@
+{
+  "name": "@yaks/feedback",
+  "version": "0.2.33",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./hosted": "./hosted.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "The feedback tool and support thread workflow for yak and yaks.app.",
+  "dependencies": {
+    "@yaks/tools": "0.2.30"
+  }
+}
