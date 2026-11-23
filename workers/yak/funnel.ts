@@ -313,7 +313,9 @@ let written = (step: string, at: string) =>
 
 /** Steps written as a browser's that were an agent's check, each its step
  * and the second it was written at: T-154822's check of the box on /churches,
- * on 2026-11-10, whose visits did not name it (T-1824). A point is never
+ * on 2026-11-10, whose visits did not name it (T-1824), and T-2625's press of
+ * "Make your own copy" on `recipes` on 2026-11-23, posted from the box with a
+ * browser's user agent and no tag (T-2633). A point is never
  * rewritten, so these are read as a test's (`WHO`). Once they are further
  * back than a step is kept, they go. */
 export let MISCOUNTED = [
@@ -321,6 +323,7 @@ export let MISCOUNTED = [
   ['started', '2026-11-10T20:55:10Z'],
   ['started', '2026-11-10T20:58:23Z'],
   ['started', '2026-11-10T20:59:36Z'],
+  ['install_sign_in', '2026-11-23T13:35:10Z'],
 ] as const
 
 /** Builds begun in the box by somebody signed in, written as `started`

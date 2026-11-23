@@ -249,9 +249,15 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     ])
     // An agent's check, tagged so in its link, is a test account's step,
     // whatever client it was written with, and so is each build begun by
-    // the check of /churches on 2026-11-10 whose link did not say so.
-    let check = [1794343657, 1794344110, 1794344303, 1794344376].map((t) =>
-      ` OR blob2 = 'started' AND timestamp = toDateTime(${t})`
+    // the check of /churches on 2026-11-10 whose link did not say so, and
+    // the press of 2026-11-23 by the check of the install path.
+    let check = [
+      ...[1794343657, 1794344110, 1794344303, 1794344376].map((t) =>
+        ['started', t] as const
+      ),
+      ['install_sign_in', 1795440910] as const,
+    ].map(([step, t]) =>
+      ` OR blob2 = '${step}' AND timestamp = toDateTime(${t})`
     ).join('')
     let who = `if(blob7 LIKE 'agent-check/%'${check}, 'test', blob6)`
     assertEquals(

@@ -207,7 +207,10 @@ admin as an anonymous visitor:
   browser's user agent on a check.
 - **A check that has to look like a browser** tags its visit
   `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or its
-  `yak_came` cookie. Its newcomer is then a test too.
+  `yak_came` cookie. Its newcomer is then a test too. A stranger's press of
+  "Make your own copy" counts apart the same way: open
+  `/apps/<name>?utm_source=agent-check` before pressing, or post to
+  `/install?name=<name>&utm_source=agent-check`.
 
 ## A live page in a browser
 

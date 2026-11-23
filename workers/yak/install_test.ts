@@ -91,6 +91,16 @@ test('the funnel counts a stranger sent to sign in, one back from it, and somebo
   assertEquals(await steps(request('GET')), ['install_form'])
   // Pressed signed in with two spaces to choose from, the form asks which.
   assertEquals(await steps(request('POST')), ['install_form'])
+  // An agent's check that opened the listing by an agent-check link presses
+  // under that source, which the funnel counts apart (funnel.ts `WHO`).
+  let check = { cookie: 'yak_came=utm_source=agent-check&at=5' }
+  await answer(request('POST', false, 'trip-plan', false, check), {
+    ...env,
+    VIEWS: views,
+  }, dir)
+  assertEquals(views.points.splice(0).map((p) => p.blobs![6]), [
+    'agent-check//',
+  ])
 })
 
 test('only a press from our own page is kept for the way back, and only for its app', async () => {
