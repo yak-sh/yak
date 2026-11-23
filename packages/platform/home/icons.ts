@@ -5,9 +5,7 @@ import pencil from 'lucide/dist/esm/icons/pencil.mjs'
 // @ts-types="@yaks/ui/lucide"
 import plug from 'lucide/dist/esm/icons/plug.mjs'
 // @ts-types="@yaks/ui/lucide"
-import send from 'lucide/dist/esm/icons/send.mjs'
-// @ts-types="@yaks/ui/lucide"
-import inbox from 'lucide/dist/esm/icons/inbox.mjs'
+import mail from 'lucide/dist/esm/icons/mail.mjs'
 // @ts-types="@yaks/ui/lucide"
 import credit from 'lucide/dist/esm/icons/credit-card.mjs'
 // @ts-types="@yaks/ui/lucide"
@@ -21,8 +19,7 @@ export const ICONS = {
   build: sparkles,
   change: pencil,
   connect: plug,
-  send,
-  receive: inbox,
+  email: mail,
   sell: credit,
   helper: bot,
   team: users,
@@ -31,3 +28,9 @@ export const ICONS = {
 
 // @ts-types="@yaks/ui/lucide"
 export { default as gift } from 'lucide/dist/esm/icons/gift.mjs'
+// @ts-types="@yaks/ui/lucide"
+export { default as priceTag } from 'lucide/dist/esm/icons/tag.mjs'
+// @ts-types="@yaks/ui/lucide"
+export { default as chat } from 'lucide/dist/esm/icons/message-circle.mjs'
+// @ts-types="@yaks/ui/lucide"
+export { default as sms } from 'lucide/dist/esm/icons/message-square-text.mjs'

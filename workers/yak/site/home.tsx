@@ -281,14 +281,12 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
       <Plan
         copy={{ attr, text }}
         plan='free'
-        illustrated={story}
         items={['address']}
         slots={{ yours: <Yours /> }}
       />
       <Plan
         copy={{ attr, text }}
         plan='plus'
-        illustrated={story}
         cta='plus'
         items={['domain', 'payments']}
         slots={{ domain: <b {...text('home.cost.plus.example')} /> }}
@@ -296,7 +294,6 @@ export let Cost = ({ story }: { story?: boolean } = {}) => (
       <Plan
         copy={{ attr, text }}
         plan='pro'
-        illustrated={story}
         cta='pro'
         items={['domain', 'change']}
         slots={{ domain: <b {...text('home.cost.pro.example')} /> }}

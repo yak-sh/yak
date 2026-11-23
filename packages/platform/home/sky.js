@@ -262,6 +262,7 @@
       sign = t.content.firstChild
     }
     e.target.append(sign)
+    e.target.removeAttribute('aria-hidden')
     delete sign.dataset.away
     sign.dataset.out = ''
     // it stands centred over him, slid along so all of it is in the window

@@ -288,8 +288,6 @@
           "body": "Each friend who signs up with your invite and builds their first app earns you one month of the Plus plan."
         }
       },
-      "earlier": "Earlier features",
-      "later": "More features",
       "assistant": {
         "title": "Build from the assistant you already use.",
         "body": "Paste %{agent} into Claude or ChatGPT to build, change and publish the same apps you use on yaks.app.",
@@ -350,7 +348,7 @@
           "body": "Describe your app in plain words. An AI assistant builds your app while you watch and puts your app online at a web address of its own."
         },
         "change": {
-          "short": "Change",
+          "short": "Edit",
           "heading": "Change anything by asking.",
           "body": "Ask for a new field, a photo on every item or another page. Your assistant makes the change, checks the result and puts the new version online.",
           "point2": "Photos and files, up to 50 GB on the Plus plan",
@@ -364,21 +362,13 @@
           "point2": "Each visitor can connect an account of their own",
           "point3": "Remove a connection at any time, and your app stops using the service"
         },
-        "send": {
-          "short": "Email out",
-          "heading": "Send email to your app’s users.",
-          "body": "Thank-yous, reminders, receipts and news go out from your app’s own address. Visitors can sign up for notices with only an email address, and every notice carries a one-click unsubscribe link.",
-          "point1": "Reminders on a schedule, like every Monday at 7 am",
-          "point2": "Notices to everyone who asked, like “Back in stock”",
-          "point3": "See pricing for the email allowance on each plan"
-        },
-        "receive": {
-          "short": "Email in",
-          "body": "Forward the bulletin, a booking or the week’s specials. An app can file the message with its attachments and show the news on its page.",
-          "point1": "An address like yourname.menu@yaks.app on every plan",
-          "point2": "Mail to your apps always arrives, even past the month’s email limit",
-          "point3": "Only you and your editors can read the mail",
-          "heading": "Every app has an email address."
+        "email": {
+          "short": "Email",
+          "heading": "Send and receive email from your app.",
+          "body": "Send reminders, receipts or updates from your app’s own address. Forward a bulletin, a booking or the week’s specials to that address, and your app can save the message and attachments.",
+          "point1": "Visitors can sign up for notices, and every notice has a one-click unsubscribe link",
+          "point2": "Your app receives email on every plan, even after you reach your monthly sending limit",
+          "point3": "Only you and your editors can read incoming mail"
         },
         "sell": {
           "short": "Payments",
@@ -404,11 +394,14 @@
           "point3": "Members use a sign-in code sent by email"
         },
         "domain": {
-          "short": "Pricing",
-          "heading": "Your own domain, on the Plus plan.",
-          "body": "Your apps start at an address like yourname.yaks.app. The Plus and Pro plans let you use a domain you own for one app or for the whole space.",
-          "point1": "Add two settings at the company you bought the domain from, and yaks.app does the rest",
-          "point2": "Every app keeps the yourname.yaks.app address too"
+          "short": "Domains",
+          "heading": "Use your own domain.",
+          "body": "Give your app or space its own web address on the Plus or Pro plan. Buy a domain through yaks.app and we’ll connect it for you. You can also connect a domain you already own.",
+          "point1": "Connecting a domain you own takes two settings where you bought it",
+          "point2": "Your yaks.app address keeps working"
+        },
+        "pricing": {
+          "short": "Pricing"
         }
       }
     }

@@ -3,7 +3,6 @@ export const SECTIONS = [
   'how',
   'integrations',
   'work',
-  'email-in',
   'payments',
   'helpers',
   'people',
@@ -11,14 +10,13 @@ export const SECTIONS = [
 ] as const
 
 export const POSES = {
-  change: 'typing',
-  connect: 'plug',
-  send: 'plane',
-  receive: 'letter',
-  sell: 'calculating',
-  helper: 'thinking',
-  team: 'wave',
-  domain: 'flag',
+  change: ['typing'],
+  connect: ['plug'],
+  email: ['plane', 'letter'],
+  sell: ['calculating'],
+  helper: ['thinking'],
+  team: ['wave'],
+  domain: ['flag'],
 } as const
 
 /** The supplied logos of the two example services the integrations catalog does not serve. */

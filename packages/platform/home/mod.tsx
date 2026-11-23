@@ -4,7 +4,7 @@ import { Button, Card, Copy as Copyable, Field, Icon } from '@yaks/ui'
 import type { Tier } from '../plans.ts'
 import { GET_PLAN } from '../routes.ts'
 import { TURNS } from './demos.ts'
-import { gift, ICONS } from './icons.ts'
+import { gift, ICONS, priceTag } from './icons.ts'
 import { Phone, Picks } from './phone.tsx'
 import { POSES, SECTIONS } from './parts.ts'
 import { Change, People, Scene, Services } from './scenes.tsx'
@@ -15,18 +15,13 @@ let [, ...FEATURE_TURNS] = TURNS
 let POINTS = {
   change: [2, 3],
   connect: [1, 2, 3],
-  send: [1, 2, 3],
+  email: [1, 2, 3],
   sell: [1, 2, 3],
   helper: [1, 2, 3],
   team: [1, 3],
+  domain: [1, 2],
 } as const
-let SCENES = {
-  send: 'send',
-  receive: 'receive',
-  sell: 'sell',
-  helper: 'helper',
-  domain: 'domain',
-} as const
+let SCENES = ['email', 'sell', 'helper', 'domain'] as const
 
 let Ask = (
   { copy, action, id, cta, children }: {
@@ -104,47 +99,28 @@ let Hero = (
   </section>
 )
 
+let NAV = [...TURNS, 'pricing'] as const
+
 let FeatureNav = ({ copy }: { copy: Copy }) => (
   <nav
     class='Home_Contents'
     {...copy.attr('aria-label', 'home.story.features')}
   >
-    <ul class='Home_Jumps' id='feature-nav' data-feature-nav=''>
-      {TURNS.map((turn, i) => (
+    <ul class='Home_Jumps' data-feature-nav=''>
+      {NAV.map((turn, i) => (
         <li class='Home_Jump'>
           <a
             class='Home_JumpLink'
-            href={`#${SECTIONS[i]}`}
+            href={`#${turn == 'pricing' ? 'cost' : SECTIONS[i]}`}
             data-feature-link={i}
+            aria-current={i == 0 ? 'location' : undefined}
           >
-            <Icon of={ICONS[turn]} />
+            <Icon of={turn == 'pricing' ? priceTag : ICONS[turn]} />
             <span {...copy.text(`home.story.turn.${turn}.short`)} />
           </a>
         </li>
       ))}
     </ul>
-    <div class='Home_NavControls' data-feature-controls='' hidden>
-      <Button
-        class='Home_NavButton'
-        mod='quiet'
-        type='button'
-        data-feature-scroll='-1'
-        {...copy.attr('aria-label', 'home.story.earlier')}
-        aria-controls='feature-nav'
-      >
-        ‹
-      </Button>
-      <Button
-        class='Home_NavButton'
-        mod='quiet'
-        type='button'
-        data-feature-scroll='1'
-        {...copy.attr('aria-label', 'home.story.later')}
-        aria-controls='feature-nav'
-      >
-        ›
-      </Button>
-    </div>
   </nav>
 )
 
@@ -152,17 +128,18 @@ let Features = ({ copy }: { copy: Copy }) => (
   <div class='Home_Features'>
     {FEATURE_TURNS.map((turn, j) => {
       let i = j + 1, key = `home.story.turn.${turn}`
-      let scene = SCENES[turn as keyof typeof SCENES]
+      let scene = SCENES.find((id) => id == turn)
       let points = POINTS[turn as keyof typeof POINTS]
+      let title = turn == 'email' ? 'email-in' : `title-${turn}`
       return (
         <section
           class='Home_Feature'
           id={SECTIONS[i]}
-          aria-labelledby={`title-${turn}`}
+          aria-labelledby={title}
           data-story-step={i}
-          data-story-pose={POSES[turn]}
+          data-story-pose={POSES[turn].join(' ')}
         >
-          <h2 class='Title Home_FeatureTitle' id={`title-${turn}`}>
+          <h2 class='Title Home_FeatureTitle' id={title}>
             <span class='Home_Icon'>
               <Icon of={ICONS[turn]} />
             </span>
@@ -266,28 +243,30 @@ export let Story = (
       <span class='Home_SunSlot' data-sun-at='' />
       <span class='Home_MoonSlot' data-moon-at='' />
     </div>
-    <div class='Home_Desk' data-story-desk=''>
+    <div class='Home_Desk'>
       <Hero copy={copy} action={action} yak={yak} />
-      <aside
-        class='Home_Demo'
-        id='examples'
-        aria-labelledby='example-title'
-        data-story-demo=''
-      >
-        <p
-          class='Home_DemoTitle'
-          id='example-title'
-          {...copy.text('home.story.example')}
-        />
-        <Phone />
-        <Picks />
-        <Ask copy={copy} action={action} id='example-say' cta='walk' />
-      </aside>
-      <FeatureNav copy={copy} />
+      <div class='Home_Showcase' data-showcase=''>
+        <FeatureNav copy={copy} />
+        <aside
+          class='Home_Demo'
+          id='examples'
+          aria-labelledby='example-title'
+          data-story-demo=''
+        >
+          <p
+            class='Home_DemoTitle'
+            id='example-title'
+            {...copy.text('home.story.example')}
+          />
+          <Phone />
+          <Picks />
+          <Ask copy={copy} action={action} id='example-say' cta='walk' />
+        </aside>
+      </div>
       <Features copy={copy} />
     </div>
     <div class='Home_After'>
-      <div class='Home_Pricing'>
+      <div class='Home_Pricing' data-story-step=''>
         {plans}
         <Card class='Home_Reward'>
           <Icon of={gift} />
@@ -330,13 +309,12 @@ let PLAN_FEATURES = ['apps', 'visitors', 'data', 'files', 'emails']
 /** The same plan card on the home and pricing pages, with room for a page's
  * selection of features. */
 export let Plan = (
-  { copy, plan, items, slots, cta, illustrated }: {
+  { copy, plan, items, slots, cta }: {
     copy: Copy
     plan: Tier
     items: readonly string[]
     slots?: Record<string, VNode>
     cta?: string
-    illustrated?: boolean
   },
 ) => {
   let at = `home.cost.${plan}`
@@ -351,8 +329,8 @@ export let Plan = (
       />
       <p class='Note Note-small' {...copy.text(`${at}.note`)} />
       <ul class='Plan_List'>
-        <li class={illustrated ? 'Home_PlanCredit' : 'Plan_Item'}>
-          {illustrated && <Icon of={gift} />}
+        <li class='Plan_Credit'>
+          <Icon class='Plan_CreditIcon' of={gift} />
           <span {...copy.text(`${at}.credit`)} />
         </li>
         {[...PLAN_FEATURES, ...items].map((item) => (

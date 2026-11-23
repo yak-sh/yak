@@ -4,7 +4,7 @@ import type { ComponentChildren } from 'preact'
 import { LOGOS } from '../routes.ts'
 import { DEMOS, SCENES } from './demos.ts'
 import { BRANDS } from './parts.ts'
-import { ICONS } from './icons.ts'
+import { chat, ICONS, sms } from './icons.ts'
 import type { Copy } from './words.ts'
 
 let SERVICES = [
@@ -56,9 +56,9 @@ export let Services = ({ short = false }: { short?: boolean }) => (
 )
 
 let CHANNELS = [
-  ['chat', ICONS.build],
-  ['mail', ICONS.receive],
-  ['text', ICONS.change],
+  ['chat', chat],
+  ['mail', ICONS.email],
+  ['text', sms],
 ] as const
 
 export let Change = ({ copy }: { copy: Copy }) => (
@@ -115,22 +115,22 @@ let Envelope = ({ box, subject, children }: {
 )
 
 let Scenes = {
-  send: ({ letter }: typeof SCENES[string], slug: string) => (
-    <Envelope box='Inbox' subject={letter[0]}>
-      <p class='Home_MailFrom'>
-        <b>From</b> yourname.{slug}@yaks.app
-      </p>
-      <p class='Home_MailFrom'>To me · 7:02 AM</p>
-      <p>{letter[1]}</p>
-      <span class='Home_MailFrom'>Unsubscribe</span>
-    </Envelope>
-  ),
-  receive: ({ mail }: typeof SCENES[string], slug: string) => (
-    <Envelope box='Forward' subject={`Fwd: ${mail[0]}`}>
-      <span class='Home_MailFrom'>To yourname.{slug}@yaks.app</span>
-      <span class='Home_Attachment'>{mail[1]}</span>
-      <span class='Home_MailSend' aria-hidden='true'>Send</span>
-    </Envelope>
+  email: ({ letter, mail }: typeof SCENES[string], slug: string) => (
+    <div class='Home_MailPair'>
+      <Envelope box='Inbox' subject={letter[0]}>
+        <p class='Home_MailFrom'>
+          <b>From</b> yourname.{slug}@yaks.app
+        </p>
+        <p class='Home_MailFrom'>To me · 7:02 AM</p>
+        <p>{letter[1]}</p>
+        <span class='Home_MailFrom'>Unsubscribe</span>
+      </Envelope>
+      <Envelope box='Forward' subject={`Fwd: ${mail[0]}`}>
+        <span class='Home_MailFrom'>To yourname.{slug}@yaks.app</span>
+        <span class='Home_Attachment'>{mail[1]}</span>
+        <span class='Home_MailSend' aria-hidden='true'>Send</span>
+      </Envelope>
+    </div>
   ),
   sell: ({ sale }: typeof SCENES[string]) => (
     <div class='Home_Checkout'>
@@ -164,7 +164,8 @@ let Scenes = {
   ),
   domain: ({ domain }: typeof SCENES[string], slug: string) => (
     <Card class='Home_Address'>
-      <s>yourname.yaks.app/{slug}</s> <span aria-hidden='true'>→</span>{' '}
+      <span>yourname.yaks.app/{slug}</span> <span aria-hidden='true'>→</span>
+      {' '}
       <b>{domain}</b>
     </Card>
   ),

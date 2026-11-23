@@ -23,11 +23,11 @@ const built = (text: string, d: { slug: string; shot: Shot }): Line => ({
   link: { label: 'Open demo', href: `${DEMO_AT}${d.slug}/` },
 })
 const live = (domain: string) => them(`Your app is ready at ${domain}.`)
-/** The reply to a domain on the Free plan: the Plus plan, and where to get it. */
-const plus: Line = {
+/** Where to buy a domain and have it connected to the app. */
+const buyDomain: Line = {
   who: 'them',
   text:
-    'You can use your own domain on the Plus plan. I’ll tell you the two settings to add where you bought it.',
+    'You can buy a domain in your plan settings. Choose this app at checkout and we’ll connect it for you.',
   link: { label: 'See the plans', href: '#cost' },
 }
 
@@ -36,8 +36,7 @@ export const TURNS = [
   'build',
   'change',
   'connect',
-  'send',
-  'receive',
+  'email',
   'sell',
   'helper',
   'team',
@@ -79,8 +78,6 @@ export const DEMOS: Demo[] = [
       [
         you('email people when a sold-out bake is back'),
         them('Done. Customers can sign up on each sold-out item.'),
-      ],
-      [
         you('post the specials I email you on Fridays'),
         them('Email them to yourname.menu@yaks.app.'),
       ],
@@ -98,8 +95,8 @@ export const DEMOS: Demo[] = [
       ],
       [
         you('put the menu at wrensbakery.example'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the menu'),
         live('wrensbakery.example'),
       ],
     ],
@@ -126,8 +123,6 @@ export const DEMOS: Demo[] = [
       [
         you('email me the week’s birthdays every Monday at 7'),
         them('Set. This week has 3 birthdays.'),
-      ],
-      [
         you('post the bulletin I email each Friday'),
         them('Email the bulletin to yourname.directory@yaks.app.'),
       ],
@@ -145,8 +140,8 @@ export const DEMOS: Demo[] = [
       ],
       [
         you('put the directory at fairview.example.org'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the directory'),
         live('fairview.example.org'),
       ],
     ],
@@ -173,8 +168,6 @@ export const DEMOS: Demo[] = [
       [
         you('remind everyone two days before each meeting'),
         them('Reminders set for 9 members.'),
-      ],
-      [
         you('add the books I email you to the shortlist'),
         them('Email them to yourname.bookclub@yaks.app.'),
       ],
@@ -189,8 +182,8 @@ export const DEMOS: Demo[] = [
       [you('invite the other eight members'), them('Invited 8 members.')],
       [
         you('put the club at ourbookclub.example'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the book club'),
         live('ourbookclub.example'),
       ],
     ],
@@ -217,8 +210,6 @@ export const DEMOS: Demo[] = [
       [
         you('message the guests a thank-you from me'),
         them('Sent emails to 21 guests.'),
-      ],
-      [
         you('add the photos my sister emails'),
         them('She can send them to yourname.guestbook@yaks.app.'),
       ],
@@ -236,8 +227,8 @@ export const DEMOS: Demo[] = [
       ],
       [
         you('put the guestbook at margaretturns70.example'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the guestbook'),
         live('margaretturns70.example'),
       ],
     ],
@@ -265,8 +256,6 @@ export const DEMOS: Demo[] = [
       [
         you('email everyone the plan the night before each day'),
         them('Set. The first one goes out Friday.'),
-      ],
-      [
         you('add the bookings I forward'),
         them('Forward them to yourname.trip@yaks.app.'),
       ],
@@ -281,8 +270,8 @@ export const DEMOS: Demo[] = [
       [you('invite the other five'), them('Invited 5 people.')],
       [
         you('put the planner at reyesinlisbon.example'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the trip planner'),
         live('reyesinlisbon.example'),
       ],
     ],
@@ -309,8 +298,6 @@ export const DEMOS: Demo[] = [
       [
         you('email the family a recipe every Sunday'),
         them('Set. Sundays at 9 am.'),
-      ],
-      [
         you('add the recipes Grandma emails'),
         them('She can send them to yourname.recipes@yaks.app.'),
       ],
@@ -328,8 +315,8 @@ export const DEMOS: Demo[] = [
       ],
       [
         you('put the recipes at grandmaskitchen.example'),
-        plus,
-        you('done, and I added the two settings'),
+        buyDomain,
+        you('I bought it and chose the recipe box'),
         live('grandmaskitchen.example'),
       ],
     ],

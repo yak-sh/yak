@@ -17,7 +17,6 @@ let Message = (
     class={`Home_Message Home_Message-${line.who}`}
     data-turn={turn}
     data-line={at}
-    data-recent={first ? '' : undefined}
     hidden={!first}
   >
     <div class={`Chat_Bubble Chat_Bubble-${line.who}`}>

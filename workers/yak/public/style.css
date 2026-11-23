@@ -520,7 +520,7 @@
      foot, under the document, where it reads as where to go next. */
   @media (max-width: 700px) {
     .Page {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: [body] minmax(0, 1fr);
     }
 
     .Page_Side,
@@ -1784,10 +1784,11 @@
   }
 
   .Plan_List {
+    --plan-list-indent: 1.25rem;
     display: grid;
     gap: 0.5rem;
     margin: 0;
-    padding-inline-start: 1.25rem;
+    padding-inline-start: var(--plan-list-indent);
     color: var(--muted);
     list-style: '–  ';
     text-wrap: pretty;
@@ -1795,6 +1796,22 @@
 
   .Plan_Item::marker {
     color: var(--accent);
+  }
+
+  .Plan_Credit {
+    display: flex;
+    align-items: start;
+    gap: 0.45rem;
+    margin-inline-start: calc(-1 * var(--plan-list-indent));
+    color: var(--accent);
+    font-weight: 800;
+  }
+
+  .Plan_CreditIcon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    margin-block-start: calc((1lh - 1rem) / 2);
   }
 
   /* Every limit, a row each and a plan a column. Each row's name says what

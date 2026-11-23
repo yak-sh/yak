@@ -31,15 +31,16 @@ let reveal = (log, { step, through }, motion) => {
     }
     return !el.hidden
   })
-  let last = shown.at(-1)
-  let newest = shown.slice(-2)
-  for (let el of shown) el.toggleAttribute('data-recent', newest.includes(el))
-  if (last === lines[before]) return
-  requestAnimationFrame(() => newestAt(log))
-  if (motion && before >= 0 && before < shown.length - 1) {
-    last.animate(
+  if (shown.at(-1) === lines[before]) return
+  newestAt(log)
+  if (!motion || before < 0) return
+  let entering = shown.slice(before + 1).filter((el) =>
+    Number(el.dataset.turn) == step
+  )
+  for (let [i, el] of entering.entries()) {
+    el.animate(
       [{ opacity: 0, translate: '0 .45rem' }, { opacity: 1, translate: '0 0' }],
-      { duration: 320, easing: 'ease-out' },
+      { duration: 320, delay: i * 55, easing: 'ease-out', fill: 'backwards' },
     )
   }
 }
@@ -58,31 +59,33 @@ let swipe = (old, log, backwards) => {
   log.animate([{ translate: x }, { translate: '0' }], timing)
 }
 
-let navigation = (track, calm) => {
-  let controls = track.parentElement.querySelector('[data-feature-controls]')
-  let [back, forward] = controls.querySelectorAll('[data-feature-scroll]')
+let navigation = (track, links) => {
+  let current = track.querySelector('[aria-current]')
   let edges = () => {
-    controls.hidden = track.scrollWidth <= track.parentElement.clientWidth + 1
-    back.disabled = track.scrollLeft <= 1
-    forward.disabled =
-      track.scrollLeft + track.clientWidth >= track.scrollWidth - 1
-    track.toggleAttribute('data-earlier', !back.disabled)
-    track.toggleAttribute('data-later', !forward.disabled)
+    track.toggleAttribute('data-earlier', track.scrollLeft > 1)
+    track.toggleAttribute(
+      'data-later',
+      track.scrollLeft + track.clientWidth < track.scrollWidth - 1,
+    )
   }
-  for (let button of [back, forward]) {
-    button.addEventListener('click', () =>
-      track.scrollBy({
-        left: Number(button.dataset.featureScroll) *
-          Math.max(80, track.clientWidth - 48),
-        behavior: calm.matches ? 'instant' : 'smooth',
-      }))
+  let position = () => {
+    track.style.setProperty('--jump-left', `${current.offsetLeft}px`)
+    track.style.setProperty('--jump-width', `${current.offsetWidth}px`)
   }
+  let resized = new ResizeObserver(() => (position(), edges()))
+  resized.observe(track)
+  for (let link of links) resized.observe(link)
   track.addEventListener('scroll', edges, { passive: true })
-  new ResizeObserver(edges).observe(track.parentElement)
-  edges()
-  return (link) => {
-    track.scrollLeft = link.offsetLeft -
-      (track.clientWidth - link.offsetWidth) / 2
+  return (link, motion) => {
+    current?.removeAttribute('aria-current')
+    current = link
+    link.setAttribute('aria-current', 'location')
+    position()
+    track.dataset.highlight = motion ? 'smooth' : ''
+    track.scrollTo({
+      left: link.offsetLeft - (track.clientWidth - link.offsetWidth) / 2,
+      behavior: motion ? 'smooth' : 'instant',
+    })
     edges()
   }
 }
@@ -93,9 +96,8 @@ let mascot = (root, calm, narrow) => {
   let beside = new Image()
   beside.alt = ''
   beside.className = 'Home_WanderPose'
-  let seated, section, shown
-  let update = () => {
-    let name = !calm.matches && section?.dataset.storyPose
+  let seated, section, shown, timer
+  let paint = (name) => {
     let path = name && `/home-mascot/${name}.webp`
     if (shown) shown.src = rest, shown = undefined
     if (path && narrow.matches) {
@@ -114,14 +116,22 @@ let mascot = (root, calm, narrow) => {
       } else beside.remove()
     }
   }
+  let update = () => {
+    clearTimeout(timer)
+    let [first, second] = section?.dataset.storyPose?.split(' ') ?? []
+    if (calm.matches || !(narrow.matches || seated)) return paint()
+    paint(first)
+    if (second) timer = setTimeout(() => paint(second), 3300)
+  }
   beside.addEventListener('load', () => beside.setAttribute('data-ready', ''))
   root.ownerDocument.addEventListener('sat', (e) => {
     seated = e.target
     update()
   }, true)
-  root.ownerDocument.addEventListener('home', () => {
+  root.ownerDocument.addEventListener('rise', () => {
     beside.remove()
     seated = undefined
+    update()
   }, true)
   calm.addEventListener('change', update)
   narrow.addEventListener('change', update)
@@ -173,7 +183,7 @@ let copyLinks = (root) => {
 }
 
 let mount = (root) => {
-  let desk = root.querySelector('[data-story-desk]')
+  let showcase = root.querySelector('[data-showcase]')
   let demo = root.querySelector('[data-story-demo]')
   let picks = root.querySelector('[data-picks]')
   let pause = picks.querySelector('[data-pause]')
@@ -186,37 +196,26 @@ let mount = (root) => {
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let narrow = matchMedia('(max-width: 59.99rem)')
   let i = 0, active = -1, frame = 0, timer = 0
-  let fullDemoHeight = 0
+  let showcaseHeight = 0
   let playing = !calm.matches
-  let highlight = navigation(nav, calm)
+  let highlight = navigation(nav, jumps)
   let pose = mascot(root, calm, narrow)
 
   let draw = (motion = !calm.matches) => {
-    let line = Math.min(innerHeight * .45, 250),
-      rects = steps.map((el) => el.getBoundingClientRect())
-    let at = reading(rects, line)
-    let last = rects.at(-1)
-    let past = last.bottom <= line
-    let bounds = desk.getBoundingClientRect()
-    let docked = !narrow.matches && !past && bounds.top < 16
-    let room = bounds.bottom - 24
-    if (!demo.hasAttribute('data-compact')) fullDemoHeight = demo.offsetHeight
-    let compact = docked && room < fullDemoHeight
-    demo.toggleAttribute('data-mini', narrow.matches && at.step > 0 && !past)
-    demo.toggleAttribute('data-docked', docked)
-    demo.toggleAttribute('data-compact', compact)
-    if (compact) demo.style.setProperty('--dock-room', `${room}px`)
-    demo.toggleAttribute('data-finished', !narrow.matches && past)
+    let line = Math.min(innerHeight * .45, 250) + showcaseHeight / 2
+    let at = reading(steps.map((el) => el.getBoundingClientRect()), line)
     reveal(logs[i], at, motion)
     if (active == at.step) return
-    if (active >= 0) jumps[active].removeAttribute('aria-current')
-    let link = jumps[active = at.step]
-    link.setAttribute('aria-current', 'location')
-    highlight(link)
+    active = at.step
+    highlight(jumps[active], motion)
     pose(steps[active])
     if (active > 0) hold()
   }
   let soon = () => frame ||= requestAnimationFrame(() => (frame = 0, draw()))
+  let sized = () => {
+    showcaseHeight = showcase.offsetHeight
+    root.style.setProperty('--showcase-height', `${showcaseHeight}px`)
+  }
   let pick = (n, direction = n < i) => {
     if (n == i) return
     let old = logs[i]
@@ -270,13 +269,14 @@ let mount = (root) => {
   document.addEventListener('visibilitychange', wait)
   addEventListener('scroll', soon, { passive: true })
   addEventListener('resize', soon)
-  new ResizeObserver(soon).observe(desk)
+  new ResizeObserver(() => (sized(), soon())).observe(showcase)
   let resized = new ResizeObserver((entries) => {
     for (let { target } of entries) newestAt(target.parentElement)
   })
   for (let log of logs) resized.observe(log.firstElementChild)
   copyLinks(root)
   ideas(root)
+  sized()
   draw(false)
   wait()
 }

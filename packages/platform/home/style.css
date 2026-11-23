@@ -3,7 +3,7 @@
 .Story_Page {
   --measure: 45rem;
   --phone-width: 22rem;
-  --phone-height: clamp(15rem, calc(100svh - 18.5rem), 45rem);
+  --phone-height: clamp(8rem, 25svh, 20rem);
   --story-gap: clamp(2rem, 5vw, 7rem);
   --sky-ink: light-dark(#374450, #e0e6f2);
   --sky-accent: light-dark(#315342, #b8dbad);
@@ -41,13 +41,6 @@
 
 .Home_SunSlot {
   inset-inline-start: 54%;
-}
-
-.Home_Desk {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'hero' 'demo' 'contents' 'features';
-  align-items: start;
 }
 
 .Home_Story .Story_Hero {
@@ -235,12 +228,12 @@
   display: grid;
   grid-area: demo;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 20rem auto auto;
+  grid-template-rows: auto var(--phone-height) auto auto;
   align-content: start;
   gap: .65rem;
   width: min(100%, var(--phone-width));
   justify-self: center;
-  margin-block: 1rem 2rem;
+  margin-inline: auto;
   min-width: 0;
 }
 
@@ -261,7 +254,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: .8rem;
-  height: 20rem;
+  height: var(--phone-height);
   padding: 1.15rem .9rem 1rem;
   border-radius: var(--radius);
   background: light-dark(#f9f9ff, #262b37);
@@ -286,6 +279,16 @@
   height: 100%;
   overflow-y: auto;
   overflow-anchor: none;
+}
+
+.Home_Track,
+.Home_Jumps {
+  scrollbar-width: none;
+}
+
+.Home_Track::-webkit-scrollbar,
+.Home_Jumps::-webkit-scrollbar {
+  display: none;
 }
 
 .Home_Messages {
@@ -399,25 +402,9 @@
 
 .Home_Contents {
   grid-area: contents;
-  position: sticky;
-  z-index: 2;
-  top: 0;
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: .3rem;
   padding-block: .45rem .65rem;
   background: var(--bg);
-}
-
-.Home_Contents::after {
-  content: '';
-  position: absolute;
-  inset: 100% 0 auto;
-  height: .65rem;
-  background: linear-gradient(var(--bg), transparent);
-  pointer-events: none;
 }
 
 .Home_Jumps {
@@ -427,12 +414,27 @@
   display: flex;
   align-items: center;
   gap: .3rem;
-  padding: .25rem .25rem .45rem;
+  padding: .25rem;
   overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent) transparent;
   mask-image: linear-gradient(to right, transparent, #000 var(--earlier), #000
     calc(100% - var(--later)), transparent);
+}
+
+.Home_Jumps[data-highlight]::before {
+  content: '';
+  position: absolute;
+  inset: .25rem auto .25rem 0;
+  width: var(--jump-width);
+  transform: translateX(var(--jump-left));
+  border-radius: 2rem;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .Home_Jumps[data-highlight='smooth']::before {
+    transition: transform .28s ease, width .28s ease;
+  }
 }
 
 .Home_Jumps[data-earlier] {
@@ -443,25 +445,12 @@
   --later: .6rem;
 }
 
-.Home_NavControls {
-  display: flex;
-  gap: .15rem;
-  padding-inline-start: .28rem;
-  border-inline-start: 1px solid var(--border);
-}
-
-.Story_Page .Home_NavButton {
-  --control-height: 2rem;
-  min-width: 1.55rem;
-  font-size: 1.45rem;
-  text-decoration: none;
-}
-
 .Home_Jump {
   flex: none;
 }
 
 .Home_JumpLink {
+  position: relative;
   display: flex;
   align-items: center;
   gap: .38rem;
@@ -473,9 +462,15 @@
   text-decoration: none;
 }
 
-.Home_JumpLink:hover,
-.Home_JumpLink[aria-current='location'] {
+.Home_JumpLink:hover {
+  text-decoration: underline;
+}
+
+.Home_Jumps:not([data-highlight]) .Home_JumpLink[aria-current='location'] {
   background: var(--accent);
+}
+
+.Home_JumpLink[aria-current='location'] {
   color: var(--bg);
 }
 
@@ -491,7 +486,11 @@
   display: grid;
   gap: .9rem clamp(1rem, 2.1vw, 2rem);
   align-items: start;
-  scroll-margin-top: 5rem;
+}
+
+.Home_Feature,
+.Home_FeatureTitle {
+  scroll-margin-top: max(5rem, calc(var(--showcase-height, 0px) + .5rem));
 }
 
 .Home_Feature + .Home_Feature {
@@ -539,8 +538,7 @@
   visibility: visible;
 }
 
-.Story_Page .Wander-out:has(> .Home_WanderPose[data-ready]) > .Wander_Image[data-on],
-.Story_Page .Wander-out > .Sign {
+.Story_Page .Wander-out:has(> .Home_WanderPose[data-ready]) > .Wander_Image[data-on] {
   visibility: hidden;
 }
 
@@ -647,6 +645,7 @@
   font-weight: 650;
 }
 
+.Home_MailPair,
 .Home_Checkout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
@@ -730,20 +729,14 @@
   align-content: start;
 }
 
-.Home_Reward,
-.Home_PlanCredit {
+.Home_Reward {
   display: flex;
   gap: .55rem;
   align-items: start;
   color: var(--accent);
 }
 
-.Home_PlanCredit {
-  font-weight: 800;
-}
-
-.Home_Reward .Icon,
-.Home_PlanCredit .Icon {
+.Home_Reward .Icon {
   flex: none;
   width: 1.15rem;
   height: 1.15rem;
@@ -800,12 +793,19 @@
   .Story_Page {
     --measure: min(94rem, 78vw);
     --phone-width: clamp(18rem, 25vw, 23rem);
+    --phone-height: clamp(15rem, calc(100svh - 18.5rem), 45rem);
   }
 
   .Home_Desk {
+    display: grid;
     grid-template-columns: minmax(0, 1fr) var(--phone-width);
     grid-template-areas: 'hero demo' 'contents demo' 'features demo';
+    align-items: start;
     column-gap: var(--story-gap);
+  }
+
+  .Home_Showcase {
+    display: contents;
   }
 
   .Home_MoonSlot {
@@ -832,37 +832,25 @@
   }
 
   .Story_Page .Home_Demo {
-    grid-template-rows: auto var(--phone-height) auto auto;
     position: sticky;
     z-index: 1;
     top: 1rem;
     margin: 0;
   }
 
-  .Story_Page .Home_Demo[data-docked] {
-    position: fixed;
-    inset-inline-end: max(var(--gap), calc((100vw - var(--measure)) / 2));
+  .Home_Contents {
+    position: sticky;
+    z-index: 2;
+    top: 0;
   }
 
-  .Story_Page .Home_Demo[data-finished] {
-    visibility: hidden;
-  }
-
-  .Story_Page .Home_Phone {
-    height: var(--phone-height);
-  }
-
-  .Story_Page .Home_Demo[data-compact] {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .Story_Page .Home_Demo[data-compact] .Home_Phone {
-    height: min(var(--phone-height), calc(var(--dock-room) - 2rem));
-  }
-
-  .Home_Demo[data-compact] :is(.Home_Picks, .Home_Ask, .Home_Shot),
-  .Home_Demo[data-compact] .Home_Message:not([data-recent]) {
-    display: none;
+  .Home_Contents::after {
+    content: '';
+    position: absolute;
+    inset: 100% 0 auto;
+    height: .65rem;
+    background: linear-gradient(var(--bg), transparent);
+    pointer-events: none;
   }
 }
 
@@ -873,36 +861,22 @@
 }
 
 @media (max-width: 59.99rem) {
+  .Home_Story {
+    --showcase-height: calc(var(--phone-height) + 10rem);
+  }
+
+  .Home_Showcase {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    padding-block-end: .85rem;
+    background: var(--bg);
+    box-shadow: 0 .5rem .75rem -.55rem var(--border);
+  }
+
   .Home_Features,
   .Home_Details {
     min-width: 0;
-  }
-
-  .Home_Demo[data-mini] .Home_Phone {
-    position: fixed;
-    z-index: 3;
-    inset: auto 0 max(.5rem, env(safe-area-inset-bottom));
-    width: min(calc(100% - 1rem), 21rem);
-    height: auto;
-    max-height: min(16rem, 40svh);
-    margin-inline: auto;
-    padding: .6rem .7rem .5rem;
-    grid-template-rows: auto minmax(0, 1fr);
-    border-radius: 1.4rem;
-    box-shadow: 0 -.25rem 1.3rem #151b2832;
-  }
-
-  .Home_Demo[data-mini] .Home_Shot,
-  .Home_Demo[data-mini] .Home_Message:not([data-recent]) {
-    display: none;
-  }
-
-  .Home_Demo[data-mini] .Home_Track {
-    max-height: min(13rem, 32svh);
-  }
-
-  .Home_Demo[data-mini] .Home_Messages {
-    gap: .45rem;
   }
 }
 
