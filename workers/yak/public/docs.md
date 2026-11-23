@@ -401,7 +401,9 @@ takes calls on a softphone (`number_status` with `login`) and texts people who
 know it. Texts to many people need carrier approval: a toll-free number's
 verification, which `number_verify` files, or a local number's 10DLC campaign,
 which `number_assign` records. `number_status` says what each number is approved
-for.
+for. Until then a number is a personal line: a text to it from anyone outside
+the space is told to the space's owners in their Updates and the way they chose
+to be alerted, and nobody answers it.
 
 A text to an app's number is a `text` row in its store. To run the app's own
 code for each one (reply, file it, start a workflow), give the app a builder

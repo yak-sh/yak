@@ -264,7 +264,10 @@ export let arrived = async (
   let own = await dir.textSpace(arrival.to)
   if (own) {
     let { spaceArrived } = await import('./operator-signup.ts')
-    return await spaceArrived(env, own, arrival)
+    let { many } = await import('@yaks/platform/numbers')
+    return await spaceArrived(env, own, arrival, undefined, {
+      personal: !!held && !many(held.line),
+    })
   }
   // An unassigned or returned number is not the platform's inbox.
   if (!arrival.rcs && arrival.to != await (await phoneOf(env)).from()) return

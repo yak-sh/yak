@@ -49,6 +49,26 @@ export type Approval = {
 }
 
 /**
+ * Whether a number texts many people, or has asked carriers to: its 10DLC
+ * campaign is registered, or its toll-free verification filed. Such a number
+ * is a space's public line, where a stranger's text signs them up with the
+ * Operator; any other texts only people who know it, a personal line, where
+ * a stranger's text is told to the space's owners and answered by nobody
+ * (workers/yak/operator-signup.ts `spaceArrived`).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { many } from '@yaks/platform/numbers'
+ * equal(many({ campaign: null, verification: null }), false)
+ * equal(many({ campaign: 'CX1', verification: null }), true)
+ * equal(many({ campaign: null, verification: 'tfv-1' }), true)
+ * ```
+ */
+export let many = (
+  line: { campaign: string | null; verification: string | null },
+) => !!line.campaign || !!line.verification
+
+/**
  * What a number is approved for, as its line says and, for texts to many,
  * as its 10DLC campaign or its toll-free verification (`verified`) stands:
  * calls, texts to people who texted it first or know it, and texts to many

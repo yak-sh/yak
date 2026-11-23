@@ -526,11 +526,6 @@ test('a space buys a local voip.ms number by area code at its price and our marg
       await tool('number_status'),
       'approved for calls, texts to people who know it',
     )
-    await tool('number_assign', { number: LOCAL, campaign: 'CX1' })
-    assertStringIncludes(
-      await tool('number_status'),
-      'texts to many people (10DLC campaign CX1)',
-    )
     assertStringIncludes(
       await tool('number_status', { number: LOCAL, login: true }),
       'at chicago1.voip.ms as 100_y2692015487 with password sip-pw',
@@ -555,6 +550,43 @@ test('a space buys a local voip.ms number by area code at its price and our marg
     assertEquals(
       (await k.at('yaks.app', '/voipms/not-a-ticket?id=1&to=1')).status,
       403,
+    )
+
+    // On a number approved only for texts to people who know it, a
+    // stranger's text is told to the space's owner, and nobody answers it.
+    let texts = vms.asked.filter((q) => q.get('method') == 'sendSMS').length
+    assertEquals(
+      (await reach('2692015487', 'Your%20code%20is%20123')).status,
+      200,
+    )
+    let home = (await k.dir.space(slug))!
+    let [owner] = await k.dir.owners(home)
+    let updates = async () =>
+      (await (await k.builder(home.eid).fetch(
+        new Request('https://builder/operator/updates', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-yak-person': owner,
+            'x-space-eid': home.eid,
+          },
+          body: '{}',
+        }),
+      )).json()).updates as { words: string; subject?: string }[]
+    let told = await until(
+      async () => (await updates()).find((u) => u.words == 'Your code is 123'),
+      { label: 'the owner told of the text' },
+    )
+    assertEquals(told.subject, 'Text to (269) 201-5487 from (269) 555-0142')
+    assertEquals(
+      vms.asked.filter((q) => q.get('method') == 'sendSMS').length,
+      texts,
+    )
+
+    await tool('number_assign', { number: LOCAL, campaign: 'CX1' })
+    assertStringIncludes(
+      await tool('number_status'),
+      'texts to many people (10DLC campaign CX1)',
     )
 
     // Its calls are charged once each, at voip.ms's price and our share.

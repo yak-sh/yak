@@ -246,12 +246,16 @@ export let textRoute = (
   word ? 'control' : stopped ? 'quiet' : role ? 'own' : 'signup'
 
 /** A text to a space's own number or inbound line, sent where `textRoute`
- * says. */
+ * says. On a `personal` number, one approved only for texts to people who
+ * know it (@yaks/platform/numbers `many`), a text from someone without a
+ * seat is told to the space's owners (`personalArrived`) instead of signing
+ * them up. */
 export let spaceArrived = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
   sender?: string,
+  { personal = false } = {},
 ) => {
   let word = formKeyword(arrival.text)
   let { stopped } = await controlText(env, space, arrival, sender)
@@ -263,6 +267,9 @@ export let spaceArrived = async (
     : { role: null }
   let route = textRoute(word, stopped, role)
   if (route == 'quiet') return
+  if (route == 'signup' && personal) {
+    return await personalArrived(env, space, arrival)
+  }
   // Anyone in a group text is heard in the group's conversation, where they
   // have only what the space lets anyone do (operator-texts.ts
   // `textedOperator`); nobody signs up there.
@@ -278,6 +285,36 @@ export let spaceArrived = async (
     return
   }
   await controlReply(env, space, arrival, word as Keyword)
+}
+
+/**
+ * A text to a space's personal number from someone without a seat there:
+ * kept with the line's texts (`controlText`), and told to each of the
+ * space's owners in their Updates and the way they chose to be alerted
+ * (operator-alerts.ts `alert`), once however often its provider brings it.
+ * Nobody answers it, and it counts against the space's budget as any text
+ * that arrives does.
+ */
+export let personalArrived = async (
+  env: Env,
+  space: Space,
+  arrival: Arrival & { via: string },
+) => {
+  let { shown } = await import('@yaks/phone')
+  let { tell } = await import('./operator-updates.ts')
+  let from = shown(arrival.from) || arrival.from
+  for (let owner of await directoryOf(env.STORE).owners(space)) {
+    await tell(env, space, {
+      to: owner,
+      subject: `Text to ${shown(arrival.to) || arrival.to} from ${from}`,
+      words: arrival.text,
+      by: space.eid,
+      id: `text|${arrival.via}:${arrival.id}|${owner}`,
+    })
+  }
+  let { countedTexts } = await import('./meter.ts')
+  let { costOf } = await import('./text-spend.ts')
+  await countedTexts(env, space, costOf(arrival.text))
 }
 
 /** The carrier's required keyword answer, outside the model's conversation. */

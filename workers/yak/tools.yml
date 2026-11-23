@@ -982,8 +982,12 @@ number_assign:
     app's texts go from it and replies reach the app's store. It moves off
     wherever it was before. Texts still go only to people who agreed to them.
     campaign records the 10DLC campaign its texts to many people are
-    registered under, once the carriers approved it. Only the space owner
-    may assign.
+    registered under, once the carriers approved it. On the space, a number
+    approved only for texts to people who know it is a personal line: a text
+    from anyone without a seat is told to the space's owners in their Updates
+    and the way they chose to be alerted, and nobody answers it. With a
+    campaign or toll-free verification, such a text signs them up with the
+    Operator instead. Only the space owner may assign.
 number_release:
   title: Release a phone number
   step:
