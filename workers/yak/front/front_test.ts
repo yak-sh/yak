@@ -631,3 +631,21 @@ test('an unanswered MCP read reaches a fresh kernel hop before its caller gives 
   assertEquals(f.errors, [])
   lost.reject(new DOMException('aborted', 'AbortError'))
 })
+
+test('the front keeps one kernel hop while an app page reaches its deadline', async () => {
+  let time = clock(), answer = Promise.withResolvers<Response>()
+  let entered = Promise.withResolvers<void>()
+  let f = front(() => new Response(null, { status: 204 }), () => {
+    entered.resolve()
+    return answer.promise
+  })
+  f.env.CLOCK = time
+  let result = f.go('https://ada.yaks.app/recipes/slow')
+  await entered.promise
+  await time.advance(10_000)
+  answer.resolve(
+    new Response('The app worker did not answer.', { status: 504 }),
+  )
+  assertEquals((await result).status, 504)
+  assertEquals(f.forwarded.length, 1)
+})

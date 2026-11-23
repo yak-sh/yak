@@ -1016,6 +1016,18 @@ subrequest however many rows it returns.
 
 ## Error handling
 
+Page and API routes handled by your worker have 10 seconds to return response
+headers. A route can return a streaming response within that time and keep
+sending the body afterward. Declared commands have 20 seconds to return the
+complete response. Commands called as services by another app have 5 seconds to
+return the complete response. For longer jobs, save a job row, return an
+acknowledgment, and process the job in bounded steps with
+[wakes](https://yaks.app/docs/wakes).
+
+An expired deadline answers with HTTP 504 and records the app and route in
+`app_errors`. A home router has one second to answer before normal routing
+continues.
+
 Let errors throw. An error you can see is more useful than a `catch` that hides
 it, and the platform records each of these:
 

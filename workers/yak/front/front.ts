@@ -49,6 +49,7 @@ import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
 import { VERSION } from '@yaks/workerd/worker'
 import { resending } from '@yaks/workerd/fetch'
+import { workerWaits } from '@yaks/platform/app-worker'
 
 /** The header the front's own deploy is said in, beside the kernel's. */
 export let FRONT_VERSION = 'x-yak-front-version'
@@ -300,8 +301,14 @@ let serving = async (
     report(error, env, ctx, 'front fetch', req)
   }
   waiting('kernel_wait')
-  let res = await resending(env.KERNEL, req, env.CLOCK)
-  if (new URL(req.url).pathname == VERSION) {
+  let path = new URL(req.url).pathname
+  // Give app pages time to finish or reach their deadline before resending a
+  // lost kernel hop. Platform doors keep the shorter retry interval.
+  let app = hostOf(req, env) != apex(env) || homed(path) ||
+    path.startsWith('/home/')
+  let retry = app ? workerWaits.page + 5_000 : undefined
+  let res = await resending(env.KERNEL, req, env.CLOCK, retry)
+  if (path == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')
     out.headers.set('cache-control', 'no-store')

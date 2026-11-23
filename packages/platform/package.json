@@ -100,6 +100,7 @@
     "./page-wire": "./page-wire.ts",
     "./app-commands": "./app-commands.ts",
     "./app-command": "./app-command.ts",
+    "./app-worker": "./app-worker.ts",
     "./app-effects": "./app-effects.ts",
     "./app-decision": "./app-decision.ts",
     "./publishing-graph": "./publishing-graph.ts",

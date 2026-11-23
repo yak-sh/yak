@@ -246,6 +246,8 @@ export let noted = async (
     breadcrumbs?: Break['breadcrumbs']
     // The app's own write or query refused at its door: never the platform's.
     mistake?: boolean
+    // An app worker's deadline is tracked on the app that exceeded it.
+    mirror?: false
   },
   at: {
     env: Env
@@ -293,7 +295,7 @@ export let noted = async (
     tags: { ...place.tags, ...reached },
   })
   await queue(at.env.ERRORS)(owned)
-  if (account != 'test' && !broke.mistake) {
+  if (account != 'test' && !broke.mistake && broke.mirror !== false) {
     await queue(at.env.ERRORS)(
       seenByPlatform(error, broke.version, at, {
         ...reached,

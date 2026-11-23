@@ -50,7 +50,9 @@
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
 import type { Caller } from '@yaks/egress'
-import { type Clock, sleep, system } from '@yaks/fp'
+import { sleep } from '@yaks/fp'
+import { before } from '@yaks/workerd/fetch'
+import { AppWorkerTimeout, workerWaits } from '@yaks/platform/app-worker'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { atApp } from '@yaks/platform/visits'
@@ -70,7 +72,7 @@ import { FILED } from '@yaks/api/refuse'
 import { type Bound, type Config, metadata, WRAPPER } from './wrangler_app.ts'
 import { WORKER } from '@yaks/platform/files'
 import { refuse, rejected } from './tool.ts'
-import { caught, refused, reported } from './defects.ts'
+import { background, caught, refused, reported } from './defects.ts'
 import { modules } from '@yaks/esbuild'
 import {
   archived,
@@ -531,6 +533,7 @@ export let workerBreak = async (
     version,
     message: error.message,
     stack: error.stack ?? '',
+    ...error instanceof AppWorkerTimeout ? { mirror: false } : {},
   }, {
     env,
     space,
@@ -628,67 +631,82 @@ export let grantee = (space: Space, app: App) =>
     ? storeName(space, app)
     : `${storeName(space, app)}@${app.branch}`
 
-let called = async (
-  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET'> & Partial<Pick<Env, 'STORE'>>,
+let called = <T>(
+  env:
+    & Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'CLOCK'>
+    & Partial<Pick<Env, 'STORE'>>,
   space: Space,
   app: App,
   req: Request,
   who: Who,
-  call?: string,
-  at?: string,
-  source?: string,
-  cpuMs?: number,
-): Promise<Response | null> => {
-  if (!env.DISPATCH || !env.SESSION_SECRET) return null
+  wait: keyof typeof workerWaits,
+  read: (res: Response) => Promise<T>,
+  opts: { call?: string; at?: string; source?: string; cpuMs?: number } = {},
+): Promise<T | null> => {
+  let { DISPATCH: dispatch, SESSION_SECRET: secret } = env
+  if (!dispatch || !secret) return Promise.resolve(null)
   // A release that built no worker has none to ask for. Asking anyway was a
   // lookup of a script nobody uploaded: about 110 ms the first time a name is
   // asked in a place, which is a release's first view (T-124006).
-  if (app.worker === '') return null
-  if (env.STORE && who.person !== app.eid) {
-    who = await browsersOf({ STORE: env.STORE }, who)
-  }
-  let store = grantee(space, app)
-  let worker
-  try {
-    // Declared commands may do bounded work beyond a page's 50 ms budget.
-    worker = script(
-      env.DISPATCH,
-      scriptName(scriptOf(space, app)),
+  if (app.worker === '') return Promise.resolve(null)
+  let ms = workerWaits[wait]
+  return before(req, ms, new AppWorkerTimeout(ms), async (req) => {
+    if (env.STORE && who.person !== app.eid) {
+      who = await browsersOf({ STORE: env.STORE }, who)
+    }
+    let { signal } = req
+    let out = await handed(
+      req,
       app,
+      grantee(space, app),
       who,
-      cpuMs,
+      secret,
+      opts.call,
+      opts.at,
+      opts.source,
     )
-  } catch (e) {
-    // Not the app's code — the namespace refusing to hand it over is ours.
-    if (nowhere(e)) return null
-    throw e
-  }
-  try {
-    return hostOnly(
-      await worker.fetch(
-        await handed(
-          req,
-          app,
-          store,
-          who,
-          env.SESSION_SECRET,
-          call,
-          at,
-          source,
-        ),
-      ),
-    )
-  } catch (e) {
-    if (nowhere(e)) return null
-    throw e
-  }
+    signal.throwIfAborted()
+    let res
+    try {
+      let worker = script(
+        dispatch,
+        scriptName(scriptOf(space, app)),
+        app,
+        who,
+        opts.cpuMs,
+      )
+      res = await worker.fetch(out, { signal })
+    } catch (e) {
+      if (nowhere(e)) return null
+      throw e
+    }
+    if (signal.aborted) {
+      void res.body?.cancel().catch(() => {})
+      signal.throwIfAborted()
+    }
+    return read(hostOnly(res))
+  }, env.CLOCK)
 }
+
+// The deadline has already stopped the app request. Tracker intake and
+// notifications run after the response, with later catches deduped now.
+let timeoutReport = (error: AppWorkerTimeout, report: () => Promise<void>) => {
+  reported(error)
+  background(
+    report().catch((why) =>
+      caught(why, { request: 'report an app worker timeout' })
+    ),
+  )
+}
+
+let buffered = async (res: Response) =>
+  res.body ? new Response(await res.arrayBuffer(), res) : res
 
 /** Run one declared command in the app's own worker, with the same scoped
  * grants an ordinary visit receives. The caller chooses the actor; a wake
  * runs as the app, while an MCP call runs as its person. */
 export let commandWorker = async (
-  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX' | 'CLOCK'>,
   space: Space,
   app: App,
   who: Who,
@@ -715,14 +733,15 @@ export let commandWorker = async (
       app,
       req,
       who,
-      opts.call,
-      opts.at,
-      opts.source,
-      5_000,
+      who.service ? 'service' : 'command',
+      buffered,
+      { ...opts, cpuMs: 5_000 },
     )
   } catch (e) {
     let error = e instanceof Error ? e : new Error(String(e))
-    await opts.report?.(req, error)
+    if (error instanceof AppWorkerTimeout) {
+      if (opts.report) timeoutReport(error, () => opts.report!(req, error))
+    } else await opts.report?.(req, error)
     throw error
   }
   if (!res) {
@@ -774,6 +793,13 @@ let saying = async (res: Response) => {
   return m ? `: ${m}` : ''
 }
 
+let checked = async (res: Response) => ({
+  res,
+  message: failed(res.status)
+    ? `the app's worker answered ${res.status}${await saying(res)}`
+    : '',
+})
+
 // What the worker's answer means, whichever caller asked for it: a 4xx —
 // its 404 too, which is its pass — is the app's own deliberate no and files
 // nothing (unseen.ts `refusal`), and a 5xx is not a throw and would otherwise
@@ -783,11 +809,11 @@ let verdict = async (
   space: Space,
   app: App,
   req: Request,
-  res: Response | null,
+  answer: Awaited<ReturnType<typeof checked>> | null,
 ) => {
-  if (!res) return null
-  if (!failed(res.status)) return res
-  let message = `the app's worker answered ${res.status}${await saying(res)}`
+  if (!answer) return null
+  let { res, message } = answer
+  if (!message) return res
   await workerBreak(env, space, app, req, new Error(message))
   // Filed here, so the page that hears it files it no second time.
   let headers = new Headers(res.headers)
@@ -814,35 +840,17 @@ export let ran = async (
 ): Promise<Response | null> => {
   let res
   try {
-    res = await called(env, space, app, req, who)
+    res = await called(env, space, app, req, who, 'page', checked)
   } catch (e) {
+    if (req.signal.aborted) throw e
+    if (e instanceof AppWorkerTimeout) {
+      timeoutReport(e, () => workerBreak(env, space, app, req, e))
+      return e.response()
+    }
     await threw(env, space, app, req, e)
     return oops(env)
   }
   return verdict(env, space, app, req, res)
-}
-
-// How long the home app's router has to answer before the kernel routes
-// without it. It sits in front of another app's page, so this is time the
-// visitor waits before the page they asked for even begins: long enough for a
-// store read and an outside call, short enough that a stuck router costs the
-// page a beat rather than the request. The grant it is handed outlives it by
-// far (LIFE above), so nothing here is bounded by that.
-let PATIENCE = 1_000
-
-let LATE = `the router did not answer in ${PATIENCE}ms`
-
-// The work, or that sentence, whichever comes first on `clock`. Both halves
-// of the race are handled, so a worker that answers after we stopped waiting
-// is not an unhandled rejection.
-let patient = <T>(work: Promise<T>, clock: Clock = system) => {
-  let cancel = () => {}
-  return Promise.race([
-    work.finally(() => cancel()),
-    new Promise<never>((_, no) => {
-      cancel = clock.after(PATIENCE, () => no(new Error(LATE)))
-    }),
-  ])
 }
 
 /**
@@ -866,9 +874,12 @@ export let ahead = async (
 ): Promise<Response | null> => {
   let res
   try {
-    res = await patient(called(env, space, home, req, who), env.CLOCK)
+    res = await called(env, space, home, req, who, 'router', checked)
   } catch (e) {
-    await threw(env, space, home, req, e)
+    if (req.signal.aborted) throw e
+    if (e instanceof AppWorkerTimeout) {
+      timeoutReport(e, () => workerBreak(env, space, home, req, e))
+    } else await threw(env, space, home, req, e)
     return null
   }
   let said = await verdict(env, space, home, req, res)

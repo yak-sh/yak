@@ -4,7 +4,39 @@
 import { type Clock, system } from '@yaks/fp'
 
 /** A service binding's fetch door. */
-export type Bound = { fetch(req: Request): Promise<Response> }
+export type Bound = {
+  fetch(req: Request, init?: Pick<RequestInit, 'signal'>): Promise<Response>
+}
+
+/** Stop waiting and abort the forwarded request when its caller leaves or the
+ * deadline expires. The work decides whether headers or a body end the wait. */
+export let before = async <T>(
+  req: Request,
+  ms: number,
+  timeout: Error,
+  run: (req: Request) => Promise<T>,
+  time: Clock = system,
+): Promise<T> => {
+  req.signal.throwIfAborted()
+  let stop = new AbortController()
+  let ended = Promise.withResolvers<never>()
+  let leave = () => ended.reject(req.signal.reason)
+  let cancel = time.after(ms, () => {
+    ended.reject(timeout)
+    stop.abort(timeout)
+  })
+  req.signal.addEventListener('abort', leave, { once: true })
+  try {
+    let signal = AbortSignal.any([req.signal, stop.signal])
+    return await Promise.race([
+      ended.promise,
+      run(new Request(req, { signal })),
+    ])
+  } finally {
+    cancel()
+    req.signal.removeEventListener('abort', leave)
+  }
+}
 
 /** Send an unanswered read once more, aborting the lost hop. Writes and
  * upgrades keep their one send, because replaying one can repeat its act. */
@@ -24,13 +56,10 @@ export let resending = async (
     expired.resolve(null)
     stop.abort()
   })
-  let first = Promise.resolve().then(() =>
-    door.fetch(
-      new Request(req, {
-        signal: AbortSignal.any([req.signal, stop.signal]),
-      }),
-    )
-  ).then(async (answer) => {
+  let first = Promise.resolve().then(() => {
+    let signal = AbortSignal.any([req.signal, stop.signal])
+    return door.fetch(new Request(req, { signal }), { signal })
+  }).then(async (answer) => {
     if (!late) return answer
     await answer.body?.cancel()
     return null

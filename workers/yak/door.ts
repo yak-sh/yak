@@ -76,7 +76,7 @@ let metered = async (
 
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */
-export type Fetcher = { fetch(req: Request): Promise<Response> }
+export type Fetcher = import('@yaks/workerd/fetch').Bound
 
 // The dispatch namespace binding, the slice we ask of it (env.ts): a name in,
 // a fetcher out, and what its outbound Worker is handed for every fetch that

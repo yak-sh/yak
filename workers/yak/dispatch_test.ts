@@ -45,6 +45,7 @@ import {
   workerBreak,
 } from './dispatch.ts'
 import { WORKER } from '@yaks/platform/files'
+import { AppWorkerTimeout } from '@yaks/platform/app-worker'
 import { CallError } from '@yaks/tools/errors'
 import { commandAt } from './app-command.ts'
 import { caught, within } from './defects.ts'
@@ -156,6 +157,116 @@ let tracked = async (run: (seen: Bundle[]) => Promise<void>) => {
   }
   await within(env, {}, () => run(seen), clock())
 }
+
+test('a stalled page returns 504 before tracker intake and cancels the worker once', async () => {
+  let time = clock()
+  let entered = Promise.withResolvers<Request>()
+  let tracker = Promise.withResolvers<void>()
+  let retained: Promise<void>[] = []
+  let notes: Bundle[] = []
+  let env = envOf(() => ({
+    fetch: (req) => {
+      entered.resolve(req)
+      return new Promise<Response>(() => {})
+    },
+  }))
+  env.CLOCK = time
+  env.ERRORS = {
+    send: async (rows) => {
+      notes.push(...rows)
+      await tracker.promise
+    },
+  }
+  let answer = within(
+    env,
+    {},
+    () => ran(env, space, app, visit('/never'), who),
+    time,
+    { retain: (work) => retained.push(work) },
+  )
+  let req = await entered.promise
+  await time.advance(9_999)
+  assert(!req.signal.aborted)
+  await time.advance(1)
+  let res = await answer
+  assertEquals(res?.status, 504)
+  assertEquals(
+    await res?.text(),
+    'The app worker did not answer in 10 seconds.',
+  )
+  assert(req.signal.aborted)
+  tracker.resolve()
+  await Promise.all(retained)
+  let reports = notes.filter((row) => row.error)
+  assertEquals(reports.length, 1)
+  let { tags } = reports[0].error as { tags: Record<string, string> }
+  assertEquals([tags.space, tags.app, tags.request], [
+    'jeff',
+    'recipes',
+    'worker GET /recipes/never',
+  ])
+})
+
+test('a page can keep streaming after its worker deadline', async () => {
+  let time = clock()
+  let req: Request | undefined
+  let body = Promise.withResolvers<void>()
+  let env = envOf(() => ({
+    fetch: (sent) => {
+      req = sent
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            async start(out) {
+              await body.promise
+              out.enqueue(new TextEncoder().encode('finished'))
+              out.close()
+            },
+          }),
+        ),
+      )
+    },
+  }))
+  env.CLOCK = time
+  let answer = await ran(env, space, app, visit('/stream'), who)
+  let text = answer!.text()
+  await time.advance(60_000)
+  assert(!req?.signal.aborted)
+  body.resolve()
+  assertEquals(await text, 'finished')
+})
+
+test('a command and an inter-app service must finish their response bodies by their own deadlines', async () => {
+  let service = {
+    person: 'p1',
+    app: 'client',
+    space: 's2',
+    service: app.eid,
+    connection: 'connection',
+    operation: 'inspect',
+  }
+  for (
+    let [caller, ms] of [[who, 20_000], [{ ...who, service }, 5_000]] as const
+  ) {
+    let time = clock()
+    let entered = Promise.withResolvers<Request>()
+    let env = envOf(() => ({
+      fetch: (req) => {
+        entered.resolve(req)
+        return Promise.resolve(new Response(new ReadableStream({})))
+      },
+    }))
+    env.CLOCK = time
+    let answer = commandWorker(env, space, app, caller, '/inspect', {})
+    let failure = assertRejects(() => answer, AppWorkerTimeout)
+    let req = await entered.promise
+    await time.advance(ms - 1)
+    assert(!req.signal.aborted)
+    await time.advance(1)
+    await failure
+    assert(req.signal.aborted)
+  }
+})
 
 test('a script is named for the store, which a rename never moves', () => {
   assertEquals(scriptName('jeff/recipes'), 'jeff_recipes')

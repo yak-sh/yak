@@ -88,6 +88,7 @@ import { caught, defect, within } from './defects.ts'
 import { CallError, refused as toolRefusal } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
 import * as apps from './apps.ts'
+import { AppWorkerTimeout } from '@yaks/platform/app-worker'
 import { sealed } from '@yaks/platform/kept'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
@@ -351,6 +352,12 @@ let hosting = async (
     let answer = await next(req)
     return sealed(given.anyone ? cors(answer) : answer, env)
   } catch (e) {
+    if (req.signal.aborted && e === req.signal.reason) {
+      return new Response(null, { status: 499 })
+    }
+    if (e instanceof AppWorkerTimeout) {
+      return sealed(e.response(jsonDoor(new URL(req.url).pathname)), env)
+    }
     // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
     // relays a door's deliberate no by throwing what it was answered is
     // carrying an answer out, not a failure: it files nothing. Log one
