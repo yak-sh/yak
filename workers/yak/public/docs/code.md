@@ -922,11 +922,15 @@ So the cut's step is:
 
     $v .video, doc.title=$title, lines_video>=1; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio]; ![$l .line.video=$v, built.current=true; ![$y .voicing.line=$l, built.current=true]]
 
-It runs once, when the last line is voiced, with every voicing in its bracket.
-`lines_video>=1` (at least one line whose `line.video` is this video) keeps it
-from running before the script has written any lines. It runs again only when a
-voicing changes, such as one redone. Its worker reads the brackets in the order
-they are written; a `![…]` bracket is always empty.
+It runs once, when the last line is voiced, with every voicing in its bracket. A
+whole set needs at least one member too: `lines_video>=1` counts the lines whose
+`line.video` is this video (a reference read from its target is its component's
+plural, followed by `_` and the property when the component has more than one
+reference, as `line` has `video` and `role`). It keeps the step from running on
+an empty set before the script has written any lines, so write one beside every
+`![…]`. It runs again only when a voicing changes, such as one redone. Its
+worker reads the brackets in the order they are written; a `![…]` bracket is
+always empty.
 
 For example, a Voiced Video app makes a video from a request in four steps,
 which its `seed.json` writes:
