@@ -3860,7 +3860,16 @@ export let boundReads = (
   reads: string[],
 ): { select: Select; fields: Map<string, Field> } => {
   let fields = new Map<string, Field>()
-  let select = prepared(ast, vocab, opts, d, reads, undefined, opts, fields)
+  let select = prepared(
+    ast,
+    vocab,
+    opts,
+    d,
+    reads,
+    undefined,
+    undefined,
+    fields,
+  )
     .lower()
   return { select, fields }
 }
@@ -3926,7 +3935,7 @@ export let prepared = (
   d: Dialect = dialectOf(opts),
   reads: string[] = [],
   scope?: Scope,
-  heard: Heard = opts,
+  heard: Heard = { archetypes: opts.archetypes, extend: opts.extend },
   fields?: Map<string, Field>,
 ): Prepared => {
   let vacant = empty(ast, vocab, opts)
@@ -5231,7 +5240,7 @@ export let screening = (
   vocab: Vocab,
   opts: BindOpts,
   d: Dialect,
-  heard: Heard = opts,
+  heard?: Heard,
 ): Prepared => {
   let p = prepared(ast, vocab, opts, d, [], { correlated: true }, heard)
   return {
@@ -5924,7 +5933,7 @@ let visible = (
   reads: string[],
   screening = false,
   correlated = false,
-  heard: Heard = opts,
+  heard: Heard,
   fields?: Map<string, Field>,
 ): Prepared => {
   let visibility = opts.visibility!

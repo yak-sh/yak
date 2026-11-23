@@ -327,6 +327,11 @@ test('a sparse text selection drives a broad scalar range', () => {
   assertEquals(result.rows.map((r) => r.eid), ['row-4095'])
   assert(result.steps < 1000, `${result.steps} VM instructions`)
 })
+test('ranked text search screens a required component and a scalar range', () => {
+  let store = { ...opts, counts: 'lazy' as const }
+  let query = compile(parse(`${before} .comment needle .limit=2`), vocab, store)
+  assertEquals(sql.query(query).map((r) => r.eid), ['row-4095'])
+})
 test('a narrow scalar range still seeks before reading required bodies', () => {
   let result = probe(narrow)
   assertEquals(result.rows, [])
