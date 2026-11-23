@@ -372,7 +372,7 @@ export let signedIn = async (k: Kernel, person: string) =>
  * let k = await kernel()
  * let me = await signIn(k)
  * let own = (await k.dir.own(me.person))!
- * await stillPage(k, managePath('updates', own.slug), me.cookie, '.scratch/updates.html')
+ * await stillPage(k, `/${own.slug}/updates`, me.cookie, '.scratch/updates.html')
  * ```
  */
 export let stillPage = async (
@@ -388,13 +388,16 @@ export let stillPage = async (
       headers: { cookie, accept: 'text/html' },
     })
   }
-  let r = await get(path)
-  if (!r.ok) throw new Error(`${path} answered ${r.status}`)
+  // An address that moved draws the page it moved to.
+  let at = new URL(path, 'https://yaks.app')
+  let r = await get(at.href)
+  for (let hops = 0; r.status >= 300 && r.status < 400 && hops < 5; hops++) {
+    at = new URL(r.headers.get('location')!, at)
+    r = await get(at.href)
+  }
+  if (!r.ok) throw new Error(`${at.pathname} answered ${r.status}`)
   let { still } = await import('@yaks/platform/still')
-  await Deno.writeTextFile(
-    file,
-    await still(await r.text(), `https://yaks.app${path}`, get),
-  )
+  await Deno.writeTextFile(file, await still(await r.text(), at.href, get))
 }
 let building: Promise<void> | undefined
 

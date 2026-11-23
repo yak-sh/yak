@@ -230,7 +230,7 @@ yak admin browse /manage/checks/people --dark --as checks   # the dark theme
 
 A page from your checkout is seen the same way before it lands, with no
 deploy. `stillPage(k, path, cookie, file)` (workers/yak/probe.ts), called
-from a scratch test, draws the page through the in-process kernel and writes
+from a scratch test, draws the page through the in-process kernel (following a moved address) and writes
 it as one document (@yaks/platform/still): the site's files built as the
 deploy builds them, each stylesheet and what it imports written in, scripts
 dropped, and the kernel's own addresses made relative. `--html <file>` then
@@ -247,14 +247,14 @@ test('look', async () => {
   let k = await kernel()
   let me = await signIn(k)
   let own = (await k.dir.own(me.person))!
-  await stillPage(k, `/manage/${own.slug}/updates`, me.cookie, '.scratch/updates.html')
+  await stillPage(k, `/${own.slug}/updates`, me.cookie, '.scratch/updates.html')
 })
 ```
 
 ```sh
 deno test -A --no-check workers/yak/look_scratch_test.ts
-yak admin browse /manage/checks/updates --html .scratch/updates.html
-yak admin browse /manage/checks/updates --html .scratch/updates.html --width 1280 --height 800 --touch=false
+yak admin browse /checks/updates --html .scratch/updates.html
+yak admin browse /checks/updates --html .scratch/updates.html --width 1280 --height 800 --touch=false
 ```
 
 `--steps` is a JSON array, run in order once the page loads:

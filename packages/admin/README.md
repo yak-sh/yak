@@ -248,7 +248,7 @@ the browser answers the page's first load with the file (@yaks/platform/still
 makes one), and everything else comes from yaks.app.
 
 ```sh
-yak admin browse /manage/checks/updates --html .scratch/updates.html
+yak admin browse /checks/updates --html .scratch/updates.html
 yak admin browse /manage/checks/operator --as checks
 yak admin browse /admin/spending --as admin
 yak admin browse /manage/checks/operator --as checks --steps \
