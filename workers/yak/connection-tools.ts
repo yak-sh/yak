@@ -55,6 +55,12 @@ let CONNECTIONS: Row[] = [
           'the name the app reads it as, env.NAME in worker.js and from ' +
             "./api/env in a page; omit for the service's name in capitals",
         ),
+        anyone: {
+          type: 'boolean',
+          description: 'true lets anyone using the app call out through it, ' +
+            'as a public page serving everybody needs; false keeps it to ' +
+            "the app's members, as it starts; omit to leave it as it is",
+        },
       },
       required: ['app', 'connection'],
     },
@@ -65,10 +71,10 @@ let CONNECTIONS: Row[] = [
       let [b] = EID.test(connection)
         ? await c.graph.read(line`.entity.eid=${connection}&.${CONNECTION}`)
         : []
-      let refused = barred(
-        'attach',
-        await holdOf(ctx.env, space, who, b, app.eid),
-      )
+      let anyone = args.anyone == null ? null : args.anyone === true
+      let hold = await holdOf(ctx.env, space, who, b, app.eid)
+      let refused = barred('attach', hold) ??
+        (anyone == null ? undefined : barred(anyone ? 'open' : 'close', hold))
       if (refused) throw refuse('access', refused)
       let bundles = await attach(c.graph.read, {
         owner: space.eid,
@@ -80,16 +86,23 @@ let CONNECTIONS: Row[] = [
       }).catch((e) => {
         throw refuse('conflict', e instanceof Error ? e.message : String(e))
       })
+      // Opening the link to anyone, or closing it to the app's members, is
+      // the connections page's open and close (connections.ts), said here.
+      let link = edgeEid(app.eid, USES, connection)
+      if (anyone != null) {
+        bundles.push({ entity: { eid: link }, [USES]: { anyone } })
+      }
       if (bundles.length) await c.graph.apply(bundles)
       await rebound(ctx.env, [app.eid])
-      let [l] = await c.graph.read(
-        line`.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
-      )
+      let [l] = await c.graph.read(line`.entity.eid=${link}&.${USES}`)
       return {
         space,
         text: `${space.slug}/${app.slug} can use connection ${connection}, ` +
           `as env.${comp(l, USES).binding}. ` +
-          'Only app members can call out through it. The credential stays in the vault.',
+          (comp(l, USES).anyone == true
+            ? 'Anyone using the app can call out through it.'
+            : 'Only app members can call out through it.') +
+          ' The credential stays in the vault.',
       }
     },
   },

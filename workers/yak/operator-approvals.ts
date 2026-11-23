@@ -190,7 +190,8 @@ export let ESCALATING: Record<
     'in every space',
   service_connect: (a) => `Connect the service ${a.service} to ${a.app}`,
   connection_attach: (a) =>
-    `Give the app ${a.app} the connection ${a.connection}`,
+    `Give the app ${a.app} the connection ${a.connection}` +
+    (a.anyone === true ? ', for anyone using it to call out through' : ''),
   store_attach: (a) =>
     a.detach === true
       ? undefined

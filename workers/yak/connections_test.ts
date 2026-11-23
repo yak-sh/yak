@@ -19,8 +19,9 @@ import {
   listing,
   need,
   registration,
+  USES,
 } from '@yaks/connections'
-import { link } from '@yaks/edge'
+import { edgeEid, link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
@@ -28,6 +29,7 @@ import {
   barred,
   CALLBACK,
   callback,
+  comp,
   connecting,
   connectionsOf,
   ctxOf,
@@ -537,6 +539,19 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
     { space: 'ada', app: 'notes', connection, binding: 'SKY' },
   )
   assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['SKY'])
+  // Opened to anyone using the app, and closed to its members again.
+  let anyone = async (open: boolean) => {
+    let said = await tool.run(
+      { env: s.p.env, dir: s.dir, person: s.person },
+      { space: 'ada', app: 'notes', connection, anyone: open },
+    )
+    let [l] = await ctxOf(s.p.env).graph.read(
+      line`.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
+    )
+    return [comp(l, USES).anyone, String(said.text).includes('Anyone using')]
+  }
+  assertEquals(await anyone(true), [true, true])
+  assertEquals(await anyone(false), [false, false])
 })
 
 // Every act the page posts, and one app's link to a connection as each side
