@@ -21,11 +21,11 @@
 // only order what it holds. And the vocabulary is the union of what the
 // members declare, the language a merged bundle is written in.
 import { archetypes } from '@yaks/archetype'
-import { edges } from '@yaks/edge'
+import { edges, stated as statedEdges } from '@yaks/edge'
 import type { Bundle, Entity, Projection } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { status } from '@yaks/graph/errors'
-import { derivedEid, identities, resolve } from '@yaks/graph/identity'
+import { derivedEid, identities, isAlias, resolve } from '@yaks/graph/identity'
 import { flat, projection } from '@yaks/graph/read'
 import { keys } from '@yaks/key'
 import { matcher, rows } from '@yaks/match'
@@ -1102,7 +1102,7 @@ let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
     key
       ? derivedEid(JSON.stringify(['outbox', key, ordinal++]))
       : crypto.randomUUID()
-  let stated = bundles.map((e) => {
+  let stated = bundles.map((e): Bundle => {
     let eid = e.entity?.eid
     if (typeof eid == 'string') return e
     // An eid is the only address that holds across members: a num is one
@@ -1121,6 +1121,10 @@ let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
     ...edges(vocab).derive,
     ...keys(vocab).derive,
   }
+  // The store sees only the tombstone. Check the relation before the router
+  // discards it, so an unknown relation cannot mint a fresh id for a drop.
+  let drops = stated.filter((b) => dead(b) && b.edge && isAlias(b.entity.eid))
+  if (drops.length) statedEdges(vocab)(drops)
   let resolved = resolve(stated, vocab, derive, mint)
   let aliases = Object.fromEntries(
     resolved.flatMap((e) =>

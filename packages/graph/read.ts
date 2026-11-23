@@ -74,6 +74,39 @@ export let fits = (id: string, eids: Eid[]): string =>
   `${id} names ${eids.length} entities (${eids.slice(0, 3).join(', ')}` +
   `${eids.length > 3 ? ', …' : ''}); give more of it`
 
+let handled = (id: string): boolean => BARE.test(id) && !minted(id)
+
+let titled = (
+  tx: ReadTx,
+  vocab: Vocab,
+  id: string,
+): boolean | Promise<boolean> =>
+  !!vocab.prop('doc', 'title') &&
+  after(
+    tx.read(and(eq('doc.title', id), want('entity'))),
+    (rows) => rows.length > 0,
+  )
+
+/** Resolve a copied handle after names and numbers. A matching eid or title
+ * keeps its spelling, and all other matches are left for the caller to decide
+ * whether to refuse an ambiguity. */
+export let bareHandles = (
+  tx: ReadTx,
+  vocab: Vocab,
+  ids: string[],
+): Map<string, Eid | Eid[]> | Promise<Map<string, Eid | Eid[]>> =>
+  each(
+    [...new Set(ids.filter(handled))],
+    new Map<string, Eid | Eid[]>(),
+    (at, id) =>
+      after(starting(tx, id.toLowerCase()), (eids) =>
+        !eids.length || eids.includes(id) ? at : after(
+          titled(tx, vocab, id),
+          (held) =>
+            held ? at : at.set(id, eids.length == 1 ? eids[0] : eids),
+        )),
+  )
+
 /** How strictly an address holds an id to naming one entity: `one` refuses
  * an id naming nothing or several; `query` keeps one naming nothing as
  * written and refuses several; `words` leaves out both. */
@@ -253,7 +286,7 @@ export let reader = (opts: {
     )
     let all = continuing(asked, (at) =>
       continuing(
-        bare(outside, ids.filter((id) => at.get(id) == null)),
+        bareHandles(outside, vocab, ids.filter((id) => at.get(id) == null)),
         (more) => new Map([...at, ...more]),
       ))
     return continuing(all, (at) => {
@@ -319,35 +352,6 @@ export let reader = (opts: {
       return out === ast ? query : out as Query
     })
   }
-
-  // A handle as a person copies it is often its hex without the `#`
-  // (`e854bf7dc0`): a shell reads a leading `#` as a comment, and a handle
-  // quoted in a sentence loses it. Such an id that no plugin resolved names
-  // the entity whose eid starts that way, as the `#` form does (@yaks/id). It
-  // is asked last, as a later plugin would be, so a name, a number and an eid
-  // of that spelling keep what they name, and so does a title, which a tool's
-  // argument may name (tool.ts `referenced`). Digits alone are a number first,
-  // and a handle only when no entity carries that number. An id it fits
-  // nothing is left as it was.
-  let handled = (id: string) => BARE.test(id) && !minted(id)
-  let bare = (tx: ReadTx, ids: string[]) =>
-    each(
-      ids.filter(handled),
-      new Map<string, Eid | Eid[]>(),
-      (at, id) =>
-        after(starting(tx, id.toLowerCase()), (eids) =>
-          !eids.length || eids.includes(id) ? at : after(
-            titled(tx, id),
-            (held) =>
-              held ? at : at.set(id, eids.length == 1 ? eids[0] : eids),
-          )),
-    )
-  let titled = (tx: ReadTx, id: string) =>
-    !!vocab.prop('doc', 'title') &&
-    after(
-      tx.read(and(eq('doc.title', id), want('entity'))),
-      (rows) => rows.length > 0,
-    )
 
   let ask = (query: Query, readOpts?: ReadOpts): Query | Promise<Query> =>
     continuing(aimed(query, readOpts), (q) => {

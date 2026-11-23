@@ -312,8 +312,9 @@ test('graph_show and graph_apply take the space and app other tools take', async
         shown({ ids: [eid], space, app: 'notes' }),
         shown({ id: eid }),
         shown({ id: short(eid) }),
+        shown({ id: short(eid).slice(1) }),
       ]),
-      ['Kept', 'Kept', 'Kept', 'Kept'],
+      ['Kept', 'Kept', 'Kept', 'Kept', 'Kept'],
     )
     let other = unique('another')
     await owned(k, person.person, other)
@@ -354,6 +355,90 @@ test('graph_show and graph_apply take the space and app other tools take', async
     assertEquals(await titles(`${space}/notes`), ['Explicit', 'Personal'])
     assertEquals(await titles(`${space}/extra`), [])
     assertEquals(await titles(`${other}/notes`), ['Existing home', 'Qualified'])
+  } finally {
+    await k.stop()
+  }
+})
+
+test('graph_show accepts a bare hex handle when it names one entity', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    let app = 'notes'
+    await agent.tool('app_new', { slug: app, title: 'Notes' })
+    let first = '01aba85c-56aa-44aa-aaaa-aaaaaaaaaaaa'
+    let second = '01aba85c-56bb-44bb-bbbb-bbbbbbbbbbbb'
+    let numeric = '01234567-89aa-44aa-aaaa-aaaaaaaaaaaa'
+    let save = (eid: string, title: string, alias?: string) =>
+      agent.tool('graph_apply', {
+        app,
+        bundles: [{
+          entity: { eid },
+          doc: { title },
+          ...(alias ? { alias: { name: alias } } : {}),
+        }],
+      })
+    let show = async (...ids: string[]) =>
+      (JSON.parse(await agent.tool('graph_show', { ids })) as Bundle[])
+        .map((b) => b.entity.eid)
+    await save(first, 'First')
+    await save(numeric, 'Digits')
+    assertEquals(await show('01ABA85C56', '0123456789', first), [
+      first,
+      numeric,
+    ])
+    await save(second, 'Second')
+    await assertRejects(() => show('01aba85c56'), Error, 'names 2 entities')
+    assertEquals(await show('01aba85c56bb'), [second])
+    await save(numeric, '01aba85c56')
+    assertEquals(await show('01aba85c56'), [numeric])
+    await save(second, 'Second', '0123456789')
+    assertEquals(await show('0123456789'), [second])
+  } finally {
+    await k.stop()
+  }
+})
+
+test('graph_apply adds and drops app edges through links', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    let app = 'notes'
+    await agent.tool('app_new', { slug: app, title: 'Notes' })
+    let linked = (from: string, to: string, drop = false) =>
+      agent.tool('graph_apply', {
+        app,
+        links: [{ from, to, relation: 'referenced', ord: 2, drop }],
+      })
+    let wrote = await agent.tool('graph_apply', {
+      app,
+      edits: [
+        { id: '$from', set: { 'doc.title': 'Source' } },
+        { id: '$to', set: { 'doc.title': 'Target' } },
+      ],
+      links: [{ from: '$from', to: '$to', relation: 'referenced', ord: 2 }],
+    })
+    let from = minted(wrote, '$from')
+    let to = minted(wrote, '$to')
+    let rows = async () =>
+      JSON.parse(
+        await agent.tool('graph_query', { app, q: '.referenced&.edge' }),
+      ) as Bundle[]
+    let [edge] = await rows()
+    assertEquals(edge.edge, { from, to, ord: 2 })
+    await linked(short(from).slice(1), to)
+    assertEquals((await rows()).map((b) => b.entity.eid), [edge.entity.eid])
+    await assertRejects(
+      () =>
+        agent.tool('graph_apply', {
+          app,
+          links: [{ from, to, relation: 'doc', drop: true }],
+        }),
+      Error,
+      'declares no relation',
+    )
+    await linked(from, to, true)
+    assertEquals(await rows(), [])
   } finally {
     await k.stop()
   }

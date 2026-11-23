@@ -20,7 +20,13 @@ export type Link = {
 export let linked = async (graph: Graph, links: Link[]): Promise<Bundle[]> => {
   if (!links.length) return []
   let derive = deriving(graph.vocab, graph.plugins).edge
-  if (!derive) throw new Refused('this graph has no edge implementation')
+  if (!derive) {
+    throw new Refused(
+      'This store supports no edge relations. Use graph_schema to find a ' +
+        'reference property on the source entity, then set it to the target ' +
+        'eid with graph_apply edits. Set the property to null to clear it.',
+    )
+  }
   let ids = links.flatMap(({ from, to }) => [from, to])
     .filter((id) => !id.startsWith('$'))
   let addresses = await graph.address(ids)

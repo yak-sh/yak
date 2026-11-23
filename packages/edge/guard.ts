@@ -44,7 +44,9 @@ let gathered = (bundles: Bundle[]): Map<Eid, Bundle> => {
  * Registered by the {@link plugin}; exported on its own for a graph that wants
  * the check without the rest.
  */
-export let stated = (vocab: Vocab): Hook => {
+export let stated = (
+  vocab: Vocab,
+): Hook & ((bundles: Bundle[]) => Bundle[]) => {
   let tags = names(vocab)
   let known = Object.values(tags).sort()
   return (bundles) => {

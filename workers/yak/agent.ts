@@ -39,7 +39,7 @@ import type {
   Tool,
   Tx,
 } from '@yaks/graph'
-import { addressing, fits } from '@yaks/graph/read'
+import { addressing, bareHandles, fits } from '@yaks/graph/read'
 import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
@@ -47,6 +47,7 @@ import { detached } from '@yaks/graph/storage'
 import { Refused } from '@yaks/graph/errors'
 import { parse, stringify, whole } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
+import { edges } from '@yaks/edge'
 import { SHORT } from '@yaks/id'
 import { starting } from '@yaks/id/graph'
 import { barred, openly } from './anon.ts'
@@ -418,6 +419,7 @@ let byName = async (
 // unless `loose`, which leaves it out as `Graph.named` does.
 let reached = async (
   tx: ReadTx,
+  vocab: Vocab,
   ids: string[],
   loose = false,
 ): Promise<Map<string, Eid>> => {
@@ -431,6 +433,16 @@ let reached = async (
     if (eids.length == 1) at.set(id, eids[0])
     else if (eids.length && !loose) throw refuse('arguments', fits(id, eids))
   })
+  for (
+    let [id, eid] of await bareHandles(
+      tx,
+      vocab,
+      ids.filter((id) => !at.has(id)),
+    )
+  ) {
+    if (typeof eid == 'string') at.set(id, eid)
+    else if (!loose) throw refuse('arguments', fits(id, eid))
+  }
   return at
 }
 
@@ -747,7 +759,7 @@ export let reaching = async (
   // list, and hears that as the sign-in challenge rather than as a tool that
   // is not there. One roster, one order, whoever is asking (`platform`,
   // T-34541).
-  let plugins = [platform(ctx), post(ctx)]
+  let plugins = [platform(ctx), post(ctx), edges(vocab)]
   let writing = (bundles: Bundle[], opts?: ApplyOpts, admission = false) => {
     applyOptions(opts, admission)
     return fresh(() => writes(bundles, opts))
@@ -794,8 +806,8 @@ export let reaching = async (
     // A name or a short handle where an eid goes (`reached`). Both are reads,
     // so they work here as they do inside a store: `get` and `read` fan across
     // the reach, and whichever store this caller can see that holds it answers.
-    address: (ids) => reached(detached(storage), ids),
-    named: (ids) => reached(detached(storage), ids, true),
+    address: (ids) => reached(detached(storage), vocab, ids),
+    named: (ids) => reached(detached(storage), vocab, ids, true),
     // Each reached store keeps its prose as it composes it to.
     prose: (texts) => texts,
     apply: writing,

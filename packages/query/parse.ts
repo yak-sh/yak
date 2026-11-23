@@ -564,8 +564,14 @@ export let parseDot = (token: string): Clause[] | null => {
     let n = cursor(val)
     return [n == null ? { kind: 'after', eid: val } : { kind: 'after', n }]
   }
-  if (!rawValue && op == '=') throw spelled(token, `!${pathStr}`)
-  if (!rawValue && op == '!=') throw spelled(token, `.${pathStr}`)
+  if (!rawValue && (op == '=' || op == '!=')) {
+    if (pathStr == EID || pathStr == `${SPINE}.${EID}`) {
+      throw new SyntaxError(
+        `${token} needs an entity id, for example .entity.eid${op}#3b5bc70420`,
+      )
+    }
+    throw spelled(token, op == '=' ? `!${pathStr}` : `.${pathStr}`)
+  }
 
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
   // value is one raw scalar; every other form parses list and range structure

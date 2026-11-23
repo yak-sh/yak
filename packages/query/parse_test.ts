@@ -250,6 +250,9 @@ let refused = (rows: [string, string][]) => {
 }
 
 refused([
+  ['.entity.eid=', 'needs an entity id, for example .entity.eid=#3b5bc70420'],
+  ['.eid!=', 'needs an entity id, for example .entity.eid!=#3b5bc70420'],
+  ['.doc.title=', 'is written !doc.title'],
   ['.app{name:', 'a property is queried as .app.<prop>=<value>'],
   ['.a=1|', 'empty alternative'],
   ['(.a=1', 'unclosed group'],
