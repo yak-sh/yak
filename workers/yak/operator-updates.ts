@@ -57,6 +57,8 @@ export type Update = {
   /** They dismissed it, and nothing has happened on it since. */
   dismissed: boolean
   transfer?: { editor: boolean }
+  /** A friend request or suggestion from this person (friends.ts). */
+  friend?: { person: string }
   choices?: Choice[]
   recommended?: string
   /** What its choices show, in the order they show it. */

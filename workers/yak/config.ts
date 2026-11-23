@@ -33,6 +33,10 @@ export let directoryConfig: Config = {
         'completed',
         'cancelled',
         'unchecked',
+        // A person's answer on their side of a friendship, and a side the
+        // platform suggested (@yaks/platform/friends, D-472).
+        'decided',
+        'proposed',
       ],
     },
     provenance,
@@ -51,9 +55,10 @@ export let directoryConfig: Config = {
       },
     },
     // The directory keeps the persona every Operator is worn on
-    // (operator-persona.ts), and each skill a space publishes, at the version
-    // on offer (shared-skill.ts).
-    ...machine(['person', 'persona', 'skill']),
+    // (operator-persona.ts), each skill a space publishes, at the version
+    // on offer (shared-skill.ts), and each person's side of a friendship
+    // (@yaks/platform/friends).
+    ...machine(['person', 'persona', 'skill', 'relationship']),
     '@yaks/id',
     ...addressed,
     '@yaks/doc',

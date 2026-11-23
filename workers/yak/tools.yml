@@ -1257,6 +1257,26 @@ member_remove:
     which puts them back where they were. Returns a removal confirmation.
     App-specific removal revokes an app invitation, not access inherited
     from space membership. Documentation: https://yaks.app/docs/sharing.
+friend_add:
+  title: Add a friend
+  description: >-
+    Ask someone to be the person's friend on yaks.app, accept their request,
+    or say yes to a suggested friend. Name them by person from friend_list,
+    or by their yaks.app sign-in email. They become friends once both have
+    said yes; until then the other person sees a request in their Updates.
+    Use only when the person asks to add this friend.
+friend_list:
+  title: List friends
+  description: >-
+    The person's friends on yaks.app, and everyone waiting on an answer: who
+    asked them (asked), who yaks.app suggests they may know (suggested), and
+    whom they asked (asking). Each has a person id for friend_add and
+    friend_remove.
+friend_remove:
+  title: Remove a friend
+  description: >-
+    Unfriend someone, turn down their request, or dismiss a suggested friend.
+    The other person is not told. Use only when the person asks.
 grant:
   title: Create a CLI token
   description: >-

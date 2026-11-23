@@ -1,4 +1,5 @@
 import { answerTransfer, transferUpdates } from './app-transfer.ts'
+import { answerFriend, friendUpdates } from './friends.ts'
 import { Empty, Form } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
@@ -68,16 +69,16 @@ export let updatesAcross = async (
   let missed: Missed[] = []
   let read = await Promise.all(seats.map(async ({ space, who }) => {
     try {
-      let [{ updates, waiting }, transfers] = await Promise.all([
+      let [{ updates, waiting }, offers] = await Promise.all([
         operatorDoor(env, space, who, 'updates', args) as Promise<
           { updates: Update[]; waiting: number }
         >,
-        dismissed ? [] : transferUpdates(env, space, who),
+        dismissed ? [] : offersOf(env, space, who),
       ])
       return {
         space,
-        waiting: waiting + transfers.filter((u) => u.needs).length,
-        updates: [...updates, ...transfers].map((u) => ({ ...u, space })),
+        waiting: waiting + offers.filter((u) => u.needs).length,
+        updates: [...updates, ...offers].map((u) => ({ ...u, space })),
       }
     } catch (error) {
       missed.push({ space, error })
@@ -135,13 +136,13 @@ export let waitingAcross = async (
   Object.fromEntries(
     (await Promise.all(seats.map(async ({ space, who }) => {
       try {
-        let [{ waiting }, transfers] = await Promise.all([
+        let [{ waiting }, offers] = await Promise.all([
           operatorDoor(env, space, who, 'updates', { count: true }) as Promise<
             { waiting: number }
           >,
-          transferUpdates(env, space, who),
+          offersOf(env, space, who),
         ])
-        return [[space.slug, waiting + transfers.filter((u) => u.needs).length]]
+        return [[space.slug, waiting + offers.filter((u) => u.needs).length]]
       } catch (e) {
         caught(e, { request: 'updates waiting', space: space.slug })
         return []
@@ -181,6 +182,14 @@ let opening = (env: Env, space: Space, app: Apps[number]) =>
     target: '_blank',
     rel: 'noopener',
   }, `Open ${app.title || app.slug}`)
+
+// What the directory holds for a person to answer beside their Operator's
+// Updates: apps offered to the space, and friend requests and suggestions.
+let offersOf = async (env: Env, space: Space, who: Who) =>
+  (await Promise.all([
+    transferUpdates(env, space, who),
+    friendUpdates(env, space, who),
+  ])).flat()
 
 /** Where an update's card is drawn: its space, and the page it is on where
  * that is not the space's own Updates (`back`), which a choice or a
@@ -419,6 +428,40 @@ let dismissing = (at: At, u: Update) =>
     h(Button, { mod: 'quiet', type: 'submit' }, 'Dismiss'),
   )
 
+// An answer a card's button sends: its value and its label.
+type Answer = [string, string]
+
+// Something the directory holds for a person to answer (an app offered to
+// them, a friend request): its subject, its words, and a button for each
+// answer while it needs them, the first filled.
+let offerCard = (
+  at: At,
+  u: Update,
+  where: ComponentChildren,
+  field: [string, string],
+  answers: Answer[],
+) =>
+  h(
+    Card,
+    { class: 'Update', id: updateAnchor(u.eid) },
+    where,
+    h(Card.Head, null, h(Card.Title, null, u.subject), stamp(u)),
+    h('p', { class: 'Update_Words' }, u.words),
+    u.needs
+      ? form(
+        at,
+        [field],
+        h(
+          Card.Actions,
+          null,
+          answers.map(([value, label], i) =>
+            h(Button, { mod: !i && 'go', name: 'answer', value }, label)
+          ),
+        ),
+      )
+      : null,
+  )
+
 // A notice: its subject and a way to put it away, its words, when it came
 // and where it came from, and a way to ask about it.
 let card = (
@@ -430,36 +473,19 @@ let card = (
 ) => {
   let { space } = at
   if (u.transfer) {
-    return h(
-      Card,
-      { class: 'Update', id: updateAnchor(u.eid) },
-      where,
-      h(Card.Head, null, h(Card.Title, null, u.subject), stamp(u)),
-      h('p', { class: 'Update_Words' }, u.words),
-      u.needs
-        ? form(
-          at,
-          [['transfer', u.eid]],
-          h(
-            Card.Actions,
-            null,
-            h(
-              Button,
-              { mod: 'go', name: 'answer', value: 'accept' },
-              'Accept app',
-            ),
-            u.transfer.editor
-              ? h(
-                Button,
-                { name: 'answer', value: 'accept-with-editor' },
-                'Accept and keep editor',
-              )
-              : null,
-            h(Button, { name: 'answer', value: 'decline' }, 'Decline'),
-          ),
-        )
-        : null,
-    )
+    return offerCard(at, u, where, ['transfer', u.eid], [
+      ['accept', 'Accept app'],
+      ...u.transfer.editor
+        ? [['accept-with-editor', 'Accept and keep editor'] as Answer]
+        : [],
+      ['decline', 'Decline'],
+    ])
+  }
+  if (u.friend) {
+    return offerCard(at, u, where, ['friend', u.friend.person], [
+      ['approved', 'Add friend'],
+      ['declined', 'Not now'],
+    ])
   }
   if (u.needs) return needsCard(at, u, where)
   let away = u.dismissed ? null : h(Card.Actions, null, dismissing(at, u))
@@ -704,6 +730,10 @@ export let updatesAnswer = async (
   let back = to.pathname + to.search
   if (form.has('transfer')) {
     await answerTransfer(env, space, who, field('transfer'), field('answer'))
+    return new Response(null, { status: 303, headers: { location: back } })
+  }
+  if (form.has('friend')) {
+    await answerFriend(env, space, who, field('friend'), field('answer'))
     return new Response(null, { status: 303, headers: { location: back } })
   }
   if (form.has('dismiss')) {

@@ -34,6 +34,7 @@ import {
   decide,
   type Request as AppTransfer,
 } from '@yaks/platform/app-transfer'
+import { friendsPlugin } from '@yaks/platform/friends'
 import { idOf, inside, type Row } from '../directory.ts'
 import { reclaimFiles } from '../file-retirement-graph.ts'
 import { caught } from '../defects.ts'
@@ -329,6 +330,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [
       })
     }),
   },
+  friendsPlugin(),
   reclaimFiles(),
   seatsHeard(options),
 ]

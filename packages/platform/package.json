@@ -31,6 +31,7 @@
     "./installs": "./installs.ts",
     "./upstream": "./upstream.ts",
     "./app-transfer": "./app-transfer.ts",
+    "./friends": "./friends.ts",
     "./app-authority": "./app-authority.ts",
     "./app-writes": "./app-writes.ts",
     "./app-read": "./app-read.ts",

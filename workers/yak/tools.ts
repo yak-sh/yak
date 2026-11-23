@@ -1,4 +1,5 @@
 import { transferTool } from './app-transfer.ts'
+import { friendTools } from './friends.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
@@ -8418,6 +8419,7 @@ let appBuildTools = new Set([
 export let TOOLS: Tool[] = [
   ...previewTools,
   worded(transferTool),
+  ...friendTools.map(worded),
   ...OURS.map(worded),
   ...operatorTools.map(worded),
   ...libraryTools.map(worded),
