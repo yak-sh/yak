@@ -2831,7 +2831,10 @@ export class Store extends Durable {
   #commands = (g: Graph, declared: Tools): NamedTool[] =>
     commands(declared).map((tool) => ({
       ...tool,
-      applied: true,
+      // A template's writes are made here, through `acts`; a worker's answer
+      // is its own, kept beside the call like any tool's, so a builder whose
+      // tool it is hears its value (D-467).
+      applied: declared[tool.name!].worker == null,
       run: async (call: Bundle) => {
         let ns = this.#bind.STORE, appId = this.#get('app')
         if (!appId) throw new Error('app store is unavailable')
@@ -2972,10 +2975,16 @@ export class Store extends Durable {
             acts,
           )
         this.#used(true)
+        // The value is what the command answered: a worker's JSON as it sent
+        // it, so a builder whose tool is the app's own code takes its outputs
+        // (D-467).
         return [{
           entity: { eid: '$answer' },
           content: { body: answered.text },
-          output: { source: call.entity.eid },
+          output: {
+            source: call.entity.eid,
+            value: answered.json ?? answered.value,
+          },
         }]
       },
     }))

@@ -13,6 +13,7 @@ test('JSON command answers show fields and keep their raw answer', async () => {
   assertStringIncludes(out.text, '**level**: `"tombsands"`')
   assertEquals(out.text.includes('{"player":'), false)
   assertEquals(out.value.answer, JSON.stringify(payload))
+  assertEquals(out.json, payload)
 })
 
 test('worker command plain text keeps its sentence and answer', async () => {

@@ -18,6 +18,10 @@ export type Caller = { person: string | null; role: string | null }
 export type Reply = {
   text: string
   value: Record<string, unknown>
+  /** A worker's answer read as JSON, where it answered JSON: what a call run
+   * in the store answers as its value, so a builder can name a worker command
+   * as its tool (D-467). */
+  json?: unknown
   heard?: true
 }
 
@@ -40,12 +44,16 @@ export let workerReply = async (
   let answer = await res.text()
   let mime = res.headers.get('content-type')?.split(';')[0].trim()
     .toLowerCase()
-  let json = mime == 'application/json' || mime?.endsWith('+json')
+  let json = (mime == 'application/json' || mime?.endsWith('+json')) &&
+      answer
+    ? { json: JSON.parse(answer) }
+    : null
   return {
-    text: json && answer
-      ? `${name}: answered in ${at}\n\n${display(JSON.parse(answer))}`
+    text: json
+      ? `${name}: answered in ${at}\n\n${display(json.json)}`
       : `${name}: ${answer || 'done'} in ${at}`,
     value: { answer },
+    ...json,
   }
 }
 
