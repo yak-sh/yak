@@ -1,5 +1,4 @@
 import { mapped, packet, readAsk, WIRE } from '@yaks/platform/browser-wire'
-import { streamingFetch } from '@yaks/process/http'
 import { COOKIE } from '@yaks/platform/cookie'
 import { ADMIN_BROWSE, adminPage, BROWSE } from '@yaks/platform/routes'
 // Credential forwarding is a transport boundary: callers hold an address;
@@ -29,6 +28,7 @@ export type Forwarding = {
   credential: () => Promise<Credentials>
   renewed: (session: string) => Promise<void>
   fetch?: typeof fetch
+  browseFetch?: typeof fetch
 }
 
 // These paths are served by the platform itself, never by uploaded app code.
@@ -125,8 +125,6 @@ let browsePage = (body: ArrayBuffer): unknown => {
   }
 }
 
-let browserFetch = streamingFetch()
-
 let sendTo = (
   doors: Forwarding,
   request: Request,
@@ -149,14 +147,14 @@ let sendTo = (
       ? `${COOKIE}=${secret}; __Host-${COOKIE}=${secret}`
       : `Bearer ${secret}`,
   )
-  let send = doors.fetch ??
-    (target.pathname == ADMIN_BROWSE ? browserFetch : fetch)
+  let browser = target.pathname == ADMIN_BROWSE ? doors.browseFetch : undefined
+  let send = browser ?? doors.fetch ?? fetch
   return send(target.href, {
     method: request.method,
     headers,
     body,
     redirect: 'manual',
-    signal: request.signal,
+    signal: browser ? request.signal : undefined,
   })
 }
 

@@ -16,7 +16,7 @@ import {
   readAsk,
   WIRE,
 } from './browser-wire.ts'
-import { holding } from '@yaks/blob'
+import { holding } from '@yaks/blob/stream'
 
 import {
   CONNECT,

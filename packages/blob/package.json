@@ -8,6 +8,7 @@
     "./identify": "./identify.ts",
     "./backend": "./backend.ts",
     "./store": "./store.ts",
+    "./stream": "./stream.ts",
     "./file": "./file.ts",
     "./sqlite": "./sqlite.ts",
     "./vocab": "./vocab.ts",

@@ -3,6 +3,7 @@
 import { client, type Provider, type Tokens } from '@yaks/oauth'
 import { queue } from '@yaks/secrets'
 import { report } from '@yaks/tracker/report'
+import { streamingFetch } from '@yaks/process/http'
 import { forward } from '../packages/admin/forward.ts'
 
 type State = {
@@ -37,7 +38,18 @@ let oauth = client(state.provider, {
     update: (_, fn) => update(fn),
   },
 })
+let browseFetch = streamingFetch(() => {
+  let connection = Deno.createHttpClient({ http2: false })
+  return {
+    fetch: (input, init) => {
+      let options = { ...init, client: connection }
+      return fetch(input, options)
+    },
+    close: () => connection.close(),
+  }
+})
 let handler = forward({
+  browseFetch,
   credential: async () => {
     let bearer = await oauth.token()
     if (!bearer) throw new Error('Admin has no OAuth grant')
