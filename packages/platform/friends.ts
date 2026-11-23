@@ -76,11 +76,11 @@ export let suggestion = (a: string, b: string): Bundle[] => [
   friendSide(b, a, { proposed: {} }),
 ]
 
-/** The query for every friend side a person is at either end of. */
-export let sidesOf = (person: string) => [
-  line`.edge.from=${person}&.relationship.role=${FRIEND}&?decided&?proposed&?created&?updated`,
-  line`.edge.to=${person}&.relationship.role=${FRIEND}&?decided&?proposed&?created&?updated`,
-]
+/** The one read of every friend side a person is at either end of, with
+ * each person at either end as a row of their own (their `doc{title}` and
+ * `email{address}`), so the people it names come back with it. */
+export let sidesOf = (person: string) =>
+  line`.relationship.role=${FRIEND}&(.edge.from=${person}|.edge.to=${person})&.fields=edge,relationship,decided,proposed,created,updated,edge.from.doc.title,edge.from.email.address,edge.to.doc.title,edge.to.email.address`
 
 /** Where each other person stands with `person`, by eid, from the friend
  * sides at either end of them. Whoever stands nowhere (turned down, never

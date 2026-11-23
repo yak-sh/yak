@@ -518,7 +518,9 @@ let rowsAhead = (
     return [agentsOf(at.env, person, dir), dir.provenance(walk)]
   }
   if (view == 'new') return [agentsOf(at.env, person, dir)]
-  if (view == 'people') return [dir.people(walk), dir.admits(walk)]
+  if (view == 'people') {
+    return [dir.people(walk), dir.admits(walk), friendsOf(dir, person)]
+  }
   if (view == 'operator') {
     return [
       reachOf(dir, walk, person),

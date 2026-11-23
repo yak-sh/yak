@@ -15,6 +15,7 @@ import { presence } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
 import { managePath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
+import { nameOf } from './names.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Who } from './session.ts'
@@ -25,12 +26,13 @@ import type { Row as ToolRow } from './tool-words.ts'
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
+// Every friend side `person` is at either end of, and the people at their
+// ends, in one read.
+let sidesRead = (dir: Directory, person: string) => dir.read(sidesOf(person))
+
 // Where everyone stands with `person`, unnamed.
 let standingsOf = async (dir: Directory, person: string) =>
-  standings(
-    person,
-    (await Promise.all(sidesOf(person).map((q) => dir.read(q)))).flat(),
-  )
+  standings(person, await sidesRead(dir, person))
 
 /** Another person, where they stand with the reader, and since when. */
 export type Friend = Stand & { person: string; name: string }
@@ -42,13 +44,19 @@ export let friendsOf = async (
   person: string,
 ): Promise<Friend[]> => {
   let order: Standing[] = ['friend', 'asked', 'suggested', 'asking']
-  return (await Promise.all(
-    [...await standingsOf(dir, person)].map(async ([other, stand]) => ({
-      person: other,
-      name: await dir.nameAt(other) ?? 'Someone on yaks.app',
-      ...stand,
-    })),
-  )).sort((a, b) =>
+  let rows = await sidesRead(dir, person)
+  let named = new Map(rows.map((r) => [
+    r.entity.eid,
+    nameOf(
+      (r.doc as { title?: string } | undefined)?.title,
+      (r.email as { address?: string } | undefined)?.address ?? '',
+    ),
+  ]))
+  return [...standings(person, rows)].map(([other, stand]) => ({
+    person: other,
+    name: named.get(other) || 'Someone on yaks.app',
+    ...stand,
+  })).sort((a, b) =>
     order.indexOf(a.standing) - order.indexOf(b.standing) ||
     a.name.localeCompare(b.name)
   )
