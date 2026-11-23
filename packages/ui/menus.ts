@@ -8,8 +8,8 @@ let installed = new WeakSet<Document>()
  * return keyboard focus to their trigger. Native buttons handle Enter/Space.
  * A panel hears `menu-open`, its `detail` the trigger, as it opens, so one
  * panel can serve many triggers. */
-export let menus = (doc: Document = document): void => {
-  if (installed.has(doc)) return
+export let menus = (doc: Document = document, signal?: AbortSignal): void => {
+  if (installed.has(doc) || signal?.aborted) return
   installed.add(doc)
   let active: { trigger: HTMLElement; panel: HTMLElement; home: Node } | null =
     null
@@ -42,6 +42,10 @@ export let menus = (doc: Document = document): void => {
     place(panel, trigger.getBoundingClientRect(), 'below')
     items()[0]?.focus()
   }
+  signal?.addEventListener('abort', () => {
+    close()
+    installed.delete(doc)
+  }, { once: true })
   doc.addEventListener('click', (e) => {
     let target = e.target as Element
     let trigger = target.closest<HTMLElement>('[data-menu-trigger]')
@@ -49,7 +53,7 @@ export let menus = (doc: Document = document): void => {
     if (!active) return
     if (!active.panel.contains(target)) close()
     else if (target.closest('[role=menuitem]')) close(true)
-  })
+  }, { signal })
   doc.addEventListener('keydown', (e) => {
     let trigger = (e.target as Element).closest?.('[data-menu-trigger]') as
       | HTMLElement
@@ -77,5 +81,5 @@ export let menus = (doc: Document = document): void => {
       e.preventDefault()
       list[next]?.focus()
     } else if (e.key == 'Tab') close()
-  })
+  }, { signal })
 }

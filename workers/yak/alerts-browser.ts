@@ -5,6 +5,7 @@
 // added to an iPhone's Home Screen, after a press there, so in an iPhone's
 // browser the offer says to add it first.
 import { CallError } from '@yaks/tools/errors'
+import { leaving, PAGE } from '@yaks/ui/navigate'
 
 let report = (error: unknown) =>
   queueMicrotask(() => {
@@ -133,12 +134,17 @@ let alerting = async (on: boolean) => {
 export let LONG_WORK = 'yak-long-work'
 
 // The offer's moment: the work is long.
-let due = (root: Document, box: HTMLElement) =>
-  new Promise<void>((done) =>
-    box.hasAttribute('data-due')
-      ? done()
-      : root.addEventListener(LONG_WORK, () => done(), { once: true })
-  )
+let due = (root: Document, box: HTMLElement, signal?: AbortSignal) =>
+  new Promise<void>((done) => {
+    if (box.hasAttribute('data-due') || signal?.aborted) return done()
+    let end = () => {
+      root.removeEventListener(LONG_WORK, end)
+      signal?.removeEventListener('abort', end)
+      done()
+    }
+    root.addEventListener(LONG_WORK, end, { signal })
+    signal?.addEventListener('abort', end, { once: true })
+  })
 
 /** The offer of alerts on this device, as `alertsOffer` drew it: each of its
  * parts hidden until this device is known and the Operator starts long work
@@ -148,7 +154,7 @@ let due = (root: Document, box: HTMLElement) =>
  * chooses notifications as the way the person is alerted. Not now is kept on
  * the person (operator-page.ts `?alerts`), and the offer says where alerts
  * are turned on instead. */
-export let offer = async (root: Document = document) => {
+export let offer = async (root: Document = document, signal?: AbortSignal) => {
   let box = root.querySelector<HTMLElement>('[data-alerts-offer]')
   if (!box) return
   if (box.dataset.badge) badge(Number(box.dataset.badge))
@@ -163,14 +169,19 @@ export let offer = async (root: Document = document) => {
     ? null
     : 'offer'
   if (!asked) return
-  await due(root, box)
+  await due(root, box, signal)
+  if (signal?.aborted) return
   let card = part(asked)!
   let said = card.querySelector<HTMLElement>('[data-status]')!
   let leave = (name: string) => {
+    if (signal?.aborted) return
     card.hidden = true
     let left = part(name)!
     left.hidden = false
-    left.addEventListener('animationend', () => box.remove())
+    left.addEventListener('animationend', () => box.remove(), {
+      once: true,
+      signal,
+    })
   }
   let choose = async (body: Record<string, string>, otherwise: string) => {
     let response = await fetch(`${box.dataset.at}?alerts=1`, {
@@ -188,11 +199,12 @@ export let offer = async (root: Document = document) => {
         await act()
       } catch (error) {
         if (!(error instanceof CallError)) report(error)
+        if (signal?.aborted) return
         said.textContent = error instanceof CallError
           ? error.message
           : otherwise
       }
-      press.disabled = false
+      if (!signal?.aborted) press.disabled = false
     }
   card.hidden = false
   card.querySelector('[data-not-now]')!.addEventListener(
@@ -201,6 +213,7 @@ export let offer = async (root: Document = document) => {
       await choose({ declined: '1' }, 'That could not be saved. Try again.')
       leave('away')
     }, 'That could not be saved. Try again.'),
+    { signal },
   )
   if (asked != 'offer') return
   card.querySelector('.Button-go')!.addEventListener(
@@ -220,7 +233,16 @@ export let offer = async (root: Document = document) => {
       )
       leave('on')
     }, 'Alerts could not be turned on. Try again.'),
+    { signal },
   )
 }
 
-if (typeof document != 'undefined') offer().catch(report)
+if (typeof document != 'undefined') {
+  let page = () => {
+    if (document.querySelector('[data-alerts-offer]')) {
+      offer(document, leaving(document)).catch(report)
+    }
+  }
+  page()
+  document.addEventListener(PAGE, page)
+}

@@ -87,18 +87,19 @@ test('a swap runs a script it names for the first time once, and a written one e
   let runs: string[] = []
   let run = (s: Element) =>
     void runs.push(s.getAttribute('src') ?? s.textContent!)
-  let page = (body: string) =>
+  let page = (body: string, code: string) =>
     parse(
       framed(
         'updates',
         body,
-        '<script src="/b.js"></script><script>go()</script>',
+        `<script src="/b.js"></script><script>${code}</script>`,
       ),
     )
-  swap(doc, page('<p>b</p>'), ran, run, 'https://y.test/updates')
+  swap(doc, page('<p>b</p>', 'go(1)'), ran, run, 'https://y.test/updates')
+  swap(doc, page('<p>c</p>', 'go(2)'), ran, run, 'https://y.test/updates')
   swap(doc, parse(framed('apps', '<p>a</p>')), ran, run, 'https://y.test/apps')
-  swap(doc, page('<p>c</p>'), ran, run, 'https://y.test/updates')
-  assertEquals(runs, ['/b.js', 'go()', 'go()'])
+  swap(doc, page('<p>c</p>', 'go(2)'), ran, run, 'https://y.test/updates')
+  assertEquals(runs, ['/b.js', 'go(1)', 'go(2)', 'go(2)'])
   assertEquals(doc.title, 'updates')
   assert(style.parentNode == doc.head, 'what a script put in the head stays')
 })
@@ -242,13 +243,13 @@ test('a click the browser owns is left to it', () => {
     ...site,
     '/apps': framed(
       'apps',
-      '<a id="hash" href="#menu">Menu</a><a id="new" href="/updates" target="_blank">New</a>' +
+      '<a id="hash" href="#menu">Menu</a><a id="close" href="#">Close</a><a id="new" href="/updates" target="_blank">New</a>' +
         '<a id="far" href="https://elsewhere.test/">Far</a>',
     ),
   })
   assertEquals(
-    ['#hash', '#new', '#far'].map((s) => b.click(s)),
-    [false, false, false],
+    ['#hash', '#close', '#new', '#far'].map((s) => b.click(s)),
+    [false, false, false, false],
   )
   assertEquals(b.click('a[href="/updates"]', { metaKey: true }), false)
   assertEquals(b.fetched, [])

@@ -28,6 +28,7 @@ let MINUTE = 60_000
  *   Audio?: typeof Audio,
  *   lang: string,
  *   setTimeout: typeof setTimeout,
+ *   clearTimeout?: typeof clearTimeout,
  *   Event: typeof Event,
  * }} Platform
  */
@@ -45,6 +46,7 @@ let browser = () => {
     Audio: g.Audio,
     lang: g.document?.documentElement.lang || g.navigator?.language || 'en',
     setTimeout: g.setTimeout.bind(g),
+    clearTimeout: g.clearTimeout.bind(g),
     Event: g.Event,
   }
 }
@@ -77,10 +79,11 @@ let failure = async (r, fallback) =>
  *   at: string,
  *   paid: boolean,
  *   said: (e: Error) => void,
+ *   signal?: AbortSignal,
  *   platform?: Platform,
  * }} o
  */
-export function voice({ button, form, say, at, paid, said, platform }) {
+export function voice({ button, form, say, at, paid, said, signal, platform }) {
   let p = platform ?? browser()
   let records = paid && !!p.media?.getUserMedia && !!p.Recorder
   let voiced = !!p.synthesis && !!p.Utterance
@@ -92,6 +95,7 @@ export function voice({ button, form, say, at, paid, said, platform }) {
   let state = 'idle'
   /** @type {null | (() => void)} */
   let stop = null
+  let release = () => {}
   let show = (now = 'idle') => {
     state = now
     button.setAttribute('aria-pressed', String(now == 'listening'))
@@ -114,7 +118,7 @@ export function voice({ button, form, say, at, paid, said, platform }) {
   form.addEventListener('submit', () => {
     talking = talked
     talked = false
-  })
+  }, { signal })
   let send = () => {
     talked = true
     form.requestSubmit()
@@ -135,12 +139,18 @@ export function voice({ button, form, say, at, paid, said, platform }) {
     }
     r.onend = () => {
       stop = null
+      release = () => {}
       show()
       if (refused) said(new Error(refused))
       else if (words.trim()) send()
     }
     r.start()
     stop = () => r.stop()
+    release = () => {
+      r.onresult = r.onerror = r.onend = null
+      if (r.abort) r.abort()
+      else r.stop()
+    }
     show('listening')
   }
 
@@ -149,28 +159,37 @@ export function voice({ button, form, say, at, paid, said, platform }) {
   let record = async () => {
     let before = say.value.trim()
     let stream, wanted = true
-    stop = () => void (wanted = false)
+    release = stop = () => void (wanted = false)
     show('listening')
     try {
       stream = await p.media.getUserMedia({ audio: true })
     } catch {
+      if (signal?.aborted) return
       stop = null
+      release = () => {}
       show()
       return said(new Error(REFUSED['not-allowed']))
     }
     if (!wanted) {
       for (let track of stream.getTracks()) track.stop()
+      if (signal?.aborted) return
       stop = null
+      release = () => {}
       return show()
     }
     let recorder = new p.Recorder(stream)
     /** @type {Blob[]} */
     let parts = []
+    let off = () => {
+      p.clearTimeout?.(timer)
+      for (let track of stream.getTracks()) track.stop()
+    }
     recorder.ondataavailable = (/** @type {BlobEvent} */ e) =>
       parts.push(e.data)
     recorder.onstop = async () => {
-      for (let track of stream.getTracks()) track.stop()
+      off()
       stop = null
+      release = () => {}
       show('hearing')
       try {
         let audio = new Blob(parts, { type: recorder.mimeType || 'audio/webm' })
@@ -178,22 +197,30 @@ export function voice({ button, form, say, at, paid, said, platform }) {
           method: 'POST',
           headers: { 'content-type': audio.type },
           body: audio,
+          signal,
         })
         if (!r.ok) {
           throw await failure(r, REFUSED.network)
         }
         let { text } = await r.json()
+        if (signal?.aborted) return
         put(before, text)
         show()
         if (String(text).trim()) send()
       } catch (e) {
+        if (signal?.aborted) return
         show()
         said(/** @type {Error} */ (e))
       }
     }
     recorder.start()
     stop = () => recorder.state != 'inactive' && recorder.stop()
-    p.setTimeout(() => stop?.(), MINUTE)
+    let timer = p.setTimeout(stop, MINUTE)
+    release = () => {
+      recorder.onstop = recorder.ondataavailable = null
+      stop?.()
+      off()
+    }
   }
 
   // Lines are said one after another; `hush` drops those not yet said.
@@ -213,6 +240,7 @@ export function voice({ button, form, say, at, paid, said, platform }) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: line }),
+      signal,
     })
     if (!r.ok) throw await failure(r, 'The Operator could not be heard.')
     return URL.createObjectURL(await r.blob())
@@ -226,9 +254,13 @@ export function voice({ button, form, say, at, paid, said, platform }) {
     }
     if (!paid || !p.Audio) return
     let mine = round
-    let sound = fetched(line)
+    let sound = fetched(line).catch((e) => {
+      if (!signal?.aborted) said(e)
+      return null
+    })
     queue = queue.then(async () => {
       let src = await sound
+      if (!src) return
       if (mine != round) return URL.revokeObjectURL(src)
       let audio = playing = new p.Audio(src)
       await new Promise((done) => {
@@ -236,7 +268,9 @@ export function voice({ button, form, say, at, paid, said, platform }) {
         audio.play().catch(done)
       })
       URL.revokeObjectURL(src)
-    }).catch(said)
+    }).catch((e) => {
+      if (!signal?.aborted) said(e)
+    })
   }
 
   // A phone speaks only once a press has let it, so the first press says
@@ -252,7 +286,11 @@ export function voice({ button, form, say, at, paid, said, platform }) {
     }
     if (p.Recognition) listen()
     else record()
-  })
+  }, { signal })
+  signal?.addEventListener('abort', () => {
+    release()
+    hush()
+  }, { once: true })
   show()
 
   return {

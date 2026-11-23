@@ -57,6 +57,8 @@ export let markHtml = (standing: HelperLine['standing']) =>
 export { dates } from './dates.ts'
 
 export { menus, tips } from '@yaks/ui/parts'
+export { leaving } from '@yaks/ui/navigate'
+export { sleep } from '@yaks/fp'
 
 // The page's store, read and written through @yaks/api (operator-api.ts).
 export { storeAt } from './operator-api-page.ts'

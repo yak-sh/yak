@@ -144,7 +144,7 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(letter.to, ADDRESS)
   assertEquals(letter.subject, 'Notes: the build finished')
   assertStringIncludes(String(letter.text), 'Open it from your Updates.')
-  assertStringIncludes(String(letter.text), '/manage/ana/updates')
+  assertStringIncludes(String(letter.text), '/ana/updates')
   // The letter is a row of its own, carrying the notification, and keeps
   // what became of it; the notification is no letter.
   let envelope = byMail.letter!.mail as Comp
@@ -199,7 +199,7 @@ test('what the Operator asks a person is alerted, opening at it in their Updates
   assertEquals(asked.map((l) => l.subject), ['Email bo@x.com?'])
   assertStringIncludes(
     String(asked[0].text),
-    `Answer it in your Updates: https://yaks.app/manage/ana/updates#u-${question.entity.eid}`,
+    `Answer it in your Updates: https://yaks.app/ana/updates#u-${question.entity.eid}`,
   )
 })
 
@@ -366,7 +366,7 @@ test('an alert to a person who chose push is a notification on each browser they
     space.operator,
     'Your report is ready.',
   ])
-  assertEquals(new URL(shown.url).pathname, '/manage/ana/updates')
+  assertEquals(new URL(shown.url).pathname, '/ana/updates')
   assertEquals(new URL(shown.url).hash, `#ask-${about}`)
   assertEquals(shown.tag, byPush.notification)
   assertEquals(shown.count, 0)

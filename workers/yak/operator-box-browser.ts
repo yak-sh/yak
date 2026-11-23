@@ -2,7 +2,7 @@
 // server drew (operator-box.ts `Ask`), as part of `_talk.js`
 // (operator-rows.ts). Only page code imports it, as operator-talk-browser.ts
 // says why.
-import { h, render } from 'preact'
+import { h, hydrate, render } from 'preact'
 import { type Filed, PICTURES } from '@yaks/session/conversation'
 import {
   Ask,
@@ -61,8 +61,8 @@ export let mountAsk = (
     now = { ...now, files: kept.map(drawn), left }
     draw()
   }
-  let draw = () =>
-    render(
+  let draw = (paint = render) =>
+    paint(
       h(Ask, {
         ...given,
         ...now,
@@ -74,9 +74,14 @@ export let mountAsk = (
       }),
       root,
     )
-  draw()
+  draw(hydrate)
   let field = () => root.querySelector('textarea')
   return {
+    close: () => {
+      render(null, root)
+      for (let src of sources.values()) URL.revokeObjectURL(src)
+      sources.clear()
+    },
     set: (change: Held) => {
       now = { ...now, ...change }
       draw()

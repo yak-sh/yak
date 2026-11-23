@@ -26,6 +26,7 @@ import { released } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
 import { inputOf } from '@yaks/session'
+import { LEAVE, sources, stays, swap } from '@yaks/ui/navigate'
 import { TOOLS } from './tools.ts'
 
 let p = platform('operator-draft')
@@ -135,6 +136,27 @@ let scriptAt = (url: string) => {
   return read
 }
 
+type View = Pick<ReturnType<typeof parseHTML>, 'document'> & {
+  windowEvents: EventTarget
+}
+// linkedom supports once but needs the browser's removal on abort.
+let bound = new WeakSet<EventTarget>()
+let signals = (target: EventTarget) => {
+  if (bound.has(target)) return
+  bound.add(target)
+  let add = target.addEventListener.bind(target)
+  target.addEventListener = (type, listener, options) => {
+    let signal = typeof options == 'object' && options.signal
+    if (signal && signal.aborted) return
+    add(type, listener, options)
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        target.removeEventListener(type, listener, options)
+      }, { once: true })
+    }
+  }
+}
+
 let load = async (
   stash: Stash,
   cut = false,
@@ -143,10 +165,27 @@ let load = async (
   app?: string,
   network?: 'held' | 'deploying' | 'down',
   as: Who = who,
+  view?: View,
 ) => {
   let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
-  let { document, Event } = parseHTML(html)
+  let { document: next, Event } = parseHTML(html)
+  let { document, windowEvents } = view ??
+    { document: next, windowEvents: next.createElement('div') }
+  if (view) {
+    let doc = document as unknown as Document
+    swap(doc, next as unknown as Document, sources(doc, base), () => {}, base)
+  }
+  signals(document)
+  signals(windowEvents)
+  document.hasFocus = () => true
+  for (
+    let part of document.querySelectorAll(
+      '#content, #entry-menu, #ask, [data-voice]',
+    )
+  ) {
+    signals(part)
+  }
   for (
     let trigger of document.querySelectorAll<HTMLElement>('[data-menu-trigger]')
   ) {
@@ -158,12 +197,15 @@ let load = async (
   for (let form of document.querySelectorAll('form')) {
     let named = (name: string) => form.querySelector(`[name="${name}"]`)
     Object.defineProperty(form, 'elements', {
+      configurable: true,
       value: new Proxy({}, { get: (_, name) => named(String(name)) }),
     })
     Object.defineProperty(form, 'action', {
+      configurable: true,
       value: form.getAttribute('action'),
     })
     Object.defineProperty(form, 'requestSubmit', {
+      configurable: true,
       value: () =>
         form.dispatchEvent(new Event('submit', { cancelable: true })),
     })
@@ -178,7 +220,7 @@ let load = async (
     }
   }
   let left = false
-  let timers = new Set<ReturnType<typeof setTimeout>>()
+  let timers = new Map<number, ReturnType<typeof setTimeout>>()
   // The page's waits on the held clock: each runs once `pass` reaches its
   // moment, `now`, which the page reads as `performance.now()`.
   let held = network == 'down'
@@ -186,13 +228,30 @@ let load = async (
   let waits = new Map<number, { at: number; fn: () => void }>()
   let after = (fn: () => void, ms: number) => {
     if (left) return 0
-    if (held) return waits.set(++n, { at: now + ms, fn }), n
-    let t = setTimeout(
-      () => (timers.delete(t), fn()),
-      network || ms < 1000 ? ms / 1000 : ms,
-    )
-    timers.add(t)
-    return t
+    let id = ++n
+    if (held) waits.set(id, { at: now + ms, fn })
+    else {
+      timers.set(
+        id,
+        setTimeout(
+          () => (timers.delete(id), fn()),
+          network || ms < 1000 ? ms / 1000 : ms,
+        ),
+      )
+    }
+    return id
+  }
+  let cancel = (id: number) => {
+    if (held) waits.delete(id)
+    else {
+      clearTimeout(timers.get(id))
+      timers.delete(id)
+    }
+  }
+  let intervals = new Set<number>()
+  let every = () => {
+    intervals.add(++n)
+    return n
   }
   // Lets `ms` of the held clock pass, the page's waits running in the order
   // they fall due, each once what the last set going has landed; or less, once
@@ -288,6 +347,7 @@ let load = async (
       // A frame other than the time is the store's answer.
       if (!('clock' in JSON.parse(data))) queueMicrotask(() => void reads++)
     })
+    if (left || page.readyState != 0) return shut(server)
     servers.push(server)
     page.server = server
     page.send = (data) => p.builder(eid).webSocketMessage(server, data)
@@ -299,12 +359,15 @@ let load = async (
     onopen?: () => void
     onmessage?: (e: { data: string }) => void
     onclose?: () => void
+    sent: string[] = []
     #heard: Record<string, ((e: unknown) => void)[]> = {}
     constructor(public url: string) {
       if (!new URL(url).pathname.endsWith('/operator/ws')) sockets.push(this)
       else stores.push(this), queueMicrotask(() => void reach(this))
     }
-    send(_data: string) {}
+    send(data: string) {
+      this.sent.push(data)
+    }
     addEventListener(type: string, fn: (e: unknown) => void) {
       ;(this.#heard[type] ??= []).push(fn)
     }
@@ -326,7 +389,7 @@ let load = async (
       queueMicrotask(() => this.emit('close'))
     }
   }
-  let source = document.querySelector('script[type=module]:not([src])')!
+  let source = document.querySelector('script[data-operator-chat]')!
     .textContent!
   // Generated bundles still depend on the source graph that builds them.
   imported(
@@ -341,6 +404,17 @@ let load = async (
     href: base + '/' + open,
   }
   let copied: string[] = []
+  let leave = () => {
+    if (left) return
+    document.dispatchEvent(new Event(LEAVE))
+    left = true
+  }
+  cleanup(() => {
+    leave()
+    for (let t of timers.values()) clearTimeout(t)
+    waits.clear()
+    for (let server of servers.splice(0)) shut(server)
+  })
   // The browser's interfaces belong to this load, including those used inside
   // imported modules: storage, speech, timers and the page's socket.
   await pageModule(source, {
@@ -358,14 +432,17 @@ let load = async (
       innerWidth: 320,
       innerHeight: 600,
       localStorage: stash,
-      setInterval: () => 0,
+      setInterval: every,
+      clearInterval: (id: number) => void intervals.delete(id),
       setTimeout: after,
-      clearTimeout: held ? (id: number) => void waits.delete(id) : clearTimeout,
+      clearTimeout: cancel,
       ...held ? { performance: { now: () => now } } : {},
       FormData: FormOf,
       Event,
       scrollTo: () => {},
-      addEventListener: () => {},
+      addEventListener: windowEvents.addEventListener.bind(windowEvents),
+      removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+      dispatchEvent: windowEvents.dispatchEvent.bind(windowEvents),
       ...speaking
         ? {
           SpeechRecognition: speaking.platform(Event).Recognition,
@@ -376,20 +453,18 @@ let load = async (
       WebSocket: Page,
     },
   })
-  let leave = () => {
-    left = true
-    for (let t of timers) clearTimeout(t)
-    waits.clear()
-    for (let server of servers.splice(0)) shut(server)
-  }
-  cleanup(leave)
   return {
     say,
     focused,
     copied,
     loads,
     document,
+    view: { document, windowEvents },
+    focus: () => windowEvents.dispatchEvent(new Event('focus')),
     sockets,
+    stores,
+    intervals,
+    timeouts: () => timers.size + waits.size,
     // What the page says under its box.
     status: () => document.querySelector('#ask .Composer_Status')!.textContent,
     went,
@@ -410,7 +485,7 @@ let load = async (
       await tick()
     },
     // The Operator's socket opening, as after a deploy restarted it.
-    open: () => (sockets[0] as { onopen: () => void }).onopen(),
+    open: () => sockets[0].emit('open'),
     // The page's newest socket upgraded through the Builder object, which
     // speaks for it from then on.
     connect: async () => {
@@ -597,6 +672,85 @@ let begun = async (say: string) => {
 }
 let road = await begun('Post the road millage notice')
 let park = await begun('Book the park pavilion for June')
+
+test('swapping between conversations and leaving for Manage lets go of each chat', async () => {
+  let stash = storage()
+  let first = await load(stash, false, road)
+  let doc = first.document as unknown as Document
+  let menu = doc.getElementById('menu')
+  await first.heard()
+  first.open()
+  assert(!stays(doc), 'the navigator can leave the conversation in place')
+  first.leave()
+  assertEquals(first.sockets.map((s) => s.readyState), [3])
+  assertEquals(first.stores.map((s) => s.readyState), [3])
+  assertEquals(first.intervals.size, 0)
+  assertEquals(first.timeouts(), 0)
+  assert(!doc.querySelector('#ask'))
+  assert(!doc.querySelector('[data-task]'))
+
+  let second = await load(
+    stash,
+    false,
+    park,
+    {},
+    undefined,
+    undefined,
+    who,
+    first.view,
+  )
+  await second.heard()
+  second.open()
+  assertEquals(second.sockets.length, 1)
+  assertEquals(second.stores.length, 1)
+  assertEquals(second.intervals.size, 2)
+  assertEquals(doc.querySelectorAll('#ask').length, 1)
+  assert(doc.getElementById('menu') == menu)
+  assertStringIncludes(
+    doc.querySelector('[data-conversation]')!.textContent!,
+    'Book the park pavilion',
+  )
+
+  let before = second.sockets[0].sent.length
+  second.focus()
+  assertEquals(second.sockets[0].sent.length, before + 1)
+  let trigger = doc.querySelector('[data-menu-trigger]')!
+  second.press(trigger)
+  second.press(doc.querySelector('[data-entry-copy]')!)
+  assertEquals(second.copied, [trigger.getAttribute('data-entry-text')])
+  assertEquals(first.copied, [])
+
+  second.leave()
+  let manage = parseHTML(
+    '<html><head><script data-navigate src="/_navigate.js"></script></head><body><main>Manage</main></body></html>',
+  ).document
+  swap(doc, manage as unknown as Document, sources(doc, base), () => {}, base)
+  assertEquals(doc.querySelector('main')?.textContent, 'Manage')
+  assertEquals(second.sockets.map((s) => s.readyState), [3])
+  assertEquals(second.stores.map((s) => s.readyState), [3])
+  assertEquals(second.intervals.size, 0)
+  assertEquals(second.timeouts(), 0)
+
+  let back = await load(
+    stash,
+    false,
+    road,
+    {},
+    undefined,
+    undefined,
+    who,
+    second.view,
+  )
+  await back.heard()
+  back.open()
+  assertEquals(back.sockets.length, 1)
+  assertEquals(back.stores.length, 1)
+  assertStringIncludes(
+    doc.querySelector('[data-conversation]')!.textContent!,
+    'Post the road millage notice',
+  )
+  back.leave()
+})
 
 let onRoad = await load(stash, false, road)
 await onRoad.heard()
@@ -902,9 +1056,9 @@ test('opening the chat app reads the conversation once, with the page', async ()
   await begun('Ask for the north shelter as well')
   await landed.connect()
   await until(() => box.innerHTML.includes('Ask for the north shelter as well'))
-  landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   assertStringIncludes(box.innerHTML, 'Ask for the north shelter as well')
+  landed.leave()
 })
 
 test('archive and restore while disconnected refresh the conversation once on reconnect', async () => {
@@ -995,11 +1149,11 @@ test('a line heard while the page reads the conversation stays on it', async () 
   release()
   await until(() => page.talks() >= 2)
   await page.received()
-  page.leave()
   assertEquals(
     [heard, box.innerHTML.includes('Ask for the lakeside shelter too')],
     [true, true],
   )
+  page.leave()
 })
 
 // Words of the person the page showed are never taken off it by a read that
@@ -1105,13 +1259,13 @@ test('a helper’s line landing before the socket opens is read, once', async ()
   await landed.connect()
   await until(landed.talks)
   await landed.received()
-  landed.leave()
   assertEquals([still, landed.talks()], [0, 1])
   // what it was told closed, its words fetched as it opens
   assertStringIncludes(
     box.innerHTML,
     'The context the helper was given changed here',
   )
+  landed.leave()
 })
 
 // The aside in the margin (operator-aside.ts), kept live from the graph: a
@@ -1317,7 +1471,6 @@ test('a page whose store cannot be reached says its draft is kept, and asks for 
   // until the page says so, within a minute, then a hundred seconds more
   let said = await page.pass(60_000, () => page.status() != '')
   await page.pass(100_000)
-  page.leave()
   assertEquals(said, true)
   assertEquals(
     page.status(),
@@ -1326,6 +1479,7 @@ test('a page whose store cannot be reached says its draft is kept, and asks for 
   assertEquals(page.asked(), 0)
   assert(page.probes() > 0, 'HTTP could not reach its store either')
   assert(page.handshakes() > 2, 'its socket was tried again')
+  page.leave()
 })
 
 test('a connected page reassures while offline, then clears its reassurance when its store reconnects', async () => {

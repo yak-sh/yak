@@ -298,7 +298,7 @@ test('pages draw without lists their machine has not answered, saying nothing wh
     let text = await (await drawing).text()
     return {
       document: parseHTML(text).document,
-      from: text.match(/fetch\("([^"]+lists=1[^"]*)"\)/)?.[1],
+      from: text.match(/fetch\("([^"]+lists=1[^"]*)"/)?.[1],
     }
   }
   // In the aside the lists stand hidden around their slot.

@@ -49,8 +49,7 @@ let el = (n: Node): Element | null =>
   n.nodeType == ELEMENT ? n as Element : null
 
 // What makes a node the same node in both pages, where something does: its
-// id, its `data-key`, the address an image, script, link or anchor names. An
-// inline script has none, so it is always the new page's (it runs again).
+// id, its `data-key`, the address an image, script, link or anchor names.
 let keyOf = (n: Node): string | null => {
   let e = el(n)
   if (!e) return null
@@ -135,6 +134,7 @@ export let morph = (
     }
     attributes(a, b)
     if (a.localName == 'script') {
+      if (!b.hasAttribute('src')) a.textContent = b.textContent
       tally.kept++
       return tally
     }
@@ -199,7 +199,8 @@ let leaveInHead = (n: Node) => {
   let e = el(n)
   if (!e) return false
   let rel = e.getAttribute('rel') ?? ''
-  return e.localName == 'script' || e.localName == 'style' ||
+  return (e.localName == 'script' && e.hasAttribute('src')) ||
+    e.localName == 'style' ||
     (e.localName == 'link' && /stylesheet|preload|modulepreload/.test(rel))
 }
 
@@ -252,9 +253,8 @@ export let swap = (
   let tally = morph(doc.head, next.head, { leave: leaveInHead })
   morph(doc.body, next.body, {}, tally)
   for (let s of scripts(doc)) {
-    if (before.has(s)) continue
     let src = source(s, base)
-    if (src && ran.has(src)) continue
+    if (src && (before.has(s) || ran.has(src))) continue
     if (src) ran.add(src)
     run(s)
   }
@@ -404,7 +404,7 @@ export let start = (
     ) return
     let to = new URL(link.getAttribute('href')!, win.location.href)
     if (to.origin != win.location.origin) return
-    if (page(to) == here && to.hash) return
+    if (page(to) == here && (to.hash || to.href.endsWith('#'))) return
     e.preventDefault()
     go(to)
   })

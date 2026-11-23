@@ -11,8 +11,9 @@
  * @param {Window & typeof globalThis} win
  * @param {Element} conversation
  * @param {HTMLElement | null} pane
+ * @param {AbortSignal} [signal]
  */
-export function follow(win, conversation, pane) {
+export function follow(win, conversation, pane, signal) {
   let doc = conversation.ownerDocument
   let named = () => {
     let id = decodeURIComponent(win.location.hash?.slice(1) ?? '')
@@ -22,19 +23,25 @@ export function follow(win, conversation, pane) {
     let at = named()
     return !!at && !conversation.contains(at)
   }
-  if (win.history) win.history.scrollRestoration = 'manual'
+  if (win.history) {
+    let was = win.history.scrollRestoration
+    win.history.scrollRestoration = 'manual'
+    signal?.addEventListener('abort', () => {
+      win.history.scrollRestoration = was
+    }, { once: true })
+  }
   if (!pane) return
   // Where the person was, kept while nothing is over the conversation.
   let y = pane.scrollTop
   pane.addEventListener('scroll', () => {
     if (!over()) y = pane.scrollTop
-  }, { passive: true })
+  }, { passive: true, signal })
   let back = () => {
     pane.scrollTop = y
   }
   win.addEventListener('hashchange', () => {
     if (!named()) back()
-  })
+  }, { signal })
   // A layer's close (`href="#"`) takes the layer off where the person was.
   doc.addEventListener('click', (e) => {
     let link = /** @type {Element} */ (e.target).closest?.('a[href="#"]')
@@ -42,5 +49,5 @@ export function follow(win, conversation, pane) {
     e.preventDefault()
     win.location.replace('#')
     back()
-  })
+  }, { signal })
 }

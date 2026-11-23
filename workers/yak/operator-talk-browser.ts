@@ -182,6 +182,11 @@ export let mountTalk = (
   // as the server drew it, so the fold keeps its place and whether it is open.
   // One that could not be fetched says so, with a retry.
   let fetching = new Set<string>()
+  let folds = new Set<HTMLElement>()
+  let closeFold = (body: HTMLElement) => {
+    folds.delete(body)
+    render(null, body)
+  }
   let unfolded = (eid: string) => {
     let fold = box.querySelector(`[data-lazy][data-disclosure="${eid}"]`)
     let id = fold?.closest('[id^="row-"]')?.id.slice('row-'.length)
@@ -191,18 +196,21 @@ export let mountTalk = (
     }
     let body = fold.lastElementChild as HTMLElement
     fetching.add(id)
+    folds.add(body)
     render(h(Loading, null), body)
     unfold(id).then((sent) => {
+      if (!held) return
       if (!sent?.lines.some((l) => l.id == id)) {
         throw new Error(`Line ${id} was not among the lines fetched to open`)
       }
       fetching.delete(id)
-      if (!held) return
+      closeFold(body)
       put(sent.entries)
       held = heard(held, sent)
       draw()
     }).catch((e) => {
       fetching.delete(id)
+      if (!held) return
       onError(e)
       render(
         h(
@@ -221,6 +229,12 @@ export let mountTalk = (
   }
   let typing = false
   return {
+    close: () => {
+      held = null
+      for (let body of folds) closeFold(body)
+      render(null, box)
+      front.close()
+    },
     /** the task the page shows, once it shows one */
     task: () => held?.task,
     /** whether the conversation is at work */

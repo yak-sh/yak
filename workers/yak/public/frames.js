@@ -1,8 +1,9 @@
 /** Keep each preview's address beside its frame, including frames drawn later.
  * @param {Window} win
  * @param {Document} document
+ * @param {AbortSignal} [signal]
  */
-export function frames(win, document) {
+export function frames(win, document, signal) {
   let all = () => [...document.querySelectorAll('iframe[data-frame]')]
   let origin = (frame) => new URL(frame.getAttribute('src')).origin
   let opened = () => {
@@ -38,13 +39,13 @@ export function frames(win, document) {
     address.href = href
     address.textContent = href
     opened()
-  })
+  }, { signal })
   document.addEventListener('load', (event) => {
     if (event.target?.matches?.('iframe[data-frame]')) ask(event.target)
-  }, true)
+  }, { capture: true, signal })
   document.addEventListener('change', (event) => {
     if (event.target?.matches?.('[name=screen]')) opened()
-  })
+  }, { signal })
   all().forEach(ask)
   opened()
   return opened

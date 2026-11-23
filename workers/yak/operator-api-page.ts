@@ -4,7 +4,7 @@
 // a draft desk asks of a store (@yaks/draft `Store`), and runs in the browser
 // as part of `_talk.js` (assets.ts).
 import type { Bundle } from '@yaks/graph'
-import { wire } from '@yaks/sync/socket'
+import { type Timer, wire } from '@yaks/sync/socket'
 
 /** How long a write waits on its door before it is given up, ms: a request
  * the network holds unanswered fails in seconds, and is sent again. */
@@ -17,6 +17,7 @@ export let storeAt = (
   url: string,
   person: string,
   report: (error: unknown) => void,
+  { signal, timer }: { signal?: AbortSignal; timer?: Timer } = {},
 ) => {
   let held = new Map<
     string,
@@ -25,6 +26,7 @@ export let storeAt = (
   let link = wire({
     url,
     report,
+    timer,
     land: (frame) => {
       let sub = held.get(frame.id)
       if (!sub) return
@@ -57,11 +59,12 @@ export let storeAt = (
     },
     /** The rows `query` answers now, as the person may read them. */
     query: async (query: string): Promise<Bundle[]> => {
+      let wait = AbortSignal.timeout(WAIT)
       let response = await fetch(`${url}/query`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ q: query }),
-        signal: AbortSignal.timeout(WAIT),
+        signal: signal ? AbortSignal.any([signal, wait]) : wait,
       })
       if (!response.ok) throw new Error(`The store answered ${response.status}`)
       return await response.json() as Bundle[]

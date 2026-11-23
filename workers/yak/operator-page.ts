@@ -35,7 +35,7 @@ import {
 } from './build-door.ts'
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
-import { esc, page as drawn, type Picked, script, shell } from './pages.ts'
+import { esc, page as drawn, type Picked, run, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
@@ -2215,10 +2215,11 @@ let UNREAD = html(
 // something, and adds the rows that wait to the bell and the installed
 // page's icon.
 let lateScript = (from: string) =>
-  `<script type="module">
-let got = await fetch(${
+  html(run(`
+fetch(${
     JSON.stringify(from)
-  }).then((r) => r.ok ? r.json() : null).catch(() => null)
+  }, { signal }).then((r) => r.ok ? r.json() : null).catch(() => null).then((got) => {
+if (signal.aborted) return
 for (let slot of document.querySelectorAll('[data-later]')) {
   let made = document.createElement('template')
   made.innerHTML = got ? got[slot.dataset.later] ?? '' : slot.dataset.later == 'waits' ? ${
@@ -2237,7 +2238,7 @@ if (got) {
   let offer = document.querySelector('[data-alerts-offer][data-badge]')
   if (offer) navigator.setAppBadge?.(Number(offer.dataset.badge) + got.waiting)?.catch(() => {})
 }
-</script>`
+})`))
 
 // What a new chat offers to start with, each a few words the box is filled
 // with for the person to finish: an app made, one of theirs changed, a
@@ -2533,6 +2534,7 @@ export let chatPage = async (
       follows,
       talked.standing,
       !!speechOf(env),
+      asking.request,
       mentions,
     ),
     app,
@@ -2683,9 +2685,7 @@ export let matchesPage = async (
 // Builder object's socket, each step's lines drawn from the entries its
 // frame sends (operator-talk.ts) and what it says aloud said to a person who
 // talked. `boxOf` is the box, where the page has one; `paid` is whether the
-// platform's speech is on, for a browser that has none of its own. Its
-// socket and timers hold the page (`data-stays`), so a link away from a
-// conversation loads the next page (@yaks/ui/navigate).
+// platform's speech is on, for a browser that has none of its own.
 let chatScript = (
   now: Asided,
   at: string,
@@ -2697,18 +2697,30 @@ let chatScript = (
   follows: Follows,
   standing: string,
   paid: boolean,
+  visit: string,
   mentions?: string,
 ) =>
-  `<script type="module" data-stays>
+  `<script type="module" data-operator-chat="${visit}">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, long, markHtml, menus, mountAsk, mountTalk, ordered, selfHtml, showing, storeAt, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, ordered, selfHtml, showing, sleep, storeAt, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
+// Imports may arrive after a second navigation has already replaced this page.
+if (document.querySelector('script[data-operator-chat="${visit}"]')) {
+let signal = leaving(document)
+let timers = new Set()
+let cancel = (id) => { clearTimeout(id); timers.delete(id) }
+let after = (fn, ms) => {
+  if (signal.aborted) return
+  let id = setTimeout(() => { timers.delete(id); fn() }, ms)
+  timers.add(id)
+  return id
+}
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
-menus(document)
+menus(document, signal)
 let box = document.querySelector('[data-conversation]')
 // An id in a line drawn here opens where the person's server says
 // (\`mentions\`), as it does in the lines the page came drawn with.
@@ -2719,13 +2731,13 @@ let mentions = ${JSON.stringify(mentions ?? '')}
 // they ask for them. Where the page keeps a layer over it (the side's
 // \`#menu\`, the app's \`#app\` on a phone) is public/follow.js's.
 let content = document.getElementById('content')
-follow(globalThis, box, content)
+follow(globalThis, box, content, signal)
 // How long the page waits on its door before giving up and asking again, so
 // a request the network holds unanswered fails in seconds.
 let WAIT = 10_000
 // What the page says goes under its box (\`boxed\`, mounted once its drafts are).
 let boxed
-let said = (e) => boxed?.set({ said: e.message })
+let said = (e) => { if (!signal.aborted) boxed?.set({ said: e.message }) }
 // The Operator's store as this person reads and writes it, through @yaks/api
 // (operator-api.ts): their drafts are its rows, heard on its socket as each
 // change lands, from this page or another, and read again whenever the socket
@@ -2733,11 +2745,13 @@ let said = (e) => boxed?.set({ said: e.message })
 // the device and written whether or not a read answered.
 // While its socket cannot reach the store, the page says the draft is kept.
 let KEPT = 'Your draft is kept on this device until syncing returns.'
-let store = storeAt(location.origin + '${at}', '${who.person}', (e) => boxed?.set({ said: e?.name == 'Dropped' ? KEPT : e.message }))
+let store = storeAt(location.origin + '${at}', '${who.person}', (e) => {
+  if (!signal.aborted) boxed?.set({ said: e?.name == 'Dropped' ? KEPT : e.message })
+}, { signal, timer: after })
 let disconnected
 store.connected((open) => {
-  clearTimeout(disconnected)
-  if (!open) disconnected = setTimeout(() => {
+  cancel(disconnected)
+  if (!open) disconnected = after(() => {
     if (!boxed?.said()) boxed?.set({ said: KEPT })
   }, WAIT)
   else if (boxed?.said() == KEPT) boxed.set({ said: '' })
@@ -2800,7 +2814,7 @@ let remember = (app) => {
   for (let part of app?.querySelectorAll('[data-part]') ?? []) painted.set(part, part.outerHTML)
 }
 remember(canvas())
-let refreshFrames = frames(globalThis, document)
+let refreshFrames = frames(globalThis, document, signal)
 let ours = (apps = []) => apps.filter((c) => !c.space || c.space == here).map((c) => c.app)
 let changing = (o) => {
   let app = canvas(), shown = app?.querySelector('[data-frame=live]')
@@ -2858,7 +2872,7 @@ document.addEventListener('click', (e) => {
   let frame = app?.querySelector('[name=screen][value="' + shows.dataset.shows + '"]')
   if (frame) frame.checked = true
   refreshFrames()
-})
+}, { signal })
 // One read of it at a time; one asked for meanwhile follows it. An app the
 // conversation made may since have been deleted: the door answers it missing,
 // and it is not asked for again.
@@ -2879,7 +2893,9 @@ let remake = async (slug) => {
         continue
       }
       if (!response.ok) throw new Error('What is being made could not be brought up to date. Reload to try again.')
-      put(await response.json())
+      let drawn = await response.json()
+      if (signal.aborted) return
+      put(drawn)
     }
   } catch (e) { said(e) } finally { remaking = false }
 }
@@ -2909,14 +2925,16 @@ document.addEventListener('click', async (event) => {
       body: JSON.stringify({ approval: card.dataset.approval, digest: card.dataset.digest, act: button.dataset.act }),
     })
     let answer = await response.json()
+    if (signal.aborted) return
     if (!response.ok) throw new Error(answer?.message ?? 'That could not be answered. Try again.')
     said.textContent = [APPROVAL[answer.state], (answer.state == 'failed' || answer.state == 'forbidden') && answer.said].filter(Boolean).join(' ')
     for (let b of buttons) b.hidden = true
   } catch (error) {
+    if (signal.aborted) return
     said.textContent = error.message
     for (let b of buttons) b.disabled = false
   }
-})
+}, { signal })
 document.addEventListener('submit', async (event) => {
   let contact = event.target.closest?.('[data-contact-form]')
   if (!contact) return
@@ -2926,6 +2944,7 @@ document.addEventListener('submit', async (event) => {
   try {
     let response = await fetch(contact.action, { method: 'POST', body: new FormData(contact) })
     let answer = await response.json()
+    if (signal.aborted) return
     if (!response.ok) throw new Error(answer?.message ?? 'Your contact could not be saved. Try again.')
     if (answer.pending) {
       contact.querySelector('[data-contact-code]').hidden = false
@@ -2936,8 +2955,8 @@ document.addEventListener('submit', async (event) => {
     }
     said.textContent = 'Confirmed. Your Operator can text you here.'
     contact.querySelector('[type=submit]').disabled = true
-  } catch (error) { said.textContent = error.message }
-})
+  } catch (error) { if (!signal.aborted) said.textContent = error.message }
+}, { signal })
 // A read that had no answer in time, or one the platform failed, is asked
 // again after a second, then two, four and eight: a deploy is a moment in
 // which the edge answers 502 and the Builder restarts, and the page reads past
@@ -2945,12 +2964,13 @@ document.addEventListener('submit', async (event) => {
 // failed through all of them is said.
 let ask = async (url) => {
   for (let pause of [1000, 2000, 4000, 8000, null]) {
+    signal.throwIfAborted()
     try {
-      let response = await fetch(url, { signal: AbortSignal.timeout(WAIT) })
+      let response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(WAIT)]) })
       if (response.status < 500 || pause == null) return response
       response.body?.cancel()
-    } catch (e) { if (pause == null) throw e }
-    await new Promise((on) => setTimeout(on, pause))
+    } catch (e) { if (signal.aborted || pause == null) throw e }
+    await sleep(pause, signal)
   }
 }
 // The box is ready to type in.
@@ -2959,12 +2979,12 @@ form?.elements.say.focus()
 // what they had typed here, and leaves the address so a reload adds nothing.
 let typed = new URL(location.href).searchParams.get('say')
 if (form && typed) {
-  drafts.ready.then(() => drafts.restore(place, typed))
+  drafts.ready.then(() => { if (!signal.aborted) drafts.restore(place, typed) })
   let clean = new URL(location.href)
   clean.searchParams.delete('say')
   history.replaceState(history.state, '', clean)
 }
-let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
+let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said, signal })
 let working = () => talk.working()
 // The aside (operator-aside.ts), at the top of the pane at the page's right:
 // the turn under way and the helpers (\`happening\`), each put in place as a
@@ -3041,7 +3061,7 @@ let helped = (helper) => {
 // Every time on the page is the kit's (\`Time\`), said again in the person's
 // clock and zone each second, so a duration counts up, and at once after
 // anything is drawn here.
-setInterval(() => (dates(document), lengthy()), 1000)
+let datesBeat = setInterval(() => (dates(document), lengthy()), 1000)
 // The yak beside the box shows what the Operator is doing, and once the
 // conversation rests, what its helpers are (operator-aside.ts \`showing\`,
 // over the helpers the aside lists): a pose he holds while it lasts (mascot.ts
@@ -3077,7 +3097,7 @@ let typing = (text) => {
 document.addEventListener('click', (e) => {
   let start = e.target.closest('[data-say]')
   if (start && boxed) typing(start.dataset.say)
-})
+}, { signal })
 // The one menu every line's time opens (operator-draw.ts \`EntryMenu\`),
 // filled from the time that opened it: the line's id, its words, and the
 // entries Hide or Restore changes, which a line of none goes without.
@@ -3089,7 +3109,7 @@ actions?.addEventListener('menu-open', ({ detail }) => {
   let archive = actions.querySelector('[data-entry-archive]')
   archive.disabled = false
   archive.textContent = entry.restore == 'true' ? 'Restore' : 'Hide'
-})
+}, { signal })
 document.addEventListener('click', async (e) => {
   let action = e.target.closest?.('[data-entry-copy], [data-entry-quote], [data-entry-link]')
   if (!action) return
@@ -3102,7 +3122,7 @@ document.addEventListener('click', async (e) => {
       typing([drafts.text(place), quote].filter(Boolean).join('\\n\\n') + '\\n\\n')
     } else await navigator.clipboard.writeText('entryCopy' in action.dataset ? text : link.href)
   } catch (error) { said(error) }
-})
+}, { signal })
 // Archive and restore change marks, keeping the words on the page and in search.
 document.addEventListener('click', async (e) => {
   let button = e.target.closest?.('[data-entry-archive]')
@@ -3113,8 +3133,8 @@ document.addEventListener('click', async (e) => {
     await store.apply(entry.archiveEntries.split(',').map((eid) => ({ entity: { eid }, archived: restore ? null : {} })))
       .catch(() => { throw new Error('These entries could not be changed. Try again.') })
     await read()
-  } catch (error) { said(error); button.disabled = false }
-})
+  } catch (error) { if (!signal.aborted) { said(error); button.disabled = false } }
+}, { signal })
 // Stop, pressed in the box, takes effect on the page at once; the Operator's
 // own word follows.
 let stop = async (b) => {
@@ -3125,9 +3145,11 @@ let stop = async (b) => {
   turning(null)
   try {
     let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task }) })
+    if (signal.aborted) return
     if (!response.ok) throw new Error('It could not be stopped. Try again.')
     boxed.set({ said: '' })
   } catch (error) {
+    if (signal.aborted) return
     undo()
     redrawn()
     said(error)
@@ -3149,15 +3171,17 @@ let from = talk.from()
 // or its entry was removed from the store (operator-remove.ts), which takes
 // it off the page too.
 let left = async (ids) => {
-  let kept = await store.query('.entity.eid=' + ids.join(',')).catch((error) => void globalThis.reportError?.(error))
-  if (!kept) return
+  let kept = await store.query('.entity.eid=' + ids.join(',')).catch((error) => {
+    if (!signal.aborted) globalThis.reportError?.(error)
+  })
+  if (!kept || signal.aborted) return
   let there = new Set(kept.filter((b) => !b.tombstone).map((b) => b.entity.eid))
   talk.removed(ids.filter((id) => !there.has(id)))
   for (let id of ids) if (there.has(id)) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
   redrawn()
 }
 let read = async () => {
-  if (open == 'new') return
+  if (signal.aborted || open == 'new') return
   if (reading) return void (again = true)
   reading = (async () => {
     do {
@@ -3165,11 +3189,13 @@ let read = async () => {
       let response = await ask('${at}?talk=' + encodeURIComponent(open) + (from == null ? '' : '&from=' + encodeURIComponent(from)) + (taking ? '&take=' + taking : ''))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
+      if (signal.aborted) return
       standing = got.standing
       if (got.html) {
         let missing = talk.read(got.html)
         redrawn()
         if (missing.length && !again) await left(missing)
+        if (signal.aborted) return
       }
       from ??= talk.from()
       if (got.aside && aside()) {
@@ -3217,16 +3243,16 @@ let hear = (frame) => {
 // (whereabouts.ts).
 let wire
 let sayTab = () => { if (wire?.readyState == 1) wire.send(JSON.stringify({ tab: { visible: document.visibilityState == 'visible', focused: document.hasFocus() } })) }
-for (let on of ['visibilitychange', 'focus', 'blur']) (on == 'visibilitychange' ? document : window).addEventListener(on, sayTab)
-setInterval(sayTab, ${BEAT})
+for (let on of ['visibilitychange', 'focus', 'blur']) (on == 'visibilitychange' ? document : window).addEventListener(on, sayTab, { signal })
+let tabBeat = setInterval(sayTab, ${BEAT})
 let listen = () => {
   let socket = wire = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
-  let opening = setTimeout(() => socket.close(), WAIT)
+  let opening = after(() => socket.close(), WAIT)
   // A socket opening again may follow a deploy, which the page then moves onto
   // (public/deploy.js).
   socket.onopen = () => {
-    clearTimeout(opening); live = true
+    cancel(opening); live = true
     sayTab()
     let app = canvas()
     if (app) remake(app.dataset.app)
@@ -3234,14 +3260,14 @@ let listen = () => {
     opened = true
   }
   socket.onmessage = (e) => { try { hear(JSON.parse(e.data)) } catch (error) { said(error) } }
-  socket.onclose = () => { clearTimeout(opening); live = false; poll(); setTimeout(listen, 3000) }
+  socket.onclose = () => { cancel(opening); live = false; poll(); after(listen, 3000) }
 }
 let polling = false
 let poll = async () => {
-  if (live || polling || !working()) return
+  if (signal.aborted || live || polling || !working()) return
   polling = true
   try { await read() } catch (e) { said(e) }
-  finally { polling = false; if (working()) setTimeout(poll, 2000) }
+  finally { polling = false; if (working()) after(poll, 2000) }
 }
 // Words sent from the box go to this page's door with the rest of its form,
 // the files held with them, in the request that spends their draft, so the
@@ -3255,6 +3281,7 @@ let send = async (b) => {
     submission.set('request', request)
     submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
+    if (signal.aborted) return
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
     boxed.hold([])
     boxed.set({ request: crypto.randomUUID(), said: '' })
@@ -3265,7 +3292,21 @@ let send = async (b) => {
     if (talk.task() != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
     await read(); poll()
   } catch (error) { said(error) }
-  finally { boxed.set({ sending: false }) }
+  finally { if (!signal.aborted) boxed.set({ sending: false }) }
 }
+signal.addEventListener('abort', () => {
+  clearInterval(datesBeat)
+  clearInterval(tabBeat)
+  for (let id of timers) cancel(id)
+  if (wire) {
+    wire.onopen = wire.onmessage = wire.onclose = null
+    wire.close()
+  }
+  boxed?.close()
+  talk.close()
+  drafts.close()
+  store.close()
+}, { once: true })
 listen()
+}
 </script>`
