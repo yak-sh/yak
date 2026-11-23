@@ -136,10 +136,15 @@ let service = operatorService(env, held, {
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Tell them which meetings changed.')
-      ? call('notification_send', {
-        subject,
-        text: 'The budget hearing is new.',
-      })
+      ? [
+        ...call('notification_send', {
+          subject,
+          text: 'The budget hearing is new.',
+        }),
+        ...call('graph_schema', { space: 'clerk', component: 'meeting' }),
+        ...call('app_preview', { app: 'notices', released: true }),
+        ...call('tool_load', { names: ['subscription_cancel'] }),
+      ]
       : cancel
       ? call('subscription_cancel', { subscription: cancel })
       : planned
@@ -181,6 +186,10 @@ let hearing = await meeting('Budget hearing: Monday at 6')
 await meeting('Road millage: Thursday at 8', road)
 await look()
 let [request] = await fired()
+let firedSession = (request.operator_request as { session: string }).session
+let wakeResults = await store.g.read(
+  line`.entry.session=${firedSession}&.result&*`,
+)
 let [told] = await store.g.read(
   line`.notification.to=${person}&.doc.title=${subject}&*`,
 )
@@ -328,6 +337,24 @@ test("a subscription's turn holds its reads and the person's own alerts, never a
   for (let kept of ['notification_send', 'text_send', 'graph_query']) {
     assertEquals(seen.includes(kept), true, kept)
   }
+})
+
+test('a subscription turn reads its space schema and explains unavailable tools', () => {
+  let schema = wakeResults.filter((b) => !b.refusal)
+    .map((b) => (b.content as { body?: string } | undefined)?.body)
+    .find((body) => body?.startsWith('# meeting\n'))
+  assertStringIncludes(schema ?? '', '- title: string')
+  let refused = JSON.stringify(wakeResults.filter((b) => b.refusal))
+  assertStringIncludes(refused, 'app_preview is not held in this turn')
+  assertStringIncludes(
+    refused,
+    'Use app_list for the released address and graph_query',
+  )
+  assertStringIncludes(refused, 'subscription_cancel is not held in this turn')
+  assertStringIncludes(
+    refused,
+    'Use subscription_list to find the subscription',
+  )
 })
 
 test('subscription_list shows each subscription, wake_list leaves them out, and subscription_cancel ends one', () => {

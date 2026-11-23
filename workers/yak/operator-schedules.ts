@@ -355,7 +355,7 @@ export let subscriptionTools = (
     title: 'Cancel a subscription',
     step: { doing: 'Cancelling a subscription…', done: 'Cancelled' },
     description:
-      'Cancel a subscription of the person you work for, by the id subscription_set or subscription_list gave, so it never wakes you again.',
+      'Cancel a subscription of the person you work for by its id from subscription_set or subscription_list. Available when acting on the subscription owner’s own request. Use subscription_list in turns triggered by a subscription, an app page, an error report, or another person’s thread.',
     parameters: {
       type: 'object',
       properties: {

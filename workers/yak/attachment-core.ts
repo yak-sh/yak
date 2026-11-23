@@ -1,5 +1,6 @@
 import { argsOf, type Bundle, type Tool } from '@yaks/graph'
 import { core, type CoreOpts, inputSchemaOf } from '@yaks/mcp'
+import type { Vocab } from '@yaks/vocab'
 import { operatorDoor } from './build-door.ts'
 import { writeSpace } from './reach.ts'
 import { apart, type Ctx, inSpace, SPACE, str } from './tool.ts'
@@ -100,14 +101,49 @@ let selfQuery = (name: Scoped, args: Record<string, unknown>) => {
   return { ...rest, q: `.entity.eid=${ids.join(',')}&*` }
 }
 
+let spaceSchema = (
+  ctx: Ctx,
+  tool: Tool,
+  vocabIn: (space: string) => Promise<Vocab>,
+): Tool => {
+  let schema = inputSchemaOf(tool)
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...schema.properties as Record<string, unknown>,
+        space: str(
+          'Read the vocabulary of the apps you can reach in this space. ' +
+            'Give its slug, id or former slug. Omit for all reachable apps.',
+        ),
+      },
+    },
+    run: async (call, graph) => {
+      let { space: slug, ...args } = argsOf(call)
+      if (slug == null) return tool.run(call, graph)
+      let { space } = await inSpace(ctx, { space: slug })
+      return tool.run(
+        { ...call, call: { ...call.call as object, args } },
+        { ...graph, vocab: await vocabIn(space.eid) },
+      )
+    },
+  }
+}
+
 /** The connector's ordinary graph tools, with `space` and `app` on the reads
  * and the write, and with `self` a read of one's Operator attachments, or a
  * write to one's Operator conversations. That write lands in the Operator's
  * store, so its answer is the batch as applied there, in words the runner
  * keeps beside the call rather than bundles it would write to the apps. */
-export let attachmentCore = (ctx: Ctx, opts: CoreOpts): Tool[] =>
+export let attachmentCore = (
+  ctx: Ctx,
+  opts: CoreOpts,
+  vocabIn: (space: string) => Promise<Vocab>,
+): Tool[] =>
   core(opts).map((tool) => {
     let name = tool.name ?? ''
+    if (name == 'graph_schema') return spaceSchema(ctx, tool, vocabIn)
     if (!scoped(name)) return tool
     let schema = inputSchemaOf(tool)
     let writes = name == 'graph_apply'

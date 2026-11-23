@@ -554,8 +554,11 @@ let OPEN = new Set(['feedback'])
 let TELLING = new Set(['platform_bug', 'text_send', 'notification_send'])
 
 // The tools a turn holds, and the rest withheld with why.
-let holding = (tools: Tool[], held: (t: Tool) => boolean, why: string) =>
-  tools.map((t) => held(t) ? t : { ...t, withheld: why })
+let holding = (
+  tools: Tool[],
+  held: (t: Tool) => boolean,
+  why: (t: Tool) => string,
+) => tools.map((t) => held(t) ? t : { ...t, withheld: why(t) })
 
 // The tools whose answer in words is the platform's own: a receipt of what
 // the call did, or what the space's own people and its Operator wrote (its
@@ -2698,7 +2701,21 @@ export let operating = (
         ))
         : tools
     if (heard) {
-      let why = texted ? TEXTED : OUTSIDE
+      let why = (t: Tool) => {
+        let reason = texted ? TEXTED : OUTSIDE
+        if (t.name == 'app_preview') {
+          return reason +
+            ' Use app_list for the released address and graph_query ' +
+            'for the rows the page shows. To read a public page, open the address ' +
+            'with your web tools if available.'
+        }
+        if (t.name == 'subscription_cancel') {
+          return reason +
+            ' Use subscription_list to find the subscription and ' +
+            'ask its owner to request cancellation in their chat.'
+        }
+        return reason
+      }
       return kept(confirmed(deferred(listened([
         ...odd,
         ...holding(

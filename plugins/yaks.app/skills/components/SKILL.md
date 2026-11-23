@@ -315,10 +315,12 @@ follows a reference of yours, as it follows the platform's own
 
 ## Schema refusals and `graph_schema`
 
-`graph_schema` reports the vocabulary: every component, its properties and their
-types, for the app or the space you name. `graph_apply`'s input schema is the
-generic bundle, `{entity: {eid}}` and any components, so it is the store that
-refuses a property nobody declared.
+`graph_schema` reports components, properties and types. When signed in, pass
+`space` to read the vocabulary of the apps you can reach in that space. Omit
+`space` to read across all reachable apps. When signed out, use
+`app: '<space>/<app>'` for an app anyone with the link can read. `graph_apply`
+takes bundles such as `{entity: {eid}}` with components, and the store checks
+their properties against its vocabulary.
 
 A write or query naming a property that does not exist is refused, and the
 refusal lists the whole component, with each property's type as its schema

@@ -16,8 +16,10 @@ import {
   kernel,
   num,
   rowsOf,
+  seed,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
@@ -758,6 +760,54 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
     )).message
     assertStringIncludes(missing, "no component 'recipy'")
     assertStringIncludes(missing, 'index')
+  } finally {
+    await k.stop()
+  }
+})
+
+test('graph_schema resolves a space before choosing its vocabulary', async () => {
+  let k = await kernel()
+  try {
+    let one = unique('schema-one'), two = unique('schema-two')
+    let them = await seed(
+      k,
+      [one, two].map((slug) => ({ slug, apps: ['notes'] })),
+    )
+    let agent = connector(k, them.cookie)
+    for (let [space, property] of [[one, 'title'], [two, 'date']]) {
+      let target = { space, app: 'notes' }
+      await agent.tool('app_files', {
+        ...target,
+        op: 'write',
+        path: 'vocab.json',
+        content: vocabFile({ schema_record: { [property]: txt } }),
+      })
+      await agent.tool('app_deploy', target)
+    }
+    let renamed = unique('schema-renamed')
+    await agent.tool('space_set', { space: two, slug: renamed })
+    let schema = async (space: string) => {
+      let reply = await agent.call('tools/call', {
+        name: 'graph_schema',
+        arguments: { space, component: 'schema_record' },
+      })
+      assert(!reply.isError, reply.content[0].text)
+      return reply.structuredContent.$defs.schema_record.properties
+    }
+    assertEquals(Object.keys(await schema(one)), ['title'])
+    for (let space of [two, renamed, them.eids[two]]) {
+      assertEquals(Object.keys(await schema(space)), ['date'])
+    }
+    let stranger = connector(k, (await signIn(k)).cookie)
+    await assertRejects(
+      () =>
+        stranger.tool('graph_schema', {
+          space: two,
+          component: 'schema_record',
+        }),
+      Error,
+      'not a member',
+    )
   } finally {
     await k.stop()
   }

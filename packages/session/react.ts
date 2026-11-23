@@ -1611,6 +1611,15 @@ export let react = async (
       description: 'a tool this session does not serve',
       run: (call) => {
         let c = comp(call, CALL)
+        let withheld = selected.find((t) =>
+          t.withheld && (t.name == c?.name || toolEid(t.name) == c?.to)
+        )
+        if (withheld) {
+          throw new CallError(
+            'tool',
+            `${withheld.name} is not held in this turn: ${withheld.withheld}`,
+          )
+        }
         throw new CallError('tool', 'no such tool: ' + (c?.name ?? c?.to))
       },
     }

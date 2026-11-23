@@ -519,7 +519,7 @@ test('nested calls discover new app vocabulary and data without naming a store',
     await tools.yaks.app_deploy({space:'code-mode-person',app: 'code-graph'});
     await tools.yaks.graph_apply({bundles:[{entity:{eid:'$note'},code_note:{body:'new graph'}}]});
     let rows = await tools.yaks.graph_query({q:'.code_note'});
-    return {rows, schema:await tools.yaks.graph_schema({component:'code_note'})};
+    return {rows, schema:await tools.yaks.graph_schema({space:'code-mode-person',component:'code_note'})};
   `
   let out = (await graphAgent.call('tools/call', {
     name: 'code_mode',

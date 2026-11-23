@@ -5,7 +5,7 @@ import {
   type Options as Coding,
   tool as codeMode,
 } from '@yaks/code-mode'
-import { reaching, searching } from './agent.ts'
+import { connected, reaching, searching } from './agent.ts'
 import { inReach } from './declared.ts'
 import { stripping } from './esbuild.ts'
 import { ledger } from './ledger.ts'
@@ -73,12 +73,13 @@ export let coded = <T extends Options>(
           let now = { ...ctx, dir: ctx.reopen?.(true) ?? ctx.dir }
           let reach = await inReach(now)
           let graph = await reaching(now, reach)
+          let current = Array.isArray(opts.core)
+            ? connected(now, reach, graph)
+            : { graph, search: searching(now, reach) }
           let catalog = registry([{
             name: 'yaks',
             tools: [
-              ...appTools(
-                listing({ ...opts, graph, search: searching(now, reach) }),
-              ),
+              ...appTools(listing({ ...opts, ...current })),
               ...resultTools(now, local),
             ],
           }, { name: 'mcp', tools: remoteTools }])

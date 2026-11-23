@@ -289,10 +289,15 @@ conversation and the platform tracker, even if a checking helper succeeds.
 ## The Operator's subscriptions
 
 A person's Operator can also be woken by a change rather than a time, when they
-ask it to watch something: "tell me when a sign-up arrives", "when the build
-finishes, deploy it". Its tools are `subscription_set` (words to act on, a
-`query` written as for `graph_query`, and `mine` to read it over the Operator's
-own store rather than the space), `subscription_list` and `subscription_cancel`.
+ask it to watch something: "tell me when a sign-up arrives" or "tell me when the
+build finishes". Its tools are `subscription_set` (words to act on, a `query`
+written as for `graph_query`, and `mine` to read it over the Operator's own
+store rather than the space), `subscription_list` and `subscription_cancel`.
+
+Cancel a subscription when its owner asks in their own turn. A turn triggered by
+a subscription can use `subscription_list` to identify it and
+`notification_send` to ask its owner to request cancellation in their chat.
+
 In place of a query, `subscription_set` takes a reading tool's name and its
 `args`, as the Operator would call it now: a tool whose answer is a store
 query's rows declares that query as `watch` in its vocabulary (`graph_query`,

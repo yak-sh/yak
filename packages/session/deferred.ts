@@ -72,7 +72,7 @@ export let unknown = (
       .slice(0, 5)
   return missing.map((n) => {
     let why = withheld.get(named(n, new Set(withheld.keys())) ?? '')
-    if (why) return `${n} is not held in this turn: ${why}`
+    if (why) return `${n} is not held in this turn: ${why.replace(/\.+$/, '')}`
     let some = near(n)
     return `There is no tool called ${n}` +
       (some.length ? `; nearest: ${some.join(', ')}` : '')

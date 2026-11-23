@@ -679,14 +679,18 @@ export let searching =
  */
 export let connected = (ctx: Ctx, reach: Reach[], graph: Graph) => ({
   graph,
-  core: attachmentCore(ctx, {
-    vocab: graph.vocab,
-    search: searching(ctx, reach),
-    guide: (comp) => pageFor(comp, ctx.env),
-    aim: AIM,
-    undo: UNDO,
-    narrow: NARROW,
-  }),
+  core: attachmentCore(
+    ctx,
+    {
+      vocab: graph.vocab,
+      search: searching(ctx, reach),
+      guide: (comp) => pageFor(comp, ctx.env),
+      aim: AIM,
+      undo: UNDO,
+      narrow: NARROW,
+    },
+    (space) => spoken(ctx, reach.filter((r) => r.space.eid == space)),
+  ),
   search: searching(ctx, reach),
   // Where a component is documented at length, so graph_schema hands over the
   // page beside the properties (guide.ts `pageFor`).
