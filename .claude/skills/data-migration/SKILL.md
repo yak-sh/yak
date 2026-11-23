@@ -118,6 +118,15 @@ move a batch per unit. A step that can only be atomic is timed on a
 `bin/copy-db` copy first. If it holds the lock for more than a few seconds, it
 is split up.
 
+A `VACUUM` is one atomic step over the whole file, so it never runs on a live
+one: tracker.db's, after a bulk delete, held its write lock about four minutes
+and the tracker's own writes failed. A delete's freed pages are reused by later
+writes. A file with `auto_vacuum` incremental (every graph file made since
+@yaks/sqlite/db set it; `PRAGMA auto_vacuum` answers 2) gives them back to the
+disk in windows through `work` (@yaks/sqlite/owe). tracker.db predates that
+setting (it answers 0), and turning it on takes a VACUUM, so its free pages wait
+for reuse.
+
 A patch keeps what it omits. A repair that puts a component back to an older
 value names every property, `null` for one the older value lacks, or what the
 bad write added stays.
