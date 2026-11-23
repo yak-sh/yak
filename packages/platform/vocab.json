@@ -4,6 +4,48 @@
   },
   "title": "platform",
   "$defs": {
+    "yaks_account": {
+      "component": true,
+      "type": "object",
+      "identity": ["holder", "space"],
+      "description": "a person in this graph and their account in a verified yaks.app space",
+      "properties": {
+        "holder": {
+          "type": "string",
+          "ref": "person",
+          "death": "cascade",
+          "description": "the person this graph knows"
+        },
+        "person": {
+          "type": "string",
+          "ref": "person",
+          "death": "keep",
+          "description": "the person in the hosted yaks.app directory"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "keep",
+          "description": "the space in the hosted yaks.app directory"
+        },
+        "handle": {
+          "type": "string",
+          "search": true,
+          "description": "the space's slug when the link was verified"
+        },
+        "name": {
+          "type": "string",
+          "search": true,
+          "description": "another name people use for the account or space"
+        },
+        "email": {
+          "type": "string",
+          "ref": "email",
+          "death": "detach",
+          "description": "the address this account uses, if recorded in this graph"
+        }
+      }
+    },
     "app": {
       "component": true,
       "type": "object",

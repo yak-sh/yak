@@ -890,6 +890,7 @@ The complete list of reserved names:
     unchecked untrashed updated upstream usage uses using verified visit
     visitor_build visitor_calls visitor_share volume waitlisted wake
     wake_run wants watch web whereabouts withdrawn worked worktree written
+    yaks_account
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

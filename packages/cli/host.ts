@@ -84,6 +84,7 @@ import { survey } from '@yaks/sqlite/survey'
 import type { Opened } from '@yaks/sqlite/db'
 import type { Search } from '@yaks/graph/tools'
 import { type Found, searching } from './searching.ts'
+import { peopleSearch } from './people-search.ts'
 import {
   adopt,
   find,
@@ -94,6 +95,7 @@ import {
   schema as textSchema,
   search,
   split,
+  unfound,
   worded as wordFields,
 } from '@yaks/fts'
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
@@ -987,15 +989,33 @@ let composed = async (
         if (!wordFields(text).length) return undefined
         hits = (words, count) => find(sql, text, words, { limit: count })
         said = async (words, found, limit) => {
-          let hits = merged(found.words, found.meaning, limit)
-          let rows = await built.graph.get(hits.map((h) => h.entity))
+          let people = await peopleSearch(built.graph, words, limit)
+          let ranked = merged(found.words, found.meaning, limit)
+          let hits = new Map(ranked.map((h) => [h.entity, h]))
+          let named = new Set(people.map((h) => h.entity))
+          for (let h of people) {
+            let ranked = hits.get(h.entity)
+            hits.set(h.entity, {
+              ...h,
+              score: ranked?.score ?? 0,
+              snippet: h.snippet || ranked?.snippet || '',
+              source: ranked?.source == 'meaning'
+                ? 'both'
+                : ranked?.source ?? 'text',
+            })
+          }
+          let ordered = [...new Set([...named, ...hits.keys()])]
+          let rows = await built.graph.get(ordered)
+          let hidden = unfound(vocab).not ?? []
           let at = new Map(rows.map((b) => [b.entity.eid, b]))
           // A snippet that says only the title says what the hit line
           // already does; the row's other text says what it is.
           let line = hit(vocab, split(words))
-          return hits.flatMap((h) => {
-            let b = at.get(h.entity)
-            if (!b) return []
+          return ordered.flatMap((eid) => {
+            let b = at.get(eid), h = hits.get(eid)!
+            if (
+              !b || named.has(eid) && (!b.person || hidden.some((c) => b[c]))
+            ) return []
             return [{
               entity: b.entity,
               hit: {
@@ -1010,7 +1030,7 @@ let composed = async (
                   : {}),
               },
             }]
-          })
+          }).slice(0, limit)
         }
         return searching(
           async (words, count) => ({

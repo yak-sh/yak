@@ -1,6 +1,7 @@
 {
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/edge": true,
     "https://yak.sh/vocab/id": true,
     "https://yak.sh/vocab/names": true,
     "https://yak.sh/vocab/kernel": true
@@ -13,6 +14,19 @@
       "by_name": true,
       "properties": {},
       "description": "a human being, as this graph knows them"
+    },
+    "relationship": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "properties": {
+        "role": {
+          "type": "string",
+          "index": true,
+          "description": "how the person at edge.from is related to the person at edge.to, such as brother, mother or friend"
+        }
+      },
+      "description": "a relationship known between two people"
     },
     "persona": {
       "component": true,
