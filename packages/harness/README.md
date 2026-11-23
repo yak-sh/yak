@@ -356,6 +356,17 @@ yak graph apply --bundles '[
   {"edge": {"from": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73", "to": "b032077b-4a75-83d0-8580-7a1782959d1a"}, "routes": {}}]'
 ```
 
+A session whose plan runs out goes on with the next one. When a request fails
+because the plan it spends is used up (@yaks/model `spent`: the Codex backend's
+`usage_limit_reached`, a billing quota, or a window Claude Code read full), the
+runner asks the harness where to go (`Deps.onward`, ./default.ts `movedOn`): of
+the offerings the default routes, one on another plan whose readings leave room
+(@yaks/model `onward`). The session records the move as a passive line,
+`Moved on: <why>.` with `using{provider, model, why}`, and asks again at once
+with the same conversation; every later turn stays there until a person chooses
+another model. Where the default routes nothing else, or every other plan is
+spent too, the request waits for its plan to reset as before.
+
 Deleting a `routes` edge takes its model out, and with none left the row's
 `using` is the default again. A project routes its own work the same way, by
 `routes` edges from the project.
@@ -1448,6 +1459,17 @@ Press **Esc, m** to open the model selector. It lists every offering in the
 graph — each `serves` edge, shown as model and provider. Use **j/k** or arrows
 and **Enter**, or click a row. **Esc** cancels without changing the draft. The
 choice records both the model and the provider that serves it.
+
+A session another harness ran until now (a Claude Code, Codex, Grok or
+Antigravity transcript read into the graph) is taken over in place: the choice
+line also carries a note telling the model where the conversation ran, that the
+tool calls in it were that harness's, and which files it worked on
+(@yaks/session `handoffOf`), and the next message asks the chosen model with the
+whole conversation. From a shell,
+`yak session send S-<n> '<text>' --provider <p>
+--model <m>` does the same, even
+while that harness's process is still open: a send naming a model this graph
+asks is never a knock.
 
 With **New session** selected, the choice applies when that draft is submitted;
 it does not change the harness default or another session. For an existing

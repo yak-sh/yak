@@ -59,19 +59,64 @@ export let limitEid = (
 export let metering = (limits: Limit[], model?: Eid): Limit[] =>
   limits.map((l) => l.per == 'model' && model ? { ...l, model } : l)
 
+// The codes a provider answers a spent allowance with: the Codex backend's
+// plan window, the API's billing quota, and @yaks/openai's native door's.
+let SPENT = new Set(['usage_limit_reached', 'insufficient_quota', 'limit'])
+
+/**
+ * Whether a failed request says the plan it spends is used up: a code a
+ * provider answers a spent allowance with, or a window it read full that has
+ * not reset by `now`. A provider merely busy is not spent.
+ *
+ * ```ts
+ * import { spent } from './limits.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = Date.parse('2026-11-23T12:00:00Z')
+ * let full = { provider: 'claude', window: 300, used: 100, resets: '2026-11-23T14:00:00Z' }
+ * equal(spent({ code: 'busy', limits: [full] }, now), true)
+ * equal(spent({ code: 'busy', limits: [{ ...full, resets: '2026-11-23T11:00:00Z' }] }, now), false)
+ * equal(spent({ code: 'usage_limit_reached' }, now), true)
+ * equal(spent({ code: 'busy' }, now), false)
+ * ```
+ */
+export let spent = (
+  e: { code?: string; limits?: Limit[] },
+  now: number = Date.now(),
+): boolean =>
+  SPENT.has(e.code ?? '') ||
+  !!e.limits?.some((l) =>
+    l.used >= 100 && !(l.resets && Date.parse(l.resets) <= now)
+  )
+
 /** The row of an account a CLI keeps on this machine (`account`), named by
  * its directory. */
 export let accountEid = (home: string): Eid => identityEid('account', [home])
 
-/** The directory of the account a CLI signs in with in an environment:
- * `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, else `~/.claude` or `~/.codex`. */
+/** Where each CLI on this machine keeps the account it signs in with, and
+ * its transcripts: the variable that names the directory, and the one it
+ * keeps under the home directory without it. Antigravity's CLI reads no such
+ * variable. */
+export let ACCOUNTS = {
+  claude: { env: 'CLAUDE_CONFIG_DIR', dir: '.claude' },
+  codex: { env: 'CODEX_HOME', dir: '.codex' },
+  grok: { env: 'GROK_HOME', dir: '.grok' },
+  antigravity: { env: undefined, dir: '.gemini/antigravity-cli' },
+} as const
+
+/** A CLI that keeps an account on this machine (`ACCOUNTS`). */
+export type Runner = keyof typeof ACCOUNTS
+
+/** The directory of the account a CLI signs in with in an environment: the
+ * one its variable names (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`),
+ * else its own under the home directory (`~/.claude`, `~/.codex`, ...). */
 export let accountHome = (
-  runner: 'claude' | 'codex',
+  runner: Runner,
   env: (name: string) => string | undefined,
 ): string | undefined => {
-  let named = env(runner == 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME')
+  let { env: name, dir } = ACCOUNTS[runner]
   let at = env('HOME')
-  return named || (at && `${at}/.${runner}`) || undefined
+  return (name && env(name)) || (at && `${at}/${dir}`) || undefined
 }
 
 /**
@@ -92,13 +137,14 @@ export let accountHome = (
  * ```
  */
 export let signingIn = (
-  runner: 'claude' | 'codex',
+  runner: Runner,
   home: string,
   env: Record<string, string>,
 ): Record<string, string> => {
-  let name = runner == 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'
+  let { env: name, dir } = ACCOUNTS[runner]
+  if (!name) return env
   let { [name]: _, ...rest } = env
-  return home == `${env.HOME}/.${runner}` ? rest : { ...rest, [name]: home }
+  return home == `${env.HOME}/${dir}` ? rest : { ...rest, [name]: home }
 }
 
 /**

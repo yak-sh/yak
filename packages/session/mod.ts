@@ -96,6 +96,7 @@ export { calledIn, noticeParent, raiseNotice } from './child-notice.ts'
 
 export { appendEntry } from './append.ts'
 export { grafted } from './graft.ts'
+export { handoff, handoffOf, touched } from './handoff.ts'
 export * from './timing.ts'
 
 export * from './window.ts'

@@ -130,12 +130,14 @@ import type { Affordable } from './afford.ts'
 export {
   accountEid,
   accountHome,
+  ACCOUNTS,
   limitEid,
   limitRows,
   metering,
   signingIn,
+  spent,
 } from './limits.ts'
-export type { Limit } from './limits.ts'
+export type { Limit, Runner } from './limits.ts'
 import type { Limit } from './limits.ts'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'

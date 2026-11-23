@@ -59,6 +59,7 @@ import {
   currentStatus,
   type Deps,
   ENTRY,
+  handoffOf,
   humanCaller,
   live,
   passing,
@@ -79,7 +80,7 @@ import {
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
 import { lineage } from '@yaks/project'
 import { render } from '@yaks/text'
-import { defaultUsing } from './default.ts'
+import { defaultUsing, movedOn } from './default.ts'
 import {
   type ModelSelection,
   modelSelection,
@@ -502,6 +503,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     prepareChild,
     model,
     resolveModel,
+    onward: (using) => movedOn(h.g, using),
     compactModel: compact,
     elideCold: opts.elideCold,
     answers: answers(h.g, implementations, opts.model),
@@ -755,10 +757,14 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       if (!owner?.session) throw new Error('Unknown session')
       const chosen = await modelUsing(h.g, model, implementations)
       const prior = await selectedUsing(h.g, session)
+      // A conversation another harness ran until now is taken over here, and
+      // the model is told so (@yaks/session `handoffOf`).
+      const note = await handoffOf(h.g, session)
       await h.g.apply([{
         entity: { eid: crypto.randomUUID() },
         entry: { session },
         notice: {},
+        ...note ? { [CONTENT]: { body: note } } : {},
         using: { ...using, ...prior, ...chosen },
         $actor: through(session),
       }])

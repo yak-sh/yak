@@ -184,6 +184,13 @@ the parent transcript through the referenced entry, followed by its own entries.
 Provider continuation data is stored as a provider-specific component on an ask
 entry; for example, `@yaks/openai` stores `openai{response_id}`.
 
+A model that takes over a conversation another harness ran (its newest model
+selection or request was imported, `lines{file, start}`) is told so first:
+`handoffOf(g, session)` is the note (`handoff`) saying what it ran on, that its
+tool calls were that harness's own, and the files its calls named (`touched`). A
+model whose window cannot hold the conversation reads it summarized, as any long
+transcript is.
+
 A fork reads its parent's lines where they are, so both live in one store. To
 begin a session in another store with a transcript's lines,
 `grafted(lines,
@@ -728,13 +735,15 @@ straight to the harness, never to a file another loop watches.
 
 A session a harness runs outside this package's daemon is read into the graph
 from the harness's own log, by one importer (`@yaks/session/tail`). A reader
-(`claude`, `codex`) says what each line of a format means, and `pull()` writes
-it: what a person typed (an input, signed by them, and the session marked
-`operator`), what the harness put in front of the model (`notice`), what the
-model said and thought, and each tool call with its result. A call arrives held
-by the session (`execution{state, by}`), so no tool runner here runs it again.
-Tool arguments and output pass through `scrub()`, which redacts the shapes a
-credential takes.
+(`claude`, `codex`, `codexRollout`, `grok`, `antigravity`) says what each line
+of a format means, and `pull()` writes it: what a person typed (an input, signed
+by them, and the session marked `operator`), what the harness put in front of
+the model (`notice`), what the model said and thought, and each tool call with
+its result. A call arrives held by the session (`execution{state, by}`), so no
+tool runner here runs it again, and keeps the name it was called by
+(`call.name`): a provider that continues the conversation is not served that
+harness's tools. Tool arguments and output pass through `scrub()`, which redacts
+the shapes a credential takes.
 
 Each file read is a @yaks/file `file{path, root}` on the volume that holds it,
 and every entry read from it wears the line it came from, `lines{file, start}`.
@@ -786,6 +795,33 @@ transcript, and the session's `session.transcript` where it named the plain
 file, so reading resumes at the same line and entry identities hold. A failed
 archive retries after a minute while the other files progress.
 
+The Codex Mac app writes the same rollouts under the same `CODEX_HOME` as the
+CLI, so its threads are read as the CLI's are.
+
+Grok Build keeps each session's model history as
+`<GROK_HOME>/sessions/<percent-encoded cwd>/<session>/chat_history.jsonl`, one
+`{type, content}` row per line, read by `grok`. An assistant row names its model
+(`model_id`) and its calls (`tool_calls`, each `{id, name, arguments}` with the
+arguments a JSON string), and a `tool_result` names its call by `tool_call_id`.
+Reasoning that is only `encrypted_content` is left out, and the rows carry no
+time. The session's `updates.jsonl` streams the same turns as Agent Client
+Protocol chunks; the history holds each message whole, so it is the one read.
+
+The Antigravity CLI (`agy`) keeps each conversation's steps as
+`~/.gemini/antigravity-cli/brain/<conversation>/.system_generated/logs/transcript_full.jsonl`
+(`transcript.jsonl`, whose long fields are cut, where an older version kept only
+that), one `{step_index, source, type, status, created_at, content}` per line,
+read by `antigravity`. A `PLANNER_RESPONSE` carries the model's words, its
+`thinking` and its calls (`tool_calls`, `{name, args}` with no id), and each
+call's outcome is the `GENERIC` step after it, in call order. A call is named by
+the step that answers it (`step-<n>`), and that step names its call too, so a
+result always has the call it answers. The desktop app's `~/.gemini/antigravity`
+is another layout, and is not read.
+
+Both formats are copied from what others saw these CLIs write, not from a
+published schema, and the fixtures in grok_antigravity_test.ts follow them: a
+version that writes another shape reads as nothing, and the fix is the reader.
+
 The duty scans sessions one at a time, starting another scan an hour after the
 last finishes. `stale()` yields pages of at most 50 imported entry identities
 from sessions whose newest entry is older than `full`, checking that age before
@@ -802,15 +838,18 @@ since the session's cost is their sum.
 | `find`  | `true`  | whether accounts are found on their own                 |
 | `full`  | 14 days | how long a session keeps its full depth                 |
 
-An **account** is a directory a CLI keeps one sign-in and its transcripts in:
-Claude Code's `CLAUDE_CONFIG_DIR` (its `projects`), Codex's `CODEX_HOME` (its
-`sessions`). Someone with several accounts keeps each in a directory of its own,
-so the duty reads every account it finds (`homes` in ./files.ts): the ones
-`yak serve`'s environment names, else `~/.claude` and `~/.codex`; every
-`~/.claude*` and `~/.codex*` directory holding transcripts; and each one the
-`homes` option lists, known as Claude Code's by its `projects` and as Codex's by
-its `sessions`. They are found again as often as transcripts are listed. Each is
-an `account{home, provider}` row (@yaks/model), and each transcript keeps its
+An **account** is a directory a CLI keeps one sign-in and its transcripts in
+(@yaks/model `ACCOUNTS`): Claude Code's `CLAUDE_CONFIG_DIR` (its `projects`),
+Codex's `CODEX_HOME` and Grok's `GROK_HOME` (their `sessions`), and the
+Antigravity CLI's `~/.gemini/antigravity-cli` (its `brain`). Someone with
+several accounts keeps each in a directory of its own, so the duty reads every
+account it finds (`homes` in ./files.ts): the ones `yak serve`'s environment
+names, else `~/.claude`, `~/.codex`, `~/.grok` and `~/.gemini/antigravity-cli`;
+every `~/.claude*`, `~/.codex*` and `~/.grok*` directory holding transcripts;
+and each one the `homes` option lists, known by its name, else as Claude Code's
+by its `projects`, Antigravity's by its `brain` and Codex's by its `sessions`.
+They are found again as often as transcripts are listed. Each is an
+`account{home, provider}` row (@yaks/model), and each transcript keeps its
 account: a Codex rollout's plan readings are that account's `rate_limit` rows,
 as are those a `claude -p` run reports in its stream (`rate_limit_event`), and
 @yaks/spend bills a request to the account whose directory holds its transcript.

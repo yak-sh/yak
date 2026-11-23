@@ -141,6 +141,61 @@ export let route = (asked: Asked): Routed | undefined => {
     : undefined
 }
 
+/**
+ * Where a conversation goes on once the plan `from` runs on is spent: of the
+ * offerings on another plan whose readings leave room, the one {@link route}
+ * chooses, else the first of them. Nothing where every other plan is spent
+ * too, or none is routed. The reason says which plan ran out.
+ *
+ * ```ts
+ * import { onward } from './route.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let routes = [
+ *   { provider: 'claude', model: 'opus', name: 'opus', plan: 'claude' },
+ *   { provider: 'openai', model: 'sol', name: 'sol', plan: 'codex' },
+ *   { provider: 'grok', model: 'grok-5', name: 'grok-5', plan: 'grok' },
+ * ]
+ * let now = Date.parse('2026-11-23T12:00:00Z')
+ * let full = { provider: 'codex', window: 10080, used: 100, resets: '2026-11-25T00:00:00Z' }
+ * let from = { provider: 'claude', model: 'opus' }
+ * // With no readings, the next routed offering.
+ * equal(onward({ routes, readings: [], now, from }), {
+ *   provider: 'openai', model: 'sol', why: "opus's plan is spent; sol is next",
+ * })
+ * // A plan read full is passed over.
+ * equal(onward({ routes, readings: [full], now, from })?.model, 'grok-5')
+ * equal(onward({ routes: routes.slice(0, 2), readings: [full], now, from }), undefined)
+ * ```
+ */
+export let onward = (
+  asked: Asked & { from: { provider: Eid; model?: Eid } },
+): Routed | undefined => {
+  let { routes, readings, now, from } = asked
+  let was =
+    routes.find((r) =>
+      r.provider == from.provider && (!from.model || r.model == from.model)
+    ) ?? routes.find((r) => r.provider == from.provider)
+  let plan = was?.plan ?? from.provider
+  let full = (plan: Eid) =>
+    readings.some((r) =>
+      r.provider == plan && r.used >= 100 &&
+      !(r.resets && Date.parse(r.resets) <= now)
+    )
+  let open = routes.filter((r) => r.plan != plan && !full(r.plan))
+  if (!open.length) return undefined
+  let chosen = route({ ...asked, routes: open }) ??
+    {
+      provider: open[0].provider,
+      model: open[0].model,
+      why: `${open[0].name} is next`,
+    }
+  return {
+    ...chosen,
+    why: `${was ? `${was.name}'s plan` : 'its plan'} is spent; ${chosen.why}`,
+  }
+}
+
 /** An account an offering may run on (`account`), and what it is called,
  * for the reason. */
 export type Account = { account: Eid; name: string }

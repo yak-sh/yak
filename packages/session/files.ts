@@ -5,26 +5,35 @@ import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { accountEid, accountHome } from '@yaks/model'
+import { accountEid, accountHome, ACCOUNTS, type Runner } from '@yaks/model'
 
 /** An account a CLI keeps on this machine: its config directory, the one
- * `CLAUDE_CONFIG_DIR` or `CODEX_HOME` names, which holds its transcripts. */
-export type Home = { runner: 'claude' | 'codex'; dir: string }
+ * `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME` names, which holds its
+ * transcripts (@yaks/model `ACCOUNTS`). */
+export type Home = { runner: Runner; dir: string }
+
+// The directory under an account that holds its transcripts.
+let KEEPS: Record<Runner, string> = {
+  claude: 'projects',
+  codex: 'sessions',
+  grok: 'sessions',
+  antigravity: 'brain',
+}
 
 type Env = Pick<systemProcess.Env, 'get'>
 
 /** The account a CLI signs in with in an environment, this process's by
- * default: `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, else `~/.claude` or
- * `~/.codex`. */
+ * default: the directory its variable names, else its own under the home
+ * directory (`~/.claude`, `~/.codex`, `~/.grok`,
+ * `~/.gemini/antigravity-cli`). */
 export let home = (
   runner: Home['runner'],
   env: Env = systemProcess.env,
 ): string | undefined => accountHome(runner, (name) => env.get(name))
 
 /** Where an account keeps its transcripts: Claude Code's `projects`, Codex's
- * `sessions`. */
-export let transcriptsOf = (h: Home): string =>
-  `${h.dir}/${h.runner == 'claude' ? 'projects' : 'sessions'}`
+ * and Grok's `sessions`, Antigravity's `brain`. */
+export let transcriptsOf = (h: Home): string => `${h.dir}/${KEEPS[h.runner]}`
 
 /** Where a Claude Code account keeps one file per running process, naming
  * its session. */
@@ -38,21 +47,32 @@ let isDir = async (path: string) => {
   }
 }
 
-// Which CLI's account a directory listed by hand is, by what it holds:
-// Claude Code keeps `projects`, Codex only `sessions`. One found on its own
-// says by its name.
-let kindOf = async (dir: string): Promise<Home['runner'] | undefined> =>
-  await isDir(`${dir}/projects`)
-    ? 'claude'
-    : await isDir(`${dir}/sessions`)
-    ? 'codex'
-    : undefined
+// Which CLI's account a directory is by its name: `~/.claude-work` is
+// Claude Code's, `~/.grok` Grok's.
+let named = (dir: string): Runner | undefined =>
+  (dir.match(/\/\.(claude|codex|grok)[^/]*$/)?.[1] ??
+    (dir.endsWith('/antigravity-cli') ? 'antigravity' : undefined)) as
+      | Runner
+      | undefined
+
+// Which CLI's account a directory listed by hand is, by its name or else by
+// what it holds: Claude Code keeps `projects`, Antigravity `brain`, Codex
+// `sessions`.
+let kindOf = async (dir: string): Promise<Runner | undefined> =>
+  named(dir) ??
+    (await isDir(`${dir}/projects`)
+      ? 'claude'
+      : await isDir(`${dir}/brain`)
+      ? 'antigravity'
+      : await isDir(`${dir}/sessions`)
+      ? 'codex'
+      : undefined)
 
 /**
  * Every account on this machine that holds transcripts: the directories
  * `listed` names and, unless `find` is false, the ones the environment (this
- * process's by default) signs in with and each `~/.claude*` and `~/.codex*`
- * directory. Someone
+ * process's by default) signs in with and each `~/.claude*`, `~/.codex*` and
+ * `~/.grok*` directory. Someone
  * with several accounts keeps each in a directory of its own
  * (`CLAUDE_CONFIG_DIR=~/.claude-work`), so each is found on its own.
  *
@@ -70,22 +90,21 @@ export let homes = async (
   let at = env.get('HOME')
   let expand = (dir: string) =>
     dir.replace(/^~(?=\/|$)/, at ?? '~').replace(/(.)\/+$/, '$1')
-  let named = (dir: string): Home['runner'] | undefined =>
-    dir.match(/\/\.(claude|codex)[^/]*$/)?.[1] as Home['runner'] | undefined
   let found = find && at
     ? (await list(at)).filter((f) => f.isDirectory)
       .map((f) => `${at}/${f.name}`).filter(named).sort()
     : []
   let out = new Map<string, Home>()
-  let add = async (runner: Home['runner'] | undefined, dir?: string) => {
+  let add = async (runner: Runner | undefined, dir?: string) => {
     if (!runner || !dir || out.has(dir)) return
     if (await isDir(transcriptsOf({ runner, dir }))) {
       out.set(dir, { runner, dir })
     }
   }
   if (find) {
-    await add('claude', home('claude', env))
-    await add('codex', home('codex', env))
+    for (let runner of Object.keys(ACCOUNTS) as Runner[]) {
+      await add(runner, home(runner, env))
+    }
   }
   for (let dir of listed.map(expand)) await add(await kindOf(dir), dir)
   for (let dir of found) await add(named(dir), dir)
@@ -108,13 +127,11 @@ export let accountRows = (from: Home[]): Bundle[] => {
 }
 
 /** Every transcript the accounts keep, each with its account: Claude Code's
- * by {@link transcripts}, Codex's by {@link rollouts}. */
+ * by {@link transcripts}, Codex's by {@link rollouts}, Grok's by
+ * {@link grokSessions} and Antigravity's by {@link conversations}. */
 export let held = async (from: Home[]): Promise<Found[]> =>
   (await Promise.all(from.map(async (h) => {
-    let dir = transcriptsOf(h)
-    let found = h.runner == 'claude'
-      ? await transcripts(dir)
-      : await rollouts(dir)
+    let found = await LISTS[h.runner](transcriptsOf(h))
     let account = accountEid(h.dir)
     return found.map((f) => ({ ...f, account }))
   }))).flat()
@@ -154,7 +171,8 @@ export let versionOf = (
 export type Found = {
   id: string
   path: string
-  runner?: 'codex'
+  /** the CLI that keeps it, where it is not Claude Code */
+  runner?: Exclude<Runner, 'claude'>
   /** a subagent's: the harness's id for the session that started it */
   parent?: string
   /** the account whose transcript it is (@yaks/model `account`) */
@@ -244,4 +262,57 @@ export let header = (path: string): Record<string, unknown> => {
   } finally {
     file.close()
   }
+}
+
+// A session's id as its directory names it: a UUID.
+let UUID = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i
+
+/** Every Grok Build session under its `sessions` directory: one directory
+ * per working directory (percent-encoded), and in it one per session, named
+ * by its id, holding the model's history, `chat_history.jsonl`. */
+export let grokSessions = async (dir: string): Promise<Found[]> => {
+  let found: Found[] = []
+  for (let cwd of await list(dir)) {
+    if (!cwd.isDirectory) continue
+    for (let s of await list(`${dir}/${cwd.name}`)) {
+      if (!s.isDirectory || !UUID.test(s.name)) continue
+      let path = `${dir}/${cwd.name}/${s.name}/chat_history.jsonl`
+      if (await isFile(path)) found.push({ id: s.name, path, runner: 'grok' })
+    }
+  }
+  return found
+}
+
+/** Every Antigravity CLI conversation under its `brain` directory: one
+ * directory per conversation, named by its id, whose steps are logged in
+ * `.system_generated/logs/transcript_full.jsonl`, or, where an older version
+ * kept only the shortened log, `transcript.jsonl`. */
+export let conversations = async (dir: string): Promise<Found[]> => {
+  let found: Found[] = []
+  for (let c of await list(dir)) {
+    if (!c.isDirectory || !UUID.test(c.name)) continue
+    let logs = `${dir}/${c.name}/.system_generated/logs`
+    for (let name of ['transcript_full.jsonl', 'transcript.jsonl']) {
+      if (!await isFile(`${logs}/${name}`)) continue
+      found.push({ id: c.name, path: `${logs}/${name}`, runner: 'antigravity' })
+      break
+    }
+  }
+  return found
+}
+
+let isFile = async (path: string) => {
+  try {
+    return (await fs.stat(path)).isFile
+  } catch {
+    return false
+  }
+}
+
+// How each CLI's transcripts are listed.
+let LISTS: Record<Runner, (dir: string) => Promise<Found[]>> = {
+  claude: (dir) => transcripts(dir),
+  codex: (dir) => rollouts(dir),
+  grok: grokSessions,
+  antigravity: conversations,
 }

@@ -244,7 +244,9 @@ export let imported = (
       put({
         entity: { eid: callOf(session, String(call.id)) },
         ...at,
-        call: { ...asked, ...(name ? { to: toolEid(name) } : {}) },
+        // The name it was called by stays beside the tool it names: a
+        // provider that continues the conversation is not served that tool.
+        call: { ...asked, ...(name ? { to: toolEid(name), name } : {}) },
         execution: { by: session },
         ...rest,
       })

@@ -633,3 +633,145 @@ let limited = (r: Event): Limit[] =>
         : { resets: new Date(Number(w.resets_at) * 1000).toISOString() },
     }]
   )
+
+// Readable text out of a row's content: a string, or blocks each carrying its
+// text, whatever the block's type is called.
+let prose = (v: unknown): string =>
+  typeof v == 'string'
+    ? v
+    : list(v).map((b) => str(b.text)).filter(Boolean).join('\n')
+
+/**
+ * Grok Build: the model's history it keeps of a session,
+ * `$GROK_HOME/sessions/<percent-encoded cwd>/<session>/chat_history.jsonl`,
+ * one `{type, content}` row per line. An assistant row names its model
+ * (`model_id`) and the calls it made (`tool_calls`: `{id, name, arguments}`,
+ * the arguments a JSON string), and a `tool_result` names the call it answers
+ * (`tool_call_id`). Reasoning that is only `encrypted_content` says nothing
+ * readable, and the rows carry no time. The session's `updates.jsonl` streams
+ * the same turns as Agent Client Protocol chunks; the history holds each
+ * message whole.
+ *
+ * ```ts
+ * import { grok } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let asked = { type: 'assistant', content: 'Looking.', model_id: 'grok-4.6-build',
+ *   tool_calls: [{ id: 'c1', name: 'read_file', arguments: '{"path":"a.ts"}' }] }
+ * assertEquals(grok(asked).entries, [
+ *   { content: { body: 'Looking.' }, output: {} },
+ *   { call: { to: 'read_file', id: 'c1', args: { path: 'a.ts' } } },
+ * ])
+ * assertEquals(grok(asked).model, 'grok-4.6-build')
+ * ```
+ */
+export let grok: Reader = (e) => {
+  let type = str(e.type)
+  let body = prose(e.content)
+  let entries: Comps[] = type == 'system'
+    ? [{ using: { provider: 'grok' }, notice: {} }]
+    : type == 'user'
+    ? said(body)
+    : type == 'assistant'
+    ? [
+      ...said(body, { output: {} }),
+      ...list(e.tool_calls).map((c) =>
+        call(str(c.name), c.id, argumentsOf(c.arguments))
+      ),
+    ]
+    : type == 'reasoning'
+    ? said(body, { reasoning: {}, output: {} })
+    : type == 'tool_result'
+    ? [result(e.tool_call_id, body, !!e.is_error)]
+    // A call the backend ran itself (its web search) is asked and answered
+    // on one row.
+    : type == 'backend_tool_call'
+    ? [
+      call(str(e.name) || 'backend_tool', e.id, argumentsOf(e.arguments)),
+      result(e.id, body, false),
+    ]
+    : type == 'compaction_checkpoint'
+    ? said(body, { checkpoint: {}, notice: {} })
+    : []
+  return {
+    entries,
+    ...(type == 'system' && body
+      ? { fixed: [{ source: 'system', parts: [['system', body.length]] }] }
+      : {}),
+    ...(type == 'assistant' && str(e.model_id)
+      ? { model: str(e.model_id) }
+      : {}),
+  }
+}
+
+// The call an Antigravity step's result answers: a planner response's calls
+// are answered in order by the steps after it, one each, so the `k`th call of
+// step `s` is answered at step `s + 1 + k`, and both name it by that step.
+let stepCall = (step: number) => `step-${step}`
+
+/**
+ * Antigravity CLI (`agy`): the steps of a conversation,
+ * `~/.gemini/antigravity-cli/brain/<conversation>/.system_generated/logs/transcript_full.jsonl`,
+ * one `{step_index, source, type, status, created_at, content}` per line. A
+ * `PLANNER_RESPONSE` carries what the model said, its `thinking` and the
+ * calls it made (`tool_calls`: `{name, args}`, with no id), and each call's
+ * outcome is the `GENERIC` step after it, in the order of the calls, its
+ * `status` `DONE`, `ERROR`, `INVALID` or `RUNNING`. A call is named by the
+ * step that answers it, and that step names its call too, so a call whose
+ * planner line was never read still has the call its result answers.
+ *
+ * ```ts
+ * import { antigravity } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let planned = { step_index: 3, type: 'PLANNER_RESPONSE', content: 'Reading it.',
+ *   tool_calls: [{ name: 'view_file', args: { AbsolutePath: '/w/a.ts' } }] }
+ * assertEquals(antigravity(planned).entries, [
+ *   { content: { body: 'Reading it.' }, output: {} },
+ *   { call: { to: 'view_file', id: 'step-4', args: { AbsolutePath: '/w/a.ts' } } },
+ * ])
+ * let done = { step_index: 4, type: 'GENERIC', status: 'DONE', content: 'export {}' }
+ * assertEquals(antigravity(done).entries[1].result, { call: 'step-4' })
+ * ```
+ */
+export let antigravity: Reader = (e) => {
+  let type = str(e.type)
+  let step = Number(e.step_index)
+  let body = prose(e.content)
+  let entries: Comps[] = type == 'USER_INPUT'
+    ? said(body, e.source == 'USER_EXPLICIT' || !e.source ? {} : { notice: {} })
+    : type == 'PLANNER_RESPONSE'
+    ? [
+      ...said(prose(e.thinking), { reasoning: {}, output: {} }),
+      ...said(body, { output: {} }),
+      ...list(e.tool_calls).map((c, k) =>
+        call(str(c.name), stepCall(step + 1 + k), argumentsOf(c.args))
+      ),
+    ]
+    : type == 'GENERIC' && e.status != 'RUNNING'
+    ? [
+      { call: { id: stepCall(step) } },
+      result(
+        stepCall(step),
+        body,
+        e.status == 'ERROR' || e.status == 'INVALID',
+      ),
+    ]
+    : type == 'SYSTEM_MESSAGE' || type == 'CONVERSATION_HISTORY'
+    ? said(body, { notice: {} })
+    : type == 'CHECKPOINT'
+    ? said(body, { checkpoint: {}, notice: {} })
+    : type == 'ERROR_MESSAGE'
+    ? [{
+      refusal: { code: 'error' },
+      content: { body: body || 'the step failed' },
+      output: {},
+    }]
+    : []
+  return {
+    entries: step == 0
+      ? [{ using: { provider: 'antigravity' }, notice: {} }, ...entries]
+      : entries,
+    ...(str(e.created_at) ? { at: str(e.created_at) } : {}),
+  }
+}

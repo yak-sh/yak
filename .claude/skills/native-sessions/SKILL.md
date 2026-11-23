@@ -115,6 +115,16 @@ session's first input records the choice and why as
 endpoint's catalogue; a one-line probe settles whether an unlisted name runs:
 `yak session new "Reply with only: ok" --provider openai --model <name> --effort low`.
 
+## Continuing a conversation on another model
+
+`yak session send S-<n> '<text>' --provider <p> --model <m>` continues any
+session's conversation on that model in place: a native one, or a Claude Code,
+Codex, Grok or Antigravity transcript the graph imported, even while that
+harness's process is still open. Taking over another harness's conversation
+writes a note first naming what it ran on and the files it touched. A native
+session whose plan runs out moves on to the next offering the default routes
+by itself (packages/harness/README.md, "Moved on").
+
 ## What its brief adds
 
 It finds its skills from their descriptions, so the brief needn't paste their

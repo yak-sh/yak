@@ -26,7 +26,7 @@ import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
 import { and, conjoin, line, parse, stringify, sub } from '@yaks/query'
-import { ask, askedOf, newestOf, usingOf } from '@yaks/session'
+import { ask, askedOf, handoffOf, newestOf, usingOf } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing, pin, routing } from './default.ts'
@@ -341,17 +341,6 @@ export let runs = (host?: Host): Runs => ({
     let actor = who(call)
     let body = String(args.text)
     let about = await askedOf(graph, s, word(args, 'task'))
-    // A knock needs no model: the run going on chose its own.
-    if (await outside(graph, s, prior)) {
-      return await graph.apply([{
-        ...about ? ask(s, about, body, actor?.by) : {
-          entity: { eid: crypto.randomUUID() },
-          doc: { body },
-          knock: { target: s, ...actor?.by ? { from: actor.by } : {} },
-        },
-        ...actor ? { $actor: actor } : {},
-      }])
-    }
     let provider = word(args, 'provider')
     let model = word(args, 'model')
     let using = prior
@@ -361,7 +350,32 @@ export let runs = (host?: Host): Runs => ({
         ...await following(graph, prior, provider, model),
       }
     }
+    // A knock needs no model: the run going on chose its own. One that names
+    // a model this graph asks takes the conversation over here, whatever
+    // harness ran it so far: that harness may have run out.
+    let over = (provider || model) && !await commanded(graph, using)
+    if (!over && await outside(graph, s, prior)) {
+      return await graph.apply([{
+        ...about ? ask(s, about, body, actor?.by) : {
+          entity: { eid: crypto.randomUUID() },
+          doc: { body },
+          knock: { target: s, ...actor?.by ? { from: actor.by } : {} },
+        },
+        ...actor ? { $actor: actor } : {},
+      }])
+    }
+    // Taking over another harness's conversation, the model is told so.
+    let note = over ? await handoffOf(graph, s) : undefined
     await graph.apply([
+      ...note
+        ? [{
+          entity: { eid: crypto.randomUUID() },
+          entry: { session: s },
+          content: { body: note },
+          notice: {},
+          $actor: through(s),
+        }]
+        : [],
       {
         entity: { eid: crypto.randomUUID() },
         entry: { session: s },

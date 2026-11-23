@@ -79,6 +79,7 @@ import {
   type Reply,
   type Request,
   RESPONSE,
+  spent,
   TOOL,
   type Tool as Declared,
   UNANCHORED,
@@ -319,6 +320,12 @@ export type Deps = {
   executor?: Executor
   /** Choose the provider that serves the model, and what it calls the model. */
   resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
+  /** Where a conversation goes on once the plan of the model it asked
+   * (`using`) is spent (@yaks/model `spent`): the `using{provider, model,
+   * why}` to ask instead, or nothing to let it wait for the plan to reset. */
+  onward?: (using: Comp | undefined, error: ModelError) => Promise<
+    Comp | undefined
+  >
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. `open` is every
    * call of the transcript no result answers yet, as the step read it. */
@@ -2512,12 +2519,27 @@ export let react = async (
         }
       }
     }
+    // A plan spent moves the conversation on to the next one with room, as
+    // a line saying so: the attempt asked again reads it, and so does every
+    // turn after, until a person chooses another.
+    let moved = e instanceof ModelError && !overflow && !stream.size &&
+        !modalities?.includes('audio') && spent(e) && deps.onward
+      ? await deps.onward(using, e)
+      : undefined
+    // Asked again at once, on the plan it moved to.
+    if (moved) {
+      let was = e as ModelError
+      e = Object.assign(
+        new ModelError(was.code, was.message, {}, was.response),
+        { limits: was.limits },
+      )
+    }
     let refused = e instanceof ModelError && (overflow || !passing(e))
       ? e
       : undefined
     let retried = !overflow && passing(e) && !modalities?.includes('audio') &&
       !stream.size && !!deps.attempt &&
-      (deferring(e) || !deps.attempt.last())
+      (deferring(e) || !!moved || !deps.attempt.last())
     let defect = !(e instanceof ModelError) &&
       !(e instanceof Error && e.name == 'AbortError')
     let failed = await finish(
@@ -2569,6 +2591,12 @@ export let react = async (
           ask,
           e instanceof ModelError ? e.limits : undefined,
         ),
+        ...moved
+          ? [line(
+            { notice: {}, [USING]: moved },
+            `Moved on: ${moved.why}.`,
+          )]
+          : [],
       ],
       (defect || transportFailure(e)) && !deferring(e)
         ? { error: e, phase }

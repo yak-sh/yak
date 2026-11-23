@@ -50,8 +50,10 @@ import { follow } from './bus.ts'
 import { SESSION } from './comp.ts'
 import {
   accounted,
+  antigravity,
   claude,
   codexRollout,
+  grok,
   type Reader,
   subagent,
 } from './readers.ts'
@@ -332,7 +334,11 @@ let opened = async (
 
 // How a transcript's lines read: a subagent's are all side conversations.
 let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
-  f.runner == 'codex'
+  f.runner == 'grok'
+    ? accounted(grok, f.account)
+    : f.runner == 'antigravity'
+    ? accounted(antigravity, f.account)
+    : f.runner == 'codex'
     ? (e: Parameters<typeof codexRollout>[0]) => {
       let said = accounted(codexRollout, f.account)(e)
       if (

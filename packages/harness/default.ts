@@ -10,7 +10,7 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
 import { identityEid } from '@yaks/graph/identity'
-import { type Reading, type Route, route } from '@yaks/model/route'
+import { onward, type Reading, type Route, route } from '@yaks/model/route'
 import { CallError } from '@yaks/tools/errors'
 
 /** The native harness's own entity, @yaks/code's row for this package: its
@@ -75,6 +75,32 @@ let routed = async (g: Graph, of: Eid): Promise<Comp | undefined> => {
     b.rate_limit as Reading
   )
   return route({ routes, readings, now: Date.now() })
+}
+
+/** Where a session asking `using` goes on once that model's plan is spent:
+ * of the offerings {@link HARNESS} routes, one on another plan with room
+ * (@yaks/model `onward`), keeping the effort it asked with; nothing where the
+ * harness routes no other, or every other plan is spent too. */
+export let movedOn = async (
+  g: Graph,
+  using: Comp | undefined,
+): Promise<Comp | undefined> => {
+  if (!using?.provider) return undefined
+  let routes = await routing(g, HARNESS)
+  if (!routes.length) return undefined
+  let readings = (await g.read('.rate_limit')).map((b) =>
+    b.rate_limit as Reading
+  )
+  let next = onward({
+    routes,
+    readings,
+    now: Date.now(),
+    from: {
+      provider: String(using.provider),
+      ...using.model ? { model: String(using.model) } : {},
+    },
+  })
+  return next && { ...next, ...using.effort ? { effort: using.effort } : {} }
 }
 
 /** Pin what `of` (otherwise {@link HARNESS}) asks by default to the offering
