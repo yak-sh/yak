@@ -9,7 +9,7 @@
  * A page takes part by loading the navigator in a script marked
  * `data-navigate` (`TAKES`, `start`); a link to a page that
  * does not load it, a failed fetch or an answer that is not HTML is followed
- * as the browser would follow it.
+ * as the browser would follow it, and so is one whose swap fails.
  *
  * What scripts do across a swap:
  *
@@ -364,8 +364,16 @@ export let start = (
     if (!next.querySelector(`script[${TAKES}]`)) return load(to, pop)
     let at = new URL(answer.url || to.href)
     at.hash = to.hash
-    tell(doc, LEAVE)
-    let tally = swap(doc, next, ran, rerun, at.href)
+    let tally: Tally
+    try {
+      tell(doc, LEAVE)
+      tally = swap(doc, next, ran, rerun, at.href)
+    } catch (error) {
+      // A page half laid over is no page: the next loads as a document, and
+      // the reporter hears why (M-37965).
+      globalThis.reportError?.(error)
+      return load(at, pop)
+    }
     if (!pop) {
       history.write({ path: at.pathname + at.search + at.hash, state: null })
     }

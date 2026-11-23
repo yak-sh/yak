@@ -220,6 +220,23 @@ test('a link the navigator cannot swap in is followed as a link', async () => {
   assertEquals(b.left(), 0)
 })
 
+test('a swap that fails loads the page as a document', async () => {
+  let b = browsing(site)
+  b.doc.addEventListener(LEAVE, () => {
+    throw new Error('a script could not let go')
+  })
+  let reported: unknown[] = []
+  let was = globalThis.reportError
+  globalThis.reportError = (e: unknown) => void reported.push(e)
+  try {
+    await b.go(new URL('https://y.test/updates'))
+  } finally {
+    globalThis.reportError = was
+  }
+  assertEquals(b.loaded, ['https://y.test/updates'])
+  assertEquals(reported.length, 1)
+})
+
 test('a click the browser owns is left to it', () => {
   let b = browsing({
     ...site,
