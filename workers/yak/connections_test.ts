@@ -50,6 +50,7 @@ import { vaultOf } from './vault.ts'
 import { within } from './defects.ts'
 import { tallying } from './lib/hops.ts'
 import type { Env } from './env.ts'
+import { parseHTML } from 'linkedom'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
 let SECRET = 'a probe secret'
@@ -1177,6 +1178,7 @@ let PROVIDERS = [
     categories: ['design'],
     auth_mode: 'API_KEY',
     proxy: { base_url: 'https://api.abyssale.com' },
+    docs_connect: 'https://nango.dev/docs/api-integrations/abyssale/connect',
     credentials: {
       apiKey: { title: 'API Key', description: 'Your workspace API key.' },
     },
@@ -1307,7 +1309,54 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
       add: 'abyssale',
     })
     assertEquals([adding.asked?.name, adding.asked?.keyed], ['abyssale', true])
-    assertStringIncludes(adding.asked!.face.instructions, 'workspace API key')
+    let help = async (
+      connections: Awaited<ReturnType<typeof connectionsOf>>,
+    ) => {
+      let res = desk({
+        space: 'ada',
+        apps: [],
+        sell: 'none',
+        view: 'connections',
+        connections,
+      }, s.p.env)
+      let { document } = parseHTML(await res.text())
+      let fold = [...document.querySelectorAll('details')].find((d) =>
+        d.querySelector('summary')?.textContent == 'How to get the key'
+      )!
+      return fold.querySelector('.More_Body')!
+    }
+    let link = async (
+      connections: Awaited<ReturnType<typeof connectionsOf>>,
+    ) => {
+      let body = await help(connections)
+      let a = body.querySelector('a')!
+      assertEquals(body.textContent, a.textContent)
+      return a.getAttribute('href')
+    }
+    let guide = 'https://nango.dev/docs/api-integrations/abyssale/connect'
+    assertEquals(await link(adding), guide)
+    // A description already copied into an integration should also fall back
+    // to its guide. The old catalog wrote field descriptions as Markdown.
+    await s.at.apply([{
+      entity: { eid: integrationEid('abyssale') },
+      integration: {
+        name: 'abyssale',
+        title: 'Abyssale',
+        built: true,
+        categories: ['design'],
+        connects: 'key',
+        hosts: ['api.abyssale.com'],
+        instructions: '- **API Key**: Your workspace API key.',
+      },
+    }], KERNEL)
+    assertEquals(
+      await link(
+        await connectionsOf(s.p.env, s.space, s.person, {
+          add: 'abyssale',
+        }),
+      ),
+      guide,
+    )
     // Opened to add one the directory describes, it says what it is, though
     // the catalog reads no prose.
     let described = await connectionsOf(s.p.env, s.space, s.person, {

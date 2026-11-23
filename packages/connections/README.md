@@ -395,11 +395,12 @@ Every service a person can be offered, connected or not, is one list of offers
 (./catalog.ts): the built integrations, and every service a broker lists.
 `Broker.catalog()` answers the broker's list as
 `Listing{name, title, logo,
-categories, hosts, connects, fields, instructions, popular}`,
+categories, hosts, connects, fields, keyGuide, popular}`,
 `logo` the address of an SVG. Nango's comes from its provider list
 (`listingOf`): a service it signs in to with an OAuth app of its own (`signin`),
 one the person brings an OAuth client for (`client`), or a key (`key`), whose
-`fields` and `instructions` come from Nango's credential schema. A sign-in is
+`fields` come from Nango's credential schema. The key guide is a link to a known
+key page or to the provider's connection guide in the catalog. A sign-in is
 listed only for a provider Nango has an OAuth app of its own with, which its
 guide's list says (`managedIn`; its API tells only its dashboard): Nango refuses
 to make any other ready. A way to connect that hands back no access token is

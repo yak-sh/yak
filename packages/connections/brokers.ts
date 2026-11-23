@@ -48,8 +48,8 @@ export class BrokerError extends Error {
  * (none where they depend on the account). `connects` is how: signing in
  * through the broker's own app with the service, giving the broker an OAuth
  * client of the person's own, or a key, as the `fields` it names (none is
- * one key). `instructions` say, in markdown, what each field is. `popular` is
- * one the broker features. */
+ * one key). `keyGuide` links to where a person can get the credential.
+ * `popular` is one the broker features. */
 export type Listing = {
   name: string
   title: string
@@ -58,7 +58,7 @@ export type Listing = {
   hosts: string[]
   connects: 'signin' | 'client' | 'key'
   fields?: Field[]
-  instructions?: string
+  keyGuide?: string
   popular?: boolean
 }
 
@@ -114,8 +114,16 @@ type Provider = {
   categories?: string[]
   auth_mode?: string
   proxy?: { base_url?: string }
-  credentials?: Record<string, { title?: string; description?: string }>
+  docs?: string
+  docs_connect?: string
+  credentials?: Record<string, { title?: string }>
 }
+
+// Direct key pages where we know them. The broker also publishes guides
+// about getting the credential, separately from its field labels.
+let KEY_PAGES = new Map([
+  ['resend', 'https://resend.com/api-keys'],
+])
 
 /** A Nango provider (GET /providers) as the listing it is, or none where
  * Nango hands back nothing a connection here can use: a sign-in needs an app
@@ -139,8 +147,9 @@ export let listingOf = (
     let shown = OPEN.test(name) && !/key|secret|token|password/i.test(label)
     return { name: snake(name), label, ...shown ? { shown } : {} }
   })
-  let said = given.filter(([, f]) => f.description)
-    .map(([name, f]) => `- **${f.title || name}**: ${f.description}`)
+  let keyGuide = connects == 'key'
+    ? KEY_PAGES.get(p.name) || p.docs_connect || p.docs
+    : undefined
   return {
     name: p.name,
     title: p.display_name,
@@ -149,7 +158,7 @@ export let listingOf = (
     hosts: host ? [host] : [],
     connects,
     ...fields.length > 1 ? { fields } : {},
-    ...said.length ? { instructions: said.join('\n') } : {},
+    ...keyGuide ? { keyGuide } : {},
     ...p.categories?.includes('popular') ? { popular: true } : {},
   }
 }

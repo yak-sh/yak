@@ -56,8 +56,10 @@ test('a Nango provider is a listing only where a connection here can use it', ()
     )?.hosts,
     [],
   )
-  // A key of several fields says each, and what each is.
+  // Field labels drive the form. The provider's guide supplies the help.
   let basic = listingOf(provider('bas', 'BASIC', {
+    docs: 'https://bas.example/docs',
+    docs_connect: 'https://bas.example/keys',
     credentials: {
       username: { title: 'Username', description: 'Your login' },
       apiSecret: { title: 'API Secret' },
@@ -67,7 +69,7 @@ test('a Nango provider is a listing only where a connection here can use it', ()
     { name: 'username', label: 'Username', shown: true },
     { name: 'api_secret', label: 'API Secret' },
   ])
-  assertEquals(basic?.instructions, '- **Username**: Your login')
+  assertEquals(basic?.keyGuide, 'https://bas.example/keys')
 })
 
 let listing = (name: string, more: Partial<Listing> = {}): Listing => ({
@@ -114,7 +116,10 @@ test('the catalog is direct first: a built integration stands in for its listing
     }),
     listing('openai', { categories: ['dev-tools'] }),
     listing('hubspot', { categories: ['crm'], popular: true }),
-    listing('abyssale', { connects: 'key', instructions: '- **Key**: yours' }),
+    listing('abyssale', {
+      connects: 'key',
+      keyGuide: 'https://app.abyssale.example/keys',
+    }),
     listing('subbed', { hosts: [] }),
   ], 'nango')
   assertEquals(all.map((o) => o.name), [
@@ -139,7 +144,10 @@ test('the catalog is direct first: a built integration stands in for its listing
   // Signed in to through the broker, or a key kept here and never brokered.
   assertEquals(at.hubspot.broker, { name: 'nango', integration: 'hubspot' })
   assertEquals(at.abyssale.broker, undefined)
-  assertEquals(at.abyssale.instructions, '- **Key**: yours')
+  assertEquals(
+    at.abyssale.instructions,
+    '[Where to get your key](<https://app.abyssale.example/keys>)',
+  )
   assertEquals(at.hubspot.tagline, 'CRM')
   // Written once connected: built, its logo the SVG fetched, and never
   // featured, which is the platform's mark rather than the row's.

@@ -127,7 +127,7 @@ import { type Ctx as Asking, EID, refuse } from './tool.ts'
 export { EID }
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
-import { adopting, BROKER, offersOf } from './catalog.ts'
+import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -200,12 +200,12 @@ export type Face = {
   fields: Field[]
 }
 
-/** The face of an integration, or of a catalog's offer, called by its name
- * where it has no title. A card in a grid says no instructions (`brief`). */
-export let faceOf = async (
+// The face of an integration, called by its name where it has no title. A
+// card in a grid has no instructions.
+let faceOf = async (
   name: string,
-  i?: Integration & { image?: string },
-  brief = false,
+  i: Integration | undefined,
+  instructions: string,
 ): Promise<Face> => ({
   title: i?.title || name,
   tagline: i?.tagline ?? '',
@@ -218,7 +218,7 @@ export let faceOf = async (
   name,
   logo: i?.logo ?? '',
   image: i?.image ?? '',
-  instructions: brief ? '' : await drawn(i?.instructions),
+  instructions: await drawn(instructions),
   theirs: !!i?.owner,
   fields: fieldsOf(i),
 })
@@ -816,7 +816,7 @@ export let connectionsOf = async (
   let card = async (i: Integration, brief = true): Promise<Offered> => ({
     name: i.name,
     keyed: keyed(i),
-    face: await faceOf(i.name, i, brief),
+    face: await faceOf(i.name, i, brief ? '' : await instructionsOf(env, i)),
   })
   // What is offered, each client read from the vault at once and beside the
   // reads below.
@@ -902,12 +902,13 @@ export let connectionsOf = async (
     all.filter((b) => b[CONNECTION]).map(async (b): Promise<Shown> => {
       let c = comp(b, CONNECTION)
       let i = knownIn(all, String(c.integration))
+      let instructions = await instructionsOf(env, i)
       let failed = !b[PROVISIONAL] && (b.failed || b.exception)
       let to = links.filter((l) => comp(l, 'edge').to == b.entity.eid)
       return {
         eid: b.entity.eid,
         integration: String(c.integration),
-        face: await faceOf(String(c.integration), i),
+        face: await faceOf(String(c.integration), i, instructions),
         own: c.owner == person,
         each: to.some((l) => comp(l, USES).each),
         status: (c.status ?? 'needed') as Status,
@@ -927,7 +928,7 @@ export let connectionsOf = async (
         available: (c.owner == here.eid ? available : [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
-        instructions: typeof i?.instructions == 'string' ? i.instructions : '',
+        instructions,
         failed: failed
           ? String(
             comp(b, 'failed').reason ?? comp(b, 'content').body ??
@@ -983,7 +984,7 @@ export let connectionsOf = async (
         return {
           eid,
           integration,
-          face: await faceOf(integration, i),
+          face: await faceOf(integration, i, await instructionsOf(env, i)),
           keyed: !i || keyed(i),
           hosts: i?.hosts ?? [],
           lender: names.get(String(c.owner)) ?? 'another space',
@@ -1748,7 +1749,7 @@ export let own: Answer = async (
     })
     return askConnect({
       app: app.title,
-      face: await faceOf(integration, i),
+      face: await faceOf(integration, i, await instructionsOf(env, i)),
       keyed: keyed(i),
       on: !keyed(i) || vaulted(env),
       status: (comp(mine, CONNECTION).status ?? 'needed') as Status,

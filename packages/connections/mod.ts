@@ -102,10 +102,13 @@ export {
 } from './brokers.ts'
 export {
   adopted,
+  catalogKey,
   catalogue,
   find,
   initialLogo,
   isSvg,
+  keyGuide,
+  keyHelp,
   kind,
   kinds,
   type Offer,

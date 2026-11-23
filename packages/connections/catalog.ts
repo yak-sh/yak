@@ -44,24 +44,51 @@ export let kind = (category: string): string =>
   WORDS[category] ??
     category.charAt(0).toUpperCase() + category.slice(1).replaceAll('-', ' ')
 
+/** Whether an integration can take credential help from the broker catalog. */
+export let catalogKey = (i: Integration): boolean =>
+  !i.owner && i.connects == 'key' && Array.isArray(i.categories)
+
+/** Instructions someone wrote, ignoring old imports of credential field
+ * descriptions from the broker catalog. */
+export let keyHelp = (i?: Integration): string => {
+  let source = i?.instructions ?? ''
+  return !source.trim() || i && catalogKey(i) &&
+      /^(?:- \*\*[^\n]+?\*\*:|\*\*[^\n]+?\*\*\r?\n[ \t]*:)/.test(
+        source.trimStart(),
+      )
+    ? ''
+    : source
+}
+
+/** A link to the credential page or guide, for a listing with no written
+ * steps. */
+export let keyGuide = (l?: Listing): string => {
+  let url = l?.keyGuide && URL.canParse(l.keyGuide) && new URL(l.keyGuide)
+  return l?.connects == 'key' && url && url.protocol == 'https:' &&
+      !url.username && !url.password
+    ? `[Where to get your key](<${url.href}>)`
+    : ''
+}
+
 /** The integration a broker's listing would be: brokered where it is signed
  * in to through the broker, a pasted key where it is reached with one. */
-export let offerOf = (l: Listing, broker: string): Offer => ({
-  name: l.name,
-  title: l.title,
-  tagline: l.categories.slice(0, 3).map(kind).join(' · '),
-  hosts: l.hosts,
-  connects: l.connects,
-  ...l.connects == 'key'
-    ? {
-      ...l.fields ? { fields: l.fields } : {},
-      ...l.instructions ? { instructions: l.instructions } : {},
-    }
-    : { broker: { name: broker, integration: l.name } },
-  categories: l.categories,
-  ...l.logo ? { image: l.logo } : {},
-  ...l.popular ? { featured: true } : {},
-})
+export let offerOf = (l: Listing, broker: string): Offer => {
+  let instructions = keyGuide(l)
+  return {
+    name: l.name,
+    title: l.title,
+    tagline: l.categories.slice(0, 3).map(kind).join(' · '),
+    hosts: l.hosts,
+    connects: l.connects,
+    ...l.connects == 'key'
+      ? { ...l.fields ? { fields: l.fields } : {} }
+      : { broker: { name: broker, integration: l.name } },
+    ...instructions ? { instructions } : {},
+    categories: l.categories,
+    ...l.logo ? { image: l.logo } : {},
+    ...l.popular ? { featured: true } : {},
+  }
+}
 
 /** The catalog: the built integrations a person may be offered unasked (none
  * in its service's testing mode), each featured, and every listing of

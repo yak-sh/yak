@@ -56,6 +56,7 @@ import { edgeEid } from '@yaks/edge'
 import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
 import { apex } from '@yaks/platform/host'
+import { instructionsOf } from './catalog.ts'
 
 /** The Claude connector directory's listing: what `tools/list` answered when
  * it was submitted on 2026-09-22, with main at aa4e26e6. */
@@ -473,7 +474,9 @@ let CONNECTIONS: Row[] = [
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)
-      let how = howTo((await known(read, integrationOf(b)))?.instructions)
+      let how = howTo(
+        await instructionsOf(ctx.env, await known(read, integrationOf(b))),
+      )
       if (u.each) {
         let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
         return {

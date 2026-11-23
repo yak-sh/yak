@@ -25,12 +25,15 @@ import {
   adopted,
   BrokerError,
   brokerOf,
+  catalogKey,
   catalogue,
   initialLogo,
   INTEGRATION,
   type Integration,
   integrationEid,
   isSvg,
+  keyGuide,
+  keyHelp,
   type Listed,
   type Listing,
   logoSources,
@@ -69,7 +72,7 @@ export type Kept = {
 
 // What a kept list is read as: one kept by an older reading of the broker is
 // asked again.
-let VERSION = 2
+let VERSION = 3
 
 // This isolate's copy, and the read under way, for each bucket it is kept in.
 let held = new WeakMap<object, Kept>()
@@ -152,6 +155,19 @@ export let listingsOf = async (env: Env): Promise<Kept | undefined> => {
   }
   return kept
 }
+
+/** The integration's written steps, or a link from the catalog for a key
+ * integration that has none. */
+export let instructionsOf = async (
+  env: Env,
+  i?: Integration,
+): Promise<string> =>
+  keyHelp(i) ||
+  (i && catalogKey(i)
+    ? keyGuide(
+      (await listingsOf(env))?.listings.find((l) => l.name == i.name),
+    )
+    : '')
 
 /** Every offer, given the built integrations the directory holds. */
 export let offersOf = async (
