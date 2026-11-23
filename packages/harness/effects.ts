@@ -25,7 +25,13 @@ import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
 import { machines } from './session_machines.ts'
-import { exposed, isolate, type Isolation, snapshot } from './isolated.ts'
+import {
+  exposed,
+  isolate,
+  type Isolation,
+  type Setup,
+  snapshot,
+} from './isolated.ts'
 
 /** What config says an exposed session's sandbox is (./isolated.ts): a
  * bubblewrap sandbox under `dir` with `limits`, the read-only `binds` and
@@ -39,7 +45,7 @@ export type IsolationConfig = {
   binds?: string[]
   env?: Record<string, string>
   source?: string
-  setup?: string
+  setup?: Setup
   tools?: string[]
   landing?: string[]
 }

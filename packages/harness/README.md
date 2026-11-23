@@ -257,7 +257,10 @@ on where it works. An exposed fixer gets no host checkout. The plugin's
         "DENO_DIR": "/home/yaks/.cache/deno"
       },
       "source": "/home/yaks/code/tasks",
-      "setup": "deno install --cached-only",
+      "setup": {
+        "install": "deno install --cached-only --quiet",
+        "warm": "deno install --node-modules-dir=none --quiet"
+      },
       "tools": ["graph_show", "graph_query", "search", "session_handup"]
     }
   }
@@ -277,6 +280,12 @@ read-only:
   (`deno.json`, `package.json`, `deno.lock`), each `node_modules` it made bound
   at its place in the workspace. On the host's disk an install hardlinks its
   cache.
+
+`setup` takes a shell command or an object with `install` and `warm` commands.
+If `install` fails, the host runs `warm` against the same committed manifests
+and cache, then retries `install`. The Deno example downloads workspace
+dependencies into `DENO_DIR` during `warm` and builds `node_modules` during the
+offline `install`.
 
 The commit is the host's own code, and nothing a sandbox writes reaches the
 host. A layer no sandbox was made from for a day is removed. Without `dir`,

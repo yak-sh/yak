@@ -7,7 +7,7 @@ import type { Proc, Workspace } from '@yaks/machine'
 import type { SandboxProvider, SandboxRequest } from '@yaks/sandbox'
 import type { Runner, Tool } from '@yaks/session'
 import { line } from '@yaks/query'
-import { exposed, isolate, layerKey } from './isolated.ts'
+import { exposed, isolate, layerKey, setupLayer } from './isolated.ts'
 import { at } from './testing.ts'
 
 let BUG = '55555555-5555-4555-8555-555555555555'
@@ -260,4 +260,34 @@ test('commits share a dependency layer until a manifest or the setup changes', (
       key,
   )
   ok(layerKey('pnpm install', tree(base)) != key)
+  let setup = { install: 'offline install', warm: 'fill cache' }
+  ok(
+    layerKey(setup, tree(base)) !=
+      layerKey({ ...setup, warm: 'refill' }, tree(base)),
+  )
+})
+
+test('a dependency layer fills a cold cache before retrying its offline install', async () => {
+  let cached = new Set<string>()
+  let needed = ['root dependency', 'workspace dependency']
+  let warmups = 0
+  let installs: string[][] = []
+  let setup = { install: 'offline install', warm: 'fill cache' }
+  let shell = (script: string): Promise<void> => {
+    if (script == setup.warm) {
+      warmups++
+      needed.forEach((name) => cached.add(name))
+    } else if (needed.some((name) => !cached.has(name))) {
+      return Promise.reject(new Error('package missing from cache'))
+    } else {
+      installs.push([...needed])
+    }
+    return Promise.resolve()
+  }
+  await setupLayer(setup, shell)
+  needed.push('new workspace dependency')
+  await setupLayer(setup, shell)
+  await setupLayer(setup, shell)
+  equal(installs, [needed.slice(0, -1), needed, needed])
+  equal(warmups, 2)
 })

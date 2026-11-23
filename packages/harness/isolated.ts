@@ -127,12 +127,34 @@ let STORE = '/snapshot.git'
 // one run.
 let IDLE = 24 * 60 * 60 * 1000
 
+/** The host command that builds a dependency layer, with an optional command
+ * that fills its cache when the install fails. */
+export type Setup = string | { install: string; warm: string }
+
+/** Build the layer from cache when possible. If the cache needs filling,
+ * run both commands in the same committed checkout with the same cache. */
+export let setupLayer = async (
+  setup: Setup,
+  shell: (script: string) => Promise<unknown>,
+): Promise<void> => {
+  if (typeof setup == 'string') {
+    await shell(setup)
+    return
+  }
+  try {
+    await shell(setup.install)
+  } catch {
+    await shell(setup.warm)
+    await shell(setup.install)
+  }
+}
+
 /** The name of the layer `setup` makes of a commit whose `git ls-tree -r -z`
  * says `tree`: commits that differ only outside their manifests share one. */
-export let layerKey = (setup: string, tree: string): string =>
+export let layerKey = (setup: Setup, tree: string): string =>
   sha256(
     [
-      setup,
+      ...(typeof setup == 'string' ? [setup] : [setup.install, setup.warm]),
       ...tree.split('\0').filter((entry) => {
         let path = entry.split('\t')[1] ?? ''
         return MANIFESTS.has(path.slice(path.lastIndexOf('/') + 1))
@@ -196,7 +218,7 @@ let shared = async (root: string, at = ''): Promise<string[]> => {
  * cannot. Nothing a sandbox writes reaches the host. */
 export let snapshot = (
   source: string,
-  o: { setup?: string; env?: Record<string, string>; dir: string },
+  o: { setup?: Setup; env?: Record<string, string>; dir: string },
 ) => {
   let ask = (args: string[]) => host('git', args, { cwd: source })
   // Makes `path` once: built in a staging directory beside it and renamed
@@ -249,8 +271,9 @@ export let snapshot = (
     return [{ source: path, target: STORE }]
   }
   let installed = async (commit: string, kept: string[]): Promise<Layer[]> => {
-    if (!o.setup) return []
-    let key = layerKey(o.setup, await ask(['ls-tree', '-r', '-z', commit]))
+    let { setup } = o
+    if (!setup) return []
+    let key = layerKey(setup, await ask(['ls-tree', '-r', '-z', commit]))
     let path = `${o.dir}/${key}`
     kept.push(path)
     await made(path, async (at) => {
@@ -262,10 +285,11 @@ export let snapshot = (
       }).output()
       if (!archive.success) throw new Error('Cannot snapshot ' + source)
       await host('tar', ['-xf', '-'], { cwd: at, input: archive.stdout })
-      await host('/bin/sh', ['-c', o.setup!], {
-        cwd: at,
-        env: { ...BARE, ...o.env, HOME: at },
-      })
+      await setupLayer(setup, (script) =>
+        host('/bin/sh', ['-c', script], {
+          cwd: at,
+          env: { ...BARE, ...o.env, HOME: at },
+        }))
       await io.writeTextFile(
         `${at}/.shared.json`,
         JSON.stringify(await shared(at)),
