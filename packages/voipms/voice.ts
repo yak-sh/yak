@@ -103,7 +103,8 @@ let groupOf = async (call: Call, digits: string) => {
 
 let route = async (call: Call, digits: string, accounts: Fields[]) => {
   let did = await heldDid(call, digits)
-  let group = await groupOf(call, digits)
+  let routedToGroup = String(did?.routing ?? '').startsWith('grp:')
+  let group = accounts.length > 1 ? await groupOf(call, digits) : undefined
   let members = accounts.map((a) => `account:${a.account},25,0`).sort().join(
     ';',
   )
@@ -126,8 +127,9 @@ let route = async (call: Call, digits: string, accounts: Fields[]) => {
   if (did && did.routing != routing) {
     await call('setDIDRouting', { did: digits, routing })
   }
-  if (group && accounts.length < 2) {
-    await call('delRingGroup', { ringgroup: String(group.ring_group) })
+  if (routedToGroup && accounts.length < 2) {
+    let old = await groupOf(call, digits)
+    if (old) await call('delRingGroup', { ringgroup: String(old.ring_group) })
   }
 }
 
@@ -223,8 +225,21 @@ export let allow = async (
 }
 
 export let release = async (call: Call, digits: string) => {
-  await allow(call, digits, { in: false, out: false, seats: [], legacy: null })
-  if (await heldDid(call, digits)) await call('cancelDID', { did: digits })
+  // Cancel the DID itself before catalog cleanup. A slow list of SIP
+  // accounts or groups must not hold up returning a number to the carrier.
+  await call('cancelDID', { did: digits }).catch(async (error) => {
+    if (await heldDid(call, digits)) throw error
+  })
+  await Promise.all([
+    accountsOf(call, digits).then((accounts) =>
+      Promise.all(accounts.map((account) => drop(call, account)))
+    ),
+    groupOf(call, digits).then(async (group) => {
+      if (group) {
+        await call('delRingGroup', { ringgroup: String(group.ring_group) })
+      }
+    }),
+  ])
 }
 
 export let login = async (

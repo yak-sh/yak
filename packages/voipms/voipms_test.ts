@@ -402,6 +402,32 @@ test('a late duplicate SIP account leaves the earlier sign-in in place', async (
   assertEquals(accounts, [first])
 })
 
+test('permanent return cancels a DID even when SIP cleanup has to wait', async () => {
+  let held = true
+  let slow = true
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let method = new URL(String(url)).searchParams.get('method')
+      if (method == 'cancelDID') {
+        let status = held ? 'success' : 'invalid_did'
+        held = false
+        return Promise.resolve(Response.json({ status }))
+      }
+      if (method == 'getSubAccounts' && slow) {
+        return Promise.resolve(new Response('', { status: 522 }))
+      }
+      return Promise.resolve(Response.json({ status: 'success' }))
+    },
+  })
+  let number = '+12695550100'
+  await assertRejects(() => shop.release(number), Unsent)
+  assertEquals(held, false)
+  slow = false
+  await shop.release(number)
+})
+
 test('a read voip.ms is slow to answer is asked once more, and a text is never sent twice', async () => {
   let time = clock()
   let asked: string[] = []
