@@ -1254,6 +1254,57 @@ let wakes = {
   },
 }
 
+let scheduled = async () => {
+  let vocab = words({ ...wakes, ...effectDoc.$defs })
+  let errors: unknown[] = []
+  let fx = effects(vocab, {
+    defer: true,
+    singleOwner: true,
+    report: (e) => void errors.push(e),
+  })
+  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+  let r = runner(g, { tools: [echo] })
+  fx.handle(Object.fromEntries(r.rules.map(({ rule }) => [
+    rule.name,
+    (e: { entity: { eid: string } }) => r.due(e.entity.eid),
+  ])))
+  await r.ensure()
+  let eid = 'scheduled', at = '2030-01-01T00:00:00.000Z'
+  await g.apply([{
+    entity: { eid },
+    call: { to: toolEid('example_echo'), args: { value: 'scheduled' } },
+    wake: { at, every: '1d' },
+  }])
+  await g.apply([{ entity: { eid }, fired: { at } }])
+  return { g, r, fx, errors, eid }
+}
+
+let editedSchedule = await scheduled()
+let cancelledSchedule = await scheduled()
+
+test('editing a fired schedule does not queue another run', async () => {
+  let { g, eid } = editedSchedule
+  let owed = await g.read('.effect.handler=call_woken')
+  assertEquals(owed.length, 1)
+  await g.apply([{
+    entity: { eid },
+    wake: { at: '2030-01-03T00:00:00.000Z' },
+  }])
+  assertEquals(await g.read('.effect.handler=call_woken'), owed)
+})
+
+test('a cancelled schedule settles its queued run without reporting a failure', async () => {
+  let { g, r, fx, errors, eid } = cancelledSchedule
+  assertEquals((await g.read('.effect.handler=call_woken')).length, 1)
+  await g.apply([{ entity: { eid }, call: null, wake: null }])
+  await fx.work(g, undefined, 1)
+  await fx.idle()
+  assertEquals(errors, [])
+  assertEquals(await g.read('.effect.handler=call_woken'), [])
+  assertEquals(await g.read('.result'), [])
+  await assertRejects(() => r.run(eid), CallError, `Not a call: ${eid}`)
+})
+
 test('a call waiting on a wake that has not fired is not this tick', async () => {
   let { g, r } = watched([echo], wakes)
   await r.ensure()

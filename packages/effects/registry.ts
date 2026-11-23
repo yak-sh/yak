@@ -561,11 +561,28 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let hits = (
     s: Slot,
     bundles: Bundle[],
+    seen: Event[],
     tx: ReadTx,
   ): Event[] | Promise<Event[]> => {
     let plan = s.plan!
     let touched = new Set<Eid>(bundles.map((b) => b.entity.eid))
     let one = plan.patterns.filter((p) => !p.makes)
+    // A *component clause anchors the match to a write of that component on
+    // the bound entity. The same match without a write clause uses any touch.
+    let written: Map<Eid, Set<string>> | undefined
+    if (one.some((p) => p.writes.length)) {
+      written = new Map()
+      for (let e of seen) {
+        if (e.kind == 'removed') continue
+        let names = written.get(e.entity.eid) ?? new Set<string>()
+        names.add(e.name)
+        written.set(e.entity.eid, names)
+      }
+    }
+    let anchors = (eid: Eid, writes: string[]) =>
+      written
+        ? writes.some((name) => written.get(eid)?.has(name))
+        : touched.has(eid)
     // The batch is passed to the query only where the query is about it: a
     // `-comp` clause reads the deletions a storage's overlay carries.
     let pending = s.gone?.length ? bundles : []
@@ -585,7 +602,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         tx.bindings([plan], pending, s.watch!),
         ([rows]) =>
           rows
-            .filter((r) => r.entities.some((e) => e && touched.has(e)))
+            .filter((r) =>
+              r.entities.some((e, i) =>
+                e && anchors(e, plan.patterns[i].writes)
+              )
+            )
             .map((r) => ({
               kind: 'matched' as Kind,
               // The subject: the first entity the match bound.
@@ -598,9 +619,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     }
     // Asked about the entities this batch touched and no others: an index
     // lookup, not a scan with the batch picked out afterwards.
-    let { filter } = one[0]
+    let { filter, writes } = one[0]
+    let eids = [...touched].filter((eid) => anchors(eid, writes))
+    if (!eids.length) return []
     return after(
-      tx.read(filter, { eids: [...touched] }),
+      tx.read(filter, { eids }),
       (rows) =>
         rows.map((b) => ({
           kind: 'matched' as Kind,
@@ -698,7 +721,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       each(asking, found, (out, s) => {
         try {
           return after(
-            hits(s, bundles, tx),
+            hits(s, bundles, seen, tx),
             (evs) => {
               for (let e of evs) if (allowed(s, e)) out.push([s, e])
               return out

@@ -356,16 +356,16 @@ equal(display([]), 'No rows.')
 `run(callId)` executes a stored call, awaits an invocation already running in
 this process, or recalls its recorded answer. A read-only answer is not stored
 as bundles; recalling it returns its result with the answer's text.
-`due(callId)` runs a call a rule selected and leaves a held call alone.
+`due(callId)` runs a call a rule selected if it still exists and is unclaimed.
 `drive()` runs one pass over eligible calls. `reconcile(r)` calls
 `drive({ redrive: true })` for startup recovery.
 
 The runner's [rules](../graph/README.md#data-model) select an unclaimed call
-without a result or wake (`call_ready`), or a call whose
-[@yaks/wake](../wake/README.md) has fired without a result (`call_woken`). Their
-matches derive result eids, so rerunning a call addresses the same result.
-Importing this package starts no timer and registers no effects. A host can
-register each rule with [@yaks/effects](../effects/README.md):
+without a result or wake (`call_ready`), or a call without a result when its
+[@yaks/wake](../wake/README.md) writes `fired{at}` (`call_woken`). Their matches
+derive result eids, so rerunning a call addresses the same result. Importing
+this package starts no timer and registers no effects. A host can register each
+rule with [@yaks/effects](../effects/README.md):
 
 ```ts
 import { graph } from '@yaks/graph'

@@ -158,7 +158,10 @@ An observer's [pattern](../query/README.md#multi-entity-matches) is evaluated
 against the committed graph to find handler targets. It is checked only when a
 batch moves a component it reads. A match triggers a handler only if the batch
 touched an entity that the pattern bound. An entity that already matched can
-trigger again when touched; this is not a false-to-true transition test.
+trigger again when touched; this is not a false-to-true transition test. Use
+`*component` to require the batch to write that component on the bound entity.
+With several `*component` clauses, a write to any of them on its bound entity
+can trigger the match.
 
 ```ts
 import { graph } from '@yaks/graph'

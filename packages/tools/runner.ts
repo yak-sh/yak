@@ -256,8 +256,8 @@ export type Runner = {
    * answered */
   run: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** run one call a rule selected, if it is this runner's to take: what an
-   * effect handler calls. A call somebody holds, in flight here included, is
-   * left to them rather than awaited or refused. */
+   * effect handler calls. A held call, including one in flight here, or one
+   * removed since selection returns an empty answer. */
   due: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** Explicit recovery over eligible call identities, including unanswered
    * claims. Durable effect hosts recover recorded runs instead of sweeping. */
@@ -499,7 +499,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     o: { redrive?: boolean; due?: boolean },
   ): Promise<Bundle[]> => {
     let [call] = await g.get([id])
-    if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
+    if (!call?.call) {
+      if (o.due) return []
+      throw new CallError('call', 'Not a call: ' + id)
+    }
     // A recurring call is not one invocation: it is the row that keeps asking
     // for one. Each firing writes its own call entity, with an id derived from
     // the schedule and the instant it fired, and that new call is what runs —
