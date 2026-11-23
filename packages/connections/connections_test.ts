@@ -629,6 +629,7 @@ test('the integration directory: every built one but those in testing, and each 
     'Anthropic',
     'calendar',
     'Canva',
+    'ElevenLabs',
     'ESV API',
     'Gmail',
     'Google Calendar',

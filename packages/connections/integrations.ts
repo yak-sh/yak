@@ -29,6 +29,7 @@ import gmail from './gmail.json' with { type: 'json' }
 import discord from './discord.json' with { type: 'json' }
 import discordAccount from './discord-account.json' with { type: 'json' }
 import discordBot from './discord-bot.json' with { type: 'json' }
+import elevenlabs from './elevenlabs.json' with { type: 'json' }
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import googleDrive from './google-drive.json' with { type: 'json' }
 import googleSearchConsole from './google-search-console.json' with {
@@ -155,6 +156,7 @@ let SEEDS: Integration[] = [
   discord,
   discordAccount,
   discordBot,
+  elevenlabs,
   gmail,
   googleCalendar,
   googleDrive,

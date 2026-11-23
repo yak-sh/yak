@@ -111,6 +111,9 @@ no logo yet. `voipms` is built: a person's own phone number at voip.ms, its
 fields the account's sign-in email (`username`) and API password (`password`),
 sent to `voip.ms` alone. A voip.ms key kept before it named fields, the two
 joined by a colon, is read as them the first time it is used and kept as them.
+`elevenlabs` is built in-house: a pasted API key, sent to `api.elevenlabs.io`
+alone in its own `xi-api-key` header. It takes the place of Nango's listing of
+the same name, so a key kept through that listing is the same connection.
 `openrouter` is built: its sign-in needs no registered client, and its exchange
 answers an API key (`answers: 'key'`, @yaks/oauth), kept as the connection's
 grant. `gmail` is brokered by Nango's CASA-verified Google app
