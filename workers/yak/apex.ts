@@ -136,9 +136,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // A phone's doors, for any provider config.ts `phoneConfig` lends as `via`
   // (phones.ts): its texts, their outcomes and its calls ringing, as it
   // posts them (operator-texts.ts); a call's audio, streamed to the Operator
-  // it reached (operator-calls.ts); and the texts to a person's own number,
-  // as its callback sends them under the ticket it was given
-  // (operator-line.ts). A speech provider whose own line carries calls
+  // it reached (operator-calls.ts); and the texts to a number a space bought
+  // (number-door.ts) or to a person's own number, as its callback sends them
+  // under the ticket it was given (operator-line.ts). A speech provider whose own line carries calls
   // rings `/<provider>/calls` (operator-carried.ts).
   let [, via, door] = /^\/([^/]+)\/([^/]+)$/.exec(path) ?? []
   if (via && door == 'calls') {
@@ -160,8 +160,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
     return streamDoor(req, env)
   }
   if (phone && phone.own) {
+    let { heldDoor } = await import('./number-door.ts')
     let { lineDoor } = await import('./operator-line.ts')
-    return lineDoor(req, env, via, phone.own)
+    return await heldDoor(req, env, via, phone.own) ??
+      lineDoor(req, env, via, phone.own)
   }
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason

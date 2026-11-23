@@ -28,9 +28,9 @@ export let jobs: Record<string, Job> = {
       let { collected } = await import('./erase.ts')
       return await collected(env, new Date(row.Now.at), spent)
     }),
-  // The hourly meter: each store's counts, read into the directory, and every
+  // The hourly meter: each store's counts, read into the directory, every
   // model call's hold its caller died holding settled (model-spend.ts
-  // `expired`).
+  // `expired`), and each bought number's calls charged (number-minutes.ts).
   meter: (env, row) =>
     reporting(env, row, async () => {
       let now = new Date(row.Now.at)
@@ -39,6 +39,8 @@ export let jobs: Record<string, Job> = {
       if (n) console.log(`yak-meter: ${n} expired model holds settled`)
       let { metered } = await import('./usage.ts')
       await metered(env, now)
+      let { minutes } = await import('./number-minutes.ts')
+      await minutes(env, now)
     }),
   // Each month after the first that a space holds a number (numbers.ts
   // `number_buy`), its monthly price spent from the space's budget under

@@ -302,7 +302,9 @@ let phone = (use: string, options: Record<string, unknown>): Plug => ({
  * What the kernel itself composes, outside any store: the phone providers
  * the platform texts and calls through (phones.ts). Each lends its phone
  * under its name; `PHONE_SENDER` picks the one the platform sends from, and
- * a space's `sender{via}` another. A `{"secret": "NAME"}` is read from the
+ * a space's `sender{via}` another. `sells` names the numbers a space buys
+ * through it (numbers.ts): toll-free from Telnyx, local from our voip.ms
+ * account. A `{"secret": "NAME"}` is read from the
  * Worker's environment at its use.
  */
 export let phoneConfig: Config = {
@@ -311,6 +313,7 @@ export let phoneConfig: Config = {
       key: { secret: 'TELNYX_API_KEY' },
       profile: 'yaks.app',
       tollFree: true,
+      sells: ['toll_free'],
       api: { secret: 'TELNYX_API' },
       door: { key: { secret: 'TELNYX_PUBLIC_KEY' } },
     }),
@@ -324,6 +327,8 @@ export let phoneConfig: Config = {
       user: { secret: 'VOIPMS_USERNAME' },
       key: { secret: 'VOIPMS_API_PASSWORD' },
       number: { secret: 'VOIPMS_NUMBER' },
+      api: { secret: 'VOIPMS_API' },
+      sells: ['local'],
     }),
   ],
 }

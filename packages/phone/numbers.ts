@@ -12,6 +12,10 @@ export type Search = {
   tollFree?: boolean
   /** a three-digit area code */
   area?: string
+  /** a two-letter state or province */
+  region?: string
+  /** a city or town, in `region` */
+  city?: string
   /** digits the number contains */
   contains?: string
   /** exactly this number, in E.164 form, to quote it before buying */
@@ -30,7 +34,18 @@ export type Offer = {
   currency: string
   sms: boolean
   voice: boolean
+  /** where the number is local to, in the provider's words, such as
+   * "BATTLE CRK, MI" */
+  place?: string
 }
+
+/** A call a number took or made, as its provider billed it: when it began,
+ * how long it took, and the dollars it cost. */
+export type Call = { id: string; at: string; seconds: number; cost: number }
+
+/** A softphone's sign-in to a number's calls: the SIP server, user and
+ * password. */
+export type Login = { server: string; user: string; password: string }
 
 /** A number bought: the provider's order for it, and whether it is held yet. */
 export type Bought = {
@@ -118,14 +133,21 @@ export type Verification = {
 /** A provider's numbers, on the account its phone texts through. */
 export type Numbers = {
   find: (search: Search) => Promise<Offer[]>
-  /** buys a number on offer and puts its texts on the phone's profile */
-  buy: (number: string) => Promise<Bought>
+  /** buys a number on offer and puts its texts on the phone's profile, or,
+   * for a provider that sends each number's texts to a URL of its own, on
+   * `callback` */
+  buy: (number: string, callback?: string) => Promise<Bought>
   /** gives a held number back; it costs nothing from then on */
   release: (number: string) => Promise<void>
   /** files a toll-free verification */
   verify: (form: TollFree) => Promise<Verification>
   /** where a filed verification stands now */
   verification: (id: string) => Promise<Verification>
+  /** for a provider whose numbers' calls ring a softphone, its sign-in */
+  login?: (number: string) => Promise<Login>
+  /** for a provider that bills each call, the calls a number took or made
+   * after `since`, oldest first */
+  calls?: (number: string, since: string) => Promise<Call[]>
 }
 
 /** A provider's {@link Numbers} kept in memory. */
@@ -169,6 +191,7 @@ export let shelf = (offers: Offer[] = []): Shelf => {
           !held.has(o.number) && (!s.tollFree || free(o.number)) &&
           (!s.number || o.number == s.number) &&
           (!s.area || o.number.startsWith(`+1${s.area}`)) &&
+          (!s.region || !!o.place?.endsWith(`, ${s.region}`)) &&
           (!s.contains || o.number.includes(s.contains))
         ).slice(0, s.limit ?? 5),
       ),

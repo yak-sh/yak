@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Unsent } from '@yaks/host/senders'
 import { Blocked, Denied } from '@yaks/phone'
-import { voipms } from './mod.ts'
+import { numbers, voipms } from './mod.ts'
 
 // An account whose API answers every call with `said`, keeping what it was
 // asked.
@@ -60,4 +60,23 @@ test("voip.ms's refusals are told apart: a limit is Blocked, a key it refuses De
       error,
     )
   }
+})
+
+test('a number voip.ms will not sell takes back the sub-account made to ring it', async () => {
+  let asked: string[] = []
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      asked.push(method)
+      return Promise.resolve(Response.json(
+        method == 'orderDID'
+          ? { status: 'did_unavailable' }
+          : { status: 'success', id: 9, account: '100_y2695550100' },
+      ))
+    },
+  })
+  await assertRejects(() => shop.buy('+12695550100'), Error, 'did_unavailable')
+  assertEquals(asked, ['createSubAccount', 'orderDID', 'delSubAccount'])
 })

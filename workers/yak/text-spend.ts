@@ -8,6 +8,7 @@
 // number a person connected of their own (operator-line.ts) is theirs to pay
 // and is counted nowhere here.
 import type { Texter } from '@yaks/host/senders'
+import { usage } from '@yaks/platform/numbers'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import type { Space } from './directory.ts'
@@ -15,10 +16,10 @@ import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
 import { refuse } from './tool.ts'
 
-/** Dollars a segment of a text costs: Telnyx's US rate, $0.004 a segment
- * each way, with the carriers' pass-through fees (up to about $0.004) on
- * top. */
-export let PER_SEGMENT = 0.008
+/** Dollars a segment of a text costs a space: Telnyx's US rate, $0.004 a
+ * segment each way, with the carriers' pass-through fees (up to about
+ * $0.004) on top, and our share (@yaks/platform/numbers `usage`). */
+export let PER_SEGMENT = usage(0.008)
 
 /**
  * How many segments a carrier sends `text` as: 160 characters in one, 153 in

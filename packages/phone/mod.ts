@@ -58,7 +58,9 @@ export type { Caller, Frame, Line, Ring } from './call.ts'
 export {
   type Address,
   type Bought,
+  type Call,
   type Entity,
+  type Login,
   type Numbers,
   type Offer,
   type Search,

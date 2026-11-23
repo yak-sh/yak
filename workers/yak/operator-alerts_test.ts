@@ -219,7 +219,7 @@ test('an alert to a person who agreed to texts is a text to their number, signed
     to: ANA,
     text: `Report ready\n\nOpen it from your Updates.\n\n${textSigned(space)}`,
   }])
-  assertEquals(spent, PER_SEGMENT)
+  assertEquals(Number(spent.toFixed(6)), PER_SEGMENT)
 })
 
 // Their choice wins: email, or Updates alone; nothing else is a choice.
