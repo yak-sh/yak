@@ -13,6 +13,8 @@ import {
   Blocked,
   Denied,
   type Held,
+  type Numbers,
+  type Offer,
   type Provider,
   type Receipt,
   type Text,
@@ -30,6 +32,12 @@ export let VOIPMS = {
    * to its own address. Its {TIMESTAMP} names no time zone, so a text is
    * kept as arriving when the callback came. */
   callback: 'id={ID}&from={FROM}&to={TO}&message={MESSAGE}',
+  /** the server a number bought here rings, by voip.ms's number for it:
+   * Chicago */
+  pop: '7',
+  /** a number bought here pays by the minute its calls take, voip.ms's
+   * cheaper monthly price */
+  billing: '1',
   blocked: {
     limit_reached:
       'voip.ms allows 100 texts a day from this line, and today’s are spent. Send it again tomorrow.',
@@ -76,6 +84,51 @@ export let e164 = (digits: string): string => {
 type Said = Record<string, unknown> & { status?: string; message?: string }
 type Did = Record<string, string | number | null | undefined>
 
+// voip.ms's API, called as the account: each method a GET carrying its
+// username and API password, its answer's status read the same way for all.
+let requester = (
+  { user, key, api = VOIPMS.api, fetch: given }: Omit<Voipms, 'number'>,
+) =>
+async (method: string, params: Record<string, string> = {}): Promise<Said> => {
+  let url = new URL(api)
+  for (
+    let [k, v] of Object.entries({
+      api_username: user,
+      api_password: key,
+      method,
+      ...params,
+    })
+  ) url.searchParams.set(k, v)
+  let response
+  try {
+    // The global fetch as it is at the call, not as it was when this was made.
+    response = await (given ?? globalThis.fetch)(url, {
+      headers: { accept: 'application/json' },
+    })
+  } catch (error) {
+    throw new Unsent(`voip.ms could not be reached: ${error}`)
+  }
+  if (response.status >= 500 || response.status == 429) {
+    await response.body?.cancel()
+    throw new Unsent(
+      `voip.ms is not answering right now (${response.status} to ${method}); yaks.app will try again`,
+      30_000,
+    )
+  }
+  let said = await response.json().catch(() => ({})) as Said
+  let status = String(said.status ?? '')
+  if (status == 'success') return said
+  if (VOIPMS.blocked[status]) {
+    throw new Blocked(VOIPMS.blocked[status], status)
+  }
+  if (VOIPMS.denied[status]) throw new Denied(VOIPMS.denied[status], status)
+  throw new Error(
+    `voip.ms answered ${status || response.status} to ${method}: ${
+      said.message ?? 'no reason given'
+    }`,
+  )
+}
+
 /**
  * A voip.ms {@link Account}. A text of up to {@link VOIPMS}.sms characters
  * goes as SMS, a longer one as MMS. A status voip.ms lists in
@@ -102,51 +155,8 @@ type Did = Record<string, string | number | null | undefined>
  * equal(asked[0].searchParams.get('dst'), '2695550142')
  * ```
  */
-export let voipms = (
-  { user, key, number, api = VOIPMS.api, fetch: given }: Voipms,
-): Account => {
-  let call = async (
-    method: string,
-    params: Record<string, string> = {},
-  ): Promise<Said> => {
-    let url = new URL(api)
-    for (
-      let [k, v] of Object.entries({
-        api_username: user,
-        api_password: key,
-        method,
-        ...params,
-      })
-    ) url.searchParams.set(k, v)
-    let response
-    try {
-      // The global fetch as it is at the call, not as it was when this was made.
-      response = await (given ?? globalThis.fetch)(url, {
-        headers: { accept: 'application/json' },
-      })
-    } catch (error) {
-      throw new Unsent(`voip.ms could not be reached: ${error}`)
-    }
-    if (response.status >= 500 || response.status == 429) {
-      await response.body?.cancel()
-      throw new Unsent(
-        `voip.ms is not answering right now (${response.status} to ${method}); yaks.app will try again`,
-        30_000,
-      )
-    }
-    let said = await response.json().catch(() => ({})) as Said
-    let status = String(said.status ?? '')
-    if (status == 'success') return said
-    if (VOIPMS.blocked[status]) {
-      throw new Blocked(VOIPMS.blocked[status], status)
-    }
-    if (VOIPMS.denied[status]) throw new Denied(VOIPMS.denied[status], status)
-    throw new Error(
-      `voip.ms answered ${status || response.status} to ${method}: ${
-        said.message ?? 'no reason given'
-      }`,
-    )
-  }
+export let voipms = ({ number, ...account }: Voipms): Account => {
+  let call = requester(account)
   let dids = async () => ((await call('getDIDsInfo')).dids ?? []) as Did[]
   let lines = async (): Promise<Held[]> =>
     (await dids()).map((d) => ({
@@ -240,6 +250,201 @@ export let called = (
   }
 }
 
+type Available = Record<string, string | number | undefined>
+
+// Letters alone, uppercased: how a city and a rate center are compared.
+let letters = (name: string) => name.toUpperCase().replace(/[^A-Z]/g, '')
+
+// Whether `short` is `long` with letters left out: BATTLECRK is BATTLECREEK.
+let within = (short: string, long: string) => {
+  let i = 0
+  for (let c of long) if (c == short[i]) i++
+  return i == short.length
+}
+
+/**
+ * The rate centers among `centers` a city is in. voip.ms names a rate center
+ * in at most ten capitals, cutting letters out of longer names ("BATTLE CRK",
+ * "MIDDLEVL") or adding a zone ("DETROITZN1"), so a center is the city's when
+ * it is the city, starts with it, or is it with letters left out; when one is
+ * the city exactly, only that one is.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { centersOf } from '@yaks/voipms'
+ * let centers = ['BATTLE CRK', 'DETROITZN1', 'DETROITZN2', 'GRANT', 'KALAMAZOO']
+ * equal(centersOf('Battle Creek', centers), ['BATTLE CRK'])
+ * equal(centersOf('Detroit', centers), ['DETROITZN1', 'DETROITZN2'])
+ * equal(centersOf('Grand Rapids', centers), [])
+ * ```
+ */
+export let centersOf = (city: string, centers: string[]): string[] => {
+  let want = letters(city)
+  let exact = centers.filter((c) => letters(c) == want)
+  if (exact.length) return exact
+  return centers.filter((c) => {
+    let have = letters(c)
+    return have[0] == want[0] &&
+      (have.startsWith(want) || within(have, want))
+  })
+}
+
+// Some of `all`, chosen at random, so any number asked for is any.
+let some = <T>(all: T[], n: number) =>
+  all.map((x) => [Math.random(), x] as const).sort((a, b) => a[0] - b[0])
+    .slice(0, n).map(([, x]) => x)
+
+// The sub-account a number bought here rings, by its ten digits.
+let accountFor = (digits: string) => `y${digits}`
+
+/**
+ * voip.ms's numbers, sold from our account: local US numbers found by area
+ * code, by state and city, by digits they contain, or any, at voip.ms's
+ * price by the minute. A number bought rings a sub-account of its own, which
+ * a softphone signs in to (`login`) and which calls out as the number, and
+ * its texts go to the callback the buyer names. voip.ms sells no toll-free
+ * number here, so none is ever verified.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { numbers } from '@yaks/voipms'
+ * let said: Record<string, object> = {
+ *   searchDIDsUSA: { dids: [{ did: '2692015487', ratecenter: 'WATERVLIET',
+ *     state: 'MI', perminute_setup: '0.40', perminute_monthly: '1.10',
+ *     sms: 1 }] },
+ * }
+ * let shop = numbers({ user: 'u', key: 'k', fetch: (url) => {
+ *   let method = new URL(String(url)).searchParams.get('method')!
+ *   return Promise.resolve(Response.json({ status: 'success', ...said[method] }))
+ * } })
+ * let [offer] = await shop.find({ area: '269' })
+ * equal(offer.number, '+12692015487')
+ * equal([offer.upfront, offer.monthly, offer.place], [0.4, 1.1, 'WATERVLIET, MI'])
+ * ```
+ */
+export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
+  let call = requester(options)
+  let found = async (method: string, params: Record<string, string>) => {
+    try {
+      return ((await call(method, params)).dids ?? []) as Available[]
+    } catch (error) {
+      // voip.ms answers a search that finds nothing as a failure.
+      if (/no_did|unavailable_info/.test(String(error))) return []
+      throw error
+    }
+  }
+  let centers = async (state: string) =>
+    (((await call('getRateCentersUSA', { state })).ratecenters ?? []) as {
+      ratecenter: string
+    }[]).map((c) => c.ratecenter)
+  let states = async () =>
+    (((await call('getStates')).states ?? []) as { state: string }[])
+      .map((s) => s.state)
+  let subaccount = async (digits: string) =>
+    (((await call('getSubAccounts')).accounts ?? []) as Available[])
+      .find((a) => String(a.account).endsWith(`_${accountFor(digits)}`))
+  let offered = (d: Available): Offer => ({
+    number: e164(String(d.did)),
+    upfront: Number(d.perminute_setup ?? 0),
+    monthly: Number(d.perminute_monthly ?? 0),
+    currency: 'USD',
+    sms: String(d.sms) == '1',
+    voice: true,
+    place: `${d.ratecenter}, ${d.state}`,
+  })
+  return {
+    find: async (s) => {
+      if (s.tollFree || (s.country ?? 'US') != 'US') return []
+      let limit = s.limit ?? 5
+      let all: Available[]
+      if (s.number) {
+        all = (await found('searchDIDsUSA', {
+          type: 'starts',
+          query: ten(s.number),
+        })).filter((d) => String(d.did) == ten(s.number!))
+      } else if (s.region || !s.area && !s.contains) {
+        let state = s.region?.toUpperCase() ??
+          some(await states(), 1)[0]
+        let at = s.city ? centersOf(s.city, await centers(state)) : [undefined]
+        all = (await Promise.all(
+          at.map((ratecenter) =>
+            found('getDIDsUSA', { state, ...ratecenter ? { ratecenter } : {} })
+          ),
+        )).flat()
+      } else {
+        all = await found('searchDIDsUSA', {
+          type: s.area ? 'starts' : 'contains',
+          query: s.area ?? s.contains!,
+        })
+      }
+      return some(
+        all.filter((d) =>
+          String(d.sms) == '1' &&
+          (!s.area || String(d.did).startsWith(s.area)) &&
+          (!s.contains || String(d.did).includes(s.contains))
+        ),
+        limit,
+      ).map(offered)
+    },
+    buy: async (number, callback) => {
+      let digits = ten(number)
+      let made = await call('createSubAccount', {
+        username: accountFor(digits),
+        protocol: '1',
+        description: number,
+        auth_type: '1',
+        password: `Y${crypto.randomUUID().replaceAll('-', '')}`,
+        device_type: '2',
+        callerid_number: digits,
+        lock_international: '1',
+        international_route: '1',
+        music_on_hold: 'default',
+        allowed_codecs: 'ulaw;g729;gsm',
+        dtmf_mode: 'AUTO',
+        nat: 'yes',
+      })
+      try {
+        await call('orderDID', {
+          did: digits,
+          routing: `account:${made.account}`,
+          pop: VOIPMS.pop,
+          dialtime: '60',
+          cnam: '1',
+          billing_type: VOIPMS.billing,
+        })
+      } catch (error) {
+        await call('delSubAccount', { id: String(made.id) })
+        throw error
+      }
+      if (callback) {
+        await voipms(options).point(number, callback)
+      }
+      return { number, order: digits, status: 'held' }
+    },
+    release: async (number) => {
+      let digits = ten(number)
+      await call('cancelDID', { did: digits })
+      let account = await subaccount(digits)
+      if (account) await call('delSubAccount', { id: String(account.id) })
+    },
+    verify: () =>
+      Promise.reject(new Error('voip.ms sells no toll-free number to verify')),
+    verification: () =>
+      Promise.reject(new Error('voip.ms files no toll-free verification')),
+    login: async (number) => {
+      let account = await subaccount(ten(number))
+      if (!account) throw new Error(`${number} rings no voip.ms sub-account`)
+      let [server] = ((await call('getServersInfo', { server_pop: VOIPMS.pop }))
+        .servers ?? []) as Available[]
+      return {
+        server: String(server?.server_hostname ?? ''),
+        user: String(account.account),
+        password: String(account.password),
+      }
+    },
+  }
+}
+
 // A voip.ms account from the settings a host gives it.
 let opened = (options: import('@yaks/phone').Transport): Account => {
   if (!options.key || !options.user) {
@@ -254,6 +459,12 @@ let opened = (options: import('@yaks/phone').Transport): Account => {
 export let provider: Provider = {
   needs: ['key', 'user'],
   sender: opened,
+  numbers: (options) => {
+    if (!options.key || !options.user) {
+      throw new Error('voipms numbers need `user` and `key`')
+    }
+    return numbers({ ...options, key: options.key, user: options.user })
+  },
   own: {
     fields: { user: 'username', key: 'password' },
     account: opened,

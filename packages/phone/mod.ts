@@ -59,6 +59,7 @@ export {
   type Address,
   type Bought,
   type Entity,
+  type Login,
   type Numbers,
   type Offer,
   type Search,

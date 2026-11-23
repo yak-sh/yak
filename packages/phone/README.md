@@ -166,12 +166,14 @@ A provider that sells numbers adds `numbers(options)` beside its sender, and the
 `Phone` its plugin lends offers it as `numbers()`, on the account and profile
 the phone texts through. `Numbers` is:
 
-- `find(search)`: what is on offer (`tollFree`, `area`, `contains`, an exact
-  `number` to quote it, `limit`), each
-  `Offer{number, upfront, monthly,
-  currency, sms, voice}`.
-- `buy(number)`: a number on offer onto the account, its texts on the phone's
-  profile; `Bought{number, order, status}`, `pending` until it is held.
+- `find(search)`: what is on offer (`tollFree`, `area`, `region` and `city`,
+  `contains`, an exact `number` to quote it, `limit`), each
+  `Offer{number,
+  upfront, monthly, currency, sms, voice, place}`, `place`
+  where it is local to.
+- `buy(number, callback?)`: a number on offer onto the account, its texts on the
+  phone's profile, or on `callback` for a provider that sends each number's
+  texts to a URL; `Bought{number, order, status}`, `pending` until it is held.
 - `release(number)`: a held number given back.
 - `verify(form)`: files a `TollFree` verification, the carriers' own fields (the
   business, its kind and registration, a contact, the use case, a sample, the
@@ -179,6 +181,11 @@ the phone texts through. `Numbers` is:
   `Verification{id, number, status, said, reason}`, where `status` is `pending`,
   `needed` (waiting on the sender), `verified` or `rejected` and `said` is the
   provider's word.
+- `login(number)`, for a provider whose numbers' calls ring a softphone: its SIP
+  sign-in, `Login{server, user, password}`.
+
+A config entry's `sells` (`local`, `toll_free`) says which numbers a host buys
+through that provider.
 
 `shelf(offers)` keeps numbers in memory: bought ones in `held`, and filed
 verifications in `filed`, pending until a test changes one.

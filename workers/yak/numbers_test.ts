@@ -131,15 +131,18 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       agent.tool(name, { space: slug, ...args })
 
     assertStringIncludes(
-      await tool('number_find'),
-      `${FREE} (833) 555-0100 — $1.00 up front and $1.00 a month`,
+      await tool('number_find', { toll_free: true }),
+      `${FREE} (833) 555-0100 — $2.00 up front and $2.00 a month`,
     )
     assertStringIncludes(
       await tool('number_buy', { number: FREE }),
-      '$2.00 of it from this month',
+      '$4.00 of it from this month',
     )
-    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 2)
-    assertEquals(await tool('number_find'), 'No number on offer matches that.')
+    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 4)
+    assertEquals(
+      await tool('number_find', { toll_free: true }),
+      'No number on offer matches that.',
+    )
     await assertRejects(() => tool('number_buy', { number: FREE }))
 
     assertStringIncludes(
@@ -151,9 +154,9 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     assertEquals(filed[0].isvReseller, 'yaks.app')
     assertEquals(
       await tool('number_status'),
-      '(833) 555-0100 — not assigned yet; $1.00 up front and $1.00 a month; ' +
+      '(833) 555-0100 — not assigned yet; $2.00 up front and $2.00 a month; ' +
         'verification needed (Waiting For Customer): Add a picture of the ' +
-        'sign-up card',
+        'sign-up card; approved for calls, texts to people who know it',
     )
 
     await tool('number_assign', { number: FREE })
@@ -203,7 +206,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     )
     await assertRejects(() => tool('number_assign', { number: FREE }))
     assertStringIncludes(await readTrash(), '(833) 555-0100')
-    assertStringIncludes(await readTrash(), '$1.00 a month')
+    assertStringIncludes(await readTrash(), '$2.00 a month')
     await assertRejects(
       () => cached.send({ to: '+12695550142', text: 'Queued before release' }),
       Error,
@@ -327,7 +330,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
         wake: { at: new Date().toISOString() },
       }],
     })
-    await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 5, {
+    await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 10, {
       label: 'the next month spent',
     })
     let [after] = await k.dir.read(q`.phone_line.number=${FREE} ?wake`)
@@ -390,5 +393,164 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
   } finally {
     await k.stop()
     await telnyx.stop()
+  }
+})
+
+// voip.ms in memory: what is on offer, the sub-accounts and numbers held,
+// where each number's texts go, and every method called.
+let LOCAL = '+12692015487'
+let vms = {
+  held: new Map<string, { routing: string; callback?: string }>(),
+  accounts: new Map<string, string>(),
+  asked: [] as URLSearchParams[],
+}
+let voipmsApi = endpoints(globalThis).open((req) => {
+  let q = new URL(req.url).searchParams
+  vms.asked.push(q)
+  let ok = (more: object = {}) => Response.json({ status: 'success', ...more })
+  let did = (d: string) => ({
+    did: d,
+    ratecenter: d.startsWith('269') ? 'BATTLE CRK' : 'DETROITZN1',
+    state: 'MI',
+    perminute_setup: '0.40',
+    perminute_monthly: '1.10',
+    sms: 1,
+  })
+  let offered = ['2692015487', '3135550100']
+    .filter((d) => !vms.held.has(d)).map(did)
+  switch (q.get('method')) {
+    case 'searchDIDsUSA':
+      return ok({
+        dids: offered.filter((d) => d.did.startsWith(q.get('query')!)),
+      })
+    case 'getRateCentersUSA':
+      return ok({
+        ratecenters: [{ ratecenter: 'BATTLE CRK' }, { ratecenter: 'GRANT' }],
+      })
+    case 'getDIDsUSA':
+      return ok({
+        dids: offered.filter((d) =>
+          !q.get('ratecenter') || d.ratecenter == q.get('ratecenter')
+        ),
+      })
+    case 'createSubAccount': {
+      let id = String(vms.accounts.size + 1)
+      vms.accounts.set(id, `100_${q.get('username')}`)
+      return ok({ id, account: `100_${q.get('username')}` })
+    }
+    case 'delSubAccount':
+      vms.accounts.delete(q.get('id')!)
+      return ok()
+    case 'getSubAccounts':
+      return ok({
+        accounts: [...vms.accounts].map(([id, account]) => ({
+          id,
+          account,
+          password: 'sip-pw',
+        })),
+      })
+    case 'getServersInfo':
+      return ok({ servers: [{ server_hostname: 'chicago1.voip.ms' }] })
+    case 'orderDID':
+      vms.held.set(q.get('did')!, { routing: q.get('routing')! })
+      return ok()
+    case 'getDIDsInfo':
+      return ok({
+        dids: [...vms.held.keys()].map((d) => ({ did: d, sms_enabled: '1' })),
+      })
+    case 'setSMS':
+      vms.held.get(q.get('did')!)!.callback = q.get('url_callback')!
+      return ok()
+    case 'cancelDID':
+      vms.held.delete(q.get('did')!)
+      return ok()
+    case 'sendSMS':
+      return ok({ sms: 7 })
+  }
+  return Response.json({ status: 'invalid_method' })
+})
+
+test('a space buys a local voip.ms number by area code at its price and our margin, hears texts at it, signs a softphone in and gives it back', async () => {
+  let env!: Env
+  let k = await fresh({}, (e) => {
+    env = e
+    Object.assign(e, {
+      PHONE_SENDER: { via: 'telnyx', number: '+18005550199' },
+      TELNYX_API: telnyx.url,
+      TELNYX_API_KEY: 'a-key',
+      VOIPMS_API: voipmsApi.url,
+      VOIPMS_USERNAME: 'us@example.com',
+      VOIPMS_API_PASSWORD: 'pw',
+    })
+  })
+  try {
+    let slug = unique('home')
+    let { cookie, eids } = await seed(k, [{ slug, apps: [] }])
+    let agent = connector(k, cookie)
+    let tool = (name: string, args: Record<string, unknown> = {}) =>
+      agent.tool(name, { space: slug, ...args })
+
+    let offer = `${LOCAL} (269) 201-5487 (BATTLE CRK, MI) — ` +
+      '$0.80 up front and $2.20 a month'
+    assertStringIncludes(await tool('number_find', { area: '269' }), offer)
+    assertStringIncludes(
+      await tool('number_find', { state: 'MI', city: 'Battle Creek' }),
+      offer,
+    )
+    assertStringIncludes(
+      await tool('number_buy', { number: LOCAL }),
+      '$3.00 of it from this month',
+    )
+    assertEquals((await k.dir.at(eids[slug]))?.meter?.texts, 3)
+    assertEquals(vms.held.get('2692015487')?.routing, 'account:100_y2692015487')
+
+    await tool('number_assign', { number: LOCAL })
+    assertEquals((await k.dir.textSpace(LOCAL))?.sender, {
+      via: 'voipms',
+      number: LOCAL,
+    })
+    assertStringIncludes(
+      await tool('number_status'),
+      'approved for calls, texts to people who know it',
+    )
+    await tool('number_assign', { number: LOCAL, campaign: 'CX1' })
+    assertStringIncludes(
+      await tool('number_status'),
+      'texts to many people (10DLC campaign CX1)',
+    )
+    assertStringIncludes(
+      await tool('number_status', { number: LOCAL, login: true }),
+      'at chicago1.voip.ms as 100_y2692015487 with password sip-pw',
+    )
+
+    // A text to it reaches the space at the callback voip.ms was given; a
+    // HELP is answered from the number itself.
+    let callback = new URL(vms.held.get('2692015487')!.callback!)
+    let path = callback.pathname
+    let reach = (to: string, text: string) =>
+      k.at(
+        'yaks.app',
+        `${path}?id=${crypto.randomUUID()}&from=2695550142&to=${to}&message=${text}`,
+      )
+    assertEquals((await reach('2695559999', 'HELP')).status, 403)
+    assertEquals((await reach('2692015487', 'HELP')).status, 200)
+    let sent = vms.asked.find((q) => q.get('method') == 'sendSMS')
+    assertEquals(
+      [sent?.get('did'), sent?.get('dst')],
+      ['2692015487', '2695550142'],
+    )
+    assertEquals(
+      (await k.at('yaks.app', '/voipms/not-a-ticket?id=1&to=1')).status,
+      403,
+    )
+
+    let space = (await k.dir.space(slug))!
+    await tool('number_release', { number: LOCAL })
+    await released(env, (await k.dir.lines(space))[0])
+    assertEquals(vms.held.size, 0)
+    assertEquals(vms.accounts.size, 0)
+  } finally {
+    await k.stop()
+    await voipmsApi.stop()
   }
 })

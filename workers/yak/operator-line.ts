@@ -24,7 +24,8 @@
 //
 // A number's 10DLC campaign, once its provider approved the registration
 // that lets its texts to many people through, is recorded on its
-// `own_number` row (`phone_numbers`), where an app texting from it reads it
+// `own_number` row (`phone_numbers`), or on the `phone_line` of a number a
+// space bought, where an app texting from it reads it
 // (`campaignOf`, app-texts.ts `lineAnswer`).
 //
 // voip.ms's API answers only addresses its allowlist names, and a Worker
@@ -146,10 +147,16 @@ export let numbersOf = async (env: Env, connection: string) =>
     .map((b) => comp(b, OWN) as Owned)
 
 /** The 10DLC campaign texts from `number` to many people are registered
- * under, as recorded beside it (`phone_numbers`); null while none is. */
-export let campaignOf = async (env: Env, number: string) =>
-  (await meta(env).query(q`.${OWN}.number=${number}&*`))
+ * under, as recorded beside it: a person's own number's (`phone_numbers`),
+ * or a number a space bought (numbers.ts `number_assign`); null while none
+ * is. */
+export let campaignOf = async (env: Env, number: string) => {
+  let { directoryOf } = await import('./directory.ts')
+  let held = await directoryOf(env.STORE).heldLine(number)
+  if (held?.line.campaign) return held.line.campaign
+  return (await meta(env).query(q`.${OWN}.number=${number}&*`))
     .map((b) => String(comp(b, OWN).campaign ?? '')).find(Boolean) ?? null
+}
 
 /** How the Operator whose store `g` reads uses each of a connection's
  * numbers. A connection saved before numbers were listed has none written,

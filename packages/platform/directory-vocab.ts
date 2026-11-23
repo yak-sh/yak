@@ -482,7 +482,10 @@ export let directoryDoc: VocabDoc = {
     // A number the platform holds for a space (numbers.ts): bought through
     // the phone lent as `via`, on the platform's account, at the price it was
     // bought at in dollars, `upfront` once and `monthly`, and the toll-free
-    // verification filed for it by the provider's id. Whichever space or app
+    // verification filed for it by the provider's id. What it is approved
+    // for: calls where `voice`, texts to people who know it where `sms`, and
+    // texts to many once its 10DLC `campaign` is registered, by the
+    // campaign's id (./numbers.ts `uses`). Whichever space or app
     // row wears it as `phone{number}` is where it texts from; the line says
     // only who holds it. The row wears the wake that charges each later
     // month (meter-graph.ts `lines`). The space keeps it, so erasing the
@@ -502,6 +505,9 @@ export let directoryDoc: VocabDoc = {
         monthly: owned(num),
         at: owned(time),
         verification: owned(text),
+        sms: owned(bool),
+        voice: owned(bool),
+        campaign: owned(text),
       },
     },
     // What the platform takes from one sale, in basis points (sell.ts `fee`),
