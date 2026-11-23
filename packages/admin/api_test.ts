@@ -461,6 +461,11 @@ let through = FORWARDED + 'http://127.0.0.1:5176/'
 
 let releasing = (op: string) =>
   rpc(through)('tools/call', { name: 'app_files', arguments: { op } })
+let browseReply = () =>
+  new Response(null, {
+    headers: { 'content-type': 'application/vnd.yaks.browse' },
+  })
+
 let visiting = () => browse(through, { url: 'https://yaks.app/admin' })
 
 for (
@@ -517,9 +522,11 @@ for (
           : Promise.resolve(new Response(null, { status: 400 }))
       }
       sent.push(init.body)
-      return sent.length == 1
-        ? Promise.reject(failure)
-        : Promise.resolve(Response.json({ result: {}, text: 'ready' }))
+      return sent.length == 1 ? Promise.reject(failure) : Promise.resolve(
+        call === visiting
+          ? browseReply()
+          : Response.json({ result: {}, text: 'ready' }),
+      )
     }) as typeof fetch
     try {
       if (retry) {

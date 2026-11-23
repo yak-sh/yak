@@ -144,3 +144,41 @@ export let freshFetch =
         : client.close())
     }
   }
+
+/** A streamed request gets its own connection until its response ends. */
+export let streamingFetch =
+  (create: () => Client = httpClient): typeof fetch => async (input, init) => {
+    let client = create()
+    let end = () => client.destroy ? client.destroy() : client.close()
+    try {
+      let source = await client.fetch(input, init)
+      if (!source.body) {
+        await end()
+        return source
+      }
+      let reader = source.body.getReader()
+      let body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            let part = await reader.read()
+            if (!part.done) {
+              controller.enqueue(part.value)
+              return
+            }
+            await client.close()
+            controller.close()
+          } catch (e) {
+            await end()
+            controller.error(e)
+          }
+        },
+        async cancel(reason) {
+          await Promise.all([reader.cancel(reason), end()])
+        },
+      }, { highWaterMark: 0 })
+      return answer(body, source)
+    } catch (e) {
+      await end()
+      throw e
+    }
+  }

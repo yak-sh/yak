@@ -3,10 +3,18 @@
 import { cleanup, clock, equal, match, test } from '@yaks/testing'
 import {
   answer,
+  type BrowseFrame,
   type Browsing,
   MOST,
   type Visit,
 } from '@yaks/platform/browser-visit'
+import {
+  frames,
+  packet,
+  readAsk,
+  streamed,
+  WIRE,
+} from '@yaks/platform/browser-wire'
 import { actions } from './browser/testing.ts'
 import { bearerFor, fresh, type Kernel, signIn } from './probe.ts'
 import { HOST_COOKIE } from './browser-cookie.ts'
@@ -16,6 +24,7 @@ import type { Comp } from '@yaks/graph'
 
 let time = clock()
 let visits: Visit[] = []
+let uploads: string[] = []
 let did: string[] = []
 let controls = actions((line) => did.push(line))
 let browsing: Browsing = {
@@ -68,6 +77,11 @@ let k: Kernel = await fresh({
 }, (env) => {
   env.BROWSER = {
     fetch: async (req: Request) => {
+      if (req.headers.get('content-type') == WIRE) {
+        let file = await readAsk<Visit>(req.clone().body)
+        uploads.push(await new Response(file.body).text())
+        return answer(browsing, clock())(req)
+      }
       let visit: Visit = await req.clone().json()
       visits.push(visit)
       if (new URL(visit.url).searchParams.has('slow')) return slow(req)
@@ -154,6 +168,46 @@ test('a page brought as a checkout renders it goes to the browser as its documen
     cookie: checks.cookie,
   })
   equal(huge.status, 413)
+})
+
+test('a checkout document and the screenshots stream through the kernel', async () => {
+  let html = '<b>Draft 🌐</b>'
+  let bytes = new TextEncoder().encode(html)
+  let r = await k.at(k.host, '/api/browse', {
+    method: 'POST',
+    headers: {
+      origin: `https://${k.host}`,
+      cookie: checks.cookie,
+      accept: WIRE,
+      'content-type': WIRE,
+    },
+    body: packet({
+      head: { ...manage, view: { wait: 0 }, steps: [{ shot: 'before' }] },
+      size: bytes.length,
+      body: streamed((async function* () {
+        yield bytes.subarray(0, 10)
+        yield bytes.subarray(10)
+      })()),
+    }),
+  })
+  equal(r.status, 200)
+  equal(r.headers.get('content-type'), WIRE)
+  let seen: unknown[] = []
+  for await (let { head, body } of frames<BrowseFrame>(r.body)) {
+    if (head.kind == 'shot') {
+      seen.push([
+        head.name,
+        new Uint8Array(await new Response(body).arrayBuffer()),
+      ])
+    } else if (head.kind == 'result') {
+      match(head.result, { status: 200, errors: [] })
+      seen.push(head.kind)
+    } else seen.push(head.kind)
+  }
+  let png = Uint8Array.fromBase64('png')
+  equal(seen, ['reset', ['before', png], ['end', png], 'result'])
+  equal(uploads.at(-1), html)
+  equal(did.includes('intercept true'), true)
 })
 
 test('a person never lends their sign-in to the browser, not even the platform owner', async () => {

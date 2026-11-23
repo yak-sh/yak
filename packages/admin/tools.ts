@@ -31,7 +31,7 @@ import {
   apex,
   appStores,
   type Browse,
-  browse,
+  type BrowseFile,
   budgetNow,
   close,
   compNow,
@@ -71,6 +71,7 @@ import {
   usesIn,
   zone,
 } from './api.ts'
+import { documentAt, visit } from './browse.ts'
 import { deploys, git, type Login, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
@@ -167,15 +168,28 @@ let website = async (at: Account, rejected?: string): Promise<string> => {
   return session
 }
 
-let browserVisit = async (at: Account, asked: Browse) => {
+let browserVisit = async (
+  at: Account,
+  asked: Browse,
+  to: string,
+  file?: BrowseFile,
+  recovered?: (e: Error) => void | Promise<void>,
+) => {
   let session = await website(at)
   try {
-    return await browse(session, asked)
+    return await visit(session, asked, to, file, undefined, recovered)
   } catch (e) {
     if (!(e instanceof CallError && e.code == 'unauthorized' && at.signedIn)) {
       throw e
     }
-    return await browse(await website(at, session), asked)
+    return await visit(
+      await website(at, session),
+      asked,
+      to,
+      file,
+      undefined,
+      recovered,
+    )
   }
 }
 
@@ -311,7 +325,10 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
-  host: Pick<Host, 'vault' | 'config' | 'graph' | 'stopping' | 'fetch'>,
+  host: Pick<
+    Host,
+    'vault' | 'config' | 'graph' | 'stopping' | 'fetch' | 'report'
+  >,
 ): Runs => {
   let acting = (a: Args) => account(host)(word(a, 'as'))
   // A write is recorded as its account, and an agent's write is the agent's
@@ -425,30 +442,18 @@ export let runs = (
         .filter(Boolean)
       let signedOut = a.stranger === true
       let file = word(a, 'html')
-      let html = file
-        ? await fs.readTextFile(within(word(a, 'cwd'), file))
-        : undefined
-      let got = await browserVisit(at, {
-        url,
-        view,
-        steps,
-        allow,
-        signedOut,
-        ...html ? { html } : {},
-      })
       let to = within(word(a, 'cwd'), word(a, 'to') ?? '.scratch/browse')
-      await fs.mkdir(to, { recursive: true })
-      let files: string[] = []
-      for (
-        let { name, image } of [...got.shots, { name: 'end', image: got.image }]
-      ) {
-        let file = `${to}/${name.replace(/[^\w.-]+/g, '-')}.png`
-        await fs.writeFile(
-          file,
-          Uint8Array.from(atob(image), (c) => c.charCodeAt(0)),
-        )
-        files.push(file)
-      }
+      let html = file == null ? undefined : await documentAt(
+        within(word(a, 'cwd'), file),
+      )
+      let got = await browserVisit(
+        at,
+        { url, view, steps, allow, signedOut },
+        to,
+        html,
+        (e) =>
+          host.report?.(e, { tags: { tool: 'admin_browse', retry: 'browse' } }),
+      )
       return [
         said(call, [
           `${url}${html ? ` showing ${file}` : ''} as ${
@@ -456,7 +461,7 @@ export let runs = (
           }: HTTP ${got.status}, ${
             Math.round(got.duration / 100) / 10
           }s of browser`,
-          ...files.map((f) => `shot      ${f}`),
+          ...got.files.map((f) => `shot      ${f}`),
           ...got.dialogs.map((d) => `dialog    ${d.type}: ${d.message}`),
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
           ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')

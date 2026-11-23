@@ -9,14 +9,18 @@ import type { Checked } from '@yaks/platform/preview-audit'
 import {
   bounded,
   BROWSE_REPLY,
+  type BrowseFrame,
   BrowserTimeout,
   type Fault,
   PREVIEW_REPLY,
   type Rendered,
   type Reply,
+  type Result,
   type Visit,
   waitRoom,
 } from '@yaks/platform/browser-visit'
+
+import { type Frame, mapped, packet, WIRE } from '@yaks/platform/browser-wire'
 
 // A failure yak-browser answered, raised here with the stack it had there.
 let relayed = ({ failed, stack, timeout }: Fault) =>
@@ -71,8 +75,8 @@ export let seen = async (
   } finally {
     await used(said?.duration ?? Math.max(0, time.now() - start))
   }
-  let { faults = [], ...reply } = said
-  for (let fault of faults) caught(relayed(fault), where)
+  report(said, where)
+  let { faults: _faults, ...reply } = said
   if ('failed' in reply) {
     if (reply.refusal) throw new CallError(reply.refusal, reply.failed)
     throw relayed(reply)
@@ -84,6 +88,55 @@ export let seen = async (
     })
   }
   return reply
+}
+
+let report = (said: Result, where: Record<string, string>) => {
+  for (let fault of said.faults ?? []) caught(relayed(fault), where)
+}
+
+export let browseStream = async (
+  env: Pick<Env, 'BROWSER' | 'CLOCK'>,
+  visit: Frame<Visit>,
+  where: Record<string, string>,
+) => {
+  if (!env.BROWSER) {
+    throw new Error('Cloudflare Browser Rendering is not configured')
+  }
+  let transfer = !!visit.body
+  let browser = env.BROWSER
+  let r = await bounded(
+    env.CLOCK ?? system,
+    BROWSE_REPLY + waitRoom(visit.head),
+    () => 'Waiting for the browser service to open its stream',
+    (signal) =>
+      browser.fetch(
+        new Request('https://browser.invalid/', {
+          method: 'POST',
+          headers: {
+            accept: WIRE,
+            'content-type': transfer ? WIRE : 'application/json',
+          },
+          body: transfer ? packet(visit) : JSON.stringify(visit.head),
+          signal,
+        }),
+      ),
+  )
+  if (r.headers.get('content-type') != WIRE) {
+    await r.body?.cancel()
+    throw new Error(
+      'The browser service did not return a browse stream. Try again.',
+    )
+  }
+  let body = mapped<BrowseFrame>(r.body, (frame) => {
+    if (frame.kind == 'result') {
+      let { faults: _faults, ...result } = frame.result
+      report(frame.result, where)
+      if ('failed' in result && !result.refusal) caught(relayed(result), where)
+      return { kind: 'result', result }
+    }
+    return frame
+  }, (e) => caught(e, where))
+  return new Response(body, { headers: { 'content-type': WIRE } })
 }
 
 /** A render for app_preview: what {@link seen} answers, its accessibility

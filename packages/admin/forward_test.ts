@@ -1,3 +1,11 @@
+import {
+  frames,
+  header,
+  packet,
+  readAsk,
+  streamed,
+  WIRE,
+} from '@yaks/platform/browser-wire'
 import { account } from './account.ts'
 import { equal, test } from '@yaks/testing'
 import { forward, FORWARDED, forwarded } from './forward.ts'
@@ -98,6 +106,55 @@ test('the private admin forwards only visits to admin pages, using the private O
   equal(sent.at(-1)?.headers.get('cookie'), null)
   equal(sent.at(-1)?.headers.get('authorization'), `Bearer ${bearer}`)
   equal(await response.json(), { bearer: '[redacted]', session: '[redacted]' })
+})
+
+test('the private admin streams a checkout document and PNG bytes, redacting only response headers and diagnostics', async () => {
+  let page = 'https://yaks.app/admin/spending'
+  let html = new TextEncoder().encode('<p>Draft</p>')
+  let png = new Uint8Array([137, 80, 78, 71, 0])
+  let visit = forward({
+    credential: () => Promise.resolve({ bearer, session }),
+    renewed: () => Promise.resolve(),
+    fetch: async (input, init) => {
+      let req = new Request(input, init)
+      equal(req.url, 'https://yaks.app/api/browse/admin')
+      equal(req.headers.get('authorization'), `Bearer ${bearer}`)
+      let file = await readAsk<{ url: string }>(req.body)
+      equal(file.head.url, page)
+      equal(new Uint8Array(await new Response(file.body).arrayBuffer()), html)
+      return new Response(
+        streamed((async function* () {
+          yield header({ kind: 'shot', name: 'end' }, png.length)
+          yield png
+          yield header({ kind: 'result', result: { text: bearer } })
+        })()),
+        { headers: { 'content-type': WIRE, 'x-test': session } },
+      )
+    },
+  })
+  let response = await visit(
+    new Request(request('https://yaks.app/api/browse').url, {
+      method: 'POST',
+      headers: { 'content-type': WIRE, 'x-yak-credential': 'session' },
+      body: packet({
+        head: { url: page },
+        size: html.length,
+        body: new Blob([html]).stream(),
+      }),
+    }),
+  )
+  equal(response.headers.get('x-test'), '[redacted]')
+  let received = []
+  for await (
+    let { head, body } of frames<Record<string, unknown>>(response.body)
+  ) {
+    received.push(
+      body
+        ? new Uint8Array(await new Response(body).arrayBuffer())
+        : head.result,
+    )
+  }
+  equal(received, [png, { text: '[redacted]' }])
 })
 
 test('forwarding preserves the platform free-space allowance door', async () => {

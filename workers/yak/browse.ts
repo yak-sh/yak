@@ -42,7 +42,13 @@ import {
   type View,
   waiting,
 } from '@yaks/platform/browser-visit'
-import { seen, timedOut } from './browser.ts'
+import { browseStream, seen, timedOut } from './browser.ts'
+import {
+  HTML_BYTES,
+  HTML_LIMIT,
+  readAsk,
+  WIRE,
+} from '@yaks/platform/browser-wire'
 
 export let PATH = BROWSE
 export let ADMIN_PATH = ADMIN_BROWSE
@@ -61,10 +67,6 @@ export type Asked = {
   /** The document the page answers with, as a checkout renders it. */
   html?: string
 }
-
-// A rendered page with its stylesheets written in runs to a few hundred
-// kilobytes; this is room for the biggest with plenty to spare.
-let HTML = 4_000_000
 
 // A phone's window unless the caller names another.
 let PHONE: View = { width: 390, height: 844, wait: 1000, touch: true }
@@ -173,7 +175,12 @@ let sessionCaller = async (req: Request, env: Env, dir: Directory) => {
   }
 }
 
-let visitOf = async (req: Request, env: Env, path: string) => {
+let visitOf = async (
+  req: Request,
+  env: Env,
+  path: string,
+  signal: AbortSignal,
+) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let caller = await (path == ADMIN_PATH ? adminCaller : sessionCaller)(
     req,
@@ -182,19 +189,41 @@ let visitOf = async (req: Request, env: Env, path: string) => {
   )
   if (caller instanceof Response) return caller
   let { person, token } = caller
-  let asked = await req.json().catch(() => null) as Asked | null
+  let stream = req.headers.get('content-type') == WIRE
+  let file = stream ? await readAsk<Asked>(req.body) : undefined
+  try {
+    signal.throwIfAborted()
+    let asked = file?.head ?? await req.json().catch(() => null) as Asked | null
+    let visit = await prepared(asked, env, person, token, file?.size ?? 0)
+    if (visit instanceof Response) return visit
+    signal.throwIfAborted()
+    let ready = { visit, person, file }
+    file = undefined
+    return ready
+  } finally {
+    await file?.close()
+  }
+}
+
+let prepared = async (
+  asked: Asked | null,
+  env: Env,
+  person: string,
+  token: string | null,
+  bytes: number,
+) => {
   let url = typeof asked?.url == 'string' && /^https:/.test(asked.url) &&
     onZone(asked.url, env)
   if (!asked || !url) {
     return json(400, 'off_zone', `name an https address on ${apex(env)}`)
   }
   let html = typeof asked.html == 'string' ? asked.html : undefined
-  if (html && html.length > HTML) {
+  if ((html?.length ?? 0) > HTML_LIMIT || bytes > HTML_BYTES) {
     return json(
       413,
       'html_too_large',
       `a page's document runs to ${
-        HTML / 1_000_000
+        HTML_LIMIT / 1_000_000
       } million characters at most`,
     )
   }
@@ -227,7 +256,7 @@ let visitOf = async (req: Request, env: Env, path: string) => {
       }-second wait limit. Shorten the waits or split the visit.`,
     )
   }
-  return { visit, person }
+  return visit
 }
 
 export let fetch = async (
@@ -244,16 +273,25 @@ export let fetch = async (
       env.CLOCK ?? system,
       5_000,
       () => 'Reading and authorizing the browser visit',
-      () => visitOf(req, env, path),
+      (signal) => visitOf(req, env, path, signal),
     )
     if (asked instanceof Response) return asked
-    let { visit, person } = asked
+    let { visit, person, file } = asked
     Object.assign(where, {
       browse_page: pageAddress(visit.url),
       browse_caller: person,
       browse_input: visit.view.touch ? 'touch' : 'mouse',
-      browse_document: visit.html ? 'posted' : 'served',
+      browse_document: visit.html || file?.body ? 'posted' : 'served',
     })
+    if (req.headers.get('accept') == WIRE) {
+      try {
+        return await browseStream(env, { ...file, head: visit }, where)
+      } catch (e) {
+        await file?.close()
+        throw e
+      }
+    }
+    await file?.close()
     return Response.json(await seen(env, visit, undefined, where))
   } catch (e) {
     if (e instanceof CallError) return refused(e)

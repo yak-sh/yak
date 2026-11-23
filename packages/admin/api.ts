@@ -38,6 +38,9 @@ import type { Asked } from './move.ts'
 import { COOKIE } from '@yaks/platform/cookie'
 import { BROWSE } from '@yaks/platform/routes'
 import { forwarded } from './forward.ts'
+import { type Frame, packet, WIRE } from '@yaks/platform/browser-wire'
+import type { Result, Step } from '@yaks/platform/browser-visit'
+export type { Step } from '@yaks/platform/browser-visit'
 export { BROWSE } from '@yaks/platform/routes'
 
 // The zone this client points at, so a probe can aim somewhere else.
@@ -196,11 +199,13 @@ let sent = async (
     headers?: Record<string, string>
     rereads?: boolean
     replay?: boolean
+    upload?: () => ReadableStream<Uint8Array>
+    transport?: typeof fetch
   } = {},
   quiet = false,
   browser = false,
 ) => {
-  let { rereads, replay, ...rest } = init
+  let { rereads, replay, upload, transport = fetch, ...rest } = init
   let asked = {
     ...rest,
     headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
@@ -213,7 +218,15 @@ let sent = async (
       !!(replay || rereads) && phase(err, 'SendRequest')
     : undefined
   let send = () =>
-    again(() => fetch(destination.url, destination.init), rereads, restarting)
+    again(
+      () =>
+        transport(
+          destination.url,
+          upload ? { ...destination.init, body: upload() } : destination.init,
+        ),
+      rereads,
+      restarting,
+    )
   let go = async () => {
     try {
       return await send()
@@ -320,18 +333,6 @@ export type Link = {
 export let linkFor = (session: string, days?: number): Promise<Link> =>
   said(posted(apex(LINK), days ? { days: String(days) } : {}, session, true))
 
-/** One thing done on a page in the browser (@yaks/platform/browser-visit
- * `Step`). */
-export type Step =
-  | { tap: string }
-  | { type: string; into?: string }
-  | { clear: string }
-  | { press: string }
-  | { swipe: [number, number, number, number] }
-  | { keyboard: number }
-  | { wait: number }
-  | { shot: string }
-
 /** A page to open in the browser: where, in what window, and what to do. */
 export type Browse = {
   url: string
@@ -348,43 +349,52 @@ export type Browse = {
   allow?: string[]
   /** Open the page as a stranger, holding no cookie. */
   signedOut?: boolean
-  /** The document the page answers with, as a checkout renders it, to see a
-   * change before it deploys (@yaks/platform/still). */
-  html?: string
 }
 
-/** What the browser saw (@yaks/platform/browser-visit `Rendered`). */
-export type Browsed = {
-  image: string
-  shots: { name: string; image: string }[]
-  text: string
-  console: { type: string; text: string }[]
-  /** The dialogs the page opened, each dismissed. */
-  dialogs: { type: string; message: string }[]
-  errors: string[]
-  status: number
-  duration: number
-}
+export type Browsed = Exclude<Result, { failed: string }>
+export type BrowseFile = () => Pick<Frame<Browse>, 'size' | 'body'>
 
-// A page of ours opened in Cloudflare's browser signed in as this account
-// (workers/yak/browse.ts): the website session is the browser's credential,
-// and the page is opened with it.
-export let browse = (session: string, asked: Browse): Promise<Browsed> =>
-  said(sent(
+export let replayBrowse = (asked: Browse) =>
+  asked.steps?.every((step) => 'wait' in step || 'shot' in step) ?? true
+
+// A page of ours opened in Cloudflare's browser with the account's session.
+export let browse = async (
+  session: string,
+  asked: Browse,
+  file?: BrowseFile,
+  signal?: AbortSignal,
+  transport?: typeof fetch,
+) => {
+  let answer = await sent(
     apex(BROWSE),
     session,
     {
       method: 'POST',
       redirect: 'manual',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(asked),
+      headers: {
+        accept: WIRE,
+        'content-type': file ? WIRE : 'application/json',
+      },
+      ...file
+        ? { upload: () => packet({ head: asked, ...file() }) }
+        : { body: JSON.stringify(asked) },
       // Interactive steps may already have acted on the page.
-      replay: asked.steps?.every((step) => 'wait' in step || 'shot' in step) ??
-        true,
+      replay: replayBrowse(asked),
+      signal,
+      transport,
     },
     false,
     true,
-  ))
+  )
+  if (answer.ok && answer.headers.get('content-type') == WIRE) return answer
+  if (!answer.ok) await said(Promise.resolve(answer))
+  await answer.body?.cancel()
+  throw new Error(
+    `/api/browse did not return a screenshot stream; try again${
+      traced(answer)
+    }`,
+  )
+}
 
 /** Taking one back, by its id or the front of one. Answers the ids that went. */
 export let unlink = async (session: string, id: string): Promise<string[]> =>
@@ -818,7 +828,7 @@ let said = async <T>(answer: Promise<Response>): Promise<T> => {
 }
 
 // The id a failed answer names, which finds its line in the platform's log.
-let traced = (r: Response) => {
+export let traced = (r: Response) => {
   let requestId = r.headers.get('x-request-id')
   let ray = r.headers.get('cf-ray')
   return requestId

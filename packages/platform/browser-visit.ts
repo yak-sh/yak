@@ -9,6 +9,14 @@ import { type Clock, type Hold, sleep, system } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
+import {
+  header,
+  HTML_BYTES,
+  HTML_LIMIT,
+  readAsk,
+  WIRE,
+} from './browser-wire.ts'
+import { holding } from '@yaks/blob'
 
 import {
   CONNECT,
@@ -206,6 +214,17 @@ export type Rendered = {
 export type Fault = { failed: string; stack?: string; timeout?: boolean }
 export type Failed = Fault & { duration: number; refusal?: string }
 export type Reply = (Rendered | Failed) & { faults?: Fault[] }
+export type Result = (Omit<Rendered, 'image' | 'shots'> | Failed) & {
+  faults?: Fault[]
+}
+export type BrowseFrame =
+  | { kind: 'reset' }
+  | { kind: 'shot'; name: string }
+  | { kind: 'result'; result: Result }
+type Screens = {
+  reset: () => Promise<void>
+  shot: (name: string, image: string) => Promise<void>
+}
 
 let failure = (e: unknown): Fault => ({
   failed: e instanceof Error ? e.message : String(e),
@@ -541,6 +560,7 @@ let loaded = async (
   { url, view, cookies = [], steps = [], allow = [], audit, html }: Visit,
   ms: number,
   time: Clock,
+  screens?: Screens,
 ): Promise<Loaded> => {
   let stage = 'opening the page'
   let finding: { step: string; selector: string } | undefined
@@ -649,7 +669,9 @@ let loaded = async (
         }
         if ('shot' in step) {
           stage += ' (taking a screenshot)'
-          shots.push({ name: step.shot, image: await shoot() })
+          let image = await shoot()
+          if (screens) await screens.shot(step.shot, image)
+          else shots.push({ name: step.shot, image })
           continue
         }
         navigation ??= navigating(page)
@@ -673,7 +695,16 @@ let loaded = async (
       await ready()
       stage = 'taking the final screenshot'
       let image = await shoot()
-      return { page, image, shots, console, dialogs, errors, status }
+      if (screens) await screens.shot('end', image)
+      return {
+        page,
+        image: screens ? '' : image,
+        shots,
+        console,
+        dialogs,
+        errors,
+        status,
+      }
     },
   )
   try {
@@ -691,7 +722,11 @@ export let capture = async (
   visit: Visit,
   used: (duration: number) => Promise<void> = () => Promise.resolve(),
   time: Clock = system,
-  { hold = () => {}, report = () => {} }: Partial<SessionOptions> = {},
+  {
+    hold = () => {},
+    report = () => {},
+    screens,
+  }: Partial<SessionOptions> & { screens?: Screens } = {},
 ): Promise<Rendered> => {
   let start = time.now()
   let opening = start + OPEN
@@ -700,11 +735,13 @@ export let capture = async (
   let left = () => end - time.now()
   let attempt = (openBy: number) =>
     withSession(browsing, openBy, time, { hold, report }, async (browser) => {
+      await screens?.reset()
       let { page, ...shot } = await loaded(
         browser,
         visit,
         Math.min(render, left()),
         time,
+        screens,
       )
       return {
         ...shot,
@@ -739,6 +776,101 @@ export let capture = async (
   return { ...result, duration }
 }
 
+let documentTooLarge = () =>
+  new CallError(
+    'html_too_large',
+    `a page's document runs to ${
+      HTML_LIMIT / 1_000_000
+    } million characters at most`,
+  )
+
+let visitIn = async (req: Request): Promise<Visit> => {
+  if (req.headers.get('content-type') != WIRE) return req.json()
+  let file = await readAsk<Visit>(req.body)
+  try {
+    if ((file.size ?? 0) > HTML_BYTES) throw documentTooLarge()
+    if (!file.body) return file.head
+    // Puppeteer's intercepted response requires the document as one string.
+    let held = await holding({ stream: file.body }, HTML_BYTES)
+    if (!(held instanceof Uint8Array)) {
+      await held.stream.cancel()
+      throw documentTooLarge()
+    }
+    let html = new TextDecoder('utf-8', { ignoreBOM: true }).decode(held)
+    if (html.length > HTML_LIMIT) throw documentTooLarge()
+    return { ...file.head, html }
+  } finally {
+    await file.close()
+  }
+}
+
+let run = async (
+  req: Request,
+  browsing: Browsing,
+  time: Clock,
+  hold?: Hold,
+  screens?: Screens,
+): Promise<Reply> => {
+  let duration = 0
+  let faults: Fault[] = []
+  let report = (e: unknown) => faults.push(failure(e))
+  let result: Rendered | Failed
+  try {
+    result = await capture(
+      browsing,
+      await visitIn(req),
+      (ms) => {
+        duration = ms
+        return Promise.resolve()
+      },
+      time,
+      { hold, report, screens },
+    )
+  } catch (e) {
+    result = e instanceof CallError
+      ? { failed: e.message, refusal: e.code, duration }
+      : { ...failure(e), duration }
+  }
+  return { ...result, ...faults.length ? { faults } : {} }
+}
+
+let stream = (
+  req: Request,
+  browsing: Browsing,
+  time: Clock,
+  hold?: Hold,
+) => {
+  let { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+  let write = writable.getWriter()
+  let frame = (head: BrowseFrame, size?: number) =>
+    write.write(header(head, size))
+  let screens: Screens = {
+    reset: () => frame({ kind: 'reset' }),
+    shot: async (name, image) => {
+      // CDP gives one base64 screenshot at a time. Decode it in bounded
+      // pieces as the receiver takes the PNG.
+      let padding = image.endsWith('==') ? 2 : image.endsWith('=') ? 1 : 0
+      let size = Math.floor((image.length - padding) * 3 / 4)
+      await frame({ kind: 'shot', name }, size)
+      for (let at = 0; at < image.length; at += 64 * 1024) {
+        await write.write(
+          Uint8Array.fromBase64(image.slice(at, at + 64 * 1024)),
+        )
+      }
+    },
+  }
+  let send = async () => {
+    let said = await run(req, browsing, time, hold, screens)
+    let result = 'failed' in said
+      ? said
+      : (({ image: _image, shots: _shots, ...result }) => result)(said)
+    await frame({ kind: 'result', result })
+    await write.close()
+  }
+  send().catch((e) => write.abort(e).catch(() => {}))
+  return new Response(readable, { headers: { 'content-type': WIRE } })
+}
+
 /** The browser service's reply carries elapsed time on both paths. */
 export let answer = (
   browsing: Browsing,
@@ -746,32 +878,18 @@ export let answer = (
   hold?: Hold,
 ): (req: Request) => Promise<Response> =>
 async (req: Request): Promise<Response> => {
-  let duration = 0
-  let faults: Fault[] = []
-  let report = (e: unknown) => faults.push(failure(e))
-  let result: Rendered | Failed
-  let status = 200
-  try {
-    result = await capture(
-      browsing,
-      await req.json() as Visit,
-      (ms) => {
-        duration = ms
-        return Promise.resolve()
-      },
-      time,
-      { hold, report },
-    )
-  } catch (e) {
-    if (e instanceof CallError) {
-      result = { failed: e.message, refusal: e.code, duration }
-      status = 400
-    } else {
-      result = { ...failure(e), duration }
-      status = result.timeout ? 504 : 500
-    }
+  if (req.headers.get('accept') == WIRE) {
+    return stream(req, browsing, time, hold)
   }
-  return Response.json({ ...result, ...faults.length ? { faults } : {} }, {
-    status,
-  })
+  let result = await run(req, browsing, time, hold)
+  let status = !('failed' in result)
+    ? 200
+    : result.refusal == 'html_too_large'
+    ? 413
+    : result.refusal
+    ? 400
+    : result.timeout
+    ? 504
+    : 500
+  return Response.json(result, { status })
 }

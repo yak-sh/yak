@@ -1,3 +1,5 @@
+import { mapped, packet, readAsk, WIRE } from '@yaks/platform/browser-wire'
+import { streamingFetch } from '@yaks/process/http'
 import { COOKIE } from '@yaks/platform/cookie'
 import { ADMIN_BROWSE, adminPage, BROWSE } from '@yaks/platform/routes'
 // Credential forwarding is a transport boundary: callers hold an address;
@@ -61,17 +63,51 @@ export let forward = (doors: Forwarding) => async (request: Request) => {
   ) {
     return new Response('Choose a platform control door', { status: 403 })
   }
+  if (browsing && request.headers.get('content-type') == WIRE) {
+    let file = await readAsk<{ url: string }>(request.body).catch(() => null)
+    if (!file || !adminPage(file.head.url)) {
+      await file?.close()
+      return new Response('Choose an /admin page on yaks.app', { status: 403 })
+    }
+    try {
+      let response = await adminVisit(doors, request, target, packet(file))
+      if (response.status >= 400) await file.close()
+      return response
+    } catch (e) {
+      await file.close()
+      throw e
+    }
+  }
   let body = ['GET', 'HEAD'].includes(request.method)
     ? undefined
     : await request.arrayBuffer()
-  if (browsing && !adminPage(browsePage(body!))) {
-    return new Response('Choose an /admin page on yaks.app', { status: 403 })
-  }
-  // The admin visit has its own route and uses the private OAuth grant.
   if (browsing) {
-    target.pathname = ADMIN_BROWSE
-    mode = 'bearer'
+    if (!adminPage(browsePage(body!))) {
+      return new Response('Choose an /admin page on yaks.app', { status: 403 })
+    }
+    return adminVisit(doors, request, target, body!)
   }
+  return delegated(doors, request, target, mode, body)
+}
+
+let adminVisit = (
+  doors: Forwarding,
+  request: Request,
+  target: URL,
+  body: BodyInit,
+) => {
+  // This route uses the OAuth grant and issues a short-lived admin cookie.
+  target.pathname = ADMIN_BROWSE
+  return delegated(doors, request, target, 'bearer', body)
+}
+
+let delegated = async (
+  doors: Forwarding,
+  request: Request,
+  target: URL,
+  mode: string | null,
+  body: BodyInit | undefined,
+) => {
   let credentials = await doors.credential()
   let secret = mode == 'session' ? credentials.session : credentials.bearer
   if (!secret) {
@@ -89,18 +125,21 @@ let browsePage = (body: ArrayBuffer): unknown => {
   }
 }
 
+let browserFetch = streamingFetch()
+
 let sendTo = (
   doors: Forwarding,
   request: Request,
   target: URL,
   mode: string | null,
   secret: string,
-  body: ArrayBuffer | undefined,
+  body: BodyInit | undefined,
 ) => {
   let headers = new Headers(request.headers)
   for (let key of ['authorization', 'cookie', 'host', 'x-yak-credential']) {
     headers.delete(key)
   }
+  if (body instanceof ReadableStream) headers.delete('content-length')
   // A session rides as both cookies a signed-in browser holds, as the
   // direct client sends it (api.ts `head`): the apex reads only its own once
   // the shared one stops being honored there.
@@ -110,11 +149,14 @@ let sendTo = (
       ? `${COOKIE}=${secret}; __Host-${COOKIE}=${secret}`
       : `Bearer ${secret}`,
   )
-  return (doors.fetch ?? fetch)(target.href, {
+  let send = doors.fetch ??
+    (target.pathname == ADMIN_BROWSE ? browserFetch : fetch)
+  return send(target.href, {
     method: request.method,
     headers,
     body,
     redirect: 'manual',
+    signal: request.signal,
   })
 }
 
@@ -141,10 +183,12 @@ let relay = async (
       text,
     )
   for (let [key, value] of answer) answer.set(key, scrub(value))
-  let textual = /json|text|javascript|xml/.test(
-    answer.get('content-type') ?? '',
-  )
-  let body = textual ? scrub(await response.text()) : response.body
+  let type = answer.get('content-type') ?? ''
+  let body = type == WIRE
+    ? mapped(response.body, (head) => JSON.parse(scrub(JSON.stringify(head))))
+    : /json|text|javascript|xml/.test(type)
+    ? scrub(await response.text())
+    : response.body
   answer.delete('content-length')
   answer.delete('content-encoding')
   return new Response([204, 205, 304].includes(response.status) ? null : body, {
