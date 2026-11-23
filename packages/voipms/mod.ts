@@ -6,12 +6,11 @@
 // https://voip.ms/m/apidocs.php (behind a sign-in; the parameters here are
 // as its docs and an account's answers name them)
 
-import { Unsent } from '@yaks/host/senders'
+import { type Clock, system } from '@yaks/fp'
 import {
   type Account,
   type Arrival,
   Blocked,
-  Denied,
   type Held,
   type Numbers,
   type Offer,
@@ -20,55 +19,16 @@ import {
   type Text,
 } from '@yaks/phone'
 
-/** voip.ms as data: its API, how long a text may be, and the statuses that
- * mean a text will not go, in a person's words. */
-export let VOIPMS = {
-  api: 'https://voip.ms/api/v1/rest.php',
-  /** the most characters `sendSMS` takes; a longer text goes as `sendMMS` */
-  sms: 160,
-  /** the most characters `sendMMS` takes */
-  mms: 2048,
-  /** the variables its SMS URL callback fills in, as a query a host appends
-   * to its own address. Its {TIMESTAMP} names no time zone, so a text is
-   * kept as arriving when the callback came. */
-  callback: 'id={ID}&from={FROM}&to={TO}&message={MESSAGE}',
-  /** the server a number bought here rings, by voip.ms's number for it:
-   * Chicago */
-  pop: '7',
-  /** a number bought here pays by the minute its calls take, voip.ms's
-   * cheaper monthly price */
-  billing: '1',
-  blocked: {
-    limit_reached:
-      'voip.ms allows 100 texts a day from this line, and today’s are spent. Send it again tomorrow.',
-    sms_toolong: 'The text is longer than voip.ms carries (2,048 characters).',
-    invalid_dst:
-      'voip.ms says this number cannot get texts. It may be a landline or mistyped; check it in the directory.',
-  } as Record<string, string>,
-  denied: {
-    ip_not_enabled:
-      'voip.ms refused the address yaks.app calls from. On voip.ms, open Main Menu, then SOAP & REST/JSON API, enter 0.0.0.0 under Enable IP Addresses and save.',
-    invalid_credentials:
-      'voip.ms refused the username or API password. The username is the email you sign in to voip.ms with; the API password is the one set on its SOAP & REST/JSON API page.',
-    missing_credentials: 'voip.ms needs the username and the API password.',
-    api_not_enabled:
-      'The voip.ms API is not enabled. On voip.ms, open Main Menu, then SOAP & REST/JSON API, and enable it.',
-  } as Record<string, string>,
-}
-
-/** How a voip.ms sender is made. */
-export type Voipms = {
-  /** the email the account signs in with */
-  user: string
-  /** the API password, set on its SOAP & REST/JSON API page */
-  key: string
-  /** the number texts go from, in E.164 form; absent, the account's first
-   * number that texts */
-  number?: string
-  /** the API's address (default {@link VOIPMS}.api) */
-  api?: string
-  fetch?: typeof fetch
-}
+import {
+  bounded,
+  type Call,
+  type Params,
+  requester,
+  TimedOut,
+  VOIPMS,
+  type Voipms,
+} from './request.ts'
+export { VOIPMS, type Voipms } from './request.ts'
 
 // voip.ms writes a North American number as its ten digits.
 let ten = (number: string) =>
@@ -81,52 +41,32 @@ export let e164 = (digits: string): string => {
   return d.length == 10 ? '+1' + d : d ? '+' + d : ''
 }
 
-type Said = Record<string, unknown> & { status?: string; message?: string }
 type Did = Record<string, string | number | null | undefined>
 
-// voip.ms's API, called as the account: each method a GET carrying its
-// username and API password, its answer's status read the same way for all.
-let requester = (
-  { user, key, api = VOIPMS.api, fetch: given }: Omit<Voipms, 'number'>,
-) =>
-async (method: string, params: Record<string, string> = {}): Promise<Said> => {
-  let url = new URL(api)
-  for (
-    let [k, v] of Object.entries({
-      api_username: user,
-      api_password: key,
-      method,
-      ...params,
-    })
-  ) url.searchParams.set(k, v)
-  let response
-  try {
-    // The global fetch as it is at the call, not as it was when this was made.
-    response = await (given ?? globalThis.fetch)(url, {
-      headers: { accept: 'application/json' },
-    })
-  } catch (error) {
-    throw new Unsent(`voip.ms could not be reached: ${error}`)
-  }
-  if (response.status >= 500 || response.status == 429) {
-    await response.body?.cancel()
-    throw new Unsent(
-      `voip.ms is not answering right now (${response.status} to ${method}); yaks.app will try again`,
-      30_000,
-    )
-  }
-  let said = await response.json().catch(() => ({})) as Said
-  let status = String(said.status ?? '')
-  if (status == 'success') return said
-  if (VOIPMS.blocked[status]) {
-    throw new Blocked(VOIPMS.blocked[status], status)
-  }
-  if (VOIPMS.denied[status]) throw new Denied(VOIPMS.denied[status], status)
-  throw new Error(
-    `voip.ms answered ${status || response.status} to ${method}: ${
-      said.message ?? 'no reason given'
-    }`,
+let didsOf = async (call: Call) =>
+  ((await call('getDIDsInfo')).dids ?? []) as Did[]
+
+let point = async (call: Call, at: string, url?: string) => {
+  let did = (await didsOf(call)).find((d) =>
+    ten(String(d.did ?? '')) == ten(at)
   )
+  if (!did) throw new Error(`${at} is not a number on this voip.ms account`)
+  // setSMS sets every way a number's texts reach its owner at once, so
+  // each is said again as the account has it; no url turns the callback off.
+  let flag = (v: unknown) => String(v) == '1' ? '1' : '0'
+  await call('setSMS', {
+    did: ten(at),
+    enable: '1',
+    email_enabled: flag(did.sms_email_enabled),
+    email_address: String(did.sms_email ?? ''),
+    sms_forward_enable: flag(did.sms_forward_enabled),
+    sms_forward: String(did.sms_forward ?? ''),
+    sms_sipaccount_enabled: flag(did.sms_sipaccount_enabled),
+    sms_sipaccount: String(did.sms_sipaccount ?? ''),
+    url_callback_enable: url ? '1' : '0',
+    url_callback: url ?? '',
+    url_callback_retry: url ? '1' : '0',
+  })
 }
 
 /**
@@ -157,9 +97,8 @@ async (method: string, params: Record<string, string> = {}): Promise<Said> => {
  */
 export let voipms = ({ number, ...account }: Voipms): Account => {
   let call = requester(account)
-  let dids = async () => ((await call('getDIDsInfo')).dids ?? []) as Did[]
   let lines = async (): Promise<Held[]> =>
-    (await dids()).map((d) => ({
+    (await didsOf(call)).map((d) => ({
       number: e164(String(d.did ?? '')),
       sms: String(d.sms_enabled) == '1',
       ...d.description ? { label: String(d.description) } : {},
@@ -178,30 +117,10 @@ export let voipms = ({ number, ...account }: Voipms): Account => {
       own = null
       throw error
     })
-  let flag = (v: unknown) => String(v) == '1' ? '1' : '0'
   return {
     lines,
     from,
-    point: async (at, url) => {
-      let did = (await dids()).find((d) => ten(String(d.did ?? '')) == ten(at))
-      if (!did) throw new Error(`${at} is not a number on this voip.ms account`)
-      // setSMS sets every way a number's texts reach its owner at once, so
-      // each is said again as the account has it; no url turns the callback
-      // off.
-      await call('setSMS', {
-        did: ten(at),
-        enable: '1',
-        email_enabled: flag(did.sms_email_enabled),
-        email_address: String(did.sms_email ?? ''),
-        sms_forward_enable: flag(did.sms_forward_enabled),
-        sms_forward: String(did.sms_forward ?? ''),
-        sms_sipaccount_enabled: flag(did.sms_sipaccount_enabled),
-        sms_sipaccount: String(did.sms_sipaccount ?? ''),
-        url_callback_enable: url ? '1' : '0',
-        url_callback: url ?? '',
-        url_callback_retry: url ? '1' : '0',
-      })
-    },
+    point: (at, url) => point(call, at, url),
     send: async ({ to, text, from: given }: Text): Promise<Receipt> => {
       if (text.length > VOIPMS.mms) {
         throw new Blocked(VOIPMS.blocked.sms_toolong, 'sms_toolong')
@@ -295,7 +214,39 @@ let some = <T>(all: T[], n: number) =>
     .slice(0, n).map(([, x]) => x)
 
 // The sub-account a number bought here rings, by its ten digits.
+// An offer read precedes a purchase. Leave time for that read, giving back
+// any number already ordered, and the platform's own writes within a minute.
+let FIND = 16_000
+let BUY = 28_000
+let CLEANUP = 10_000
+
 let accountFor = (digits: string) => `y${digits}`
+
+let subaccount = async (call: Call, digits: string) =>
+  (((await call('getSubAccounts')).accounts ?? []) as Available[])
+    .find((a) => String(a.account).endsWith(`_${accountFor(digits)}`))
+
+let release = async (call: Call, digits: string) => {
+  await call('cancelDID', { did: digits })
+  let account = await subaccount(call, digits)
+  if (account) await call('delSubAccount', { id: String(account.id) })
+}
+
+let heldDid = async (call: Call, digits: string) => {
+  // voip.ms answers a number the account does not hold as a failure.
+  let held = await call('getDIDsInfo', { did: digits }).then(
+    (said) => (said.dids ?? []) as Available[],
+    (error) => {
+      if (/invalid_did|no_did/.test(String(error))) return []
+      throw error
+    },
+  )
+  return held.find((d) => String(d.did) == digits)
+}
+
+// A number this account routed to the sub-account made for it.
+let routed = (did: Available, digits: string) =>
+  String(did.routing).endsWith(`_${accountFor(digits)}`)
 
 /**
  * voip.ms's numbers, sold from our account: local US numbers found by area
@@ -327,9 +278,13 @@ let accountFor = (digits: string) => `y${digits}`
  * equal([offer.upfront, offer.monthly, offer.place], [0.4, 1.1, 'WATERVLIET, MI'])
  * ```
  */
-export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
-  let call = requester(options)
-  let found = async (method: string, params: Record<string, string>) => {
+export let numbers = (
+  options: Omit<Voipms, 'number'>,
+  time: Clock = system,
+): Numbers => {
+  let request = requester(options)
+  let call = bounded(request, time)
+  let found = async (call: Call, method: string, params: Params) => {
     try {
       return ((await call(method, params)).dids ?? []) as Available[]
     } catch (error) {
@@ -338,32 +293,13 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
       throw error
     }
   }
-  let centers = async (state: string) =>
+  let centers = async (call: Call, state: string) =>
     (((await call('getRateCentersUSA', { state })).ratecenters ?? []) as {
       ratecenter: string
     }[]).map((c) => c.ratecenter)
-  let states = async () =>
+  let states = async (call: Call) =>
     (((await call('getStates')).states ?? []) as { state: string }[])
       .map((s) => s.state)
-  let subaccount = async (digits: string) =>
-    (((await call('getSubAccounts')).accounts ?? []) as Available[])
-      .find((a) => String(a.account).endsWith(`_${accountFor(digits)}`))
-  // The number, held on the account and ringing the sub-account made for
-  // it, where it is one.
-  let ours = async (digits: string) => {
-    // voip.ms answers a number the account does not hold as a failure.
-    let held = await call('getDIDsInfo', { did: digits }).then(
-      (said) => (said.dids ?? []) as Available[],
-      (error) => {
-        if (/invalid_did|no_did/.test(String(error))) return []
-        throw error
-      },
-    )
-    return held.find((d) =>
-      String(d.did) == digits &&
-      String(d.routing).endsWith(`_${accountFor(digits)}`)
-    )
-  }
   let offered = (d: Available): Offer => ({
     number: e164(String(d.did)),
     upfront: Number(d.perminute_setup ?? 0),
@@ -376,18 +312,22 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
   return {
     find: async (s) => {
       if (s.tollFree || (s.country ?? 'US') != 'US') return []
+      let search = bounded(request, time, time.now() + FIND)
       let limit = s.limit ?? 5
       let all: Available[]
       if (s.number) {
         let digits = ten(s.number)
-        all = (await found('searchDIDsUSA', { type: 'starts', query: digits }))
+        all = (await found(search, 'searchDIDsUSA', {
+          type: 'starts',
+          query: digits,
+        }))
           .filter((d) => String(d.did) == digits)
-        let held = all.length ? undefined : await ours(digits)
-        if (held) {
+        let held = all.length ? undefined : await heldDid(search, digits)
+        if (held && routed(held, digits)) {
           // Bought already, so only its month is left to pay, at what its
           // rate center's numbers cost.
           let [ratecenter, state] = String(held.description).split(', ')
-          let [like] = await found('getDIDsUSA', { state, ratecenter })
+          let [like] = await found(search, 'getDIDsUSA', { state, ratecenter })
           return [{
             ...offered({ ...like, did: digits, ratecenter, state, sms: 1 }),
             upfront: 0,
@@ -395,15 +335,20 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
         }
       } else if (s.region || !s.area && !s.contains) {
         let state = s.region?.toUpperCase() ??
-          some(await states(), 1)[0]
-        let at = s.city ? centersOf(s.city, await centers(state)) : [undefined]
+          some(await states(search), 1)[0]
+        let at = s.city
+          ? centersOf(s.city, await centers(search, state))
+          : [undefined]
         all = (await Promise.all(
           at.map((ratecenter) =>
-            found('getDIDsUSA', { state, ...ratecenter ? { ratecenter } : {} })
+            found(search, 'getDIDsUSA', {
+              state,
+              ...ratecenter ? { ratecenter } : {},
+            })
           ),
         )).flat()
       } else {
-        all = await found('searchDIDsUSA', {
+        all = await found(search, 'searchDIDsUSA', {
           type: s.area ? 'starts' : 'contains',
           query: s.area ?? s.contains!,
         })
@@ -419,24 +364,31 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
     },
     buy: async (number) => {
       let digits = ten(number)
+      let purchase = bounded(request, time, time.now() + BUY)
       // A number already ringing the sub-account made for it was bought
       // here before, by a purchase that ended before its host kept it.
-      if (await ours(digits)) {
+      let held = await heldDid(purchase, digits)
+      if (held && routed(held, digits)) {
         return { number, order: digits, status: 'held' }
       }
-      // A sub-account calls out as a number the account already holds, so
-      // the number is ordered first, hanging up on calls until the
-      // sub-account it rings is made.
-      await call('orderDID', {
-        did: digits,
-        routing: 'sys:hangup',
-        pop: VOIPMS.pop,
-        dialtime: '60',
-        cnam: '1',
-        billing_type: VOIPMS.billing,
-      })
+      if (held) {
+        throw new Error(`voip.ms already holds ${number} on another route`)
+      }
+      let routing = 'sys:hangup'
+      let ordered = false
       try {
-        let made = await call('createSubAccount', {
+        // A sub-account calls out as a number the account already holds.
+        // Hang up on calls until the sub-account it rings is made.
+        await purchase('orderDID', {
+          did: digits,
+          routing,
+          pop: VOIPMS.pop,
+          dialtime: '60',
+          cnam: '1',
+          billing_type: VOIPMS.billing,
+        })
+        ordered = true
+        let made = await purchase('createSubAccount', {
           username: accountFor(digits),
           protocol: '1',
           description: number,
@@ -451,27 +403,39 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
           dtmf_mode: 'AUTO',
           nat: 'yes',
         })
-        await call('setDIDRouting', {
+        await purchase('setDIDRouting', {
           did: digits,
           routing: `account:${made.account}`,
         })
       } catch (error) {
-        let account = await subaccount(digits).catch(() => undefined)
-        if (account) await call('delSubAccount', { id: String(account.id) })
-        await call('cancelDID', { did: digits })
+        let cleanup = bounded(request, time, time.now() + CLEANUP)
+        try {
+          // A timed-out order may have reached the carrier. Check ownership
+          // before cancelling a number the carrier never confirmed we bought.
+          if (!ordered && error instanceof TimedOut) {
+            ordered = (await heldDid(cleanup, digits))?.routing == routing
+            if (!ordered) throw Error('voip.ms has yet to confirm the order')
+          }
+          if (ordered) await release(cleanup, digits)
+        } catch (cause) {
+          throw new Error(
+            `${
+              (error as Error).message
+            }. Cleanup of ${number} could not be confirmed: ` +
+              `${
+                (cause as Error).message
+              }. Check the carrier account before retrying.`,
+            { cause: new AggregateError([error, cause]) },
+          )
+        }
         throw error
       }
       return { number, order: digits, status: 'held' }
     },
     // voip.ms takes a number's texting settings only a while after it is
     // ordered, so a host points it once it puts the number to use.
-    point: (number, callback) => voipms(options).point(number, callback),
-    release: async (number) => {
-      let digits = ten(number)
-      await call('cancelDID', { did: digits })
-      let account = await subaccount(digits)
-      if (account) await call('delSubAccount', { id: String(account.id) })
-    },
+    point: (number, callback) => point(call, number, callback),
+    release: (number) => release(call, ten(number)),
     verify: () =>
       Promise.reject(new Error('voip.ms sells no toll-free number to verify')),
     verification: () =>
@@ -509,7 +473,7 @@ export let numbers = (options: Omit<Voipms, 'number'>): Numbers => {
         .sort((a, b) => a.at.localeCompare(b.at))
     },
     login: async (number) => {
-      let account = await subaccount(ten(number))
+      let account = await subaccount(call, ten(number))
       if (!account) throw new Error(`${number} rings no voip.ms sub-account`)
       let [server] = ((await call('getServersInfo', { server_pop: VOIPMS.pop }))
         .servers ?? []) as Available[]

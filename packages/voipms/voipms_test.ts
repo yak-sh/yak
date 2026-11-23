@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Unsent } from '@yaks/host/senders'
 import { Blocked, Denied } from '@yaks/phone'
@@ -82,9 +82,104 @@ test('a number whose sub-account voip.ms will not make is given back', async () 
     'getDIDsInfo',
     'orderDID',
     'createSubAccount',
+    'cancelDID',
     'getSubAccounts',
+  ])
+})
+
+test('a slow voip.ms sub-account reply ends within the purchase budget and gives back the DID', async () => {
+  let time = clock()
+  let asked: string[] = []
+  let held = false
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url, init) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      let signal = init!.signal!
+      asked.push(method)
+      let ok = (body: object = {}) =>
+        Response.json({ status: 'success', ...body })
+      if (method == 'orderDID') {
+        return new Promise((answer) =>
+          time.after(14_000, () => {
+            held = true
+            answer(ok())
+          })
+        )
+      }
+      if (method == 'createSubAccount') {
+        return Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start: (body) => {
+                signal.addEventListener(
+                  'abort',
+                  () => body.error(signal.reason),
+                )
+              },
+            }),
+          ),
+        )
+      }
+      if (method == 'cancelDID') held = false
+      return Promise.resolve(ok())
+    },
+  }, time)
+  let answer = assertRejects(
+    () => shop.buy('+12695550100'),
+    Error,
+    'voip.ms did not answer createSubAccount in time',
+  )
+  await time.advance(14_000)
+  assertEquals(held, true)
+  await time.advance(14_000)
+  await answer
+  assertEquals(held, false)
+  assertEquals(asked, [
+    'getDIDsInfo',
+    'orderDID',
+    'createSubAccount',
+    'cancelDID',
+    'getSubAccounts',
+  ])
+  assertEquals(time.pending(), 0)
+})
+
+test('a stalled purchase cleanup answers with the carrier state unconfirmed', async () => {
+  let time = clock()
+  let asked: string[] = []
+  let shop = numbers({
+    user: 'u',
+    key: 'k',
+    fetch: (url, init) => {
+      let method = new URL(String(url)).searchParams.get('method')!
+      asked.push(method)
+      if (method == 'getDIDsInfo' || method == 'orderDID') {
+        return Promise.resolve(Response.json({ status: 'success' }))
+      }
+      let signal = init!.signal!
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason))
+      )
+    },
+  }, time)
+  let answer = assertRejects(
+    () => shop.buy('+12695550100'),
+    Error,
+    'Cleanup of +12695550100 could not be confirmed',
+  )
+  await time.advance(15_000)
+  await time.advance(10_000)
+  let error = await answer
+  assertEquals(asked, [
+    'getDIDsInfo',
+    'orderDID',
+    'createSubAccount',
     'cancelDID',
   ])
+  assertEquals(time.pending(), 0)
+  assertEquals((error.cause as AggregateError).errors.length, 2)
 })
 
 test('buying a number already held on the sub-account made for it completes it, quoted at its month alone', async () => {
