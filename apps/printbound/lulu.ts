@@ -135,12 +135,14 @@ export let lulu = (config: {
   base: 'https://api.sandbox.lulu.com' | 'https://api.lulu.com'
   fetch: typeof fetch
 }): Printer => {
+  // Called bare: a Worker's fetch refuses `config` as its `this`.
+  let send = config.fetch
   let call = async (
     path: string,
     method = 'GET',
     body?: Json,
   ): Promise<Wire> => {
-    let token = await config.fetch(
+    let token = await send(
       `${config.base}/auth/realms/glasstree/protocol/openid-connect/token`,
       {
         method: 'POST',
@@ -159,7 +161,7 @@ export let lulu = (config: {
     if (!auth.access_token) {
       throw new ProviderError('Lulu authentication returned no token')
     }
-    let response = await config.fetch(`${config.base}${path}`, {
+    let response = await send(`${config.base}${path}`, {
       method,
       headers: {
         authorization: `Bearer ${auth.access_token}`,

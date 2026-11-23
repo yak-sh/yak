@@ -32,10 +32,13 @@ let adapter = (
     key: 'sentinel-key',
     secret: 'sentinel-secret',
     base: 'https://api.sandbox.lulu.com',
-    fetch: ((url, init) =>
-      String(url).endsWith('/token')
+    // As a Worker's fetch does, refuse a call that hands it a `this`.
+    fetch: function (this: unknown, url: string, init?: RequestInit) {
+      if (this !== undefined) throw new TypeError('Illegal invocation')
+      return String(url).endsWith('/token')
         ? Promise.resolve(json({ access_token: 'token' }))
-        : Promise.resolve(read(new URL(String(url)), init))) as typeof fetch,
+        : Promise.resolve(read(new URL(String(url)), init))
+    } as typeof fetch,
   })
 let failed = async (body: () => Promise<unknown>) => {
   try {
