@@ -35,6 +35,48 @@ export type Guide = (comp: string) => string | undefined
  * kind. */
 export type About = { comps?: string[]; kind?: string }
 
+let terms = (text: unknown): string[] => {
+  if (typeof text != 'string') return []
+  return text.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase()
+    .match(/[a-z0-9]+/g)?.map((word) =>
+      word.replace(/([a-z]{3}[^s])s$/, '$1')
+    ) ??
+    []
+}
+
+// Vocabulary names and descriptions supply the words a caller uses for a
+// thing. Match whole words, preferring what a component is over what one of
+// its properties happens to mention.
+export let related = (v: Vocab, word: string, kind = false): string[] => {
+  let asked = terms(word)
+  if (!asked.length) return []
+  let position = (text = '') => {
+    let said = terms(text)
+    let places = asked.map((term) => said.indexOf(term))
+    return places.includes(-1) ? Infinity : Math.max(...places)
+  }
+  return (kind ? v.kinds : v.all).flatMap((name) => {
+    let def = kind ? v.kind(name)! : v.def(name)!
+    let fields = [name, def.title, def.description]
+    let props = v.def(name)?.properties
+    if (!kind && props) {
+      fields.push(
+        ...Object.entries(props).map(([prop, s]) =>
+          [prop, s.title, s.description].filter((s) => typeof s == 'string')
+            .join(' ')
+        ),
+      )
+    }
+    let scores = fields.map((text, i) => {
+      let at = position(text)
+      return Number.isFinite(at) ? Math.min(i, 3) + at / (at + 1) : Infinity
+    })
+    let score = Math.min(...scores)
+    return Number.isFinite(score) ? [{ name, score }] : []
+  }).sort((a, b) => a.score - b.score || a.name.localeCompare(b.name))
+    .slice(0, 4).map(({ name }) => name)
+}
+
 /** A vocabulary document: the components under one `$defs`, and the kinds
  * they make under `kinds`. */
 export type SchemaDoc = {

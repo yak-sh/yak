@@ -425,13 +425,21 @@ export type Reach = {
     members: Member[],
     named: Member | undefined,
     bundles: Bundle[],
-    opts?: { key?: string; check?: boolean },
+    opts?: WriteOpts,
   ) => Promise<{
     bundles: Bundle[]
     aliases: Record<string, string>
     where: string
   }>
   spoken: (members: Member[]) => Promise<Spoken>
+}
+
+type DefaultSpace = () => Promise<string | undefined>
+type WriteOpts = {
+  key?: string
+  check?: boolean
+  /** The caller's own space, considered when a write has no home. */
+  defaultSpace?: DefaultSpace
 }
 
 /** A composition over a shared language: the operations every set of
@@ -862,6 +870,7 @@ export let reach = (words: Words): Reach => {
     named: Member | undefined,
     bundles: Bundle[],
     key?: string,
+    defaultSpace?: DefaultSpace,
   ): Promise<Routed> => {
     // A sandboxed copy owns only writes aimed at it, and a write aimed at a
     // member stays in its space: spaces share no home, so another space's
@@ -893,15 +902,32 @@ export let reach = (words: Words): Reach => {
     let slugs = (ms = members) => ms.map(called).join(', ')
     let onBundle = (m?: Member) =>
       m ? `on the bundle, as "$app": "${called(m)}"` : 'on the bundle with $app'
+    let remembered: Promise<Member | undefined> | undefined
+    let preferred = () =>
+      remembered ??=
+        (members.length > 1 ? defaultSpace?.() : undefined)?.then((space) => {
+          let there = members.filter((m) => spaceOf(m) == space)
+          return there.length == 1 ? there[0] : undefined
+        }) ?? Promise.resolve(undefined)
+    let available = () => {
+      if (!members.length) throw refuse('no app in reach — deploy an app first')
+    }
     // The one member a bundle that cannot be split goes to.
-    let only = () => {
+    let only = async () => {
       if (named) return named
       if (members.length == 1) return members[0]
+      let there = await preferred()
+      if (there) return there
+      available()
       throw refuse(
         `name the app this goes in ${onBundle(members[0])} — ${slugs()}`,
       )
     }
-    let home = (name: string, eid: string | null, mates: Member[]): Member => {
+    let home = async (
+      name: string,
+      eid: string | null,
+      mates: Member[],
+    ): Promise<Member> => {
       let declared = words.get(name) ?? []
       let mine = eid ? held.get(eid)?.home ?? {} : {}
       if (declared.length) {
@@ -919,6 +945,8 @@ export let reach = (words: Words): Reach => {
         let homes = [...new Set(declared.map(spaceOf))]
           .map((s) => declared.find((m) => spaceOf(m) == s)!)
         if (apart.has(name) && homes.length > 1) {
+          let there = await preferred()
+          if (there && declared.includes(there)) return there
           throw refuse(
             `${name} means two things — ${slugs(homes)} declare it ` +
               `differently; name one ${onBundle(homes[0])}`,
@@ -936,6 +964,11 @@ export let reach = (words: Words): Reach => {
       // same bundle, which is what makes writing a new entity one call.
       if (mates.length == 1) return mates[0]
       if (members.length == 1) return members[0]
+      if (!holders.length && !mates.length) {
+        let there = await preferred()
+        if (there) return there
+      }
+      available()
       throw refuse(
         `which app should ${name} go in? name it ${
           onBundle(members[0])
@@ -948,7 +981,7 @@ export let reach = (words: Words): Reach => {
     for (let [i, e] of entities.entries()) {
       let eid = eids[i]
       if (!eid) {
-        add(only(), e)
+        add(await only(), e)
         continue
       }
       // Death is the whole entity's, so it goes wherever the entity is: every
@@ -956,7 +989,7 @@ export let reach = (words: Words): Reach => {
       if (dead(e)) {
         let holders = [...new Set(Object.values(held.get(eid)?.home ?? {}))]
           .map(by).filter(Boolean) as Member[]
-        for (let m of holders.length ? holders : [only()]) {
+        for (let m of holders.length ? holders : [await only()]) {
           add(m, { entity: { eid }, tombstone: {} })
         }
         continue
@@ -973,11 +1006,11 @@ export let reach = (words: Words): Reach => {
         mine.set(m, [...(mine.get(m) ?? []), name])
       // The members' own words first: they are what a shared word rides with.
       for (let name of names.filter((n) => words.has(n))) {
-        take(home(name, eid, []), name)
+        take(await home(name, eid, []), name)
       }
       let mates = [...mine.keys()]
       for (let name of names.filter((n) => !words.has(n))) {
-        take(home(name, eid, mates), name)
+        take(await home(name, eid, mates), name)
       }
       for (let [m, keys] of mine) {
         let was = Object.fromEntries(
@@ -1013,14 +1046,20 @@ export let reach = (words: Words): Reach => {
     members: Member[],
     named: Member | undefined,
     bundles: Bundle[],
-    opts: { key?: string; check?: boolean } = {},
+    opts: WriteOpts = {},
   ): Promise<{
     bundles: Bundle[]
     aliases: Record<string, string>
     where: string
   }> => {
-    let { key, check = false } = opts
-    let { parts, aliases } = await routed(members, named, bundles, key)
+    let { key, check = false, defaultSpace } = opts
+    let { parts, aliases } = await routed(
+      members,
+      named,
+      bundles,
+      key,
+      defaultSpace,
+    )
     if (!parts.length) throw refuse('entities: nothing to write')
     if (parts.length > 1 && !check) {
       await Promise.all(parts.map((p) => p.member.apply(p.entities, true)))

@@ -297,7 +297,7 @@
         "doing": "Reading the schema\u2026",
         "done": "Read the schema"
       },
-      "description": "Read vocabulary JSON Schema. No arguments returns a component/property index; component returns full declarations, types, refs and write examples. kind returns its definition and associated components, taking precedence over component; a kind's name sent as component is that kind. https://yaks.app/docs/components",
+      "description": "Read vocabulary JSON Schema. No arguments returns a component/property index; component returns full declarations, types, refs and write examples. When a name is absent, the tool looks for those words in the vocabulary's names and descriptions. kind returns its definition and associated components, taking precedence over component; a kind's name sent as component is that kind. https://yaks.app/docs/components",
       "input": {
         "component": {
           "anyOf": [

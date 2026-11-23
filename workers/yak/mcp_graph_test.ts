@@ -289,13 +289,17 @@ test(
 test('graph_show and graph_apply take the space and app other tools take', async () => {
   let k = await kernel()
   try {
-    let agent = connector(k, (await signIn(k)).cookie)
+    let person = await signIn(k)
+    let agent = connector(k, person.cookie)
     let made = await agent.tool('app_new', { slug: 'notes', title: 'Notes' })
     let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/.exec(made)![1]
+    await agent.tool('graph_apply', {
+      bundles: [{ entity: { eid: '$body' }, content: { body: 'Stored' } }],
+    })
+    let [row] = JSON.parse(await agent.tool('graph_query', { q: '.content' }))
+    assertEquals(row.content.body, 'Stored')
     let eid = minted(
       await agent.tool('graph_apply', {
-        space,
-        app: 'notes',
         bundles: [{ entity: { eid: '$note' }, doc: { title: 'Kept' } }],
       }),
       '$note',
@@ -311,6 +315,45 @@ test('graph_show and graph_apply take the space and app other tools take', async
       ]),
       ['Kept', 'Kept', 'Kept', 'Kept'],
     )
+    let other = unique('another')
+    await owned(k, person.person, other)
+    await agent.tool('app_new', { space: other, slug: 'notes', title: 'Notes' })
+
+    let added = async (title: string, args: Record<string, unknown> = {}) =>
+      minted(
+        await agent.tool('graph_apply', {
+          q: `$new .doc.title="${title}"`,
+          ...args,
+        }),
+        '$new',
+      )
+    let titles = async (at: string) =>
+      (JSON.parse(await agent.tool('graph_query', { app: at, q: '.doc' })) as {
+        doc: { title: string }
+      }[]).map((r) => r.doc.title).sort()
+    await added('Personal')
+    let existing = await added('Space', { space: other })
+    await added('Qualified', { app: `${other}/notes` })
+    await agent.tool('graph_apply', {
+      edits: [{ id: existing, set: { 'doc.title': 'Existing home' } }],
+    })
+    await agent.tool('graph_apply', {
+      edits: [{ id: eid, set: { 'doc.title': 'Explicit' } }],
+      space,
+      app: 'notes',
+    })
+    assertEquals(await titles(`${space}/notes`), ['Explicit', 'Personal'])
+    assertEquals(await titles(`${other}/notes`), ['Existing home', 'Qualified'])
+
+    await agent.tool('app_new', { space, slug: 'extra', title: 'Extra' })
+    await assertRejects(
+      () => added('Ambiguous', { space }),
+      Error,
+      'which app should doc go in?',
+    )
+    assertEquals(await titles(`${space}/notes`), ['Explicit', 'Personal'])
+    assertEquals(await titles(`${space}/extra`), [])
+    assertEquals(await titles(`${other}/notes`), ['Existing home', 'Qualified'])
   } finally {
     await k.stop()
   }

@@ -43,7 +43,7 @@ test('an app declares its own commands, and command runs them', async () => {
           path: 'vocab.json',
           content: vocabFile(jogs, {
             log_run: {
-              description: 'Log a run for the club leaderboard',
+              title: 'Log a run for the club leaderboard',
               input: { who: txt, miles: num },
               required: ['who', 'miles'],
               options: { positional: ['who', 'miles'], short: { m: 'miles' } },
@@ -92,6 +92,7 @@ test('an app declares its own commands, and command runs them', async () => {
     ])
     assertEquals(new Set(all.map((c) => c.at)), new Set([`${space}/runs`]))
     let log = all.find((c) => c.name == 'log_run')!
+    assertStringIncludes(log.description, 'Log a run for the club leaderboard')
     // The app's title and address ride in the description: a slug is not what
     // the person called it, and a model choosing reads the words.
     assertStringIncludes(log.description, 'Run club')
@@ -738,6 +739,15 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
     // index entry of each word a whole one carries.
     let letter = await said({ kind: 'mail' })
     assertEquals(Object.keys(letter.defs), ['mail', 'doc'])
+
+    let sms = await said({ component: 'sms' })
+    assertStringIncludes(sms.defs.text.description!, 'text message')
+    let messages = await said({ component: ['sms', 'message'] })
+    assert(messages.defs.text.properties.message_id)
+    assertStringIncludes(
+      messages.defs.chat_message.description!,
+      'chat platform',
+    )
 
     // And a word nobody declared is a refusal that says where to look.
     let missing = (await assertRejects(

@@ -1,7 +1,8 @@
 import { argsOf, type Bundle, type Tool } from '@yaks/graph'
 import { core, type CoreOpts, inputSchemaOf } from '@yaks/mcp'
 import { operatorDoor } from './build-door.ts'
-import { type Ctx, inSpace, SPACE, str } from './tool.ts'
+import { writeSpace } from './reach.ts'
+import { apart, type Ctx, inSpace, SPACE, str } from './tool.ts'
 
 // The connector's generic graph tools take the arguments nearly every other
 // tool here takes, so a caller carrying `space` and `app` over from app_files
@@ -42,11 +43,8 @@ let APP = {
   ),
   graph_apply: str(
     'the app slug, as in <space>.yaks.app/<app>/, that bundles write to, ' +
-      'with space where two spaces have an app by that name; the same as ' +
-      '"$app": "<space>/<app>" on each bundle. Omitted, each component goes ' +
-      'to the app that declares it. Name the app when a new entity carries ' +
-      'only shared components such as doc, or when two spaces declare a ' +
-      'component differently: a write cannot guess between them',
+      'or <space>/<app> where two spaces have that app name. With app ' +
+      'omitted, an explicit space limits the write to that space',
   ),
 }
 
@@ -61,28 +59,36 @@ let named = (space: unknown, app: unknown) =>
     ? `${space}/${app}`
     : app
 
-/** A call's arguments with the one app `app` and `space` name said where
- * the tool reads it: on a query's filters (`.in=`) or on each bundle
- * (`$app`). The connector's door narrows with it before it picks the reach a
- * call reads (mcp.ts `heard`), and each tool again for every other door. A
- * read with `self` is not of the apps, so its `space` stays for it. */
+/** A query's app as an `.in=` filter, before the connector picks its reach. */
 export let inApp = (name: string, args: Record<string, unknown>) => {
+  if (name != 'graph_query' || args.self) return args
   let { space, app, ...rest } = args
   let at = named(space, app)
-  if (!at || args.self) return args
-  if (name == 'graph_query') {
-    let filters = Array.isArray(rest.filters) ? rest.filters : []
-    return { ...rest, filters: [`.in=${at}`, ...filters] }
-  }
-  if (name == 'graph_apply' && Array.isArray(rest.bundles)) {
-    return {
-      ...rest,
-      bundles: rest.bundles.map((b) =>
-        b && typeof b == 'object' && !('$app' in b) ? { ...b, $app: at } : b
-      ),
-    }
-  }
-  return rest
+  if (!at) return args
+  let filters = Array.isArray(rest.filters) ? rest.filters : []
+  return { ...rest, filters: [`.in=${at}`, ...filters] }
+}
+
+// Attach the destination to bundles after graph_apply has built the patch.
+// The same target then applies to raw bundles, q, and field and link edits.
+let targeted = async (
+  ctx: Ctx,
+  args: Record<string, unknown>,
+  bundles: Bundle[],
+): Promise<Bundle[]> => {
+  let target = { app: args.app, space: args.space }
+  apart(target)
+  let space = target.space && !target.app
+    ? (await inSpace(ctx, target, false, true)).space
+    : undefined
+  return bundles.map((b) => {
+    if (target.app && '$app' in b) return b
+    let app = { space: target.space, app: b.$app ?? target.app }
+    apart(app)
+    let at = named(app.space, app.app)
+    if (at) return { ...b, $app: at }
+    return { ...b, [writeSpace]: space?.eid }
+  })
 }
 
 // What `self` asks the Operator's attachment door: graph_query's own line, or
@@ -120,10 +126,11 @@ export let attachmentCore = (ctx: Ctx, opts: CoreOpts): Tool[] =>
         let said = argsOf(call)
         if (!said.self) {
           let { space: _, app: __, self: ___, ...args } = inApp(name, said)
-          return tool.run(
+          let bundles = tool.run(
             { ...call, call: { ...call.call as object, args } },
             graph,
           )
+          return writes ? targeted(ctx, said, await bundles) : bundles
         }
         let { space: _, app: __, self: ___, ...args } = said
         let { space, who } = await inSpace(ctx, said)

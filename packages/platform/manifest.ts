@@ -51,6 +51,10 @@ let mine = (schema: PropSchema, implicit: boolean): PropSchema =>
     type: 'object',
     ...implicit || schema.kind === true ? { kind: true, before: ['doc'] } : {},
     ...schema,
+    ...schema.description === undefined && typeof schema.title == 'string' &&
+        schema.title.trim()
+      ? { description: schema.title }
+      : {},
   })
 
 /** One kind an app declared under `kinds`: like a component of its own, it

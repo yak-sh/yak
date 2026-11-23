@@ -223,7 +223,8 @@ Never guess at a component's properties: graph_schema says what each
 component is and what it holds. Called bare, an index of every one of them; graph_schema({component: 'mail'}) for that one component in
 full — each property's type and meaning, what points at it, a bundle that
 writes it, the guide page for it; graph_schema({kind: 'mail'}) for what an
-entity of that kind is made of.
+entity of that kind is made of. Words such as 'sms' also find components by
+their names and descriptions.
 
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
@@ -231,10 +232,10 @@ component lives with the app that declares it, so nothing is copied and
 nothing is synced. graph_query reads every app you can reach at once and
 returns one bundle per entity: '.book&?loan' is every book with its loan
 where it has one, and '?loan' asks for a component without filtering on it.
-graph_apply writes each component to the app that declares it, and where a
-brand-new entity carries only shared components — a doc and nothing else —
-name the app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes",
-"doc": {...}}.
+graph_apply writes each component to the app that declares it. A new row
+with only shared components, such as doc, goes to the only app in reach or
+the only app in the selected space. When several apps could take it, give
+app on the call (for example, app: "<space>/recipes") or $app on the bundle.
 To read one app rather than all of them, add '.in=recipes' to the query string
 ('.in=<space>/<app>' where a slug means two things).
 A page reads a sibling app the same way, with store('/lending/api/') from
@@ -479,12 +480,11 @@ export let INSTRUCTIONS = instructions()
  * whether to risk a delete, which is the moment it is reading that tool's
  * description and not this guide.
  */
-// Where a write goes, said on graph_apply: the platform's `$app`, which rides
-// on each bundle beside its entity (agent.ts `aimed`), never around them.
 export let AIM =
-  'A write names its app with $app on each bundle, beside its entity: ' +
-  "{entity: {eid: '$r'}, $app: 'recipes', recipe: {...}}. Every bundle " +
-  'carries entity; there is no wrapper holding entities.'
+  'Components go to the apps that declare them or already hold them. ' +
+  'For a new row with only shared components, the only app in reach or ' +
+  'in the selected space is used. When several apps could take the write, ' +
+  'pass app: "<space>/<app>" on the call or $app beside entity on a bundle.'
 
 export let UNDO =
   'Nothing deleted here is lost by a simple mistake. To undo: ' +

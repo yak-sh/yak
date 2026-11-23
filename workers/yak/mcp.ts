@@ -259,11 +259,10 @@ async (
 // already installed; @yaks/mcp `translated` renames them at every door, and
 // here first, so what follows reads the current names.
 //
-// The `app`/`space` pair that named one app moves too: on a write it becomes
-// `$app` on each bundle, on a read an `.in=` filter — both the
-// platform's own forms, each written where the thing it is about is
-// (attachment-core.ts `inApp`), and here first so the door reads only
-// that app's reach. Signed out it moves nowhere: the pair is the call's scope there,
+// On a query the app and space become an `.in=` filter here so the door
+// reads only that app's reach. On a write they stay on the call until it
+// has produced its bundles (attachment-core.ts `targeted`).
+// Signed out the pair is the call's scope,
 // read off the arguments before any graph exists (anon.ts `opened`), so
 // `scoped` tells us whether this caller has a reach for an app to be narrowed
 // out of.

@@ -321,6 +321,10 @@ export let routed = async (
   }
 }
 
+// Marks caller data in the invocation ledger and carries a selected space, if
+// any, to the writer. It is removed before routing and cannot come from JSON.
+export let writeSpace = Symbol('writeSpace')
+
 // The write, whole (@yaks/reach `written`): routed, rehearsed everywhere,
 // then committed.
 export let written = (
@@ -330,6 +334,7 @@ export let written = (
   bundles: Bundle[],
   headers: Record<string, string> = {},
   check = false,
+  defaultSpace?: () => Promise<string | undefined>,
 ): Promise<{
   bundles: Bundle[]
   aliases: Record<string, string>
@@ -351,5 +356,6 @@ export let written = (
   return fan().written(members, one, bundles, {
     key: durable(key) ? key! : undefined,
     check,
+    defaultSpace,
   })
 }

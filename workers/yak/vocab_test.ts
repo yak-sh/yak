@@ -139,6 +139,17 @@ test("an app's own word is a kind before doc", () => {
   )
 })
 
+test('a manifest uses a component title when it has no description', () => {
+  let doc = appDoc({
+    $defs: {
+      note: { title: 'A saved note' },
+      draft: { title: 'Draft', description: 'A note still being written' },
+    },
+  })
+  assertEquals(doc.$defs?.note.description, 'A saved note')
+  assertEquals(doc.$defs?.draft.description, 'A note still being written')
+})
+
 // A manifest that declares `kinds` says which its kinds are: a component is
 // one only where it says so, and each kind is named before the `doc` its rows
 // wear for their titles.

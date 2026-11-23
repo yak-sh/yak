@@ -40,6 +40,7 @@ import { spineDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
 import { appKeywords } from './vocab.ts'
+import { writeSpace } from './reach.ts'
 
 /** The words an invocation is made of: what stays in the ledger. */
 let INVOCATION = [
@@ -103,10 +104,10 @@ let VOCAB = loadVocab([spineDoc, provenanceDoc, {
 
 // Is this bundle the invocation's own? A bundle that says nothing at all — a
 // bare delete — is the caller's, since what it deletes is their data. An
-// app-addressed patch is theirs too, even when it only carries content.
+// explicit graph write is theirs too, even when it only carries content.
 let mine = (b: Bundle): boolean => {
   let said = comps(b)
-  return !('$app' in b) && said.length > 0 &&
+  return !('$app' in b || writeSpace in b) && said.length > 0 &&
     said.every(([name]) => INVOCATION.includes(name))
 }
 

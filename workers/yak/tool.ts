@@ -403,6 +403,14 @@ export let ownSpace = async (
   holding?: Space[],
 ): Promise<Space> => (await ownSeat(ctx, app, holding)).space
 
+let personal = (owned: Awaited<ReturnType<Directory['seats']>>) =>
+  owned.length > 1 ? owned.find((s) => s.own) : owned[0]
+
+/** The space the call already implies, without creating a space. */
+export let defaultSpace = async (ctx: Ctx): Promise<Space | undefined> =>
+  await ctx.dir.narrowedTo() ??
+    personal(await ctx.dir.seats(ctx.person, 'owner'))?.space
+
 // The space a call means, with the caller's seat in it where the read that
 // found it said it: the one space they own, read with their seats, is theirs
 // as owner, so admitting them asks nothing more.
@@ -428,7 +436,7 @@ let ownSeat = async (
   let owned = await ctx.dir.seats(ctx.person, 'owner')
   // A person who owns several spaces means their own one, the space whose
   // seat says so (directory.ts `own`), as an Operator means its own.
-  let mine = owned.length > 1 ? owned.find((s) => s.own) : undefined
+  let mine = personal(owned)
   if (mine) return { space: mine.space, role: mine.role }
   if (owned.length > 1) {
     throw refuse(
@@ -439,7 +447,6 @@ let ownSeat = async (
         'alone is enough where only one of them holds it.',
     )
   }
-  if (owned[0]) return { space: owned[0].space, role: owned[0].role }
   // The legacy default may mint its space. That internal write uses an
   // authoritative client and starts a new scope before any role is used.
   let space =

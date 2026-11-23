@@ -61,7 +61,7 @@ import { declared, graphDoc } from './vocab.ts'
 import { formed } from './admit.ts'
 import { deriving } from './identity.ts'
 import { Refused } from './errors.ts'
-import { type Guide, proseOf, schemaOf } from './schema.ts'
+import { type Guide, proseOf, related, schemaOf } from './schema.ts'
 import { type Edit, edited } from './changes.ts'
 import { type Link, linked } from './links.ts'
 import { readTrash } from './trash-read.ts'
@@ -480,8 +480,18 @@ export let runs = (seams: Seams = {}): Runs => {
       if (!kind && named.length == 1 && !v.comp(named[0]) && v.kind(named[0])) {
         kind = named.pop()!
       }
-      let unknown = [...named, ...(kind && !v.kind(kind) ? [kind] : [])]
-        .filter((name) => !v.comp(name))
+      let unknown: string[] = []
+      let comps = named.flatMap((name) => {
+        if (v.comp(name)) return [name]
+        let matches = related(v, name)
+        if (!matches.length) unknown.push(name)
+        return matches
+      })
+      if (kind && !v.kind(kind) && !v.comp(kind)) {
+        let [match] = related(v, kind, true)
+        if (match) kind = match
+        else unknown.push(kind)
+      }
       if (unknown.length) {
         let names = named.length == 1 && !kind
           ? [...new Set([...v.all, ...v.kinds])]
@@ -507,7 +517,7 @@ export let runs = (seams: Seams = {}): Runs => {
             `${v.kinds.join(', ')}; ask for it as component instead`,
         )
       }
-      let about = kind ? { kind } : { comps: named }
+      let about = kind ? { kind } : { comps: [...new Set(comps)] }
       return [{
         entity: { eid: '$said' },
         content: { body: proseOf(v, about, seams.guide) },

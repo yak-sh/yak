@@ -64,6 +64,7 @@ import {
   read,
   trashed,
   vocabAt,
+  writeSpace,
   written,
 } from './reach.ts'
 import { narrowed } from './lexicon.ts'
@@ -83,7 +84,7 @@ import { appVocab, packagesOf } from './vocab.ts'
 import { lined } from '@yaks/platform/page-wire'
 import { queryRefusal, scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from '@yaks/platform/host'
-import { refuse, unavailable } from './tool.ts'
+import { defaultSpace, refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
 import { AIM, NARROW, pageFor, UNDO } from './guide.ts'
 import { caught } from './defects.ts'
@@ -619,8 +620,12 @@ let aliased = (
 // store handed a component it never planted refuses the batch.
 let aimed = async (ctx: Ctx, batch: Bundle[]) => {
   let slugs = new Set<string>()
+  let space: string | undefined
   let said = batch.map((e) => {
-    let { $app: at, $actor: _, ...rest } = e as Record<string, unknown>
+    let { $app: at, $actor: _, [writeSpace]: scoped, ...rest } = e as
+      & Record<string, unknown>
+      & { [writeSpace]?: string }
+    space ??= scoped
     if (typeof at == 'string' && at) slugs.add(at)
     return rest as Bundle
   })
@@ -633,6 +638,7 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
   let [slug] = [...slugs]
   return {
     batch: said,
+    space,
     where: slug ? await named(ctx, slug, true) : undefined,
   }
 }
@@ -744,19 +750,21 @@ export let reaching = async (
   }
   let writes = async (bundles: Bundle[], opts?: ApplyOpts) => {
     let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
-    let { batch, where } = await aimed(ctx, asked)
+    let { batch, space, where } = await aimed(ctx, asked)
+    let scope = space ? reach.filter((r) => r.space.eid == space) : reach
     // The same `Reach` the fan-out is holding, where it holds one: reach.ts
     // routes by identity — a word's declarers are picked out of this very
     // list — so a second object naming the same app is not it.
     let one = where &&
-      (reach.find((r) => r.app.eid == where.app.eid) ?? where)
+      (scope.find((r) => r.app.eid == where.app.eid) ?? where)
     let out = await written(
       ctx.env,
-      one && !reach.includes(one) ? [...reach, one] : reach,
+      one && !scope.includes(one) ? [...scope, one] : scope,
       one,
       batch,
       await titling(ctx.dir, ctx.person),
       opts?.check === true,
+      async () => (await defaultSpace(ctx))?.slug,
     )
     return aliased(out)
   }

@@ -64,6 +64,16 @@ test('a tool entry: a sentence, its arguments, and one act', () => {
   assertEquals(parseTools('{}'), {})
 })
 
+test('a command uses title when it has no description', () => {
+  let withTitle = { title: 'Every run', query: '.jog' }
+  let { board, detailed } = parsed({
+    board: withTitle,
+    detailed: { ...withTitle, description: 'Every run in the leaderboard' },
+  })
+  assertEquals(board.description, 'Every run')
+  assertEquals(detailed.description, 'Every run in the leaderboard')
+})
+
 let positional = ['who', 'body...']
 let grammarTool = parsed({
   log_run: {

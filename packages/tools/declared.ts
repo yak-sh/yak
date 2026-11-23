@@ -125,6 +125,7 @@ export let TOOLS_EXAMPLE = '{"$defs": {"log_run": {"tool": true, ' +
 let KEYS = [
   'tool',
   'description',
+  'title',
   'revision',
   'service',
   'input',
@@ -251,7 +252,16 @@ export let parseTools = (
         `${name}: ${alien.join(', ')} — a tool says ${KEYS.join(', ')}`,
       )
     }
-    if (typeof entry.description != 'string' || !entry.description) {
+    let description = entry.description ?? entry.title
+    if (
+      entry.title !== undefined &&
+      (typeof entry.title != 'string' || !entry.title.trim())
+    ) {
+      wrong.push(
+        `${name}.title must be text — use description to say what the tool does`,
+      )
+    }
+    if (typeof description != 'string' || !description) {
       wrong.push(`${name}.description says what the tool does, in a sentence`)
     }
     let input: Record<string, Arg> = {}
@@ -415,7 +425,7 @@ export let parseTools = (
       ? 'owner'
       : undefined
     out[name] = {
-      description: String(entry.description ?? ''),
+      description: String(description ?? ''),
       ...(typeof entry.revision == 'string'
         ? { revision: entry.revision }
         : {}),
