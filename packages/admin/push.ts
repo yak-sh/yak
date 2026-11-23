@@ -13,8 +13,9 @@
 // file by line. The merged files go into the release and into the checkout,
 // which writes them into its working tree or lands them as a commit on main,
 // so git holds them before the next push. Where git and the platform changed
-// the same lines, the push refuses before writing anything, and the app keeps
-// what is live until someone merges the two by hand.
+// the same source lines, the push refuses before writing anything. A conflict
+// in the app's generated lock clears it from the draft so the release compiler
+// regenerates it from the merged package.json.
 //
 // A file is sent as text when its bytes are UTF-8 and as base64 when they are
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
@@ -209,6 +210,9 @@ export let read = async (dir: string): Promise<File[]> => {
   return files.sort((a, b) => a.path < b.path ? -1 : 1)
 }
 
+let LOCK = 'package-lock.json'
+let PACKAGE = 'package.json'
+
 // A lock the compile wrote beside a package.json the directory still has.
 let pinned = (path: string, keep: Set<string>) =>
   /(^|\/)package-lock\.json$/.test(path) &&
@@ -255,6 +259,12 @@ let filesIn = (value: Record<string, unknown>) => {
     ])),
     unreleased: value.unreleased,
     version: value.version,
+    lockRemoved: typeof value.draft == 'string' &&
+      Array.isArray(value.drafts) &&
+      value.drafts.some((draft) =>
+        draft?.draft == value.draft && Array.isArray(draft.paths) &&
+        draft.paths.includes(LOCK)
+      ) && !files.some((f) => f.path == LOCK),
   }
 }
 
@@ -359,10 +369,12 @@ let changes = async (
   held: Map<string, string>,
   checkout: Checkout,
   kept: string[] = [],
-): Promise<Carried[]> => {
+) => {
   let keep = new Set([...local.map((f) => f.path), ...kept])
   let ours = new Map(local.map((f, i) => [f.path, { f, sha: hashes[i] }]))
+  let compiled = ours.has(PACKAGE) || held.has(PACKAGE)
   let out: Carried[] = []
+  let relock = false
   for (let [path, sha] of held) {
     let mine = ours.get(path)
     if (
@@ -371,10 +383,38 @@ let changes = async (
         : keep.has(path) || pinned(path, keep) || asset(path)
     ) continue
     let text = mine && 'content' in mine.f ? mine.f.content : ''
-    let content = await carried(ask, at, path, sha, text, checkout)
-    if (content != null) out.push({ path, content })
+    try {
+      let content = await carried(ask, at, path, sha, text, checkout)
+      if (content != null) out.push({ path, content })
+    } catch (e) {
+      if (path != LOCK || !compiled || !(e instanceof Unmerged)) throw e
+      relock = true
+    }
   }
-  return out
+  return { carry: out, relock }
+}
+
+// The compiler writes the regenerated lock into its release. Keep those
+// bytes in the checkout too, provided this is still the release we made.
+let keepLock = async (
+  ask: Ask,
+  at: Record<string, string>,
+  opts: PushOptions,
+  version: number,
+  previous: string | undefined,
+) => {
+  let write = opts.checkout?.write
+  if (!write) return
+  let fresh = await listed(ask, at, opts)
+  let sha = fresh.held.get(LOCK)
+  if (fresh.version != version || !sha) return
+  let lock = valueOf(
+    await reply(ask, 'app_files', { ...at, op: 'read', path: LOCK }),
+  )
+  if (lock?.version != version || typeof lock.content != 'string') return
+  if (lock.sha == sha && lock.content != previous) {
+    await write([{ path: LOCK, content: lock.content }])
+  }
 }
 
 /**
@@ -407,7 +447,7 @@ let pushing = async (
   if (!local.length) throw new CallError('dir', 'no files to push')
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
-  let held: { held: Map<string, string>; unreleased: boolean; version: number }
+  let held: Awaited<ReturnType<typeof listed>>
   let created = false
   opts.progress?.({ phase: 'list', state: 'start' })
   try {
@@ -424,7 +464,7 @@ let pushing = async (
       }),
     )
     opts.progress?.({ phase: 'create', state: 'done' })
-    held = { held: new Map(), unreleased: true, version: 0 }
+    held = { held: new Map(), unreleased: true, version: 0, lockRemoved: false }
   }
   if (!created) {
     opts.progress?.({ phase: 'list', state: 'done', count: held.held.size })
@@ -449,9 +489,9 @@ let pushing = async (
   opts.progress?.({ phase: 'hash', state: 'start', count: local.length })
   let hashes = await Promise.all(local.map(shaOf))
   let checkout = opts.checkout
-  let carry = checkout
+  let { carry, relock } = checkout
     ? await changes(ask, at, local, hashes, held.held, checkout, opts.keep)
-    : []
+    : { carry: [], relock: false }
   if (carry.length) {
     await checkout?.write?.(carry)
     let by = new Map(carry.map((f) => [f.path, f]))
@@ -468,10 +508,14 @@ let pushing = async (
       ),
     )
   }
+  // A retry may find the deletion already staged in its draft.
+  relock ||= held.lockRemoved && local.some((f) => f.path == LOCK)
   let keep = new Set([...local.map((f) => f.path), ...opts.keep ?? []])
-  let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
+  let changed = local.filter((f, i) =>
+    !(relock && f.path == LOCK) && held.held.get(f.path) != hashes[i]
+  )
   let gone = [...held.held.keys()].filter((p) =>
-    !keep.has(p) && !pinned(p, keep) && !asset(p)
+    relock && p == LOCK || !keep.has(p) && !pinned(p, keep) && !asset(p)
   )
   opts.progress?.({
     phase: 'hash',
@@ -539,8 +583,19 @@ let pushing = async (
     value.version < 0
   ) throw new Error('app_deploy answered malformed version data')
   said.push(saidBy(deployed))
-  if (value.deployed) await opts.remember?.(value.version)
-  else if (opts.review === false) {
+  if (value.deployed) {
+    if (relock) {
+      let old = given.find((f) => f.path == LOCK)
+      await keepLock(
+        ask,
+        at,
+        opts,
+        value.version,
+        old && 'content' in old ? old.content : undefined,
+      )
+    }
+    await opts.remember?.(value.version)
+  } else if (opts.review === false) {
     // Another release went live while this one wrote its files (a person's
     // push, or a copy edit): the source is still what goes live, so push it
     // again from the live it moved to.

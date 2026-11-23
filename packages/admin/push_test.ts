@@ -756,15 +756,16 @@ let fixed = async (
   live: Record<string, string>,
   git: Record<string, string[]>,
   ours: Record<string, string>,
+  compile?: (files: Map<string, File>) => void,
 ) => {
-  let p = platform({
-    app: new Map(
-      Object.keys(git).map((path) => [path, {
-        path,
-        content: git[path][0],
-      }]),
-    ),
-  })
+  let app = new Map<string, File>(
+    Object.keys(git).map((path) => [path, { path, content: git[path][0] }]),
+  )
+  let p = platform({ app })
+  let ask: Ask = (method, params) => {
+    if ((params as { name: string }).name == 'app_deploy') compile?.(app)
+    return p.ask(method, params)
+  }
   // The Operator's fix: its files written over what the last push left.
   await p.ask('tools/call', {
     name: 'app_files',
@@ -775,7 +776,7 @@ let fixed = async (
   })
   let wrote: Carried[] = []
   let said = await push(
-    p.ask,
+    ask,
     Object.entries(ours).map(([path, content]) => ({ path, content })),
     { app: 'app' },
     {
@@ -831,6 +832,39 @@ test('a release over a text git had replaces it and hands git nothing', async ()
   )
   assertEquals(await r.read('app.ts'), 'new\n')
   assertEquals(r.wrote, [])
+})
+
+test('a conflicting lock is regenerated from the merged manifest and carried into git', async () => {
+  let pkg = (a: number, b: number) =>
+    JSON.stringify(
+      {
+        dependencies: { a: String(a), middle: '1', b: String(b) },
+      },
+      null,
+      2,
+    ) + '\n'
+  let lock = (a: number, b: number) =>
+    JSON.stringify({
+      lockfileVersion: 3,
+      packages: { '': JSON.parse(pkg(a, b)) },
+    })
+  let manifest = 'package.json'
+  let path = 'package-lock.json'
+  let r = await fixed(
+    { [path]: lock(2, 1), [manifest]: pkg(2, 1) },
+    { [path]: [lock(1, 1)], [manifest]: [pkg(1, 1)] },
+    { [path]: lock(1, 2), [manifest]: pkg(1, 2) },
+    (files) => {
+      assertEquals(files.get(manifest), { path: manifest, content: pkg(2, 2) })
+      assert(!files.has(path))
+      files.set(path, { path, content: lock(2, 2) })
+    },
+  )
+  assertEquals(await r.read(path), lock(2, 2))
+  assertEquals(r.wrote, [
+    { path: manifest, content: pkg(2, 2) },
+    { path, content: lock(2, 2) },
+  ])
 })
 
 test('a release whose git changed the lines the platform changed writes nothing', async () => {

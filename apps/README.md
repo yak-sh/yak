@@ -25,8 +25,10 @@ the newest text git has that the app held too: `copy.json` by key (a key edited
 on the page keeps the page's text), every other file by line. A push from a
 checkout writes the merged files into it, so they show in `git diff`; commit
 them with the change you pushed. The deploy catch-up's release lands them on
-main as their own commit. Where git and the platform changed the same lines, the
-push writes nothing and says which file to merge by hand.
+main as their own commit. Where git and the platform changed the same source
+lines, the push writes nothing and says which file to merge by hand. If the
+app's generated `package-lock.json` conflicts, the release compiler regenerates
+it from the merged `package.json` and the push saves the new lock in git.
 
 An app with a `package.json` of its own is formatted with the repository's
 settings only when they are named: `deno fmt --config deno.json apps/<name>`.
