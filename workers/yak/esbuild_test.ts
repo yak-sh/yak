@@ -24,7 +24,7 @@ import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
 import { KERNEL, meta } from './meta.ts'
 import { ask, remade, type Remake } from './remake.ts'
-import { drawn, fenced } from './versions.ts'
+import { drawn, fenced, unfenced } from './versions.ts'
 import { addressed, SHA } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 
@@ -739,6 +739,49 @@ test('concurrent first edits share one private draft', async () => {
   assert((await s.served('index.html')).body.includes('<h1>old</h1>'))
   await s.tool('app_deploy')
   assert((await s.served('index.html')).body.includes('<h1>new</h1>'))
+})
+
+// Another release takes the fence between a deploy's read of the app and its
+// own take of it. The deploy waits its turn behind that release and releases
+// after it, rather than failing its caller.
+test('a deploy overtaken for the fence waits its turn', async () => {
+  await using s = await scenario(compiles)
+  await s.write({ 'index.html': PAGE, 'main.ts': 'let n = 1' })
+  await s.tool('app_deploy')
+  await s.write({ 'main.ts': 'let n = 2' })
+  let space = (await s.dir.space('ada'))!
+  let app = async () => (await s.dir.app(space, 'cookbook'))!
+  let other: Promise<unknown> | undefined
+  let dir = new Proxy(s.dir, {
+    get: (target, key) => {
+      let value = Reflect.get(target, key)
+      if (key != 'stamp') {
+        return typeof value == 'function' ? value.bind(target) : value
+      }
+      return async (...args: Parameters<typeof target.stamp>) => {
+        let taking = args[0].entities.some((e) =>
+          (e.app as { fence?: string } | undefined)?.fence
+        )
+        if (taking && !other) {
+          let held = await fenced(s.dir, await app(), null, OWNER)
+          other = new Promise((done) => setTimeout(done, 300))
+            .then(async () => unfenced(s.dir, await app(), held, OWNER))
+        }
+        return await target.stamp(...args)
+      }
+    },
+  })
+  let out = await call({ env: s.env, dir, person: ADA } as Ctx, 'app_deploy', {
+    space: 'ada',
+    app: 'cookbook',
+  })
+  await other
+  assertEquals(out.value!.version, 2)
+  assertEquals((await app()).fence, null)
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'main.ts' }),
+    'let n = 2',
+  )
 })
 
 test('a released app stages changed files over its source', async () => {

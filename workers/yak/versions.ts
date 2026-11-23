@@ -11,6 +11,7 @@ import { releasesPrefix } from '@yaks/platform/file-root'
 // between deploys, and each path's history, are written.ts's.
 import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
+import { Stale } from '@yaks/graph/errors'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
 import type { Join } from '@yaks/platform/manifest'
@@ -68,26 +69,38 @@ export let holds = (fence: string, draft?: string | null) => {
   return draft === undefined || (!!took && took === draft)
 }
 
+/** How old a fence is when whoever waits on it lifts it: the release that
+ * drew it died holding it. */
+export let ABANDONED = 5 * 60_000
+
+/** How long a release waits its turn behind another (tools.ts `released`):
+ * past {@link ABANDONED}, so a fence a dead release left is lifted before it
+ * gives up. Only a release that outlasts its caller (outlast.ts) waits so
+ * long; a dead fence is the one way it would see the end of it. */
+export let TURN = ABANDONED + 60_000
+
 /** A release fence holds new edits of the draft it takes (`holds`) until its
- * source switch or refusal. The edit gives up after 30 seconds, an answer
- * well inside the minute after which a request that has not answered is a
- * defect (defects.ts `watched`). `draft` is the one the edit goes into, null
- * for a draft it opens; left out, every fence holds the edit. */
+ * source switch or refusal. The edit gives up after `patience`, 30 seconds by
+ * default, an answer well inside the minute after which a request that has
+ * not answered is a defect (defects.ts `watched`). `draft` is the one the
+ * edit goes into, null for a draft it opens; left out, every fence holds the
+ * edit. */
 export let waiting = async (
   dir: Directory,
   space: Space,
   app: App,
   who: Who,
   draft?: string | null,
+  patience = 30_000,
 ) => {
-  let until = Date.now() + 30_000
+  let until = Date.now() + patience
   for (let n = 0;; n++) {
     // The release lifting the fence is another request's write.
     if (n) dir.reread()
     let row = await latest(dir, space, app)
     if (!row.fence || !holds(row.fence, draft)) return row
     let started = Number(row.fence.split(':')[0])
-    if (Date.now() - started > 5 * 60_000) {
+    if (Date.now() - started > ABANDONED) {
       try {
         await dir.stamp({
           entities: [{
@@ -104,6 +117,14 @@ export let waiting = async (
     await new Promise((done) => setTimeout(done, 250))
   }
 }
+
+/** Whether `error` says another release moved the app row between the read
+ * a release took its fence on and the take: it took the fence, or committed
+ * and moved the live version. The release reads the row again and waits its
+ * turn behind it. */
+export let overtaken = (error: unknown, app: App) =>
+  error instanceof Stale && error.eid == app.eid && error.comp == 'app' &&
+  ['fence', 'source', 'version'].includes(error.prop)
 
 /** A fence not yet taken: when it was drawn, which `waiting` reads its age
  * from, and a name no other fence shares. A job that can die holding one

@@ -417,7 +417,9 @@ equal(cursor('book:dune'), undefined)
 A **rule instruction** is a clause that declares what a
 [rule](../graph/README.md#rules) adds, writes, reads as a
 [resource](../graph/README.md#rules), or binds as a variable. These clauses need
-a rule engine; ordinary evaluators reject them when passed directly.
+a rule engine; ordinary evaluators reject them when passed directly, with
+`instruction()`'s sentence: what the clause is and the filter a query writes
+instead (`$total` names no value, so a query writes `.order.total=5`).
 `declared()` separates instructions from the **filter**, the query an evaluator
 can answer.
 

@@ -3,7 +3,12 @@
 // never inlined, and that a gap declines loudly.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { absent, and, eq, parse, present, text } from '@yaks/query'
 import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
@@ -326,10 +331,21 @@ test('words, without a search index to answer them, say what to match instead', 
 })
 
 // A rule sigil is an instruction to a rule engine, and storage has no engine:
-// compiling one away would answer a question nobody asked.
-test('a rule sigil throws Unsupported rather than compiling', () => {
-  for (let q of ['+task', '+!task', '*task', '#task', '$t']) {
-    assertThrows(() => compile(parse(q), v), Unsupported, 'directive')
+// compiling one away would answer a question nobody asked. The refusal says
+// what the sigil is and the filter a query writes instead.
+test('a rule sigil throws Unsupported rather than compiling, naming the filter to write', () => {
+  for (
+    let [q, filter] of [
+      ['+task', '.task'],
+      ['+!task', '!task'],
+      ['*task', '.task'],
+      ['#task', '.task'],
+      ['$t', '.order.total=5'],
+    ]
+  ) {
+    let e = assertThrows(() => compile(parse(q), v), Unsupported)
+    assertStringIncludes(e.message, `cannot compile a rule instruction: ${q} `)
+    assertStringIncludes(e.message, `as ${filter}`)
   }
 })
 

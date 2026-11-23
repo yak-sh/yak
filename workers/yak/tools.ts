@@ -349,8 +349,10 @@ import { an, invitedWords, room, send } from './invite.ts'
 import { aloud, peopleOwned, shown } from './people.ts'
 import {
   fenced,
+  overtaken,
   record,
   releaseOf,
+  TURN,
   unfenced,
   versions,
   waiting,
@@ -2264,6 +2266,7 @@ export let released = async (
     keep = !!over,
     draft: asked = null,
     rows = 'none',
+    patience,
   }: {
     target?: Version
     reload?: Reload
@@ -2294,6 +2297,9 @@ export let released = async (
     /** Which rows the draft's preview wrote merge into the live ones
      * (app_deploy `rows`): none, the default, keeps them on its branch. */
     rows?: Rows
+    /** How long it waits its turn behind another release (versions.ts
+     * `waiting`, `TURN`). */
+    patience?: number
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -2306,25 +2312,51 @@ export let released = async (
     who = current.who
     store = current.store!
   }
-  let standing = await waiting(ctx.dir, space, app, who)
-  if (expectedVersion != null && standing.version != expectedVersion) {
-    throw refuse('stale', `v${expectedVersion} is no longer live`)
-  }
-  if (base != null && base > (standing.version ?? 0)) {
-    throw refuse(
-      'invalid',
-      `base v${base} is ahead of live v${standing.version ?? 0}`,
-    )
+  let taken = target || over || keep ? null : asked
+  // Releases of one app take turns: each waits for the fence before it, and
+  // one that took the fence or committed between this read and the take
+  // moves the row, so the take reads it again and waits behind it.
+  let standing: App, fence: string
+  for (;;) {
+    standing = await waiting(ctx.dir, space, app, who, undefined, patience)
+    if (expectedVersion != null && standing.version != expectedVersion) {
+      throw refuse('stale', `v${expectedVersion} is no longer live`)
+    }
+    if (base != null && base > (standing.version ?? 0)) {
+      throw refuse(
+        'invalid',
+        `base v${base} is ahead of live v${standing.version ?? 0}`,
+      )
+    }
+    try {
+      fence = await c.time(
+        'fence',
+        () => fenced(ctx.dir, standing, taken, who, drew),
+      )
+      break
+    } catch (error) {
+      // Another release took this one's draft (a legacy draft is the app
+      // row's own `draft`), so there is nothing left to release.
+      if (
+        taken && error instanceof Stale && (
+          error.eid == taken.eid ||
+          error.eid == standing.eid && error.prop == 'draft'
+        )
+      ) {
+        throw refuse(
+          'missing',
+          `draft ${taken.eid} was released or discarded while this ` +
+            'release waited its turn; app_files op: list names the open ones',
+        )
+      }
+      if (!overtaken(error, standing)) throw error
+      ctx.dir.reread()
+    }
   }
   let blobs = r2RawObjects(ctx.env.BLOBS)
   let kept = !recompile && target?.source && target.script ? target : undefined
   let release = kept?.source ?? releaseOf(space, standing)
-  let taken = target || over || keep ? null : asked
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
-  let fence = await c.time(
-    'fence',
-    () => fenced(ctx.dir, standing, taken, who, drew),
-  )
   // The fence is a directory commit. Acquire a new app and caller together;
   // none of the standing from before that commit authorizes the next phase.
   if (ctx.reopen) {
@@ -5123,6 +5155,8 @@ let OURS: Row[] = [
           message: (args.message as string | undefined)?.trim() || undefined,
           draft,
           rows,
+          // It outlasts its caller (outlast.ts), so it can wait its turn.
+          patience: TURN,
         },
       )
       if (review) {

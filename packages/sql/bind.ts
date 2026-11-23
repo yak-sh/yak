@@ -66,6 +66,7 @@ import {
   bare,
   compares,
   directive,
+  instruction,
   parse,
   present,
 } from '@yaks/query/core'
@@ -2873,6 +2874,10 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
       }" needs a search index, which this store keeps none of; match a property with ~= instead`,
     )
   }
+  // A rule instruction reaches here from a query sent as one: the refusal
+  // says what it is and the filter to write instead.
+  let said = instruction(c as Clause)
+  if (said) throw new Unsupported('a rule instruction', said)
   throw new Unsupported(`the ${(c as Clause).kind} directive`)
 }
 
