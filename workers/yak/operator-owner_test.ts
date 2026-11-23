@@ -5,9 +5,10 @@
 // workerd's SQLite.
 import { line, sub } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
-import { type Bundle, signed } from '@yaks/graph'
+import { type Bundle, graph, signed } from '@yaks/graph'
+import { storage } from '@yaks/durable-object/store'
 import { operatorMemory } from './operator-testing.ts'
-import { operatorStore } from './operator-store.ts'
+import { operatorStore, operatorVocab } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { seenBy } from './operator-access.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
@@ -99,6 +100,63 @@ test('what nobody owns is a member’s to read, and nobody else’s', async () =
     ),
     [3, 3, 2, 2],
   )
+})
+
+test('the store keeps the recipient of an escalation as its owner', async () => {
+  let copy = id(), work = id()
+  await write([
+    {
+      entity: { eid: copy },
+      operator_escalation: { raised: id(), from: root },
+    },
+    { entity: { eid: copy }, filed: { assignee: ada, project: space } },
+    {
+      entity: { eid: work },
+      task: {},
+      filed: { assignee: ada, project: space },
+    },
+  ])
+  equal(await owners(copy, work), [ada, undefined])
+  await write([{ entity: { eid: copy }, filed: { assignee: bea } }])
+  equal(await owners(copy), [bea])
+  await agree()
+})
+
+test('older decisions use their assignment when they have no stored owner', async () => {
+  using disk = durable()
+  let kept = storage(disk, operatorVocab)
+  kept.install()
+  let g = graph({ vocab: operatorVocab, storage: kept })
+  let copy = id(), ask = id(), unassigned = id(), work = id()
+  await g.apply([
+    {
+      entity: { eid: copy },
+      operator_escalation: { raised: id(), from: root },
+      filed: { assignee: ada },
+    },
+    {
+      entity: { eid: ask },
+      approval_ask: { approval: id() },
+      filed: { assignee: bea },
+    },
+    {
+      entity: { eid: unassigned },
+      operator_escalation: { raised: id(), from: root },
+    },
+    { entity: { eid: work }, task: {}, filed: { assignee: ada } },
+  ], { trusted: true })
+  let ids = [copy, ask, unassigned, work]
+  for (let source of [{ g }, { g, marks: legacyOwners }]) {
+    for (let [person, own] of [[ada, copy], [bea, ask]]) {
+      for (let member of [true, false]) {
+        let rows = await seenBy(source, { person, member }).get(ids)
+        equal(
+          rows.map((b) => b.entity.eid).sort(),
+          (member ? [own, work] : [own]).sort(),
+        )
+      }
+    }
+  }
 })
 
 test('an item a person’s words came in is theirs once their session takes it', async () => {

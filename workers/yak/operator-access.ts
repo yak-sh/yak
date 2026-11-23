@@ -3,7 +3,7 @@ import { type Bundle, type Graph, type ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or, pred, present } from '@yaks/query/core'
-import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
+import { OWNERS, visibleOwner } from '@yaks/platform/operator-owner'
 import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
 import type { Held } from './build-door.ts'
 import type { Conversing } from '@yaks/harness/conversations'
@@ -109,41 +109,6 @@ export let owns = async (store: Store, open: string, who: Owner) => {
   return !!owner && owner.person == who.person && owner.space == who.space
 }
 
-// The entities `person` may read, by the paths an owner is named on: each
-// names nobody else, here or on what it hangs on (@yaks/platform/operator-owner). A store
-// is read by this only until every entity's owner is written there.
-let claimed = (person: string) =>
-  and(
-    or(absent('operator_memory.person'), eq('operator_memory.person', person)),
-    ...['', ...ON].flatMap((at) =>
-      OWNED.map(([name, by]) =>
-        or(absent(`${at}${name}`), eq(`${at}${name}.${by}`, person))
-      )
-    ),
-    or(
-      and(...MADE.map((c) => absent(c))),
-      absent('created.via.operator_session'),
-      eq('created.via.operator_session.person', person),
-    ),
-  )
-
-// Those of them that name `person` somewhere: what is theirs alone.
-let named = (person: string) =>
-  or(
-    eq('operator_memory.person', person),
-    ...['', ...ON].flatMap((at) =>
-      OWNED.map(([name, by]) => eq(`${at}${name}.${by}`, person))
-    ),
-    and(
-      or(...MADE.map((c) => present(c))),
-      eq('created.via.operator_session.person', person),
-    ),
-  )
-
-// The same entities, by the owner each keeps: theirs, or nobody's.
-let theirs = (person: string) =>
-  and(or(absent('owner'), eq('owner.person', person)))
-
 // A store seen to have every owner written, which never goes back.
 let written = new WeakSet<Graph>()
 
@@ -218,18 +183,7 @@ export let sight = (
 ): ReadOpts => ({
   visibility: {
     entity: and(
-      // Approval asks have no stored owner, including those already filed.
-      or(
-        and(present('approval_ask'), eq('filed.assignee', person)),
-        and(
-          absent('approval_ask'),
-          owned(store)
-            ? member ? theirs(person) : eq('owner.person', person)
-            : member
-            ? claimed(person)
-            : and(claimed(person), named(person)),
-        ),
-      ),
+      visibleOwner(person, member, owned(store)),
       ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
       ...store.marks && store.marks.get(MEMORY_OWNERS) != 'done'
         ? [

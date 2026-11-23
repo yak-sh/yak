@@ -25,12 +25,17 @@ import { minted } from '@yaks/graph/identity'
 import { inputOf } from '@yaks/session/intake'
 import { after, each } from '@yaks/fp'
 import { type Built, joined, line, sub } from '@yaks/query'
+import { absent, and, eq, or, present } from '@yaks/query/core'
+
+// Decisions whose assignment names their owner.
+const ASSIGNED = ['approval_ask', 'operator_escalation']
 
 /** What names its person as an owner, by the property that names them:
  * their conversations and the sessions working for them, their requests, the
  * wake-ups and subscriptions they set, the letters and texts sent for them,
- * the contacts they gave, what they were told, and their drafts. */
-export const OWNED: [string, string][] = [
+ * the contacts they gave, what they were asked or told, and their drafts.
+ * A third value names the component carrying the property when it is separate. */
+export const OWNED: [string, string, string?][] = [
   ['operator_session', 'person'],
   ['operator_oracle', 'person'],
   ['operator_request', 'person'],
@@ -45,6 +50,9 @@ export const OWNED: [string, string][] = [
   ['context_output', 'reader'],
   ['deliver', 'to'],
   ['draft', 'by'],
+  ...ASSIGNED.map((
+    name,
+  ): [string, string, string] => [name, 'assignee', 'filed']),
 ]
 /** What an entity hangs on, as a path to what names an owner there. */
 export const ON = [
@@ -60,7 +68,65 @@ export const MADE = ['call', 'result', 'output']
  * is born done. */
 export let OWNERS = 'operator:owners'
 
-let NAMING = [...OWNED.map(([name]) => name), 'operator_memory']
+// On stores whose owners are still being written, each path must name the
+// reader or be absent. Guests also need a path naming them.
+let paths = (person: string) => {
+  let names = ['', ...ON].flatMap((at) =>
+    OWNED.map(([name, by, comp = name]) => {
+      let marker = `${at}${name}`
+      let match = eq(`${at}${comp}.${by}`, person)
+      return {
+        claimed: or(absent(marker), match),
+        named: name == comp ? match : and(present(marker), match),
+      }
+    })
+  )
+  let made = or(...MADE.map(present))
+  let writer = eq('created.via.operator_session.person', person)
+  let memory = eq('operator_memory.person', person)
+  return {
+    claimed: and(
+      or(absent('operator_memory.person'), memory),
+      ...names.map((path) => path.claimed),
+      or(
+        and(...MADE.map(absent)),
+        absent('created.via.operator_session'),
+        writer,
+      ),
+    ),
+    named: or(
+      memory,
+      ...names.map((path) => path.named),
+      and(made, writer),
+    ),
+  }
+}
+
+/** What the reader owns, and for a member, the space's shared work. Older
+ * decisions without a stored owner are read by the person they were filed with. */
+export let visibleOwner = (person: string, member: boolean, kept: boolean) => {
+  if (kept) {
+    return or(
+      eq('owner.person', person),
+      and(
+        absent('owner'),
+        or(
+          and(or(...ASSIGNED.map(present)), eq('filed.assignee', person)),
+          ...member ? [and(...ASSIGNED.map(absent))] : [],
+        ),
+      ),
+    )
+  }
+  let { claimed, named } = paths(person)
+  return member ? claimed : and(claimed, named)
+}
+
+let NAMING = [
+  ...new Set([
+    ...OWNED.flatMap(([name, , comp = name]) => [name, comp]),
+    'operator_memory',
+  ]),
+]
 // What an entity's owner is read from: what names one on it, what it hangs
 // on, and what made it.
 let BEARING = [
@@ -87,10 +153,10 @@ let named = (b: Bundle | undefined): (string | null)[] => {
   let memory = ref(b, 'operator_memory', 'person')
   return [
     ...memory ? [minted(memory) ? memory : null] : [],
-    ...OWNED.flatMap(([name, by]) => {
-      let c = b[name] as Comp | undefined
-      let v = c?.[by]
-      return c ? [typeof v == 'string' && minted(v) ? v : null] : []
+    ...OWNED.flatMap(([name, by, comp = name]) => {
+      if (!b[name]) return []
+      let v = (b[comp] as Comp | undefined)?.[by]
+      return [typeof v == 'string' && minted(v) ? v : null]
     }),
   ]
 }

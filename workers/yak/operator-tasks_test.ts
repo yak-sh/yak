@@ -10,6 +10,7 @@ import { operatorMemory } from './operator-testing.ts'
 import { operatorStore, operatorVocab } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { askOf, waiting } from './operator-approvals.ts'
+import { seenBy } from './operator-access.ts'
 import { working } from './operator-tasks.ts'
 import { invokePackage, packageTools } from './package-tools.ts'
 import { owned } from './directory-fixture.ts'
@@ -94,9 +95,9 @@ await approvals.g.apply([
 let approvalWork = (person: string, name: string, args: unknown) =>
   working(approvals, { person, member: true }, name, args)
 
-test('an approval ask without a stored owner is private to its assignee', async () => {
+test('an approval ask is private to its assignee', async () => {
   let [row] = await approvals.g.get([ask])
-  equal(row.owner, undefined)
+  equal(row.owner, { person: approver })
   equal(titles(await approvalWork(approver, 'task_list', {})), [
     'Review the draft?',
   ])
@@ -111,6 +112,42 @@ test('an approval ask without a stored owner is private to its assignee', async 
     'names no task',
   )
   equal((await approvals.g.get([ask]))[0].cancelled, undefined)
+})
+
+test('an escalation is visible to its recipient and its words are written by the system', async () => {
+  let escalation = crypto.randomUUID()
+  await approvals.g.apply([{
+    entity: { eid: escalation },
+    task: {},
+    doc: { title: 'Review the reply', body: 'The proposed reply.' },
+    operator_escalation: { raised: crypto.randomUUID(), from: session },
+    filed: { assignee: approver, project: approvalSpace },
+  }], { trusted: true })
+  let query = line`.entity.eid=${escalation}`
+  equal(titles(await approvalWork(approver, 'task_list', { query })), [
+    'Review the reply',
+  ])
+  equal(await approvalWork(requester, 'task_list', { query }), [])
+  for (let patch of [{ body: 'Edited reply.' }, { assignee: requester }]) {
+    await assertRejects(
+      () =>
+        approvalWork(approver, 'task_update', { task: escalation, ...patch }),
+      CallError,
+      'Only the system writes',
+    )
+  }
+  let self = seenBy(approvals, { person: approver, member: true })
+  await assertRejects(
+    async () =>
+      await self.apply([{
+        entity: { eid: escalation },
+        doc: { body: 'Edited reply.' },
+      }]),
+    Error,
+    'Only the system writes',
+  )
+  let [row] = await self.get([escalation], ['doc'])
+  equal((row.doc as Comp).body, 'The proposed reply.')
 })
 
 test('a work tool keeps the approval assigned to the person asked to answer it', async () => {
