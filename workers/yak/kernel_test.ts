@@ -104,6 +104,31 @@ test('a failure at a JSON door answers JSON its caller can read', async () => {
   }
 })
 
+test('a failure the platform filed says so, so its page files it no second time', async () => {
+  let fail = env(() => {
+    throw Error('the directory did not answer')
+  })
+  let filed = async (bindings: Env, address: string) =>
+    (await handler.fetch(new Request(address), bindings)).headers.get(
+      'x-yak-filed',
+    )
+  let sent: unknown[] = []
+  let reporting = {
+    ...fail,
+    ERRORS: { send: (rows: unknown) => Promise.resolve(void sent.push(rows)) },
+  } as unknown as Env
+  for (
+    let address of [
+      'https://jill.yaks.app/practice/api/release',
+      'https://yaks.app/',
+    ]
+  ) {
+    equal(await filed(reporting, address), '1')
+    equal(await filed(fail, address), null)
+  }
+  equal(sent.length > 0, true)
+})
+
 test('HSTS covers a preflight response', async () => {
   let res = await handler.fetch(
     new Request('https://hsts.yaks.app/~token/api/query', {

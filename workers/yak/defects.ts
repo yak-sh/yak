@@ -268,6 +268,14 @@ export let defect = (...args: Parameters<typeof filed>): void => {
   filed(...args)
 }
 
+/** Whether {@link defect} puts `error` on file, now or where it was first
+ * caught: the answer that carries it out says so (@yaks/api `FILED`), and the
+ * page that hears it files it no second time. */
+export let filing = (error: unknown): boolean => {
+  let invocation = context.getStore()
+  return !!invocation?.env.ERRORS && !redone(error, invocation.replaced)
+}
+
 /** {@link defect}, answering the occurrence it sent, whose fault
  * (@yaks/tracker `faultOf`) is the one its bug is filed under, or nothing
  * where it sent none. */

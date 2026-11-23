@@ -85,7 +85,8 @@
 //                             segment, the front page answers what is left
 import { origin } from '@yaks/tracker/report'
 import { compose, type WorkerFacet } from '@yaks/workerd/compose'
-import { caught, defect, within } from './defects.ts'
+import { caught, defect, filing, within } from './defects.ts'
+import { FILED } from '@yaks/api/refuse'
 import { CallError, refused as toolRefusal } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
 import * as apps from './apps.ts'
@@ -415,6 +416,7 @@ let hosting = async (
         JSON.stringify(said)
       }`,
     )
+    let told = filing(e)
     defect(e, {
       request: `${req.method} ${where}`,
       space: r.space,
@@ -432,11 +434,17 @@ let hosting = async (
               `Something went wrong. Try again shortly. Request ID: ${requestId}.`,
             request_id: requestId,
           },
-        }, { status: 500, headers: { 'x-request-id': requestId } }),
+        }, {
+          status: 500,
+          headers: {
+            'x-request-id': requestId,
+            ...told ? { [FILED]: '1' } : {},
+          },
+        }),
         env,
       )
     }
-    return oops(env, requestId)
+    return oops(env, requestId, told)
   }
 }
 

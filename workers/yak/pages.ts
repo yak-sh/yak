@@ -79,6 +79,7 @@ import { decodeHTML } from 'entities'
 
 import { BLOCK, type Budget } from '@yaks/platform/meter'
 import { size } from '@yaks/fp'
+import { FILED } from '@yaks/api/refuse'
 import {
   beyond,
   type Ceiling,
@@ -1122,14 +1123,18 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   )
 }
 
-export let oops = (env: Host = {}, requestId?: string) =>
+export let oops = (env: Host = {}, requestId?: string, filed = false) =>
   page(env, {
     title: 'Something went wrong.',
     lead:
       'Try again shortly. If the problem continues, ask your assistant to check the app.' +
       (requestId ? ` Request ID: ${requestId}.` : ''),
     status: 500,
-    headers: requestId ? { 'x-request-id': requestId } : {},
+    headers: {
+      ...requestId ? { 'x-request-id': requestId } : {},
+      // Reported where it was caught (@yaks/api `FILED`).
+      ...filed ? { [FILED]: '1' } : {},
+    },
   }, home(env))
 
 // A custom domain that reached the Worker before there was anything to
