@@ -289,7 +289,8 @@
       "description": "what one model request or tool call cost, in dollars, on the entity that spent it: a request's entry beside its `usage`, or a call",
       "properties": {
         "dollars": {
-          "type": "number"
+          "type": "number",
+          "index": true
         },
         "reported": {
           "type": "boolean",
