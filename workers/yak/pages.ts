@@ -926,7 +926,9 @@ export let howTo = (f: Face, open: boolean) =>
 // The box a key is pasted in and the button that saves it, one line under
 // its label; or, for a service that asks for several fields, a box for each
 // under its own label, masked unless the field is shown, and the button under
-// them. connections.ts `givenOf` reads what was typed.
+// them. Each box shows what its field looks like, where the integration says,
+// and a row of dots where it does not. connections.ts `givenOf` reads what was
+// typed.
 export let keyBox = (
   id: string,
   label: Kids,
@@ -934,12 +936,12 @@ export let keyBox = (
   hint: Kids = '',
   fields: Fielded[] = [KEY],
 ) => {
-  let box = (at: string, name: string, shown = false) =>
+  let box = (at: string, name: string, f: Fielded) =>
     h(Field, {
       id: at,
       name,
-      type: shown ? 'text' : 'password',
-      placeholder: 'Paste the credential',
+      type: f.shown ? 'text' : 'password',
+      placeholder: f.example || '••••••••',
       autocomplete: 'off',
       spellcheck: 'false',
       required: true,
@@ -947,8 +949,8 @@ export let keyBox = (
   if (fields.length == 1) {
     return labeled(
       id,
-      fields[0] == KEY ? label : fields[0].label,
-      h(Form.Line, null, box(id, 'key', fields[0].shown), send),
+      fields[0].label == KEY.label ? label : fields[0].label,
+      h(Form.Line, null, box(id, 'key', fields[0]), send),
       hint,
     )
   }
@@ -957,7 +959,7 @@ export let keyBox = (
       labeled(
         `${id}-${f.name}`,
         f.label,
-        box(`${id}-${f.name}`, `key.${f.name}`, f.shown),
+        box(`${id}-${f.name}`, `key.${f.name}`, f),
       )
     ),
     send ? h(Form.Actions, null, send) : null,

@@ -1330,6 +1330,7 @@ let connection = (
               ['title', 'Its name', 'What people call it'],
               ['tagline', 'One line about it', 'What it is, in a line'],
               ['site', 'Its site', 'https://…'],
+              ['example', 'What its key looks like', 'rk_live_••••••••'],
             ] as const
           ).map(([k, label, hint]) =>
             labeled(

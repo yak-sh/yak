@@ -11,7 +11,8 @@
     {
       "name": "username",
       "label": "Sign-in email",
-      "shown": true
+      "shown": true,
+      "example": "you@example.com"
     },
     {
       "name": "password",

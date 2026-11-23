@@ -157,6 +157,10 @@
               "shown": {
                 "type": "boolean",
                 "description": "typed in the open rather than masked, as a username or a region is"
+              },
+              "example": {
+                "type": "string",
+                "description": "what it looks like, shown in the box it is typed in: an access key ID's AKIA••••••••"
               }
             }
           },
@@ -210,6 +214,10 @@
         "instructions": {
           "type": "string",
           "description": "how a person gets the credential, in markdown, written for them and for the agent helping them: where to sign up, which page issues the key, what to paste. Shown beside every connection it is needed for"
+        },
+        "example": {
+          "type": "string",
+          "description": "what its one key looks like, shown in the box it is pasted in: ElevenLabs' sk_••••••••, Stripe's rk_live_••••••••. None shows a row of dots"
         },
         "owner": {
           "type": "string",
@@ -431,6 +439,10 @@
               "shown": {
                 "type": "boolean",
                 "description": "typed in the open rather than masked, as a username or a region is"
+              },
+              "example": {
+                "type": "string",
+                "description": "what it looks like, shown in the box it is typed in: an access key ID's AKIA••••••••"
               }
             }
           },
@@ -451,6 +463,10 @@
         "instructions": {
           "type": "string",
           "description": "for a custom integration: how a person gets its key, in markdown, written for them and the agent helping them"
+        },
+        "example": {
+          "type": "string",
+          "description": "for a custom integration with one key: what the key looks like, shown in the box it is pasted in, its own prefix then dots: rk_live_••••••••"
         },
         "title": {
           "type": "string",

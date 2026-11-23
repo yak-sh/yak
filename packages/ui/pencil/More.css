@@ -22,9 +22,10 @@
   gap: .375rem;
   padding-inline-start: 1.4rem;
 }
-.More_Body > .Body .Body_Item {
-  display: grid;
-  gap: .375rem;
+/* An item stays a list item, so its words, links and bold run as one
+   sentence after its number; only blocks inside it stand apart. */
+.More_Body > .Body .Body_Item > * + :is(.Body_Paragraph, .Body_Ordered, .Body_Unordered, .Body_Source) {
+  margin-top: .375rem;
 }
 .More_Body > .Body .Body_Ordered {
   list-style: decimal;

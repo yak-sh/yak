@@ -126,23 +126,34 @@ export type Integration = {
   built?: boolean
   /** how a person gets the credential, in markdown, for them and their agent */
   instructions?: string
+  /** what its one key looks like, shown in the box it is pasted in:
+   * ElevenLabs' `sk_••••••••` */
+  example?: string
   /** the space or person that made a custom one, who alone may change its
    * text; none for a built one */
   owner?: string
 }
 
 /** One thing a person gives to connect a pasted-key integration: what an app
- * reads it by, what the page asks for it by, and whether it is typed in the
- * open, as a username or a region is. */
-export type Field = { name: string; label: string; shown?: boolean }
+ * reads it by, what the page asks for it by, whether it is typed in the open,
+ * as a username or a region is, and what it looks like. */
+export type Field = {
+  name: string
+  label: string
+  shown?: boolean
+  example?: string
+}
 
 /** The one field of an integration that declares none: its key. */
 export let KEY: Field = { name: 'key', label: 'Key' }
 
 /** What a person gives to connect a pasted-key integration, in the order the
- * page asks for it: the fields it declares, or its one key. */
+ * page asks for it: the fields it declares, or its one key, shaped as the
+ * integration says. */
 export let fieldsOf = (i?: Integration): Field[] =>
-  i?.fields?.length ? i.fields : [KEY]
+  i?.fields?.length
+    ? i.fields
+    : [i?.example ? { ...KEY, example: i.example } : KEY]
 
 /** A read of the graph: what a tool's context and a graph both offer. */
 export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
@@ -272,6 +283,7 @@ let CARRIED = {
   hosts: 1,
   api: 1,
   fields: 1,
+  example: 1,
   signature: 1,
   testing: 1,
   built: 1,
@@ -332,10 +344,16 @@ export let catalogHeld = (): (read: Read) => Promise<Marked[]> => {
  * never where its credential is sent. */
 export type About = Pick<
   Integration,
-  'title' | 'tagline' | 'site' | 'instructions'
+  'title' | 'tagline' | 'site' | 'instructions' | 'example'
 >
 /** The properties of {@link About}, in the order a page shows them. */
-export let ABOUT = ['title', 'tagline', 'site', 'instructions'] as const
+export let ABOUT = [
+  'title',
+  'tagline',
+  'site',
+  'instructions',
+  'example',
+] as const
 
 /** What was said about an integration, as it is written: each property given,
  * trimmed, and an empty one cleared. A site is an https address, the only

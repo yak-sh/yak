@@ -2,12 +2,13 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { beyond } from '@yaks/platform/standing'
-import { KEY, type Status } from '@yaks/connections'
+import { fieldsOf, KEY, keyed, seeds, type Status } from '@yaks/connections'
 import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
 import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 import type { Card } from './billing.ts'
+import { drawn as theirs } from './theirs.ts'
 import { PRICE, PRO_GRANT, STARTER, YEARLY } from '@yaks/platform/plans'
 
 let env = { APEX: 'yaks.fyi' }
@@ -763,6 +764,46 @@ test('askConnect: how to get the key, above the box it is pasted in', async () =
   }, env).text()
   let at = html.indexOf(HOW)
   assert(at > 0 && at < html.indexOf('Paste your key'), html)
+})
+
+// Every built service a key is pasted for, as its connect page draws it: each
+// step of how to get the key one list item read as a sentence, and each box
+// showing what its field looks like, or a row of dots.
+test('askConnect: every built key service says its steps as sentences, and shows its key shape', async () => {
+  for (let i of seeds().filter(keyed)) {
+    let { document } = parseHTML(
+      await askConnect({
+        app: 'Notes',
+        face: {
+          ...named(i.title ?? i.name),
+          instructions: await theirs(i.instructions),
+          fields: fieldsOf(i),
+        },
+        keyed: true,
+        on: true,
+        status: 'needed',
+        back: 'https://ada.yaks.fyi/notes/',
+      }, env).text(),
+    )
+    for (let li of document.querySelectorAll('.More_Body .Body_Item')) {
+      assert(/^\S.*[.:)]$/.test(li.textContent!.trim()), li.outerHTML)
+      for (let c of li.children) {
+        assert(['A', 'STRONG', 'EM', 'CODE'].includes(c.tagName), li.outerHTML)
+      }
+    }
+    assertEquals(
+      [...document.querySelectorAll('input[name^=key]')].map((b) =>
+        b.getAttribute('placeholder')
+      ),
+      fieldsOf(i).map((f) => f.example ?? '••••••••'),
+      i.name,
+    )
+  }
+  let shapes = Object.fromEntries(
+    seeds().map((i) => [i.name, fieldsOf(i).map((f) => f.example)]),
+  )
+  assertEquals(shapes.elevenlabs, ['sk_••••••••'])
+  assertEquals(shapes.anthropic, ['sk-ant-••••••••'])
 })
 
 test('askConnect: the app, the service, the one form, and the way back', async () => {

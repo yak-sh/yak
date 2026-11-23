@@ -11,5 +11,6 @@
     "base": "https://api.elevenlabs.io",
     "docs": "https://elevenlabs.io/docs/api-reference"
   },
-  "instructions": "1. Sign in at [elevenlabs.io](https://elevenlabs.io) and open [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys).\n2. Choose **Create Key**, name it yaks.app, and allow what your apps and Operator will do: **Text to Speech**, **Voices** (read, and write to design or clone voices) and **Speech to Text**.\n3. Copy the key and paste it here.\n\nSpeech, voices and designs made with it are charged to your ElevenLabs account. Cloning a voice needs a plan that allows it. An app sends the key in the `xi-api-key` header."
+  "instructions": "1. Sign in at [elevenlabs.io](https://elevenlabs.io) and open [Developers → API Keys](https://elevenlabs.io/app/developers/api-keys).\n2. Choose **Create Key**, name it yaks.app, and allow what your apps and Operator will do: **Text to Speech**, **Voices** (read, and write to design or clone voices) and **Speech to Text**.\n3. Copy the key and paste it here.\n\nSpeech, voices and designs made with it are charged to your ElevenLabs account. Cloning a voice needs a plan that allows it. An app sends the key in the `xi-api-key` header.",
+  "example": "sk_••••••••"
 }
