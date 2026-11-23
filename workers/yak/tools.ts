@@ -3611,12 +3611,8 @@ let noteOf = (v: unknown) => {
  * its way out, so it does not count; one somebody else made and invited them
  * into is not theirs, and one on the Plus plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {
-  let [owned, allowed] = await Promise.all([
-    ctx.dir.spaces(ctx.person, 'owner'),
-    ctx.dir.freeSpaces(ctx.person),
-  ])
-  let held = owned.filter((s) => free(s) && !s.trashed)
-  if (held.length >= allowed) {
+  let { held, allowed, canCreate } = await ctx.dir.spaceRoom(ctx.person)
+  if (!canCreate) {
     throw refuse('limit', tooManySpaces(held, ctx.env, allowed))
   }
 }

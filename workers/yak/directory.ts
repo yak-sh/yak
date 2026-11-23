@@ -53,6 +53,7 @@ import { type Restored, trashPage, trashSearch } from './trash-wire.ts'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
 import {
+  free,
   type Meter,
   type Metered,
   meteredOf,
@@ -4200,6 +4201,15 @@ export let directoryRows = (rows: {
       let meta = await one(line`.space.slug=${META.space}&?role_free_spaces`)
       let role = meta && await self.role({ eid: meta.entity.eid }, person)
       return freeSpaces(role && meta.role_free_spaces?.[role])
+    },
+    // The same capacity used for both creating and restoring free spaces.
+    spaceRoom: async (person: string) => {
+      let [owned, allowed] = await Promise.all([
+        self.spaces(person, 'owner'),
+        self.freeSpaces(person),
+      ])
+      let held = owned.filter((space) => free(space) && !space.trashed)
+      return { held, allowed, canCreate: held.length < allowed }
     },
     // The free spaces a seat of each role in the platform's own space may
     // own, where one was set (`role_free_spaces`).

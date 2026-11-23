@@ -32,6 +32,22 @@ test('one free space a person, and each space answers to its own allowances', as
     // Signing in made her one, and Bob inviting her into his is not hers.
     await connector(k, bob.cookie).tool('member_add', { email: ada.email })
     let [first] = await owned(ada)
+    let room = async () => {
+      let res = await k.at(
+        k.host,
+        `/api/spaces?person=${encodeURIComponent(ada.email)}`,
+        { headers: { cookie: k.owner.cookie } },
+      )
+      assertEquals(res.status, 200)
+      return await res.json()
+    }
+    let capacity = (
+      spaces: number | 'unlimited',
+      used: number,
+      canCreate: boolean,
+    ) => ({ person: ada.email, spaces, used, canCreate })
+    assertEquals(await room(), capacity(1, 1, false))
+    assertEquals(await owned(ada), [first])
     let refused = await make()
     assertStringIncludes(
       refused,
@@ -82,8 +98,16 @@ test('one free space a person, and each space answers to its own allowances', as
     // Spaces on the Plus plan are paid for on their own, and make room.
     await onPlus(k, first.eid)
     await onPlus(k, old.eid)
+    assertEquals(await room(), capacity(1, 0, true))
     assertEquals(await make(), '')
     assertEquals((await owned(ada)).length, 3)
+    assertEquals(await room(), capacity(1, 1, false))
+
+    let [probe] = (await owned(ada)).filter(({ slug }) => slug == `a${tag}`)
+    await meta(k).apply([{ entity: { eid: probe.eid }, trashed: {} }])
+    assertEquals(await room(), capacity(1, 0, true))
+    await hers.tool('space_restore', { space: probe.slug })
+    assertEquals(await room(), capacity(1, 1, false))
   } finally {
     await k.stop()
   }

@@ -1097,7 +1097,7 @@
       "noun": "admin",
       "verb": "spaces",
       "title": "Read or set how many free spaces a person may own",
-      "description": "One person's allowance of free spaces, beside the one every person gets, or a role's: every person seated in the yak space with that role, who has no allowance of their own. A number, unlimited, or default to take it off. A person's own allowance comes first, then their role's, then the one every person gets. Only the platform role may set it; act as the person's own account when they asked for it, so it is recorded as theirs.\n\n  yak admin spaces ada@example.com 3 --as admin@bot.yak.sh\n  yak admin spaces ada@example.com default --as admin@bot.yak.sh\n  yak admin spaces --role editor --spaces unlimited --as admin@bot.yak.sh",
+      "description": "Read a person's free-space allowance, how many they use and whether the allowance lets them create another. This read uses the same calculation as space creation and restoration. You can also read a role's allowance in the yak space. Pass a number, unlimited, or default to change or clear an allowance. A person's own allowance comes first, then their role's, then the platform default. The tool uses the platform admin account by default. Pass the person's own account when they explicitly asked to make the change as them.\n\n  yak admin spaces ada@example.com\n  yak admin spaces ada@example.com 3\n  yak admin spaces ada@example.com default\n  yak admin spaces --role editor --spaces unlimited",
       "input": {
         "person": {
           "type": "string",
@@ -1114,7 +1114,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the yaks.app account to use, matched by email address or local part. Defaults to admin@bot.yak.sh"
         }
       },
       "openWorld": true,

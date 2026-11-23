@@ -438,7 +438,10 @@ export let setComp = (
  * role's, every seat of it in the `yak` space without one of their own: a
  * number, or `unlimited`. Only an owner of the `yak` space is answered. */
 export type FreeSpaces =
-  & ({ person: string } | { role: string })
+  & (
+    | { person: string; used?: number; canCreate?: boolean }
+    | { role: string }
+  )
   & { spaces: number | 'unlimited' }
 /** Whose allowance: a person by address, or a role in the `yak` space. */
 export type Holder = { person: string } | { role: string }

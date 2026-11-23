@@ -13,11 +13,8 @@ import { adminWho } from './asking.ts'
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
-let shown = (who: { person: string } | { role: Role }, allowed: number) =>
-  Response.json({
-    ...who,
-    spaces: Number.isFinite(allowed) ? allowed : 'unlimited',
-  })
+let quota = (allowed: number) =>
+  Number.isFinite(allowed) ? allowed : 'unlimited'
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
 
 // What `spaces` asks for, as the row's component: null takes it off.
@@ -56,7 +53,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       return json(400, 'bad_role', `say a role: ${ROLES.join(', ')}`)
     }
     if (!form) {
-      return shown({ role }, freeSpaces((await dir.roleSpaces())[role]))
+      return Response.json({
+        role,
+        spaces: quota(freeSpaces((await dir.roleSpaces())[role])),
+      })
     }
     let allowance = wanted(said('spaces'))
     if (allowance === undefined) {
@@ -68,12 +68,20 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
         role_free_spaces: { [role]: allowance },
       }],
     }, { actor: { by: who.person! } })
-    return shown({ role }, freeSpaces(allowance))
+    return Response.json({ role, spaces: quota(freeSpaces(allowance)) })
   }
   let address = said('person').toLowerCase()
   let person = address && await dir.personAt(address)
   if (!person) return json(404, 'no_person', 'nobody has that address')
-  if (!form) return shown({ person: address }, await dir.freeSpaces(person))
+  if (!form) {
+    let { held, allowed, canCreate } = await dir.spaceRoom(person)
+    return Response.json({
+      person: address,
+      spaces: quota(allowed),
+      used: held.length,
+      canCreate,
+    }, { headers: { 'cache-control': 'private, no-store' } })
+  }
   let free_spaces = wanted(said('spaces'))
   if (free_spaces === undefined) {
     return json(400, 'bad_spaces', 'say a number, unlimited or default')
@@ -81,5 +89,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   await stamp(env, { entities: [{ entity: { eid: person }, free_spaces }] }, {
     actor: { by: who.person! },
   })
-  return shown({ person: address }, await dir.freeSpaces(person))
+  return Response.json({
+    person: address,
+    spaces: quota(await dir.freeSpaces(person)),
+  })
 }

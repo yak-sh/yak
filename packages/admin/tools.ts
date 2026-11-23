@@ -543,12 +543,17 @@ export let runs = (
         throw new CallError('spaces', 'say a number, unlimited or default')
       }
       let of = person ? { person } : { role: role! }
-      let at = await acting(a)
+      let at = await writing(a)
       let now = spaces == null
         ? await freeSpacesNow(at.bearer, of)
         : await setFreeSpaces(at.bearer, of, spaces)
       let who = 'person' in now ? now.person : `every ${now.role} of yak`
-      return [said(call, `${who}: ${now.spaces} free spaces`)]
+      let room = 'person' in now && now.canCreate != null
+        ? ` (${now.used} used). ${
+          now.canCreate ? 'Can' : 'Cannot'
+        } create another.`
+        : ''
+      return [said(call, `${who}: ${now.spaces} free spaces${room}`)]
     }),
 
     // The server answers support threads only to the account's seat in yak.
