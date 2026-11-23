@@ -241,8 +241,9 @@ export let tracker = async (
  * with review skipped (app_set `review: false`), code-review records an
  * agent's review of a stranger's app and sends its request to the platform's
  * owner (gallery_code_review), and publish publishes an app of a space the
- * caller owns and asks for its listing (app_publish `gallery: true`), after
- * giving its card the picture `screenshot` names (app_set). A `by` the call names, the platform owner's
+ * caller owns, with the line `about` says of it, and asks for its listing
+ * (app_publish `gallery: true`), after giving its card the picture
+ * `screenshot` names (app_set). A `by` the call names, the platform owner's
  * address when he asked for the act, stands in for the caller's own. Account
  * selection stays at the admin boundary shared by every operation. */
 export let review = async (bearer: string, call: Bundle): Promise<string> => {
@@ -271,7 +272,13 @@ export let review = async (bearer: string, call: Bundle): Promise<string> => {
       : []
     let published = await ask('tools/call', {
       name: 'app_publish',
-      arguments: { space, app, gallery: true, ...stamp },
+      arguments: {
+        space,
+        app,
+        gallery: true,
+        ...(a.about ? { about: a.about } : {}),
+        ...stamp,
+      },
     })
     return [...pictured, saidBy(published)].join('\n')
   }

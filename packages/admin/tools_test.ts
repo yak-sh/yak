@@ -872,6 +872,7 @@ test('a publish gives the card its picture, then publishes and asks for the list
             app: 'yak/back-office',
             decision: 'publish',
             screenshot: 's1',
+            about: 'A shop’s orders',
           },
         },
         created: { by: 'yaks-project', via: 'agent-session' },
@@ -892,7 +893,13 @@ test('a publish gives the card its picture, then publishes and asks for the list
     },
     {
       name: 'app_publish',
-      arguments: { space: 'yak', app: 'back-office', gallery: true, ...stamp },
+      arguments: {
+        space: 'yak',
+        app: 'back-office',
+        gallery: true,
+        about: 'A shop’s orders',
+        ...stamp,
+      },
     },
   ])
 })
