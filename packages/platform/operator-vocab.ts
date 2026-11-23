@@ -627,7 +627,6 @@ export let operatorDoc: VocabDoc = {
         session: { type: 'string', ref: 'session', death: 'keep' },
         task: { type: 'string', ref: 'entity', death: 'keep' },
         previous: { type: 'string', ref: 'entity', death: 'keep' },
-        notify: { type: 'boolean' },
         report: { type: 'string', ref: 'entity', death: 'keep' },
       },
     },

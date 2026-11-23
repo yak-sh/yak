@@ -126,7 +126,7 @@ export let sessionSend = (
         : ''
     }. The session takes a turn of its own and answers its own person itself, with their permissions, never yours; a thread reads your note as your thread's words, not its person's. Send only the context it needs. It answers here only when it sends you a note back${
       reach.handoff
-        ? ", except another space's Operator, whose reply comes back to this conversation when ready: set notify when the person is waiting for it"
+        ? ", except another space's Operator, whose reply comes back to this conversation when ready, written for you to act on and never shown to the person"
         : ''
     }. Returns at once; carry on with independent work.`,
   parameters: {
@@ -144,11 +144,6 @@ export let sessionSend = (
             description:
               'For a new handoff, the slug or id of the space whose Operator starts a conversation; left out when you name a session.',
           },
-          notify: {
-            type: 'boolean',
-            description:
-              "Alert the person when another space's Operator replies.",
-          },
         }
         : {},
       say: {
@@ -158,7 +153,7 @@ export let sessionSend = (
     },
     required: ['say'],
   },
-  run: async ({ session, space: to, say, notify }, context) => {
+  run: async ({ session, space: to, say }, context) => {
     let text = typeof say == 'string' ? say.trim() : ''
     if (!text) throw refuse('arguments', 'Say what the note says.')
     if (!context) throw refuse('access', 'Send it from a conversation.')
@@ -182,7 +177,6 @@ export let sessionSend = (
         await handOff(env, store, space, person, context, {
           space: to.trim(),
           say: text,
-          notify: notify === true,
         }),
       )
     }
@@ -220,7 +214,6 @@ export let sessionSend = (
       await handOff(env, store, space, person, context, {
         sent,
         say: text,
-        notify: notify === true,
       }),
     )
   },

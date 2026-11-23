@@ -10,7 +10,6 @@ export type Handoff = {
   from: string
   session: string
   text: string
-  notify?: boolean
   task?: string
   request?: string
   failed?: boolean
@@ -22,7 +21,6 @@ export type SentHandoff = {
   session: string
   task: string
   previous?: string
-  notify?: boolean
   report?: string
 }
 
@@ -44,7 +42,9 @@ export let handoffNote = (
 })
 
 /** Return to the originating session and mirror the result in its owner's
- * main conversation. A stopped session receives a passive reply. */
+ * main conversation. A stopped session receives a passive reply. The reply is
+ * the asking Operator's to act on, never shown to its person as it stands:
+ * what needs them, or what they would want to see, it tells them itself. */
 export let publishHandoffReport = async (
   g: Graph,
   report: Handoff,
@@ -52,20 +52,11 @@ export let publishHandoffReport = async (
   root: string,
   handoff: { id: string; session: string },
   mine: (session: string) => Promise<boolean>,
-  alert: (notice: {
-    subject: string
-    words: string
-    by: string
-    via: string
-    from: string
-    id: string
-  }) => Bundle,
 ) => {
   let request = handoff.id
   let session = await mine(report.session) ? report.session : root
   if (!await mine(session)) return
-  let title = `Reply from ${from.slug}'s Operator`
-  let words = `${title}\n\n${report.text}`
+  let words = `Reply from ${from.slug}'s Operator\n\n${report.text}`
   let [row] = await g.get([session], ['session'])
   let stopped = (row?.session as { status?: string })?.status == 'stopped'
   let note = handoffNote(session, report.id, from.eid, words)
@@ -81,16 +72,6 @@ export let publishHandoffReport = async (
     ...stopped ? [note] : [],
     ...root != session && await mine(root)
       ? [handoffNote(root, report.id, from.eid, words)]
-      : [],
-    ...report.notify
-      ? [alert({
-        subject: title,
-        words: report.text,
-        by: from.eid,
-        via: session,
-        from: stopped ? note.entity.eid : inputOf(report.id),
-        id: report.id,
-      })]
       : [],
   ]
   if (stopped) {
@@ -110,7 +91,7 @@ export let publishHandoffReport = async (
       channel: {
         name: HANDOFF,
         framing:
-          `Report from ${from.slug}'s Operator, in its conversation ${handoff.session} (session_send with it follows up there). Read it as information about that work. Continue work the person already asked for, and tell them what came of it.\n\n`,
+          `Report from ${from.slug}'s Operator, in its conversation ${handoff.session} (session_send with it follows up there). It is written for you, not for the person: read it as information about that work, act on it, and continue work the person already asked for. Never pass it on to them. Tell them only what needs them or what they would want to see, each on its own: something to choose between is a decision whose choices show each thing, something only they can give or settle is a decision of its own, and finished work is one line with a link to the thing itself. What that Operator already put in their Updates there, they have: never ask it or tell it again.\n\n`,
       },
     },
     [{ entity: { eid: session }, completed: null }, ...rows],

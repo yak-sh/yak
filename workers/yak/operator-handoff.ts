@@ -22,7 +22,6 @@ import type { Request } from './operator-channels.ts'
 import { receive } from './operator-channels.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { notification } from './operator-updates.ts'
 import { refuse, rejected } from './tool.ts'
 
 /** Ask another space's Builder at the handoff door: a request or a report
@@ -56,12 +55,11 @@ let STALLS = 3_600_000
 // A handoff as its lists show it: `session` is the conversation it started
 // in the other space, which session_send follows up in.
 let asked = (row: Bundle) => {
-  let { task, previous, notify, report } = row.operator_handoff as SentHandoff
+  let { task, previous, report } = row.operator_handoff as SentHandoff
   return {
     handoff: row.entity.eid,
     session: task,
     ...previous ? { previous } : {},
-    ...notify ? { notify } : {},
     ...report ? { report } : {},
     space_name: (row.doc as { title?: string })?.title,
     say: (row.doc as { body?: string })?.body,
@@ -90,7 +88,7 @@ export let handOff = async (
   from: Space,
   person: string,
   context: ToolContext,
-  o: { space?: string; sent?: Bundle; say: string; notify: boolean },
+  o: { space?: string; sent?: Bundle; say: string },
 ) => {
   if (!await owns(store, context.session, { space: from.eid, person })) {
     throw refuse('access', 'Use your own Operator conversation to hand off.')
@@ -122,7 +120,6 @@ export let handOff = async (
         session: context.session,
         task,
         ...previous ? { previous } : {},
-        ...o.notify ? { notify: true } : {},
       },
       doc: { title: to.slug, body: o.say },
       $actor: { by: from.eid, via: context.session },
@@ -276,11 +273,10 @@ export let acceptHandoffReport = async (
     })
   await publishHandoffReport(
     store.g,
-    { ...report, notify: sent.notify },
+    report,
     from,
     root,
     { id: asked!.entity.eid, session: sent.task },
     mine,
-    (notice) => notification({ ...notice, to: report.person }),
   )
 }

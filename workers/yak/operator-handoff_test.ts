@@ -136,6 +136,9 @@ let [outgoing, incoming] = await Promise.all([
   messages(source, sourceRoot),
   messages(target, targetRoot),
 ])
+let told = JSON.stringify(
+  await source.g.read(line`.notification.to=${person}&.doc`),
+)
 
 test('a handoff uses the person’s own seat and reports back after the receiving Operator works', async () => {
   assertEquals(callsBefore, 0)
@@ -162,4 +165,9 @@ test('a handoff uses the person’s own seat and reports back after the receivin
     assertMatch(transcript, /The space is now Handoff result/)
     assertMatch(transcript, /Confirmed: Handoff result/)
   }
+})
+
+test('a reply between Operators is the asking Operator’s, never a notice in its person’s Updates', () => {
+  assertMatch(outgoing, /The space is now Handoff result/)
+  assertEquals(told.includes('The space is now Handoff result'), false)
 })

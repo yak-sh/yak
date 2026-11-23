@@ -536,7 +536,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
   title: 'Notify them',
   step: { doing: 'Notifying them…', done: 'Notified them' },
   description:
-    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, when something needs them, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, apart from any conversation, read later by someone who has not seen this one and may not be a programmer, so it must stand on its own: no file names, tool names, ids or error messages, which stay in this chat it links to. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone. Write it as yourself, in the first person (“I finished your report”), and say what they can reply to have done (“Reply renew and I’ll renew it”): a reply to a text or an email reaches you here. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
+    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, read later by someone who has not seen this conversation and may not be a programmer: one line saying what happened, with a link to the thing itself (the page, the app, the preview), never a report of your work, which stays in this chat it links to. No file names, tool names, ids or error messages. An ask is never a notice: a choice between things, or something only they can give or settle, is a decision_new of its own, one per ask. Write as yourself, in the first person (“I finished your [recipe page](…)”), and call them by the name they gave you. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone; a reply to a text or an email reaches you here. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
   parameters: {
     type: 'object',
     properties: {
@@ -548,7 +548,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
       text: {
         type: 'string',
         description:
-          'Two or three plain sentences to them in your own voice, standing on their own: what happened, what you did, and what (if anything) they can reply to have done.',
+          'One plain line to them in your own voice, standing on its own, with a Markdown link to the thing it tells of: "Your [recipe page](…) prints again."',
       },
       about: {
         type: 'string',
