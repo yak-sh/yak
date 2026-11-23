@@ -6,9 +6,9 @@ import { nameItem, nameSet, unnamed } from './named.ts'
 // A directory holding one person's row.
 let directory = (title: string) => {
   let me: Bundle = {
-    entity: { eid: 'erik' },
+    entity: { eid: 'dana' },
     doc: { title },
-    email: { address: 'thecompanygardener@gmail.com' },
+    email: { address: 'dana@example.com' },
   }
   let dir: Dir = {
     read: () => [me],
@@ -32,19 +32,19 @@ test('a title is no name when it is empty, an address or its front', () => {
 })
 
 test('name_set keeps a supplied name even if it matches the fallback', async () => {
-  let dir = directory('thecompanygardener')
+  let dir = directory('dana')
   equal(
-    await nameItem(dir, 'erik'),
+    await nameItem(dir, 'dana'),
     'Their name is unknown. When they tell you their own name, keep it with name_set.',
   )
-  let set = nameSet(() => dir, 'erik')
+  let set = nameSet(() => dir, 'dana')
   equal(await set.run({ name: ' x@y.z ' }), 'Give their name, not an address.')
   equal(
-    await set.run({ name: ' thecompanygardener ' }),
-    'Kept: they go by thecompanygardener.',
+    await set.run({ name: ' dana ' }),
+    'Kept: they go by dana.',
   )
   equal(
-    await nameItem(dir, 'erik'),
-    'Their saved display name is "thecompanygardener". Use it as their name.',
+    await nameItem(dir, 'dana'),
+    'Their saved display name is "dana". Use it as their name.',
   )
 })
