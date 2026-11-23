@@ -28,14 +28,24 @@ export let printer =
     })
     // PrintBound's failure was reported where it happened; the person reads
     // it on the card, with their book kept, and the id names it for support.
+    // 424, not a 5xx: yaks.app files an app's 5xx as its own break, and this
+    // one is PrintBound's, filed once already.
     if (answer.status >= 500) {
       let body = await answer.json().catch(() => null)
       let id = body?.error?.request_id
       throw new Refusal(
         'PrintBound could not finish that just now. Your book is kept; ' +
           `try again in a little while.${id ? ` (Request ${id}.)` : ''}`,
-        502,
+        424,
       )
+    }
+    // PrintBound's no, in its own words: why it cannot print this for you.
+    if (answer.status >= 400) {
+      let body = await answer.json().catch(() => null)
+      let said = body?.error?.message
+      if (typeof said === 'string' && said) {
+        throw new Refusal(said, answer.status)
+      }
     }
     let result = await json<{ value: { answer: string } }>(answer)
     return JSON.parse(result.value.answer) as Record<string, unknown>

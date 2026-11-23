@@ -182,9 +182,26 @@ test('a PrintBound failure answers the person on the card, never the failure its
       ),
   }, crypto.randomUUID())
   let refused = await assertRejects(() => call('quote', {}), Refusal)
-  assertEquals(refused.status, 502)
+  assertEquals(refused.status, 424)
   assertEquals(
     refused.message,
     'PrintBound could not finish that just now. Your book is kept; try again in a little while. (Request r1.)',
   )
+})
+
+test("PrintBound's refusal reaches the person in PrintBound's words", async () => {
+  let call = printer({
+    fetch: () =>
+      Promise.resolve(
+        Response.json({
+          error: {
+            code: 'access',
+            message: 'PrintBound cannot reach Lulu for you',
+          },
+        }, { status: 403 }),
+      ),
+  }, crypto.randomUUID())
+  let refused = await assertRejects(() => call('quote', {}), Refusal)
+  assertEquals(refused.status, 403)
+  assertEquals(refused.message, 'PrintBound cannot reach Lulu for you')
 })
