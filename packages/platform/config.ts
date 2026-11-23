@@ -205,6 +205,11 @@ export let appConfig: Config = {
         'builder_supply',
         'builder_choose',
         'builder_model',
+        // A step the person's own agent takes (@yaks/builders/agent).
+        'builder_agent',
+        'agent_step',
+        'step_list',
+        'step_answer',
       ],
     },
     { use: '@yaks/effects', words: ['provisional', 'effect', 'lease'] },

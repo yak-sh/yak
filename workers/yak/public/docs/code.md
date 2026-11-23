@@ -883,8 +883,9 @@ the take in use of an earlier step's output slot:
     $o .built.slot=script, built.current=true, doc.body=$script
 
 Each step is a builder with `immediate: true`, and its tool is a model
-([AI Models](./models.md)) or one of the app's commands. Next to the builders,
-write a `requires` edge from each step to every step it reads:
+([AI Models](./models.md)), one of the app's commands, or the person's own agent
+(below). Next to the builders, write a `requires` edge from each step to every
+step it reads:
 
     {
       entity: { eid: '$need' },
@@ -1001,6 +1002,20 @@ step's query matches it:
   to act on any answer, or matches one label to go on only from that one.
 - A decision any row of the app holds is asked the same way, so the app's own
   code can ask too, by writing one.
+
+### A step the person's own agent takes
+
+A step can be done by the person's own agent, such as Claude Code connected to
+yaks.app, on their own computer and subscription, spending nothing from the
+space's budget. When the person says their own agent does a step ("I run the
+voicing myself", "my Claude Code does this step"), write it as an agent step: a
+builder whose tool is `builder_agent`,
+`to: '45ee9195-562c-87c2-98bc-e7d6fcf76576'`, with its instructions in
+`content.body` as for a model step, saying which outputs to answer. Each match
+becomes a step task that waits for their agent, which finds it with `step_list`,
+does the work, and answers its outputs with `step_answer`; the next step reads
+them like any step's. Then tell the person how to set their agent up:
+[Workflow Steps From Claude Code](./steps.md).
 
 ## CPU and subrequest limits
 

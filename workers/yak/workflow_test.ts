@@ -8,6 +8,8 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { toolEid } from '@yaks/tools'
+import { valueIn } from '@yaks/tools/value'
+import { agentToolEid } from '@yaks/builders/agent'
 import { parseTools } from '@yaks/tools/declared'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Dispatch } from './door.ts'
@@ -15,6 +17,7 @@ import { appStore, storeName } from './directory.ts'
 import { appArrived } from './app-texts.ts'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { SPACE } from './build-door.ts'
+import { KERNEL } from './meta.ts'
 import type { Update } from './operator-updates.ts'
 
 let NUMBER = '+12695550100'
@@ -32,7 +35,8 @@ let words = {
 type Comps = Record<string, Comp>
 type Vars = { body: string; [name: string]: string }
 type Binding = { entities: string[]; vars: Vars }
-type Step = { slot: string; reads?: string; query?: string }
+// A step is the app's worker's, or the person's own agent's (`agent`).
+type Step = { slot: string; reads?: string; query?: string; agent?: boolean }
 
 // An app whose worker answers each step with `step(slot, body)`'s words in its
 // step's slot, or the components it gives, and whose builders are `steps`: one
@@ -100,7 +104,7 @@ let workflow = async (
           (s.reads
             ? `$o .built.slot=${s.reads}, built.current=true, doc.body=$body`
             : `$t .text.to=${NUMBER}, doc.body=$body`),
-        to: toolEid('step'),
+        to: s.agent ? agentToolEid() : toolEid('step'),
         immediate: true,
       },
     })),
@@ -140,8 +144,19 @@ let workflow = async (
     assertEquals(res.status, 200, body)
     return JSON.parse(body)
   }
+  // A store tool, called as Ada's own agent calls it through the connector.
+  let call = async (name: string, args: object = {}) => {
+    let res = await store('/call', {
+      method: 'POST',
+      body: JSON.stringify({ name, args, id: crypto.randomUUID() }),
+    }, { ...ADA_OWNS, ...KERNEL })
+    let body = await res.text()
+    assertEquals(res.status, 200, body)
+    return valueIn(JSON.parse(body)) as Record<string, unknown>
+  }
   return {
     apply: (bundles: Bundle[]) => send('/apply', bundles),
+    call,
     rows,
     takes,
     text,
@@ -273,4 +288,42 @@ test('a workflow decision given another person is asked of them', async () => {
     let [copy] = await w.questions()
     return (copy?.filed as Comp | undefined)?.assignee == bo || null
   }, { label: 'the question asked of Bo' })
+})
+
+// An agent step: the middle step is the person's own agent's (Claude Code over
+// the connector, on their own subscription). It waits as a task until their
+// agent lists it and answers it, and the next step builds on that answer.
+test("a step the person's own agent takes waits for it, and its answer carries the workflow on", async () => {
+  await using w = await workflow([
+    { slot: 'first' },
+    { slot: 'middle', reads: 'first', agent: true },
+    { slot: 'last', reads: 'middle' },
+  ], (slot, body) => `${body} ${slot}`)
+  await w.text('msg-1', 'go')
+  type Waiting = {
+    step: string
+    title: string
+    instructions: string
+    binding: { entities: string[]; vars: Vars }
+  }
+  let [step] = await until(async () => {
+    await w.rows('.agent_step')
+    let { steps } = await w.call('step_list') as { steps: Waiting[] }
+    return steps.length ? steps : null
+  }, { label: 'the step in step_list' })
+  assertEquals(step.title, 'middle')
+  assertEquals(step.binding.vars.body, 'go first')
+  assertEquals(await w.rows('.built.slot=last'), [])
+  await w.call('step_answer', {
+    step: step.step,
+    outputs: [{
+      slot: 'middle',
+      inputs: [step.binding.entities[0]],
+      components: { doc: { body: `${step.binding.vars.body} by agent` } },
+    }],
+  })
+  assertEquals(await w.takes('last', 1), ['go first by agent last'])
+  assertEquals(await w.call('step_list'), { steps: [] })
+  let [task] = await w.rows(`.entity.eid=${step.step}&*`)
+  assertEquals((task.task as Comp).status, 'done')
 })

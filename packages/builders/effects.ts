@@ -18,6 +18,7 @@ import { next, WAKE } from '@yaks/wake'
 import { BUILD, clock, due, type Options, reconcile } from './build.ts'
 import { answer, Malformed, spent } from './answer.ts'
 import { adapted, modelToolEid } from './model.ts'
+import { STEP, stepOf } from './agent.ts'
 import { preserve } from './preserve.ts'
 import { type Runner, toolEid } from '@yaks/tools'
 
@@ -164,6 +165,11 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
   let cost = spent(call, value)
   try {
     let writes = [...cost, ...await answer(tx, call, value, vocab)]
+    // The agent's step this answers is done once its outputs are written.
+    let [step] = await tx.get([stepOf(call.entity.eid)])
+    if (step?.[STEP] && !step.completed && !step.cancelled) {
+      writes.push({ entity: step.entity, completed: {} })
+    }
     if (writes.length) await write(writes)
   } catch (err) {
     // A build that moved on refuses the outputs, never what the call spent.

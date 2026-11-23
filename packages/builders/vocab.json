@@ -295,6 +295,102 @@
         "key"
       ]
     },
+    "builder_agent": {
+      "tool": true,
+      "revision": "1",
+      "noun": "builder",
+      "verb": "agent",
+      "title": "Agent step",
+      "description": "Ask the person's own agent for one frozen builder binding: a step task holding its instructions, which the agent answers with step_answer. It spends nothing.",
+      "surfaces": [],
+      "input": {
+        "binding": {
+          "type": "object"
+        },
+        "key": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string"
+        },
+        "using": {
+          "type": "object"
+        },
+        "inputs": {
+          "type": "string",
+          "description": "the frozen binding input fingerprint"
+        },
+        "definition": {
+          "type": "string",
+          "description": "the frozen builder definition fingerprint"
+        },
+        "wiring": {
+          "type": "object",
+          "description": "the frozen output recipe"
+        },
+        "sending": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "binding",
+        "key"
+      ]
+    },
+    "agent_step": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "call": {
+          "type": "string",
+          "ref": "call",
+          "death": "cascade",
+          "description": "the builder call this step answers"
+        }
+      },
+      "required": [
+        "call"
+      ],
+      "description": "a workflow step the person's own agent takes: a task whose doc.body is its instructions, answered with step_answer"
+    },
+    "step_list": {
+      "tool": true,
+      "readOnly": true,
+      "noun": "step",
+      "verb": "list",
+      "title": "List steps for your agent",
+      "description": "The workflow steps waiting for your own agent: each its step id, title, instructions and binding (the input rows' ids in entities, the query's variables in vars). Do each one with your own tools and models, then answer it with step_answer. A step whose last answer was refused says why in failed.",
+      "input": {}
+    },
+    "step_answer": {
+      "tool": true,
+      "destructive": false,
+      "noun": "step",
+      "verb": "answer",
+      "title": "Answer a step",
+      "description": "Answer a step from step_list with its outputs, as a worker answers a builder: each output {slot, inputs, components}, where slot is a unique name, inputs lists the binding's entity ids it used, and components are the output row's components (doc, and the app's own). A file goes to the app's ./api/blob first, and a component names the eid it answered. The workflow carries on from the outputs, and the step closes once they are written. It spends nothing.",
+      "input": {
+        "step": {
+          "type": "string",
+          "ref": "agent_step",
+          "description": "the step's id from step_list"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "the step's outputs, each {slot, inputs, components, artifact?}"
+        }
+      },
+      "required": [
+        "step",
+        "outputs"
+      ],
+      "positional": [
+        "step"
+      ]
+    },
     "builder_build": {
       "tool": true,
       "destructive": false,
@@ -552,6 +648,25 @@
       "with": {
         "doc": true
       }
+    },
+    "agent_step": {
+      "description": "a workflow step the person's own agent takes; step_list finds it and step_answer answers it",
+      "with": {
+        "task": true,
+        "doc": true
+      },
+      "examples": [
+        {
+          "task": {},
+          "doc": {
+            "title": "Write the script",
+            "body": "Write the script for a short video about a lighthouse."
+          },
+          "agent_step": {
+            "call": "6f1c2a9e-0d3b-4c2e-9a51-2f7e8b1d4c60"
+          }
+        }
+      ]
     }
   }
 }

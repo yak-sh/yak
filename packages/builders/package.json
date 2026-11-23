@@ -7,6 +7,7 @@
     "./vocab": "./vocab.ts",
     "./effects": "./effects.ts",
     "./model": "./model.ts",
+    "./agent": "./agent.ts",
     "./tools": "./tools.ts",
     "./cli": "./cli.ts",
     "./graph": "./graph.ts",
@@ -38,6 +39,7 @@
     "@yaks/model": "0.2.32",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.30",
+    "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.30"
   }
 }

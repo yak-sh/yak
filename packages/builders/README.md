@@ -309,11 +309,26 @@ included. A tool's row is written when something first calls it, so a builder
 that names one nothing has called yet writes that row as it opens, through the
 host's runner.
 
+## Agent steps
+
+A step can be done by a person's own agent, such as Claude Code connected over
+MCP on their own subscription: a builder whose tool is `builder_agent`
+(`agentToolEid()` in `@yaks/builders/agent`). Its call writes an `agent_step`
+task, `task{} doc{title, body} agent_step{call}`, whose body is the builder's
+rendered `content.body` and the binding's input ids, and the call is answered
+later, as a model's is. `step_list` lists the open steps their build still asks
+for, each with its binding, and `failed` where the last answer was refused.
+`step_answer` checks the output contract, then writes the call's
+`output{source, value}`; `builder_answer` writes the outputs and marks the step
+`completed`. A changed binding writes a new step and cancels the old one. The
+host composes @yaks/task for `task`. Nothing in an agent step spends.
+
 ## Exports
 
 - `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`,
   `reconcile`, and `code`, a code tool answered in place.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
+- `@yaks/builders/agent`: `agentTool`, `agentToolEid`, `waiting` and `reply`.
 - `@yaks/builders/graph`: output choice and transactional immediate-builder
   reconciliation, `plugins(host, here)`.
 - `@yaks/builders/effects`: `watches` and `effects`.

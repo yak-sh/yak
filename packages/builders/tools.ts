@@ -17,6 +17,7 @@ import type { Vocab } from '@yaks/vocab'
 import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
 import { type Desk, modelTool } from './model.ts'
+import { agentTool, stepRuns } from './agent.ts'
 import { type Supply, supply } from './supply.ts'
 import { choose } from './choice.ts'
 import { preserve } from './preserve.ts'
@@ -142,6 +143,8 @@ export let runs = (
   options: Omit<Options, 'vocab'> & { desk?: Desk } = {},
 ): Runs => ({
   builder_model: modelTool(options.desk).run,
+  builder_agent: agentTool().run,
+  ...stepRuns(host),
   builder_choose: async (
     call,
     graph,

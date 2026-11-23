@@ -538,6 +538,7 @@ export let PAGES: Page[] = [
   'tools',
   'notes',
   'code',
+  'steps',
   'sandbox',
   'clipping',
   'library',
@@ -567,6 +568,7 @@ let COVERS: Record<string, string[]> = {
   files: ['artifact', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
   wakes: ['wake', 'fired'],
+  steps: ['agent_step'],
   models: [
     'session',
     'entry',

@@ -10,6 +10,7 @@ export { builderDoc } from './vocab.ts'
 export * from './key.ts'
 export * from './build.ts'
 export { modelTool, modelToolEid, render } from './model.ts'
+export { agentTool, agentToolEid } from './agent.ts'
 
 export { type Answer, type Args, type Code, code } from './code.ts'
 

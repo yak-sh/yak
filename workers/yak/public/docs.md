@@ -283,6 +283,17 @@ the versions it installed in `package-lock.json`.
 Deeper: <https://yaks.app/docs/code.md> — env, routes, keys, limits, whole
 workers to copy, and TypeScript and npm packages.
 
+## Workflow Steps From Claude Code
+
+A step of a workflow can be done by the person's own agent, such as Claude Code
+connected to yaks.app, on their own computer and subscription: a builder whose
+tool is `builder_agent`. Each match waits as a step task until their agent finds
+it with `step_list` and answers it with `step_answer`, and the next step builds
+on the answer. It spends nothing from the space's budget.
+
+Deeper: <https://yaks.app/docs/steps.md> — writing an agent step, the two tools,
+uploading the files a step makes, and the command to paste into Claude Code.
+
 ## Sandbox
 
 Each person has a private Linux container in each space, the **sandbox**, where

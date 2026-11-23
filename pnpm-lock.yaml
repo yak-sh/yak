@@ -985,6 +985,9 @@ importers:
       '@yaks/sqlite':
         specifier: 0.2.30
         version: link:../sqlite
+      '@yaks/task':
+        specifier: 0.2.23
+        version: link:../task
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing

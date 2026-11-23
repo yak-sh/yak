@@ -842,10 +842,10 @@ one is refused entirely:
 The complete list of reserved names:
 
     _change _pace _privacy _tx about access account_alert account_usage
-    acts_for admin_action alias answer app app_draft archetype archived
-    arrived artifact ask attachment attempt attribute_writes authorship
-    belief binding blob bounced browser browser_session budget build
-    build_of builder builder_answer builder_dep builder_edit
+    acts_for admin_action agent_step alias answer app app_draft archetype
+    archived arrived artifact ask attachment attempt attribute_writes
+    authorship belief binding blob bounced browser browser_session budget
+    build build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built call call_ready
     call_woken called calls cancel cancelled chat_account chat_hears
     chat_message chat_post chat_private chat_room chat_serves checkout
