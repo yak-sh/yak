@@ -1,5 +1,10 @@
 import { answerTransfer, transferUpdates } from './app-transfer.ts'
-import { answerFriend, friendUpdates } from './friends.ts'
+import {
+  answerFriend,
+  friendUpdates,
+  messageUpdates,
+  replyFriend,
+} from './friends.ts'
 import { Empty, Form } from '@yaks/ui/parts'
 // Updates from the Operator (T-140508): what happened in a space, as messages
 // from its Operator a person can reply to, at `/manage/<space>/updates`
@@ -73,7 +78,7 @@ export let updatesAcross = async (
         operatorDoor(env, space, who, 'updates', args) as Promise<
           { updates: Update[]; waiting: number }
         >,
-        dismissed ? [] : offersOf(env, space, who),
+        dismissed ? [] : offersOf(env, space, who, seen),
       ])
       return {
         space,
@@ -183,12 +188,14 @@ let opening = (env: Env, space: Space, app: Apps[number]) =>
     rel: 'noopener',
   }, `Open ${app.title || app.slug}`)
 
-// What the directory holds for a person to answer beside their Operator's
-// Updates: apps offered to the space, and friend requests and suggestions.
-let offersOf = async (env: Env, space: Space, who: Who) =>
+// What the directory holds for a person beside their Operator's
+// Updates: apps offered to the space, friend requests and suggestions, and
+// messages from friends, which reading (`seen`) marks read.
+let offersOf = async (env: Env, space: Space, who: Who, seen = false) =>
   (await Promise.all([
     transferUpdates(env, space, who),
     friendUpdates(env, space, who),
+    messageUpdates(env, space, who, seen),
   ])).flat()
 
 /** Where an update's card is drawn: its space, and the page it is on where
@@ -462,6 +469,42 @@ let offerCard = (
       : null,
   )
 
+// A friend's message: who it is from, their words, when, and a box to
+// reply to them.
+let messageCard = (
+  at: At,
+  u: Update,
+  where: ComponentChildren,
+  { friend, name }: NonNullable<Update['message']>,
+) =>
+  h(
+    Card,
+    { class: 'Update', id: updateAnchor(u.eid) },
+    where,
+    h(
+      Card.Head,
+      null,
+      h(Card.Title, { class: 'Update_Subject' }, u.subject),
+      stamp(u),
+      u.unread ? h(State, { mod: 'positive' }, 'New') : null,
+    ),
+    h('p', { class: 'Update_Words' }, u.words),
+    form(
+      at,
+      [['message', friend]],
+      h(Field, {
+        class: 'Update_Input',
+        lines: true,
+        name: 'say',
+        required: true,
+        maxlength: 4000,
+        'aria-label': `Your reply to ${name}`,
+        placeholder: `Reply to ${name}…`,
+      }),
+      h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+    ),
+  )
+
 // A notice: its subject and a way to put it away, its words, when it came
 // and where it came from, and a way to ask about it.
 let card = (
@@ -481,6 +524,7 @@ let card = (
       ['decline', 'Decline'],
     ])
   }
+  if (u.message) return messageCard(at, u, where, u.message)
   if (u.friend) {
     return offerCard(at, u, where, ['friend', u.friend.person], [
       ['approved', 'Add friend'],
@@ -738,6 +782,10 @@ export let updatesAnswer = async (
   let back = to.pathname + to.search
   if (form.has('transfer')) {
     await answerTransfer(env, space, who, field('transfer'), field('answer'))
+    return new Response(null, { status: 303, headers: { location: back } })
+  }
+  if (form.has('message')) {
+    await replyFriend(env, who, field('message'), field('say'))
     return new Response(null, { status: 303, headers: { location: back } })
   }
   if (form.has('friend')) {

@@ -97,9 +97,17 @@ export let directoryConfig: Config = {
     // The browsers a person allowed notifications on (operator-alerts.ts).
     { use: '@yaks/push', facets: ['vocab'], words: ['push_subscription'] },
     // Where each person is available now, channel by channel (whereabouts.ts):
-    // read by their own Operator only.
-    { use: '@yaks/notify', facets: ['vocab'], words: ['whereabouts'] },
-    '@yaks/tunnel',
+    // read by their own Operator, and by friends as their presence. A message
+    // between friends is a knock aimed at the person it is for (friends.ts).
+    {
+      use: '@yaks/notify',
+      facets: ['vocab'],
+      words: ['whereabouts', 'knock'],
+    },
+    // A machine's tunnel and its trashing. Not `tunnel_tell`: that effect
+    // runs on the machine, at knocks on sessions, and the directory keeps
+    // neither sessions nor a machine's knocks.
+    { use: '@yaks/tunnel', words: ['tunnel', 'tunnel_trashed'] },
     // Who has a sandbox in each space and until when it is awake
     // (sandbox.ts `awake`): what a space's plan counts and its erasure destroys.
     {

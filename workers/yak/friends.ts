@@ -294,7 +294,168 @@ export let friendTools: ToolRow[] = [
       }
     },
   },
+  {
+    name: 'friend_message',
+    role: 'self',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        friend: FRIEND,
+        words: str('the message, as it should read'),
+      },
+      required: ['friend', 'words'],
+    },
+    run: async (ctx, args) => {
+      let dir = open(ctx.env)
+      let { name } = await sent(dir, asCaller(ctx, null), {
+        from: ctx.person,
+        to: text(args.friend, 'friend'),
+        words: text(args.words, 'words'),
+      })
+      return { text: `Sent to ${name}. It is in their Updates.`, value: {} }
+    },
+  },
+  {
+    name: 'friend_messages',
+    role: 'self',
+    destructive: false,
+    idempotent: true,
+    input: { type: 'object', properties: {} },
+    run: async (ctx) => ({
+      text: '',
+      value: { messages: await messagesOf(open(ctx.env), ctx.person) },
+    }),
+  },
 ]
+
+/** One message between friends, as its reader sees it. */
+export type Message = {
+  eid: string
+  /** the friend it is from or to, and whether it is to them */
+  friend: string
+  name: string
+  outgoing: boolean
+  /** written by the sender's Operator rather than by them at a page */
+  operator: boolean
+  words: string
+  at: string
+  read: boolean
+}
+
+// What a message is: a knock aimed at the person it is for, from the person
+// who sent it, with its words.
+let LIMIT = 40
+
+/** A person's messages with their confirmed friends, newest first: each sent
+ * to them or by them, as `knock{target, from}` + `doc{body}` rows. */
+export let messagesOf = async (
+  dir: Directory,
+  person: string,
+): Promise<Message[]> => {
+  let [rows, friends] = await Promise.all([
+    dir.read(
+      line`(.knock.target=${person}|.knock.from=${person})&.knock.from&.doc&?opened&?created&.order=-created.at&.limit=${LIMIT}`,
+    ),
+    friendsOf(dir, person),
+  ])
+  let named = new Map(
+    friends.filter((f) => f.standing == 'friend').map((f) => [f.person, f]),
+  )
+  return rows.flatMap((r): Message[] => {
+    let knock = r.knock as { target?: unknown; from?: unknown }
+    let from = idOf(knock.from), to = idOf(knock.target)
+    let outgoing = from == person
+    let friend = named.get(outgoing ? to : from)
+    if (!friend) return []
+    let created = r.created as { at?: string; by?: unknown } | undefined
+    return [{
+      eid: r.entity.eid,
+      friend: friend.person,
+      name: friend.name,
+      outgoing,
+      operator: !!created?.by && idOf(created.by) != from,
+      words: String((r.doc as { body?: string }).body ?? ''),
+      at: String(created?.at ?? ''),
+      read: outgoing || !!r.opened,
+    }]
+  })
+}
+
+let idOf = (v: unknown) =>
+  typeof v == 'string' ? v : String((v as { eid?: string })?.eid ?? '')
+
+// Sends `words` from one friend to another: refused unless they are
+// confirmed friends, and kept to the length of a message.
+let sent = async (
+  dir: Directory,
+  who: Who,
+  { from, to, words }: { from: string; to: string; words: string },
+) => {
+  let friend = EID.test(to)
+    ? (await friendsOf(dir, from)).find((f) => f.person == to)
+    : undefined
+  if (friend?.standing != 'friend') {
+    throw refuse('arguments', 'Choose someone from your friend list.')
+  }
+  let body = words.trim()
+  if (!body || body.length > 4000) {
+    throw refuse('arguments', 'Write a message of up to 4,000 characters.')
+  }
+  await dir.stamp({
+    entities: [{
+      entity: { eid: crypto.randomUUID() },
+      knock: { target: to, from },
+      doc: { body },
+    }],
+  }, vouched(who))
+  return friend
+}
+
+/** A person's messages from friends, as Updates in their own space, with a
+ * reply box each; reading them (`seen`) marks them read. */
+export let messageUpdates = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  seen = false,
+): Promise<Update[]> => {
+  if (!who.person || who.role != 'owner') return []
+  let dir = open(env)
+  let [seats, messages] = await Promise.all([
+    dir.seats(who.person, 'owner'),
+    messagesOf(dir, who.person),
+  ])
+  if (ownOf(seats)?.space.eid != space.eid) return []
+  let incoming = messages.filter((m) => !m.outgoing)
+  let unread = incoming.filter((m) => !m.read)
+  if (seen && unread.length) {
+    await dir.stamp({
+      entities: unread.map((m) => ({ entity: { eid: m.eid }, opened: {} })),
+    }, vouched(who))
+  }
+  return incoming.map((m) => ({
+    eid: m.eid,
+    at: m.at,
+    subject: m.operator ? `${m.name}'s Operator` : `Message from ${m.name}`,
+    words: m.words,
+    needs: false,
+    unread: !m.read,
+    dismissed: false,
+    message: { friend: m.friend, name: m.name },
+  }))
+}
+
+/** A reply from a person's Updates to a friend's message. */
+export let replyFriend = async (
+  env: Env,
+  who: Who,
+  friend: string,
+  words: string,
+) => {
+  if (!who.person) throw refuse('access', 'Sign in to reply.')
+  await sent(open(env), who, { from: who.person, to: friend, words })
+}
 
 /** The friend requests and suggestions waiting on a person, as Updates that
  * need them, in their own space alone so each shows once. */

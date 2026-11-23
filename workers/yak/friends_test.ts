@@ -195,3 +195,38 @@ test('nobody but a friend sees where someone is', async () => {
   let page = await (await updates(ann, annSpace.slug)).text()
   assertEquals(page.includes('Friends on yaks.app now'), false)
 })
+
+test('a friend’s message lands in their Updates, and a reply there comes back', async () => {
+  await tools(eve).answer('friend_message', {
+    friend: fay.person,
+    words: 'Can you help me with Gift?',
+  })
+  let page = await (await updates(fay, faySpace.slug)).text()
+  assertStringIncludes(page, 'Can you help me with Gift?')
+  let mine = (await tools(fay).answer('friend_messages', {})).value
+    ?.messages as { outgoing: boolean; read: boolean; friend: string }[]
+  assertEquals(mine[0].friend, eve.person)
+  assertEquals(mine[0].read, true)
+  let replied = await k.at(k.host, `/manage/${faySpace.slug}/updates`, {
+    method: 'POST',
+    headers: {
+      cookie: fay.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ message: eve.person, say: 'On my way' })
+      .toString(),
+  })
+  assertEquals(replied.status, 303, await replied.text())
+  let theirs = (await tools(eve).answer('friend_messages', {})).value
+    ?.messages as { outgoing: boolean; words: string }[]
+  assertEquals(theirs[0], { ...theirs[0], outgoing: false, words: 'On my way' })
+})
+
+test('only a confirmed friend can be messaged', async () => {
+  await assertRejects(
+    () =>
+      tools(eve).tool('friend_message', { friend: ann.person, words: 'Hi' }),
+    Error,
+    'friend list',
+  )
+})

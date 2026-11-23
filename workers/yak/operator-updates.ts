@@ -59,6 +59,8 @@ export type Update = {
   transfer?: { editor: boolean }
   /** A friend request or suggestion from this person (friends.ts). */
   friend?: { person: string }
+  /** A message from a friend, answered by a reply to them (friends.ts). */
+  message?: { friend: string; name: string }
   choices?: Choice[]
   recommended?: string
   /** What its choices show, in the order they show it. */

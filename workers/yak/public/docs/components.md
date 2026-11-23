@@ -861,8 +861,8 @@ The complete list of reserved names:
     form_guest form_mail form_phone form_post former free_spaces gallery
     gitobj grant grants_listed handoff_spent heard heard_turn hearing held
     home hook hostname image inference install installed integration
-    integration_install interrupted invite inviting key last_deploy lease
-    lent lines located mail mail_answered mail_dismissed mail_domain
+    integration_install interrupted invite inviting key knock last_deploy
+    lease lent lines located mail mail_answered mail_dismissed mail_domain
     mail_post mail_task mcp_list mcp_server member memory mentions meter
     miss model model_estimate model_reservation model_result newcomer
     newcomer_builds notice notice_confirmed notice_letter notice_posted
@@ -887,10 +887,10 @@ The complete list of reserved names:
     standing_link started starter stop stream_item submitted subscribed
     subscription supersedes supervises support sweep switched task text
     text_post theme told tool tool_refusal topic trashed tree_entry trend
-    tunnel tunnel_tell tunnel_trashed typed unchecked untrashed updated
-    upstream usage uses using verified visit visitor_build visitor_calls
-    visitor_share volume waitlisted wake wake_run wants watch web
-    whereabouts withdrawn worked worktree written yaks_account
+    tunnel tunnel_trashed typed unchecked untrashed updated upstream usage
+    uses using verified visit visitor_build visitor_calls visitor_share
+    volume waitlisted wake wake_run wants watch web whereabouts withdrawn
+    worked worktree written yaks_account
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as
