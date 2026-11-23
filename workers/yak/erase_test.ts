@@ -130,9 +130,6 @@ let line = {
   monthly: 1.5,
   at: '',
   verification: null,
-  sms: true,
-  voice: true,
-  campaign: null,
 }
 
 let ticketSecret = 'shhh'

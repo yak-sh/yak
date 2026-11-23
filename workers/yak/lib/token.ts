@@ -81,7 +81,6 @@ export type Use =
   | 'service-consent' // approval from the platform's service consent page
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
-  | 'held' // a number a space bought's SMS callback (numbers.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
   | 'screen' // a TV's code and the pairing it finds by it (screen.ts)
   | 'oidc' // a sign-in at another provider, on its way back (oidc.ts)

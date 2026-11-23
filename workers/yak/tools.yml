@@ -944,14 +944,11 @@ number_find:
     doing: 'Looking for numbers…'
     done: 'Found numbers'
   description: >-
-    The phone numbers on offer for a space to buy as its own, each with
-    where it is local to and what it costs up front and each month. Local
-    numbers by default: by area code ("a 269 number"), by state and city, by
-    digits it contains, or any number when none is given. toll_free true
-    finds toll-free numbers. A local number takes calls on a softphone and
-    texts people who know it, for personal use or the space's; a space's
-    own number is how it texts the public as itself, such as a church
-    texting its members. Without one a space texts only its owners, from
+    The phone numbers on offer for a space to buy as its own, each with what
+    it costs up front and each month. Toll-free by default; toll_free false
+    with an area code finds local numbers. A space's own number is how it
+    texts the public as itself, such as a church texting its members or a
+    township texting residents; without one it texts only its owners, from
     yaks.app's number. Next: number_buy with the number the person chose.
 number_buy:
   title: Buy a phone number
@@ -963,13 +960,11 @@ number_buy:
     front and its first month are spent from the space's monthly budget at
     once, and each later month its monthly price is spent on the day of the
     month it was bought, including while it is in the trash, until its owner
-    confirms returning it to the provider. Only the space owner may buy;
-    tell the person both prices before buying. A bought number texts nothing
-    until number_assign puts it on the space or one of its apps. Use a number
-    only for what number_status says it is approved for: calls, texts to
-    people who know it, and texts to many people only once its toll-free
-    verification (number_verify) is approved or its 10DLC campaign is
-    recorded (number_assign campaign).
+    confirms returning it to the provider. Only the space owner may buy; tell the person both prices before
+    buying. A bought
+    number texts nothing until number_assign puts it on the space or one of
+    its apps, and a toll-free number reaches people only once its toll-free
+    verification (number_verify) is approved.
 number_assign:
   title: Assign a phone number
   step:
@@ -980,9 +975,7 @@ number_assign:
     and texts to it reach the Operator, or on one of its apps (app), so the
     app's texts go from it and replies reach the app's store. It moves off
     wherever it was before. Texts still go only to people who agreed to them.
-    campaign records the 10DLC campaign its texts to many people are
-    registered under, once the carriers approved it. Only the space owner
-    may assign.
+    Only the space owner may assign.
 number_release:
   title: Release a phone number
   step:
@@ -1040,12 +1033,9 @@ number_status:
     done: 'Checked numbers'
   description: >-
     The numbers a space holds: where each texts from (the space, an app, or
-    nowhere yet), what it costs, where its toll-free verification stands,
-    read from the provider now, and what it is approved for: calls, texts to
-    people who know it, and texts to many people. Leave number out for every
-    number the space holds. With a number and login true, the space owner
-    gets the softphone (SIP) sign-in that takes its calls and calls out as
-    it.
+    nowhere yet), what it costs, and where its toll-free verification stands,
+    read from the provider now. Leave number out for every number the space
+    holds.
 app_publish:
   title: Publish an app for others to install
   description: >-

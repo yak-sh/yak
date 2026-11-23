@@ -598,13 +598,6 @@ export type PhoneLine = {
   monthly: number
   at: string
   verification: string | null
-  /** texts to people who know it; absent on a line bought before it was
-   * kept, which texted */
-  sms: boolean
-  /** calls, both ways */
-  voice: boolean
-  /** the 10DLC campaign its texts to many are registered under */
-  campaign: string | null
   trashed: Trashed | null
 }
 
@@ -938,9 +931,6 @@ export type Row = MeteredRow & {
     monthly?: number | null
     at?: string | null
     verification?: string | null
-    sms?: boolean | null
-    voice?: boolean | null
-    campaign?: string | null
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
@@ -1458,9 +1448,6 @@ let lineOf = (r: Row): PhoneLine => {
     monthly: l.monthly ?? 0,
     at: l.at ?? '',
     verification: l.verification ?? null,
-    sms: l.sms ?? true,
-    voice: l.voice ?? true,
-    campaign: l.campaign ?? null,
     trashed: trashedOf(r),
   }
 }

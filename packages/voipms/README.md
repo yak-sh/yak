@@ -10,16 +10,6 @@ after the host authenticates its URL.
 
 [voip.ms API](https://voip.ms/m/apidocs.php)
 
-`numbers({ user, key })` sells local US numbers from our own account
-(@yaks/phone `Numbers`): `find` by area code, by state and city (`centersOf`
-matches a city to voip.ms's rate centers, "BATTLE CRK" for Battle Creek), by
-digits, or any, at voip.ms's price by the minute, each with its `place`;
-`buy(number, callback)` makes a sub-account that rings the number and calls out
-as it, orders the number onto it, and sends its texts to `callback`; `release`
-cancels the number and removes its sub-account; `login(number)` is the
-sub-account's SIP sign-in for a softphone. voip.ms sells no toll-free number
-here, so `verify` refuses.
-
 The `provider` export plugs into [@yaks/phone](../phone/README.md). Credentials
 and `fetch` are supplied by the host. Nothing reads the environment.
 
@@ -46,9 +36,6 @@ number whose SMS URL callback points brings the texts that arrived
   { "use": "@yaks/phone", "with": { "sender": { "via": "voipms" } } }
 ]
 ```
-
-The phone it lends offers `numbers()` from the account the config names; a
-config's `sells: ["local"]` says the host buys local numbers through it.
 
 The phone's `own` (@yaks/phone `Own`) is how a person connects a voip.ms number
 of their own: the connection fields their sign-in email and API password are

@@ -77,7 +77,6 @@
     "./plans": "./plans.ts",
     "./price": "./price.ts",
     "./meter": "./meter.ts",
-    "./numbers": "./numbers.ts",
     "./standing": "./standing.ts",
     "./meter-graph": "./meter-graph.ts",
     "./files": "./files.ts",

@@ -394,14 +394,10 @@ pending state means.
 ## Phone Numbers
 
 A space can hold a phone number of its own: `number_find` lists numbers and
-their prices (local ones by area code, state and city, or any; toll-free ones on
-request), `number_buy` buys the one the person chooses from the space's budget,
-and `number_assign` puts it on the space or one of its apps. A local number
-takes calls on a softphone (`number_status` with `login`) and texts people who
-know it. Texts to many people need carrier approval: a toll-free number's
-verification, which `number_verify` files, or a local number's 10DLC campaign,
-which `number_assign` records. `number_status` says what each number is approved
-for.
+their prices, `number_buy` buys the one the person chooses from the space's
+budget, and `number_assign` puts it on the space or one of its apps. A toll-free
+number needs carrier approval before it texts: `number_verify` files the
+verification and `number_status` reads where it stands.
 
 `number_release` puts the number in the space's trash for 30 days. It stops
 taking calls and texts, and the space keeps paying its monthly price. Restore it

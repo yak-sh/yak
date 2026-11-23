@@ -446,7 +446,6 @@ let form = (f: TollFree) => {
 
 type Available = {
   phone_number?: string
-  region_information?: { region_type?: string; region_name?: string }[]
   cost_information?: {
     upfront_cost?: string
     monthly_cost?: string
@@ -485,8 +484,6 @@ export let numbers = (
       })
       if (s.tollFree) q.set('filter[phone_number_type]', 'toll_free')
       if (s.area) q.set('filter[national_destination_code]', s.area)
-      if (s.region) q.set('filter[administrative_area]', s.region)
-      if (s.city) q.set('filter[locality]', s.city)
       // Telnyx matches digits within the national number, so one number
       // is found by its digits after the country code (+1 here).
       let digits = s.number?.replace(/^\+1?/, '') ?? s.contains
@@ -497,12 +494,7 @@ export let numbers = (
           let number = n.phone_number
           if (!number || (s.number && number != s.number)) return []
           let has = (f: string) => !!n.features?.some((x) => x.name == f)
-          let region = (t: string) =>
-            n.region_information?.find((r) => r.region_type == t)?.region_name
-          let place = [region('rate_center'), region('state')].filter(Boolean)
-            .join(', ')
           return [{
-            ...place ? { place } : {},
             number,
             upfront: Number(n.cost_information?.upfront_cost ?? 0),
             monthly: Number(n.cost_information?.monthly_cost ?? 0),

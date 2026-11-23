@@ -12,8 +12,6 @@ export type Transport = {
   user?: string
   number?: string
   tollFree?: boolean
-  /** the kinds of number a provider that sells them sells here */
-  sells?: ('local' | 'toll_free')[]
   api?: string
   fetch?: typeof fetch
 }

@@ -1,33 +1,18 @@
 // A space's own numbers: finding one on offer, buying it on the platform's
 // account, putting it on the space or one of its apps, giving it back, and
 // the toll-free verification carriers ask before it texts. Every call goes
-// through the numbers of a phone config.ts `phoneConfig` lends (@yaks/phone
-// `Numbers`): the one whose `sells` names the kind of number, local or
-// toll-free, so nothing here names a provider. A space pays the provider's
-// price and our margin (@yaks/platform/numbers `ours`).
+// through the numbers of the phone the space texts through (phones.ts
+// `phoneAt`, @yaks/phone `Numbers`), so nothing here names a provider.
 //
 // A number bought is a `phone_line{number, via, space, upfront, monthly, at,
-// verification, sms, voice, campaign}` row (facets/directory-vocab.ts), which
-// says what the number is approved for (@yaks/platform/numbers `uses`): calls, texts to people who
-// know it, and texts to many once its toll-free verification or 10DLC
-// campaign stands. Where it texts from is the space or app row wearing it as
-// `phone{number}`, the field every text path already reads, with the
-// space's `sender{via}` beside it. A provider that sends each number's texts
-// to a URL of its own, as voip.ms does, is given `/<via>/<ticket>` here, the
-// ticket the kernel's seal on the number (`heldDoor`).
+// verification}` row (facets/directory-vocab.ts). Where it texts from is the
+// space or app row wearing it as `phone{number}`, the field every text path
+// already reads, with the space's `sender{via}` beside it.
 //
 // Each later month a number is held is charged by a wake on its row, on the
 // day of the month it was bought (@yaks/platform/meter-graph `lines`), and a
 // space that is erased releases every number it holds (erase.ts).
-import {
-  type Numbers,
-  type Offer,
-  type Own,
-  shown,
-  type TollFree,
-} from '@yaks/phone'
-import { apex } from '@yaks/platform/host'
-import { ours, uses } from '@yaks/platform/numbers'
+import { type Numbers, shown, type TollFree } from '@yaks/phone'
 import { ModelError } from '@yaks/model'
 import { next } from '@yaks/wake'
 import {
@@ -41,8 +26,7 @@ import {
 import { requested } from './confirm.ts'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
-import { phoneNamed, phones } from './phones.ts'
-import { opened, seal } from './lib/token.ts'
+import { phoneAt } from './phones.ts'
 import {
   APP,
   type Args,
@@ -68,15 +52,6 @@ let free = (number: string) => /^\+18(00|33|44|55|66|77|88)\d{7}$/.test(number)
 
 export let dollars = (n: number) => `$${n.toFixed(2)}`
 
-// An offer at our price.
-let priceOf = (o: Offer): Offer => ({
-  ...o,
-  upfront: ours(o.upfront),
-  monthly: ours(o.monthly),
-})
-
-type Kind = 'local' | 'toll_free'
-
 /** A number's month, as the wake its row wears recurs: at the minute it was
  * bought, on that day of each month, or the 28th where a month has no such
  * day. */
@@ -85,75 +60,27 @@ export let monthly = (at: Date) =>
     Math.min(at.getUTCDate(), 28)
   } * *`
 
-// The phone that sells this kind of number: its numbers, its name, and how
-// a provider that sends each number's texts to a URL is given one.
-let sellerOf = async (env: Env, kind: Kind) => {
-  for (let [via, phone] of Object.entries(await phones(env))) {
-    if (!phone.transport().sells?.includes(kind) || phone.waiting?.()) continue
-    let numbers = phone.numbers?.()
-    if (numbers) return { numbers, via, own: phone.own }
-  }
-  throw refuse(
-    'unavailable',
-    `No phone provider here sells ${
-      kind == 'local' ? 'local' : 'toll-free'
-    } numbers, so none can be bought yet.`,
-  )
-}
-
-// The numbers of the phone a number was bought through.
-let numbersOf = async (env: Env, via: string): Promise<Numbers> => {
-  let numbers = (await phoneNamed(env, via))?.numbers?.()
-  if (!numbers) throw new Error(`No phone provider ${via} sells numbers`)
-  return numbers
-}
-
-let secretOf = (env: Env) => {
-  if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET is not set')
-  return env.SESSION_SECRET
-}
-
-// Where a number's texts go, for a provider that sends them to a URL: its
-// phone's door with the kernel's seal on the number, then the query the
-// provider fills in.
-let callbackOf = async (env: Env, via: string, own: Own, number: string) =>
-  `https://${apex(env)}/${via}/${
-    encodeURIComponent(await seal('held', { number }, secretOf(env)))
-  }?${own.callback}`
-
-/**
- * `GET /<via>/<ticket>`, where a number a space bought sends its texts when
- * its provider calls a URL (`callbackOf`): a text that reached the number
- * the ticket names is kept as any text to it is (operator-texts.ts
- * `arrived`). Nobody signs the call, so the ticket is what says it is ours;
- * only the provider holds it. Null for a ticket that is not one, which may
- * be a person's own number's (operator-line.ts `lineDoor`).
- */
-export let heldDoor = async (
-  req: Request,
+// The numbers of the phone a space texts through, or of the one named, and
+// that phone's name.
+let numbersOf = async (
   env: Env,
-  via: string,
-  own: Own,
-): Promise<Response | null> => {
-  let url = new URL(req.url)
-  let ticket = decodeURIComponent(url.pathname.slice(`/${via}/`.length))
-  let held = await opened<{ number?: string }>('held', ticket, secretOf(env))
-  if (!held?.number) return null
-  let arrival = own.called(url.searchParams)
-  if (arrival && arrival.to != held.number) {
-    return new Response('not this number', { status: 403 })
+  chosen: Space['sender'],
+): Promise<{ numbers: Numbers; via: string }> => {
+  let phone = await phoneAt(env, chosen)
+  let numbers = phone?.numbers?.()
+  if (!phone || !numbers) {
+    throw refuse(
+      'unavailable',
+      'No phone provider here sells numbers, so none can be bought yet.',
+    )
   }
-  if (arrival) {
-    let { arrived } = await import('./operator-texts.ts')
-    await arrived(env, { ...arrival, via })
-  }
-  return new Response('ok', { headers: { 'content-type': 'text/plain' } })
+  return { numbers, via: phone.transport().via }
 }
 
 /** A number given back to the provider it was bought through, and its row
  * buried: it costs nothing from then on. */
 export let released = async (env: Env, line: PhoneLine) => {
-  await (await numbersOf(env, line.via)).release(line.number)
+  await (await numbersOf(env, { via: line.via })).numbers.release(line.number)
   await unworn(env, directoryOf(env.STORE), line.number)
   await stamp(env, { entities: [{ entity: { eid: line.eid }, tombstone: {} }] })
 }
@@ -274,26 +201,6 @@ let ENTITIES = [
   'government',
 ]
 
-// A softphone's sign-in to a number the space holds, for its owner.
-let signIn = async (ctx: Ctx, args: Args) => {
-  let { space } = await inSpace(ctx, args, true)
-  let line = await heldBy(ctx, space, args)
-  let login = (await numbersOf(ctx.env, line.via)).login
-  if (!line.voice || !login) {
-    throw refuse(
-      'unavailable',
-      `${shown(line.number)} takes no calls on a softphone of its own`,
-    )
-  }
-  let { server, user, password } = await login(line.number)
-  return {
-    text: `A softphone (SIP) takes calls to ${shown(line.number)} and calls ` +
-      `out as it, signed in at ${server} as ${user} with password ` +
-      `${password}. Keep the password private.`,
-    space,
-  }
-}
-
 /** The number tools, worded in tools.yml. */
 export let numberTools: Row[] = [
   {
@@ -306,11 +213,9 @@ export let numberTools: Row[] = [
         space: SPACE,
         toll_free: {
           type: 'boolean',
-          description: 'true for toll-free numbers; local ones by default',
+          description: 'toll-free numbers only (the default); false for local',
         },
-        area: str('a three-digit area code'),
-        state: str('a two-letter state, such as MI'),
-        city: str('a city or town, with its state'),
+        area: str('a three-digit area code, for a local number'),
         contains: str('digits the number should contain'),
         limit: {
           type: 'number',
@@ -320,34 +225,22 @@ export let numberTools: Row[] = [
     },
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args)
-      let tollFree = args.toll_free === true
-      let maybe = (key: string) =>
-        args[key] == null ? undefined : text(args[key], key)
-      if (args.city != null && args.state == null) {
-        throw refuse('arguments', 'Name the state the city is in (state).')
-      }
-      let { numbers } = await sellerOf(
-        ctx.env,
-        tollFree ? 'toll_free' : 'local',
-      )
-      let offers = (await numbers.find({
-        tollFree,
-        area: maybe('area'),
-        region: maybe('state')?.toUpperCase(),
-        city: maybe('city'),
-        contains: maybe('contains'),
+      let offers = await (await numbersOf(ctx.env, space.sender)).numbers.find({
+        tollFree: args.toll_free !== false,
+        ...args.area == null ? {} : { area: text(args.area, 'area') },
+        ...args.contains == null
+          ? {}
+          : { contains: text(args.contains, 'contains') },
         limit: Math.min(Number(args.limit ?? 5) || 5, 20),
-      })).map(priceOf)
+      })
       if (!offers.length) {
         return { text: 'No number on offer matches that.', space }
       }
       return {
         text:
           offers.map((o) =>
-            `${o.number} ${shown(o.number)}${
-              o.place ? ` (${o.place})` : ''
-            } — ${priced(o)}` +
-            (o.sms ? '' : ', no texts') + (o.voice ? '' : ', no calls')
+            `${o.number} ${shown(o.number)} — ${priced(o)}` +
+            (o.sms ? '' : ', no texts')
           ).join('\n') +
           `\n\nnumber_buy buys one for ${space.slug}, from its budget.`,
         space,
@@ -367,12 +260,8 @@ export let numberTools: Row[] = [
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args, true)
       let number = text(args.number, 'number')
-      let { numbers, via, own } = await sellerOf(
-        ctx.env,
-        free(number) ? 'toll_free' : 'local',
-      )
-      let [found] = await numbers.find({ number, tollFree: free(number) })
-      let offer = found && priceOf(found)
+      let { numbers, via } = await numbersOf(ctx.env, space.sender)
+      let [offer] = await numbers.find({ number, tollFree: free(number) })
       if (!offer) {
         throw refuse(
           'missing',
@@ -397,8 +286,6 @@ export let numberTools: Row[] = [
             upfront: offer.upfront,
             monthly: offer.monthly,
             at: now.toISOString(),
-            sms: offer.sms,
-            voice: offer.voice,
           },
           wake: {
             every,
@@ -415,10 +302,7 @@ export let numberTools: Row[] = [
           cost,
           'texts',
           async (spent) => {
-            let it = await numbers.buy(
-              number,
-              own && await callbackOf(ctx.env, via, own, number),
-            )
+            let it = await numbers.buy(number)
             spent(cost)
             return it
           },
@@ -433,9 +317,7 @@ export let numberTools: Row[] = [
             (free(number)
               ? ' Carriers carry its texts once its toll-free verification ' +
                 'is approved: number_verify files it.'
-              : ` It is approved for ${
-                uses({ ...offer, campaign: null }).join(' and ')
-              }; texts to many people wait for a registered 10DLC campaign.`) +
+              : '') +
             ` number_assign puts it on ${space.slug} or one of its apps.`,
           space,
         }
@@ -454,27 +336,12 @@ export let numberTools: Row[] = [
     idempotent: true,
     input: {
       type: 'object',
-      properties: {
-        space: SPACE,
-        number: NUMBER,
-        app: APP,
-        campaign: str(
-          'the 10DLC campaign id its texts to many people are registered under, once the campaign is approved',
-        ),
-      },
+      properties: { space: SPACE, number: NUMBER, app: APP },
       required: ['number'],
     },
     run: async (ctx, args) => {
       let { space } = await inSpace(ctx, args, true)
       let line = await heldBy(ctx, space, args)
-      if (args.campaign != null) {
-        await stamp(ctx.env, {
-          entities: [{
-            entity: { eid: line.eid },
-            phone_line: { campaign: text(args.campaign, 'campaign') },
-          }],
-        })
-      }
       let app = null
       if (args.app != null) {
         let slug = text(args.app, 'app')
@@ -618,7 +485,7 @@ export let numberTools: Row[] = [
       if (!free(line.number)) {
         throw refuse('arguments', `${line.number} is not toll-free`)
       }
-      let filed = await (await numbersOf(ctx.env, line.via)).verify(
+      let filed = await (await numbersOf(ctx.env, space.sender)).numbers.verify(
         formOf(line.number, args),
       )
       await stamp(ctx.env, {
@@ -641,18 +508,9 @@ export let numberTools: Row[] = [
     openWorld: true,
     input: {
       type: 'object',
-      properties: {
-        space: SPACE,
-        number: NUMBER,
-        login: {
-          type: 'boolean',
-          description:
-            "with number, the sign-in a softphone uses to call and take calls on it; the space owner's only",
-        },
-      },
+      properties: { space: SPACE, number: NUMBER },
     },
     run: async (ctx, args) => {
-      if (args.login === true) return await signIn(ctx, args)
       let { space } = await inSpace(ctx, args)
       let lines = args.number == null
         ? await ctx.dir.lines(space)
@@ -676,20 +534,18 @@ export let numberTools: Row[] = [
           continue
         }
         let state = 'no toll-free verification filed'
-        let verified = false
         if (line.verification) {
-          let v = await (await numbersOf(ctx.env, line.via)).verification(
-            line.verification,
-          )
-          verified = v.status == 'verified'
+          let v = await (await numbersOf(ctx.env, space.sender)).numbers
+            .verification(
+              line.verification,
+            )
           state = `verification ${v.status} (${v.said})` +
             (v.reason ? `: ${v.reason}` : '')
         }
         said.push(
           `${shown(line.number)} — ${where(space, apps, line.number)}; ` +
             `${priced(line)}; ` +
-            (free(line.number) ? state : 'a local number') +
-            `; approved for ${uses(line, verified).join(', ')}`,
+            (free(line.number) ? state : 'a local number'),
         )
       }
       return { text: said.join('\n'), space }
