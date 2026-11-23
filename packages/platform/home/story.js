@@ -1,3 +1,5 @@
+import { run } from './yak.js'
+
 // The reading line moves through the feature sections. The chosen example
 // answers at that same point, so changing examples leaves the reader in place.
 let clamp = (n) => Math.max(0, Math.min(1, n))
@@ -279,6 +281,7 @@ let mount = (root) => {
   demo.addEventListener('click', (e) => jumpFromMessage(e, steps, calm))
   copyLinks(root)
   ideas(root)
+  run(root)
   draw(false)
   wait()
 }

@@ -6,7 +6,7 @@ import { GET_PLAN } from '../routes.ts'
 import { TURNS } from './demos.ts'
 import { gift, ICONS, priceTag } from './icons.ts'
 import { DemoLinks, Phone, Picks } from './phone.tsx'
-import { POSES, SECTIONS } from './parts.ts'
+import { POSES, RUN, SECTIONS } from './parts.ts'
 import { Change, People, Scene, Services } from './scenes.tsx'
 import type { Copy } from './words.ts'
 
@@ -64,6 +64,29 @@ let Ask = (
   )
 }
 
+/** The hero yak's run, as yak.js plays it: a step a click, each with its
+ * line, and the start step with the words it types and what it says when
+ * the box already holds the person's own. */
+let YakRun = ({ copy }: { copy: Copy }) => (
+  <ol class='Home_YakRun' data-yak-run='' hidden>
+    {RUN.map((step) => (
+      <li
+        data-pose={step.pose}
+        data-ms={step.ms}
+        data-act={'act' in step ? step.act : undefined}
+      >
+        <span data-say='' {...copy.text(`home.yak.${step.pose}`)} />
+        {'act' in step && step.act == 'start' && (
+          <>
+            <span data-had='' {...copy.text(`home.yak.${step.pose}-had`)} />
+            <span data-type='' {...copy.text(`home.yak.${step.pose}-type`)} />
+          </>
+        )}
+      </li>
+    ))}
+  </ol>
+)
+
 let Hero = (
   { copy, action, yak }: { copy: Copy; action: string; yak: ComponentChildren },
 ) => (
@@ -94,6 +117,7 @@ let Hero = (
         <a href='#integrations' {...copy.text('home.story.more')} />
       </div>
       {yak}
+      <YakRun copy={copy} />
       <div class='Sky_End' aria-hidden='true' />
     </div>
   </section>

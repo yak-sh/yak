@@ -186,6 +186,120 @@
   margin: 0 0 -1.4rem -.5rem;
 }
 
+/* The hero's yak answers a click (yak.js): a pose played once over his
+   seat, and a line in a bubble above him, or on a narrow page beside him,
+   over the grass. Both go when he walks off into the margin, since they are
+   his seat's, not his. */
+.Story_Hero .Hello_Yak {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.Home_YakPose,
+.Home_YakSays {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.Home_YakPose {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.Hello_Yak:has(.Wander_Image) > .Home_YakPose[data-on],
+.Hello_Yak:has(.Wander_Image) > .Home_YakSays[data-on] {
+  visibility: visible;
+}
+
+.Hello_Yak:has(> .Home_YakPose[data-on]) .Wander_Image {
+  visibility: hidden;
+}
+
+.Home_YakSays {
+  --fill: light-dark(#fffaf2, #2c3649);
+  left: 38%;
+  bottom: 92%;
+  width: max-content;
+  max-width: min(13rem, 70vw);
+  padding: .5rem .8rem;
+  border-radius: 1rem;
+  background: var(--fill);
+  box-shadow: 0 2px 8px light-dark(#5a3d2a2e, #00000066);
+  font-size: var(--small);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: pretty;
+  transform-origin: 1rem 100%;
+}
+
+.Home_YakSays::after {
+  content: '';
+  position: absolute;
+  left: .8rem;
+  bottom: -.3rem;
+  width: .8rem;
+  height: .8rem;
+  background: var(--fill);
+  transform: rotate(45deg);
+}
+
+@media (max-width: 59.99rem) {
+  .Home_YakSays {
+    left: 86%;
+    bottom: 42%;
+    transform-origin: 0 100%;
+  }
+
+  .Home_YakSays::after {
+    left: -.3rem;
+    bottom: .7rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .Home_YakSays[data-on] {
+    animation: Home_YakPop .35s cubic-bezier(.3, 1.6, .5, 1) both;
+  }
+
+  .Home_Build[data-nudge] {
+    animation: Home_Nudge .9s ease-in-out 2;
+  }
+}
+
+@keyframes Home_YakPop {
+  0% {
+    opacity: 0;
+    scale: .6;
+  }
+}
+
+@keyframes Home_Nudge {
+  0%,
+  100% {
+    rotate: 0deg;
+    scale: 1;
+  }
+
+  20% {
+    rotate: -4deg;
+    scale: 1.08;
+  }
+
+  45% {
+    rotate: 4deg;
+    scale: 1.08;
+  }
+
+  70% {
+    rotate: 0deg;
+    scale: 1;
+  }
+}
+
 .Sky_End {
   min-height: 2.2rem;
 }

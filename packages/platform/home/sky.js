@@ -314,7 +314,7 @@
   // a touch is the sky's when it lands on nothing of the page's: no control,
   // and no words of an element's own
   let CONTROLS = 'a, button, input, textarea, select, label, summary, ' +
-    '[tabindex], [contenteditable], .Card, .Demo, .Wander'
+    '[tabindex], [contenteditable], .Card, .Demo, .Wander, [data-wander]'
   let page = (el) =>
     !el || el.closest?.(CONTROLS) ||
     [...el.childNodes].some((n) => n.nodeType == 3 && n.data.trim())

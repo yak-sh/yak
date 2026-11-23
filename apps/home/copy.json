@@ -40,6 +40,16 @@
       "price": "$12 a month",
       "examples": "See examples"
     },
+    "yak": {
+      "wave": "Oh! Hi there.",
+      "thinking": "Got an idea? I love ideas.",
+      "calculating": "Trying it is free. No card needed.",
+      "plane": "You say it, I build it, and off it goes, online.",
+      "typing": "Here, I’ll start it for you.",
+      "typing-had": "Ooh, I like it. Press Build it!",
+      "typing-type": "Make me an app that ",
+      "flag": "Your turn! Finish it and press Build it."
+    },
     "walk": {
       "title": "Watch an app get built, one request at a time",
       "note": "Below is one conversation someone had with the assistant on yaks.app, and the app it made. Scroll to follow it. Yours starts with whatever you need.",

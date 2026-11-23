@@ -12,7 +12,8 @@
 // strip is too narrow for him (a phone, a small window) he stays the logo,
 // and so he does for anyone who asks their system for less motion.
 //
-// A click on him while he sits plays his nose lick.
+// A click on him while he sits plays his nose lick, unless the page answers
+// it itself (prevents its default, as the home page's run does: yak.js).
 //
 // He tells the page what he does, as events on him that a listener on the
 // window hears by capturing: `sat` when he sits down out in the margin (its
@@ -161,9 +162,10 @@
       }
       if (layer != still) layer.firstChild.style.marginLeft = `${-100 * i}%`
     }
-    // a click on him while he sits plays his nose lick (idle.js)
-    yak.addEventListener('click', () => {
-      if (shown == still) {
+    // a click on him while he sits plays his nose lick (idle.js), unless
+    // the page has answered it
+    yak.addEventListener('click', (e) => {
+      if (shown == still && !e.defaultPrevented) {
         still.dispatchEvent(new CustomEvent('idle', { detail: 'lick' }))
       }
     })

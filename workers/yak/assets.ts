@@ -58,7 +58,7 @@ export let ASSETS: Asset[] = [
   // A signed-in page's links followed in place (pages.ts `documented`).
   { name: '_navigate.js', bundle: of('@yaks/web/navigate'), named: true },
   { name: '_home.css', file: homeStyle, named: true },
-  { name: '_home.js', file: homeScript, named: true },
+  { name: '_home.js', bundle: homeScript, named: true },
   ...homeFigures,
   { name: 'sky.js', file: skyScript, named: true },
   ...['style.css', 'pages.css'].map((name) => ({ name, named: true })),
