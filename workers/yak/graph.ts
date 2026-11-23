@@ -1,5 +1,4 @@
 import { trashDoor } from './graph-trash.ts'
-import { setImmediate } from 'node:timers'
 import { marked } from '@yaks/cloudflare/alarm-logs'
 import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
@@ -249,6 +248,7 @@ import {
 } from '@yaks/embedding'
 import { after, type Clock, isPromise, system } from '@yaks/fp'
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { setImmediate } from 'node:timers'
 import {
   type Context,
   context,
