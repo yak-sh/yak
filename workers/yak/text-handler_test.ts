@@ -84,6 +84,7 @@ test('a builder hands each text that arrives to the app worker and keeps the row
     builder: {
       query: `$t .text.to=${NUMBER}, text.from=$from, doc.body=$body`,
       to: toolEid('on_text'),
+      immediate: true,
     },
   }])
   await appArrived(env, { space, app }, {
