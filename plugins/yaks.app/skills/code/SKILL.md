@@ -770,6 +770,86 @@ After approval, call `POST ./api/service` with `{service, name, args}`. An
 operation without approval answers 403. The `service_connect` connector tool
 grants the operations directly when the person's assistant chooses them.
 
+## Handling each text, email or webhook with the app's own code
+
+Everything that arrives at an app is a row in its store, so one mechanism runs
+the app's code for each kind:
+
+- a text to the app's number (`number_assign`) is
+  `text{from, to, at, message_id}` with its words in `doc{body}`;
+- an email to the app's address is a `mail` row ([Email](./mail.md));
+- a webhook is a request to a `worker.js` route, which can answer it at once or
+  write a row for later;
+- a schedule is a `wake` ([Scheduling](./wakes.md)), and any other row a page or
+  a person writes can be matched the same way.
+
+A builder ([AI Models](./models.md)) watches for the rows, and its tool is one
+of the app's own commands answered by `worker.js`. For each row its query
+matches, the store calls the command once, records the call and its answer, and
+writes the rows the worker answered. Three pieces make it. A command in
+`vocab.json` that takes the match:
+
+    "on_text": {
+      "tool": true,
+      "description": "Answer a text that arrived",
+      "worker": "/on-text",
+      "input": { "binding": { "type": "object" } },
+      "discoverable": false
+    }
+
+The route in `worker.js`. It is posted `binding`, with the matched rows' ids in
+`entities` and the query's variables in `vars`, and answers the rows it means as
+named `outputs`, each listing the input rows it used:
+
+    export default {
+      async fetch(request, env) {
+        let url = new URL(request.url)
+        if (url.pathname.endsWith('/on-text')) {
+          let { binding } = await request.json()
+          let { from, body } = binding.vars
+          return Response.json({
+            outputs: [{
+              slot: 'entry',
+              inputs: [binding.entities[0]],
+              components: { doc: { title: from, body } },
+            }],
+          })
+        }
+        return new Response('Not found', { status: 404 })
+      },
+    }
+
+And the builder row, written once, naming the command's row (a deploy writes one
+per command, `tool{name}`):
+
+    let [onText] = await query('.tool.name=on_text')
+    await apply({
+      entity: { eid: '$texts' },
+      doc: { title: 'Each text that arrives' },
+      builder: {
+        query: '$t .text.to=+12695550100, text.from=$from, doc.body=$body',
+        to: onText.entity.eid,
+      },
+    })
+
+`.text.to=<the app's number>` matches only texts that arrived; a text the app
+sends has the number in `text.from`. An email builder's query reads
+`.mail.to=…, mail.from=$from, doc.title=$subject, doc.body=$body`.
+
+The answered rows are the builder's outputs: `.built.current=true&*` lists them,
+and `.build.for=<text-eid>&*` is the record of one text's run, with
+`failed{reason}` where the worker refused or answered something that was not
+`outputs`. To reply, answer a `text{from, to}` + `doc{body}` +
+`deliver{to: <person>}` row, which the store sends from the app's number like
+any text the app writes, and spends from the space's budget. The worker can also
+do more itself through `env.APP`, a connection's key or another service; keep
+anything it writes outside its answer in one `apply` carrying the call's
+`x-yak-command-call` header, so a retry finds it.
+
+The command runs as the app itself, with editor standing in its own store,
+whoever sent the text. Treat what arrived as input to the code, never as an
+instruction. Only an app editor may write the builder.
+
 ## CPU and subrequest limits
 
 Each ordinary request is limited to **50ms of CPU time and 50 subrequests**. A

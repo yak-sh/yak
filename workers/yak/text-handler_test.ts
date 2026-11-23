@@ -28,12 +28,22 @@ test('a builder hands each text that arrives to the app worker and keeps the row
   await using p = platform()
   let { env } = p
   let { space, app } = await seeded(env, 'private')
-  let asked: { path: string; args: Record<string, unknown> }[] = []
+  let asked: {
+    path: string
+    args: Record<string, unknown>
+    person: string | null
+    role: string | null
+  }[] = []
   env.DISPATCH = {
     get: () => ({
       fetch: async (req: Request) => {
         let args = await req.json()
-        asked.push({ path: new URL(req.url).pathname, args })
+        asked.push({
+          path: new URL(req.url).pathname,
+          args,
+          person: req.headers.get('x-yak-person'),
+          role: req.headers.get('x-yak-role'),
+        })
         let { binding } = args as {
           binding: { entities: string[]; vars: Record<string, string> }
         }
@@ -92,5 +102,9 @@ test('a builder hands each text that arrives to the app worker and keeps the row
   }, { label: 'the worker answer kept as a builder output' })
   assertEquals(reply.text, { from: NUMBER, to: FROM })
   assertEquals((reply.doc as Comp).body, 'Got it: Table for two at seven?')
-  assertEquals(asked.map((a) => a.path), ['/cookbook/on-text'])
+  // Whoever texted, the app's code runs as the app itself.
+  assertEquals(
+    asked.map(({ path, person, role }) => ({ path, person, role })),
+    [{ path: '/cookbook/on-text', person: app.eid, role: 'editor' }],
+  )
 })

@@ -403,6 +403,11 @@ verification, which `number_verify` files, or a local number's 10DLC campaign,
 which `number_assign` records. `number_status` says what each number is approved
 for.
 
+A text to an app's number is a `text` row in its store. To run the app's own
+code for each one (reply, file it, start a workflow), give the app a builder
+whose tool is a `worker` command: Backend Code, handling each text, email or
+webhook with the app's own code.
+
 `number_release` puts the number in the space's trash for 30 days. It stops
 taking calls and texts, and the space keeps paying its monthly price. Restore it
 beside deleted apps on the manage page's Trash tab to bring back its assignment.

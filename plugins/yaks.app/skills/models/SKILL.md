@@ -248,6 +248,11 @@ again. A `wake` can check it later, and `builder.immediate: true` also checks
 changed inputs. Only app editors may write a builder, since model turns spend
 the space's budget.
 
+`builder.to` may instead name one of the app's own `worker` commands, so each
+matched row runs the app's code and the worker answers the outputs: see
+[Backend Code](./code.md), handling each text, email or webhook with the app's
+own code.
+
 A builder written with `staged: {}` builds nothing by itself, so a new prompt
 can be tried on a few rows first. `store_builder_build` builds it now: `only`
 names the rows to build for, `limit` takes the first few, and a `template`,
