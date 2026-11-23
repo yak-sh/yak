@@ -85,8 +85,24 @@ export let STEPS = [
     say: 'Connectors granted',
     of: 'connector_start',
   },
-  { name: 'install', say: 'Install pages opened' },
-  { name: 'install_done', say: 'Installs finished', of: 'install' },
+  {
+    name: 'install_sign_in',
+    say: '"Make your own copy" pressed by a stranger, sent to sign in',
+  },
+  {
+    name: 'install_back',
+    say: 'Strangers back from signing in to the install page',
+    of: 'install_sign_in',
+  },
+  { name: 'install_form', say: 'Install pages opened' },
+  { name: 'install_done', say: 'Installs finished', of: 'install_form' },
+  // Written until T-2621 for any browser's GET of the install page, a
+  // stranger's sent to sign in as much as one shown the form, and never
+  // rewritten. Once further back than a step is kept, it goes.
+  {
+    name: 'install',
+    say: 'Install page requests, signed in or not, counted until 2026-11-23',
+  },
   { name: 'first_app', say: "Spaces' first apps", of: 'signup' },
   { name: 'first_deploy', say: "Apps' first deploys", of: 'first_app' },
   { name: 'checkout', say: 'Checkouts started', of: 'signup' },

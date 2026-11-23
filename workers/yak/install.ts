@@ -6,11 +6,11 @@ import { refusing } from './defects.ts'
 import { h } from 'preact'
 import { Button, Card, Field, Form, Notice } from '@yaks/ui/parts'
 import { url } from '@yaks/platform/host'
-import { installAt, signInAt } from '@yaks/platform/routes'
+import { installAt, isBack, signInAt } from '@yaks/platform/routes'
 import { whoIs } from './session.ts'
 import { drawn, head } from './shell.ts'
 import { call } from './tools.ts'
-import { step } from './funnel.ts'
+import { type Step, step } from './funnel.ts'
 import { visitOf } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 
@@ -105,11 +105,19 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
     )
   }
   let who = await whoIs(req, env, () => Promise.resolve(null))
-  let address = who.person ? await dir.emailAt(who.person) : null
-  if (req.method == 'GET') step(env, 'install', req, { who: address })
+  // A stranger signs in on the way, and one who pressed the button (a
+  // gallery listing's "Make your own copy") comes back marked, so the funnel
+  // counts the press, the return and the page shown each on its own line.
   if (!who.person) {
-    return Response.redirect(signInAt(url(env, installAt(name)), env), 303)
+    let pressed = req.method == 'POST'
+    if (pressed) step(env, 'install_sign_in', req)
+    return Response.redirect(
+      signInAt(url(env, installAt(name, pressed)), env),
+      303,
+    )
   }
+  let address = await dir.emailAt(who.person)
+  let counted = (taken: Step) => step(env, taken, req, { who: address })
   let spaces = (await dir.seats(who.person))
     .filter((s) => !s.space.trashed && writes(s.role)).map((s) => s.space)
   let title = `Install ${offer.app.title}`
@@ -122,11 +130,20 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
   // Asked again once it became one, the install answers that app.
   let shown = (why = '', status = 200, selected = '') =>
     page(env, title, name, spaces, why, status, selected, kept)
-  if (req.method == 'GET') return shown()
+  // Somebody signed in shown the form, by opening the page or by pressing a
+  // listing's button with more than one space to choose from.
+  let offered = () => {
+    counted('install_form')
+    return shown()
+  }
+  if (req.method == 'GET') {
+    if (isBack(new URL(req.url))) counted('install_back')
+    return offered()
+  }
   let form = await req.formData()
   let space = String(form.get('space') ?? '') ||
     (spaces.length == 1 ? spaces[0].slug : '')
-  if (!space && spaces.length > 1) return shown()
+  if (!space && spaces.length > 1) return offered()
   try {
     let installed = await call(
       {
@@ -147,7 +164,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
     if (typeof destination != 'string') {
       throw new Error('Installation returned no app address')
     }
-    step(env, 'install_done', req, { who: address })
+    counted('install_done')
     return Response.redirect(destination, 303)
   } catch (error) {
     let status = refusing(error, { request: 'POST /install' })

@@ -4,6 +4,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Directory, Seat } from './directory.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
+import { dataset } from './testing.ts'
 
 let auth = platform('install-test')
 await auth.dir.stamp({ entities: [{ entity: { eid: 'person' }, person: {} }] })
@@ -33,10 +34,17 @@ let dir = {
   seats: () => Promise.resolve(spaces),
   emailAt: () => Promise.resolve('ada@example.com'),
 } as unknown as Directory
-let request = (method: string, signed = true, name = 'trip-plan') =>
-  new Request(`https://yaks.app${at(name)}`, {
+let BROWSER =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15'
+let request = (
+  method: string,
+  signed = true,
+  name = 'trip-plan',
+  back = false,
+) =>
+  new Request(`https://yaks.app${at(name, back)}`, {
     method,
-    headers: signed ? { cookie } : {},
+    headers: { 'user-agent': BROWSER, ...signed ? { cookie } : {} },
     ...method == 'POST' ? { body: new URLSearchParams() } : {},
   })
 
@@ -47,8 +55,27 @@ test('install sign-in keeps the chosen app as its return address', async () => {
   assertEquals(login.pathname, '/login')
   assertEquals(
     login.searchParams.get('return'),
-    'https://yaks.app/install?name=trip-plan',
+    'https://yaks.app/install?name=trip-plan&from=sign-in',
   )
+})
+
+test('the funnel counts a stranger sent to sign in, one back from it, and somebody shown the form, each apart', async () => {
+  let views = dataset()
+  let steps = async (req: Request) => {
+    await answer(req, { ...env, VIEWS: views }, dir)
+    return views.points.splice(0).map((p) => p.blobs![1])
+  }
+  // A press of a listing's "Make your own copy" by a stranger.
+  assertEquals(await steps(request('POST', false)), ['install_sign_in'])
+  // A stranger following a link, or a machine fetching it, presses nothing.
+  assertEquals(await steps(request('GET', false)), [])
+  assertEquals(await steps(request('GET', true, 'trip-plan', true)), [
+    'install_back',
+    'install_form',
+  ])
+  assertEquals(await steps(request('GET')), ['install_form'])
+  // Pressed signed in with two spaces to choose from, the form asks which.
+  assertEquals(await steps(request('POST')), ['install_form'])
 })
 
 // The page's one form, read from its markup by where its quotes fall: a DOM

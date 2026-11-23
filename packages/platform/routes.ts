@@ -372,8 +372,15 @@ export let GET_PLAN = `/login?return=${
  * beside the sign-in address, since a visitor's bar (./visits.ts) sends a
  * stranger through the one to the other. */
 export let INSTALL = '/install'
-export let installAt = (name: string): string =>
-  `${INSTALL}?name=${encodeURIComponent(name)}`
+/** The page installing `name`, or, `back`, where it sends a stranger who
+ * pressed its button back to once signed in: the same page, marked so the
+ * funnel counts one who came back apart (install.ts). */
+export let installAt = (name: string, back = false): string =>
+  `${INSTALL}?name=${encodeURIComponent(name)}${back ? '&from=sign-in' : ''}`
+/** Whether an install page's address is one a stranger came back to from
+ * signing in (`installAt`). */
+export let isBack = (url: URL): boolean =>
+  url.searchParams.get('from') == 'sign-in'
 
 export let says = (env: Host = {}): string =>
   `sign in at ${url(env, '/login')} to reach your apps from here`
