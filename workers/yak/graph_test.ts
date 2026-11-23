@@ -317,7 +317,7 @@ test('a decision and an app-owned board word keep their own write behavior', () 
 })
 
 let completion = await (async () => {
-  let { ctx, store } = await recipe()
+  let { store } = await recipe()
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 2 },
@@ -336,7 +336,7 @@ test('a kernel completion patch keeps the writer the Store was given', () => {
 })
 
 let draftWrites = await (async () => {
-  let { ctx, store } = await recipe()
+  let { store } = await recipe()
   let eid = draftEid(ADA, 'command')
   let write = (text: string, over: string, also: Bundle[] = []) =>
     post(store, '/apply', [{

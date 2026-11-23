@@ -28,7 +28,6 @@ import { minted } from '@yaks/platform/page-wire'
 import { mint, personOf, spend } from './signin.ts'
 import { doorOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { named } from './testing.ts'
 
 let state = () => {
   let live: Wire[] = []
