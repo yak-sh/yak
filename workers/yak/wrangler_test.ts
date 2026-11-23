@@ -32,6 +32,7 @@ import {
   SIBLINGS,
   siblings,
   stagedDeploy,
+  updateMode,
   uploadDigest,
   uploadSibling,
 } from './wrangler.ts'
@@ -1281,6 +1282,41 @@ test('a staged deploy uploads, puts its version live, then applies its triggers'
   )
   assertEquals(await deploy('Authentication error', 1), [1])
   assertEquals(await deploy('Uploaded yak'), [1])
+})
+
+test('a deploy updates Durable Objects immediately only while production fails its probe', async () => {
+  let mode = async (
+    answer: (signal: AbortSignal) => Promise<Response>,
+    args = ['deploy'],
+  ) => {
+    let asked: string[] = []
+    let get = ((url: string, init: RequestInit) => {
+      asked.push(url)
+      return answer(init.signal!)
+    }) as typeof fetch
+    let flags = await updateMode(args, get, () => {}, 5)
+    return [...asked, ...flags]
+  }
+  let status = (status: number) => () =>
+    Promise.resolve(new Response('x', { status }))
+  let hung = (signal: AbortSignal) =>
+    new Promise<Response>((_, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason))
+    )
+  let immediate = ['--durable-objects-code-update-mode', 'immediate']
+  let production = 'https://yourname.yaks.app/recipes/api/me'
+  assertEquals(await mode(status(200)), [production])
+  assertEquals(await mode(status(403)), [production])
+  assertEquals(await mode(status(503)), [production, ...immediate])
+  assertEquals(await mode(hung), [production, ...immediate])
+  assertEquals(await mode(() => Promise.reject(TypeError('refused'))), [
+    production,
+    ...immediate,
+  ])
+  assertEquals(await mode(status(404), ['deploy', '--env', 'staging']), [
+    'https://yourname.yaks.fyi/recipes/api/me',
+  ])
+  assertEquals(await mode(status(503), ['deploy', '--env=elsewhere']), [])
 })
 
 test('only a Wrangler step that changes what serves asks the guard', async () => {

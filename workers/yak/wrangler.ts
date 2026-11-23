@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com,api.cloudflare.com --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com,api.cloudflare.com,yourname.yaks.app,yourname.yaks.fyi --allow-env --allow-sys=uid --allow-run=deno,node,pnpm,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
@@ -271,11 +271,12 @@ export let siblings = (argv: string[]): string[][] =>
     ? []
     : SIBLINGS.map((c) => [...argv, '-c', c])
 
-// Arguments without their `--containers-rollout`, in either form.
-let unrolled = (args: string[]) =>
+/// without('--containers-rollout', ['deploy', '--containers-rollout', 'none', '-c', 'b.toml']) -> ['deploy', '-c', 'b.toml']
+/// without('--containers-rollout', ['deploy', '--containers-rollout=none']) -> ['deploy']
+/** Arguments without `flag` and its value, in either form. */
+export let without = (flag: string, args: string[]) =>
   args.filter((a, i) =>
-    !/^--containers-rollout(=|$)/.test(a) &&
-    args[i - 1] != '--containers-rollout'
+    a != flag && !a.startsWith(`${flag}=`) && args[i - 1] != flag
   )
 
 type Containers = {
@@ -958,7 +959,7 @@ export let prepareSibling = async (
     let [bundled, serving] = await Promise.allSettled([
       Promise.resolve().then(() =>
         query([
-          ...unrolled(args),
+          ...without('--containers-rollout', args),
           '--dry-run',
           '--outdir',
           output,
@@ -1231,6 +1232,85 @@ export let aheadOf = async (
   return code == 0 ? true : code == 1 ? false : null
 }
 
+// ---- how Durable Objects take the new code ----------------------------------
+//
+// wrangler.toml defers each busy object's code update for up to 30 minutes, so
+// an Operator finishes its turn across a deploy burst (T-2212). An object that
+// fails every request is busy too: on 2026-11-23 the Directory and the Stores
+// kept failing for 17 minutes after the fix 5ab8a7a98 went live, until the same
+// version was deployed again with immediate updates (T-2903, T-2954). So the
+// deploy probes production beside its preparation, and when production does
+// not answer, the version goes live with immediate updates: every object takes
+// the new code within a minute, and a busy Operator's interrupted turn is asked
+// again. When production answers, the deploy is deferred as configured.
+
+/** The door each environment's deploy probes: the recipe box of the demo space
+ * (M-37804), whose API asks the Directory for the space and its Store for the
+ * person. In the 2026-11-23 outage it timed out. Staging has no `yourname`
+ * space, so there the Directory answers 404. */
+export let PROBES: Record<string, string> = {
+  production: 'https://yourname.yaks.app/recipes/api/me',
+  staging: 'https://yourname.yaks.fyi/recipes/api/me',
+}
+
+/** How long the probe waits for an answer. It runs beside a minute of
+ * preparation, so waiting costs the deploy nothing. */
+export let PROBE_WAIT = 10_000
+
+/** Wrangler's flag for how Durable Objects take a deployment's code. Only the
+ * steps that go live (`deploy`, `versions deploy`) take it. */
+export let UPDATE_MODE = '--durable-objects-code-update-mode'
+
+/// environment(['deploy']) -> 'production'
+/// environment(['deploy', '--env', 'staging']) -> 'staging'
+/// environment(['deploy', '--env=staging']) -> 'staging'
+/// environment(['deploy', '-e', 'staging']) -> 'staging'
+/** The environment these arguments deploy to. */
+export let environment = (args: string[]) => {
+  let [flag, value] = envs(args)
+  return flag?.startsWith('--env=') ? flag.slice(6) : value ?? 'production'
+}
+
+/** Why `url` shows production failing (no answer within `wait`, or a 5xx), or
+ * null when it answers. */
+export let failing = async (
+  url: string,
+  get: typeof fetch = fetch,
+  wait = PROBE_WAIT,
+): Promise<string | null> => {
+  let res = await get(url, {
+    redirect: 'manual',
+    signal: AbortSignal.timeout(wait),
+  }).catch((e: Error) => e)
+  if (res instanceof Error) {
+    return `${url}: ${
+      res.name == 'TimeoutError' ? `no answer in ${wait / 1000} s` : res.message
+    }`
+  }
+  await res.body?.cancel()
+  return res.status >= 500 ? `${url}: ${res.status}` : null
+}
+
+/** The update-mode arguments for a deploy to `args`'s environment: immediate
+ * when its probe finds production failing, none (wrangler.toml's deferred)
+ * otherwise. */
+export let updateMode = async (
+  args: string[],
+  get: typeof fetch = fetch,
+  note = console.log,
+  wait = PROBE_WAIT,
+): Promise<string[]> => {
+  let url = PROBES[environment(args)]
+  if (!url) return []
+  let why = await failing(url, get, wait)
+  note(
+    why
+      ? `production is failing (${why}); Durable Objects take this deploy immediately`
+      : `${url} answers; Durable Objects take this deploy deferred (wrangler.toml)`,
+  )
+  return why ? [UPDATE_MODE, 'immediate'] : []
+}
+
 // Wrangler's account of what its `versions upload` made, and what it says when
 // a migration stops one.
 let UPLOADED = /Worker Version ID: ([0-9a-f]{8}-[0-9a-f-]{27})/
@@ -1239,10 +1319,12 @@ let MIGRATING = /pending Durable Object migration/
 /// staged(['deploy', '--message', 'm', '-c', 'b.toml']).upload -> ['versions', 'upload', '--message', 'm', '-c', 'b.toml']
 /// staged(['--env', 's', 'deploy', '-c', 'b.toml', '--message', 'm']).promote('v1') -> ['versions', 'deploy', 'v1@100%', '--yes', '--env', 's', '-c', 'b.toml', '--message', 'm']
 /// staged(['deploy', '--config=b.toml', '--message', 'm', '-e', 's']).triggers -> ['triggers', 'deploy', '--config=b.toml', '-e', 's']
+/// staged(['deploy', '-c', 'b.toml', '--durable-objects-code-update-mode', 'immediate']).upload -> ['versions', 'upload', '-c', 'b.toml']
+/// staged(['deploy', '-c', 'b.toml', '--durable-objects-code-update-mode', 'immediate']).promote('v1') -> ['versions', 'deploy', 'v1@100%', '--yes', '-c', 'b.toml', '--durable-objects-code-update-mode', 'immediate']
 /** A `wrangler deploy` as the three steps it makes: upload a version that
  * serves nothing, put that version live (`versions deploy`, which also syncs
- * the settings versions don't carry), then apply its triggers (crons, queue
- * consumers, routes). */
+ * the settings versions don't carry, and takes the update mode), then apply
+ * its triggers (crons, queue consumers, routes). */
 export let staged = (args: string[]) => {
   let at = args.indexOf(command(args)!)
   let kept = (...flags: string[]) =>
@@ -1254,13 +1336,18 @@ export let staged = (args: string[]) => {
         : []
     )
   return {
-    upload: [...args.slice(0, at), 'versions', 'upload', ...args.slice(at + 1)],
+    upload: without(UPDATE_MODE, [
+      ...args.slice(0, at),
+      'versions',
+      'upload',
+      ...args.slice(at + 1),
+    ]),
     promote: (version: string) => [
       'versions',
       'deploy',
       `${version}@100%`,
       '--yes',
-      ...kept('--env', '-e', '-c', '--config', '--message'),
+      ...kept('--env', '-e', '-c', '--config', '--message', UPDATE_MODE),
     ],
     triggers: ['triggers', 'deploy', ...kept('--env', '-e', '-c', '--config')],
   }
@@ -1339,6 +1426,8 @@ if (import.meta.main) {
     )
     : undefined
   let inspect = async () => door ? await door.first() : true
+  // Probed beside preparation; the kernel's step that goes live takes it.
+  let mode = guarded ? updateMode(argv) : Promise.resolve([])
   let still = async () => door ? await door.still() : true
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by
@@ -1442,9 +1531,10 @@ if (import.meta.main) {
       allowed: still,
     })
   // The kernel's deploy goes live in a step of its own, the guard's look
-  // right before it (`staged`).
-  let deploy = (args: string[]) =>
-    door && command(args) == 'deploy'
+  // right before it (`staged`), in the update mode the probe chose.
+  let deploy = async (argv: string[]) => {
+    let args = deploying(argv) ? [...argv, ...await mode] : argv
+    return door && command(args) == 'deploy'
       ? stagedDeploy(
         args,
         (args) =>
@@ -1456,6 +1546,7 @@ if (import.meta.main) {
         door.declined,
       )
       : run(args)
+  }
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after pnpm has installed: a cold checkout has this pin now too.

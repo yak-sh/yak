@@ -106,12 +106,19 @@ deployed. `yak admin rollback [version]` is for a broken build path and refuses
 to cross a data migration boundary. A Durable Object already migrated keeps its
 data, even when older code is deployed.
 
-A busy Durable Object takes new code up to 300 seconds after its version goes
+A busy Durable Object takes new code up to 30 minutes after its version goes
 live: Cloudflare defers an active object's code update until it hibernates or
-`max_delay` (300 s by default) passes. A Builder working an Operator run stays
-on the old version for those minutes while stateless requests serve the new one.
+`max_delay` (wrangler.toml, 1800 s) passes. A Builder working an Operator run
+stays on the old version for those minutes while stateless requests serve the
+new one. An object failing every request is busy too, so the deploy door probes
+the demo space's recipe box API first (wrangler.ts `PROBES`), and when it gets a
+5xx or no answer in 10 s, the version goes live with
+`--durable-objects-code-update-mode immediate`: every object takes the new code
+within a minute. To hurry a version that is already live, deploy it again the
+same way:
+`npx wrangler versions deploy <version>@100% --yes --durable-objects-code-update-mode immediate`.
 To see a fix live in an object, compare the `version` tag on what it reports
-with `admin_deploys`, and look again once the 300 seconds have passed.
+with `admin_deploys`.
 
 ## Workers Builds
 

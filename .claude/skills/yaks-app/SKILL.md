@@ -205,10 +205,13 @@ sandbox for billing, not a canary.
 "Live at 100%" is the Worker. Each Durable Object (a store, the directory) moves
 to the new version on its own, seconds later; Cloudflare releases them
 eventually consistently. A busy object finishes on the code it has for up to
-five minutes before taking up a deploy (wrangler.toml
-`[durable_objects]
-code_update_strategy`, deferred, `max_delay = 300`), so an
-Operator is not reset under its reply (T-145428). A store a newer Worker reaches
+30 minutes before taking up a deploy (wrangler.toml
+`[durable_objects.code_update_strategy]`, deferred, `max_delay = 1800`), so an
+Operator is not reset under its reply (T-2212). An object failing every request
+counts as busy, so a deploy while production fails its probe goes live with
+immediate updates (wrangler.ts `updateMode`); a version already live is hurried
+by deploying it again with `--durable-objects-code-update-mode immediate`
+(workers/yak/README.md). A store a newer Worker reaches
 answers it on the code it has, and restarts itself only when that code refused
 the caller (running.ts `owed`, graph.ts `#fetch`): the refusal may be a door or
 a word only the new deploy has, and the caller's door sends it again to the new
