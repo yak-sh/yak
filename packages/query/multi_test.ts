@@ -40,6 +40,18 @@ test('path qualifiers and quoted semicolons stay in their entity', () => {
   )
 })
 
+test('a none collection is a collection marked none', () => {
+  assertEquals(parseMatch('$v .video; ![$l .line.video=$v]')[1], {
+    kind: 'collection',
+    none: true,
+    parts: [{
+      kind: 'pattern',
+      query: parse('$l .line.video=$v', { text: false }),
+    }],
+  })
+  assertThrows(() => parseMatch('![]'), SyntaxError, 'empty collection')
+})
+
 test('an unclosed or empty collection is refused', () => {
   assertThrows(() => parseMatch('[.sfx'), SyntaxError, 'unclosed')
   assertThrows(() => parseMatch('[]'), SyntaxError, 'empty collection')

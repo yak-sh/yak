@@ -99,6 +99,9 @@ export type Match = {
   collections: Match[]
   /** An impossible nested match still leaves its parent's collection empty. */
   empty?: boolean
+  /** `![…]`: a collection that must stay empty, so a binding holds only
+   * while none of its matches exist. */
+  none?: boolean
   /** every variable, in the order it was first written */
   vars: string[]
 }
@@ -189,7 +192,9 @@ let fresh = (source: string): Match => {
       p.kind == 'pattern' ? [pattern(p.query)] : []
     )
     let collections = parts.flatMap((p) =>
-      p.kind == 'collection' ? [build(p.parts, true)] : []
+      p.kind == 'collection'
+        ? [{ ...build(p.parts, true), ...(p.none ? { none: true } : {}) }]
+        : []
     )
     if (
       inside &&
@@ -280,7 +285,9 @@ export let writes = (m: Match): string[] => [
  * is asked narrowed to the values its parents bound (`narrowed`) and never
  * anchored: it reads every member of an outer binding, including the ones the
  * batch did not touch. Each member is attached to the parent whose shared
- * variables it holds, and a parent with none keeps an empty collection.
+ * variables it holds, and a parent with none keeps an empty collection. A
+ * `none` collection keeps only the parents it has no member for: "each video
+ * none of whose lines is still unvoiced" is how a step waits for a whole set.
  */
 export let collected = (
   m: Match,
@@ -294,9 +301,13 @@ export let collected = (
       : rows(plan, anchored)
   let key = (names: string[], vars: Binding['vars']) =>
     JSON.stringify(names.map((name) => vars[name]))
-  let attach = (parents: Binding[], children: Match[]): void => {
-    if (!parents.length) return
+  // Attach each child collection to the parents it belongs to, and answer
+  // the parents that hold: all of them, but for a `none` child that matched.
+  // A member is first held to its own collections, so nesting composes:
+  // `![$l .line; ![$x .voicing.line=$l]]` is "no line without a voicing".
+  let attach = (parents: Binding[], children: Match[]): Binding[] => {
     for (let child of children) {
+      if (!parents.length) return parents
       let shared = child.vars.filter((name) => name in parents[0].vars)
       let choices = Object.fromEntries(shared.map((name) => [
         name,
@@ -307,30 +318,30 @@ export let collected = (
         let id = key(shared, member.vars)
         groups.set(id, [...(groups.get(id) ?? []), member])
       }
-      let attached: Binding[] = []
-      for (let parent of parents) {
-        let found = (groups.get(key(shared, parent.vars)) ?? []).map((
-          member,
-        ) => ({
+      let found = parents.map((parent) =>
+        (groups.get(key(shared, parent.vars)) ?? []).map((member) => ({
           entities: member.entities,
           vars: { ...parent.vars, ...member.vars },
         }))
+      )
+      let held = new Set(attach(found.flat(), child.collections))
+      parents = parents.flatMap((parent, i) => {
+        let members = found[i].filter((member) => held.has(member))
+        if (child.none && members.length) return []
         let collections = parent.collections ?? (parent.collections = [])
         collections.push({
           vars: child.vars,
           entityVars: child.patterns.flatMap((pattern) =>
             pattern.entity ? [pattern.entity] : []
           ),
-          members: found,
+          members,
         })
-        attached.push(...found)
-      }
-      attach(attached, child.collections)
+        return [parent]
+      })
     }
+    return parents
   }
-  let found = level(m, true)
-  attach(found, m.collections)
-  return found
+  return attach(level(m, true), m.collections)
 }
 
 /**
@@ -527,6 +538,7 @@ let asking = (m: Match, v: Vocab): Match | null => {
         collections: [],
         vars: [],
         empty: true,
+        ...(child.none ? { none: true } : {}),
       })
     }
   }

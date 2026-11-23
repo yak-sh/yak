@@ -223,6 +223,10 @@ and a bracket gathers inner matches into one binding:
   entity whose `result.call` is that call.
 - `$region .region; [$sfx .sfx .sfx.region=$region]`: one binding per region
   holding all its sfx (a builder runs one build per outer binding).
+- `$region .region; ![$sfx .sfx.region=$region, !mixed]`: only the regions
+  with no unmixed sfx. `![…]` is a collection that must stay empty, and nested
+  it says "every": `![$l .line.video=$v; ![$x .voicing.line=$l]]` is no line
+  without a voicing. A builder step that needs a whole set waits on one.
 
 How rules run is `effects-and-rules`.
 

@@ -284,11 +284,25 @@ builder whose query reads the current takes of the steps before it
 (`.built.slot=script, built.current=true`), so it builds as soon as they exist
 and steps that read nothing of each other build side by side. An
 `edge{from, to}` + `requires{}` (@yaks/task) from a step to each step it reads
-records the shape. `workflow(rows)` turns builders and those edges into stages:
-the steps requiring none first, then each step once every step it requires is in
-an earlier stage. A loop of requirements is drawn as a last stage. A chain needs
-no depth of its own: a runner writes each answer as a request of its own
-(@yaks/tools), so an effect pool's generation bound starts again at each step.
+records the shape.
+
+A step's outer patterns say how often it runs: `$l .line` builds once per line,
+and the lines build side by side. A bracket gathers rows into the one build: a
+video's step with `[$x .voicing.video=$v]` is posted every voicing, and builds
+again as each arrives. A step that needs the whole set at once also says that
+nothing is missing, with a none collection (@yaks/query):
+`![$l .line.video=$v;
+![$x .voicing.line=$l]]` holds only once no line of the
+video is without a voicing, so the step builds once, when the last line is
+voiced. Outputs a code tool answers in place reconcile the immediate builders
+that read them in the same write, so a chain of code steps runs to its end
+there, up to 16 steps.
+
+`workflow(rows)` turns builders and those edges into stages: the steps requiring
+none first, then each step once every step it requires is in an earlier stage. A
+loop of requirements is drawn as a last stage. A chain needs no depth of its
+own: a runner writes each answer as a request of its own (@yaks/tools), so an
+effect pool's generation bound starts again at each step.
 
 On a yak stack a step's tool is any tool a plugin registers, a `code()` tool
 included. A tool's row is written when something first calls it, so a builder

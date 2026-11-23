@@ -86,9 +86,12 @@ test('a video is scripted, auditioned, cast by its person, voiced and cut', asyn
       return new Response('no', { status: 404 })
     },
   }
+  // How many times the cut's step ran: once, when the last line is voiced.
+  let cuts = 0
   env.DISPATCH = {
     get: () => ({
       fetch: async (req: Request) => {
+        if (new URL(req.url).pathname.endsWith('/assemble')) cuts++
         if (!new URL(req.url).pathname.endsWith('/script')) {
           return await worker.fetch(req, { APP: api })
         }
@@ -214,7 +217,7 @@ test('a video is scripted, auditioned, cast by its person, voiced and cut', asyn
       audio: 'blob v-ollie: Aye, tonight it is.',
     },
   ])
-  equal((made.doc as Comp).title, 'Night sail')
+  equal([(made.doc as Comp).title, cuts], ['Night sail', 1])
   assertEquals(await shown(), 'Ready to play.')
 })
 

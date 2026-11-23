@@ -878,6 +878,37 @@ draws the workflow under "How it runs": each step after the steps it requires,
 side by side where none requires another. A chain runs to its last step however
 many steps it has.
 
+### Each of them, or all of them at once
+
+A step's query says how often it runs. It runs once for each match of its outer
+patterns, so a step for each line runs once per line, the lines side by side:
+
+    $l .line, built.current=true, line.n=$n, doc.body=$text
+
+A bracket gathers rows into the one run instead of multiplying it: the run is
+posted every voicing of the video, as `binding.collections[0].members`, each
+member with its own `entities` and `vars`:
+
+    $v .video, doc.title=$title; [$x .voicing.video=$v, built.current=true, voicing.audio=$audio]
+
+A bracket alone does not wait. That step runs as soon as the video exists, and
+again as each voicing arrives. A step that needs the whole set, such as cutting
+a video from all its voiced lines, also says nothing is missing, with a bracket
+written `![…]`, whose rows must not exist. "No line of this video is without a
+voicing" is:
+
+    ![$l .line.video=$v, built.current=true; ![$y .voicing.line=$l, built.current=true]]
+
+So the cut's step is:
+
+    $v .video, doc.title=$title, lines_video>=1; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio]; ![$l .line.video=$v, built.current=true; ![$y .voicing.line=$l, built.current=true]]
+
+It runs once, when the last line is voiced, with every voicing in its bracket.
+`lines_video>=1` (at least one line whose `line.video` is this video) keeps it
+from running before the script has written any lines. It runs again only when a
+voicing changes, such as one redone. Its worker reads the brackets in the order
+they are written; a `![…]` bracket is always empty.
+
 For example, a Voiced Video app makes a video from a request in four steps,
 which its `seed.json` writes:
 
@@ -893,9 +924,9 @@ which its `seed.json` writes:
    `…; $d .decision, built.current=true, cast.role=$role, decided.choice=$name; $a .audition.role=$role, built.current=true, audition.name=$name, audition.voice=$voice`.
    A character's lines are voiced the moment its voice is chosen, side by side
    and without waiting on the other characters.
-4. **Assemble**, a worker step for each video, gathering its lines and their
-   voicings in brackets. It answers no outputs until every line is voiced, then
-   the cut: the voiced lines in script order.
+4. **Assemble**, a worker step for each video once every line is voiced (the
+   query above), gathering their voicings in a bracket and answering the cut:
+   the voiced lines in script order.
 
 The person chooses a voice by answering the decision in their Updates, or on the
 app's page, which writes `decided{choice}` on it; the third step's query matches

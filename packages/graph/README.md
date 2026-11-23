@@ -1223,9 +1223,14 @@ together with the pending patches. `[$review .review, review.product=$product]`
 attaches a [collection](../query/README.md#multi-entity-matches) of matching
 reviews to each product's binding; a product with none keeps an empty
 collection. Each member retains its entity ids and variables. Brackets may nest.
-The adapter evaluates the match against stored data with pending patches;
-`+!comp` requires the component to be absent and adds it. `reads(plan, vocab)`
-lists the components that must be included in those sources.
+`$p .product; ![$review .review, review.product=$p]` keeps only the products no
+review matches, and nesting composes:
+`$m .maker; ![$p .product.maker=$m;
+![$r .review.product=$p]]` is each maker
+none of whose products is unreviewed, every one of them reviewed. The adapter
+evaluates the match against stored data with pending patches; `+!comp` requires
+the component to be absent and adds it. `reads(plan, vocab)` lists the
+components that must be included in those sources.
 
 Declared rules require `Tx.bindings`. An adapter without it skips declared
 rules. [@yaks/sqlite](../sqlite/README.md) and [@yaks/ram](../ram/README.md)

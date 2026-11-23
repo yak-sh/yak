@@ -1,14 +1,16 @@
 // A multi-entity match is a sequence of ordinary entity queries. Brackets turn
 // a sequence into a collection, so its matches belong to the surrounding
-// binding rather than multiplying it. This is syntax only: each leaf is parsed
-// by the same query parser as every other entity match.
+// binding rather than multiplying it, and `![…]` is a collection none of
+// whose matches may exist: the surrounding binding holds only while it is
+// empty. This is syntax only: each leaf is parsed by the same query parser as
+// every other entity match.
 
 import { type And } from './ast.ts'
 import { parse, type ParseOpts } from './parse.ts'
 
 export type MatchPart =
   | { kind: 'pattern'; query: And }
-  | { kind: 'collection'; parts: MatchPart[] }
+  | { kind: 'collection'; parts: MatchPart[]; none?: true }
 
 // Semicolons separate entities only outside quotes, path qualifiers, and
 // collection brackets. A bracketed part is parsed again, so nesting needs no
@@ -44,13 +46,14 @@ export let parseMatch = (
   opts: ParseOpts = { text: false },
 ): MatchPart[] =>
   split(source).map((part): MatchPart => {
-    if (!part.startsWith('[')) {
+    let none = part.startsWith('![')
+    if (!none && !part.startsWith('[')) {
       return { kind: 'pattern', query: parse(part, opts) }
     }
     if (!part.endsWith(']')) {
       throw new SyntaxError(`a collection is one match part: ${part}`)
     }
-    let parts = parseMatch(part.slice(1, -1), opts)
+    let parts = parseMatch(part.slice(none ? 2 : 1, -1), opts)
     if (!parts.length) throw new SyntaxError('an empty collection')
-    return { kind: 'collection', parts }
+    return { kind: 'collection', parts, ...(none ? { none: true } : {}) }
   })

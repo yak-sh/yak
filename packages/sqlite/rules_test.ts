@@ -185,6 +185,31 @@ test('nested collections correlate to the member above them', () => {
   )
 })
 
+// A maker's products, each as one binding's entities.
+let held = (driver: ReturnType<typeof mem>, source: string) =>
+  matched(driver, match(source), shop).map((row) => row.entities)
+
+test('a none collection keeps only the bindings it has no member for', () => {
+  let { driver, s } = floor()
+  let unreviewed = '$p .product; ![$r .review, review.product=$p]'
+  assertEquals(held(driver, unreviewed), [['p2']])
+  // Every product reviewed: no product is without a review.
+  let ready =
+    '$m .doc.title=Herbert; ![$p .product.maker=$m; ![$r .review, review.product=$p]]'
+  assertEquals(held(driver, ready), [])
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'r2' }, review: { stars: 2, product: 'p2' } }])
+  )
+  assertEquals(held(driver, unreviewed), [])
+  assertEquals(held(driver, ready), [['m1']])
+  // The kept binding still says every bracket, the none one empty.
+  assertEquals(
+    matched(driver, match(`${ready}; [$p .product.maker=$m]`), shop)[0]
+      .collections?.map((c) => c.members.length),
+    [0, 2],
+  )
+})
+
 test('a collection reads unchanged members through a batch overlay', () => {
   let { driver } = floor()
   let m = match('$p .product; [$r .review, review.product=$p]')

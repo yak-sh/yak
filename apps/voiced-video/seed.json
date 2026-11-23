@@ -57,7 +57,7 @@
       "body": "Once every line is voiced, the lines are put in script order as the video's cut."
     },
     "builder": {
-      "query": "$v .video, doc.title=$title; [$l .line.video=$v, built.current=true]; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio, doc.title=$who, doc.body=$text]",
+      "query": "$v .video, doc.title=$title, lines_video>=1; [$x .voicing.video=$v, built.current=true, voicing.n=$n, voicing.audio=$audio, doc.title=$who, doc.body=$text]; ![$l .line.video=$v, built.current=true; ![$y .voicing.line=$l, built.current=true]]",
       "to": "842b3768-998b-8265-83bf-6cf771624c20",
       "immediate": true
     }

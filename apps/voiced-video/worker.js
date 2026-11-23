@@ -105,15 +105,13 @@ export let steps = (api) => {
       }
     },
 
-    // The video's cut, once every current line has its voicing; until then
-    // it answers nothing, and the next voicing asks again.
+    // The video's cut. Its step runs once every current line has its voicing
+    // (seed.json), with the voicings in its first bracket.
     assemble: (binding) => {
       let [video] = binding.entities
-      let lines = members(binding, 0)
-      let clips = members(binding, 1)
+      let clips = members(binding, 0)
         .map(({ vars: { n, who, text, audio } }) => ({ n, who, text, audio }))
         .toSorted((a, b) => a.n - b.n)
-      if (!lines.length || clips.length < lines.length) return { outputs: [] }
       return {
         outputs: [{
           slot: 'cut',

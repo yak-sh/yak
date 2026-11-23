@@ -1,6 +1,8 @@
 // Immediate builders are a transaction rule, not an effect for every edit.
 // Dependencies narrow the builders; reconciliation over the pending batch
 // writes calls only for inputs that really changed or entered the selection.
+// Outputs answered in place are changes too, so a chain of code steps runs to
+// its end in the one write.
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import { guard } from '@yaks/graph/guard'
@@ -15,13 +17,30 @@ import { type Options, reconcile } from './build.ts'
  * in-place answer that threw (./code.ts). */
 export type Here = Pick<Options, 'tools' | 'report'>
 
+// How many steps one write's in-place answers may chain. A loop of steps
+// that keep changing each other's inputs stops here, and is reported.
+let STEPS = 16
+
 export let changing = (vocab: Vocab, here: Here = {}): Hook =>
 (
   bundles,
   tx,
-) => {
-  if (!vocab.comp('builder_dep')) return bundles
-  let changes = bundles.filter((b) =>
+) =>
+  vocab.comp('builder_dep')
+    ? chain(bundles, bundles, tx, vocab, here, 0)
+    : bundles
+
+// Reconcile the immediate builders `changed` reaches, then again for what
+// they answered in place.
+let chain = (
+  bundles: Bundle[],
+  changed: Bundle[],
+  tx: Parameters<Hook>[1],
+  vocab: Vocab,
+  here: Here,
+  depth: number,
+): Bundle[] | Promise<Bundle[]> => {
+  let changes = changed.filter((b) =>
     !b.effect && !b.builder_dep && !b.build && !b.call && !b.result &&
     !b.execution && !b.interrupted && !b.failed && !b.refusal &&
     !(b.output as Comp | undefined)?.value
@@ -54,7 +73,24 @@ export let changing = (vocab: Vocab, here: Here = {}): Hook =>
           return deps
         }),
     ),
-    (deps) => deps.length ? apply(bundles, tx, vocab, deps, here) : bundles,
+    (deps) => {
+      if (!deps.length) return bundles
+      if (depth == STEPS) {
+        here.report?.(
+          new Error(
+            `immediate builders still answering after ${STEPS} steps in one write: a loop of steps?`,
+          ),
+        )
+        return bundles
+      }
+      return after(
+        apply(bundles, tx, vocab, deps, here),
+        (made) =>
+          made.length
+            ? chain([...bundles, ...made], made, tx, vocab, here, depth + 1)
+            : bundles,
+      )
+    },
   )
 }
 
@@ -74,9 +110,7 @@ let apply = (
         write.entity.eid == b.entity.eid && write.builder
       )
     )
-    if (!builders.length) {
-      return bundles
-    }
+    if (!builders.length) return []
     let writes: Bundle[] = []
     for (let builder of builders) {
       writes.push(
@@ -85,13 +119,11 @@ let apply = (
         )).writes,
       )
     }
-    if (!writes.length) {
-      return bundles
-    }
+    if (!writes.length) return []
     let made = resolve(writes, vocab, {}, () => crypto.randomUUID())
     yield* step(guard(made, tx, vocab))
     let gone = made.filter(dead)
     if (gone.length) yield* step(tx.remove(gone.map((b) => b.entity)))
     yield* step(tx.patch(made.filter((b) => !dead(b))))
-    return [...bundles, ...made]
+    return made
   })

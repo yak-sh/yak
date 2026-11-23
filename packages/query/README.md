@@ -461,9 +461,11 @@ A **multi-entity match** joins entity queries by shared variables. A **pattern**
 is one entity query in that match. A **collection** is a bracketed sequence of
 patterns or nested collections whose matches belong to the surrounding
 [binding](../graph/README.md#rules-over-more-than-one-entity) rather than
-multiplying it. Semicolons separate patterns outside brackets and quotes; shared
-variables join their matches. A collection can yield no matches, but its syntax
-must contain at least one pattern.
+multiplying it. A **none collection**, written `![…]`, is one whose matches must
+not exist: the surrounding binding holds only while it is empty. Semicolons
+separate patterns outside brackets and quotes; shared variables join their
+matches. A collection can yield no matches, but its syntax must contain at least
+one pattern.
 
 `parseMatch()` parses these parts, using strict parsing by default.
 [@yaks/graph](../graph/README.md#rules-over-more-than-one-entity) plans and

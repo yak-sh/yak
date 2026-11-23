@@ -146,3 +146,97 @@ test("a person's step waits for their answer, and the next step builds on it", (
   g.apply([{ entity: question.entity, decided: { choice: 'Send it' } }])
   equal(sent(), ['Send it'])
 })
+
+// A fan-out and its join: each line of a script is voiced in a step of its
+// own as soon as it is cast, and the cut, which needs every voicing, waits
+// until no line is left unvoiced and then runs once.
+let lines: VocabDoc = {
+  $defs: {
+    script: { component: true, type: 'object', properties: {} },
+    line: {
+      component: true,
+      type: 'object',
+      properties: {
+        script: { type: 'string', ref: 'script' },
+        n: { type: 'integer' },
+        cast: { type: 'string' },
+      },
+    },
+    voicing: {
+      component: true,
+      type: 'object',
+      properties: { line: { type: 'string', ref: 'line' } },
+    },
+  },
+}
+
+test('a fan-out runs once per line, and its join once when every line is ready', () => {
+  let vocab = workshop([effectDoc, lines])
+  let db = storage(driver(durable()), vocab, { derived: derived(vocab) })
+  db.install()
+  let voiced: unknown[] = [], cut: unknown[][] = []
+  let voice = code({
+    name: 'voice',
+    description: 'Voice one line',
+    answer: ({ binding }) => {
+      voiced.push(binding.vars.n)
+      return {
+        outputs: [{
+          slot: 'voicing',
+          inputs: [binding.entities[0]],
+          components: { voicing: { line: binding.entities[0] } },
+        }],
+      }
+    },
+  })
+  let assemble = code({
+    name: 'assemble',
+    description: 'Cut every voiced line',
+    answer: ({ binding }) => {
+      cut.push(binding.collections![0].members.map((m) => m.vars.n).sort())
+      return {
+        outputs: [{
+          slot: 'cut',
+          inputs: [binding.entities[0]],
+          components: { doc: { title: 'cut' } },
+        }],
+      }
+    },
+  })
+  let here = { vocab, tools: [voice, assemble] }
+  let g = graph({ storage: db, vocab, plugins: plugins(null, here) })
+  g.apply([{
+    entity: { eid: 'voices' },
+    builder: {
+      query: '$l .line.cast=yes, line.n=$n',
+      to: toolEid('voice'),
+      immediate: true,
+    },
+  }, {
+    entity: { eid: 'cuts' },
+    builder: {
+      query: '$s .script, lines>=1; ' +
+        '[$v .voicing, built.current=true, voicing.line.line.n=$n, voicing.line.line.script=$s]; ' +
+        '![$l .line.script=$s; ![$x .voicing.line=$l, built.current=true]]',
+      to: toolEid('assemble'),
+      immediate: true,
+    },
+  }])
+  for (let b of g.get(['voices', 'cuts']) as Bundle[]) {
+    let plan = db.tx((tx) => reconcile(tx, b, here)) as { writes: Bundle[] }
+    g.apply(plan.writes, { trusted: true })
+  }
+  let N = 4
+  g.apply([{ entity: { eid: 's' }, script: {} }])
+  g.apply([
+    ...Array.from({ length: N }, (_, n) => ({
+      entity: { eid: `l${n}` },
+      line: { script: 's', n },
+    })),
+  ])
+  for (let n = 0; n < N; n++) {
+    equal(cut, [])
+    g.apply([{ entity: { eid: `l${n}` }, line: { cast: 'yes' } }])
+  }
+  equal([voiced.length, cut], [N, [[0, 1, 2, 3]]])
+})
