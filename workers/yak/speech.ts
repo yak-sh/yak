@@ -1,5 +1,5 @@
 // Speech: yaks.app's one door for hearing and speaking, onto @yaks/speech's
-// providers, each given as data (Deepgram, OpenAI). The Operator's calls
+// providers, each given as data (Deepgram, OpenAI, ElevenLabs). The Operator's calls
 // (operator-calls.ts) and every app's ./api/speech/ door hear and speak
 // through it, and what each costs is charged to the space that asked, from
 // its budget shared with models (meter.ts `models`).
@@ -9,29 +9,44 @@
 // that says its balance below which every request to it is refused: its
 // balance at the start less what the pilot may spend. OpenAI's says none; its
 // project holds it to $10 a month instead.
+//
+// A provider in OWN is also spoken through with a space's own key: the
+// connection through the integration of the same name (@yaks/connections'
+// `elevenlabs`), whose account pays, so nothing is charged here. Designing,
+// keeping and cloning voices go through such a key only: their price is not
+// said before they are made, and a voice made is kept on the account that
+// made it, which is never the platform's.
 import type { Scheme } from '@yaks/hook'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import {
   balance,
+  base64,
+  clone,
   DEEPGRAM,
+  design,
+  ELEVENLABS,
   type Format,
   hear,
   heard,
+  keep,
   type Keyed,
   type Open,
   OPENAI,
   type Provider,
   type Socket,
   speak,
+  SpeechError,
   spoken,
   talkerOf,
   type Voice,
+  voices,
 } from '@yaks/speech'
 import type { Offer } from '@yaks/speech/ui'
 import type { Answer } from './apps.ts'
 import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
+import type { Ctx } from './tool.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
@@ -43,7 +58,12 @@ import { modelAccess } from './models.ts'
 export let SECRETS = new Map<Provider, keyof Env>([
   [DEEPGRAM, 'DEEPGRAM_API_KEY'],
   [OPENAI, 'OPENAI_VOICE_KEY'],
+  [ELEVENLABS, 'ELEVENLABS_API_KEY'],
 ])
+
+/** The providers a space may speak through with a key of its own, by the
+ * name of the integration its connection is through. */
+export let OWN = new Map<string, Provider>([[ELEVENLABS.name, ELEVENLABS]])
 
 /** The providers whose own line carries calls sent to them over SIP
  * (operator-carried.ts), the secret their webhook is signed with, and how. */
@@ -337,9 +357,80 @@ export type Speaking =
  * space's budget. */
 export type Charging = Speaking & { STORE: Namespace }
 
+/** A provider and the key it is asked with: a space's own connection's
+ * (`own`), whose account pays, or the platform's, charged to the space. */
+export type Voicing = { provider: Provider; key: string; own: boolean }
+
+/** `provider` asked with `key`, a space's own, else with the platform's,
+ * or null where neither is. */
+export let voicing = (
+  env: Speaking,
+  provider: Provider = PROVIDER,
+  key?: string,
+): Voicing | null => {
+  if (key) {
+    return {
+      provider: env.SPEECH_API
+        ? { ...provider, api: env.SPEECH_API }
+        : provider,
+      key,
+      own: true,
+    }
+  }
+  let on = speechOf(env, provider)
+  return on && { ...on, own: false }
+}
+
+/** The key of the connection through `provider` that `app` uses
+ * (@yaks/connections `used`), or undefined where it uses none. */
+export let appKey = async (
+  env: Env,
+  app: { eid: string },
+  provider: Provider,
+): Promise<string | undefined> => {
+  let { vaulted } = await import('./vault.ts')
+  if (!vaulted(env)) return undefined
+  let { CONNECTION, credential, used } = await import('@yaks/connections')
+  let { comp, ctxOf } = await import('./connections.ts')
+  let c = ctxOf(env)
+  let r = (await used(c, app.eid)).find((r) =>
+    comp(r.connection, CONNECTION).integration == provider.name
+  )
+  return r && await credential(c, r.connection.entity.eid)
+}
+
+/** The key of the connection through `provider` that `person` holds, or
+ * their space's when they own it (connections.ts `ownConnection`): what the
+ * Operator speaks through for them. */
+export let ownKey = async (
+  env: Env,
+  ctx: Pick<Ctx, 'person' | 'dir'>,
+  space: Pick<Space, 'eid'>,
+  provider: Provider,
+): Promise<string | undefined> => {
+  let { vaulted } = await import('./vault.ts')
+  if (!vaulted(env) || !ctx.person) return undefined
+  let { credential } = await import('@yaks/connections')
+  let { ctxOf, ownConnection } = await import('./connections.ts')
+  let b = await ownConnection(env, ctx, space, provider.name)
+  return b && await credential(ctxOf(env), b.entity.eid)
+}
+
+let OWN_ONLY =
+  'Designing, keeping and cloning voices needs your own ElevenLabs account: connect it at your space’s connections, and the voices are kept there.'
+
+/** `on`, where it is a space's own key: refused otherwise, since making a
+ * voice is priced by nobody before it is made, and kept on the account. */
+export let making = (on: Voicing | null): Voicing => {
+  if (!on?.own) throw new ModelError('speech_own', OWN_ONLY)
+  return on
+}
+
 /** `provider` and its key, or null where it is off. */
 export let speechOf = (env: Speaking, provider: Provider = PROVIDER) => {
-  let key = env[SECRETS.get(provider)!]
+  // By name: a copy of a provider aimed elsewhere (SPEECH_API) is the same.
+  let secret = [...SECRETS].find(([p]) => p.name == provider.name)?.[1]
+  let key = secret && env[secret]
   return typeof key == 'string' && key
     ? {
       provider: env.SPEECH_API
@@ -453,16 +544,19 @@ export let speaking = async (
   env: Env,
   space: Space,
   text: string,
-  { provider, ...o }: {
+  { provider, key, ...o }: {
     provider?: Provider
+    /** a space's own key for `provider`, whose account pays */
+    key?: string
     voice?: string
     format?: Format
     speed?: number
     signal?: AbortSignal
   } = {},
 ) => {
-  let on = speechOf(env, provider)
+  let on = voicing(env, provider, key)
   if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
+  if (on.own) return await speak({ ...on, ...o, text })
   return await charged(
     env,
     space,
@@ -552,32 +646,93 @@ let posted = (most: number) =>
   './api/blob and post {"blob": "<its url>"}'
 
 let MAX_TEXT = 2000
+
+// Each door under ./api/speech/: its method, and the provider it asks unless
+// another is named (none: the platform's).
+let DOORS = new Map<string, { method: string; provider?: string }>([
+  ['/speech/speak', { method: 'POST' }],
+  ['/speech/hear', { method: 'POST' }],
+  ['/speech/voices', { method: 'GET' }],
+  ['/speech/design', { method: 'POST', provider: ELEVENLABS.name }],
+  ['/speech/voice', { method: 'POST', provider: ELEVENLABS.name }],
+])
+
+let OFF = 'speech is not switched on here'
+
+// Why an app's ask has no provider, answered.
+let refused = (json: Parameters<Answer>[0]['json'], why: string) =>
+  why == OFF ? json(503, 'speech_off', why) : json(400, 'bad_request', why)
+
+/** The provider an app asks, named or else the one `voice` is of, else the
+ * platform's, with the key it asks it with: the connection through it that
+ * the app uses, else the platform's; or why there is none. */
+let appVoicing = async (
+  env: Env,
+  app: { eid: string },
+  name?: string,
+  voice?: string,
+): Promise<Voicing | string> => {
+  let provider = name == undefined
+    ? VOICES.find((v) => v.id == voice)?.provider ?? PROVIDER
+    : OWN.get(name) ?? [...SECRETS.keys()].find((p) => p.name == name)
+  if (!provider) {
+    return `no provider is called ${name}: name one of ${
+      [...new Set([...SECRETS.keys()].map((p) => p.name))].join(', ')
+    }`
+  }
+  let key = OWN.has(provider.name)
+    ? await appKey(env, app, provider)
+    : undefined
+  let on = voicing(env, provider, key)
+  if (on) return on
+  return OWN.has(provider.name)
+    ? `connect ${provider.title} at the space's connections and have this app use it`
+    : OFF
+}
 // The most of a recording posted to the door it reads whole, which a
 // recording kept at ./api/blob is not (hearings.ts).
 let MAX_AUDIO = 25 * 1024 * 1024
 
 /**
- * `./api/speech/speak` and `./api/speech/hear` (and `./api/speech/listen`,
- * listen.ts, beside it): an app's page or worker turns
- * text into an MP3 (`{"text", "voice"?}` answered `audio/mpeg`) or a
- * recording into words: the audio posted as it is, answered `{"text",
- * "turns", "seconds"}`, or `{"blob"}` the address of one the app keeps, heard
- * in its store (hearings.ts `asking`). Asked by whoever may ask the app's
- * models, and charged to its space.
+ * `./api/speech/*` (and `./api/speech/listen`, listen.ts, beside it): an
+ * app's page or worker speaks, hears and finds voices, asked by whoever may
+ * ask the app's models.
+ *
+ * - `POST speak` turns `{"text", "voice"?, "provider"?}` into the audio,
+ *   answered `audio/mpeg`; posting that to ./api/blob keeps it.
+ * - `POST hear` turns a recording into words: the audio posted as it is,
+ *   answered `{"text", "turns", "seconds"}`, or `{"blob"}` the address of
+ *   one the app keeps, heard in its store (hearings.ts `asking`).
+ * - `GET voices?provider=` lists the voices it may speak in.
+ * - `POST design` with `{"description", "text"?}` answers
+ *   `{"designs": [{id, audio, type, seconds}]}`, each sample's audio base64.
+ * - `POST voice` keeps a design, `{"design", "name", "description"}`, or
+ *   clones one from recordings posted as a form (`name`, `description`?,
+ *   `files`), answering `{"voice"}`, its id.
+ *
+ * A provider is the platform's (Deepgram) unless `provider` names another;
+ * design and voice are ElevenLabs'. A provider in OWN is asked with the key
+ * of the connection through it that the app uses, charged to that account,
+ * else with the platform's, charged to the space; design and voice take the
+ * app's own key only.
  */
 export let speechDoor: Answer = async (asked) => {
   let { env, req, path, space, app, json } = asked
-  if (path != '/speech/speak' && path != '/speech/hear') return null
-  if (req.method != 'POST') return json(405, 'method_not_allowed')
+  let route = DOORS.get(path)
+  if (!route) return null
+  if (req.method != route.method) return json(405, 'method_not_allowed')
   let denied = await modelAccess(asked)
   if (denied) return denied
-  if (!speechOf(env)) {
-    return json(503, 'speech_off', 'speech is not switched on here')
-  }
+  // Asked with a space's own key: what its provider refuses is its account's
+  // to answer, said back rather than reported here.
+  let own = false
+  let named = path == '/speech/speak'
+    ? undefined
+    : new URL(req.url).searchParams.get('provider') ?? route.provider
   try {
     if (path == '/speech/speak') {
       let body = await req.json().catch(() => null) as
-        | { text?: unknown; voice?: unknown }
+        | { text?: unknown; voice?: unknown; provider?: unknown }
         | null
       let text = typeof body?.text == 'string' ? body.text.trim() : ''
       if (!text || text.length > MAX_TEXT) {
@@ -585,14 +740,102 @@ export let speechDoor: Answer = async (asked) => {
           400,
           'bad_request',
           `post {"text": "<up to ${MAX_TEXT} characters>"}, and a "voice" ` +
-            'if not the default',
+            'and "provider" if not the default',
         )
       }
       let voice = typeof body?.voice == 'string' ? body.voice : undefined
-      // A voice names its provider; one no provider has is the default's.
-      let provider = VOICES.find((v) => v.id == voice)?.provider
-      let said = await speaking(env, space, text, { voice, provider })
-      return new Response(said.body, { headers: { 'content-type': said.type } })
+      let on = await appVoicing(
+        env,
+        app,
+        typeof body?.provider == 'string' ? body.provider : undefined,
+        voice,
+      )
+      if (typeof on == 'string') return refused(json, on)
+      own = on.own
+      let spoke = await speaking(env, space, text, {
+        voice,
+        provider: on.provider,
+        ...on.own ? { key: on.key } : {},
+      })
+      return new Response(spoke.body, {
+        headers: { 'content-type': spoke.type },
+      })
+    }
+    let on = await appVoicing(env, app, named)
+    if (typeof on == 'string') return refused(json, on)
+    own = on.own
+    if (path == '/speech/voices') {
+      return Response.json({
+        provider: on.provider.name,
+        voices: await voices(on),
+      })
+    }
+    if (path == '/speech/design') {
+      let body = await req.json().catch(() => null) as
+        | { description?: unknown; text?: unknown }
+        | null
+      let description = typeof body?.description == 'string'
+        ? body.description.trim()
+        : ''
+      if (!description) {
+        return json(
+          400,
+          'bad_request',
+          'post {"description": "<how the voice sounds>"}, and the "text" ' +
+            'its samples say (100 to 1000 characters) if not words it picks',
+        )
+      }
+      let designs = await design({
+        ...making(on),
+        description,
+        ...typeof body?.text == 'string' ? { text: body.text } : {},
+      })
+      return Response.json({
+        designs: designs.map((d) => ({ ...d, audio: base64(d.audio) })),
+      })
+    }
+    if (path == '/speech/voice') {
+      let mine = making(on)
+      let type = req.headers.get('content-type') ?? ''
+      if (type.startsWith('multipart/form-data')) {
+        let form = await req.formData()
+        let name = String(form.get('name') ?? '').trim()
+        let samples = form.getAll('files').filter((f) => f instanceof Blob)
+        if (!name || !samples.length) {
+          return json(
+            400,
+            'bad_request',
+            'post a form with the voice\'s "name" and its recordings as "files"',
+          )
+        }
+        let description = String(form.get('description') ?? '') || undefined
+        return Response.json({
+          voice: await clone({ ...mine, name, samples, description }),
+        })
+      }
+      let body = await req.json().catch(() => null) as
+        | { design?: unknown; name?: unknown; description?: unknown }
+        | null
+      let [d, name, description] = [body?.design, body?.name, body?.description]
+      if (
+        typeof d != 'string' || typeof name != 'string' ||
+        typeof description != 'string' || !d || !name.trim()
+      ) {
+        return json(
+          400,
+          'bad_request',
+          'post {"design", "name", "description"} to keep a design, or a ' +
+            'form with "name" and "files" to clone a voice',
+        )
+      }
+      return Response.json({
+        voice: await keep({
+          ...mine,
+          design: d,
+          name: name.trim(),
+          description,
+        }),
+      })
     }
     let type = req.headers.get('content-type') ?? ''
     if (type.startsWith('application/json')) {
@@ -603,14 +846,16 @@ export let speechDoor: Answer = async (asked) => {
     if (!type.startsWith('audio/') && !type.startsWith('video/')) {
       return json(400, 'bad_request', 'post the recording with its audio type')
     }
-    let most = Math.min(MAX_AUDIO, speechOf(env)!.provider.hear.bytes)
+    let most = Math.min(MAX_AUDIO, on.provider.hear.bytes)
     if (Number(req.headers.get('content-length') ?? 0) > most) {
       return json(413, 'too_large', posted(most))
     }
     let audio = new Uint8Array(await req.arrayBuffer())
     if (audio.length > most) return json(413, 'too_large', posted(most))
     if (!audio.length) return json(400, 'bad_request', 'post a recording')
-    let got = await hearing(env, space, audio, type)
+    let got = on.own
+      ? await hear({ ...on, audio, type })
+      : await hearing(env, space, audio, type)
     return Response.json({
       text: got.text,
       turns: got.turns,
@@ -618,7 +863,19 @@ export let speechDoor: Answer = async (asked) => {
     })
   } catch (error) {
     if (error instanceof ModelError) {
-      return json(error.code == 'limit' ? 402 : 503, error.code, error.message)
+      return json(
+        error.code == 'limit' ? 402 : error.code == 'speech_own' ? 403 : 503,
+        error.code,
+        error.message,
+      )
+    }
+    // The provider refusing what was asked of it: its reason, said back.
+    if (own && error instanceof SpeechError && !error.retry) {
+      return json(
+        error.status == 401 ? 403 : 400,
+        'speech_refused',
+        error.message,
+      )
     }
     caught(error, {
       request: 'POST /api' + path,

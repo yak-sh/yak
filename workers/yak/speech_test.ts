@@ -18,6 +18,10 @@ import {
   unread,
 } from './speech.ts'
 import type { Asked } from './apps.ts'
+import { connect, need } from '@yaks/connections'
+import type { D1Like } from '@yaks/d1'
+import { d1 } from '../../packages/d1/testing.ts'
+import { ctxOf } from './connections.ts'
 
 let left = 199.5
 let voices: string[] = []
@@ -33,6 +37,31 @@ let deepgram = endpoints(globalThis).open(async (req) => {
     voices.push(url.searchParams.get('model')!)
     return new Response(new Uint8Array([1, 2, 3]))
   }
+  // ElevenLabs, which says who asked by its own header.
+  let eleven = req.headers.get('xi-api-key')
+  if (url.pathname.startsWith('/v1/text-to-speech/')) {
+    voices.push(`${url.pathname.split('/').at(-1)} ${eleven}`)
+    return new Response(new Uint8Array([6]))
+  }
+  if (url.pathname == '/v2/voices') {
+    return Response.json({
+      voices: [{ voice_id: 'v1', name: `Ada ${eleven}` }],
+    })
+  }
+  if (url.pathname == '/v1/text-to-voice/design') {
+    let { voice_description } = await req.json()
+    return Response.json({
+      previews: [{
+        generated_voice_id: `g-${voice_description}`,
+        audio_base_64: 'AQI=',
+        duration_secs: 3,
+      }],
+    })
+  }
+  if (url.pathname == '/v1/text-to-voice') {
+    let { generated_voice_id, voice_name } = await req.json()
+    return Response.json({ voice_id: `${generated_voice_id}-${voice_name}` })
+  }
   // OpenAI's voice, which says who asked.
   if (url.pathname == '/v1/audio/speech') {
     let { voice } = await req.json()
@@ -46,12 +75,15 @@ let deepgram = endpoints(globalThis).open(async (req) => {
   })
 })
 
-let fixture = async (dollars = 1) => {
+let fixture = async (dollars = 1, vars: Record<string, unknown> = {}) => {
   let p = platform('speech', {
     DEEPGRAM_API_KEY: 'a-key',
     OPENAI_VOICE_KEY: 'o-key',
     SPEECH_API: deepgram.url,
     SPEECH_FLOOR: '195',
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+    ...vars,
   })
   let person = crypto.randomUUID(), eid = crypto.randomUUID()
   await p.dir.apply({
@@ -75,17 +107,32 @@ let fixture = async (dollars = 1) => {
     }],
   })
   let space = async () => (await p.dir.at(eid))!
-  let ask = async (path: string, body: BodyInit, type: string) => {
+  let app = crypto.randomUUID()
+  // The app using an ElevenLabs connection of the space's, its key `key`.
+  let connected = async (key: string) => {
+    let c = ctxOf(p.env, { person, role: 'owner' })
+    let made = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: eid,
+        app,
+        integration: 'elevenlabs',
+        hosts: ['api.elevenlabs.io'],
+      }),
+    )
+    await connect(c, made.find((b) => b.connection)!.entity.eid, { key })
+  }
+  let ask = async (path: string, body: BodyInit | null, type = '') => {
+    let route = path.split('?')[0]
     let res = await speechDoor({
       env: p.env,
       req: new Request('https://choir.yaks.app/x/api' + path, {
-        method: 'POST',
+        method: body == null ? 'GET' : 'POST',
         headers: { 'content-type': type },
         body,
       }),
-      path,
+      path: route,
       space: await space(),
-      app: { access: 'private' },
+      app: { eid: app, access: 'private' },
       who: { person, role: 'owner' },
       refuse: () => Promise.resolve(new Response(null, { status: 401 })),
       json: (status: number, code: string, says?: string) =>
@@ -93,7 +140,7 @@ let fixture = async (dollars = 1) => {
     } as unknown as Asked)
     return res!
   }
-  return { p, eid, space, ask }
+  return { p, eid, space, ask, connected }
 }
 
 test('a member’s text is spoken and a recording heard, each charged to the space', async () => {
@@ -326,4 +373,76 @@ test('a talking model is picked only with one of its own voices', () => {
     'can’t speak in this voice',
   )
   assertThrows(() => modelOf('gpt-9', 'cedar'), Error, 'ways listed')
+})
+
+let error = async (r: Response) => [r.status, (await r.json()).error.code]
+
+test('an app speaks, lists and makes ElevenLabs voices with the key of the connection it uses, charged to that account', async () => {
+  unread()
+  left = 199.5
+  voices = []
+  let { space, ask, connected } = await fixture()
+  equal(
+    await error(
+      await ask(
+        '/speech/speak',
+        '{"text":"Hi","provider":"elevenlabs"}',
+        'text/json',
+      ),
+    ),
+    [400, 'bad_request'],
+  )
+  await connected('their-key')
+  let spoke = await ask(
+    '/speech/speak',
+    '{"text":"Hello choir","voice":"v1","provider":"elevenlabs"}',
+    'text/json',
+  )
+  equal([...new Uint8Array(await spoke.arrayBuffer())], [6])
+  equal(voices, ['v1 their-key'])
+  equal(await (await ask('/speech/voices?provider=elevenlabs', null)).json(), {
+    provider: 'elevenlabs',
+    voices: [{ id: 'v1', name: 'Ada their-key', about: '' }],
+  })
+  let designed = await (await ask(
+    '/speech/design',
+    '{"description":"captain"}',
+    'application/json',
+  )).json()
+  equal(designed, {
+    designs: [{
+      id: 'g-captain',
+      audio: 'AQI=',
+      type: 'audio/mpeg',
+      seconds: 3,
+    }],
+  })
+  let kept = await ask(
+    '/speech/voice',
+    '{"design":"g-captain","name":"Cap","description":"captain"}',
+    'application/json',
+  )
+  equal(await kept.json(), { voice: 'g-captain-Cap' })
+  equal(budget(await space()).spent, 0)
+})
+
+test("without a connection, ElevenLabs speaks with the platform's key, charged to the space, and makes no voices", async () => {
+  unread()
+  left = 199.5
+  voices = []
+  let { space, ask } = await fixture(1, { ELEVENLABS_API_KEY: 'our-key' })
+  await ask(
+    '/speech/speak',
+    '{"text":"Hello choir","voice":"JBFqnCBsd6RMkjVDRZzb"}',
+    'text/json',
+  )
+  equal(voices, ['JBFqnCBsd6RMkjVDRZzb our-key'])
+  // 11 characters at $0.08 a thousand.
+  equal(budget(await space()).spent.toFixed(6), '0.000880')
+  equal(
+    await error(
+      await ask('/speech/design', '{"description":"x"}', 'application/json'),
+    ),
+    [403, 'speech_own'],
+  )
 })

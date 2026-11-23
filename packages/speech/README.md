@@ -13,6 +13,10 @@ argument; nothing here reads the environment.
   speaks (its 24 kHz PCM made μ-law for a call), gpt-realtime-2.1 and its mini
   hear and speak in one stream (`talk`), and gpt-live-1 hears and speaks at
   once, taking its own turns.
+- `ELEVENLABS`: Multilingual v2 speaks, Scribe v2 hears a recording and tells
+  its speakers apart, and the account keeps voices of its own, designed from a
+  description or cloned from recordings. It hears no stream and has no model
+  that talks. Its key goes in its own header, `xi-api-key` (`header`).
 
 ## Speaking and hearing
 
@@ -120,6 +124,18 @@ argument; nothing here reads the environment.
   in, each an `id` to pass as `voice`, a `name` and how it sounds (`about`).
 - `balance({provider, key})` is the credit left on the account, in dollars, or
   undefined where the provider does not say.
+- `voices({provider, key})` lists the voices the key's account speaks in, page
+  after page, where the provider keeps them per account (`provider.voices`):
+  ElevenLabs' premade voices and those the account designed, cloned or added,
+  each with a `sample` to play. Another provider answers its own `speak.voices`.
+- `design({provider, key, description, text?})` designs voices from words saying
+  how one sounds, each a `Design`: its `id`, and a sample saying `text` (or
+  words the provider picks) as `audio` bytes of `type`, `seconds` long.
+  `keep({provider, key, design, name, description})` keeps one as a voice of the
+  account's, and `clone({provider, key, name, samples, description?})` makes one
+  from recordings (`Blob`s); both answer the new voice's id. A provider that
+  makes no voices (`provider.make`) refuses, and one whose plan does not allow
+  cloning refuses with its reason.
 - `spoken(provider, text)` and `heard(provider, seconds)` price speech before it
   is asked for.
 - `mulawed(from, to)` turns a stream of 16-bit PCM into μ-law at a lower rate,

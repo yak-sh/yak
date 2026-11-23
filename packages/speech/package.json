@@ -7,7 +7,7 @@
     "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
-  "description": "Speech to text, text to speech and speech to speech, each provider given as data: Deepgram and OpenAI, their endpoints, models, voices and prices.",
+  "description": "Speech to text, text to speech and speech to speech, each provider given as data: Deepgram, OpenAI and ElevenLabs, their endpoints, models, voices and prices.",
   "type": "module",
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

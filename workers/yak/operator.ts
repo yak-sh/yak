@@ -187,6 +187,7 @@ import {
 import { PLATFORMS } from './chat.ts'
 import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
+import { voiceTools } from './operator-voices.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
 import { apiCall, integrationsTold } from './operator-integrations.ts'
 import { notification } from './operator-updates.ts'
@@ -685,6 +686,9 @@ let OWN_WORDS = new Set([
   'phone_send',
   'phone_numbers',
   'image_new',
+  'speech_new',
+  'voice_design',
+  'voice_add',
   'wake_set',
   'wake_list',
   'wake_cancel',
@@ -2624,6 +2628,7 @@ export let operating = (
       phoneSend(env, ctx, space, store),
       phoneNumbers(env, ctx, space, store),
       imageNew(env, space, store),
+      ...voiceTools(env, ctx, space, store),
       ...pickTools(store, ctx.person!),
       ...wakeTools(store),
       memberList(dir(), space, ctx.person!, ctx.role ?? null),

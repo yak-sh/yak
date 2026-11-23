@@ -260,6 +260,9 @@ export type Env = {
   // provider elsewhere, for a test.
   DEEPGRAM_API_KEY?: string
   OPENAI_VOICE_KEY?: string
+  // yaks.app's own ElevenLabs key, metered on the space's budget; unset, a
+  // space speaks through ElevenLabs with its own connection only (T-2567).
+  ELEVENLABS_API_KEY?: string
   // The signing secret of the webhook a provider whose own line carries
   // calls rings when one comes in (speech.ts LINES, operator-carried.ts).
   OPENAI_CALLS_SECRET?: string

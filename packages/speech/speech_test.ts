@@ -4,6 +4,7 @@ import {
   accept,
   balance,
   DEEPGRAM,
+  ELEVENLABS,
   hear,
   type Keyed,
   OPENAI,
@@ -1119,4 +1120,78 @@ test('GPT-Live hands work only to a larger model it has', () => {
       told: { audio: () => {}, call: () => Promise.resolve('') },
     })
   assertThrows(opened, Error, 'hands no work to gpt-2')
+})
+
+test('ElevenLabs speaks the voice in its own key header, at the format and speed asked', async () => {
+  let o = answering(() => new Response(new Uint8Array([1])), ELEVENLABS)
+  let said = await speak({
+    ...o,
+    text: 'x'.repeat(1000),
+    voice: 'v 1',
+    speed: 2,
+  })
+  let url = new URL(o.asked[0].url)
+  let headers = o.asked[0].init.headers as Record<string, string>
+  equal(
+    [url.host, url.pathname, url.searchParams.get('output_format')],
+    ['api.elevenlabs.io', '/v1/text-to-speech/v%201', 'mp3_44100_128'],
+  )
+  equal([headers['xi-api-key'], headers.authorization], ['k1', undefined])
+  equal(JSON.parse(String(o.asked[0].init.body)), {
+    text: 'x'.repeat(1000),
+    model_id: 'eleven_multilingual_v2',
+    voice_settings: { speed: 1.2 },
+  })
+  equal([said.type, said.dollars], ['audio/mpeg', 0.08])
+  let formats = await Promise.all(
+    [{ encoding: 'mulaw', rate: 8000 }, { encoding: 'linear16', rate: 16000 }]
+      .map(async (format) => {
+        let o = answering(() => new Response(new Uint8Array(1)), ELEVENLABS)
+        await speak({ ...o, text: 'Hi', format: format as never })
+        return new URL(o.asked[0].url).searchParams.get('output_format')
+      }),
+  )
+  equal(formats, ['ulaw_8000', 'pcm_16000'])
+})
+
+test("ElevenLabs hears a recording as its speakers' turns, leaving out sounds", async () => {
+  let w = (
+    text: string,
+    speaker: string,
+    start: number,
+    end: number,
+    type = 'word',
+  ) => ({ text, type, start, end, speaker_id: speaker })
+  let o = answering(() =>
+    Response.json({
+      text: 'Hi there. Hello.',
+      audio_duration_secs: 90,
+      words: [
+        w('Hi', 'speaker_0', 0, 0.3),
+        w(' ', 'speaker_0', 0.3, 0.3, 'spacing'),
+        w('there.', 'speaker_0', 0.3, 0.8),
+        w('(laughs)', 'speaker_1', 0.8, 1, 'audio_event'),
+        w(' ', 'speaker_1', 1, 1, 'spacing'),
+        w('Hello.', 'speaker_1', 1, 1.5),
+      ],
+    }), ELEVENLABS)
+  let got = await hear({ ...o, audio: new Uint8Array([1]), type: 'audio/mpeg' })
+  let form = o.asked[0].init.body as FormData
+  equal([form.get('model_id'), form.get('diarize')], ['scribe_v2', 'true'])
+  equal(got.turns, [
+    { speaker: 0, text: 'Hi there.', from: 0, to: 0.8 },
+    { speaker: 1, text: 'Hello.', from: 1, to: 1.5 },
+  ])
+  equal(got.dollars, 0.005)
+})
+
+test('a provider that makes no voices refuses to design one', async () => {
+  await assertRejects(
+    () =>
+      import('./mod.ts').then((m) =>
+        m.design({ provider: DEEPGRAM, key: 'k', description: 'x' })
+      ),
+    SpeechError,
+    'Deepgram makes no voices',
+  )
 })

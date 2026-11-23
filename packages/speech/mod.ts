@@ -1,10 +1,12 @@
 // Speech to text, text to speech, and speech to speech. A provider is data:
 // where it answers, which models hear and speak, what each costs, and how its
 // requests and streams are worded, all in its own entry (deepgram.ts,
-// openai.ts). One implementation here calls any provider described so; the
-// key is an argument, and nothing here reads the environment.
+// openai.ts, elevenlabs.ts). One implementation here calls any provider
+// described so; the key is an argument, and nothing here reads the
+// environment.
 
 export { DEEPGRAM } from './deepgram.ts'
+export { ELEVENLABS } from './elevenlabs.ts'
 export { OPENAI } from './openai.ts'
 export {
   base64,
@@ -30,8 +32,18 @@ export type Format =
 export type Raw = Extract<Format, { rate: number }>
 
 /** A voice a provider speaks in: the `id` a request names, what a person
- * calls it, and how it sounds. */
-export type Voice = { id: string; name: string; about: string }
+ * calls it, how it sounds, and where a sample of it plays, where the
+ * provider has one. */
+export type Voice = { id: string; name: string; about: string; sample?: string }
+
+/** A voice designed from a description, not yet kept: the id `keep` takes,
+ * and a sample of it. */
+export type Design = {
+  id: string
+  audio: Uint8Array
+  type: string
+  seconds: number
+}
 
 /** The speeds a provider speaks at, as multiples of its own pace. */
 export type Speeds = { min: number; max: number }
@@ -143,7 +155,10 @@ export type Provider = {
   api: string
   /** the streaming API's base */
   live: string
-  /** the Authorization header's value for a key */
+  /** the header a request carries its key in, `authorization` unless
+   * named */
+  header?: string
+  /** that header's value for a key */
   authorization: (key: string) => string
   /** the WebSocket subprotocols a browser offers a key under */
   protocols: (key: string) => string[]
@@ -186,6 +201,25 @@ export type Provider = {
   talk?: Talker[]
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
+  /** the voices the key's account speaks in, where it keeps its own: a
+   * page of them, and the next page's token while there are more */
+  voices?: {
+    request: (page?: string) => Asked
+    read: (said: unknown) => { voices: Voice[]; next?: string }
+  }
+  /** making voices of the account's own, where the provider does */
+  make?: {
+    /** voices designed from a description, each saying `text`, or words
+     * the provider picks */
+    design: (description: string, text?: string) => Asked
+    designs: (said: unknown) => Design[]
+    /** a design kept as a voice of the account's */
+    keep: (design: string, name: string, description: string) => Asked
+    /** a voice cloned from recordings of it */
+    clone: (name: string, samples: Blob[], description?: string) => Asked
+    /** the id of the voice `keep` or `clone` made */
+    made: (said: unknown) => string
+  }
 }
 
 /** A model that hears audio as it streams, told back a turn at a time, as
@@ -383,7 +417,7 @@ async (path, init = {}) => {
       ...init,
       signal,
       headers: {
-        authorization: provider.authorization(key),
+        [provider.header ?? 'authorization']: provider.authorization(key),
         ...init.headers as Record<string, string>,
       },
     })
@@ -502,6 +536,125 @@ export let hear = async (
  * does not say. */
 export let balance = (o: Calling): Promise<number | undefined> =>
   o.provider.balance?.(asking(o)) ?? Promise.resolve(undefined)
+
+// The most pages of voices read: 2,000 voices at 100 a page.
+let PAGES = 20
+
+/**
+ * The voices the key's account speaks in, where the provider keeps them per
+ * account (ElevenLabs: its premade voices and the ones it designed, cloned or
+ * added), else the provider's own list.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { DEEPGRAM, ELEVENLABS, voices } from '@yaks/speech'
+ * let pages = [
+ *   { voices: [{ voice_id: 'a', name: 'A' }], has_more: true, next_page_token: 't' },
+ *   { voices: [{ voice_id: 'b', name: 'B' }], has_more: false },
+ * ]
+ * let asked: string[] = []
+ * let fetch = (url: string | URL | Request, init?: RequestInit) => {
+ *   asked.push(String(url) + ' ' + new Headers(init?.headers).get('xi-api-key'))
+ *   return Promise.resolve(Response.json(pages.shift()))
+ * }
+ * let got = await voices({
+ *   provider: ELEVENLABS,
+ *   key: 'k',
+ *   fetch: fetch as typeof globalThis.fetch,
+ * })
+ * equal(got.map((v) => v.id), ['a', 'b'])
+ * equal(asked[1].includes('next_page_token=t'), true)
+ * equal(asked[1].endsWith(' k'), true)
+ * equal((await voices({ provider: DEEPGRAM, key: 'k' })).length > 0, true)
+ * ```
+ */
+export let voices = async (o: Calling): Promise<Voice[]> => {
+  let listed = o.provider.voices
+  if (!listed) return o.provider.speak.voices
+  let ask = asking(o), all: Voice[] = [], page: string | undefined
+  for (let n = 0; n < PAGES; n++) {
+    let { path, init } = listed.request(page)
+    let got = listed.read(await (await ask(path, init)).json())
+    all.push(...got.voices)
+    if (!(page = got.next)) break
+  }
+  return all
+}
+
+// What makes voices on `provider`, refused where it makes none.
+let maker = (provider: Provider) => {
+  if (!provider.make) {
+    throw new SpeechError(`${provider.title} makes no voices of its own`, 400)
+  }
+  return provider.make
+}
+
+/**
+ * Voices designed from `description`, each a sample saying `text` (or words
+ * the provider picks), for one to be kept with `keep`.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { design, ELEVENLABS } from '@yaks/speech'
+ * let fetch = () =>
+ *   Promise.resolve(Response.json({
+ *     previews: [{ generated_voice_id: 'g1', audio_base_64: 'AQID', duration_secs: 4 }],
+ *   }))
+ * let got = await design({
+ *   provider: ELEVENLABS,
+ *   key: 'k',
+ *   description: 'An old sea captain, gravelly and warm',
+ *   fetch: fetch as typeof globalThis.fetch,
+ * })
+ * equal(got, [{ id: 'g1', audio: new Uint8Array([1, 2, 3]), type: 'audio/mpeg', seconds: 4 }])
+ * ```
+ */
+export let design = async (
+  o: Calling & { description: string; text?: string },
+): Promise<Design[]> => {
+  let make = maker(o.provider)
+  let { path, init } = make.design(o.description, o.text)
+  return make.designs(await (await asking(o)(path, init)).json())
+}
+
+/** A design (`design`) kept as a voice of the account's, answering its id. */
+export let keep = async (
+  o: Calling & { design: string; name: string; description: string },
+): Promise<string> => {
+  let make = maker(o.provider)
+  let { path, init } = make.keep(o.design, o.name, o.description)
+  return make.made(await (await asking(o)(path, init)).json())
+}
+
+/**
+ * A voice cloned from recordings of it, answering its id. A provider refuses
+ * one the account's plan does not allow, with its reason.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { clone, ELEVENLABS } from '@yaks/speech'
+ * let sent: FormData | undefined
+ * let fetch = (_: unknown, init?: RequestInit) => {
+ *   sent = init?.body as FormData
+ *   return Promise.resolve(Response.json({ voice_id: 'v9' }))
+ * }
+ * let id = await clone({
+ *   provider: ELEVENLABS,
+ *   key: 'k',
+ *   name: 'Narrator',
+ *   samples: [new Blob([new Uint8Array([1])], { type: 'audio/mpeg' })],
+ *   fetch: fetch as typeof globalThis.fetch,
+ * })
+ * equal([id, sent?.get('name'), sent?.getAll('files').length], ['v9', 'Narrator', 1])
+ * ```
+ */
+export let clone = async (
+  o: Calling & { name: string; samples: Blob[]; description?: string },
+): Promise<string> => {
+  let make = maker(o.provider)
+  let { path, init } = make.clone(o.name, o.samples, o.description)
+  return make.made(await (await asking(o)(path, init)).json())
+}
 
 /** The socket a stream speaks over: the platform's WebSocket, or a stand-in. */
 export type Socket = {

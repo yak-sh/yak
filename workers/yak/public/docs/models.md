@@ -363,6 +363,62 @@ budget: $0.030 a thousand characters spoken, and $0.0043 a minute heard. A
 refusal is `{error: {code, message}}`: `402` past the budget, `413` a recording
 too large, `503` while speech is paused.
 
+### ElevenLabs voices: `"provider": "elevenlabs"`
+
+ElevenLabs speaks in lifelike voices: its premade ones, and voices a person
+designs from a description or clones from recordings, kept on their own
+ElevenLabs account. The space connects its ElevenLabs key at its connections
+page (<https://yaks.app/manage/connections>), and the app uses that connection;
+its speech is then charged to that ElevenLabs account, not the space's budget.
+
+    let voices = await (await fetch('./api/speech/voices?provider=elevenlabs')).json()
+    // {provider: 'elevenlabs', voices: [{id, name, about, sample}]}
+
+    let line = await fetch('./api/speech/speak', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'elevenlabs',
+        voice: voices.voices[0].id,
+        text: 'Ahoy! The tide waits for no one.',
+      }),
+    })
+    // Keep the voiced line as a file of the app's: POST it to ./api/blob.
+    let kept = await fetch('./api/blob', {
+      method: 'POST',
+      headers: { 'content-type': 'audio/mpeg' },
+      body: await line.blob(),
+    })
+
+A voice is designed from words saying how it sounds, each design a sample to
+audition, and the one picked is kept:
+
+    let { designs } = await (await fetch('./api/speech/design', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ description: 'an old sea captain, gravelly and warm' }),
+    })).json()
+    // designs: [{id, audio (base64 MP3), type, seconds}]
+    let { voice } = await (await fetch('./api/speech/voice', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ design: designs[0].id, name: 'Captain', description: 'gravelly, warm' }),
+    })).json()
+
+`./api/speech/voice` also clones a voice from recordings posted as a form:
+`name`, an optional `description`, and the recordings as `files`. Clone only a
+voice the person has the right to. ElevenLabs allows cloning on some plans and
+says so when the account's plan doesn't. Designing, keeping and cloning need the
+app's own ElevenLabs connection, and are refused with `403` (`speech_own`)
+without one. ElevenLabs' own refusal of a request is `400` (`speech_refused`)
+with its reason. Recordings name the provider too:
+`./api/speech/hear?provider=elevenlabs` hears with Scribe and tells the speakers
+apart.
+
+The space's Operator speaks through the same connection: it lists the voices,
+voices a line as a file in the space's files (`speech_new`), designs voices and
+adds them to the account.
+
 ### Hearing a long recording: `{"blob"}`
 
 A recording the app keeps at `./api/blob` is heard whole, up to 2 GB: a two-hour
