@@ -11,7 +11,7 @@ test('a page request sends ordered character and prior-page references before it
     preview: false,
     font: '',
     printer: '',
-    model: 'gpt-image-2.5-flare',
+    model: 'gpt-image-2.6-sunburst',
   })
   let job = crypto.randomUUID(),
     refs = [{ blob: 'a'.repeat(64), label: 'Character sheet' }, {

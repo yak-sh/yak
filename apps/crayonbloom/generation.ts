@@ -18,7 +18,7 @@ export let settings = async (db: Store): Promise<Runtime> => {
     preview: true,
     font: '',
     printer: '',
-    model: 'gpt-image-2.5-flare',
+    model: 'gpt-image-2.6-sunburst',
     ...(row?.coloring_runtime as Partial<Runtime> ?? {}),
   }
 }
