@@ -513,6 +513,7 @@ export let directoryDoc: VocabDoc = {
         legacy_seat: owned(text),
         ordering: owned(time),
         order_reported: owned(time),
+        returned: owned(time),
       },
     },
     phone_login: {
@@ -547,6 +548,8 @@ export let directoryDoc: VocabDoc = {
         line: owned(ref('keep')),
         at: owned(time),
         permanent: owned(bool),
+        stopped_in: owned(time),
+        stopped_out: owned(time),
         reported: owned(time),
       },
     },

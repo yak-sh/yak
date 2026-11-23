@@ -59,8 +59,8 @@ export let jobs: Record<string, Job> = {
   // its texts. Never refused: the provider bills the platform for the month
   // whether or not the budget has room, so the spend counts all the same.
   lines: async (env, row) => {
-    let { space, monthly, ordering } = props(row.phone_line)
-    if (!monthly || ordering) return
+    let { space, monthly, ordering, returned } = props(row.phone_line)
+    if (!monthly || ordering || returned) return
     await stamp(env, {
       entities: [{
         entity: { eid: idOf(space as string) },

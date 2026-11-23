@@ -45,7 +45,7 @@ export let claimVoice = (env: Env, line: string) => async (seat: string) => {
   let [[row], [member], [held]] = await Promise.all([
     read(env, q`.entity.eid=${eid}&?phone_login`),
     read(env, q`.entity.eid=${seat}&.member.role=owner`),
-    read(env, q`.entity.eid=${line}&.phone_line&!trashed`),
+    read(env, q`.entity.eid=${line}&.phone_line&!phone_line.returned&!trashed`),
   ])
   let space = (held?.phone_line as Row['phone_line'])?.space
   let inSpace = (member?.member as Row['member'])?.space
@@ -76,7 +76,9 @@ let policy = async (env: Env, line: Line, ways: Ways): Promise<Voice> => {
     loginRows(env, line.eid),
   ])
   let row = held?.phone_line as Row['phone_line']
-  if (!row || row.ordering || held.trashed) ways = { in: false, out: false }
+  if (!row || row.ordering || row.returned || held.trashed) {
+    ways = { in: false, out: false }
+  }
   return {
     ...ways,
     seats: owners.map((r) => r.entity.eid),
@@ -173,7 +175,10 @@ let boundLegacy = async (env: Env, line: PhoneLine, voice: Voice) => {
 /** Apply an owner departure to every line in that space. The hourly meter
  * also converges any provider call that could not finish here. */
 export let ownersLeft = async (env: Env, space: string, seats: string[]) => {
-  let rows = await read(env, q`.phone_line.space=${space}&?trashed`)
+  let rows = await read(
+    env,
+    q`.phone_line.space=${space}&!phone_line.returned&?trashed`,
+  )
   if (!rows.length) return
   let home = await spaceNow(env, space)
   for (let row of rows) {

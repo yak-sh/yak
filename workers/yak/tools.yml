@@ -994,9 +994,11 @@ number_release:
     doing: 'Releasing %{number}…'
     done: 'Released %{number}'
   description: >-
-    Move a number to the space's trash. It stops taking calls and texts, and
-    the space keeps paying its monthly price so the shared number stays held.
-    Restore it on the manage page to bring back its assignment. There is no
+    Move a number to the space's trash. Texts stop immediately. The provider
+    is asked to shut off calls, with automatic retries if needed. The space
+    keeps paying its monthly price until the provider confirms its return.
+    Restore it on the manage page to bring back its assignment and softphone
+    sign-ins. There is no
     automatic purge. Calling this again for a trashed number emails the owner
     a confirmation link, valid for one hour; only their confirmation returns
     it to the provider. A returned number may never be bought back. Only the
@@ -1051,8 +1053,9 @@ number_status:
     The numbers a space holds: where each texts from (the space, an app, or
     nowhere yet), what it costs, where its toll-free verification stands,
     read from the provider now, and what it is approved for: calls, texts to
-    people who know it, and texts to many people. Leave number out for every
-    number the space holds. With a number and login true, the space owner
+    people who know it, and texts to many people. A trashed number shows
+    which call directions the provider has shut off. Leave number out for
+    every number the space holds. With a number and login true, the space owner
     gets a signed-in page to reveal their own softphone (SIP) username and
     password.
 app_publish:

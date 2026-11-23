@@ -431,7 +431,9 @@ let vms = {
   slow: 0,
   unansweredOrder: false,
   slowHangup: 0,
+  slowRestriction: false,
   slowGroups: 0,
+  slowCancel: false,
 }
 let voipmsApi = endpoints(globalThis).open((req) => {
   let q = new URL(req.url).searchParams
@@ -490,6 +492,9 @@ let voipmsApi = endpoints(globalThis).open((req) => {
         })),
       })
     case 'setSubAccount': {
+      if (q.get('enable_ip_restriction') == '1' && vms.slowRestriction) {
+        return new Response('', { status: 522 })
+      }
       let one = vms.accounts.get(q.get('id')!)!
       vms.passwords.push(q.get('password')!)
       one.only = q.get('enable_ip_restriction') == '1'
@@ -543,6 +548,7 @@ let voipmsApi = endpoints(globalThis).open((req) => {
       return ok()
     case 'cancelDID':
       vms.held.delete(q.get('did')!)
+      if (vms.slowCancel) return new Response('', { status: 522 })
       return ok()
     case 'sendSMS':
       return ok({ sms: 7 })
@@ -755,6 +761,145 @@ test('a space buys a local voip.ms number by area code at its price and our marg
   }
 })
 
+let retryRelease = async (
+  k: Awaited<ReturnType<typeof fresh>>,
+  env: Env,
+  line: string,
+) => {
+  let [release] = await k.dir.read(q`.phone_release.line=${line}&?wake`)
+  assert(release.wake)
+  await stamp(env, {
+    entities: [{
+      entity: release.entity,
+      wake: { at: new Date().toISOString() },
+    }],
+  })
+  await until(
+    async () => !(await k.dir.read(q`.phone_release.line=${line}`)).length,
+    { label: 'the carrier release retried from its wake' },
+  )
+}
+
+let localLine = async () => {
+  let env!: Env
+  let k = await fresh({}, (e) => {
+    env = e
+    Object.assign(e, {
+      VOIPMS_API: voipmsApi.url,
+      VOIPMS_USERNAME: 'us@example.com',
+      VOIPMS_API_PASSWORD: 'pw',
+    })
+  })
+  let slug = unique('release')
+  let { cookie, person } = await seed(k, [{ slug, apps: [] }])
+  let agent = connector(k, cookie)
+  let tool = (name: string, args: Record<string, unknown> = {}) =>
+    agent.tool(name, { space: slug, ...args })
+  let space = (await k.dir.space(slug))!
+  await tool('number_buy', { number: LOCAL })
+  let [line] = await k.dir.lines(space)
+  let release = () => tool('number_release', { number: LOCAL })
+  let stop = async () => {
+    await k.stop()
+    vms.held.clear()
+    vms.accounts.clear()
+    vms.groups.clear()
+    vms.slowRestriction = vms.slowCancel = false
+    vms.slowGroups = 0
+  }
+  return { k, env, space, line, release, tool, cookie, person, stop }
+}
+
+test('a slow outbound shut is reported in the trash and retried by the release wake', async () => {
+  let { k, env, space, line, release, tool, person, stop } = await localLine()
+  try {
+    let [sub] = vms.accounts.values()
+    let password = sub.password
+    vms.slowRestriction = true
+    let answer = await release()
+    assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
+    assertEquals(sub.only, undefined)
+    assertStringIncludes(answer, 'Incoming calls have stopped.')
+    assertStringIncludes(answer, 'Outgoing calls should stop shortly')
+    assertStringIncludes(
+      await tool('number_status'),
+      'Incoming calls have stopped.',
+    )
+    assertStringIncludes(
+      await tool('number_status'),
+      'Outgoing calls should stop shortly',
+    )
+
+    let [job] = await k.dir.read(q`.phone_release.line=${line.eid}&?wake`)
+    let started = Date.parse((job.phone_release as { at: string }).at)
+    let wake = job.wake as { at: string; every: string }
+    let first = Date.parse(wake.at)
+    assertEquals(first - started, 60_000)
+    assertEquals(Date.parse(next(wake.every, first)!) - first, 60_000)
+    vms.slowRestriction = false
+    await retryRelease(k, env, line.eid)
+    assertEquals(sub.only, '192.0.2.1')
+    assertStringIncludes(
+      await tool('number_status'),
+      'Incoming and outgoing calls have stopped.',
+    )
+    let [trashed] = await k.dir.lines(space)
+    await restoredNumber(env, k.dir, trashed, { person, role: 'owner' })
+    assertEquals(vms.accounts.size, 1)
+    assertEquals(sub.only, undefined)
+    assertEquals(sub.password, password)
+    assertEquals(vms.held.get('2692015487')?.routing, `account:${sub.account}`)
+    assertEquals(trashed.eid, line.eid)
+  } finally {
+    await stop()
+  }
+})
+
+test('a carrier-confirmed return leaves the trash and stops monthly billing even while SIP cleanup retries', async () => {
+  let { k, env, space, line, release, tool, cookie, person, stop } =
+    await localLine()
+  try {
+    await release()
+    vms.groups.set('1', { ring_group: '1', name: 'y2692015487', members: '' })
+    vms.slowGroups = 2
+    vms.slowCancel = true
+    let cancellations = () =>
+      vms.asked.filter((p) => p.get('method') == 'cancelDID').length
+    let before = cancellations()
+    let t = await ticket(
+      'numbererase',
+      space,
+      line.eid,
+      person,
+      env.SESSION_SECRET!,
+    )
+    let response = await k.at(
+      'yaks.app',
+      new URL(door(space.slug, 'numbererase', line.eid)).pathname,
+      {
+        method: 'POST',
+        headers: { cookie },
+        body: new URLSearchParams({ t }),
+      },
+    )
+    assertEquals(response.status, 200)
+    let answer = await response.text()
+    assertEquals(vms.held.size, 0)
+    assertEquals(vms.groups.size, 1)
+    assertStringIncludes(await tool('number_status'), 'holds no number')
+    assertStringIncludes(answer, 'costs nothing from now on')
+    assertEquals(await k.dir.read(q`.entity.eid=${line.eid}&.wake`), [])
+
+    await retryRelease(k, env, line.eid)
+    assertEquals(cancellations(), before + 1)
+    assertEquals(vms.groups.size, 0)
+    assertEquals(vms.accounts.size, 0)
+    assertEquals(await k.dir.trash([line.eid]), [])
+  } finally {
+    await stop()
+  }
+})
+
 test('a spent budget and the trash both keep the sign-in a softphone holds', async () => {
   let env!: Env
   let k = await fresh({}, (e) => {
@@ -843,28 +988,14 @@ test('a spent budget and the trash both keep the sign-in a softphone holds', asy
 
     // In the trash it takes and makes no call, and restored, it does again.
     let space = (await k.dir.space(slug))!
-    let retryRelease = async (line: string) => {
-      let [release] = await k.dir.read(q`.phone_release.line=${line}&?wake`)
-      assert(release.wake)
-      await stamp(env, {
-        entities: [{
-          entity: release.entity,
-          wake: { at: new Date().toISOString() },
-        }],
-      })
-      await until(
-        async () => !(await k.dir.read(q`.phone_release.line=${line}`)).length,
-        { label: 'the carrier release retried from its wake' },
-      )
-    }
     vms.slowHangup = 2
     assertStringIncludes(
       await tool('number_release', { number: LOCAL }),
-      'will retry automatically',
+      'Incoming calls should stop shortly. Outgoing calls have stopped.',
     )
     let [line] = await k.dir.lines(space)
     assert(line.trashed)
-    await retryRelease(line.eid)
+    await retryRelease(k, env, line.eid)
     assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
     assertEquals(vms.accounts.size, 1)
     assertEquals(ways(), { in: false, out: false })
@@ -899,11 +1030,11 @@ test('a spent budget and the trash both keep the sign-in a softphone holds', asy
         body: new URLSearchParams({ t }),
       },
     )
-    assertStringIncludes(await response.text(), 'We will retry automatically')
-    assert((await k.dir.lines(space))[0].trashed)
+    assertStringIncludes(await response.text(), 'costs nothing from now on')
+    assertEquals(await k.dir.lines(space), [])
     assertEquals(vms.held.size, 0)
     assertEquals(vms.groups.size, 1)
-    await retryRelease(line.eid)
+    await retryRelease(k, env, line.eid)
     assertEquals(vms.groups.size, 0)
     assertEquals(vms.accounts.size, 0)
     assertEquals(await k.dir.lines(space), [])

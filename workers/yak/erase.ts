@@ -67,7 +67,9 @@ import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
 import { purgedPrefix, retiring, retiringPrefix } from './file-retirement.ts'
 import { refuse } from './tool.ts'
-import { dollars, released } from './numbers.ts'
+import { Unsent } from '@yaks/host/senders'
+import { dollars } from './numbers.ts'
+import { returnNumber } from './number-release.ts'
 import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
 import { unkept } from './newcomer.ts'
@@ -446,7 +448,15 @@ export let erase = async (
   // Its numbers, each given back at the provider and then its row buried,
   // which its death would not take (directory-vocab.ts `phone_line`): a
   // number held past its space is billed every month with nobody to bill.
-  for (let line of d.lines) await released(env, line)
+  for (let line of d.lines) {
+    if (!await returnNumber(env, line.eid)) {
+      throw new Unsent(
+        `The phone company is still returning ${
+          shown(line.number)
+        }. We will retry automatically.`,
+      )
+    }
+  }
   for (let host of d.hosts) {
     await release(env, host.name)
     await unmail(env, host.mail)

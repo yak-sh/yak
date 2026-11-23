@@ -506,10 +506,11 @@ test('permanent return cancels a DID even when SIP cleanup has to wait', async (
     },
   })
   let number = '+12695550100'
-  await assertRejects(() => shop.release(number), Unsent)
-  assertEquals(held, false)
-  slow = false
   await shop.release(number)
+  assertEquals(held, false)
+  await assertRejects(() => shop.cleanup!(number), Unsent)
+  slow = false
+  await shop.cleanup!(number)
 })
 
 test('a read voip.ms is slow to answer is asked once more, and a text is never sent twice', async () => {

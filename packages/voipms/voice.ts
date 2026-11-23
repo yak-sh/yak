@@ -1,6 +1,11 @@
 // The carrier's SIP accounts for one DID. Account names identify the line
 // even after deletion, so its outstanding call records can still be billed.
-import type { Login, SubmitLogin, Voice } from '@yaks/phone'
+import {
+  CallStopError,
+  type Login,
+  type SubmitLogin,
+  type Voice,
+} from '@yaks/phone'
 import { Unsent } from '@yaks/host/senders'
 import { type Call, type Params, TimedOut, VOIPMS } from './request.ts'
 
@@ -102,6 +107,34 @@ let settled = async (steps: Promise<unknown>[]) => {
 
 let twice = <T>(step: () => Promise<T>) => step().catch(() => step())
 
+let failed = (step: Promise<unknown>): Promise<unknown[]> =>
+  step.then(
+    () => [],
+    (error) => error instanceof AggregateError ? error.errors : [error],
+  )
+
+let shut = async (
+  call: Call,
+  digits: string,
+  restrict: () => Promise<unknown>,
+) => {
+  // Stop calls out first, but try incoming even when restricting fails.
+  let out = await failed(twice(restrict))
+  let incoming = await failed(
+    heldDid(call, digits).then(async (did) => {
+      if (did && did.routing != 'sys:hangup') {
+        await call('setDIDRouting', { did: digits, routing: 'sys:hangup' })
+      }
+    }),
+  )
+  if (out.length || incoming.length) {
+    throw new CallStopError({ in: !incoming.length, out: !out.length }, [
+      ...out,
+      ...incoming,
+    ])
+  }
+}
+
 let groupOf = async (call: Call, digits: string) => {
   let groups = await call('getRingGroups').catch((error) => {
     if (/no_ringgroup/.test(String(error))) return { ring_groups: [] }
@@ -195,9 +228,6 @@ export let allow = async (
   let seats = voice.seats.filter((seat) =>
     requested.has(seat) && !voice.revoked?.includes(seat)
   )
-  // A shut line keeps its sign-ins, restricted, so a restore brings back
-  // the passwords people's softphones hold. Restricting comes before
-  // dropping departed owners' accounts, so calls out stop first.
   let keep = async () => {
     let kept = new Map<string, Fields>()
     let gone: Fields[] = []
@@ -215,14 +245,15 @@ export let allow = async (
     return kept
   }
   if (!voice.in) {
-    // Calls out stop first, asked again on their own before the DID is
-    // routed to a hang-up; the hang-up is tried whatever that answered.
-    let shut = await twice(keep).then(() => [], (e) => [e])
-    let routed = await route(call, digits, []).then(() => [], (e) => [e])
-    let errors = [...shut, ...routed]
-    if (errors.length) {
-      throw new AggregateError(errors, 'voip.ms could not shut all calls')
-    }
+    // Trash restricts every sign-in. Only a separate seat revocation drops one.
+    await shut(
+      call,
+      digits,
+      voice.revoked?.length ? keep : async () =>
+        settled(
+          (await accountsOf(call, digits)).map((a) => blocking(call, a, false)),
+        ),
+    )
     return
   }
   let kept = await keep()
@@ -238,14 +269,15 @@ export let allow = async (
 }
 
 export let release = async (call: Call, digits: string) => {
-  // Cancel the DID itself before catalog cleanup. A slow list of SIP
-  // accounts or groups must not hold up returning a number to the carrier.
   await call('cancelDID', { did: digits }).catch(async (error) => {
     if (await heldDid(call, digits)) throw error
   })
-  await Promise.all([
+}
+
+export let cleanup = async (call: Call, digits: string) => {
+  await settled([
     accountsOf(call, digits).then((accounts) =>
-      Promise.all(accounts.map((account) => drop(call, account)))
+      settled(accounts.map((account) => drop(call, account)))
     ),
     groupOf(call, digits).then(async (group) => {
       if (group) {

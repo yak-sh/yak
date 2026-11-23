@@ -27,6 +27,7 @@ import { manageAt } from '@yaks/platform/routes'
 import { ModelError } from '@yaks/model'
 import { Unsent } from '@yaks/host/senders'
 import { next } from '@yaks/wake'
+import { token } from '@yaks/graph'
 import {
   type App,
   type Directory,
@@ -53,6 +54,7 @@ import {
 } from './tool.ts'
 import { type Row } from './tool-words.ts'
 import { binnedNumber, trashedNumber } from './number-trash.ts'
+import { releaseStatus } from './number-release.ts'
 import { searched, slowPhone } from './number-search.ts'
 import { claimVoice, legacySeat, ownerSeats } from './number-voice.ts'
 export { heldNumber, trashedNumber } from './number-trash.ts'
@@ -118,10 +120,7 @@ export let purchaseConfirmed = async (
   })
 }
 
-/** A number given back to the provider it was bought through, and its row
- * buried: it costs nothing from then on. */
-export let released = async (env: Env, line: PhoneLine) => {
-  let carrier = await numbersOf(env, line.via)
+let returned = async (env: Env, line: PhoneLine, carrier: Numbers) => {
   if (line.ordering) {
     if (!await carrier.ordered?.(line.number)) {
       throw refuse(
@@ -132,7 +131,24 @@ export let released = async (env: Env, line: PhoneLine) => {
     await settled(env, line.eid, line.upfront + line.monthly)
   }
   await carrier.release(line.number)
-  await unworn(env, directoryOf(env.STORE), line.number)
+  let on = await wearer(directoryOf(env.STORE), line.number)
+  await stamp(env, {
+    entities: [{
+      entity: { eid: line.eid },
+      $was: { phone_line: { number: token(line.number), returned: null } },
+      phone_line: {
+        returned: new Date(env.CLOCK?.now() ?? Date.now()).toISOString(),
+      },
+      wake: null,
+    }, ...on ? [unwear(on)] : []],
+  })
+}
+
+/** Stop charging once the carrier takes the number back, then finish cleanup. */
+export let released = async (env: Env, line: PhoneLine) => {
+  let carrier = await numbersOf(env, line.via)
+  if (!line.returned) await returned(env, line, carrier)
+  await carrier.cleanup?.(line.number)
   await stamp(env, { entities: [{ entity: { eid: line.eid }, tombstone: {} }] })
 }
 
@@ -165,13 +181,11 @@ let heldBy = async (ctx: Ctx, space: Space, args: Args, trash = false) => {
 let wearer = async (dir: Directory, number: string) =>
   await dir.textSpace(number) ?? (await dir.lined(number))?.app ?? null
 
+let unwear = (on: { eid: string }) => ({ entity: { eid: on.eid }, phone: null })
+
 let unworn = async (env: Env, dir: Directory, number: string) => {
   let on = await wearer(dir, number)
-  if (on) {
-    await stamp(env, {
-      entities: [{ entity: { eid: on.eid }, phone: null }],
-    })
-  }
+  if (on) await stamp(env, { entities: [unwear(on)] })
 }
 
 let where = (space: Space, apps: App[], number: string) => {
@@ -718,10 +732,13 @@ export let numberTools: Row[] = [
       let said = []
       for (let line of lines) {
         if (line.trashed) {
+          let { calls, returning } = await releaseStatus(ctx.env, line.eid)
           said.push(
-            `${shown(line.number)} — in the trash until restored or purged; ${
+            `${shown(line.number)} — in the trash; ${
               dollars(line.monthly)
-            } a month; restore it on the manage page`,
+            } a month. ${calls} ` + (returning
+              ? 'The phone company is still returning it.'
+              : 'Restore it on the manage page.'),
           )
           continue
         }

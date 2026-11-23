@@ -8,6 +8,7 @@ import type { Env } from './env.ts'
 import { trashNumber, untrashNumber } from './erase.ts'
 import { spaceNow } from './model-spend.ts'
 import {
+  releaseStatus,
   releaseWork,
   returning,
   returnNumber,
@@ -27,11 +28,9 @@ export let binnedNumber = async (
 ) => {
   let now = new Date(env.CLOCK?.now() ?? Date.now())
   await trashNumber(dir, line, who, [releaseWork(line.eid, false, now)])
-  let stopped = await stopCalls(env, line.eid)
-  return `${shown(line.number)} is in the trash. ` +
-    (stopped
-      ? 'It stops taking calls and texts. '
-      : 'Texts are stopped. The phone company is still shutting off calls and we will retry automatically. ') +
+  await stopCalls(env, line.eid)
+  return `${shown(line.number)} is in the trash. Texts have stopped. ` +
+    `${(await releaseStatus(env, line.eid)).calls} ` +
     `It still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +
     'Only your confirmation returns it to the phone company.'

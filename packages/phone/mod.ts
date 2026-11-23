@@ -59,6 +59,7 @@ export {
   type Address,
   type Bought,
   type Call,
+  CallStopError,
   type Entity,
   type Login,
   type Numbers,

@@ -134,6 +134,13 @@ export type Verification = {
  * `out`, calls go out as it. */
 export type Ways = { in: boolean; out: boolean }
 
+/** The directions a provider confirmed stopped before the other work failed. */
+export class CallStopError extends AggregateError {
+  constructor(readonly stopped: Ways, errors: unknown[]) {
+    super(errors, 'The phone company could not shut all calls')
+  }
+}
+
 /** Which seats may hold a softphone sign-in, and which one inherits the
  * original account. A revoked seat loses its old sign-in even if it is
  * promoted again. */
@@ -160,6 +167,8 @@ export type Numbers = {
   point?: (number: string, callback: string) => Promise<void>
   /** gives a held number back; it costs nothing from then on */
   release: (number: string) => Promise<void>
+  /** Removes provider resources left behind after a confirmed return. */
+  cleanup?: (number: string) => Promise<void>
   /** files a toll-free verification */
   verify: (form: TollFree) => Promise<Verification>
   /** where a filed verification stands now */

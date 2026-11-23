@@ -607,6 +607,7 @@ export type PhoneLine = {
   campaign: string | null
   legacySeat?: string | null
   ordering?: string | null
+  returned?: string | null
   trashed: Trashed | null
 }
 
@@ -947,6 +948,7 @@ export type Row = MeteredRow & {
     legacy_seat?: string | null
     ordering?: string | null
     order_reported?: string | null
+    returned?: string | null
   }
   sms_consent?: { person: Id; consent: string; at: string; space?: Id }
   operator_alerts?: { channel?: Alerting | null; declined?: string | null }
@@ -1469,6 +1471,7 @@ export let lineOf = (r: Row): PhoneLine => {
     campaign: l.campaign ?? null,
     legacySeat: l.legacy_seat,
     ordering: l.ordering,
+    returned: l.returned,
     trashed: trashedOf(r),
   }
 }
@@ -4067,14 +4070,18 @@ export let directoryRows = (rows: {
       space: Pick<Space, 'eid'> | { path: Built },
     ): Promise<PhoneLine[]> => {
       let at = 'path' in space ? space.path : line`=${space.eid}`
-      return (await query(line`.phone_line.space${sub(at)} ?trashed`))
+      return (await query(
+        line`.phone_line.space${sub(at)} !phone_line.returned ?trashed`,
+      ))
         .map(lineOf)
     },
     // A held number, including its trash state, wherever it was assigned.
     heldLine: async (
       number: string,
     ): Promise<{ space: Space; line: PhoneLine } | null> => {
-      let row = await one(line`.phone_line.number=${number} ?trashed`)
+      let row = await one(
+        line`.phone_line.number=${number} !phone_line.returned ?trashed`,
+      )
       if (!row?.phone_line) return null
       let held = lineOf(row)
       let space = await self.at(held.space)

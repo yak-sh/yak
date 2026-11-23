@@ -52,7 +52,9 @@ type Line = {
 
 // Every number spaces hold, and those in the trash.
 let lines = async (env: Env) =>
-  await meta(env).query(q`.phone_line&!phone_line.ordering&?trashed`)
+  await meta(env).query(
+    q`.phone_line&!phone_line.ordering&!phone_line.returned&?trashed`,
+  )
 
 /** Confirm the carrier's result for a submitted order. The existing budget
  * hold and line stay in place while the carrier has yet to show the DID. */

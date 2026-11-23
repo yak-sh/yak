@@ -34,6 +34,7 @@ import {
   accountFor,
   allow,
   callsAs,
+  cleanup,
   heldDid,
   login,
   made,
@@ -448,6 +449,7 @@ export let numbers = (
     // ordered, so a host points it once it puts the number to use.
     point: (number, callback) => point(call, number, callback),
     release: (number) => release(call, ten(number)),
+    cleanup: (number) => cleanup(call, ten(number)),
     verify: () =>
       Promise.reject(new Error('voip.ms sells no toll-free number to verify')),
     verification: () =>
