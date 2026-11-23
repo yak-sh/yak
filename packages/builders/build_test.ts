@@ -343,6 +343,21 @@ test('outer query bindings make independent builds and tool calls', async () => 
   assert(cited?.cites)
 })
 
+test('immediate builders matching one write each make their own build', async () => {
+  let { g } = await shop({}, [], [code()])
+  let others = ['second', 'third'].map((eid) => ({
+    ...builder(),
+    entity: { eid },
+  }))
+  await g.apply([builder(), ...others])
+  await g.apply([source('a')])
+  let made = await Promise.all(
+    [ids.builder, 'second', 'third'].map((b) => runOf(g, ['a'], 'main', b)),
+  )
+  assertEquals(new Set(made).size, 3)
+  assertEquals((await rows(g, '.build')).length, 3)
+})
+
 test('nested collection changes the key, retains the build and adds a take', async () => {
   let { g, runner } = await shop({}, [notes], [code()])
   let query = '$s .doc.title=Source; [$n .note.parent=$s, note.text=$text]'

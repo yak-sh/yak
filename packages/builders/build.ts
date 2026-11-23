@@ -342,8 +342,10 @@ export let reconcile = (
     for (let { binding } of wanted) {
       let entities = binding.entities
       let match = JSON.stringify(entities)
+      // The alias names its builder: one write can wake several immediate
+      // builders, whose writes resolve together (./change.ts).
       let build = owners.get(buildOf(builder.entity.eid, match, variant)) ??
-        `$build${plans.length}`
+        `$build:${builder.entity.eid}:${plans.length}`
       let p: Plan = {
         builder: builder.entity.eid,
         build,

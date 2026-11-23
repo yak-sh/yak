@@ -1631,7 +1631,9 @@ export class Store extends Durable {
       // builders is not: the runner writes each answer at generation zero,
       // so every step starts the count again (workflow_test.ts).
       depth: 3,
-      max: 2,
+      // How many runs go at once is the pool's to judge by how promptly its
+      // thread comes back (@yaks/effects pool.ts): steps of a workflow that
+      // require none of each other run together (workflow_test.ts).
       nudge: () => this.#owedEffects(),
       // No request waits on the pool, so none counts its trips (hops.ts).
       apart,
