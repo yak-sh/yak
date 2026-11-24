@@ -3111,9 +3111,10 @@ let served = async (
   // reporter, streamed, with what they load of the release's files moved to
   // the release (`kept`); a worker's stylesheet and its other files are
   // kept the same way.
-  if (page == own) page = await kept(req, env, app, at, bare, page)
+  let worker = page == own
+  if (worker) page = await kept(req, env, app, at, bare, page)
   if (
-    page == own && page.body &&
+    worker && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')
   ) {
     page = await reported(

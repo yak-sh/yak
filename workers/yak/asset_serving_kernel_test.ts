@@ -91,7 +91,7 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     let kept = await at(chunk1)
     assertEquals(
       kept.headers.get('cache-control'),
-      'private, max-age=31536000, immutable',
+      'public, max-age=31536000, immutable',
     )
     assertEquals(await kept.text(), "export let v = 'first'")
     assertStringIncludes(first, '<a href="./next.html">')
@@ -111,7 +111,7 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertEquals(css.status, 200)
     assertEquals(
       css.headers.get('cache-control'),
-      'private, max-age=31536000, immutable',
+      'public, max-age=31536000, immutable',
     )
     assertStringIncludes(await css.text(), '/*first*/')
     let image = new URL('../images/bg.svg', `https://${host}${css1}`)
@@ -124,7 +124,7 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertEquals(head.status, 200)
     assertEquals(
       head.headers.get('cache-control'),
-      'private, max-age=31536000, immutable',
+      'public, max-age=31536000, immutable',
     )
     assertEquals(await head.text(), '')
     let range = await at(css1, { headers: { range: 'bytes=0-3' } })

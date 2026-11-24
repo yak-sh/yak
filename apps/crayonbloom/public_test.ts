@@ -1,3 +1,4 @@
+import { lookVersion } from './look/look.ts'
 import { equal, ok, test } from '@yaks/testing'
 import { DOMParser, parseHTML } from 'linkedom'
 import { publicPage } from './public.ts'
@@ -54,7 +55,7 @@ test('a post and feed preserve published text and mounted links', async () => {
     ).document.querySelector('article')!.textContent,
   )
   ok(html.includes('href="/crayonbloom-preview/coloring-pages/unicorns"'))
-  ok(html.includes('href="/crayonbloom-preview/look.css"'))
+  ok(html.includes(`href="/crayonbloom-preview/look.css?v=${lookVersion}"`))
   ok(!html.includes('<script'))
   let feed = await publicPage(new Request(base + '/blog.rss'), env)
   equal(

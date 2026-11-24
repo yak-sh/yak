@@ -81,6 +81,8 @@ test("a worker's page names the release's files by the release's address, and no
   assertMatch(html, /<link rel="stylesheet" href="look.css">/)
   assertMatch(html, /<img src="drawn.png">/)
   assertMatch(html, /<a href="art\/p.svg">/)
+  // And it wears the platform's reporter, as every page does.
+  assertMatch(html, /data-yak-version/)
 })
 
 test("a worker's stylesheet names the release's fonts by the release's address", async () => {
