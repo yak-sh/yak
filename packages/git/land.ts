@@ -184,6 +184,8 @@ export type LandOps = {
   /** Bring pnpm-lock.yaml up to the checkout at cwd's manifests. */
   lock?: (cwd: string) => Promise<Ran>
   write?: (text: string, error?: boolean) => void
+  /** The writer that owns an automated worktree. */
+  writer?: string
   /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
   /** wait for the shared checkout to be this landing's alone, given its Git
@@ -467,7 +469,12 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // Uncommitted work would not land and would break a rebase, so a dirty
   // worktree is refused: what you land must be what you tested.
   let dirty = must('git status', status)
-  if (dirty) throw new LandError(`land: worktree is dirty:\n${dirty}`)
+  if (dirty) {
+    let writer = ops.writer ? `\n  writer: ${ops.writer}` : ''
+    throw new LandError(
+      `land: worktree is dirty:\n${dirty}\n  branch: ${branch}\n  checkout: ${tree}${writer}`,
+    )
+  }
   let gitdir = must('find the shared checkout', common)
 
   // Ancestry decides which of the two things this invocation does, and it is

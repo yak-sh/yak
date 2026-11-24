@@ -1,8 +1,61 @@
+import * as fs from '@yaks/file/io'
 import { posix } from 'node:path'
-import { type File, fileOf } from './push.ts'
+import type { Run } from '@yaks/git/land'
+import { type Carried, type File, fileOf, type Target } from './push.ts'
 import { output } from './subprocess.ts'
 
 let text = new TextDecoder()
+
+/** Save the changes a push merged from the platform. */
+export let writeCarried = async (dir: string, files: Carried[]) => {
+  for (let { path, content } of files) {
+    let at = `${dir}/${path}`
+    await fs.mkdir(posix.dirname(at), { recursive: true })
+    await fs.writeTextFile(at, content)
+  }
+}
+
+/** The commit for a platform change, naming the writer that brought it to Git. */
+export let carrying = (to: Target, files: Carried[], writer: string): string =>
+  `${to.space ? `${to.space}/` : ''}${to.app}: carry ${
+    files.map((f) => f.path).join(', ')
+  } into git\n\nMerged platform changes into the app's Git source.\n\nWriter: ${writer}`
+
+/** A manual push saves the merged paths in its own commit. Git's path-limited
+ * commit preserves staged changes elsewhere. The caller's checkout may also
+ * have changes to generated files, so its commit runs only this writer. */
+export let saveCarried = async (
+  dir: string,
+  to: Target,
+  files: Carried[],
+  run: Run,
+  writer: string,
+) => {
+  let repo = await run(['rev-parse', '--is-inside-work-tree'], dir)
+  await writeCarried(dir, files)
+  if (!repo.ok || repo.out.trim() != 'true') return
+  let paths = files.map((f) => f.path)
+  let git = async (...args: string[]) => {
+    let r = await run(['--literal-pathspecs', ...args], dir)
+    if (!r.ok) {
+      throw new Error(
+        `${writer}: git ${args[0]} failed in ${dir} for ${
+          paths.join(', ')
+        }: ${r.err.trim()}`,
+      )
+    }
+  }
+  await git('add', '--intent-to-add', '--', ...paths)
+  await git(
+    'commit',
+    '--only',
+    '--no-verify',
+    '-m',
+    carrying(to, files, writer),
+    '--',
+    ...paths,
+  )
+}
 
 /** Git's NUL-delimited batch replies. Blob lengths frame the raw bytes, so
  * both names and blobs may contain newlines and blobs may contain NULs. */

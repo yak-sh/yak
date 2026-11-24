@@ -10,9 +10,8 @@
 // such a change. The push merges it over the checkout's file, against the
 // newest text git has that the app held too: copy.json by key (@yaks/copy
 // `merge`, where a key edited on the page keeps the page's text), every other
-// file by line. The merged files go into the release and into the checkout,
-// which writes them into its working tree or lands them as a commit on main,
-// so git holds them before the next push. Where git and the platform changed
+// file by line. A Git checkout commits the merge and the release uses the
+// committed bytes. Where git and the platform changed
 // the same source lines, the push refuses before writing anything. A conflict
 // in the app's generated lock clears it from the draft so the release compiler
 // regenerates it from the merged package.json.
@@ -92,7 +91,9 @@ export type Carried = { path: string; content: string }
  * checkout that cannot keep them still carries them into the release. */
 export type Checkout = {
   earlier: (path: string) => AsyncIterable<string>
-  write?: (files: Carried[]) => Promise<void>
+  /** Save the merge, returning the bytes the checkout committed if it
+   * transformed the files before committing. */
+  write?: (files: Carried[]) => Promise<Carried[] | void>
 }
 
 /** A push's base version, confirmation and progress, its bounded wait for
@@ -493,12 +494,12 @@ let pushing = async (
     ? await changes(ask, at, local, hashes, held.held, checkout, opts.keep)
     : { carry: [], relock: false }
   if (carry.length) {
-    await checkout?.write?.(carry)
-    let by = new Map(carry.map((f) => [f.path, f]))
+    let saved = await checkout?.write?.(carry) ?? carry
+    let by = new Map(saved.map((f) => [f.path, f]))
     let had = new Set(local.map((f) => f.path))
     local = [
       ...local.map((f) => by.get(f.path) ?? f),
-      ...carry.filter((f) => !had.has(f.path)),
+      ...saved.filter((f) => !had.has(f.path)),
     ]
     hashes = await Promise.all(local.map(shaOf))
     said.push(

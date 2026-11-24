@@ -35,13 +35,11 @@
 import { checkout } from './checkout.ts'
 import { account } from './account.ts'
 import { rpc, zone } from './api.ts'
-import { type Carried, homeOf, push, versions } from './push.ts'
-import { blobs, filesAt } from './git-files.ts'
+import { homeOf, push, versions } from './push.ts'
+import { blobs, carrying, filesAt, writeCarried } from './git-files.ts'
 import { onMain } from './landing.ts'
-import * as fs from '@yaks/file/io'
 import { output } from './subprocess.ts'
 import { ADMIN } from '@yaks/platform/bots'
-import { posix } from 'node:path'
 import type { Comp, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
@@ -442,26 +440,49 @@ export let box = (
           // What the app holds and git does not lands on main before the
           // release, so the next push carries it from git.
           write: async (carried) => {
+            let writer = `deploy catch-up for ${to.space}/${to.app}`
+            let paths = carried.map((f) => `${to.dir}/${f.path}`)
             let landed = await onMain(dir, `carry-${to.app}`, {
               run: (args, cwd) => git(cwd, args, stopping),
               out: () => {},
               note: (line) => console.log(`@yaks/admin — ${line}`),
+              writer,
             }, async (tree, need) => {
-              let paths = carried.map((f) => `${to.dir}/${f.path}`)
-              for (let [i, f] of carried.entries()) {
-                await fs.mkdir(posix.dirname(`${tree}/${paths[i]}`), {
-                  recursive: true,
-                })
-                await fs.writeTextFile(`${tree}/${paths[i]}`, f.content)
-              }
-              await need(tree, ['add', '--', ...paths])
-              await need(tree, ['commit', '-q', '-m', carrying(to, carried)])
+              await writeCarried(`${tree}/${to.dir}`, carried)
+              await need(tree, ['--literal-pathspecs', 'add', '--', ...paths])
+              await need(tree, [
+                'commit',
+                '-q',
+                '-m',
+                carrying(to, carried, writer),
+              ])
               return []
+            }, async (base, need) => {
+              let changed = await need(dir, [
+                '--literal-pathspecs',
+                'diff',
+                '--name-only',
+                sha,
+                base,
+                '--',
+                ...paths,
+              ])
+              if (changed) {
+                throw new Error(
+                  `${writer}: Git moved while merging these files:\n${changed}`,
+                )
+              }
             })
             console.log(
               `@yaks/admin — landed ${to.space}/${to.app}'s platform ` +
                 `changes as ${landed.slice(0, 8)}`,
             )
+            return await Promise.all(carried.map(async ({ path }) => ({
+              path,
+              content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(
+                await blob(`${landed}:${to.dir}/${path}`),
+              ),
+            })))
           },
         },
       })
@@ -470,16 +491,6 @@ export let box = (
     wait: sleep,
   }
 }
-
-/// carrying({ dir: 'apps/mail', app: 'mail', space: 'jeff' }, [{ path: 'a.ts', content: '' }])
-///   -> 'jeff/mail: carry a.ts, changed on yaks.app, into git\n\nIts Operator or an edit on its page changed it on yaks.app, and no commit\nhad it. A release from git merged it in instead of pushing over it.'
-/** The message of the commit that carries an app's platform changes. */
-export let carrying = (to: Release, carried: Carried[]): string =>
-  `${to.space}/${to.app}: carry ${
-    carried.map((f) => f.path).join(', ')
-  }, changed on yaks.app, into git\n\n` +
-  'Its Operator or an edit on its page changed it on yaks.app, and no commit\n' +
-  'had it. A release from git merged it in instead of pushing over it.'
 
 let time = (c?: Comp) => c?.at ? Date.parse(String(c.at)) : undefined
 

@@ -85,6 +85,7 @@ import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
 import { homeOf, push, type PushProgress, read, versions } from './push.ts'
+import { saveCarried } from './git-files.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 import { modelLine, operatorModel, operatorRows } from './model.ts'
@@ -931,12 +932,14 @@ export let runs = (
               if (shown.ok) yield shown.out
             }
           },
-          write: async (files) => {
-            for (let f of files) {
-              await fs.mkdir(dirname(`${dir}/${f.path}`), { recursive: true })
-              await fs.writeTextFile(`${dir}/${f.path}`, f.content)
-            }
-          },
+          write: (files) =>
+            saveCarried(
+              dir,
+              to,
+              files,
+              (args, cwd) => git(cwd, args, host.stopping),
+              `yak admin push as ${at.address}`,
+            ),
         },
         confirm: a.confirm === true,
         progress: pushNote,

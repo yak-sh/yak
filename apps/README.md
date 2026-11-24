@@ -22,13 +22,13 @@ its space's Operator fixing it, or its `copy.json` (@yaks/copy) edited on the
 app's page. A file the app holds that matches no text git has of it is such a
 change. Before it writes, the push merges it over the checkout's file, against
 the newest text git has that the app held too: `copy.json` by key (a key edited
-on the page keeps the page's text), every other file by line. A push from a
-checkout writes the merged files into it, so they show in `git diff`; commit
-them with the change you pushed. The deploy catch-up's release lands them on
-main as their own commit. Where git and the platform changed the same source
-lines, the push writes nothing and says which file to merge by hand. If the
-app's generated `package-lock.json` conflicts, the release compiler regenerates
-it from the merged `package.json` and the push saves the new lock in git.
+on the page keeps the page's text), every other file by line. A manual push
+commits the merged paths in the current checkout when it is in Git. The deploy
+catch-up lands its commit on main and releases the bytes it committed. Where git
+and the platform changed the same source lines, the push writes nothing and says
+which file to merge by hand. If the app's generated `package-lock.json`
+conflicts, the release compiler regenerates it from the merged `package.json`
+and the push saves the new lock in git.
 
 An app with a `package.json` of its own is formatted with the repository's
 settings only when they are named: `deno fmt --config deno.json apps/<name>`.

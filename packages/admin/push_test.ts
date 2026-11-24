@@ -757,6 +757,7 @@ let fixed = async (
   git: Record<string, string[]>,
   ours: Record<string, string>,
   compile?: (files: Map<string, File>) => void,
+  committed?: (files: Carried[]) => Carried[],
 ) => {
   let app = new Map<string, File>(
     Object.keys(git).map((path) => [path, { path, content: git[path][0] }]),
@@ -784,7 +785,10 @@ let fixed = async (
         earlier: async function* (path) {
           yield* git[path] ?? []
         },
-        write: (files) => Promise.resolve(void wrote.push(...files)),
+        write: (files) => {
+          wrote.push(...files)
+          return Promise.resolve(committed?.(files))
+        },
       },
     },
   )
@@ -822,6 +826,19 @@ test('a release keeps a file added on the platform', async () => {
   )
   assertEquals(r.held, ['app.ts', 'auth.ts'])
   assertEquals(r.wrote, [{ path: 'auth.ts', content: 'basic\n' }])
+})
+
+test('a release serves the committed bytes of a platform change', async () => {
+  let r = await fixed(
+    { 'app.ts': 'let version=2\n', 'pitch.ts': 'let pitch=440\n' },
+    { 'app.ts': ['let version = 1\n'] },
+    { 'app.ts': 'let version = 1\n' },
+    undefined,
+    (files) =>
+      files.map((f) => ({ ...f, content: f.content.replace('=', ' = ') })),
+  )
+  assertEquals(await r.read('app.ts'), 'let version = 2\n')
+  assertEquals(await r.read('pitch.ts'), 'let pitch = 440\n')
 })
 
 test('a release over a text git had replaces it and hands git nothing', async () => {

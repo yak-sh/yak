@@ -45,6 +45,7 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
     allow?: string[],
     formatted: Answer = {},
     locked: Answer = {},
+    writer?: string,
   ) =>
     land({
       cwd: '/work',
@@ -58,6 +59,7 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
         return ran(locked)
       },
       allow,
+      writer,
       // The lock shows in the calls, where it falls among the git commands.
       hold: (gitdir) => {
         calls.push({ args: ['hold'], cwd: gitdir })
@@ -84,6 +86,28 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
     commands: () => calls.map((c) => c.args.join(' ')),
   }
 }
+
+test('land identifies the writer and files when its worktree is dirty', async () => {
+  let f = fixture({
+    'status --porcelain=v1 --untracked-files=all': {
+      out: ' M apps/sound/index.css\n?? apps/sound/lib/pitch.js\n',
+    },
+  })
+  let error = await assertRejects(
+    () => f.invoke(undefined, {}, {}, 'deploy catch-up for jeff/sound'),
+    LandError,
+  )
+  for (
+    let detail of [
+      'apps/sound/index.css',
+      'apps/sound/lib/pitch.js',
+      'branch: work',
+      'checkout: /work',
+      'writer: deploy catch-up for jeff/sound',
+    ]
+  ) assert(error.message.includes(detail))
+  assertEquals(f.formats, [])
+})
 
 test('land publishes the branch and fast-forwards the base while preserving its worktree', async () => {
   let f = fixture()

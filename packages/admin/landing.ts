@@ -12,6 +12,7 @@ export type Landing = {
   run: Run
   out: (line: string) => void
   note: (line: string) => void
+  writer?: string
 }
 
 /** git run in `cwd`, its output trimmed, refused as `refusal` or failing. */
@@ -30,7 +31,7 @@ export type Need = (
 export let onMain = async (
   root: string,
   name: string,
-  { run, out, note }: Landing,
+  { run, out, note, writer = name }: Landing,
   make: (tree: string, need: Need) => Promise<string[]>,
   check?: (base: string, need: Need) => Promise<void>,
 ): Promise<string> => {
@@ -67,9 +68,9 @@ export let onMain = async (
   let parent = `${root}/.claude/worktrees`
   await fs.mkdir(parent, { recursive: true })
   let tree = `${parent}/${named}`
-  await need(root, ['worktree', 'add', '-b', named, tree, 'main'])
+  await need(root, ['worktree', 'add', '-b', named, tree, base])
   let kept = true
-  note(`landing worktree: ${tree}`)
+  note(`${writer} is landing from ${tree}`)
   try {
     let allow = await make(tree, need)
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -77,6 +78,7 @@ export let onMain = async (
         cwd: tree,
         allow,
         run,
+        writer,
         write: (line, error) => (error ? note : out)(line.trimEnd()),
       })
       if (!('landed' in outcome)) {

@@ -11,7 +11,8 @@ git diff --cached --name-only --diff-filter=ACMR -z |
   while IFS= read -r file
   do
     git diff --quiet -- "$file" || continue
-    deno fmt --config deno.json --quiet -- "$file" 2>/dev/null &&
+    # Deno treats -- here as an empty file list and formats the whole checkout.
+    deno fmt --config deno.json --quiet "./$file" 2>/dev/null &&
       git add -- "$file"
   done
 
