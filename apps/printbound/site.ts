@@ -54,7 +54,7 @@ let answers: Record<
   (files: Files, base: string) => Response | Promise<Response>
 > = {
   '': (_files, base) => page(renderToString(h(Home, { base }))),
-  'look.css': (files) => look(files),
+  'look.css': look,
   // The studio's page is a file, so the platform compiles its script; the
   // bar and the foot are set into it where it marks them.
   studio: async (files, base) => {

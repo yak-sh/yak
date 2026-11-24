@@ -23,9 +23,9 @@ The look is Spellbound, the design of the site PrintBound had before it moved
 here (`bindery` at `10aaf7c`; `public/spellbound.md` has its reasons): a theme
 of the kit's roles (`look/spellbound.css`), a skin laid over the kit's parts
 (`look/skin.css`) and the sheets of the app's own parts. `look.ts` serves them
-as one stylesheet, `look.css`, with the kit's sheets read from the platform's
-copy of @yaks/ui. The fonts (`fonts/`) and pictures (`img/`, `og.png`) are
-released with the app and not kept in git (`apps/.gitignore`).
+as one stylesheet, `look.css`, with the kit's sheets compiled into the Worker
+from @yaks/ui. The fonts (`fonts/`) and pictures (`img/`, `og.png`) are released
+with the app and not kept in git (`apps/.gitignore`).
 
 The initial fixture preview is explicit and makes no paid model or print calls.
 `bin/print-previews.ts` provisions typography and preview settings as artifacts.

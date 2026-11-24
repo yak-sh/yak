@@ -3,16 +3,13 @@ import { parseHTML } from 'linkedom'
 import { relative } from './request.ts'
 import { GUIDES, site } from './site.ts'
 
-// The app's files as its FILES binding hands them over, and the kit's sheets
-// where the platform puts them beside an app that names @yaks/ui.
+// The app's files as its FILES binding hands them over.
 let reads: string[] = []
 let env = {
   FILES: {
     fetch: async (path: string) => {
       reads.push(path)
-      let file = path.startsWith('/__packages/@yaks/ui/')
-        ? new URL('../../packages/ui/' + path.slice(21), import.meta.url)
-        : new URL('.' + path, import.meta.url)
+      let file = new URL('.' + path, import.meta.url)
       try {
         return new Response(await Deno.readTextFile(file))
       } catch {
@@ -109,6 +106,7 @@ test('a doubled slash, a trailing slash and .html name the same page', async () 
 })
 
 test('the look is the theme, then the kit’s sheets, then the skin', async () => {
+  let count = reads.length
   let answer = await ask('look.css')
   equal(answer!.headers.get('content-type'), 'text/css; charset=utf-8')
   let css = await answer!.text()
@@ -121,6 +119,7 @@ test('the look is the theme, then the kit’s sheets, then the skin', async () =
   ]
     .map((mark) => css.indexOf(mark))
   ok(at.every((n, i) => n >= 0 && (i == 0 || n > at[i - 1])), at.join())
+  equal(reads.length, count)
 })
 
 test('the studio’s page file wears the bar and the foot', async () => {
