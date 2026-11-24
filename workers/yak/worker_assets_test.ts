@@ -50,6 +50,18 @@ await agent.tool('app_files', {
   ],
 })
 await agent.tool('app_deploy', { space, app: 'made' })
+await agent.tool('app_new', {
+  space,
+  slug: 'gated',
+  title: 'Gated',
+  access: 'private',
+})
+await agent.tool('app_files', {
+  space,
+  app: 'gated',
+  files: [serverSource, { path: 'fonts/f.ttf', content: 'gated font' }],
+})
+await agent.tool('app_deploy', { space, app: 'gated' })
 let at = (path: string, init: RequestInit = {}) => k.at(host, path, init)
 let release = (path: string) =>
   new RegExp(`/made/api/assets/[0-9a-f-]{36}/${path}`)
@@ -114,4 +126,19 @@ test('a file a page loads at an address the browser asks again is reported, once
   let paths = k.reported.slice(before).filter((row) => row.error)
     .map((row) => (row.error as { tags: Record<string, string> }).tags.path)
   equal(paths, ['/made/drawn.png'])
+})
+
+test("a private app's worker hands a stranger its release's file, kept privately", async () => {
+  let html = await (await at('/gated/made')).text()
+  let url = html.match(/\/gated\/api\/assets\/[0-9a-f-]{36}\/fonts\/f\.ttf/)![0]
+  let font = await at(url)
+  equal(await font.text(), 'gated font')
+  equal(
+    font.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
+  let held = await at(url, {
+    headers: { 'if-none-match': font.headers.get('etag')! },
+  })
+  equal(held.status, 304)
 })

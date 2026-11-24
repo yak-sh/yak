@@ -37,7 +37,10 @@ let local = (
     : url.pathname.startsWith(bare)
     ? url.pathname.slice(bare.length)
     : null
-  return path == null || path.startsWith('api/') || path.startsWith('~')
+  // The icon is the platform's to answer at the app's address, drawn where
+  // the release holds none, and named by what draws it (`iconAt`).
+  return path == null || path.startsWith('api/') || path.startsWith('~') ||
+      path == 'icon.png'
     ? null
     : { path, url }
 }
@@ -390,7 +393,7 @@ export let unfound = async (
       if (!at || !/\.[a-z0-9]+$/i.test(at.path) || /\.html?$/i.test(at.path)) {
         continue
       }
-      if (at.path.startsWith('__packages/') || at.path == 'icon.png') continue
+      if (at.path.startsWith('__packages/')) continue
       let path
       try {
         path = root + decodeURIComponent(at.path)

@@ -1464,6 +1464,19 @@ let appDoor = async (
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
         versioned.path
       let own = await c.time('worker', () => worker(new Request(url, req)))
+      // What the worker gives of the live release is that release's file,
+      // so the browser keeps it, privately: the worker decides who may.
+      if (own?.status == 200 && source == app.source) {
+        let headers = new Headers(own.headers)
+        headers.set('cache-control', browserImmutable)
+        let etag = own.headers.get('etag')
+        if (etag && unchanged(req, etag)) {
+          await own.body?.cancel()
+          headers.delete('content-length')
+          return new Response(null, { status: 304, headers })
+        }
+        return new Response(own.body, { status: 200, headers })
+      }
       if (own && own.status != 404) return own
       await own?.body?.cancel()
       return refuse('not_a_reader')

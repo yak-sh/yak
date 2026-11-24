@@ -53,6 +53,8 @@ test('release URLs keep local assets under their mount', () => {
     assetUrl(ref, at, at, id, () => false, at, (p) => p == 'a b.svg')
   assertEquals(held('./a%20b.svg'), `${at}api/assets/${id}/a%20b.svg`)
   assertEquals(held('./look.css'), './look.css')
+  // The icon is the platform's to answer at the app's address.
+  assertEquals(assetUrl('./icon.png?v=1', at, at, id), './icon.png?v=1')
 })
 
 test('local import-map values, URL keys, and scopes follow a release', () => {
