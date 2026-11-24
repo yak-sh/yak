@@ -74,7 +74,8 @@ export let asked = async (
 ) => {
   let path = new URL(req.url).pathname
   if (!shareable(req, path)) return null
-  let key = pageAt(host, path, mount)
+  let search = new URL(req.url).search
+  let key = pageAt(host, path, mount, undefined, search)
   // The app this path could be: the one its first segment names, or the
   // front page, whose mount is the whole hostname.
   let first = /^\/[^/]+\//.exec(path)?.[0]
@@ -115,7 +116,7 @@ export let asked = async (
   // Not a pass: the next stranger is answered from it.
   if (kept.at.stranger && session) {
     await kept.got.body?.cancel()
-    let own = pageAt(host, path, mount, session)
+    let own = pageAt(host, path, mount, session, search)
     kept = passes(site, [own]) ? null : await held(own, session)
     if (!kept?.at.outsider) {
       await kept?.got.body?.cancel()
@@ -140,7 +141,6 @@ export let asked = async (
   // A kept forward is kept by its path alone, so the visitor's query, a
   // shared link's `ref` or an ad's `utm_*`, goes on with them.
   let to = headers.get('location')
-  let search = new URL(req.url).search
   if (to && search && !to.includes('?')) headers.set('location', to + search)
   let etag = headers.get('etag')
   let answer = etag && matches(req.headers.get('if-none-match'), etag)

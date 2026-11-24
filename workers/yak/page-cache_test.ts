@@ -295,6 +295,17 @@ test('two spaces at one path keep two pages', async () => {
   assertEquals(g.site.held.size, 2)
 })
 
+test("an address's version is part of what is kept, and a visitor's tracking query is not", async () => {
+  let g = gateway((who) => keep(page(new URL(who.url).search), space, app))
+  let at = 'https://ada.yaks.app/cookbook/icon.png'
+  let text = async (url: string) => await (await g.get(url))!.text()
+  assertEquals(await text(at), '<body></body>')
+  assertEquals(await text(`${at}?v=r1.&utm_source=x`), '<body>?v=r1.</body>')
+  assertEquals(await text(`${at}?display`), '<body>?display</body>')
+  assertEquals(await text(`${at}?ref=friend`), '<body></body>')
+  assertEquals(g.site.held.size, 3)
+})
+
 test('an answer that sets a cookie is never kept', async () => {
   let cookie = new Response('hi', { headers: { 'set-cookie': 'a=b' } })
   let ok = new Response('hi')

@@ -321,21 +321,39 @@ let heldBy = (session: string) => sha256(session).slice(0, 32)
  * the digest of their session token, which only they hold, so nobody else's
  * request ever reads it, and a forged cookie names a key Site never filled. */
 /// pageAt('ada.yaks.app', '/menu/', '/menu/') -> 'https://site.invalid/@ada.yaks.app/menu/?g=5&mount=%2Fmenu%2F'
+/// pageAt('ada.yaks.app', '/menu/icon.png', '/menu/', undefined, '?v=r.&utm_source=x') -> 'https://site.invalid/@ada.yaks.app/menu/icon.png?g=5&mount=%2Fmenu%2F&v=r.'
 export let pageAt = (
   host: string,
   path: string,
   mount: string | null,
   session?: string,
+  // The visitor's query, of which only what the platform names an address
+  // by is kept (`NAMED`): a version (`v`), the list's mark (`display`). A
+  // shared link's `ref` or an ad's `utm_*` names the same page.
+  search = '',
 ): string =>
   `https://site.invalid/@${encodeURIComponent(host)}${path}?g=${PAGES}${
     mount ? `&mount=${encodeURIComponent(mount)}` : ''
-  }${session ? `&who=${heldBy(session)}` : ''}`
+  }${session ? `&who=${heldBy(session)}` : ''}${named(search, '&')}`
+
+// What the platform names an address by in its query.
+let NAMED = ['display', 'v']
+let named = (search: string, lead: string) => {
+  let from = new URLSearchParams(search)
+  let kept = new URLSearchParams()
+  for (let name of NAMED) {
+    let value = from.get(name)
+    if (value != null) kept.set(name, value)
+  }
+  let said = kept.toString().replace(/=(?=&|$)/g, '')
+  return said ? lead + said : ''
+}
 
 /** The address a key names, as the request a visitor would have sent: with
  * the session cookie `asking` carries, where the key is that session's own
  * and the cookie is the session it names, else with no cookie at all. */
 export let visitor = (url: string, asking?: Request): Request | null => {
-  let { pathname, searchParams } = new URL(url)
+  let { pathname, search, searchParams } = new URL(url)
   let at = pathname.indexOf('/', 2)
   if (!pathname.startsWith('/@') || at < 0) return null
   let host = decoded(pathname.slice(2, at))
@@ -349,7 +367,10 @@ export let visitor = (url: string, asking?: Request): Request | null => {
   // An upload's fill may take Files' yes: it is kept under its app's mark,
   // which moves the moment an upload is withdrawn, so only this keep's own
   // freshness bounds a removed upload.
-  return new Request(`https://${host}${pathname.slice(at)}`, { headers })
+  return new Request(
+    `https://${host}${pathname.slice(at)}${named(search, '?')}`,
+    { headers },
+  )
 }
 
 /** Whether a key is a session's own (`pageAt`). */
