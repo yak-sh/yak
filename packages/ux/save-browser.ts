@@ -2,6 +2,7 @@
 import { batch, effect, untracked } from '@preact/signals'
 import { h, render } from 'preact'
 import { Save } from './Save.ts'
+import { result } from '@yaks/ui/interaction'
 
 type Control = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 type Group = {
@@ -218,6 +219,17 @@ export let bindSave = (
       groups.some((g) => g.form == form && changed(g))
     )
     if (pending.some((form) => form.reportValidity?.() === false)) return
+    let measured = result(doc)
+    let server = 0
+    let waiting = async <T>(send: () => Promise<T>) => {
+      if (!measured) return send()
+      let since = performance.now()
+      try {
+        return await send()
+      } finally {
+        server += performance.now() - since
+      }
+    }
     let snapshots = pending.map((form) => ({
       form,
       body: bodyOf(form),
@@ -233,7 +245,7 @@ export let bindSave = (
     let said = ''
     try {
       for (let { form, body, fields } of snapshots) {
-        let answer = await opts.save(form, body)
+        let answer = await waiting(() => opts.save(form, body))
         if (typeof answer == 'string') said = answer
         batch(() => {
           for (let { g, value } of fields) {
@@ -261,6 +273,8 @@ export let bindSave = (
     } finally {
       busy = false
       draw()
+      if (closed) measured?.cancel()
+      else measured?.drawn(server)
     }
   }
   let input = () => {

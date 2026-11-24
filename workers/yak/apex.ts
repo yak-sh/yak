@@ -38,6 +38,7 @@ import {
 import { apex } from '@yaks/platform/host'
 import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
+import { INTERACTION_PATH } from '@yaks/timing/interaction'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
 import * as support from './support-door.ts'
@@ -210,6 +211,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // What breaks in the platform's own pages (page-report.ts), before the
   // connector for the same reason as the fee's.
   if (path == pageReport.PATH) return pageReport.answer(req, env)
+  if (path == INTERACTION_PATH) {
+    return pageReport.interactions(req, env)
+  }
   // A click on a home-page call to action (funnel.ts), before the connector
   // for the same reason.
   if (path == funnel.CLICKED) return funnel.clicked(req, env)

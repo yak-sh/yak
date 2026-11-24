@@ -3,7 +3,14 @@
  * durations. Start events carry no measurement and are ignored. */
 import { derivedEid } from '@yaks/graph/identity'
 import type { Event } from '@yaks/trace'
-import { type Clock, minute, type TimingRow } from './model.ts'
+import { type Clock, minute, type Timing, type TimingRow } from './model.ts'
+
+export type Measure =
+  & Pick<
+    Event,
+    'name' | 'plugin' | 'stage' | 'time' | 'duration' | 'counts'
+  >
+  & { kind: Timing['op'] }
 
 /** Positive bucket upper bounds in ms, from 2^-10 through 2^30. Bucket zero
  * holds exact zero; the final bucket holds durations beyond the last bound. */
@@ -35,7 +42,7 @@ let bucket = (ms: number): number => {
  * instant to its completion minute. Omit open minutes, even with completed
  * spans in them. The caller retains those events until that minute closes. */
 export let summarize = (
-  events: readonly Event[],
+  events: readonly Measure[],
   options: SummaryOptions,
 ): TimingRow[] => {
   let rows = new Map<string, TimingRow>()

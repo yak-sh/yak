@@ -4465,6 +4465,7 @@
             "npm:@yaks/sync@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/text@0.2.24",
+            "npm:@yaks/timing@0.2.23",
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/tracker@0.2.33",
             "npm:@yaks/ui@0.2.30",

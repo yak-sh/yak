@@ -275,6 +275,10 @@ ${
       ? `<script type="module" src="${file('_friends.js')}"></script>`
       : ''
   }${
+    main.includes('data-domain-search=')
+      ? `<script type="module" src="${file('_domains.js')}"></script>`
+      : ''
+  }${
     main.includes('data-chart')
       ? `<script type="module" src="${file('chart.js')}"></script>`
       : ''

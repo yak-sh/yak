@@ -349,6 +349,8 @@ export type Seen = 'page' | 'sign-in' | 'nothing'
 let DATA = '/_web/data'
 let DATA_SCRIPT = '/_web/data.js'
 let DATA_ASSETS = '/_web/assets/'
+/** The platform's telemetry door beside each mounted editor. */
+export let DATA_TIMING = 'interaction'
 let INSPECT = ['/_web/inspect/app.js', '/_web/inspect/styles.css']
 
 /** Which of an app's doors a request inside it goes to. */
@@ -365,7 +367,10 @@ export type Door =
   }
   /** the data editor, or its script or an asset of its skin by `name`, else
    * the sign-in or the nothing a page would meet */
-  | { to: 'data'; part: 'sign-in' | 'nothing' | 'script' | 'editor' }
+  | {
+    to: 'data'
+    part: 'sign-in' | 'nothing' | 'script' | 'editor' | 'interaction'
+  }
   | { to: 'data'; part: 'asset'; name: string }
   /** the app's @yaks/web page, or its `asset` */
   | { to: 'web'; asset?: string }
@@ -401,6 +406,9 @@ export let door = (
   },
 ): Door => {
   if (webPath(path)) {
+    if (method == 'POST' && path == DATA_ASSETS + DATA_TIMING) {
+      return { to: 'data', part: 'interaction' }
+    }
     if (!reading(method)) {
       return { to: 'refused', status: 405, code: 'method_not_allowed' }
     }

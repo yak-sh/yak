@@ -129,10 +129,13 @@
     "./operator-graph": "./operator-graph.ts",
     "./monogram": "./monogram.ts",
     "./app-icon": "./app-icon.ts",
-    "./operator-push": "./operator-push.tsx"
+    "./operator-push": "./operator-push.tsx",
+    "./interaction": "./interaction.ts",
+    "./interaction-browser": "./interaction-browser.ts",
+    "./interaction-report": "./interaction-report.ts"
   },
   "license": "Apache-2.0",
-  "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+  "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@types/ua-parser-js": "0.7.39",
     "@yaks/api": "0.2.29",
@@ -166,6 +169,7 @@
     "@yaks/sync": "0.2.24",
     "@yaks/text": "0.2.24",
     "@yaks/tools": "0.2.30",
+    "@yaks/timing": "0.2.23",
     "@yaks/tracker": "0.2.33",
     "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",

@@ -9,6 +9,7 @@
   "entries": [
     ".",
     "./vocab",
-    "./views"
+    "./views",
+    "./interaction-browser"
   ]
 }

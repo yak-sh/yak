@@ -71,7 +71,6 @@ import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
 import { domainRenewals, domainsPage } from '@yaks/platform/domain-pages'
-import { domainBrowser } from '@yaks/platform/domain-browser'
 
 import {
   addressBox,
@@ -94,7 +93,6 @@ import {
   page,
   type Picked,
   plan,
-  run,
   said,
   send,
   sentence,
@@ -3285,7 +3283,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
   if (view == 'domains' && at.domains) {
-    body = [...domainsPage(at.space, at.apps, at.domains), run(domainBrowser)]
+    body = domainsPage(at.space, at.apps, at.domains)
   }
   if (view == 'billing') {
     body = [

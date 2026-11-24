@@ -17,7 +17,8 @@
     "./wear": "./wear.ts",
     "./relative": "./relative.ts",
     "./lucide": "./lucide.d.ts",
-    "./*.css": "./*.css"
+    "./*.css": "./*.css",
+    "./interaction": "./interaction.ts"
   },
   "license": "Apache-2.0",
   "description": "Preact parts with semantic variants, CSS and terminal sheet entries; compose kits with themes and skins, and inspect their specimens in the style guide.",

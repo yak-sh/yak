@@ -4062,6 +4062,9 @@ importers:
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
+      '@yaks/timing':
+        specifier: 0.2.23
+        version: link:../timing
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
@@ -5523,6 +5526,9 @@ importers:
       '@yaks/sql':
         specifier: 0.2.30
         version: link:../sql
+      '@yaks/timing':
+        specifier: 0.2.23
+        version: link:../timing
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
@@ -5569,9 +5575,6 @@ importers:
       '@yaks/text':
         specifier: 0.2.24
         version: link:../text
-      '@yaks/timing':
-        specifier: 0.2.23
-        version: link:../timing
       preact-render-to-string:
         specifier: 6.7.0
         version: 6.7.0(preact@10.29.7)

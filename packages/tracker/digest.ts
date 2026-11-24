@@ -11,8 +11,15 @@ import { comp, type Desk, str } from './model.ts'
 import { headline, whom } from './brief.ts'
 import { fixtime, opened, span, spread } from './fixtime.ts'
 import { type Day, query } from './chart.ts'
-import { remoteBug } from './reading.ts'
-import { and, eq, every, ge, present } from '@yaks/query'
+import { platform as PLATFORM, remoteBug } from './reading.ts'
+import { and, eq, every, ge, le, present } from '@yaks/query'
+import {
+  FRAME,
+  INTERACTION,
+  type InteractionSummary,
+  interactionSummary,
+  SLOW,
+} from '@yaks/timing/interaction'
 
 /** The owner's time zone: the digest goes out in his morning, and its days
  * are his. */
@@ -101,6 +108,25 @@ let on = (b: Bundle) => str(comp(b, 'taken').task) || (b.taken ? 'taken' : '')
 let table = (head: string[], rows: string[][]) =>
   [head, head.map(() => '---'), ...rows].map((r) => `| ${r.join(' | ')} |`)
     .join('\n')
+let interactions = ({ n, under16, under100, kinds }: InteractionSummary) => {
+  let share = (count: number) => `${(count * 100 / n).toFixed(1)}%`
+  let head = '## yaks.app interactions\n\n'
+  if (!n) return head + 'No interactions recorded in the last 24 hours.'
+  return head + `${n.toLocaleString('en-US')} in the last 24 hours. ` +
+    `${share(under16)} under ${FRAME} ms and ${
+      share(under100)
+    } under ${SLOW} ms.\n\n` +
+    table(
+      ['Slowest kinds', 'Interactions', 'Peak', 'Mean'],
+      kinds
+        .slice(0, 5).map(({ name, n, max, total }) => [
+          cell(name),
+          String(n),
+          `${Math.round(max)} ms`,
+          `${Math.round(total / n)} ms`,
+        ]),
+    )
+}
 let when = (t: number) =>
   new Intl.DateTimeFormat('en-US', {
     timeZone: ZONE,
@@ -128,6 +154,7 @@ export let digest = (
   bugs: Bundle[],
   now: number,
   places: Places,
+  timing?: InteractionSummary,
 ): { title: string; body: string } => {
   let since = now - DAY
   let hits = (b: Bundle) => Number(comp(b, 'bug').hits ?? 1)
@@ -172,6 +199,7 @@ export let digest = (
         }).`,
       ]
       : [],
+    ...timing ? [interactions(timing)] : [],
     section(
       'New',
       fresh,
@@ -261,10 +289,20 @@ export let send = async (
     for (let b of await g.read(q)) found.set(b.entity.eid, b)
   }
   let link = (path: string) => url ? new URL(path, url).href : path
+  let timings = store == 'platform' || store == PLATFORM
+    ? interactionSummary(
+      await g.read(and(
+        eq('timing.op', INTERACTION),
+        ge('timing.at', new Date(now - DAY).toISOString()),
+        le('timing.at', new Date(now).toISOString()),
+        every(),
+      )),
+    )
+    : undefined
   let { title, body } = digest([...found.values()], now, {
     bug: (bug) => link(remoteBug('yaks.app', bug, { scope: store })),
     ...chart ? { chart } : {},
-  })
+  }, timings)
   await g.apply([{
     entity: { eid },
     doc: { title, body },

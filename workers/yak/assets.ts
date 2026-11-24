@@ -46,6 +46,11 @@ export let ASSETS: Asset[] = [
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
   { name: '_talk.js', bundle: here('./operator-rows.ts') },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
+  {
+    name: '_domains.js',
+    bundle: of('@yaks/platform/domain-browser'),
+    named: true,
+  },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   // The service worker that shows pushed notifications, at the root it
   // serves, under the address the browsers that allowed it registered.
@@ -71,6 +76,11 @@ export let ASSETS: Asset[] = [
   },
   // A signed-in page's links followed in place (pages.ts `documented`).
   { name: '_navigate.js', bundle: of('@yaks/web/navigate'), named: true },
+  {
+    name: '_interaction.js',
+    bundle: of('@yaks/platform/interaction-browser'),
+    named: true,
+  },
   { name: '_home.css', file: homeStyle, named: true },
   { name: '_home.js', bundle: homeScript, named: true },
   ...homeFigures,

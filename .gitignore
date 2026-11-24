@@ -104,6 +104,8 @@ node_modules
 /workers/yak/public/_fit-list.js
 /workers/yak/public/_image-fallback.js
 /workers/yak/public/_navigate.js
+/workers/yak/public/_interaction.js
+/workers/yak/public/_domains.js
 /workers/yak/public/_home.css
 /workers/yak/public/_home.js
 /workers/yak/public/home-mascot/

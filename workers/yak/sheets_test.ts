@@ -171,7 +171,12 @@ test('sheets: a static page names every file of the site it fetches by its bytes
     fetched(served).toSorted(),
     [
       ...['report.js', 'favicon-32.png', 'nunito-latin.woff2', 'style.css']
-        .concat(['apple-touch-icon.png', 'idle.js', 'cta.js'])
+        .concat([
+          'apple-touch-icon.png',
+          'idle.js',
+          'cta.js',
+          '_interaction.js',
+        ])
         .map((name) => `https://yaks.app/${names[name]}`),
       'nothing.js',
     ].toSorted(),

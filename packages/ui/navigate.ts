@@ -28,6 +28,7 @@
  */
 
 import type { HistoryPort } from './history.ts'
+import { type Result, result } from './interaction.ts'
 
 /** What a swap did to the nodes on screen: those kept in place, those made
  * from the new page, those taken away. */
@@ -398,7 +399,13 @@ let followed = (
 /** A page answered: its document's words, parsed as it arrived so a click
  * spends nothing on that, where it was answered from, and whether it asks to
  * be asked for again once opened (`AGAIN`). */
-type Answer = { text: string; page: Document; url: string; again: boolean }
+type Answer = {
+  text: string
+  page: Document
+  url: string
+  again: boolean
+  received: number
+}
 /** A page held: its answer, or null where it cannot be swapped in, when it
  * was asked for, whether it was only looked ahead at, whether a click has
  * taken it up, and how to stop asking for it. */
@@ -486,9 +493,10 @@ export let start = (
     if (!answer || !type.includes('text/html')) return null
     let text = await answer.text().catch(() => null)
     if (text == null) return null
+    let received = now()
     let page = new win.DOMParser().parseFromString(text, 'text/html')
     let again = answer.headers.has(AGAIN)
-    return { text, page, url: answer.url || to.href, again }
+    return { text, page, url: answer.url || to.href, again, received }
   }
   let ask = (to: URL, ahead = false): Held => {
     let key = page(to)
@@ -568,8 +576,11 @@ export let start = (
     tell(doc, PAGE, detail)
     return true
   }
-  let go = async (to: URL, pop = false) => {
-    if (stays(doc)) return load(to, pop)
+  let go = async (to: URL, pop = false, pressed?: Result) => {
+    if (stays(doc)) {
+      pressed?.leaving()
+      return load(to, pop)
+    }
     let mine = ++turn
     let began = now()
     let held = pages.get(page(to))
@@ -577,10 +588,12 @@ export let start = (
     let using = held ?? ask(to)
     using.used = true
     let answer = await using.answer
-    if (mine != turn) return
+    if (mine != turn) return pressed?.cancel()
     if (!answer || !draw(to, answer, from, began, now() - began, pop)) {
+      pressed?.leaving()
       return load(answer ? new URL(answer.url) : to, pop)
     }
+    pressed?.drawn(Math.max(0, answer.received - began))
     if (!held || (fresh(held) && !(held.ahead && answer.again))) return
     let again = now()
     let newer = await ask(to).answer
@@ -635,12 +648,13 @@ export let start = (
   win.addEventListener('click', (e: MouseEvent) => {
     let to = followed(e, win.location.href, here)
     if (!to) return
+    let pressed = result(doc, e)
     e.preventDefault()
     if (!pages.has(page(to)) || looking?.key == page(to)) {
       going(win, (e.target as Element).closest('a[href]')!, to)
       tell(doc, GOING, { began: now() })
     }
-    go(to)
+    go(to, false, pressed)
   })
   history.listen(({ path }) => {
     let to = new URL(path, win.location.href)

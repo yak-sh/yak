@@ -5,7 +5,7 @@ import type { Ran } from './ran.ts'
 
 /** One completed minute's measurements of one piece of code. */
 export type Timing = {
-  op: Kind
+  op: Kind | 'interaction'
   name: string
   plugin: string
   at: string

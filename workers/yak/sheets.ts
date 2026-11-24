@@ -4,6 +4,8 @@
 // under `wrangler dev`, the sources answer instead.
 import { type Host, url } from '@yaks/platform/host'
 import { island, signedIn } from './signed.ts'
+import { DATA_TIMING } from '@yaks/platform/ladder'
+import { INTERACTION_PATH } from '@yaks/timing/interaction'
 
 declare const YAK_NAMED: Record<string, string> | undefined
 
@@ -22,6 +24,14 @@ export let asset = (
  * `api`), or null where none was made. */
 export let client = (names = NAMES) =>
   names['_client.js']?.replace(/^_yak\/_/, '') ?? null
+
+/** The same observer in platform pages and the platform's mounted editors. */
+export let interaction = (env: Host, names = NAMES, base?: string) =>
+  `<script type="module" src="${
+    asset(env, '_interaction.js', names, base)
+  }" data-yak-interaction="${
+    base ? base + DATA_TIMING : INTERACTION_PATH
+  }"></script>`
 
 // The face nearly every page's text is in, asked for before the sheet is parsed.
 let FONT = 'nunito-latin.woff2'
@@ -49,7 +59,8 @@ export let links = (
       at('favicon-32.png')
     }" type="image/png" sizes="32x32">`
     : ''
-  return `${reported ? '' : reporter}${icon}
+  return `${reported ? '' : reporter}${interaction(env, names, base)}
+${icon}
 <link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`
 }

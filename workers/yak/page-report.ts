@@ -17,9 +17,17 @@
 // variant), is tagged as it says, and names the commit it was published from. A repeat of a break is one more occurrence of its bug
 // in the tracker, which groups it (@yaks/tracker `faultKey`) and notifies once.
 import { type Break, door, flood } from '@yaks/tracker/report'
-import { defect } from './defects.ts'
+import { caught, defect } from './defects.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { refusal } from './unseen.ts'
+import { reportInteractions } from '@yaks/platform/interaction-report'
+import { INTERACTION_PATH } from '@yaks/timing/interaction'
+import { CHECK } from '@yaks/platform/bots'
+import { isPerson } from './crawlers.ts'
+import { arrival } from './arrival.ts'
+import { sessionPerson } from './session.ts'
+import { bound, type Env } from './env.ts'
+import { directory, fetch as directoryFetch } from './directory.ts'
 
 export let PATH = '/api/report'
 
@@ -80,4 +88,25 @@ export let answer = (req: Request, env: Host): Promise<Response> => {
       }, { commit, page: { mechanism, breadcrumbs } })
     },
   })(req)
+}
+
+/** The platform's own interaction batches, from its browser pages. */
+export let interactions = async (req: Request, env: Env): Promise<Response> => {
+  let { ERRORS } = env
+  if (
+    req.method != 'POST' || !ERRORS || env.ENVIRONMENT == 'staging' ||
+    !fromOurs(req, env) || !isPerson(req) ||
+    arrival(req)?.said.utm_source == CHECK
+  ) return new Response(null, { status: 204 })
+  let person = await sessionPerson(req, env)
+  if (
+    person &&
+    await directory(bound(env.DIRECTORY, directoryFetch, env)).tested(person)
+  ) return new Response(null, { status: 204 })
+  return reportInteractions(req, {
+    sink: (rows) => ERRORS.send(rows),
+    environment: 'production',
+    commit: env.CF_VERSION_METADATA?.id,
+    failed: (error) => caught(error, { request: INTERACTION_PATH }),
+  })
 }

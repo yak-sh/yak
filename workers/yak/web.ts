@@ -2,7 +2,7 @@
 // this door only mounts that page onto the app's existing API and identity.
 import type { Env } from './env.ts'
 import type { Hosting } from '../../packages/browse/hosting.ts'
-import { named } from './sheets.ts'
+import { interaction, named } from './sheets.ts'
 import { ADDRESS } from '@yaks/platform/routes'
 
 /** The data editor's skin beside its page, by `name` (@yaks/platform/ladder
@@ -90,7 +90,9 @@ export let webPage = async (
   ).replaceAll('<', '\\u003c')
   page = page.replace(
     '<head>',
-    `<head><script>globalThis.YAK_WEB=${data}</script>`,
+    `<head><script>globalThis.YAK_WEB=${data}</script>${
+      interaction(env, undefined, host.page + '/assets/')
+    }`,
   )
   return new Response(req.method == 'HEAD' ? null : page, {
     headers: {

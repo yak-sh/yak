@@ -7,6 +7,7 @@ import { platform } from './core.ts'
 import { traceBatch } from '@yaks/tracker/intake'
 import { stopped } from '@yaks/durable-object/ceiling'
 import { waits } from '@yaks/api'
+import { INTERACTION } from '@yaks/timing/interaction'
 
 export type Message = {
   id?: string
@@ -90,8 +91,14 @@ export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
       scopes.add(space)
     } else if (row.error) {
       scopes.add(typeof space == 'string' ? space : platform)
+    } else if (
+      (row.timing as { op?: string } | undefined)?.op == INTERACTION
+    ) {
+      scopes.add(platform)
     } else if (!errors) {
-      throw Error('tracker batch expects errors or trace entities')
+      throw Error(
+        'tracker batch expects errors, trace entities or interaction timings',
+      )
     }
     // Error companions may omit context, but may not smuggle a second scope.
     if (typeof space == 'string') scopes.add(space)
