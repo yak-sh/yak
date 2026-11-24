@@ -194,7 +194,9 @@ test("a piece of the Operator's work draws its task as its session ran: the word
     .map((summary) => summary.textContent ?? '')
   assertStringIncludes(drawn.html, 'Transcript_Bubble">Post a special meeting')
   assertEquals(
-    summaries.some((text) => text.startsWith('Read the schema')),
+    summaries.some((text) =>
+      text.startsWith('Checked what the data looks like')
+    ),
     true,
   )
   assertEquals(

@@ -1131,6 +1131,17 @@ export let holdOf = async (
   }
 }
 
+/** Whether connection `connection` is space `space`'s own, which any app of
+ * the space may be given without asking (operator-approvals.ts). */
+export let spaceKeeps = async (env: Env, space: string, connection: string) =>
+  EID.test(connection) &&
+  comp(
+      (await readOf(env)(
+        line`.entity.eid=${connection}&.${CONNECTION}`,
+      ))[0],
+      CONNECTION,
+    ).owner == space
+
 let lent = (h: Hold) => h.link?.lender != null
 
 let GONE = 'That connection is not here any more.'

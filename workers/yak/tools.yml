@@ -749,7 +749,9 @@ connection_attach:
     done: 'Let %{app} use a connection'
   description: >-
     Give an app access to one connected connection its space already owns.
-    Only the space's owner may do this. The app starts members-only, receives
+    A connection the space holds is the space's to use: look with
+    store_connection_list before asking the person for a new key, and attach
+    it. Only the space's owner may do this. The app starts members-only, receives
     a sentinel rather than the credential, and reads it by binding (the name
     its code reads, env.NAME in worker.js and from ./api/env in a page): the
     one given, else any it already asked for, else the service's name in

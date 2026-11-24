@@ -104,6 +104,9 @@ export type Known = (address: string) => Promise<boolean>
  * waits for someone whose role allows it (operator-route.ts). */
 export type Turn = {
   known: Known
+  /** whether a connection is the space's own, which any app of the space
+   * may use without asking */
+  ours?: (connection: string) => Promise<boolean>
   texted?: boolean
   place?: string
   role?: Role
@@ -189,9 +192,15 @@ export let ESCALATING: Record<
     `Let the screen showing ${a.code} show your drafts as you write them, ` +
     'in every space',
   service_connect: (a) => `Connect the service ${a.service} to ${a.app}`,
-  connection_attach: (a) =>
-    `Give the app ${a.app} the connection ${a.connection}` +
-    (a.anyone === true ? ', for anyone using it to call out through' : ''),
+  // A connection the space keeps is the space's to use: attaching it to
+  // another of its apps keeps the key in the vault and the calls to the app's
+  // members. A person's own connection, or opening the link to anyone using
+  // the app, waits for the tap.
+  connection_attach: async (a, { ours }) =>
+    a.anyone !== true && await ours?.(String(a.connection)) ? undefined : (
+      `Give the app ${a.app} the connection ${a.connection}` +
+      (a.anyone === true ? ', for anyone using it to call out through' : '')
+    ),
   store_attach: (a) =>
     a.detach === true
       ? undefined

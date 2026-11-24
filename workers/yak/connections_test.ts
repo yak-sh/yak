@@ -36,6 +36,7 @@ import {
   type Hold,
   hook as receiveHook,
   own,
+  spaceKeeps,
 } from './connections.ts'
 import { TOOLS } from './tools.ts'
 import { directory, over, storeName } from './directory.ts'
@@ -552,6 +553,26 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
   }
   assertEquals(await anyone(true), [true, true])
   assertEquals(await anyone(false), [false, false])
+})
+
+test('attaching a space connection may say who calls out through it as it makes the link', async () => {
+  let s = await setup()
+  await s.post({
+    do: 'add',
+    integration: 'Weather',
+    hosts: 'api.weather.test',
+    key: 'private-key',
+  })
+  let app = await liveApp(s)
+  let connection = (await s.shown()).list[0].eid
+  let said = await TOOLS.find((t) => t.name == 'connection_attach')!.run(
+    { env: s.p.env, dir: s.dir, person: s.person },
+    { space: 'ada', app: 'notes', connection, anyone: false },
+  )
+  assertStringIncludes(String(said.text), 'Only app members')
+  assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['WEATHER'])
+  assertEquals(await spaceKeeps(s.p.env, s.space.eid, connection), true)
+  assertEquals(await spaceKeeps(s.p.env, app.eid, connection), false)
 })
 
 // Every act the page posts, and one app's link to a connection as each side

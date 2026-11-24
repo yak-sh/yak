@@ -147,8 +147,10 @@ back. Every app_delete goes to retained trash. Only the owner
 can confirm permanent erasure from trash. Forgetting an old address, submitting an app to
 the gallery, and sending an email from an app are the person's decisions;
 read an email back to them before it goes, since nothing recalls it. A
-key comes from the person, on their connections page after
-store_connection_need, never through you.
+connection the space already holds is the space's to use: look with
+store_connection_list before asking for a key, and give it to the app with
+connection_attach. A new key comes from the person, on their connections page
+after store_connection_need, never through you.
 
 An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) accepts access 'open',

@@ -276,6 +276,28 @@ test('app_set waits when it opens the app to joining or lets it out of its sandb
   for (let [t, args, said] of cases) equal(await asked(t, args), said)
 })
 
+test('connection_attach runs with a connection the space keeps, and waits for one it does not or for opening it to anyone', async () => {
+  let [attach] = confirming([tool('connection_attach')], ask, {
+    known,
+    texted: true,
+    ours: (connection) => Promise.resolve(connection == 'esv'),
+  })
+  let asked = async (args: Record<string, unknown>) => {
+    let said = String(await attach.run(args))
+    return said == 'ran' ? 'ran' : texts.at(-1)!.words.split('? Tap')[0]
+  }
+  equal(await asked({ app: 'a', connection: 'esv' }), 'ran')
+  equal(await asked({ app: 'a', connection: 'esv', anyone: false }), 'ran')
+  equal(
+    await asked({ app: 'a', connection: 'esv', anyone: true }),
+    'Give the app a the connection esv, for anyone using it to call out through',
+  )
+  equal(
+    await asked({ app: 'a', connection: 'mine' }),
+    'Give the app a the connection mine',
+  )
+})
+
 // member_add as a turn asks it where its person reads at `at`.
 let asking = (at: Partial<At>) =>
   confirming(

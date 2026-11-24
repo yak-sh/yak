@@ -564,6 +564,11 @@ What they do not guarantee:
       hosts: ['api.esv.org'])
     store_connection_list()  → what is connected in the selected space, and to which apps
 
+Look first with `store_connection_list`: a connection the space already holds,
+one another app here uses, is the space's to use. Give it to the app with
+`connection_attach`, naming the app, the connection id and the `binding`; the
+Operator does this without asking.
+
 An app never holds a key. `store_connection_need` declares what it needs (a
 built-in integration by name, or a name you choose with the hosts its key may be
 sent to), and the person pastes the key, or signs in, on the space's connections
@@ -579,11 +584,9 @@ choose the app and the binding name its code reads, and click **Attach to app**.
 Use this when `store_connection_need` is not among your tools: tell the person
 the binding name the code reads and the hosts, and they do the rest. A
 connection the space already has is attached the same way, or with
-`connection_attach`, naming the app, the connection id from
-`store_connection_list` and the `binding`. Attaching is the owner's grant: at
-first only the app's members can use the connection, and the app receives a
-sentinel. The owner can separately allow the app's visitors to use it, on the
-same page.
+`connection_attach`. Attaching is the owner's grant: at first only the app's
+members can use the connection, and the app receives a sentinel. The owner can
+separately allow the app's visitors to use it, on the same page.
 
 A connection that is made or attached is available to the app immediately,
 whatever release it is running: there is nothing to redeploy.
