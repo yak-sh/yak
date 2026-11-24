@@ -815,8 +815,11 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
   let key = `${most}:${cap}:${r.sql}`
   if (settled.has(key)) return r
   let under = (sql: string) => cursors(sql) <= most - MARGIN
+  let native = most == STOCK_DEPTH
+  // Only workerd imposes the 100 KB statement limit.
+  let fits = (sql: string) => native || !long(sql)
   // The embedded driver keeps the planner hints of statements that fit.
-  if (most == STOCK_DEPTH && under(r.sql)) {
+  if (native && under(r.sql)) {
     settle(key)
     return r
   }
@@ -826,7 +829,7 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
     if (!next) break
     out = next
   }
-  if (out != r && long(out.sql)) out = r
+  if (out != r && !fits(out.sql)) out = r
   if (!under(out.sql)) {
     let whole = out
     for (let turn = 0; turn < 64 && !under(whole.sql); turn++) {
@@ -834,7 +837,7 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
       if (!next) break
       whole = next
     }
-    if (under(whole.sql) && !long(whole.sql)) out = whole
+    if (under(whole.sql) && fits(whole.sql)) out = whole
   }
   if (out == r) settle(key)
   return out

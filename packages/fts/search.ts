@@ -294,7 +294,7 @@ let best = (
       (sorting && !opts.owners || !keyed && !probed)
     ? [{
       name: '__fts_screen',
-      cols: ['id'],
+      // Selection already projects id. Keep the CTE eligible for unfolding.
       q: opts.screen,
       materialized: sorting && !probed,
     }]

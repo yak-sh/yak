@@ -118,7 +118,10 @@ let wide = loadVocab({
 })
 let indexed = fields(wide)
 let native = mem()
-let rankedStore = storage(native, wide, { extend: [search(indexed, native)] })
+// Use the file-backed ranker's sort plan on an in-memory database.
+let rankedStore = storage(native, wide, {
+  extend: [search(indexed, { ...native, file: true })],
+})
 rankedStore.install()
 rankedStore.raise()
 for (let stmt of schema(indexed)) native.query(stmt)
