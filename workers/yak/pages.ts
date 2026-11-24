@@ -267,7 +267,7 @@ ${
       ? `<script type="module" src="${file('_sort.js')}"></script>`
       : ''
   }${
-    main.includes('data-inbox-actions=')
+    main.includes(' data-inbox-actions')
       ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
       : ''
   }${

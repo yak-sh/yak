@@ -52,3 +52,15 @@ test('a tab drawn for someone else, or nobody signed in, is told to sign in agai
   let nobody = await k.at(k.host, `${REACH}/query?q=.doc`)
   equal(nobody.status, 401)
 })
+
+test('an Updates page loads the script that takes its card actions', async () => {
+  let page = await k.at(
+    k.host,
+    `/${await k.dir.own(bea.person).then((s) => s.slug)}/updates`,
+    {
+      headers: { cookie: bea.cookie },
+    },
+  )
+  let html = await page.text()
+  equal(/<script[^>]*_inbox-actions[^>]*>/.test(html), true)
+})
