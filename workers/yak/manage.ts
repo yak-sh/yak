@@ -785,11 +785,12 @@ let beside = async (
   ])
   return {
     spaces,
-    apps: mine.map(({ eid, slug, title, source }) => ({
+    apps: mine.map(({ eid, slug, title, source, generatedIcon }) => ({
       eid,
       slug,
       title,
       source,
+      generatedIcon,
     })),
     name,
     admin: platformAdmin,
@@ -992,6 +993,7 @@ let desk = async (
       slug: a.slug,
       title: a.title,
       source: a.source,
+      generatedIcon: a.generatedIcon,
       home: a.home,
       access: a.access,
       gallery: pilled(standing(a)),

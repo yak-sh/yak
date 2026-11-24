@@ -59,6 +59,7 @@ export let app: ComponentRenderer = {
       slug: string
       access?: string | null
       source?: string | null
+      generatedIcon?: string
     }
     let title = (b.doc as { title?: string } | undefined)?.title || a.slug
     let at = `${ctx.at ?? ''}/${a.slug}`

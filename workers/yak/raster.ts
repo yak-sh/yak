@@ -10,12 +10,7 @@
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
 
-/** The app-relative path an app's icon is drawn from. */
-export let ICON_SVG = 'icon.svg'
-
-// What an app's icon is to the Operator, drawn here (files.ts `icon`) or the
-// space's logo or the platform's (apps.ts `unwritten`), is the base persona's
-// plugins/yaks.app/persona/icon.md.
+export { ICON_SVG } from '@yaks/platform/app-icon'
 
 // The one size drawn: the manifest names the icon at 512 and 192, and iOS
 // scales the smallest icon larger than it wants (apps.ts `manifesting`).

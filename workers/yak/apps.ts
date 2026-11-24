@@ -42,8 +42,7 @@ import { previewed } from './preview-html.ts'
 // signed-out visitor sent to sign in is the platform working.
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { logoImage } from './logo.ts'
-import { monogram } from '@yaks/platform/monogram'
+import { generatedIconKey } from '@yaks/platform/app-icon'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
 import {
@@ -688,16 +687,8 @@ let media = async (
 // is served its drawing (files.ts `icon`), because this is only reached where
 // the files door had nothing.
 //
-// The icon is its space's logo, drawn square (logo.ts `logoImage`, T-151744),
-// so a church's or a shop's apps wear its picture on a home screen; or, in a
-// space without one, the platform's connector tile — opaque, square, 512
-// (site_test) — so an app on a home screen wears the platform's face rather
-// than the browser's blank sheet. iOS fills a transparent icon with black,
-// which is why the tile that carries its own ground is the right one to fall
-// back to. A display mark (?display), what a list of apps shows beside each
-// name, is the app's own first letter instead (@yaks/platform/monogram): a
-// list of a space's apps all wearing its logo, often its owner's photo, tells
-// none of them apart (T-2259).
+// Apps without a release icon wear their generated artwork. The platform's
+// opaque yak tile fills in while the artwork is pending.
 export let unwritten = async (
   req: Request,
   env: Env,
@@ -708,32 +699,44 @@ export let unwritten = async (
   retry = false,
 ) => {
   if (path == '/icon.png') {
-    if (new URL(req.url).searchParams.has('display')) {
-      return new Response(monogram(app.title || app.slug, app.eid), {
+    let display = new URL(req.url).searchParams.has('display')
+    let cache = display ? caching(req, space, app, path) : keeping(app)
+    let drawn = app.generatedIcon && await r2RawObjects(env.BLOBS).open(
+      generatedIconKey(space, app),
+    )
+    if (drawn) {
+      let etag = etagOf(drawn.version)
+      let headers = {
+        'content-type': 'image/png',
+        'cache-control': retry ? 'no-store' : cache,
+        etag,
+      }
+      if (unchanged(req, etag)) {
+        return new Response(null, { status: 304, headers })
+      }
+      return new Response(req.method == 'HEAD' ? null : await drawn.read(), {
         headers: {
-          'content-type': 'image/svg+xml',
-          'cache-control': retry ? 'no-store' : caching(req, space, app, path),
+          ...headers,
+          'content-length': String(drawn.size),
         },
       })
     }
-    let logo = space.logo && await logoImage(env, space, space.logo.sha, 'icon')
-    if (logo) {
-      return new Response(req.method == 'HEAD' ? null : await logo.read(), {
-        headers: {
-          'content-type': logo.type,
-          'content-length': String(logo.size),
-          'cache-control': caching(req, space, app, path),
-        },
+    if (app.generatedIcon) {
+      caught(new Error('Generated app icon is missing'), {
+        request: 'app icon',
+        app: app.eid,
       })
     }
     let tile = await env.ASSETS.fetch(
-      new Request(new URL('/connector-512.png', req.url)),
+      new Request(new URL('/connector-512.png', req.url), {
+        method: req.method,
+      }),
     )
     if (!tile.ok) return null
     return new Response(tile.body, {
       headers: {
         'content-type': 'image/png',
-        'cache-control': caching(req, space, app, path),
+        'cache-control': retry || app.generatedIcon ? 'no-store' : cache,
       },
     })
   }

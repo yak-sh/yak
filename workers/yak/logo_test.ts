@@ -1,7 +1,6 @@
 // A space's logo (T-140199): its owner chooses a picture in Settings, or has
 // its Operator set it with space_set (T-151744), and the space wears it where
-// its letter stood, served to the space's people alone, and as the icon of
-// each of its apps with none of its own.
+// its letter stood, served to the space's people alone.
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -88,7 +87,7 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
   }
 })
 
-test('space_set sets the logo its Operator is given, and an app with no icon wears it', async () => {
+test('space_set sets the logo its Operator is given and apps keep their own icons', async () => {
   let calls: number[] = []
   let k = await fresh({ IMAGES: images(calls) })
   try {
@@ -118,7 +117,7 @@ test('space_set sets the logo its Operator is given, and an app with no icon wea
     assertStringIncludes(await set({ logo_base64: encodeBase64(PNG) }), 'logo')
     let at = `/manage/${slug}/logo/${await digest(PNG)}`
     assertEquals((await tile()).getAttribute('src'), at + '?size=avatar')
-    assertEquals(await icon(), PNG)
+    assertEquals(await icon(), yak)
     assertEquals(calls, [128, 512])
 
     let no = await assertRejects(

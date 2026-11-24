@@ -13,6 +13,20 @@ export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
   $defs: {
+    app_icon: {
+      description: 'The platform artwork requested and drawn for an app.',
+      component: true,
+      type: 'object',
+      properties: { requested: owned(time), drawn: owned(time) },
+    },
+    app_icon_draw: {
+      effect: true,
+      created: ['app_icon', 'untrashed'],
+      changed: ['app.source', 'app.space', 'app_icon.requested'],
+      target: '.app.version>0&!trashed',
+      description:
+        'Draw an icon for a released app without artwork of its own.',
+    },
     person_name: {
       description: "Where a person's doc{title} came from.",
       component: true,

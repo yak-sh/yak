@@ -472,6 +472,31 @@
         "space"
       ]
     },
+    "admin_app_icons": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "app-icons",
+      "title": "Read released app icons or queue artwork for missing ones",
+      "description": "Read a page of released apps and whether their icons are authored, generated or missing. Pass queue to request artwork for the missing apps on this page. Continue with next as after until next is null. The platform pays for generation. Requires a platform owner.",
+      "input": {
+        "after": {
+          "type": "string",
+          "description": "the previous page's next cursor"
+        },
+        "queue": {
+          "type": "boolean",
+          "description": "queue artwork for missing icons"
+        },
+        "owner_of": {
+          "type": "string",
+          "description": "limit to spaces owned by an owner of this space"
+        },
+        "as": {
+          "type": "string",
+          "description": "the platform admin connection to use"
+        }
+      }
+    },
     "admin_graves": {
       "tool": true,
       "noun": "admin",

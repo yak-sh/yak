@@ -21,6 +21,7 @@ import { carry } from '../support-reply.ts'
 import type { Env } from '../env.ts'
 import { retired } from '../file-retirement.ts'
 import { r2RawObjects } from '../lib/objects.ts'
+import { drawingIcons } from './app-icons.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
@@ -70,6 +71,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
   if (!at.meta) return {}
   let dir = () => inStore(at)
   return {
+    ...drawingIcons(at, dir()),
     delete_retired_files: async (event, _tx, _write, attempt) => {
       if (!at.env.BLOBS) return
       await retired(

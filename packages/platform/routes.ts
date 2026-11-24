@@ -20,7 +20,6 @@
  */
 import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { letter } from './monogram.ts'
 import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
 import type { LogoSize } from './space-logo.ts'
 import { releaseId } from './versions.ts'
@@ -225,8 +224,7 @@ export let logoPath = (
       encodeURIComponent(space.slug)
     }/logo/${space.logo.sha}?size=${size}`
     : undefined
-/** What draws an app's icon, as its address says it: the release it is
- * served from and its space's logo, which it wears where it has none. */
+/** The validator used by existing versioned home-screen icon URLs. */
 export let iconVersion = (
   app: { source?: string | null },
   space: { logo?: { sha: string } | null },
@@ -258,17 +256,18 @@ export type MarkedApp = {
   slug: string
   title: string
   source?: string | null
+  generatedIcon?: string
 }
 
-/** The release and the inputs to its app-specific fallback. */
-export let markVersion = ({ eid, slug, title, source }: MarkedApp) => {
+/** The release and the platform artwork it can show. */
+export let markVersion = ({ eid, source, generatedIcon }: MarkedApp) => {
   let release = releaseId(source)
   return release || source === null
-    ? `1.${release ?? ''}.${eid}.${letter(title || slug)}`
+    ? `2.${release ?? ''}.${eid}.${generatedIcon ?? ''}`
     : null
 }
 
-/** The icon in an app list, with the app's own mark as its fallback. */
+/** The icon in an app list. */
 export let appMark = (at: string, app: MarkedApp): string => {
   let version = markVersion(app)
   return `${at}/icon.png?display${

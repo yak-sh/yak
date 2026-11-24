@@ -203,7 +203,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
     path == sweep.ACCOUNT_PATH || path == sweep.RELOCATE_PATH ||
     path == sweep.OPERATOR_PATH || path == sweep.STORE_COPY_PATH ||
     path == sweep.GRAVES_PATH || path == sweep.USES_PATH ||
-    path == sweep.OPERATOR_GRAPH_PATH
+    path == sweep.OPERATOR_GRAPH_PATH || path == sweep.ICONS
   ) {
     return sweep.fetch(req, env)
   }

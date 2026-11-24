@@ -60,6 +60,8 @@ import { type Asked, COPY } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
 import { graves } from '@yaks/platform/graves'
 import { inspect } from './store-inspect.ts'
+import { ICONS } from '@yaks/platform/app-icon'
+export { ICONS }
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
@@ -439,6 +441,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (who.role != 'owner') {
     return json(403, 'not_owner', `a sweep is an owner of ${meta.slug}'s`)
+  }
+  if (new URL(req.url).pathname == ICONS) {
+    let { appIcons } = await import('./facets/app-icons.ts')
+    return appIcons(req, env, dir, who)
   }
   if (new URL(req.url).pathname == IDLE_PATH) {
     if (req.method != 'GET') {

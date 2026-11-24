@@ -79,9 +79,8 @@ space_set:
     or GIF, no SVG), or logo_base64 with a picture's bytes; logo
     "none" takes it off. The logo stands in for the space's first letter
     wherever the space shows (its owner's space switcher, its list of
-    spaces, the Operator's chat) and is the icon of every app in it with no
-    icon.png or icon.svg of its own, on a home screen too. It is the logo
-    its owner can choose on the space's Settings page; only the owner may
+    spaces, the Operator's chat). Its owner can choose it on the space's
+    Settings page. Only the owner may
     set it. Returns the current address and a summary of the changes.
     Documentation: https://yaks.app/docs/home.
 space_delete:
@@ -243,7 +242,8 @@ app_files:
     The app's icon, wherever yaks.app lists it and on a home screen, is its
     icon.png: a PNG fetched there with op: fetch, or else an icon.svg
     written as content (a square viewBox, no <text>), which the platform
-    draws as icon.png; without either it wears its space's logo. NOTES.md
+    draws as icon.png. yaks.app generates artwork for a released app without
+    an icon and shows the yaks.app mark until it is ready. NOTES.md
     beside index.html holds the app's notes in the person's words, returned
     by the about tool; like vocab.json it is never served on the web.
     NOTES.md is limited to 4096 bytes.

@@ -37,6 +37,7 @@ import type { Swept } from '@yaks/platform/mover'
 import type { Asked } from './move.ts'
 import { COOKIE } from '@yaks/platform/cookie'
 import { BROWSE } from '@yaks/platform/routes'
+import { type IconPage, ICONS } from '@yaks/platform/app-icon'
 import { forwarded } from './forward.ts'
 import {
   type Frame,
@@ -731,6 +732,20 @@ export let operatorPage = <T>(
  * entities whose deaths fall in [since, until), as its journal tells them. An
  * owner of the `yak` space is answered. */
 export let GRAVES = '/api/graves'
+
+export let appIcons = (
+  session: string,
+  after: string,
+  queue: boolean,
+  ownerOf?: string,
+): Promise<IconPage> => {
+  let query = new URLSearchParams({ after })
+  if (ownerOf) query.set('owner_of', ownerOf)
+  return said(sent(apex(`${ICONS}?${query}`), session, {
+    method: queue ? 'POST' : 'GET',
+    rereads: !queue,
+  }))
+}
 
 export let gravesIn = (session: string, window: Window): Promise<Graves> =>
   said(sent(

@@ -1,6 +1,7 @@
 import { mapped, packet, readAsk, WIRE } from '@yaks/platform/browser-wire'
 import { COOKIE } from '@yaks/platform/cookie'
 import { ADMIN_BROWSE, adminPage, BROWSE } from '@yaks/platform/routes'
+import { ICONS } from '@yaks/platform/app-icon'
 export { FORWARDED, forwarded } from '@yaks/cli/account-forward'
 
 type Credentials = { bearer: string; session?: string }
@@ -17,8 +18,9 @@ let allowed = (url: URL) => {
     return false
   }
   if (url.hostname == 'yaks.app') {
-    return /^\/(?:mcp|invite|login\/link|api\/(?:fee|budget|comp|spaces|support|funnel|move|relocate|operator-copy|operator-graph|store-copy|graves|uses|account|tunnel)|space\/[a-z0-9-]+\/delete)$/
-      .test(url.pathname)
+    return url.pathname == ICONS ||
+      /^\/(?:mcp|invite|login\/link|api\/(?:fee|budget|comp|spaces|support|funnel|move|relocate|operator-copy|operator-graph|store-copy|graves|uses|account|tunnel)|space\/[a-z0-9-]+\/delete)$/
+        .test(url.pathname)
   }
   return /^[a-z0-9][a-z0-9-]*\.yaks\.app$/.test(url.hostname) &&
     /^\/(?:[a-z0-9][a-z0-9-]*\/)?api\/(?:query|apply|blob|vocab|pay\/artifacts(?:\/[a-f0-9]+)?)$/

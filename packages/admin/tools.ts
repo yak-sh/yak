@@ -29,6 +29,7 @@ export { Refused } from './refusal.ts'
 import {
   acceptInvite,
   apex,
+  appIcons,
   appStores,
   type Browse,
   type BrowseFile,
@@ -1049,6 +1050,18 @@ export let runs = (
         until: word(a, 'until') ?? new Date().toISOString(),
         after: typeof a.after == 'number' ? a.after : undefined,
       })
+      return [valued(call, page)]
+    }),
+
+    admin_app_icons: verb(async (call) => {
+      let args = argsOf(call)
+      let at = await acting(args)
+      let page = await appIcons(
+        at.bearer,
+        word(args, 'after') ?? '',
+        args.queue === true,
+        word(args, 'owner_of'),
+      )
       return [valued(call, page)]
     }),
 

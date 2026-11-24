@@ -72,6 +72,7 @@ import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed } from '@yaks/platform/versions'
 import { appMark } from '@yaks/platform/routes'
+import { generatedIconKey } from '@yaks/platform/app-icon'
 import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -520,10 +521,10 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
 
-  // Lists wear the app's own letter; installers keep the opaque tile.
+  // App lists and installers show the same mark while artwork is pending.
   let mark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
-  assertEquals(mark.headers.get('content-type'), 'image/svg+xml')
-  assertStringIncludes(await mark.text(), '>C</text>')
+  assertEquals(mark.headers.get('content-type'), 'image/png')
+  assertEquals(new Uint8Array(await mark.arrayBuffer()), tile)
   let installed = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(new Uint8Array(await installed.arrayBuffer()), tile)
 
@@ -563,16 +564,21 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   assertEquals(await theirs.json(), { name: 'Ours' })
 })
 
-test("a display mark is the app's letter, and an installer's icon the space logo drawn", async () => {
+test('the generated icon serves at both icon addresses', async () => {
   let blobs = bucket()
-  blobs.held.set('space/.logo/sha', new Uint8Array([1, 2, 3]))
-  blobs.held.set('space/.logo/sha.icon.png', new Uint8Array([4, 5, 6]))
+  blobs.held.set('space/.declarations/a1/icon.png', new Uint8Array([4, 5, 6]))
   let env = { BLOBS: blobs.r2 } as unknown as Env
   let space = {
     store: 'space',
     logo: { sha: 'sha', type: 'image/webp' },
   } as Space
-  let app = { eid: 'a1', slug: 'notes', title: 'notes', access: 'public' }
+  let app = {
+    eid: 'a1',
+    slug: 'notes',
+    title: 'notes',
+    access: 'public',
+    generatedIcon: '2026-11-24T01:00:00.000Z',
+  }
   let icon = (query: string) =>
     apps.unwritten(
       new Request(`https://ada.yaks.app/notes/icon.png${query}`),
@@ -582,33 +588,32 @@ test("a display mark is the app's letter, and an installer's icon the space logo
       '/icon.png',
       '/notes/',
     ).then((r) => r!)
-  let mark = await icon('?display')
-  assertEquals(mark.headers.get('content-type'), 'image/svg+xml')
-  assertStringIncludes(await mark.text(), '>N</text>')
-  let installed = await icon('')
-  assertEquals(installed.headers.get('content-type'), 'image/png')
-  assertEquals(
-    new Uint8Array(await installed.arrayBuffer()),
-    new Uint8Array([4, 5, 6]),
-  )
+  for (let variant of ['?display', '']) {
+    let result = await icon(variant)
+    assertEquals(result.headers.get('content-type'), 'image/png')
+    assertEquals(
+      new Uint8Array(await result.arrayBuffer()),
+      new Uint8Array([4, 5, 6]),
+    )
+  }
 })
 
-test('the browser can keep a release’s display icon or its fallback', async () => {
+test('a generated display icon has a new cacheable URL', async () => {
   await using scenario = platform()
   let { env } = scenario
-  let { app, dir } = await seeded(env, 'private', scenario.dir)
+  let { app, dir, space } = await seeded(env, 'private', scenario.dir)
   let show = async (files: Record<string, string>) => {
     let source = `ada/.releases/${app.eid}/${crypto.randomUUID()}`
     await released(env, source, files)
     await dir.stamp({
       entities: [{ entity: { eid: app.eid }, app: { source } }],
     })
-    return appMark('/cookbook', { ...app, source })
+    return { ...app, source }
   }
   let cookie = await as(ADA)
   let open = (path: string) =>
     apps.fetch(visit(path, { headers: { cookie } }), env)
-  let first = await show({ 'icon.png': 'art' })
+  let first = appMark('/cookbook', await show({ 'icon.png': 'art' }))
   let own = await open(first)
   assertEquals(await own.text(), 'art')
   assertEquals(
@@ -616,10 +621,28 @@ test('the browser can keep a release’s display icon or its fallback', async ()
     'private, max-age=31536000, immutable',
   )
 
-  let second = await show({ 'index.html': '<h1>Cookbook</h1>' })
+  let pending = await show({ 'index.html': '<h1>Cookbook</h1>' })
+  let second = appMark('/cookbook', pending)
   let fallback = await open(second)
   assert(fallback.headers.get('cache-control')?.endsWith(', immutable'))
-  assertStringIncludes(await fallback.text(), '>C</text>')
+  assertEquals(fallback.headers.get('content-type'), 'image/png')
+  await fallback.body?.cancel()
+  let generatedIcon = new Date().toISOString()
+  await r2RawObjects(env.BLOBS).put(
+    generatedIconKey(space, app),
+    new TextEncoder().encode('generated art'),
+  )
+  await dir.stamp({
+    entities: [{
+      entity: { eid: app.eid },
+      app_icon: { drawn: generatedIcon },
+    }],
+  })
+  let third = appMark('/cookbook', { ...pending, generatedIcon })
+  assert(third != second)
+  let generated = await open(third)
+  assertEquals(await generated.text(), 'generated art')
+  assert(generated.headers.get('cache-control')?.endsWith(', immutable'))
   let stale = await open(first)
   assertEquals(stale.headers.get('cache-control'), 'private, no-cache')
   await stale.body?.cancel()

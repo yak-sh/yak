@@ -345,6 +345,7 @@ export type AppInfo = {
   featured?: boolean
   // The app's uploaded image chosen by its owner for listings.
   screenshot: string | null
+  generatedIcon?: string
   // The site somebody else may own that this app was rebuilt from
   // (newcomer.ts `previewing`): until its domain is verified here the app is
   // that site's private preview. Null for every other app.
@@ -764,6 +765,7 @@ export type Row = MeteredRow & {
   code_review?: { version?: number | null; verdict?: string | null }
   featured?: { at?: string | null }
   screenshot?: { blob?: string | null }
+  app_icon?: { drawn?: string | null; requested?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   demo?: {
     store?: string | null
@@ -1359,6 +1361,7 @@ export let APP_PARTS = [
   'code_review',
   'featured',
   'screenshot',
+  'app_icon',
   'preview',
   'seeded',
   'demo',
@@ -1704,6 +1707,7 @@ export let appAbout = (r: Row): AppInfo => ({
   gallery: galleryOf(r),
   featured: !!r.featured,
   screenshot: r.screenshot?.blob ?? null,
+  ...r.app_icon?.drawn ? { generatedIcon: r.app_icon.drawn } : {},
   preview: previewOf(r),
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
