@@ -48,8 +48,10 @@ import {
 } from './Disclosure.ts'
 
 /** How many lines it draws before it is asked for more, and how many more
- * each time. */
-export let TAKE = 100
+ * each time: a screen or two, so moving to a page holding it lays over a few
+ * thousand nodes rather than tens of thousands. A reader scrolling up to the
+ * oldest drawn asks for the next. */
+export let TAKE = 40
 
 /** How close to the newest line, in px, still reads as at it. */
 export let NEAR = 120
@@ -405,6 +407,10 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     away,
     pane: null as HTMLElement | null,
     y: 0,
+    hidden: 0,
+    take,
+    asked: 0,
+    older: () => {},
   })
   at.current = { ...at.current, e, onChange, state }
   let say = (away: boolean) => {
@@ -440,6 +446,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     at.current.away = true
     onChange(conversed(e, { take: take + TAKE, away: true }))
   }
+  at.current = { ...at.current, hidden: drawn.hidden, take, older }
   // Set up before the first paint, so it is first seen at the newest.
   useLayoutEffect(() => {
     let el = root.current
@@ -474,6 +481,12 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
       let was = at.current.y
       at.current.y = now
       say(scrolled(at.current.away, { was, now, near: near() }))
+      // Near the oldest drawn, the next earlier lines come in, once a take.
+      let { hidden, take, asked } = at.current
+      if (now < was && now < NEAR && hidden && asked != take) {
+        at.current.asked = take
+        at.current.older()
+      }
     }
     let grown = () => {
       if (!at.current.away && !address()?.over) newest()

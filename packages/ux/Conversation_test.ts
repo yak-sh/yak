@@ -245,7 +245,7 @@ test('an address naming a line opens at it, away from the newest', () => {
   equal(p.state().away, true)
 })
 
-test('it draws the last hundred lines, and earlier ones above when asked, where the reader is', () => {
+test('it draws the last TAKE lines, and earlier ones above when asked, where the reader is', () => {
   using p = page()
   p.draw(lines(TAKE + 5))
   equal(p.rows().length, TAKE)
@@ -259,6 +259,16 @@ test('it draws the last hundred lines, and earlier ones above when asked, where 
   equal(p.state(), { away: true, take: 2 * TAKE })
   equal(p.pane.scrollHeight - p.pane.scrollTop, below)
   equal(p.root.querySelector('button'), null)
+})
+
+test('scrolling up to the oldest line drawn brings the earlier ones in', () => {
+  using p = page()
+  p.draw(lines(TAKE + 5))
+  p.scroll(400)
+  equal(p.rows().length, TAKE)
+  p.scroll(40)
+  equal(p.rows().length, TAKE + 5)
+  equal(p.state().take, 2 * TAKE)
 })
 
 // A line's words with a mark beside them opening the fold under them, which

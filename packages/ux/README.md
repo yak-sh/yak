@@ -311,14 +311,15 @@ equal(renderToString(tree).includes('<p>Saved the village</p>'), true)
 
 A **conversation** draws a session's lines, the newest last, and follows them as
 a reader does: it stays at the newest line while lines arrive until the reader
-scrolls up to read, and draws the last `take` lines it is given (100, `TAKE`),
-with a Button above them that draws earlier ones without moving the reader. It
-knows no data names: its owner gives it `lines`, each `{id, node}` already drawn
-(or `{id, html}`, a line a server drew, kept as it is), what the conversation is
-doing now (`now`), and how many lines came before these that it was not given
-(`earlier`). Any other prop lands on the `Transcript` it draws. Each line is at
-`#row-<id>`: an address naming one opens there, and scrolling while the address
-names a place outside it (a menu over it) is not the reader's.
+scrolls up to read, and draws the last `take` lines it is given (40, `TAKE`),
+with a Button above them that draws earlier ones without moving the reader, as
+scrolling up near the oldest drawn line also does. It knows no data names: its
+owner gives it `lines`, each `{id, node}` already drawn (or `{id, html}`, a line
+a server drew, kept as it is), what the conversation is doing now (`now`), and
+how many lines came before these that it was not given (`earlier`). Any other
+prop lands on the `Transcript` it draws. Each line is at `#row-<id>`: an address
+naming one opens there, and scrolling while the address names a place outside it
+(a menu over it) is not the reader's.
 
 Where it scrolls in a place of its own (`pane`) rather than the page, it holds
 the page to what a person sees (`fit`): it sets `--viewport-height` on the root
