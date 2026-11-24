@@ -45,7 +45,6 @@ import {
   feeOf,
   linkable,
   linking,
-  rate,
   refusedSell,
   selling,
 } from './sell.ts'
@@ -957,6 +956,7 @@ let desk = async (
       : undefined,
     shops: provider.shops.on(),
     provider: provider.name,
+    costs: provider.shops.costs,
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
     // The space's month against its allowances (@yaks/platform/meter), as the
@@ -969,7 +969,7 @@ let desk = async (
         payer: billed,
       }
       : undefined,
-    fee: rate(fee),
+    fee,
     agents: known,
     people: people?.[0],
     friends: people?.[2].filter((f) => f.standing == 'friend'),

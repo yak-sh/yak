@@ -83,6 +83,7 @@
     "./cli": "./cli.ts",
     "./plans": "./plans.ts",
     "./price": "./price.ts",
+    "./fee": "./fee.ts",
     "./meter": "./meter.ts",
     "./numbers": "./numbers.ts",
     "./standing": "./standing.ts",

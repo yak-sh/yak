@@ -426,6 +426,45 @@ export type Shopped =
     | { about: 'other' }
   )
 
+/** What a provider charges a seller, as its published pricing says, for
+ * the pages that tell a seller what selling costs before they start. */
+export type Costs = {
+  /** a payment by a card from the seller's own country: a rate in basis
+   * points of the payment, plus a fixed amount in cents */
+  card: { bps: number; cents: number }
+  /** what a card from another country adds to the rate, in basis points */
+  abroad: number
+  /** the fee for a payment a buyer disputes with their bank, in cents,
+   * returned when the seller wins */
+  dispute: number
+  /** whether the processing fee comes back when a payment is refunded */
+  refunded: boolean
+  /** days from a sale to its payout, and from a new account's first sale
+   * to its first payout */
+  payout: { days: number; first: number }
+  /** the country those numbers are for, and where the provider publishes
+   * them for every other */
+  country: string
+  pricing: string
+}
+
+/** What a provider keeps of a card payment of `cents`: its rate, rounded to
+ * the nearest cent, plus its fixed amount, never more than the payment.
+ *
+ * ```ts
+ * import { charged } from '@yaks/host/payments'
+ * import { equal } from '@yaks/testing'
+ * let card = { bps: 290, cents: 30 }
+ * equal(charged(card, 2000), 88)
+ * equal(charged(card, 1999), 88)
+ * equal(charged(card, 10), 10)
+ * ```
+ */
+export let charged = (
+  card: Costs['card'],
+  cents: number,
+): number => Math.min(cents, Math.round(cents * card.bps / 10_000) + card.cents)
+
 /** What a provider lends a party selling on an account of its own: the
  * account opened once and finished through the provider's onboarding, or one
  * the seller already had and connected at the provider's own page, and
@@ -435,6 +474,8 @@ export type Shopped =
 export type Shops = {
   /** whether it can be asked anything here: its credentials are set */
   on: () => boolean
+  /** what selling through it costs a seller */
+  costs: Costs
   /** the most characters one tag's value carries ({@link Sale.tags}): a
    * longer one the provider refuses or cuts short */
   tag: number

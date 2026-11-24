@@ -15,7 +15,6 @@ import {
   backAt,
   backTo,
   cart,
-  fee,
   feeOf,
   MARK,
   orderEid,
@@ -23,13 +22,13 @@ import {
   priced,
   type Product,
   quoted,
-  rate,
   receipt,
   sale,
   sellerOf,
   selling,
 } from './sell.ts'
 import { packed, type Paid, unpacked } from '@yaks/host/payments'
+import { fee, rate } from '@yaks/platform/fee'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import { page as drawn } from './site/mod.ts'

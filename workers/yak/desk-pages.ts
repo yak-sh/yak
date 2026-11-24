@@ -25,8 +25,12 @@ import {
   Notice,
   Report,
   Rows,
+  Table,
   TabSet,
 } from '@yaks/ui/parts'
+import type { Costs } from '@yaks/host/payments'
+import { kept, rate } from '@yaks/platform/fee'
+import { amount } from '@yaks/platform/price'
 import { h, type VNode } from 'preact'
 import type {
   Borrowed,
@@ -864,6 +868,13 @@ let preferences = (at: DeskPage, env: Host) => {
   ]
 }
 
+// Selling (T-34524): a space starts taking payments in its apps here, so the
+// page says what selling is and what every part of it costs before the
+// button is pressed. Each number is read where it is set: the platform's fee
+// from the directory (sell.ts `feeOf`), the plan's price from
+// @yaks/platform/plans, and the provider's own fees from what it publishes
+// (@yaks/host/payments `Costs`), and the $20 sale is worked from those
+// (@yaks/platform/fee `kept`).
 let selling = (at: DeskPage, env: Host) => {
   let by = at.provider
   if (!at.sell || !by) {
@@ -917,68 +928,246 @@ let selling = (at: DeskPage, env: Host) => {
       ),
     )
     : null
-  let subscribe = at.paying ? null : billButton(
-    'checkout',
-    `Subscribe — ${plusPrice()} a month`,
-    managePath('selling', at.space),
-  )
-  return [
+  // The card that starts selling, with the lead under the first one only.
+  let start = (title: string, said?: Kids) =>
     h(
       Card,
       { class: 'Bill' },
-      heading(
-        !at.paying
-          ? 'Take payments with Plus'
-          : ready
-          ? 'Payments are connected'
-          : 'Take payments in your apps',
-        {
-          status: ready
-            ? status('Connected', 'positive')
-            : at.sell == 'setup'
-            ? status('Setup unfinished', 'negative')
-            : null,
-          actions: subscribe || account ? [subscribe, account] : null,
-        },
-      ),
-      h(
-        'p',
-        null,
-        !at.paying
-          ? connected
-            ? `Your ${by} account is connected. Upgrade to Plus to accept new payments.`
-            : `Connect ${by} and accept payments from your customers on Plus.`
-          : ready
-          ? `Payments go to your ${by} account. You manage refunds and disputes there.`
+      heading(title, {
+        status: ready
+          ? status('Connected', 'positive')
           : at.sell == 'setup'
-          ? `Finish connecting your ${by} account to start accepting payments.`
-          : `Payments from your customers go to a ${by} account of your own.`,
-      ),
+          ? status('Setup unfinished', 'negative')
+          : null,
+        actions: at.paying ? account : billButton(
+          'checkout',
+          `Subscribe — ${plusPrice()} a month`,
+          managePath('selling', at.space),
+        ),
+      }),
+      said,
       existing,
-      at.paying
-        ? h(
-          Form.Hint,
-          null,
-          `yaks.app takes ${at.fee ?? ''} of each sale. `,
-          h(
-            'a',
-            { href: url(env, '/pricing'), target: '_blank', rel: 'noopener' },
-            'Pricing',
-          ),
-        )
-        : [
-          at.fee
-            ? h(
-              Form.Hint,
-              null,
-              `${at.fee} per sale, plus ${by} processing fees.`,
-            )
-            : null,
-          h(Notice, { class: 'Bill_Say', role: 'status' }),
-        ],
+      h(Notice, { class: 'Bill_Say', role: 'status' }),
+    )
+  return [
+    start(
+      ready ? 'Payments are connected' : 'Sell from your apps',
+      lead(at, by),
+    ),
+    offered(at, by),
+    at.costs ? costing(at, by, at.costs, env) : null,
+    // Once the costs are read, the button is at hand again rather than a
+    // scroll back up.
+    ready ? null : start(
+      !at.paying
+        ? 'Start selling on the Plus plan'
+        : at.sell == 'setup'
+        ? `Finish setting up ${by}`
+        : 'Start selling',
     ),
     at.paying ? null : billing(),
   ]
+}
+
+// What the first card says under its title, for where the space stands.
+let lead = (at: DeskPage, by: string) =>
+  h(
+    'p',
+    null,
+    at.sell == 'ready'
+      ? `Payments go to your ${by} account, and ${by} pays them into your bank. You manage refunds and disputes in your ${by} dashboard.`
+      : !at.paying && at.sell != 'none'
+      ? `Your ${by} account is connected. Upgrade to the Plus plan to take new payments.`
+      : at.sell == 'setup'
+      ? `Finish connecting your ${by} account to start taking payments.`
+      : `Your apps can take card payments, and ${by} pays the money into your bank account.${
+        at.paying
+          ? ''
+          : ` Selling comes with the Plus plan, ${plusPrice()} a month.`
+      }`,
+  )
+
+// A row of facts: what it is, and a line that says more.
+let fact = (name: Kids, meta: Kids) =>
+  h(
+    Rows.Item,
+    { as: 'li' },
+    h(
+      Rows.Main,
+      null,
+      h(Rows.Name, { as: 'span' }, name),
+      h(Rows.Meta, null, meta),
+    ),
+  )
+
+// The space's apps by name, as one phrase: a few, and how many more.
+let appsNamed = (apps: { title: string; slug: string }[]) => {
+  let names = apps.map((a) => a.title || a.slug)
+  let shown = names.length > 4
+    ? [...names.slice(0, 3), `${names.length - 3} more`]
+    : names
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(shown)
+}
+
+// What a space can sell, and how a sale reaches the seller.
+let offered = (at: DeskPage, by: string) => [
+  h(
+    Card,
+    null,
+    heading('What you can sell'),
+    h(
+      Card.Sub,
+      null,
+      at.apps.length
+        ? `Every app in this space can take payments: ${appsNamed(at.apps)}.`
+        : 'Every app you make in this space can take payments.',
+    ),
+    h(
+      Rows,
+      { as: 'ul' },
+      fact(
+        'Things with a price',
+        'An app lists what it sells, each with a price, and with sizes or stock where it has them. A buyer can put several in one cart, with a flat shipping rate.',
+      ),
+      fact(
+        'Work priced per order',
+        'An app can price each order on its own, with its shipping and tax, the way a book printed to order is priced.',
+      ),
+      fact(
+        'Paid once',
+        'Each sale is one payment. Subscriptions aren’t offered yet.',
+      ),
+    ),
+  ),
+  h(
+    Card,
+    null,
+    heading('How a sale reaches you'),
+    h(
+      Rows,
+      { as: 'ul' },
+      fact(
+        `The buyer pays on ${by}’s page`,
+        `Your app sends them to a ${by} checkout page to pay by card. Their card number never reaches your app or yaks.app.`,
+      ),
+      fact(
+        'You get the order',
+        'The order shows up in your app, and the buyer gets a receipt by email from it.',
+      ),
+      fact(
+        `${by} pays you`,
+        'The money, less the fees below, goes into your bank account.',
+      ),
+      fact(
+        'You look after your buyers',
+        `You deliver what you sold and answer your buyers. Refunds and disputes are in your ${by} dashboard. Your bank details and ID go to ${by}, and yaks.app never sees them.`,
+      ),
+    ),
+  ),
+]
+
+// Cents as a person reads a fee: `30¢`, `$15`, or `$0.88` in a sum.
+let small = (cents: number) => cents < 100 ? `${cents}¢` : amount(cents)
+let usd = (cents: number) => `$${(cents / 100).toFixed(2)}`
+
+// The sale the costs are worked through.
+let EXAMPLE = 2000
+
+// Every cost of selling, and a sale worked through them.
+let costing = (at: DeskPage, by: string, costs: Costs, env: Host) => {
+  let bps = at.fee ?? 0
+  let card = `${rate(costs.card.bps)} + ${small(costs.card.cents)}`
+  let sale = kept(EXAMPLE, bps, costs.card)
+  let line = (name: Kids, value: string) =>
+    h(
+      Table.Row,
+      null,
+      h(Table.Cell, null, name),
+      h(Table.Cell, { mod: 'num' }, value),
+    )
+  return h(
+    Card,
+    null,
+    heading('What it costs'),
+    h(
+      Rows,
+      { as: 'ul' },
+      at.paying ? null : fact(
+        `The Plus plan: ${plusPrice()} a month`,
+        'Selling comes with the Plus and Pro plans.',
+      ),
+      fact(`${by}: ${card} a payment`, [
+        `On a card from the ${costs.country}. A card from another country adds ${
+          rate(costs.abroad)
+        }. Rates in other countries are on `,
+        h(
+          'a',
+          { href: costs.pricing, target: '_blank', rel: 'noopener' },
+          `${by}’s pricing page`,
+        ),
+        '.',
+      ]),
+      fact(
+        bps
+          ? `yaks.app: ${rate(bps)} of each sale`
+          : 'yaks.app: nothing per sale',
+        bps
+          ? 'Taken from the same payment. Nothing else is charged per sale.'
+          : 'yaks.app takes no cut of your sales.',
+      ),
+      fact(
+        'Payouts',
+        `${by} pays into your bank about ${costs.payout.days} days after each sale. Your first payout comes about ${costs.payout.first} days after your first sale.`,
+      ),
+      fact(
+        'Refunds',
+        (costs.refunded
+          ? `${by} gives its fee back on a refund.`
+          : `${by} keeps its fee on a refunded payment.`) +
+          (bps ? ' yaks.app gives its fee back.' : ''),
+      ),
+      fact(
+        `Disputes: ${small(costs.dispute)}`,
+        `If a buyer disputes a charge with their bank, ${by} charges you ${
+          small(costs.dispute)
+        }, and gives it back if you win.`,
+      ),
+      fact(
+        'Sales tax',
+        'Checkout adds no sales tax: the buyer pays the price your app shows. Any sales tax you owe is yours to pay.',
+      ),
+    ),
+    h(Card.Title, { as: 'h3' }, `A ${amount(EXAMPLE)} sale`),
+    h(
+      Table,
+      { cols: [null, 'num'] },
+      h(
+        Table.Body,
+        null,
+        line('The buyer pays', usd(EXAMPLE)),
+        line(`${by}’s fee, ${card}`, `−${usd(sale.provider)}`),
+        line(`yaks.app’s fee, ${rate(bps)}`, `−${usd(sale.platform)}`),
+        line(h('b', null, 'Reaches your bank'), usd(sale.seller)),
+      ),
+    ),
+    h(
+      Form.Hint,
+      null,
+      'The same fee is on the ',
+      h(
+        'a',
+        { href: url(env, '/pricing'), target: '_blank', rel: 'noopener' },
+        'pricing page',
+      ),
+      ', and the ',
+      h(
+        'a',
+        { href: url(env, '/terms'), target: '_blank', rel: 'noopener' },
+        'terms',
+      ),
+      ' say what selling asks of you.',
+    ),
+  )
 }
 
 let trash = (at: DeskPage, env: Host) => {

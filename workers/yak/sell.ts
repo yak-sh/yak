@@ -80,6 +80,7 @@ import {
   readQuote,
 } from './service-quotes.ts'
 import { type Item, packed, type Quote, unpacked } from '@yaks/host/payments'
+import { fee, rate } from '@yaks/platform/fee'
 import { protectedSale } from './sale-private.ts'
 import {
   recordRefund,
@@ -114,22 +115,6 @@ export let MOST = 10_000
 export let feeOf = async (
   dir: { space: (slug: string) => Promise<Space | null> },
 ) => (await dir.space(dirPart.META.space))?.fee ?? 0
-
-/** The fee on a total, in cents. Rounded down, so the fee is never a cent more
- * than the rate says, and never more than the sale itself.
- *
- * ```ts
- * fee(1000, 250) // 25
- * fee(999, 250)  // 24 — down, not up
- * fee(1000, 0)   // 0
- * ```
- */
-export let fee = (cents: number, bps: number) =>
-  Math.min(cents, Math.max(0, Math.floor((cents * bps) / 10_000)))
-
-/** The rate as a person reads it: `2.5%`, or `0%`. One derivation, so the
- * pages and the tool sentence cannot disagree with the arithmetic above. */
-export let rate = (bps: number) => `${Math.round(bps / 100 * 100) / 100}%`
 
 /**
  * The rate as the pricing page says it. The page is a file — hand-written,

@@ -96,6 +96,7 @@ import {
 } from '@yaks/platform/plans'
 
 import type { Card as Billed, Payer, Want } from './billing.ts'
+import type { Costs } from '@yaks/host/payments'
 
 import type { Accepts } from '@yaks/blob'
 
@@ -754,6 +755,8 @@ export type DeskPage = {
   /** the name of the payment provider the space pays and sells through
    * (payments.ts), as the selling and billing cards say it */
   provider?: string
+  /** what selling through that provider costs a seller, as it publishes */
+  costs?: Costs
   plan?: Billed
   /** the Billing page's month: each allowance the space answers to and how
    * much of it is used, its model budget, when the hourly sweep last read
@@ -767,7 +770,8 @@ export type DeskPage = {
   }
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean
-  fee?: string
+  /** what the platform takes from each sale, in basis points */
+  fee?: number
   say?: string
   no?: boolean
   view?: Setting

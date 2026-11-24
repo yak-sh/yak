@@ -289,10 +289,10 @@ import {
   disconnect,
   feeOf,
   linkable,
-  rate,
   refusedSell,
   selling,
 } from './sell.ts'
+import { rate } from '@yaks/platform/fee'
 import { payments } from './payments.ts'
 import { pricing, refusedPrice } from './pricing.ts'
 import { INTERVALS, priceTag } from '@yaks/platform/price'

@@ -14,7 +14,7 @@ import { type Directory, META } from './directory.ts'
 import type { Env } from './env.ts'
 import { standing } from './budget.ts'
 import { budgetLines } from '@yaks/platform/budget'
-import { rate } from './sell.ts'
+import { rate } from '@yaks/platform/fee'
 import { refuse } from './tool.ts'
 
 let text = (v: unknown) => typeof v == 'string' ? v.trim() : ''

@@ -42,6 +42,7 @@
 // and a dashboard ticking the other, which is a webhook that silently does
 // nothing.
 import type {
+  Costs,
   Paid,
   Sale,
   Seller,
@@ -214,6 +215,27 @@ export let sellerOf = (a: Account): Seller => ({
   ready: !!a.charges_enabled,
   submitted: !!a.details_submitted,
 })
+
+/** What Stripe charges a seller in the United States, from its pricing page
+ * (stripe.com/pricing) and help pages, read 2026-11-23: 2.9% + 30¢ a
+ * domestic card payment, 1.5% more for an international card, a $15 dispute
+ * fee returned on a won dispute, processing fees kept on a refund
+ * (support.stripe.com/questions/understanding-fees-for-refunded-payments),
+ * and payouts on a two-day rolling schedule after a first payout about seven
+ * days after the first payment
+ * (support.stripe.com/questions/delay-for-first-payout-for-connected-accounts).
+ * The account pays them itself (`fees.payer = account`, {@link account}),
+ * so these are the seller's costs, as published, and change when Stripe's
+ * pricing does. */
+export let COSTS: Costs = {
+  card: { bps: 290, cents: 30 },
+  abroad: 150,
+  dispute: 1500,
+  refunded: false,
+  payout: { days: 2, first: 7 },
+  country: 'US',
+  pricing: 'https://stripe.com/pricing',
+}
 
 /** The longest metadata value Stripe keeps, in characters: the most one
  * tag carries ({@link Shops.tag}). */
@@ -436,6 +458,7 @@ export let shops = (options: Options): Shops => {
   }
   return {
     on: () => !!options.key,
+    costs: COSTS,
     tag: TAG,
     open: async (who) => {
       let a = await ask(options, '/v1/accounts', account(who)) as Account

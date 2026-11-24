@@ -1073,12 +1073,51 @@ test('selling names the provider it sells through', async () => {
     let [at, text] of [
       [{ paying: true }, 'Create a Paybox account'],
       [{ paying: true, sell: 'ready' }, 'Disconnect Paybox'],
-      [{ paying: false, fee: '1%' }, 'plus Paybox processing fees'],
     ] as const
   ) assertStringIncludes(await selling(at), text)
   assertStringIncludes(
     await selling({ provider: undefined }),
     'Selling is not available here yet.',
+  )
+})
+
+// Every cost is said before selling starts, from the provider's published
+// costs and the platform's fee, and a sale is worked through them.
+test('selling spells out every cost and works a $20 sale through them', async () => {
+  let costs = {
+    card: { bps: 290, cents: 30 },
+    abroad: 150,
+    dispute: 1500,
+    refunded: false,
+    payout: { days: 2, first: 7 },
+    country: 'US',
+    pricing: 'https://paybox.test/pricing',
+  }
+  let selling = (at: Partial<DeskPage>) =>
+    desk({ ...page, view: 'selling', provider: 'Paybox', costs, ...at }, env)
+      .text()
+  let html = await selling({ paying: true, fee: 100 })
+  for (
+    let text of [
+      'Paybox: 2.9% + 30¢ a payment',
+      'adds 1.5%',
+      'yaks.app: 1% of each sale',
+      'about 2 days after each sale',
+      'about 7 days after your first sale',
+      'Paybox keeps its fee on a refunded payment. yaks.app gives its fee back.',
+      'Disputes: $15',
+      'Any sales tax you owe is yours to pay.',
+      '−$0.88',
+      '−$0.20',
+      '$18.92',
+    ]
+  ) assertStringIncludes(html, text)
+  let free = await selling({ paying: true, fee: 0 })
+  assertStringIncludes(free, 'yaks.app: nothing per sale')
+  assertStringIncludes(free, '$19.12')
+  assertStringIncludes(
+    await selling({ paying: false, fee: 100 }),
+    'The Plus plan: $12 a month',
   )
 })
 
