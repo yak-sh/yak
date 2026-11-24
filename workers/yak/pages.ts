@@ -287,6 +287,10 @@ ${
       ? `<script type="module" src="${file('_fit-list.js')}"></script>`
       : ''
   }${
+    main.includes('data-app-mark')
+      ? `<script type="module" src="${file('_image-fallback.js')}"></script>`
+      : ''
+  }${
     main.includes('data-menu')
       ? `<script src="${file('menu.js')}" defer></script>`
       : ''

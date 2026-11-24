@@ -20,7 +20,7 @@
 // its owner.
 
 import { parse } from '@yaks/query'
-import { appMark } from '@yaks/platform/routes'
+import { appMarkImage } from '@yaks/platform/routes'
 import type { ComponentRenderer } from '@yaks/preact'
 import { Badge, Icon, Menu, Rows, Time } from '@yaks/ui/parts'
 import { h } from 'preact'
@@ -80,16 +80,18 @@ export let app: ComponentRenderer = {
       'data-name': title,
       'data-changed': changed?.at ?? '',
     }
+    let mark = appMarkImage(at, { ...a, eid: b.entity.eid, title })
+    let size = { width: 32, height: 32 }
     return h(
       Rows.Item,
       { as: 'li', ...sift },
-      h(Rows.Mark, {
-        src: ctx.icon ?? appMark(at, { ...a, eid: b.entity.eid, title }),
-        width: 32,
-        height: 32,
-        alt: '',
-        loading: 'lazy',
-      }),
+      ctx.icon
+        ? h(Rows.Mark, { src: ctx.icon, alt: '', loading: 'lazy', ...size })
+        : h(
+          Rows.Mark,
+          { as: 'span', ...mark.backdrop },
+          h('img', { ...mark.image, ...size }),
+        ),
       h(
         Rows.Main,
         null,

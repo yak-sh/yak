@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { Badge, Button, Form, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
-import { managePath } from '@yaks/platform/routes'
+import { type appMarkImage, managePath } from '@yaks/platform/routes'
 import { NAMES } from '@yaks/ui/navigate'
 import { acrossBadge, choice } from './space-picker.ts'
 
@@ -15,7 +15,7 @@ export type Item = {
    * `NAMES`). */
   names?: string
   icon: IconName
-  image?: string
+  image?: ReturnType<typeof appMarkImage>
   current?: boolean
   /** Open beside the current page rather than the page itself: a quiet
    * "Open" mark, not the lit tab (talk-sidebar.ts, an app beside the one
@@ -115,14 +115,11 @@ export let link = (at: Item) => {
       rel: at.external ? 'noopener' : undefined,
     },
     at.image
-      ? h('img', {
-        class: 'Sidebar_Icon',
-        src: at.image,
-        width: 24,
-        height: 24,
-        alt: '',
-        loading: 'lazy',
-      })
+      ? h(
+        'span',
+        { class: 'Sidebar_Icon', ...at.image.backdrop },
+        h('img', { ...at.image.image, width: 24, height: 24 }),
+      )
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
     at.beside

@@ -101,6 +101,7 @@ node_modules
 # Browser bundles for framed pages.
 /workers/yak/public/_contents.js
 /workers/yak/public/_fit-list.js
+/workers/yak/public/_image-fallback.js
 /workers/yak/public/_navigate.js
 /workers/yak/public/_home.css
 /workers/yak/public/_home.js

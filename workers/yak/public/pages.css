@@ -1404,6 +1404,20 @@
 }
 
 @layer sections {
+  :is(.Rows_Mark, .Sidebar_Icon)[data-app-mark]:not(:has(.AppMark_Image[data-app-mark-ready])) {
+    background: var(--app-mark) center / cover no-repeat;
+  }
+  .AppMark_Image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    visibility: hidden;
+  }
+  .AppMark_Image[data-app-mark-ready] {
+    visibility: visible;
+  }
   .Sidebar_Icon {
     flex: none;
     width: 1.5rem;

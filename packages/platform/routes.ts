@@ -20,6 +20,7 @@
  */
 import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { letter, monogram } from './monogram.ts'
 import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
 import type { LogoSize } from './space-logo.ts'
 import { releaseId } from './versions.ts'
@@ -260,10 +261,12 @@ export type MarkedApp = {
 }
 
 /** The release and the platform artwork it can show. */
-export let markVersion = ({ eid, source, generatedIcon }: MarkedApp) => {
+export let markVersion = (
+  { eid, slug, title, source, generatedIcon }: MarkedApp,
+) => {
   let release = releaseId(source)
   return release || source === null
-    ? `2.${release ?? ''}.${eid}.${generatedIcon ?? ''}`
+    ? `3.${release ?? ''}.${eid}.${generatedIcon ?? letter(title || slug)}`
     : null
 }
 
@@ -274,6 +277,32 @@ export let appMark = (at: string, app: MarkedApp): string => {
     version ? `&v=${encodeURIComponent(version)}` : ''
   }`
 }
+
+/** An app list's image and the mark it can paint before the image arrives. */
+export let appMarkImage = (at: string, app: MarkedApp): {
+  backdrop: { 'data-app-mark': string; style: string }
+  image: {
+    src: string
+    alt: string
+    loading: 'lazy'
+    class: string
+    'data-app-mark-image': string
+  }
+} => ({
+  backdrop: {
+    'data-app-mark': '',
+    style: `--app-mark:url("data:image/svg+xml,${
+      encodeURIComponent(monogram(app.title || app.slug, app.eid))
+    }");`,
+  },
+  image: {
+    src: appMark(at, app),
+    alt: '',
+    loading: 'lazy',
+    class: 'AppMark_Image',
+    'data-app-mark-image': '',
+  },
+})
 
 /** Where the connections page serves the logos it does not keep as SVG
  * (workers/yak catalog.ts `logoDoor`), by the integration's name. */

@@ -361,14 +361,19 @@ let library = parseHTML(
 
 test('the sidebar and Apps page ask for the same app icons', () => {
   let sources = (page: Document, selector: string) =>
-    [...page.querySelectorAll(selector)].map((img) => img.getAttribute('src'))
-      .sort()
-  let sidebar = (doc: typeof owner.document) =>
-    sources(doc, '[data-fit-list] .Sidebar_Icon')
+    [...page.querySelectorAll(selector)].map((mark) => [
+      mark.querySelector('img')?.getAttribute('src') ?? '',
+      mark.getAttribute('style') ?? '',
+    ]).sort(([a], [b]) => a.localeCompare(b))
+  let sidebar = (doc: Document) => sources(doc, '[data-fit-list] .Sidebar_Icon')
   let icons = sidebar(owner.document)
   assertEquals(icons, sources(library, '#apps .Rows_Mark'))
   assertEquals(icons, sidebar(chosen.document))
-  assert(icons.every((src) => src?.includes('?display&v=')))
+  assert(
+    icons.every(([src, style]) =>
+      src.includes('?display&v=') && style.includes('data:image/svg+xml,')
+    ),
+  )
 })
 
 test('the side holds the space, the Operator, Updates, the apps and Manage', () => {

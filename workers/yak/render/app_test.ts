@@ -74,7 +74,7 @@ test('app Tile resolves by component and draws the same row served and mounted',
     ['Visits', '/manage/ada/visits#visits-recipes'],
   ])
   assertEquals(
-    served.querySelector('.Rows_Mark')?.getAttribute('src'),
+    served.querySelector('.Rows_Mark img')?.getAttribute('src'),
     'https://ada.yaks.app/recipes/icon.png?display',
   )
   assertEquals(

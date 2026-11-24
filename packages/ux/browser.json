@@ -13,6 +13,7 @@
     "./keys",
     "./save",
     "./sort",
-    "./fit-list"
+    "./fit-list",
+    "./image-fallback"
   ]
 }

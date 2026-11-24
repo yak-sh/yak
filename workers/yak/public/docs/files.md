@@ -510,7 +510,8 @@ was deleted.
 The app's icon is the picture beside its name wherever yaks.app lists it (the
 space's apps, the Operator's sidebar) and on a home screen. It is the app's
 `icon.png`, served once the app is deployed. yaks.app generates an icon for
-released apps without artwork and serves the yaks.app mark until it is ready.
+released apps without artwork. While the icon is pending, app lists display the
+app's initial and home screens use the yaks.app icon.
 
 A PNG on the web is fetched there:
 

@@ -521,10 +521,10 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assertEquals(new Uint8Array(await icon.arrayBuffer()), tile)
 
-  // App lists and installers show the same mark while artwork is pending.
+  // Lists can draw their app's initial while artwork is pending.
   let mark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
-  assertEquals(mark.headers.get('content-type'), 'image/png')
-  assertEquals(new Uint8Array(await mark.arrayBuffer()), tile)
+  assertEquals(mark.headers.get('content-type'), 'image/svg+xml')
+  assertStringIncludes(await mark.text(), '>C</text>')
   let installed = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(new Uint8Array(await installed.arrayBuffer()), tile)
 
@@ -625,8 +625,8 @@ test('a generated display icon has a new cacheable URL', async () => {
   let second = appMark('/cookbook', pending)
   let fallback = await open(second)
   assert(fallback.headers.get('cache-control')?.endsWith(', immutable'))
-  assertEquals(fallback.headers.get('content-type'), 'image/png')
-  await fallback.body?.cancel()
+  assertEquals(fallback.headers.get('content-type'), 'image/svg+xml')
+  assertStringIncludes(await fallback.text(), '>C</text>')
   let generatedIcon = new Date().toISOString()
   await r2RawObjects(env.BLOBS).put(
     generatedIconKey(space, app),

@@ -243,7 +243,8 @@ app_files:
     icon.png: a PNG fetched there with op: fetch, or else an icon.svg
     written as content (a square viewBox, no <text>), which the platform
     draws as icon.png. yaks.app generates artwork for a released app without
-    an icon and shows the yaks.app mark until it is ready. NOTES.md
+    an icon. While the icon is pending, app lists display the app's initial
+    and home screens use the yaks.app icon. NOTES.md
     beside index.html holds the app's notes in the person's words, returned
     by the about tool; like vocab.json it is never served on the web.
     NOTES.md is limited to 4096 bytes.

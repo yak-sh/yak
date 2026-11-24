@@ -43,6 +43,7 @@ import { previewed } from './preview-html.ts'
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { generatedIconKey } from '@yaks/platform/app-icon'
+import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
 import {
@@ -687,8 +688,8 @@ let media = async (
 // is served its drawing (files.ts `icon`), because this is only reached where
 // the files door had nothing.
 //
-// Apps without a release icon wear their generated artwork. The platform's
-// opaque yak tile fills in while the artwork is pending.
+// Apps without a release icon wear their generated artwork. While it is
+// pending, lists wear an app monogram and installers wear the platform tile.
 export let unwritten = async (
   req: Request,
   env: Env,
@@ -726,6 +727,17 @@ export let unwritten = async (
         request: 'app icon',
         app: app.eid,
       })
+    }
+    if (display) {
+      return new Response(
+        req.method == 'HEAD' ? null : monogram(app.title || app.slug, app.eid),
+        {
+          headers: {
+            'content-type': 'image/svg+xml',
+            'cache-control': retry || app.generatedIcon ? 'no-store' : cache,
+          },
+        },
+      )
     }
     let tile = await env.ASSETS.fetch(
       new Request(new URL('/connector-512.png', req.url), {
