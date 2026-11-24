@@ -610,8 +610,9 @@ export let billedDomains = async (
   env: Env,
   dir: Directory,
   space: Space,
+  at: Parameters<Directory['domainOrders']>[0] = space,
 ): Promise<Domain[]> => {
-  let orders = await dir.domainOrders(space)
+  let orders = await dir.domainOrders(at)
   let terms = await choiceOf(env, space, orders)
   return await Promise.all(
     orders.filter((r) => r.registered).map(async (r) => ({

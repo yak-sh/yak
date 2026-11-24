@@ -3454,9 +3454,12 @@ export let directoryRows = (rows: {
     renewalPaid: async (eid: string) =>
       !!await one(line`.entity.eid=${eid}&.domain_renewal_paid`),
     // Registrations belong to the space that paid, including while unattached.
-    domainOrders: async (space: Space) =>
+    // A page asks them by its walk (`walkTo`), ahead of knowing the eid.
+    domainOrders: async (space: Pick<Space, 'eid'> | { path: Built }) =>
       (await query(
-        line`.domain_order.space=${space.eid}&?domain_registered&?domain_refused&?domain_refunded&?created&?domain_renewal&?domain_courtesy`,
+        line`.domain_order.space${
+          sub('path' in space ? space.path : line`=${space.eid}`)
+        }&?domain_registered&?domain_refused&?domain_refunded&?created&?domain_renewal&?domain_courtesy`,
       ))
         .map((r) => ({
           eid: r.entity.eid,

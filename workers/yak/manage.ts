@@ -594,6 +594,7 @@ let rowsAhead = (
     return [agentsOf(at.env, person, dir), dir.provenance(walk)]
   }
   if (view == 'new') return [agentsOf(at.env, person, dir)]
+  if (view == 'billing') return [dir.domainOrders(walk)]
   if (view == 'people') {
     return [dir.people(walk), dir.admits(walk), friendsOf(dir, person)]
   }
@@ -997,7 +998,10 @@ let desk = async (
       )
       : undefined,
     view == 'domains' && q.get('q') ? searched(env, q.get('q')!) : undefined,
-    view == 'billing' ? billedDomains(env, dir, space) : undefined,
+    // As the page asked them ahead (`rowsAhead`), by its walk.
+    view == 'billing'
+      ? billedDomains(env, dir, space, walkTo(space.slug, space.eid))
+      : undefined,
   ])
   let known = await inHand(agents)
   let page = deskPage({
