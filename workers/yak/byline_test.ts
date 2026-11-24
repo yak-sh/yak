@@ -13,7 +13,7 @@ let them = await seed(k, [{ slug: 'oak-church', apps: ['site'] }])
 let eid = them.eids['oak-church']
 let agent = connector(k, them.cookie)
 let on = async () => !!(await k.dir.at(eid))!.byline
-let settings = (body?: Record<string, string>) =>
+let settings = (body?: string[][]) =>
   k.at(k.host, managePath('settings', 'oak-church'), {
     redirect: 'manual',
     headers: {
@@ -38,10 +38,19 @@ test('an owner turns the line on with space_set or in Settings, which offers it 
   let page = await (await settings()).text()
   ok(page.includes('Website by yaks.app'))
   ok(/name="byline" value="on" checked/.test(page))
-  // Saved with the box unticked, the line comes off; ticked, back on.
-  let saved = await settings({ title: 'Oak Church', byline: '' })
-  await saved.body?.cancel()
-  equal(await on(), false)
-  await (await settings({ byline: 'on' })).body?.cancel()
-  equal(await on(), true)
+  // The page sends the hidden field, and the box beside it when ticked.
+  // Unticked, the line comes off; ticked, back on; saved again unchanged, it
+  // stays. Each save goes back to the page.
+  let save = async (body: string[][], after: boolean) => {
+    let saved = await settings(body)
+    await saved.body?.cancel()
+    equal(saved.status, 303)
+    equal(await on(), after)
+  }
+  let box = (ticked: boolean) =>
+    ticked ? [['byline', ''], ['byline', 'on']] : [['byline', '']]
+  await save([['title', 'Oak Church'], ...box(false)], false)
+  await save([['title', 'Oak Church'], ...box(false)], false)
+  await save(box(true), true)
+  await save([['title', 'Oak Church'], ...box(true)], true)
 })
