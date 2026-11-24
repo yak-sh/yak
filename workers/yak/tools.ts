@@ -3912,6 +3912,15 @@ let OURS: Row[] = [
           "the logo's bytes, base64-encoded, in place of an attachment: a " +
             'picture read from a file',
         ),
+        byline: {
+          type: 'boolean',
+          description:
+            'on a paid plan, true to show "Website by yaks.app" at the foot ' +
+            "of every page of the space's apps, linking to yaks.app's page " +
+            'for organizations; false to take it off. Off unless turned on; ' +
+            'a space on the free plan wears the "Made with yaks.app" badge ' +
+            'instead',
+        },
       },
     },
     run: async (ctx, args) => {
@@ -3923,14 +3932,15 @@ let OURS: Row[] = [
       let share = args.visitors == null ? null : Number(args.visitors)
       let calls = args.visitor_calls == null ? null : Number(args.visitor_calls)
       let welcoming = share != null || calls != null
+      let byline = args.byline == null ? null : !!args.byline
       if (
         to == null && title == null && drop == null && !welcoming &&
-        logo === undefined
+        logo === undefined && byline == null
       ) {
         throw refuse(
           'arguments',
           'nothing to change: pass slug, title, forget, visitors, ' +
-            'visitor_calls, or logo',
+            'visitor_calls, logo, or byline',
         )
       }
       let moving = to != null && to != space.slug
@@ -3969,6 +3979,9 @@ let OURS: Row[] = [
           { slug: to, title, forget: drop },
           vouched(who),
         )
+      if (byline != null && byline != !!now.byline) {
+        now = await ctx.dir.byline(now, byline, vouched(who))
+      }
       if (welcoming) {
         now = await ctx.dir.welcome(
           now,
@@ -4002,6 +4015,15 @@ let OURS: Row[] = [
             ? ' — it wears the logo now, beside its name and as the icon of ' +
               'each of its apps with none of its own'
             : ' — its logo is off, and its first letter stands in its place') +
+          (byline == null
+            ? ''
+            : !byline
+            ? ` — its apps' pages no longer say "Website by yaks.app"`
+            : paying(now.tier)
+            ? ` — its apps' pages say "Website by yaks.app" at their foot`
+            : ` — its apps' pages will say "Website by yaks.app" at their ` +
+              'foot once it is on a paid plan; on the free plan they wear ' +
+              'the "Made with yaks.app" badge') +
           (welcoming
             ? ` — its apps' visitors may spend ` +
               `${now.visitors ?? VISITORS}% of its model and voice budget ` +

@@ -386,20 +386,51 @@ export let badgeOf = (
   return app.eid ? `${to}?app=${encodeURIComponent(app.eid)}` : to
 }
 
-/** The badge and what it says of a site's preview (workers/yak newcomer.ts
- * `previewing`): every plan's preview wears it, saying whose site it is
- * not. */
-/// badged({ tier: 'plus' }, { preview: { site: 'https://www.bakery.example/' } }, {}) -> { badge: 'https://yaks.app/', preview: 'bakery.example' }
-/// badged({ tier: 'plus' }, {}, {}) -> { badge: null }
-export let badged = (
-  space: Pick<Metered, 'tier'>,
+/** What a paid space's line "Website by yaks.app" opens, or null where its
+ * owner has not turned it on (`byline`) or the space is on the free plan,
+ * whose badge it never wears beside. It opens yaks.app's page for
+ * organizations, naming the app (`?app=`), as a badge's link does, so a
+ * follow and a sign-up it leads to say which app's line it was.
+ *
+ * ```ts
+ * import { bylineOf } from '@yaks/platform/woven'
+ * import { equal } from '@yaks/testing'
+ * let eid = '6f1c1b3e-0b5e-4c4a-9d1a-2b8f8c1d7e10'
+ * equal(bylineOf({ tier: 'pro', byline: true }, { eid }, {}), `https://yaks.app/organizations?app=${eid}`)
+ * equal(bylineOf({ tier: 'pro' }, { eid }, {}), null)
+ * equal(bylineOf({ tier: null, byline: true }, { eid }, {}), null)
+ * ```
+ */
+export let bylineOf = (
+  space: Pick<Metered, 'tier'> & { byline?: boolean },
   app: Badged,
   env: Host,
-): { badge: string | null; preview?: string | null } => {
+): string | null => {
+  if (free(space) || !space.byline) return null
+  let to = url(env, '/organizations')
+  return app.eid ? `${to}?app=${encodeURIComponent(app.eid)}` : to
+}
+
+/** The badge and what it says of a site's preview (workers/yak newcomer.ts
+ * `previewing`): every plan's preview wears it, saying whose site it is
+ * not. A paid space's page whose owner chose the line (`bylineOf`) wears it,
+ * drawn by the badge's script as a line at its foot (`byline`). */
+/// badged({ tier: 'plus' }, { preview: { site: 'https://www.bakery.example/' } }, {}) -> { badge: 'https://yaks.app/', preview: 'bakery.example' }
+/// badged({ tier: 'plus' }, {}, {}) -> { badge: null }
+/// badged({ tier: 'plus', byline: true }, {}, {}) -> { badge: 'https://yaks.app/organizations', byline: true }
+export let badged = (
+  space: Pick<Metered, 'tier'> & { byline?: boolean },
+  app: Badged,
+  env: Host,
+): { badge: string | null; preview?: string | null; byline?: boolean } => {
   let preview = app.preview
     ? URL.parse(app.preview.site)?.hostname.replace(/^www\./, '') ?? null
     : null
-  return preview
-    ? { badge: badgeOf(space, app, env) ?? url(env, '/'), preview }
+  if (preview) {
+    return { badge: badgeOf(space, app, env) ?? url(env, '/'), preview }
+  }
+  let line = bylineOf(space, app, env)
+  return line
+    ? { badge: line, byline: true }
     : { badge: badgeOf(space, app, env) }
 }

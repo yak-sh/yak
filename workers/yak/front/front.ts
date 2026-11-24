@@ -27,6 +27,7 @@ import {
 import { opens, scope, sealed, stranger, UNKEPT_AT } from '@yaks/platform/kept'
 import { cookieValue } from '@yaks/platform/cookie'
 import {
+  badgeFollowed,
   isHome,
   isPage,
   isView,
@@ -200,6 +201,13 @@ export let kept = (
         // A visit to the home page is the funnel's first step (funnel.ts).
         if (env.VIEWS && isHome(req, path, page)) {
           env.VIEWS.writeDataPoint(stepOf('home', req as Visited))
+        }
+        // And so is a page an app's badge or line led to (funnel.ts `badge`).
+        let app = env.VIEWS && badgeFollowed(req, page)
+        if (app) {
+          env.VIEWS!.writeDataPoint(
+            stepOf('badge', req as Visited, { button: app }),
+          )
         }
         // The ad network whose click brought this visit is the kernel's to tell
         // (ads.ts), behind this answer; the arrival is kept here (arrival.ts).

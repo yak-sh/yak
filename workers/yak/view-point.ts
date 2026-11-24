@@ -3,7 +3,7 @@
 // Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
 // import at most @yaks/platform/cookie, and @yaks/ui/navigate's
 // `lookingAhead`, so the front Worker can hold it.
-import { arrival, campaign } from './arrival.ts'
+import { arrival, cameFrom, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
 import { PATHS } from './variant.ts'
 import { lookingAhead } from '@yaks/ui/navigate'
@@ -91,7 +91,8 @@ export let FUNNEL = 'yaks.app'
  * platform itself, whose slug is the step. The request, where there is one,
  * says what a view says of it, and after it the campaign its arrival names
  * (arrival.ts), the call to action clicked, for a click (funnel.ts
- * `clicked`), and the home page its visitor opened last (arrival.ts), or
+ * `clicked`), or the app whose badge was followed, for a follow
+ * (`badgeFollowed`), and the home page its visitor opened last (arrival.ts), or
  * the one `page` names, for a visit its script counted (funnel.ts `loaded`); a
  * step taken away from any request (a person coming back, a newcomer's first
  * app) says only the step and the campaign `came`, the one its taker arrived
@@ -134,6 +135,14 @@ export let stepOf = (
 export let isPage = (req: Request, res: Response) =>
   req.method == 'GET' && (res.status == 304 || isView(res)) &&
   isPerson(req) && !lookingAhead(req)
+
+/** The app whose badge, or whose paid space's line "Website by yaks.app",
+ * a person followed to this page at the apex: the app its own address names
+ * (`?app=`, @yaks/platform/woven `badgeOf` and `bylineOf`), where it is a
+ * page a person opened (`isPage`); else null. A step for it names the app
+ * where a click names its call to action (funnel.ts `badges`). */
+export let badgeFollowed = (req: Request, res: Response): string | null =>
+  isPage(req, res) ? cameFrom(new URL(req.url))?.app ?? null : null
 
 /** Whether this answer at the apex is a person visiting a home page: a GET
  * of `/` or of a home page's own address (variant.ts) that was answered, from

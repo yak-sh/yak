@@ -293,6 +293,18 @@ export let directoryDoc: VocabDoc = {
         "The space's logo: the SHA-256 of its image's bytes and their type.",
       properties: { sha: text, type: text },
     },
+    // A paid space's choice to sign its apps' pages "Website by yaks.app" at
+    // their foot (@yaks/platform/woven `badged`, public/badge.js), linking to
+    // yaks.app's page for organizations. Its owner turns it on in the space's
+    // settings, or with space_set; off where it is not worn. A space on the
+    // free plan wears the badge instead.
+    byline: {
+      component: true,
+      type: 'object',
+      description:
+        'A paid space\'s choice to show "Website by yaks.app" at the foot of its apps\' pages.',
+      properties: {},
+    },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
     // is the space (a seat) or the app (a grant), one property the way
     // `hostname.serves` is, and accepting is one batch that writes the

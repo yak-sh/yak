@@ -135,7 +135,9 @@ test('a home page is visited by a browser asking for it, not a crawler', () => {
 
 test('the funnel reads each step, a share of the one it follows, and where visitors came from', async () => {
   let sql = analytics((q) =>
-    q.includes('AS site')
+    q.includes("'badge'")
+      ? [{ app: 'a', n: 3 }, { app: 'c', n: 4 }, { app: 'b', n: '2' }]
+      : q.includes('AS site')
       ? [{ site: 'news.example.com', n: 3 }]
       : q.includes('blob7 AS key')
       ? [
@@ -176,7 +178,14 @@ test('the funnel reads each step, a share of the one it follows, and where visit
   try {
     let env = { CF_ANALYTICS_TOKEN: 't', CF_ACCOUNT: 'a' } as Env
     let since = new Date(Math.floor(Date.now() / 1000 - 2 * 86_400) * 1000)
-    let f = (await funnel(env, since))!
+    let spaces: Record<string, string> = { a: 'church', b: 'church' }
+    let f = (await funnel(env, since, (app) =>
+      Promise.resolve(spaces[app] ?? null)))!
+    // A badge's follows are added up by the space its app is in.
+    assertEquals(f.badges, [
+      { space: 'church', n: 5 },
+      { space: 'app c', n: 4 },
+    ])
     assertEquals(f.since, since.toISOString())
     // A stage counts its step, and is a share of the stage it follows: a
     // connector's sign-in and a build begun are two doors, each its own count.
@@ -565,6 +574,30 @@ test('a landing page visited at its own address is a home page visit counted und
       [['home', name], ['code_sent', name]],
     )
   }
+})
+
+test("a badge's or a paid space's line's link, followed by a browser, is a step naming its app; a crawler's is none", async () => {
+  let k = await kernel()
+  let app = crypto.randomUUID()
+  let before = k.views.points.length
+  for (
+    let [path, ua] of [
+      [`/organizations?app=${app}`, BROWSER],
+      [`/?app=${app}`, BROWSER],
+      [`/organizations?app=${app}`, 'Googlebot/2.1'],
+      ['/organizations?app=recipes', BROWSER],
+      ['/organizations', BROWSER],
+    ]
+  ) {
+    let r = await k.at(k.host, path, { headers: { 'user-agent': ua } })
+    await r.body?.cancel()
+  }
+  assertEquals(
+    k.views.points.slice(before)
+      .filter((p) => p.indexes?.[0] == FUNNEL && p.blobs![1] == 'badge')
+      .map((p) => [p.blobs![5], p.blobs![7]]),
+    [['browser', app], ['browser', app]],
+  )
 })
 
 test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's left out, and where they stop is the stage most go no further than", async () => {

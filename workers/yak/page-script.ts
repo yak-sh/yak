@@ -11,7 +11,9 @@
 // Beside the mount and release every tag says, the release listener's and
 // the pencil's also say where the app's own `api/` is when it is not under
 // the mount (`data-yak-api`). The badge's says what it opens
-// (`data-yak-badge`): the app's own page on yaks.app, or yaks.app itself. The
+// (`data-yak-badge`): the app's own page on yaks.app, or yaks.app itself; on
+// a paid space whose owner chose it, it is the line "Website by yaks.app" at
+// the page's foot (`data-yak-byline`), opening yaks.app's organizations page. The
 // corner's says where the Operator's chat for the app is (`data-yak-edit`)
 // and where its note is (`data-yak-note`), a page of yaks.app's own.
 // The bar's says where keeping it goes and what its button says
@@ -44,6 +46,9 @@ export type Scripts = {
   /** The host of the site a preview was rebuilt from, which its badge says
    * this page is not (newcomer.ts `previewing`). */
   preview?: string | null
+  /** The badge drawn as a paid space's line at the page's foot, "Website by
+   * yaks.app" (@yaks/platform/woven `bylineOf`). */
+  byline?: boolean
   draft?: string
   edit?: string | null
   /** The corner's note, yaks.app's own page (apps.ts `cornerOf`). */
@@ -77,7 +82,7 @@ export let pageScript = async (
   assets: Assets,
   at: string,
   version: number,
-  { badge, draft, bar, preview, edit, note, api }: Scripts,
+  { badge, draft, bar, preview, byline, edit, note, api }: Scripts,
 ) => {
   try {
     let [report, release, badged, barred, location, pencil] = await scripts(
@@ -99,6 +104,7 @@ export let pageScript = async (
       worn.push([badged, {
         'data-yak-badge': badge,
         ...preview ? { 'data-yak-preview': preview } : {},
+        ...byline ? { 'data-yak-byline': '' } : {},
       }])
     }
     if (edit) {

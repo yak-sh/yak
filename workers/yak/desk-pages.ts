@@ -988,6 +988,28 @@ let logoCard = (at: DeskPage) => {
   )
 }
 
+// Settings' line at the foot of a paid space's pages (@yaks/platform/woven
+// `bylineOf`), space_set's `byline`. The hidden field says the box was on the
+// form, so leaving it unticked takes the line off.
+let bylineCheck = (at: DeskPage) =>
+  h(
+    Check,
+    null,
+    h('input', { type: 'hidden', name: 'byline', value: '' }),
+    h(Check.Input, {
+      type: 'checkbox',
+      name: 'byline',
+      value: 'on',
+      checked: !!at.byline,
+    }),
+    'Show “Website by yaks.app” at the foot of your site',
+    h(
+      Check.Note,
+      null,
+      ' A small line linking to yaks.app, for visitors who would like a site like yours.',
+    ),
+  )
+
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)
   let was = at.typed ??
@@ -1042,6 +1064,7 @@ let preferences = (at: DeskPage, env: Host) => {
               ),
             )
             : h('p', null, `${host} opens its app library.`),
+          at.paying ? bylineCheck(at) : null,
         ),
       ),
     ),

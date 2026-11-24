@@ -1182,6 +1182,14 @@ let funnelPage = (
           facts(f.buttons.map((r) => [r.say, String(r.n)])),
         )
         : null,
+      f.badges?.length
+        ? h(
+          Fragment,
+          null,
+          h(Group, null, 'Badges and lines followed, by space'),
+          facts(f.badges.map((r) => [r.space, String(r.n)])),
+        )
+        : null,
       ...([
         ['Came from campaigns', f.campaigns],
         ['Home page variants', f.variants],
@@ -1223,6 +1231,11 @@ let funnelPage = (
   )
 }
 
+// The space each app whose badge or line was followed lives in, by its slug
+// (funnel.ts `bySpace`).
+let spaceOfApp = (dir: Pick<Directory, 'appAt'>) => async (app: string) =>
+  (await dir.appAt(app))?.space.slug ?? null
+
 /** Where the funnel is answered as data, for the box's admin_funnel tool. */
 export let FUNNEL = '/api/funnel'
 
@@ -1259,7 +1272,11 @@ export let funnelDoor = async (req: Request, env: Env): Promise<Response> => {
   if (at && isNaN(at.getTime())) {
     return refused(400, 'bad_since', `not a time: ${since}`)
   }
-  let f = await funnel(env, at ?? (Number(asked.get('days')) || 7))
+  let f = await funnel(
+    env,
+    at ?? (Number(asked.get('days')) || 7),
+    spaceOfApp(dir),
+  )
   return f
     ? Response.json({ ...f, people: await arrivals(env, f.since) })
     : refused(503, 'not_on', 'visitor counts are not switched on here')
@@ -1313,7 +1330,7 @@ export let answer = async (
   }
   if (rest == 'funnel') {
     let days = Number(asked.searchParams.get('days')) || 7
-    let f = await funnel(env, days).catch((e) => {
+    let f = await funnel(env, days, spaceOfApp(dir)).catch((e) => {
       caught(e, { request: 'admin funnel' })
       return e instanceof Error ? e : new Error(String(e))
     })

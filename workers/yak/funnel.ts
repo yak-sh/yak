@@ -60,6 +60,10 @@ export let BEGAN = '2026-11-07T13:23:04Z'
 /** Each step, in the order a person meets them, what the admin calls it, and
  * the step it is a share of. */
 export let STEPS = [
+  // A page of yaks.app opened from an app's badge on the free plan, or a paid
+  // space's line "Website by yaks.app" (view-point.ts `badgeFollowed`), which
+  // names the app; `badges` reads it by space.
+  { name: 'badge', say: 'Badges and "Website by yaks.app" lines followed' },
   { name: 'home', say: 'Home page visits' },
   {
     name: 'home_loaded',
@@ -439,6 +443,52 @@ export let buttons = (since: Date, dataset = DATASET) =>
     order: busiest,
   })
 
+/** How many times people followed each app's badge or line, busiest first,
+ * by the app it names (view-point.ts `badgeFollowed`). */
+export let badges = (since: Date, dataset = DATASET) =>
+  select({
+    cols: [as(col(BUTTON), 'app'), N],
+    ...stepped(since, dataset, 'badge', BUTTON),
+    group: [col('app')],
+    order: busiest,
+    limit: lit(TOP),
+  })
+
+/** The space an app lives in, by its slug, or null for an app the directory
+ * no longer has. */
+export type SpaceOfApp = (app: string) => Promise<string | null>
+
+/**
+ * The follows of each space's badges and lines, busiest first: each app's
+ * count, added up under its space. An app the directory no longer has, or
+ * with no way to ask, is counted under its eid.
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let spaces: Record<string, string> = { a: 'church', b: 'church', c: 'garden' }
+ * let rows = [{ app: 'a', n: 2 }, { app: 'c', n: 4 }, { app: 'b', n: 3 }, { app: 'd', n: 1 }]
+ * assertEquals(await bySpace(rows, (app) => Promise.resolve(spaces[app] ?? null)), [
+ *   { space: 'church', n: 5 },
+ *   { space: 'garden', n: 4 },
+ *   { space: 'app d', n: 1 },
+ * ])
+ * ```
+ */
+export let bySpace = async (
+  rows: Record<string, unknown>[],
+  spaceOf?: SpaceOfApp,
+): Promise<{ space: string; n: number }[]> => {
+  let named = await Promise.all(rows.map(async (r) => {
+    let app = String(r.app ?? '')
+    let space = app && spaceOf ? await spaceOf(app) : null
+    return { space: space ?? `app ${app}`, n: Number(r.n) || 0 }
+  }))
+  return [...Map.groupBy(named.filter((r) => r.n), (r) => r.space)]
+    .map(([space, all]) => ({ space, n: all.reduce((t, r) => t + r.n, 0) }))
+    .sort((a, b) => b.n - a.n)
+}
+
 let split = (rows: Record<string, unknown>[]): FunnelSplit[] =>
   [...Map.groupBy(rows, (r) => String(r.key))].map(([name, rows]) => {
     let n = (step: string) => Number(rows.find((r) => r.step == step)?.n) || 0
@@ -461,6 +511,7 @@ export let shaped = (
   pressed: Record<string, unknown>[] = [],
   shown: Record<string, unknown>[] = [],
   others: Record<string, unknown>[] = [],
+  followed: { space: string; n: number }[] = [],
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
@@ -497,23 +548,35 @@ export let shaped = (
     }),
     campaigns: split(by),
     variants: split(shown),
+    badges: followed,
   }
 }
 
 /** The funnel over the last `days`, or from a moment to now (`start`), or
- * null where analytics are not switched on (views.ts `statsFor`). The admin's
- * page (admin.ts) and its tool (`/api/funnel`, `door`) both read this. */
+ * null where analytics are not switched on (views.ts `statsFor`), with the
+ * badges followed by the space each app is in (`spaceOf`). The admin's page
+ * (admin.ts) and its tool (`/api/funnel`, `door`) both read this. */
 export let funnel = async (
   env: Env,
   window: number | Date = 7,
+  spaceOf?: SpaceOfApp,
 ): Promise<Funnel | null> => {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT) return null
   let since = start(window)
   let dataset = env.VIEWS_DATASET ?? DATASET
-  let [rows, from, by, pressed, shown, others] = await Promise.all(
-    [counts, sources, campaigns, buttons, variants, apart].map((q) =>
+  let [rows, from, by, pressed, shown, others, followed] = await Promise.all(
+    [counts, sources, campaigns, buttons, variants, apart, badges].map((q) =>
       ran(env, q(since, dataset))
     ),
   )
-  return shaped(since, rows, from, by, pressed, shown, others)
+  return shaped(
+    since,
+    rows,
+    from,
+    by,
+    pressed,
+    shown,
+    others,
+    await bySpace(followed, spaceOf),
+  )
 }

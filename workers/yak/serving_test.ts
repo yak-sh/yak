@@ -36,6 +36,7 @@ import {
 } from './directory.ts'
 import { pageScript } from './page-script.ts'
 import {
+  badged,
   badgeOf,
   PLATFORM_BACKGROUND,
   PLATFORM_THEME,
@@ -226,6 +227,28 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
     )).tags.includes('Made with ')
   assert(await badged({}), 'the free plan')
   assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
+})
+
+test('a paid space signs its pages "Website by yaks.app" only where its owner chose it', async () => {
+  let space = (more: object) =>
+    spaceOf(
+      {
+        entity: { eid: 's' },
+        space: { slug: 'church', store: 'church' },
+        plan: { tier: 'pro' },
+        ...more,
+      } as Row,
+    )
+  let app = { eid: 'a', slug: 'site', published: null } as unknown as App
+  let tags = async (more: object) =>
+    (await pageScript(ASSETS, '/site/', 1, badged(space(more), app, {}))).tags
+  let signed = await tags({ byline: {} })
+  assertStringIncludes(signed, 'data-yak-byline')
+  assertStringIncludes(
+    signed,
+    'data-yak-badge="https://yaks.app/organizations?app=a"',
+  )
+  assert(!(await tags({})).includes('data-yak-badge'), 'off unless chosen')
 })
 
 // A deployed page names its module under its release (@yaks/platform/asset-url), and the

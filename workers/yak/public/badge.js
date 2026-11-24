@@ -9,6 +9,12 @@
 // wears it on every plan, saying it was made on yaks.app and is not that
 // site's own (`data-yak-preview`).
 //
+// A paid space whose owner chose it (@yaks/platform/woven `bylineOf`) wears
+// it as a line instead (`data-yak-byline`): "Website by yaks.app", centred at
+// the foot of the page after its body, in grey that reads on a light page and
+// a dark one, opening yaks.app's page for organizations. It sits in the
+// page's flow, so it covers nothing and is never moved.
+//
 // It lives in a closed shadow root on an element of its own, beside <body>
 // rather than in it: the page's styles cannot reach in (the host's rules are
 // `!important` inside its shadow, which outranks the page's own), its styles
@@ -57,6 +63,11 @@
   position: sticky !important;
   bottom: 0 !important;
 }
+:host([at=foot]) {
+  position: static !important;
+  padding: 16px 8px calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+  text-align: center !important;
+}
 @media print {
   :host { display: none !important }
 }
@@ -79,6 +90,17 @@ a {
 a:hover { border-color: #c9b19c }
 a:focus-visible { outline: 2px solid #4c773e; outline-offset: 2px }
 b { font-weight: 800 }
+:host([at=foot]) a {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: #767676;
+  font: 400 12px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+:host([at=foot]) a:hover { text-decoration: underline }
+:host([at=foot]) b { font-weight: 600 }
 @media (prefers-color-scheme: dark) {
   a {
     border-color: #4d3d34;
@@ -101,6 +123,8 @@ b { font-weight: 800 }
   // The site a preview was rebuilt from (newcomer.ts `previewing`), which
   // the badge says this page is not.
   let preview = document.currentScript?.dataset.yakPreview
+  // A paid space's line at the foot (`bylineOf`) rather than the badge.
+  let byline = document.currentScript?.dataset.yakByline != null
   let host = document.createElement('yaks-badge')
   let root = host.attachShadow({ mode: 'closed' })
   // Two sheets: the look, and how high the badge rides at the end of a
@@ -125,7 +149,8 @@ b { font-weight: 800 }
   link.rel = 'noopener'
   let name = document.createElement('b')
   name.textContent = 'yaks.app'
-  if (preview) {
+  if (byline) link.append('Website by ', name)
+  else if (preview) {
     link.append('Preview made on ', name, ` · not ${preview}'s own site`)
   } else link.append('Made with ', name)
   root.append(link)
@@ -208,6 +233,7 @@ b { font-weight: 800 }
   }
   let wear = () => {
     page.append(host)
+    if (byline) return host.setAttribute('at', 'foot')
     place()
     addEventListener('resize', again)
     addEventListener('load', again)

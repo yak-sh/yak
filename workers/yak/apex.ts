@@ -46,7 +46,7 @@ import * as sweep from './sweep.ts'
 import * as tunnel from './tunnel.ts'
 import * as site from './site.ts'
 import * as funnel from './funnel.ts'
-import { isHome, isPage } from './view-point.ts'
+import { badgeFollowed, isHome, isPage } from './view-point.ts'
 import { keep } from './arrival.ts'
 import * as ads from './ads.ts'
 
@@ -286,10 +286,12 @@ let atApex = async (req: Request, env: Env, path: string) => {
 }
 
 // An answer at the apex a person opened: it keeps the arrival its link carried
-// (arrival.ts), and a page tells the ad network whose click brought it
-// (ads.ts).
+// (arrival.ts), a page tells the ad network whose click brought it (ads.ts),
+// and one an app's badge or line led to is the funnel's step (funnel.ts).
 let seen = (req: Request, env: Env, page: Response) => {
   if (isPage(req, page)) ads.after(env, 'view', req)
+  let app = badgeFollowed(req, page)
+  if (app) funnel.step(env, 'badge', req, { button: app })
   return keep(req, page)
 }
 

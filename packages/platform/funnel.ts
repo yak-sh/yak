@@ -95,6 +95,10 @@ export type Funnel = {
   /** Each person who signed up in the window, oldest first, and where they
    * came from. A Worker older than these has none. */
   people?: FunnelPerson[]
+  /** How many times people followed a free space's badge or a paid space's
+   * line "Website by yaks.app", by the space it was on, busiest first. A
+   * Worker older than these has none. */
+  badges?: { space: string; n: number }[]
 }
 
 /** A stage most go no further than, and the share of it that went on. */
@@ -140,7 +144,7 @@ let split = (s: FunnelSplit) => `  ${s.name}: ${splitSays(s)}`
 
 /**
  * The funnel in lines: how far strangers got, stage by stage, and where most
- * of them stop; each step people took and its share of the one it follows; then the sites, calls to action, campaigns and variants, and last
+ * of them stop; each step people took and its share of the one it follows; then the sites, calls to action, badges followed by space, campaigns and variants, and last
  * what crawlers, agents and test accounts took, which no count above holds.
  *
  * @example
@@ -203,6 +207,11 @@ export let funnelLines = (f: Funnel): string[] => {
       'Calls to action clicked:',
       f.buttons,
       (r) => `  ${r.button} (${r.say}): ${r.n}`,
+    ),
+    ...group(
+      'Badges and lines followed, by space:',
+      f.badges ?? [],
+      (r) => `  ${r.space}: ${r.n}`,
     ),
     ...group('By campaign:', f.campaigns, split),
     ...group('By home page variant:', f.variants, split),

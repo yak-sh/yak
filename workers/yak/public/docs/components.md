@@ -847,12 +847,12 @@ The complete list of reserved names:
     arrived artifact ask attachment attempt attribute_writes authorship
     belief binding blob bounced browser browser_session budget build
     build_of builder builder_answer builder_dep builder_edit
-    builder_model_answer builder_open builder_ring built call call_ready
-    call_woken called calls cancel cancelled chat_account chat_hears
-    chat_message chat_post chat_private chat_room chat_serves checkout
-    chosen cites cli_grant code_review comment commit comp compat completed
-    connection contains content conversation cost counted created credit
-    credit_block decided decision decision_ask delegates
+    builder_model_answer builder_open builder_ring built byline call
+    call_ready call_woken called calls cancel cancelled chat_account
+    chat_hears chat_message chat_post chat_private chat_room chat_serves
+    checkout chosen cites cli_grant code_review comment commit comp compat
+    completed connection contains content conversation cost counted created
+    credit credit_block decided decision decision_ask delegates
     delete_retired_files delete_upload deliver delivered demo deploy
     desk_aside desk_sidebar dispatch doc document_extract document_page
     document_text domain_choice domain_courtesy domain_credit_used

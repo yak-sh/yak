@@ -794,6 +794,9 @@ export type DeskPage = {
   }
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean
+  /** whether its apps' pages say "Website by yaks.app" at their foot
+   * (`byline`), which Settings offers on a paid plan */
+  byline?: boolean
   /** what the platform takes from each sale, in basis points */
   fee?: number
   say?: string

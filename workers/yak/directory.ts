@@ -215,6 +215,9 @@ export type Space = Metered & {
   // Whether the platform features this space as a publisher (`featured`,
   // T-160642): everything it shares shows the mark.
   featured?: boolean
+  // Whether its apps' pages say "Website by yaks.app" at their foot on a
+  // paid plan (`byline`, @yaks/platform/woven `badged`).
+  byline?: boolean
   sender?: import('@yaks/phone').Transport
   // The `plan` row its `tier` is read from, whole, for the one caller that
   // needs every property of it (billing.ts). Null where none was ever written.
@@ -835,6 +838,7 @@ export type Row = MeteredRow & {
   }
   fee?: { bps?: number | null }
   space_logo?: { sha?: string | null; type?: string | null }
+  byline?: Record<string, never>
   operator?: {
     name?: string | null
     voice?: string | null
@@ -1409,6 +1413,7 @@ export let SPACE_PARTS = [
   'space_logo',
   'preview',
   'featured',
+  'byline',
   'mail_domain',
 ]
 let SPACE_ABOUT = chain(SPACE_PARTS.map((part) => line`?${part}`), '&')
@@ -1562,6 +1567,7 @@ export let spaceOf = (r: Row): Space => ({
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
     : null,
   ...(r.featured ? { featured: true } : {}),
+  ...(r.byline ? { byline: true } : {}),
   ...(r.sender
     ? {
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
@@ -3198,6 +3204,18 @@ export let directoryRows = (rows: {
     ): Promise<Space> => {
       await self.apply({
         entities: [{ entity: { eid: space.eid }, space_logo: logo }],
+      }, headers)
+      return (await self.at(space.eid))!
+    },
+    // The space signing its apps' pages "Website by yaks.app", or not
+    // (`byline`).
+    byline: async (
+      space: Space,
+      on: boolean,
+      headers: Record<string, string>,
+    ): Promise<Space> => {
+      await self.apply({
+        entities: [{ entity: { eid: space.eid }, byline: on ? {} : null }],
       }, headers)
       return (await self.at(space.eid))!
     },

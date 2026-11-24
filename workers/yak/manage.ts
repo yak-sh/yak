@@ -1046,6 +1046,7 @@ let desk = async (
     provider: provider.name,
     costs: provider.shops.costs,
     paying: paid(space.tier),
+    byline: !!space.byline,
     plan: planCard(provider.plans, space),
     domains: domains && {
       domains,
@@ -1728,6 +1729,18 @@ let saved = async (
         space: space.slug,
         app: typed.home || now!.slug,
         home: !!typed.home,
+      })
+    if (said) return kept(said)
+  }
+  // The line at the foot of its pages is space_set's `byline`: the box is on
+  // the form only on a paid plan (desk-pages.ts `bylineCheck`).
+  if (form.has('byline')) {
+    let on = form.getAll('byline').includes('on')
+    let { said } = on == !!space.byline
+      ? {}
+      : await pressed(env, dir, who, 'space_set', {
+        space: space.slug,
+        byline: on,
       })
     if (said) return kept(said)
   }
