@@ -303,7 +303,7 @@ points to. Every hop but the last must be a reference:
 
     .comment.target.doc.title~=Pancakes    comments on the pancake recipe
     .filed.project.doc.title~=Kitchen       tasks in the project called Kitchen
-    .assignee.title~=maya                  bare: filed.assignee → doc.title
+    .filed.assignee.doc.title~=maya        tasks assigned to Maya
 
 A path walks a reference: the platform's `comment.target`, `filed.project`,
 `filed.assignee`, `attachment.blob` and the `by` of each stamp, and any property
