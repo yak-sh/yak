@@ -70,6 +70,8 @@ export type Cookie = {
  *   clear     empty the first shown field a selector names, as a person
  *             selecting all of it and deleting does
  *   press     press one key, such as `Enter`
+ *   hover     rest the mouse on the first shown element a selector names,
+ *             as a person does before pressing it
  *   swipe     drag a finger from one point to another, [x1, y1, x2, y2]
  *   keyboard  a phone's on-screen keyboard opens over this many pixels: the
  *             window shrinks by them, as it does for a page that asks to be
@@ -82,6 +84,7 @@ export type Step =
   | { type: string; into?: string }
   | { clear: string }
   | { press: string }
+  | { hover: string }
   | { swipe: [number, number, number, number] }
   | { keyboard: number }
   | { wait: number }
@@ -434,6 +437,11 @@ let taken = async (
     let el = await find(step.tap, view.touch ? 'tapping' : 'clicking')
     signal.throwIfAborted()
     return view.touch ? el.tap() : click(page, el, signal)
+  }
+  if ('hover' in step) {
+    let el = await find(step.hover, 'hovering over')
+    signal.throwIfAborted()
+    return el.hover()
   }
   if ('type' in step) {
     if (step.into) {

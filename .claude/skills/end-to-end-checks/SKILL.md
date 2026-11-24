@@ -268,6 +268,7 @@ Use `--to .scratch/browse/mockup` to keep its screenshots beside the port's.
 | step                    | what a person does                                      |
 | ----------------------- | ------------------------------------------------------- |
 | `{"tap": "<selector>"}` | taps the first one shown (a click when the window has no touch) |
+| `{"hover": "<selector>"}` | rests the mouse on the first one shown, as before a press |
 | `{"type": "hi", "into": "<selector>"}` | types, into that element or whatever has focus |
 | `{"clear": "<selector>"}` | selects all of a field and deletes it                 |
 | `{"press": "Enter"}`    | presses one key                                         |
@@ -296,8 +297,8 @@ waits. A `fetched` line counts the pages the page fetched and the server's
 time on them, which is what looking ahead costs. To time a navigation, tap
 its link in a step and add a
 `wait` long enough for the server, then read the line. A step's tap presses
-and clicks at once, so a fetch on hover gets no head start: a person's
-pointer usually gives it a few hundred ms.
+and clicks at once, so a fetch on hover gets no head start: `hover` the link
+and `wait` a few hundred ms first, as a person's pointer does.
 
 Saying something in checks' own chat (`/checks`), as the person, with
 the keyboard open. A draft is kept across visits, so clear the field first:
