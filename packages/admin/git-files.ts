@@ -1,6 +1,6 @@
 import * as fs from '@yaks/file/io'
 import { posix } from 'node:path'
-import type { Run } from '@yaks/git/land'
+import type { Ran, Run } from '@yaks/git/land'
 import { type Carried, type File, fileOf, type Target } from './push.ts'
 import { output } from './subprocess.ts'
 
@@ -19,7 +19,45 @@ export let writeCarried = async (dir: string, files: Carried[]) => {
 export let carrying = (to: Target, files: Carried[], writer: string): string =>
   `${to.space ? `${to.space}/` : ''}${to.app}: carry ${
     files.map((f) => f.path).join(', ')
-  } into git\n\nMerged platform changes into the app's Git source.\n\nWriter: ${writer}`
+  } into git\n\nMerged platform changes into the app's Git source.\n\n` +
+  [
+    `Writer: ${writer}`,
+    ...files.flatMap(({ path, from }) =>
+      from ? [`Platform-File: ${from} ${JSON.stringify(path)}`] : []
+    ),
+  ].join('\n')
+
+/** Git's earlier texts and the platform hashes already merged into them. A
+ * retry can find its commit even if Git formatted or combined the text. */
+export let fileHistory = async function* (
+  run: (args: string[]) => Promise<Ran>,
+  path: string,
+  file: string,
+  at?: string,
+) {
+  let log = await run([
+    '--literal-pathspecs',
+    'log',
+    '--format=%H%x00%(trailers:key=Platform-File,valueonly,separator=%x00)%x01',
+    ...at ? [at] : [],
+    '--',
+    file,
+  ])
+  if (!log.ok) {
+    if (!at) return
+    throw new Error(`git log for ${file}: ${log.err.trim()}`)
+  }
+  for (let entry of log.out.split('\x01')) {
+    let [commit, ...sources] = entry.trim().split('\0')
+    if (!commit) continue
+    for (let source of sources) {
+      let [, sha, name] = /^([a-f0-9]{64}) (.+)$/.exec(source) ?? []
+      if (name == JSON.stringify(path)) yield { sha }
+    }
+    let shown = await run(['show', `${commit}:${file}`])
+    if (shown.ok) yield shown.out
+  }
+}
 
 /** A manual push saves the merged paths in its own commit. Git's path-limited
  * commit preserves staged changes elsewhere. The caller's checkout may also

@@ -181,6 +181,8 @@ export type LandOps = {
   run?: Run
   /** Format changed paths; Deno selects file types and honors checkout config. */
   format?: Run
+  /** Preserve the source commit and record landing's edits in their own commit. */
+  formatCommit?: string
   /** Bring pnpm-lock.yaml up to the checkout at cwd's manifests. */
   lock?: (cwd: string) => Promise<Ran>
   write?: (text: string, error?: boolean) => void
@@ -559,12 +561,13 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
           '--',
           ...paths,
         ])
-        await need('commit landing edits', tree, [
-          'commit',
-          '--amend',
-          '--no-edit',
-          '--allow-empty',
-        ])
+        await need(
+          'commit landing edits',
+          tree,
+          ops.formatCommit
+            ? ['commit', '--no-verify', '-m', ops.formatCommit]
+            : ['commit', '--amend', '--no-edit', '--allow-empty'],
+        )
       }
     }
     // The shared checkout need not be spotless: Git leaves unrelated edits

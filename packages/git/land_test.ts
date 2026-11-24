@@ -46,6 +46,7 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
     formatted: Answer = {},
     locked: Answer = {},
     writer?: string,
+    formatCommit?: string,
   ) =>
     land({
       cwd: '/work',
@@ -60,6 +61,7 @@ let fixture = (answers: Record<string, Answer | Answer[]> = {}) => {
       },
       allow,
       writer,
+      formatCommit,
       // The lock shows in the calls, where it falls among the git commands.
       hold: (gitdir) => {
         calls.push({ args: ['hold'], cwd: gitdir })
@@ -563,6 +565,23 @@ test('landing formats only changed regular files and amends before merging', asy
   let amend = commands.indexOf('commit --amend --no-edit --allow-empty')
   assert(add >= 0 && add < amend)
   assert(amend < commands.indexOf('merge --ff-only work'))
+})
+
+test('a landing can keep formatting separate from the source commit', async () => {
+  let f = fixture({
+    ...formatting,
+    [`--literal-pathspecs diff --quiet -- ${files.join(' ')}`]: { code: 1 },
+  })
+  let message = 'Format carried files'
+  await f.invoke(undefined, {}, {}, 'deploy catch-up', message)
+  let commands = f.commands()
+  let add = commands.indexOf(`--literal-pathspecs add -- ${files.join(' ')}`)
+  let commit = commands.indexOf(`commit --no-verify -m ${message}`)
+  assert(
+    add >= 0 && add < commit &&
+      commit < commands.indexOf('merge --ff-only work'),
+  )
+  assert(!commands.some((command) => command.startsWith('commit --amend')))
 })
 
 test('formatted files land without rewriting the commit', async () => {

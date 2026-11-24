@@ -36,7 +36,13 @@ import { checkout } from './checkout.ts'
 import { account } from './account.ts'
 import { rpc, zone } from './api.ts'
 import { homeOf, push, versions } from './push.ts'
-import { blobs, carrying, filesAt, writeCarried } from './git-files.ts'
+import {
+  blobs,
+  carrying,
+  fileHistory,
+  filesAt,
+  writeCarried,
+} from './git-files.ts'
 import { onMain } from './landing.ts'
 import { output } from './subprocess.ts'
 import { ADMIN } from '@yaks/platform/bots'
@@ -423,20 +429,13 @@ export let box = (
         review: false,
         keep: to.keep,
         checkout: {
-          earlier: async function* (path) {
-            let log = await run([
-              'log',
-              '--format=%H',
-              sha,
-              '--',
+          earlier: (path) =>
+            fileHistory(
+              (args) => git(dir, args, stopping),
+              path,
               `${to.dir}/${path}`,
-            ])
-            // A commit that deleted the file has no text of it.
-            for (let c of log.match(SHAS) ?? []) {
-              let text = await blob(`${c}:${to.dir}/${path}`).catch(() => null)
-              if (text) yield new TextDecoder().decode(text)
-            }
-          },
+              sha,
+            ),
           // What the app holds and git does not lands on main before the
           // release, so the next push carries it from git.
           write: async (carried) => {
@@ -447,12 +446,15 @@ export let box = (
               out: () => {},
               note: (line) => console.log(`@yaks/admin — ${line}`),
               writer,
+              formatCommit:
+                `${to.space}/${to.app}: format carried files for release`,
             }, async (tree, need) => {
               await writeCarried(`${tree}/${to.dir}`, carried)
               await need(tree, ['--literal-pathspecs', 'add', '--', ...paths])
               await need(tree, [
                 'commit',
                 '-q',
+                '--no-verify',
                 '-m',
                 carrying(to, carried, writer),
               ])

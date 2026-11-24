@@ -13,6 +13,7 @@ export type Landing = {
   out: (line: string) => void
   note: (line: string) => void
   writer?: string
+  formatCommit?: string
 }
 
 /** git run in `cwd`, its output trimmed, refused as `refusal` or failing. */
@@ -31,7 +32,7 @@ export type Need = (
 export let onMain = async (
   root: string,
   name: string,
-  { run, out, note, writer = name }: Landing,
+  { run, out, note, writer = name, formatCommit }: Landing,
   make: (tree: string, need: Need) => Promise<string[]>,
   check?: (base: string, need: Need) => Promise<void>,
 ): Promise<string> => {
@@ -79,6 +80,7 @@ export let onMain = async (
         allow,
         run,
         writer,
+        formatCommit,
         write: (line, error) => (error ? note : out)(line.trimEnd()),
       })
       if (!('landed' in outcome)) {

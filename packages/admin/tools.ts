@@ -85,7 +85,7 @@ import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
 import { homeOf, push, type PushProgress, read, versions } from './push.ts'
-import { saveCarried } from './git-files.ts'
+import { fileHistory, saveCarried } from './git-files.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 import { modelLine, operatorModel, operatorRows } from './model.ts'
@@ -916,22 +916,12 @@ export let runs = (
       let lines = await push(rpc(at.bearer), files, to, {
         ...known,
         checkout: {
-          // Each text git has of the file, newest first; none outside git.
-          earlier: async function* (path) {
-            let log = await git(
-              dir,
-              ['log', '--format=%H', '--', path],
-              host.stopping,
-            )
-            for (let sha of log.ok ? log.out.split('\n').filter(Boolean) : []) {
-              let shown = await git(
-                dir,
-                ['show', `${sha}:./${path}`],
-                host.stopping,
-              )
-              if (shown.ok) yield shown.out
-            }
-          },
+          earlier: (path) =>
+            fileHistory(
+              (args) => git(dir, args, host.stopping),
+              path,
+              `./${path}`,
+            ),
           write: (files) =>
             saveCarried(
               dir,

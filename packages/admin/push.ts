@@ -82,15 +82,13 @@ export type PushProgress =
     path: string
   }
 
-/** A text the app holds that git does not, merged with git's. */
-export type Carried = { path: string; content: string }
+/** A text merged into Git, with the hash of the platform text it carried. */
+export type Carried = { path: string; content: string; from?: string }
 
-/** The checkout a push reads from: each earlier text git has of a file,
- * newest first, and how the changes made on the platform reach git: written
- * into a working tree, or landed as a commit on main by a release from one. A
- * checkout that cannot keep them still carries them into the release. */
+/** The checkout a push reads from, its earlier file contents and the
+ * platform hashes it already merged, newest first. */
 export type Checkout = {
-  earlier: (path: string) => AsyncIterable<string>
+  earlier: (path: string) => AsyncIterable<string | { sha: string }>
   /** Save the merge, returning the bytes the checkout committed if it
    * transformed the files before committing. */
   write?: (files: Carried[]) => Promise<Carried[] | void>
@@ -342,7 +340,10 @@ let carried = async (
   checkout: Checkout,
 ): Promise<string | undefined> => {
   let texts = [ours]
-  for await (let text of checkout.earlier(path)) texts.push(text)
+  for await (let prior of checkout.earlier(path)) {
+    if (typeof prior == 'string') texts.push(prior)
+    else if (prior.sha == sha) return
+  }
   let shas = await Promise.all(texts.map((content) => shaOf({ path, content })))
   if (shas.includes(sha)) return
   let live = valueOf(await reply(ask, 'app_files', { ...at, op: 'read', path }))
@@ -386,7 +387,7 @@ let changes = async (
     let text = mine && 'content' in mine.f ? mine.f.content : ''
     try {
       let content = await carried(ask, at, path, sha, text, checkout)
-      if (content != null) out.push({ path, content })
+      if (content != null) out.push({ path, content, from: sha })
     } catch (e) {
       if (path != LOCK || !compiled || !(e instanceof Unmerged)) throw e
       relock = true
@@ -414,7 +415,7 @@ let keepLock = async (
   )
   if (lock?.version != version || typeof lock.content != 'string') return
   if (lock.sha == sha && lock.content != previous) {
-    await write([{ path: LOCK, content: lock.content }])
+    await write([{ path: LOCK, content: lock.content, from: sha }])
   }
 }
 
@@ -494,7 +495,8 @@ let pushing = async (
     ? await changes(ask, at, local, hashes, held.held, checkout, opts.keep)
     : { carry: [], relock: false }
   if (carry.length) {
-    let saved = await checkout?.write?.(carry) ?? carry
+    let saved = (await checkout?.write?.(carry) ?? carry)
+      .map(({ path, content }) => ({ path, content }))
     let by = new Map(saved.map((f) => [f.path, f]))
     let had = new Set(local.map((f) => f.path))
     local = [
