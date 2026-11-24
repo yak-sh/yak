@@ -43,15 +43,17 @@ let hrefs = (document: Document, within: string) =>
   [...document.querySelectorAll(within + ' a[href]')].map((a) =>
     a.getAttribute('href')!
   )
+let css = (document: Document) =>
+  [...document.querySelectorAll('link[rel=stylesheet]')].map((link) =>
+    link.getAttribute('href')!
+  )
 
 test('the home page links its studio, guides, look and pictures from the address it is opened at', async () => {
   for (let place of PLACES) {
     let home = await page('', place), base = place[0]
     ok(home.querySelector('h1')!.textContent!.includes('made real.'))
-    equal(
-      home.querySelector('link[rel=stylesheet]')!.getAttribute('href'),
-      base + 'look.css',
-    )
+    equal(css(home)[0], base + 'look/spellbound.css')
+    ok(css(home).includes(base + '__packages/@yaks/ui/Button.css'))
     let links = hrefs(home, 'body')
     for (let to of ['studio#new', 'make-a-picture-book-in-chatgpt', '#how']) {
       ok(links.includes(base + to), to)
@@ -105,21 +107,11 @@ test('a doubled slash, a trailing slash and .html name the same page', async () 
   }
 })
 
-test('the look is the theme, then the kit’s sheets, then the skin', async () => {
-  let count = reads.length
-  let answer = await ask('look.css')
-  equal(answer!.headers.get('content-type'), 'text/css; charset=utf-8')
-  let css = await answer!.text()
-  let at = [
-    '--night-900:',
-    '.Surface_Press',
-    '.Button {',
-    '.Button-go,',
-    '.Hero',
-  ]
-    .map((mark) => css.indexOf(mark))
-  ok(at.every((n, i) => n >= 0 && (i == 0 || n > at[i - 1])), at.join())
-  equal(reads.length, count)
+test('the theme and skin are served as separate release files', async () => {
+  ok(
+    (await (await ask('look/spellbound.css'))!.text()).includes('--night-900:'),
+  )
+  ok((await (await ask('look/skin.css'))!.text()).includes('.Button-go,'))
 })
 
 test('the studio’s page file wears the bar and the foot', async () => {
@@ -128,6 +120,7 @@ test('the studio’s page file wears the bar and the foot', async () => {
   ok(studio.querySelector('main#desk'))
   ok(hrefs(studio, 'footer').includes(PLACES[0][0] + 'terms'))
   ok(studio.querySelector('script[type=module][src$="studio.ts"]'))
+  equal(css(studio), css(await page('', PLACES[0])))
 })
 
 test('files that name the app say the address it is opened at', async () => {
@@ -149,7 +142,7 @@ test('HEAD answers without a body, and the door reads no source or saved book', 
       'worker.ts',
       'vocab.json',
       'pages/terms.md',
-      'look/skin.css',
+      'look/links.ts',
       'studio/book?id=private',
       'fonts/%2e%2e/worker.ts',
       'img/..%2fworker.ts',

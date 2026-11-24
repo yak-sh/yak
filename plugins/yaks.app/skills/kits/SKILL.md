@@ -78,6 +78,28 @@ let { apply, drafts, subscribe } = await import(
 )
 ```
 
+## Stylesheets for server-rendered pages
+
+Declare `"@yaks/ui": "platform"` in `package.json` and link the kit stylesheets
+from `__packages/@yaks/ui/` under the app's mount. The compiler supplies those
+files for apps with a Worker. Put app stylesheets in the release and link them
+from the same `<head>`. For example, a page at the app's root with a custom
+theme can link the following files.
+
+```html
+<link rel="stylesheet" href="./theme.css">
+<link rel="stylesheet" href="./__packages/@yaks/ui/derived.css">
+<link rel="stylesheet" href="./__packages/@yaks/ui/base.css">
+<link rel="stylesheet" href="./__packages/@yaks/ui/Button.css">
+<link rel="stylesheet" href="./style.css">
+```
+
+Link the stylesheets for the parts the page uses. For a page on a nested route,
+build the stylesheet URLs from the app's mount. The platform rewrites these
+links to immutable release asset URLs. If a private app's Worker serves the page
+to visitors, pass the stylesheet requests through to `env.FILES` along with the
+page's other visitor-facing assets.
+
 ## Colours and type
 
 Every part paints with the same CSS custom properties. A **theme** sets them

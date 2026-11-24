@@ -16,7 +16,7 @@ export let apiOut = (asset: string): string | null =>
 /** Point a local static reference at its release without moving navigation.
  * `base` is where the page resolves it from: the mount, or the page's own
  * folder under it. */
-export let localAsset = (
+let localAsset = (
   ref: string,
   mount: string,
   bare: string,
@@ -192,9 +192,10 @@ let SCRIPTS = new Set([
 // `import('./x.js')`: a module named by its address, not computed.
 let SPECIFIER = /\b(?:from|import)\s*\(?\s*(['"])((?:\/|\.\.?\/)[^'"\n]*)\1/g
 
-// What a page's own scripts import by address, keyed by the address the
-// browser resolves and pointed at its release, the rule `<script src>` follows
-// (`assetUrl`). A page's inline module importing `./cooking.js` would
+// What a page's own scripts import by address, including the modules it
+// loads directly. An import of a module's original URL then resolves to
+// the same module as its versioned script tag. A page's inline module
+// importing `./cooking.js` would
 // otherwise fetch the app's mutable address, which is asked again on every
 // load; its release address never changes, so the browser keeps it. A
 // release's module asking for the app's API (`./api/client.js`, below the
@@ -225,7 +226,10 @@ let imported = (
     let type = typeOf(attrs)
     modules ||= type == 'module'
     if (!SCRIPTS.has(type)) continue
-    for (let [, , ref] of body.matchAll(SPECIFIER)) {
+    let refs = [...body.matchAll(SPECIFIER)].map(([, , ref]) => ref)
+    let src = type == 'module' && attrOf(attrs, 'src')
+    if (src) refs.push(src)
+    for (let ref of refs) {
       let next = assetUrl(
         ref,
         mount,
@@ -369,25 +373,11 @@ let ICONS = [
 /** Whether a `<link>` of this rel and `as` loads the file it names. */
 export let linked = (rel: string, as: string): boolean => {
   let rels = rel.toLowerCase().split(/\s+/)
-  return !!linkKind(rels, as) || rels.includes('modulepreload') ||
+  return rels.includes('stylesheet') || rels.includes('modulepreload') ||
+    rels.some((r) => ICONS.includes(r)) ||
     rels.includes('preload') &&
-      ['script', 'font', 'image', 'audio', 'video'].includes(as)
+      ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as)
 }
-
-type LinkAsset = 'style' | 'image'
-
-let linkKind = (rels: string[], as: string): LinkAsset | null => {
-  if (
-    rels.includes('stylesheet') || rels.includes('preload') && as == 'style'
-  ) {
-    return 'style'
-  }
-  return rels.some((r) => ICONS.includes(r)) ? 'image' : null
-}
-
-/** Styles and icons are linked assets even when a worker generates them. */
-export let linkedAsset = (rel: string, as: string): LinkAsset | null =>
-  linkKind(rel.toLowerCase().split(/\s+/), as)
 
 /** A reference a release's page or module makes to a file the release does
  * not hold: `file` is the one that names it, `ref` the address as written,

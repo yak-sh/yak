@@ -1,3 +1,4 @@
+import { renderToString } from 'preact-render-to-string'
 import { collection } from './collection.ts'
 import { gallery } from './gallery.ts'
 import { story } from './story.ts'
@@ -10,8 +11,8 @@ import { answer, approval, ask } from './approval.ts'
 import { publicPage } from './public.ts'
 import { legacyPage } from './legacy.ts'
 import type { Book } from './model.ts'
-import { lookVersion, stylesheet } from './look/look.ts'
-import { placed } from './pages/chrome.ts'
+import { styleLinks, stylesheets } from './look/links.ts'
+import { type Place, placed } from './pages/chrome.ts'
 import { galleryPage } from './pages/gallery.ts'
 import { home } from './pages/home.ts'
 
@@ -39,23 +40,11 @@ let schedule = async (
     wake: { at: new Date(Date.now() + 1000).toISOString(), every: '30s' },
   }])
 }
-// What the pages load besides themselves: the look's fonts, the art the home
-// page shows, the marks, and the studio's shell and script.
+// The fonts, home page art, marks and studio script a visitor may read.
 let STATIC =
   /^\/(look\/fonts\/[\w-]+\.ttf|art\/[\w/-]+\.(png|webp)|(icon|favicon)\.svg|studio\.ts)$/
-// The look at the address naming its bytes is kept for good; at a bare
-// address, for a few minutes.
-let styled = (url: URL): Response =>
-  new Response(stylesheet, {
-    headers: {
-      'content-type': 'text/css; charset=utf-8',
-      'cache-control': url.searchParams.get('v') == lookVersion
-        ? 'public, max-age=31536000, immutable'
-        : 'public, max-age=300',
-    },
-  })
-// The studio's shell links the look at the address naming its bytes.
-let studio = async (env: Env) => {
+
+let studio = async (env: Env, place: Place) => {
   let shell = await file(env, 'studio.html')
   if (!shell.ok) return shell
   let headers = new Headers(shell.headers)
@@ -63,8 +52,8 @@ let studio = async (env: Env) => {
   headers.delete('etag')
   return new Response(
     (await shell.text()).replace(
-      'href="./look.css"',
-      `href="./look.css?v=${lookVersion}"`,
+      '<!--stylesheets-->',
+      renderToString(styleLinks((path) => place.at('/' + path))),
     ),
     { status: shell.status, headers },
   )
@@ -101,12 +90,14 @@ export let fetchApp = async (request: Request, env: Env): Promise<Response> => {
   let place = placed(address, url.pathname)
   if (['GET', 'HEAD'].includes(request.method)) {
     if (place.path == '/') return home(place)
-    if (place.path == '/look.css') return styled(url)
-    if (place.path == '/studio') return studio(env)
+    if (place.path == '/studio') return studio(env, place)
     if (place.path == '/gallery') {
       return galleryPage(place, await gallery(db, env.APP).list())
     }
-    if (STATIC.test(place.path)) return file(env, place.path.slice(1))
+    let name = place.path.slice(1)
+    if (stylesheets.includes(name) || STATIC.test(place.path)) {
+      return file(env, name)
+    }
   }
   let action = path(request).split('/studio/')[1] ??
     (path(request).endsWith('/free_pages/resume') ? 'resume_free' : null)

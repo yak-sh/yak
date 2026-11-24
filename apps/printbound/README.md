@@ -22,10 +22,11 @@ gets only what that door hands over.
 The look is Spellbound, the design of the site PrintBound had before it moved
 here (`bindery` at `10aaf7c`; `public/spellbound.md` has its reasons): a theme
 of the kit's roles (`look/spellbound.css`), a skin laid over the kit's parts
-(`look/skin.css`) and the sheets of the app's own parts. `look.ts` serves them
-as one stylesheet, `look.css`, with the kit's sheets compiled into the Worker
-from @yaks/ui. The fonts (`fonts/`) and pictures (`img/`, `og.png`) are released
-with the app and not kept in git (`apps/.gitignore`).
+(`look/skin.css`) and the sheets of the app's own parts. `look/links.ts` links
+those release files and the platform's `__packages/@yaks/ui/` stylesheets in
+cascade order. The platform gives each linked stylesheet a content-addressed
+URL. The fonts (`fonts/`) and pictures (`img/`, `og.png`) are released with the
+app and not kept in git (`apps/.gitignore`).
 
 The initial fixture preview is explicit and makes no paid model or print calls.
 `bin/print-previews.ts` provisions typography and preview settings as artifacts.

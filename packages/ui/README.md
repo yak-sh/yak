@@ -69,7 +69,7 @@ equal(
 | `@yaks/ui/guide`         | `Guide`, `Specimens`, `Contents`, `Page`, `sections`, `stopsOf`, `stops`, `title`                                                                                                       |
 | `@yaks/ui/routes`        | `page`, `routes`: the static browser guide at `/ui`                                                                                                                                     |
 | `@yaks/ui/cli`           | `commands`: the terminal guide, `yak ui`                                                                                                                                                |
-| `@yaks/ui/<Part>.css`    | A part's sheet, for a Worker that answers its own stylesheet: `import sheet from '@yaks/ui/Button.css' with { type: 'text' }`                                                           |
+| `@yaks/ui/<Part>.css`    | A part's stylesheet. On yaks.app, a Worker-rendered page links the compiler's copy under `__packages/@yaks/ui/` within the app mount.                                                   |
 
 ## Building parts
 

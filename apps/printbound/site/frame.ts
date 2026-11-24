@@ -7,6 +7,7 @@
  * mount. */
 import { type ComponentChildren, type FunctionComponent, h } from 'preact'
 import { Button, Skip } from '@yaks/ui/parts'
+import { styleLinks } from '../look/links.ts'
 import { Foot, Mast, Wordmark } from './parts.ts'
 
 let SPARK =
@@ -187,7 +188,7 @@ export let Page: FunctionComponent<
           crossorigin: '',
         })
       ),
-      h('link', { rel: 'stylesheet', href: to('look.css') }),
+      styleLinks(to),
       data
         ? h('script', {
           type: 'application/ld+json',

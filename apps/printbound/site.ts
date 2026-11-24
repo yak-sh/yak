@@ -1,12 +1,11 @@
 // The site's door: every page a visitor reads and the files those pages
 // name. The home page, the guides and the policies are drawn here from the
-// kit's parts (site/); the studio's page is a file the frame is set into; the
-// look is one stylesheet (look.ts). The app is private, so a visitor has only
-// what this door hands over: the app's source and saved books never pass it.
+// kit's parts (site/); the studio's page is a file the frame is set into.
+// The app is private, so a visitor has only what this door hands over.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { appBase } from './request.ts'
-import { look } from './look.ts'
+import { styleLinks, stylesheets } from './look/links.ts'
 import { Bottom, Top } from './site/frame.ts'
 import { Home } from './site/home.ts'
 import { Guide, read } from './site/doc.ts'
@@ -40,8 +39,7 @@ let ADDRESSED: Record<string, string> = {
   'sitemap.xml': 'application/xml',
   'robots.txt': 'text/plain',
 }
-// The fonts and pictures, and the platform's packages a compiled script and
-// the look read.
+// The fonts and pictures, and the platform's packages a compiled script reads.
 let SHELVES = /^(fonts|img|__packages)\/[\w@.-]+(\/[\w@.-]+)*$/
 
 let HTML = { 'content-type': 'text/html; charset=utf-8' }
@@ -54,14 +52,17 @@ let answers: Record<
   (files: Files, base: string) => Response | Promise<Response>
 > = {
   '': (_files, base) => page(renderToString(h(Home, { base }))),
-  'look.css': look,
   // The studio's page is a file, so the platform compiles its script; the
-  // bar and the foot are set into it where it marks them.
+  // stylesheet links, bar and foot are set where it marks them.
   studio: async (files, base) => {
     let file = await files.fetch('/studio.html')
     if (!file.ok) return file
     return new Response(
       (await file.text())
+        .replace(
+          '<!--stylesheets-->',
+          renderToString(styleLinks((path) => new URL(path, base).href)),
+        )
         .replace(
           '<!--mast-->',
           renderToString(h(Top, { base, studio: true })),
@@ -112,7 +113,7 @@ export let site = async (
     .replace(/^\/|\/$/g, '').replace(/\.html$/, '')
   let answer = Object.hasOwn(answers, path)
     ? await answers[path](env.FILES, appBase(request).href)
-    : SHELVES.test(path) && !path.includes('..')
+    : stylesheets.includes(path) || SHELVES.test(path) && !path.includes('..')
     ? await env.FILES.fetch('/' + path)
     : null
   return answer && request.method == 'HEAD'

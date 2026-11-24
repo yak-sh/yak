@@ -156,6 +156,11 @@ test("a page's imports by address follow its release", () => {
       ?.['/cookbook/about/me.js'],
     `${root}about/me.js`,
   )
+  assertEquals(
+    mapOf('<head></head><script type="module" src="views.ts"></script>')
+      ?.['/cookbook/views.ts'],
+    `${root}views.ts`,
+  )
   // A classic script's dynamic import counts; a page with no module has no map.
   assertEquals(mapOf(page(`import('./a.js')`, 'text/javascript')), {
     '/cookbook/a.js': `${root}a.js`,

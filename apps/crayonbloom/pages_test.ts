@@ -1,6 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { lookVersion, stylesheet } from './look/look.ts'
 import { placed } from './pages/chrome.ts'
 import { ready } from './pages/free.ts'
 import { home } from './pages/home.ts'
@@ -23,10 +22,11 @@ test('the home page sends an idea to the studio under its mount', async () => {
       href!.startsWith('/preview/studio?prompt=')
     ),
   )
-  equal(
-    document.querySelector('link[rel=stylesheet]')!.getAttribute('href'),
-    `/preview/look.css?v=${lookVersion}`,
-  )
+  let css = hrefs(document, 'link[rel=stylesheet]')
+  equal(css[0], '/preview/look/crayon.css')
+  ok(css.includes('/preview/__packages/@yaks/ui/Button.css'))
+  ok(css.includes('/preview/look/skin/Button.css'))
+  ok(css.every((href) => href?.startsWith('/preview/')))
 })
 
 test('a theme page offers each of its pages as a printable', async () => {
@@ -59,10 +59,4 @@ test('a finished free page is one visitor’s, with its printable', async () => 
     document.querySelector('meta[name=robots]')!.getAttribute('content'),
     'noindex',
   )
-})
-
-test("the stylesheet holds the theme, the kit parts worn and the app's own", () => {
-  for (let rule of ['--accent: #e8654e', '.Button:hover', '.Mast_Brand']) {
-    ok(stylesheet.includes(rule), rule)
-  }
 })

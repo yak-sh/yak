@@ -52,16 +52,8 @@ import {
   assetUrl,
   cssUrls,
   linked,
-  linkedAsset,
   LOADS,
 } from '@yaks/platform/asset-url'
-import {
-  assetProbe,
-  assetRequest,
-  generatedAt,
-  namedWorkerAsset,
-  workerAssetQuery,
-} from '@yaks/platform/worker-assets'
 import {
   addressed as pinnedAsset,
   assetPath,
@@ -594,45 +586,34 @@ let mapped = (
     : html
 }
 // The page's loads moved the same way: each element's file, and an icon's.
-// A worker's page (`html` null) is never held whole, so a `<base>` it carries
-// is heard as it streams, and stops the moves after it; and it names only
-// what the release `holds`, since the worker answers addresses of its own.
+// A streamed page stops rewriting links after a <base>. A worker's page
+// moves only what the release holds, since the worker also answers its own routes.
 let released = (
   page: Response,
-  html: string | null,
   at: string,
   bare: string,
   source: string | null | undefined,
   base = at,
   holds?: (path: string) => boolean,
   assets: Assets = {},
-  generated?: (ref: string, kind: 'style' | 'image') => Promise<string>,
+  streamed = false,
 ) => {
   let id = releaseId(source)
-  if ((!id && !generated) || (!generated && html != null && hasBase(html))) {
-    return page
-  }
+  if (!id) return page
   let rewrite = new HTMLRewriter()
   let based = false
-  if (html == null) {
+  if (streamed) {
     rewrite.on('base[href]', { element: () => void (based = true) })
   }
-  let move = (attr: string, kind?: 'style' | 'image' | null) => ({
+  let move = (attr: string) => ({
     element: (el: {
       getAttribute(name: string): string | null
       setAttribute(name: string, value: string): void
     }) => {
       let ref = el.getAttribute(attr)
       if (!ref || based) return
-      let next = id
-        ? assetUrl(ref, at, bare, id, platformPath, base, holds, assets)
-        : ref
+      let next = assetUrl(ref, at, bare, id, platformPath, base, holds, assets)
       if (next != ref) el.setAttribute(attr, next)
-      else if (kind && generated) {
-        return generated(ref, kind).then((next) => {
-          if (next != ref) el.setAttribute(attr, next)
-        })
-      }
     },
   })
   for (let [tag, attr] of LOADS) rewrite.on(`${tag}[${attr}]`, move(attr))
@@ -640,7 +621,7 @@ let released = (
     element: (el) => {
       let rel = el.getAttribute('rel') ?? '', as = el.getAttribute('as') ?? ''
       if (linked(rel, as)) {
-        return move('href', linkedAsset(rel, as)).element(el)
+        move('href').element(el)
       }
     },
   })
@@ -1198,17 +1179,11 @@ export let woven = async (
     !local(app),
     icon,
   )
+  let html = new Response(based(base, tags ? intoHead(own, tags) : own))
   let page = filled(
-    released(
-      new Response(based(base, tags ? intoHead(own, tags) : own)),
-      original,
-      at,
-      bare,
-      app.source,
-      base,
-      undefined,
-      assets,
-    ),
+    hasBase(original)
+      ? html
+      : released(html, at, bare, app.source, base, undefined, assets),
     copy,
   )
   if (scripts) {
@@ -1241,31 +1216,18 @@ let workerPage = async (
   base: string,
   holds: (path: string) => boolean,
   assets: Assets,
-  probe?: (url: URL, kind: 'style' | 'image') => Promise<Response>,
 ) => {
   let held = await holding({ stream: page.body! }, 256 * 1024)
-  let generated = (base: string) =>
-    probe && generatedAt({
-      at,
-      bare,
-      source: app.source,
-      base,
-      holds,
-      probe,
-      reserved: platformPath,
-      failed: failing('fingerprint worker asset'),
-    })
   if (!(held instanceof Uint8Array)) {
     return released(
       new Response(held.stream, page),
-      null,
       at,
       bare,
       app.source,
       base,
       holds,
       assets,
-      generated(base),
+      true,
     )
   }
   let original = new TextDecoder().decode(held)
@@ -1293,14 +1255,12 @@ let workerPage = async (
       statusText: page.statusText,
       headers,
     }),
-    original,
     at,
     bare,
     app.source,
     base,
     holds,
     assets,
-    generated(base),
   )
 }
 
@@ -1318,7 +1278,6 @@ let kept = async (
   at: string,
   bare: string,
   page: Response,
-  probe?: (url: URL, kind: 'style' | 'image') => Promise<Response>,
 ) => {
   if (!['GET', 'HEAD'].includes(req.method) || page.status != 200) return page
   let type = page.headers.get('content-type') ?? ''
@@ -1336,18 +1295,7 @@ let kept = async (
     })
     : [null, {}] as const
   if (html) {
-    return page.body && (holds || probe)
-      ? workerPage(
-        page,
-        app,
-        at,
-        bare,
-        base,
-        holds ?? (() => false),
-        assets,
-        probe,
-      )
-      : page
+    return holds ? workerPage(page, app, at, bare, base, holds, assets) : page
   }
   if (css && holds) {
     let sheet = cssUrls(
@@ -1372,8 +1320,8 @@ let kept = async (
   return page
 }
 
-// A page still holding the worker's bare file address can follow it to the
-// release if the worker just served those bytes to this caller.
+// A subresource requested at a bare address can follow it to the release
+// when the files door or the worker served those bytes to this caller.
 let releasedAlias = async (
   req: Request,
   env: Env,
@@ -2630,7 +2578,6 @@ let served = async (
   copied: () => void = () => {},
   visitor = req,
   view?: Directory,
-  probeFor?: string,
 ): Promise<Response> => {
   let url = new URL(req.url)
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
@@ -2672,7 +2619,7 @@ let served = async (
     mount: req.headers.get(MOUNT),
   }, {
     kept: async () => {
-      if (edge || probeFor) return null
+      if (edge) return null
       let { cookied } = await identity()
       let session = cookied && sessionCookie(req, env)
       return await asked(visitor, env, c, session || null)
@@ -2699,16 +2646,13 @@ let served = async (
       return at ? { space: at.space.slug, slug: at.app.slug } : null
     },
   }, env)
-  if (probeFor && (step.to != 'app' || step.app.eid != probeFor)) {
-    return new Response(null, { status: 404 })
-  }
   if (step.to == 'manage') {
     return (await import('./manage.ts')).manage(req, env, c)
   }
   if (step.to == 'kept') return step.page
   // Its pages tell the browser whose this hostname's storage is now
   // (site-data.ts), on their way out of `fetch` below.
-  if (step.space && !edge && !probeFor) serves(visitor, step.space.store)
+  if (step.space && !edge) serves(visitor, step.space.store)
   if (step.to == 'nothing') {
     let none = nothingAt(url.pathname, env)
     return edge && step.kept ? keep(none, step.space ?? null, null) : none
@@ -2833,10 +2777,6 @@ let served = async (
         dir.stale,
       ))
   if (open) {
-    if (probeFor) {
-      await open.body?.cancel()
-      return new Response(null, { status: 404 })
-    }
     if (open.headers.get('content-type')?.startsWith('text/html')) {
       open = await reported(
         env,
@@ -2856,10 +2796,9 @@ let served = async (
   // Nor does the gateway ask Site about the addresses of an app it keeps
   // nothing of for a while.
   if (edge && !keeps(app, path)) return passed()
-  if (!edge && !probeFor && !keepable(app)) unkept(req, env, bare, c)
+  if (!edge && !keepable(app)) unkept(req, env, bare, c)
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {
-    if (probeFor) return new Response(null, { status: 404 })
     if (edge) return passed()
     // The app's own worker answers its feed first, as it answers every other
     // address of its own (rung 2): the township's adds its meetings. Its 404
@@ -3060,9 +2999,6 @@ let served = async (
   // Nor for a sandboxed page's own request: its token is its app's alone,
   // and the router would be acting as the person who holds it.
   if (!front && !bearing(req) && !paper && !webPath(path)) {
-    if (probeFor && claims(home, url.pathname)) {
-      return new Response(null, { status: 404 })
-    }
     if (edge && claims(home, url.pathname)) return passed()
     let early = await firstly(env, space, home, req, who, c)
     // The answer is the home app's, so it reports as the home app — and is
@@ -3159,9 +3095,6 @@ let served = async (
     access: app.access,
     itself: !!itself,
   })
-  if (probeFor && (to.to != 'page' || to.form != null)) {
-    return new Response(null, { status: 404 })
-  }
   if (to.to == 'refused') {
     return json(
       to.status,
@@ -3330,7 +3263,7 @@ let served = async (
   // the worker's, while it runs. A page the worker asked for is filled with
   // the worker's answer, so it is read none.
   let copy = !itself && fence.page(path) ? copyFor(env, space, app) : null
-  let file = mayRead && !probeFor
+  let file = mayRead
     ? asset(
       req,
       env,
@@ -3350,18 +3283,9 @@ let served = async (
   // What it may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on
   // refuses exactly what the page would have.
-  let named = !itself && ['GET', 'HEAD'].includes(req.method)
-    ? workerAssetQuery(url)
-    : null
-  let workerRequest = named ? assetRequest(req, named.original) : req
   let own = itself
     ? null
-    : await c.time('worker', () => ran(env, space!, app!, workerRequest, who))
-  if (probeFor) {
-    return own
-      ? kept(req, env, app, at, bare, own)
-      : new Response(null, { status: 404 })
-  }
+    : await c.time('worker', () => ran(env, space!, app!, req, who))
   // A write the worker made for a stranger on the sample gave them a store of
   // their own (above): their browser is told it holds one, and the page that
   // asked that its store moved, as the page's own write tells them.
@@ -3406,20 +3330,9 @@ let served = async (
     }
   }
   if (worker) {
-    let probe = !named && !walls && req.method == 'GET'
-      ? (target: URL, kind: 'style' | 'image') => {
-        let sub = assetProbe(req, target, kind)
-        return c.time(
-          'worker_asset',
-          () => served(sub, env, c, edge, copied, sub, dir, app!.eid),
-        )
-      }
-      : undefined
-    page = await kept(workerRequest, env, app, at, bare, page, probe)
-    page = named
-      ? await namedWorkerAsset(req, page, named)
-      : await releasedAlias(req, env, app, at, bare, page)
+    page = await kept(req, env, app, at, bare, page)
   }
+  if (!itself) page = await releasedAlias(req, env, app, at, bare, page)
   if (
     worker && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')

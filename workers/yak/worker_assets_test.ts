@@ -4,7 +4,6 @@
 // what the worker answers with a validator is answered 304 when held.
 import { cleanup, equal, test } from '@yaks/testing'
 import { assertMatch } from '@std/assert'
-import { digest } from '@yaks/graph/sha256'
 import { KERNEL } from './meta.ts'
 import { connector, seed, unique } from './probe.ts'
 import { serverSource, workerKernel } from './worker-probe.ts'
@@ -21,9 +20,12 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
         '<link rel="preload" as="font" href="fonts/f.ttf">' +
         '<link rel="stylesheet" href="look.css">' +
         '<link rel="stylesheet" href="private.css">' +
-        '<link rel="mask-icon" href="badge.svg?shade=red#mask">' +
         '<img src="' + new URL('art/p.svg', url).href + '"><img src="drawn.png"><a href="art/p.svg">p</a>',
         'text/html')
+    }
+    if (path == '/studio') {
+      return text('<base href="' + mount + 'styles/">' +
+        '<link rel="stylesheet" href="studio.css">', 'text/html')
     }
     if (path == '/look.css') {
       return text("@font-face{src:url('fonts/f.ttf')}" +
@@ -32,7 +34,7 @@ let worker = 'data:text/javascript,' + encodeURIComponent(`export default {
     if (path == '/private.css') return new Response('.p{}', {
       headers: { 'content-type': 'text/css', 'cache-control': 'private, no-store' },
     })
-    if (path == '/badge.svg') return text('<svg>' + url.search + '</svg>', 'image/svg+xml')
+    if (path == '/styles/studio.css') return env.FILES.fetch(path)
     if (path.startsWith('/fonts/') || path == '/icon.svg') return env.FILES.fetch(path)
     if (path == '/drawn.png') {
       return new Response('drawn', {
@@ -57,18 +59,11 @@ await agent.tool('app_files', {
     { path: 'icon.svg', content: '<svg/>' },
     { path: 'fonts/f.ttf', content: 'font bytes' },
     { path: 'art/p.svg', content: '<svg>art</svg>' },
+    { path: 'views.js', content: 'export let view = 1' },
   ],
 })
 await agent.tool('app_deploy', { space, app: 'made' })
 let customHost = `${space}.example`
-let placed = (await k.dir.space(space))!
-let app = (await k.dir.app(placed, 'made'))!
-await k.dir.apply({
-  entities: [{
-    entity: { eid: crypto.randomUUID() },
-    hostname: { name: customHost, serves: app.eid, stage: 'active' },
-  }],
-}, KERNEL)
 await agent.tool('app_new', {
   space,
   slug: 'gated',
@@ -78,14 +73,29 @@ await agent.tool('app_new', {
 await agent.tool('app_files', {
   space,
   app: 'gated',
-  files: [serverSource, { path: 'fonts/f.ttf', content: 'gated font' }],
+  files: [
+    serverSource,
+    { path: 'fonts/f.ttf', content: 'gated font' },
+    {
+      path: 'styles/studio.css',
+      content: "@font-face{src:url('../fonts/f.ttf')}",
+    },
+  ],
 })
 await agent.tool('app_deploy', { space, app: 'gated' })
+let placed = (await k.dir.space(space))!
+let app = (await k.dir.app(placed, 'gated'))!
+await k.dir.apply({
+  entities: [{
+    entity: { eid: crypto.randomUUID() },
+    hostname: { name: customHost, serves: app.eid, stage: 'active' },
+  }],
+}, KERNEL)
 let at = (path: string, init: RequestInit = {}) => k.at(host, path, init)
 let release = (path: string) =>
   new RegExp(`/made/api/assets/[0-9a-f]{64}/${path}`)
 
-test("a worker's page names release files and cacheable styles and icons by their hashes", async () => {
+test("a worker's page names release files by their hashes", async () => {
   let html = await (await at('/made/made')).text()
   assertMatch(
     html,
@@ -96,7 +106,7 @@ test("a worker's page names release files and cacheable styles and icons by thei
     new RegExp(`as="font" href="${release('fonts/f.ttf').source}"`),
   )
   assertMatch(html, new RegExp(`<img src="${release('art/p.svg').source}"`))
-  assertMatch(html, /href="\/made\/look.css\?__yak_asset=[0-9a-f]{64}"/)
+  assertMatch(html, /href="look.css"/)
   assertMatch(html, /href="private.css"/)
   assertMatch(html, /<img src="drawn.png">/)
   assertMatch(html, /<a href="art\/p.svg">/)
@@ -104,38 +114,38 @@ test("a worker's page names release files and cacheable styles and icons by thei
   assertMatch(html, /data-yak-version/)
 })
 
-test('the custom domain serves the exact named stylesheet and icon on repeat visits', async () => {
-  let at = (path: string, init: RequestInit = {}) =>
-    k.at(customHost, path, init)
-  let html = () => at('/made').then((res) => res.text())
-  let first = await html()
-  let url = first.match(/href="(\/look.css\?__yak_asset=([0-9a-f]{64}))"/)!
-  let file = await at(url[1])
-  let sheet = await file.text()
-  equal(await digest(sheet), url[2])
-  equal(
-    file.headers.get('cache-control'),
-    'private, max-age=31536000, immutable',
-  )
-  assertMatch(sheet, /url\('\/api\/assets\/[0-9a-f]{64}\/fonts\/f\.ttf'\)/)
-  assertMatch(await html(), new RegExp(url[2]))
-  let head = await at(url[1], { method: 'HEAD' })
-  equal([head.status, await head.text(), head.headers.get('etag')], [
-    200,
-    '',
-    `"${url[2]}"`,
-  ])
-  let stale = await at(url[1].replace(url[2], '0'.repeat(64)))
-  equal([stale.status, stale.headers.get('location')], [307, '/look.css'])
-  let badge = first.match(
-    /href="(\/badge\.svg\?shade=red&(?:amp;)?__yak_asset=[0-9a-f]{64})#mask"/,
-  )!
-  let icon = await at(badge[1].replace('&amp;', '&'))
-  equal(await icon.text(), '<svg>?shade=red</svg>')
-  equal(
-    icon.headers.get('cache-control'),
-    'private, max-age=31536000, immutable',
-  )
+test('a worker links a release stylesheet relative to its page base', async () => {
+  for (let [domain, mount] of [[host, '/gated/'], [customHost, '/']]) {
+    let html = () => k.at(domain, mount + 'studio').then((res) => res.text())
+    let link = (markup: string) => markup.match(/href="([^"]+\.css)"/)![1]
+    let url = link(await html())
+    assertMatch(
+      url,
+      new RegExp(`^${mount}api/assets/[a-f0-9]{64}/styles/studio\\.css$`),
+    )
+    let file = await k.at(domain, url)
+    equal(file.status, 200)
+    equal(
+      file.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
+    let css = await file.text()
+    let font = new URL(
+      css.match(/url\('([^']+)'\)/)![1],
+      'https://' + domain + url,
+    )
+    assertMatch(
+      font.pathname,
+      new RegExp(`^${mount}api/assets/[a-f0-9]{64}/fonts/f\\.ttf$`),
+    )
+    let bytes = await k.at(domain, font.pathname)
+    equal(await bytes.text(), 'gated font')
+    equal(
+      bytes.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
+    equal(link(await html()), url)
+  }
 })
 
 test('a worker-served release icon at its bare address leads to its fingerprint', async () => {
@@ -151,6 +161,28 @@ test('a worker-served release icon at its bare address leads to its fingerprint'
     named.headers.get('cache-control'),
     'public, max-age=31536000, immutable',
   )
+})
+
+test('a file the worker passes at its bare address leads to its fingerprint', async () => {
+  for (
+    let [path, dest, body] of [
+      ['views.js', 'script', 'export let view = 1'],
+      ['art/p.svg', 'image', '<svg>art</svg>'],
+    ]
+  ) {
+    let asset = await at('/made/' + path, {
+      headers: { 'sec-fetch-dest': dest },
+    })
+    equal(asset.status, 307)
+    let location = asset.headers.get('location')!
+    assertMatch(location, release(path))
+    let named = await at(location)
+    equal(await named.text(), body)
+    equal(
+      named.headers.get('cache-control'),
+      'public, max-age=31536000, immutable',
+    )
+  }
 })
 
 test("a worker's stylesheet names the release's fonts by their hashes", async () => {
