@@ -20,8 +20,10 @@
  */
 import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
+import { letter } from './monogram.ts'
 import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
 import type { LogoSize } from './space-logo.ts'
+import { releaseId } from './versions.ts'
 
 /** A request before the router splits the hostname into an app path, in
  * the env `E` of whatever serves it. */
@@ -250,8 +252,29 @@ export let iconAt = (
   space: { logo?: { sha: string } | null },
 ): string => `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space))}`
 
+/** The app fields needed to address its display icon. */
+export type MarkedApp = {
+  eid: string
+  slug: string
+  title: string
+  source?: string | null
+}
+
+/** The release and the inputs to its app-specific fallback. */
+export let markVersion = ({ eid, slug, title, source }: MarkedApp) => {
+  let release = releaseId(source)
+  return release || source === null
+    ? `1.${release ?? ''}.${eid}.${letter(title || slug)}`
+    : null
+}
+
 /** The icon in an app list, with the app's own mark as its fallback. */
-export let appMark = (at: string): string => `${at}/icon.png?display`
+export let appMark = (at: string, app: MarkedApp): string => {
+  let version = markVersion(app)
+  return `${at}/icon.png?display${
+    version ? `&v=${encodeURIComponent(version)}` : ''
+  }`
+}
 
 /** Where the connections page serves the logos it does not keep as SVG
  * (workers/yak catalog.ts `logoDoor`), by the integration's name. */

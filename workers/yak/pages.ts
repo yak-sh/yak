@@ -63,6 +63,7 @@ import {
   chatPath,
   integrationLogo,
   managePath,
+  type MarkedApp,
   type Setting,
 } from '@yaks/platform/routes'
 
@@ -703,10 +704,7 @@ export type SpacePage = {
   manage?: string
 }
 
-type Listed = {
-  eid: string
-  slug: string
-  title: string
+type Listed = MarkedApp & {
   gallery?: string
   home?: boolean
   access?: string | null

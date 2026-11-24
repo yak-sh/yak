@@ -43,7 +43,7 @@ export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>
     registry,
     {
       entity: { eid: a.eid },
-      app: { slug: a.slug, access: a.access },
+      app: { slug: a.slug, access: a.access, source: a.source },
       doc: { title: a.title },
       ...(a.home ? { home: {} } : {}),
     },

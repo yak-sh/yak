@@ -49,7 +49,7 @@ export let talkSide = (
     href: aboutPath(space.slug, a.slug, open),
     beside: a.slug == at.app,
     icon: 'layout-grid',
-    image: appMark(`https://${spaceHost(env, space.slug)}/${a.slug}`),
+    image: appMark(`https://${spaceHost(env, space.slug)}/${a.slug}`, a),
     label: a.title || a.slug,
   }))
   return h(Sidebar, {

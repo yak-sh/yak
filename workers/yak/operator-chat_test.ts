@@ -138,7 +138,14 @@ let six = [
   'Garden log',
   'RSVP',
 ]
-  .map((title, i) => ({ eid: `app${i}`, slug: `app${i}`, title }))
+  .map((title, i) => ({
+    eid: `app${i}`,
+    slug: `app${i}`,
+    title,
+    source: i == 0
+      ? 'clerk/.releases/app0/0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69'
+      : null,
+  }))
 let beside = { name: '  Ada Lovelace ', apps: six }
 let sided = async (
   role: 'owner' | 'editor',
@@ -356,10 +363,12 @@ test('the sidebar and Apps page ask for the same app icons', () => {
   let sources = (page: Document, selector: string) =>
     [...page.querySelectorAll(selector)].map((img) => img.getAttribute('src'))
       .sort()
-  assertEquals(
-    sources(owner.document, '[data-fit-list] .Sidebar_Icon'),
-    sources(library, '#apps .Rows_Mark'),
-  )
+  let sidebar = (doc: typeof owner.document) =>
+    sources(doc, '[data-fit-list] .Sidebar_Icon')
+  let icons = sidebar(owner.document)
+  assertEquals(icons, sources(library, '#apps .Rows_Mark'))
+  assertEquals(icons, sidebar(chosen.document))
+  assert(icons.every((src) => src?.includes('?display&v=')))
 })
 
 test('the side holds the space, the Operator, Updates, the apps and Manage', () => {

@@ -48,6 +48,7 @@ import {
   MANAGE,
   managePath,
   manifestPath,
+  type MarkedApp,
   type StoreDoor,
   talkPath,
 } from '@yaks/platform/routes'
@@ -1719,11 +1720,7 @@ for (let form of document.querySelectorAll('#texts-stop')) {
  * the platform's admin (tool.ts `admin`), and how to reach its Operator. */
 export type Beside = {
   spaces?: Picked[]
-  apps?: {
-    eid: string
-    slug: string
-    title: string
-  }[]
+  apps?: MarkedApp[]
   name?: string | null
   admin?: boolean
   /** how the person keeps the panes: the side folded to its icons, the

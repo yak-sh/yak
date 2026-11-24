@@ -71,6 +71,7 @@ import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed } from '@yaks/platform/versions'
+import { appMark } from '@yaks/platform/routes'
 import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -590,6 +591,38 @@ test("a display mark is the app's letter, and an installer's icon the space logo
     new Uint8Array(await installed.arrayBuffer()),
     new Uint8Array([4, 5, 6]),
   )
+})
+
+test('the browser can keep a release’s display icon or its fallback', async () => {
+  await using scenario = platform()
+  let { env } = scenario
+  let { app, dir } = await seeded(env, 'private', scenario.dir)
+  let show = async (files: Record<string, string>) => {
+    let source = `ada/.releases/${app.eid}/${crypto.randomUUID()}`
+    await released(env, source, files)
+    await dir.stamp({
+      entities: [{ entity: { eid: app.eid }, app: { source } }],
+    })
+    return appMark('/cookbook', { ...app, source })
+  }
+  let cookie = await as(ADA)
+  let open = (path: string) =>
+    apps.fetch(visit(path, { headers: { cookie } }), env)
+  let first = await show({ 'icon.png': 'art' })
+  let own = await open(first)
+  assertEquals(await own.text(), 'art')
+  assertEquals(
+    own.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
+
+  let second = await show({ 'index.html': '<h1>Cookbook</h1>' })
+  let fallback = await open(second)
+  assert(fallback.headers.get('cache-control')?.endsWith(', immutable'))
+  assertStringIncludes(await fallback.text(), '>C</text>')
+  let stale = await open(first)
+  assertEquals(stale.headers.get('cache-control'), 'private, no-cache')
+  await stale.body?.cancel()
 })
 
 test('an app that wrote an icon.svg and no icon.png is served the svg drawn', async () => {

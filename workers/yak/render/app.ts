@@ -55,7 +55,11 @@ export let app: ComponentRenderer = {
   view: 'Tile',
   match: parse('.app'),
   Render: ({ e: b, ...ctx }) => {
-    let a = b.app as { slug: string; access?: string | null }
+    let a = b.app as {
+      slug: string
+      access?: string | null
+      source?: string | null
+    }
     let title = (b.doc as { title?: string } | undefined)?.title || a.slug
     let at = `${ctx.at ?? ''}/${a.slug}`
     // The space's host, which its homepage opens at.
@@ -79,7 +83,7 @@ export let app: ComponentRenderer = {
       Rows.Item,
       { as: 'li', ...sift },
       h(Rows.Mark, {
-        src: ctx.icon ?? appMark(at),
+        src: ctx.icon ?? appMark(at, { ...a, eid: b.entity.eid, title }),
         width: 32,
         height: 32,
         alt: '',

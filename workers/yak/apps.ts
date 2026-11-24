@@ -115,6 +115,7 @@ import {
   manageAt,
   managePath,
   MANIFEST,
+  markVersion,
   MOUNT,
   paged as pagePath,
   signInAt,
@@ -613,14 +614,21 @@ export let keeping = (app: App) =>
   `${app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
 
-// What a browser may keep of a file at `path`: an icon asked for by what
-// draws it (@yaks/platform/routes `iconAt`) is kept for good, since a new
-// release or logo names a new address; the rest as `keeping` says.
-let caching = (req: Request, space: Space, app: App, path: string) =>
-  path == '/icon.png' &&
-    new URL(req.url).searchParams.get('v') == iconVersion(app, space)
-    ? app.access == 'public' ? immutable['cache-control'] : browserImmutable
+// Icons named by their inputs can stay in the browser across page swaps.
+// Unversioned requests and addresses from an earlier release revalidate.
+let caching = (req: Request, space: Space, app: App, path: string) => {
+  if (path != '/icon.png') return keeping(app)
+  let q = new URL(req.url).searchParams
+  let display = q.has('display')
+  let version = display
+    ? app.version && !app.source ? null : markVersion(app)
+    : iconVersion(app, space)
+  return version && q.get('v') == version
+    ? display || app.access != 'public'
+      ? browserImmutable
+      : immutable['cache-control']
     : keeping(app)
+}
 
 // The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).
 let etagOf = (version: string) => `"${version}"`
@@ -697,13 +705,14 @@ export let unwritten = async (
   app: App,
   path: string,
   at: string,
+  retry = false,
 ) => {
   if (path == '/icon.png') {
     if (new URL(req.url).searchParams.has('display')) {
       return new Response(monogram(app.title || app.slug, app.eid), {
         headers: {
           'content-type': 'image/svg+xml',
-          'cache-control': caching(req, space, app, path),
+          'cache-control': retry ? 'no-store' : caching(req, space, app, path),
         },
       })
     }
@@ -1003,7 +1012,15 @@ let asset = async (
   let lost = got.status == 404 && got.headers.has(files.FILE)
   if (![200, 206, 416].includes(got.status) && !lost) {
     await got.body?.cancel()
-    return await unwritten(req, env, space, app, path, bare) ??
+    return await unwritten(
+      req,
+      env,
+      space,
+      app,
+      path,
+      bare,
+      got.status != 404,
+    ) ??
       (got.status == 404 ? null : nothingHere(env))
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
