@@ -25,12 +25,16 @@ import type { Conversion } from '../arrival.ts'
 import type { builds } from '../builds.ts'
 import type { Explanation } from '@yaks/tracker/resolution'
 
+let openFiles = () => caches.open('Files')
+let shelved = (env: Env): Env =>
+  env.FILES ? { ...env, FILE_CACHE: openFiles } : env
+
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
 let agentEnv = async () => {
   let { evaluator } = await import('../code-runtime.ts')
   return (env: Env): Env => ({
-    ...env,
+    ...shelved(env),
     ...(env.LOADER
       ? {
         CODE_MODE: evaluator(env.LOADER, (bridge) =>
@@ -52,7 +56,8 @@ let instrumented = async <C>(load: Promise<C>) =>
 
 // A class's object, made the way the runtime constructs it.
 type Class = new (...args: never[]) => object
-let made = (C: Class) => (...args: never[]) => new C(...args)
+let made = (C: Class) => (ctx: never, env: Env) =>
+  new C(ctx, shelved(env) as never)
 
 // @yaks/durable-object `Durable`'s own, which every object on it answers.
 let DURABLE = [
@@ -143,7 +148,8 @@ let entered = (
   base,
   methods,
   entered: true,
-  load: () => Promise.resolve(make as never),
+  load: () =>
+    Promise.resolve((ctx: never, env: never) => make(ctx, shelved(env))),
 })
 
 let hosting = async (env: Env) => (await import('../inference.ts')).hosting(env)
@@ -245,7 +251,7 @@ export let classes: Record<string, Deferred> = {
     let { failing } = await import('../defects.ts')
     return {
       fetch: (req: Request) =>
-        stored(() => caches.open('Files'), req, (req) => fetch(req, env), {
+        stored(openFiles, req, (req) => fetch(req, env), {
           hold: waitUntil,
           failed: failing('Files cache'),
           clock: env.CLOCK,

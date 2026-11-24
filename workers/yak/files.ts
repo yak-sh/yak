@@ -4,9 +4,6 @@ import { type Clock, clock, timed } from './timing.ts'
 // The cached half of serving an app's files and blobs: bytes out of R2, and
 // whether the app's rows still name an upload's bytes. This part knows an
 // app's eid, the R2 prefix its bytes live under, its store, and their address.
-// It does not know who is asking, and that is the whole point — Cloudflare's
-// cache wraps this entrypoint (@yaks/platform/kept), so anything
-// this part could learn about a person would end up shared with strangers.
 //
 // The access decision stays in apps.ts `served()`, in front, on the uncached
 // gateway, run on every single request. What is cached here is the same for
@@ -14,10 +11,8 @@ import { type Clock, clock, timed } from './timing.ts'
 // cacheable as a public one: the cache holds the bytes, and the gateway holds
 // the question of who may have them.
 //
-// Reachable only through the `FILES` service binding (wrangler.toml), which is
-// bound to this named entrypoint. The routes in wrangler.toml address the
-// default entrypoint, so no request from the internet arrives here — a caller
-// has to be this Worker.
+// Its requests use internal addresses from @yaks/platform/kept. Both the
+// gateway and the named Files entrypoint use the same local cache.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import {
   type Loaded,
@@ -43,11 +38,11 @@ import {
   keptAt,
   servableAt,
 } from '@yaks/platform/kept'
-import { through } from '@yaks/workerd/cache'
+import { stored, through } from '@yaks/workerd/cache'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
-import { caught, relayed, responding } from './defects.ts'
+import { background, caught, failing, relayed, responding } from './defects.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from '@yaks/platform/versions'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -172,17 +167,8 @@ export let servesSaid = (dir?: string) =>
       'files outside it are source only, not on the web'
     : ''
 
-// The gateway's way in: the `FILES` binding, whose entrypoint reads the local
-// Cache API before this module, or this module in-process where there is no
-// binding or the runtime refuses or fails the hop (@yaks/workerd/cache
-// `through`). Inside an app worker's own call to the kernel (its KERNEL
-// binding, dispatch.ts) that refusal is the answer: the same bytes, read
-// in-process, uncached. A cache
-// that answered for want of an answer is reported, and the bytes are read
-// in-process the same way, so a person's image still loads.
-//
-// Each trip is one `files` hop on the request's tally (hops.ts), and its wait
-// `files_wait`: a hit never reaches the bucket, so no `r2` counts it.
+// Each read is counted as `files` and timed as `files_wait`. A cache hit
+// never reaches the bucket.
 export let door = (env: Env): Fetcher => ({
   fetch: (req) => {
     hop('files')
@@ -190,18 +176,28 @@ export let door = (env: Env): Fetcher => ({
   },
 })
 
-// One trip through `door`, uncounted. `patience` is `through`'s.
-let trip = async (env: Env, req: Request, patience?: number) =>
-  relayed(
-    // Request.cache is not carried across a service binding. Honor it
-    // before the hop, where a fresh servability read still knows it.
-    await through(
-      req.cache == 'no-store' ? undefined : env.FILES,
-      req,
-      (asked) => fetch(asked, env),
-      { clock: env.CLOCK, failed: unanswered, held, patience },
-    ),
+// Bound the lookup itself. If the cache is slow, draw once from the origin
+// in this invocation. A second deadline on the whole answer used to abandon
+// an R2 read already in flight and start it again (T-1112).
+let trip = async (env: Env, req: Request) => {
+  let draw = (asked: Request) => fetch(asked, env)
+  if (env.FILE_CACHE) {
+    return relayed(
+      await stored(env.FILE_CACHE, req, draw, {
+        hold: background,
+        failed: failing('Files cache'),
+        clock: env.CLOCK,
+      }),
+    )
+  }
+  return relayed(
+    await through(req.cache == 'no-store' ? undefined : env.FILES, req, draw, {
+      clock: env.CLOCK,
+      failed: unanswered,
+      patience: Infinity,
+    }),
   )
+}
 
 // A files cache that answered for want of an answer from Files.
 let unanswered = (cached: Response, req: Request) =>
@@ -214,20 +210,9 @@ let unanswered = (cached: Response, req: Request) =>
     cache_ray: cached.headers.get('cf-ray'),
   })
 
-// A files cache that held a read's answer back past its patience.
-let held = (req: Request, ms: number) =>
-  caught(new Error(`the files cache did not answer within ${ms / 1000} s`), {
-    request: `${req.method} files`,
-    cache_url: req.url,
-  })
-
-// An app file's bytes, through the cache (@yaks/platform/kept `fileAt`):
-// `Files` is a second entrypoint backed by the local Cache API,
-// addressed by the app's
-// eid, this path and its release, so a warm edge answers without the bucket
-// being touched. It is the same call for a private app as for a public one —
-// what is cached is the file, and whether this person may have it was decided
-// by the gateway before it asked.
+// The local cache keys an app file by eid, path and release
+// (@yaks/platform/kept `fileAt`). The gateway checks access before asking
+// for the file, so public and private apps use the same cache.
 //
 // A seek or HEAD goes to the same file door without that cache; ordinary
 // GETs fill and read the shared full-file cache.
@@ -380,9 +365,9 @@ export let keptBytes = async (
 // moves. An isolate shares one ask per upload among the reads that want it at
 // once, and remembers the last yes it heard. When the store fails, or has not
 // said within `GLANCE`, that yes answers: a store overloaded by the burst
-// neither takes every image down with it nor is asked a second time
-// in-process (`through` waits the hop out). With no yes heard, a read waits
-// `PATIENCE` for the store, then fails. A yes heard is kept under the mark it
+// neither takes every image down with it nor is asked a second time.
+// With no yes heard, a read waits `PATIENCE` for the store, then fails.
+// A yes heard is kept under the mark it
 // was heard under, so it never answers for an upload withdrawn since (T-1112).
 let asking = new Map<string, Promise<Representation | null>>()
 let heard = new Map<string, { rep: Representation; at: number }>()
@@ -466,8 +451,7 @@ export let patiently = async <T>(
   )
 }
 
-// Files' answer, waited out: only the store can give it, and the hop a
-// read gives up on goes on asking it.
+// The store's answer keeps going when a reader gives up on it.
 let askedServable = async (
   env: Env,
   url: string,
@@ -477,7 +461,6 @@ let askedServable = async (
   let r = await trip(
     env,
     new Request(url, { cache, headers: { [STORE]: JSON.stringify(store) } }),
-    Infinity,
   )
   if (r.ok) return await r.json() as Representation
   if (r.status == 404) {

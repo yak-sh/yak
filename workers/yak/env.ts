@@ -20,6 +20,7 @@ import type { Purgers, Purges } from '@yaks/workerd/purge'
 import type { Outlasts } from './outlast.ts'
 import type { Lexicons } from './lexicon.ts'
 import type { Limiter } from '@yaks/workerd/rate'
+import type { Stored } from '@yaks/workerd/cache'
 import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Inference } from '@yaks/model'
 import type { Clock } from '@yaks/fp'
@@ -337,13 +338,11 @@ export type Env = {
   SERVING_COPY?: ServingCopies
   DIRECTORY?: Fetcher
   APPS?: Fetcher
-  // The one binding that is not a part waiting to be split out: `Files` is a
-  // second entrypoint of this same Worker (facets/kernel-worker.ts), bound
-  // here so that its local Cache API sits between the gateway and the bucket
-  // (@yaks/platform/kept, T-33197). Absent in a test run; there, and wherever
-  // Cloudflare refuses the hop, files.ts `door` reads the module in-process
-  // and nothing is cached.
+  // Release warming and older objects' reads reach the named Files
+  // entrypoint. A probe can also supply a fetcher for the files door.
   FILES?: Fetcher
+  // The same named cache, opened in the invocation that needs the bytes.
+  FILE_CACHE?: () => Promise<Stored>
   // The cached public pages behind the uncached gateway (site.ts): the apex's
   // home and gallery, and every public page an app serves. Its `purge` takes
   // pages out of its cache (@yaks/workerd/purge); the in-process stand-in has
