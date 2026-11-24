@@ -1,4 +1,7 @@
 import type { Picked } from '@yaks/platform/side-rows'
+import type { Bundle } from '@yaks/graph'
+import { heading, labeled, send } from '@yaks/platform/page-parts'
+export { heading, labeled, send }
 import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
@@ -40,7 +43,7 @@ import {
   State,
 } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
-import { fixId } from './render/app.ts'
+import { fixId } from '@yaks/platform/app-tile'
 
 import { type ComponentChildren, h } from 'preact'
 
@@ -159,39 +162,9 @@ export let billButton = (
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
 
-/** A card's head: its mark, its title, how it stands, and what acts on the
- * whole card, at the right. */
-export let heading = (
-  title: Kids,
-  at: { mark?: Kids; status?: Kids; actions?: Kids; id?: string } = {},
-) =>
-  h(
-    Card.Head,
-    null,
-    at.mark,
-    h(Card.Title, { id: at.id }, title),
-    at.status,
-    at.actions ? h(Card.Actions, null, at.actions) : null,
-  )
-
 /** How something stands, in its role's colour. */
 export let status = (word: Kids, tone?: 'positive' | 'negative') =>
   h(State, { mod: tone }, word)
-
-/** A field: its label, its control, and what explains it under both. */
-export let labeled = (
-  id: string,
-  label: Kids,
-  control: Kids,
-  hint: Kids = '',
-) =>
-  h(
-    Form.Field,
-    null,
-    h(Form.Label, { for: id }, label),
-    control,
-    hint ? h(Form.Hint, null, hint) : null,
-  )
 
 /** A value as text a script can hold: JSON, with nothing that could close
  * it. */
@@ -274,7 +247,7 @@ ${
       ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
       : ''
   }${
-    main.includes('data-friends=')
+    main.includes('data-friends-view=')
       ? `<script type="module" src="${file('_friends.js')}"></script>`
       : ''
   }${
@@ -832,6 +805,9 @@ export type DeskPage = {
   /** the apps of other people's spaces this person may open, each with the
    * slug of the space it lives in */
   shared?: (Listed & { space: string })[]
+  /** the rows a page drawn from the page graph's reads was drawn from, which
+   * it carries for its first paint (@yaks/platform/page-graph `drawnRows`) */
+  drawn?: Bundle[]
   /** every space this person may work in, this one among them */
   spaces?: Picked[]
   /** the person's own invite to yaks.app (referral.ts `invitation`) */
@@ -868,7 +844,7 @@ export let operated = (e: Plain, space: string) => {
 // What broke in an app, for its owner: each break as its line says it to their
 // assistant, how often and when last, and the one thing to do, which is to
 // ask that assistant. It is a dialog over the apps page, opened by the error
-// badge on the app's row (render/app.ts) with no script: a popover, which the
+// badge on the app's row (@yaks/platform/app-tile) with no script: a popover, which the
 // backdrop, the close button and Escape put away.
 export let fixing = (a: DeskPage['apps'][number], space: string) => {
   let errors = a.errors ?? []
@@ -1207,10 +1183,6 @@ export let soon = (what: string, env: Host = {}) =>
     lead: 'This feature is still being built.',
     status: 404,
   }, home(env))
-
-// One button that sends the form it is in.
-export let send = (label: Kids) =>
-  h(Button, { mod: 'go', type: 'submit' }, label)
 
 /** The button that begins a sign-in at `face`'s service, sending its form's
  * `do` as `act` where it names one, `quiet` where it is not the next step.

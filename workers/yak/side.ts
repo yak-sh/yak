@@ -1,6 +1,6 @@
-// What the sidebar draws, read from the directory (@yaks/platform/side-rows):
-// the spaces the person may work in, as the side's selector offers them, and
-// the apps of one of them they may open. A page asks it as it is drawn
+// What the person's own pages draw, read from the directory: the sidebar's
+// spaces and apps (@yaks/platform/side-rows), and their account and friends
+// (@yaks/platform/account-rows). A page asks it as it is drawn
 // (manage.ts `beside`), and the directory answers the same as a live read of
 // the person (graph.ts `/person/ws`), so the side the page drew and the one
 // its rows redraw agree.
@@ -15,8 +15,53 @@ import {
   spaceRows,
 } from '@yaks/platform/side-rows'
 import type { Directory, Space } from './directory.ts'
+import {
+  ACCOUNT,
+  accountRow,
+  friendRows,
+  FRIENDS,
+} from '@yaks/platform/account-rows'
+import { friendList } from './friends.ts'
 import { shelf } from './apps.ts'
+import { kernels } from '@yaks/platform/ladder'
 import type { Who } from './session.ts'
+
+// The apps of other people's spaces this person may open (T-124081): each app
+// of a space they hold a seat in and do not own, and each app they are a guest
+// of. What is in the trash opens onto nothing, so it is left out, and an app
+// of a space they own is on that space's own page.
+export let shared = async (
+  dir: Directory,
+  person: string,
+) => {
+  let [seats, granted] = await Promise.all([
+    dir.seats(person),
+    dir.granted(person),
+  ])
+  let owned = new Set(
+    seats.filter((s) => s.role == 'owner').map((s) => s.space.eid),
+  )
+  let spaces = seats.map((s) => s.space)
+    .filter((s) => !owned.has(s.eid) && !s.trashed)
+  let seated = (await dir.apps(spaces)).map((app) => ({
+    space: spaces.find((s) => s.eid == app.space)!,
+    app,
+  }))
+  // One row an app, however it was shared: a seat and a grant can both
+  // reach it.
+  let each = new Map([...seated, ...granted].map((g) => [g.app.eid, g]))
+  return [...each.values()]
+    .filter(({ space, app }) =>
+      !owned.has(space.eid) && !space.trashed && !app.trashed &&
+      !kernels(space.slug, app.slug)
+    )
+    .map(({ space, app }) => ({
+      eid: app.eid,
+      slug: app.slug,
+      title: app.title,
+      space: space.slug,
+    }))
+}
 
 // The spaces the side's selector offers: every one this person may work in,
 // the platform's own `yak` among them for its owners, as the admin's
@@ -57,9 +102,33 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
     { eid, slug, title, source, generatedIcon },
   ) => ({ eid, slug, title, source, generatedIcon }))
 
-/** The rows `line` asks of the person's side, or none for a space they hold
- * no seat in that lets them change it. */
-export let sideRows = async (
+/** The rows `line` asks of the person: their account, their friends, or the
+ * side's, none for a space they hold no seat in that lets them change it. */
+export let personRows = async (
+  dir: Directory,
+  person: string,
+  line: string,
+): Promise<Bundle[]> => {
+  if (line == ACCOUNT) {
+    let [name, email, hidden] = await Promise.all([
+      dir.nameAt(person),
+      dir.emailAt(person),
+      dir.presenceHidden(person),
+    ])
+    return [accountRow(person, {
+      name: name ?? '',
+      email: email ?? '',
+      hidden,
+    })]
+  }
+  if (line == FRIENDS) {
+    let all = await shared(dir, person)
+    return friendRows(person, await friendList(dir, person, all))
+  }
+  return await sideRows(dir, person, line)
+}
+
+let sideRows = async (
   dir: Directory,
   person: string,
   line: string,

@@ -10,38 +10,57 @@
 // Page context: `at`, the space's own address, on a page that is not there;
 // `host`, the space's own host, said before the app's path; `errors`, the
 // count of open ones its owner's dashboard shows, opened in the dialog
-// `fix-<slug>` beside the list (desk-pages.ts `library`); `icon`, the picture
+// `fix-<slug>` beside the list (workers/yak desk-pages.ts `library`); `icon`, the picture
 // to wear instead of the app's own, for a viewer the app's own would be
 // refused to (a private app, before they are in); `editor`, a menu for
 // someone who may open its data editor; `visits`, where its visits are
 // counted; `made` and `deployed`, when it was made and last deployed, and by
-// whom; `writers`, what each writer is called (stamps.ts), and `me`, the
+// whom; `writers`, what each writer is called (workers/yak stamps.ts), and `me`, the
 // person looking; and `gallery`, how it stands with the gallery, said only to
 // its owner.
 
 import { parse } from '@yaks/query'
-import { appMarkImage } from '@yaks/platform/routes'
 import type { ComponentRenderer } from '@yaks/preact'
-import { Badge, Icon, Menu, Rows, Time } from '@yaks/ui/parts'
+import { Badge } from '@yaks/ui/Badge'
+import { Icon } from '@yaks/ui/Icon'
+import { Menu } from '@yaks/ui/Menu'
+import { Rows } from '@yaks/ui/Rows'
+import { Time } from '@yaks/ui/Time'
 import { h } from 'preact'
-import type { Stamp, Writers } from '../stamps.ts'
-import { icons } from '../icons.ts'
+import type { IconNode } from 'lucide'
+// @ts-types="@yaks/ui/lucide"
+import Ellipsis from 'lucide/dist/esm/icons/ellipsis.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Globe from 'lucide/dist/esm/icons/globe.mjs'
+// @ts-types="@yaks/ui/lucide"
+import House from 'lucide/dist/esm/icons/house.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Lock from 'lucide/dist/esm/icons/lock.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Pencil from 'lucide/dist/esm/icons/pencil.mjs'
+import { appMarkImage } from './routes.ts'
+
+/** When something was written, and by whom. */
+export type Stamp = { at: string; by: string | null }
+
+/** What each writer is called, by eid. */
+export type Writers = ReadonlyMap<string, string>
 
 // Who may use an app, as a glyph and the words its tooltip says.
 let ACCESS = {
   public: [
-    icons.globe,
+    Globe,
     'Public: anyone can open it, and its members change its data',
   ],
   open: [
-    icons.pencil,
+    Pencil,
     'Open: anyone with the link can open it and change its data',
   ],
-  private: [icons.lock, 'Private: only people let in can open it'],
+  private: [Lock, 'Private: only people let in can open it'],
 } as const
 
 // A glyph that stands for a word: said to a screen reader and in a tooltip.
-let glyph = (of: (typeof icons)[keyof typeof icons], words: string) =>
+let glyph = (of: IconNode, words: string) =>
   h(
     Rows.Meta,
     { role: 'img', 'aria-label': words, 'data-tip': words },
@@ -131,7 +150,7 @@ export let app: ComponentRenderer = {
           : null,
         b.home
           ? glyph(
-            icons.house,
+            House,
             `The homepage: it opens at ${space || 'the space’s address'}`,
           )
           : null,
@@ -147,7 +166,7 @@ export let app: ComponentRenderer = {
                 'aria-label': `More for ${title}`,
                 'data-tip': 'More',
               },
-              h(Icon, { of: icons.ellipsis }),
+              h(Icon, { of: Ellipsis }),
             ),
             h(
               Menu,

@@ -439,7 +439,8 @@ import {
   type Row as DirectoryRow,
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
-import { sideLine } from '@yaks/platform/side-rows'
+import { personLine } from '@yaks/platform/person-lines'
+import { SEEN_EVERY } from '@yaks/platform/account-rows'
 import {
   isRetired,
   RECEIPTS,
@@ -2277,8 +2278,18 @@ export class Store extends Durable {
               'space_logo',
               'app_icon',
               'email',
+              // The person's account and friends (account-rows).
+              'presence',
+              'grant',
             ].some((key) => key in b)
           ),
+        // Where friends are moves with time and with writes this read does
+        // not watch: a friends answer is read again as often as an open
+        // Friends page says where it is (friends-browser `EVERY`).
+        renew: (answer) =>
+          Array.isArray(answer) && answer.some((b) => b.befriended)
+            ? Date.now() + SEEN_EVERY
+            : undefined,
         hold: (work) => this.#ctx.waitUntil?.(work),
         read: async (line, read) => {
           if (!read?.person) return []
@@ -2291,8 +2302,8 @@ export class Store extends Durable {
             apply: async (rows) => await g.apply(rows, { trusted: true }),
           })
           if (line != UPDATE_WAITING) {
-            let { sideRows } = await import('./side.ts')
-            return await sideRows(dir, read.person, line)
+            let { personRows } = await import('./side.ts')
+            return await personRows(dir, read.person, line)
           }
           let { waitingSeats } = await import('./updates.ts')
           return (await waitingSeats(dir, read.person)).map(({ bundle }) =>
@@ -2304,7 +2315,7 @@ export class Store extends Durable {
       watching = beside(
         watching,
         pending,
-        (line) => line == UPDATE_WAITING || sideLine(line),
+        personLine,
       )
     }
     let live = sockets(

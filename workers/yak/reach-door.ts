@@ -9,9 +9,10 @@
 // The person's side (@yaks/platform/side-rows) and their Updates badges are
 // reads of the person the directory answers, live on its `/person/ws`.
 //
-// One write is not rows: an Updates card's action (updates.ts `acting`) is
-// done here and answered with its receipt, the way the card's page graph
-// shows it at once and the server confirms it.
+// Some writes are not rows: an Updates card's action (updates.ts `acting`),
+// and the person's own account, messages and friend asks
+// (account-writes.ts), are done here and answered with what they came to,
+// the way the page graph shows each at once and the server confirms it.
 import { attach } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import { type Kept, watched } from '@yaks/api/reached'
@@ -24,8 +25,8 @@ import {
   watchWaiting,
 } from '@yaks/platform/update-waiting'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { sideLine } from '@yaks/platform/side-rows'
-import { sideRows } from './side.ts'
+import { personLine } from '@yaks/platform/person-lines'
+import { personRows } from './side.ts'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
@@ -43,6 +44,7 @@ import { reachWrite } from './agent.ts'
 import { vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
 import { acting, updatesApply, waitingSeats } from './updates.ts'
+import { accountApply, accountWrites } from './account-writes.ts'
 
 let TAGS = { request: 'reach door' }
 
@@ -91,8 +93,8 @@ export let reachDoor = async (
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
       let line = q.get('q') ?? ''
-      if (sideLine(line)) {
-        return Response.json(await sideRows(dir, person, line))
+      if (line != UPDATE_WAITING && personLine(line)) {
+        return Response.json(await personRows(dir, person, line))
       }
       if (line == UPDATE_WAITING) {
         let seats = await waitingSeats(dir, person)
@@ -130,6 +132,9 @@ export let reachDoor = async (
       if (acting(bundles)) {
         return await updatesApply(bundles, env, dir, person, who.until, c)
       }
+      if (accountWrites(bundles)) {
+        return Response.json(await accountApply(bundles, env, dir, person))
+      }
       let key = req.headers.get(IDEMPOTENCY)
       return Response.json(
         await reachWrite(
@@ -157,7 +162,9 @@ export let reachDoor = async (
                 { ...vouched(who), ...KERNEL },
                 '/person/ws',
               )
-            if (sideLine(line)) return personal(sink)
+            if (line != UPDATE_WAITING && personLine(line)) {
+              return personal(sink)
+            }
             if (line == UPDATE_WAITING) {
               let headers = vouched(who)
               return watchWaiting(

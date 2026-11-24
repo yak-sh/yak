@@ -10,7 +10,7 @@ import { resolve } from '@yaks/render'
 import { mount } from '../../../packages/preact/testing.ts'
 import { markup } from '../html.ts'
 import { desk } from '../desk-pages.ts'
-import { app } from './app.ts'
+import { app } from '@yaks/platform/app-tile'
 import { registry, tile, vocab } from './mod.ts'
 
 type Listed = Parameters<typeof tile>[0]

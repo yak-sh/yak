@@ -28,12 +28,11 @@ export type Drawn = { person: string; epoch: string; rows: Bundle[] }
 /** Where a page carries the rows it was drawn from. */
 export let DRAWN = 'script[data-page-graph]'
 
-/** The script carrying `rows`, which `person`'s page was drawn from. */
+/** What a page carries of the rows `person`'s page was drawn from, as the
+ * text of its `DRAWN` script: JSON with nothing that could close it. */
 export let drawnRows = (person: string, rows: Bundle[]): string =>
-  `<script type="application/json" data-page-graph>${
-    JSON.stringify({ person, epoch: crypto.randomUUID(), rows } as Drawn)
-      .replaceAll('<', '\\u003c')
-  }</script>`
+  JSON.stringify({ person, epoch: crypto.randomUUID(), rows } as Drawn)
+    .replaceAll('<', '\\u003c')
 
 // What the page in `doc` carries for `person`, if anything.
 let drawn = (person: string, doc = globalThis.document): Drawn | undefined => {

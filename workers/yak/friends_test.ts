@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
+import { FRIENDS, friendsOf } from '@yaks/platform/account-rows'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
 import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
@@ -312,14 +313,35 @@ let post = (p: typeof ann, fields: Record<string, string>, accept?: string) =>
     },
     body: new URLSearchParams(fields).toString(),
   })
-let live = async (p: typeof ann, tab = 'here') =>
-  Object.fromEntries(
-    ((await (await post(p, { tab }, 'application/json')).json()).friends as {
-      person: string
-      state?: string
-      last?: string
-    }[]).map(({ person, ...seen }) => [person, seen]),
+// The page's tab said, then where each friend is as its page graph reads
+// it through its door (@yaks/platform/account-rows `FRIENDS`).
+let door = (p: typeof ann, path: string, init: RequestInit = {}) =>
+  k.at(k.host, `${REACH}${path}`, {
+    ...init,
+    headers: {
+      cookie: p.cookie,
+      [TAB_PERSON]: p.person,
+      'content-type': 'application/json',
+    },
+  })
+let live = async (p: typeof ann, tab = 'here') => {
+  assertEquals((await post(p, { tab })).status, 204)
+  let rows = await (await door(p, `/query?q=${FRIENDS}`)).json()
+  return Object.fromEntries(
+    friendsOf(rows).map((f) => [
+      f.person,
+      f.seen ? { state: f.seen.state, last: f.seen.last } : {},
+    ]),
   )
+}
+let message = (from: typeof ann, to: typeof ann, words: string) =>
+  door(from, '/apply', {
+    method: 'POST',
+    body: JSON.stringify([{
+      entity: { eid: crypto.randomUUID() },
+      friendMessage: { to: to.person, words },
+    }]),
+  })
 
 test('the Friends page lists friends online first with a green dot, and their shared apps', async () => {
   let page = await friendsPage(eve)
@@ -327,6 +349,7 @@ test('the Friends page lists friends online first with a green dot, and their sh
   assertStringIncludes(page, 'Building now')
   assertStringIncludes(page, 'Show when I’m online')
   assertStringIncludes(page, '_friends.js')
+  assertStringIncludes(page, 'data-page-graph')
   assertEquals(page.includes(`data-friend="${ann.person}"`), false)
   await k.dir.apply({
     entities: [{
@@ -360,12 +383,13 @@ test('someone who hides their status is seen by no friend and sees none', async 
 })
 
 test('a message sent from the Friends page lands in the friend’s Updates', async () => {
-  let sent = await post(eve, { message: fay.person, say: 'Lunch?' })
-  assertEquals(sent.status, 303, await sent.text())
+  let sent = await message(eve, fay, 'Lunch?')
+  assertEquals(sent.status, 200, await sent.text())
   assertStringIncludes(
     await (await updates(fay, faySpace.slug)).text(),
     'Lunch?',
   )
-  let refused = await post(eve, { message: ann.person, say: 'Hi' })
+  let refused = await message(eve, ann, 'Hi')
+  assertEquals(refused.status, 400)
   assertStringIncludes(await refused.text(), 'friend list')
 })

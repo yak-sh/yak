@@ -17,6 +17,13 @@ import { SIDE_SPACES, sideApps, sideWords } from '@yaks/platform/side-rows'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { friendSide } from '@yaks/platform/friends'
+import {
+  ACCOUNT,
+  accountEid,
+  accountOf,
+  FRIENDS,
+  friendsOf,
+} from '@yaks/platform/account-rows'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { installPair, made, type Pair } from '../../packages/workerd/testing.ts'
@@ -74,6 +81,81 @@ test('a tab drawn for someone else, or nobody signed in, is told to sign in agai
   equal(other.status, 401)
   let nobody = await k.at(k.host, `${REACH}/query?q=.doc`)
   equal(nobody.status, 401)
+})
+
+// A write to the door as `who`'s tab: its answer and status.
+let wrote = async (who: Tab, bundles: unknown[]) => {
+  let res = await door(who, '/apply', {
+    method: 'POST',
+    body: JSON.stringify(bundles),
+  })
+  return { status: res.status, body: await res.json() }
+}
+let rowsOf = async (who: Tab, q: string) =>
+  await (await door(who, `/query?q=${encodeURIComponent(q)}`))
+    .json() as Bundle[]
+
+test('a tab reads its person’s account and friends, and a friend who says yes or leaves is on it', async () => {
+  let cy = await signIn(k)
+  let [me] = await rowsOf(ada, ACCOUNT)
+  equal(accountOf([me])?.hidden, false)
+  equal(me.entity.eid, accountEid(ada.person))
+  equal(await rowsOf(ada, FRIENDS), [])
+  let yes = { decided: { verdict: 'approved' } }
+  await k.dir.stamp({
+    entities: [
+      friendSide(ada.person, cy.person, yes),
+      friendSide(cy.person, ada.person, yes),
+    ],
+  })
+  equal(friendsOf(await rowsOf(ada, FRIENDS)).map((f) => f.person), [cy.person])
+  await k.dir.stamp({
+    entities: [{
+      entity: { eid: friendSide(cy.person, ada.person).entity.eid },
+      $delete: true,
+    }],
+  })
+  equal(await rowsOf(ada, FRIENDS), [])
+})
+
+test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {
+  let hidden = await wrote(ada, [{
+    entity: { eid: accountEid(ada.person) },
+    account: { hidden: true },
+  }])
+  equal(hidden.status, 200, JSON.stringify(hidden.body))
+  equal(accountOf(hidden.body)?.hidden, true)
+  equal(accountOf(await rowsOf(ada, ACCOUNT))?.hidden, true)
+  await wrote(ada, [{
+    entity: { eid: accountEid(ada.person) },
+    account: { hidden: false },
+  }])
+
+  let theirs = await wrote(ada, [{
+    entity: { eid: accountEid(bea.person) },
+    account: { name: 'Mallory' },
+  }])
+  equal(theirs.status, 403)
+
+  let unknown = await wrote(ada, [{
+    entity: { eid: crypto.randomUUID() },
+    friendAsk: { email: 'nobody-here@example.com' },
+  }])
+  equal(
+    unknown.status >= 400 && unknown.status < 500,
+    true,
+    JSON.stringify(unknown.body),
+  )
+
+  let stranger = await wrote(ada, [{
+    entity: { eid: crypto.randomUUID() },
+    friendMessage: { to: bea.person, words: 'Hello' },
+  }])
+  equal(
+    stranger.status >= 400 && stranger.status < 500,
+    true,
+    JSON.stringify(stranger.body),
+  )
 })
 
 test('an Updates page loads the script that takes its card actions', async () => {

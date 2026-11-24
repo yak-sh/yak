@@ -18,7 +18,7 @@ import {
   taken,
 } from './invite.ts'
 import { invitedHere, refusedSaid, shut, waiting } from './apps.ts'
-import { shared } from './manage.ts'
+import { shared } from './side.ts'
 import { markup } from './html.ts'
 import { type Offer } from './pages.ts'
 import { invited as invitationPage } from './signin-pages.ts'

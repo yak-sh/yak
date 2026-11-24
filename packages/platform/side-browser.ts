@@ -23,6 +23,9 @@ import { section, sideParts, type SideView } from './side-parts.ts'
 import { appsOf, pickedOf, SIDE_SPACES, sideApps } from './side-rows.ts'
 import { UPDATE_WAITING, waitingCounts } from './update-waiting.ts'
 
+// A selector the person holds open stays open.
+let OPEN = { keeps: (_: Element, name: string) => name == 'open' }
+
 /** The side drawn from rows: the element that says how. */
 export let SIDE = '[data-side-view]'
 
@@ -65,10 +68,11 @@ export let drawSide = (
   let parts = sideParts(view, pickedOf(rows.spaces), apps, counts)
   let whose = root.querySelector('.Sidebar_Whose')
   if (whose) {
-    // A selector the person holds open stays open.
-    let open = whose.querySelector('details[open]')
-    morph(whose, made(doc, h('div', { class: 'Sidebar_Whose' }, parts.picker)))
-    if (open?.isConnected) open.setAttribute('open', '')
+    morph(
+      whose,
+      made(doc, h('div', { class: 'Sidebar_Whose' }, parts.picker)),
+      OPEN,
+    )
   }
   if (!view.talk) return
   place(

@@ -92,10 +92,10 @@ let control = (a: Element, b: Element) => {
   }
 }
 
-let attributes = (a: Element, b: Element) => {
+let attributes = (a: Element, b: Element, o: Morphing) => {
   control(a, b)
   for (let { name } of [...a.attributes]) {
-    if (!b.hasAttribute(name)) a.removeAttribute(name)
+    if (!b.hasAttribute(name) && !o.keeps?.(a, name)) a.removeAttribute(name)
   }
   for (let { name, value } of [...b.attributes]) {
     if (a.getAttribute(name) != value) a.setAttribute(name, value)
@@ -103,8 +103,13 @@ let attributes = (a: Element, b: Element) => {
 }
 
 /** Options for `morph`: `leave` names a node of the old page that stays where
- * the new page has nothing for it (a stylesheet a script put in the head). */
-export type Morphing = { leave?: (n: Node) => boolean }
+ * the new page has nothing for it (a stylesheet a script put in the head), and
+ * `keeps` an attribute of one that stays where the new page has no word on it
+ * (a fold the person opened, redrawn from rows). */
+export type Morphing = {
+  leave?: (n: Node) => boolean
+  keeps?: (e: Element, name: string) => boolean
+}
 
 /** Make `was` the same as `next` in place, keeping every node of `was` that
  * stands in `next` (by `keyOf`, else by its kind at its place), and answer
@@ -133,7 +138,7 @@ export let morph = (
       tally.kept += size(a)
       return tally
     }
-    attributes(a, b)
+    attributes(a, b, o)
     if (a.localName == 'script') {
       if (!b.hasAttribute('src')) a.textContent = b.textContent
       tally.kept++
@@ -250,7 +255,7 @@ export let swap = (
   base: string = doc.baseURI,
 ): Tally => {
   let before = new Set(scripts(doc))
-  attributes(doc.documentElement, next.documentElement)
+  attributes(doc.documentElement, next.documentElement, {})
   let tally = morph(doc.head, next.head, { leave: leaveInHead })
   morph(doc.body, next.body, {}, tally)
   for (let s of scripts(doc)) {

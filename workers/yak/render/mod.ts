@@ -3,7 +3,7 @@
 // parts, each a row for a `Rows` list, drawn into its pages as nodes; the admin's directory rows are
 // portable renderers, drawn as markup (admin.ts).
 
-import type { Stamp, Writers } from '../stamps.ts'
+import type { Stamp, Writers } from '@yaks/platform/app-tile'
 import { render as markup } from '@yaks/html'
 import { render } from '@yaks/preact'
 import { type Bundle, type Context, define } from '@yaks/render'
@@ -11,7 +11,7 @@ import type { SpacePage } from '../pages.ts'
 import type { Person } from '../people.ts'
 import { platformVocab } from '../vocab.ts'
 import { once } from '@yaks/fp'
-import { app } from './app.ts'
+import { app } from '@yaks/platform/app-tile'
 import { directory } from './directory.ts'
 import { guest, invitation, seat } from './held.ts'
 
@@ -24,7 +24,7 @@ export let vocab = once(platformVocab)
 export let drawn = (b: Bundle, view: string, ctx: Context = {}) =>
   markup(rows, b, view, vocab(), ctx)
 
-/** What a page around a tile says about it (render/app.ts). */
+/** What a page around a tile says about it (@yaks/platform/app-tile). */
 export type Around = {
   at?: string
   host?: string

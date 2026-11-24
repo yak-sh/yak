@@ -58,7 +58,7 @@ import { monogram } from '@yaks/platform/monogram'
 import type { LogoSize } from '@yaks/platform/space-logo'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
-import { friendList, friendsOf, hidePresence } from './friends.ts'
+import { friendsOf as standingWith, hidePresence } from './friends.ts'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -104,8 +104,13 @@ import { admin, refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
-import { pickable, sideApps } from './side.ts'
-import { kernels } from '@yaks/platform/ladder'
+import { personRows, pickable, shared, sideApps } from './side.ts'
+import {
+  ACCOUNT,
+  accountOf,
+  FRIENDS,
+  friendsOf,
+} from '@yaks/platform/account-rows'
 import {
   billedDomains,
   domainOffers,
@@ -591,7 +596,7 @@ let rowsAhead = (
   if (view == 'new') return [agentsOf(at.env, person, dir)]
   if (view == 'billing') return [dir.domainOrders(walk)]
   if (view == 'people') {
-    return [dir.people(walk), dir.admits(walk), friendsOf(dir, person)]
+    return [dir.people(walk), dir.admits(walk), standingWith(dir, person)]
   }
   if (view == 'operator') {
     return [
@@ -626,43 +631,6 @@ let rowsAhead = (
 
 // Who a dashboard page is drawn for: a person signed in, who owns the space.
 type Owner = Who & { person: string }
-
-// The apps of other people's spaces this person may open (T-124081): each app
-// of a space they hold a seat in and do not own, and each app they are a guest
-// of. What is in the trash opens onto nothing, so it is left out, and an app
-// of a space they own is on that space's own page.
-export let shared = async (
-  dir: ReturnType<typeof directory>,
-  person: string,
-) => {
-  let [seats, granted] = await Promise.all([
-    dir.seats(person),
-    dir.granted(person),
-  ])
-  let owned = new Set(
-    seats.filter((s) => s.role == 'owner').map((s) => s.space.eid),
-  )
-  let spaces = seats.map((s) => s.space)
-    .filter((s) => !owned.has(s.eid) && !s.trashed)
-  let seated = (await dir.apps(spaces)).map((app) => ({
-    space: spaces.find((s) => s.eid == app.space)!,
-    app,
-  }))
-  // One row an app, however it was shared: a seat and a grant can both
-  // reach it.
-  let each = new Map([...seated, ...granted].map((g) => [g.app.eid, g]))
-  return [...each.values()]
-    .filter(({ space, app }) =>
-      !owned.has(space.eid) && !space.trashed && !app.trashed &&
-      !kernels(space.slug, app.slug)
-    )
-    .map(({ space, app }) => ({
-      eid: app.eid,
-      slug: app.slug,
-      title: app.title,
-      space: space.slug,
-    }))
-}
 
 let sentFrom = (req: Request, env: Env) => {
   let at = new URL(req.url)
@@ -884,7 +852,7 @@ let desk = async (
       ? Promise.all([
         shelved.then(({ all }) => peopleIn(dir, space, all)),
         dir.admits(walkTo(space.slug, space.eid)),
-        friendsOf(dir, owner),
+        standingWith(dir, owner),
       ])
       : undefined,
     // What this space calls out through (connections.ts), read only for the
@@ -1094,7 +1062,7 @@ let mine = async (
     provider,
     links,
     hidden,
-    friends,
+    drawn,
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
@@ -1110,11 +1078,12 @@ let mine = async (
       ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
         .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
-    view == 'profile' || view == 'friends'
-      ? dir.presenceHidden(person)
-      : undefined,
+    view == 'profile' ? dir.presenceHidden(person) : undefined,
+    // The rows a page drawn from the page graph's reads is drawn from
+    // (@yaks/platform/account-rows), carried for its first paint.
     view == 'friends'
-      ? shared(dir, person).then((all) => friendList(dir, person, all))
+      ? Promise.all([ACCOUNT, FRIENDS].map((l) => personRows(dir, person, l)))
+        .then((rows) => rows.flat())
       : undefined,
   ])
   let chosen = q.get('space') ?? inOf(req)
@@ -1126,8 +1095,9 @@ let mine = async (
     apps: [],
     name: name ?? '',
     email: email ?? '',
-    presenceHidden: hidden,
-    friendList: friends,
+    presenceHidden: drawn ? accountOf(drawn)?.hidden : hidden,
+    friendList: drawn && friendsOf(drawn),
+    drawn,
     allFriends: q.has('all'),
     agents,
     sessions,
@@ -1222,7 +1192,7 @@ let account = async (
     )
   }
   if (view == 'friends') {
-    let done = await befriending(req, env, dir, who, form)
+    let done = await befriending(env, who, form)
     if (done) return done
   }
   if (view != 'profile' && view != 'friends') return nothingHere(env)
@@ -1294,54 +1264,23 @@ let account = async (
   return answered(req, env, { say: 'Saved.' })
 }
 
-// What the Friends page posts besides "Show when I'm online": its script
-// saying the page's tab, answered with where each friend is now
-// (@yaks/platform/friends-browser); a message to a friend; a friend added by
-// their sign-in email. None for anything else.
+// The Friends page saying where the person is
+// (@yaks/platform/friends-browser `present`), which its friends see; their
+// own whereabouts come to the page through its graph. None for anything else.
 let befriending = async (
-  req: Request,
   env: Env,
-  dir: ReturnType<typeof directory>,
   who: Owner,
   form: FormData,
 ): Promise<Response | undefined> => {
-  let field = (name: string) => String(form.get(name) ?? '')
-  if (form.has('tab')) {
-    let state = field('tab')
-    let { present } = await import('./whereabouts.ts')
-    await present(env, {
-      person: who.person,
-      channel: 'apps',
-      state: state == 'here' || state == 'background' ? state : 'away',
-    })
-    let friends = await friendList(dir, who.person, [])
-    return Response.json({
-      friends: friends.map((f) => ({
-        person: f.person,
-        state: f.seen?.state,
-        last: f.seen?.last,
-      })),
-    }, { headers: { 'cache-control': 'no-store' } })
-  }
-  let { said } = form.has('message')
-    ? await pressed(env, dir, who, 'friend_message', {
-      friend: field('message'),
-      words: field('say'),
-    })
-    : form.has('email')
-    ? await pressed(env, dir, who, 'friend_add', { email: field('email') })
-    : { said: undefined }
-  if (said) {
-    return refusal(req, said, () => mine(req, env, dir, who, 'friends', said))
-  }
-  if (form.has('message')) {
-    return answered(req, env, { say: 'Sent. It is in their Updates.' })
-  }
-  if (form.has('email')) {
-    return answered(req, env, {
-      say: 'Asked. They’ll see it in their Updates.',
-    })
-  }
+  if (!form.has('tab')) return
+  let state = String(form.get('tab'))
+  let { present } = await import('./whereabouts.ts')
+  await present(env, {
+    person: who.person,
+    channel: 'apps',
+    state: state == 'here' || state == 'background' ? state : 'away',
+  })
+  return new Response(null, { status: 204 })
 }
 
 // A dashboard control is the tool the person's assistant would call, called

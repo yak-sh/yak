@@ -2,6 +2,7 @@
 // friend_list, friend_add and friend_remove, and the requests and suggestions
 // waiting on a person in their Updates. What a friendship is, and who may
 // write which side of it, is @yaks/platform/friends.
+import type { Befriended, Seen, Shared } from '@yaks/platform/account-rows'
 import { possessive } from '@yaks/text'
 import {
   type Request as FriendRequest,
@@ -25,6 +26,8 @@ import { vouched } from './session.ts'
 import { asCaller, type Ctx, EID, flag, refuse, str, text } from './tool.ts'
 import type { Update } from './operator-updates.ts'
 import type { Row as ToolRow } from './tool-words.ts'
+
+export type { Befriended, Seen, Shared }
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
@@ -62,16 +65,6 @@ export let friendsOf = async (
     order.indexOf(a.standing) - order.indexOf(b.standing) ||
     a.name.localeCompare(b.name)
   )
-}
-
-/** Where a friend is on yaks.app, as one reader may see it: building or
- * online now, with the spaces and apps they have open that the reader can
- * already open themselves, or away since they were `last` active. */
-export type Seen = {
-  state: 'building' | 'online' | 'away'
-  last?: string
-  spaces: { slug: string; title: string }[]
-  apps: { slug: string; title: string; space: string }[]
 }
 
 /** What `reader` may see of each of `friends`' presence
@@ -131,23 +124,6 @@ let presenceOf = async (
       space: space.slug,
     })),
   }
-}
-
-/** An app someone let the reader into, in the space it lives in. */
-export type Shared = {
-  eid: string
-  slug: string
-  title: string
-  space: string
-}
-
-/** A confirmed friend as their Friends page lists them: where they are,
- * and the apps in their spaces they let the reader into. */
-export type Befriended = {
-  person: string
-  name: string
-  seen?: Seen
-  shared: Shared[]
 }
 
 /** `person`'s confirmed friends for their Friends page, online first, then
