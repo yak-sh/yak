@@ -242,8 +242,13 @@ export let restart = (ctx: Restartable, reason: string): void => {
  * may say only because its code does not know what the caller's does. A 429
  * asks for a wait (a pace, an object past its rows), which no deploy changes,
  * and a restart would forget the rows that stopped the object. */
-export let refused = (answer: Response): boolean =>
-  answer.status >= 400 && answer.status < 500 && answer.status != 429
+export let refused = (answer: Response): boolean => refuses(answer.status)
+
+/** Whether an answer of status `code` refuses its caller, as `refused` judges
+ * an answer: what a refusal a socket was sent is judged by, its status the
+ * one its error's name has. */
+export let refuses = (code: number): boolean =>
+  code >= 400 && code < 500 && code != 429
 
 /** How long an object's work behind an answer waits once its caller has read
  * the answer through (`onceRead`), so the runtime has sent it on: the runtime

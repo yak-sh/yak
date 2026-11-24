@@ -314,6 +314,11 @@ export let sockets = (
       read: ReadOpts | undefined,
       writer: PeerWriter | undefined,
     ) => boolean | Promise<boolean>
+    /** Told each refusal a socket is sent, as the client reads it: an
+     * object on older code than its caller restarts on one, as it does on a
+     * refused request, since a socket's refusals come after its handshake was
+     * answered. */
+    refused?: (refusal: { error: string; message: string }) => void
     /** How a burst of watch changes is put off until its stored map is
      * written once (default: a timer of {@link SETTLE} ms, which also keeps
      * the object from hibernating before the write is made). */
@@ -594,6 +599,7 @@ export let sockets = (
     let skip = new Set(seen)
     let reopening = new Map(Object.entries(asks(ws)))
     let send: Sink = (frame) => {
+      if (frame.refused) opts.refused?.(frame.refused)
       let snapshot = reopening.has(frame.id) && reopening.get(frame.id) !== true
       if (snapshot) reopening.delete(frame.id)
       if (snapshot && skip.delete(frame.id) && !frame.reset) return

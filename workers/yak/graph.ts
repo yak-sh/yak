@@ -398,7 +398,16 @@ import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
-import { BEAT, owed, ran, refused, skewed } from './running.ts'
+import {
+  BEAT,
+  owed,
+  ran,
+  refused,
+  refuses,
+  skewed,
+  unserved,
+} from './running.ts'
+import { upgrading } from './protocol.ts'
 import { type Relocating, relocation } from './relocate.ts'
 import { answered, KERNEL, type Meta, metaOf } from './meta.ts'
 import { BINARY } from '@yaks/vocab/wire'
@@ -1024,6 +1033,10 @@ export class Store extends Durable {
   }
   #people = new Map<string, string | null>()
   #live!: Sockets
+  // The restart a socket's newer caller is owed, kept until a refusal on one
+  // of this object's sockets pays it (`#fetch`): a socket's refusals come in
+  // frames, after its handshake was answered.
+  #behind: (() => Promise<void>) | null = null
   #afar!: Reached
   // Opens this graph's raw feed to the news it owes (`#pages`).
   #feed: () => void = () => {}
@@ -2328,6 +2341,17 @@ export class Store extends Durable {
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
         deferStatic: true,
+        // A socket a newer deploy opened, refused what its code may not know
+        // yet: the object restarts onto that deploy, as for a refused request.
+        refused: (r) => {
+          let named = Object.assign(new Error(r.message), { name: r.error })
+          if (!this.#behind || !refuses(status(named))) return
+          // The restart ends this object's work in the runtime's words,
+          // which nobody waits on here; anything else is a failure.
+          this.#behind().catch((e) =>
+            unserved(e) || defect(e, { request: 'restart', store: name })
+          )
+        },
         read: (read, writer) => {
           // The reach's kernel-only directory socket opens without a writer.
           if (directory && !writer) return read ?? {}
@@ -4815,6 +4839,7 @@ export class Store extends Durable {
       this.#bind.CF_VERSION_METADATA,
       this.#ctx,
     )
+    if (restart && upgrading(request)) this.#behind = restart
     let answer = await this.#door(request, waking, woke)
     if (restart && refused(answer)) await restart()
     return answer

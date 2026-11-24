@@ -4,7 +4,8 @@
 // The restart itself is the runtime's: here `abort` throws as workerd's does,
 // with the reason as the message. The decision is `owed`, tested on a bare
 // object; each kind of object is checked once to ask it at its door.
-import { clock, test } from '@yaks/testing'
+import { clock, equal, test, until } from '@yaks/testing'
+import { installPair, made } from '../../packages/workerd/testing.ts'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
 import { evicted } from '@yaks/durable-object'
@@ -374,4 +375,41 @@ test('a projection fixed in the newer query compiler still retries across deploy
   assertEquals([sends, status, body, reports], [2, 200, [{
     comped: { until: '2026-12-01' },
   }], []])
+})
+
+// A socket's refusals come in frames, after its handshake was answered: a
+// store on an older deploy restarts on one refused on a newer caller's socket,
+// as on a refused request, and on no other (T-3072).
+test("a store on an older deploy restarts when a newer caller's socket is refused a subscription", async () => {
+  let undo = installPair()
+  try {
+    for (let [v, restarts] of [[A, 0], [B, 1]] as const) {
+      let o = object()
+      let store = older(o)
+      made.length = 0
+      let upgraded = await store.fetch(
+        new Request('http://store/person/ws', {
+          headers: {
+            ...Object.fromEntries(from(v)),
+            ...KERNEL,
+            'x-store': PLATFORM_STORE,
+            'x-yak-person': crypto.randomUUID(),
+            upgrade: 'websocket',
+          },
+        }),
+      )
+      equal(upgraded.status, 101, await upgraded.text())
+      let ws = made[0][1]
+      equal(o.restarts, [])
+      await store.webSocketMessage(
+        ws,
+        JSON.stringify({ subscribe: '.unheard_of', id: 'u' }),
+      )
+      await until(() => ws.sent.some((f) => f.refused), { label: 'refused' })
+      await until(() => o.restarts.length == restarts)
+      equal(o.restarts.length, restarts)
+    }
+  } finally {
+    undo()
+  }
 })
