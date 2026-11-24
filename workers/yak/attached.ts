@@ -8,13 +8,13 @@
 // store. A sandboxed app reaches nothing but its own store, until its page
 // token opens a store it is attached to as well: that store's `/api/`, as the
 // person who loaded the page, with their own role there (page-token.ts
-// `paged`, apps.ts). The link is read on every such request, so an app
-// detached is refused at its next one.
+// `paged`, apps.ts). Every such request checks the link and the current
+// space of both apps.
 //
 // What serves a request is here; the tool that writes the link is
 // attach-tools.ts, so a page that only serves a space never compiles the
 // tools' words (T-148886).
-import { line } from '@yaks/query'
+import { line, sub } from '@yaks/query'
 import { edgeEid } from '@yaks/edge'
 import { USES } from '@yaks/connections/identity'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -51,14 +51,21 @@ export let opens = (path: string) => DOORS.test(path)
 export let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 
+let attachment = (from: string, to: string) =>
+  line`.entity.eid=${edgeEid(from, USES, to)}&.${USES}`
+
 /** The link that attaches `from` to `to`'s store, if there is one. */
 export let held = (env: Env, from: string, to: string) =>
-  meta(env).query(line`.entity.eid=${edgeEid(from, USES, to)}&.${USES}&*`)
+  meta(env).query(line`${sub(attachment(from, to))}&*`)
 
 /** Whether an app is attached to `store`'s app: what a page token sealed for
  * another app asks before it opens this one. */
 export let reaching = (env: Env, store: App): Reaches => async (app) =>
-  app != store.eid && (await held(env, app, store.eid)).length > 0
+  app != store.eid && (await meta(env).query(
+      line`${
+        sub(attachment(app, store.eid))
+      }&.edge.from.app.space=${store.space}&.edge.to.app.space=${store.space}`,
+    )).length > 0
 
 /** The address of each store `app` is attached to, by its binding: what
  * ./api/env adds to the app's connections' sentinels. */

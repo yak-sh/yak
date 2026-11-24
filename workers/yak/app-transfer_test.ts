@@ -1,5 +1,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
+import { comp } from './attached.ts'
 import { connector, kernel, signIn, txt, unique, vocabFile } from './probe.ts'
 
 let k = await kernel()
@@ -47,6 +49,17 @@ await hers.tool('app_new', {
   access: 'private',
 })
 let app = (await k.dir.app(source, slug))!
+let caller = { space: source.slug, app: 'caller' }
+for (let name of [caller.app, 'sibling']) {
+  await his.tool('app_new', { space: source.slug, slug: name, title: name })
+}
+await his.tool('store_attach', { ...caller, store: slug })
+await his.tool('store_attach', { ...caller, store: 'sibling' })
+let callerApp = (await k.dir.app(source, caller.app))!
+let sibling = (await k.dir.app(source, 'sibling'))!
+let attachments = async () =>
+  (await k.dir.read(line`.edge.from=${callerApp.eid}&.uses`))
+    .map((row) => comp(row, 'edge').to)
 let offer = { ...original, email: recipient.email, editor: true }
 let offered = await his.answer('app_transfer', offer)
 let transfer = String(offered.value?.transfer)
@@ -58,6 +71,7 @@ let accept = (cookie: string, answer: string, at = updates) =>
   })
 
 test('an owner transfers the same private app on the named recipient’s acceptance', async () => {
+  assertStringIncludes(offered.text, 'store will be detached')
   assertEquals(
     (await his.answer('app_transfer', offer)).value?.transfer,
     transfer,
@@ -81,8 +95,18 @@ test('an owner transfers the same private app on the named recipient’s accepta
     true,
     await outsider.text(),
   )
+  await his.tool('store_attach', { ...original, store: 'sibling' })
+  let blocked = await accept(recipient.cookie, 'accept-with-editor')
+  assertEquals(blocked.status, 400, await blocked.text())
+  assertEquals((await attachments()).sort(), [app.eid, sibling.eid].sort())
+  await his.tool('store_attach', {
+    ...original,
+    store: 'sibling',
+    detach: true,
+  })
   let accepted = await accept(recipient.cookie, 'accept-with-editor')
   assertEquals(accepted.status, 303, await accepted.text())
+  assertEquals(await attachments(), [sibling.eid])
   assertEquals(
     (await accept(recipient.cookie, 'accept-with-editor')).status,
     303,

@@ -3,7 +3,40 @@
 // loaded the page, and nothing else of its space, until it is detached.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { connector, kernel, owned, signIn } from './probe.ts'
+import { reaching } from './attached.ts'
+import { stamp } from './directory.ts'
+import type { Env } from './env.ts'
+import { connector, fresh, kernel, owned, seed, signIn } from './probe.ts'
+
+let env!: Env
+let fixture = await fresh({}, (e) => env = e)
+let { cookie, eids } = await seed(fixture, [
+  { slug: 'attachment-source', apps: ['caller', 'shop'] },
+  { slug: 'attachment-target', apps: [] },
+])
+await connector(fixture, cookie).tool('store_attach', {
+  space: 'attachment-source',
+  app: 'caller',
+  store: 'shop',
+})
+
+test('attachment authorization checks the current space on both ends', async () => {
+  let caller = eids['attachment-source/caller']
+  let shop = (await fixture.dir.appAt(eids['attachment-source/shop']))!.app
+  let reaches = reaching(env, shop)
+  assertEquals(await reaches(caller), true)
+
+  await stamp(env, {
+    entities: [{
+      entity: { eid: shop.eid },
+      app: { space: eids['attachment-target'] },
+    }],
+  })
+
+  let moved = (await fixture.dir.appAt(shop.eid))!.app
+  assertEquals(await reaches(caller), false)
+  assertEquals(await reaching(env, moved)(caller), false)
+})
 
 test('a sandboxed app reaches the one store it is attached to', async () => {
   let k = await kernel()

@@ -122,9 +122,11 @@ export let transferTool: ToolRow = {
     let offer = applied.find((b) => b.app_transfer) as Transfer | undefined
     if (!offer) throw new Error('App transfer did not return its offer')
     return {
-      text: `${
-        app.title || app.slug
-      } was offered to ${email}. They can accept or decline it in their Updates.`,
+      text:
+        `${
+          app.title || app.slug
+        } was offered to ${email}. They can accept or decline it in their Updates. ` +
+        'If they accept, other apps attached to this app’s store will be detached.',
       space,
       value: { transfer: offer.entity.eid },
     }

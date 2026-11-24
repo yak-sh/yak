@@ -123,9 +123,20 @@ let changed = (
       tx.read(line`.app.space=${o.to}&!trashed&?former`),
       tx.read(line`.grant.app=${o.app}&.grant.person=${o.giver}`),
       tx.read(line`.edge.from=${o.app}&.uses`),
+      tx.read(line`.edge.to=${o.app}&.uses`),
     ]),
     (
-      [app, source, target, givers, recipients, apps, grants, connections],
+      [
+        app,
+        source,
+        target,
+        givers,
+        recipients,
+        apps,
+        grants,
+        connections,
+        attachments,
+      ],
     ): Bundle[] => {
       if (
         !live(app, 'app') || id(part(app, 'app')?.space) != o.from ||
@@ -165,7 +176,7 @@ let changed = (
         })
       ) {
         throw new Refused(
-          'Disconnect the app’s shared credentials before transferring it. Personal connections and borrowed integrations can stay.',
+          'Before transferring this app, detach any stores it uses and disconnect any shared credentials. Personal connections and borrowed integrations can stay.',
         )
       }
       let grant = grants[0]
@@ -185,6 +196,10 @@ let changed = (
           former: { slug, slugs: slug },
           ...(app?.home ? { home: null } : {}),
         },
+        ...attachments.map(({ entity: { eid } }): Bundle => ({
+          entity: { eid },
+          $delete: true,
+        })),
         ...(grant || keep
           ? [{
             entity: {
