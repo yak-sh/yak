@@ -37,10 +37,26 @@ export class Unauthorized extends Error {
   }
 }
 
+// What was thrown, as an error: a refusal another door answered, relayed as
+// it was said, is the error it names, with what else it carried.
+let errorOf = (err: unknown): Error => {
+  if (err instanceof Error) return err
+  if (
+    err && typeof err == 'object' &&
+    typeof (err as Refusal).error == 'string' &&
+    typeof (err as Refusal).message == 'string'
+  ) {
+    let { error, message, ...rest } = err as Refusal
+    return Object.assign(new Error(message), rest, { name: error })
+  }
+  return new Error(String(err))
+}
+
 /** An error as the body a client reads: its name as `error`, its message, and
- * every other field it carries. */
+ * every other field it carries. A refusal relayed from another door is said
+ * as that door said it. */
 export let refusal = (err: unknown): Refusal => {
-  let e = err instanceof Error ? err : new Error(String(err))
+  let e = errorOf(err)
   let out: Refusal = { error: e.name, message: e.message }
   for (let [k, v] of Object.entries(e)) {
     if (k != 'name' && k != 'message' && k != 'stack') out[k] = v
@@ -85,8 +101,11 @@ export let reporting = (): boolean => reporters.length > 0
 
 /** A server failure, reported with where it happened and its door's tags to
  * the host's reporter ({@link faults}), or said on the console while none is
- * installed; a refusal (below 500) is the caller's and says nothing. */
+ * installed; a refusal (below 500) is the caller's and says nothing. A
+ * refusal relayed from another door is judged and reported as the error it
+ * names. */
 export let fault = (err: unknown, where: string, tags: Tags = {}): void => {
+  if (!(err instanceof Error)) err = errorOf(err)
   if (status(err) < 500) return
   let report = reporters.at(-1) ?? said
   try {

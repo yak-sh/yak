@@ -4,7 +4,8 @@
 import { equal, test, tick } from '@yaks/testing'
 import type { Bundle, Reduced } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { beside, reached } from './reached.ts'
+import { beside, reached, watched } from './reached.ts'
+import { faults } from './refuse.ts'
 import type { Frame } from './subs.ts'
 
 let book = (eid: string) => ({ entity: { eid }, book: {} })
@@ -112,4 +113,36 @@ test('beside a graph, a borrowed line is the reach’s and the rest the graph’
     1,
     false,
   ])
+})
+
+test('a refusal relayed from the store a watch reads is said in its words, and a failure among them reported', () => {
+  let heard: [string, string][] = []
+  let off = faults((err) =>
+    void heard.push([(err as Error).name, (err as Error).message])
+  )
+  try {
+    let frames: Frame[] = []
+    let relay = watched({
+      watch: (line, sink) => {
+        sink({
+          refused: line == '.gone'
+            ? { error: 'NotFound', message: 'No such line' }
+            : { error: 'TypeError', message: 'x is not a function' },
+        })
+        return () => {}
+      },
+    })
+    relay.open((f) => void frames.push(f), 'a', '.gone')
+    relay.open((f) => void frames.push(f), 'b', '.broken')
+    equal(frames, [
+      { id: 'a', refused: { error: 'NotFound', message: 'No such line' } },
+      {
+        id: 'b',
+        refused: { error: 'TypeError', message: 'x is not a function' },
+      },
+    ])
+    equal(heard, [['TypeError', 'x is not a function']])
+  } finally {
+    off()
+  }
 })
