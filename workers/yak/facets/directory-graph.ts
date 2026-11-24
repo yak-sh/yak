@@ -393,21 +393,6 @@ let directSeat = (tx: Tx, { via, account }: Comp) => {
 
 export let plugins = (_host: unknown, options: Options): Plugin[] => [
   {
-    name: 'yak/direct-intake',
-    authorize: hook(['chat_dm'], (bundles, tx, _err, context) => {
-      if (!context?.trusted || !options.store.meta) return bundles
-      return each(bundles, [] as Bundle[], (out, row) => {
-        if (!row.chat_dm || row.$was?.chat_dm?.via !== null) {
-          return [...out, row]
-        }
-        return after(
-          admitDirect(tx, row, options.store.now(), (dm) => directSeat(tx, dm)),
-          (queued) => queued ? [...out, queued] : out,
-        )
-      })
-    }),
-  },
-  {
     name: 'yak/directory',
     requests: ['$own'],
     authorize: hook(['$own'], (bundles, tx, _err, context) => {
@@ -427,6 +412,21 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [
           )
         },
       )
+    }),
+  },
+  {
+    name: 'yak/direct-intake',
+    authorize: hook(['chat_dm'], (bundles, tx, _err, context) => {
+      if (!context?.trusted || !options.store.meta) return bundles
+      return each(bundles, [] as Bundle[], (out, row) => {
+        if (!row.chat_dm || row.$was?.chat_dm?.via !== null) {
+          return [...out, row]
+        }
+        return after(
+          admitDirect(tx, row, options.store.now(), (dm) => directSeat(tx, dm)),
+          (queued) => queued ? [...out, queued] : out,
+        )
+      })
     }),
   },
   {
