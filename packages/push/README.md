@@ -38,10 +38,10 @@ subscription. `pushRequest` builds the same request without sending it, and
 `isSubscription(value)` says whether a value a page posted is a subscription a
 message can go to.
 
-`pushAll(browsers, payload, vapid, send?)` pushes one payload to several
-browsers at once and answers which took it (`sent`), which are `gone`, and the
-first refusal of any other, which a host retries or falls back from when none
-took it.
+`pushAll(browsers, payload, vapid, send?)` pushes to several browsers at once.
+Pass one payload or a function that chooses one for each subscription. It
+answers which took it (`sent`), which are `gone`, and the first refusal of any
+other, which a host retries or falls back from when none took it.
 
 ## Notifications
 
@@ -68,12 +68,13 @@ said(notice!, 2) // the push that shows it, the installed icon counting 2
 ```
 
 `said(notice, count?)` is the push that shows a notification, cut to what one
-shows and to what a push carries. A notification with the tag of one already
-shown replaces it. `closing(tags, count?)` is the push that takes away the
+shows and to what a push carries. Browsers that support tag replacement replace
+existing notifications with the same tag. `closing(tags, count?)` takes away the
 notifications of `tags` once what they were about was read or answered.
 `quietly(endpoint)` says whether a browser may be pushed one: Safari takes back
-the subscription of a site whose push shows nothing, so Apple's push service is
-never sent a closing.
+the subscription of a site whose push shows nothing. `refreshed` packages a
+quiet fallback notification as a mutable declarative push. Safari can display it
+even if the service worker fails. Older Safari reads the same payload as JSON.
 
 ## In the browser
 
@@ -81,8 +82,13 @@ never sent a closing.
 notification and sets the installed app's icon count, takes away the
 notifications a closing names, opens a notification's `url` in a window of the
 site already open when there is one, and posts a pressed button's form, opening
-the notification instead when that fails. Every push that is not a closing shows
-a notification, even one whose words can't be read.
+the notification instead when that fails. A Safari refresh closes the handled
+notification and quietly re-shows one waiting notification with the same tag and
+content. When the inbox is empty, it closes the old notifications and shows one
+dismissal count. Fresh Safari alerts can pass a `check` URL to `said` so the
+worker can remove older handled notifications. The worker explicitly closes the
+old copy when re-showing a notification.
+[WebKit issue 258922](https://bugs.webkit.org/show_bug.cgi?id=258922)
 
 `@yaks/push/browser` is the page's half. `subscribe(key, { worker, waiting })`
 asks the browser's permission, registers the worker (`/push.js` by default) and
@@ -90,7 +96,7 @@ subscribes with the site's public key, trying again while the browser's push
 service refuses (`persist`); a reason the person can act on is `Unallowed`.
 `badge(count)` sets the installed app's icon. `tidy(handled)` asks `handled`
 which tags of the notifications this device shows were handled since and closes
-those: a device that is never pushed a closing loses them as its page is seen.
+those. A page calls it as it is seen to clear stale tagged notifications.
 
 ## Testing
 

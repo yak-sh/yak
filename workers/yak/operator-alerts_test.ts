@@ -260,16 +260,20 @@ test("a wake-up's own words reach nobody", () => {
 // handed with its own keys.
 let pushes: Record<string, number> = {}
 let heard: { at: string; request: Request }[] = [], refused: string[] = []
-let pushService = endpoints(globalThis).open((req) => {
+let receivePush = (req: Request) => {
   let at = new URL(req.url).pathname, status = pushes[at] ?? 201
   if (status == 201) heard.push({ at, request: req })
   else refused.push(at)
   return new Response(null, { status })
-})
+}
+let pushService = endpoints(globalThis).open(receivePush)
+let applePush = endpoints(globalThis).open(receivePush, 'push.apple.com')
 let [laptop, phone] = await Promise.all([
   browser(`${pushService.url}/laptop`),
-  browser(`${pushService.url}/phone`),
+  browser(`${applePush.url}/phone`),
 ])
+await updating(store, held, { seen: true })
+await service.drain()
 let chatted = async () => await (await chatPage(env, space, held, 'new')).text()
 let offerless = await operatorBody(env, space, held)
 let chatOfferless = await chatted()
@@ -306,11 +310,26 @@ let byPush = await told('Your report is ready.\nIt has three charts.', about)
 let onBoth = await opened()
 // Read in the app, it is taken away from every browser, and a device still
 // showing it hears it was handled.
+await told('Your second report is ready.')
+let third = await told('Your third report is ready.')
+let thirdPush = (await opened()).phone
 let unhandled = await page('handled', [byPush.notification])
 await updating(store, held, { open: byPush.notification })
 await service.drain()
 let closedOnBoth = await opened()
 let handled = await page('handled', [byPush.notification, eid])
+await updating(store, held, { seen: true })
+await service.drain()
+let urgency = heard.filter(({ at }) => at == '/phone')
+  .map(({ request }) => request.headers.get('urgency'))
+let allHandled = await opened()
+await page('alerts', { channel: 'text' })
+let byTextWithSafari = await told('Reach me by text.')
+await updating(store, held, { open: byTextWithSafari.notification })
+await service.drain()
+let afterText = await opened()
+take(texted)
+await page('alerts', { channel: 'push' })
 pushes['/laptop'] = 530
 let partial = await told('One push service is down.')
 let partialPush = await opened()
@@ -330,6 +349,7 @@ take(texted)
 let fellBack = await told('Every browser is gone.')
 let fallen = [take(heard), take(refused), take(texted).map((t) => t.to)]
 await pushService.stop()
+await applePush.stop()
 test('a person allows browser notifications on the Operator page, one subscription per browser', () => {
   assertEquals(offerless.includes('value="push"'), false)
   assertStringIncludes(offered, 'value="push"')
@@ -379,15 +399,38 @@ test('an alert to a person who chose push is a notification on each browser they
   assertEquals(new URL(shown.url).pathname, '/ana/updates')
   assertEquals(new URL(shown.url).hash, `#ask-${about}`)
   assertEquals(shown.tag, byPush.notification)
+  assertEquals(new URL(shown.check).search, '?handled=1')
+  assertEquals(onBoth.laptop.check, undefined)
   assertEquals(shown.count, 0)
   assertEquals(typeof (byPush.row.delivered as { at: string }).at, 'string')
 })
-test('once read in the app, its notification is taken away on every browser, and the icon counted again', () => {
+test('reading an Update silently dismisses it on desktop and shows what is still waiting on Safari', () => {
   let closing = { close: [byPush.notification], count: 0 }
-  assertEquals(closedOnBoth, { laptop: closing, phone: closing })
+  assertEquals(closedOnBoth.laptop, closing)
+  let { web_push, mutable, notification } = closedOnBoth.phone
+  assertEquals([web_push, mutable], [8030, true])
+  assertEquals([notification.title, notification.body, notification.tag], [
+    thirdPush.title,
+    thirdPush.body,
+    third.notification,
+  ])
+  assertEquals(notification.navigate, thirdPush.url)
+  assertEquals([notification.data.handled, notification.data.empty], [
+    byPush.notification,
+    false,
+  ])
   assertEquals([unhandled.said, handled.said], [{ handled: [] }, {
     handled: [byPush.notification],
   }])
+})
+test('after the last Updates are read, Safari receives a visible dismissal without urgent delivery', () => {
+  let { title, data, navigate, silent, renotify } =
+    allHandled.phone.notification
+  assertEquals([title, data.empty, data.count], ['1 dismissed', true, 0])
+  assertEquals([silent, renotify], [true, false])
+  assertEquals(new URL(navigate).pathname, '/ana/updates')
+  assertEquals(urgency, [null, null])
+  assertEquals(afterText.phone, undefined)
 })
 test('a browser that took back its subscription is dropped, and the rest still hear', () => {
   assertEquals([goneOnce, Object.keys(onPhone)], [['/laptop'], ['phone']])

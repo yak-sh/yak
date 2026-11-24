@@ -842,7 +842,7 @@ export let operatorDoc: VocabDoc = {
       created: ['opened', 'archived'],
       tries: 3,
       description:
-        'Take away the browser notifications of what the Operator told or asked a person once they read or dismissed it in the app, on every device that can be pushed it quietly (operator-alerts.ts `unalert`).',
+        'Refresh browser notifications after a person reads or dismisses an Update in the app (operator-alerts.ts `unalert`).',
     },
     operator_alert_answered: {
       effect: true,
@@ -850,7 +850,7 @@ export let operatorDoc: VocabDoc = {
       created: ['decided', 'cancelled'],
       tries: 3,
       description:
-        'Take away the browser notifications of a question the Operator asked once it is answered or withdrawn, on every device that can be pushed it quietly (operator-alerts.ts `unalert`).',
+        'Refresh browser notifications once a question the Operator asked is answered or withdrawn (operator-alerts.ts `unalert`).',
     },
     operator_decision_answer: {
       effect: true,

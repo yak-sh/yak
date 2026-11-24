@@ -32,12 +32,12 @@ let router = (host: Host): Router => {
 
 export let endpoints = (host: Host) => {
   let r = router(host)
-  let open = (handler: Handler) => {
+  let open = (handler: Handler, domain = 'probe.invalid') => {
     if (!r.routes.size && host.fetch != r.routed) {
       r.outside = host.fetch
       host.fetch = r.routed
     }
-    let url = `https://${crypto.randomUUID()}.probe.invalid`
+    let url = `https://${crypto.randomUUID()}.${domain}`
     r.routes.set(url, handler)
     return {
       url,

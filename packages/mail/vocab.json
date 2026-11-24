@@ -125,6 +125,10 @@
           "format": "date-time",
           "stamped": true,
           "description": "when it went"
+        },
+        "channel": {
+          "type": "string",
+          "description": "the delivery channel, when delivery can take more than one route"
         }
       }
     },

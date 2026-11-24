@@ -20,7 +20,7 @@ export type Button = {
 }
 
 /** What one notification shows, as a browser is pushed it. A new one with
- * the same `tag` replaces the old one instead of adding another. */
+ * the same `tag` can replace the old one on browsers that support it. */
 export type Notice = {
   title: string
   body: string
@@ -133,6 +133,16 @@ let cut = (text: string, most: number) =>
 
 let bytes = (text: string) => new TextEncoder().encode(text).length
 
+let wordsFit = (text: string, message: (body: string) => string): string => {
+  let body = cut(text, BODY)
+  let out = message(body)
+  while (bytes(out) > MOST && body) {
+    body = cut(body, Math.floor(body.length / 2))
+    out = message(body)
+  }
+  return out
+}
+
 /**
  * The push that shows `notice`, carrying how many things wait on its person
  * (`count`), which the installed app's icon shows. Its title and body are
@@ -147,22 +157,60 @@ let bytes = (text: string) => new TextEncoder().encode(text).length
  * equal(JSON.parse(said({ ...notice, body: 'x'.repeat(900) })).body.length, 400)
  * ```
  */
-export let said = (notice: Notice, count?: number | null): string => {
-  let message = (body: string) =>
+export let said = (
+  notice: Notice,
+  count?: number | null,
+  check?: string,
+): string =>
+  wordsFit(notice.body, (body) =>
     JSON.stringify({
       ...notice,
       title: cut(notice.title, TITLE),
       body,
       ...count == null ? {} : { count },
+      ...check ? { check } : {},
+    }))
+
+/** A mutable declarative push after `handled` was read or answered. Safari
+ * shows `notice` if the worker cannot replace it. A notice without a tag
+ * summarizes the dismissals when the inbox is empty. */
+export let refreshed = (
+  notice: Omit<Notice, 'tag' | 'url'> & { tag?: string; url: string },
+  handled: string,
+  empty: boolean,
+  count?: number | null,
+  check?: string,
+): string =>
+  wordsFit(notice.body, (body) => {
+    // Safari 18.4 read these two fields inside notification. Later Safari
+    // reads them at the top level, where the Push API moved them.
+    let options = {
+      mutable: true,
+      ...count == null ? {} : { app_badge: String(count) },
+    }
+    return JSON.stringify({
+      web_push: 8030,
+      ...options,
+      notification: {
+        ...options,
+        title: cut(notice.title, TITLE),
+        body,
+        tag: notice.tag,
+        icon: notice.icon,
+        silent: true,
+        renotify: false,
+        navigate: notice.url,
+        data: {
+          url: notice.url,
+          badge: notice.badge,
+          handled,
+          empty,
+          count,
+          check,
+        },
+      },
     })
-  let body = cut(notice.body, BODY)
-  let out = message(body)
-  while (bytes(out) > MOST && body) {
-    body = cut(body, Math.floor(body.length / 2))
-    out = message(body)
-  }
-  return out
-}
+  })
 
 /**
  * The push that takes away the notifications tagged `tags`, where what they
@@ -180,8 +228,8 @@ export let closing = (tags: string[], count?: number | null): string =>
 /**
  * Whether a browser may be pushed a message that shows nothing (`closing`).
  * Safari takes back the subscription of a site whose push showed no
- * notification, so Apple's push service is never sent one; Chrome and
- * Firefox take an occasional one.
+ * notification. Send it a visible replacement instead. Chrome and Firefox
+ * take an occasional silent closing.
  *
  * ```ts
  * import { equal } from '@yaks/testing'

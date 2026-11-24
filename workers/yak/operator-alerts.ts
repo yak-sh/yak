@@ -23,7 +23,7 @@ import {
   Unpushed,
   type Vapid,
 } from '@yaks/push'
-import { closing, noticeOf, quietly, said } from '@yaks/push/notice'
+import { closing, noticeOf, quietly, refreshed, said } from '@yaks/push/notice'
 import { resolve } from '@yaks/render'
 import { h } from 'preact'
 import { pushViews, type Telling } from '@yaks/platform/operator-push'
@@ -33,7 +33,7 @@ import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { alerted } from '@yaks/platform/letters'
-import { chatPath, logoPath, talkPath } from '@yaks/platform/routes'
+import { chatPath, logoPath, managePath, talkPath } from '@yaks/platform/routes'
 import {
   askAnchor,
   listsOf,
@@ -246,6 +246,9 @@ export let openAt = (conversation: string, updates: string, about?: string) =>
 
 let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 
+let checkAt = (env: Env, space: Space) =>
+  url(env, `${managePath('operator', space.slug)}?handled=1`)
+
 /** What an alert tells, read off the row it is of: a notification's words
  * to whom it names, or a decision's question to the person it is assigned
  * to (`asks`, opened at it in their Updates, where it is answered); nothing
@@ -359,10 +362,10 @@ export let alert = async (
   }
   let outcome: Bundle[]
   try {
-    let letter = await sent(env, store, dir, space, to, route, note)
-    outcome = letter ?? [{
+    let reached = await sent(env, store, dir, space, to, route, note)
+    outcome = typeof reached != 'string' ? reached : [{
       entity: row.entity,
-      delivered: { at: new Date().toISOString() },
+      delivered: { at: new Date().toISOString(), channel: reached },
     }]
   } catch (error) {
     if (error instanceof Unsent) throw error
@@ -406,21 +409,27 @@ let sent = async (
   person: string,
   route: Route,
   note: Note,
-): Promise<Bundle[] | undefined> => {
+): Promise<Bundle[] | Way> => {
   let { words, subject, id } = note
   let updates = url(env, talkPath('updates', space.slug))
   // What asks them opens at itself in their Updates, answered there.
   let answer = note.asks ? `${updates}#${updateAnchor(id)}` : undefined
   if (route.by == 'push') {
-    let open = answer ?? await replyAt(env, store, space, note.row) ??
-      openAt(url(env, chatPath(space.slug)), updates, note.about)
-    let telling = tellingOf(env, space, open)
-    let notice = noticeIn(store, note.row, telling)
-    let count = await waitingOn(env, store, person, space.eid)
+    let notice = await noticeFor(env, store, space, note.row, note)
+    let { count } = await waitingOn(env, store, person, space.eid)
     let refused: Unpushed | undefined
     try {
-      if (notice && await pushed(env, dir, route.to, said(notice, count))) {
-        return undefined
+      if (notice) {
+        let usual = said(notice, count),
+          safari = said(notice, count, checkAt(env, space))
+        if (
+          await pushed(
+            env,
+            dir,
+            route.to,
+            (b) => quietly(b.endpoint) ? usual : safari,
+          )
+        ) return route.by
       }
     } catch (error) {
       if (!(error instanceof Unpushed)) throw error
@@ -438,7 +447,7 @@ let sent = async (
     let said = subject ? `${subject}\n\n${words}` : words
     try {
       await sayDirect(env, route.to, `${said}\n\n${open}`)
-      return undefined
+      return route.by
     } catch (error) {
       if (error instanceof Unsent) throw error
       if (!(error instanceof Unreachable)) {
@@ -461,7 +470,7 @@ let sent = async (
       route.to,
       answer ? `${said}\n\nAnswer it here: ${answer}` : said,
     )
-    return undefined
+    return route.by
   }
   let { letterFor, letterRows } = await import('./operator-channels.ts')
   let [recipient, letter] = letterRows(env, space, {
@@ -476,9 +485,7 @@ let sent = async (
   return [recipient, { ...letter, operator_letter: { person } }]
 }
 
-// How many things wait on the person, as the bar beside their conversation
-// counts them, which the installed page's icon shows; null when that could
-// not be read. Never fails the alert it rides on.
+// The installed icon's count and the next unread browser notification.
 let waitingOn = async (
   env: Env,
   store: Store,
@@ -486,15 +493,18 @@ let waitingOn = async (
   space: string,
 ) => {
   try {
-    let { updatesOf } = await import('./operator-updates.ts')
+    let { alertUpdatesOf } = await import('./operator-updates.ts')
     let [listed, read] = await Promise.all([
       listsOf(env, person, space),
-      updatesOf(store, person, space),
+      alertUpdatesOf(store, person, space),
     ])
-    return needCount(listed.lists, read.updates)
+    return {
+      count: needCount(listed.lists, read.updates),
+      next: read.next,
+    }
   } catch (e) {
     caught(e, { request: 'alert count' })
-    return null
+    return {}
   }
 }
 
@@ -516,6 +526,23 @@ export let noticeIn = (store: Store, row: Bundle, telling: Telling) => {
   return view ? noticeOf(h(view.Render, { e: row, ctx: telling })) : null
 }
 
+// The same notification and tap destination for a new alert and a refresh.
+let noticeFor = async (
+  env: Env,
+  store: Store,
+  space: Space,
+  row: Bundle,
+  note: Pick<Told, 'asks' | 'about'> | null = toldOf(row),
+) => {
+  if (!note) return null
+  let updates = url(env, talkPath('updates', space.slug))
+  let open = note.asks
+    ? `${updates}#${updateAnchor(row.entity.eid)}`
+    : await replyAt(env, store, space, row) ??
+      openAt(url(env, chatPath(space.slug)), updates, note.about)
+  return noticeIn(store, row, tellingOf(env, space, open))
+}
+
 // Where a reply opens: the conversation at the words it answers, drawn
 // from just before them (updates.ts `chatAt`); none for another row.
 let replyAt = async (env: Env, store: Store, space: Space, row: Bundle) => {
@@ -530,13 +557,14 @@ let replyAt = async (env: Env, store: Store, space: Space, row: Bundle) => {
 
 /** Whether `payload` reached any of `browsers`. A browser whose
  * subscription is gone is dropped; one the push service refused is
- * retained, and when none took it the first refusal is handed back to the
- * alert for fallback or retry. */
+ * retained. Refusals come back when none took it, or when refreshing every
+ * browser, so the effect can retry. */
 export let pushed = async (
   env: Env,
   dir: Directory,
   browsers: Subscription[],
-  payload: string,
+  payload: Parameters<typeof pushAll>[1],
+  { every = false } = {},
 ) => {
   let vapid = vapidOf(env)
   if (!vapid) throw refuse('push', 'Browser notifications are not switched on.')
@@ -549,19 +577,16 @@ export let pushed = async (
       })),
     })
   }
-  if (sent.length) return true
-  if (refused) throw refused
-  return false
+  if (refused && (every || !sent.length)) throw refused
+  return sent.length > 0
 }
 
 /**
  * The `operator_alert_read` and `operator_alert_answered` effects: row `eid`,
  * a notification or question the Operator told a person, was read,
  * dismissed or answered in the app, by `person` or by whoever answered it.
- * Its notification (its `Push` view's tag) is taken away from each of their
- * browsers that can be pushed a closing quietly, and the icon's count set
- * again. Safari can't be, and an iPhone keeps it until it is opened
- * (@yaks/push/notice `quietly`). Nothing is pushed for a row never told.
+ * Its notification is taken away by tag, or by a visible replacement on
+ * Safari. The installed icon's count is refreshed on both paths.
  */
 export let unalert = async (
   env: Env,
@@ -580,18 +605,52 @@ export let unalert = async (
     by ? dir.at(by) : null,
     dir.pushes(to),
   ])
-  let quiet = browsers.filter((b) => quietly(b.endpoint)).map(subscription)
-  if (!space || !quiet.length || !vapidOf(env)) return
+  if (!space || !browsers.length || !vapidOf(env)) return
   let notice = noticeIn(store, row, tellingOf(env, space, ''))
   if (!notice) return
-  let count = await waitingOn(env, store, to, space.eid)
+  let at = String(part(row, 'created')?.at ?? '')
+  let channel = part(row, 'delivered')?.channel
+  let quiet = browsers.filter((b) => quietly(b.endpoint))
+  let safari = browsers.filter((b) =>
+    !quietly(b.endpoint) && (!b.since || b.since <= at)
+  )
+  if (safari.length && (channel ?? await dir.alerts(to)) != 'push') safari = []
+  if (!quiet.length && !safari.length) return
+  let { count, next } = await waitingOn(env, store, to, space.eid)
+  let open = url(env, talkPath('updates', space.slug))
+  let { operator, icon, badge } = tellingOf(env, space, open)
+  let close = closing([notice.tag], count)
+  let nextNotice = safari.length && next
+    ? await noticeFor(env, store, space, next)
+    : null
+  let empty = !next && count != null
+  let refresh = refreshed(
+    nextNotice?.url ? { ...nextNotice, url: nextNotice.url } : {
+      title: empty ? '1 dismissed' : `${operator}: Updates`,
+      body: '',
+      icon,
+      badge,
+      url: open,
+    },
+    notice.tag,
+    empty,
+    count,
+    checkAt(env, space),
+  )
   try {
-    await pushed(env, dir, quiet, closing([notice.tag], count))
+    await pushed(
+      env,
+      dir,
+      [...quiet, ...safari],
+      (b) => quietly(b.endpoint) ? close : refresh,
+      { every: true },
+    )
   } catch (error) {
     if (error instanceof Unpushed && error.retry) {
       throw Object.assign(refuse('push', error.message), { retry: error.retry })
     }
     if (!(error instanceof Unpushed)) throw error
+    caught(error, { request: 'dismiss operator alert' })
   }
 }
 

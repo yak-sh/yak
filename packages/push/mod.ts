@@ -284,17 +284,19 @@ export type Spread = {
   refused?: Unpushed | Error
 }
 
-/** Push `payload` to each of `browsers` at once (`push`): which took it,
+/** Push a shared or per-browser payload to `browsers` at once (`push`): which took it,
  * which are gone, and the first refusal, which a host retries or falls back
  * from when none took it. */
 export let pushAll = async (
   browsers: Subscription[],
-  payload: string,
+  payload: string | ((browser: Subscription) => string),
   vapid: Vapid,
   send?: (request: Request) => Promise<Response>,
 ): Promise<Spread> => {
   let outcomes = await Promise.allSettled(
-    browsers.map((b) => push(b, payload, vapid, send)),
+    browsers.map((b) =>
+      push(b, typeof payload == 'string' ? payload : payload(b), vapid, send)
+    ),
   )
   let were = (want: Pushed) =>
     browsers.filter((_, i) => {

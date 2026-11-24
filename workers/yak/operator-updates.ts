@@ -418,6 +418,29 @@ let keptOf = async (
 let waitingIn = (kept: { t: Thread }[]) =>
   kept.filter(({ t }) => t.unread || t.lane == 'Needs you').length
 
+/** The updates counted by the installed icon, and the newest unread alert
+ * that a Safari dismissal can re-show. */
+export let alertUpdatesOf = async (
+  store: Store,
+  person: string,
+  space: string,
+) => {
+  let { kept } = await keptOf(store, person, space, false, Date.now())
+  let waiting = kept.filter(({ t, row }) =>
+    t.unread && !!row?.delivered &&
+    (comp(row, 'delivered')?.channel ?? 'push') == 'push' &&
+    (row.decision
+      ? t.lane == 'Needs you' && comp(row, 'filed')?.assignee == person
+      : comp(row, 'notification')?.to == person)
+  ).toSorted((a, b) => b.t.at.localeCompare(a.t.at))
+  return {
+    updates: kept.slice(0, 50).map(({ t }) => ({
+      needs: t.lane == 'Needs you',
+    })),
+    next: waiting[0]?.row,
+  }
+}
+
 /** How many of a person's Updates in a space wait on them, as `updatesOf`
  * counts them, without drawing any: the Operator switcher's badge. */
 export let waitingOf = async (

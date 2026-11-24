@@ -89,8 +89,8 @@ export let badge = (count: number) => {
 
 /** Takes away this device's notifications whose thing was read or
  * answered since they came: `handled` is asked which of the tags shown are,
- * and those close. A page calls it as it is seen, which is how they leave a
- * device that is never pushed a closing (notice.ts `quietly`). */
+ * and those close. A page calls it as it is seen to clear any stale tagged
+ * notifications still on the device. */
 export let tidy = async (
   handled: (tags: string[]) => Promise<string[]>,
 ): Promise<void> => {
