@@ -1,6 +1,6 @@
 ---
 name: errors
-description: 'Errors and Rollback (yaks.app). The error codes an ./api/ endpoint refuses with and how a page shows them, the error reporter in every page and POST ./api/report, where an error is filed and how the agent is told about it once, app_errors, app_versions and app_rollback, retained trash (app_delete, space_delete, app_restore, space_restore), store_restore and file history, and feedback for anything you or the person have to say about the platform itself.'
+description: 'Errors and Rollback (yaks.app). The error codes an ./api/ endpoint refuses with and how a page shows them, microphone and camera permissions, the error reporter in every page and POST ./api/report, where an error is filed and how the agent is told about it once, app_errors, app_versions and app_rollback, retained trash (app_delete, space_delete, app_restore, space_restore), store_restore and file history, and feedback for anything you or the person have to say about the platform itself.'
 ---
 
 # Errors and Rollback
@@ -107,6 +107,42 @@ sending them through the sign-in is the only way to keep it.
 
 Better still, avoid the refusal: `me()`, called on load, reports `reads`,
 `writes` and `signIn` before anyone types.
+
+## Microphone and camera permissions
+
+Request microphone or camera access from a button. If
+`navigator.mediaDevices.getUserMedia()` rejects with `NotAllowedError`, keep the
+reply on the page. Tell the person to allow the device in their browser's site
+settings and offer a button that requests permission again without reloading.
+Permission denial is a normal outcome and needs no error report.
+
+This example uses a microphone. For a camera, request `{ video: true }` and name
+the camera in the message and button.
+
+    <p id="mic-status" role="status"></p>
+    <button id="mic" type="button">Use microphone</button>
+    <script type="module">
+      let status = document.getElementById('mic-status')
+      let button = document.getElementById('mic')
+      button.addEventListener('click', async () => {
+        button.disabled = true
+        status.textContent = 'Waiting for microphone access…'
+        let stream
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        } catch (error) {
+          if (error.name !== 'NotAllowedError') throw error
+          status.textContent = 'Open this site’s settings in your browser and set Microphone to Allow.'
+          button.textContent = 'Try microphone again'
+          return
+        } finally {
+          button.disabled = false
+        }
+        status.textContent = ''
+        button.hidden = true
+        startCapture(stream) // Hand the stream to the app's capture code.
+      })
+    </script>
 
 ## The error reporter in every page
 

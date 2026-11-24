@@ -100,6 +100,11 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    what the app is about, who uses it and its main job, and plan its colors,
    type and first screen from that, never a look that would fit any app:
    call guide with page design for how.
+   If the app uses a microphone or camera, catch a denied permission in the
+   page. Tell the person how to allow access in their browser's site settings,
+   and give them a retry button (${
+    url(env, '/docs/errors.md#microphone-and-camera-permissions')
+  }).
 3. app_preview — check the private draft before releasing it, at width: 390
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
    console messages, JavaScript errors, WCAG 2.1 AA accessibility problems

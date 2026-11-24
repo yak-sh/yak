@@ -530,11 +530,13 @@ The microphone's samples come from an `AudioWorklet`, a file of the app's own
       }
     })
 
-The page streams it, keeps what was not yet told, and opens the door again where
-it stands:
+Request the microphone using the
+[microphone and camera permissions](./errors.md#microphone-and-camera-permissions)
+flow. In the capture handler, `mic` is the granted `MediaStream`. The page
+streams it, keeps what was not yet told, and opens the door again where it
+stands:
 
     let ctx = new AudioContext()
-    let mic = await navigator.mediaDevices.getUserMedia({ audio: true })
     await ctx.audioWorklet.addModule('./pcm.js')
     let node = new AudioWorkletNode(ctx, 'pcm')
     // Connected on to the speakers, which it plays nothing to, so it runs.
