@@ -96,3 +96,4 @@ export { ANSWER_BYTES, type SavedAnswer } from './answers.ts'
 export { WriteRefused, WriteUnknown } from '@yaks/sync'
 
 export { recover, removed, type Trashed } from './vault-trash.ts'
+export { shared } from './shared.ts'

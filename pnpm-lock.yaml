@@ -4020,6 +4020,9 @@ importers:
       '@yaks/host':
         specifier: 0.2.29
         version: link:../host
+      '@yaks/inbox':
+        specifier: 0.2.30
+        version: link:../inbox
       '@yaks/lens':
         specifier: 0.2.24
         version: link:../lens

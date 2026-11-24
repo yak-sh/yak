@@ -5,9 +5,9 @@
 // DOM half of a module lives in its `-browser` file.
 import { h, hydrate, render } from 'preact'
 import { Host } from '@yaks/markdown'
-import { client } from '@yaks/client'
+import { pageGraph } from '@yaks/platform/page-graph'
 import type { Bundle } from '@yaks/graph'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
 import { docs as uxDocs } from '@yaks/ux/vocab'
 import {
   conversed,
@@ -61,20 +61,13 @@ export let parsed = (at: ParentNode): Held | null => {
 export let pageWords = (words: VocabDoc[]): VocabDoc[] =>
   words.some((d) => d.$defs?.Conversation) ? words : [...words, ...uxDocs]
 
-// Each set of words loaded once, however many conversations hold them.
-let loaded = new WeakMap<VocabDoc[], Vocab>()
-let vocabOf = (words: VocabDoc[]) => {
-  let v = loaded.get(words) ?? loadVocab(pageWords(words))
-  loaded.set(words, v)
-  return v
-}
-
 /** What the page does to its conversation. */
 export type Talking = ReturnType<typeof mountTalk>
 
 /**
- * The conversation mounted over what the server drew in `box`, its page
- * graph over the store's `words` (`_words.js`, assets.ts): a step's frame (`heard`), a reply as it is
+ * The conversation mounted over what the server drew in `box`, in the tab's
+ * page graph (@yaks/platform/page-graph), drawn for `person` and grown with
+ * the store's `words` (`_words.js`, assets.ts): a step's frame (`heard`), a reply as it is
  * written (`typed`), a whole read (`read`, the `?talk=` answer's HTML) and
  * Stop pressed (`stopped`). Where its reader is goes to `onAway`, and
  * `newest` takes them back; `older` is asked for a read of `take` lines when
@@ -88,6 +81,7 @@ export let mountTalk = (
   {
     box,
     words,
+    person,
     mentions,
     pane,
     onAway = () => {},
@@ -98,6 +92,7 @@ export let mountTalk = (
   }: {
     box: HTMLElement
     words: VocabDoc[]
+    person: string
     mentions?: string
     pane?: () => HTMLElement | null
     onAway?: (away: boolean) => void
@@ -107,11 +102,7 @@ export let mountTalk = (
     clock?: () => string
   },
 ) => {
-  let front = client(vocabOf(words), [], {
-    vault: false,
-    wireVault: false,
-    provenance: false,
-  })
+  let front = pageGraph(pageWords(words), person)
   // What the store sent, as @yaks/sync puts a server's rows in a page's graph
   // (its `replicate`), and what the page holds of its own: committed at once,
   // over a memory store.
@@ -122,6 +113,18 @@ export let mountTalk = (
       stamp: false,
     })
   let held = parsed(box)
+  // The tab's page graph may hold this conversation's own state from an
+  // earlier visit to it: the page as the server drew it now is what stands,
+  // the reader at the newest line and each fold as it was drawn.
+  put([
+    ...held
+      ? [{ entity: { eid: readerAt(held.task) }, Conversation: null }]
+      : [],
+    ...[...box.querySelectorAll('[data-disclosure]')].map((fold) => ({
+      entity: { eid: fold.getAttribute('data-disclosure')! },
+      Disclosure: fold.hasAttribute('open') ? { open: true } : null,
+    })),
+  ])
   let away = false
   let asked = 0
   let state = (task: string) =>
@@ -241,7 +244,6 @@ export let mountTalk = (
       let drawn = [...box.childNodes]
       render(null, box)
       box.replaceChildren(...drawn)
-      front.close()
     },
     /** the task the page shows, once it shows one */
     task: () => held?.task,

@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, signIn } from './probe.ts'
-import { managePath, talkPath, UPDATE_APPLY } from '@yaks/platform/routes'
+import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(
@@ -88,12 +88,12 @@ test('a suggestion friends nobody until each says yes, and becomes a request', a
   assertStringIncludes(await all.text(), 'Bea Alvarez is on yaks.app too')
   let entity = { eid: crypto.randomUUID() }
   let apply = (p: typeof cy) =>
-    k.at(k.host, UPDATE_APPLY, {
+    k.at(k.host, `${REACH}/apply`, {
       method: 'POST',
       headers: {
         cookie: p.cookie,
         'content-type': 'application/json',
-        'x-yak-inbox-person': p.person,
+        [TAB_PERSON]: p.person,
       },
       body: JSON.stringify([{
         entity,

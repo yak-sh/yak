@@ -10,25 +10,21 @@
 
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
-import { type Client, client, type ClientOpts } from '@yaks/client'
+import { type Client, client } from '@yaks/client'
 import { derivedEid } from '@yaks/graph/identity'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import doc from './front.json' with { type: 'json' }
 
 let made: Client | undefined
 
-/** Make an inbox page graph, with a host for the actions on a hosted inbox. */
-export let inboxFront = (options: ClientOpts = {}): Client =>
-  client(loadVocab([doc as VocabDoc]), [], {
+/** The inbox views' page graph, made when a view first asks for it: a server
+ * that imports the views to see what they offer never makes one. */
+export let front = (): Client =>
+  made ??= client(loadVocab([doc as VocabDoc]), [], {
     vault: false,
     wireVault: false,
     page: false,
-    ...options,
   })
-
-/** The inbox views' page graph, made when a view first asks for it: a server
- * that imports the views to see what they offer never makes one. */
-export let front = (): Client => made ??= inboxFront()
 
 /** One view's state at a stable place, read live and changed in place: a
  * thread's (`thread:<eid>`) or a person's search (`search:<eid>`). */

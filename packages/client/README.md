@@ -68,6 +68,7 @@ All exports come from `@yaks/client`:
 | Export                           | Purpose                                                                   |
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `client`                         | Assemble the graph, storage, watches, and optional synchronization.       |
+| `shared`                         | The tab's one client for a server, shared by every script on the page.    |
 | `watches`                        | Add reactive queries to an existing graph.                                |
 | `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
 | `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |

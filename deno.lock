@@ -4447,6 +4447,7 @@
             "npm:@yaks/git@0.2.30",
             "npm:@yaks/graph@0.2.33",
             "npm:@yaks/host@0.2.29",
+            "npm:@yaks/inbox@0.2.30",
             "npm:@yaks/key@0.2.24",
             "npm:@yaks/lens@0.2.24",
             "npm:@yaks/mail@0.2.23",

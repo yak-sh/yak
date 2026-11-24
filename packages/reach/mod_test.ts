@@ -1,12 +1,13 @@
 // Two graphs in memory as the members of one composition: a read spans them
 // as one bundle per eid, and a write lands each component where its word lives.
 import { whole } from '@yaks/query'
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
+import { subscriptions } from '@yaks/api'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
-import { type Member, reach } from './mod.ts'
+import { type Frame, type Member, reach } from './mod.ts'
 
 let text = { type: 'string' }
 let core: VocabDoc = {
@@ -16,11 +17,17 @@ let member = (at: string, own: VocabDoc): Member => {
   let vocab = loadVocab([core, own])
   let g = graph({ storage: ram(vocab), vocab })
   g.install()
+  let subs = subscriptions(g)
   return {
     at,
     read: async (line) => await g.read(whole(line)),
     apply: (bundles, check) => g.apply(bundles, { check }) as Promise<Bundle[]>,
     vocab: () => Promise.resolve(own),
+    watch: (line, sink) => {
+      let to = (frame: Frame) => void sink(frame)
+      void subs.open(to, 'w', line)
+      return () => void subs.drop(to)
+    },
   }
 }
 
@@ -180,4 +187,64 @@ test('a refusal names the $app a caller should send', async () => {
     'which app should doc go in? name it on the bundle, as "$app": ' +
       '"jeff/recipes" — jeff/recipes, mom/recipes',
   )
+})
+
+// A watch's frames, and the eids its latest answer holds.
+let watching = (fan: ReturnType<typeof reach>, ms: Member[], line: string) => {
+  let frames: Frame[] = []
+  let stop = fan.watch(ms, line, (f) => frames.push(f))
+  let now = () => eids(frames.at(-1)?.bundles ?? []).sort()
+  return { frames, stop, now }
+}
+
+test('a watch across members answers as the read does, and again when any member moves', async () => {
+  let { fan, both } = await setup()
+  let lent = watching(fan, both, '.book&.loan.to=Ann')
+  await until(() => lent.now().length == 1)
+  assertEquals(lent.frames.at(-1)?.bundles?.[0]._stores, {
+    book: 'me/books',
+    loan: 'me/loans',
+  })
+  await fan.written(both, undefined, [{
+    entity: { eid: 'emma' },
+    loan: { to: 'Ann' },
+  }])
+  await until(() => lent.now().length == 2)
+  assertEquals(lent.now(), ['dune', 'emma'])
+  // A move in the member keeping the other word is news too.
+  await fan.written(both, undefined, [{
+    entity: { eid: 'dune' },
+    book: { pages: 9 },
+  }])
+  await until(() =>
+    (lent.frames.at(-1)?.bundles?.[0].book as { pages?: number })?.pages == 9
+  )
+  let sent = lent.frames.length
+  lent.stop()
+  await fan.written(both, undefined, [{
+    entity: { eid: 'emma' },
+    loan: { to: 'Bo' },
+  }])
+  await new Promise((r) => setTimeout(r, 20))
+  assertEquals(lent.frames.length, sent)
+  let counted = watching(fan, both, '.book&.count')
+  await until(() => counted.frames.at(-1)?.count == 2)
+  counted.stop()
+})
+
+test('a watch of one member is its own, and a line every member refuses is refused', async () => {
+  let { fan, books, loans } = await setup()
+  let own = watching(fan, [books], '.book')
+  await until(() => own.now().length == 2)
+  await books.apply([{ entity: { eid: 'emma' }, book: null }], false)
+  await until(() => own.frames.at(-1)?.gone?.includes('emma'))
+  own.stop()
+  let no = (m: Member): Member => ({
+    ...m,
+    read: () => Promise.reject(new Error('no')),
+  })
+  let none = watching(fan, [no(books), no(loans)], '.book')
+  await until(() => none.frames.length)
+  assertEquals('refused' in none.frames[0], true)
+  none.stop()
 })

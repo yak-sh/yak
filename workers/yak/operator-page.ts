@@ -2557,7 +2557,7 @@ export let chatPage = async (
 
 let updateColumn = (space: Space, who: Who) => ({
   class: 'Talk_Column Updates',
-  'data-inbox-actions': ALL,
+  'data-inbox-actions': '',
   'data-inbox-scope': who.person,
   'data-inbox-home': space.slug,
 })
@@ -2814,6 +2814,7 @@ let taking = 0
 let talk = mountTalk({
   box,
   words,
+  person: '${who.person}',
   mentions,
   pane: () => content,
   onAway: (away) => boxed?.set({ away }),

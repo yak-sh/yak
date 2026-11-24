@@ -853,11 +853,8 @@ let commitAction = async (
   }
 }
 
-let readAction = async (req: Request) => {
-  if (req.headers.get('content-type')?.split(';')[0] != 'application/json') {
-    throw new CallError('arguments', 'Send the action as JSON.')
-  }
-  let items = await req.json()
+// The one action an Updates card sends, as its bundle.
+let readAction = (items: unknown) => {
   if (!Array.isArray(items) || items.length != 1) {
     throw new CallError('arguments', 'Send one action from an Updates card.')
   }
@@ -877,9 +874,16 @@ let readAction = async (req: Request) => {
   }
 }
 
-/** The page graph's write door. It only needs the space and the caller's seat. */
+/** Whether a batch is an Updates card's action rather than rows to keep. */
+export let acting = (bundles: unknown): boolean =>
+  Array.isArray(bundles) &&
+  bundles.some((b) => b && typeof b == 'object' && 'inboxAction' in b)
+
+/** An Updates card's action, written to the page graph's door (reach-door.ts):
+ * it is done, and answered with its receipt. It only needs the space and the
+ * caller's seat. */
 export let updatesApply = async (
-  req: Request,
+  items: unknown,
   env: Env,
   dir: Directory,
   person: string,
@@ -887,7 +891,7 @@ export let updatesApply = async (
   c: Clock,
 ): Promise<Response> => {
   try {
-    let { entity, action } = await readAction(req)
+    let { entity, action } = readAction(items)
     let { space, role, administrative } = await c.time(
       'updates_seat',
       () => dir.seat(action.space, person, true),

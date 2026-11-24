@@ -59,6 +59,10 @@ export type Member = {
   apply: (bundles: Bundle[], check: boolean) => Promise<Bundle[]>
   /** The words this member declares as its own. */
   vocab: () => Promise<VocabDoc>
+  /** Watch a line live: `sink` is sent each frame the answer moves by, in
+   * the frames @yaks/api's subscriptions speak. Returns what stops it. A
+   * member without one is read, and never heard from again. */
+  watch?: (line: string, sink: (frame: Frame) => void) => () => void
   /** A copy that takes only the writes aimed at it. */
   sandboxed?: boolean
   /** A graph other than the caller's own, such as another host: a bundle
@@ -86,6 +90,17 @@ export type Member = {
 export let homeOf = (b: Bundle): string | undefined => {
   let at = (b._stores as Record<string, unknown> | undefined)?.entity
   return typeof at == 'string' ? at : undefined
+}
+
+/** A frame of a live watch, as @yaks/api's subscriptions send one: rows
+ * (all of them with `reset`) and the eids `gone`, a reduction (`count`,
+ * `tally`, `distinct`), or the error the line was refused with. */
+export type Frame = {
+  bundles?: Bundle[]
+  gone?: string[]
+  reset?: boolean
+  refused?: unknown
+  [more: string]: unknown
 }
 
 /** The language every member shares, and how the composition reports. */
@@ -414,6 +429,11 @@ export type Routed = {
 /** The operations every set of members is asked through. */
 export type Reach = {
   read: (members: Member[], line: string, live?: boolean) => Promise<unknown>
+  watch: (
+    members: Member[],
+    line: string,
+    sink: (frame: Frame) => void,
+  ) => () => void
   composed: (members: Member[], eids: string[], ask?: Ask) => Promise<Bundle[]>
   routed: (
     members: Member[],
@@ -1083,7 +1103,81 @@ export let reach = (words: Words): Reach => {
     }
   }
 
-  return { read, composed, routed, written, spoken }
+  /** The read, live. One member and this is that member's own watch. With
+   * several, each member that speaks a word the line names watches its part
+   * of the line, and any frame one sends is news: the line is read again,
+   * whole, and its answer sent with `reset` when it moved. So a watch answers
+   * exactly what the read does, its merge, order and count included. Reads
+   * the news raises while one is out share the next. */
+  let watch = (
+    members: Member[],
+    line: string,
+    sink: (frame: Frame) => void,
+  ): () => void => {
+    let [one] = members
+    if (members.length == 1 && one.watch) return one.watch(line, sink)
+    let closed = false, reading = false, again = false
+    let said: string | undefined
+    let send = (frame: Frame, key: string) => {
+      if (closed || key == said) return
+      said = key
+      sink(frame)
+    }
+    let ask = async () => {
+      if (reading) return void (again = true)
+      reading = true
+      do {
+        again = false
+        try {
+          let out = await read(members, line, true)
+          let frame = Array.isArray(out)
+            ? { bundles: out as Bundle[], reset: true }
+            : out as Frame
+          send(frame, JSON.stringify(frame))
+        } catch (e) {
+          send({ refused: e }, `refused ${(e as Error)?.message}`)
+        }
+      } while (again && !closed)
+      reading = false
+    }
+    let stops: (() => void)[] = []
+    void ask()
+    void news(members, line).then((lines) => {
+      for (let [m, part] of lines) {
+        if (!closed) stops.push(m.watch!(part, () => void ask()))
+      }
+    }, (e) => send({ refused: e }, `refused ${(e as Error)?.message}`))
+    return () => {
+      closed = true
+      for (let stop of stops) stop()
+    }
+  }
+
+  // Who tells a watch across members that its answer may have moved, and
+  // what each watches: every member speaking a word the line names, its part
+  // of the line (a request, `?loan`, as the presence of the word), with the
+  // filters every part rides with. A line naming no word is watched whole by
+  // every member. Riders and reductions shape an answer, not which rows
+  // move it, so they stay out.
+  let news = async (
+    members: Member[],
+    line: string,
+  ): Promise<[Member, string][]> => {
+    let live = members.filter((m) => m.watch)
+    let { parts, global } = split(line)
+    let rides = global.filter((s) =>
+      ![...RIDERS, ...AGGS].includes(firstWord(s))
+    )
+    if (!parts.size) return live.map((m) => [m, rides.join('&') || '.entity'])
+    let { words } = await spoken(live)
+    return [...parts].flatMap(([name, part]) => {
+      let segs = part.asks ? [`.${name}`] : part.segs
+      let one = [...segs, ...rides].join('&')
+      return (words.get(name) ?? live).map((m) => [m, one] as [Member, string])
+    })
+  }
+
+  return { read, watch, composed, routed, written, spoken }
 }
 
 // The keys of a bundle that name no component: its address and its death.

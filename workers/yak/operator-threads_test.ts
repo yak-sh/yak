@@ -196,6 +196,7 @@ let calls: string[] = []
 let talk = mountTalk({
   box: document.querySelector('[data-conversation]') as HTMLElement,
   words: pageDocs(operatorVocab.docs),
+  person: 'ada',
   unfold: (l: string) => (calls.push(l), opening(l)),
 })
 let opened = document.querySelector(`#row-${notice} details`)!

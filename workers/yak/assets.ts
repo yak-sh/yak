@@ -58,7 +58,7 @@ export let ASSETS: Asset[] = [
   { name: '_sort.js', bundle: here('./sort.ts') },
   {
     name: '_inbox-actions.js',
-    bundle: of('@yaks/inbox/actions-browser'),
+    bundle: of('@yaks/platform/updates-browser'),
     named: true,
   },
   // The Friends page kept current (@yaks/platform/friends-browser).

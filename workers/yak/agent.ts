@@ -740,6 +740,40 @@ export let renewing =
   }
 
 /**
+ * A batch written across the caller's reach (reach.ts `written`): aimed at the
+ * app its `$app` names, kept to a space the caller chose, and each component
+ * routed to its word's home. `headers` ride beside the caller's own, such as
+ * the write's idempotency key. Answers the bundles applied, each minted alias
+ * said on its bundle.
+ */
+export let reachWrite = async (
+  ctx: Ctx,
+  reach: Reach[],
+  bundles: Bundle[],
+  check = false,
+  headers: Record<string, string> = {},
+) => {
+  let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
+  let { batch, space, where } = await aimed(ctx, asked)
+  let scope = space ? reach.filter((r) => r.space.eid == space) : reach
+  // The same `Reach` the fan-out is holding, where it holds one: reach.ts
+  // routes by identity — a word's declarers are picked out of this very
+  // list — so a second object naming the same app is not it.
+  let one = where &&
+    (scope.find((r) => r.app.eid == where.app.eid) ?? where)
+  let out = await written(
+    ctx.env,
+    one && !scope.includes(one) ? [...scope, one] : scope,
+    one,
+    batch,
+    { ...await titling(ctx.dir, ctx.person), ...headers },
+    check,
+    async () => (await defaultSpace(ctx))?.slug,
+  )
+  return aliased(out)
+}
+
+/**
  * The caller's reach as one graph: every app they can read, asked together and
  * answered as one bundle per entity, with the platform's tools on it.
  *
@@ -764,26 +798,8 @@ export let reaching = async (
     applyOptions(opts, admission)
     return fresh(() => writes(bundles, opts))
   }
-  let writes = async (bundles: Bundle[], opts?: ApplyOpts) => {
-    let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
-    let { batch, space, where } = await aimed(ctx, asked)
-    let scope = space ? reach.filter((r) => r.space.eid == space) : reach
-    // The same `Reach` the fan-out is holding, where it holds one: reach.ts
-    // routes by identity — a word's declarers are picked out of this very
-    // list — so a second object naming the same app is not it.
-    let one = where &&
-      (scope.find((r) => r.app.eid == where.app.eid) ?? where)
-    let out = await written(
-      ctx.env,
-      one && !scope.includes(one) ? [...scope, one] : scope,
-      one,
-      batch,
-      await titling(ctx.dir, ctx.person),
-      opts?.check === true,
-      async () => (await defaultSpace(ctx))?.slug,
-    )
-    return aliased(out)
-  }
+  let writes = (bundles: Bundle[], opts?: ApplyOpts) =>
+    reachWrite(ctx, reach, bundles, opts?.check === true)
   let self: Graph = {
     vocab,
     extend: () => false,

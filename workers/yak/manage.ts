@@ -75,13 +75,13 @@ import {
   managed,
   managePath,
   type ManageView,
+  REACH,
   renamed,
   signInAt,
   spaced,
   type SpaceView,
   type Talk,
   talkPath,
-  UPDATE_APPLY,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
@@ -205,13 +205,22 @@ export let manage = async (
   c: Clock = clock(),
 ): Promise<Response> => {
   let url = new URL(req.url)
+  let dirOf = () =>
+    directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+      copy: copyOf(env),
+      time: env.CLOCK,
+    })
+  // The page graph's door (reach-door.ts), as the browser's own session.
+  if (url.pathname.startsWith(`${REACH}/`)) {
+    let { reachDoor } = await import('./reach-door.ts')
+    let dir = dirOf()
+    let who = await whoIs(req, env, () => Promise.resolve(null), null, dir)
+    return reachDoor(req, env, dir, who, c)
+  }
   let at = managed(url.pathname) ?? spaced(url.pathname)
   if (!at) return nothingHere(env)
   if ('moved' in at) return moved(req, hostUrl(env, at.moved) + url.search)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
-    copy: copyOf(env),
-    time: env.CLOCK,
-  })
+  let dir = dirOf()
   let page: ReturnType<typeof dir.page> | undefined
   let ahead = (person: string) => {
     let reads = req.method == 'GET' || req.method == 'HEAD'
@@ -265,21 +274,6 @@ export let manage = async (
     : socket
     ? { person: null, until: undefined, session: undefined }
     : await whoIs(req, env, ahead, null, dir)
-  if (url.pathname == UPDATE_APPLY) {
-    if (req.method != 'POST') {
-      return new Response(null, { status: 405, headers: { allow: 'POST' } })
-    }
-    if (!person || person != req.headers.get('x-yak-inbox-person')) {
-      return Response.json(
-        { error: 'Unauthorized', message: 'Sign in again.' },
-        {
-          status: 401,
-        },
-      )
-    }
-    let { updatesApply } = await import('./updates.ts')
-    return updatesApply(req, env, dir, person, until, c)
-  }
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
   if (url.searchParams.has('settings-draft')) {

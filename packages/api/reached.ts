@@ -13,7 +13,7 @@
 import type { Bundle, ReadOpts, Reduced } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { fault, refusal, type Tags } from './refuse.ts'
-import type { Ask, Frame, Opening, Sink, Subs } from './subs.ts'
+import type { Ask, Frame, Listening, Opening, Sink, Subs } from './subs.ts'
 import type { PeerWriter } from './save.ts'
 
 /** A registry over a reach, as {@link reached} makes one. */
@@ -232,5 +232,76 @@ export let beside = (
       lent.drop(sink)
       return subs.drop(sink)
     },
+  }
+}
+
+/** A frame a kept watch sends, before it is said under a subscription's id:
+ * its `refused` is the error itself. */
+export type Kept = Omit<Frame, 'id' | 'refused'> & { refused?: unknown }
+
+/**
+ * Subscriptions whose every line is a live watch another keeps, such as a
+ * reach's (@yaks/reach `watch`): what it sends goes out under the
+ * subscription's id, and closing the subscription stops it. It answers lines
+ * only, so the raw feed is refused and relayed values go nowhere.
+ *
+ * ```ts
+ * import { watched } from '@yaks/api/reached'
+ * import { equal } from '@yaks/testing'
+ *
+ * let stopped = 0
+ * let subs = watched({
+ *   watch: (line, sink) => {
+ *     sink({ bundles: [{ entity: { eid: line } }], reset: true })
+ *     return () => stopped++
+ *   },
+ * })
+ * let frames: unknown[] = []
+ * let to = (f: unknown) => void frames.push(f)
+ * subs.open(to, 'a', 'dune')
+ * subs.drop(to)
+ * equal(frames, [{ id: 'a', bundles: [{ entity: { eid: 'dune' } }], reset: true }])
+ * equal(stopped, 1)
+ * ```
+ */
+export let watched = (opts: {
+  /** watch a line as `read` says who asks; returns what stops it */
+  watch: (
+    line: string,
+    sink: (frame: Kept) => void,
+    read?: ReadOpts,
+  ) => () => void
+  /** what a failure reported here is tagged with (./refuse.ts `fault`) */
+  tags?: Tags
+}): Listening => {
+  let held = new Map<Sink, Map<string, () => void>>()
+  let close = (sink: Sink, id: string) => {
+    held.get(sink)?.get(id)?.()
+    held.get(sink)?.delete(id)
+  }
+  return {
+    open: (sink, id, query, read) => {
+      if (query === true) throw new Error('a watch answers lines, not a feed')
+      close(sink, id)
+      let mine = held.get(sink) ?? new Map<string, () => void>()
+      held.set(sink, mine)
+      let live = true
+      let stop = opts.watch(query, (frame) => {
+        if (!live) return
+        if (!('refused' in frame)) return sink({ id, ...frame } as Frame)
+        fault(frame.refused, 'watched subscription', opts.tags)
+        sink({ id, refused: refusal(frame.refused) })
+      }, read)
+      mine.set(id, () => {
+        live = false
+        stop()
+      })
+    },
+    close,
+    drop: (sink) => {
+      for (let id of [...held.get(sink)?.keys() ?? []]) close(sink, id)
+      held.delete(sink)
+    },
+    relay: () => {},
   }
 }

@@ -10,6 +10,7 @@ import { namer } from '@yaks/session/conversation'
 import { TAKE } from '@yaks/ux/conversation'
 import { frame, talk } from './operator-view.ts'
 import { mountTalk, type Talking } from './operator-talk-browser.ts'
+import { pageGraph } from '@yaks/platform/page-graph'
 import { operatorVocab } from './operator-store.ts'
 import { pageDocs } from './operator-words.ts'
 import type { Lines } from './operator-draw.ts'
@@ -58,6 +59,7 @@ let page = (
   heard: { take?: number }[] = [],
   take?: number,
   unfold?: (line: string) => Promise<Lines | null>,
+  tab: 'new' | 'same' = 'new',
 ) => {
   let { document, Event } = parseHTML(
     `<html><body><main id="content"><div data-conversation>${
@@ -72,9 +74,12 @@ let page = (
   let box = document.querySelector('[data-conversation]') as HTMLElement
   let drawn = box.innerHTML
   let errors: string[] = []
+  // Each page its own tab unless said: what another held is not in its graph.
+  if (tab == 'new') pageGraph([], 'ada').close()
   let shown: Talking = mountTalk({
     box,
     words: docs,
+    person: 'ada',
     older: (take) => void heard.push({ take }),
     unfold,
     onError: (e) => void errors.push(e.message),
@@ -199,7 +204,7 @@ let told = entry('told', 1, {
   ask: {},
   sending: { instructions: '# Base\nBe kind.' },
 })
-let telling = (fails = 0) => {
+let telling = (fails = 0, tab: 'new' | 'same' = 'new') => {
   let all = [told, entry('said', 2, { content: { body: 'Hello' } })]
   let asked: string[] = []
   let answers: (() => void)[] = []
@@ -212,7 +217,7 @@ let telling = (fails = 0) => {
         asked.length <= fails ? fail(new Error('offline')) : done(one)
       )
     )
-  })
+  }, tab)
   let fold = () => p.box.querySelector('#row-told [data-lazy]')!
   let press = (at: Element) =>
     at.dispatchEvent(new p.Event('click', { bubbles: true, cancelable: true }))
@@ -254,6 +259,21 @@ test('a fold the server drew holding only Loading opens at once, its line fetche
   t.press()
   equal(t.shown(), { open: true, says: 'Base' })
   equal(t.asked, ['told'])
+})
+
+test('a conversation visited again in the same tab is drawn as the server drew it', async () => {
+  let first = telling()
+  first.press()
+  await first.answer()
+  equal(first.shown(), { open: true, says: 'Base' })
+  first.p.talk.close()
+  first.p[Symbol.dispose]()
+  let again = telling(0, 'same')
+  using _p = again.p
+  equal(again.shown(), { open: false, says: 'Loading…' })
+  again.press()
+  await again.answer()
+  equal(again.shown(), { open: true, says: 'Base' })
 })
 
 test('a fold whose line could not be fetched says so, and its retry opens it', async () => {

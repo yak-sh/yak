@@ -13,7 +13,7 @@ import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
 import { type Door, IDEMPOTENCY } from '@yaks/durable-object/door'
 import { durable, INTENT } from '@yaks/api/log'
-import { misfit, Refused } from '@yaks/graph/errors'
+import { misfit, Refused, status } from '@yaks/graph/errors'
 import {
   type App,
   appStore,
@@ -41,7 +41,12 @@ import {
 } from './vocab.ts'
 import { once } from '@yaks/fp'
 import { type Asked, bareLine, type Line } from '@yaks/query'
-import { type Ask, type Member, reach as composition } from '@yaks/reach'
+import {
+  type Ask,
+  type Frame,
+  type Member,
+  reach as composition,
+} from '@yaks/reach'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
 import { caught } from './defects.ts'
@@ -199,6 +204,11 @@ let memberOf = (
       ? listed(bundles as Row[], said ?? asked) as Bundle[]
       : bundles
   },
+  watch: (line, sink) =>
+    watching(doorAt(env, r), at(r), line, sink, {
+      ...vouched(r.who),
+      ...r.headers,
+    }),
   apply: (entities, check) => {
     if (!edits(mode(r.app.access), r.who.role)) {
       throw refuse('access', `not a writer of ${at(r)}`)
@@ -230,6 +240,75 @@ let memberOf = (
   },
 })
 
+// A socket as the runtime hands a Worker one: accepted before it is used.
+type Wire = {
+  accept: () => void
+  send: (text: string) => void
+  close: (code?: number) => void
+  addEventListener: (
+    type: 'message' | 'close' | 'error',
+    fn: (e: { data?: unknown }) => void,
+  ) => void
+}
+
+// How long a store's socket that closed waits before it opens again, at most.
+let MOST = 30_000
+
+// One line watched on one store's own socket (graph.ts `/ws`), as the
+// caller: each frame it sends, its id taken off. A socket that drops (a
+// deploy, an evicted object) opens again, after a wait that doubles to
+// `MOST`, and its first answer is said with `reset`, since what left while it
+// was away is said no other way. One the store refuses to open is said as the
+// store's refusal and left closed; one that failed is tried again.
+let watching = (
+  door: Door,
+  at: string,
+  line: string,
+  sink: (frame: Frame) => void,
+  headers: Record<string, string>,
+): () => void => {
+  let closed = false, wire: Wire | undefined, wait = 250, again = false
+  let open = async () => {
+    let res = await door('/ws', { headers: { upgrade: 'websocket' } }, headers)
+    let ws = (res as Response & { webSocket?: Wire }).webSocket
+    if (!ws) throw rejected(res.status, `${at}: ${await told(res)}`)
+    if (closed) return ws.close()
+    ws.accept()
+    wire = ws
+    let first = again
+    ws.addEventListener('message', (e) => {
+      if (closed || wire != ws) return
+      let { id: _, ...frame } = JSON.parse(String(e.data)) as Frame
+      if (first && frame.bundles) frame.reset = true
+      if (frame.bundles) first = false
+      wait = 250
+      sink(frame)
+    })
+    ws.addEventListener('close', () => wire == ws && retry())
+    ws.send(JSON.stringify({ subscribe: line, id: 'w' }))
+  }
+  let retry = () => {
+    if (closed) return
+    wire = undefined
+    again = true
+    setTimeout(start, wait)
+    wait = Math.min(wait * 2, MOST)
+  }
+  let start = () => {
+    if (closed) return
+    open().catch((e) => {
+      sink({ refused: e })
+      if (status(e) >= 500) retry()
+    })
+  }
+  start()
+  return () => {
+    closed = true
+    wire?.close(1000)
+    wire = undefined
+  }
+}
+
 // The reach as members, ranked as a space's homes are (directory.ts `ranked`),
 // and the one named among them: routing goes by identity, so a named store
 // already in reach is that very member.
@@ -255,6 +334,15 @@ export let read = <Q extends string>(
   live = false,
 ): Promise<unknown> =>
   fan().read(membersOf(env, reach).members, line as Line, live)
+
+/** The read, live (@yaks/reach `watch`): `sink` is sent each frame its
+ * answer moves by, until what it returns is called. */
+export let watch = (
+  env: Env,
+  reach: Reach[],
+  line: string,
+  sink: (frame: Frame) => void,
+): () => void => fan().watch(membersOf(env, reach).members, line, sink)
 
 /** These eids, whole, out of every store that holds a piece of one. */
 export let composed = (

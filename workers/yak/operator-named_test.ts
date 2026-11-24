@@ -52,7 +52,11 @@ test('and so does the page, drawing those lines from their entries', () => {
   })
   try {
     let box = document.querySelector('[data-conversation]') as HTMLElement
-    let talk = mountTalk({ box, words: pageDocs(operatorVocab.docs) })
+    let talk = mountTalk({
+      box,
+      words: pageDocs(operatorVocab.docs),
+      person: 'ada',
+    })
     talk.heard({ task: session, lines: page.lines()! })
     equal(words(box.innerHTML), said)
   } finally {

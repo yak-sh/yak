@@ -1,5 +1,4 @@
 import type { Client } from '@yaks/client'
-import { leaving, PAGE } from '@yaks/ui/navigate'
 import {
   type ActionKind,
   actionLabel,
@@ -7,7 +6,11 @@ import {
   type InboxAction,
   type InboxReceipt,
 } from './actions.ts'
-import { inboxFront } from './front.ts'
+import front from './front.json' with { type: 'json' }
+import type { VocabDoc } from '@yaks/vocab'
+
+/** The words a page graph speaks to take an inbox's card actions. */
+export let actionWords: VocabDoc[] = [front as VocabDoc]
 
 let FORM = 'form[data-inbox-action]'
 let CARD = '[data-inbox-card]'
@@ -108,35 +111,3 @@ export let bindActions = (
     void send().catch((error) => globalThis.reportError?.(error))
   }, { signal: lifetime })
 }
-
-/** Follow the navigator's pages. Pending writes survive a swap. */
-let startActions = (doc: Document = document) => {
-  let fronts = new Map<string, Client>()
-  let bind = (root: HTMLElement) => {
-    let url = new URL(root.dataset.inboxActions!, doc.baseURI).href
-    let person = root.dataset.inboxScope!
-    let scope = `inbox-actions:${url}:${person}`
-    if (!fronts.has(scope)) {
-      fronts.set(
-        scope,
-        inboxFront({
-          url,
-          headers: { 'x-yak-inbox-person': person },
-          outboxScope: scope,
-        }),
-      )
-    }
-    bindActions(root, fronts.get(scope)!, leaving(doc))
-  }
-  let page = () => {
-    for (
-      let root of doc.querySelectorAll<HTMLElement>('[data-inbox-actions]')
-    ) {
-      bind(root)
-    }
-  }
-  page()
-  doc.addEventListener(PAGE, page)
-}
-
-if (typeof document != 'undefined') startActions()
