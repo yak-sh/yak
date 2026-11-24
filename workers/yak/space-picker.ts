@@ -1,10 +1,9 @@
 import { Identity } from '@yaks/ui/parts'
 // The space picker shared by the dashboard and Operator sidebar.
 import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
 import { Badge, Icon, Menu } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
-import { type Picked, run } from './pages.ts'
+import type { Picked } from './pages.ts'
 let named = (s: Picked) => s.title || s.slug
 let glyph = (name: 'chevrons-up-down' | 'plus' | 'check') =>
   h(Icon, { of: icons[name] })
@@ -28,29 +27,9 @@ export let spaceTile = (s: Picked, mod?: string) =>
     )
 
 /** How many of the person's Updates wait on them in the space `slug`, or in
- * all their spaces where it is empty: drawn hidden, and filled once the page
- * has asked every space's Operator (`acrossScript`), so no page waits on
- * them all. */
+ * all their spaces where it is empty. The tab's page graph fills it. */
 export let acrossBadge = (slug: string, cls?: string) =>
   h(Badge, { class: cls, hidden: true, 'data-across': slug })
-
-/** The script filling every `acrossBadge` on a page from `from`
- * (`/updates?waiting`): how many wait on the person in each space, by
- * slug, and their sum where a badge names none. */
-export let acrossScript = (from: string) =>
-  renderToString(run(`
-fetch(${
-    JSON.stringify(from)
-  }, { headers: { accept: 'application/json' }, signal }).then((r) => r.ok ? r.json() : null).catch(() => null).then((got) => {
-if (got && !signal.aborted) {
-  let total = Object.values(got).reduce((n, m) => n + m, 0)
-  for (let badge of document.querySelectorAll('[data-across]')) {
-    let n = badge.dataset.across ? got[badge.dataset.across] ?? 0 : total
-    badge.textContent = n
-    badge.hidden = !n
-  }
-}
-})`))
 
 // The space selector over `all`, holding `here`: each space opens at `to`,
 // `make` follows the list, and `about` leads the line under each space's name

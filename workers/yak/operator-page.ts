@@ -149,7 +149,6 @@ import {
   visitsOf,
 } from './updates.ts'
 import { friendsHere } from './friends.ts'
-import { acrossScript } from './space-picker.ts'
 import {
   answered,
   type Listed,
@@ -2209,9 +2208,7 @@ let talkPage = (
     })) + (page.script ?? '') +
       (listed ? '' : lateScript(
         `${at}?${new URLSearchParams({ lists: '1', back: page.here })}`,
-      )) +
-      // The Operator switcher's counts, once every space's Operator answers.
-      ((beside.spaces?.length ?? 0) > 1 ? acrossScript(`${ALL}?waiting`) : ''),
+      )),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
     FRAMED,
     installable(space),

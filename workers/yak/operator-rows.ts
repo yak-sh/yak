@@ -4,6 +4,7 @@
 // the page the script puts in place.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
+import '@yaks/platform/updates-browser'
 import {
   Aside,
   Glance,

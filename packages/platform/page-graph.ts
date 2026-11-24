@@ -15,8 +15,8 @@ import type { VocabDoc } from '@yaks/vocab'
  * can be named `account` (./names.ts), so it is no space's page. */
 export let REACH = '/manage/account/reach'
 
-/** The header a tab's writes say whom it was drawn for: a tab drawn for one
- * person writes nothing once the browser is signed in as another. */
+/** The header on writes and the query parameter on socket upgrades identifying
+ * the person the tab was drawn for. The door compares it with the session. */
 export let TAB_PERSON = 'x-yak-tab-person'
 
 /** The tab's page graph, drawn for `person`, declaring at least `words`. */
@@ -29,6 +29,11 @@ export let pageGraph = (words: VocabDoc[], person: string): Client =>
       wireVault: false,
       page: false,
       headers: { [TAB_PERSON]: person },
+      connect: (url) => {
+        let socket = new URL(url)
+        socket.searchParams.set(TAB_PERSON, person)
+        return new WebSocket(socket)
+      },
       outboxScope: `${REACH}:${person}`,
     },
   )

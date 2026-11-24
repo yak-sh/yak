@@ -5,7 +5,15 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, seed, signIn, unique } from './probe.ts'
-import { ADMIN, chatPath, managePath, talkPath } from '@yaks/platform/routes'
+import {
+  ADMIN,
+  chatPath,
+  managePath,
+  REACH,
+  talkPath,
+} from '@yaks/platform/routes'
+import { UPDATE_WAITING, waitingCounts } from '@yaks/platform/update-waiting'
+import type { Bundle } from '@yaks/graph'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
@@ -113,9 +121,14 @@ let across = async () => {
       redirect: 'manual',
       headers: { cookie: other.cookie, accept, ...more },
     })
-  let waiting = async () =>
-    await (await get(`${talkPath('updates')}?waiting`, 'application/json'))
-      .json() as Record<string, number>
+  let waiting = async () => {
+    let res = await get(
+      `${REACH}/query?q=${encodeURIComponent(UPDATE_WAITING)}`,
+      'application/json',
+    )
+    assertEquals(res.status, 200)
+    return Object.fromEntries(waitingCounts(await res.json() as Bundle[]))
+  }
   // What the space's own Updates badge says, beside its chat.
   let badge = async (space: Space) => {
     let d = parseHTML(await (await get(chatPath(space.slug))).text()).document
@@ -154,6 +167,9 @@ test('every space’s Updates in one place: labelled, counted from each space’
   assertEquals(counted[club.slug] >= 1 && counted[own.slug] >= 1, true)
   assertEquals(counted[club.slug], await badge(club))
   assertEquals(counted[own.slug], await badge(own))
+  let retired = await get(`${talkPath('updates')}?waiting`, 'application/json')
+  assertEquals(retired.status, 410)
+  assertEquals(await waiting(), counted)
   let ahead = await get(talkPath('updates'), 'text/html', {
     [AHEAD]: 'prefetch',
   })
@@ -190,7 +206,8 @@ test('All updates sits above the space picker and opens with that space still se
   let badges = [...picker.querySelectorAll('[data-across]')]
     .map((b) => b.getAttribute('data-across'))
   assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
-  assertEquals(page.includes(`${talkPath('updates')}?waiting`), true)
+  assert(page.includes('_inbox-actions'))
+  assert(group.closest('[data-update-badges]'))
   let all = group.previousElementSibling?.querySelector('a')
   assert(all?.querySelector('[data-across=""]'))
   let current = group.querySelector('[aria-current="page"]')

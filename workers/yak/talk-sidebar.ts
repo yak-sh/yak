@@ -56,6 +56,7 @@ export let talkSide = (
     base: url(env),
     home: chatPath(space.slug),
     label: 'Menu',
+    badgePerson: spaces.length > 1 ? who.person : null,
     fold: { collapsed: !!beside.panes?.collapsed, back: at.here },
     personal: spaces.length > 1
       ? {

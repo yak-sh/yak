@@ -448,8 +448,23 @@ export let waitingOf = async (
   person: string,
   space: string,
   now = Date.now(),
-): Promise<number> =>
-  waitingIn((await keptOf(store, person, space, false, now)).kept)
+): Promise<number> => (await waitingUntil(store, person, space, now)).count
+
+/** The count and the next approval expiry that can move it. */
+export let waitingUntil = async (
+  store: Store,
+  person: string,
+  space: string,
+  now: number,
+) => {
+  let { kept } = await keptOf(store, person, space, false, now)
+  let expires = kept.reduce((next, { row, t }) => {
+    if (row?.decided || (!t.unread && t.lane != 'Needs you')) return next
+    let at = Date.parse(String(comp(row, 'operator_approval')?.expires))
+    return Number.isFinite(at) ? Math.min(next, at + 1) : next
+  }, Infinity)
+  return { count: waitingIn(kept), expires }
+}
 
 // One of the person's Updates, dismissed or not, or a refusal: nobody acts
 // on another's.

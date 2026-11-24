@@ -3,7 +3,8 @@
 // what is theirs or nobody's, and writes only their drafts, the archive
 // marks on their own lines and the walkthrough marks on their own
 // conversations. A socket stands by its person's seat as it is now.
-import { equal, test, until } from '@yaks/testing'
+import { clock, equal, test, until } from '@yaks/testing'
+import { UPDATE_WAITING, waitingFrom } from '@yaks/platform/update-waiting'
 import type { Level } from '@yaks/member'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -103,7 +104,11 @@ test('a person marks their own conversation a walkthrough, and nobody else’s',
 
 // A hibernatable socket as the runtime hands one over, subscribed to `q`:
 // the frames it was sent, and its attachment.
-let socket = async (who: Asker, q = '.entry&?content') => {
+let socket = async (
+  who: Asker,
+  q = '.entry&?content',
+  host = door,
+) => {
   let sent: Record<string, unknown>[] = []
   let held: unknown = null
   let ws: Wire = {
@@ -118,16 +123,52 @@ let socket = async (who: Asker, q = '.entry&?content') => {
     return { 0: {}, 1: ws }
   }
   try {
-    await ask(who, '/ws', { headers: { upgrade: 'websocket' } })
+    await host.answer(
+      new Request('https://builder/api/ws', {
+        headers: { upgrade: 'websocket' },
+      }),
+      who,
+    )
   } finally {
     delete factory.WebSocketPair
   }
   let subscribe = (q: string, id = q) =>
-    door.message(ws, JSON.stringify({ subscribe: q, id }))
+    host.message(ws, JSON.stringify({ subscribe: q, id }))
   await subscribe(q, 'lines')
   await until(() => sent.length > 0)
   return Object.assign(sent, { ws, subscribe })
 }
+
+test('an expired approval leaves a live Updates count without another write', async () => {
+  let time = clock(Date.now())
+  let store = operatorMemory()
+  await store.g.apply([
+    { entity: { eid: id() }, session: {}, operator_session: ada },
+    {
+      entity: { eid: id() },
+      task: {},
+      decision: { question: 'Send the invitation?' },
+      filed: { project: space, assignee: ada.person },
+      operator_approval: { expires: new Date(time.now() + 5).toISOString() },
+    },
+  ], { trusted: true })
+  let host = operatorApi(store, state(), {
+    seat: () => Promise.resolve('owner'),
+    clock: time,
+  })
+  let seen = await socket(ada, UPDATE_WAITING, host)
+  try {
+    let counts = () =>
+      seen.flatMap((f) => (f.bundles as Bundle[] ?? []).map(waitingFrom))
+        .map(({ count }) => count)
+    equal(counts(), [1])
+    await time.advance(6)
+    await until(() => seen.length == 2)
+    equal(counts(), [1, 0])
+  } finally {
+    await host.close(seen.ws)
+  }
+})
 
 test('a socket hears its person’s lines, and a reply as it is written, and nobody else’s', async () => {
   let [heard, overheard] = [await socket(ada), await socket(bea)]

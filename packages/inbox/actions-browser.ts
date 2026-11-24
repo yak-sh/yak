@@ -49,9 +49,6 @@ let less = (badge: HTMLElement) => {
 
 let answered = (root: HTMLElement, slug: string) => {
   let doc = root.ownerDocument
-  for (let badge of doc.querySelectorAll<HTMLElement>('[data-across]')) {
-    if (!badge.dataset.across || badge.dataset.across == slug) less(badge)
-  }
   if (root.dataset.inboxHome != slug) return
   for (let badge of doc.querySelectorAll<HTMLElement>('[data-waiting]')) {
     less(badge)

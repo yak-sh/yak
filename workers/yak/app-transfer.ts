@@ -139,11 +139,10 @@ let offers = (dir: Directory, space: Space, who: Who) =>
   )
 
 let appUpdates = async (
-  env: Env,
+  dir: Directory,
   space: Space,
   who: Who,
 ): Promise<Update[]> => {
-  let dir = open(env)
   let items = (await offers(dir, space, who) as unknown as Row[])
     .sort((a, b) => (b.created?.at ?? '').localeCompare(a.created?.at ?? ''))
     .slice(0, 40)
@@ -218,10 +217,10 @@ let domainUpdates = async (
   }))).filter((row) => row != null)
 }
 
-export let transferUpdates = async (env: Env, space: Space, who: Who) =>
+export let transferUpdates = async (dir: Directory, space: Space, who: Who) =>
   (await Promise.all([
-    appUpdates(env, space, who),
-    domainUpdates(open(env), space, who),
+    appUpdates(dir, space, who),
+    domainUpdates(dir, space, who),
   ])).flat()
 
 export let answerTransfer = async (

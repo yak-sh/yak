@@ -14,21 +14,30 @@ import type { Bundle } from '@yaks/graph'
 import { watched } from '@yaks/api/reached'
 import { refusal } from '@yaks/api/refuse'
 import { status } from '@yaks/graph/errors'
-import { IDEMPOTENCY } from '@yaks/durable-object/door'
+import { doorOf, IDEMPOTENCY } from '@yaks/durable-object/door'
+import {
+  UPDATE_WAITING,
+  waitingFrom,
+  watchWaiting,
+} from '@yaks/platform/update-waiting'
+import { PLATFORM_STORE } from '@yaks/platform/names'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { workerUpgrade } from '@yaks/workerd'
 import { inReach } from './declared.ts'
+import { builderOf, operatorDoor, SPACE } from './build-door.ts'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
+import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { upgrading } from './protocol.ts'
-import { type Reach, read, watch } from './reach.ts'
+import { KERNEL, meta } from './meta.ts'
+import { type Reach, read, watch, watching } from './reach.ts'
 import { reachWrite } from './agent.ts'
-import type { Who } from './session.ts'
+import { vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
-import { acting, updatesApply } from './updates.ts'
+import { acting, updatesApply, waitingSeats } from './updates.ts'
 
 let TAGS = { request: 'reach door' }
 
@@ -56,10 +65,11 @@ export let reachDoor = async (
   who: Who,
   c: Clock,
 ): Promise<Response> => {
-  let door = new URL(req.url).pathname.slice(REACH.length)
+  let url = new URL(req.url)
+  let door = url.pathname.slice(REACH.length)
   let { person } = who
   // A tab drawn for someone else than the browser is now signed in as.
-  let tab = req.headers.get(TAB_PERSON)
+  let tab = req.headers.get(TAB_PERSON) ?? url.searchParams.get(TAB_PERSON)
   if (!person || (tab && tab != person)) {
     return Response.json(
       { error: 'Unauthorized', message: 'Sign in again.' },
@@ -75,6 +85,28 @@ export let reachDoor = async (
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
+      if (q.get('q') == UPDATE_WAITING) {
+        let seats = await waitingSeats(dir, person)
+        let rows = await Promise.all(
+          seats.map(async ({ space, role, bundle }) => {
+            try {
+              let answer = await operatorDoor(
+                env,
+                space,
+                { ...who, role },
+                'updates',
+                { count: true },
+              ) as { waiting: number }
+              waitingFrom(bundle).count += answer.waiting
+              return [bundle]
+            } catch (e) {
+              caught(e, { request: 'Updates count', space: space.slug })
+              return []
+            }
+          }),
+        )
+        return Response.json(rows.flat())
+      }
       return Response.json(
         await read(
           env,
@@ -101,13 +133,51 @@ export let reachDoor = async (
       )
     }
     if (door == '/ws' && upgrading(req)) {
-      // The stores in reach as the socket opened: a space joined later is
-      // watched once the page's socket opens again.
-      let stores = await reach()
+      let stores: Promise<Reach[]> | undefined
       let { socket, response } = workerUpgrade(req)
       attach(
         watched({
-          watch: (line, sink) => watch(env, stores, line, sink),
+          watch: (line, sink) => {
+            if (line == UPDATE_WAITING) {
+              let headers = vouched(who)
+              return watchWaiting(
+                (emit) =>
+                  watching(
+                    meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
+                    'directory',
+                    line,
+                    emit,
+                    { ...headers, ...KERNEL },
+                    '/waiting/ws',
+                  ),
+                (seat) => (emit) => {
+                  let { space, slug } = waitingFrom(seat)
+                  let ask = builderOf(env, space)
+                  return watching(
+                    doorOf((req) => ask(() => req)),
+                    slug,
+                    line,
+                    emit,
+                    { ...headers, [SPACE]: space },
+                    '/api/waiting/ws',
+                  )
+                },
+                sink,
+              )
+            }
+            let closed = false
+            let stop: (() => void) | undefined
+            ;(stores ??= reach()).then((members) => {
+              if (!closed) stop = watch(env, members, line, sink)
+            }, (error) => {
+              stores = undefined
+              if (!closed) sink({ refused: error })
+            })
+            return () => {
+              closed = true
+              stop?.()
+            }
+          },
           tags: TAGS,
         }),
         socket,

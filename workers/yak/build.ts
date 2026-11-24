@@ -852,6 +852,8 @@ export class Builder extends Durable {
         let { operatorApi } = await import('./operator-api.ts')
         let { spaceOf } = await import('./operator-root.ts')
         let door = operatorApi(store, this.#ctx, {
+          clock: this.#env.CLOCK,
+          hold: (work) => this.#ctx.waitUntil?.(work),
           // A page's socket stands by its person's seat in the space as it is
           // now, an administrator's read as an owner's, as `#operate` reads it.
           seat: async (person, administrative) => {
@@ -1219,7 +1221,7 @@ let unstopped = <T>(forget: () => void, make: () => Promise<T>): Promise<T> => {
 // The doors of the Operator's store's @yaks/api (operator-api.ts), outside
 // `/operator/`: an object on code from before them reads none of them as an
 // Operator request it would run.
-let API = /^\/api\/(apply|query|ws)$/
+let API = /^\/api\/(apply|query|ws|waiting\/ws)$/
 
 // What the work under way when its space was deleted fails with: a reset's
 // words (@yaks/durable-object `moved`), so the instance reports none of it

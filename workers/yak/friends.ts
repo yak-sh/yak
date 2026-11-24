@@ -572,12 +572,11 @@ export let replyFriend = async (
 /** The friend requests and suggestions waiting on a person, as Updates that
  * need them, in their own space alone so each shows once. */
 export let friendUpdates = async (
-  env: Env,
+  dir: Directory,
   space: Space,
   who: Who,
 ): Promise<Update[]> => {
   if (!who.person || who.role != 'owner') return []
-  let dir = open(env)
   let [seats, friends] = await Promise.all([
     dir.seats(who.person, 'owner'),
     friendsOf(dir, who.person),

@@ -15,10 +15,9 @@ import { Empty, Form } from '@yaks/ui/parts'
 // words about one, go into their conversation, and the chat they went to
 // opens. Every space's together are at `/updates` (`allUpdates`), the
 // same read across the spaces a person talks with an Operator in
-// (`updatesAcross`), and how many wait in each badges the Operator switcher
-// (`waitingAcross`, space-picker.ts `acrossBadge`).
+// (`updatesAcross`).
 import { Time } from '@yaks/ui/parts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { cloneElement, type ComponentChildren, Fragment, h } from 'preact'
@@ -33,7 +32,7 @@ import { markdown, PICTURES } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
 import type { Choice } from '@yaks/task'
 import { attachmentKey } from './attachments.ts'
-import { type Directory, directoryOf } from './directory.ts'
+import { type Directory, directory, directoryOf, fetch } from './directory.ts'
 import { EID, inApp } from './tool.ts'
 import { linkOf } from './preview.ts'
 import { updateAnchor } from './operator-lists.ts'
@@ -42,6 +41,7 @@ import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { refusal } from '@yaks/api/refuse'
 import { status } from '@yaks/graph/errors'
 import { writes } from '@yaks/member'
+import { waitingBundle } from '@yaks/platform/update-waiting'
 import {
   actionKinds,
   answerField,
@@ -142,30 +142,6 @@ export let dismissedOf = async (
   return { updates, waiting }
 }
 
-/** How many of a person's Updates wait on them in each of their spaces, by
- * slug: the count each space's own Updates badge says, asked alone. A space
- * whose Operator did not answer is reported and left out. */
-export let waitingAcross = async (
-  env: Env,
-  seats: Seat[],
-): Promise<Record<string, number>> =>
-  Object.fromEntries(
-    (await Promise.all(seats.map(async ({ space, who }) => {
-      try {
-        let [{ waiting }, offers] = await Promise.all([
-          operatorDoor(env, space, who, 'updates', { count: true }) as Promise<
-            { waiting: number }
-          >,
-          offersOf(env, space, who),
-        ])
-        return [[space.slug, waiting + offers.filter((u) => u.needs).length]]
-      } catch (e) {
-        caught(e, { request: 'updates waiting', space: space.slug })
-        return []
-      }
-    }))).flat(),
-  )
-
 /** The apps an update can be about, by eid, where they open. */
 export type Apps = { eid: string; slug: string; title: string }[]
 
@@ -202,10 +178,34 @@ let opening = (env: Env, space: Space, app: Apps[number]) =>
 // What the directory holds for a person beside their Operator's
 // Updates: apps offered to the space, friend requests and suggestions, and
 // messages from friends, which reading (`seen`) marks read.
+let requestsOf = async (dir: Directory, space: Space, who: Who) =>
+  (await Promise.all([
+    transferUpdates(dir, space, who),
+    friendUpdates(dir, space, who),
+  ])).flat()
+
+/** The seats and the directory's share of their Updates counts. */
+export let waitingSeats = async (dir: Directory, person: string) =>
+  Promise.all(
+    (await dir.seated(person))
+      .filter(({ space, role }) => !space.trashed && writes(role))
+      .map(async ({ space, role }) => {
+        let requests = await requestsOf(dir, space, { person, role })
+        return {
+          space,
+          role,
+          bundle: waitingBundle(person, {
+            space: space.eid,
+            slug: space.slug,
+            count: requests.filter((u) => u.needs).length,
+          }),
+        }
+      }),
+  )
+
 let offersOf = async (env: Env, space: Space, who: Who, seen = false) =>
   (await Promise.all([
-    transferUpdates(env, space, who),
-    friendUpdates(env, space, who),
+    requestsOf(directory(bound(env.DIRECTORY, fetch, env)), space, who),
     messageUpdates(env, space, who, seen),
   ])).flat()
 

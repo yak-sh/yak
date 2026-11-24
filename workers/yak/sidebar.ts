@@ -59,6 +59,7 @@ export type Sidebar = {
   title?: string
   back?: { href: string; name: string }
   personal?: Section
+  badgePerson?: string | null
   space?: { picker: Parameters<typeof choice>; sections: Section[] }
   sections?: Section[]
   footer?: Section[]
@@ -194,6 +195,7 @@ export let Sidebar = (at: Sidebar) => {
       class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
       id: 'menu',
       'aria-label': at.label,
+      'data-update-badges': at.badgePerson ?? undefined,
     },
     h(
       'div',

@@ -260,50 +260,84 @@ let MOST = 30_000
 // `MOST`, and its first answer is said with `reset`, since what left while it
 // was away is said no other way. One the store refuses to open is said as the
 // store's refusal and left closed; one that failed is tried again.
-let watching = (
+export let watching = (
   door: Door,
   at: string,
   line: string,
   sink: (frame: Frame) => void,
   headers: Record<string, string>,
+  path = '/ws',
 ): () => void => {
   let closed = false, wire: Wire | undefined, wait = 250, again = false
+  let timer: ReturnType<typeof setTimeout> | undefined
   let open = async () => {
-    let res = await door('/ws', { headers: { upgrade: 'websocket' } }, headers)
+    let res = await door(path, { headers: { upgrade: 'websocket' } }, headers)
     let ws = (res as Response & { webSocket?: Wire }).webSocket
-    if (!ws) throw rejected(res.status, `${at}: ${await told(res)}`)
-    if (closed) return ws.close()
+    if (!ws) {
+      let code = res.status == 101 || path != '/ws' && res.status == 404
+        ? 503
+        : res.status
+      throw Object.assign(
+        rejected(code, `${at}: ${await told(res)}`),
+        { status: code },
+      )
+    }
     ws.accept()
+    if (closed) return ws.close(1000)
     wire = ws
     let first = again
     ws.addEventListener('message', (e) => {
       if (closed || wire != ws) return
-      let { id: _, ...frame } = JSON.parse(String(e.data)) as Frame
+      let frame: Frame
+      try {
+        let { id: _, ...said } = JSON.parse(String(e.data)) as Frame
+        frame = said
+      } catch (error) {
+        caught(error, { request: 'reach member socket frame', store: at })
+        ws.close(1011)
+        retry()
+        return
+      }
       if (first && frame.bundles) frame.reset = true
       if (frame.bundles) first = false
       wait = 250
       sink(frame)
+      if (path != '/ws' && frame.refused) {
+        let { error } = frame.refused as { error?: string }
+        if (status(Object.assign(new Error(), { name: error })) >= 500) {
+          ws.close(1011)
+          retry()
+        }
+      }
     })
     ws.addEventListener('close', () => wire == ws && retry())
     ws.send(JSON.stringify({ subscribe: line, id: 'w' }))
   }
   let retry = () => {
-    if (closed) return
+    if (closed || timer !== undefined) return
     wire = undefined
     again = true
-    setTimeout(start, wait)
+    timer = setTimeout(() => {
+      timer = undefined
+      start()
+    }, wait)
     wait = Math.min(wait * 2, MOST)
   }
   let start = () => {
     if (closed) return
     open().catch((e) => {
+      if (closed) return
       sink({ refused: e })
-      if (status(e) >= 500) retry()
+      if (((e as { status?: number })?.status ?? status(e)) >= 500) {
+        caught(e, { request: 'reach member socket', store: at })
+        retry()
+      }
     })
   }
   start()
   return () => {
     closed = true
+    clearTimeout(timer)
     wire?.close(1000)
     wire = undefined
   }

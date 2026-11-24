@@ -19,6 +19,7 @@
     "./routes": "./routes.ts",
     "./page-graph": "./page-graph.ts",
     "./updates-browser": "./updates-browser.ts",
+    "./update-waiting": "./update-waiting.ts",
     "./space-logo": "./space-logo.ts",
     "./domain-pages": "./domain-pages.ts",
     "./domain-browser": "./domain-browser.ts",

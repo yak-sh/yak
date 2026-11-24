@@ -10,8 +10,8 @@
 // next to a graph's own registry, which keeps the raw feed and relayed
 // values, so one socket asks each line of whichever answers it.
 
-import type { Bundle, ReadOpts, Reduced } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import type { Bundle, Graph, ReadOpts, Reduced } from '@yaks/graph'
+import { after, type Clock, system } from '@yaks/fp'
 import { fault, refusal, type Tags } from './refuse.ts'
 import type { Ask, Frame, Listening, Opening, Sink, Subs } from './subs.ts'
 import type { PeerWriter } from './save.ts'
@@ -48,6 +48,8 @@ type Watch = {
   opts?: ReadOpts
   writer?: PeerWriter
   said?: string
+  cancel?: () => void
+  revision?: number
 }
 
 /**
@@ -84,22 +86,42 @@ export let reached = (opts: {
   refused?: (error: unknown, line: string) => void
   /** what a failure reported here is tagged with (./refuse.ts `fault`) */
   tags?: Tags
+  /** When a time-dependent answer next changes without a write. */
+  renew?: (answer: Bundle[] | Reduced) => number | undefined
+  clock?: Clock
+  /** The local revision at which a derived read starts. */
+  revision?: () => number
 }): Reached => {
   let held = new Map<Sink, Map<string, Watch>>()
+  let clock = opts.clock ?? system
   // A newer ask, a replacement or a close makes an answer still on its way
   // nobody's.
   let ask = (sink: Sink, id: string, watch: Watch): Promise<void> => {
+    watch.cancel?.()
     let asked = ++watch.asked
+    let revision = opts.revision?.()
     let current = () =>
       held.get(sink)?.get(id) === watch && watch.asked == asked
     return opts.read(watch.line, watch.opts, watch.writer).then((answer) => {
       if (!current()) return
+      let next = opts.renew?.(answer)
+      if (next !== undefined) {
+        watch.cancel = clock.after(
+          Math.min(2 ** 31 - 1, Math.max(1, next - clock.now())),
+          () => void ask(sink, id, watch),
+        )
+      }
       let frame: Frame = Array.isArray(answer)
         ? { id, bundles: answer, reset: true }
         : { id, ...answer }
       let said = JSON.stringify(frame)
       if (said == watch.said) return
       watch.said = said
+      if (revision !== undefined) {
+        frame.revision = revision
+        frame.since = watch.revision
+        watch.revision = revision
+      }
       sink(frame)
     }, (error) => {
       if (!current()) return
@@ -120,6 +142,7 @@ export let reached = (opts: {
   ) => {
     let mine = held.get(sink) ?? new Map<string, Watch>()
     held.set(sink, mine)
+    mine.get(id)?.cancel?.()
     let watch: Watch = { line, asked: 0, opts: read, writer }
     mine.set(id, watch)
     if (!quiet) void ask(sink, id, watch)
@@ -140,9 +163,13 @@ export let reached = (opts: {
     },
     watching: () => [...held.values()].some((mine) => mine.size > 0),
     close: (sink, id) => {
-      held.get(sink)?.delete(id)
+      let mine = held.get(sink)
+      mine?.get(id)?.cancel?.()
+      mine?.delete(id)
+      if (!mine?.size) held.delete(sink)
     },
     drop: (sink) => {
+      for (let watch of held.get(sink)?.values() ?? []) watch.cancel?.()
       held.delete(sink)
     },
     hear: async () => {
@@ -153,6 +180,38 @@ export let reached = (opts: {
       await Promise.all(asked)
     },
   }
+}
+
+/** A derived read that changes with committed inputs in a local graph. */
+export let computed = (
+  graph: Graph,
+  opts: Parameters<typeof reached>[0] & {
+    affects: (bundles: Bundle[]) => boolean
+    hold?: (work: Promise<void>) => void
+  },
+): Reached => {
+  let clock = opts.clock ?? system
+  let revision = clock.now()
+  let queries = reached({
+    ...opts,
+    clock,
+    revision: () => revision = Math.max(revision + 1, clock.now()),
+  })
+  graph.use({
+    name: '@yaks/api/computed',
+    hooks: {
+      effect: (bundles) => {
+        if (queries.watching() && opts.affects(bundles)) {
+          let work = queries.hear().catch((e) =>
+            fault(e, 'computed subscription', opts.tags)
+          )
+          opts.hold?.(work)
+        }
+        return bundles
+      },
+    },
+  })
+  return queries
 }
 
 /**

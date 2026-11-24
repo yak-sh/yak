@@ -699,9 +699,7 @@ let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
 
 // The person's Updates from every space's Operator they talk with, at
 // `/updates` (operator-page.ts `allUpdatesPage`), beside the side of
-// the space they came from (`?in=`), else their own; with `?waiting`, how
-// many wait on them in each space, which the Operator switcher badges
-// (space-picker.ts `acrossScript`). An address from before the space was in
+// the space they came from (`?in=`), else their own. An address from before the space was in
 // the path (`?space=`) still goes to that space's Updates.
 let everyUpdate = async (
   req: Request,
@@ -712,6 +710,10 @@ let everyUpdate = async (
   asked: string | null,
 ): Promise<Response> => {
   let url = new URL(req.url)
+  // A tab drawn before the reach watch still asks here without opening Updates.
+  if (url.searchParams.has('waiting')) {
+    return new Response(null, { status: 410 })
+  }
   if (asked) {
     let to = new URL(talkPath('updates', asked), hostUrl(env))
     for (let [k, v] of url.searchParams) {
@@ -727,12 +729,6 @@ let everyUpdate = async (
     space,
     who: { person, role, until } satisfies Owner,
   }))
-  if (url.searchParams.has('waiting')) {
-    let { waitingAcross } = await import('./updates.ts')
-    return Response.json(await waitingAcross(env, held), {
-      headers: { 'cache-control': 'private, no-store' },
-    })
-  }
   let into = url.searchParams.get('in')
   let home = held.find((s) => s.space.slug == into) ?? held[0]
   if (!home) return redirect(hostUrl(env, MANAGE), 303)

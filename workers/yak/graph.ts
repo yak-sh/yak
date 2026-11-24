@@ -394,7 +394,7 @@ import {
 import { type Reach, read, written } from './reach.ts'
 import { vouched, vouchedAs, type Who } from './session.ts'
 import type { Role } from './directory.ts'
-import { beside, type Reached, reached } from '@yaks/api/reached'
+import { beside, computed, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
@@ -431,7 +431,14 @@ import {
 } from './mover.ts'
 import { weighed } from './meter.ts'
 import { embedder, ranking, SPACE, texts, withheld } from './embedding.ts'
-import { directory, fetch as directoryFetch, inTrash } from './directory.ts'
+import {
+  directory,
+  directoryRows,
+  fetch as directoryFetch,
+  inTrash,
+  type Row as DirectoryRow,
+} from './directory.ts'
+import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
 import {
   isRetired,
   RECEIPTS,
@@ -2239,17 +2246,61 @@ export class Store extends Durable {
     let afar = this.#lending(branch, feed)
     if (branch == null) this.#feed = feed
     let local = policy(g.storage, { ignore: this.#staleGrant })
+    let watching = beside(
+      this.#naming(subs, spared),
+      afar,
+      (line) => borrows(line, this.#uses()),
+    )
+    let directory = branch == null && name == PLATFORM_STORE
+    if (directory) {
+      let pending = computed(g, {
+        affects: (bundles) =>
+          bundles.some((b) =>
+            [
+              '$delete',
+              'member',
+              'space',
+              'app',
+              'trashed',
+              'app_transfer',
+              'app_transfer_answer',
+              'domain_transfer',
+              'domain_transfer_answer',
+              'relationship',
+              'edge',
+              'decided',
+              'proposed',
+            ].some((key) => key in b)
+          ),
+        hold: (work) => this.#ctx.waitUntil?.(work),
+        read: async (_, read) => {
+          if (!read?.person) return []
+          let { waitingSeats } = await import('./updates.ts')
+          let dir = directoryRows({
+            query: async (q) => {
+              let rows = await g.read(q) as DirectoryRow[]
+              let revision = this.#committed()
+              return rows.map((row) => ({ ...row, policy: { revision } }))
+            },
+            apply: async (rows) => await g.apply(rows, { trusted: true }),
+          })
+          return (await waitingSeats(dir, read.person)).map(({ bundle }) =>
+            bundle
+          )
+        },
+        tags: { request: 'directory Updates count' },
+      })
+      watching = beside(watching, pending, (line) => line == UPDATE_WAITING)
+    }
     let live = sockets(
-      beside(
-        this.#naming(subs, spared),
-        afar,
-        (line) => borrows(line, this.#uses()),
-      ),
+      watching,
       at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
         deferStatic: true,
         read: (read, writer) => {
+          // The reach's kernel-only directory socket opens without a writer.
+          if (directory && !writer) return read ?? {}
           let actor = writer?.actor
           let authority = this.#authority(actor)
           return {
@@ -2260,7 +2311,9 @@ export class Store extends Durable {
           }
         },
         authorize: (read, writer) =>
-          this.#socketStanding(local, read?.person ?? null, writer?.actor),
+          directory && !writer
+            ? !!read?.person
+            : this.#socketStanding(local, read?.person ?? null, writer?.actor),
       },
     )
     let route = api({ ...applying, graph: g, subs })
@@ -5316,6 +5369,9 @@ export class Store extends Durable {
     }
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))
+    }
+    if (path == '/waiting/ws' && kernel && this.#name() == PLATFORM_STORE) {
+      return this.#live.accept(request, this.#callerRead(request))
     }
     if (path.startsWith('/branches') && kernel) {
       return this.#branching(request, path)

@@ -13,12 +13,17 @@
 // seat as the directory has it now, on every frame in and every delivery out:
 // once they no longer write in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
+import { beside, computed } from '@yaks/api/reached'
 import { type Hibernation, sockets } from '@yaks/durable-object'
+import { type Clock, system } from '@yaks/fp'
 import type { Graph } from '@yaks/graph'
 import { type Level, writes } from '@yaks/member'
+import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
 import { mayWrite, sight } from './operator-access.ts'
+import { spaceOf } from './operator-root.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { paged } from './build-door.ts'
+import { waitingUntil } from './operator-updates.ts'
 
 /** Who a request is from, as the kernel said: a person who writes in a
  * space (build.ts `#operate`). */
@@ -31,20 +36,72 @@ export type Seating = {
    * handshake) read as theirs: the level it gives, or null for none. */
   seat: (person: string, administrative: boolean) => Promise<Level | null>
   report?: (error: Error) => void
+  clock?: Clock
+  hold?: (work: Promise<void>) => void
 }
+
+let inputs = [
+  '$delete',
+  'notification',
+  'decision',
+  'filed',
+  'subscription',
+  'opened',
+  'archived',
+  'decided',
+  'completed',
+  'cancelled',
+  'blocked',
+  'failed',
+  'resolved',
+  'regressed',
+  'broken',
+  'task',
+  'requires',
+  'edge',
+  'notified',
+  'doc',
+  'occurrence',
+  'operator_request',
+  'operator_approval',
+]
 
 /** @yaks/api over `store`, its sockets among the object's (`ctx`). */
 export let operatorApi = (
   store: OperatorStore,
   ctx: Hibernation,
-  { seat, report }: Seating,
+  { seat, report, clock = system, hold }: Seating,
 ) => {
   let subs = subscriptions(store.g)
+  let waiting = computed(store.g, {
+    affects: (bundles) => bundles.some((b) => inputs.some((key) => key in b)),
+    hold,
+    clock,
+    read: async (_, read) => {
+      let person = read?.person, space = await spaceOf(store)
+      if (!person || !space) return []
+      let { count, expires } = await waitingUntil(
+        store,
+        person,
+        space,
+        clock.now(),
+      )
+      return [{
+        ...waitingBundle(person, { space, slug: '', count }),
+        ...Number.isFinite(expires) ? { $expires: { at: expires } } : {},
+      }]
+    },
+    renew: (answer) =>
+      Array.isArray(answer)
+        ? (answer[0]?.$expires as { at: number } | undefined)?.at
+        : undefined,
+    tags: { request: 'Operator Updates count' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
   let live = sockets(
-    subs,
+    beside(subs, waiting, (line) => line == UPDATE_WAITING),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),
       getWebSockets: () =>
@@ -92,7 +149,7 @@ export let operatorApi = (
     ): Response | Promise<Response> => {
       let url = new URL(request.url)
       url.pathname = url.pathname.slice('/api'.length)
-      return url.pathname == '/ws'
+      return url.pathname == '/ws' || url.pathname == '/waiting/ws'
         ? live.accept(request, { person: who.person, administrative })
         : as(who)(new Request(url, request))
     },
