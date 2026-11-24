@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -193,6 +193,9 @@ test('a continued launch carries the current task and feedback from its previous
   }
 })
 
+// Before the five-hour reset in the stand-in's `hours` recording.
+const ACCOUNT_TIME = Date.parse('2026-11-24T19:00:00Z')
+
 // Two Claude accounts offered to runs, the personal one well over its weekly
 // pace: three days into the week, 90% of it used.
 let accounts = async (g: Graph) => {
@@ -215,7 +218,7 @@ let accounts = async (g: Graph) => {
         account: own,
         window: 10080,
         used: 90,
-        resets: new Date(Date.now() + 4 * 86400_000).toISOString(),
+        resets: new Date(ACCOUNT_TIME + 4 * 86400_000).toISOString(),
       },
     },
   ])
@@ -231,6 +234,7 @@ let started = async (g: Graph, session: string) => {
       cwd: dir,
       adapters: { fake: claude },
       env: { HOME: '/u', CLAUDE_CONFIG_DIR: '/u/.elsewhere' },
+      clock: clock(ACCOUNT_TIME),
       launch: launched.launch,
       signal: AbortSignal.abort(),
     })
@@ -312,7 +316,7 @@ test('a first run passes over an account whose five hours are spent', async () =
       account: teams,
       window: 300,
       used: 100,
-      resets: new Date(Date.now() + 3600_000).toISOString(),
+      resets: new Date(ACCOUNT_TIME + 3600_000).toISOString(),
     },
   }])
   await g.apply(asking('S1', 'E1', 'fix it'))
@@ -330,6 +334,11 @@ test("a run its five hours end carries on in another account with room, its thre
   Deno.mkdirSync(`${bob}/projects/-w`, { recursive: true })
   Deno.writeTextFileSync(thread(bob), '{}\n')
   let runs: { args: string[]; env: Record<string, string> }[] = []
+  let errors: unknown[] = []
+  let settled = () => Promise.resolve()
+  let detach = detached((release) => {
+    settled = release
+  })
   try {
     await g.apply([
       ...standing('S1', 'E1', 'hours'),
@@ -351,23 +360,23 @@ test("a run its five hours end carries on in another account with room, its thre
     await start(g, 'S1', {
       cwd: dir,
       dir,
-      poll: 5,
       env: { HOME: dir },
+      clock: clock(ACCOUNT_TIME),
+      detach,
+      report: (error) => void errors.push(error),
       launch: (store, spec, o) => {
         runs.push({ args: spec.args ?? [], env: spec.env ?? {} })
+        assert(runs.length <= 2, 'both accounts have spent their five hours')
         return playing(store, spec, o)
       },
     })
-    await until(
-      async () =>
-        runs.length == 2 &&
-        await Deno.stat(`${dir}/S1.out`).then(() => false, () => true),
-      'the run to carry on, and end',
-    )
+    await settled()
     assertEquals(
       runs.map((r) => [r.env.CLAUDE_CONFIG_DIR, r.args.includes('--resume')]),
       [[bob, false], [jeff, true]],
     )
+    assertEquals(errors, [])
+    await assertRejects(() => Deno.stat(`${dir}/S1.out`), Deno.errors.NotFound)
     let there = (path: string) => Deno.stat(path).then(() => true, () => false)
     assertEquals([await there(thread(bob)), await there(thread(jeff))], [
       false,

@@ -1,6 +1,7 @@
 import { trash } from '@yaks/process/trash'
 import * as disk from '@yaks/file/io'
 import * as system from '@yaks/process/system'
+import { type Clock, system as systemClock } from '@yaks/fp'
 // A managed session: the provider run as a detached command, its stdout read
 // back into the graph as the transcript.
 //
@@ -165,6 +166,8 @@ export type Opts = {
   /** The room reading for a queued start, or an admission decision from
    * a caller supplying its own policy. Defaults to this computer's room. */
   admit?: () => Promise<Room | boolean>
+  /** the clock for account limit resets and weekly pace (default system time) */
+  clock?: Clock
   /** mint an entry's eid (default a uuid) */
   mint?: () => string
   /** where a failure that has nobody to throw at goes: the host's tracker
@@ -306,7 +309,7 @@ export let accountFor = async (
   g: Graph,
   adapter: Adapter,
   job: Asked,
-  now: number = Date.now(),
+  now: number = systemClock.now(),
 ): Promise<Account | undefined> => {
   if (job.account || !adapter.account) return job.account
   let chosen = await offered(g, adapter.account, now)
@@ -357,7 +360,6 @@ let moveOn = async (
   g: Graph,
   session: string,
   o: Opts,
-  now = Date.now(),
 ): Promise<boolean> => {
   let job = await asked(g, session).catch(() => null)
   let adapter = adapterOf(job, o)
@@ -365,6 +367,7 @@ let moveOn = async (
   if (!job || job.recorded || !adapter || !runner) return false
   let env = runEnv(adapter, job, o)
   let from = signedIn(runner, { get: (name) => env[name] })
+  let now = (o.clock ?? systemClock).now()
   let to = from && await offered(g, runner, now, accountEid(from))
   if (!from || !to || to.full) return false
   let thread = comp(await one(g, session), SESSION)?.id
@@ -617,7 +620,7 @@ export let start = async (
   // offered one. A CLI that runs only on offered accounts (`offeredOnly`)
   // never signs in with the box's default login, the owner's own.
   let recorded = job.account
-  let account = await accountFor(g, adapter, job)
+  let account = await accountFor(g, adapter, job, o.clock?.now())
   if (account) job = { ...job, account }
   if (adapter.offeredOnly && !job.account) {
     throw new Error(
