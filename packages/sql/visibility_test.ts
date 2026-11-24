@@ -6,9 +6,12 @@ import {
   as,
   col,
   derivedOf,
+  desc,
   eq,
   fn,
   insert,
+  lit,
+  or,
   render,
   select,
   sub,
@@ -104,6 +107,46 @@ test('a shared registry leaves auxiliary sources outside graph visibility', () =
 test('a shared registry scopes sources declared by this vocabulary', () =>
   assertEquals(scopedValue(vocab), null))
 
+test('a shared source still screens each probe whose owner can differ', () => {
+  driver.query(insert('entity', { id: 2, eid: 'two' }))
+  driver.query(insert('private', { entity: 2, text: 'hidden' }))
+  let p = table('private', 'p')
+  let correlated = eq(col('entity', 'p'), col('entity', 'anchor'))
+  let different = eq(col('entity', 'p'), lit(2))
+  let probe = (where: typeof correlated) =>
+    sub(select({
+      cols: [col('text', 'p')],
+      from: p,
+      where,
+      order: [desc(col('entity', 'p'))],
+      limit: lit(1),
+    }))
+  let scoped = visibleDerived(vocab, {
+    derived: {
+      'public.value': {
+        tag: 'text',
+        expr: (owner) =>
+          sub(select({
+            cols: [fn(
+              'json_array',
+              probe(correlated),
+              probe(different),
+              probe(or(correlated, different)),
+            )],
+            from: table('private', 'anchor'),
+            where: eq(col('entity', 'anchor'), owner),
+          })),
+      },
+    },
+    visibility: { entity: '.private.text=secret' },
+  })['public.value']
+  let got = driver.query(select({
+    cols: [as(scoped.expr(col('entity', 'public')), 'value')],
+    from: table('public'),
+  }))[0].value
+  assertEquals(JSON.parse(String(got)), ['secret', null, 'secret'])
+})
+
 // Several probes of the same protected relation must fit the engine's statement
 // allowance without exposing a row its component permission hides.
 let wide = textual({ sqlLength: 100_000 }, snapshot(vocab, { derived }))
@@ -111,7 +154,7 @@ let exec = (stmt: Parameters<typeof render>[0]) => {
   let { sql, params } = render(stmt)
   return wide.run(sql, params)
 }
-let prose = 'visible'.repeat(600)
+let prose = 'visible'.repeat(8_000)
 exec(insert('entity', { id: 1, eid: 'one' }))
 exec(insert('public', { entity: 1 }))
 exec(insert('private', { entity: 1, text: prose }))
@@ -155,4 +198,21 @@ test('repeated derived probes share their permission screen within SQL limits', 
 test('repeated derived probes share an owner-keyed entity screen within SQL limits', () => {
   assertEquals(guardedValue(prose, true), prose)
   assertEquals(guardedValue(prose + 'hidden', true), null)
+})
+
+let projected = (text: string) => {
+  let scoped = visibleDerived(vocab, {
+    derived,
+    visibility: { components: { private: `.private.text="${text}"` } },
+  })['public.value']
+  let owner = col('entity', 'public')
+  return exec(select({
+    cols: ['first', 'second'].map((name) => as(scoped.expr(owner), name)),
+    from: table('public'),
+  }))[0]
+}
+
+test('multiple derived values fit the statement limit with a large permission value', () => {
+  assertEquals(projected(prose), { first: prose, second: prose })
+  assertEquals(projected(prose + 'hidden'), { first: null, second: null })
 })

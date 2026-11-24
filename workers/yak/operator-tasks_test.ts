@@ -13,11 +13,15 @@ import { askOf, waiting } from './operator-approvals.ts'
 import { seenBy } from './operator-access.ts'
 import { working } from './operator-tasks.ts'
 import { handedOf } from '@yaks/spawn/machines'
+import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
+import { OWNERS } from '@yaks/platform/operator-owner'
 import { invokePackage, packageTools } from './package-tools.ts'
+import { ORACLES } from './oracle-move.ts'
 import { owned } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
 import type { Ctx } from './tools.ts'
+import { snapshot } from '../../packages/sqlite/testing.ts'
 
 let store = operatorMemory()
 let person = crypto.randomUUID()
@@ -106,8 +110,12 @@ test('a developer can retire and register their machine again', async () => {
 })
 
 test("a session asked of a developer's machine runs there and reports on its task", async () => {
-  // The store a space keeps, over SQLite as on yaks.app.
-  let store = await operatorStore(durable())
+  // A populated space has all the tables a scoped status read can use.
+  using db = durable(snapshot(operatorVocab))
+  let store = await operatorStore(db)
+  for (let mark of [OWNERS, ORACLES, MEMORY_OWNERS]) {
+    store.marks!.set(mark, 'done')
+  }
   let work = (name: string, args: Record<string, unknown>) =>
     working(store, { person, member: true }, name, args)
   let [made] = await work('task_new', { title: 'Tune the organ' })
@@ -116,7 +124,10 @@ test("a session asked of a developer's machine runs there and reports on its tas
   )
   equal(typeof machine.providers.claude, 'string')
   // Named as a person types them: the task by its id, the provider by name.
-  await work('session_spawn', { task: id(made), provider: 'claude on mbp' })
+  let started = body(
+    await work('session_spawn', { task: id(made), provider: 'claude on mbp' }),
+  )
+  equal(started, 'S-1 spawned')
   // Read as yaks.app hands it to the machine, its prose drawn for the reader:
   // the session still its eid, which the CLI names its thread with.
   let job = handedOf(
@@ -124,6 +135,20 @@ test("a session asked of a developer's machine runs there and reports on its tas
   )!
   equal(/^[0-9a-f-]{36}$/.test(job.session), true)
   equal(job.cli, 'claude')
+  await work('session_log', {
+    machine: 'mbp',
+    session: job.session,
+    lines: [],
+    pid: 9,
+  })
+  let follow = body(
+    await work('session_spawn', {
+      task: id(made),
+      provider: 'claude on mbp',
+      instruction: 'Check the pedals too.',
+    }),
+  )
+  equal(follow.includes('no second run started'), true)
   equal(body(await work('session_take', { machine: 'mbp' })), '')
   let said = (text: string) =>
     JSON.stringify({

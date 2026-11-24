@@ -5452,21 +5452,26 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let cache = byVocab.get(derived)
   let held = cache?.get(key)
   if (held) return held
-  let allowed: Cte[] = []
-  let names = new Map<string, string>()
+  let allowed = new Set<Cte>()
+  let relations = new Map<string, Cte>()
   let shared = (screen: Raw): string => {
-    let sql = inline(screen)
-    let name = names.get(sql)
-    if (!name) {
-      name = `__derive_allowed${names.size}`
-      names.set(sql, name)
-      allowed.push({
+    let key = inline(screen)
+    let relation = relations.get(key)
+    if (!relation) {
+      let name = `__derive_allowed${relations.size}`
+      while (vocab.comp(name)) name += '_'
+      relation = {
         name,
-        q: select({ from: from(raw(sql), '__screen') }),
+        q: select({
+          from: from(raw(screen.sql, screen.params), '__screen'),
+        }),
         materialized: false,
-      })
+        shared: true,
+      }
+      relations.set(key, relation)
     }
-    return name
+    allowed.add(relation)
+    return relation.name
   }
   let source = (name: string, alias = name): Source => {
     if (!vocab.comp(name)) return table(name, alias)
@@ -5491,28 +5496,28 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let policy = opts.visibility?.entity
   let keyed = policy && !screens.size && ownerKeyed(vocab, opts, parsed(policy))
   let scoping = <T extends Cond | Select>(node: T): T => {
-    let owned = keyed ? ownerReads(vocab, node) : new Set()
+    let owned = entity && !screens.size
+      ? ownerReads(vocab, node, { shapes: !!keyed, peers: true })
+      : new Set()
     return sources(
       node,
       (name, alias, src) =>
         owned.has(src) ? table(name, alias) : source(name, alias),
     )
   }
-  // A derived expression can read the same protected relation many times.
-  // Name each permission screen once instead of repeating it at every probe.
+  // Name each permission screen once per expression. A whole read with
+  // several derived properties can share the closed screen across them.
   let expression = (expr: Cond): Cond => {
-    allowed = []
-    names = new Map()
+    allowed = new Set()
     let scoped = scoping(expr)
-    return allowed.length
-      ? sub(select({ with: allowed, cols: [scoped] }))
+    return allowed.size
+      ? sub(select({ with: [...allowed], cols: [scoped] }))
       : scoped
   }
   let selection = (query: Select): Select => {
-    allowed = []
-    names = new Map()
+    allowed = new Set()
     let scoped = scoping(query)
-    return allowed.length
+    return allowed.size
       ? { ...scoped, with: [...allowed, ...scoped.with ?? []] }
       : scoped
   }
@@ -5972,19 +5977,20 @@ let rowAdmits = (
   return (owner) => admitting(vocab, plain, scope, owner, alive)
 }
 
-// An owner's identity and shape, read through a row an owner-keyed scope
-// admits: the `entity` joined on a component row's owner, and the `archetype`
-// that entity names. The scope asks of the owner what it already asked of the
-// row, a component's rows belong to live entities, and the shape names only
-// components the row's owner is read through anyway, so both stand admitted
-// with the row. A derived property reads an entry's shape for every entry it
-// reads: screening each again cost more than the rule (T-148077). The tables
-// are returned by node, since one alias can name a joined owner in one
-// subquery and a free read of the table in the next.
-let ownerReads = (vocab: Vocab, node: unknown): Set<Source> => {
+// A row joined or probed by an owner already in scope needs no second read
+// of the same owner policy. This applies to peers only when every component
+// uses the same screen. An owner-keyed policy also admits the archetype an
+// admitted entity names: its shape is read through that entity (T-148077).
+let ownerReads = (
+  vocab: Vocab,
+  node: unknown,
+  { shapes, peers } = { shapes: true, peers: false },
+): Set<Source> => {
   let found = new Set<Source>()
+  let required = new Set<Source>()
   let named = (src: Source) =>
     !isRaw(src) && src.t == 'table' && !src.args ? src : undefined
+  let keyOf = (name: string) => name.replace(/[A-Z]/g, (c) => c.toLowerCase())
   // Whether `on` equates `alias`'s `key` with a column `of` names.
   let joined = (on: Cond | undefined, alias: string, key: string) => {
     if (on?.t != 'op' || on.op != '=' || on.parts.length != 2) return
@@ -5994,42 +6000,96 @@ let ownerReads = (vocab: Vocab, node: unknown): Set<Source> => {
     if (mine.of != alias || mine.name != key || !theirs.of) return
     return theirs
   }
-  let walk = (value: unknown): void => {
-    if (Array.isArray(value)) return value.forEach(walk)
+  let walk = (value: unknown, outer: Map<string, string>): void => {
+    if (Array.isArray(value)) return value.forEach((v) => walk(v, outer))
     if (!value || typeof value != 'object' || isRaw(value)) return
     let obj = value as Record<string, unknown>
     if (obj.t == 'select') {
       let q = obj as Select
       let joins = q.joins ?? []
-      let rows = new Set<string>()
-      for (let src of [...[q.from ?? []].flat(), ...joins.map((j) => j.src)]) {
-        let t = named(src)
-        if (
-          t && t.name != 'entity' && t.name != 'archetype' && vocab.comp(t.name)
-        ) {
-          rows.add(t.as ?? t.name)
+      let from = [q.from ?? []].flat()
+      let sources = [...from, ...joins.map((j) => j.src)]
+      // A local alias hides a correlated one. A raw source can introduce an
+      // alias of its own, so only known local owners are used in that query.
+      let inherited = new Map(sources.some(isRaw) ? undefined : outer)
+      for (let src of sources) {
+        if (!isRaw(src)) {
+          let alias = src.as ?? (src.t == 'table' ? src.name : undefined)
+          if (alias) inherited.delete(keyOf(alias))
         }
       }
-      let ids = new Set<string>()
-      for (let { src, on } of joins) {
-        let t = named(src)
-        if (t?.name != 'entity') continue
-        let row = joined(on, t.as ?? t.name, 'id')
-        if (row?.name == 'entity' && rows.has(row.of!)) {
-          found.add(src)
-          ids.add(t.as ?? t.name)
+      let scope = new Map(inherited), owned = new Set<Source>()
+      if (peers) {
+        let admit = (src: Source, on?: Cond) => {
+          let t = named(src)
+          if (!t || t.name == 'archetype' || !vocab.comp(t.name)) return
+          let alias = t.as ?? t.name
+          let key = t.name == 'entity' ? 'id' : 'entity'
+          let tied = (p?: Cond): boolean => {
+            if (p?.t == 'op' && p.op == 'and') return p.parts.some(tied)
+            let col = joined(p, alias, key)
+            return !!col && scope.get(keyOf(col.of!)) == col.name
+          }
+          if (tied(on)) owned.add(src)
+          scope.set(keyOf(alias), key)
+        }
+        for (let src of from) admit(src, q.where)
+        for (let { src, on } of joins) admit(src, on)
+      }
+      if (shapes) {
+        let rows = new Set<string>()
+        for (let src of sources) {
+          let t = named(src)
+          if (
+            t && t.name != 'entity' && t.name != 'archetype' &&
+            vocab.comp(t.name)
+          ) rows.add(t.as ?? t.name)
+        }
+        let ids = new Set<string>()
+        for (let { src, on } of joins) {
+          let t = named(src)
+          if (t?.name != 'entity') continue
+          let row = joined(on, t.as ?? t.name, 'id')
+          if (row?.name == 'entity' && rows.has(row.of!)) {
+            owned.add(src)
+            ids.add(t.as ?? t.name)
+          }
+        }
+        for (let { src, on } of joins) {
+          let t = named(src)
+          if (t?.name != 'archetype') continue
+          let owner = joined(on, t.as ?? t.name, 'entity')
+          if (owner?.name == 'archetype' && ids.has(owner.of!)) owned.add(src)
         }
       }
-      for (let { src, on } of joins) {
-        let t = named(src)
-        if (t?.name != 'archetype') continue
-        let owner = joined(on, t.as ?? t.name, 'entity')
-        if (owner?.name == 'archetype' && ids.has(owner.of!)) found.add(src)
+      for (let src of sources) {
+        // An AST node can be used in several selects. All its occurrences
+        // must prove the same screen is redundant before replacing it.
+        let reads = owned.has(src) ? found : required
+        reads.add(src)
+        walk(src, inherited)
       }
+      walk(q.with, inherited)
+      for (let { on } of joins) walk(on, scope)
+      for (
+        let part of [
+          q.cols,
+          q.where,
+          q.group,
+          q.having,
+          q.order,
+          q.limit,
+          q.offset,
+        ]
+      ) {
+        walk(part, scope)
+      }
+      return
     }
-    Object.values(obj).forEach(walk)
+    Object.values(obj).forEach((v) => walk(v, outer))
   }
-  walk(node)
+  walk(node, new Map())
+  for (let src of required) found.delete(src)
   return found
 }
 
