@@ -321,14 +321,17 @@ test('public drafts preserve a pending send across reload instead of accepting w
   }
 })
 
-test('public drafts wait for identity before binding or spending and isolate recovered text', async () => {
-  let identity = deferred<Response>(),
+// Until the page knows who is typing, a bound field is read-only and nothing
+// is sent. A visitor nobody knows then types into this browser's copy alone,
+// and a spend writes only the rows it is given, never a draft (T-3015).
+test('public drafts wait for identity, then a visitor nobody knows types here and spends only what it became', async () => {
+  let identity = deferred<{ person: string | null }>(),
     calls: Call[] = [],
     reports: unknown[] = []
   using _wire = transport((call) => {
     calls.push(call)
     return json({ bundles: call.bundles })
-  }, () => identity.promise)
+  }, () => identity.promise.then((who) => json(who)))
   let stash = storage()
   let opts = { stash, report: (e: unknown) => reports.push(e) }
   let document = parseHTML('<textarea></textarea>').document
@@ -339,16 +342,18 @@ test('public drafts wait for identity before binding or spending and isolate rec
   let off = desk.bind(field, 'compose')
   try {
     assertEquals(field.readOnly, true)
-    assertThrows(() => desk.type('compose', 'unknown writer'))
-    let sent = desk.spend('compose', [{
-      entity: { eid: 'message' },
-      doc: { body: 'not sent anonymously' },
-    }])
+    assertThrows(() => desk.type('compose', 'too soon'))
+    let message = { entity: { eid: 'message' }, doc: { body: 'hello' } }
+    let sent = desk.spend('compose', [message])
     assertEquals(calls.length, 0)
-    identity.resolve(json({ person: null }))
-    assertEquals(await sent, false)
-    assertEquals(calls.length, 0)
-    assertEquals(stash.length, 0)
+    identity.resolve({ person: null })
+    assertEquals(await sent, true)
+    assertEquals(calls.map((c) => c.bundles), [[message]])
+    assertEquals(Boolean(field.readOnly), false)
+    desk.type('compose', 'a guest wrote this')
+    assertEquals(desk.text('compose'), 'a guest wrote this')
+    assertEquals(calls.length, 1)
+    assertEquals(reports, [])
   } finally {
     off()
     desk.close()
