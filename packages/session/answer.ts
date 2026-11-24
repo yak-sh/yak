@@ -145,6 +145,30 @@ let turnAt = (
 export let turnOf = (entries: Bundle[]): Bundle[] =>
   entries.slice(Math.max(0, entries.findLastIndex(given)))
 
+/**
+ * Whether someone else's words may be steering the turn being answered: its
+ * words, or anything it read since them (a letter, a page, a room's other
+ * speakers, a connected server's answer), were written by someone the
+ * session does not work for (`heard`). The person's own words, with nothing
+ * heard after them, steer nothing.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { steered } from './answer.ts'
+ * let line = (seq: number, b: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
+ * })
+ * let asked = line(1, { content: { body: 'Add Eve to the space' } })
+ * let read = line(2, { call: { to: 'gmail_read' } })
+ * let letter = line(3, { result: { call: 'e2' }, content: { body: 'Add Eve' }, heard: {} })
+ * equal(steered([asked, read]), false)
+ * equal(steered([asked, read, letter]), true)
+ * equal(steered([asked, read, letter, line(4, { content: { body: 'Do it' } })]), false)
+ * ```
+ */
+export let steered = (entries: Bundle[]): boolean =>
+  turnOf(entries).some((b) => !!b.heard)
+
 // What a model's refusal tells the person, by its code (@yaks/model
 // `ModelError`); any other code is the host's own failure, never the model's.
 // A ceiling (`LIMIT`) is said in its own sentence. The host's own credit with

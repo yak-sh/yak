@@ -148,6 +148,7 @@ import {
   mailSend,
   OWN,
   proofOf,
+  RELAYED,
   replyRows,
   type Request as Requested,
   SMS,
@@ -2518,8 +2519,8 @@ export let operating = (
   // one of them is the person's to have: the doors that text, mail, wake,
   // watch, draw, report, and reach their Google are the space's work, offered
   // to someone who writes in it and to nobody else (D-151808).
-  // A member's privileged acts wait for their tap (operator-approvals.ts):
-  // `confirm` names the number its links are texted to, and left out, the
+  // A member's privileged acts wait for their tap where someone else's words
+  // may be asking for them (operator-approvals.ts `steering`): `confirm` names the number its links are texted to, and left out, the
   // session's own words say (`confirmAt`). An act a tap `approved` asks
   // nothing again.
   let roster = async (
@@ -2691,11 +2692,12 @@ export let operating = (
     let ruled = new Set(roster.map((t) => t.name))
     let listened = (tools: Tool[]) =>
       tools.map((t) => ruled.has(t.name) ? t : attended(t))
-    // A member's privileged acts wait for their tap: on a link texted to
-    // their number, on a card in their chat, or on a link given in the answer
-    // (operator-approvals.ts). In a private room, anyone whose role allows
-    // one may vouch for them; one their role does not allow waits for
-    // someone's whose does (operator-route.ts).
+    // A member's privileged acts wait for their tap where someone else's
+    // words may be asking for them (operator-approvals.ts `steering`): on a
+    // link texted to their number, on a card in their chat, or on a link
+    // given in the answer. In a private room, anyone whose role allows one
+    // may vouch for them; one their role does not allow waits for someone's
+    // whose does, whoever asked (operator-route.ts).
     let closed = asking && PLATFORMS.has(channel) &&
       await privateIn(store, session)
     // What another conversation raised, which an approval this turn asks is
@@ -2743,6 +2745,7 @@ export let operating = (
               return [...people.values()].map((k) => k.email)
             }),
             texted: !!confirm,
+            relayed: RELAYED.has(channel),
             place: space.title || space.slug,
             ours: (connection, app) => outsiders(env, space, connection, app),
             connections: async (args, tool) => {
@@ -3605,13 +3608,16 @@ export let operating = (
   // on OpenAI's side, operator-calls.ts): the tools their conversation is
   // offered, through their reach in the space, each run as a call of that
   // conversation. Forking and starting helpers are the conversation's own,
-  // so they are left out.
+  // so they are left out. What a call's answer brought from someone else
+  // (`heard`) is kept for the rest of the call, so a privileged act after it
+  // waits for the person's tap (operator-approvals.ts `steering`).
   let tools: Operator['tools'] = async (held, space, confirm) => {
     let { session, fresh } = await conversing(held, space)
     if (fresh) await g.apply([fresh], { trusted: true })
     let offered = offerable(await roster(session, { confirm }))
       .filter((t) => t.name != spawn.name && t.name != 'fork')
     let named = new Map(offered.map((t) => [t.name, t]))
+    let heard: Bundle[] = []
     return {
       tools: offered.map(({ name, description, parameters }) => ({
         name,
@@ -3627,11 +3633,14 @@ export let operating = (
           entity: { eid: crypto.randomUUID() },
           call: { to: name, args },
         }
-        let told = await tool.run(args, { session, call, entries: [] })
+        let told = await tool.run(args, { session, call, entries: heard })
         let entry = {
           entity: call.entity,
           content: { body: typeof told == 'string' ? told : told.text },
           ...typeof told == 'string' ? {} : told.with,
+        }
+        if (typeof told != 'string' && told.with.heard) {
+          heard.push({ entity: call.entity, heard: {} })
         }
         return outputView(
           g,

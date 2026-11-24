@@ -651,7 +651,11 @@ let keepKey = async (
     .eid
 }
 
-test('Operator app invites and join approvals name the space connections already attached', async () => {
+// What a call's words name of the space's connections.
+let naming = (said: string) =>
+  ['Maps', 'Unused', 'Weather'].filter((name) => said.includes(name))
+
+test('Operator app invites and joins the owner asks for run, and their answers name the space connections already attached', async () => {
   let s = await setup()
   let app = await liveApp(s)
   let approvals = await connectionApprovals(s)
@@ -666,37 +670,32 @@ test('Operator app invites and join approvals name the space connections already
   await attach('Weather')
   await attach('Maps')
   await keepKey(s, 'Unused')
-  await approvals.run('member_add', {
+  let invited = await approvals.run('member_add', {
     app: app.slug,
     email: 'new@example.test',
   })
-  await approvals.run('app_set', {
+  let opened = await approvals.run('app_set', {
     app: app.slug,
     join: { domain: 'example.test', role: 'viewer' },
   })
-  let pending = (await approvals.asked()).map(({ ask }) => ask)
-    .sort((a, b) => a.tool.localeCompare(b.tool))
-  assertEquals(
-    pending.map(({ tool, say }) => ({
-      tool,
-      names: ['Maps', 'Unused', 'Weather'].filter((name) => say.includes(name)),
-    })),
-    [
-      { tool: 'app_set', names: ['Maps', 'Weather'] },
-      { tool: 'member_add', names: ['Maps', 'Weather'] },
-    ],
-  )
-  assertEquals(await s.at.query(line`.invite`), [])
-  assertEquals((await s.dir.app(s.space, app.slug))!.join, undefined)
-  assertEquals(
-    Object.keys(await envOf(ctxOf(s.p.env), app.eid)).sort(),
-    ['MAPS', 'WEATHER'],
-  )
-  await approvals.run('app_set', { app: app.slug, join: {} })
-  assertEquals((await approvals.asked()).length, pending.length)
+  assertEquals([naming(invited), naming(opened)], [
+    ['Maps', 'Weather'],
+    ['Maps', 'Weather'],
+  ])
+  assertEquals(await approvals.asked(), [])
+  assertEquals((await s.at.query(line`.invite`)).length, 1)
+  assertEquals(!!(await s.dir.app(s.space, app.slug))!.join, true)
+  let asked = await approvals.run('approval_request', {
+    tool: 'member_add',
+    args: { app: app.slug, email: 'other@example.test' },
+    say: 'Invite other@example.test',
+  })
+  assertStringIncludes(asked, 'Nothing has happened yet')
+  let [pending] = await approvals.asked()
+  assertEquals(naming(pending.ask.say), ['Maps', 'Weather'])
 })
 
-test('Operator updates a sandboxed copy with a space connection only after approval', async () => {
+test('Operator updates a sandboxed copy with a space connection at the owner’s word, and after approval where asked', async () => {
   let s = await setup()
   let ctx = { env: s.p.env, dir: s.dir, person: s.person }
   let publisher = { ...ctx, person: crypto.randomUUID() }
@@ -739,7 +738,11 @@ test('Operator updates a sandboxed copy with a space connection only after appro
   await approvals.run('app_update', { app: 'unlinked' })
   assertEquals((await approvals.asked()).length, 0)
   assertEquals((await installed('unlinked'))!.installed!.version, before + 1)
-  await approvals.run('app_update', { app: copy.slug })
+  await approvals.run('approval_request', {
+    tool: 'app_update',
+    args: { app: copy.slug },
+    say: 'Update the copy',
+  })
   assertEquals((await installed(copy.slug))!.installed!.version, before)
   let [pending] = await approvals.asked()
   assertEquals(pending.ask.tool, 'app_update')
@@ -751,6 +754,14 @@ test('Operator updates a sandboxed copy with a space connection only after appro
   assertEquals(approved.state, 'done')
   assertEquals((await installed(copy.slug))!.installed!.version, before + 1)
   assertEquals(Object.keys(await envOf(ctxOf(s.p.env), copy.eid)), ['WEATHER'])
+  // Asked for by the owner in a new call, which has heard no publisher's
+  // words yet, it runs at once and names the connection.
+  await release('Third')
+  let fresh = await connectionApprovals(s)
+  let said = await fresh.run('app_update', { app: copy.slug })
+  assertEquals(naming(said), ['Weather'])
+  assertEquals((await fresh.asked()).length, 0)
+  assertEquals((await installed(copy.slug))!.installed!.version, before + 2)
 })
 
 // Every act the page posts, and one app's link to a connection as each side

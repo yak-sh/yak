@@ -1,7 +1,8 @@
 // A text's sender number is all that says who sent it, and anyone can show a
 // member's number, but only the member's phone reads what is texted back
 // (T-1864). So a member's SMS turn holds their tools, and a privileged act
-// it asks for waits for a tap on a link texted to that number. RCS stays as
+// it asks for waits for a tap on a link texted to that number, where in chat
+// it runs at their word (T-3155). RCS stays as
 // it was: reads and their own alerts.
 import { equal, test } from '@yaks/testing'
 import type { Request as Ask } from '@yaks/model'
@@ -170,12 +171,23 @@ test('a member added by text waits for the tap on the link texted to that number
   equal(await invited(), 1)
 })
 
-test('a member added in chat waits for a press on its card in the conversation, which only they can press', async () => {
+test('a member the owner adds in chat at their own word is added at once', async () => {
   let invited = async () => (await ctx.dir.read('.invite')).length
   let before = await invited(), links = texted.length
   await asked(
     'chat',
-    'Call member_add {"email":"ann@bot.yak.sh","role":"editor"}\nby chat',
+    'Call member_add {"email":"cy@bot.yak.sh","role":"editor"}\nby chat',
+  )
+  equal(answered.get('chat')!.includes('Nothing has happened yet'), false)
+  equal([await invited(), texted.length], [before + 1, links])
+})
+
+test('an act asked for approval in chat waits for a press on its card in the conversation, which only they can press', async () => {
+  let invited = async () => (await ctx.dir.read('.invite')).length
+  let before = await invited(), links = texted.length
+  await asked(
+    'chat',
+    'Call approval_request {"tool":"member_add","args":{"email":"ann@bot.yak.sh","role":"editor"},"say":"Add ann@bot.yak.sh"}\nby chat',
   )
   let said = answered.get('chat')!
   equal([said.includes('Nothing has happened yet'), said.includes('http')], [

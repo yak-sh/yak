@@ -1505,8 +1505,22 @@ export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
  * their tools again, as they do after a tool's answer that was `heard`. What
  * a stranger's conversation raised (`escalated`) is not among them: it is
  * the helper's own short request, decided as the Operator's work for the
- * person with their tools, whose escalations wait for their tap (T-2079). */
+ * person with their tools, whose privileged acts wait for their tap, as on
+ * every channel of `RELAYED` (T-2079, T-3155). */
 export let HEARSAY = new Set(['subscription', 'error', THREAD, PAGE])
+
+/** The channels whose words are someone else's ask, carried to the person:
+ * what a stranger's conversation raised (`escalated`), what another space's
+ * Operator handed over, what an app's code or the person's machine told, and
+ * every channel of `HEARSAY`. A privileged act of a turn they start waits for
+ * the person's tap (operator-approvals.ts `steering`). */
+export let RELAYED = new Set([
+  'escalated',
+  HANDOFF,
+  'app',
+  'machine',
+  ...HEARSAY,
+])
 
 /** The channels whose sender is known only by the number they texted from,
  * which anyone can fake, and whose turns are read-only: RCS, left as it was
