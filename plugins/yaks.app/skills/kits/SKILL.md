@@ -81,11 +81,11 @@ let { apply, drafts, subscribe } = await import(
 ## Colours and type
 
 Every part paints with the same CSS custom properties. A **theme** sets them
-all; `wear(themes.linen, kits.base)` from `@yaks/ui/wear` links a theme's and a
-kit's stylesheets ahead of the page's own and resolves once they have loaded, so
-render after it. Then the app's `style.css` sets the ones its design plan chose
-(<https://yaks.app/docs/design.md>, Plan before code), and every part wears
-them:
+all; `wear({ kits, theme: themes.linen })` from `@yaks/ui/wear` links the
+theme's and the kit's stylesheets ahead of the page's own and resolves once they
+have loaded, so render after it. Then the app's `style.css` sets the ones its
+design plan chose (<https://yaks.app/docs/design.md>, Plan before code), and
+every part wears them:
 
 | Property                      | What it colours or sets                       |
 | ----------------------------- | --------------------------------------------- |
@@ -143,7 +143,7 @@ let { apply, drafts, subscribe } = await import(
 )
 let [copy] = await Promise.all([
   fetch('copy.json').then((r) => r.json()),
-  wear(themes.linen, kits.base),
+  wear({ kits, theme: themes.linen }),
 ])
 let desk = drafts()
 

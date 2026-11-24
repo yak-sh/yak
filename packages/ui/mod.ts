@@ -40,6 +40,7 @@ export { gouache } from './gouache.ts'
 export { linen } from './linen.ts'
 export { rosepine } from './rosepine.ts'
 export {
+  addresses,
   composition,
   gather,
   groups,

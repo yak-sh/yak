@@ -46,7 +46,7 @@ type Simulation = {
 type Reply = { run: string; defender: string; message: string; at: number }
 
 async function boot() {
-  void wear(themes.everforest, kits.base, hudKit)
+  void wear({ kits: { ...kits, hud: hudKit }, theme: themes.everforest })
   let canvas = document.querySelector('canvas')!
   let root = document.querySelector<HTMLElement>('#hud')!
   let base = new URL('./api/', location.href)

@@ -324,25 +324,32 @@ let read = async (sheet: Stylesheet) => {
  * the parts: the half gap, the faint wash, the touch floor, the type scale. */
 let DERIVED = here('./derived.css')
 
-/** Each sheet a browser gets, by what it dresses: `theme` first (the theme,
- * and what every theme derives), then one rendering per part, the skin's
- * where it replaces one, the kit's otherwise, and whatever the skin lays over
- * it. A host that layers its own CSS reads them apart. */
-export let sheets = async (c: Composition): Promise<[string, string][]> => {
-  let each = (sheets: Stylesheet[]) => Promise.all(sheets.map(read))
-  return await Promise.all([
-    each([c.theme.css, DERIVED]).then((css): [string, string] => [
-      'theme',
-      css.join('\n'),
+// Each sheet a browser gets, by what it dresses: `theme` first (the theme,
+// and what every theme derives), then one rendering per part, the skin's
+// where it replaces one, the kit's otherwise, and whatever the skin lays over
+// it.
+let dressing = (c: Composition): [string, Stylesheet[]][] => [
+  ['theme', [c.theme.css, DERIVED]],
+  ...pieces(c).map(({ name, part, skin }): [string, Stylesheet[]] => {
+    let { css = part.css, over = [] } = skin ?? {}
+    return [name, [css, ...[over].flat()]]
+  }),
+]
+
+/** Each sheet a browser gets, by what it dresses (see `addresses` for the
+ * order). A host that layers its own CSS reads them apart. */
+export let sheets = (c: Composition): Promise<[string, string][]> =>
+  Promise.all(
+    dressing(c).map(async ([name, each]): Promise<[string, string]> => [
+      name,
+      (await Promise.all(each.map(read))).join('\n'),
     ]),
-    ...pieces(c).map(({ name, part, skin }) => {
-      let { css = part.css, over = [] } = skin ?? {}
-      return each([css, ...[over].flat()]).then((
-        css,
-      ): [string, string] => [name, css.join('\n')])
-    }),
-  ])
-}
+  )
+
+/** The address of every sheet a browser gets, in the order `stylesheet`
+ * reads them: the theme and what every theme derives, then each part's. */
+export let addresses = (c: Composition): string[] =>
+  dressing(c).flatMap(([, each]) => each.map((sheet) => sheet().href))
 
 /** Every sheet a browser gets, in order, as one. */
 export let stylesheet = async (c: Composition): Promise<string> =>

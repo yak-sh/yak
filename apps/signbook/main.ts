@@ -34,7 +34,7 @@ let { apply, drafts, subscribe } = await import(
 )
 let [copy] = await Promise.all([
   fetch('copy.json').then((r) => r.json()),
-  wear(themes.linen, kits.base),
+  wear({ kits, theme: themes.linen }),
 ])
 let desk = drafts()
 

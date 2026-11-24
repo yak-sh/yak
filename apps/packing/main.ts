@@ -10,7 +10,7 @@ let { apply, query }: Store = await import(
   new URL('api/client.js', document.baseURI).href
 )
 
-await wear(themes.gouache, kits.base)
+await wear({ kits, theme: themes.gouache })
 
 render(
   h(Packing, { store: { query, apply } }),
