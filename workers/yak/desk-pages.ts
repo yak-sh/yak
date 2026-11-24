@@ -958,7 +958,9 @@ let selling = (at: DeskPage, env: Host) => {
       }),
       said,
       existing,
-      h(Notice, { class: 'Bill_Say', role: 'status' }),
+      // Where the Subscribe button says how it went (pages.ts `billing`);
+      // the account's forms load a page of their own.
+      at.paying ? null : h(Notice, { class: 'Bill_Say', role: 'status' }),
     )
   return [
     start(
