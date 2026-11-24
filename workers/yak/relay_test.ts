@@ -12,7 +12,6 @@ import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import type { Level } from '@yaks/member'
-import type { Wire } from '@yaks/durable-object'
 import { seededState, state } from './testing.ts'
 import { socketDirectory } from './socket-fixture.ts'
 import { Store, type Time } from './graph.ts'
@@ -32,17 +31,6 @@ let wire = (actor: Actor | null = { by: ADA }) => {
       held = JSON.parse(JSON.stringify(v))
     },
     deserializeAttachment: () => held,
-  }
-}
-
-let withSockets = ({ storage, waitUntil }: ReturnType<typeof state>) => {
-  let live: Wire[] = []
-  return {
-    storage,
-    waitUntil,
-    live,
-    acceptWebSocket: (ws: Wire) => void live.push(ws),
-    getWebSockets: () => live,
   }
 }
 
@@ -109,7 +97,7 @@ let subscribe = async (
 }
 
 let kitchen = (
-  ctx: ReturnType<typeof withSockets>,
+  ctx: ReturnType<typeof state>,
   access: string,
   time?: Time,
 ) => {
@@ -137,7 +125,7 @@ let stock = async (store: Store, access: string) => {
 }
 
 let stocked = (access: string) =>
-  seededState((ctx) => stock(kitchen(withSockets(ctx), access).wake(), access))
+  seededState((ctx) => stock(kitchen(ctx, access).wake(), access))
 let cookbooks = { private: stocked('private'), open: stocked('open') }
 
 // A cookbook with one recipe in it, and cooks watching it.
@@ -145,7 +133,7 @@ let watching = async (
   access: keyof typeof cookbooks = 'private',
   time?: Time,
 ) => {
-  let ctx = withSockets(time ? state() : await cookbooks[access]())
+  let ctx = time ? state() : await cookbooks[access]()
   let { wake, members } = kitchen(ctx, access, time)
   let store = wake()
   if (time) await stock(store, access)

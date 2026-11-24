@@ -4009,16 +4009,21 @@ export class Store extends Durable {
 
   // The rules live here that are not done, less the ones this incarnation
   // saw fail. No rules is no read at all.
-  #owing = (): Rule[] =>
-    this.#moves().length
-      ? this.#moves().filter((r) =>
-        runs(r, this.#get('name') ?? '') && !this.#halted.has(r.mark) &&
-        !this.#stamp(r)?.done
-      )
-      : []
+  #owing = (): Rule[] => {
+    let name = this.#get('name') ?? ''
+    return this.#moves().filter((r) =>
+      runs(r, name) && !this.#halted.has(r.mark) && !this.#stamp(r)?.done
+    )
+  }
 
-  #moves = (): Rule[] =>
-    [
+  #moves = (): Rule[] => {
+    let name = this.#get('name') ?? ''
+    // The app's own words, read once a call and only for a rule that asks.
+    let defs: VocabDoc['$defs']
+    let declared = (comp: string) =>
+      (defs ??= meant(this.#get('vocab')).$defs ?? {})[comp]?.component ===
+        true
+    return [
       ...this.#rules,
       sessionMove(),
       ...(this.#lensMove ? [this.#lensMove] : []),
@@ -4026,12 +4031,11 @@ export class Store extends Durable {
     ]
       .filter((r) =>
         (r.stores == 'apps'
-          ? !ownStore(this.#get('name') ?? '')
-          : !r.stores || r.stores.includes(this.#get('name') ?? '')) &&
-        !r.core?.some((comp) =>
-          meant(this.#get('vocab')).$defs?.[comp]?.component === true
-        )
+          ? !ownStore(name)
+          : !r.stores || r.stores.includes(name)) &&
+        !r.core?.some(declared)
       )
+  }
 
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,

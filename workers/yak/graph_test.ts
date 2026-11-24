@@ -81,12 +81,13 @@ let wire = () => {
 // One object's whole state: storage that outlives an incarnation, and the
 // socket list the runtime holds for it.
 let withSockets = (
-  { storage, waitUntil }: ReturnType<typeof probeState>,
+  { storage, waitUntil, beat }: ReturnType<typeof probeState>,
   retain = false,
 ) => {
   let live: Wire[] = []
   return {
     storage,
+    beat,
     ...(retain ? { waitUntil } : {}),
     live,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
