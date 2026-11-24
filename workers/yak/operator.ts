@@ -227,7 +227,7 @@ import {
   topicOf,
 } from './operator-oracles.ts'
 import { attachmentKey } from './attachments.ts'
-import { spaceKeeps } from './connections.ts'
+import { outsiders } from './connections.ts'
 
 type Store = OperatorStore
 export type Options = {
@@ -2729,7 +2729,7 @@ export let operating = (
             }),
             texted: !!confirm,
             place: space.title || space.slug,
-            ours: (connection) => spaceKeeps(env, space.eid, connection),
+            ours: (connection, app) => outsiders(env, space, connection, app),
           },
         ))
         : tools

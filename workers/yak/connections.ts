@@ -92,6 +92,7 @@ import {
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
 import { integrationLogo } from '@yaks/platform/routes'
+import { sampling } from '@yaks/platform/visits'
 import { PROVISIONAL } from '@yaks/effects'
 import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp, Taken } from '@yaks/graph'
@@ -1141,6 +1142,36 @@ export let spaceKeeps = async (env: Env, space: string, connection: string) =>
       ))[0],
       CONNECTION,
     ).owner == space
+
+/** Who outside space `space` would call out through connection `connection`
+ * once app `app` (its slug or eid) is given it, in the person's words: nobody
+ * where everyone holding a level on the app, and all the code running with
+ * it, is the space's own, and then any of its apps may be given it without
+ * asking (operator-approvals.ts). Null where the connection is not the
+ * space's own or the app not a live app of it. */
+export let outsiders = async (
+  env: Env,
+  space: Space,
+  connection: string,
+  app: string,
+): Promise<string[] | null> => {
+  let dir = dirOf(env)
+  let at = await spaceKeeps(env, space.eid, connection) &&
+    await dir.findApp(space, app)
+  if (!at || at.trashed) return null
+  let { held } = await dir.people([space.eid])
+  let seated = new Set(
+    held.flatMap((h) => h.held == 'seat' ? [h.person] : []),
+  )
+  return [
+    held.some((h) => h.on == at.eid && !seated.has(h.person)) &&
+    'people invited to this app alone',
+    !!at.join && Object.keys(at.join).length > 0 &&
+    'anyone its join policy lets in',
+    sampling(at) && !!at.demo && 'strangers trying its sample',
+    !!at.installed?.sandboxed && 'code another space published',
+  ].filter((who): who is string => typeof who == 'string')
+}
 
 let lent = (h: Hold) => h.link?.lender != null
 

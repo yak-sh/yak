@@ -276,26 +276,42 @@ test('app_set waits when it opens the app to joining or lets it out of its sandb
   for (let [t, args, said] of cases) equal(await asked(t, args), said)
 })
 
-test('connection_attach runs with a connection the space keeps, and waits for one it does not or for opening it to anyone', async () => {
+test('connection_attach runs with a connection the space keeps for an app only the space reaches, and waits where it reaches further', async () => {
+  // Who outside the space each app lets call out, for the connection the
+  // space keeps; any other connection is not the space's.
+  let reach: Record<string, string[]> = {
+    a: [],
+    guests: ['people invited to this app alone'],
+    copy: ['anyone its join policy lets in', 'code another space published'],
+  }
   let [attach] = confirming([tool('connection_attach')], ask, {
     known,
     texted: true,
-    ours: (connection) => Promise.resolve(connection == 'esv'),
+    ours: (connection, app) =>
+      Promise.resolve(connection == 'esv' ? reach[app] : null),
   })
   let asked = async (args: Record<string, unknown>) => {
     let said = String(await attach.run(args))
     return said == 'ran' ? 'ran' : texts.at(-1)!.words.split('? Tap')[0]
   }
-  equal(await asked({ app: 'a', connection: 'esv' }), 'ran')
-  equal(await asked({ app: 'a', connection: 'esv', anyone: false }), 'ran')
-  equal(
-    await asked({ app: 'a', connection: 'esv', anyone: true }),
-    'Give the app a the connection esv, for anyone using it to call out through',
-  )
-  equal(
-    await asked({ app: 'a', connection: 'mine' }),
-    'Give the app a the connection mine',
-  )
+  let cases: [Record<string, unknown>, string][] = [
+    [{ app: 'a', connection: 'esv' }, 'ran'],
+    [{ app: 'a', connection: 'esv', anyone: false }, 'ran'],
+    [
+      { app: 'a', connection: 'esv', anyone: true },
+      'Give the app a the connection esv, for anyone using it to call out through',
+    ],
+    [{ app: 'a', connection: 'mine' }, 'Give the app a the connection mine'],
+    [
+      { app: 'guests', connection: 'esv' },
+      'Give the app guests the connection esv, for people invited to this app alone to call out through',
+    ],
+    [
+      { app: 'copy', connection: 'esv', anyone: false },
+      'Give the app copy the connection esv, for anyone its join policy lets in and code another space published to call out through',
+    ],
+  ]
+  for (let [args, said] of cases) equal(await asked(args), said)
 })
 
 // member_add as a turn asks it where its person reads at `at`.

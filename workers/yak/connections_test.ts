@@ -35,6 +35,7 @@ import {
   ctxOf,
   type Hold,
   hook as receiveHook,
+  outsiders,
   own,
   spaceKeeps,
 } from './connections.ts'
@@ -573,6 +574,49 @@ test('attaching a space connection may say who calls out through it as it makes 
   assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['WEATHER'])
   assertEquals(await spaceKeeps(s.p.env, s.space.eid, connection), true)
   assertEquals(await spaceKeeps(s.p.env, app.eid, connection), false)
+})
+
+test('who outside the space a connection it keeps would reach through an app', async () => {
+  let s = await setup()
+  await s.post({
+    do: 'add',
+    integration: 'Weather',
+    hosts: 'api.weather.test',
+    key: 'private-key',
+  })
+  let app = await liveApp(s)
+  let connection = (await s.shown()).list[0].eid
+  let reach = () => outsiders(s.p.env, s.space, connection, 'notes')
+  let set = (bundle: Record<string, unknown>) =>
+    s.at.apply([{ entity: { eid: app.eid }, ...bundle }], KERNEL)
+  assertEquals(await reach(), [])
+  assertEquals(await outsiders(s.p.env, s.space, 'mine', 'notes'), null)
+  assertEquals(await outsiders(s.p.env, s.space, connection, 'gone'), null)
+  // The space's own owner holding a grant on the app too is still the space.
+  await s.at.apply([{
+    entity: { eid: crypto.randomUUID() },
+    grant: { app: app.eid, person: s.person, access: 'editor' },
+  }], KERNEL)
+  assertEquals(await reach(), [])
+  let guest = crypto.randomUUID()
+  await s.at.apply([{ entity: { eid: guest }, person: {} }, {
+    entity: { eid: crypto.randomUUID() },
+    grant: { app: app.eid, person: guest, access: 'viewer' },
+  }], KERNEL)
+  assertEquals(await reach(), ['people invited to this app alone'])
+  await set({ join: { policy: { domain: 'x.com' } } })
+  await set({
+    installed: {
+      of: crypto.randomUUID(),
+      version: 1,
+      sandboxed: new Date().toISOString(),
+    },
+  })
+  assertEquals(await reach(), [
+    'people invited to this app alone',
+    'anyone its join policy lets in',
+    'code another space published',
+  ])
 })
 
 // Every act the page posts, and one app's link to a connection as each side

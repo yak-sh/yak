@@ -104,9 +104,10 @@ export type Known = (address: string) => Promise<boolean>
  * waits for someone whose role allows it (operator-route.ts). */
 export type Turn = {
   known: Known
-  /** whether a connection is the space's own, which any app of the space
-   * may use without asking */
-  ours?: (connection: string) => Promise<boolean>
+  /** who outside the space would call out through a connection given to
+   * an app (connections.ts `outsiders`): none, and it is given without
+   * asking; null where the connection is not the space's own */
+  ours?: (connection: string, app: string) => Promise<string[] | null>
   texted?: boolean
   place?: string
   role?: Role
@@ -141,6 +142,12 @@ let strangers = async (known: Known, ...v: unknown[]) => {
   let met = await Promise.all(all.map(known))
   return all.filter((_, i) => !met[i])
 }
+
+// Several in one line: a, b and c.
+let listed = (all: string[]) =>
+  all.length < 2
+    ? all.join('')
+    : `${all.slice(0, -1).join(', ')} and ${all.at(-1)}`
 
 // Whether app_set's `join` sets a policy, rather than clearing it with {}.
 let opens = (join: unknown) =>
@@ -194,13 +201,18 @@ export let ESCALATING: Record<
   service_connect: (a) => `Connect the service ${a.service} to ${a.app}`,
   // A connection the space keeps is the space's to use: attaching it to
   // another of its apps keeps the key in the vault and the calls to the app's
-  // members. A person's own connection, or opening the link to anyone using
-  // the app, waits for the tap.
-  connection_attach: async (a, { ours }) =>
-    a.anyone !== true && await ours?.(String(a.connection)) ? undefined : (
+  // members. A person's own connection waits for the tap, as does a link
+  // anyone outside the space would call out through: anyone using the app,
+  // its guests and joiners, or a sandboxed copy's publisher's code.
+  connection_attach: async (a, { ours }) => {
+    let outside = a.anyone === true
+      ? ['anyone using it']
+      : await ours?.(String(a.connection), String(a.app)) ?? null
+    return outside?.length === 0 ? undefined : (
       `Give the app ${a.app} the connection ${a.connection}` +
-      (a.anyone === true ? ', for anyone using it to call out through' : '')
-    ),
+      (outside?.length ? `, for ${listed(outside)} to call out through` : '')
+    )
+  },
   store_attach: (a) =>
     a.detach === true
       ? undefined
