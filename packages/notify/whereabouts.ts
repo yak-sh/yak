@@ -209,6 +209,18 @@ export let presence = (
   }
 }
 
+/** When a person was last active on yaks.app: the newest word any page of
+ * theirs, or a text or an email to their Operator, said of them, faded or
+ * not. Discord's status is not something they did here. None for someone
+ * never seen. */
+export let lastSeen = (rows: Row[]): string | undefined => {
+  let last: string | undefined
+  for (let { whereabouts: p } of rows) {
+    if (p?.at && p.channel && p.channel != 'discord') last = latest(last, p.at)
+  }
+  return last
+}
+
 let latest = (a: string | undefined, b: string) => !a || b > a ? b : a
 
 /** How long ago `at` was, as a person says it: 4m, 2h, 1d. */

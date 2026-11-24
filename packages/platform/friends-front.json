@@ -1,0 +1,27 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "friends front",
+  "description": "The Friends page's own state in its page graph, never synced.",
+  "$defs": {
+    "friendSeen": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "where one friend is on yaks.app, as the page last heard it",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["building", "online", "away"],
+          "description": "on yaks.app now, building or online, or away; none when they or the reader hide it"
+        },
+        "last": {
+          "type": "string",
+          "description": "when they were last active on yaks.app"
+        }
+      }
+    }
+  }
+}

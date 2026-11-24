@@ -1423,3 +1423,41 @@
 .Talk_Way form {
   display: contents;
 }
+
+/* Friends (desk-pages.ts `friendsView`): each friend a fold, pressed open for
+   a message box and what they share, their initial wearing a green dot while
+   they are online. Past the first six (`FEW`), only those online show until
+   the person asks for all. */
+@layer sections {
+  .Friends:not(.Friends-all) > .Friend:nth-child(n + 7):not(.Friend-here) {
+    display: none;
+  }
+  .Friend_Summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .Friend_Summary::-webkit-details-marker {
+    display: none;
+  }
+  .Friend_Summary > .Identity {
+    padding-inline: 0;
+  }
+  .Friend_Avatar {
+    position: relative;
+  }
+  .Friend_Dot {
+    position: absolute;
+    right: -.3rem;
+    bottom: -.3rem;
+    font-size: .95rem;
+    box-shadow: 0 0 0 .15rem var(--surface, var(--bg));
+  }
+  .Friend_Dot[hidden] {
+    display: none;
+  }
+  .Friend_Body {
+    display: grid;
+    gap: var(--half-gap);
+    padding-block: 0 var(--half-gap);
+  }
+}

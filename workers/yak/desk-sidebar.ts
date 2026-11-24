@@ -13,6 +13,7 @@ import {
 
 let icons = {
   profile: 'user',
+  friends: 'users-round',
   invite: 'qr-code',
   agents: 'bot',
   shared: 'share-2',
@@ -92,6 +93,7 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
       heading: true,
       items: [
         item('profile', 'Profile'),
+        item('friends', 'Friends'),
         item('invite', 'Invite a friend'),
         item('agents', 'Agents'),
         item('shared', 'Shared with you'),

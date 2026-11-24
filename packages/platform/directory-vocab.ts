@@ -1120,7 +1120,7 @@ let presenceDoc: VocabDoc = {
       component: true,
       type: 'object',
       description:
-        'Whether a person hides from their friends when they are on yaks.app and what they have open.',
+        "Whether a person hides from their friends when they are on yaks.app, when they last were and what they have open; hiding it, they see none of their friends' either.",
       properties: { hidden: { type: 'boolean' } },
     },
   },

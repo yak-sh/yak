@@ -3981,6 +3981,9 @@ importers:
       '@yaks/cli':
         specifier: 0.2.33
         version: link:../cli
+      '@yaks/client':
+        specifier: 0.2.24
+        version: link:../client
       '@yaks/code':
         specifier: 0.2.23
         version: link:../code
@@ -4087,6 +4090,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      linkedom:
+        specifier: ^0.18.12
+        version: 0.18.15(patch_hash=d711716217dc74800ac6be22d4bbceee17bc29eafa085f76abe5e086d9c88fe9)
 
   packages/preact:
     dependencies:

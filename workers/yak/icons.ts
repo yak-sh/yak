@@ -101,6 +101,8 @@ import User from 'lucide/dist/esm/icons/user.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Users from 'lucide/dist/esm/icons/users.mjs'
 // @ts-types="@yaks/ui/lucide"
+import UsersRound from 'lucide/dist/esm/icons/users-round.mjs'
+// @ts-types="@yaks/ui/lucide"
 import X from 'lucide/dist/esm/icons/x.mjs'
 
 export let icons = {
@@ -120,6 +122,7 @@ export let icons = {
   plug: Plug,
   play: Play,
   users: Users,
+  'users-round': UsersRound,
   user: User,
   'share-2': Share2,
   'qr-code': QrCode,

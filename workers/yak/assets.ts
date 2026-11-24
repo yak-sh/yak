@@ -53,6 +53,12 @@ export let ASSETS: Asset[] = [
     bundle: of('@yaks/inbox/actions-browser'),
     named: true,
   },
+  // The Friends page kept current (@yaks/platform/friends-browser).
+  {
+    name: '_friends.js',
+    bundle: of('@yaks/platform/friends-browser'),
+    named: true,
+  },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A signed-in page's links followed in place (pages.ts `documented`).

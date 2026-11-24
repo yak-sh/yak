@@ -41,6 +41,8 @@
     "./upstream": "./upstream.ts",
     "./app-transfer": "./app-transfer.ts",
     "./friends": "./friends.ts",
+    "./friends-browser": "./friends-browser.ts",
+    "./presence": "./presence.ts",
     "./app-authority": "./app-authority.ts",
     "./app-writes": "./app-writes.ts",
     "./app-read": "./app-read.ts",
@@ -134,6 +136,7 @@
     "@yaks/archetype": "0.2.24",
     "@yaks/blob": "0.2.30",
     "@yaks/builders": "0.2.23",
+    "@yaks/client": "0.2.24",
     "@yaks/cli": "0.2.33",
     "@yaks/code": "0.2.23",
     "@yaks/draft": "0.2.24",
@@ -171,6 +174,7 @@
     "@yaks/key": "0.2.24",
     "@yaks/ram": "0.2.24",
     "@yaks/sqlite": "0.2.30",
-    "@yaks/testing": "0.2.30"
+    "@yaks/testing": "0.2.30",
+    "linkedom": "^0.18.12"
   }
 }

@@ -12,8 +12,9 @@ import {
   type Verdict,
 } from '@yaks/platform/friends'
 import { sendable } from '@yaks/mail'
-import { presence } from '@yaks/notify/whereabouts'
+import { lastSeen, presence } from '@yaks/notify/whereabouts'
 import { line } from '@yaks/query'
+import { ordered } from '@yaks/platform/presence'
 import { canon } from './signin.ts'
 import { nameOf } from './names.ts'
 import { type Directory, directory, fetch, type Space } from './directory.ts'
@@ -62,30 +63,49 @@ export let friendsOf = async (
   )
 }
 
-/** Where a friend is on yaks.app now, as one reader may see it: building
- * or online, and the spaces and apps they have open that the reader can
- * already open themselves. */
+/** Where a friend is on yaks.app, as one reader may see it: building or
+ * online now, with the spaces and apps they have open that the reader can
+ * already open themselves, or away since they were `last` active. */
 export type Seen = {
-  state: 'building' | 'online'
+  state: 'building' | 'online' | 'away'
+  last?: string
   spaces: { slug: string; title: string }[]
   apps: { slug: string; title: string; space: string }[]
 }
 
-/** What `reader` may see of `friend`'s presence (@yaks/notify/whereabouts
- * `presence`), none when no page of theirs is open or they hide it
- * (`presence{hidden}`). Call it for a confirmed friend alone. */
-export let presenceOf = async (
+/** What `reader` may see of each of `friends`' presence
+ * (@yaks/notify/whereabouts `presence` and `lastSeen`), by person. Showing
+ * is mutual: someone who hides their own (`presence{hidden}`) is shown to no
+ * friend and sees none of theirs. A friend never seen on yaks.app has none.
+ * Call it for confirmed friends alone. */
+export let presencesOf = async (
+  dir: Directory,
+  reader: string,
+  friends: string[],
+  now: number = Date.now(),
+): Promise<Map<string, Seen>> => {
+  if (!friends.length || await dir.presenceHidden(reader)) return new Map()
+  let seen = await Promise.all(
+    friends.map((f) => presenceOf(dir, reader, f, now)),
+  )
+  return new Map(friends.flatMap((f, i) => seen[i] ? [[f, seen[i]]] : []))
+}
+
+let presenceOf = async (
   dir: Directory,
   reader: string,
   friend: string,
-  now: number = Date.now(),
+  now: number,
 ): Promise<Seen | undefined> => {
   let [rows, hidden] = await Promise.all([
     dir.read(line`.whereabouts.person=${friend}&*`),
     dir.presenceHidden(friend),
   ])
-  let said = hidden ? undefined : presence(rows, now)
-  if (!said) return
+  if (hidden) return
+  let said = presence(rows, now), last = lastSeen(rows)
+  if (!said) {
+    return last ? { state: 'away', last, spaces: [], apps: [] } : undefined
+  }
   let [spaces, apps] = await Promise.all([
     Promise.all(said.spaces.map(async (eid) => {
       let space = await dir.at(eid)
@@ -102,6 +122,7 @@ export let presenceOf = async (
   ])
   return {
     state: said.state,
+    last,
     spaces: spaces.flat().map((s) => ({ slug: s.slug, title: s.title })),
     apps: apps.flat().map(({ app, space }) => ({
       slug: app.slug,
@@ -109,6 +130,53 @@ export let presenceOf = async (
       space: space.slug,
     })),
   }
+}
+
+/** An app someone let the reader into, in the space it lives in. */
+export type Shared = {
+  eid: string
+  slug: string
+  title: string
+  space: string
+}
+
+/** A confirmed friend as their Friends page lists them: where they are,
+ * and the apps in their spaces they let the reader into. */
+export type Befriended = {
+  person: string
+  name: string
+  seen?: Seen
+  shared: Shared[]
+}
+
+/** `person`'s confirmed friends for their Friends page, online first, then
+ * the most recently active (@yaks/platform/presence `ordered`), each with
+ * the apps of `shared` (everything others let them into) that live in a
+ * space the friend owns. */
+export let friendList = async (
+  dir: Directory,
+  person: string,
+  shared: Shared[],
+): Promise<Befriended[]> => {
+  let mine = (await friendsOf(dir, person)).filter((f) =>
+    f.standing == 'friend'
+  )
+  let [seen, owned] = await Promise.all([
+    presencesOf(dir, person, mine.map((f) => f.person)),
+    shared.length
+      ? Promise.all(mine.map((f) => dir.seats(f.person, 'owner')))
+      : mine.map(() => []),
+  ])
+  let listed = mine.map((f, i) => {
+    let theirs = new Set(owned[i].map((s) => s.space.slug))
+    return {
+      person: f.person,
+      name: f.name,
+      seen: seen.get(f.person),
+      shared: shared.filter((a) => theirs.has(a.space)),
+    }
+  })
+  return ordered(listed, (f) => f.seen)
 }
 
 // One friend's presence in words: "Fay is building in gift-shop".
@@ -135,12 +203,12 @@ export let friendsHere = async (
     friendsOf(dir, who.person),
   ])
   if (ownOf(seats)?.space.eid != space.eid) return
-  let here = (await Promise.all(
-    friends.filter((f) => f.standing == 'friend').map(async (f) => {
-      let seen = await presenceOf(dir, who.person!, f.person)
-      return seen ? [presenceLine(f.name, seen)] : []
-    }),
-  )).flat()
+  let mine = friends.filter((f) => f.standing == 'friend')
+  let seen = await presencesOf(dir, who.person, mine.map((f) => f.person))
+  let here = mine.flatMap((f) => {
+    let s = seen.get(f.person)
+    return s && s.state != 'away' ? [presenceLine(f.name, s)] : []
+  })
   return here.length
     ? `Friends on yaks.app now: ${here.join('. ')}.`
     : undefined
@@ -255,12 +323,14 @@ export let friendTools: ToolRow[] = [
     input: { type: 'object', properties: {} },
     run: async (ctx) => {
       let dir = open(ctx.env)
-      let friends = await Promise.all(
-        (await friendsOf(dir, ctx.person)).map(async (f) =>
-          f.standing == 'friend'
-            ? { ...f, presence: await presenceOf(dir, ctx.person, f.person) }
-            : f
-        ),
+      let all = await friendsOf(dir, ctx.person)
+      let seen = await presencesOf(
+        dir,
+        ctx.person,
+        all.filter((f) => f.standing == 'friend').map((f) => f.person),
+      )
+      let friends = all.map((f) =>
+        seen.has(f.person) ? { ...f, presence: seen.get(f.person) } : f
       )
       return { text: '', value: { friends } }
     },

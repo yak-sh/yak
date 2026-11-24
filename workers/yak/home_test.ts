@@ -114,6 +114,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
   assertEquals(document.querySelector('.Sidebar_Title')?.textContent, 'Manage')
   assertEquals(account, [
     { label: 'Profile', href: '/manage/account/profile' },
+    { label: 'Friends', href: '/manage/account/friends' },
     { label: 'Invite a friend', href: '/manage/account/invite' },
     { label: 'Agents', href: '/manage/account/agents' },
     { label: 'Shared with you', href: '/manage/account/shared' },
@@ -279,7 +280,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
   let member = sides(await block({ view: 'operator', member: true }))
   assertEquals(member.space.map((l) => l.label), ['Operator'])
   assertEquals(member.back?.getAttribute('href'), '/dana')
-  assertEquals(member.account.length, 4)
+  assertEquals(member.account.length, 5)
   // On the person's own space it is the Operator too.
   let own = sides(
     await block({

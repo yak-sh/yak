@@ -296,3 +296,76 @@ test('a person who hides their presence shows to no friend, until they show it a
   assertEquals(shown.status, 303, await shown.text())
   assertEquals((await seen() as { state: string }).state, 'building')
 })
+
+let friendsPage = async (p: typeof ann, query = '') =>
+  await (await k.at(k.host, managePath('friends') + query, {
+    headers: { cookie: p.cookie },
+  })).text()
+let post = (p: typeof ann, fields: Record<string, string>, accept?: string) =>
+  k.at(k.host, managePath('friends'), {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      cookie: p.cookie,
+      'content-type': 'application/x-www-form-urlencoded',
+      ...accept ? { accept } : {},
+    },
+    body: new URLSearchParams(fields).toString(),
+  })
+let live = async (p: typeof ann, tab = 'here') =>
+  Object.fromEntries(
+    ((await (await post(p, { tab }, 'application/json')).json()).friends as {
+      person: string
+      state?: string
+      last?: string
+    }[]).map(({ person, ...seen }) => [person, seen]),
+  )
+
+test('the Friends page lists friends online first with a green dot, and their shared apps', async () => {
+  let page = await friendsPage(eve)
+  assertStringIncludes(page, `data-friend="${fay.person}"`)
+  assertStringIncludes(page, 'Building now')
+  assertStringIncludes(page, 'Show when I’m online')
+  assertStringIncludes(page, '_friends.js')
+  assertEquals(page.includes(`data-friend="${ann.person}"`), false)
+  await k.dir.apply({
+    entities: [{
+      entity: { eid: crypto.randomUUID() },
+      grant: { app: gift!.eid, person: fay.person, access: 'editor' },
+    }],
+  })
+  let fays = await friendsPage(fay)
+  assertStringIncludes(fays, `data-friend="${eve.person}"`)
+  assertStringIncludes(fays, '>Gift<')
+})
+
+test('the open page says its tab and hears where each friend is, as it changes', async () => {
+  assertEquals((await live(eve))[fay.person].state, 'building')
+  assertEquals((await live(fay))[eve.person].state, 'online')
+  await post(eve, { tab: 'away' })
+  let away = (await live(fay))[eve.person]
+  assertEquals(away.state, 'away')
+  assertEquals(typeof away.last, 'string')
+  assertStringIncludes(await friendsPage(fay), 'Active ')
+})
+
+test('someone who hides their status is seen by no friend and sees none', async () => {
+  let hid = await post(fay, { presence: 'hidden' })
+  assertEquals(hid.status, 303, await hid.text())
+  assertEquals((await live(eve))[fay.person], {})
+  assertEquals((await live(fay))[eve.person], {})
+  assertEquals((await friendsPage(eve)).includes('Building now'), false)
+  await post(fay, { presence: 'shown' })
+  assertEquals((await live(eve))[fay.person].state, 'building')
+})
+
+test('a message sent from the Friends page lands in the friend’s Updates', async () => {
+  let sent = await post(eve, { message: fay.person, say: 'Lunch?' })
+  assertEquals(sent.status, 303, await sent.text())
+  assertStringIncludes(
+    await (await updates(fay, faySpace.slug)).text(),
+    'Lunch?',
+  )
+  let refused = await post(eve, { message: ann.person, say: 'Hi' })
+  assertStringIncludes(await refused.text(), 'friend list')
+})

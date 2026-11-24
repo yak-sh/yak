@@ -70,7 +70,13 @@ export type SpaceView =
   | 'settings'
   | 'trash'
 /** A page of the person's own, the same in every space. `space` makes one. */
-export type AccountView = 'profile' | 'invite' | 'agents' | 'shared' | 'space'
+export type AccountView =
+  | 'profile'
+  | 'friends'
+  | 'invite'
+  | 'agents'
+  | 'shared'
+  | 'space'
 export type ManageView = SpaceView | AccountView
 /** A page of a space's Operator, at the space's own address. */
 export type Talk = 'updates' | 'matches'
@@ -95,6 +101,7 @@ let SPACE_VIEWS: SpaceView[] = [
 ]
 let ACCOUNT_VIEWS: AccountView[] = [
   'profile',
+  'friends',
   'invite',
   'agents',
   'shared',

@@ -49,6 +49,7 @@ import type { Connections, Face } from './connections.ts'
 import { day, esc, fileDrop, markup, raw } from './html.ts'
 
 import type { People } from './people.ts'
+import type { Befriended } from './friends.ts'
 
 import type { Panes, Role } from './directory.ts'
 
@@ -266,6 +267,10 @@ ${
   }${
     main.includes('data-inbox-actions=')
       ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-friends=')
+      ? `<script type="module" src="${file('_friends.js')}"></script>`
       : ''
   }${
     main.includes('data-chart')
@@ -808,6 +813,10 @@ export type DeskPage = {
   /** whether the person hides their presence from their friends
    * (`presence{hidden}`), on their profile */
   presenceHidden?: boolean
+  /** the person's confirmed friends on their Friends page, online first,
+   * and whether it shows them all (`?all`) or the first few */
+  friendList?: Befriended[]
+  allFriends?: boolean
   /** the owner's confirmed friends, offered before the invitation's email
    * box (friends.ts) */
   friends?: { person: string; name: string }[]

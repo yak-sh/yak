@@ -1278,9 +1278,11 @@ friend_list:
     The person's friends on yaks.app, and everyone waiting on an answer: who
     asked them (asked), who yaks.app suggests they may know (suggested), and
     whom they asked (asking). Each has a person id for friend_add and
-    friend_remove. A friend on yaks.app now has presence: building (an
-    Operator page open) or online, with the spaces and apps they have open
-    that the person can open too.
+    friend_remove. A friend has presence: building (an Operator page open)
+    or online now, with the spaces and apps they have open that the person
+    can open too, or away, with when they were last active (last). A friend
+    who hides it has none, and so does every friend while the person hides
+    their own. Their Friends page (/manage/account/friends) shows the same.
 friend_message:
   title: Message a friend
   description: >-
@@ -1299,9 +1301,11 @@ friend_messages:
 friend_presence:
   title: Hide or show presence
   description: >-
-    Hide from the person's friends when they are on yaks.app and what they
-    have open (hidden true), or show it again (hidden false). Only confirmed
-    friends ever see it. Use only when the person asks.
+    Hide from the person's friends when they are on yaks.app, when they last
+    were and what they have open (hidden true), or show it again (hidden
+    false): "Show when I'm online" on their Friends page and Profile. Hiding
+    is mutual: while it is hidden they see none of their friends' either.
+    Only confirmed friends ever see it. Use only when the person asks.
 friend_remove:
   title: Remove a friend
   description: >-

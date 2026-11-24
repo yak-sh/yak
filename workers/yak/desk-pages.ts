@@ -14,11 +14,13 @@ import {
   Check,
   Chip,
   Chips,
+  Dot,
   Empty,
   Field,
   Form,
   Group,
   Icon,
+  Identity,
   Logo,
   Modal,
   More,
@@ -48,6 +50,8 @@ import { icons } from './icons.ts'
 import { day, fileDrop, markup, raw } from './html.ts'
 import { LOGO_TYPES } from './logo.ts'
 import { holder, tile } from './render/mod.ts'
+import type { Befriended } from './friends.ts'
+import { online, seenWords } from '@yaks/platform/presence'
 import type { Person } from './people.ts'
 import { type Invitation, qr } from './referral.ts'
 import {
@@ -515,17 +519,7 @@ let profile = (at: DeskPage, env: Host) => {
             h(Form.Label, { as: 'p' }, 'Email'),
             h('p', null, at.email ?? ''),
           ),
-          labeled(
-            'your-presence',
-            'Friends see when you’re here',
-            h(
-              Field,
-              { choose: true, id: 'your-presence', name: 'presence' },
-              option('shown', 'Yes', !at.presenceHidden),
-              option('hidden', 'No', !!at.presenceHidden),
-            ),
-            'Your confirmed friends see when you’re on yaks.app, and which of your apps they could open themselves. Nobody else does.',
-          ),
+          showing(at, managePath('profile')),
           mine.length > 1
             ? labeled(
               'your-first',
@@ -557,6 +551,194 @@ let profile = (at: DeskPage, env: Host) => {
         h(Form.Hidden, { name: 'session', value: 'all' }),
         send('Sign out everywhere'),
       ),
+    ),
+  ]
+}
+
+// "Show when I'm online": the person's `presence{hidden}`, the same one
+// choice Profile has, saved as it changes.
+let showing = (at: DeskPage, action: string) =>
+  labeled(
+    `presence-${action == managePath('friends') ? 'friends' : 'profile'}`,
+    'Show when I’m online',
+    h(
+      Field,
+      {
+        choose: true,
+        id: `presence-${
+          action == managePath('friends') ? 'friends' : 'profile'
+        }`,
+        name: 'presence',
+      },
+      option('shown', 'Yes', !at.presenceHidden),
+      option('hidden', 'No', !!at.presenceHidden),
+    ),
+    at.presenceHidden
+      ? 'Your friends don’t see when you’re on yaks.app, and you don’t see when they are.'
+      : 'Your friends see when you’re on yaks.app or when you last were, and which of your apps they could open themselves. Nobody else does.',
+  )
+
+// How many friends the list shows before "Show all": every one online, then
+// the most recently active up to this many (pages.css `.Friends`).
+let FEW = 6
+
+// One friend: their initial and a green dot while they are online, "Online
+// now" or "Active 3 hours ago" under their name, kept current by
+// @yaks/platform/friends-browser. Pressed, it opens what friends can do: send
+// them a message, which lands in their Updates, and open the apps of theirs
+// they let this person into.
+let friendRow = (f: Befriended, env: Host, now: number) => {
+  let here = online(f.seen)
+  let words = seenWords(f.seen, now)
+  return h(
+    Rows.Item,
+    {
+      as: 'li',
+      class: here ? 'Friend Friend-here' : 'Friend',
+      'data-friend': f.person,
+    },
+    h(
+      'details',
+      { class: 'Friend_Fold' },
+      h(
+        'summary',
+        { class: 'Friend_Summary' },
+        h(
+          Identity,
+          { as: 'span' },
+          h(
+            Identity.Avatar,
+            { class: 'Friend_Avatar' },
+            (f.name.trim()[0] ?? '?').toUpperCase(),
+            h(Dot, {
+              mod: 'positive',
+              class: 'Friend_Dot',
+              'data-friend-dot': '',
+              hidden: !here,
+              role: 'img',
+              'aria-label': 'Online',
+            }),
+          ),
+          h(
+            Identity.Text,
+            null,
+            h(Identity.Name, null, f.name),
+            h(
+              Identity.Note,
+              { 'data-friend-seen': '', hidden: !words },
+              !here && f.seen?.last
+                ? ['Active ', h(Time, { at: f.seen.last, now })]
+                : words,
+            ),
+          ),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'Friend_Body' },
+        h(
+          Form,
+          { class: 'Page_Form', method: 'post', action: managePath('friends') },
+          h(Form.Hidden, { name: 'message', value: f.person }),
+          labeled(
+            `friend-say-${f.person}`,
+            `Message ${f.name}`,
+            h(Field, {
+              lines: true,
+              id: `friend-say-${f.person}`,
+              name: 'say',
+              rows: 2,
+              maxlength: 4000,
+              required: true,
+              placeholder: 'Write a message…',
+            }),
+            'It lands in their Updates, where they can reply.',
+          ),
+          h(Form.Actions, null, send('Send')),
+        ),
+        h(Form.Label, { as: 'p' }, 'Shared with you'),
+        f.shared.length
+          ? h(
+            Rows,
+            { as: 'ul' },
+            f.shared.map((a) => {
+              let host = spaceHost(env, a.space)
+              return tile(a, { at: `https://${host}`, host, editor: true })
+            }),
+          )
+          : h(Form.Hint, { as: 'p' }, `Nothing of ${f.name}’s yet.`),
+      ),
+    ),
+  )
+}
+
+// Friends (Your account): who's online now and when the rest last were,
+// online first, the first few unless the person asked for all; adding a
+// friend; and "Show when I'm online".
+let friendsView = (at: DeskPage, env: Host) => {
+  let all = at.friendList ?? []
+  let now = Date.now()
+  let more = all.length -
+    Math.max(FEW, all.filter((f) => online(f.seen)).length)
+  return [
+    h(
+      Card,
+      null,
+      heading('Friends'),
+      all.length
+        ? [
+          h(
+            Rows,
+            {
+              as: 'ul',
+              class: at.allFriends ? 'Friends Friends-all' : 'Friends',
+              'data-friends': managePath('friends'),
+            },
+            all.map((f) => friendRow(f, env, now)),
+          ),
+          more > 0 && !at.allFriends
+            ? h(
+              Rows.Note,
+              null,
+              h(
+                'a',
+                { href: `${managePath('friends')}?all` },
+                `Show all ${all.length} friends`,
+              ),
+            )
+            : null,
+        ]
+        : empty(
+          'No friends here yet',
+          h(
+            'p',
+            null,
+            'Add someone by their yaks.app sign-in email, or say yes to a request in your Updates.',
+          ),
+        ),
+      h(
+        Form,
+        { class: 'Page_Form', method: 'post', action: managePath('friends') },
+        labeled(
+          'friend-email',
+          'Add a friend',
+          h(Field, {
+            id: 'friend-email',
+            name: 'email',
+            type: 'email',
+            required: true,
+            autocomplete: 'off',
+            spellcheck: 'false',
+            placeholder: 'friend@example.com',
+          }),
+          'They become your friend once they say yes in their Updates.',
+        ),
+        h(Form.Actions, null, send('Ask')),
+      ),
+    ),
+    saving(
+      managePath('friends'),
+      h(Card, null, fieldsOf(showing(at, managePath('friends')))),
     ),
   ]
 }
@@ -3005,6 +3187,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
     profile: 'Profile',
+    friends: 'Friends',
     invite: 'Invite a friend',
     agents: 'Agents',
     shared: 'Shared with you',
@@ -3027,6 +3210,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let whose = space ? named(space) : 'Your account'
   let body: Kids = null
   if (view == 'profile') body = profile(at, env)
+  if (view == 'friends') body = friendsView(at, env)
   if (view == 'invite' && at.referral) {
     let own = at.spaces?.find((s) => s.own)
     body = invitation(at.referral, own ? named(own) : 'your space', env)

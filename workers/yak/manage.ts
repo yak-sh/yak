@@ -55,7 +55,7 @@ import { monogram } from '@yaks/platform/monogram'
 import type { LogoSize } from '@yaks/platform/space-logo'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
-import { friendsOf, hidePresence } from './friends.ts'
+import { friendList, friendsOf, hidePresence } from './friends.ts'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -1102,6 +1102,7 @@ let mine = async (
     provider,
     links,
     hidden,
+    friends,
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
@@ -1117,7 +1118,12 @@ let mine = async (
       ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
         .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
-    view == 'profile' ? dir.presenceHidden(person) : undefined,
+    view == 'profile' || view == 'friends'
+      ? dir.presenceHidden(person)
+      : undefined,
+    view == 'friends'
+      ? shared(dir, person).then((all) => friendList(dir, person, all))
+      : undefined,
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -1129,6 +1135,8 @@ let mine = async (
     name: name ?? '',
     email: email ?? '',
     presenceHidden: hidden,
+    friendList: friends,
+    allFriends: q.has('all'),
     agents,
     sessions,
     links,
@@ -1221,7 +1229,11 @@ let account = async (
       made.slug,
     )
   }
-  if (view != 'profile') return nothingHere(env)
+  if (view == 'friends') {
+    let done = await befriending(req, env, dir, who, form)
+    if (done) return done
+  }
+  if (view != 'profile' && view != 'friends') return nothingHere(env)
   // Connect Discord: the person links their own account, whatever spaces
   // they are in, the sign-in held under their own space.
   // Only a platform's own account integration is linked here.
@@ -1288,6 +1300,56 @@ let account = async (
     }
   }
   return answered(req, env, { say: 'Saved.' })
+}
+
+// What the Friends page posts besides "Show when I'm online": its script
+// saying the page's tab, answered with where each friend is now
+// (@yaks/platform/friends-browser); a message to a friend; a friend added by
+// their sign-in email. None for anything else.
+let befriending = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  who: Owner,
+  form: FormData,
+): Promise<Response | undefined> => {
+  let field = (name: string) => String(form.get(name) ?? '')
+  if (form.has('tab')) {
+    let state = field('tab')
+    let { present } = await import('./whereabouts.ts')
+    await present(env, {
+      person: who.person,
+      channel: 'apps',
+      state: state == 'here' || state == 'background' ? state : 'away',
+    })
+    let friends = await friendList(dir, who.person, [])
+    return Response.json({
+      friends: friends.map((f) => ({
+        person: f.person,
+        state: f.seen?.state,
+        last: f.seen?.last,
+      })),
+    }, { headers: { 'cache-control': 'no-store' } })
+  }
+  let { said } = form.has('message')
+    ? await pressed(env, dir, who, 'friend_message', {
+      friend: field('message'),
+      words: field('say'),
+    })
+    : form.has('email')
+    ? await pressed(env, dir, who, 'friend_add', { email: field('email') })
+    : { said: undefined }
+  if (said) {
+    return refusal(req, said, () => mine(req, env, dir, who, 'friends', said))
+  }
+  if (form.has('message')) {
+    return answered(req, env, { say: 'Sent. It is in their Updates.' })
+  }
+  if (form.has('email')) {
+    return answered(req, env, {
+      say: 'Asked. They’ll see it in their Updates.',
+    })
+  }
 }
 
 // A dashboard control is the tool the person's assistant would call, called

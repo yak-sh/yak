@@ -2,6 +2,7 @@ import { equal, test } from '@yaks/testing'
 import {
   type Channel,
   glance,
+  lastSeen,
   noted,
   presence,
   reachBy,
@@ -129,4 +130,19 @@ test('a closed, faded or other channel says nobody is on yaks.app', () => {
       [row('discord', 'online'), row('text', 'used')],
     ]
   ) equal(presence(rows, T), undefined)
+})
+
+test('last seen is the newest word a page or the Operator heard, faded or not, never Discord', () => {
+  let at = (ago: number) => new Date(T - ago).toISOString()
+  equal(lastSeen([]), undefined)
+  equal(lastSeen([row('discord', 'online')]), undefined)
+  equal(
+    lastSeen([
+      row('apps', 'away', 3 * 60 * MIN, 'gift'),
+      row('operator', 'here', 30 * MIN, 'home'),
+      row('discord', 'online'),
+    ]),
+    at(30 * MIN),
+  )
+  equal(lastSeen([row('text', 'used', 5 * MIN)]), at(5 * MIN))
 })
