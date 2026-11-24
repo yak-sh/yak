@@ -83,7 +83,11 @@ export type Ports = {
   paying: (space: string) => Promise<boolean>
   /** attach a registered name to the space or app it serves, and answer the
    * records its DNS needs */
-  attach: (name: string, serves: string) => Promise<Rec[]>
+  attach: (
+    name: string,
+    serves: string | undefined,
+    space: string,
+  ) => Promise<Rec[]>
   /** write records into a zone, leaving the ones already there */
   write: (zone: string, records: Rec[]) => Promise<void>
   /** an order's payment returned whole, asked again without refunding
@@ -98,8 +102,10 @@ export type Ports = {
 export type Order = {
   name: string
   space: string
-  serves: string
+  bought_by?: string
+  serves?: string
   cents: number
+  renews?: number
   live: boolean
 }
 
@@ -223,7 +229,7 @@ export let fulfil = async (p: Ports, eid: string): Promise<Fulfilled> => {
   }
   if (r.state != 'succeeded') throw new Waiting(r)
   let zone = await p.registry.zone(order.name)
-  await p.write(zone, await p.attach(order.name, order.serves))
+  await p.write(zone, await p.attach(order.name, order.serves, order.space))
   await p.graph.apply([{
     entity: { eid },
     domain_registered: {
@@ -240,11 +246,33 @@ export let renew = async (p: Ports, space: string): Promise<string[]> => {
   let held = await p.graph.read(
     line`.domain_registered&.domain_order.space=${space}`,
   )
-  if (!held.length) return []
-  let on = await p.paying(space)
-  let names = held.map((b) => (b.domain_order as Order).name)
-  for (let name of names) await p.registry.renewing(name, on)
-  return names
+  let renewed = []
+  for (let row of held) {
+    let name = await renewOrder(p, row.entity.eid)
+    if (name) renewed.push(name)
+  }
+  return renewed
+}
+
+/** Reconcile with the current owner even if a move or plan change happened
+ * while the registrar was answering a previous request. */
+export let renewOrder = async (
+  p: Ports,
+  eid: string,
+): Promise<string | null> => {
+  let read = async () => {
+    let [row] = await p.graph.read(line`.entity.eid=${eid}`)
+    let order = row?.domain_registered && row.domain_order as Placed | undefined
+    return order ? { name: order.name, on: await p.paying(order.space) } : null
+  }
+  let want = await read()
+  while (want) {
+    await p.registry.renewing(want.name, want.on)
+    let next = await read()
+    if (!next || next.on == want.on) return want.name
+    want = next
+  }
+  return null
 }
 
 /** Dollars from cents, as a person reads a price.
@@ -274,19 +302,25 @@ export let RENEWS_AT_MOST = 3000
  * ```
  */
 export let sold = (o: Offer): Offer =>
-  o.registrable && (o.renews ?? o.cents ?? 0) > RENEWS_AT_MOST
+  o.registrable && o.currency && o.currency != 'USD'
+    ? { ...o, registrable: false, reason: 'unsupported_currency' }
+    : o.registrable && (o.renews ?? o.cents ?? 0) > RENEWS_AT_MOST
     ? { ...o, registrable: false, reason: 'domain_renews_high' }
     : o
 
 /** Why a name can't be bought here, as a person reads it. */
 let REASONS: Record<string, string> = {
   domain_unavailable: 'taken',
+  unsupported_currency: 'not available in US dollars',
   domain_premium: 'a premium name, not sold here',
   domain_renews_high: 'costs more to renew than a plan includes',
   extension_not_supported_via_api: 'its ending is not sold here yet',
   extension_not_supported: 'its ending is not sold here',
   extension_disallows_registration: 'its ending takes no new names',
 }
+
+export let unavailable = (o: Offer): string =>
+  REASONS[o.reason ?? ''] ?? 'not for sale'
 
 /** An offer as one line an agent reads out: the name and what its first year
  * costs (later years come with the plan), or why it can't be bought.
@@ -295,7 +329,7 @@ let REASONS: Record<string, string> = {
  * import { assertEquals } from '@std/assert'
  * assertEquals(
  *   offerLine({ name: 'ada.com', registrable: true, cents: 1117, renews: 1117 }),
- *   'ada.com — $11.17 for the first year',
+ *   'ada.com — $11.17 for the first year, $11.17 per year to renew',
  * )
  * assertEquals(
  *   offerLine({ name: 'x.com', registrable: false, reason: 'domain_unavailable' }),
@@ -305,5 +339,45 @@ let REASONS: Record<string, string> = {
  */
 export let offerLine = (o: Offer): string =>
   !o.registrable || o.cents == null
-    ? `${o.name} — ${REASONS[o.reason ?? ''] ?? o.reason ?? 'not for sale'}`
-    : `${o.name} — ${dollars(o.cents)} for the first year`
+    ? `${o.name} — ${unavailable(o)}`
+    : `${o.name} — ${dollars(o.cents)} for the first year` +
+      (o.renews == null ? '' : `, ${dollars(o.renews)} per year to renew`)
+
+let LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+let domainName = (name: string) =>
+  name.length <= 253 && name.includes('.') &&
+  name.split('.').every((part) => LABEL.test(part))
+
+let ENDINGS = ['com', 'net', 'org', 'app', 'dev', 'co']
+
+/** Names to check, with the requested spelling first and the registrar's
+ * suggestions after it. The check gives every result its current price. */
+export let find = async (
+  registry: Registry,
+  input: string,
+): Promise<Offer[]> => {
+  let q = input.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/[/?#].*$/, '').replace(/\.$/, '')
+  if (q.length > 253 || !/^[a-z0-9.\s-]+$/.test(q)) return []
+  let [stem, ...ending] = q.split('.')
+  let words = stem.trim().split(/\s+/)
+  let label = words.join('')
+  if (![label, ...ending].every((part) => LABEL.test(part))) return []
+  let exact = [
+    ...ending.length ? [`${label}.${ending.join('.')}`] : [],
+    ...ENDINGS.map((tld) => `${label}.${tld}`),
+    ...words.length > 1 ? [`${words.join('-')}.com`] : [],
+  ]
+  let names = [
+    ...new Set([
+      ...exact,
+      ...(await registry.search(ending.length ? label : q, 10)).map((o) =>
+        o.name
+      ),
+    ]),
+  ].filter(domainName).slice(0, 20)
+  let checked = new Map(
+    (await registry.check(names)).map((o) => [o.name, sold(o)]),
+  )
+  return names.flatMap((name) => checked.get(name) ?? [])
+}

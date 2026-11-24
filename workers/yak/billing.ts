@@ -62,10 +62,10 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { planSettings } from '@yaks/platform/routes'
+import { manageAt, planSettings } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
-import { ceilings, CURRENCY, paid, type Tier } from '@yaks/platform/plans'
+import { CURRENCY, paid, type Tier } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { derivedEid } from '@yaks/graph/identity'
@@ -94,7 +94,7 @@ import {
   ordered,
   sold as onSale,
 } from '@yaks/domains'
-import { HOST, registryOf } from './domains.ts'
+import { HOST, included as domainsWith, registryOf } from './domains.ts'
 import { keepName } from './names.ts'
 import { meta } from './meta.ts'
 
@@ -302,9 +302,6 @@ export type Card = {
   invoice?: number
   /** whether its subscription is made and waits on its first payment */
   awaiting?: boolean
-  /** whether its owner may buy a domain for it here: its plan includes
-   * custom domains and payments are set up */
-  domains?: boolean
   /** its AI credit, where its plan buys credit or it holds some: the cap,
    * what is left to spend this month, what this month drew, and whether a
    * block may be bought now */
@@ -337,7 +334,6 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     sold: { plus: sold(lent, 'plus'), pro: sold(lent, 'pro') },
     ...lent.offers(INVOICED.tier, INVOICED.per) ? { invoice: DUE } : {},
     ...awaiting(lent, space) ? { awaiting: true } : {},
-    ...lent.on() && domainsWith(space) ? { domains: true } : {},
     ...credits
       ? {
         credit: {
@@ -686,7 +682,7 @@ export let domainCheckout = async (
 ) => {
   let lent = await plans(env)
   if (!lent.on()) throw new Error('payments are not set up here')
-  let back = planSettings(space.slug, env)
+  let back = manageAt(space.slug, 'domains', env)
   return await lent.once({
     payer: await payerFor(env, lent, space, email),
     name: `${order.name}: its first year; later years come with ` +
@@ -694,28 +690,23 @@ export let domainCheckout = async (
     cents: order.cents,
     currency: CURRENCY,
     done: `${back}?domain=${encodeURIComponent(order.name)}`,
-    cancel: back,
+    cancel: `${back}?q=${encodeURIComponent(order.name)}`,
     reference: space.eid,
     tags: {
       ...tagsOf(env, space),
       person,
       domain: order.name,
-      serves: order.serves,
       cents: String(order.cents),
+      ...order.renews != null ? { renews: String(order.renews) } : {},
     },
   })
 }
 
-// Whether a space's plan includes custom domains: a paid plan, or a space the
-// platform comps, as domain_attach decides.
-export let domainsWith = (space: Space) =>
-  paid(space.tier) || !ceilings(space.tier ?? null, space.slug)
-
-// Buy a domain for a space, or one app in it: the provider's checkout at the
+// Buy a domain for a space: the provider's checkout at the
 // registry's price, opened only for the owner of a space whose plan includes
 // domains, for a name the registry will register now. Answers the URL, as
 // `buy` does, from a signed-in page only: a tool never opens a checkout
-// (C-33033), it sends the person to their plan settings.
+// (C-33033), it sends the person to Domains.
 export let buyDomain = async (
   env: Env,
   req: Request,
@@ -741,15 +732,8 @@ export let buyDomain = async (
   if (!HOST.test(name)) {
     return json(400, 'bad_domain', 'a domain like herbusiness.com')
   }
-  let slug = String(form.get('app') ?? '').trim()
-  let app = slug
-    ? (await dir.apps(space)).find((a) => a.slug == slug)
-    : undefined
-  if (slug && !app) {
-    return json(404, 'no_app', `${space.slug} has no app ${slug}`)
-  }
-  if (await dir.serves(name)) {
-    return json(409, 'taken', `${name} is already attached on yaks.app`)
+  if (await dir.hostname(name)) {
+    return json(409, 'taken', `${name} is already held on yaks.app`)
   }
   let lent = await plans(env)
   if (!lent.on()) return json(503, 'no_billing', 'domains are not on sale here')
@@ -762,11 +746,23 @@ export let buyDomain = async (
         offer ? offerLine(offer) : `${name} can't be bought here`,
       )
     }
+    let quoted = form.get('cents')
+    let renewal = form.get('renews')
+    if (
+      (quoted != null && Number(quoted) != offer.cents) ||
+      (renewal != null && Number(renewal) != offer.renews)
+    ) {
+      return json(
+        409,
+        'price_changed',
+        `${name}'s price changed. Search again to see the latest price.`,
+      )
+    }
     let email = await dir.emailAt(person) ?? ''
     let url = await domainCheckout(env, space, email, person, {
       name,
-      serves: (app ?? space).eid,
       cents: offer.cents,
+      renews: offer.renews,
     })
     return Response.json({ url, price: price(offer.cents) })
   } catch (e) {
@@ -787,7 +783,7 @@ export let domainBought = async (env: Env, heard: Bought) => {
   let here = apex(env)
   if (elsewhere(heard.tags, here)) return 'elsewhere'
   if (!heard.paid) return 'not paid yet'
-  let { domain: name, serves } = heard.tags
+  let { domain: name, serves, renews } = heard.tags
   let dir = dirOf(env)
   let space = await whose(dir, { space: heard.tags.space || heard.reference })
   if (!space) {
@@ -803,7 +799,8 @@ export let domainBought = async (env: Env, heard: Bought) => {
       entities: [ordered(eid, heard.checkout, {
         name,
         space: space.eid,
-        serves: serves || space.eid,
+        ...serves ? { serves } : {},
+        ...renews ? { renews: Number(renews) } : {},
         cents: Number(heard.tags.cents) || 0,
         live: heard.live,
       })],

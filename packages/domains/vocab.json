@@ -8,7 +8,7 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "description": "a domain a space bought at checkout, held in the platform's registrar account; domain_registered{at, expires} once the registry holds it and it is attached, domain_refused{at, why} where it could not be registered, and domain_refunded{at, refund} once its payment is returned",
+      "description": "a domain a space bought at checkout, held in the platform's registrar account; domain_registered{at, expires} once the registry holds it, domain_refused{at, why} where it could not be registered, and domain_refunded{at, refund} once its payment is returned",
       "properties": {
         "name": {
           "type": "string",
@@ -18,13 +18,19 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "the space that paid for it, whose plan its renewal follows"
+          "description": "the space currently responsible for renewal"
+        },
+        "bought_by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the space that paid for the first year, recorded when renewal first moves to another space"
         },
         "serves": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "the space or app it is attached to once registered"
+          "description": "the checkout’s initial destination on older orders, if chosen"
         },
         "checkout": {
           "type": "string",
@@ -33,6 +39,10 @@
         "cents": {
           "type": "number",
           "description": "what the person paid, in cents: the registry's price for the first year"
+        },
+        "renews": {
+          "type": "number",
+          "description": "the registrar’s yearly renewal quote at checkout, in cents"
         },
         "live": {
           "type": "boolean",
@@ -44,7 +54,7 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "description": "a bought domain the registry holds, attached to the place it serves with its DNS written, and when its year ends",
+      "description": "a bought domain the registry holds, with its DNS written, and when its year ends",
       "properties": {
         "at": { "type": "string", "format": "date-time" },
         "expires": { "type": "string", "format": "date-time" }
@@ -73,13 +83,19 @@
     "register_domain": {
       "effect": true,
       "created": ["domain_order"],
-      "description": "register a bought domain at the registry, waiting out its workflow, then attach it to the place it serves and write every DNS record that takes in its zone; refund one that cannot be registered"
+      "description": "register a bought domain at the registry, waiting out its workflow, then prepare its hostname and write its DNS records; refund one that cannot be registered"
     },
     "renew_domains": {
       "effect": true,
       "changed": ["plan"],
       "active": ".space",
       "description": "turn renewal on for every domain a space bought while its plan is paid, and off once it is not"
+    },
+    "renew_transferred_domain": {
+      "effect": true,
+      "changed": ["domain_order.space"],
+      "active": ".domain_registered",
+      "description": "reconcile a transferred domain’s auto-renew setting with the receiving space’s plan"
     }
   }
 }

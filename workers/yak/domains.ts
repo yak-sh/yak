@@ -27,12 +27,32 @@ import { answered } from './dispatch.ts'
 import { resent } from '@yaks/cloudflare/api'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from '@yaks/platform/host'
-import { type Host as Hostname, stamp } from './directory.ts'
+import {
+  type Directory,
+  type Host as Hostname,
+  type Space,
+  stamp,
+} from './directory.ts'
 import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
-import { registry } from '@yaks/cloudflare/registrar'
-import type { Registry } from '@yaks/domains'
+import { current, registry } from '@yaks/cloudflare/registrar'
+import { dollars, find, type Registry, unavailable } from '@yaks/domains'
+import type {
+  Domain,
+  DomainApp,
+  DomainOffer,
+} from '@yaks/platform/domain-pages'
+import { ceilings, paid } from '@yaks/platform/plans'
+import { sentence } from './html.ts'
+import {
+  domainDetails,
+  listings,
+  pointed,
+  renewal,
+} from '@yaks/platform/domain-settings'
+import { caught } from './defects.ts'
+import { vouched, type Who } from './session.ts'
 
 export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +
@@ -414,14 +434,23 @@ export let NEEDS_REGISTRAR =
 
 /** The platform's registry: Cloudflare Registrar on its account, or one
  * whose every call refuses, saying which credential is missing. */
-export let registryOf = (env: Env): Registry => {
-  if (env.CF_ACCOUNT && env.CF_REGISTRAR_TOKEN) {
-    return registry({
+let registrar = (env: Env) =>
+  env.CF_ACCOUNT && env.CF_REGISTRAR_TOKEN
+    ? {
       CF_ACCOUNT: env.CF_ACCOUNT,
       WORKERS_API: env.WORKERS_API,
       token: env.CF_REGISTRAR_TOKEN,
-    })
-  }
+    }
+    : null
+
+export let registrationOf = (env: Env, name: string) => {
+  let r = registrar(env)
+  return r ? current(r, name) : Promise.resolve(null)
+}
+
+export let registryOf = (env: Env): Registry => {
+  let r = registrar(env)
+  if (r) return registry(r)
   let refuse = () =>
     Promise.reject(new CallError('unavailable', NEEDS_REGISTRAR))
   return {
@@ -431,5 +460,156 @@ export let registryOf = (env: Env): Registry => {
     registration: refuse,
     renewing: refuse,
     zone: refuse,
+  }
+}
+
+/** Search from either the owner's page or the connector, using live quotes. */
+export let domainOffers = async (
+  env: Env,
+  query: string,
+): Promise<DomainOffer[]> =>
+  (await find(registryOf(env), query)).map((o) =>
+    o.registrable && o.cents != null && o.renews != null
+      ? {
+        name: o.name,
+        first: dollars(o.cents),
+        renewal: dollars(o.renews),
+        cents: o.cents,
+        renews: o.renews,
+      }
+      : { name: o.name, unavailable: sentence(unavailable(o)) }
+  )
+
+type Purchase = Awaited<ReturnType<Directory['domainOrders']>>[number]
+
+let report = (error: unknown, request: string, name: string) => {
+  if (!(error instanceof CallError)) caught(error, { request, hostname: name })
+  return null
+}
+
+let renewalOf = async (env: Env, space: Space, purchase: Purchase) => {
+  let current = await registrationOf(env, purchase.order.name)
+    .catch((e) => report(e, 'read domain registration', purchase.order.name))
+  return renewal(current, purchase.registered?.expires, included(space))
+}
+
+export let included = (space: Space) =>
+  paid(space.tier) || !ceilings(space.tier ?? null, space.slug)
+
+let statusOf = async (env: Env, host: Hostname) => {
+  if (host.trashed) return {}
+  let custom = await customOf(env, host.name)
+    .catch((e) => report(e, 'read domain provisioning', host.name))
+  if (!custom) {
+    return { dns: 'Status unavailable', certificate: 'Status unavailable' }
+  }
+  let how = steps(custom, !!host.verified)
+  return {
+    dns: sentence(how.find((s) => s.step == 'dns')!.said),
+    certificate: sentence(how.find((s) => s.step == 'certificate')!.said),
+  }
+}
+
+let asDomain = async (
+  env: Env,
+  space: Space,
+  apps: DomainApp[],
+  host: Hostname | undefined,
+  purchase: Purchase | undefined,
+): Promise<Domain> => {
+  let view = domainDetails(
+    host?.name ?? purchase!.order.name,
+    host,
+    purchase,
+    space.eid,
+    apps,
+    included(space),
+  )
+  if (!host && !purchase?.registered) return view
+  let [how, when] = await Promise.all([
+    host ? statusOf(env, host) : {},
+    purchase?.registered
+      ? renewalOf(env, space, purchase)
+      : 'Renewal managed by your registrar.',
+  ])
+  return { ...view, ...how, renewal: when }
+}
+
+export let ownedDomains = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  apps: DomainApp[],
+  checkoutReturn?: string,
+) => {
+  let [hosts, orders] = await Promise.all([
+    dir.hosts(space),
+    dir.domainOrders(space),
+  ])
+  return await Promise.all(
+    listings(hosts, orders, checkoutReturn)
+      .map(({ hostname, purchase }) =>
+        asDomain(env, space, apps, hostname, purchase)
+      ),
+  )
+}
+
+export let billedDomains = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+): Promise<Domain[]> =>
+  await Promise.all(
+    (await dir.domainOrders(space)).filter((r) => r.registered)
+      .map(async (r) => ({
+        name: r.order.name,
+        destination: '',
+        renewal: await renewalOf(env, space, r),
+      })),
+  )
+
+/** Changing a domain's destination keeps its registration, web DNS, certificate and mail setup. */
+export let pointDomain = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  who: Who,
+  name: string,
+  destination: string,
+) => {
+  let [hosts, apps] = await Promise.all([dir.hosts(space), dir.apps(space)])
+  let available = apps.filter((a) => !a.trashed)
+  let host = hosts.find((h) => h.name == name && !h.trashed)
+  if (!host) {
+    throw new CallError('missing', 'This space does not hold that domain.')
+  }
+  let aim = destination == 'space' && host.serves == space.eid
+    ? space.eid
+    : available.find((a) => a.eid == destination)?.eid ?? null
+  if (destination && !aim) {
+    throw new CallError('missing', 'This space does not have that app.')
+  }
+  if (aim && aim != host.serves && !included(space)) {
+    throw new CallError(
+      'not_included',
+      'Attaching a domain comes with the Plus plan.',
+    )
+  }
+  if (aim != host.serves) {
+    let at = { ...host, serves: aim }
+    await dir.apply({
+      entities: [
+        ...await unveiled(env, at),
+        ...pointed(space.eid, host, aim, hosts),
+      ],
+    }, vouched(who))
+    host = { ...at, to: null }
+  }
+  let purchase = (await dir.domainOrders(space)).find((r) =>
+    r.order.name == name && r.registered
+  )
+  return {
+    domain: await asDomain(env, space, available, host, purchase),
+    apps: available,
   }
 }

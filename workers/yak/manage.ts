@@ -102,6 +102,21 @@ import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
+import {
+  billedDomains,
+  domainOffers,
+  included,
+  ownedDomains,
+  pointDomain,
+} from './domains.ts'
+import {
+  type DomainOffer,
+  offers,
+  ownedDomain,
+} from '@yaks/platform/domain-pages'
+import { markup } from './html.ts'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { offerDomain } from './app-transfer.ts'
 
 // The identity part, asked for at request time rather than imported at the
 // top: it carries the OAuth provider, whose `cloudflare:` modules exist only
@@ -206,7 +221,8 @@ export let manage = async (
       )
       page.catch(() => {})
       if (reads && !at.door) {
-        let drawn = !at.open && !at.logo && !at.manifest
+        let drawn = !at.open && !at.logo && !at.manifest &&
+          !(at.view == 'domains' && url.searchParams.has('search'))
         let chat = !!at.open && !url.searchParams.has('attachment')
         foresee(
           dir,
@@ -381,7 +397,8 @@ export let manage = async (
   let asks = view == 'updates' || view == 'matches' ||
     view == 'operator' && (at.open || at.door)
   if (
-    reading && !asks && writes(who.role) && !administrative && !space.trashed
+    reading && !asks && writes(who.role) && !administrative && !space.trashed &&
+    !(view == 'domains' && url.searchParams.has('search'))
   ) {
     woken(env, space.eid)
   }
@@ -458,6 +475,25 @@ export let manage = async (
   }
   if (req.method == 'POST') return saved(req, env, dir, space, who, view)
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
+  if (view == 'domains' && url.searchParams.has('search')) {
+    let { found, error } = await searched(env, url.searchParams.get('search')!)
+    let checkout = included(space) && (await plans(env)).on()
+    return new Response(
+      markup(offers(managePath('domains', space.slug), found, checkout, error)),
+      {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'private, no-store',
+        },
+      },
+    )
+  }
+  if (view == 'billing' && url.searchParams.has('domain')) {
+    return redirect(
+      hostUrl(env, managePath('domains', space.slug)) + url.search,
+      303,
+    )
+  }
   if (view == 'connections') {
     let old = url.searchParams.get('add') ?? url.searchParams.get('connect')
     if (old) {
@@ -754,6 +790,21 @@ let beside = async (
   }
 }
 
+let searched = async (
+  env: Env,
+  query: string,
+): Promise<{ found: DomainOffer[]; error?: string }> => {
+  try {
+    return { found: await domainOffers(env, query) }
+  } catch (e) {
+    if (!(e instanceof CallError)) caught(e, { request: 'search for domains' })
+    return {
+      found: [],
+      error: 'Domain search is unavailable right now. Try again shortly.',
+    }
+  }
+}
+
 // One page of a space's (pages.ts `desk`), for its owner, or its Operator for
 // a member who may change it.
 let desk = async (
@@ -817,6 +868,9 @@ let desk = async (
     made,
     panes,
     lines,
+    domains,
+    searchedFor,
+    renewals,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -909,6 +963,13 @@ let desk = async (
     // How the person keeps the panes (directory.ts `Panes`).
     dir.panes(owner),
     dir.lines(walkTo(space.slug, space.eid)),
+    view == 'domains'
+      ? shelved.then(({ all }) =>
+        ownedDomains(env, dir, space, all, q.get('domain') ?? undefined)
+      )
+      : undefined,
+    view == 'domains' && q.get('q') ? searched(env, q.get('q')!) : undefined,
+    view == 'billing' ? billedDomains(env, dir, space) : undefined,
   ])
   let known = await inHand(agents)
   let page = deskPage({
@@ -956,6 +1017,15 @@ let desk = async (
     costs: provider.shops.costs,
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
+    domains: domains && {
+      domains,
+      search: q.get('q') ?? undefined,
+      ...searchedFor,
+      checkout: included(space) && provider.plans.on(),
+      included: included(space),
+      ordered: q.get('domain') ?? undefined,
+    },
+    renewals,
     // The space's month against its allowances (@yaks/platform/meter), as the
     // directory's row holds it.
     bill: view == 'billing'
@@ -1383,7 +1453,58 @@ let saved = async (
     })
   }
   if (form.get('billing') == 'credit') return buy(env, req, space)
-  if (form.get('billing') == 'domain') return buyDomain(env, req, space, form)
+  if (form.get('billing') == 'domain') {
+    let checkout = await buyDomain(env, req, space, form)
+    if (view != 'domains' || scripted(req)) return checkout
+    let out = await checkout.json() as {
+      url: string
+      error: { message: string }
+    }
+    return checkout.ok ? redirect(out.url, 303) : refused('domains', {
+      say: sentence(out.error.message),
+      no: true,
+    })
+  }
+  if (view == 'domains' && form.has('transfer_domain')) {
+    try {
+      let say = await offerDomain(
+        dir,
+        space,
+        who,
+        String(form.get('transfer_domain')),
+        String(form.get('receiving_space') ?? '').trim().toLowerCase(),
+      )
+      return answered(req, env, { say })
+    } catch (e) {
+      if (!(e instanceof CallError) && !(e instanceof Refused)) throw e
+      return refused('domains', { say: sentence(e.message), no: true })
+    }
+  }
+  if (view == 'domains' && form.has('point_domain')) {
+    try {
+      let { domain, apps } = await pointDomain(
+        env,
+        dir,
+        space,
+        who,
+        String(form.get('point_domain')),
+        String(form.get('destination') ?? ''),
+      )
+      if (scripted(req)) {
+        let path = managePath('domains', space.slug)
+        return Response.json({ row: markup(ownedDomain(path, domain, apps)) })
+      }
+      return answered(req, env, { say: 'Saved.' })
+    } catch (e) {
+      if (!(e instanceof CallError) && !(e instanceof Stale)) throw e
+      return refused('domains', {
+        say: e instanceof Stale
+          ? 'This domain changed. Reload the page and try again.'
+          : sentence(e.message),
+        no: true,
+      })
+    }
+  }
   // The plan card's cap on AI credit: a plain form, so it lands back on the
   // page saying it saved, or why not.
   if (form.get('billing') == 'cap') {

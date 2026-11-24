@@ -31,9 +31,13 @@ import { sharing } from '@yaks/connections/mcp'
 import { spaceHost } from '@yaks/platform/host'
 import { mcpUnshared } from '@yaks/platform/letters'
 import {
-  decide,
+  decide as decideAppTransfer,
   type Request as AppTransfer,
 } from '@yaks/platform/app-transfer'
+import {
+  decide as decideDomainTransfer,
+  type Request as DomainTransfer,
+} from '@yaks/platform/domain-transfer'
 import { friendsPlugin } from '@yaks/platform/friends'
 import { idOf, inside, type Row } from '../directory.ts'
 import { reclaimFiles } from '../file-retirement-graph.ts'
@@ -315,20 +319,23 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [
     }),
   },
   {
-    name: 'yak/app-transfer',
-    requests: ['$appTransfer'],
-    authorize: hook(['$appTransfer'], (bundles, tx, _err, context) => {
-      return each(bundles, [] as Bundle[], (out, b) => {
-        if (!b.$appTransfer) return [...out, b]
-        if (!context?.trusted) {
-          throw new Refused('Use the app transfer tools or Updates.')
-        }
-        return after(
-          decide(tx, b.$appTransfer as AppTransfer),
-          (rows) => [...out, ...rows],
-        )
-      })
-    }),
+    name: 'yak/transfer',
+    requests: ['$appTransfer', '$domainTransfer'],
+    authorize: hook(
+      ['$appTransfer', '$domainTransfer'],
+      (bundles, tx, _err, context) => {
+        return each(bundles, [] as Bundle[], (out, b) => {
+          if (!b.$appTransfer && !b.$domainTransfer) return [...out, b]
+          if (!context?.trusted) {
+            throw new Refused('Use the transfer form or Updates.')
+          }
+          let changes = b.$domainTransfer
+            ? decideDomainTransfer(tx, b.$domainTransfer as DomainTransfer)
+            : decideAppTransfer(tx, b.$appTransfer as AppTransfer)
+          return after(changes, (rows) => [...out, ...rows])
+        })
+      },
+    ),
   },
   friendsPlugin(),
   reclaimFiles(),

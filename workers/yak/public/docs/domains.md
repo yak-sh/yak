@@ -63,33 +63,27 @@ conversation.
 Wait for the plan change before continuing with DNS setup. Keep using the
 existing `.yaks.app` address in the meantime.
 
-## Buying a domain: `domain_search`
+## Buying a domain
 
-A person without a domain can buy one here. `domain_search(query)` answers names
-with what their first year costs at Cloudflare's price, with no markup, or why
-one can't be bought (taken, a premium name, an ending not sold here, or one that
-costs more than $30 a year to renew). A whole name such as `herbusiness.com` is
-checked live; a word such as `herbusiness` gives suggestions across endings,
-which are checked again when bought.
+In your space’s settings, open **Domains** and search for a name or a few words.
+Results show availability, the price for the first year, and the registrar’s
+yearly renewal price. An agent can search with `domain_search(query)` and send
+you to the same Domains page.
 
-The space's owner buys it on the space's plan settings, signed in, under "Buy a
-domain": the name, and the app it serves, or nothing for the whole space. The
-checkout is never opened by a tool; give them the page `domain_search` answers
-with. Once paid:
+You pay Cloudflare’s price for the first year with no markup. Renewals are
+covered while your space stays on a paid plan. If you leave your paid plan,
+auto-renew is turned off and the domain expires at the end of its registration.
 
-1. yaks.app registers the name in its own Cloudflare account. Registration
-   usually takes seconds and can take a few minutes.
-2. It attaches the name to the space or app, exactly as `domain_attach` would,
-   and writes the CNAME, the ownership TXT and the mail records into the name's
-   DNS itself. There is nothing to add at a registrar.
-3. `domain_status` reports the certificate as it is issued, within minutes.
+The domain belongs to your space. When it appears in **Your domains**, choose an
+app and save to attach it. You can choose another app or **Unattached** at any
+time. yaks.app sets up DNS and the certificate for you.
 
-yaks.app pays its renewal each year while the space is on a paid plan; the
-person is never charged for a later year. If the space leaves its paid plan,
-renewal turns off and the name lapses at the end of its year, unless the space
-is back on a paid plan by then. A paid order that can't be registered (the
-registry refuses it, or another checkout bought the name first) is refunded in
-full.
+To transfer a domain, open **Transfer** beside it and enter the receiving
+space's address. An owner of that space can accept the offer in **Updates**.
+Acceptance moves ownership and renewal to the receiving space. The domain
+arrives unattached, and its renewal then follows the receiving space's plan.
+
+A paid order that cannot be registered is refunded in full.
 
 ## Tools: `domain_attach`, `domain_status`, `domain_detach`
 

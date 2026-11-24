@@ -104,6 +104,8 @@ import type { VocabDoc } from '@yaks/vocab'
 
 import { kinds } from '@yaks/data-editor'
 
+import type { Domain, DomainPage } from '@yaks/platform/domain-pages'
+
 export type Kids = ComponentChildren
 
 // A page's own script: constant code, which says nothing a person typed. A
@@ -770,6 +772,8 @@ export type DeskPage = {
   /** what selling through that provider costs a seller, as it publishes */
   costs?: Costs
   plan?: Billed
+  domains?: DomainPage
+  renewals?: Domain[]
   /** the Billing page's month: each allowance the space answers to and how
    * much of it is used, its model budget, when the hourly sweep last read
    * them, and whom the payment provider bills (`undefined` when it couldn't
@@ -935,13 +939,7 @@ export let fixing = (a: DeskPage['apps'][number], space: string) => {
   )
 }
 
-// A sentence out of a lowercase line: what a failed seal wrote beside it. An
-// email address that opens it stays as it was typed.
-/// sentence('no app x in y') -> 'No app x in y.'
-/// sentence('ana@x.test is you') -> 'ana@x.test is you.'
-export let sentence = (text: string) =>
-  (/^\S+@/.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1)) +
-  (/[.!?]$/.test(text) ? '' : '.')
+export { sentence } from './html.ts'
 
 // A service's logo at the head of its card, read from its integration's row
 // (@yaks/platform/routes `integrationLogo`); a neutral mark where it has none.
@@ -1683,7 +1681,6 @@ export let plan = (
     head,
     billedLine(y.plan, y.payer, y.provider),
     target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
-    target && y.plan.domains ? domain(space, target) : null,
     invoiced,
     more,
     ask,
@@ -1784,39 +1781,6 @@ let credit = (
           dollars(c.drawn)
         } spent. Credit not spent carries to next month.`
         : `Past its monthly AI budget, ${space} can spend credit you buy in $${BLOCK} blocks, up to a monthly cap in dollars you choose here. Nothing is ever charged past it.`,
-    ),
-  )
-
-// A domain bought for the space, or one app in it (@yaks/domains): a name,
-// optionally an app, and a billing button, since it leaves for the provider's
-// checkout. Once paid, the platform registers it and writes its DNS.
-let domain = (space: string, target: string) =>
-  h(
-    Form,
-    { class: 'Page_Form', method: 'post', action: target, id: 'domains' },
-    labeled(
-      'domain-name',
-      'Buy a domain',
-      h(
-        Form.Line,
-        null,
-        h(Field, {
-          id: 'domain-name',
-          name: 'domain',
-          placeholder: 'herbusiness.com',
-          autocomplete: 'off',
-          required: true,
-        }),
-        h(Field, {
-          id: 'domain-app',
-          name: 'app',
-          placeholder: 'app (or the whole space)',
-          'aria-label': 'App it serves',
-          autocomplete: 'off',
-        }),
-        billButton('domain', 'Buy for a year', target),
-      ),
-      `You pay its first year at Cloudflare's price, with no markup. yaks.app registers it, attaches it to the app you name (or the whole space) with nothing for you to set up, and pays its renewal every year while ${space} is on a paid plan. If ${space} leaves its paid plan, the name stops renewing and lapses when its year ends.`,
     ),
   )
 
@@ -1929,7 +1893,6 @@ for (let b of document.querySelectorAll('.Bill_Go')) {
       let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
         method: 'POST',
         body: new URLSearchParams({
-          ...(b.form && b.dataset.door == 'domain' ? Object.fromEntries(new FormData(b.form)) : {}),
           billing: b.dataset.door,
           ...(b.dataset.plan ? { plan: b.dataset.plan, per: b.dataset.per } : {}),
         }),

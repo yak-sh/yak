@@ -226,6 +226,31 @@ export let directoryDoc: VocabDoc = {
         slugs: owned(text),
       },
     },
+    domain_transfer: {
+      description: 'An owner offers a domain to the owners of another space.',
+      component: true,
+      type: 'object',
+      properties: {
+        host: owned(ref('cascade')),
+        name: owned(text),
+        from: owned(ref('keep')),
+        to: { ...owned(ref('keep')), index: true },
+        giver: owned(ref('keep')),
+      },
+    },
+    domain_transfer_answer: {
+      description:
+        'An owner’s answer to a domain transfer, or withdrawal when another space accepted.',
+      component: true,
+      type: 'object',
+      properties: {
+        at: owned(time),
+        answer: owned({
+          type: 'string',
+          enum: ['accept', 'decline', 'withdrawn'],
+        }),
+      },
+    },
     // Another space's Operator let into this one (T-136179): the Operator of
     // `operator` works in `space` with `role`, for whoever may ask it there.
     // A space's owner writes it on its People page (operator-reach.ts), and

@@ -230,7 +230,7 @@ import {
   refresh,
   registryOf,
 } from './domains.ts'
-import { offerLine, sold } from '@yaks/domains'
+import { find as findDomains, offerLine } from '@yaks/domains'
 import { type Mail, placed, readMail, ready, setUp } from './domain-mail.ts'
 import { subdomainBox, subdomainMail } from './space-mail.ts'
 import type { DomainRecord } from '@yaks/host/senders'
@@ -307,7 +307,7 @@ import {
   spaceHost,
   url as hostUrl,
 } from '@yaks/platform/host'
-import { foreign, pageAt, planSettings } from '@yaks/platform/routes'
+import { foreign, manageAt, pageAt, planSettings } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'
@@ -6648,9 +6648,10 @@ let OURS: Row[] = [
       // unless it is this space's: another space's app names are not this
       // caller's to learn. Attached here already, to this place, attaching it
       // again updates its destination and repairs a missing provider attachment.
-      let taken = await ctx.dir.serves(host)
-      let mine = taken &&
-        rows.find((h) => h.name == host && (h.serves == aim || h.trashed))
+      let taken = await ctx.dir.hostname(host)
+      let mine = rows.find((h) =>
+        h.name == host && (!h.serves || h.serves == aim || h.trashed)
+      )
       // A domain attached before it took mail is given mail now, and one
       // whose mail could not be set up then is set up now.
       if (mine) {
@@ -6706,9 +6707,8 @@ let OURS: Row[] = [
       if (taken) {
         throw refuse(
           'conflict',
-          taken.space.eid == space.eid
-            ? `${host} already serves ${place(taken.space, taken.app)} — ` +
-              'domain_detach it first to move it'
+          rows.some((h) => h.name == host)
+            ? `${host} already serves another address in this space — move it from Domains`
             : `${host} is attached to another space on this platform. If it ` +
               "is the person's domain, whoever attached it has to " +
               'release it through domain_detach with purge: true and the owner’s confirmation page first',
@@ -6844,6 +6844,17 @@ let OURS: Row[] = [
           )
           continue
         }
+        if (
+          !row.serves || (row.space && row.serves != space.eid &&
+            !apps.some((a) => a.eid == row.serves))
+        ) {
+          lines.push(
+            `${row.name} — unattached. Assign it to an app in Domains at ${
+              manageAt(space.slug, 'domains', ctx.env)
+            }.`,
+          )
+          continue
+        }
         // What this domain points at. `hosts` answered only the rows aimed
         // into this space, so no app here is the space's own form and never a
         // row we cannot read.
@@ -6936,38 +6947,21 @@ let OURS: Row[] = [
       required: ['query'],
     },
     run: async (ctx, args) => {
-      let query = text(args.query, 'query').trim().toLowerCase()
-        .replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '')
+      let query = text(args.query, 'query').trim()
       let { space } = await owns(ctx, args)
-      let registry = registryOf(ctx.env)
-      // A whole name is checked live first; the suggestions after it are
-      // the registry's cache, so each is checked again before it is sold.
-      let [asked, suggested] = await Promise.all([
-        HOST.test(query) ? registry.check([query]) : Promise.resolve([]),
-        registry.search(query, 10),
-      ])
-      let offers = [
-        ...asked,
-        ...suggested.filter((o) => !asked.some((a) => a.name == o.name)),
-      ].map(sold)
-      let settings = `${planSettings(space.slug, ctx.env)}#domains`
+      let offers = await findDomains(registryOf(ctx.env), query)
+      let settings = manageAt(space.slug, 'domains', ctx.env)
       return {
         text:
           (offers.length
             ? offers.map(offerLine).join('\n')
             : `No names found for ${query}.`) +
           '\n\n' +
-          (!paying(space.tier) && ceilings(space.tier, space.slug)
-            ? `Domains come with the Plus plan. ${space.slug}'s plan ` +
-              `settings compare the paid plans: ${settings}.`
-            : `${space.slug}'s owner buys one, signed in, on its plan ` +
-              `settings: ${settings}. The first year is charged at ` +
-              "Cloudflare's price, with no markup. yaks.app registers it in " +
-              'its own Cloudflare account, attaches it to the space or the ' +
-              'app they name with every DNS record written for them, and ' +
-              'pays its renewal each year while the space stays on a paid ' +
-              'plan; once it leaves, the name stops renewing and lapses when ' +
-              'its year ends. domain_status says when it serves.'),
+          `Search and manage domains at ${settings}. ` +
+          'Domains come with the Plus plan. You pay the registrar’s price ' +
+          'for the first year, with no markup. yaks.app covers yearly renewal ' +
+          'while the space stays on a paid plan. The space owns the domain ' +
+          'and can attach it to an app at any time.',
         space,
       }
     },

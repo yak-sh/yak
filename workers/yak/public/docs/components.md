@@ -855,29 +855,30 @@ The complete list of reserved names:
     delete_retired_files delete_upload deliver delivered demo deploy
     desk_aside desk_sidebar dispatch doc document_extract document_page
     document_text domain_order domain_refunded domain_refused
-    domain_registered draft draft_rows durable_retirement edge effect email
-    entity entry error event exception execution failed favorite featured
-    fee feed feedback file file_retirement filed finding fired form
-    form_guest form_mail form_phone form_post former free_spaces gallery
-    gitobj grant grants_listed handoff_spent heard heard_turn hearing held
-    home hook hostname image inference install installed integration
-    integration_install interrupted invite inviting key knock last_deploy
-    lease lent lines located mail mail_answered mail_dismissed mail_domain
-    mail_post mail_task mcp_list mcp_server member memory mentions meter
-    miss model model_estimate model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy occurrence offer openai opened openrouter operator
-    operator_alerts operator_reach order output output_of outreach_batch
-    outreach_letter outreach_read outreach_trial outreach_write
-    outreach_written own_number parent pending person person_name persona
-    phone phone_line phone_login phone_release phone_slow plan preview price
-    pro_grant product project proposed provider provisional public_file
-    published push_subscription quarantined question questions rating reads
-    recalled recipient reconnecting ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    refusal_report register_domain register_writes registration relationship
-    release_remake renew_domains report report_refusals repository
+    domain_registered domain_transfer domain_transfer_answer draft
+    draft_rows durable_retirement edge effect email entity entry error event
+    exception execution failed favorite featured fee feed feedback file
+    file_retirement filed finding fired form form_guest form_mail form_phone
+    form_post former free_spaces gallery gitobj grant grants_listed
+    handoff_spent heard heard_turn hearing held home hook hostname image
+    inference install installed integration integration_install interrupted
+    invite inviting key knock last_deploy lease lent lines located mail
+    mail_answered mail_dismissed mail_domain mail_post mail_task mcp_list
+    mcp_server member memory mentions meter miss model model_estimate
+    model_reservation model_result newcomer newcomer_builds notice
+    notice_confirmed notice_letter notice_posted notice_subscription
+    notified notify_deaths notify_trash oauth_grant occupancy occurrence
+    offer openai opened openrouter operator operator_alerts operator_reach
+    order output output_of outreach_batch outreach_letter outreach_read
+    outreach_trial outreach_write outreach_written own_number parent pending
+    person person_name persona phone phone_line phone_login phone_release
+    phone_slow plan preview price pro_grant product project proposed
+    provider provisional public_file published push_subscription quarantined
+    question questions rating reads recalled recipient reconnecting ref
+    referenced refund_failed refund_request refund_retry refund_sale
+    refund_sent refusal refusal_report register_domain register_writes
+    registration relationship release_remake renew_domains
+    renew_transferred_domain report report_refusals repository
     representation requires restored result retired revision
     role_free_spaces rtc rtc_lapse sale_access sale_artifact satisfies
     screen screenshot secret seeded seller sender sending serves

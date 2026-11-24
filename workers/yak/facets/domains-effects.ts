@@ -14,7 +14,14 @@
 import type { Bundle } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { line } from '@yaks/query'
-import { fulfil, type Ports, type Rec, renew, Waiting } from '@yaks/domains'
+import {
+  fulfil,
+  type Ports,
+  type Rec,
+  renew,
+  renewOrder,
+  Waiting,
+} from '@yaks/domains'
 import { ceilings, paid, type Tier } from '@yaks/platform/plans'
 import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
@@ -29,14 +36,13 @@ type Graph = Ports['graph']
 
 // A bought name attached to its place, and every record that takes.
 let attach =
-  (env: Env, graph: Graph) => async (name: string, serves: string) => {
+  (env: Env, graph: Graph) =>
+  async (name: string, serves: string | undefined, space: string) => {
     let at = new Date().toISOString()
     let [held] = await graph.read(line`.hostname.name=${name}`)
-    let row = held?.hostname as { serves?: string } | undefined
-    if (row && row.serves != serves) {
-      throw new Error(
-        `${name} was bought for ${serves} and serves ${row.serves}`,
-      )
+    let row = held?.hostname as { serves?: string; space?: string } | undefined
+    if (row && (row.space ? row.space != space : row.serves != serves)) {
+      throw new Error(`${name} is already held by another space`)
     }
     let eid = held?.entity.eid ?? crypto.randomUUID()
     let mail = held?.mail_domain as MailDomain | undefined ??
@@ -44,7 +50,14 @@ let attach =
     if (!held) {
       await graph.apply([{
         entity: { eid },
-        hostname: { name, serves, stage: 'pending', verification: {}, at },
+        hostname: {
+          name,
+          space,
+          ...serves ? { serves } : {},
+          stage: 'pending',
+          verification: {},
+          at,
+        },
         mail_domain: mail,
       }])
     }
@@ -139,6 +152,18 @@ export let effects = (_host: unknown, options: Options): Handlers => {
         ) {
           caught(error, { request: 'register_domain', order: event.entity.eid })
         }
+        await attempt?.progressed()
+        throw again(error)
+      }
+    },
+    renew_transferred_domain: async (event, _tx, _write, attempt) => {
+      try {
+        await renewOrder(ports(env, graph), event.entity.eid)
+      } catch (error) {
+        caught(error, {
+          request: 'renew_transferred_domain',
+          order: event.entity.eid,
+        })
         await attempt?.progressed()
         throw again(error)
       }

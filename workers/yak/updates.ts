@@ -549,7 +549,7 @@ let drawCard = (
   let { space } = at
   if (u.transfer) {
     return offerCard(at, u, where, ['transfer', u.eid], [
-      ['accept', 'Accept app'],
+      ['accept', u.transfer.kind == 'domain' ? 'Accept domain' : 'Accept app'],
       ...u.transfer.editor
         ? [['accept-with-editor', 'Accept and keep editor'] as Answer]
         : [],
@@ -821,9 +821,16 @@ let commitAction = async (
   receipt: boolean,
 ): Promise<InboxReceipt> => {
   switch (kind) {
-    case 'transfer':
-      await answerTransfer(env, space, who, target, answer)
-      return { label: answer == 'decline' ? 'Declined' : 'App accepted' }
+    case 'transfer': {
+      let kind = await answerTransfer(env, space, who, target, answer)
+      return {
+        label: answer == 'decline'
+          ? 'Declined'
+          : kind == 'domain'
+          ? 'Domain accepted'
+          : 'App accepted',
+      }
+    }
     case 'friend': {
       let standing = await answerFriend(env, who, target, answer, receipt)
       return {

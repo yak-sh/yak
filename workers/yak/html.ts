@@ -68,3 +68,11 @@ export let fileDrop = (o: {
     o.size ? h(Drop.Said, { role: 'status' }) : null,
     h(Drop.Chosen, { 'aria-live': 'polite' }),
   )
+
+// A sentence out of a lowercase line: what a failed seal wrote beside it. An
+// email address that opens it stays as it was typed.
+/// sentence('no app x in y') -> 'No app x in y.'
+/// sentence('ana@x.test is you') -> 'ana@x.test is you.'
+export let sentence = (text: string) =>
+  (/^\S+@/.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1)) +
+  (/[.!?]$/.test(text) ? '' : '.')

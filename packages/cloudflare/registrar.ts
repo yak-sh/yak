@@ -165,6 +165,12 @@ export let registration = async (r: Registrar, name: string) => {
   return w && workflow(w)
 }
 
+/** Current expiry and auto-renew setting, including renewals since purchase. */
+export let current = (r: Registrar, name: string) =>
+  found<{ expires_at: string | null; auto_renew: boolean }>(
+    call(r, registrar(r, `/registrations/${encodeURIComponent(name)}`)),
+  )
+
 /** Turn a registered name's renewal on or off. On, Cloudflare charges the
  * account up to 30 days before it expires and renews it a year. */
 export let renewing = async (r: Registrar, name: string, on: boolean) => {

@@ -66,6 +66,7 @@ export type SpaceView =
   | 'visits'
   | 'selling'
   | 'billing'
+  | 'domains'
   | 'settings'
   | 'trash'
 /** A page of the person's own, the same in every space. `space` makes one. */
@@ -88,6 +89,7 @@ let SPACE_VIEWS: SpaceView[] = [
   'visits',
   'selling',
   'billing',
+  'domains',
   'settings',
   'trash',
 ]

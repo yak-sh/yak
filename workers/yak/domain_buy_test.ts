@@ -6,6 +6,7 @@
 // (billing.ts `buyDomain`); the connector only searches.
 import { equal, ok, test } from '@yaks/testing'
 import { delivered } from '@yaks/stripe/testing'
+import { parseHTML } from 'linkedom'
 import {
   apexPost,
   connector,
@@ -60,7 +61,7 @@ test('a paid domain registers once, attaches to its app with its DNS written, an
     query: 'bakery-menu',
   })
   ok(found.includes('bakery-menu.com — $10.44 for the first year'), found)
-  ok(found.includes('/manage/bakery/billing#domains'), found)
+  ok(found.includes('/manage/bakery/domains'), found)
 
   let paid = () => pay(k, space, app.eid, name, 'cs_domain')
   equal(await paid(), `bakery bought ${name}`)
@@ -143,4 +144,174 @@ test('a sandbox payment and a second checkout for a taken name are refunded once
   let host = (await k.dir.hosts((await k.dir.at(eids.cafe))!))
     .find((h) => h.name == name)!
   equal(host.serves, eids.cafe)
+})
+
+test('Domains quotes checkout, changes the destination, and transfers ownership on acceptance', async () => {
+  let checkout: URLSearchParams | undefined
+  let fetcher = globalThis.fetch
+  using _ = stub(globalThis, 'fetch', async (input, init) => {
+    let req = new Request(input, init)
+    if (!req.url.startsWith('https://api.stripe.com')) {
+      return fetcher(input, init)
+    }
+    if (new URL(req.url).pathname == '/v1/checkout/sessions') {
+      checkout = new URLSearchParams(await req.text())
+      return Response.json({
+        id: 'cs_name',
+        url: 'https://checkout.stripe.com/session',
+      })
+    }
+    return Response.json(
+      req.method == 'POST' ? { id: 'cus_domains' } : {
+        data: [],
+        has_more: false,
+      },
+    )
+  })
+  let k = await fresh({
+    CF_REGISTRAR_TOKEN: 'a-token',
+    STRIPE_KEY: 'sk_test_probe',
+  })
+  let { cookie, eids } = await seed(k, [{
+    slug: 'studio',
+    apps: ['one', 'two'],
+  }, {
+    slug: 'other-studio',
+    apps: ['elsewhere'],
+  }])
+  let space = (await k.dir.at(eids.studio))!
+  let [one, two] = (await k.dir.apps(space)).sort((a, b) =>
+    a.slug.localeCompare(b.slug)
+  )
+  let [other] = await k.dir.apps((await k.dir.at(eids['other-studio']))!)
+  await onPlus(k, space.eid)
+  let path = '/manage/studio/domains'
+  let read = async (at: string) =>
+    await (await k.at('yaks.app', at, { headers: { cookie } })).text()
+  let post = (body: Record<string, string>) =>
+    k.at('yaks.app', path, {
+      method: 'POST',
+      headers: {
+        cookie,
+        origin: 'https://yaks.app',
+        accept: 'application/json',
+      },
+      body: new URLSearchParams(body),
+    })
+  let search = (q: string) => read(path + '?search=' + encodeURIComponent(q))
+
+  let start = await read(path)
+  ok(start.includes('This space has no domains yet.'), start)
+  ok((await read('/manage/studio/settings')).includes('Manage custom domains'))
+  let results = await search('studio books')
+  ok(results.includes('studiobooks.com'), results)
+  ok(results.includes('studiobooks.org'), results)
+  ok(results.includes('$10.44 first year · $10.44 per year to renew'), results)
+  let taken = await search('taken.com')
+  ok(taken.includes('Taken.'), taken)
+  ok(taken.includes('No available domains'), taken)
+  ok(!taken.includes('data-domain-buy'), taken)
+  ok((await search('!!!')).includes('No available domains'))
+
+  let name = 'studiobooks.com'
+  let quote = { billing: 'domain', domain: name, cents: '1044', renews: '1044' }
+  equal((await post({ ...quote, cents: '999' })).status, 409)
+  equal(checkout, undefined)
+  let opened = await post(quote)
+  equal(opened.status, 200)
+  equal(
+    (await opened.json() as { url: string }).url,
+    'https://checkout.stripe.com/session',
+  )
+  let sent = checkout!
+  equal(sent.get('line_items[0][price_data][unit_amount]'), '1044')
+  equal(sent.get('metadata[serves]'), null)
+  equal(sent.get('metadata[renews]'), '1044')
+  equal(new URL(sent.get('success_url')!).pathname, path)
+  equal(await registered(k), {})
+
+  await delivered(
+    apexPost(k),
+    '/stripe/webhook',
+    WEBHOOK_SECRET,
+    'checkout.session.completed',
+    {
+      id: 'cs_name',
+      livemode: true,
+      mode: 'payment',
+      payment_status: 'paid',
+      client_reference_id: space.eid,
+      metadata: {
+        ...tagged(space.eid),
+        domain: name,
+        cents: '1044',
+        renews: '1044',
+      },
+    },
+  )
+  await k.settled()
+
+  let listing = await read(path)
+  ok(listing.includes('Unattached'), listing)
+  ok(listing.includes('Certificate'), listing)
+  ok(listing.includes('Renews by'), listing)
+  ok(listing.includes('$10.44 per year at the registrar'), listing)
+  equal(await k.dir.serves(name), null)
+  let point = (destination: string) => post({ point_domain: name, destination })
+  equal((await point(other.eid)).status, 400)
+  equal((await point(one.eid)).status, 200)
+  equal((await k.dir.serves(name))?.app?.eid, one.eid)
+  equal((await point(two.eid)).status, 200)
+  equal((await k.dir.serves(name))?.app?.eid, two.eid)
+  equal((await point('')).status, 200)
+  equal(await k.dir.serves(name), null)
+  equal(await registered(k), { [name]: { auto_renew: true } })
+
+  let bill = await read('/manage/studio/billing')
+  ok(bill.includes('Domain renewals'), bill)
+  ok(bill.includes(`${path}#${name}`), bill)
+  ok(!bill.includes('data-domain-search'), bill)
+
+  let recipient = await seed(k, [{ slug: 'receiving', apps: [] }])
+  let target = (await k.dir.at(recipient.eids.receiving))!
+  equal((await point(one.eid)).status, 200)
+  let offer = { transfer_domain: name, receiving_space: target.slug }
+  equal((await post(offer)).status, 200)
+  equal((await post(offer)).status, 200)
+  equal((await k.dir.serves(name))?.space.eid, space.eid)
+
+  let updates = '/receiving/updates'
+  let card = await (await k.at('yaks.app', updates, {
+    headers: { cookie: recipient.cookie },
+  })).text()
+  ok(card.includes('Accept domain'), card)
+  ok(card.includes('The domain arrives unattached.'), card)
+  let nodes = parseHTML(card).document.querySelectorAll(
+    'input[name="transfer"]',
+  )
+  equal(nodes.length, 1)
+  let transfer = nodes[0].getAttribute('value')!
+  let accept = (cookie: string) =>
+    k.at('yaks.app', updates, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { cookie, origin: 'https://yaks.app' },
+      body: new URLSearchParams({ transfer, answer: 'accept' }),
+    })
+  ok((await accept(cookie)).status != 303)
+  equal((await k.dir.serves(name))?.space.eid, space.eid)
+  equal((await accept(recipient.cookie)).status, 303)
+  equal((await accept(recipient.cookie)).status, 303)
+  await k.settled()
+  equal(await k.dir.serves(name), null)
+  equal((await k.dir.hostname(name))?.space, target.eid)
+  equal((await k.dir.domainOrders(space)).length, 0)
+  equal((await k.dir.domainOrders(target))[0]?.order.bought_by, space.eid)
+  equal(await registered(k), { [name]: { auto_renew: false } })
+  ok(!(await read('/manage/studio/billing')).includes(name))
+  let receiving = await (await k.at('yaks.app', '/manage/receiving/billing', {
+    headers: { cookie: recipient.cookie },
+  })).text()
+  ok(receiving.includes(`/manage/receiving/domains#${name}`), receiving)
+  ok(receiving.includes('auto-renew off'), receiving)
 })

@@ -64,6 +64,8 @@ import type { BrowserSession } from './browser-sessions.ts'
 import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
+import { domainRenewals, domainsPage } from '@yaks/platform/domain-pages'
+import { domainBrowser } from '@yaks/platform/domain-browser'
 
 import {
   addressBox,
@@ -86,6 +88,7 @@ import {
   page,
   type Picked,
   plan,
+  run,
   said,
   send,
   sentence,
@@ -831,7 +834,16 @@ let preferences = (at: DeskPage, env: Host) => {
             'your-address',
             'Address',
             addressBox('your-address', 'space', was.space, env),
-            MOVES,
+            [
+              MOVES,
+              ' ',
+              h(
+                'a',
+                { href: managePath('domains', at.space) },
+                'Manage custom domains',
+              ),
+              '.',
+            ],
           ),
           at.apps.length
             ? labeled(
@@ -3004,6 +3016,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     selling: 'Selling',
     settings: 'Space settings',
     billing: 'Billing',
+    domains: 'Domains',
     trash: 'Trash',
   } satisfies Record<Setting, string>
   // The line over the title names whose the page is: the person's own, or
@@ -3060,6 +3073,9 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'selling') body = selling(at, env)
   if (view == 'settings') body = preferences(at, env)
+  if (view == 'domains' && at.domains) {
+    body = [...domainsPage(at.space, at.apps, at.domains), run(domainBrowser)]
+  }
   if (view == 'billing') {
     body = [
       plan(
@@ -3080,6 +3096,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         managePath('billing', at.space),
       ),
       at.bill ? allowances(at.bill, env, at.space) : null,
+      domainRenewals(at.space, at.renewals ?? []),
       billing(),
     ]
   }

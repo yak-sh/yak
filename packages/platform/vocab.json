@@ -248,11 +248,17 @@
           "unique": true,
           "description": "the domain, as a person typed it; one hostname points at one place"
         },
-        "serves": {
+        "space": {
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "what the name opens: a space, whose front page it opens at `/` with every app at `/<app>/`, or a single app, which it opens at `/`"
+          "description": "the space that holds the name independently of what it opens"
+        },
+        "serves": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the optional destination: a space, whose front page it opens at `/` with every app at `/<app>/`, or a single app, which it opens at `/`"
         },
         "to": {
           "type": "string",

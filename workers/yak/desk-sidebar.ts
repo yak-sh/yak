@@ -23,6 +23,7 @@ let icons = {
   visits: 'chart-no-axes-column-increasing',
   selling: 'credit-card',
   billing: 'receipt',
+  domains: 'globe',
   settings: 'settings-2',
   trash: 'trash-2',
 } satisfies Record<string, Item['icon']>
@@ -80,6 +81,7 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
           ...(at.shops ? [item('selling', 'Selling')] : []),
           item('billing', 'Billing'),
           item('settings', 'Space settings'),
+          item('domains', 'Domains'),
           item('trash', 'Trash'),
         ],
       }],

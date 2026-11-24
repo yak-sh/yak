@@ -230,8 +230,9 @@ export let HELD = (site: string) =>
  */
 export let unveiled = async (
   env: Env,
-  row: { name: string; serves: string },
+  row: { name: string; serves: string | null },
 ): Promise<Bundle[]> => {
+  if (!row.serves) return []
   let store = meta(env)
   let [served] = await store.query(line`.entity.eid=${row.serves}&?space&?app`)
   let space = served?.app

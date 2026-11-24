@@ -1012,6 +1012,12 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     let held = name && names.get(decodeURIComponent(name))
     if (!held) return missing()
     if (rest == 'registration-status') return ok(workflow(name))
+    if (!rest && req.method == 'GET') {
+      return ok({
+        expires_at: '2027-11-19T00:00:00Z',
+        auto_renew: held.auto_renew,
+      })
+    }
     if (!rest && req.method == 'PATCH') {
       held.auto_renew = !!(await req.json()).auto_renew
       return ok(workflow(name))

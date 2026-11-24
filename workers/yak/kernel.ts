@@ -182,8 +182,8 @@ let inSpace = async (req: Request, env: Env, space: string) => {
 // through, and it is a config gap, not a domain's own state.
 let settling = async (env: Env, host: string): Promise<Response | null> => {
   if (!foreign(host, env)) return null
-  let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
-    .serves(host)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let served = await dir.serves(host)
   if (served?.host.trashed) {
     return new Response(
       'This domain is in the trash. Its owner can restore it.',
@@ -191,6 +191,11 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
     )
   }
   if (ready(served)) return null
+  if (!served && (await dir.hostname(host))?.space) {
+    return new Response('This domain is not attached to an app.', {
+      status: 404,
+    })
+  }
   let how: Step[] | null = null
   let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'
     ? 'error'

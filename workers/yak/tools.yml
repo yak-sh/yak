@@ -968,18 +968,13 @@ domain_search:
     doing: 'Looking for %{query} domains…'
     done: 'Looked for %{query} domains'
   description: >-
-    Look for a domain the person could buy: each name with what its first
-    year costs at Cloudflare's price, with no markup, or why it can't be
-    bought. A whole name such as herbusiness.com is checked live; a word
-    gives suggestions across endings. Domains are bought by the space's
-    owner on its plan settings page, signed in, never through a tool. The
-    answer gives that page. Once paid, yaks.app registers the name in its own
-    Cloudflare account, attaches it to the space or the app they named and
-    writes every DNS record, so there is nothing to set up at a registrar.
-    yaks.app pays the renewal each year while the space is on a paid plan;
-    after it leaves, the name lapses when its year ends. Custom domains
-    require the Plus plan unless the space is exempt. Documentation:
-    https://yaks.app/docs/domains.
+    Search live registrar availability for a domain name or a few words.
+    Results include common endings and related names, with first-year and
+    renewal prices or a reason a name is unavailable. The owner buys from
+    Domains in the space settings. The first year costs the registrar's price
+    with no markup. yaks.app covers renewal while the space stays on a paid
+    plan. The space owns the domain and can attach it to an app at any time.
+    Documentation: https://yaks.app/docs/domains.
 number_find:
   title: Find a phone number
   step:

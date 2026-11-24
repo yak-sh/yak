@@ -56,7 +56,7 @@ export type Update = {
   from?: Place
   /** They dismissed it, and nothing has happened on it since. */
   dismissed: boolean
-  transfer?: { editor: boolean }
+  transfer?: { editor: boolean; kind?: 'domain' }
   /** A friend request or suggestion from this person (friends.ts). */
   friend?: { person: string; suggested: boolean }
   /** A message from a friend, answered by a reply to them (friends.ts). */

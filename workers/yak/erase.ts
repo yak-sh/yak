@@ -498,7 +498,13 @@ export let erase = async (
   // directory's whole record of the space — and frees the slug, which is
   // unique across the platform and now belongs to nobody.
   let gone = await dir.apply({
-    entities: [{ entity: { eid: d.space.eid }, tombstone: {} }],
+    entities: [
+      { entity: { eid: d.space.eid }, tombstone: {} },
+      ...d.hosts.filter((h) => !h.space).map((h) => ({
+        entity: { eid: h.eid },
+        tombstone: {},
+      })),
+    ],
   }, vouched(who))
   await purgedRows(dir, gone, [
     d.space.eid,
@@ -903,8 +909,24 @@ export let erased = async (
     await dir.stamp({ entities: declarations }, vouched(who))
   }
   let files = await emptied(env, space, app, who, true)
+  let [hosts, orders] = await Promise.all([
+    dir.hosts(space),
+    dir.domainOrders(space),
+  ])
+  let bought = new Set(
+    orders.filter((r) => r.registered).map((r) => r.order.name),
+  )
+  let aliases = hosts.filter((h) => h.serves == app.eid && !h.space)
   let gone = await dir.apply({
-    entities: [{ entity: { eid: app.eid }, tombstone: {} }],
+    entities: [
+      ...aliases.map((h) => ({
+        entity: { eid: h.eid },
+        ...bought.has(h.name)
+          ? { hostname: { space: space.eid, to: null } }
+          : { tombstone: {} },
+      })),
+      { entity: { eid: app.eid }, tombstone: {} },
+    ],
   }, vouched(who))
   await purgedRows(dir, gone, [app.eid])
   return files.length

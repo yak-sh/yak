@@ -4,10 +4,13 @@ import {
   type Request as TransferRequest,
   type Transfer,
 } from '@yaks/platform/app-transfer'
+import type {
+  Answer as DomainAnswer,
+  Request as DomainTransfer,
+} from '@yaks/platform/domain-transfer'
 import { mint } from '@yaks/graph/identity'
 import { line } from '@yaks/query'
 import { sendable } from '@yaks/mail'
-import { talkPath } from '@yaks/platform/routes'
 import { canon } from './signin.ts'
 import {
   type Directory,
@@ -27,10 +30,43 @@ import { FRIEND, recipientOf } from './friends.ts'
 
 let open = (env: Env) => directory(bound(env.DIRECTORY, fetch, env))
 
-let apply = (dir: Directory, who: Who, asked: TransferRequest) =>
+let apply = (
+  dir: Directory,
+  who: Who,
+  asked: TransferRequest | DomainTransfer,
+  key = '$appTransfer',
+) =>
   dir.stamp({
-    entities: [{ entity: { eid: '$appTransfer' }, $appTransfer: asked }],
+    entities: [{ entity: { eid: key }, [key]: asked }],
   }, vouched(who))
+
+export let offerDomain = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+  hostname: string,
+  destination: string,
+) => {
+  if (!who.person || who.role != 'owner') {
+    throw refuse('access', 'Only an owner can offer this domain.')
+  }
+  let [hosts, target] = await Promise.all([
+    dir.hosts(space),
+    dir.space(destination),
+  ])
+  let host = hosts.find((row) => row.name == hostname && !row.trashed)
+  if (!host) throw refuse('missing', 'This space does not hold that domain.')
+  if (!target) throw refuse('missing', 'No space has that address.')
+  await apply(dir, who, {
+    person: who.person,
+    at: new Date().toISOString(),
+    eid: mint(),
+    offer: { host: host.eid, from: space.eid, to: target.eid },
+  }, '$domainTransfer')
+  return `Transfer offered. An owner of ${
+    target.title || target.slug
+  } can respond in Updates.`
+}
 
 export let transferTool: ToolRow = {
   name: 'app_transfer',
@@ -91,7 +127,7 @@ let offers = (dir: Directory, space: Space, who: Who) =>
     line`.app_transfer.to=${space.eid}&.app_transfer.recipient=${who.person}&?app_transfer_answer&?created`,
   )
 
-export let transferUpdates = async (
+let appUpdates = async (
   env: Env,
   space: Space,
   who: Who,
@@ -135,6 +171,48 @@ export let transferUpdates = async (
   }))).filter((row) => row != null)
 }
 
+let domainUpdates = async (
+  dir: Directory,
+  space: Space,
+  who: Who,
+): Promise<Update[]> => {
+  if (!who.person || who.role != 'owner') return []
+  let rows = (await dir.domainTransfersTo(space))
+    .sort((a, b) => (b.created?.at ?? '').localeCompare(a.created?.at ?? ''))
+    .slice(0, 40)
+  return (await Promise.all(rows.map(async (row) => {
+    let offer = row.domain_transfer!
+    let response = row.domain_transfer_answer
+    if (response?.answer == 'withdrawn') return null
+    let from = await dir.at(idOf(offer.from))
+    if (!response && (!from || from.trashed)) return null
+    let fromName = from?.title || from?.slug || 'another space'
+    let name = offer.name
+    return {
+      eid: row.entity.eid,
+      at: response?.at ?? row.created?.at ?? '',
+      subject: name,
+      words: !response
+        ? `${fromName} offered you ${name}. Accepting moves the domain and its renewal to ${
+          space.title || space.slug
+        }. The domain arrives unattached.`
+        : response.answer == 'decline'
+        ? `You declined ${name}.`
+        : `You accepted ${name}.`,
+      needs: !response,
+      unread: false,
+      dismissed: false,
+      transfer: { editor: false, kind: 'domain' },
+    } satisfies Update
+  }))).filter((row) => row != null)
+}
+
+export let transferUpdates = async (env: Env, space: Space, who: Who) =>
+  (await Promise.all([
+    appUpdates(env, space, who),
+    domainUpdates(open(env), space, who),
+  ])).flat()
+
 export let answerTransfer = async (
   env: Env,
   space: Space,
@@ -148,12 +226,21 @@ export let answerTransfer = async (
   if (!EID.test(transfer) || !answers.includes(answer as Answer)) {
     throw refuse('arguments', 'Choose an answer from the offer.')
   }
-  await apply(open(env), who, {
+  let dir = open(env)
+  let domain = await dir.domainTransferAt(transfer)
+  let request = {
     person: who.person,
     at: new Date().toISOString(),
     space: space.eid,
     transfer,
-    answer: answer as Answer,
-  })
-  return talkPath('updates', space.slug)
+  }
+  if (domain) {
+    await apply(
+      dir,
+      who,
+      { ...request, answer: answer as DomainAnswer },
+      '$domainTransfer',
+    )
+  } else await apply(dir, who, { ...request, answer: answer as Answer })
+  return domain ? 'domain' : 'app'
 }

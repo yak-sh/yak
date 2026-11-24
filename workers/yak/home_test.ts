@@ -127,6 +127,7 @@ test('Manage is one side: back to the Operator, the space you manage, then your 
     { label: 'Visits', href: '/manage/dana/visits' },
     { label: 'Billing', href: '/manage/dana/billing' },
     { label: 'Space settings', href: '/manage/dana/settings' },
+    { label: 'Domains', href: '/manage/dana/domains' },
     { label: 'Trash', href: '/manage/dana/trash' },
   ])
   // Each page is titled as the side names it.
@@ -589,10 +590,10 @@ test('Billing is a management page beside Settings with space checkout and porta
     assertEquals(
       [...document.querySelectorAll('nav[aria-labelledby="side-space"] a')].map(
         (a) => a.getAttribute('href'),
-      ).slice(-4),
-      (['visits', 'billing', 'settings', 'trash'] as const).map((view) =>
-        managePath(view, 'dana')
-      ),
+      ).slice(-5),
+      (['visits', 'billing', 'settings', 'domains', 'trash'] as const).map((
+        view,
+      ) => managePath(view, 'dana')),
     )
     if (plus) assertStringIncludes(page, 'stops renewing')
   }

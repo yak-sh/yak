@@ -906,7 +906,7 @@ let UNFENCED = new Set([
   ...UNNAMED,
 ])
 let UNHELD = new Set([...UNFENCED, ...STAMPS])
-let DECIDED = ['$own', '$appTransfer']
+let DECIDED = ['$own', '$appTransfer', '$domainTransfer']
 let CORE = new Set(REQUESTS)
 let deciding = (bundles: Bundle[]) =>
   bundles.some((b) => Object.keys(b).some((k) => k[0] == '$' && !CORE.has(k)))

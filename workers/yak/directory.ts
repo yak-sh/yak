@@ -81,6 +81,11 @@ import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
 import { BARE, SHORT } from '@yaks/id'
 import type { Rec } from './domains.ts'
+import type { Placed } from '@yaks/domains'
+import type {
+  Answer as DomainTransferAnswer,
+  Offer as DomainTransferOffer,
+} from '@yaks/platform/domain-transfer'
 import { type Fetcher, STATIC_QUERY, storeOf } from './door.ts'
 import { type Door, type Namespace } from '@yaks/durable-object/door'
 import {
@@ -565,7 +570,8 @@ export type Host = {
   trashed?: Trashed | null
   eid: string
   name: string
-  serves: string
+  space?: string
+  serves: string | null
   stage: HostStage | null
   at: string
   verification: Partial<Rec> | null
@@ -778,9 +784,19 @@ export type Row = MeteredRow & {
     mime?: string | null
     size?: number | null
   }
+  domain_transfer?: DomainTransferOffer
+  domain_transfer_answer?: {
+    at: string
+    answer: DomainTransferAnswer | 'withdrawn'
+  }
+  domain_order?: Placed
+  domain_registered?: { at: string; expires?: string }
+  domain_refused?: { why: string }
+  domain_refunded?: { at: string }
   hostname?: {
     name: string
-    serves: Id
+    space?: Id | null
+    serves?: Id | null
     stage?: HostStage | null
     at?: string | null
     verification?: Partial<Rec> | null
@@ -1754,7 +1770,8 @@ let hostOf = (r: Row): Host => ({
   eid: r.entity.eid,
   trashed: trashedOf(r),
   name: r.hostname!.name,
-  serves: idOf(r.hostname!.serves),
+  ...r.hostname!.space ? { space: idOf(r.hostname!.space) } : {},
+  serves: r.hostname!.serves ? idOf(r.hostname!.serves) : null,
   stage: r.hostname!.stage ?? null,
   at: r.hostname!.at ?? '',
   verification: r.hostname!.verification ?? null,
@@ -3367,33 +3384,51 @@ export let directoryRows = (rows: {
     // always did. Cached like every other read here, and an empty answer is not
     // cached, so a domain serves the moment it is attached rather than a TTL
     // later.
-    serves: async (host: string) => {
+    hostname: async (host: string): Promise<Host | null> => {
       let row = await one(
         line`.hostname.name=${host}&?verified&?mail_domain&?trashed`,
       )
-      if (!row?.hostname) return null
-      let eid = idOf(row.hostname.serves)
-      let aimed = hostOf(row)
-      let at = await self.appAt(eid)
+      return row?.hostname ? hostOf(row) : null
+    },
+    serves: async (host: string) => {
+      let aimed = await self.hostname(host)
+      if (!aimed?.serves) return null
+      let at = await self.appAt(aimed.serves)
       if (at) {
-        return { space: at.space, app: at.app as App | null, host: aimed }
+        return aimed.space && aimed.space != at.space.eid
+          ? null
+          : { space: at.space, app: at.app as App | null, host: aimed }
       }
-      let space = await self.at(eid)
+      let space = await self.at(aimed.serves)
       return space ? { space, app: null, host: aimed } : null
     },
-    // Every domain of this space (T-33038), oldest first: the ones aimed at the
-    // space itself and the ones aimed at an app of it. One query over the whole
-    // table, which is exactly the platform's custom hostname count, where one
-    // per app would be several.
+    domainTransfersTo: (space: Space) =>
+      query(
+        line`.domain_transfer.to=${space.eid}&?domain_transfer_answer&?created`,
+      ),
+    domainTransferAt: (eid: string) =>
+      one(line`.entity.eid=${eid}&.domain_transfer`),
+    // Registrations belong to the space that paid, including while unattached.
+    domainOrders: async (space: Space) =>
+      (await query(
+        line`.domain_order.space=${space.eid}&?domain_registered&?domain_refused&?domain_refunded`,
+      ))
+        .map((r) => ({
+          order: r.domain_order!,
+          registered: r.domain_registered,
+          refused: r.domain_refused?.why,
+          refunded: !!r.domain_refunded,
+        })),
     hosts: async (space: Space): Promise<Host[]> => {
       let mine = new Set([
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query(line`.hostname&?verified&?mail_domain&?trashed`)).map(
-        hostOf,
-      )
-        .filter((h) => mine.has(h.serves))
+      return (await query(line`.hostname&?verified&?mail_domain&?trashed`))
+        .map(hostOf)
+        .filter((h) =>
+          h.space ? h.space == space.eid : h.serves && mine.has(h.serves)
+        )
     },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.
