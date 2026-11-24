@@ -86,6 +86,13 @@ export let start = async (argv: string[]): Promise<void> => {
     let { codeFile, record } = await import('./code.ts')
     forget = record(codeFile(ready), flag(argv, 'config')).stop
   }
+  // Resolve the repository's default from the same frozen tree as the CLI.
+  // Children inherit it, and a new launcher can select its own tree's pin.
+  if (pinned && !Deno.env.has('DENO_SQLITE_PATH')) {
+    let { importing } = await import('@yaks/fp/imports')
+    let { library } = await importing(new URL('bin/sqlite.ts', root).href)
+    Deno.env.set('YAK_SQLITE_PATH', await library())
+  }
   let [{ closeAccounts }, held, { main }] = await Promise.all([
     import('./accounts.ts'),
     import('./held.ts'),

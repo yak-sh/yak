@@ -592,10 +592,10 @@ it, or is a `.backup` inside one read transaction (`bin/copy-db`): a bare
 `.backup` starts over whenever another connection commits, and on a busy file
 never ends. A new file starts in incremental auto-vacuum mode, so the pages a
 delete frees can be given back (`reclaim`, under Owed work). A file made before
-keeps its mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise
-selecting the platform's system library. This module uses Deno environment/FFI
-APIs. The root adapter can instead receive another runtime's synchronous SQLite
-driver.
+keeps its mode until a `VACUUM`. The driver uses `DENO_SQLITE_PATH` when set,
+then the checkout pin in `YAK_SQLITE_PATH`, then the platform's system library.
+This module uses Deno environment/FFI APIs. The root adapter can instead receive
+another runtime's synchronous SQLite driver.
 
 A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
 which moves when another connection commits, and calls back when it moved. A

@@ -10,16 +10,15 @@
 # that moved or deleted a package's export broke every `yak` command until
 # someone reinstalled.
 #
-# Every yak process opens the SQLite the repository's tests open (bin/sqlite.ts,
-# built here when absent), not the one the machine's package manager last
-# installed, which moves with every `brew upgrade`. Moving the pin means running
-# this again.
+# Build the checkout's pinned SQLite ahead of the first command. The CLI
+# selects its own snapshot's pin at startup, so a new pin takes effect when
+# the checkout changes.
 set -eu
 root=$(git worktree list --porcelain | head -1 | cut -c 10-)
 bin="${DENO_INSTALL_ROOT:-$HOME/.deno}/bin"
 git -C "$root" config core.hooksPath .githooks
 "$root/bin/workspace-dependencies"
-sqlite=$(deno run -A "$root/bin/sqlite.ts")
+deno run -A "$root/bin/sqlite.ts" >/dev/null
 mkdir -p "$bin"
 # The copied config a `deno install -g` of this CLI left behind.
 rm -rf "$bin/.yak"
@@ -28,7 +27,6 @@ rm -rf "$bin/.yak"
 # when they agree: otherwise every command would start a second Deno first.
 cat >"$bin/yak" <<EOF
 #!/bin/sh
-export DENO_SQLITE_PATH="\${DENO_SQLITE_PATH:-$sqlite}"
 [ '$root/node_modules/.pnpm/lock.yaml' -nt '$root/pnpm-lock.yaml' ] ||
   deno run -q -A --config '$root/deno.json' '$root/bin/workspace-dependencies.ts' || exit \$?
 exec deno run -q -A --unstable-no-legacy-abort --config '$root/deno.json' '$root/packages/cli/yak.ts' "\$@"

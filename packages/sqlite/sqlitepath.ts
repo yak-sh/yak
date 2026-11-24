@@ -1,6 +1,6 @@
 import * as system from '@yaks/process/system'
 // Which SQLite library the FFI driver opens (./ffi/ffi.ts): the one the
-// environment names, else the system's.
+// environment names, the checkout's pin, or the system's.
 //
 // Never upstream @db/sqlite's prebuilt. On Linux x86_64 it kills the process
 // the moment it initializes: `sqlite3_initialize` calls through a null pointer
@@ -18,9 +18,10 @@ let paths: Record<string, string> = {
   windows: 'sqlite3.dll',
 }
 
-/** The library the driver opens: what the environment already names, else
- * this platform's system SQLite. */
+/** The library the driver opens, with an environment override ahead of the
+ * checkout's pin and the platform default. */
 export let sqlitePath: string = system.env.get('DENO_SQLITE_PATH') ??
+  system.env.get('YAK_SQLITE_PATH') ??
   paths[system.os]
 
 if (!sqlitePath) {
