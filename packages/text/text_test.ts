@@ -9,7 +9,15 @@ import { marked } from 'marked'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { h, markdown, plain, render, safe, safeHref } from './mod.ts'
+import {
+  h,
+  markdown,
+  plain,
+  possessive,
+  render,
+  safe,
+  safeHref,
+} from './mod.ts'
 
 let { document } = parseHTML('<main></main>')
 let html = (text: string) => {
@@ -370,4 +378,15 @@ test('nested text views retain registry context and always render read-only', ()
     ),
     'Title: A page',
   )
+})
+
+test('a name ending in s takes a bare apostrophe', () => {
+  for (
+    let [name, whose] of [['Ada', 'Ada’s'], ['checks', 'checks’'], [
+      'JAMES',
+      'JAMES’',
+    ]]
+  ) {
+    assertEquals(possessive(name), whose)
+  }
 })

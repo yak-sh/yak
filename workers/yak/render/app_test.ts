@@ -78,7 +78,7 @@ test('app Tile resolves by component and draws the same row served and mounted',
     'https://ada.yaks.app/recipes/icon.png?display',
   )
   assertEquals(
-    served.querySelector('.Rows_Meta-line')?.textContent,
+    served.querySelector('.Rows_Main .Rows_Meta')?.textContent,
     '/recipes · waiting for the gallery',
   )
 
@@ -130,8 +130,8 @@ test('app Tile says when it last changed, by whom where that was not the viewer,
   let deployed = { at: '2026-02-01T00:00:00Z', by: 'ada' }
   let line = (stamps: object, me = 'ada') => {
     let root = one({}, { ...stamps, writers, me })
-    let time = root.querySelector('.Rows_Meta-line time')
-    let text = root.querySelector('.Rows_Meta-line')!.textContent!
+    let time = root.querySelector('.Rows_Main .Rows_Meta time')
+    let text = root.querySelector('.Rows_Main .Rows_Meta')!.textContent!
     return [
       root.getAttribute('data-changed'),
       time?.getAttribute('datetime') ?? null,
@@ -191,7 +191,7 @@ test('app Tile escapes every label and attribute once', () => {
   )
   assertEquals(root.querySelector('.Rows_Open')?.textContent, text)
   assertEquals(
-    root.querySelector('.Rows_Meta-line')?.textContent,
+    root.querySelector('.Rows_Main .Rows_Meta')?.textContent,
     `/${text} · ${text}`,
   )
   assertEquals(root.querySelector('script'), null)

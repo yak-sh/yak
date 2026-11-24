@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import { contents, Shell } from '@yaks/ui/parts'
 import { Head } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
@@ -3054,7 +3055,7 @@ let operating = (at: DeskPage) => {
       h(
         'span',
         null,
-        `${named(o)}'s Operator · ${
+        `${possessive(named(o))} Operator · ${
           o.role == 'viewer' ? 'only looks' : 'changes things'
         }`,
       ),
@@ -3067,7 +3068,7 @@ let operating = (at: DeskPage) => {
           held('unreach', o.eid),
           h(Button, {
             type: 'submit',
-            'aria-label': `Remove ${named(o)}'s Operator`,
+            'aria-label': `Remove ${possessive(named(o))} Operator`,
           }, 'Remove'),
         ),
       ),

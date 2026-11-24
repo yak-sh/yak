@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
 import { BEAT } from '@yaks/notify/whereabouts'
 import { Time, wordsPage } from '@yaks/ui/parts'
@@ -2058,7 +2059,7 @@ let showing = (app: Shown) =>
 // Its scope is the whole origin, so signing in stays in the window.
 let ICON = '/connector-512.png'
 let whoseOf = (space: Space) =>
-  `${space.operator}, ${space.title || space.slug}’s Operator`
+  `${space.operator}, ${possessive(space.title || space.slug)} Operator`
 let installable = (space: Space) =>
   html([
     h('link', {

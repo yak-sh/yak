@@ -4044,6 +4044,9 @@ importers:
       '@yaks/sync':
         specifier: 0.2.24
         version: link:../sync
+      '@yaks/text':
+        specifier: 0.2.24
+        version: link:../text
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools

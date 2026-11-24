@@ -42,6 +42,11 @@ export { h, type Node } from './tree.ts'
 export type { Mode } from './format.ts'
 export { safe, safeHref } from './safe.ts'
 
+/** A name made possessive: "Ada’s", but a name ending in s takes the bare
+ * apostrophe, "checks’" and "James’". */
+export let possessive = (name: string): string =>
+  /s$/i.test(name) ? `${name}’` : `${name}’s`
+
 /** Render a tree as Markdown, escaping literal text and preserving code. */
 export let markdown = (child: Child<Node>): string => format(child, 'markdown')
 

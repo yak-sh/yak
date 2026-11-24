@@ -22,6 +22,7 @@
  * equal(signed(ada), 'Nova\nAda’s Operator')
  * ```
  */
+import { possessive } from '@yaks/text'
 import { type Host, mailFrom } from './host.ts'
 
 /** The space a letter's Operator works for: its slug, its title and what
@@ -37,12 +38,14 @@ export let envelope = (space: Writer, env: Host = {}) => ({
 
 /** How the Operator signs a letter: its name, and whose Operator it is. */
 export let signed = (space: Writer) =>
-  `${space.operator}\n${space.title || space.slug}’s Operator`
+  `${space.operator}\n${possessive(space.title || space.slug)} Operator`
 
 /** How the Operator signs a letter it writes to someone else for a person:
  * its name, whose assistant it is, and that they are copied. */
 export let signedFor = (space: Writer, name: string) =>
-  `${space.operator}\n${name}’s AI assistant on yaks.app. ${name} is copied on this letter.`
+  `${space.operator}\n${
+    possessive(name)
+  } AI assistant on yaks.app. ${name} is copied on this letter.`
 
 /** The line that ends a letter whose reader may have a question. */
 export let ASK = "Reply to this email with any question, and I'll answer."
@@ -101,8 +104,8 @@ export let invitation = (o: Invited): string =>
   // Operator to be saying them.
   (o.note ? `${o.by ?? 'They'} wrote:\n\n${quoted(o.note)}\n\n` : '') +
   `I'm ${o.space.operator}, the AI assistant for ${
-    o.space.title || o.space.slug
-  }’s space on yaks.app. ${o.by ?? 'Someone there'} invited you to ${o.verb} ` +
+    possessive(o.space.title || o.space.slug)
+  } space on yaks.app. ${o.by ?? 'Someone there'} invited you to ${o.verb} ` +
   `${o.what}. Accept with one click:\n\n${o.accept}\n\n` +
   `The link signs you in as ${o.email} for the next ${o.days} days. There ` +
   'is nothing to install and no account to make first. Until you accept, ' +

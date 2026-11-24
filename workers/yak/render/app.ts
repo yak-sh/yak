@@ -1,6 +1,6 @@
 // The app library's Tile: one row of the kit's Rows, pressed anywhere to open
 // the app in a new tab. Its mark is the app's own icon, or its first letter
-// where it drew none (apps.ts `unwritten`); under its name, one quiet line
+// where it drew none (apps.ts `unwritten`); under its name, a quiet line
 // says where it lives and when it last changed, and who changed it where that
 // was not the person looking, such as an agent writing for them. At the far side sit its open
 // errors, as a badge that opens them, a glyph for whether it is the space's
@@ -104,9 +104,10 @@ export let app: ComponentRenderer = {
             title,
           ),
         ),
+        // Where it lives and when it changed wraps on a phone, never cut.
         h(
           Rows.Meta,
-          { mod: 'line' },
+          null,
           `${ctx.host ?? ''}/${a.slug}`,
           changed
             ? [

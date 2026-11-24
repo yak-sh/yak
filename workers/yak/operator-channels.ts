@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import { line } from '@yaks/query'
 import { HANDOFF, handoffTask } from '@yaks/platform/operator-handoff'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
@@ -337,7 +338,7 @@ export let PAGE = 'page'
 /** Who wrote words that came by a channel, where not the person they are
  * for (@yaks/session `Intake.from`). */
 let FROM: Record<string, (request: Request) => string | undefined> = {
-  [HANDOFF]: (r) => `${r.address}'s Operator`,
+  [HANDOFF]: (r) => `${possessive(r.address!)} Operator`,
   [THREAD]: (r) => `your thread with ${r.address}`,
   [PAGE]: (r) => `the app ${r.app}'s page`,
   decision: () => 'the system',
@@ -1084,7 +1085,9 @@ let BY: Record<
         : ''
     }The app's words: `,
   [HANDOFF]: (r) =>
-    `Handed off by ${r.address}'s Operator for the same person you work for. Do the work in this space with their permissions. Your reply goes back to the Operator that asked. Give the outcome, including anything still open. If you delegate to a helper, wait for the result before reporting completion.\n\n`,
+    `Handed off by ${
+      possessive(r.address!)
+    } Operator for the same person you work for. Do the work in this space with their permissions. Your reply goes back to the Operator that asked. Give the outcome, including anything still open. If you delegate to a helper, wait for the result before reporting completion.\n\n`,
   fixed: () => FIXED,
   decision: (_, __, about) =>
     `The person answered your question “${

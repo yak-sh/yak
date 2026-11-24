@@ -2,6 +2,7 @@
 // friend_list, friend_add and friend_remove, and the requests and suggestions
 // waiting on a person in their Updates. What a friendship is, and who may
 // write which side of it, is @yaks/platform/friends.
+import { possessive } from '@yaks/text'
 import {
   type Request as FriendRequest,
   side,
@@ -546,7 +547,9 @@ export let messageUpdates = async (
   return incoming.map((m) => ({
     eid: m.eid,
     at: m.at,
-    subject: m.operator ? `${m.name}'s Operator` : `Message from ${m.name}`,
+    subject: m.operator
+      ? `${possessive(m.name)} Operator`
+      : `Message from ${m.name}`,
     words: m.words,
     needs: false,
     unread: !m.read,

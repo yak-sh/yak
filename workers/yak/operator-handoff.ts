@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import {
   HANDOFF,
   type Handoff,
@@ -108,7 +109,7 @@ export let handOff = async (
   let id = derivedEid(`operator-handoff|${context.call.entity.eid}`)
   let task = sent?.task ?? handoffTask(id)
   let root = await rootAt(store, from.eid, person)
-  let body = `Handed off to [${to.slug}'s Operator](${
+  let body = `Handed off to [${possessive(to.slug)} Operator](${
     chatPath(to.slug, task)
   }).\n\n${o.say}`
   await store.g.apply([

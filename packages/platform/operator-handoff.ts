@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import type { Bundle, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { inputOf, take } from '@yaks/session/intake'
@@ -56,7 +57,7 @@ export let publishHandoffReport = async (
   let request = handoff.id
   let session = await mine(report.session) ? report.session : root
   if (!await mine(session)) return
-  let words = `Reply from ${from.slug}'s Operator\n\n${report.text}`
+  let words = `Reply from ${possessive(from.slug)} Operator\n\n${report.text}`
   let [row] = await g.get([session], ['session'])
   let stopped = (row?.session as { status?: string })?.status == 'stopped'
   let note = handoffNote(session, report.id, from.eid, words)
@@ -84,14 +85,15 @@ export let publishHandoffReport = async (
       session,
       id: report.id,
       by: from.eid,
-      from: `${from.slug}'s Operator`,
+      from: `${possessive(from.slug)} Operator`,
       body: report.text,
       source: '',
       system: true,
       channel: {
         name: HANDOFF,
-        framing:
-          `Report from ${from.slug}'s Operator, in its conversation ${handoff.session} (session_send with it follows up there). It is written for you, not for the person: read it as information about that work, act on it, and continue work the person already asked for. Never pass it on to them. Tell them only what needs them or what they would want to see, each on its own: something to choose between is a decision whose choices show each thing, something only they can give or settle is a decision of its own, and finished work is one line with a link to the thing itself. What that Operator already put in their Updates there, they have: never ask it or tell it again.\n\n`,
+        framing: `Report from ${
+          possessive(from.slug)
+        } Operator, in its conversation ${handoff.session} (session_send with it follows up there). It is written for you, not for the person: read it as information about that work, act on it, and continue work the person already asked for. Never pass it on to them. Tell them only what needs them or what they would want to see, each on its own: something to choose between is a decision whose choices show each thing, something only they can give or settle is a decision of its own, and finished work is one line with a link to the thing itself. What that Operator already put in their Updates there, they have: never ask it or tell it again.\n\n`,
       },
     },
     [{ entity: { eid: session }, completed: null }, ...rows],

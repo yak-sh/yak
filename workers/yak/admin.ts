@@ -1,3 +1,4 @@
+import { possessive } from '@yaks/text'
 import { line } from '@yaks/query'
 import { Form, Head } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
@@ -835,7 +836,9 @@ export let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
         h(
           'a',
           { href: `${PATH}/${r.entity.eid}/operator` },
-          `${spaceOf(r).operator}’s conversations, and what its model was told`,
+          `${
+            possessive(spaceOf(r).operator)
+          } conversations, and what its model was told`,
         ),
       ),
       grouped(d, 'Owners', held('owner')),
@@ -958,7 +961,7 @@ let operatorPage = async (
     let items = await ask('work', { everyone: true }) as Worked[] | Error
     return desk(
       d,
-      `${space.operator}’s conversations`,
+      `${possessive(space.operator)} conversations`,
       'spaces',
       items instanceof Error
         ? failed(items)
@@ -992,7 +995,7 @@ let operatorPage = async (
       : found
       ? column(talked.html)
       : empty('This Operator has no conversation with that id'),
-    back(home, `${space.operator}’s conversations`),
+    back(home, `${possessive(space.operator)} conversations`),
     talked instanceof Error || found ? 200 : 404,
   )
 }
