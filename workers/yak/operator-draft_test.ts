@@ -687,7 +687,9 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   assertEquals(first.intervals.size, 0)
   assertEquals(first.timeouts(), 0)
   assert(!doc.querySelector('#ask'))
-  assert(!doc.querySelector('[data-task]'))
+  // Its lines stay standing, let go of, for the page laid over next to keep
+  // (operator-talk-browser.ts `close`).
+  assertEquals(doc.querySelectorAll('[data-task]').length, 1)
 
   let second = await load(
     stash,
@@ -710,6 +712,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
     doc.querySelector('[data-conversation]')!.textContent!,
     'Book the park pavilion',
   )
+  assertEquals(doc.querySelectorAll('[data-task]').length, 1)
 
   let before = second.sockets[0].sent.length
   second.focus()
