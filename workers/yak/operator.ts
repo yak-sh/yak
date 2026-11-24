@@ -107,6 +107,7 @@ import { decisionRelay, relayTools, waitingOn } from './operator-relay.ts'
 import { listsOf } from './operator-lists.ts'
 import { ledger } from './ledger.ts'
 import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import { transferEmail } from './app-transfer.ts'
 import type { Caller } from './session.ts'
 import { adminTools } from './operator-admin.ts'
 import { platformFault } from './unseen.ts'
@@ -2585,8 +2586,11 @@ export let operating = (
         connecting,
         remote,
         trials,
-        // A tap confirms an escalating call only when it is called direct.
-        ...asking ? { unscripted: new Set(Object.keys(ESCALATING)) } : {},
+        // App transfers need their own approval, including in a turn replaying
+        // an approved call. Other escalating calls stay out of live scripts.
+        unscripted: new Set(
+          asking ? Object.keys(ESCALATING) : ['app_transfer'],
+        ),
       })
         .then((r) => reached('roster', r)),
       acts ? accounts.then((t) => reached('google', t)) : [],
@@ -2723,6 +2727,7 @@ export let operating = (
           ),
           {
             role: ctx.role ?? undefined,
+            transferEmail: (args) => transferEmail(ctx.dir, ctx.person, args),
             known: acquainted(store, async () => {
               let people = await ctx.dir.persons(await ctx.dir.members(space))
               return [...people.values()].map((k) => k.email)

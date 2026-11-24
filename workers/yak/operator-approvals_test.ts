@@ -504,6 +504,7 @@ let room = (
   at: Partial<At> = {},
   t: Tool = tool('member_add'),
   seats = () => members(role),
+  transferEmail?: (args: Record<string, unknown>) => Promise<string>,
 ) =>
   confirming(
     [t],
@@ -520,7 +521,7 @@ let room = (
           Promise.resolve(people.map((p) => NAMES[p]).join(' or ')),
       },
     ),
-    { known, role },
+    { known, role, transferEmail },
   )[0]
 let by: (string | null)[] = []
 let pressAs = approvals(
@@ -533,6 +534,70 @@ let pressAs = approvals(
 let waits = async (who: string) =>
   (await updatesOf(store, who, place)).updates.filter((u) => u.needs)
     .map((u) => u.words)
+
+test('an Operator app transfer waits for the owner’s tap even in a private room', async () => {
+  let calls: Record<string, unknown>[] = []
+  let transfer = {
+    ...tool('app_transfer'),
+    run: (args: Record<string, unknown>) => (calls.push(args), 'offered'),
+  }
+  let args = { app: 'recipe-box', email: 'ada@example.com' }
+  let said = await room(
+    'owner',
+    { private: true },
+    transfer,
+    () => members('owner'),
+    () => Promise.resolve(args.email),
+  ).run(args)
+  equal(calls, [])
+  let question =
+    'Give the app recipe-box, its data and files to ada@example.com'
+  equal(String(said).includes(question), true)
+
+  let row = await newest()
+  let a = row.operator_approval as Approval
+  let press = approvals(
+    store,
+    (a) => Promise.resolve(transfer.run(a.args)),
+    () => Promise.resolve('owner'),
+    () => clock,
+  )
+  let tap = (who: string) =>
+    press(row.entity.eid, digestOf(a), { own: true, press: true, who })
+  equal((await tap(jeff)).state, 'theirs')
+  equal(calls, [])
+  equal((await tap(person)).state, 'done')
+  equal(calls, [args])
+})
+
+test('an explicit transfer approval names and binds the friend’s email', async () => {
+  let friend = crypto.randomUUID()
+  let email = 'ada@example.com'
+  let args = { app: 'recipe-box', friend, editor: true }
+  let [, request] = confirming(
+    [tool('app_transfer')],
+    (act) => Promise.resolve(JSON.stringify(act)),
+    {
+      known,
+      role: 'owner',
+      transferEmail: (call) => {
+        equal(call.friend, friend)
+        return Promise.resolve(email)
+      },
+    },
+  )
+  let asked = await request.run({
+    tool: 'app_transfer',
+    args,
+    say: 'Review the recipe box',
+  })
+  equal(JSON.parse(String(asked)), {
+    tool: 'app_transfer',
+    need: 'owner',
+    args: { app: args.app, email, editor: true },
+    say: `Give the app ${args.app}, its data and files to ${email}`,
+  })
+})
 
 test("an act beyond the person's role waits for everyone whose role allows it, and the first to answer decides it for the rest, as themselves", async () => {
   let said = String(

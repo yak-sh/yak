@@ -68,6 +68,18 @@ export let offerDomain = async (
   } can respond in Updates.`
 }
 
+export let transferEmail = async (
+  dir: Directory,
+  person: string,
+  args: Record<string, unknown>,
+) => {
+  let email = canon(await recipientOf(dir, person, args))
+  if (!sendable(email)) {
+    throw refuse('arguments', 'Enter the recipient’s yaks.app sign-in email.')
+  }
+  return email
+}
+
 export let transferTool: ToolRow = {
   name: 'app_transfer',
   destructive: false,
@@ -91,10 +103,7 @@ export let transferTool: ToolRow = {
   run: async (ctx, args) => {
     let { space, app, who } = owner(await inApp(ctx, args, true))
     let dir = open(ctx.env)
-    let email = canon(await recipientOf(dir, ctx.person, args))
-    if (!sendable(email)) {
-      throw refuse('arguments', 'Enter the recipient’s yaks.app sign-in email.')
-    }
+    let email = await transferEmail(dir, ctx.person, args)
     let recipient = await dir.personAt(email)
     if (!recipient) {
       throw refuse('missing', 'No yaks.app account has that sign-in email.')
