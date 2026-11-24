@@ -23,23 +23,24 @@ type Order = {
 export type Registration = { expires_at: string | null; auto_renew: boolean }
 
 export let renewal = (
-  current: Registration | null,
-  expires: string | undefined,
-  included: boolean,
+  expires: string | null | undefined,
+  due: number | undefined,
+  credit: number,
+  paid: boolean,
   now = Date.now(),
-) => {
-  let ends = current?.expires_at ?? expires
-  let on = current?.auto_renew ?? included
-  if (current?.expires_at && Date.parse(current.expires_at) <= now) {
-    return 'Registration expired.'
-  }
-  let date = ends ? day(ends, 'UTC') : ''
-  if (on) {
-    return date
-      ? `Renews by ${date} · $0 extra with your plan`
-      : 'Renewal costs $0 extra with your plan'
-  }
-  return date ? `Expires ${date} · auto-renew off` : 'Auto-renew off'
+): string => {
+  if (expires && Date.parse(expires) <= now) return 'Registration expired.'
+  let date = expires ? day(expires, 'UTC') : ''
+  let what = paid
+    ? 'Renewal covered'
+    : due == null
+    ? 'Renewal price available closer to renewal'
+    : due == 0
+    ? 'Renewal included'
+    : `${amount(due)} to renew${
+      credit > 0 ? ' after your plan credit' : ' at the registrar’s price'
+    }`
+  return date ? `${what} · due by ${date}` : what
 }
 
 /** Join each hostname to its order by name, keeping pending orders visible. */
@@ -94,13 +95,6 @@ export let domainDetails = (
   return {
     name,
     destination,
-    price: purchase?.order.renews != null
-      ? `${
-        amount(purchase.order.renews)
-      } per year at the registrar (quote at purchase).`
-      : purchase?.registered
-      ? 'Registrar renewal price unavailable.'
-      : undefined,
     canTransfer: !!host && !host.trashed,
     status: host?.trashed
       ? 'In the trash'

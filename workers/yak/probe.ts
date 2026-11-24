@@ -172,7 +172,7 @@ let boot = async (
   let secret = crypto.randomUUID()
   let log = crypto.randomUUID()
   logs.set(log, '')
-  let cf = cloudflare(log)
+  let cf = cloudflare(log, bindings.REGISTRAR_EXPIRY as string | undefined)
   let domains = domainsApi('a-token')
   let views = dataset()
   let p = lasting(secret, {
@@ -924,7 +924,10 @@ let REFUSED = 'the destination address is not allowed'
 let refused = (to: string | string[]) =>
   [to].flat().some((t) => t.endsWith('@refused.invalid'))
 
-export let cloudflare = (log = crypto.randomUUID()) => {
+export let cloudflare = (
+  log = crypto.randomUUID(),
+  registrarExpiry = new Date(Date.now() + 365 * 86_400_000).toISOString(),
+) => {
   let held = new Map<string, Custom>()
   let dns = new Map<string, string[]>()
   // The records written in the platform's own zone (zone.ts), by their id.
@@ -960,7 +963,11 @@ export let cloudflare = (log = crypto.randomUUID()) => {
         pricing: {
           currency: 'USD',
           registration_cost: '10.44',
-          renewal_cost: '10.44',
+          renewal_cost: name.endsWith('.store')
+            ? '42.20'
+            : name.endsWith('.dev')
+            ? '12.20'
+            : '10.44',
         },
       }
   let workflow = (name: string) => ({
@@ -969,7 +976,7 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     completed: true,
     context: {
       registration: {
-        expires_at: '2027-11-19T00:00:00Z',
+        expires_at: registrarExpiry,
         auto_renew: names.get(name)?.auto_renew,
       },
     },
@@ -1014,7 +1021,7 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     if (rest == 'registration-status') return ok(workflow(name))
     if (!rest && req.method == 'GET') {
       return ok({
-        expires_at: '2027-11-19T00:00:00Z',
+        expires_at: registrarExpiry,
         auto_renew: held.auto_renew,
       })
     }
@@ -1313,13 +1320,22 @@ export let tagged = (space: string) => ({ space, apex: apex() })
  * (@yaks/stripe/testing `fakeSub`) Stripe never held. Nothing is asked of the
  * sandbox, so nothing is left in it.
  */
-export let onPlus = (k: Pick<Kernel, 'at'>, space: string) =>
+export let onPlus = (
+  k: Pick<Kernel, 'at'>,
+  space: string,
+  per?: 'month' | 'year',
+) =>
   delivered(
     apexPost(k),
     '/stripe/webhook',
     WEBHOOK_SECRET,
     'customer.subscription.updated',
-    fakeSub(tagged(space)),
+    fakeSub(
+      tagged(space),
+      per
+        ? { items: { data: [{ price: { recurring: { interval: per } } }] } }
+        : {},
+    ),
   )
 
 // ---- a zip, as a person would drop one (unzip.ts, drop.ts, T-34230) --------

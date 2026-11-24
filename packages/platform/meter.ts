@@ -112,6 +112,7 @@ export type MeteredRow = {
   plan?: {
     tier?: Tier | null
     customer?: string | null
+    per?: 'month' | 'year' | null
     subscription?: string | null
     status?: string | null
     until?: string | null

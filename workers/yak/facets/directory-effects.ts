@@ -5,6 +5,7 @@
 // of them, where a run each would cost the release its pool bookkeeping five
 // times over. And the month an invite gives once its invitee builds their
 // first app (reward.ts).
+import { derivedEid } from '@yaks/graph/identity'
 import type { Taken } from '@yaks/graph'
 import { line } from '@yaks/query'
 import type { Handlers } from '@yaks/effects'
@@ -25,6 +26,10 @@ import { drawingIcons } from './app-icons.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
+  entity: { eid: derivedEid('domain renewal sweep') },
+  wake: { every: '@daily', note: 'Prepare annual domain renewals' },
+  sweep: { kind: 'domains' },
+}, {
   entity: { eid: 'yak-git' },
   wake: { every: GIT, note: 'Commit yaks.app deploys nothing has committed' },
   sweep: { kind: 'git' },

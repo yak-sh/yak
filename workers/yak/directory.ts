@@ -81,7 +81,7 @@ import { integrationEid } from '@yaks/connections/identity'
 import { identityEid, minted } from '@yaks/graph/identity'
 import { BARE, SHORT } from '@yaks/id'
 import type { Rec } from './domains.ts'
-import type { Placed } from '@yaks/domains'
+import type { Placed, Renewal, UsedCredit } from '@yaks/domains'
 import type {
   Answer as DomainTransferAnswer,
   Offer as DomainTransferOffer,
@@ -158,6 +158,7 @@ export type Panes = { collapsed: boolean; shut: boolean }
 
 export type Plan = {
   tier: Tier
+  per?: 'month' | 'year' | null
   customer: string
   subscription: string
   status: string
@@ -218,6 +219,8 @@ export type Space = Metered & {
   // The `plan` row its `tier` is read from, whole, for the one caller that
   // needs every property of it (billing.ts). Null where none was ever written.
   plan: Plan | null
+  domainChoice?: string | null
+  domainCreditUsed?: UsedCredit | null
   // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
@@ -791,7 +794,11 @@ export type Row = MeteredRow & {
     at: string
     answer: DomainTransferAnswer | 'withdrawn'
   }
+  domain_choice?: { order: Id }
+  domain_credit_used?: { order: Id; expires: string }
   domain_order?: Placed
+  domain_courtesy?: { expires: string; space: string }
+  domain_renewal?: Renewal
   domain_registered?: { at: string; expires?: string }
   domain_refused?: { why: string }
   domain_refunded?: { at: string }
@@ -1380,6 +1387,8 @@ let ABOUT = chain(APP_PARTS.map((part) => line`?${part}`), '&')
 export let SPACE_PARTS = [
   'doc',
   'plan',
+  'domain_choice',
+  'domain_credit_used',
   'credit',
   'meter',
   'notified',
@@ -1411,6 +1420,7 @@ let planOf = (r: Row): Plan | null =>
   r.plan
     ? {
       tier: r.plan.tier ?? 'free',
+      per: r.plan.per ?? null,
       customer: r.plan.customer ?? '',
       subscription: r.plan.subscription ?? '',
       status: r.plan.status ?? '',
@@ -1558,6 +1568,13 @@ export let spaceOf = (r: Row): Space => ({
     }
     : {}),
   plan: planOf(r),
+  domainChoice: r.domain_choice ? idOf(r.domain_choice.order) : null,
+  domainCreditUsed: r.domain_credit_used
+    ? {
+      order: idOf(r.domain_credit_used.order),
+      expires: r.domain_credit_used.expires,
+    }
+    : null,
   comped: r.comped?.until ?? null,
   ...(r.comp ? { comp: { ...r.comp, by: idOf(r.comp.by) } } : {}),
   seller: sellerOf(r),
@@ -3412,13 +3429,19 @@ export let directoryRows = (rows: {
       ),
     domainTransferAt: (eid: string) =>
       one(line`.entity.eid=${eid}&.domain_transfer`),
+    renewalPaid: async (eid: string) =>
+      !!await one(line`.entity.eid=${eid}&.domain_renewal_paid`),
     // Registrations belong to the space that paid, including while unattached.
     domainOrders: async (space: Space) =>
       (await query(
-        line`.domain_order.space=${space.eid}&?domain_registered&?domain_refused&?domain_refunded`,
+        line`.domain_order.space=${space.eid}&?domain_registered&?domain_refused&?domain_refunded&?created&?domain_renewal&?domain_courtesy`,
       ))
         .map((r) => ({
+          eid: r.entity.eid,
+          at: r.created?.at,
           order: r.domain_order!,
+          renewal: r.domain_renewal,
+          courtesy: r.domain_courtesy,
           registered: r.domain_registered,
           refused: r.domain_refused?.why,
           refunded: !!r.domain_refunded,

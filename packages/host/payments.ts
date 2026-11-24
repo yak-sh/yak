@@ -71,6 +71,8 @@ export type Subscription = {
   /** the tier its price buys, one of those the provider was configured to
    * sell, whatever it stands at */
   tier: string
+  /** How often the subscription bills, where the provider names it. */
+  per?: Per
   /** the provider's own word for where it stands ({@link Plans.standing}) */
   status: string
   /** when the period paid for runs out */
@@ -207,13 +209,15 @@ export type Plans = {
    * within the hour, and it awaits that invoice's payment before it holds
    * its plan */
   invoice: (asked: Invoice) => Promise<Subscribed>
+  /** The smallest standalone payment accepted in this currency. */
+  minimum?: (currency: string) => number
   /** the address of a hosted checkout for something paid for once */
   once: (asked: Once) => Promise<string>
   /** A paid {@link once} checkout's payment refunded whole, for what was
-   * bought and could not be given. `key` names the request: asked again, it
-   * refunds nothing twice. */
+   * bought and could not be given, or by the given number of cents. `key`
+   * names the request: asked again, it refunds nothing twice. */
   refunded: (
-    asked: { key: string; checkout: string; tags: Tags },
+    asked: { key: string; checkout: string; tags: Tags; cents?: number },
   ) => Promise<Refunded>
   /** the address of the hosted portal where a payer manages what it pays,
    * handing them back to `back` */

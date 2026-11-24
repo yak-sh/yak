@@ -116,7 +116,7 @@ export let carry = async (
     await store.apply(relayed(env, t, what.m, eid), KERNEL)
   }
   let space = t.space ?? await own(store, c.person)
-  let heard = space ? await builder(env, space, c) : null
+  let heard = space ? await deliverUpdate(env, space, c) : null
   if (heard) return
   let { owe } = await import('./stream.ts')
   await owe(env, c.person, {
@@ -134,7 +134,7 @@ let own = async (store: Pick<Meta, 'query'>, person: string) =>
 // The space's Builder, keeping the Update and, where the thread came from
 // an Operator conversation of the person's, the note: that conversation's
 // session, or null when it came from elsewhere.
-let builder = async (env: Env, space: string, c: Carried) => {
+export let deliverUpdate = async (env: Env, space: string, c: Carried) => {
   let { builderOf, SPACE } = await import('./build-door.ts')
   let r = await builderOf(env, space)(() =>
     new Request('https://builder/operator/support', {

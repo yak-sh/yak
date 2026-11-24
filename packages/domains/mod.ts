@@ -6,15 +6,24 @@
 // graph the order lives in, how a name is attached to a place there, and
 // where a zone's records are written.
 //
-// The registry holds every name in the host's own account, and the host
-// renews it while the space that bought it pays (`renew`): the first year is
-// the buyer's, at the registry's price, and every later one comes with their
-// plan, so a name is sold only where its renewal is one a plan can carry
-// (`sold`). The person adds no DNS record: the host owns the zone, so
-// `fulfil` writes every record the attachment needs. A paid order that can't
-// be fulfilled is refunded, once.
+// The registry holds names on the host’s account. The buyer pays the
+// first year at the registry’s price. Plan allowances and a renewal’s
+// payment decide whether to renew. A paid order that cannot be fulfilled
+// is refunded once.
 import type { Bundle } from '@yaks/graph'
 import { line } from '@yaks/query'
+
+export {
+  chosen,
+  covered,
+  creditFor,
+  DAY,
+  type Purchase,
+  remaining,
+  type Renewal,
+  RENEWAL_WINDOW,
+  type UsedCredit,
+} from './renewal.ts'
 
 /** One name as a registry offers it: whether it can be registered now, what
  * a year costs to register and to renew, in cents of `currency`, and why not
@@ -80,7 +89,7 @@ export type Ports = {
     apply: (bundles: Bundle[]) => Promise<unknown>
   }
   /** whether a space's plan pays, which renewal follows */
-  paying: (space: string) => Promise<boolean>
+  paying: (order: Placed, eid: string) => Promise<boolean>
   /** attach a registered name to the space or app it serves, and answer the
    * records its DNS needs */
   attach: (
@@ -106,6 +115,7 @@ export type Order = {
   serves?: string
   cents: number
   renews?: number
+  renewalTerms?: boolean
   live: boolean
 }
 
@@ -217,7 +227,7 @@ export let fulfil = async (p: Ports, eid: string): Promise<Fulfilled> => {
   let why = refused ?? await barred(p, row, order)
   if (why) return await refunded(p, eid, order, why, refused != null)
   let r = await p.registry.registration(order.name) ??
-    await p.registry.register(order.name, await p.paying(order.space))
+    await p.registry.register(order.name, await p.paying(order, eid))
   if (r.state == 'failed') {
     return await refunded(
       p,
@@ -247,8 +257,12 @@ export let renew = async (p: Ports, space: string): Promise<string[]> => {
     line`.domain_registered&.domain_order.space=${space}`,
   )
   let renewed = []
-  for (let row of held) {
-    let name = await renewOrder(p, row.entity.eid)
+  let byPayment = await Promise.all(held.map(async (row) => ({
+    eid: row.entity.eid,
+    on: await p.paying(row.domain_order as Placed, row.entity.eid),
+  })))
+  for (let row of byPayment.sort((a, b) => Number(a.on) - Number(b.on))) {
+    let name = await renewOrder(p, row.eid)
     if (name) renewed.push(name)
   }
   return renewed
@@ -263,7 +277,7 @@ export let renewOrder = async (
   let read = async () => {
     let [row] = await p.graph.read(line`.entity.eid=${eid}`)
     let order = row?.domain_registered && row.domain_order as Placed | undefined
-    return order ? { name: order.name, on: await p.paying(order.space) } : null
+    return order ? { name: order.name, on: await p.paying(order, eid) } : null
   }
   let want = await read()
   while (want) {
@@ -285,27 +299,10 @@ export let renewOrder = async (
 export let dollars = (cents: number): string =>
   `$${cents % 100 ? (cents / 100).toFixed(2) : cents / 100}`
 
-/** The most a name may cost to renew a year, in cents, to be sold here.
- * Its renewal comes with the space's paid plan, and above this it would
- * cost more than a plan brings in. */
-export let RENEWS_AT_MOST = 3000
-
-/** An offer as it is sold here: one that renews above {@link RENEWS_AT_MOST}
- * is not registrable, `domain_renews_high`.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let io = { name: 'ada.io', registrable: true, cents: 3200, renews: 5000 }
- * assertEquals(sold(io), { ...io, registrable: false, reason: 'domain_renews_high' })
- * let com = { name: 'ada.com', registrable: true, cents: 1117, renews: 1117 }
- * assertEquals(sold(com), com)
- * ```
- */
+/** Domain checkout uses US dollars. */
 export let sold = (o: Offer): Offer =>
   o.registrable && o.currency && o.currency != 'USD'
     ? { ...o, registrable: false, reason: 'unsupported_currency' }
-    : o.registrable && (o.renews ?? o.cents ?? 0) > RENEWS_AT_MOST
-    ? { ...o, registrable: false, reason: 'domain_renews_high' }
     : o
 
 /** Why a name can't be bought here, as a person reads it. */
@@ -313,7 +310,6 @@ let REASONS: Record<string, string> = {
   domain_unavailable: 'taken',
   unsupported_currency: 'not available in US dollars',
   domain_premium: 'a premium name, not sold here',
-  domain_renews_high: 'costs more to renew than a plan includes',
   extension_not_supported_via_api: 'its ending is not sold here yet',
   extension_not_supported: 'its ending is not sold here',
   extension_disallows_registration: 'its ending takes no new names',
@@ -323,7 +319,7 @@ export let unavailable = (o: Offer): string =>
   REASONS[o.reason ?? ''] ?? 'not for sale'
 
 /** An offer as one line an agent reads out: the name and what its first year
- * costs (later years come with the plan), or why it can't be bought.
+ * costs, its quoted renewal price, or why it can't be bought.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

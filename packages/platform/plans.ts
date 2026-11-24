@@ -185,6 +185,24 @@ export let YEARLY: Partial<Record<Tier, number>> = { plus: 120, pro: 490 }
 
 export let CURRENCY: string = 'USD'
 
+let DOMAIN_CAP = 1200
+
+/** Annual renewal credit, in cents, for one domain registered through yaks.app. */
+export let DOMAIN_CREDIT = {
+  free: { month: 0, year: 0 },
+  plus: { month: 0, year: DOMAIN_CAP },
+  pro: { month: DOMAIN_CAP, year: DOMAIN_CAP },
+}
+
+export let domainCredit = (
+  tier: Tier | null,
+  per?: 'month' | 'year' | null,
+): number => DOMAIN_CREDIT[tier ?? 'free'][per ?? 'month']
+
+export let DOMAIN_RENEWAL: string =
+  'One domain’s renewal is included on the Pro plan, and on the Plus plan when you pay yearly. ' +
+  'The plan covers up to $12 a year for that domain. Other domains renew at the registrar’s price, with no markup.'
+
 // ---- the space (D-131886) ----------------------------------------------------
 //
 // Every allowance and the model budget belong to the space: each one compares

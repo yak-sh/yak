@@ -539,6 +539,12 @@
           "stamped": true,
           "description": "free, plus or pro: the tier every ceiling the space meets is read from"
         },
+        "per": {
+          "type": "string",
+          "enum": ["month", "year"],
+          "stamped": true,
+          "description": "the interval of the subscription’s price"
+        },
         "customer": {
           "type": "string",
           "stamped": true,

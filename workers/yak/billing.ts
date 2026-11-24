@@ -92,9 +92,16 @@ import {
   offerLine,
   type Order,
   ordered,
+  remaining,
   sold as onSale,
 } from '@yaks/domains'
-import { HOST, included as domainsWith, registryOf } from './domains.ts'
+import {
+  HOST,
+  included as domainsWith,
+  registrationOf,
+  registryOf,
+} from './domains.ts'
+import { boughtRenewal, choiceOf, paidReceipt } from './domain-renewal.ts'
 import { keepName } from './names.ts'
 import { meta } from './meta.ts'
 
@@ -127,6 +134,7 @@ let none: Plan = {
 // this was derived from — the row's own marker for how new it is.
 export let planOf = (sub: Subscription, at: string, stands: Stands): Plan => ({
   tier: holds(stands(sub.status)) ? sub.tier as Tier : 'free',
+  ...sub.per ? { per: sub.per } : {},
   customer: sub.payer,
   subscription: sub.id,
   status: sub.status,
@@ -685,8 +693,7 @@ export let domainCheckout = async (
   let back = manageAt(space.slug, 'domains', env)
   return await lent.once({
     payer: await payerFor(env, lent, space, email),
-    name: `${order.name}: its first year; later years come with ` +
-      `${space.slug}'s paid plan`,
+    name: `${order.name} · first year`,
     cents: order.cents,
     currency: CURRENCY,
     done: `${back}?domain=${encodeURIComponent(order.name)}`,
@@ -776,6 +783,157 @@ export let buyDomain = async (
   }
 }
 
+export let renewDomain = async (
+  env: Env,
+  req: Request,
+  space: Space,
+  form: FormData,
+) => {
+  let person = await buyer(env, req)
+  if (!person) return json(401, 'unauthorized', 'Sign in first.')
+  let dir = dirOf(env)
+  if (await dir.role(space, person) != 'owner') {
+    return json(
+      403,
+      'not_the_owner',
+      'Only a space owner can pay for its domain renewal.',
+    )
+  }
+  let orders = await dir.domainOrders(space)
+  let purchase = orders.find((r) =>
+    r.order.name == form.get('renew_domain') && r.registered
+  )
+  let renewal = purchase?.renewal
+  if (!purchase || !renewal) {
+    return json(409, 'no_renewal', 'No renewal is due for this domain.')
+  }
+  let name = purchase.order.name
+  let lent = await plans(env)
+  if (!lent.on()) {
+    return json(503, 'no_billing', 'Checkout is currently unavailable.')
+  }
+  let status = await registrationOf(env, name)
+  if (
+    status?.expires_at !== renewal.expires ||
+    Date.parse(renewal.expires) <= (env.CLOCK?.now() ?? Date.now())
+  ) {
+    return json(409, 'no_renewal', 'No renewal is due for this domain.')
+  }
+  let terms = await choiceOf(env, space, orders)
+  let cents = remaining(
+    purchase,
+    renewal.cents,
+    terms.for(purchase, renewal.expires),
+    renewal.expires,
+  )
+  if (
+    cents <= 0 || Number(form.get('cents')) != cents ||
+    form.get('expires') != renewal.expires
+  ) {
+    return json(
+      409,
+      'price_changed',
+      'The renewal changed. Review it in Domains.',
+    )
+  }
+  let email = await dir.emailAt(person)
+  if (!email) {
+    return json(409, 'no_email', 'Add an email address to pay for your domain.')
+  }
+  let back = manageAt(space.slug, 'domains', env)
+  let charged = Math.max(cents, lent.minimum?.(CURRENCY) ?? 0)
+  let extra = charged - cents
+  let url = await lent.once({
+    payer: await payerFor(env, lent, space, email),
+    name: `${name} · annual renewal${
+      extra ? ` · ${price(extra)} refunded automatically` : ''
+    }`,
+    cents: charged,
+    currency: CURRENCY,
+    done: `${back}?renewed=${encodeURIComponent(name)}#${name}`,
+    cancel: `${back}#${name}`,
+    reference: purchase.eid,
+    tags: {
+      ...tagsOf(env, space),
+      person,
+      renewal: purchase.eid,
+      expires: renewal.expires,
+      cents: String(cents),
+      ...extra ? { extra: String(extra) } : {},
+    },
+  })
+  return Response.json({ url })
+}
+
+// Checkout providers can impose a minimum for a standalone payment. Settle
+// the difference with the same refund key on every delivery, including a
+// delivery retried after the renewal receipt committed.
+let settleRenewal = async (env: Env, heard: Bought, answer: string) => {
+  let extra = Number(heard.tags.extra)
+  if (!(extra > 0)) return answer
+  let refund = await (await plans(env)).refunded({
+    key: `domain-renewal-excess|${heard.checkout}`,
+    checkout: heard.checkout,
+    cents: extra,
+    tags: { renewal: heard.tags.renewal },
+  })
+  if (refund.status == 'failed' || refund.status == 'canceled') {
+    throw new Error(
+      `Refund ${refund.id} for the domain renewal payment ${heard.checkout} ${refund.status}`,
+    )
+  }
+  return answer
+}
+
+export let renewalBought = async (env: Env, heard: Bought) => {
+  if (elsewhere(heard.tags, apex(env))) return 'elsewhere'
+  if (!heard.paid) return 'not paid yet'
+  let { space: owner, renewal: eid, expires } = heard.tags
+  let dir = dirOf(env)
+  if (await dir.renewalPaid(paidReceipt(heard.checkout))) {
+    return await settleRenewal(env, heard, 'already renewed')
+  }
+  let space = owner ? await dir.at(owner) : null
+  let orders = space ? await dir.domainOrders(space) : []
+  let purchase = orders.find((r) => r.eid == eid)
+  if (
+    heard.live && space && purchase?.renewal?.expires == expires &&
+    !purchase.renewal.checkout
+  ) {
+    let terms = await choiceOf(env, space, orders)
+    let price = purchase.renewal.cents
+    let due = remaining(purchase, price, terms.for(purchase, expires), expires)
+    let status = await registrationOf(env, purchase.order.name)
+    if (
+      due > 0 && due == Number(heard.tags.cents) &&
+      status?.expires_at == expires
+    ) {
+      try {
+        await boughtRenewal(
+          dir,
+          space,
+          purchase,
+          expires,
+          price - due,
+          heard.checkout,
+        )
+        return await settleRenewal(env, heard, 'renewal paid')
+      } catch (error) {
+        if (!(error instanceof Stale)) throw error
+        if (await dir.renewalPaid(paidReceipt(heard.checkout))) {
+          return await settleRenewal(env, heard, 'already renewed')
+        }
+      }
+    }
+  }
+  await (await plans(env)).refunded({
+    key: `domain-renewal-refund|${heard.checkout}`,
+    checkout: heard.checkout,
+    tags: { space: owner, renewal: eid },
+  })
+  return 'renewal payment refunded'
+}
+
 // A domain's checkout heard: the order written once its money is there, by
 // the checkout's own derived eid, so a payment told twice orders once. The
 // directory's `register_domain` effect takes it from there.
@@ -802,6 +960,7 @@ export let domainBought = async (env: Env, heard: Bought) => {
         ...serves ? { serves } : {},
         ...renews ? { renews: Number(renews) } : {},
         cents: Number(heard.tags.cents) || 0,
+        renewalTerms: true,
         live: heard.live,
       })],
     })
@@ -959,6 +1118,12 @@ let follow = async (
   if (stale(space.plan, next, stands)) return 'stale'
   for (let other of others) {
     if (strength(other, stands) > strength(next, stands)) next = other
+  }
+  if (
+    !next.per && next.subscription != space.plan?.subscription &&
+    space.plan?.per
+  ) {
+    next = { ...next, per: null }
   }
   let changed = moved(space.plan, next)
   if (!Object.keys(changed).length) return 'unchanged'

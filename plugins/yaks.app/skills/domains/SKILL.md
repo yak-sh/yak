@@ -59,9 +59,15 @@ Results show availability, the price for the first year, and the registrar’s
 yearly renewal price. An agent can search with `domain_search(query)` and send
 you to the same Domains page.
 
-You pay Cloudflare’s price for the first year with no markup. Renewals are
-covered while your space stays on a paid plan. If you leave your paid plan,
-auto-renew is turned off and the domain expires at the end of its registration.
+You pay Cloudflare’s price for the first year with no markup. The Pro plan and
+the Plus plan billed yearly cover up to $12 a year toward one domain renewal.
+Your first purchase is the default. To change it, choose **Make included
+domain** beside another domain in the space. You pay any remainder and the
+registrar’s full price for other domains.
+
+When payment is due, open **Domains** to review the price and pay before the
+registration expires. A domain you bought through yaks.app can renew even after
+the space moves to the free plan.
 
 The domain belongs to your space. When it appears in **Your domains**, choose an
 app and save to attach it. You can choose another app or **Unattached** at any

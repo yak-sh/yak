@@ -30,6 +30,7 @@ let pay = (
   name: string,
   id: string,
   livemode = true,
+  renews = 1044,
 ) =>
   delivered(
     apexPost(k),
@@ -42,11 +43,17 @@ let pay = (
       mode: 'payment',
       payment_status: 'paid',
       client_reference_id: space,
-      metadata: { ...tagged(space), domain: name, serves, cents: '1044' },
+      metadata: {
+        ...tagged(space),
+        domain: name,
+        serves,
+        cents: '1044',
+        renews: String(renews),
+      },
     },
   ).then((said) => JSON.parse(said).did)
 
-test('a paid domain registers once, attaches to its app with its DNS written, and renews while the plan pays', async () => {
+test('a paid domain registers once, attaches to its app with its DNS written, and renews only when the plan covers it', async () => {
   let env!: Env
   let k = await fresh({ CF_REGISTRAR_TOKEN: 'a-token' }, (e) => env = e)
   let { eids, cookie } = await seed(k, [{ slug: 'bakery', apps: ['menu'] }])
@@ -63,6 +70,11 @@ test('a paid domain registers once, attaches to its app with its DNS written, an
   ok(found.includes('bakery-menu.com — $10.44 for the first year'), found)
   ok(found.includes('/manage/bakery/domains'), found)
 
+  let plan = (tier: string, per: 'month' | 'year') =>
+    stamp(env, {
+      entities: [{ entity: { eid: space }, plan: { tier, per } }],
+    })
+  await plan('plus', 'year')
   let paid = () => pay(k, space, app.eid, name, 'cs_domain')
   equal(await paid(), `bakery bought ${name}`)
   equal(await paid(), 'already ordered')
@@ -76,17 +88,18 @@ test('a paid domain registers once, attaches to its app with its DNS written, an
   ok(written.includes(`CNAME ${name} origin.saas.yaks.app`), written.join('\n'))
   ok(written.some((r) => r.startsWith(`TXT _cf-custom-hostname.${name}`)))
 
-  // Off a paid plan, it stops renewing; back on one, it renews again.
-  await stamp(env, {
-    entities: [{ entity: { eid: space }, plan: { tier: 'free' } }],
-  })
-  await k.settled()
-  equal(await registered(k), { [name]: { auto_renew: false } })
-  await stamp(env, {
-    entities: [{ entity: { eid: space }, plan: { tier: 'plus' } }],
-  })
-  await k.settled()
-  equal(await registered(k), { [name]: { auto_renew: true } })
+  for (
+    let [tier, per, auto_renew] of [
+      ['plus', 'month', false],
+      ['free', 'year', false],
+      ['pro', 'month', true],
+      ['pro', 'year', true],
+    ] as const
+  ) {
+    await plan(tier, per)
+    await k.settled()
+    equal(await registered(k), { [name]: { auto_renew } })
+  }
 })
 
 test('a sandbox payment and a second checkout for a taken name are refunded once each, and register nothing more', async () => {
@@ -139,7 +152,7 @@ test('a sandbox payment and a second checkout for a taken name are refunded once
     `diner bought ${name}`,
   )
   await k.settled()
-  equal(await registered(k), { [name]: { auto_renew: true } })
+  equal(await registered(k), { [name]: { auto_renew: false } })
   equal(refunds, ['pi_cs_sandbox 1044', 'pi_cs_diner 1044'])
   let host = (await k.dir.hosts((await k.dir.at(eids.cafe))!))
     .find((h) => h.name == name)!
@@ -184,7 +197,7 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
     a.slug.localeCompare(b.slug)
   )
   let [other] = await k.dir.apps((await k.dir.at(eids['other-studio']))!)
-  await onPlus(k, space.eid)
+  await onPlus(k, space.eid, 'month')
   let path = '/manage/studio/domains'
   let read = async (at: string) =>
     await (await k.at('yaks.app', at, { headers: { cookie } })).text()
@@ -254,8 +267,7 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
   let listing = await read(path)
   ok(listing.includes('Unattached'), listing)
   ok(listing.includes('Certificate'), listing)
-  ok(listing.includes('Renews by'), listing)
-  ok(listing.includes('$10.44 per year at the registrar'), listing)
+  ok(listing.includes('$10.44 to renew at the registrar'), listing)
   equal(await k.dir.serves(name), null)
   let point = (destination: string) => post({ point_domain: name, destination })
   equal((await point(other.eid)).status, 400)
@@ -265,7 +277,7 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
   equal((await k.dir.serves(name))?.app?.eid, two.eid)
   equal((await point('')).status, 200)
   equal(await k.dir.serves(name), null)
-  equal(await registered(k), { [name]: { auto_renew: true } })
+  equal(await registered(k), { [name]: { auto_renew: false } })
 
   let bill = await read('/manage/studio/billing')
   ok(bill.includes('Domain renewals'), bill)
@@ -313,5 +325,168 @@ test('Domains quotes checkout, changes the destination, and transfers ownership 
     headers: { cookie: recipient.cookie },
   })).text()
   ok(receiving.includes(`/manage/receiving/domains#${name}`), receiving)
-  ok(receiving.includes('auto-renew off'), receiving)
+  ok(receiving.includes('$10.44 to renew at the registrar'), receiving)
 })
+
+for (
+  let [tld, renewalPrice, debit] of [
+    ['store', 4220, 3020],
+    ['dev', 1220, 20],
+  ] as const
+) {
+  test(`a .${tld} renewal uses the selected domain’s capped credit once`, async () => {
+    let charged = Math.max(50, debit)
+    let refunds: {
+      id: string
+      payment_intent: string
+      amount: number
+      status: string
+      metadata: { request: string | null }
+    }[] = []
+    let checkout: URLSearchParams | undefined
+    let fetcher = globalThis.fetch
+    using _ = stub(globalThis, 'fetch', async (input, init) => {
+      let req = new Request(input, init)
+      let url = new URL(req.url)
+      if (url.host != 'api.stripe.com') return fetcher(input, init)
+      if (url.pathname == '/v1/customers') {
+        return Response.json({ id: 'cus_renew' })
+      }
+      if (url.pathname == '/v1/checkout/sessions/cs_renew') {
+        return Response.json({
+          payment_intent: 'pi_renew',
+          amount_total: charged,
+        })
+      }
+      if (url.pathname == '/v1/refunds') {
+        if (req.method == 'GET') {
+          return Response.json({ data: refunds, has_more: false })
+        }
+        let data = new URLSearchParams(await req.text())
+        let refund = {
+          id: 're_renew',
+          payment_intent: 'pi_renew',
+          status: 'succeeded',
+          amount: Number(data.get('amount')),
+          metadata: { request: data.get('metadata[request]') },
+        }
+        refunds.push(refund)
+        return Response.json(refund)
+      }
+      if (url.pathname == '/v1/checkout/sessions') {
+        checkout = new URLSearchParams(await req.text())
+        return Response.json({ url: 'https://checkout.stripe.com/renew' })
+      }
+      throw new Error(`unexpected Stripe request ${req.method} ${url.pathname}`)
+    })
+    let env!: Env
+    let k = await fresh(
+      {
+        CF_REGISTRAR_TOKEN: 'a-token',
+        STRIPE_KEY: 'sk_test',
+        REGISTRAR_EXPIRY: new Date(Date.now() + 45 * 86_400_000).toISOString(),
+      },
+      (e) => {
+        env = e
+      },
+    )
+    let { eids, cookie } = await seed(k, [{ slug: 'renewals', apps: [] }])
+    let space = eids.renewals
+    let plan = (tier: string) =>
+      stamp(env, {
+        entities: [{ entity: { eid: space }, plan: { tier, per: 'month' } }],
+      })
+    await plan('pro')
+    let path = '/manage/renewals/domains'
+    let page = async () =>
+      parseHTML(
+        await (await k.at('yaks.app', path, { headers: { cookie } })).text(),
+      ).document
+    let post = (data: Record<string, string>) =>
+      k.at('yaks.app', path, {
+        method: 'POST',
+        headers: { cookie, origin: 'https://yaks.app' },
+        body: new URLSearchParams(data),
+      })
+    let first = 'z-first.com'
+    let second = `a-second.${tld}`
+    equal(
+      await pay(k, space, '', first, 'cs_first'),
+      `renewals bought ${first}`,
+    )
+    await k.settled()
+    equal(
+      await pay(k, space, '', second, 'cs_second', true, renewalPrice),
+      `renewals bought ${second}`,
+    )
+    await k.settled()
+    let domains = await page()
+    ok(
+      domains.getElementById(first)!.textContent!.includes('Included domain'),
+      domains.getElementById(first)!.textContent!,
+    )
+    equal(await registered(k), {
+      [first]: { auto_renew: true },
+      [second]: { auto_renew: false },
+    })
+    let picked = await post({ choose_domain: second })
+    equal(picked.status, 303)
+    let owned = await k.dir.domainOrders((await k.dir.at(space))!)
+    equal(
+      (await k.dir.at(space))?.domainChoice,
+      owned.find((r) => r.order.name == second)?.eid,
+    )
+    await k.settled()
+    let chosen = (await page()).getElementById(second)!
+    ok(chosen.textContent!.includes('Included domain'))
+    let renewal = chosen.querySelector('form:has([name=renew_domain])')!
+    let quote = Object.fromEntries(
+      [...renewal.querySelectorAll('input')].map((i) => [i.name, i.value]),
+    )
+    equal(quote.cents, String(debit))
+    if (charged > debit) {
+      ok(chosen.textContent!.includes('automatically refunds $0.30'))
+    }
+    equal(
+      (await post(quote)).headers.get('location'),
+      'https://checkout.stripe.com/renew',
+    )
+    let sent = checkout!
+    equal(sent.get('line_items[0][price_data][unit_amount]'), String(charged))
+    let metadata = Object.fromEntries(
+      [...sent.entries()]
+        .filter(([key]) => key.startsWith('metadata['))
+        .map(([key, value]) => [key.slice(9, -1), value]),
+    )
+    let received = () =>
+      delivered(
+        apexPost(k),
+        '/stripe/webhook',
+        WEBHOOK_SECRET,
+        'checkout.session.completed',
+        {
+          id: 'cs_renew',
+          livemode: true,
+          mode: 'payment',
+          payment_status: 'paid',
+          metadata,
+        },
+      ).then((said) => JSON.parse(said).did)
+    equal(await received(), 'renewal paid')
+    equal(await received(), 'already renewed')
+    equal(
+      refunds.map((r) => r.amount),
+      charged > debit ? [charged - debit] : [],
+    )
+    equal((await post({ choose_domain: first })).status, 303)
+    await k.settled()
+    let other = (await page()).getElementById(first)!
+    ok(other.textContent!.includes('$10.44 to renew at the registrar'))
+    await plan('free')
+    await k.settled()
+    equal(await registered(k), {
+      [first]: { auto_renew: false },
+      [second]: { auto_renew: true },
+    })
+  })
+}

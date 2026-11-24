@@ -1,3 +1,4 @@
+import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { transferTool } from './app-transfer.ts'
 import { FRIEND, friendTools, recipientOf } from './friends.ts'
 import { binnedDomain, trashedDomain } from './domain-trash.ts'
@@ -7059,9 +7060,8 @@ let OURS: Row[] = [
           '\n\n' +
           `Search and manage domains at ${settings}. ` +
           'Domains come with the Plus plan. You pay the registrar’s price ' +
-          'for the first year, with no markup. yaks.app covers yearly renewal ' +
-          'while the space stays on a paid plan. The space owns the domain ' +
-          'and can attach it to an app at any time.',
+          'for the first year, with no markup. ' + DOMAIN_RENEWAL +
+          ' The space owns the domain and can attach it to an app at any time.',
         space,
       }
     },

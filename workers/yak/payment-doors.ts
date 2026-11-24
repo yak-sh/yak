@@ -17,6 +17,7 @@ import {
   credited,
   domainBought,
   namedPayer,
+  renewalBought,
 } from './billing.ts'
 import { apply as shopped } from './sell.ts'
 import { payments, via } from './payments.ts'
@@ -57,7 +58,11 @@ export let applied = async (env: Env, heard: Heard): Promise<string> => {
   return heard.about == 'subscription'
     ? subscribed(env, heard)
     : heard.about == 'purchase'
-    ? heard.tags.domain ? domainBought(env, heard) : credited(env, heard)
+    ? heard.tags.renewal
+      ? renewalBought(env, heard)
+      : heard.tags.domain
+      ? domainBought(env, heard)
+      : credited(env, heard)
     : shopped(env, heard)
 }
 

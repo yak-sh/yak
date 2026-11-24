@@ -8,7 +8,7 @@ export let Terms = () => (
     copy='terms'
     path='/terms'
   >
-    <Top at='terms.top' updated='2026-11-05T00:00:00Z' />
+    <Top at='terms.top' updated='2026-11-24T00:00:00Z' />
     <Section at='terms.about' says={{ reach: { mail } }}>
       <p class='Prose_Text' {...text('terms.about.operator')} />
       <Postal at='terms.about.address' />
@@ -28,6 +28,7 @@ export let Terms = () => (
       says={{
         plans: { pricing: link('/pricing', 'terms.fees.pricing') },
         cancel: {},
+        domains: {},
       }}
     />
     <Section at='terms.invites' says={{ code: {}, others: {} }} />

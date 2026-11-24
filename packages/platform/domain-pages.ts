@@ -1,5 +1,7 @@
 import { h } from 'preact'
 import { Button, Card, Field, Form, More, Notice, Rows } from '@yaks/ui/parts'
+import { DOMAIN_RENEWAL } from './plans.ts'
+import { amount } from './price.ts'
 import { managePath } from './routes.ts'
 
 export type Domain = {
@@ -8,7 +10,9 @@ export type Domain = {
   dns?: string
   certificate?: string
   renewal?: string
-  price?: string
+  chosen?: boolean
+  canChoose?: boolean
+  payment?: { expires: string; cents: number; extra: number }
   status?: string
   canPoint?: boolean
   canTransfer?: boolean
@@ -137,6 +141,7 @@ export let ownedDomain = (
   path: string,
   domain: Domain,
   apps: DomainApp[],
+  checkout = false,
 ) => {
   let app = apps.find((a) => a.eid == domain.destination)
   let destination = domain.destination == 'space'
@@ -160,7 +165,43 @@ export let ownedDomain = (
       domain.certificate &&
         h(Rows.Meta, null, `Certificate · ${domain.certificate}`),
       domain.renewal && h(Rows.Meta, null, domain.renewal),
-      domain.price && h(Rows.Meta, null, domain.price),
+      domain.chosen && h(Rows.Meta, null, 'Included domain'),
+      domain.canChoose && h(
+        Rows.Form,
+        { method: 'post', action: path },
+        hidden('choose_domain', domain.name),
+        h(
+          Form.Line,
+          null,
+          h(Button, {
+            type: 'submit',
+            'aria-label': `Include renewal for ${domain.name}`,
+          }, 'Make included domain'),
+        ),
+      ),
+      checkout && domain.payment && h(
+        Rows.Form,
+        { method: 'post', action: path },
+        hidden('renew_domain', domain.name),
+        hidden('cents', domain.payment.cents),
+        hidden('expires', domain.payment.expires),
+        h(
+          Form.Line,
+          null,
+          h(
+            Button,
+            { type: 'submit', mod: 'go' },
+            `Renew · ${amount(domain.payment.cents)}`,
+          ),
+        ),
+      ),
+      checkout && domain.payment && domain.payment.extra > 0 && h(
+        Rows.Meta,
+        null,
+        `Checkout charges ${
+          amount(domain.payment.cents + domain.payment.extra)
+        } and automatically refunds ${amount(domain.payment.extra)}.`,
+      ),
       domain.canTransfer ? transfer(path, domain.name) : null,
     ),
     domain.canPoint
@@ -201,7 +242,8 @@ export type DomainPage = {
   found?: DomainOffer[]
   error?: string
   checkout: boolean
-  included: boolean
+  canBuy: boolean
+  renewed?: string
   ordered?: string
 }
 
@@ -216,6 +258,12 @@ export let domainsPage = (
       Card,
       { id: 'owned-domains' },
       title('Your domains'),
+      h(Card.Sub, null, DOMAIN_RENEWAL),
+      page.renewed && h(
+        Notice,
+        { role: 'status' },
+        `Checkout finished for ${page.renewed}. Renewal updates once payment is confirmed.`,
+      ),
       page.ordered &&
         h(
           Notice,
@@ -226,7 +274,7 @@ export let domainsPage = (
         ? h(
           Rows,
           { as: 'ul' },
-          page.domains.map((d) => ownedDomain(path, d, apps)),
+          page.domains.map((d) => ownedDomain(path, d, apps, page.checkout)),
         )
         : h(Card.Sub, null, 'This space has no domains yet.'),
     ),
@@ -237,17 +285,16 @@ export let domainsPage = (
       h(
         Card.Sub,
         null,
-        'Pay the registrar’s price for the first year. There’s no markup. ' +
-          'Yearly renewals are included while your space stays on a paid plan.',
+        'Pay the registrar’s price for the first year, with no markup.',
       ),
-      page.included ? null : h(
+      page.canBuy ? null : h(
         Notice,
         null,
         'Buying a domain comes with the Plus plan. ',
         h('a', { href: managePath('billing', space) }, 'Compare plans'),
         '.',
       ),
-      page.included && !page.checkout
+      page.canBuy && !page.checkout
         ? h(Notice, null, 'Checkout is currently unavailable.')
         : null,
       h(
@@ -283,7 +330,9 @@ export let domainsPage = (
       h(
         'div',
         { 'data-domain-results': '' },
-        page.found ? offers(path, page.found, page.checkout, page.error) : null,
+        page.found
+          ? offers(path, page.found, page.canBuy && page.checkout, page.error)
+          : null,
       ),
     ),
   ]

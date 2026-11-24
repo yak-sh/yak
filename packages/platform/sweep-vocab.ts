@@ -60,6 +60,7 @@ export let sweepDoc: VocabDoc = {
         kind: {
           type: 'string',
           enum: [
+            'domains',
             'git',
             'kills',
             'meter',

@@ -144,6 +144,7 @@ export let register = async (r: Registrar, name: string, renew: boolean) =>
       method: 'POST',
       body: JSON.stringify({
         domain_name: name,
+        years: 1,
         auto_renew: renew,
         privacy_mode: 'redaction',
       }),
@@ -220,3 +221,25 @@ export let registry = (r: Registrar): Registry => ({
   renewing: (name, on) => renewing(r, name, on),
   zone: (name) => zone(r, name),
 })
+
+/** The live standard renewal rate for an extension. The registration API
+ * only sells standard names, and its price check returns rates only for
+ * available names. Ask for the rate on a fresh label under the same extension. */
+export let renewalQuote = async (
+  r: Registrar,
+  name: string,
+): Promise<number> => {
+  let extension = name.slice(name.indexOf('.') + 1)
+  let quote = (label: string) => `${label}.${extension}`
+  let offers = await check(r, [
+    quote(crypto.randomUUID()),
+    quote(crypto.randomUUID()),
+  ])
+  let price = offers.find((o) => o.registrable && o.currency == 'USD')?.renews
+  if (price == null || !Number.isSafeInteger(price) || price < 0) {
+    throw new Error(
+      `Cloudflare did not give a standard renewal price for .${extension}`,
+    )
+  }
+  return price
+}

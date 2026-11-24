@@ -44,6 +44,10 @@
           "type": "number",
           "description": "the registrar’s yearly renewal quote at checkout, in cents"
         },
+        "renewalTerms": {
+          "type": "boolean",
+          "description": "the owner bought the domain under the capped renewal terms"
+        },
         "live": {
           "type": "boolean",
           "description": "whether its payment moved money; a sandbox payment's order registers nothing and is refunded"
@@ -56,8 +60,14 @@
       "wire": false,
       "description": "a bought domain the registry holds, with its DNS written, and when its year ends",
       "properties": {
-        "at": { "type": "string", "format": "date-time" },
-        "expires": { "type": "string", "format": "date-time" }
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "domain_refused": {
@@ -66,8 +76,13 @@
       "wire": false,
       "description": "a bought domain that could not be registered, and why: a sandbox payment, a name another checkout bought first, or the registry's refusal; its payment is owed back until domain_refunded",
       "properties": {
-        "at": { "type": "string", "format": "date-time" },
-        "why": { "type": "string" }
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "why": {
+          "type": "string"
+        }
       }
     },
     "domain_refunded": {
@@ -76,26 +91,123 @@
       "wire": false,
       "description": "a refused domain order whose payment was returned whole, and the payment provider's refund",
       "properties": {
-        "at": { "type": "string", "format": "date-time" },
-        "refund": { "type": "string" }
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refund": {
+          "type": "string"
+        }
       }
     },
     "register_domain": {
       "effect": true,
-      "created": ["domain_order"],
+      "created": [
+        "domain_order"
+      ],
       "description": "register a bought domain at the registry, waiting out its workflow, then prepare its hostname and write its DNS records; refund one that cannot be registered"
     },
     "renew_domains": {
       "effect": true,
-      "changed": ["plan"],
+      "changed": [
+        "plan",
+        "domain_choice"
+      ],
       "active": ".space",
-      "description": "turn renewal on for every domain a space bought while its plan is paid, and off once it is not"
+      "description": "Reconcile the annual renewals of the domains a space holds"
     },
     "renew_transferred_domain": {
       "effect": true,
-      "changed": ["domain_order.space"],
-      "active": ".domain_registered",
-      "description": "reconcile a transferred domain’s auto-renew setting with the receiving space’s plan"
+      "created": ["domain_transfer_answer"],
+      "target": ".domain_transfer_answer.answer=accept",
+      "description": "Reconcile a transferred domain and the included-domain choices in both spaces"
+    },
+    "domain_choice": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "the order a space chooses for its domain renewal allowance",
+      "properties": {
+        "order": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "domain_credit_used": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "The renewal through which a space last spent its annual domain credit",
+      "properties": {
+        "order": { "type": "string", "ref": "entity", "death": "keep" },
+        "expires": { "type": "string", "format": "date-time" }
+      }
+    },
+    "domain_renewal": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "the current annual renewal of a bought domain with its quoted registrar price in cents and its paid checkout, once paid",
+      "properties": {
+        "expires": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cents": {
+          "type": "number"
+        },
+        "credit": { "type": "number" },
+        "checkout": {
+          "type": "string"
+        }
+      }
+    },
+    "domain_renewal_paid": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "A checkout that paid for one renewal of a registered domain",
+      "properties": {
+        "order": { "type": "string", "ref": "entity", "death": "keep" },
+        "expires": { "type": "string", "format": "date-time" }
+      }
+    },
+    "domain_courtesy": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "the last renewal covered under the former plan terms, for the space that held the order when the terms changed",
+      "properties": {
+        "expires": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "space": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        }
+      }
+    },
+    "renew_domain_order": {
+      "effect": true,
+      "created": ["domain_registered"],
+      "changed": ["domain_renewal.checkout", "domain_renewal.invoice"],
+      "target": ".domain_registered",
+      "description": "Reconcile a new registration or a paid domain renewal"
+    },
+    "domain_renewals_due": {
+      "effect": true,
+      "created": [
+        "fired"
+      ],
+      "changed": [
+        "fired"
+      ],
+      "target": ".sweep.kind=domains",
+      "description": "Refresh the price, payment and registrar settings for annual domain renewals"
     }
   }
 }

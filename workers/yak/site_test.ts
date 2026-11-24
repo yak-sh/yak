@@ -428,6 +428,7 @@ let FEATURES = [
   'photos and files',
   'emails',
   'custom domain',
+  'domain renewal',
   'payments',
   'badge',
   'change',

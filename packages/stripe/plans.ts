@@ -75,7 +75,7 @@ export type Sub = {
     data?: {
       current_period_start?: number | null
       current_period_end?: number | null
-      price?: string | { id?: string } | null
+      price?: string | { id?: string; recurring?: { interval?: string } } | null
     }[]
   }
 }
@@ -184,13 +184,32 @@ export let ending = (sub: Sub, status: string): string | null => {
   )
 }
 
+let cadence = (sub: Sub, tier: string, pricing?: Pricing): Per | undefined => {
+  let prices = pricing?.prices?.[tier]
+  let items = sub.items?.data ?? []
+  let known = items.find(({ price }) =>
+    idOf(price) == prices?.month || idOf(price) == prices?.year
+  )
+  let id = idOf(known?.price)
+  if (id && id == prices?.year) return 'year'
+  if (id && id == prices?.month) return 'month'
+  let [only] = items
+  let interval = items.length == 1 && typeof only.price == 'object'
+    ? only.price?.recurring?.interval
+    : undefined
+  if (interval == 'month' || interval == 'year') return interval
+}
+
 /** A Stripe subscription in the host's words. */
 export let read = (sub: Sub, pricing?: Pricing): Subscription => {
   let status = statusOf(sub)
+  let tier = tierFor(sub, pricing)
+  let per = cadence(sub, tier, pricing)
   return {
     id: sub.id ?? '',
     payer: idOf(sub.customer),
-    tier: tierFor(sub, pricing),
+    tier,
+    ...per ? { per } : {},
     status,
     until: when(periodEnd(sub)),
     ending: ending(sub, status),
@@ -364,6 +383,7 @@ export let plans = (options: Options): Plans => {
         at: when(made.created) ?? new Date(now()).toISOString(),
       }
     },
+    minimum: (currency) => currency.toUpperCase() == 'USD' ? 50 : 0,
     // Payment mode under Managed Payments, the price made inline with its
     // tax code and tax included, as every price here is: no dashboard price
     // to keep in step. The tags ride the session's own metadata, which the
@@ -396,7 +416,7 @@ export let plans = (options: Options): Plans => {
     },
     // The session names the payment it made and what it took, and the
     // refund is made on the platform's own account.
-    refunded: async ({ key, checkout, tags }) => {
+    refunded: async ({ key, checkout, tags, cents }) => {
       let session = await ask(
         options,
         `/v1/checkout/sessions/${encodeURIComponent(checkout)}`,
@@ -408,7 +428,7 @@ export let plans = (options: Options): Plans => {
       return await refund(options, undefined, {
         key,
         payment,
-        amount: Number(session.amount_total ?? 0),
+        amount: cents ?? Number(session.amount_total ?? 0),
         tags,
       })
     },

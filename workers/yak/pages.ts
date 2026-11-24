@@ -1,3 +1,4 @@
+import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
@@ -1687,6 +1688,7 @@ export let plan = (
     }),
     head,
     billedLine(y.plan, y.payer, y.provider),
+    h(Form.Hint, null, DOMAIN_RENEWAL),
     target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
     invoiced,
     more,

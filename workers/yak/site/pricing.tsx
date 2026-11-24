@@ -10,6 +10,7 @@ let PLANS = ['free', 'plus', 'pro'] as const
 // across: a card's nth line says the same thing of each plan.
 let ITEMS = [
   'domain',
+  'renewal',
   'payments',
   'badge',
   'change',
@@ -65,6 +66,7 @@ export let Pricing = () => (
           />
         ))}
       </div>
+      <p class='Note Note-small' {...text('pricing.plans.renewal')} />
       <p class='Note Note-small' {...text('home.cost.ai')} />
     </section>
     <section aria-labelledby='always'>

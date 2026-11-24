@@ -144,6 +144,23 @@ test('the tier is read off the price, the first tier where none is listed', () =
   equal(tier(PRO[0], { ...kept, kept: { plus: [PRO[0]] } }), 'pro')
 })
 
+test('billing cadence follows the configured or previously sold price', () => {
+  let pricing = { prices: PRICES, kept: { plus: ['old_annual'] } }
+  equal(read(priced(PRO[0]), pricing).per, 'month')
+  equal(read(priced(PRO[1]), pricing).per, 'year')
+  equal(
+    read(
+      priced({
+        id: 'old_annual',
+        recurring: { interval: 'year' },
+      }),
+      pricing,
+    ).per,
+    'year',
+  )
+  equal(read(priced('old_annual'), pricing).per, undefined)
+})
+
 test('cancelled but paid through says both', () => {
   let renewing = read(sub())
   equal([renewing.until, renewing.ending], [at(PERIOD), null])

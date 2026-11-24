@@ -2,6 +2,7 @@
 // and their forms saved. apps.ts serves a space's pages and loads this on the
 // first request to `/manage`, so an isolate that only serves pages never
 // compiles it (T-148886).
+import { chooseDomain } from './domain-renewal.ts'
 import { copyOf } from './directory-copy.ts'
 import { lookingAhead } from '@yaks/ui/navigate'
 import { spaceHost, url as hostUrl } from '@yaks/platform/host'
@@ -29,6 +30,7 @@ import {
   invoice,
   planCard,
   portal,
+  renewDomain,
   setCap,
   wanted,
 } from './billing.ts'
@@ -479,7 +481,8 @@ export let manage = async (
   if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
   if (view == 'domains' && url.searchParams.has('search')) {
     let { found, error } = await searched(env, url.searchParams.get('search')!)
-    let checkout = included(space) && (await plans(env)).on()
+    let checkout = included(space) && who.role == 'owner' &&
+      (await plans(env)).on()
     return new Response(
       markup(offers(managePath('domains', space.slug), found, checkout, error)),
       {
@@ -1032,8 +1035,9 @@ let desk = async (
       domains,
       search: q.get('q') ?? undefined,
       ...searchedFor,
-      checkout: included(space) && provider.plans.on(),
-      included: included(space),
+      checkout: provider.plans.on(),
+      canBuy: included(space),
+      renewed: q.get('renewed') ?? undefined,
       ordered: q.get('domain') ?? undefined,
     },
     renewals,
@@ -1538,6 +1542,26 @@ let saved = async (
       no: true,
     })
   }
+  if (view == 'domains' && form.has('renew_domain')) {
+    let paid = await renewDomain(env, req, space, form)
+    let out = await paid.json() as {
+      url: string
+      error: { message: string }
+    }
+    return paid.ok ? redirect(out.url, 303) : refused('domains', {
+      say: out.error.message,
+      no: true,
+    })
+  }
+  if (view == 'domains' && form.has('choose_domain')) {
+    try {
+      await chooseDomain(dir, space, who, String(form.get('choose_domain')))
+      return answered(req, env, { say: 'Included domain saved.' })
+    } catch (e) {
+      if (!(e instanceof CallError) && !(e instanceof Stale)) throw e
+      return refused('domains', { say: e.message, no: true })
+    }
+  }
   if (view == 'domains' && form.has('transfer_domain')) {
     try {
       let say = await offerDomain(
@@ -1565,7 +1589,9 @@ let saved = async (
       )
       if (scripted(req)) {
         let path = managePath('domains', space.slug)
-        return Response.json({ row: markup(ownedDomain(path, domain, apps)) })
+        return Response.json({
+          row: markup(ownedDomain(path, domain, apps, (await plans(env)).on())),
+        })
       }
       return answered(req, env, { say: 'Saved.' })
     } catch (e) {

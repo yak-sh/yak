@@ -16,17 +16,30 @@ import type { Handlers } from '@yaks/effects'
 import { line } from '@yaks/query'
 import {
   fulfil,
+  type Placed,
   type Ports,
   type Rec,
   renew,
-  renewOrder,
   Waiting,
 } from '@yaks/domains'
-import { ceilings, paid, type Tier } from '@yaks/platform/plans'
+import {
+  choiceOf,
+  nextRenewal,
+  optedIn,
+  prepareRenewal,
+} from '../domain-renewal.ts'
+import { inStore } from './directory-effects.ts'
+import type { Directory } from '../directory.ts'
 import type { Options } from './store.ts'
 import type { Env } from '../env.ts'
 import type { MailDomain } from '../directory.ts'
-import { customOf, provision, records, registryOf } from '../domains.ts'
+import {
+  customOf,
+  provision,
+  records,
+  registrationOf,
+  registryOf,
+} from '../domains.ts'
 import { placed, setUp } from '../domain-mail.ts'
 import { written } from '../zone.ts'
 import { caught, defect } from '../defects.ts'
@@ -85,21 +98,30 @@ let attach =
     ]
   }
 
-// Whether a space's plan pays for its domains: a paid tier, or a space the
-// platform comps, as domain_attach decides.
-let paying = (graph: Graph) => async (space: string) => {
-  let [row] = await graph.read(line`.entity.eid=${space}`)
-  let tier = (row?.plan as { tier?: Tier } | undefined)?.tier ?? null
-  let slug = (row?.space as { slug?: string } | undefined)?.slug
-  return paid(tier) || !ceilings(tier, slug)
-}
+let paying =
+  (env: Env, dir: Directory): Ports['paying'] => async (order, eid) => {
+    let space = await dir.at(order.space)
+    if (!space || space.trashed) return false
+    let orders = await dir.domainOrders(space)
+    let purchase = orders.find((r) => r.eid == eid)
+    if (!purchase?.registered) return false
+    let terms = await choiceOf(env, space, orders)
+    let status = await registrationOf(env, order.name)
+    let expires = status?.expires_at ?? purchase.registered.expires
+    return optedIn(
+      purchase,
+      terms.for(purchase, expires),
+      expires,
+      env.CLOCK?.now() ?? Date.now(),
+    )
+  }
 
 /** The ports @yaks/domains reaches the platform through, from inside the
  * directory. */
-export let ports = (env: Env, graph: Graph): Ports => ({
+export let ports = (env: Env, graph: Graph, dir: Directory): Ports => ({
   registry: registryOf(env),
   graph,
-  paying: paying(graph),
+  paying: paying(env, dir),
   attach: attach(env, graph),
   write: (zone, recs) =>
     written({
@@ -130,10 +152,34 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     read: async (q) => await at.graph.read(q) as Bundle[],
     apply: async (bundles) => await at.graph.apply(bundles, { trusted: true }),
   }
+  let dir = inStore(at)
+  let p = ports(env, graph, dir)
+  let reconcile = async (eid: string, now = env.CLOCK?.now() ?? Date.now()) => {
+    let space = await dir.at(eid)
+    if (!space) return
+    for (let order of await dir.domainOrders(space)) {
+      if (order.registered && !space.trashed) {
+        await prepareRenewal(env, dir, space, order, now)
+      }
+    }
+    await renew(p, eid)
+  }
+  let change = async (
+    space: string,
+    attempt: { progressed: () => Promise<void> } | undefined,
+  ) => {
+    try {
+      await reconcile(space)
+    } catch (error) {
+      caught(error, { request: 'renew_domains', space })
+      await attempt?.progressed()
+      throw again(error)
+    }
+  }
   return {
     register_domain: async (event, _tx, _write, attempt) => {
       try {
-        let done = await fulfil(ports(env, graph), event.entity.eid)
+        let done = await fulfil(p, event.entity.eid)
         if (done.done == 'refunded' && done.order.live) {
           defect(
             new Error(
@@ -157,24 +203,40 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       }
     },
     renew_transferred_domain: async (event, _tx, _write, attempt) => {
-      try {
-        await renewOrder(ports(env, graph), event.entity.eid)
-      } catch (error) {
-        caught(error, {
-          request: 'renew_transferred_domain',
-          order: event.entity.eid,
-        })
-        await attempt?.progressed()
-        throw again(error)
+      let [row] = await graph.read(
+        line`.entity.eid=${event.entity.eid}&.domain_transfer`,
+      )
+      let transfer = row?.domain_transfer as
+        | { from: string; to: string }
+        | undefined
+      if (!transfer) return
+      // Switch the receiving space off its former choice before enabling the
+      // source's new choice, so a transferred name never counts twice.
+      await change(transfer.to, attempt)
+      await change(transfer.from, attempt)
+    },
+    renew_domain_order: async (event, _tx, _write, attempt) => {
+      let [row] = await graph.read(
+        line`.entity.eid=${event.entity.eid}&.domain_order`,
+      )
+      if (row?.domain_order) {
+        await change((row.domain_order as Placed).space, attempt)
       }
     },
-    renew_domains: async (event, _tx, _write, attempt) => {
-      try {
-        await renew(ports(env, graph), event.entity.eid)
-      } catch (error) {
-        caught(error, { request: 'renew_domains', space: event.entity.eid })
-        await attempt?.progressed()
-        throw again(error)
+    renew_domains: async (event, _tx, _write, attempt) =>
+      await change(event.entity.eid, attempt),
+    domain_renewals_due: async () => {
+      let due = new Set(
+        (await graph.read(nextRenewal)).map((row) =>
+          (row.domain_order as Placed).space
+        ),
+      )
+      for (let eid of due) {
+        try {
+          await reconcile(eid)
+        } catch (error) {
+          caught(error, { request: 'annual domain renewals', space: eid })
+        }
       }
     },
   }

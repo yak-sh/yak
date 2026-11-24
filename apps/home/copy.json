@@ -164,6 +164,7 @@
         "emails": "100 emails a month",
         "address": "An address like %{yours}",
         "domain": "No custom domain",
+        "renewal": "Domain renewals at the registrar’s price",
         "payments": "No payments",
         "badge": "A small “Made with yaks.app” badge",
         "change": "Your Operator, or your own assistant, makes the changes",
@@ -179,6 +180,7 @@
         "files": "50 GB of photos and files",
         "emails": "2,500 emails a month",
         "domain": "A custom domain, like %{domain}",
+        "renewal": "Up to $12 per year toward one domain renewal when you pay yearly",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
         "change": "Your Operator, or your own assistant, makes the changes",
@@ -195,6 +197,7 @@
         "files": "250 GB of photos and files",
         "emails": "10,000 emails a month",
         "domain": "A custom domain, like %{domain}",
+        "renewal": "Up to $12 per year toward one domain renewal, with monthly or yearly billing",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
         "change": "Your staff ask the Operator by email or chat, and it makes the change",
@@ -854,7 +857,8 @@
       "lead": "Invite as many people as you like for free on any plan."
     },
     "plans": {
-      "title": "Each space is free or on a paid plan."
+      "title": "Each space is free or on a paid plan.",
+      "renewal": "One domain’s renewal is included on the Pro plan, and on the Plus plan when you pay yearly. The plan covers up to $12 per year for that domain. Other domains renew at the registrar’s price, with no markup."
     },
     "always": {
       "title": "Free on every plan",
@@ -1150,9 +1154,10 @@
     },
     "fees": {
       "title": "Fees and payment",
-      "plans": "We offer a free plan and a paid plan. The %{pricing} lists what each plan costs and includes. Stripe sells and charges for the paid plan, and we will never charge a card you haven't given us.",
+      "plans": "The %{pricing} lists what each plan costs and includes. Stripe sells and charges for paid plans, and we will never charge a card you haven't given us.",
       "pricing": "pricing page",
-      "cancel": "You can cancel at any time, and the paid plan stays active until the end of the month you've paid for. Each plan includes the amounts listed on the pricing page. We may also set limits so that one person's use can't take the service down for everyone else."
+      "cancel": "You can cancel at any time, and the paid plan stays active until the end of the period you've paid for. Each plan includes the amounts listed on the pricing page. We may also set limits so that one person's use can't take the service down for everyone else.",
+      "domains": "When you buy a domain through yaks.app, the first year costs the registrar’s price, with no markup. One domain’s renewal is included on the Pro plan, and on the Plus plan when you pay yearly. The annual cap is listed on the pricing page. Other domains renew at the registrar’s price, with no markup. You pay any amount above the plan credit. A renewal that requires payment is completed after you pay."
     },
     "invites": {
       "title": "Invites",

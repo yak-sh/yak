@@ -933,7 +933,7 @@ domain_attach:
     person has to add where their domain is managed, in the response text:
     type, name, value. Nothing serves until that record is in place at the
     registrar; domain_status reports when it has arrived. Only the space
-    owner may attach one. Custom domains require Plus unless the space is
+    owner may attach one. Custom domains require the Plus plan unless the space is
     exempt. If the space is not eligible, the tool returns the plan-settings
     URL, where paid plans are compared in the space settings, and returns no
     checkout link; signing in returns the person to that page. No hostname
@@ -978,8 +978,9 @@ domain_search:
     Results include common endings and related names, with first-year and
     renewal prices or a reason a name is unavailable. The owner buys from
     Domains in the space settings. The first year costs the registrar's price
-    with no markup. yaks.app covers renewal while the space stays on a paid
-    plan. The space owns the domain and can attach it to an app at any time.
+    with no markup. The Pro plan, and the Plus plan billed yearly, cover up to
+    $12 a year toward one domain renewal. Other domains renew at the registrar's
+    price. The space owns the domain and can attach it to an app at any time.
     Documentation: https://yaks.app/docs/domains.
 number_find:
   title: Find a phone number

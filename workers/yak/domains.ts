@@ -36,14 +36,21 @@ import {
 import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
-import { current, registry } from '@yaks/cloudflare/registrar'
-import { dollars, find, type Registry, unavailable } from '@yaks/domains'
+import { current, registry, renewalQuote } from '@yaks/cloudflare/registrar'
+import {
+  covered,
+  dollars,
+  find,
+  type Registry,
+  remaining,
+  unavailable,
+} from '@yaks/domains'
 import type {
   Domain,
   DomainApp,
   DomainOffer,
 } from '@yaks/platform/domain-pages'
-import { ceilings, paid } from '@yaks/platform/plans'
+import { ceilings, CURRENCY, paid } from '@yaks/platform/plans'
 import { sentence } from './html.ts'
 import {
   domainDetails,
@@ -52,6 +59,8 @@ import {
   renewal,
 } from '@yaks/platform/domain-settings'
 import { caught } from './defects.ts'
+import { plans } from './payments.ts'
+import { choiceOf } from './domain-renewal.ts'
 import { vouched, type Who } from './session.ts'
 
 export let needsHostnames = (env: Host = {}) =>
@@ -448,6 +457,12 @@ export let registrationOf = (env: Env, name: string) => {
   return r ? current(r, name) : Promise.resolve(null)
 }
 
+export let renewalPrice = (env: Env, name: string) => {
+  let r = registrar(env)
+  if (!r) throw new CallError('unavailable', NEEDS_REGISTRAR)
+  return renewalQuote(r, name)
+}
+
 export let registryOf = (env: Env): Registry => {
   let r = registrar(env)
   if (r) return registry(r)
@@ -487,10 +502,37 @@ let report = (error: unknown, request: string, name: string) => {
   return null
 }
 
-let renewalOf = async (env: Env, space: Space, purchase: Purchase) => {
+type RenewalTerms = Awaited<ReturnType<typeof choiceOf>>
+
+let renewalOf = async (
+  env: Env,
+  purchase: Purchase,
+  terms: RenewalTerms,
+) => {
   let current = await registrationOf(env, purchase.order.name)
     .catch((e) => report(e, 'read domain registration', purchase.order.name))
-  return renewal(current, purchase.registered?.expires, included(space))
+  let expires = current?.expires_at ?? purchase.registered?.expires
+  let credit = terms.for(purchase, expires)
+  let quote = purchase.renewal?.expires == expires
+    ? purchase.renewal
+    : undefined
+  let cents = quote?.cents ?? purchase.order.renews
+  let paid = !!quote?.checkout || covered(purchase, expires)
+  let due = cents == null
+    ? undefined
+    : remaining(purchase, cents, credit, expires)
+  let now = env.CLOCK?.now() ?? Date.now()
+  let minimum = quote && due ? (await plans(env)).minimum?.(CURRENCY) ?? 0 : 0
+  return {
+    renewal: renewal(expires, due, credit, paid, now),
+    payment: quote && due && Date.parse(quote.expires) > now
+      ? {
+        expires: quote.expires,
+        cents: due,
+        extra: Math.max(0, minimum - due),
+      }
+      : undefined,
+  }
 }
 
 export let included = (space: Space) =>
@@ -516,6 +558,7 @@ let asDomain = async (
   apps: DomainApp[],
   host: Hostname | undefined,
   purchase: Purchase | undefined,
+  terms: RenewalTerms,
 ): Promise<Domain> => {
   let view = domainDetails(
     host?.name ?? purchase!.order.name,
@@ -529,10 +572,18 @@ let asDomain = async (
   let [how, when] = await Promise.all([
     host ? statusOf(env, host) : {},
     purchase?.registered
-      ? renewalOf(env, space, purchase)
-      : 'Renewal managed by your registrar.',
+      ? renewalOf(env, purchase, terms)
+      : { renewal: 'Renewal managed by your registrar.' },
   ])
-  return { ...view, ...how, renewal: when }
+  return {
+    ...view,
+    ...how,
+    ...when,
+    chosen: terms.credit > 0 && !!purchase?.registered &&
+      purchase.eid == terms.choice?.eid,
+    canChoose: terms.credit > 0 && !!purchase?.registered &&
+      purchase.eid != terms.choice?.eid,
+  }
 }
 
 export let ownedDomains = async (
@@ -546,10 +597,11 @@ export let ownedDomains = async (
     dir.hosts(space),
     dir.domainOrders(space),
   ])
+  let terms = await choiceOf(env, space, orders)
   return await Promise.all(
     listings(hosts, orders, checkoutReturn)
       .map(({ hostname, purchase }) =>
-        asDomain(env, space, apps, hostname, purchase)
+        asDomain(env, space, apps, hostname, purchase, terms)
       ),
   )
 }
@@ -558,15 +610,17 @@ export let billedDomains = async (
   env: Env,
   dir: Directory,
   space: Space,
-): Promise<Domain[]> =>
-  await Promise.all(
-    (await dir.domainOrders(space)).filter((r) => r.registered)
-      .map(async (r) => ({
-        name: r.order.name,
-        destination: '',
-        renewal: await renewalOf(env, space, r),
-      })),
+): Promise<Domain[]> => {
+  let orders = await dir.domainOrders(space)
+  let terms = await choiceOf(env, space, orders)
+  return await Promise.all(
+    orders.filter((r) => r.registered).map(async (r) => ({
+      name: r.order.name,
+      destination: '',
+      ...await renewalOf(env, r, terms),
+    })),
   )
+}
 
 /** Changing a domain's destination keeps its registration, web DNS, certificate and mail setup. */
 export let pointDomain = async (
@@ -605,11 +659,18 @@ export let pointDomain = async (
     }, vouched(who))
     host = { ...at, to: null }
   }
-  let purchase = (await dir.domainOrders(space)).find((r) =>
-    r.order.name == name && r.registered
-  )
+  let orders = await dir.domainOrders(space)
+  let purchase = orders.find((r) => r.order.name == name && r.registered)
+  let terms = await choiceOf(env, space, orders)
   return {
-    domain: await asDomain(env, space, available, host, purchase),
+    domain: await asDomain(
+      env,
+      space,
+      available,
+      host,
+      purchase,
+      terms,
+    ),
     apps: available,
   }
 }
