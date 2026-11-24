@@ -1071,7 +1071,7 @@ test('selling names the provider it sells through', async () => {
     desk({ ...page, view: 'selling', provider: 'Paybox', ...at }, env).text()
   for (
     let [at, text] of [
-      [{ paying: true }, 'Connect your Paybox account'],
+      [{ paying: true }, 'Create a Paybox account'],
       [{ paying: true, sell: 'ready' }, 'Disconnect Paybox'],
       [{ paying: false, fee: '1%' }, 'plus Paybox processing fees'],
     ] as const
