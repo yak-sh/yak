@@ -27,9 +27,15 @@ type Input = {
   done?: boolean
   changed?: boolean
 }
-type Crossing = Pick<Input, 'page' | 'target' | 'began'> & { before: number }
+// `before` is the leaving document's time origin and `left` when it went.
+type Crossing = Pick<Input, 'page' | 'target' | 'began'> & {
+  before: number
+  left: number
+}
 let CROSSING = 'yak-interaction-crossing'
 let DELAY = 2_000
+// Two documents' clocks can disagree by a little rounding.
+let SLACK = 5
 let LISTENING = Symbol.for('yaks.interactions')
 
 let element = (e: Event): Element | undefined =>
@@ -137,13 +143,19 @@ let crossed = (
   if (!held || Math.abs(perf.timeOrigin + perf.now() - held.began) > MAX_MS) {
     return
   }
+  // Only the document whose navigation the leaving page started finishes its
+  // input. One that started later (back from another site's sign-in page)
+  // would count the time the person spent there.
+  if (!restored && perf.timeOrigin > held.left + SLACK) return
   let nav = perf.getEntriesByType('navigation')[0] as
     | PerformanceNavigationTiming
     | undefined
   let finish = (end: number) => {
     let ms = perf.timeOrigin + end - held.began
     if (ms < 0 || win.document.visibilityState == 'hidden') return
-    let server = nav && !restored ? nav.responseEnd - nav.fetchStart : 0
+    // From the navigation's start: a form's post and its redirects are as
+    // much the server's as the page they lead to.
+    let server = nav && !restored ? nav.responseEnd : 0
     let ready = restored ? end : nav?.domInteractive || end
     record({
       page: held.page,
@@ -331,6 +343,7 @@ export let interactions = (win: Browser, labels: Labels): void => {
         target,
         began: perf.timeOrigin + began,
         before: perf.timeOrigin,
+        left: perf.timeOrigin + perf.now(),
       })
     }
     flush()

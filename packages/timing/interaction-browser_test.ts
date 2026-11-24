@@ -132,20 +132,23 @@ test('the event clock follows a keyboard-activated link through loading to its r
   }])
 })
 
-test('native navigation finishes at the next document’s contentful paint', () => {
+// A page left at 30 for one whose navigation started at `origin`, after its
+// form's post and redirect (`fetchStart`), answered at 125 and painted at 144.
+let crossing = (origin: number) => {
   let storage = new Map<string, string>()
   let before = browser('/pricing', 1_000, storage)
   before.install()
   before.at(10)
   before.click('/gallery')
+  before.at(30)
   before.leave()
   equal(before.seen(), [])
-  let after = browser('/gallery', 1_020, storage)
+  let after = browser('/gallery', origin, storage)
   after.observe({
     entryType: 'navigation',
     type: 'navigate',
     startTime: 0,
-    fetchStart: 3,
+    fetchStart: 90,
     responseEnd: 125,
     domInteractive: 130,
   })
@@ -157,15 +160,23 @@ test('native navigation finishes at the next document’s contentful paint', () 
   after.at(151)
   after.install()
   after.leave()
-  equal(after.seen(), [{
+  return after.seen()
+}
+
+test('native navigation finishes at the next document’s contentful paint, its post and redirect the server’s', () => {
+  equal(crossing(1_020), [{
     page: 'pricing',
     target: 'click',
     ms: 154,
     input: 0,
-    server: 122,
-    script: 18,
+    server: 125,
+    script: 15,
     render: 14,
   }])
+})
+
+test('a document whose navigation began after the page left does not finish its input', () => {
+  equal(crossing(1_400), [])
 })
 
 test('local paint is counted once and synthetic or unchanged inputs stay out', () => {

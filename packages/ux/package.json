@@ -12,6 +12,7 @@
     "./keys": "./keys.ts",
     "./save": "./save-browser.ts",
     "./sort": "./sort-browser.ts",
+    "./sending": "./sending.ts",
     "./fit-list": "./fit-list.ts",
     "./image-fallback": "./image-fallback.ts"
   },

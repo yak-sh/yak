@@ -887,3 +887,11 @@ last in either direction.
 Server-rendered pages use `bindSort(root, {read, write})` from `@yaks/ux/sort`.
 The host reads and writes bundles in its page graph; the binding orders the same
 row groups without replacing their content. It returns listener cleanup.
+
+## Sending a form
+
+A server-rendered page loads `@yaks/ux/sending` once, and a form the browser
+sends shows it in the frame of the press: the pressed button (else the form)
+takes `aria-busy="true"` until the next page replaces this one. A send a script
+prevents, one into another tab and a dialog's close are left to the page. A page
+restored by Back drops the mark.

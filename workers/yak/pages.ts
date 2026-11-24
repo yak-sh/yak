@@ -297,6 +297,10 @@ ${
       ? `<script type="module" src="${file('_image-fallback.js')}"></script>`
       : ''
   }${
+    main.includes('<form')
+      ? `<script type="module" src="${file('_sending.js')}"></script>`
+      : ''
+  }${
     main.includes('data-menu')
       ? `<script src="${file('menu.js')}" defer></script>`
       : ''

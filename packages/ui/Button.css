@@ -32,6 +32,12 @@
   opacity: 0.5;
   cursor: default;
 }
+/* sent, and waiting on its answer */
+.Button[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: progress;
+  pointer-events: none;
+}
 /* offers what is not there yet */
 .Button-add {
   --ink: var(--muted);
