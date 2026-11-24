@@ -484,6 +484,27 @@ let living = (ctx: Ctx, p: Presence, owner = ctx.owner): Presence =>
     ? { ...p, none: [...p.none ?? [], 'tombstone'] }
     : p
 
+// The positive, local archetype sets a condition fully represents. Keep the
+// ids before the dialect lowers them to a bound array or literal values.
+let archetypeLists = new WeakMap<Cond, {
+  ids: readonly number[]
+  merged: boolean
+}>()
+let archetypeList = (
+  ctx: Ctx,
+  ids: readonly number[],
+  merged = false,
+): Cond => {
+  let test = cond(
+    ids.length ? ctx.d.among(ctx.d.archetype!(), [...ids]) : {
+      sql: '0',
+      params: [],
+    },
+  )
+  archetypeLists.set(test, { ids, merged })
+  return test
+}
+
 // Presence means the component row EXISTS, never that one of its columns is
 // non-null. Matching an archetype needs no join to any of the component tables
 // the test names.
@@ -508,6 +529,9 @@ let byArchetype = (
     ? ctx.archetypes({ all: predicate.none })
     : undefined
   let inverse = positive != null && positive.length < ids.length
+  if (owner == null && !missing && !inverse && !ctx.archetypes.pending) {
+    return archetypeList(ctx, ids)
+  }
   let chosen = inverse ? positive ?? ids : ids
   let member = chosen.length
     ? ctx.d.among(key, [...chosen])
@@ -1816,6 +1840,10 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
           }),
         )
       }))
+    }
+    let lists = branches.map(({ where }) => archetypeLists.get(where)?.ids)
+    if (lists.every((ids) => ids != null)) {
+      return archetypeList(ctx, [...new Set(lists.flat())], true)
     }
     return or(...branches.map((b) => b.where))
   }
@@ -3493,7 +3521,16 @@ let indexedRelation = (
   }
   root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   if (!root) {
-    if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
+    if (ctx.spine || from != ctx.d.spine) return s
+    if (!ctx.candidates) {
+      // A complete, ordered shape read can seek its archetypes and sort the
+      // matches. The number index alone can read the whole directory to put a
+      // few hundred matching owners in order (bug 33903cf0).
+      return page == null && ctx.d.archetypeSource && from == '"entity"' &&
+          conjunctsOf(o.where).some((test) => archetypeLists.get(test)?.merged)
+        ? { ...s, from: raw(ctx.d.archetypeSource(ctx.v), [], 'entity') }
+        : s
+    }
     // Shape membership already selects physical entity owners. Keep their
     // numbered index as the ordering spine: a self-join would make SQLite
     // sort every historical match before cutting the page. Visibility stays
