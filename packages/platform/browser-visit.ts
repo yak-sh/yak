@@ -218,7 +218,7 @@ export type Rendered = {
   /** The accessibility check, unless the visit asked for none. */
   accessibility?: Checked
   /** How long the page took to load, and each move a step made in place
-   * (`timeline`). */
+   * (`TIMELINE`). */
   timings?: Timing[]
   duration: number
 }
@@ -231,52 +231,49 @@ export type Timing = {
   name: string
   url: string
   ms: number
-  parts: Record<string, number>
+  parts: Record<string, number | string>
   server: Record<string, number>
 }
 
 // The page's own timeline, read in the audit's world: the document's load
 // and every `yak-page` measure, each with the server's word on its answer.
-let timeline = () => {
-  let round = (n: number) => Math.round(n * 10) / 10
-  let server = (url: string) => {
-    let all = performance.getEntriesByName(url) as PerformanceResourceTiming[]
-    let last = all.findLast((e) => e.serverTiming?.length)
+// Written as the script it runs, since a bundler's helpers would not come
+// along with a function's own text.
+let TIMELINE = `(() => {
+  let round = (n) => Math.round(n * 10) / 10
+  let server = (url) => {
+    let last = performance.getEntriesByName(url)
+      .findLast((e) => e.serverTiming?.length)
     return Object.fromEntries(
-      (last?.serverTiming ?? []).map((t) => [t.name, round(t.duration)]),
-    )
+      (last?.serverTiming ?? []).map((t) => [t.name, round(t.duration)]))
   }
   let out = []
-  let load = performance.getEntriesByType('navigation')[0] as
-    | PerformanceNavigationTiming
-    | undefined
-  if (load) {
-    out.push({
-      name: 'load',
-      url: load.name,
-      ms: round(load.domContentLoadedEventEnd),
-      parts: {
-        wait: round(load.responseStart - load.requestStart),
-        read: round(load.responseEnd - load.responseStart),
-        build: round(load.domContentLoadedEventEnd - load.responseEnd),
-      },
-      server: server(load.name),
-    })
-  }
+  let load = performance.getEntriesByType('navigation')[0]
+  if (load) out.push({
+    name: 'load',
+    url: load.name,
+    ms: round(load.domContentLoadedEventEnd),
+    parts: {
+      wait: round(load.responseStart - load.requestStart),
+      read: round(load.responseEnd - load.responseStart),
+      build: round(load.domContentLoadedEventEnd - load.responseEnd),
+    },
+    server: server(load.name),
+  })
   for (let m of performance.getEntriesByName('yak-page')) {
-    let { url, ...parts } = (m as PerformanceMeasure).detail ?? {}
+    let { url = '', ...parts } = m.detail ?? {}
     out.push({
       name: m.name,
-      url: String(url ?? ''),
+      url: String(url),
       ms: round(m.duration),
-      parts: Object.fromEntries(
-        Object.entries(parts).map(([k, v]) => [k, round(Number(v))]),
-      ),
-      server: server(String(url ?? '')),
+      parts: Object.fromEntries(Object.entries(parts)
+        .map(([k, v]) => [k, typeof v == 'number' ? round(v) : v])),
+      server: server(String(url)),
     })
   }
   return out
-}
+})()`
+
 /** A render that failed, and the browser time it held all the same. */
 export type Fault = { failed: string; stack?: string; timeout?: boolean }
 export type Failed = Fault & { duration: number; refusal?: string }
@@ -546,7 +543,7 @@ let checked = async (
             `(${clip})(document.body?.innerText ?? '', ${TEXT})`,
           ),
         )
-        let timings = await world.evaluate(`(${timeline})()`) as Timing[]
+        let timings = await world.evaluate(TIMELINE) as Timing[]
         return { ...accessibility ? { accessibility } : {}, text, timings }
       },
     )
