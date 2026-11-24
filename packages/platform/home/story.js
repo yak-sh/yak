@@ -33,20 +33,21 @@ let messages = (log) =>
 let reveal = (lines, at, calm) => {
   for (let { el, turn, line, count } of lines) {
     let v = progress(turn, line, count, at)
-    el.hidden = v == 0
-    if (v == 0) continue
+    let hidden = v == 0
+    if (el.hidden != hidden) el.hidden = hidden
+    if (hidden) continue
     el.style.setProperty('--v', calm ? 1 : v)
     el.style.setProperty('--sat', Math.max(.25, 1 - (at.step - turn) * .24))
   }
 }
 
-// Each section is past, now or next, and its --v says how far it is read,
-// so its scene comes in with the scroll alone, backwards too.
+// Ink depends on a section's stance. Only its illustration inherits the
+// continuously changing --v, so scrolling doesn't restyle the whole section.
 let mark = (steps, at) =>
-  steps.forEach((el, turn) => {
+  steps.forEach(({ el, art }, turn) => {
     let [state, v] = stance(turn, at)
     if (el.dataset.state != state) el.dataset.state = state
-    el.style.setProperty('--v', v.toFixed(3))
+    art?.style.setProperty('--v', v.toFixed(3))
   })
 
 let swipe = (old, log, backwards) => {
@@ -213,6 +214,12 @@ let mount = (root) => {
   let lines = logs.map(messages)
   let scenes = [...root.querySelectorAll('[data-demo-scene]')]
   let steps = [...root.querySelectorAll('[data-story-step]')]
+  let illustrated = steps.map((el) => ({
+    el,
+    art: el.querySelector(
+      ':scope > :is(.Home_Illustration, .Home_Connection, .Home_Scene)',
+    ),
+  }))
   let nav = root.querySelector('[data-feature-nav]')
   let contents = nav.parentElement
   let jumps = [...nav.querySelectorAll('[data-feature-link]')]
@@ -232,7 +239,7 @@ let mount = (root) => {
       rects[1].top <= contents.getBoundingClientRect().bottom,
     )
     reveal(lines[i], at, calm.matches)
-    mark(steps, at)
+    mark(illustrated, at)
     demo.inert = narrow.matches && at.step == 0
     if (active == at.step) return
     active = at.step
