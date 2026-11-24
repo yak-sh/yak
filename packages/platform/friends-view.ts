@@ -28,15 +28,12 @@ import {
   heading,
   labeled,
   option,
+  said,
   saving,
   send,
 } from './page-parts.ts'
 import { online, seenWords } from './presence.ts'
 import { managePath } from './routes.ts'
-
-// Where a form says what came of it (./friends-browser.ts `tell`).
-let said = () =>
-  h(Form.Hint, { as: 'p', role: 'status', 'data-said': '', hidden: true })
 
 /** What the Friends page says about itself beside the rows: whose it is,
  * the zone its spaces answer under, and whether it shows every friend. */

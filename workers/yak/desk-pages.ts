@@ -48,11 +48,7 @@ import { icons } from './icons.ts'
 import { day, fileDrop, markup, raw } from './html.ts'
 import { LOGO_TYPES } from './logo.ts'
 import { drawnRows } from '@yaks/platform/page-graph'
-import {
-  type FriendsView,
-  friendsView,
-  showing,
-} from '@yaks/platform/friends-view'
+import { type FriendsView, friendsView } from '@yaks/platform/friends-view'
 import { empty, fieldsOf, option, saving } from '@yaks/platform/page-parts'
 import { holder, tile } from './render/mod.ts'
 import type { Person } from './people.ts'
@@ -61,14 +57,14 @@ import {
   accountView,
   enabling,
   logoUpload,
-  MANAGE,
   managePath,
   type Setting,
 } from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { size } from '@yaks/fp'
-import { browserName } from '@yaks/platform/signed-in'
-import type { BrowserSession } from './browser-sessions.ts'
+import { type ProfileView, profileView } from '@yaks/platform/profile-view'
+import { accountOf, signedInOf } from '@yaks/platform/account-rows'
+import { pickedOf } from '@yaks/platform/side-rows'
 import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
@@ -460,73 +456,40 @@ export let library = (at: DeskPage, env: Host) => {
   ]
 }
 
-// Profile (Your account): the person's name, their email, and the space
-// `/manage` opens, which is the one their seat marks theirs (`member.own`).
+// Profile (Your account), drawn from the person's rows as the browser draws
+// it again (@yaks/platform/profile-view), which the page carries for its
+// first paint (`data-view`).
 let profile = (at: DeskPage, env: Host) => {
-  let mine = (at.spaces ?? []).filter((s) => s.owner)
-  let first = mine.find((s) => s.own)?.slug ?? ''
-  return [
-    saving(
-      managePath('profile'),
-      h(
-        Card,
-        null,
-        heading('Profile'),
-        fieldsOf(
-          labeled(
-            'your-name',
-            'Your name',
-            h(Field, {
-              id: 'your-name',
-              name: 'name',
-              maxlength: 60,
-              autocomplete: 'name',
-              placeholder: 'Dana',
-              value: at.name ?? '',
-            }),
-            'Shown to people in every space you’re in.',
-          ),
-          h(
-            Form.Field,
-            null,
-            h(Form.Label, { as: 'p' }, 'Email'),
-            h('p', null, at.email ?? ''),
-          ),
-          showing(!!at.presenceHidden, 'profile'),
-          mine.length > 1
-            ? labeled(
-              'your-first',
-              'Open first',
-              h(
-                Field,
-                { choose: true, id: 'your-first', name: 'first' },
-                mine.map((s) => option(s.slug, named(s), s.slug == first)),
-              ),
-              `The space ${apex(env)}${MANAGE} opens.`,
-            )
-            : null,
-        ),
-      ),
+  let view: ProfileView = {
+    person: at.person ?? '',
+    apex: apex(env),
+    session: at.session,
+    links: at.links ?? [],
+  }
+  let rows = at.drawn ?? []
+  return h(
+    'div',
+    { 'data-view': 'profile', 'data-profile-view': JSON.stringify(view) },
+    profileView(
+      view,
+      accountOf(rows) ?? { name: '', email: '', hidden: false },
+      pickedOf(rows),
+      signedInOf(rows),
     ),
-    ...(at.links ?? []).map(linkCard),
-    h(
-      Card,
-      null,
-      heading('Signed-in browsers'),
-      h(
-        Rows,
-        null,
-        signedIn(at).map((s) => browserRow(s, s.eid == at.session)),
-      ),
-      h(
-        Form,
-        { method: 'post', action: managePath('profile') },
-        h(Form.Hidden, { name: 'session', value: 'all' }),
-        send('Sign out everywhere'),
-      ),
-    ),
-  ]
+    drawing(at),
+  )
 }
+
+// The rows the page was drawn from, carried for its first paint
+// (@yaks/platform/page-graph `drawnRows`).
+let drawing = (at: DeskPage) =>
+  at.drawn && at.person
+    ? h('script', {
+      type: 'application/json',
+      'data-page-graph': '',
+      dangerouslySetInnerHTML: { __html: drawnRows(at.person, at.drawn) },
+    })
+    : null
 
 // Friends (Your account), drawn from the person's rows as the browser draws
 // it again (@yaks/platform/friends-view), which the page carries for its
@@ -541,83 +504,9 @@ let friendsPage = (at: DeskPage, env: Host) => {
     'div',
     { 'data-view': 'friends', 'data-friends-view': JSON.stringify(view) },
     friendsView(view, at.friendList ?? [], { hidden: !!at.presenceHidden }),
-    at.drawn && at.person
-      ? h('script', {
-        type: 'application/json',
-        'data-page-graph': '',
-        dangerouslySetInnerHTML: { __html: drawnRows(at.person, at.drawn) },
-      })
-      : null,
+    drawing(at),
   )
 }
-
-// A chat platform the person links their own account on, so every space's
-// Operator knows it is them there: the accounts they linked, and a button to
-// link one, which adding yaks.app's bot to a server does on its own.
-let linkCard = (l: NonNullable<DeskPage['links']>[number]) =>
-  h(
-    Card,
-    { key: l.integration },
-    heading(l.platform),
-    h(
-      'p',
-      null,
-      l.accounts.length
-        ? `Linked as ${
-          l.accounts.join(', ')
-        }. Your Operator knows it’s you there.`
-        : `Link your ${l.platform} account so your Operator knows it’s you there.`,
-    ),
-    h(
-      Form,
-      {
-        method: 'post',
-        action: `${managePath('profile')}?enable=${l.integration}`,
-      },
-      h(Form.Hidden, { name: 'link', value: l.integration }),
-      send(
-        l.accounts.length ? 'Link another account' : `Connect ${l.platform}`,
-      ),
-    ),
-  )
-
-// The person's browsers, the one asking first, then the newest sign-in.
-let signedIn = (at: DeskPage) =>
-  (at.sessions ?? []).toSorted((a, b) =>
-    Number(b.eid == at.session) - Number(a.eid == at.session) ||
-    (b.at ?? '').localeCompare(a.at ?? '')
-  )
-
-// One browser by what it is and where it runs (@yaks/platform/signed-in),
-// then where and when it signed in; its raw user-agent is the name's tip.
-let browserRow = (s: BrowserSession, here: boolean) =>
-  h(
-    Rows.Item,
-    { key: s.eid },
-    h(
-      Rows.Main,
-      null,
-      h(Rows.Name, { title: s.agent }, browserName(s.agent)),
-      h(
-        Rows.Meta,
-        null,
-        joined([
-          s.place,
-          s.at ? ['signed in ', h(Time, { at: s.at })] : null,
-          here ? 'this browser' : null,
-        ]),
-      ),
-    ),
-    h(
-      Rows.Form,
-      { method: 'post', action: managePath('profile') },
-      h(Form.Hidden, { name: 'session', value: s.eid }),
-      send('Sign out'),
-    ),
-  )
-
-let joined = (parts: Kids[]) =>
-  parts.filter(Boolean).flatMap((p, i) => i ? [' · ', p] : [p])
 
 // Invite (Your account, T-138777): the person's own QR code, shown to a
 // friend on their phone, so it is the code first and large. Scanning it opens

@@ -31,6 +31,7 @@ import {
   mailed,
   meta,
   owned,
+  saveAccount,
   signIn,
   unique,
 } from './probe.ts'
@@ -1335,24 +1336,15 @@ test('Profile saves the name, and Settings the address', async () => {
 
     // Naming themselves: written on their own person row, so every byline an
     // app writes says it (T-32654).
-    let named = await save(
-      await read(managePath('profile'), cookie),
-      'name',
-      'Dana',
-      cookie,
-    )
-    assertEquals(named.status, 303)
-    await named.body?.cancel()
-    assertEquals(
-      named.headers.get('location'),
-      `https://yaks.app${managePath('profile')}`,
-    )
+    let named = await saveAccount(k, { person, cookie }, { name: 'Dana' })
+    assertEquals(named.status, 200, await named.text())
     let [them] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((them.doc as { title: string }).title, 'Dana')
 
     // Cleared, the front of their address comes back: a person is always
     // called something, or a member row reads back as an eid (T-32733).
-    await (await post(null, { name: '  ' }, cookie)).body?.cancel()
+    await (await saveAccount(k, { person, cookie }, { name: '  ' })).body
+      ?.cancel()
     let [quiet] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 

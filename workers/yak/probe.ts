@@ -9,6 +9,12 @@ import { unsealed } from './invite.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
+import {
+  ACCOUNT,
+  accountEid,
+  type AccountWrite,
+} from '@yaks/platform/account-rows'
+import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import type { Load } from '@yaks/host'
 import type { Env, Vars } from './env.ts'
 import type { Purgers } from '@yaks/workerd/purge'
@@ -78,6 +84,44 @@ export type Person = {
   email: string
   code: string
   name: string
+}
+
+/** `p`'s tab asking its page graph's door (@yaks/platform/page-graph). */
+export let reach = (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  path: string,
+  init: RequestInit = {},
+) =>
+  k.at(k.host, `${REACH}${path}`, {
+    ...init,
+    redirect: 'manual',
+    headers: {
+      cookie: p.cookie,
+      [TAB_PERSON]: p.person,
+      'content-type': 'application/json',
+    },
+  })
+
+/** `p` writing `bundles` through their tab's page graph. */
+export let wrote = (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  bundles: Bundle[],
+) => reach(k, p, '/apply', { method: 'POST', body: JSON.stringify(bundles) })
+
+/** `p` changing their account as their Profile's Save bar does: the account
+ * row they hold, with `change`, written through their page graph. */
+export let saveAccount = async (
+  k: Pick<Kernel, 'at' | 'host'>,
+  p: Pick<Person, 'person' | 'cookie'>,
+  change: AccountWrite,
+) => {
+  let [row] = await (await reach(k, p, `/query?q=${ACCOUNT}`)).json()
+  return await wrote(k, p, [{
+    entity: { eid: accountEid(p.person) },
+    account: { ...row.account, ...change },
+  }])
 }
 
 /** A kernel's door (`driven`). */

@@ -1,11 +1,14 @@
 // The hosted settings door: fields use the kit's Save behavior, and write
-// through the same forms as the settings pages and their existing tools.
+// through the same forms as the settings pages and their existing tools, or
+// through the page graph where the page drawn from it says so
+// (@yaks/platform/page-parts `SAVE_THROUGH`).
 import { bindSave, type SaveBinding } from '@yaks/ux/save'
 import { tips } from '@yaks/ui/parts'
 import { CallError } from '@yaks/tools/errors'
 import { settingsDrafts } from './settings-draft-browser.ts'
 import { allow } from './alerts-browser.ts'
 import { LEAVE, PAGE } from '@yaks/ui/navigate'
+import { SAVE_THROUGH, type SavingForm } from '@yaks/platform/page-parts'
 
 let report = (error: unknown) =>
   queueMicrotask(() => {
@@ -49,6 +52,8 @@ export let settings = (root: Document = document) => {
       if (!(error instanceof CallError)) report(error)
     },
     save: async (form: HTMLFormElement, body: FormData) => {
+      let through = (form as SavingForm)[SAVE_THROUGH]
+      if (through) return await through(body)
       let offer = form.querySelector<HTMLInputElement>('[data-push]:checked')
       if (offer) await allow(offer.dataset.push!, offer.dataset.at!)
       let response = await fetch(form.action, {

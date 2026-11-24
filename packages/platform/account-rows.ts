@@ -1,13 +1,16 @@
 /**
  * The rows the signed-in person's own pages draw from (D-475 step 3): their
- * account, `account{name, email, hidden}`, and each confirmed friend,
- * `befriended{…}`, online first. The directory answers both as reads of the
+ * account, `account{name, email, hidden}`, each browser signed in as them,
+ * `signedIn{agent, place, at}`, and each confirmed friend, `befriended{…}`,
+ * online first. The directory answers both as reads of the
  * person (graph.ts `/person/ws`), and the tab's page graph watches them through
  * its door (reach-door.ts), as it does the side's (./side-rows.ts).
  *
  * The person changes them through the page graph: an `account` row written
- * with a new name or `hidden` is that change, and a `friendMessage{to, words}`
- * or `friendAsk{email}` row is a message sent or a friend asked. The door does
+ * with a new name, `hidden` or `first` (the slug of a space they own, which
+ * `/manage` opens) is that change; a `signOut{session}` row signs out one
+ * browser, or with `session: 'all'` every one; and a `friendMessage{to,
+ * words}` or `friendAsk{email}` row is a message sent or a friend asked. The door does
  * each as the person (account-writes.ts) and answers what it made.
  *
  * @module
@@ -22,11 +25,22 @@ export let ACCOUNT = '.account'
 /** The person's confirmed friends, in the order their page lists them. */
 export let FRIENDS = '.befriended'
 
+/** The browsers signed in as the person. */
+export let SIGNED_IN = '.signedIn'
+
 /** How often where a friend is is read again while it is watched. */
 export let SEEN_EVERY = 30_000
 
 /** The person's account as their pages say it. */
 export type Account = { name: string; email: string; hidden: boolean }
+
+/** What `account` takes beside the account itself: the space `/manage`
+ * opens first. */
+export type AccountWrite = Partial<Account> & { first?: string }
+
+/** A browser signed in as the person: its user-agent, where its network
+ * placed it and when it signed in, where each is known. */
+export type SignedIn = { agent: string; place?: string; at?: string }
 
 /** An app someone let the reader into, in the space it lives in. */
 export type Shared = { eid: string; slug: string; title: string; space: string }
@@ -65,7 +79,20 @@ export let accountWords: VocabDoc = {
         name: strings,
         email: strings,
         hidden: { type: 'boolean' },
+        first: strings,
       },
+    },
+    signedIn: {
+      component: true,
+      type: 'object',
+      properties: { agent: strings, place: strings, at: strings },
+      required: ['agent'],
+    },
+    signOut: {
+      component: true,
+      type: 'object',
+      properties: { session: strings },
+      required: ['session'],
     },
     befriended: {
       component: true,
@@ -136,6 +163,21 @@ let without = ({ seen: _, ...f }: Befriended) => f
 export let accountOf = (rows: Bundle[]): Account | undefined =>
   rows.find((r) => r.account)?.account as Account | undefined
 
+/** The browsers `sessions` as rows, each the session's own eid. */
+export let signedInRows = (
+  sessions: (SignedIn & { eid: string })[],
+): Bundle[] =>
+  sessions.map(({ eid, agent, place, at }) => ({
+    entity: { eid },
+    signedIn: { agent, ...place ? { place } : {}, ...at ? { at } : {} },
+  }))
+
+/** The browsers `rows` hold, each with its session's eid. */
+export let signedInOf = (rows: Bundle[]): (SignedIn & { eid: string })[] =>
+  rows.flatMap((r) =>
+    r.signedIn ? [{ eid: r.entity.eid, ...r.signedIn as SignedIn }] : []
+  )
+
 /** The friends `rows` hold, in their page's order. */
 export let friendsOf = (rows: Bundle[]): Befriended[] =>
   rows.flatMap((r) =>
@@ -146,4 +188,4 @@ export let friendsOf = (rows: Bundle[]): Befriended[] =>
 
 /** Whether the directory answers `line` as a read of the person. */
 export let accountLine = (line: string): boolean =>
-  line == ACCOUNT || line == FRIENDS
+  line == ACCOUNT || line == FRIENDS || line == SIGNED_IN

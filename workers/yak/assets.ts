@@ -67,6 +67,12 @@ export let ASSETS: Asset[] = [
     bundle: of('@yaks/platform/friends-browser'),
     named: true,
   },
+  // The Profile page kept current (@yaks/platform/profile-browser).
+  {
+    name: '_profile.js',
+    bundle: of('@yaks/platform/profile-browser'),
+    named: true,
+  },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
   // A form the browser sends shows it is sending (pages.ts `documented`).

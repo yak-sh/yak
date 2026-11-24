@@ -2,8 +2,8 @@ import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
-import type { Bundle } from '@yaks/graph'
-import type { Client, Watch } from '@yaks/client'
+import { WriteRefused } from '@yaks/client'
+import { graph } from './page-graph_fixture_test.ts'
 import { bindFriends } from './friends-browser.ts'
 import { type FriendsView, friendsView } from './friends-view.ts'
 import {
@@ -23,39 +23,6 @@ let friend = (name: string, seen?: Befriended['seen']): Befriended => ({
   shared: [],
 })
 let online = { state: 'online' as const, spaces: [], apps: [] }
-
-// A page graph standing in for the tab's: each line's rows, set by the test,
-// and each write answered as `answer` says.
-let graph = (answer: (b: Bundle[]) => Promise<Bundle[]>) => {
-  let rows = new Map<string, Bundle[]>()
-  let heard = new Map<string, Set<(b: Bundle[]) => void>>()
-  let watch = (line: string) =>
-    ({
-      get value() {
-        return rows.get(line) ?? []
-      },
-      ready: true,
-      subscribe: (fn: (b: Bundle[]) => void) => {
-        let all = heard.get(line) ?? new Set()
-        heard.set(line, all.add(fn))
-        return () => all.delete(fn)
-      },
-      close: () => {},
-    }) as unknown as Watch
-  let wrote: Bundle[][] = []
-  return {
-    wrote,
-    set: (line: string, next: Bundle[]) => {
-      rows.set(line, next)
-      for (let fn of heard.get(line) ?? []) fn(next)
-    },
-    watch,
-    mutate: (b: Bundle[]) => (wrote.push(b), answer(b)),
-  } as unknown as Pick<Client, 'watch' | 'mutate'> & {
-    wrote: Bundle[][]
-    set: (line: string, rows: Bundle[]) => void
-  }
-}
 
 // The Friends view as the server draws it from `friends`.
 let page = (friends: Befriended[]) => {
@@ -136,7 +103,14 @@ test('a message is written through the page graph, and its form says it went', a
 
 test('a friend asked who is refused says why, and keeps what was typed', async () => {
   let { root, window } = page([])
-  let g = graph(() => Promise.reject(new Error('Nobody signs in with that.')))
+  let g = graph(() =>
+    Promise.reject(
+      new WriteRefused([], {
+        error: 'arguments',
+        message: 'Nobody signs in with that.',
+      }),
+    )
+  )
   g.set(ACCOUNT, [
     accountRow(ADA, { name: 'Ada', email: 'a@x', hidden: false }),
   ])

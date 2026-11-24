@@ -251,6 +251,10 @@ ${
       ? `<script type="module" src="${file('_friends.js')}"></script>`
       : ''
   }${
+    main.includes('data-profile-view=')
+      ? `<script type="module" src="${file('_profile.js')}"></script>`
+      : ''
+  }${
     main.includes('data-domain-search=')
       ? `<script type="module" src="${file('_domains.js')}"></script>`
       : ''

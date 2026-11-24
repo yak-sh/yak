@@ -1,7 +1,8 @@
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { test } from '@yaks/testing'
-import { kernel, signIn } from './probe.ts'
+import { kernel, reach, signIn, wrote } from './probe.ts'
+import { SIGNED_IN, signedInOf } from '@yaks/platform/account-rows'
 import { managePath } from '@yaks/platform/routes'
 import { headings } from '@yaks/ui/contents'
 
@@ -36,7 +37,14 @@ test('Profile lists its cards in its contents and names this browser first', asy
   )
 })
 
-test('logout and Profile end selected browsers through the HTTP doors', async () => {
+// Profile signing a browser out, as its page writes it through the page graph.
+let signOut = (cookie: string, session: string) =>
+  wrote(k, { person: one.person, cookie }, [{
+    entity: { eid: crypto.randomUUID() },
+    signOut: { session },
+  }])
+
+test('logout and Profile end selected browsers through their doors', async () => {
   let logout = await post('/logout', one.cookie)
   assertEquals(logout.status, 303)
   assertEquals(await signed(one.cookie), false)
@@ -48,21 +56,24 @@ test('logout and Profile end selected browsers through the HTTP doors', async ()
   let sessions = await k.dir.browserSessions(one.person)
   assertEquals(sessions.length, 2)
   let foreign = (await k.dir.browserSessions(other.person))[0]
-  assertEquals(
-    (await post(profile, two.cookie, { session: foreign.eid })).status,
-    303,
-  )
+  assertEquals((await signOut(two.cookie, foreign.eid)).status, 200)
   assertEquals(await signed(other.cookie), true)
   let third = sessions.find((s) => s.eid != sessions[0].eid)!
   // The browser chooses a row from the rendered list, regardless of its order.
-  assert(document.querySelector(`input[name="session"][value="${third.eid}"]`))
+  assert(document.querySelector(`[data-sign-out="${third.eid}"]`))
   let current = sessions[0]
-  await post(profile, two.cookie, { session: third.eid })
+  await signOut(two.cookie, third.eid)
   let live = [await signed(two.cookie), await signed(three.cookie)]
   assertEquals(live.filter(Boolean).length, 1)
   let survivor = live[0] ? two.cookie : three.cookie
   assertEquals((await k.dir.browserSessions(one.person))[0].eid, current.eid)
-  await post(profile, survivor, { session: 'all' })
+  let held = await (await reach(
+    k,
+    { person: one.person, cookie: survivor },
+    `/query?q=${SIGNED_IN}`,
+  )).json()
+  assertEquals(signedInOf(held).map((b) => b.eid), [current.eid])
+  await signOut(survivor, 'all')
   assertEquals(await signed(two.cookie), false)
   assertEquals(await signed(three.cookie), false)
   assertEquals(await signed(other.cookie), true)

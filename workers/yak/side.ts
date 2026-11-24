@@ -1,6 +1,6 @@
 // What the person's own pages draw, read from the directory: the sidebar's
-// spaces and apps (@yaks/platform/side-rows), and their account and friends
-// (@yaks/platform/account-rows). A page asks it as it is drawn
+// spaces and apps (@yaks/platform/side-rows), and their account, browsers and
+// friends (@yaks/platform/account-rows). A page asks it as it is drawn
 // (manage.ts `beside`), and the directory answers the same as a live read of
 // the person (graph.ts `/person/ws`), so the side the page drew and the one
 // its rows redraw agree.
@@ -20,6 +20,8 @@ import {
   accountRow,
   friendRows,
   FRIENDS,
+  SIGNED_IN,
+  signedInRows,
 } from '@yaks/platform/account-rows'
 import { friendList } from './friends.ts'
 import { shelf } from './apps.ts'
@@ -102,7 +104,7 @@ export let sideApps = async (dir: Directory, space: Space, who: Who) =>
     { eid, slug, title, source, generatedIcon },
   ) => ({ eid, slug, title, source, generatedIcon }))
 
-/** The rows `line` asks of the person: their account, their friends, or the
+/** The rows `line` asks of the person: their account, browsers, friends, or the
  * side's, none for a space they hold no seat in that lets them change it. */
 export let personRows = async (
   dir: Directory,
@@ -120,6 +122,9 @@ export let personRows = async (
       email: email ?? '',
       hidden,
     })]
+  }
+  if (line == SIGNED_IN) {
+    return signedInRows(await dir.browserSessions(person))
   }
   if (line == FRIENDS) {
     let all = await shared(dir, person)

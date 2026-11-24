@@ -58,7 +58,7 @@ import { monogram } from '@yaks/platform/monogram'
 import type { LogoSize } from '@yaks/platform/space-logo'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
-import { friendsOf as standingWith, hidePresence } from './friends.ts'
+import { friendsOf as standingWith } from './friends.ts'
 import { CallError } from '@yaks/tools/errors'
 import { restoredAddress, untrash } from './erase.ts'
 import { restoredNumber } from './number-trash.ts'
@@ -85,11 +85,8 @@ import {
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
-import { browsers, end as endSession, endAll } from './browser-sessions.ts'
 import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
-import { chose, keepName } from './names.ts'
-import { meta } from './meta.ts'
 import { writes } from '@yaks/member'
 import { brokenIn, trackedIn } from './unseen.ts'
 import { TOOLS } from './tools.ts'
@@ -110,7 +107,9 @@ import {
   accountOf,
   FRIENDS,
   friendsOf,
+  SIGNED_IN,
 } from '@yaks/platform/account-rows'
+import { SIDE_SPACES } from '@yaks/platform/side-rows'
 import {
   billedDomains,
   domainOffers,
@@ -1028,6 +1027,13 @@ let desk = async (
   return spend(req, keptIn(page, space.slug))
 }
 
+// The lines of the page graph each page of the person's own is drawn from
+// (@yaks/platform/account-rows, side-rows).
+let DRAWN: Partial<Record<AccountView, string[]>> = {
+  profile: [ACCOUNT, SIDE_SPACES, SIGNED_IN],
+  friends: [ACCOUNT, FRIENDS],
+}
+
 // One page of the person's own (pages.ts `desk`): their profile, their
 // agents, what others shared with them, a new space. The side's selector
 // holds the space this browser was last in, or the one `?space=` chose.
@@ -1052,39 +1058,32 @@ let mine = async (
   let [
     picks,
     name,
-    email,
     agents,
     theirs,
     referral,
     own,
     panes,
-    sessions,
     provider,
     links,
-    hidden,
     drawn,
   ] = await Promise.all([
     pickable(dir, person),
     dir.nameAt(person),
-    view == 'profile' ? dir.emailAt(person) : undefined,
     view == 'agents' ? agentsOf(env, person, dir) : [],
     view == 'shared' ? shared(dir, person) : undefined,
     view == 'invite' ? invitation(env, dir, person) : undefined,
     dir.own(person),
     dir.panes(person),
-    view == 'profile' ? browsers(env, person) : [],
     payments(env),
     view == 'profile'
       ? Promise.all([import('./chat.ts'), dir.ownConnections(person)])
         .then(([c, rows]) => c.ownLinks(env, rows))
       : undefined,
-    view == 'profile' ? dir.presenceHidden(person) : undefined,
     // The rows a page drawn from the page graph's reads is drawn from
     // (@yaks/platform/account-rows), carried for its first paint.
-    view == 'friends'
-      ? Promise.all([ACCOUNT, FRIENDS].map((l) => personRows(dir, person, l)))
-        .then((rows) => rows.flat())
-      : undefined,
+    DRAWN[view] &&
+    Promise.all(DRAWN[view].map((l) => personRows(dir, person, l)))
+      .then((rows) => rows.flat()),
   ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -1094,13 +1093,11 @@ let mine = async (
     view,
     apps: [],
     name: name ?? '',
-    email: email ?? '',
-    presenceHidden: drawn ? accountOf(drawn)?.hidden : hidden,
+    presenceHidden: drawn && accountOf(drawn)?.hidden,
     friendList: drawn && friendsOf(drawn),
     drawn,
     allFriends: q.has('all'),
     agents,
-    sessions,
     links,
     session: who.session,
     shared: theirs,
@@ -1125,8 +1122,6 @@ let mine = async (
   return spend(req, q.has('space') ? keptIn(page, space) : page)
 }
 
-// What a page of the person's own posts: Profile's name and the space they
-// open first, and a new space.
 // Linking the person's own account on a chat platform (`link`, one of
 // `ownLinks`' integrations), the sign-in held under their own space: from
 // Profile's Connect Discord, or a link the Operator sent them in a room
@@ -1201,23 +1196,6 @@ let account = async (
   // Only a platform's own account integration is linked here.
   let linking = String(form.get('link') ?? '')
   if (linking) return await linkFrom(req, env, dir, who, linking)
-  if (form.has('session')) {
-    let id = String(form.get('session'))
-    if (id == 'all') {
-      await endAll(env, who.person)
-      return redirect(hostUrl(env, '/login'), 303)
-    }
-    let all = await browsers(env, who.person)
-    for (let session of all.filter((s) => s.eid == id)) {
-      await endSession(env, session)
-    }
-    return answered(
-      req,
-      env,
-      { say: 'Signed out.' },
-      hostUrl(env, managePath('profile')),
-    )
-  }
   // The side's fold (sidebar.ts `fold`) and the aside's (frame.ts `toggle`),
   // pressed on any page: kept on the person's row, then that page again, or
   // for the script that sent it, nothing more.
@@ -1238,30 +1216,7 @@ let account = async (
       303,
     )
   }
-  if (form.has('presence')) {
-    await hidePresence(dir, who, who.person, form.get('presence') == 'hidden')
-  }
-  if (form.has('name')) {
-    await keepName(meta(env), who.person, chose(form.get('name')), 'said', {
-      by: who.person,
-    })
-  }
-  // The space they open first is the one their seat marks theirs
-  // (`member.own`): the mark moves to another space they own.
-  let first = String(form.get('first') ?? '').trim()
-  if (first) {
-    let seats = await dir.seats(who.person, 'owner')
-    let to = seats.find((s) => s.space.slug == first && !s.space.trashed)
-    if (to && !to.own) {
-      await dir.apply({
-        entities: seats.filter((s) => s.own || s == to).map((s) => ({
-          entity: { eid: s.seat },
-          member: { own: s == to },
-        })),
-      }, { 'x-yak-person': who.person, 'x-yak-role': 'owner' })
-    }
-  }
-  return answered(req, env, { say: 'Saved.' })
+  return nothingHere(env)
 }
 
 // The Friends page saying where the person is

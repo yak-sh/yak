@@ -2278,9 +2278,13 @@ export class Store extends Durable {
               'space_logo',
               'app_icon',
               'email',
-              // The person's account and friends (account-rows).
+              // The person's account, browsers and friends (account-rows).
               'presence',
               'grant',
+              // A browser signed in, and signed out: a write names only what
+              // changed, so its end is `cancelled` alone.
+              'browser_session',
+              'cancelled',
             ].some((key) => key in b)
           ),
         // Where friends are moves with time and with writes this read does

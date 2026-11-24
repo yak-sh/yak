@@ -51,6 +51,11 @@ export let send = (label: Kids) =>
 export let empty = (title: string, ...says: Kids[]) =>
   h(Empty, null, h(Empty.Title, null, title), says)
 
+/** Where a form says what came of a write, under its button
+ * (./account-browser.ts `tell`). */
+export let said = () =>
+  h(Form.Hint, { as: 'p', role: 'status', 'data-said': '', hidden: true })
+
 /** One choice of a select. */
 export let option = (value: string, label: string, chosen: boolean) =>
   h('option', { value, selected: chosen }, label)
@@ -72,3 +77,14 @@ export let saving = (action: string, card: Kids, label = 'Save') =>
     card,
     label == 'Save' ? null : h(Form.Actions, null, send(label)),
   )
+
+/** What a settings form saves through in place of posting, set on the form by
+ * the script that draws its page from the page graph (./account-browser.ts)
+ * and called by the page's Save bar (yaks.app's settings.ts) with what the
+ * form holds. What it resolves to is what the bar says. */
+export let SAVE_THROUGH = Symbol.for('@yaks/platform/save-through')
+
+/** A form that may say what it saves through. */
+export type SavingForm = HTMLFormElement & {
+  [SAVE_THROUGH]?: (body: FormData) => Promise<string | undefined>
+}

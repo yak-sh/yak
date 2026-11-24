@@ -18,6 +18,7 @@ import {
   meta,
   onPlus,
   owned,
+  saveAccount,
   signIn,
 } from './probe.ts'
 import {
@@ -247,18 +248,11 @@ test('an icon linked from the setup page downloads from the apex', async () => {
 })
 
 test('the name is the person’s, saved on their Profile', async () => {
-  let named = await post(profile, { name: 'Dana' })
-  assertEquals(named.status, 303)
-  assertEquals(named.headers.get('location'), to(profile))
+  let named = await saveAccount(k, them, { name: 'Dana' })
+  assertEquals(named.status, 200)
+  assertEquals((await named.json())[0].account.name, 'Dana')
   assertEquals(await title(), 'Dana')
-  assertEquals(await landed(named), ['Saved.', true])
   assertStringIncludes(await (await get(profile)).text(), 'value="Dana"')
-  let answer = await scripted(profile, { name: 'Dana P' })
-  assertEquals(
-    [answer.status, await answer.json()],
-    [200, { say: 'Saved.', to: to(profile) }],
-  )
-  assertEquals(await title(), 'Dana P')
 })
 
 // The side collapses to a rail of its icons (T-151458): the choice is the
@@ -495,7 +489,7 @@ test('a person makes a space, opens it first, and signs out', async () => {
   assertEquals(made.headers.get('location'), theirs)
   assertEquals(await opens(), mine)
 
-  await post(managePath('profile'), { first: fresh })
+  await saveAccount(k, ada, { first: fresh })
   assertEquals(await opens(), theirs)
 
   let out = await post(LOGOUT, {})

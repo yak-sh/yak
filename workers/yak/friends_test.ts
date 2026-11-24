@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { suggestion } from '@yaks/platform/friends'
 import { FRIENDS, friendsOf } from '@yaks/platform/account-rows'
 import { noted } from '@yaks/notify/whereabouts'
-import { connector, kernel, signIn } from './probe.ts'
+import { connector, kernel, saveAccount, signIn } from './probe.ts'
 import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
 
 let k = await kernel()
@@ -71,15 +71,8 @@ test('a suggestion friends nobody until each says yes, and becomes a request', a
   assertEquals((await listed(cy))[bo.person], 'suggested')
   let fallback = await (await updates(bo, boSpace.slug)).text()
   assertStringIncludes(fallback, `${cy.name} is on yaks.app too`)
-  let saved = await k.at(k.host, managePath('profile'), {
-    method: 'POST',
-    headers: {
-      cookie: bo.cookie,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ name: 'Bea Alvarez' }).toString(),
-  })
-  assertEquals(saved.status, 303, await saved.text())
+  let saved = await saveAccount(k, bo, { name: 'Bea Alvarez' })
+  assertEquals(saved.status, 200, await saved.text())
   let page = await (await updates(cy, cySpace.slug)).text()
   assertStringIncludes(page, 'Someone you know?')
   assertStringIncludes(page, 'Bea Alvarez is on yaks.app too')
@@ -285,16 +278,8 @@ test('a person who hides their presence shows to no friend, until they show it a
   assertEquals(await seen(), undefined)
   let page = await (await updates(eve, eveSpace.slug)).text()
   assertEquals(page.includes('Friends on yaks.app now'), false)
-  let shown = await k.at(k.host, managePath('profile'), {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      cookie: fay.cookie,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ presence: 'shown' }).toString(),
-  })
-  assertEquals(shown.status, 303, await shown.text())
+  let shown = await saveAccount(k, fay, { hidden: false })
+  assertEquals(shown.status, 200, await shown.text())
   assertEquals((await seen() as { state: string }).state, 'building')
 })
 
@@ -373,12 +358,12 @@ test('the open page says its tab and hears where each friend is, as it changes',
 })
 
 test('someone who hides their status is seen by no friend and sees none', async () => {
-  let hid = await post(fay, { presence: 'hidden' })
-  assertEquals(hid.status, 303, await hid.text())
+  let hid = await saveAccount(k, fay, { hidden: true })
+  assertEquals(hid.status, 200, await hid.text())
   assertEquals((await live(eve))[fay.person], {})
   assertEquals((await live(fay))[eve.person], {})
   assertEquals((await friendsPage(eve)).includes('Building now'), false)
-  await post(fay, { presence: 'shown' })
+  await saveAccount(k, fay, { hidden: false })
   assertEquals((await live(eve))[fay.person].state, 'building')
 })
 

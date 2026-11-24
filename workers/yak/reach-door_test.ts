@@ -13,7 +13,12 @@ import {
 } from '@yaks/platform/update-waiting'
 import { bindSide } from '@yaks/platform/side-browser'
 import { section, sideParts, type SideView } from '@yaks/platform/side-parts'
-import { SIDE_SPACES, sideApps, sideWords } from '@yaks/platform/side-rows'
+import {
+  pickedOf,
+  SIDE_SPACES,
+  sideApps,
+  sideWords,
+} from '@yaks/platform/side-rows'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { friendSide } from '@yaks/platform/friends'
@@ -21,9 +26,13 @@ import {
   ACCOUNT,
   accountEid,
   accountOf,
+  accountWords,
   FRIENDS,
   friendsOf,
+  SIGNED_IN,
+  signedInOf,
 } from '@yaks/platform/account-rows'
+import { sessionRow } from './browser-sessions.ts'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { installPair, made, type Pair } from '../../packages/workerd/testing.ts'
@@ -155,6 +164,48 @@ test('a tab writes its person’s account, messages and asks through the door, a
     stranger.status >= 400 && stranger.status < 500,
     true,
     JSON.stringify(stranger.body),
+  )
+})
+
+test('a tab opens first only a space its person owns, and signs out only their browsers', async () => {
+  let owned = async (who: Tab) =>
+    pickedOf(await rowsOf(who, SIDE_SPACES)).filter((s) => s.owner)
+  let first = async (who: Tab) => (await owned(who)).find((s) => s.own)?.slug
+  let open = (slug: string) =>
+    wrote(ada, [{
+      entity: { eid: accountEid(ada.person) },
+      account: { first: slug },
+    }])
+  let was = await first(ada)
+  equal((await open((await first(bea))!)).status, 200)
+  equal(await first(ada), was)
+  let other = (await owned(ada)).find((s) => !s.own)!.slug
+  equal((await open(other)).status, 200)
+  equal(await first(ada), other)
+  await open(was!)
+
+  let again = await signIn(k, ada.email)
+  let tab = { cookie: again.cookie, person: ada.person }
+  let browsers = async (who: Tab) =>
+    signedInOf(await rowsOf(who, SIGNED_IN)).map((b) => b.eid)
+  let theirs = (await browsers(bea))[0]
+  let mine = await browsers(ada)
+  let out = (session: string) =>
+    wrote(ada, [{ entity: { eid: crypto.randomUUID() }, signOut: { session } }])
+  equal((await out(theirs)).status, 200)
+  equal(await browsers(bea), [theirs])
+  equal(mine.length, 2)
+  // One of her two browsers, whichever: it is off the list, and signed out.
+  let gone = mine[1]
+  equal((await out(gone)).status, 200)
+  equal((await browsers(ada)).includes(gone), false)
+  equal(
+    [
+      (await door(ada, '/query?q=.doc')).status,
+      (await door(tab, '/query?q=.doc')).status,
+    ]
+      .filter((s) => s == 401).length,
+    1,
   )
 })
 
@@ -334,7 +385,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
     let { document, window } = parseHTML(`<html><body>${pane}</body></html>`)
     let next = socket
     let time = clock(Date.now())
-    let page = client(loadVocab([waitingWords, sideWords]), [], {
+    let page = client(loadVocab([waitingWords, sideWords, accountWords]), [], {
       url: `https://yaks.app${REACH}`,
       connect: () => {
         let current = next
@@ -517,6 +568,24 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
         ]
           .sort(),
       )
+
+      // A browser signing in elsewhere is on Profile's list, and off it once
+      // it signs out.
+      let browsers = page.watch(SIGNED_IN)
+      await until(() => browsers.ready)
+      let session = sessionRow({
+        eid: crypto.randomUUID(),
+        via: crypto.randomUUID(),
+        until: new Date(Date.now() + 86_400_000).toISOString(),
+        agent: 'Elsewhere',
+      }, ADA)
+      let listed = () =>
+        signedInOf(browsers.value).some((b) => b.eid == session.entity.eid)
+      await dir.stamp({ entities: [session] })
+      await until(listed)
+      await dir.stamp({ entities: [{ ...session, cancelled: {} }] })
+      await until(() => !listed())
+      browsers.close()
 
       let updates = await manage(
         new Request('https://yaks.app/ada/updates', {

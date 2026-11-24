@@ -7,6 +7,8 @@ import { parseHTML } from 'linkedom'
 import { spaceIndex } from './pages.ts'
 import { desk } from './desk-pages.ts'
 import { managePath } from '@yaks/platform/routes'
+import { accountRow } from '@yaks/platform/account-rows'
+import { spaceRows } from '@yaks/platform/side-rows'
 
 // The dashboard itself, drawn straight (pages.ts `desk` is pure): the order
 // it puts its blocks in, and what stands where the connect steps were. Every
@@ -181,8 +183,12 @@ test('Profile holds the name, the email and the space opened first', async () =>
     { slug: 'grove', title: 'Grove', owner: true, own: false },
     { slug: 'club', title: 'Club', owner: false, own: false },
   ]
+  let drawn = [
+    accountRow('dana', { name: 'dana', email: 'dana@x.test', hidden: false }),
+    ...spaceRows('dana', spaces.map((s) => ({ ...s, eid: s.slug }))),
+  ]
   let { document, current } = sides(
-    await block({ view: 'profile', email: 'dana@x.test', spaces }),
+    await block({ view: 'profile', person: 'dana', spaces, drawn }),
   )
   assertEquals(current, 'Profile')
   assertEquals(

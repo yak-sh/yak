@@ -4,7 +4,8 @@
  * page graph as they move: a friend who comes online, says yes, or lets the
  * person into an app shows at once. A message and a friend asked are written
  * through the graph (./account-rows.ts `friendMessage`, `friendAsk`): the form
- * says what came of it, or why it was refused.
+ * says what came of it, or why it was refused. "Show when I'm online" saves
+ * through it too (./account-browser.ts).
  *
  * While the page is open it says where the person is, every {@link EVERY}
  * and on coming back to the tab, to the page's own address, so friends see
@@ -27,6 +28,7 @@ import {
   FRIENDS,
   friendsOf,
 } from './account-rows.ts'
+import { refusal, savesAccount, tell } from './account-browser.ts'
 import { type FriendsView, friendsView } from './friends-view.ts'
 import { pageGraph } from './page-graph.ts'
 import { managePath } from './routes.ts'
@@ -71,15 +73,6 @@ export let drawFriends = (
   morph(root, next, KEPT)
 }
 
-// What a form says of what came of it, under its button.
-let tell = (form: HTMLFormElement, words: string, refused = false) => {
-  let said = form.querySelector<HTMLElement>('[data-said]')
-  if (!said) return
-  said.textContent = words
-  said.hidden = !words
-  said.classList.toggle('Form_Hint-negative', refused)
-}
-
 /** Keep the Friends view `root` drawn from `graph`, and write its forms
  * through it; the answer lets go of both. */
 export let bindFriends = (
@@ -89,8 +82,10 @@ export let bindFriends = (
   let view = JSON.parse(root.dataset.friendsView!) as FriendsView
   let account = graph.watch(ACCOUNT)
   let friends = graph.watch(FRIENDS)
-  let draw = () =>
+  let draw = () => {
     drawFriends(root, view, { account: account.value, friends: friends.value })
+    savesAccount(root, graph, view.person, () => account.value)
+  }
   let off = [account.subscribe(draw), friends.subscribe(draw)]
   let submit = async (e: Event) => {
     let form = e.target as HTMLFormElement
@@ -119,7 +114,11 @@ export let bindFriends = (
           : 'Sent. It is in their Updates.',
       )
     } catch (error) {
-      tell(form, (error as Error).message || 'That could not be sent.', true)
+      tell(
+        form,
+        refusal(error, 'That could not be sent. Try again in a moment.'),
+        true,
+      )
     }
   }
   root.addEventListener('submit', submit)
