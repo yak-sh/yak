@@ -10,6 +10,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parse } from 'es-module-lexer/js'
+import type { Frame } from '@yaks/api'
 import type { Wire } from '@yaks/durable-object'
 import { graph } from '@yaks/graph'
 import { choices } from '@yaks/builders'
@@ -1197,7 +1198,7 @@ test('a subscription is that query still answering', async () => {
   let name = 'ada/cookbook.aaa111'
   // The runtime's hibernation interface drives the production socket adapter
   // over the same graph API the page reads and writes.
-  let sent: Record<string, unknown>[] = []
+  let sent: Frame[] = []
   let ws: Wire = {
     readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
@@ -1206,33 +1207,33 @@ test('a subscription is that query still answering', async () => {
   }
   // The page first reaches the app through its query door.
   let page = client(env, await as(ADA))
-  assertEquals(await page.query('.doc'), [])
+  let query = '.doc!&.created?&!person'
+  let id = '1:.doc'
+  let empty = await page.query(query)
+  assertEquals(empty, [])
   pages.push(ws)
   await at(name).live!.message(
     ws,
-    JSON.stringify({ subscribe: '.doc!&.created?&!person', id: '1:.doc' }),
+    JSON.stringify({ subscribe: query, id }),
   )
   assertEquals(sent.length, 1)
-  let { revision, ...opened } = sent[0]
-  assert(typeof revision == 'number')
-  assertEquals(opened, {
-    id: '1:.doc',
-    bundles: [],
-    coverage: {},
-    transientReset: [],
-  })
+  let [opened] = sent
+  assertEquals(opened.id, id)
+  assertEquals(opened.bundles, empty)
+  assertEquals(opened.coverage, {})
+  assertEquals(opened.transientReset, [])
+  assert(typeof opened.revision == 'number')
 
   await page.apply([{
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
   }])
   assertEquals(sent.length, 2)
-  let frame = sent[1] as { id: string; bundles: Record<string, unknown>[] }
-  assertEquals(frame.id, '1:.doc')
-  // The same row `query()` answers with, kind and all — a page swaps one for
-  // the other and nothing else changes.
-  assertEquals(frame.bundles[0].kind, 'doc')
-  assertEquals((frame.bundles[0].entity as { eid: string }).eid, CAKE)
+  let [, updated] = sent
+  assertEquals(updated.id, id)
+  assertEquals(updated.bundles?.[0].kind, 'doc')
+  assertEquals(updated.bundles?.[0].entity.eid, CAKE)
+  assertEquals(updated.bundles, await page.query(query))
 })
 
 test('an open app takes a write from nobody, and a public one does not', async () => {
