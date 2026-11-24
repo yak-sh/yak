@@ -544,9 +544,20 @@ test('an account its owner already has is connected instead of a new one', async
     'connect.stripe.com/oauth/token',
     'api.stripe.com/v1/accounts/acct_mine',
   ])
-  // The same return twice connects nothing twice.
-  await returned(env, `code=ac_2&state=${again}`)
+  // The same return twice connects nothing twice, and brings them back to
+  // the page it was begun from, told so; a bare visit to the address, to
+  // their spaces.
+  let replayed = await returned(env, `code=ac_2&state=${again}`)
   assertEquals(s.asked.length, 2)
+  assertEquals(replayed.headers.get('location'), sell.backTo(space, env))
+  assertStringIncludes(
+    decodeURIComponent(replayed.headers.get('set-cookie')!),
+    'already used or has expired',
+  )
+  assertEquals(
+    (await returned(env, '')).headers.get('location'),
+    'https://yaks.app/manage',
+  )
   // A space already taking payments is not offered a second account.
   assertEquals((await pressed(env, 'link')).status, 400)
   assertEquals(

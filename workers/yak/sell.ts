@@ -260,12 +260,19 @@ export let linking = async (env: Env, space: Space, person: string) => {
   if (selling(space) == 'ready') {
     throw refuse('conflict', `${space.slug} is already taking payments`)
   }
-  let state = crypto.randomUUID()
+  let state = stateOf(space)
   let to = (await shops(env)).authorize(state, hostUrl(env, CALLBACK))
   if (!to) throw refuse('unavailable', 'connecting an account is not set up')
   await hold(env, ATTEMPT, state, { space: space.slug, person } as Linking)
   return to
 }
+
+/// stateOf({ slug: 'ada' }).startsWith('ada.') -> true
+/** The `state` an attempt waits under: random, after the slug of the space it
+ * was begun from. Only the vault's copy is believed; the slug only says which
+ * Selling page to bring back a return whose attempt is spent or stale. */
+export let stateOf = (space: Pick<Space, 'slug'>) =>
+  `${space.slug}.${crypto.randomUUID()}`
 
 // Why an account a seller connected cannot sell for this space, in a sentence
 // they read; null when it can.
@@ -289,27 +296,42 @@ let refusedLink = async (env: Env, space: Space, account: string) => {
 export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (space != null || path != CALLBACK) return null
   let q = new URL(req.url).searchParams
-  let held = await take<Linking>(env, ATTEMPT, q.get('state'))
+  let state = q.get('state')
+  let held = await take<Linking>(env, ATTEMPT, state)
   let dir = dirOf(env)
   let at = held && await dir.space(held.space)
   let who = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)
   let { name } = await payments(env)
-  let told = (say: string, no = true) =>
+  let told = (say: string, no = true, page?: string) =>
     telling(
       new Response(null, {
         status: 303,
-        headers: { location: at ? backTo(at, env) : hostUrl(env, MANAGE) },
+        headers: {
+          location: page ?? (at ? backTo(at, env) : hostUrl(env, MANAGE)),
+        },
       }),
       { say, no },
       MANAGE,
     )
+  // A return whose attempt is spent or stale — reloaded, opened again from
+  // the browser's history, or kept past a deploy — is the person's own step,
+  // not a failure: they are brought back to the Selling page it was begun
+  // from, where pressing Connect it again begins a fresh one.
+  if (!held) {
+    let slug = state?.split('.')[0]
+    let from = slug ? await dir.space(slug) : null
+    return told(
+      `That return from ${name} was already used or has expired. ` +
+        `Press “Connect it” to start again.`,
+      true,
+      from ? backTo(from, env) : undefined,
+    )
+  }
   // Turning the provider down is the person's choice, not a failure.
-  if (held && q.get('error') == 'access_denied') {
+  if (q.get('error') == 'access_denied') {
     return told(`${name} was not connected.`)
   }
-  let why = !held
-    ? 'its attempt was never begun, or was already finished'
-    : !at
+  let why = !at
     ? 'its space is gone'
     : who?.person != held.person
     ? 'someone else is signed in where it came back'
@@ -321,7 +343,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   if (why || !at) {
     caught(new Error(`Connecting an account came back unfinished: ${why}.`), {
       request: `GET ${CALLBACK}`,
-      ...held ? { space: held.space } : {},
+      space: held.space,
     })
     return told(`${name} was not connected. Try again.`)
   }
