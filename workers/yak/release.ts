@@ -1,10 +1,17 @@
 // A release names immutable bytes already stored: its index maps each path to
 // the bytes' content address (@yaks/platform/versions `addressed`), and a deploy writes
 // that index, beside what its compile made, before the app row selects it.
-import { type Objects, prefixed, type Put, stored } from '@yaks/blob'
+import { gathered, type Objects, prefixed, type Put, stored } from '@yaks/blob'
+import { lanes } from '@yaks/fp'
+import {
+  type Asset,
+  type Assets,
+  fingerprints,
+} from '@yaks/platform/fingerprint'
+import { rootOf, type Serving } from '@yaks/platform/files'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
-import { addressed, type Files, own, SHA } from '@yaks/platform/versions'
+import { addressed, BUILT, type Files, own, SHA } from '@yaks/platform/versions'
 import { decode, encode, type File, type Index, META } from './release_index.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
@@ -120,6 +127,89 @@ export let filesIn = async (
 ): Promise<Files | null> => {
   let index = await indexAt(raw, `${source}/`)
   return index && filesOf(index)
+}
+
+let assetsByIndex = new WeakMap<Index, Assets>()
+let assetsOf = (index: Index): Assets => {
+  let found = assetsByIndex.get(index)
+  if (found) return found
+  let assets = Object.fromEntries(
+    Object.values(index).flatMap(({ asset }) =>
+      asset ? [[asset.path, asset]] : []
+    ),
+  )
+  assetsByIndex.set(index, assets)
+  return assets
+}
+
+export let assetsIn = async (raw: Objects, source: string): Promise<Assets> => {
+  let index = await indexAt(raw, `${source}/`)
+  return index ? assetsOf(index) : {}
+}
+
+export let atRelease = (raw: Objects, source: string) =>
+  indexAt(raw, `${source}/`)
+
+// This app's retained content addresses. The marker holds the media type so
+// a caller cannot turn an arbitrary bucket hash into a served file.
+export let assetKey = (root: string, path: string, sha: string) =>
+  `${root}.assets/${sha}/${path}`
+
+export let keptAsset = async (
+  raw: Objects,
+  root: string,
+  path: string,
+  sha: string,
+): Promise<(Asset & { source: string }) | null> => {
+  let bytes = await raw.read(assetKey(root, path, sha))
+  return bytes ? JSON.parse(utf8.decode(bytes)) : null
+}
+
+let TEXT = 4 * 1024 * 1024
+let sourceText = async (raw: Objects, sha: string) => {
+  let file = await raw.open(addressed(sha))
+  if (!file) throw new Error(`Missing release bytes ${sha}`)
+  if (file.size > TEXT) return null
+  return textOf(await gathered({ size: file.size, stream: await file.read() }))
+}
+
+let withAssets = async (
+  raw: Objects,
+  source: string,
+  files: Files,
+  config: Serving,
+  previous?: string | null,
+): Promise<Index> => {
+  let write = async (text: string) =>
+    (await stored(prefixed(raw, SHA), new TextEncoder().encode(text))).sha
+  let [assets, prior] = await Promise.all([
+    fingerprints(files, config, (sha) => sourceText(raw, sha), write),
+    previous && release(previous + '/')
+      ? assetsIn(raw, previous)
+      : {} as Assets,
+  ])
+  let root = source.slice(0, source.lastIndexOf('/') + 1)
+  let folder = rootOf('', config)
+  let index: Index = Object.fromEntries(
+    Object.entries(files).map((
+      [path, sha],
+    ) => [path, { key: addressed(sha), sha }]),
+  )
+  // A shared pointer can be written again after an interrupted deploy.
+  // An unchanged pointer the previous release published is already there.
+  await lanes(16)(Object.entries(assets), async ([path, asset]) => {
+    let key =
+      path.startsWith('__packages/') && Object.hasOwn(files, BUILT + path)
+        ? BUILT + path
+        : `${folder}/${path}`.slice(1)
+    index[key].asset = { ...asset, path }
+    if (prior[path]?.sha == asset.sha) return
+    await raw.put(
+      assetKey(root, path, asset.sha),
+      new TextEncoder().encode(JSON.stringify({ ...asset, source })),
+    )
+  })
+  return index
 }
 
 /** The files a release names, refused for one with no index. */
@@ -286,19 +376,14 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
     Object.fromEntries(
       own(Object.keys(files)).map((path) => [path, files[path]]),
     )
-  let finish = async (): Promise<Files> => {
+  let finish = async (
+    config: Serving = {},
+    previous?: string | null,
+  ): Promise<Files> => {
     await written(
       raw,
       prefix,
-      await packed(
-        raw,
-        Object.fromEntries(
-          Object.entries(files).map(([path, sha]) => [
-            path,
-            { key: addressed(sha), sha },
-          ]),
-        ),
-      ),
+      await packed(raw, await withAssets(raw, prefix, files, config, previous)),
     )
     return manifest()
   }

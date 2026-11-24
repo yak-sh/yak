@@ -4472,6 +4472,7 @@
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/yaml@0.2.24",
+            "npm:es-module-lexer@2.3.2",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
             "npm:preact@10.29.7",

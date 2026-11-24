@@ -65,7 +65,7 @@ import { decoded } from './files.ts'
 import { apex, type Host, url } from './host.ts'
 import { offered, sandboxed } from './installs.ts'
 import { bearing, MOUNT, previews } from './routes.ts'
-import { assetPath } from './versions.ts'
+import { assetPath, fingerprintPath } from './versions.ts'
 
 // ── An app's bytes, at Files ───────────────────────────────────────────────
 
@@ -309,7 +309,7 @@ export let cardTag = (eid: string): string => `card:${eid}`
 
 // Bumped when how a page is woven changes and kept pages must not wait out
 // their freshness: every key moves, and the old pages are never read again.
-let PAGES = 5
+let PAGES = 6
 
 // What a key says of the session it is for.
 let heldBy = (session: string) => sha256(session).slice(0, 32)
@@ -320,8 +320,8 @@ let heldBy = (session: string) => sha256(session).slice(0, 32)
  * `session` keys a signed-in person's own copy of a page kept for strangers:
  * the digest of their session token, which only they hold, so nobody else's
  * request ever reads it, and a forged cookie names a key Site never filled. */
-/// pageAt('ada.yaks.app', '/menu/', '/menu/') -> 'https://site.invalid/@ada.yaks.app/menu/?g=5&mount=%2Fmenu%2F'
-/// pageAt('ada.yaks.app', '/menu/icon.png', '/menu/', undefined, '?v=r.&utm_source=x') -> 'https://site.invalid/@ada.yaks.app/menu/icon.png?g=5&mount=%2Fmenu%2F&v=r.'
+/// pageAt('ada.yaks.app', '/menu/', '/menu/') -> 'https://site.invalid/@ada.yaks.app/menu/?g=6&mount=%2Fmenu%2F'
+/// pageAt('ada.yaks.app', '/menu/icon.png', '/menu/', undefined, '?v=r.&utm_source=x') -> 'https://site.invalid/@ada.yaks.app/menu/icon.png?g=6&mount=%2Fmenu%2F&v=r.'
 export let pageAt = (
   host: string,
   path: string,
@@ -406,7 +406,8 @@ export let NAMED_CLIENT: RegExp = /^\/client\.[0-9a-f]{10}\.js$/
 export let fixed = (path: string): boolean => {
   let api = /^(?:\/[^/]+)?\/api(\/.+)$/.exec(path)?.[1]
   return !!api &&
-    (CLIENT.includes(api) || NAMED_CLIENT.test(api) || !!assetPath(api))
+    (CLIENT.includes(api) || NAMED_CLIENT.test(api) || !!assetPath(api) ||
+      !!fingerprintPath(api))
 }
 
 /** A complete upload representation, whose bytes and headers are fixed but

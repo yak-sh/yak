@@ -53,6 +53,7 @@ import {
   type StoreDoor,
   talkPath,
 } from '@yaks/platform/routes'
+import { iconAddress } from './apps.ts'
 import { SLUG } from '@yaks/platform/names'
 import { CONTEXT } from './app-operator.ts'
 import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
@@ -1757,6 +1758,7 @@ type Shown = { slug: string; title: string }
  * write (public/release.js), while the draft holds a page that is not live:
  * before the first release, and while changes wait for the next. */
 type Making = Shown & {
+  icon: string
   made: Made
   pages: Page[]
   steps: Step[][]
@@ -1801,15 +1803,15 @@ let makingOf = async (
     ),
   )
   let pending = !!pages.length && draft.unreleased && !!env.SESSION_SECRET
+  let at = `https://${spaceHost(env, space.slug)}/${app.slug}/`
   return {
     slug: app.slug,
     title: app.title || app.slug,
+    icon: await iconAddress(env, space, app, at),
     made: madeOf(words && decoded(words), file),
     pages,
     steps: await stepsOf(found.store, found.who, space, app.slug),
-    live: app.source
-      ? `https://${spaceHost(env, space.slug)}/${app.slug}/`
-      : null,
+    live: app.source ? at : null,
     draft: pending && draft.of
       ? (await linkOf(ctx, space, app, found.who, draft.of)).at
       : null,
@@ -1994,7 +1996,7 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
         'Chat',
       ),
       h(Identity.Image, {
-        src: `https://${host}/icon.png`,
+        src: app.icon,
         width: 24,
         height: 24,
         alt: '',

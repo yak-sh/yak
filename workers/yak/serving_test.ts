@@ -572,8 +572,8 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
     background_color: PLATFORM_BACKGROUND,
     theme_color: PLATFORM_THEME,
     icons: [
-      { src: '/cookbook/icon.png', type: 'image/png', sizes: '512x512' },
-      { src: '/cookbook/icon.png', type: 'image/png', sizes: '192x192' },
+      { src: '/cookbook/icon.png?v=.', type: 'image/png', sizes: '512x512' },
+      { src: '/cookbook/icon.png?v=.', type: 'image/png', sizes: '192x192' },
     ],
   })
 
@@ -1212,9 +1212,15 @@ test('a subscription is that query still answering', async () => {
     ws,
     JSON.stringify({ subscribe: '.doc!&.created?&!person', id: '1:.doc' }),
   )
-  assertEquals(sent, [
-    { id: '1:.doc', bundles: [], coverage: {}, transientReset: [] },
-  ])
+  assertEquals(sent.length, 1)
+  let { revision, ...opened } = sent[0]
+  assert(typeof revision == 'number')
+  assertEquals(opened, {
+    id: '1:.doc',
+    bundles: [],
+    coverage: {},
+    transientReset: [],
+  })
 
   await page.apply([{
     entity: { eid: CAKE },

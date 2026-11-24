@@ -252,8 +252,9 @@ export let logoUpload = (space: string): string =>
 export let iconVersion = (
   app: { source?: string | null; generatedIcon?: string },
   space: { logo?: { sha: string } | null },
+  art?: string,
 ): string =>
-  `${releaseId(app.source) ?? app.source ?? ''}.${
+  `${art ?? releaseId(app.source) ?? app.source ?? ''}.${
     space.logo?.sha.slice(0, 12) ?? ''
   }${app.generatedIcon ? `.${app.generatedIcon.slice(0, 12)}` : ''}`
 
@@ -274,7 +275,9 @@ export let iconAt = (
   at: string,
   app: { source?: string | null; generatedIcon?: string },
   space: { logo?: { sha: string } | null },
-): string => `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space))}`
+  art?: string,
+): string =>
+  `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space, art))}`
 
 /** The app fields needed to address its display icon. */
 export type MarkedApp = {

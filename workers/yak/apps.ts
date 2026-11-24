@@ -54,7 +54,15 @@ import {
   linked,
   LOADS,
 } from '@yaks/platform/asset-url'
-import { assetPath, releaseId, SHA } from '@yaks/platform/versions'
+import {
+  addressed as pinnedAsset,
+  assetPath,
+  fingerprintPath,
+  releaseId,
+  SHA,
+} from '@yaks/platform/versions'
+import type { Asset, Assets } from '@yaks/platform/fingerprint'
+import { assetsIn, keptAsset } from './release.ts'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
@@ -85,7 +93,14 @@ import {
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery-row.ts'
 import { buying } from './sell.ts'
-import { addressed, bodyOf, prefixed, stage } from '@yaks/blob'
+import {
+  addressed,
+  bodyOf,
+  holding,
+  prefixed,
+  rangedOpen,
+  stage,
+} from '@yaks/blob'
 import { declarationOf } from './declaration.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { Pending } from '@yaks/api/log'
@@ -555,20 +570,19 @@ export let reported = async (
     .transform(page)
 }
 
-// A page stays mutable, but its local static files belong to its immutable
-// release. CSS URLs and module imports then resolve below the same release
-// address without rewriting their contents. Authenticated API calls and page
-// navigation keep their ordinary addresses.
+// A page revalidates, while its local loads can keep their own bytes.
 let mapped = (
   html: string,
   at: string,
   bare: string,
   source: string | null | undefined,
   base = at,
+  holds?: (path: string) => boolean,
+  assets: Assets = {},
 ) => {
   let id = releaseId(source)
   return id && !hasBase(html)
-    ? assetMaps(html, at, bare, id, platformPath, base, client())
+    ? assetMaps(html, at, bare, id, platformPath, base, client(), holds, assets)
     : html
 }
 // The page's loads moved the same way: each element's file, and an icon's.
@@ -583,6 +597,7 @@ let released = (
   source: string | null | undefined,
   base = at,
   holds?: (path: string) => boolean,
+  assets: Assets = {},
 ) => {
   let id = releaseId(source)
   if (!id || html != null && hasBase(html)) return page
@@ -598,7 +613,7 @@ let released = (
     }) => {
       let ref = el.getAttribute(attr)
       if (!ref || based) return
-      let next = assetUrl(ref, at, bare, id, platformPath, base, holds)
+      let next = assetUrl(ref, at, bare, id, platformPath, base, holds, assets)
       if (next != ref) el.setAttribute(attr, next)
     },
   })
@@ -629,13 +644,31 @@ export let keeping = (app: App) =>
 
 // Icons named by their inputs can stay in the browser across page swaps.
 // Unversioned requests and addresses from an earlier release revalidate.
-let caching = (req: Request, space: Space, app: App, path: string) => {
+let iconArt = async (env: Env, app: App) => {
+  let assets: Assets = await releaseAssets(env, app.source)
+  return (assets['icon.png'] ?? assets['icon.svg'])?.sha
+}
+
+export let iconAddress = async (
+  env: Env,
+  space: Space,
+  app: App,
+  mount: string,
+) => iconAt(mount, app, space, await iconArt(env, app))
+
+let caching = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  path: string,
+) => {
   if (path != '/icon.png') return keeping(app)
   let q = new URL(req.url).searchParams
   let display = q.has('display')
   let version = display
     ? app.version && !app.source ? null : markVersion(app)
-    : iconVersion(app, space)
+    : iconVersion(app, space, await iconArt(env, app))
   return version && q.get('v') == version
     ? display || app.access != 'public'
       ? browserImmutable
@@ -714,7 +747,7 @@ export let unwritten = async (
 ) => {
   if (path == '/icon.png') {
     let display = new URL(req.url).searchParams.has('display')
-    let cache = caching(req, space, app, path)
+    let cache = await caching(req, env, space, app, path)
     let drawn = app.generatedIcon && await r2RawObjects(env.BLOBS).open(
       generatedIconKey(space, app),
     )
@@ -769,7 +802,8 @@ export let unwritten = async (
   // The app's own colours (`app.theme`, set through `app_set`), or the
   // platform's where it named none — `manifesting` decides, off the row
   // already in hand, so this needs no trip to the app's own front page.
-  return new Response(JSON.stringify(manifesting(app, at), null, 2), {
+  let icon = await iconAddress(env, space, app, at)
+  return new Response(JSON.stringify(manifesting(app, at, icon), null, 2), {
     headers: {
       'content-type': 'application/manifest+json',
       'cache-control': keeping(app),
@@ -1056,7 +1090,7 @@ let asset = async (
     return await media(
       req,
       got,
-      caching(req, space, app, path),
+      await caching(req, env, space, app, path),
       () => files.fileBytes(env, app.eid, prefix, path, app.source ?? ''),
     ) ?? nothingHere(env)
   }
@@ -1082,7 +1116,7 @@ let asset = async (
       base,
       req.headers.get(ADDRESS) ?? req.url,
       await copy,
-      iconAt(at, app, space),
+      await iconAddress(env, space, app, at),
     ))
   if (sandbox) {
     return new Response(page, {
@@ -1137,9 +1171,10 @@ export let woven = async (
   copy: Copy | null = null,
   icon?: string,
 ) => {
+  let assets = await releaseAssets(env, app.source)
   let own = pinned(
     at,
-    mapped(original, at, bare, app.source, base),
+    mapped(original, at, bare, app.source, base, undefined, assets),
     app,
     !local(app),
     icon,
@@ -1152,6 +1187,8 @@ export let woven = async (
       bare,
       app.source,
       base,
+      undefined,
+      assets,
     ),
     copy,
   )
@@ -1167,6 +1204,54 @@ export let woven = async (
     )
   } else page = previewed(env, page, address, appPreview(app, bare))
   return await page.text()
+}
+
+let releaseAssets = (env: Env, source: string | null | undefined) =>
+  releaseId(source)
+    ? assetsIn(r2RawObjects(env.BLOBS), source!)
+    : Promise.resolve({})
+
+let workerPage = async (
+  page: Response,
+  app: App,
+  at: string,
+  bare: string,
+  base: string,
+  holds: (path: string) => boolean,
+  assets: Assets,
+) => {
+  let held = await holding({ stream: page.body! }, 256 * 1024)
+  if (!(held instanceof Uint8Array)) {
+    return released(
+      new Response(held.stream, page),
+      null,
+      at,
+      bare,
+      app.source,
+      base,
+      holds,
+      assets,
+    )
+  }
+  let original = new TextDecoder().decode(held)
+  let html = mapped(original, at, bare, app.source, base, holds, assets)
+  let headers = new Headers(page.headers)
+  headers.delete('content-length')
+  headers.delete('etag')
+  return released(
+    new Response(html, {
+      status: page.status,
+      statusText: page.statusText,
+      headers,
+    }),
+    original,
+    at,
+    bare,
+    app.source,
+    base,
+    holds,
+    assets,
+  )
 }
 
 // What an app's worker answered, kept by the browser as a file page's loads
@@ -1191,21 +1276,22 @@ let kept = async (
   let id = releaseId(app.source)
   let address = new URL(req.headers.get(ADDRESS) ?? req.url).pathname
   let base = address.slice(0, address.lastIndexOf('/') + 1)
-  let holds = id && (html || css) && page.body
-    ? await files.holding(env, app.source!).catch((e) => {
+  let [holds, assets] = id && (html || css) && page.body
+    ? await Promise.all([
+      files.holding(env, app.source!),
+      releaseAssets(env, app.source),
+    ]).catch((e) => {
       caught(e, { request: 'release files', app: app.eid })
-      return null
+      return [null, {}] as const
     })
-    : null
+    : [null, {}] as const
   if (html) {
-    return holds
-      ? released(page, null, at, bare, app.source, base, holds)
-      : page
+    return holds ? workerPage(page, app, at, bare, base, holds, assets) : page
   }
   if (css && holds) {
     let sheet = cssUrls(
       await page.text(),
-      (ref) => assetUrl(ref, at, bare, id!, platformPath, base, holds),
+      (ref) => assetUrl(ref, at, bare, id!, platformPath, base, holds, assets),
     )
     let headers = new Headers(page.headers)
     headers.delete('content-length')
@@ -1299,6 +1385,25 @@ let versionedAsset = async (
     app.access == 'public' ? immutable['cache-control'] : browserImmutable,
     () => files.fileBytes(env, app.eid, source, path, source),
   ) ?? json(404, 'no_such_file')
+}
+
+let contentBytes = async (
+  req: Request,
+  raw: ReturnType<typeof r2RawObjects>,
+  asset: Asset,
+  cache: string,
+) => {
+  let headers = {
+    'content-type': asset.type,
+    'cache-control': cache,
+    etag: etagOf(asset.sha),
+  }
+  if (unchanged(req, headers.etag)) {
+    return new Response(null, { status: 304, headers })
+  }
+  let object = await raw.open(pinnedAsset(asset.sha))
+  if (!object) throw new Error(`Missing released asset ${asset.sha}`)
+  return rangedOpen(object, req, headers)
 }
 
 // Where the browser sends what it notices on its own: the app's own report
@@ -1432,6 +1537,63 @@ let appDoor = async (
 ): Promise<Response | null> => {
   let { env, req, path, space, app, who, refuse, json } = asked
   let mayUse = reads(mode(app.access), who.role)
+  let fingerprint = fingerprintPath(path)
+  if (fingerprint) {
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
+    let name = fence.decoded(fingerprint.path)?.slice(1)
+    if (!name || fence.inside('/' + name)) return json(404, 'no_such_file')
+    let raw = r2RawObjects(env.BLOBS)
+    let sha = fingerprint.sha
+    let inRelease = async (source: string | null | undefined) => {
+      let index: Assets = await releaseAssets(env, source)
+      return Object.hasOwn(index, name) && index[name].sha == sha
+        ? index[name]
+        : null
+    }
+    let current = await inRelease(app.source)
+    let cache = app.access == 'public'
+      ? immutable['cache-control']
+      : browserImmutable
+    if (mayUse) {
+      if (current) return contentBytes(req, raw, current, cache)
+      let asset = await keptAsset(raw, releasesPrefix(space, app), name, sha)
+      return asset && await dir.released(app, asset.source)
+        ? contentBytes(req, raw, asset, cache)
+        : json(404, 'no_such_file')
+    }
+    let offered = await inRelease(await offeredSource(dir, app))
+    if (offered) return contentBytes(req, raw, offered, cache)
+    if (!current || app.worker === '') return refuse('not_a_reader')
+    let url = new URL(req.url)
+    url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
+      fingerprint.path
+    let grant = new Headers(req.headers)
+    for (
+      let name of ['range', 'if-range', 'if-none-match', 'if-modified-since']
+    ) {
+      grant.delete(name)
+    }
+    let own = await c.time(
+      'worker',
+      () => worker(new Request(url, { method: req.method, headers: grant })),
+    )
+    if (own && own.status != 200 && own.status != 404) return own
+    await own?.body?.cancel()
+    if (own?.status != 200) return refuse('not_a_reader')
+    if (own.headers.get('etag') != etagOf(current.original.slice(0, 24))) {
+      // A worker may use this pathname for a response of its own.
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `${mount}${fingerprint.path.slice(1)}${url.search}`,
+          'cache-control': 'private, no-store',
+        },
+      })
+    }
+    return contentBytes(req, raw, current, cache)
+  }
   let versioned = assetPath(path)
   if (versioned) {
     if (req.method != 'GET' && req.method != 'HEAD') {
@@ -3112,6 +3274,13 @@ let served = async (
   // the release (`kept`); a worker's stylesheet and its other files are
   // kept the same way.
   let worker = page == own
+  // Older pages and manifests can still ask the alias as an image.
+  if (!worker && path == '/icon.png' && page.status == 200 && loadsAsset(req)) {
+    if (!url.searchParams.has('display') && !url.searchParams.has('v')) {
+      await page.body?.cancel()
+      page = redirect(await iconAddress(env, space, app, at), 307)
+    }
+  }
   if (worker) page = await kept(req, env, app, at, bare, page)
   if (
     worker && page.body &&

@@ -26,6 +26,9 @@ export type Serving = { main?: string; assets?: Assets }
 /** The server source an app's config names when it names none. */
 export let WORKER = 'worker.js'
 
+/** Extensions eligible for the browser compiler. */
+export let script = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
+
 // A path whose last segment names no file type is a page's address, not a
 // file's: `/about` may be about.html, and a path behind no page at all is a
 // route (T-32769), `/recipes/42` asking the app's index.html to open at a

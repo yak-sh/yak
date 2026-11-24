@@ -103,6 +103,7 @@ export let addressed = (sha: string) => SHA + sha
 let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 let RELEASE = new RegExp(`(?:^|/)\\.releases/[^/]+/(${UUID})$`)
 let ASSET = new RegExp(`^/assets/(${UUID})/(.+)$`)
+let FINGERPRINT = /^\/assets\/([a-f0-9]{64})\/(.+)$/
 
 /** The immutable release id, only where the app serves a release. */
 /// releaseId('apps/ada/.releases/7/0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69') -> '0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69'
@@ -116,6 +117,12 @@ export let assetPath = (
 ): { release: string; path: string } | null => {
   let found = ASSET.exec(path)
   return found ? { release: found[1], path: `/${found[2]}` } : null
+}
+
+/** An app API path naming a file by the bytes the browser receives. */
+export let fingerprintPath = (path: string) => {
+  let found = FINGERPRINT.exec(path)
+  return found ? { sha: found[1], path: `/${found[2]}` } : null
 }
 
 /**

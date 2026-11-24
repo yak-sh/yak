@@ -207,6 +207,7 @@ let credentialed = (page: string, cookies: boolean) =>
 export let manifesting = (
   app: Themed & { title?: string | null; slug: string },
   at: string,
+  icon = `${at}icon.png`,
 ) => ({
   name: app.title || app.slug,
   short_name: app.title || app.slug,
@@ -216,7 +217,7 @@ export let manifesting = (
   background_color: backgroundColorOf(app),
   theme_color: themeColorOf(app),
   icons: ['512x512', '192x192'].map((sizes) => ({
-    src: `${at}icon.png`,
+    src: icon,
     type: 'image/png',
     sizes,
   })),

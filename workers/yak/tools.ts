@@ -1644,7 +1644,10 @@ let published = async (
   // The release's index is complete once the compile has written into it, and
   // nothing selects it until `record` moves the pointers, so it goes to the
   // bucket now, beside everything below rather than after it (T-124005).
-  let snapshot = c.time('snapshot', () => files.finish())
+  let snapshot = c.time(
+    'snapshot',
+    () => files.finish(parsed.config, app.source),
+  )
   snapshot.catch(() => {})
   let [[all, { file: vocabFile, source, pkg }], [stored, serving]] =
     await Promise.all([early, readServing()])

@@ -1,6 +1,7 @@
 // A release's browser address: local static references in its page and the
 // versioned path that resolves them belong to the same mount. Which release
 // an address names is @yaks/platform/versions' (`releaseId`, `assetPath`).
+import type { Assets } from './fingerprint.ts'
 
 /** Where a release asset's reference to the app's API belongs. A release
  * holds the app's files and never its API, but a module's `./api/client.js`
@@ -49,9 +50,11 @@ let versioned = (
   mount: string,
   release: string,
   found: NonNullable<ReturnType<typeof local>>,
+  assets: Assets = {},
 ) => {
   let { path, url } = found
-  return `${mount}api/assets/${release}/${path}${url.search}${url.hash}`
+  let sha = Object.hasOwn(assets, decoded(path)) && assets[decoded(path)].sha
+  return `${mount}api/assets/${sha || release}/${path}${url.search}${url.hash}`
 }
 
 /** Point a local static reference at its release. `holds` says whether the
@@ -67,11 +70,12 @@ export let assetUrl = (
   reserved: (path: string) => boolean = () => false,
   base = mount,
   holds: (path: string) => boolean = () => true,
+  assets: Assets = {},
 ): string => {
   let found = local(ref, mount, bare, reserved, base)
   return found && /\.[a-z0-9]+$/i.test(found.path) &&
       !/\.html?$/i.test(found.path) && holds(decoded(found.path))
-    ? versioned(mount, release, found)
+    ? versioned(mount, release, found, assets)
     : ref
 }
 
@@ -83,13 +87,31 @@ let decoded = (path: string) => {
   }
 }
 
-// `url(…)`, quoted or not, and `@import '…'`: every address a stylesheet
-// loads by.
+// A URL token, a quoted @import, or a comment or string to skip.
 let CSS_URL =
-  /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)|(@import\s+)(["'])([^"']+)\5/gi
+  /\/\*[\s\S]*?\*\/|(@import\s+)(["'])((?:\\[\s\S]|(?!\2)[^\\])*)\2|\burl\(\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|((?:\\[\s\S]|[^)'"\s\\])*))\s*\)|"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/gi
 
-/** A stylesheet with each address it loads by passed through `move`, quotes
- * and all kept as written. */
+let cssRef = (ref: string) =>
+  ref.replace(
+    /\\(?:([0-9a-f]{1,6})(?:\r\n|\s)?|(\r\n|[\n\r\f])|([^\n]))/gi,
+    (_, hex?: string, line?: string, char?: string) => {
+      if (line) return ''
+      if (!hex) return char ?? ''
+      let code = parseInt(hex, 16)
+      return code && code <= 0x10ffff ? String.fromCodePoint(code) : '\ufffd'
+    },
+  )
+
+let cssQuoted = (ref: string, quote: string) =>
+  ref.replace(
+    /[\s\\'"()]/g,
+    (char) =>
+      (quote ? char == quote || char == '\\' : true)
+        ? `\\${char.charCodeAt(0).toString(16)} `
+        : char,
+  )
+
+/** A stylesheet with each address it loads passed through `move`. */
 /// cssUrls("a{background:url('x.png')}", (r) => 'v/' + r) -> "a{background:url('v/x.png')}"
 /// cssUrls('@import "a.css";', (r) => 'v/' + r) -> '@import "v/a.css";'
 export let cssUrls = (css: string, move: (ref: string) => string): string =>
@@ -97,19 +119,21 @@ export let cssUrls = (css: string, move: (ref: string) => string): string =>
     CSS_URL,
     (
       whole,
-      dq?: string,
-      sq?: string,
-      bare?: string,
       at?: string,
       q?: string,
       imp?: string,
+      dq?: string,
+      sq?: string,
+      bare?: string,
     ) => {
-      if (at) return `${at}${q}${move(imp!)}${q}`
-      let ref = dq ?? sq ?? bare ?? ''
+      let raw = imp ?? dq ?? sq ?? bare
+      if (raw == null) return whole
+      let ref = cssRef(raw)
       let next = move(ref)
       if (next == ref) return whole
-      let quote = dq != null ? '"' : sq != null ? "'" : ''
-      return `url(${quote}${next}${quote})`
+      let quote = q ?? (dq != null ? '"' : sq != null ? "'" : '')
+      let url = cssQuoted(next, quote)
+      return at ? `${at}${quote}${url}${quote}` : `url(${quote}${url}${quote})`
     },
   )
 
@@ -122,11 +146,12 @@ let mapUrl = (
   release: string,
   reserved: (path: string) => boolean,
   base: string,
+  assets: Assets,
 ) => {
   if (!ADDRESS.test(ref)) return ref
   let found = local(ref, mount, bare, reserved, base)
   return found && !/\.html?$/i.test(found.path)
-    ? versioned(mount, release, found)
+    ? versioned(mount, release, found, assets)
     : ref
 }
 
@@ -188,6 +213,8 @@ let imported = (
   reserved: (path: string) => boolean,
   base: string,
   client: string | null,
+  holds: (path: string) => boolean,
+  assets: Assets,
 ) => {
   let imports: Record<string, string> = {}
   let modules = false
@@ -196,7 +223,16 @@ let imported = (
     modules ||= type == 'module'
     if (!SCRIPTS.has(type)) continue
     for (let [, , ref] of body.matchAll(SPECIFIER)) {
-      let next = assetUrl(ref, mount, bare, release, reserved, base)
+      let next = assetUrl(
+        ref,
+        mount,
+        bare,
+        release,
+        reserved,
+        base,
+        holds,
+        assets,
+      )
       if (next == ref) continue
       imports[resolved(ref, base)] = next
     }
@@ -229,15 +265,28 @@ export let assetMaps = (
   reserved: (path: string) => boolean = () => false,
   base = mount,
   client: string | null = null,
+  holds: (path: string) => boolean = () => true,
+  assets: Assets = {},
 ): string => {
-  let imports = imported(html, mount, bare, release, reserved, base, client)
+  let imports = imported(
+    html,
+    mount,
+    bare,
+    release,
+    reserved,
+    base,
+    client,
+    holds,
+    assets,
+  )
   let named = imports[`${mount}api/client.js`]
   let preload = (map: Record<string, unknown>) =>
     named && map[`${mount}api/client.js`] == named
       ? `<link rel="modulepreload" href="${named}">`
       : ''
   let merged = false
-  let move = (url: string) => mapUrl(url, mount, bare, release, reserved, base)
+  let move = (url: string) =>
+    mapUrl(url, mount, bare, release, reserved, base, assets)
   let page = html.replace(SCRIPT, (whole, attrs: string, body: string) => {
     if (typeOf(attrs) != 'importmap') return whole
     let map
@@ -253,10 +302,17 @@ export let assetMaps = (
     map.imports = mapEntries(map.imports, move)
     if (map.scopes && typeof map.scopes == 'object') {
       map.scopes = Object.fromEntries(
-        Object.entries(map.scopes).map(([scope, imports]) => [
-          move(scope),
-          mapEntries(imports, move),
-        ]),
+        Object.entries(map.scopes).flatMap(([scope, imports]) => {
+          let mapped = mapEntries(imports, move)
+          let directory = scope.endsWith('/')
+            ? local(scope, mount, bare, reserved, base)?.path
+            : null
+          let scoped = directory == null ? [] : Object.keys(assets)
+            .map((path) => path.split('/').map(encodeURIComponent).join('/'))
+            .filter((path) => path.startsWith(directory))
+            .map((path) => [move(mount + path), mapped])
+          return [[move(scope), mapped], ...scoped]
+        }),
       )
     }
     // The first map is the one every browser reads. An author's key by

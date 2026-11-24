@@ -4083,6 +4083,9 @@ importers:
       '@yaks/yaml':
         specifier: 0.2.24
         version: link:../yaml
+      es-module-lexer:
+        specifier: 2.3.2
+        version: 2.3.2
       lucide:
         specifier: 1.31.0
         version: 1.31.0

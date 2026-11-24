@@ -2,6 +2,7 @@
 // rollback, while the page and ordinary file paths follow the live release.
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
+import { digest } from '@yaks/graph/sha256'
 import { connector, kernel, seed } from './probe.ts'
 
 test('a page uses release assets whose bytes survive deploy and rollback', async () => {
@@ -25,6 +26,7 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
               '"./scripts/":{"@scope":"./scripts/worker.js"}}}' +
               '</script>' +
               '<script type="module" src="./scripts/main.js"></script>' +
+              '<script type="module" src="./scripts/static.js"></script>' +
               `<script type="module">import { v } from './scripts/chunk.js'` +
               '</script>' +
               '<a href="./next.html">next</a>' +
@@ -37,18 +39,24 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
           },
           {
             path: 'styles/main.css',
-            content: `body{background:url('../images/bg.svg')}/*${version}*/`,
+            content: "body{background:url('../images/bg.svg')}",
           },
           { path: 'images/bg.svg', content: `<svg>${version}</svg>` },
+          { path: 'images/kept.svg', content: '<svg/>' },
           {
             path: 'docs/index.html',
             content: '<link rel="stylesheet" href="../styles/main.css">' +
-              '<h1>docs</h1>',
+              '<h1>docs</h1><img src="../images/kept.svg">',
           },
           {
             path: 'scripts/main.js',
             content:
-              `import './chunk.js'; new Worker(new URL('./worker.js', import.meta.url)); /*${version}*/`,
+              "import './chunk.js'; export let load = (name) => import('./' + name); " +
+              "new Worker(new URL('./worker.js', import.meta.url));",
+          },
+          {
+            path: 'scripts/static.js',
+            content: "export { v } from './chunk.js'",
           },
           { path: 'scripts/chunk.js', content: `export let v = '${version}'` },
           { path: 'scripts/worker.js', content: `self.v = '${version}'` },
@@ -70,20 +78,26 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     let first = await firstPage.text()
     let css1 = asset(first, 'css')
     let js1 = asset(first, 'js')
-    let release1 = css1.match(/\/assets\/([0-9a-f-]+)\//)![1]
+    let release1 = js1.match(/\/assets\/([0-9a-f-]+)\//)![1]
+    assertMatch(release1, /^[0-9a-f-]{36}$/)
     assertStringIncludes(first, '<h1>page</h1>')
-    assertStringIncludes(
-      first,
-      `"@local":"/page/api/assets/${release1}/scripts/chunk.js"`,
-    )
     assertStringIncludes(first, `"/page/api/assets/${release1}/scripts/":`)
     // The page's own module imports its release's file, which the browser
     // keeps, and a release module's client is the page's.
     let imports = (html: string) =>
       JSON.parse(/<script type=importmap>(.*?)<\/script>/.exec(html)![1])
         .imports
-    let chunk1 = `/page/api/assets/${release1}/scripts/chunk.js`
-    assertEquals(imports(first)['/page/scripts/chunk.js'], chunk1)
+    let chunk1 = imports(first)['/page/scripts/chunk.js']
+    assertMatch(chunk1, /assets\/[a-f0-9]{64}\/scripts\/chunk\.js$/)
+    assertEquals(imports(first)['@local'], chunk1)
+    let entry =
+      first.match(/\/page\/api\/assets\/[a-f0-9]{64}\/scripts\/static\.js/)![0]
+    let code = await (await at(entry)).text()
+    assertStringIncludes(entry, await digest(code))
+    assertEquals(
+      new URL(code.split("'")[1], `https://${host}${entry}`).pathname,
+      chunk1,
+    )
     assertEquals(
       imports(first)[`/page/api/assets/${release1}/api/`],
       '/page/api/',
@@ -113,8 +127,9 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
       css.headers.get('cache-control'),
       'public, max-age=31536000, immutable',
     )
-    assertStringIncludes(await css.text(), '/*first*/')
-    let image = new URL('../images/bg.svg', `https://${host}${css1}`)
+    let sheet = await css.text()
+    assertStringIncludes(css1, await digest(sheet))
+    let image = new URL(sheet.split("'")[1], `https://${host}${css1}`)
     assertStringIncludes(await (await at(image.pathname)).text(), 'first')
     let chunk = new URL('./chunk.js', `https://${host}${js1}`)
     let worker = new URL('./worker.js', `https://${host}${js1}`)
@@ -138,35 +153,37 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertEquals(conditional.status, 200)
     let second = await conditional.text()
     let css2 = asset(second, 'css')
-    let release2 = css2.match(/\/assets\/([0-9a-f-]+)\//)![1]
     assertMatch(second, /<h1>page<\/h1>/)
     assertEquals(css1 == css2, false)
-    assertStringIncludes(
-      second,
-      `"@local":"/page/api/assets/${release2}/scripts/chunk.js"`,
+    assertEquals(await (await at(css1)).text(), sheet)
+    let changed = await (await at(css2)).text()
+    assertStringIncludes(css2, await digest(changed))
+    assertEquals(
+      (await (await at('/page/docs/')).text()).match(
+        /\/page\/api\/assets\/[a-f0-9]{64}\/images\/kept\.svg/,
+      )?.[0],
+      docs.match(/\/page\/api\/assets\/[a-f0-9]{64}\/images\/kept\.svg/)?.[0],
     )
-    assertStringIncludes(await (await at(css1)).text(), '/*first*/')
-    assertStringIncludes(await (await at(css2)).text(), '/*second*/')
     // A deploy moves the import, and the old release keeps its bytes.
     let chunk2 = imports(second)['/page/scripts/chunk.js']
-    assertEquals(chunk2, `/page/api/assets/${release2}/scripts/chunk.js`)
+    assertEquals(imports(second)['@local'], chunk2)
     assertEquals(await (await at(chunk2)).text(), "export let v = 'second'")
     assertEquals(await (await at(chunk1)).text(), "export let v = 'first'")
     assertStringIncludes(
       await (await at('/page/styles/main.css')).text(),
-      '/*second*/',
+      '../images/bg.svg',
     )
 
     await agent.tool('app_rollback', app)
     assertStringIncludes(await page(), '<h1>page</h1>')
-    assertStringIncludes(await (await at(css1)).text(), '/*first*/')
-    assertStringIncludes(await (await at(css2)).text(), '/*second*/')
+    assertEquals(await (await at(css1)).text(), sheet)
+    assertEquals(await (await at(css2)).text(), changed)
 
     await agent.tool('app_set', { ...app, access: 'private' })
     assertEquals((await at(css1)).status, 401)
     let member = await at(css1, { headers: { cookie } })
     assertEquals(member.status, 200)
-    assertStringIncludes(await member.text(), '/*first*/')
+    assertEquals(await member.text(), sheet)
 
     await agent.tool('app_set', { ...app, access: 'public' })
     let name = `asset-release-${crypto.randomUUID()}`
@@ -186,7 +203,7 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     }
     let tokenRead = await at(tokenAsset)
     assertEquals(tokenRead.status, 200)
-    assertStringIncludes(await tokenRead.text(), '/*first*/')
+    assertEquals(await tokenRead.text(), sheet)
     let failed = tokenAsset.replace(
       /\/assets\/[0-9a-f-]+\//,
       `/assets/${crypto.randomUUID()}/`,

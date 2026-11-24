@@ -35,7 +35,7 @@ import { Stale } from '@yaks/graph/errors'
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
-import { filesAt, filesIn, viewOf } from './release.ts'
+import { assetKey, atRelease, filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
@@ -1043,8 +1043,9 @@ export let pruned = async (
         .map((source) => root + source.slice(source.indexOf('/'))),
     )
     let erased = false
+    let indexes = new Set([...sources].map((source) => source + META))
     await lanes(LANES)([...sources], async (source) => {
-      let files = await filesIn(blobs, source)
+      let files = await atRelease(blobs, source)
       if (!files) {
         // The census predates these reads. An erase removes bytes before
         // its directory row, and may have finished while the sweep yielded.
@@ -1054,14 +1055,16 @@ export let pruned = async (
         }
         throw new Error(`release ${source} has no index`)
       }
-      for (let sha of Object.values(files)) {
+      for (let { sha, asset } of Object.values(files)) {
         named.add(sha)
+        if (asset) {
+          named.add(asset.sha)
+          indexes.add(assetKey(stage, asset.path, asset.sha))
+        }
       }
     })
     if (erased) continue
-    // A stage holds nothing but the index of each release, so any other key
-    // there, or the index of a release nothing names, can retire once a day old.
-    let indexes = new Set([...sources].map((source) => source + META))
+    // Unreferenced release indexes and asset pointers can retire after a day.
     unindexed.push(
       ...Object.entries(await blobs.uploaded(stage)).filter(
         ([key, landed]) => !indexes.has(key) && now - landed >= GRACE,

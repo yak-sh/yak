@@ -3,8 +3,15 @@
 // a first view reads may carry its `text` (release.ts `packed`), so a reader
 // holding no index reads one object for it, not the index and then the bytes.
 
+import type { Asset } from '@yaks/platform/fingerprint'
+
 export let META = '.json'
-export type File = { key: string; sha: string; text?: string }
+export type File = {
+  key: string
+  sha: string
+  text?: string
+  asset?: Asset & { path: string }
+}
 export type Index = Record<string, File>
 
 export let encode = (index: Index) =>

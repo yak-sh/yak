@@ -64,9 +64,9 @@ await agent.tool('app_files', {
 await agent.tool('app_deploy', { space, app: 'gated' })
 let at = (path: string, init: RequestInit = {}) => k.at(host, path, init)
 let release = (path: string) =>
-  new RegExp(`/made/api/assets/[0-9a-f-]{36}/${path}`)
+  new RegExp(`/made/api/assets/[0-9a-f]{64}/${path}`)
 
-test("a worker's page names the release's files by the release's address, and nothing else", async () => {
+test("a worker's page names the release's files by their hashes, and nothing else", async () => {
   let html = await (await at('/made/made')).text()
   assertMatch(
     html,
@@ -85,7 +85,7 @@ test("a worker's page names the release's files by the release's address, and no
   assertMatch(html, /data-yak-version/)
 })
 
-test("a worker's stylesheet names the release's fonts by the release's address", async () => {
+test("a worker's stylesheet names the release's fonts by their hashes", async () => {
   let css = await at('/made/look.css')
   let sheet = await css.text()
   assertMatch(sheet, new RegExp(`url\\('${release('fonts/f.ttf').source}'\\)`))
@@ -132,7 +132,7 @@ test('a file a page loads at an address the browser asks again is reported, once
 
 test("a private app's worker hands a stranger its release's file, kept privately", async () => {
   let html = await (await at('/gated/made')).text()
-  let url = html.match(/\/gated\/api\/assets\/[0-9a-f-]{36}\/fonts\/f\.ttf/)![0]
+  let url = html.match(/\/gated\/api\/assets\/[0-9a-f]{64}\/fonts\/f\.ttf/)![0]
   let font = await at(url)
   equal(await font.text(), 'gated font')
   equal(

@@ -29,6 +29,7 @@ import {
   pretty,
   resolve,
   rootOf,
+  script,
   servedAt,
   WORKER,
 } from '@yaks/platform/files'
@@ -599,7 +600,7 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let resource = path.startsWith('/__packages/')
   // A compiled page script is kept by its source's path from the app's root
   // (esbuild.ts), whatever folder is served.
-  let built = SCRIPT.test(key)
+  let built = script.test(key)
     ? `${prefix}/${BUILT}${key.slice(prefix.length + 1)}`
     : resource
     ? keyed(prefix, `/${BUILT}${path.slice(1)}`)
@@ -712,7 +713,6 @@ let kept = async (req: Request, env: Env, path: string) => {
 }
 
 // What a module script can be written in, and what a page may load as one.
-let SCRIPT = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
 
 let served = (
   file: Loaded,
