@@ -307,8 +307,8 @@ export type Browsing =
   & { DOMParser: typeof DOMParser }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
- * (nothing, for one already held), parsing it, and laying it over the page. */
-export type Phases = { wait: number; parse: number; swap: number }
+ * and parsed (nothing, for one already held), and laying it over the page. */
+export type Phases = { wait: number; swap: number }
 
 /** Where the page a swap drew came from: fetched on the click (`fetch`),
  * held already, fetched ahead or opened before (`held`), or the answer
@@ -388,8 +388,9 @@ let followed = (
   return to
 }
 
-/** A page answered: its document's words and where it was answered from. */
-type Answer = { text: string; url: string }
+/** A page answered: its document's words, parsed as it arrived so a click
+ * spends nothing on that, and where it was answered from. */
+type Answer = { text: string; page: Document; url: string }
 /** A page held: its answer, or null where it cannot be swapped in, when it
  * was asked for, and whether it was only looked ahead at. */
 type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
@@ -432,7 +433,9 @@ export let start = (
     let type = answer?.headers.get('content-type') ?? ''
     if (!answer || !type.includes('text/html')) return null
     let text = await answer.text().catch(() => null)
-    return text == null ? null : { text, url: answer.url || to.href }
+    if (text == null) return null
+    let page = new win.DOMParser().parseFromString(text, 'text/html')
+    return { text, page, url: answer.url || to.href }
   }
   let ask = (to: URL, ahead = false): Held => {
     let key = page(to)
@@ -458,8 +461,7 @@ export let start = (
     pop: boolean,
   ) => {
     let lap = now()
-    let next = new win.DOMParser().parseFromString(answer.text, 'text/html')
-    let parse = now() - lap
+    let next = answer.page
     if (!next.querySelector(`script[${TAKES}]`)) return false
     let at = new URL(answer.url)
     at.hash = to.hash
@@ -490,7 +492,7 @@ export let start = (
       main?.focus?.({ preventScroll: true })
     }
     let end = now()
-    let phases = { wait, parse, swap: end - lap - parse }
+    let phases = { wait, swap: end - lap }
     let detail: Swapped = {
       ms: end - began,
       began,

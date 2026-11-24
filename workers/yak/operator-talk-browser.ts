@@ -232,7 +232,12 @@ export let mountTalk = (
     close: () => {
       held = null
       for (let body of folds) closeFold(body)
+      // What it drew stays standing, so a page laid over this one
+      // (@yaks/ui/navigate) keeps every line both pages hold rather than
+      // drawing the conversation again.
+      let drawn = [...box.childNodes]
       render(null, box)
+      box.replaceChildren(...drawn)
       front.close()
     },
     /** the task the page shows, once it shows one */
