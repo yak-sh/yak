@@ -90,6 +90,6 @@ test('a space installs as its Operator, wearing its logo where it has one', asyn
   equal(await icons(null), ['Jeeves', ['/connector-512.png']])
   equal(await icons({ sha, type: 'image/png' }), [
     'Jeeves',
-    [`/manage/ada/logo/${sha}`],
+    [`/manage/ada/logo/${sha}?size=icon`],
   ])
 })

@@ -48,10 +48,11 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { type File } from './uploads.ts'
 import { type DeskPage, nothingHere, sentence, type Visits } from './pages.ts'
 import { desk as deskPage } from './desk-pages.ts'
-import { LOGO, logoBytes, logoed } from './logo.ts'
+import { logoed, logoImage, logoPosted } from './logo.ts'
+import { monogram } from '@yaks/platform/monogram'
+import type { LogoSize } from '@yaks/platform/space-logo'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { friendsOf, hidePresence } from './friends.ts'
@@ -361,7 +362,7 @@ export let manage = async (
     administrative,
     until,
   }
-  if (at.logo) return logoOf(env, space, who, at.logo)
+  if (at.logo) return logoOf(req, env, space, who, at.logo)
   if (at.manifest) {
     let open = req.method == 'GET' || req.method == 'HEAD'
     if (!open || !writes(who.role) || space.trashed) return nothingHere(env)
@@ -1267,13 +1268,30 @@ let saved = async (
   who: Owner,
   view: Exclude<SpaceView, Talk>,
 ): Promise<Response> => {
-  let form = await req.formData().catch(() => new FormData())
   let refused = (
     view: Exclude<SpaceView, Talk>,
     said: Said,
     typed?: Pick<DeskPage, 'invite' | 'typed'>,
   ) =>
     refusal(req, said, () => desk(req, env, dir, space, who, view, said, typed))
+  if (
+    view == 'settings' &&
+    req.headers.get('content-type')?.toLowerCase().startsWith(
+      'multipart/form-data',
+    )
+  ) {
+    let no = await logoPosted(
+      req,
+      (input) => logoed(env, dir, space, input, vouched(who)),
+    ).catch((e) => {
+      if (e instanceof CallError) return e.message
+      throw e
+    })
+    return no
+      ? refused('settings', { say: no, no: true })
+      : answered(req, env, { say: 'Saved.' })
+  }
+  let form = await req.formData().catch(() => new FormData())
   // The connections page's buttons (connections.ts): each is one form with a
   // `do`, answered with the page saying what came of it, or sent on to a
   // service to sign in there.
@@ -1436,24 +1454,16 @@ let saved = async (
       })
     }
   }
-  // Settings' Logo: a picture chosen, or Remove.
-  if (form.has('logo') || form.has('unlogo')) {
-    let file = form.get('logo')
-    let no = !file
-      ? await logoed(env, dir, space, null, vouched(who))
-      : !(file instanceof File)
-      ? 'choose a picture for the logo'
-      : file.size > LOGO.size
-      ? 'a logo can be up to 1 MB'
-      : await logoed(
-        env,
-        dir,
-        space,
-        new Uint8Array(await file.arrayBuffer()),
-        vouched(who),
-      )
-    if (no) return refused('settings', { say: no, no: true })
+  // Remove submits a plain field. The upload is handled before formData.
+  if (form.has('unlogo')) {
+    await logoed(env, dir, space, null, vouched(who))
     return answered(req, env, { say: 'Saved.' })
+  }
+  if (form.has('logo')) {
+    return refused('settings', {
+      say: 'choose a picture for the logo',
+      no: true,
+    })
   }
   // Settings: the space's name, homepage and address, one form and one Save. A
   // refusal draws the page again with everything typed still in the fields,
@@ -1503,14 +1513,47 @@ let saved = async (
   )
 }
 
-// The bytes of a space's logo, to anyone in the space, at the address only
-// these bytes have (@yaks/platform/routes `logoPath`), so a browser keeps them for good.
-let logoOf = async (env: Env, space: Space, who: Owner, sha: string) => {
-  let bytes = who.role ? await logoBytes(env, space, sha) : null
-  if (!bytes) return nothingHere(env)
-  return new Response(bytes, {
+// Both the original and its display sizes are private to the space.
+let logoOf = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  who: Owner,
+  sha: string,
+) => {
+  if (
+    !who.role || space.logo?.sha != sha || !['GET', 'HEAD'].includes(req.method)
+  ) {
+    return nothingHere(env)
+  }
+  let variant = new URL(req.url).searchParams.get('size')
+  let size: LogoSize | undefined = variant == 'avatar'
+    ? 'avatar'
+    : variant == 'icon'
+    ? 'icon'
+    : undefined
+  let image = await logoImage(env, space, sha, size)
+  if (!image) {
+    if (size == 'icon') return redirect('/connector-512.png')
+    if (size == 'avatar') {
+      return new Response(
+        req.method == 'HEAD'
+          ? null
+          : monogram(space.title || space.slug, space.eid),
+        {
+          headers: {
+            'content-type': 'image/svg+xml',
+            'cache-control': 'private, no-cache',
+          },
+        },
+      )
+    }
+    return nothingHere(env)
+  }
+  return new Response(req.method == 'HEAD' ? null : await image.read(), {
     headers: {
-      'content-type': space.logo!.type,
+      'content-type': image.type,
+      'content-length': String(image.size),
       'cache-control': browserImmutable,
       'x-content-type-options': 'nosniff',
     },

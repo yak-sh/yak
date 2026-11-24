@@ -86,7 +86,6 @@ for (
     ['/http', 'Text media answered 404'],
     ['/network', 'Media connection lost'],
     ['/body', 'Media body interrupted'],
-    ['/large', 'Operator attachments support files up to 16 MiB.'],
   ]
 ) {
   let s = scenario(['/ok', path, '/ok'])
@@ -111,6 +110,15 @@ for (
     })
   })
 }
+
+test('text intake keeps large attachments available with the message', async () => {
+  let s = scenario(['/large'])
+  await s.run()
+  let { request: { files: [file] } } = s.received[0]
+  equal(file.size, oversized.length)
+  equal((await s.env.BLOBS.head(file.key))?.size, file.size)
+  equal(s.reports, [])
+})
 
 let full = scenario(['/ok'])
 full.space.meter = { ...spent(full.space), files: FILES.free }

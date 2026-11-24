@@ -60,6 +60,7 @@ import { mailFrom } from '@yaks/platform/host'
 import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
+import { fromChunks, holding } from '@yaks/blob'
 import { inApp, refuse } from './tool.ts'
 import { MOVES } from './mascot.ts'
 import { Ask, type Asking } from './operator-box.ts'
@@ -160,12 +161,11 @@ import { talkBeside } from './talk-beside.ts'
 // What this page draws, as markup: the edge where its parts become text.
 let html = (node: Node) => renderToString(h(Fragment, null, node))
 
-// What the message box takes: up to COUNT files at a time, each up to SIZE
-// (keepFile's ceiling), and the kinds the Operator reads (operator-channels.ts
+// What the message box takes: up to COUNT files at a time, and the kinds
+// the Operator reads (operator-channels.ts
 // `fileText`, and Claude's own); a file of another kind is kept with the
 // message, and the box says the Operator can't read it.
 let COUNT = 10
-let SIZE = 16 * 1000 * 1000
 let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)]
 // The most a recording heard at once may be, a minute of Opus with room to
 // spare, and the most a line said at once.
@@ -1174,16 +1174,9 @@ export let operatorAnswer = async (
       if (part.filename && files.length == COUNT) {
         throw refuse('arguments', `Send up to ${COUNT} files at a time.`)
       }
-      let bytes = await gathered(
-        part.body,
-        part.filename ? 16 * 1024 * 1024 : 1024 * 1024,
-        () =>
-          refuse(
-            'arguments',
-            'Operator attachments support files up to 16 MiB.',
-          ),
-      )
-      if (part.name == 'file' && part.filename && bytes.length) {
+      if (part.name == 'file' && part.filename) {
+        let bytes = await holding({ stream: fromChunks(part.body) }, 0)
+        if (bytes instanceof Uint8Array && !bytes.length) continue
         files.push(
           await keepFile(
             env,
@@ -1194,6 +1187,11 @@ export let operatorAnswer = async (
           ),
         )
       } else if (!part.filename) {
+        let bytes = await gathered(
+          part.body,
+          1024 * 1024,
+          () => refuse('arguments', 'The message is too long.'),
+        )
         form.set(part.name, new TextDecoder().decode(bytes))
       }
     }
@@ -2067,7 +2065,11 @@ let installable = (space: Space) =>
       href: manifestPath(space.slug),
       crossorigin: 'use-credentials',
     }),
-    h('link', { rel: 'apple-touch-icon', href: ICON }),
+    space.logo ? h('link', { rel: 'icon', href: logoPath(space) }) : null,
+    h('link', {
+      rel: 'apple-touch-icon',
+      href: logoPath(space, 'icon') ?? ICON,
+    }),
     h('meta', { name: 'mobile-web-app-capable', content: 'yes' }),
     h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }),
     h('meta', { name: 'apple-mobile-web-app-title', content: space.operator }),
@@ -2089,7 +2091,7 @@ export let installing = (space: Space) => {
     theme_color: PLATFORM_BACKGROUND,
     icons: [
       space.logo
-        ? { src: logoPath(space), type: space.logo.type }
+        ? { src: logoPath(space, 'icon'), type: 'image/png', sizes: '512x512' }
         : { src: ICON, type: 'image/png', sizes: '512x512' },
     ],
   }, {
@@ -2443,7 +2445,6 @@ export let chatPage = async (
     base: url(env),
     request: crypto.randomUUID(),
     count: COUNT,
-    size: SIZE,
     reads: READ,
   }
   let place = 'operator:' + (talked.begun || open)

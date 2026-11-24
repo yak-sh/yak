@@ -49,11 +49,18 @@ export type Inbound = {
 
 // The slice of Cloudflare's Images binding we use: bytes in, one format out.
 // It refuses a format it can't read with an ImagesError whose code is 9520.
-export type Images = {
-  input(stream: ReadableStream<Uint8Array>): {
-    output(o: { format: string }): Promise<{ response(): Response }>
-  }
+export type ImageInput = {
+  transform(o: {
+    width: number
+    height: number
+    fit: 'pad' | 'scale-down'
+    background?: string
+  }): ImageInput
+  output(o: { format: string; quality?: number; anim?: boolean }): Promise<{
+    response(): Response
+  }>
 }
+export type Images = { input(stream: ReadableStream<Uint8Array>): ImageInput }
 
 /** What a test hands a kernel as its environment: any of Env's bindings, and
  * the secrets a config names, which are read by name (config.ts

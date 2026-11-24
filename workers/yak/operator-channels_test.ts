@@ -935,6 +935,9 @@ let HEIC = new Uint8Array([
 let CONVERTED = new Uint8Array([255, 216, 255, 224, 255, 217])
 f.env.IMAGES = {
   input: (stream) => ({
+    transform() {
+      return this
+    },
     output: async ({ format }) => {
       let bytes = new Uint8Array(await new Response(stream).arrayBuffer())
       if (format != 'image/jpeg' || bytes.join() != HEIC.join()) {
@@ -1012,7 +1015,12 @@ test('a picture nothing can read is never sent to the model, and the person is t
 let stuck = operatorMemory()
 let images = f.env.IMAGES
 f.env.IMAGES = {
-  input: () => ({ output: () => Promise.reject(new Error('Images is down')) }),
+  input: () => ({
+    transform() {
+      return this
+    },
+    output: () => Promise.reject(new Error('Images is down')),
+  }),
 }
 f.env.AI!.run = () =>
   Promise.resolve({

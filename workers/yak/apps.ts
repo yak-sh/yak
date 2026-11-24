@@ -42,7 +42,7 @@ import { previewed } from './preview-html.ts'
 // signed-out visitor sent to sign in is the platform working.
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { logoIcon } from './logo.ts'
+import { logoImage } from './logo.ts'
 import { monogram } from '@yaks/platform/monogram'
 import { forwarded, NOBODY, NOT_A_WRITER } from './build-door.ts'
 import { client } from './sheets.ts'
@@ -680,7 +680,7 @@ let media = async (
 // is served its drawing (files.ts `icon`), because this is only reached where
 // the files door had nothing.
 //
-// The icon is its space's logo, drawn square (logo.ts `logoIcon`, T-151744),
+// The icon is its space's logo, drawn square (logo.ts `logoImage`, T-151744),
 // so a church's or a shop's apps wear its picture on a home screen; or, in a
 // space without one, the platform's connector tile — opaque, square, 512
 // (site_test) — so an app on a home screen wears the platform's face rather
@@ -707,11 +707,12 @@ export let unwritten = async (
         },
       })
     }
-    let logo = await logoIcon(env, space, app.eid)
+    let logo = space.logo && await logoImage(env, space, space.logo.sha, 'icon')
     if (logo) {
-      return new Response(logo.bytes as Uint8Array<ArrayBuffer>, {
+      return new Response(req.method == 'HEAD' ? null : await logo.read(), {
         headers: {
           'content-type': logo.type,
+          'content-length': String(logo.size),
           'cache-control': caching(req, space, app, path),
         },
       })

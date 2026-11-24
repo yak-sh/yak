@@ -15,7 +15,7 @@ A space has a logo of its own too, which stands in for its first letter wherever
 the space shows (the space switcher, the list of spaces, your chat) and is the
 icon of every app in it without one: when the person asks for the space's icon
 or logo, or for one picture on all their apps, set it with space_set: logo with
-the attachment id of a picture they sent (a PNG, JPEG, WebP or GIF up to 1 MB),
-or logo_base64 with a picture's bytes; logo "none" takes it off. Only the
-space's owner may set it. A logo can also mean a picture in the app's own pages:
-work out from the person's words which they mean, and ask when you can't tell.
+the attachment id of a picture they sent (a PNG, JPEG, WebP or GIF), or
+logo_base64 with a picture's bytes; logo "none" takes it off. Only the space's
+owner may set it. A logo can also mean a picture in the app's own pages: work
+out from the person's words which they mean, and ask when you can't tell.

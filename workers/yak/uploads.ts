@@ -16,6 +16,7 @@ import {
   filed as kept,
   servable,
   type Upload,
+  type UploadName,
 } from '@yaks/blob/upload'
 import { routes } from '@yaks/blob/routes'
 import type { Refusal } from '@yaks/api'
@@ -97,7 +98,7 @@ export let filed = async (
   graph: Pick<Meta, 'query'>,
   bytes: Put,
   mime: string,
-  name: string,
+  name: UploadName,
   accepts?: Accepts,
 ): Promise<File> => {
   let file = await kept(
@@ -143,7 +144,7 @@ export let uploaded = async (
   bytes: Put,
   o: {
     mime: string
-    name: string
+    name: UploadName
     source?: string
     accepts?: Accepts
     protect?: (rows: Bundle[], sha: string, size: number) => Bundle[]

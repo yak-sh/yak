@@ -21,6 +21,7 @@
 import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { PLATFORM, RESERVED, ROOT, SLUG } from './names.ts'
+import type { LogoSize } from './space-logo.ts'
 
 /** A request before the router splits the hostname into an app path, in
  * the env `E` of whatever serves it. */
@@ -200,15 +201,18 @@ export let chatPath = (space: string, open = 'new'): string =>
  * import { logoPath } from '@yaks/platform/routes'
  * import { assertEquals } from '@std/assert'
  * let sha = 'a'.repeat(64)
- * assertEquals(logoPath({ slug: 'ada', logo: { sha } }), `/manage/ada/logo/${sha}`)
+ * assertEquals(logoPath({ slug: 'ada', logo: { sha } }), `/manage/ada/logo/${sha}?size=avatar`)
  * assertEquals(logoPath({ slug: 'ada', logo: null }), undefined)
  * ```
  */
 export let logoPath = (
   space: { slug: string; logo?: { sha: string } | null },
+  size: LogoSize = 'avatar',
 ): string | undefined =>
   space.logo
-    ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
+    ? `${MANAGE}/${
+      encodeURIComponent(space.slug)
+    }/logo/${space.logo.sha}?size=${size}`
     : undefined
 /** What draws an app's icon, as its address says it: the release it is
  * served from and its space's logo, which it wears where it has none. */

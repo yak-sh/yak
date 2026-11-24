@@ -7,12 +7,12 @@
 // the same write `POST ./api/blob` makes (uploads.ts `uploaded`), so the app's
 // `blob` floor and limits hold and extraction runs as it does for a page's.
 import { line, sub } from '@yaks/query'
-import { mimeOf } from '@yaks/blob'
+import { bodyOf, mimeOf, type Put, type Seen } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
 import type { App, Space } from './directory.ts'
 import { DOCUMENTS, supported } from '@yaks/platform/documents'
-import { attached } from './attachments.ts'
+import { openedAttachment } from './attachments.ts'
 import { metaOf } from './meta.ts'
 import { allowed, uncopyable } from './robots.ts'
 import { vouched, type Who } from './session.ts'
@@ -31,15 +31,12 @@ import {
 } from './tool.ts'
 import { type Row } from './tool-words.ts'
 import { acceptsOf, belowFloor, uploaded } from './uploads.ts'
-import { Untaken } from '@yaks/blob/upload'
+import { Untaken, type UploadName } from '@yaks/blob/upload'
 
 // What the library sends as itself, and the token a robots.txt group names
 // it by.
 export let AGENT = 'yaks.app-library/1.0 (+https://yaks.app/docs/library)'
 let TOKEN = 'yaks.app'
-// The most one document may be: what a page sends in one request
-// (@yaks/platform/client.js sends larger files in parts), or less where the app says.
-let WHOLE = 32 * 1024 * 1024
 // How many documents one call adds, and how many it fetches at once.
 let MANY = 20
 let AT_ONCE = 4
@@ -63,37 +60,9 @@ let EXTENSIONS: Record<string, string> = {
 /** A document that was not added, and why: the site's no, or the app's. */
 class Skipped extends Error {}
 
-type Got = { bytes: Uint8Array<ArrayBuffer>; mime: string; name: string }
+type Got = { bytes: Put; mime: string; name: UploadName }
 
 // --- from the web -----------------------------------------------------------
-
-/** The body, unless it is bigger than `most`: read as it arrives, so a large
- * one is never held whole. */
-let capped = async (r: Response, most: number) => {
-  let said = Number(r.headers.get('content-length') ?? NaN)
-  if (said > most || !r.body) {
-    await r.body?.cancel()
-    return said > most ? null : new Uint8Array(0)
-  }
-  let chunks: Uint8Array[] = [], total = 0
-  let reader = r.body.getReader()
-  for (;;) {
-    let { done, value } = await reader.read()
-    if (done || !value) break
-    total += value.byteLength
-    if (total > most) {
-      await reader.cancel()
-      return null
-    }
-    chunks.push(value)
-  }
-  let out = new Uint8Array(total)
-  let at = 0
-  for (let c of chunks) out.set(c, (at += c.byteLength) - c.byteLength)
-  return out
-}
-
-let megabytes = (n: number) => `${Math.round(n / 1024 / 1024)} MB`
 
 // The file's own name: what the site said to save it as, else the address's
 // last segment, else its host.
@@ -114,38 +83,71 @@ type Rewriter = {
     selector: string,
     handlers: {
       element?(
-        e: { remove(): void; getAttribute(n: string): string | null },
+        e: {
+          remove(): void
+          getAttribute(n: string): string | null
+          onEndTag(fn: () => void): void
+        },
       ): void
       text?(t: { text: string }): void
     },
   ): Rewriter
+  onDocument(handlers: { text(t: { text: string }): void }): Rewriter
   transform(res: Response): Response
 }
 declare let HTMLRewriter: { new (): Rewriter }
 
-/** A web page as its article alone (scripts, styles, menus, headers, footers,
- * sidebars and forms removed), its title, and whether it asks not to be kept
- * (`<meta name="robots" content="noarchive">`). */
-export let article = async (html: Uint8Array<ArrayBuffer>, mime: string) => {
+/** Strip page chrome as the article passes, and learn its title and robots
+ * directives before the staged upload is kept. */
+let article = (response: Response, name: string): Got => {
   let title = '', og = '', robots = ''
-  let bytes = new Uint8Array(
-    await new HTMLRewriter()
-      .on(
-        'script, style, noscript, nav, header, footer, aside, form, iframe',
-        { element: (e) => e.remove() },
-      )
-      .on('meta[property="og:title"]', {
-        element: (e) => void (og = e.getAttribute('content') ?? ''),
-      })
-      .on('meta[name="robots"]', {
-        element: (e) =>
-          void (robots += ' ' + (e.getAttribute('content') ?? '')),
-      })
-      .on('title', { text: (t) => void (title += t.text) })
-      .transform(new Response(html, { headers: { 'content-type': mime } }))
-      .arrayBuffer(),
-  )
-  return { bytes, title: (og || title).replace(/\s+/g, ' ').trim(), robots }
+  let mime = 'text/html'
+  let cleaned = new HTMLRewriter()
+    .on(
+      'script, style, noscript, nav, header, footer, aside, form, iframe',
+      { element: (e) => e.remove() },
+    )
+    .on('meta[property="og:title"]', {
+      element: (e) => void (og = e.getAttribute('content') ?? ''),
+    })
+    .on('meta[name="robots"]', {
+      element: (e) => void (robots += ' ' + (e.getAttribute('content') ?? '')),
+    })
+    .on('title', { text: (t) => void (title += t.text) })
+    .transform(response)
+  let hasText = false, inHead = false
+  let checked = new HTMLRewriter()
+    .on('head', {
+      element: (e) => {
+        inHead = true
+        e.onEndTag(() => {
+          inHead = false
+        })
+      },
+    })
+    .onDocument({
+      text: (t) => {
+        if (!inHead && /\S/.test(t.text)) hasText = true
+      },
+    })
+    .transform(cleaned)
+  return {
+    bytes: { stream: checked.body! },
+    mime,
+    name: () => {
+      if (uncopyable(robots)) {
+        throw new Skipped(
+          `the page asks that it not be copied (robots: ${robots.trim()})`,
+        )
+      }
+      if (!hasText) {
+        throw new Skipped(
+          'the page has no text without its scripts, which the library does not run',
+        )
+      }
+      return (og || title).replace(/\s+/g, ' ').trim() || name
+    },
+  }
 }
 
 /** What a site lets the library read, by its robots.txt: a site with none
@@ -174,7 +176,6 @@ let robotsOf = (send: typeof fetch) => {
 /** A document off the web, or why the library skips it. */
 export let fromWeb = async (
   said: string,
-  most: number,
   mayRead: (at: URL) => Promise<boolean>,
   send: typeof fetch = fetch,
 ): Promise<Got> => {
@@ -215,36 +216,36 @@ export let fromWeb = async (
       `the site asks that it not be copied (X-Robots-Tag: ${tag})`,
     )
   }
-  let bytes = await capped(r, most)
-  if (!bytes) throw new Skipped(`it is bigger than ${megabytes(most)}`)
-  if (!bytes.byteLength) throw new Skipped('the site sent nothing')
+  if (!r.body) throw new Skipped('the site sent nothing')
   let mime = (r.headers.get('content-type') ?? '').split(';')[0].trim()
     .toLowerCase()
   let name = nameOf(r, new URL(r.url || at))
   if (!mime || mime == 'application/octet-stream') mime = mimeOf(name)
   if (mime == 'text/html' || mime == 'application/xhtml+xml') {
-    let page = await article(bytes, 'text/html')
-    if (uncopyable(page.robots)) {
-      throw new Skipped(
-        `the page asks that it not be copied (robots: ${page.robots.trim()})`,
-      )
-    }
-    // The words a reader sees: the body's, not the title in its head.
-    let body = new TextDecoder().decode(page.bytes)
-      .replace(/<head[\s\S]*?<\/head>/i, '').replace(/<[^>]*>/g, '')
-    if (!/\S/.test(body)) {
-      throw new Skipped(
-        'the page has no text without its scripts, which the library does not run',
-      )
-    }
-    return { bytes: page.bytes, mime: 'text/html', name: page.title || name }
+    return article(r, name)
   }
-  return named({ bytes, mime, name })
+  try {
+    let got = named({
+      bytes: r.headers.has('content-encoding') ? { stream: r.body } : bodyOf(r),
+      mime,
+      name,
+    })
+    return {
+      ...got,
+      name: (seen) => {
+        if (!seen.size) throw new Skipped('the site sent nothing')
+        return got.name
+      },
+    }
+  } catch (e) {
+    await r.body.cancel()
+    throw e
+  }
 }
 
 // A document's name, given the extension it is read by where it has none;
 // anything the library does not read is skipped.
-let named = (got: Got): Got => {
+let named = (got: Got & { name: string }): Got & { name: string } => {
   let ext = EXTENSIONS[got.mime]
   let name = ext && !new RegExp(`\\.${ext}$`, 'i').test(got.name)
     ? `${got.name || 'document'}.${ext}`
@@ -277,9 +278,23 @@ let labelOf = (asked: Asked) =>
  * Operator (operator-channels.ts `keepFile`), which it reads as
  * `attachment <sha>`. */
 let fromChat = async (ctx: Ctx, space: Space, sha: string, name: string) => {
-  let bytes = await attached(ctx.env, space, sha)
+  let bytes = await openedAttachment(ctx.env, space, sha)
   if (!bytes) throw new Skipped('no such attachment in this space')
-  return named({ bytes, mime: mimeOf(name), name })
+  try {
+    let got = named({ bytes, mime: mimeOf(name), name })
+    return {
+      ...got,
+      name: (seen: Seen) => {
+        if (seen.sha != sha) {
+          throw new Error(`Attachment bytes do not match ${sha}`)
+        }
+        return got.name
+      },
+    }
+  } catch (e) {
+    await bytes.stream.cancel()
+    throw e
+  }
 }
 
 let documentsOf = (args: Args): Asked[] => {
@@ -397,7 +412,6 @@ let added = async (
   let denied = await belowFloor(ctx.env, space, app, who)
   if (denied) throw refuse('access', denied.message)
   let accepts = await acceptsOf(ctx.env, space, app)
-  let most = Math.min(accepts?.maxLength ?? WHOLE, WHOLE)
   let graph = metaOf(store, await byCaller(ctx, who))
   let mayRead = robotsOf(fetch)
   return await pooled(list, AT_ONCE, async (asked) => {
@@ -408,7 +422,7 @@ let added = async (
         ? await attachmentsAt(graph, [asked.replaces])
         : []
       let got = asked.url != null
-        ? await fromWeb(text(asked.url, 'url'), most, mayRead)
+        ? await fromWeb(text(asked.url, 'url'), mayRead)
         : asked.attachment != null
         ? await fromChat(
           ctx,
@@ -421,15 +435,16 @@ let added = async (
           mime: mimeOf(String(asked.name)),
           name: String(asked.name),
         })
-      if (typeof asked.name == 'string' && asked.name && asked.url != null) {
-        got = { ...got, name: asked.name }
-      }
-      if (got.bytes.byteLength > most) {
-        throw new Skipped(`it is bigger than ${megabytes(most)}`)
-      }
+      let name = got.name
+      let override = asked.url != null && typeof asked.name == 'string'
+        ? asked.name
+        : undefined
       let file = await uploaded(ctx.env, space, app, graph, got.bytes, {
         mime: got.mime,
-        name: got.name,
+        name: (seen) => {
+          let called = typeof name == 'function' ? name(seen) : name
+          return override || called
+        },
         accepts,
         ...asked.url != null ? { source: String(asked.url) } : {},
       })
@@ -441,7 +456,7 @@ let added = async (
         ok: true as const,
         label,
         eid: file.use,
-        name: got.name,
+        name: file.name,
         url: file.url,
         ...replaced ? { replaced } : {},
       }

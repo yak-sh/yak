@@ -45,8 +45,8 @@ import type { Grantee, McpPage } from './connected-mcp.ts'
 import { about, connects, detail, links } from './integration-detail.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icons } from './icons.ts'
-import { day, fileDrop, raw } from './html.ts'
-import { LOGO } from './logo.ts'
+import { day, fileDrop, markup, raw } from './html.ts'
+import { LOGO_TYPES } from './logo.ts'
 import { holder, tile } from './render/mod.ts'
 import type { Person } from './people.ts'
 import { type Invitation, qr } from './referral.ts'
@@ -781,9 +781,8 @@ let logoCard = (at: DeskPage) => {
       fileDrop({
         name: 'logo',
         label: 'Logo',
-        hint: 'PNG, JPEG, WebP or GIF, up to 1 MB',
-        accept: LOGO.accept,
-        size: LOGO.size,
+        hint: 'PNG, JPEG, WebP or GIF',
+        accept: LOGO_TYPES,
         required: true,
         sends: true,
       }),
@@ -3009,7 +3008,8 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   } satisfies Record<Setting, string>
   // The line over the title names whose the page is: the person's own, or
   // the space it changes.
-  let whose = accountView(view) ? 'Your account' : named(picked(at))
+  let space = accountView(view) ? null : picked(at)
+  let whose = space ? named(space) : 'Your account'
   let body: Kids = null
   if (view == 'profile') body = profile(at, env)
   if (view == 'invite' && at.referral) {
@@ -3092,6 +3092,9 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     env,
     {
       title: `${titles[view]} · ${whose}`,
+      head: space?.logo
+        ? markup(h('link', { rel: 'icon', href: space.logo }))
+        : undefined,
       status: at.no ? 400 : 200,
       headers: {
         'cache-control': 'private, no-store',

@@ -42,6 +42,21 @@ export let streamOf = (bytes: Uint8Array): Streamed => ({
   size: bytes.byteLength,
 })
 
+/** Pull one chunk at a time from a parser or another async byte source. */
+export let fromChunks = (
+  chunks: AsyncIterable<Uint8Array>,
+): ReadableStream<Uint8Array> => {
+  let next = chunks[Symbol.asyncIterator]()
+  return new ReadableStream<Uint8Array>({
+    pull: async (out) => {
+      let part = await next.next()
+      if (part.done) out.close()
+      else out.enqueue(part.value)
+    },
+    cancel: async () => void await next.return?.(),
+  })
+}
+
 /** Bytes held whole: for a store that keeps them in this process anyway. */
 export let gathered = async (put: Put): Promise<Uint8Array<ArrayBuffer>> =>
   put instanceof Uint8Array
@@ -115,6 +130,7 @@ export let hashing = (
 /** Bytes landed but not yet kept. `keep` puts them at their address; `drop`
  * lets the staged copy go, kept or not, and is always called. */
 export type Staged = Seen & {
+  read: () => Promise<ReadableStream<Uint8Array>>
   keep: () => Promise<void>
   drop: () => Promise<void>
 }
@@ -155,6 +171,7 @@ export let stage = async (
     sha,
     size: bytes.byteLength,
     head: new Uint8Array(bytes.subarray(0, HEAD)),
+    read: () => Promise.resolve(streamOf(bytes).stream),
     keep: () => keep(store, sha, bytes),
     drop: () => Promise.resolve(),
   }
@@ -217,13 +234,13 @@ export let stored = async (
   put: Put,
   most = Infinity,
 ): Promise<Seen> => {
-  let { keep, drop, ...seen } = await stage(store, put, most)
+  let { keep, drop, sha, size, head } = await stage(store, put, most)
   try {
     await keep()
   } finally {
     await drop()
   }
-  return seen
+  return { sha, size, head }
 }
 
 /** A request's or a response's body as it arrives, with the length it

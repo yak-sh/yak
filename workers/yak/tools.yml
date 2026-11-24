@@ -76,7 +76,7 @@ space_set:
     ask its apps for in a day (UTC); past it, the apps tell that visitor
     they answer again tomorrow. Pass logo with an attachment id from the
     conversation to make that picture the space's logo (a PNG, JPEG, WebP
-    or GIF up to 1 MB, no SVG), or logo_base64 with a picture's bytes; logo
+    or GIF, no SVG), or logo_base64 with a picture's bytes; logo
     "none" takes it off. The logo stands in for the space's first letter
     wherever the space shows (its owner's space switcher, its list of
     spaces, the Operator's chat) and is the icon of every app in it with no
@@ -1624,8 +1624,8 @@ library_add:
     footers, and named by its title. name sets the name an answer cites;
     replaces names the eid of a document this one takes the place of, which
     is removed once this one is added. The upload is the caller's, held to
-    the app's "blob" floor and limits like a page's POST ./api/blob, and a
-    document is at most 32 MB. A site that refuses, whose robots.txt does not
+    the app's "blob" floor and limits like a page's POST ./api/blob. A site
+    that refuses, whose robots.txt does not
     let yaks.app read the address, or that asks not to be copied (noarchive)
     is skipped and said, never worked around; check a site's terms before
     copying from it. Answers each document added, with its eid, and each

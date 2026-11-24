@@ -342,19 +342,13 @@ test('the box posts its words and files as a form where no script runs', () => {
 })
 
 boxTest(
-  'a file over the size the box takes is left out, and the box says so',
+  'a large file can be attached to a message',
   (b) => {
     b.pick(
       file('scan.tiff', 'image/tiff', 16_000_001),
       file('note.txt', 'text/plain'),
     )
-    assertEquals(b.sending(), ['note.txt'])
-    assertEquals(
-      b.said(),
-      'scan.tiff is larger than 16 MB, so it was left out.',
-    )
-    b.pick(file('next.txt', 'text/plain'))
-    assertEquals([b.sending(), b.said()], [['note.txt', 'next.txt'], ''])
+    assertEquals([b.sending(), b.said()], [['scan.tiff', 'note.txt'], ''])
   },
 )
 

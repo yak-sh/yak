@@ -237,7 +237,16 @@ let documented = (
   }
 <title>${preview ? esc(preview.title) : `${title} · yaks.app`}</title>
 ${previewTags(env, preview ?? { title: `${decodeHTML(title)} · yaks.app` })}
-${links(env, 'pages.css', undefined, assets)}${
+${
+    links(
+      env,
+      'pages.css',
+      undefined,
+      assets,
+      false,
+      !head.includes('rel="icon"'),
+    )
+  }${
     head.includes('rel="apple-touch-icon"')
       ? ''
       : `\n<link rel="apple-touch-icon" href="${file('apple-touch-icon.png')}">`

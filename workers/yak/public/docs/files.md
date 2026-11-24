@@ -1139,7 +1139,7 @@ publishes its posts, a private notebook publishes one page for a friend.
 - **It is static**: the bytes as published, the same for everyone. To show newer
   rows, publish the page again. Its scripts run on the app's own address, so
   publish only what you would deploy.
-- Each is up to 25 MiB, counted against the space's photos and files.
+- Published files count against the space's photos and files.
 
 The HTTP endpoints, under the app's own `/api/`:
 

@@ -14,11 +14,11 @@ import type { Env } from './env.ts'
 import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
 import { envelope, signed, signedFor } from '@yaks/platform/letters'
-import { digest, sha256 } from '@yaks/graph/sha256'
+import { sha256 } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
-import { holding, keep, type Put } from '@yaks/blob'
+import { type Put, stage } from '@yaks/blob'
 import { attachmentRows } from '@yaks/blob/attachment'
-import { attachedOf, attachmentId, type File } from './operator-files.ts'
+import { attachedOf, type File } from './operator-files.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import {
   currentStatus,
@@ -211,20 +211,11 @@ export let madeFiles = async (
   return text
 }
 
-let fileOf = async (
-  space: Space,
-  name: string,
-  mime: string,
-  bytes: Uint8Array<ArrayBuffer>,
-): Promise<File> => ({
-  name,
-  mime: isPdf(name, mime) ? 'application/pdf' : mime,
-  key: attachmentKey(space, await digest(bytes)),
-  size: bytes.byteLength,
-})
-
-/** The most bytes an Operator attachment is. */
-export let ATTACHED = 16 * 1024 * 1024
+// Reading into model context has its own budget. The attachment remains
+// downloadable and can still be passed to tools that stream it.
+let READ_BYTES = 16 * 1024 * 1024
+let UNREAD_SIZE =
+  'The original is kept. This file is too large to read into the conversation.'
 
 export let keepFile = async (
   env: Env,
@@ -233,30 +224,31 @@ export let keepFile = async (
   mime: string,
   sent: Put,
 ): Promise<File> => {
-  // Read whole as a model's input (`fileText`), so held to `ATTACHED` and
-  // never read past it.
-  let bytes = await holding(sent, ATTACHED)
-  if (!(bytes instanceof Uint8Array)) {
-    await bytes.stream.cancel()
-    throw refuse(
-      'arguments',
-      'Operator attachments support files up to 16 MiB.',
-    )
+  let staged = await stage(attachments(env, space), sent)
+  try {
+    let key = attachmentKey(space, staged.sha)
+    let size = staged.size
+    let full = await fullFiles(env, space, [{ key, bytes: size }])
+    if (full) throw refuse('space_full', full)
+    await staged.keep()
+    return {
+      name,
+      mime: isPdf(name, mime) ? 'application/pdf' : mime,
+      key,
+      size,
+    }
+  } finally {
+    await staged.drop()
   }
-  let file = await fileOf(space, name, mime, bytes)
-  let full = await fullFiles(env, space, [{
-    key: file.key,
-    bytes: bytes.byteLength,
-  }])
-  if (full) throw refuse('space_full', full)
-  await keep(attachments(env, space), attachmentId(file), bytes)
-  return file
 }
 
 let UNREAD_PICTURE =
   'The original is kept, but this picture format cannot be read. Ask the sender for a PNG, JPEG, GIF or WebP.'
 
 export let fileText = async (env: Env, space: Space, file: File) => {
+  if ((file.size ?? (await env.BLOBS.head(file.key))?.size ?? 0) > READ_BYTES) {
+    return UNREAD_SIZE
+  }
   let kept = await env.BLOBS.get(file.key)
   if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
   let body = await kept.arrayBuffer()

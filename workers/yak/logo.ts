@@ -1,67 +1,126 @@
-// A space's logo (T-140199): the picture it wears where its letter stood, and
-// the icon of each of its apps that has none of its own (T-151744). One write
-// sets it, behind both doors that do: the Logo card on its Settings page
-// (manage.ts) and space_set's `logo` (tools.ts).
-//
-// The bytes are kept in the bucket under the space's handle, content-addressed,
-// so a rename moves none of them and deleting the space sweeps them with the
-// rest (erase.ts `swept`). Replaced originals remain recoverable with the
-// directory history until a person explicitly purges the space.
-import { broken, mediaTypeOf } from '@yaks/blob'
-import { base64 } from './bytes.ts'
+// The Settings form and space_set share the space's logo writer.
+import { bodyOf, fromChunks } from '@yaks/blob'
+import { unbase64 } from './bytes.ts'
+import {
+  keepLogo,
+  LOGO_TYPES,
+  type LogoInput,
+  type LogoSize,
+  logoSizes,
+  openLogo,
+  type ResizeLogo,
+} from '@yaks/platform/space-logo'
+import { caught } from './defects.ts'
 import type { directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
+import { parts } from './form.ts'
 import { r2RawObjects } from './lib/objects.ts'
-import { drawn } from './raster.ts'
-import { digest } from '@yaks/graph/sha256'
+import { refuse } from './tool.ts'
+import { fullFiles } from './usage.ts'
 
-/** The most bytes a space's logo may be, and the kinds it may be: pictures a
- * browser draws as an image and nothing else, so no SVG with its scripts. */
-export let LOGO = {
-  size: 1_000_000,
-  accept: 'image/png,image/jpeg,image/webp,image/gif',
+export { LOGO_TYPES }
+
+// The Images binding accepts at most 20 MB. This is a limit on the display
+// conversion only. Originals are still kept and can be opened at full size.
+let IMAGES_INPUT = 20_000_000
+
+let thumbnail = (env: Env): ResizeLogo => async (source, size) => {
+  if (!env.IMAGES || source.size > IMAGES_INPUT) return
+  let { width, format } = logoSizes[size]
+  let stream = await source.read()
+  try {
+    let picture = await env.IMAGES.input(stream).transform({
+      width,
+      height: width,
+      ...(size == 'icon'
+        ? { fit: 'pad', background: '#ffffff' }
+        : { fit: 'scale-down' }),
+    }).output({
+      format,
+      anim: false,
+      ...(size == 'avatar' ? { quality: 85 } : {}),
+    })
+    let response = picture.response()
+    if (response.ok && response.body) return bodyOf(response)
+    await response.body?.cancel()
+    throw new Error(`Images answered ${response.status} for a space logo`)
+  } catch (error) {
+    if (!stream.locked) await stream.cancel().catch(() => {})
+    let { code } = Object(error)
+    if (code == 9412 || code == 9520) return 'invalid'
+    if (code == 9402 || code == 9413) return
+    caught(error, { request: 'resize space logo', size })
+  }
 }
 
-let keyOf = (space: Pick<Space, 'store'>, sha: string) =>
-  `${space.store}/.logo/${sha}`
-// The logo drawn as an app's icon, beside the logo it was drawn from.
-let iconOf = (space: Pick<Space, 'store'>, sha: string) =>
-  `${keyOf(space, sha)}.icon.png`
-
-/**
- * The space wearing the picture `bytes`, or none where null (Remove). Answers
- * why the bytes cannot be its logo, or nothing once they are.
- */
 export let logoed = async (
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
-  bytes: Uint8Array<ArrayBuffer> | null,
+  input: LogoInput | null,
   headers: Record<string, string>,
 ): Promise<string | undefined> => {
-  let blobs = r2RawObjects(env.BLOBS)
-  let logo = null
-  if (bytes) {
-    if (bytes.byteLength > LOGO.size) return 'a logo can be up to 1 MB'
-    let type = mediaTypeOf(bytes)
-    if (!type || !LOGO.accept.split(',').includes(type)) {
-      return 'a logo is a PNG, JPEG, WebP or GIF picture'
-    }
-    let why = await broken(bytes, type)
-    if (why) return `that picture does not open: ${why}`
-    logo = { sha: await digest(bytes), type }
-    await blobs.put(keyOf(space, logo.sha), bytes)
-  }
+  let logo = input && await keepLogo(
+    r2RawObjects(env.BLOBS),
+    space.store,
+    input,
+    thumbnail(env),
+    async (object) => {
+      let full = await fullFiles(env, space, [object])
+      if (full) throw refuse('space_full', full)
+    },
+  )
+  if (typeof logo == 'string') return logo
   await dir.badge(space, logo, headers)
 }
 
-/** The picture at the https address `url`, read up to one byte past
- * {@link LOGO}'s size so {@link logoed} answers that it is too big without
- * holding more; refused with why it could not be read. */
+/** The browser's file part, consumed in place while the form streams. */
+export let logoPosted = async (
+  req: Request,
+  save: (input: LogoInput | null) => Promise<string | undefined>,
+) => {
+  let form = parts(req)
+  let remove = false
+  for await (let part of form) {
+    if (part.name == 'unlogo') remove = true
+    if (part.name == 'logo' && part.filename) {
+      let file = (async function* () {
+        yield* part.body
+        while (!(await form.next()).done) continue
+      })()
+      return await save({ stream: fromChunks(file) })
+    }
+  }
+  return remove ? await save(null) : 'choose a picture for the logo'
+}
+
+/** The connector carries base64 in JSON. Decode its bytes a block at a time. */
+export let logoBase64 = (text: string): LogoInput => ({
+  stream: fromChunks((async function* () {
+    let tail = ''
+    let block = 64 * 1024
+    try {
+      for (let i = 0; i < text.length; i += block) {
+        let piece = tail + text.slice(i, i + block).replace(/[ \t\r\n\f]/g, '')
+        let end = piece.indexOf('=')
+        let length = end < 0 ? piece.length : end
+        let aligned = length - length % 4
+        tail = piece.slice(aligned)
+        if (tail.length > 4) throw new Error('invalid padding')
+        if (aligned) yield unbase64(piece.slice(0, aligned))
+      }
+      if (tail) yield unbase64(tail)
+    } catch {
+      throw refuse('arguments', 'logo_base64 is not base64')
+    }
+  })()),
+})
+
+/** The body at an HTTPS address, or why it could not be opened. */
 export let logoAt = async (
   url: string,
   fetcher: typeof fetch = fetch,
-): Promise<Uint8Array<ArrayBuffer> | string> => {
+): Promise<LogoInput | string> => {
   let at: URL
   try {
     at = new URL(url)
@@ -69,7 +128,7 @@ export let logoAt = async (
     return `${url} is not an address`
   }
   if (at.protocol != 'https:') return 'a logo is read from an https address'
-  let res = await fetcher(at, { headers: { accept: LOGO.accept } }).catch(
+  let res = await fetcher(at, { headers: { accept: LOGO_TYPES } }).catch(
     (e) => e instanceof Error ? e : new Error(String(e)),
   )
   if (res instanceof Error) {
@@ -79,49 +138,18 @@ export let logoAt = async (
     await res.body?.cancel()
     return `${at.host} answered ${res.status} for that picture`
   }
-  let parts: Uint8Array<ArrayBuffer>[] = []
-  let size = 0
-  for await (let part of res.body) {
-    parts.push(part)
-    size += part.byteLength
-    if (size > LOGO.size) break
-  }
-  return new Uint8Array(await new Blob(parts).arrayBuffer())
+  return res.headers.has('content-encoding')
+    ? { stream: res.body }
+    : bodyOf(res)
 }
 
-/** The bytes of the logo the space wears at `sha`, or none. */
-export let logoBytes = async (env: Env, space: Space, sha: string) =>
+export let logoImage = (env: Env, space: Space, sha: string, size?: LogoSize) =>
   space.logo?.sha == sha
-    ? await r2RawObjects(env.BLOBS).read(keyOf(space, sha))
+    ? openLogo(
+      r2RawObjects(env.BLOBS),
+      space.store,
+      space.logo,
+      thumbnail(env),
+      size,
+    )
     : null
-
-/**
- * The space's logo as an app's icon: drawn square at 512 on white, as an
- * icon.svg is (raster.ts), since an installer asks for a square PNG and iOS
- * fills a transparent one with black. Drawn once and kept beside the logo;
- * where no drawing can be had, the logo as it is. None for a space without
- * one.
- */
-export let logoIcon = async (
-  env: Env,
-  space: Space,
-  app: string,
-): Promise<{ bytes: Uint8Array; type: string } | null> => {
-  if (!space.logo) return null
-  let { sha, type } = space.logo
-  let blobs = r2RawObjects(env.BLOBS)
-  let kept = await blobs.read(iconOf(space, sha))
-  if (kept) return { bytes: kept, type: 'image/png' }
-  let bytes = await logoBytes(env, space, sha)
-  if (!bytes) return null
-  let png = await drawn(env, framed(bytes, type), app)
-  if (!(png instanceof Uint8Array)) return { bytes, type }
-  await blobs.put(iconOf(space, sha), png)
-  return { bytes: png, type: 'image/png' }
-}
-
-// A picture centred whole in a square, for yak-raster to draw.
-let framed = (bytes: Uint8Array, type: string) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">` +
-  `<image width="512" height="512" preserveAspectRatio="xMidYMid meet" ` +
-  `href="data:${type};base64,${base64(bytes)}"/></svg>`

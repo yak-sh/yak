@@ -30,7 +30,14 @@ import {
   represents,
 } from './representation.ts'
 import type { Blobs } from './store.ts'
-import { lengthOf, type Put, stage, type Staged, TooMany } from './stream.ts'
+import {
+  lengthOf,
+  type Put,
+  type Seen,
+  stage,
+  type Staged,
+  TooMany,
+} from './stream.ts'
 
 let UNKNOWN = 'application/octet-stream'
 
@@ -202,6 +209,9 @@ export type File = Kept & {
 /** How the rows a store holds are read: a query line, its rows. */
 export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 
+/** A name supplied up front or learned as the upload's bytes pass. */
+export type UploadName = string | ((seen: Seen) => string)
+
 /**
  * The rows that name the `bytes` bytes at `sha`, read off `head`: their first
  * bytes, or all of them. A name or type the arrival leaves out is the one the
@@ -263,12 +273,13 @@ export let filed = async (
   at: Upload,
   bytes: Put,
   mime: string,
-  name: string,
+  name: UploadName,
   check?: (rows: Bundle[]) => unknown,
 ): Promise<File> => {
   let staged = await admitted(at, bytes)
   try {
-    return await settled(read, at, staged, mime, name, check)
+    let called = typeof name == 'function' ? name(staged) : name
+    return await settled(read, at, staged, mime, called, check)
   } finally {
     await staged.drop()
   }

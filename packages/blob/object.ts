@@ -338,15 +338,18 @@ let streamed = async (
   }
   let next = pieces(sent.stream)
   let first = await next.next()
-  let second = await next.next()
-  if (second.done) {
-    let bytes = first.done ? new Uint8Array() : first.value
+  let bytes = first.done ? new Uint8Array() : first.value
+  if (bytes.length < PIECE) {
     return void await patient(() => bucket.put(key, bytes), pause)
   }
   let { uploadId } = await patient(
     () => bucket.createMultipartUpload!(key),
     pause,
   )
+    .catch(async (error) => {
+      await next.return(undefined)
+      throw error
+    })
   let up = bucket.resumeMultipartUpload(key, uploadId)
   let done: { partNumber: number; etag: string }[] = []
   let send = (piece: Uint8Array) =>
@@ -359,8 +362,7 @@ let streamed = async (
         .finally(() => part.done.catch(() => {}))
     }, pause)
   try {
-    done.push(await send(first.value!))
-    done.push(await send(second.value))
+    done.push(await send(bytes))
     for await (let piece of next) done.push(await send(piece))
     await patient(() => up.complete(done), pause)
   } catch (e) {
@@ -413,18 +415,21 @@ async (sent: Streamed, most = Infinity): Promise<Staged> => {
       size: sent.size,
     })
     let { sha, size, head } = await seen
+    let read = async () => {
+      let held = await objects.open(key)
+      if (!held) throw new Error(`no object at ${key}`)
+      return await held.read()
+    }
     let keep = async () => {
       if (await objects.has(prefix + sha)) return
       await patient(async () => {
-        let held = await objects.open(key)
-        if (!held) throw new Error(`no object at ${key}`)
         await objects.put(prefix + sha, {
-          stream: await held.read(),
-          size: held.size,
+          stream: await read(),
+          size,
         })
       }, pause)
     }
-    return { sha, size, head, keep, drop }
+    return { sha, size, head, read, keep, drop }
   } catch (e) {
     await drop().catch(() => {})
     throw e

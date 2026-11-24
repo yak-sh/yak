@@ -55,6 +55,43 @@ export let attachmentBytes = async (
   id: string,
   who: Who,
 ) => {
+  await requireAttachment(env, space, id, who)
+  return present(space, id, await attached(env, space, id))
+}
+
+/** The same attachment, with its length and a streaming body. */
+export let attachmentStream = async (
+  env: Env,
+  space: Space,
+  id: string,
+  who: Who,
+) => {
+  await requireAttachment(env, space, id, who)
+  return present(space, id, await openedAttachment(env, space, id))
+}
+
+/** Open bytes of an attachment after the caller has authorized the space. */
+export let openedAttachment = async (env: Env, space: Space, id: string) => {
+  if (!/^[0-9a-f]{64}$/.test(id)) {
+    throw refuse('arguments', `attachment: ${id} is not an attachment id`)
+  }
+  let source = await attachments(env, space).open!(id)
+  return source && { sha: id, size: source.size, stream: await source.read() }
+}
+
+let present = <T>(space: Space, id: string, value: T | null): T => {
+  if (value == null) {
+    throw refuse('missing', `${space.slug} keeps no attachment ${id}`)
+  }
+  return value
+}
+
+let requireAttachment = async (
+  env: Env,
+  space: Space,
+  id: string,
+  who: Who,
+) => {
   if (!/^[0-9a-f]{64}$/.test(id)) {
     throw refuse('arguments', `attachment: ${id} is not an attachment id`)
   }
@@ -64,11 +101,7 @@ export let attachmentBytes = async (
   let allowed = rows.some((row) =>
     (row.attachment as { artifact?: string } | undefined)?.artifact == id
   )
-  let bytes = allowed ? await attached(env, space, id) : null
-  if (!bytes) {
-    throw refuse('missing', `${space.slug} keeps no attachment ${id}`)
-  }
-  return bytes
+  if (!allowed) present(space, id, null)
 }
 
 /** Original UTF-8 text, without replacing invalid bytes or dropping a BOM. */

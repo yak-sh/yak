@@ -27,15 +27,7 @@ import { ownedPrefix } from '@yaks/platform/file-root'
 //
 // Each answers `{path, url, sha, mime, size}`, `url` being where the file
 // answers for the address the request came in on.
-import {
-  bodyOf,
-  carried,
-  mimeOf,
-  prefixed,
-  stage,
-  type Staged,
-  TooMany,
-} from '@yaks/blob'
+import { bodyOf, carried, mimeOf, prefixed, stage } from '@yaks/blob'
 import { identityEid } from '@yaks/graph/identity'
 import { caught } from './defects.ts'
 import type { App, Directory, PublicFile, Space } from './directory.ts'
@@ -43,10 +35,6 @@ import type { Env } from './env.ts'
 import { blobBytes } from './files.ts'
 import { r2Objects } from './lib/objects.ts'
 import { fullFiles } from './usage.ts'
-
-// The largest file one request publishes: Cloudflare's own limit on a static
-// asset, which is what a published file is.
-export let MOST = 25 * 1024 * 1024
 
 let SEGMENT = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/
 
@@ -172,23 +160,10 @@ export let door = async (ask: Ask, rest: string): Promise<Response> => {
 
 let published = async (ask: Ask, path: string) => {
   let { req, env, dir, space, app } = ask
-  if (Number(req.headers.get('content-length') ?? 0) > MOST) {
-    await req.body?.cancel()
-    return no(413, 'too_large', 'a published file is 25 MiB at most')
-  }
-  let staged: Staged
-  try {
-    staged = await stage(
-      prefixed(r2Objects(env.BLOBS), publicPrefix(space, app)),
-      bodyOf(req),
-      MOST,
-    )
-  } catch (e) {
-    if (e instanceof TooMany) {
-      return no(413, 'too_large', 'a published file is 25 MiB at most')
-    }
-    throw e
-  }
+  let staged = await stage(
+    prefixed(r2Objects(env.BLOBS), publicPrefix(space, app)),
+    bodyOf(req),
+  )
   let { sha, size } = staged
   try {
     if (!size) return no(400, 'no_bytes', 'nothing was sent')

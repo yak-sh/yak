@@ -127,7 +127,16 @@ test('a stream of unknown length goes up in pieces, the bucket never given it wh
     resumeMultipartUpload,
   })
   let file = new Uint8Array(2 * PIECE + 5).map((_, i) => i % 251)
-  let { stream } = streamOf(file)
+  let offset = 0
+  let stream = new ReadableStream<Uint8Array>({
+    pull(out) {
+      if (offset == file.length) return out.close()
+      equal(sizes.length, offset / PIECE)
+      let piece = file.subarray(offset, offset + PIECE)
+      offset += piece.length
+      out.enqueue(piece)
+    },
+  }, { highWaterMark: 0 })
   await objects.put('big', { stream })
   equal(sizes, [0, 0, 0])
   equal(held.get('big'), file)

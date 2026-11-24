@@ -4,7 +4,7 @@ import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { hostedFeedback } from './feedback.ts'
 import { sha256 } from '@yaks/graph/sha256'
-import { base64, unbase64 } from './bytes.ts'
+import { base64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
@@ -276,8 +276,12 @@ import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
 import { CWD } from '@yaks/sandbox/cloudflare'
-import { attachmentBytes, attachmentText } from './attachments.ts'
-import { logoAt, logoed } from './logo.ts'
+import {
+  attachmentBytes,
+  attachmentStream,
+  attachmentText,
+} from './attachments.ts'
+import { logoAt, logoBase64, logoed } from './logo.ts'
 import {
   machineDeclared,
   machineTools,
@@ -3460,23 +3464,19 @@ let HINTS: Record<
 // What space_set's `logo` takes the logo off with.
 let UNLOGO = 'none'
 
-// The picture space_set's `logo` or `logo_base64` names: its bytes, null to
+// The picture space_set's `logo` or `logo_base64` names: its stream, null to
 // take the logo off, or undefined where neither came.
 let logoSent = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
   if (args.logo != null && args.logo_base64 != null) {
     throw refuse('arguments', 'one of logo or logo_base64')
   }
   if (args.logo_base64 != null) {
-    try {
-      return unbase64(text(args.logo_base64, 'logo_base64'))
-    } catch {
-      throw refuse('arguments', 'logo_base64 is not base64')
-    }
+    return logoBase64(text(args.logo_base64, 'logo_base64'))
   }
   if (args.logo == null) return undefined
   let id = text(args.logo, 'logo')
   if (id == UNLOGO) return null
-  if (!/^https?:/i.test(id)) return attachmentBytes(ctx.env, space, id, who)
+  if (!/^https?:/i.test(id)) return attachmentStream(ctx.env, space, id, who)
   let read = await logoAt(id)
   if (typeof read == 'string') throw refuse('arguments', read)
   return read
@@ -3831,7 +3831,7 @@ let OURS: Row[] = [
         logo: str(
           "the space's logo: an attachment id from the conversation (64 hex " +
             'characters) or an https address naming a PNG, JPEG, WebP or ' +
-            'GIF up to 1 MB, or ' +
+            'GIF, or ' +
             `"${UNLOGO}" to take the logo off`,
         ),
         logo_base64: str(

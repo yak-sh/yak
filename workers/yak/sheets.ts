@@ -38,14 +38,18 @@ export let links = (
   names = NAMES,
   base?: string,
   reported = false,
+  favicon = true,
 ) => {
   let at = (name: string) => asset(env, name, names, base)
   let reporter = `<script src="${at('report.js')}" data-yak-at="${
     url(env, '/')
   }"></script>\n`
-  return `${reported ? '' : reporter}<link rel="icon" href="${
-    at('favicon-32.png')
-  }" type="image/png" sizes="32x32">
+  let icon = favicon
+    ? `<link rel="icon" href="${
+      at('favicon-32.png')
+    }" type="image/png" sizes="32x32">`
+    : ''
+  return `${reported ? '' : reporter}${icon}
 <link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`
 }

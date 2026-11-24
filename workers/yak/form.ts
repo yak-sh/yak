@@ -46,46 +46,51 @@ export async function* parts(req: Request): AsyncGenerator<Part> {
   // Every delimiter but the first follows a line break; giving the first one
   // its own lets one search find them all.
   let line = encode(`\r\n--${boundary}`)
-  let r = reader((async function* () {
+  let source = (async function* () {
     yield encode('\r\n')
     yield* stream
-  })())
+  })()
+  let r = reader(source)
   let body = () => until(r, line.length, (b) => find(b, line), cut)
-  for (;;) {
-    // Whatever is left before the next delimiter: the preamble, or the rest
-    // of a body its reader left.
-    for await (let _ of body()) continue
-    r.skip(line.length)
-    let after = await r.peek(2)
-    if (after.length < 2) throw cut()
-    if (after[0] == 0x2d && after[1] == 0x2d) return
-    let head = ''
-    for (let n = END.length;; n++) {
-      let held = await r.peek(n)
-      let at = find(held, END)
-      if (at >= 0) {
-        head = new TextDecoder().decode(held.subarray(2, at))
-        r.skip(at + END.length)
-        break
+  try {
+    for (;;) {
+      // Whatever is left before the next delimiter: the preamble, or the rest
+      // of a body its reader left.
+      for await (let _ of body()) continue
+      r.skip(line.length)
+      let after = await r.peek(2)
+      if (after.length < 2) throw cut()
+      if (after[0] == 0x2d && after[1] == 0x2d) return
+      let head = ''
+      for (let n = END.length;; n++) {
+        let held = await r.peek(n)
+        let at = find(held, END)
+        if (at >= 0) {
+          head = new TextDecoder().decode(held.subarray(2, at))
+          r.skip(at + END.length)
+          break
+        }
+        if (held.length < n) throw cut()
+        if (held.length > HEAD) {
+          throw refuse('arguments', 'That form is malformed.')
+        }
+        n = held.length
       }
-      if (held.length < n) throw cut()
-      if (held.length > HEAD) {
-        throw refuse('arguments', 'That form is malformed.')
+      let headers = new Map(
+        head.split('\r\n').map((l) => {
+          let at = l.indexOf(':')
+          return [l.slice(0, at).trim().toLowerCase(), l.slice(at + 1).trim()]
+        }),
+      )
+      let disposition = headers.get('content-disposition') ?? ''
+      yield {
+        name: said(disposition, 'name') ?? '',
+        filename: said(disposition, 'filename'),
+        type: headers.get('content-type') ?? '',
+        body: body(),
       }
-      n = held.length
     }
-    let headers = new Map(
-      head.split('\r\n').map((l) => {
-        let at = l.indexOf(':')
-        return [l.slice(0, at).trim().toLowerCase(), l.slice(at + 1).trim()]
-      }),
-    )
-    let disposition = headers.get('content-disposition') ?? ''
-    yield {
-      name: said(disposition, 'name') ?? '',
-      filename: said(disposition, 'filename'),
-      type: headers.get('content-type') ?? '',
-      body: body(),
-    }
+  } finally {
+    void source.return(undefined).catch(() => {})
   }
 }

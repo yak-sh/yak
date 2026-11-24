@@ -67,7 +67,7 @@ floor holds: a visitor or viewer is refused, and nothing of theirs is kept.
   article alone, without scripts, styles, menus, headers, footers, sidebars or
   forms, and is named by its title. `name` sets the name an answer cites, and
   `replaces` names a document this one takes the place of, which is removed once
-  this one is added. A document is at most 32 MB, or the app's own `maxLength`.
+  this one is added. The app's `maxLength` applies if it declares one.
 - **`library_list`** lists every document with its eid, name, type, source and
   extraction: `reading`, `searchable` with its page count, or `failed` with the
   reason.
