@@ -2375,6 +2375,7 @@ let personsOf = (rows: ReadRow[]): Map<string, Known> =>
  * bound to each; and, in the spaces they own, who holds or is offered a place
  * in the space or its apps, and what to call each of them (people.ts). */
 export type Listing = {
+  fee?: number
   seats: Seat[]
   apps: App[]
   bound: Bundle[]
@@ -2419,7 +2420,9 @@ let listed = (rows: ReadRow[], person: string): Listing => {
   ])
   let held = heldOf(rows).filter((h) => theirs.has(h.on))
   let named = new Set(held.map((h) => h.person))
+  let platform = rows.find((row) => row.space?.slug == META.space)
   return {
+    ...platform ? { fee: platform.fee?.bps ?? 0 } : {},
     seats,
     apps,
     bound: rows.map(({ policy: _, ...row }) => row as Bundle)
@@ -3064,6 +3067,7 @@ export let directoryRows = (rows: {
       let rows = await query(
         chain([
           line`(.member.person=${person})`,
+          line`(.space.slug=${META.space}&?fee)`,
           line`(.space&.${sub(mine)}&${sub(SPACE_ABOUT)})`,
           line`(.app.space.${sub(mine)}&${sub(ABOUT)})`,
           line`(.binding.app.app.space.${sub(mine)})`,

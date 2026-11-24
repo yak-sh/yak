@@ -6412,7 +6412,9 @@ let OURS: Row[] = [
             })
           : null,
         seats.some((s) => s.role == 'owner')
-          ? platformFee(ctx.env).then(rate)
+          ? listing.fee == null
+            ? platformFee(ctx.env).then(rate)
+            : rate(listing.fee)
           : '',
       ])
       // Two readers, two forms (M-37853), and each carries every fact: Claude
