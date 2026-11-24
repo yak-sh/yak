@@ -969,6 +969,17 @@
     gap: .5rem;
     padding-bottom: .5rem;
   }
+  /* A suggestion naming an app with a long name or address wraps, even
+     inside the name, rather than run off a phone's screen. */
+  .Talk_Starts > .Button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+    height: auto;
+    min-height: var(--control-height);
+    padding-block: .35rem;
+  }
   /* The offer of alerts over the box (operator-page.ts `alertsOffer`). Once
      taken, its word that alerts are on stands in the offer's place a few
      seconds, then fades and gives the room back (alerts-browser.ts). */
