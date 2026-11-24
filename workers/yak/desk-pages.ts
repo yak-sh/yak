@@ -58,6 +58,7 @@ import { type Invitation, qr } from './referral.ts'
 import {
   accountView,
   enabling,
+  logoUpload,
   MANAGE,
   managePath,
   type Setting,
@@ -960,7 +961,7 @@ let logoCard = (at: DeskPage) => {
       {
         class: 'Desk_Logo Page_Form',
         method: 'post',
-        action,
+        action: logoUpload(at.space),
         enctype: 'multipart/form-data',
       },
       spaceTile(here, 'large'),

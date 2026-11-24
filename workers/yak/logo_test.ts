@@ -11,7 +11,7 @@ import {
 import { encodeBase64 } from '@std/encoding/base64'
 import { parseHTML } from 'linkedom'
 import { connector, fresh, kernel, signIn } from './probe.ts'
-import { managePath } from '@yaks/platform/routes'
+import { logoUpload, managePath } from '@yaks/platform/routes'
 import { digest } from '@yaks/graph/sha256'
 import { logoAt } from './logo.ts'
 import type { Images } from './env.ts'
@@ -33,8 +33,8 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
     let settings = managePath('settings', slug)
     let get = (path: string, cookie = them.cookie) =>
       k.at('yaks.app', path, { redirect: 'manual', headers: { cookie } })
-    let send = (body: FormData) =>
-      k.at('yaks.app', settings, {
+    let send = (body: FormData, to = settings) =>
+      k.at('yaks.app', to, {
         method: 'POST',
         redirect: 'manual',
         headers: { cookie: them.cookie, origin: 'https://yaks.app' },
@@ -57,7 +57,7 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
     assertStringIncludes(page, 'enctype="multipart/form-data"')
     assert(!page.includes('name="unlogo"'))
 
-    let sent = await send(picture(PNG))
+    let sent = await send(picture(PNG), logoUpload(slug))
     assertEquals(sent.status, 303)
     let at = `/manage/${slug}/logo/${await digest(PNG)}`
     assertEquals((await tile()).getAttribute('src'), at + '?size=avatar')
@@ -71,7 +71,7 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
 
     // What is not a picture, or does not open, is refused and changes nothing.
     for (let bytes of [new TextEncoder().encode('<svg/>'), PNG.slice(0, 50)]) {
-      let no = await send(picture(bytes))
+      let no = await send(picture(bytes), logoUpload(slug))
       assertEquals(no.status, 400)
       assertStringIncludes(await no.text(), 'logo')
       assertEquals((await tile()).getAttribute('src'), at + '?size=avatar')
@@ -187,7 +187,7 @@ test('Settings streams a 10 MB logo and pages use its precomputed display sizes'
     body.set('logo', full, 'logo.png')
     let headers = { cookie: them.cookie, origin: 'https://yaks.app' }
     let get = (path: string) => k.at('yaks.app', path, { headers })
-    let sent = await k.at('yaks.app', settings, {
+    let sent = await k.at('yaks.app', logoUpload(slug), {
       method: 'POST',
       redirect: 'manual',
       headers,

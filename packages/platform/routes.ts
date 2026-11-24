@@ -225,6 +225,17 @@ export let logoPath = (
       encodeURIComponent(space.slug)
     }/logo/${space.logo.sha}?size=${size}`
     : undefined
+/** Where Settings' Logo form sends a picture: Settings with `?logo`, so the
+ * page's Save, which also posts a multipart form there, is not read as one.
+ *
+ * ```ts
+ * import { logoUpload } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(logoUpload('ada'), '/manage/ada/settings?logo')
+ * ```
+ */
+export let logoUpload = (space: string): string =>
+  `${managePath('settings', space)}?logo`
 /** The validator used by existing versioned home-screen icon URLs. */
 export let iconVersion = (
   app: { source?: string | null },

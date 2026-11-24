@@ -1433,12 +1433,9 @@ let saved = async (
     typed?: Pick<DeskPage, 'invite' | 'typed'>,
   ) =>
     refusal(req, said, () => desk(req, env, dir, space, who, view, said, typed))
-  if (
-    view == 'settings' &&
-    req.headers.get('content-type')?.toLowerCase().startsWith(
-      'multipart/form-data',
-    )
-  ) {
+  // The Logo form streams its picture to its own address (`logoUpload`):
+  // Settings' Save posts a multipart form here too, and is read whole below.
+  if (view == 'settings' && new URL(req.url).searchParams.has('logo')) {
     let no = await logoPosted(
       req,
       (input) => logoed(env, dir, space, input, vouched(who)),
