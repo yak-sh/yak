@@ -154,6 +154,7 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
       )
     },
     scrollTo: () => {},
+    requestIdleCallback: (then: () => void) => setTimeout(then, 0),
     DOMParser,
   } as unknown as Parameters<typeof start>[0]
   let history = {
@@ -342,6 +343,29 @@ test('a page opened before draws at once, and is asked for again once it is old'
     3,
     'asked again, and the same page laid over nothing',
   )
+})
+
+test('the links a page marks to hold are fetched ahead while it is idle, one at a time and once', async () => {
+  let held = (here: string) =>
+    framed(
+      here,
+      `<h1>${here}</h1>`,
+      '<nav><a data-hold href="/updates">U</a><a data-hold href="/apps">A</a>' +
+        '<a data-hold href="/gone">G</a><a data-hold href="https://far.test/">F</a></nav>',
+    )
+  let b = browsing({ '/apps': held('apps'), '/updates': held('updates') })
+  for (let i = 0; i < 5; i++) await settled()
+  assertEquals(b.fetched, [
+    'https://y.test/updates prefetch',
+    'https://y.test/gone prefetch',
+  ])
+  b.click('a[href="/updates"]')
+  for (let i = 0; i < 5; i++) await settled()
+  assertEquals(b.drawn[0].from, 'held')
+  assertEquals(b.fetched.slice(2), [
+    'https://y.test/updates',
+    'https://y.test/apps prefetch',
+  ])
 })
 
 test('sending a form lets go of every page held', async () => {

@@ -107,6 +107,8 @@ export let link = (at: Item) => {
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
       target: at.external ? '_blank' : undefined,
       rel: at.external ? 'noopener' : undefined,
+      // held before it is pressed, so it draws at once (@yaks/ui/navigate)
+      'data-hold': at.submit || at.external ? undefined : '',
     },
     at.image
       ? h('img', {

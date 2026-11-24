@@ -197,6 +197,11 @@ test('All updates sits above the space picker and opens with that space still se
   let links = [...group.querySelectorAll('a.SideNav_Link')].map((a) =>
     a.getAttribute('href')
   )
+  assertEquals(
+    group.querySelectorAll('a.SideNav_Link:not([data-hold])').length,
+    0,
+    'each is held before it is pressed',
+  )
   assertEquals(links, [
     chatPath(club.slug),
     updates,

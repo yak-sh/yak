@@ -304,7 +304,10 @@ export type Browsing =
     Window,
     'document' | 'location' | 'addEventListener' | 'fetch' | 'scrollTo'
   >
-  & { DOMParser: typeof DOMParser }
+  & {
+    DOMParser: typeof DOMParser
+    requestIdleCallback?: Window['requestIdleCallback']
+  }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
  * and parsed (nothing, for one already held), and laying it over the page. */
@@ -349,6 +352,9 @@ export let FRESH = 10_000
 export let HELD = 24
 /** How long a pointer stays over a link before its page is asked for. */
 export let INTENT = 60
+/** The mark on a link whose page is held before it is clicked: asked for
+ * once the page is idle, one at a time, once a held page's life. */
+export let HOLD = 'data-hold'
 
 // Where a page's content is: what its skip link names, else its `main`.
 let content = (doc: Document) => {
@@ -405,7 +411,8 @@ type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
  * A page is drawn in the frame of the click when it is held: fetched ahead
  * as a pointer rests on its link, presses it or a finger touches it
  * (`AHEAD`), or
- * opened before. The `HELD` pages opened last are held. A held page older
+ * opened before, or marked `HOLD`, fetched while the page is idle. The
+ * `HELD` pages opened last are held. A held page older
  * than `FRESH`, or one only looked ahead at, is asked for again once drawn,
  * and laid over what was drawn where it changed. Sending a form lets go of
  * every held page.
@@ -540,9 +547,35 @@ export let start = (
     clearTimeout(hovering)
     hovering = setTimeout(() => ahead(e), INTENT)
   })
+  // The links a page marks `HOLD`, asked for while nothing else is, each
+  // once: a held page is drawn on its click and asked for again then.
+  let idle = (then: () => void) =>
+    win.requestIdleCallback
+      ? win.requestIdleCallback(then, { timeout: 2000 })
+      : setTimeout(then, 200)
+  let holding = false
+  let asked = new Set<string>()
+  let hold = () => {
+    if (holding) return
+    holding = true
+    let next = () => {
+      let to = [...doc.querySelectorAll(`a[${HOLD}]`)]
+        .map((a) => new URL(a.getAttribute('href')!, win.location.href))
+        .find((to) =>
+          to.origin == win.location.origin && page(to) != here &&
+          !pages.has(page(to)) && !asked.has(page(to))
+        )
+      if (!to) return void (holding = false)
+      asked.add(page(to))
+      ask(to, true).answer.then(() => idle(next))
+    }
+    idle(next)
+  }
+  hold()
+  doc.addEventListener(PAGE, hold)
   win.addEventListener('mousedown', ahead)
   win.addEventListener('touchstart', ahead, { passive: true })
-  win.addEventListener('submit', () => pages.clear())
+  win.addEventListener('submit', () => (pages.clear(), asked.clear()))
   win.addEventListener('click', (e: MouseEvent) => {
     let to = followed(e, win.location.href, here)
     if (!to) return
