@@ -189,8 +189,11 @@ export let mountTalk = (
   }
   let unfolded = (eid: string) => {
     let fold = box.querySelector(`[data-lazy][data-disclosure="${eid}"]`)
-    let id = fold?.closest('[id^="row-"]')?.id.slice('row-'.length)
-    let line = held?.lines.find((l) => l.id == id)
+    // The line the page holds whose row holds the fold: a fold in a run of
+    // steps stands in a row of its own inside the run's.
+    let line = fold &&
+      held?.lines.find((l) => box.querySelector(`#row-${l.id}`)?.contains(fold))
+    let id = line?.id
     if (!fold || !id || !line || line.uses || !unfold || fetching.has(id)) {
       return
     }
@@ -303,6 +306,12 @@ export let mountTalk = (
       let { held: next, missing } = reread(held, read)
       held = next
       draw(fresh)
+      // A fold open as the server drew it again holds only Loading: its line
+      // is fetched again, as when it was opened.
+      for (let fold of box.querySelectorAll('[data-lazy][open]')) {
+        let eid = fold.getAttribute('data-disclosure')
+        if (eid) unfolded(eid)
+      }
       return missing
     },
     /** lines whose entries were removed from the store, taken off */

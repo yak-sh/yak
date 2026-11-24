@@ -269,7 +269,12 @@ test('an outside agent’s chat is a step named for whom it was with, holding th
       lines: wire(lines(chat, namer({})), chat, { opens: '/operator' }),
     },
   }
-  let [row] = rows([notice], namer({}), { threads })
+  // A page with a script draws it as it opens; one without draws it whole.
+  let [lazy] = rows([notice], namer({}), { threads })
+  let closed = parseHTML(lazy.html).document.querySelector('details')!
+  assertEquals(closed.hasAttribute('data-lazy'), true)
+  assertEquals(closed.textContent!.includes('ok'), false)
+  let [row] = rows([notice], namer({}), { threads, whole: true })
   let fold = parseHTML(row.html).document.querySelector('details')!
   assertEquals(fold.className, 'More More-quiet')
   assertEquals(

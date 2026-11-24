@@ -844,7 +844,7 @@ let drawing = (
       told,
     })
     let unwrapped: Line[] = thread
-      ? [{ id, uses: [id], ...threaded(thread) }]
+      ? [{ id, uses: [id], ...threaded(thread, whole) }]
       : saying
       ? [{
         id,
@@ -1178,29 +1178,39 @@ let system = (b: Bundle, body: string) => {
 }
 
 /** A closed outside conversation, drawn at its single delivery notice: who
- * chatted (`who`, "An outside agent for Ada") and the chat's own lines. */
-export type Thread = { session: string; who: string; lines: Lines }
+ * chatted (`who`, "An outside agent for Ada") and the chat's own lines,
+ * which a page that draws its folds as they open has only once one does. */
+export type Thread = {
+  session: string
+  who: string
+  /** where a conversation opens, which its chat's page is under */
+  opens?: string
+  lines?: Lines
+}
 
 // A step like any other, named for whom the Operator chatted with, opening
 // on the chat itself. The notice's body is the model's recap of the chat,
-// never drawn: the chat's lines say it in the person's words.
-let threaded = (thread: Thread) => {
+// never drawn: the chat's lines say it in the person's words. A chat runs to
+// megabytes drawn and is rarely opened, so it is drawn only once opened,
+// unless the page draws everything `whole`.
+let threaded = (thread: Thread, whole?: boolean) => {
   let name = 'Chatted with ' + thread.who.replace(/^./, (c) => c.toLowerCase())
-  let node = step(
+  let opens = thread.opens ?? thread.lines?.opens
+  let node = (whole ? step : lazyStep)(
     name,
     '',
-    thread.lines.opens
+    opens
       ? h(
         'p',
         null,
         h(
           'a',
-          { href: `${thread.lines.opens}/${thread.session}` },
+          { href: `${opens}/${thread.session}` },
           'Open the conversation',
         ),
       )
       : null,
-    rows(drawLines(thread.lines)),
+    thread.lines ? rows(drawLines(thread.lines)) : null,
   )
   return { node, text: name, is: 'step' as const }
 }

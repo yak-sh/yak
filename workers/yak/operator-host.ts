@@ -539,21 +539,54 @@ let seenOf = async (
 // notes): it is the Operator's own context, drawn above in the conversation
 // and on the chat's own page, and drawn again in each fold it made the
 // `checks` page 4 MB, 3.4 MB of it in 12 folds, and its read 0.9-1.7 s of CPU.
+//
+// A page draws a chat's fold only as it opens (operator-draw.ts `threaded`),
+// so only the chats `full` names are read whole; the rest are who chatted
+// (`person` is whom for), read for every chat at once. With 181 chats in the
+// `checks` conversation, reading each whole took 1.1 s of a 1.4 s read.
 let threadsOf = async (
   store: Store,
   entries: Bundle[],
   named: Named,
   called?: string,
   opens?: string,
+  full: (notice: string) => boolean = () => true,
+  person?: string,
 ): Promise<Record<string, Thread>> => {
   let notices = entries.filter((b) => b.notice && b.delivery)
-  let read = await Promise.all(notices.map(async (notice) => {
-    let session = String(comp(notice, 'delivery')?.child ?? '')
-    let [row] = await store.g.get([session], ['spawned'])
-    let spawned = comp(row, 'spawned')
-    if (
-      spawned?.quiet == null || spawned.parent != comp(notice, 'entry')?.session
-    ) return []
+  if (!notices.length) return {}
+  let child = (n: Bundle) => String(comp(n, 'delivery')?.child ?? '')
+  let rows = new Map(
+    (await store.g.get(notices.map(child), ['spawned']))
+      .filter(Boolean).map((b) => [b.entity.eid, b]),
+  )
+  let chats = notices.filter((n) => {
+    let spawned = comp(rows.get(child(n)), 'spawned')
+    return spawned?.quiet != null &&
+      spawned.parent == comp(n, 'entry')?.session
+  })
+  let named_ = (who: string, whom?: string) =>
+    who[0].toUpperCase() + who.slice(1) + (whom ? ` for ${whom}` : '')
+  let shallow = chats.filter((n) => !full(n.entity.eid)).map(child)
+  let speakers = new Map<string, string>()
+  if (shallow.length) {
+    let said = await store.g.read(
+      q`.entry.session=${shallow}&.entry.from!=""&!ask&!prompt&.order=entry.seq&.fields=entry.session,entry.from`,
+    )
+    for (let b of said) {
+      let e = comp(b, 'entry')!
+      if (!speakers.has(String(e.session))) {
+        speakers.set(String(e.session), String(e.from))
+      }
+    }
+  }
+  let read = await Promise.all(chats.map(async (notice) => {
+    let session = child(notice)
+    if (!full(notice.entity.eid)) {
+      let who = speakers.get(session) ?? 'An outside agent'
+      return [[notice.entity.eid, { session, who: named_(who, person), opens }]]
+    }
+    let row = rows.get(session)!
     let own = (await linesOf(store, session, SHOWN))
       .filter((b) => !b.ask && !b.prompt)
     let helped = await seenOf(store, [row], own)
@@ -565,13 +598,12 @@ let threadsOf = async (
     return [
       [notice.entity.eid, {
         session,
-        who: who[0].toUpperCase() + who.slice(1) +
-          (naming.person ? ` for ${naming.person}` : ''),
+        who: named_(who, naming.person ?? undefined),
         lines: wire(drawnLines(own, namer(seen), seen), own, seen),
-      }] as const,
-    ]
+      }],
+    ] as [string, Thread][]
   }))
-  return Object.fromEntries(read.flat())
+  return Object.fromEntries(read.flat() as [string, Thread][])
 }
 
 // The task holding a session, by the link a task keeps to it.
@@ -1229,6 +1261,32 @@ export let walkthroughOf = async (
 
 // The lines drawn, or `only` the one with that id.
 type Drawn = Parameters<typeof wire>[0]
+
+// Which outside chats a read draws whole: all of them for a page with no
+// script to open a fold or a reader of every line as data, else none.
+let whole = (everyone?: Named, wanted?: true | string) => () =>
+  !!everyone || wanted === true
+
+// A fold opened (`wanted`, its line's id): the outside chats its line holds,
+// read whole into `seen`, which its lines as data carry.
+let opening = async (
+  store: Store,
+  seen: { threads: Record<string, Thread> },
+  drawn: Drawn,
+  shown: Bundle[],
+  wanted: true | string | undefined,
+  named: Named,
+  called?: string,
+  opens?: string,
+) => {
+  if (typeof wanted != 'string') return
+  let uses = new Set(drawn.find((l) => l.id == wanted)?.uses ?? [])
+  let held = shown.filter((b) => uses.has(b.entity.eid))
+  Object.assign(
+    seen.threads,
+    await threadsOf(store, held, named, called, opens),
+  )
+}
 let picked = (drawn: Drawn, only?: string) =>
   only == null ? drawn : drawn.filter((l) => l.id == only)
 
@@ -1243,13 +1301,15 @@ export let conversationOf = async (
   from?: number,
   mentions?: string,
   take?: number,
+  wanted?: true | string,
 ): Promise<{
   task: string
   begun: string
   title: string
   html: string
   // drawn again only for a reader that asks for its lines as data: all of
-  // them, or `only` one, which a page asks for as it opens a fold of it
+  // them, or `only` one, which a page asks for as it opens a fold of it;
+  // the outside chats in them are whole for what was `wanted`
   lines: (only?: string) => Lines | null
   now?: string
   waiting: Bundle[]
@@ -1264,16 +1324,29 @@ export let conversationOf = async (
     let helper = !!row.spawned
     let entries = await linesOf(store, eid, SHOWN, from)
     let helped = await seenOf(store, [row], entries, callsIn(entries))
+    let naming = await namingOf(
+      store,
+      withHelpers(entries, helped.helpers),
+      named,
+    )
     let seen = {
       ...helped,
-      threads: await threadsOf(store, entries, named, called, opens),
+      threads: await threadsOf(
+        store,
+        entries,
+        named,
+        called,
+        opens,
+        whole(everyone, wanted),
+        naming.person ?? undefined,
+      ),
       ...await roomsBy(store, entries),
       called,
       opens,
       ...mentions ? { mentions } : {},
       // the admin's page has no script to fetch a fold as it opens
       ...everyone ? { whole: true } : {},
-      ...await namingOf(store, withHelpers(entries, helped.helpers), named),
+      ...naming,
     }
     let names = namer(seen)
     let view = await viewOf(store, entries, !!everyone)
@@ -1284,6 +1357,7 @@ export let conversationOf = async (
     // input, which the Operator answers next.
     let working = [...entries, ...newest(arrived, entries, eid)]
     let drawn = drawnLines(shown, names, seen, view)
+    await opening(store, seen, drawn, shown, wanted, named, called, opens)
     let [page, self] = helper
       ? await Promise.all([
         helperPage(store, row, opens),
@@ -1340,21 +1414,35 @@ export let conversationOf = async (
     )
   )
   let helped = await seenOf(store, sessions, entries)
+  let naming = await namingOf(
+    store,
+    withHelpers(entries, helped.helpers),
+    named,
+  )
   let seen = {
     ...helped,
-    threads: await threadsOf(store, entries, named, called, opens),
+    threads: await threadsOf(
+      store,
+      entries,
+      named,
+      called,
+      opens,
+      whole(everyone, wanted),
+      naming.person ?? undefined,
+    ),
     ...await roomsBy(store, entries),
     called,
     opens,
     ...mentions ? { mentions } : {},
     // the admin's page has no script to fetch a fold as it opens
     ...everyone ? { whole: true } : {},
-    ...await namingOf(store, withHelpers(entries, helped.helpers), named),
+    ...naming,
   }
   let names = namer(seen)
   let view = await viewOf(store, entries, !!everyone)
   seen.helpers = await lined(store, seen.helpers, names, opens)
   let drawn = drawnLines(entries, names, seen, view)
+  await opening(store, seen, drawn, entries, wanted, named, called, opens)
   return {
     aside: asideOf(entries, seen.helpers, names),
     task,
@@ -2210,6 +2298,7 @@ export let operatorRequest = async (
         : undefined,
       typeof args.mentions == 'string' ? args.mentions : undefined,
       typeof args.take == 'number' && args.take > 0 ? args.take : undefined,
+      typeof args.line == 'string' ? args.line : args.lines ? true : undefined,
     )
     // One line as data, for a page opening a fold of it.
     if (typeof args.line == 'string') {

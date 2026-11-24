@@ -99,6 +99,24 @@ await store.g.apply([
   }),
 ], { trusted: true })
 let first = await read()
+// The page opening the sub-thread's fold asks for its line whole.
+let opening = (line: string) =>
+  conversationOf(
+    store,
+    '/operator',
+    root,
+    named,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    line,
+  ).then((c) => c.lines(line))
+// The notice's line: the run of steps it is drawn in.
+let line = first.lines()!.lines.find((l) => l.of?.includes(notice))!.id
+let unfolded = await opening(line)
 await frames.tell(root)
 let delivered = sent.splice(0)
 let latest =
@@ -123,7 +141,7 @@ let documentOf = (html: string) => parseHTML(html).document
 let foldOf = (html: string) =>
   documentOf(html).querySelector(`#row-${notice} details`)!
 
-test('a sub-thread appears once at its closing notice, a step named for whom it was with, holding the chat', () => {
+test('a sub-thread appears once at its closing notice, a step named for whom it was with, drawn as it opens', () => {
   assertEquals(before.html.includes('Check the calendar'), false)
   assertEquals(privateFrames.some((f) => f.operator.task == root), false)
   let document = documentOf(first.html)
@@ -139,19 +157,14 @@ test('a sub-thread appears once at its closing notice, a step named for whom it 
     !!document.querySelector(`#row-${notice} .Transcript_Meta time[datetime]`),
     true,
   )
-  assertStringIncludes(
-    fold.querySelector(':scope > .More_Body')!.textContent!,
-    'Check the calendar.',
-  )
-  assertStringIncludes(
-    fold.querySelector(':scope > .More_Body')!.textContent!,
-    'Tuesday is free.',
-  )
-  assertEquals(
-    fold.textContent!.includes('Main conversation stays here'),
-    false,
-  )
-  assertEquals(fold.textContent!.includes('calendar questions briefly'), false)
+  assertEquals(fold.hasAttribute('data-lazy'), true)
+  assertEquals(fold.textContent!.includes('Tuesday is free.'), false)
+  let chat = JSON.stringify(unfolded?.threads?.[notice]?.lines)
+  assertStringIncludes(chat, 'Check the calendar.')
+  assertStringIncludes(chat, 'Tuesday is free.')
+  assertEquals(chat.includes('Main conversation stays here'), false)
+  assertEquals(chat.includes('calendar questions briefly'), false)
+  assertEquals(first.lines(line)?.threads?.[notice]?.lines, undefined)
   assertEquals(first.html.includes('Another person’s private words'), false)
 })
 
@@ -171,19 +184,35 @@ Object.defineProperty(globalThis, 'document', {
   value: document,
   configurable: true,
 })
+// The sub-thread's fold once it shows the chat, its line fetched.
+let foldText = () =>
+  document.querySelector(`#row-${notice} details`)!.textContent!
+let drawn = async () => {
+  for (let i = 0; i < 50 && !foldText().includes('Tuesday'); i++) {
+    await new Promise((done) => setTimeout(done, 10))
+  }
+}
+let calls: string[] = []
 let talk = mountTalk({
   box: document.querySelector('[data-conversation]') as HTMLElement,
   words: pageDocs(operatorVocab.docs),
+  unfold: (l: string) => (calls.push(l), opening(l)),
 })
 let opened = document.querySelector(`#row-${notice} details`)!
-opened.setAttribute('open', '')
-opened.dispatchEvent(new page.Event('toggle', { bubbles: true }))
+opened.querySelector('summary')!.dispatchEvent(
+  new page.Event('click', { bubbles: true, cancelable: true }),
+)
+await drawn()
+let drawnOpen = foldText()
 talk.read(updated.html)
+await drawn()
 if (prior) Object.defineProperty(globalThis, 'document', prior)
 else Reflect.deleteProperty(globalThis, 'document')
 
 test('page and socket render the same sub-thread entries and preserve its open state on refresh', () => {
   assertEquals(socketFold, pageFold)
+  assertStringIncludes(drawnOpen, 'Tuesday is free.')
+  assertEquals(calls, [line, line], 'opened, then read again')
   let fold = document.querySelector(`#row-${notice} details`)!
   assertEquals(fold.hasAttribute('open'), true)
   assertStringIncludes(fold.textContent!, 'Tuesday is free.')
