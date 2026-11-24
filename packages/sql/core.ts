@@ -96,6 +96,7 @@ export {
   render,
   renderStable,
   shape,
+  STOCK_DEPTH,
   STOCK_VARIABLES,
   VARIABLES,
 } from './render.ts'

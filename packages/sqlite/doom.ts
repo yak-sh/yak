@@ -10,6 +10,7 @@ import {
   looseSql,
   narrow,
   type Raw,
+  STOCK_DEPTH,
 } from '@yaks/sql'
 
 /**
@@ -20,9 +21,8 @@ import {
  * a network — and that walk is what an adapter unable to compile this still
  * gets.
  *
- * A statement carries as many terms as the driver says its engine allows
- * (@yaks/sql `Driver.arms`), so an embedded SQLite asks the whole cascade at
- * once. A vocabulary too wide for one statement (@yaks/sql `narrow`) is
+ * Each statement fits the engine's compound SELECT and CTE cursor limits.
+ * A vocabulary too wide for one statement (@yaks/sql `narrow`) is
  * queried in rounds: each statement is transitive within its own tables, so
  * the result is complete when a round turns up nothing the last one had not.
  *
@@ -46,7 +46,7 @@ export let doom = (
   for (;;) {
     let fresh: string[] = []
     let least = DEEP
-    for (let s of doomSql(vocab, seed, terms, lacks)) {
+    for (let s of doomSql(vocab, seed, terms, lacks, STOCK_DEPTH)) {
       for (let r of ask(s)) {
         let eid = String(r.eid)
         if (depth.has(eid)) continue
@@ -57,18 +57,19 @@ export let doom = (
         least = Math.min(least, rung)
       }
     }
-    if (narrow(vocab, terms) || !fresh.length) break
+    if (narrow(vocab, terms, STOCK_DEPTH) || !fresh.length) break
     seed = fresh
     base = least
   }
   return {
     gone,
-    loose: looseSql(vocab, [...depth.keys()], terms, lacks).flatMap((s) =>
-      ask(s).map((r) => ({
-        eid: String(r.eid),
-        comp: String(r.comp),
-        prop: String(r.prop),
-      }))
-    ),
+    loose: looseSql(vocab, [...depth.keys()], terms, lacks, STOCK_DEPTH)
+      .flatMap((s) =>
+        ask(s).map((r) => ({
+          eid: String(r.eid),
+          comp: String(r.comp),
+          prop: String(r.prop),
+        }))
+      ),
   }
 }

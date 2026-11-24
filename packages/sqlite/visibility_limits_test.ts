@@ -2,11 +2,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
+import { fields, schema, search } from '@yaks/fts'
 import { loadVocab } from '@yaks/vocab'
 import { and, eq, joined, line, list } from '@yaks/query'
 import { type Driver, render } from '@yaks/sql'
 import { get, storage } from './mod.ts'
-import { snapshot, textual } from './testing.ts'
+import { mem, snapshot, textual } from './testing.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -99,3 +100,55 @@ test('empty scoped identity lookups need no database', () =>
     ),
     [],
   ))
+
+let wide = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      properties: { title: { type: 'string', search: true } },
+    },
+    ...Object.fromEntries(Array.from({ length: 360 }, (_, i) => [
+      `pointer${i}`,
+      {
+        component: true,
+        properties: { to: { type: 'string', ref: 'entity' } },
+      },
+    ])),
+  },
+})
+let indexed = fields(wide)
+let native = mem()
+let rankedStore = storage(native, wide, { extend: [search(indexed, native)] })
+rankedStore.install()
+rankedStore.raise()
+for (let stmt of schema(indexed)) native.query(stmt)
+let ranked = graph({
+  vocab: wide,
+  storage: rankedStore,
+  plugins: [{
+    name: 'owner',
+    scope: () => ({ entity: '.entity.eid!=hidden' }),
+  }],
+})
+ranked.apply([
+  { entity: { eid: 'visible' }, doc: { title: 'Target' } },
+  { entity: { eid: 'hidden' }, doc: { title: 'Private target' } },
+  {
+    entity: { eid: 'link' },
+    pointer359: { to: 'visible' },
+    doc: { title: 'Needle' },
+  },
+  {
+    entity: { eid: 'private-link' },
+    pointer0: { to: 'hidden' },
+    doc: { title: 'Needle' },
+  },
+  { entity: { eid: 'unrelated' }, doc: { title: 'Needle' } },
+])
+
+test('ranked full-text search over wide backlinks respects target visibility', () => {
+  assertEquals(
+    ranked.rows('(.refs=visible|.refs=hidden) needle .order=search .limit=5'),
+    [{ eid: 'link' }],
+  )
+})

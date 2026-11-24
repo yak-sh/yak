@@ -14,15 +14,12 @@
 //
 // A statement, but not necessarily one statement. Every backward term is a term
 // of the same compound SELECT, and workerd limits a compound SELECT to five
-// terms (./compound.ts). Each reference column has its own indexed term,
-// cut into statements of as
-// many terms as the engine allows ({@link ARMS} unless its driver declares
-// more), all seeded the same way. A vocabulary {@link narrow} enough to fit in
-// one statement is answered whole, as an embedded SQLite answers any; a wider
-// one is asked in rounds — each statement is transitive within its own
-// tables, so the caller re-asks with whatever the last round turned up until
-// nothing new comes back. Two rounds answer the ordinary cascade, however deep
-// it runs.
+// terms (./compound.ts). Each reference column has its own indexed term.
+// Split the terms to fit the engine's compound SELECT and CTE cursor limits.
+// A vocabulary {@link narrow} enough to fit in one statement is answered
+// whole. A wider one is asked in rounds. Each statement is transitive within
+// its own tables, so the caller re-asks with whatever the last round turned
+// up until nothing new comes back.
 //
 // The depth count stops climbing where the walk would otherwise loop. A cycle
 // among cascade properties (an entity that exists to describe an entity that
@@ -36,24 +33,34 @@
 // backend that cannot compile this (a map, a browser cache) is walked
 // instead.
 
-import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
 import { ARMS, cut } from './compound.ts'
 import {
+  among,
+  and,
+  as,
+  at,
   call,
   col,
   cross,
+  type Cte,
   eq,
-  type Frag,
+  exists,
+  fn,
+  lit,
+  not,
   oneOf,
+  op,
   type Raw,
   raw,
   select,
   table,
+  union,
+  unionAll,
   val,
 } from './ast.ts'
-import { render } from './render.ts'
-import { type Dialect, indexName, sqlite } from './sqlite.ts'
+import { DEPTH, render } from './render.ts'
+import { field, indexName } from './sqlite.ts'
 
 /** How far a cascade's rungs are counted before the number stops climbing.
  * Depth only decides the order the deleted entities come back in; it never
@@ -63,23 +70,37 @@ export let DEEP = 32
 // The CTE's name, and the alias the entity table is read through. Both are
 // named so that no component can collide with them — a vocabulary owns every
 // ordinary name.
-let W = '"__doom"'
-let E = '"__e"'
+let W = '__doom'
+let E = '__e'
+let doomed = at(W)
+let entity = at(E)
+let owner = (comp: string) => col(comp == 'entity' ? 'id' : 'entity', comp)
+let alive = (comp: string) =>
+  not(exists(select({
+    cols: [lit(1)],
+    from: table('tombstone'),
+    where: eq(col('entity', 'tombstone'), owner(comp)),
+  })))
 
-// The component row's owner has not been deleted. This is the same condition
-// @yaks/sql ANDs into every query, written against an owner column rather than
-// against the entity table.
-let alive = (owner: string): string =>
-  `not exists (select 1 from "tombstone" where "tombstone"."entity" = ${owner})`
+// SQLite 3.54.1 counts FROM sources again each time a CTE is named. The
+// seed takes at most two cursors, and a recursive arm takes three (the
+// worklist, component and tombstone). A soft-reference arm takes three of
+// its own and names the worklist twice: once to seek referrers and once to
+// exclude dead owners. Leave room for at least one such arm.
+let softCost = (cascade: number): number => 3 + 2 * (1 + 2 + 3 * cascade)
+let width = (terms: number, cursors: number): number =>
+  Math.min(
+    terms,
+    Math.floor((cursors - 1 - softCost(0)) / (softCost(1) - softCost(0))),
+  )
 
-/**
- * Does this vocabulary's whole cascade fit in one statement of `terms` terms
- * (what the engine's compound SELECT carries, past the seed)? When it does, one
- * query is the complete answer and {@link looseSql} can restate the closure
- * inside itself; when it does not, the caller asks in rounds (see the header).
- */
-export let narrow = (v: Vocab, terms: number = ARMS): boolean =>
-  v.deaths('cascade').length <= terms
+/** Whether the vocabulary's cascade fits in one statement. When it does,
+ * {@link looseSql} can restate the closure, so both lookups can run together. */
+export let narrow = (
+  v: Vocab,
+  terms: number = ARMS,
+  cursors: number = DEPTH,
+): boolean => v.deaths('cascade').length <= width(terms, cursors)
 
 /** What a look at the file found it lacks of the vocabulary's schema (as
  * @yaks/sqlite's survey reports it): each component whose table it lacks, each
@@ -98,7 +119,7 @@ export type Lacks = {
 type Held = {
   v: Vocab
   deaths: (kind: 'cascade' | 'detach' | 'release') => [string, string][]
-  reference: (comp: string, prop: string) => string
+  index: (comp: string, prop: string) => string | undefined
 }
 
 // Each reference has its own seek. An OR over several columns lets stale
@@ -118,11 +139,9 @@ let held = (v: Vocab, lacks: Lacks): Held => {
       v.deaths(kind).filter(([c, p]) =>
         !absent.has(c) && !lacking.has(`${c}.${p}`)
       ),
-    reference: (comp, prop) => {
+    index: (comp, prop) => {
       let index = seek(v, comp, prop)
-      return index && !unindexed.has(index)
-        ? sqlite.indexed!(comp, index)
-        : sqlite.table(comp)
+      return index && !unindexed.has(index) ? index : undefined
     },
   }
 }
@@ -133,67 +152,50 @@ let lackKey = (v: Vocab, lacks: Lacks): string => {
   let h = held(v, lacks)
   let kinds = ['cascade', 'detach', 'release'] as const
   return kinds.map((k) =>
-    h.deaths(k).map(([c, p]) => `${c}.${p}=${h.reference(c, p)}`).join(',')
+    h.deaths(k).map(([c, p]) => `${c}.${p}=${h.index(c, p) ?? ''}`).join(',')
   ).join(';')
 }
 
 let seed = (eids: string[]): string =>
   eids.length == 1 ? eids[0] : JSON.stringify([...new Set(eids)])
 
-let seeds = (eids: string[]) =>
-  render(select({
-    cols: [col('id', 'entity')],
+let seeds = (eids: string[], recursive = false) =>
+  select({
+    cols: [col('id', 'entity'), ...(recursive ? [lit(0)] : [])],
     ...(eids.length == 1
       ? {
         from: table('entity'),
         where: oneOf(col('eid'), eids),
       }
       : {
-        from: call(
-          'json_each',
-          [val(seed(eids))],
-          '__seeds',
-        ),
+        from: call('json_each', [val(seed(eids))], '__seeds'),
         joins: [cross(table('entity', undefined, 'sqlite_autoindex_entity_1'))],
         where: eq(col('eid', 'entity'), col('value', '__seeds')),
       }),
-  }))
+  })
 
-// The recursive CTE one statement opens with: the seed at depth 0, then this
-// group's terms — the rows whose death column points at something already
-// marked for deletion. `union` both deduplicates and, together with the
-// saturating depth, terminates.
-let closure = (
-  eids: string[],
-  group: [string, string][],
-  d: Dialect,
-  h: Held,
-): Frag => {
-  let set = seeds(eids)
-  return {
-    sql: `with recursive ${W}("id", "depth") as (\n` +
-      `  select "id", 0 from (${set.sql})\n` +
-      group.map(([comp, prop]) => {
-        let own = d.ownerKey(comp)
-        let hits = `"${comp}"."${field(prop)}" = ${W}."id"`
-        return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
-          ` from ${W} cross join ${
-            h.reference(comp, prop)
-          } where (${hits}) and ${alive(own)}\n`
-      }).join('') + `)\n`,
-    params: set.params,
-  }
-}
+let points = (comp: string, prop: string) =>
+  eq(col(field(prop), comp), doomed('id'))
 
-// The same CTE name over a set that is already known: what a soft-reference
-// statement builds on when the cascade was too wide to restate (see
-// {@link narrow}).
-let named = (eids: string[]): Frag => {
-  let set = seeds(eids)
+// UNION deduplicates and, together with the saturating depth, terminates.
+let closure = (h: Held, eids: string[], group: [string, string][]): Cte => {
+  let initial = seeds(eids, true)
+  let steps = group.map(([comp, prop]) =>
+    select({
+      cols: [
+        owner(comp),
+        fn('min', op('+', doomed('depth'), lit(1)), lit(DEEP)),
+      ],
+      from: table(W),
+      joins: [cross(table(comp, undefined, h.index(comp, prop)))],
+      where: and(points(comp, prop), alive(comp)),
+    })
+  )
   return {
-    sql: `with ${W}("id") as (` +
-      `${set.sql})\n`,
-    params: set.params,
+    name: W,
+    cols: ['id', 'depth'],
+    recursive: steps.length > 0,
+    q: steps.length ? union(initial, ...steps) : initial,
   }
 }
 
@@ -203,13 +205,14 @@ let named = (eids: string[]): Frag => {
 // including the empty set. Each answer owns its statement and bindings; no
 // caller can change a kept plan.
 type Plan = Partial<Record<'doom' | 'loose', Raw[]>>
-type Build = (h: Held, eids: string[], terms: number) => Raw[]
+type Build = (h: Held, eids: string[], terms: number, cursors: number) => Raw[]
 let plans = new WeakMap<Vocab, Map<string, [Plan, Plan]>>()
 let planned = (
   v: Vocab,
   eids: string[],
   terms: number,
   lacks: Lacks,
+  cursors: number,
   kind: keyof Plan,
   build: Build,
 ): Raw[] => {
@@ -217,15 +220,20 @@ let planned = (
   if (!cache) plans.set(v, cache = new Map())
   let whole = !lacks.absent?.length && !lacks.lacking?.length &&
     !lacks.unindexed?.length
-  let key = `${terms}|${whole ? '' : lackKey(v, lacks)}`
+  let key = `${terms}:${cursors}|${whole ? '' : lackKey(v, lacks)}`
   let forms = cache.get(key)
   if (!forms) cache.set(key, forms = [{}, {}])
   let one = eids.length == 1
   let plan = forms[one ? 0 : 1]
-  let kept = plan[kind] ??= build(held(v, lacks), one ? [''] : [], terms)
+  let kept = plan[kind] ??= build(
+    held(v, lacks),
+    one ? [''] : [],
+    terms,
+    cursors,
+  )
   if (!kept.length) return []
   let value = seed(eids)
-  return kept.map((s) => raw(s.sql, [value, ...s.params.slice(1)], s.table))
+  return kept.map((s) => raw(s.sql, [value, ...s.params.slice(1)], 'entity'))
 }
 
 /**
@@ -246,21 +254,27 @@ export let doomSql = (
   eids: string[],
   terms: number = ARMS,
   lacks: Lacks = {},
-): Raw[] => planned(v, eids, terms, lacks, 'doom', doom)
+  cursors: number = DEPTH,
+): Raw[] => planned(v, eids, terms, lacks, cursors, 'doom', doom)
 
-let doom: Build = (h, eids, terms) =>
-  cut(h.deaths('cascade'), terms).map((group) => {
-    let head = closure(eids, group, sqlite, h)
-    return raw(
-      head.sql +
-        `select ${E}."eid" as eid, ${E}."num" as num,` +
-        ` min(${W}."depth") as depth` +
-        ` from ${W} cross join "entity" ${E} on ${E}."id" = ${W}."id"` +
-        ` group by ${W}."id" order by depth, ${W}."id"`,
-      head.params,
-      'entity',
-    )
-  })
+let doom: Build = (h, eids, terms, cursors) =>
+  cut(h.deaths('cascade'), width(terms, cursors)).map((group) =>
+    render(select({
+      with: [closure(h, eids, group)],
+      cols: [
+        entity('eid'),
+        entity('num'),
+        as(fn('min', doomed('depth')), 'depth'),
+      ],
+      from: table(W),
+      joins: [{
+        ...cross(table('entity', E)),
+        on: eq(entity('id'), doomed('id')),
+      }],
+      group: [doomed('id')],
+      order: [col('depth'), doomed('id')],
+    }))
+  )
 
 /**
  * Every soft reference into the closure of these entities: a surviving row's
@@ -284,28 +298,49 @@ export let looseSql = (
   eids: string[],
   terms: number = ARMS,
   lacks: Lacks = {},
-): Raw[] => planned(v, eids, terms, lacks, 'loose', loose)
+  cursors: number = DEPTH,
+): Raw[] => planned(v, eids, terms, lacks, cursors, 'loose', loose)
 
-let loose: Build = (h, eids, terms) => {
-  let d = sqlite
+let loose: Build = (h, eids, terms, cursors) => {
+  let cascade = narrow(h.v, terms, cursors) ? h.deaths('cascade') : []
+  let head = cascade.length
+    ? closure(h, eids, cascade)
+    : { name: W, q: seeds(eids) }
   let soft = [...h.deaths('release'), ...h.deaths('detach')]
+  let room = Math.min(
+    terms,
+    Math.floor((cursors - 1) / softCost(cascade.length)),
+  )
   if (!soft.length) return []
-  let head = () =>
-    narrow(h.v, terms) ? closure(eids, h.deaths('cascade'), d, h) : named(eids)
-  return cut(soft, terms).map((group) => {
-    let open = head()
-    return raw(
-      open.sql + group.map(([comp, prop]) => {
-        let own = d.ownerKey(comp)
-        return `select distinct ? as comp, ? as prop, ${E}."eid" as eid,` +
-          ` ${E}."id" as ord` +
-          ` from ${W} cross join ${h.reference(comp, prop)}` +
-          ` cross join "entity" ${E} on ${E}."id" = ${own}` +
-          ` where "${comp}"."${field(prop)}" = ${W}."id"` +
-          ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
-      }).join('\n union all ') + ` order by "ord"`,
-      [...open.params, ...group.flat()],
-      'entity',
+  return cut(soft, room).map((group) => {
+    let parts = group.map(([comp, prop]) =>
+      select({
+        distinct: true,
+        cols: [
+          as(val(comp), 'comp'),
+          as(val(prop), 'prop'),
+          entity('eid'),
+          as(entity('id'), 'ord'),
+        ],
+        from: table(W),
+        joins: [
+          cross(table(comp, undefined, h.index(comp, prop))),
+          { ...cross(table('entity', E)), on: eq(entity('id'), owner(comp)) },
+        ],
+        where: and(
+          points(comp, prop),
+          not(
+            among(
+              owner(comp),
+              select({ cols: [doomed('id')], from: table(W) }),
+            ),
+          ),
+          alive(comp),
+        ),
+      })
     )
+    let query = parts.length == 1 ? parts[0] : unionAll(...parts)
+    // The seed parameter must precede the component and property bindings.
+    return render({ ...query, with: [head], order: [col('ord')] })
   })
 }

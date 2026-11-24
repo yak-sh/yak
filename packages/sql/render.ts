@@ -639,6 +639,7 @@ let pieces = (sql: string, counting = false): Piece[] | undefined => {
  * ({@link cursors}): its SQLITE_LIMIT_EXPR_DEPTH, 100. The library this
  * toolkit embeds holds SQLite's default of 1000. */
 export let DEPTH = 100
+export let STOCK_DEPTH = 1000
 
 // The words that end a FROM clause's list of sources at their level.
 let ENDS = new Set([
@@ -810,10 +811,15 @@ let MARGIN = 10
 // each time it runs.
 let settled = new Set<string>()
 let flat = (r: Raw, cap: number, most: number): Raw => {
-  let usual = most == DEPTH
-  if (
-    most == Infinity || !r.sql.includes('with') || usual && settled.has(r.sql)
-  ) return r
+  if (most == Infinity || !r.sql.includes('with')) return r
+  let key = `${most}:${cap}:${r.sql}`
+  if (settled.has(key)) return r
+  let under = (sql: string) => cursors(sql) <= most - MARGIN
+  // The embedded driver keeps the planner hints of statements that fit.
+  if (most == STOCK_DEPTH && under(r.sql)) {
+    settle(key)
+    return r
+  }
   let out = r, left = new Set<string>()
   for (let turn = 0; turn < 64 && out.sql.includes(HINT); turn++) {
     let next = unfolded(out, cap, left, false)
@@ -821,8 +827,7 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
     out = next
   }
   if (out != r && long(out.sql)) out = r
-  let under = (sql: string) => cursors(sql) <= most - MARGIN
-  if (most != Infinity && !under(out.sql)) {
+  if (!under(out.sql)) {
     let whole = out
     for (let turn = 0; turn < 64 && !under(whole.sql); turn++) {
       let next = unfolded(whole, cap, left, true)
@@ -831,11 +836,13 @@ let flat = (r: Raw, cap: number, most: number): Raw => {
     }
     if (under(whole.sql) && !long(whole.sql)) out = whole
   }
-  if (usual) {
-    if (settled.size >= 512) settled.clear()
-    settled.add(out.sql)
-  }
+  if (out == r) settle(key)
   return out
+}
+
+let settle = (key: string) => {
+  if (settled.size >= 512) settled.clear()
+  settled.add(key)
 }
 
 // The statement with the first relation it can write out written out, or

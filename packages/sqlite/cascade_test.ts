@@ -260,6 +260,54 @@ test('a wide vocabulary is asked in rounds until nothing is new', () => {
   })
 })
 
+let deaths = (word: 'cascade' | 'detach', count: number) =>
+  Object.fromEntries(Array.from({ length: count }, (_, i) => [
+    `${word}${i}`,
+    {
+      component: true,
+      properties: { to: { type: 'string', ref: 'entity', death: word } },
+    },
+  ]))
+
+let broad = loadVocab({
+  $defs: {
+    ...deaths('cascade', 40),
+    ...deaths('detach', 8),
+    mark: doc.$defs!.mark,
+  },
+})
+
+let broadStore = db(broad)
+broadStore.raise()
+let broadGraph = graph({ storage: broadStore, vocab: broad })
+broadGraph.apply([
+  { entity: { eid: 'seed' }, cascade0: {} },
+  { entity: { eid: 'first' }, cascade39: { to: 'seed' } },
+  {
+    entity: { eid: 'last' },
+    cascade0: { to: 'first' },
+    detach0: { to: 'seed' },
+  },
+  {
+    entity: { eid: 'survivor' },
+    detach7: { to: 'last' },
+    mark: { at: 'first' },
+  },
+])
+
+test('a broad vocabulary cascades and clears references to the deepest casualty', () => {
+  let result = broadGraph.apply([{
+    entity: { eid: 'seed' },
+    $delete: true,
+  }]) as Bundle[]
+  assertEquals(dead(result), ['seed', 'first', 'last'])
+  assertEquals(result.find((b) => b.entity.eid == 'survivor'), {
+    entity: { eid: 'survivor' },
+    detach7: { to: null },
+    mark: null,
+  })
+})
+
 test('a wide vocabulary asks no statement more than it may carry', () => {
   // Workerd caps a compound SELECT at five terms and answers a wider one with
   // `too many terms in compound SELECT` — which is not a limit an embedded

@@ -10,6 +10,7 @@ import {
   statement,
   type Stmt,
   STOCK,
+  STOCK_DEPTH,
   STOCK_VARIABLES,
   writing,
 } from '@yaks/sql/core'
@@ -40,7 +41,8 @@ export let driver = (
     opts.before?.(s)
     // Each statement is kept by its text (./native.ts `prepared`), and a list
     // costs no rows here: every collection binds as one JSON array.
-    let rendered = renderStable(s, STOCK_VARIABLES), { sql, params } = rendered
+    let rendered = renderStable(s, STOCK_VARIABLES, STOCK_DEPTH),
+      { sql, params } = rendered
     let at = context()
     let c = at?.channel ?? peek(d)
     if (!c) return run(sql, params)
