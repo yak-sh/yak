@@ -606,7 +606,8 @@ export let start = (
     let into = (e as MouseEvent).relatedTarget as Node | null
     if (!link || (into && link.contains(into))) return
     clearTimeout(hovering)
-    drop()
+    let to = new URL(link.getAttribute('href')!, win.location.href)
+    if (looking?.key == page(to)) drop()
   }
   win.addEventListener('mouseout', left)
   win.addEventListener('focusout', left)

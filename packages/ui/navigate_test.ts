@@ -394,6 +394,8 @@ test('a pointer that moves on before its page comes lets it go, and one look ahe
     'mouseout',
     { bubbles: true },
   )
+  b.doc.querySelector('a[href="/updates"]')!.dispatchEvent(out)
+  assertEquals(b.stopped, ['https://y.test/updates'], 'not its own')
   b.doc.querySelector('a[href="/apps"]')!.dispatchEvent(out)
   assertEquals(b.stopped, ['https://y.test/updates', 'https://y.test/apps'])
   await b.answer()
