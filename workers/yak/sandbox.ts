@@ -438,6 +438,11 @@ export let workbench = async (
       caught(e, { request: 'sandbox sleep', space: space.slug }),
   })
   let lent = await (first ? provider.request!(ref) : provider.connect(ref))
+  // A container that slept since this build's last call restores its files
+  // here, so the wait is the wake's and not the command's.
+  if (!first) {
+    await retrying(env)(() => prepared(ref, ns.get(ns.idFromName(ref.id))))
+  }
   spend.preparing ??= (async () => {
     await lent.workspace.write('/usr/local/bin/yak', LAUNCHER)
     let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')

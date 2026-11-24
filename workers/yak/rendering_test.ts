@@ -151,6 +151,13 @@ let page = (
       hear.get('console')?.(
         { type: () => 'log', text: () => 'page ready' } satisfies Message,
       )
+      hear.get('console')?.(
+        {
+          type: () => 'error',
+          text: () => 'Failed to load resource: net::ERR_FAILED',
+          location: () => ({ url: 'https://a.yaks.app/cdn-cgi/speculation' }),
+        } satisfies Message,
+      )
       hear.get('pageerror')?.(new Error('page exception'))
       return options.loading
         ? Promise.reject(options.loading)

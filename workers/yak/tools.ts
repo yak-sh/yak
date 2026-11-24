@@ -3481,7 +3481,9 @@ let bench = async <T>(
   let spend = ctx.spend ?? spending()
   let no = refusedSpend(space, 'seconds', ctx.env, seconds(spend))
   if (no) throw refuse('limit', no)
+  ctx.doing?.(WAKING)
   let box = await workbench(ctx.env, space, ctx.person, spend)
+  ctx.doing?.('the sandbox is running the command')
   try {
     return await body(box)
   } finally {
@@ -3490,6 +3492,11 @@ let bench = async <T>(
     }
   }
 }
+
+// What a sandbox call still running says while `workbench` wakes its
+// container: a sandbox that slept restores its kept files first.
+let WAKING = 'the sandbox is waking: starting its container and restoring ' +
+  'the files it kept, which takes longer the more it keeps'
 
 // The machine tools (@yaks/harness), declared there once and listed here as
 // sandbox_<name>, run on this space's container (sandbox.ts

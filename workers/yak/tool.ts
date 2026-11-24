@@ -55,6 +55,9 @@ export type Ctx = {
   app?: { space: Space; app: App; level?: Level | null }
   /** The invocation whose work a forwarded store call records as its source. */
   call?: string
+  /** Says what a call that outlasts its caller (outlast.ts) is doing now, for
+   * a caller who hears it is still running: "restoring the sandbox's files". */
+  doing?: (step: string) => void
   // How this caller got in, when a door knows (mcp.ts sets it from
   // identity.ts `asking`): the session, a connector's token, or a CLI grant,
   // with what that credential says about itself. `about` reads it to answer

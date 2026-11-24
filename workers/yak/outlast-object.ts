@@ -15,7 +15,11 @@ import { type Asked, type Ended, type Heard, outlasting } from './outlast.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 
-let ran = async (env: Env, asked: Asked): Promise<Ended> => {
+let ran = async (
+  env: Env,
+  asked: Asked,
+  doing: (step: string) => void,
+): Promise<Ended> => {
   let t = TOOLS.find((one) => one.name == asked.tool)
   if (!t) return { refused: { code: 'missing', text: `no tool ${asked.tool}` } }
   let space = asked.who?.space
@@ -31,6 +35,7 @@ let ran = async (env: Env, asked: Asked): Promise<Ended> => {
     dir: reopen(),
     reopen,
     person: asked.person,
+    doing,
     ...asked.who ? { who: asked.who } : {},
   }
   try {
@@ -67,7 +72,7 @@ export class Outlast extends Durable {
   call(asked: Asked): Promise<Heard> {
     return this.enter(
       'call',
-      () => this.#once(() => ran(this.#env, asked), asked.patience),
+      () => this.#once((doing) => ran(this.#env, asked, doing), asked.patience),
     )
   }
 }

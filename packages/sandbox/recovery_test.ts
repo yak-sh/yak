@@ -323,28 +323,85 @@ test('an outbound archive read streams bytes only from the calling container', a
   equal(reads, [`workbench/mine/${key}`])
 })
 
+// The recovery script, run over a directory standing in for the container's /.
+let sh = async (command: string) => {
+  let out = await new Deno.Command('sh', { args: ['-c', command] }).output()
+  let text = new TextDecoder()
+  return {
+    exitCode: out.code,
+    stdout: text.decode(out.stdout),
+    stderr: text.decode(out.stderr),
+  }
+}
+let local = (root: string) =>
+  filesystem(
+    { getState: () => Promise.resolve({ status: 'running' }), exec: sh },
+    async function* () {},
+    root,
+  )
+let image = async (root: string, files: Record<string, string>) => {
+  for (let [name, text] of Object.entries(files)) {
+    let dir = `${root}/${name}`.replace(/\/[^/]*$/, '')
+    await Deno.mkdir(dir, { recursive: true })
+    await Deno.writeTextFile(`${root}/${name}`, text)
+  }
+}
+let listed = async (root: string, dir = ''): Promise<string[]> => {
+  let names: string[] = []
+  for await (let e of Deno.readDir(`${root}/${dir}`)) {
+    let name = dir ? `${dir}/${e.name}` : e.name
+    if (name == '.yak-recovery') continue
+    names.push(...e.isDirectory ? await listed(root, name) : [name])
+  }
+  return names.sort()
+}
+
+test('a woken sandbox gets back its changed files and deletions, without caches', async () => {
+  let made = await Deno.makeTempDir()
+  try {
+    let base = {
+      'etc/conf': 'image',
+      'etc/gone': 'image',
+      'tmp/seed': 'image',
+      'var/cache/apt/seed': 'image',
+    }
+    let [was, woken] = [`${made}/was`, `${made}/woken`]
+    for (let root of [was, woken]) {
+      await image(root, base)
+      equal(await local(root).run('fresh'), 'fresh')
+    }
+    await image(was, {
+      'etc/conf': 'edited',
+      'workspace/notes': 'kept',
+      'tmp/scratch': 'temporary',
+      'var/cache/apt/pkg.deb': 'cached',
+      'root/.npm/_cacache/blob': 'cached',
+    })
+    await Deno.remove(`${was}/etc/gone`)
+    let size = await local(was).run('save')
+    let archive = `file://${was}/.yak-recovery/snapshot.tar.gz`
+    let fs = local(woken)
+    let said = await fs.run('restore', archive, size)
+    equal(typeof JSON.parse(said).restoreMs, 'number')
+    equal(await listed(woken), [
+      'etc/conf',
+      'tmp/seed',
+      'var/cache/apt/seed',
+      'workspace/notes',
+    ])
+    equal(await Deno.readTextFile(`${woken}/etc/conf`), 'edited')
+    await throws(() => fs.run('restore', archive, String(Number(size) + 1)))
+  } finally {
+    await Deno.remove(made, { recursive: true })
+  }
+})
+
 test('a snapshot skips entries it cannot read instead of failing', async () => {
   let root = await Deno.makeTempDir()
   try {
     await Deno.writeTextFile(`${root}/notes`, 'kept')
     await Deno.mkdir(`${root}/sealed`, { mode: 0o000 })
-    let fs = filesystem(
-      {
-        getState: () => Promise.resolve({ status: 'running' }),
-        exec: async (command) => {
-          let out = await new Deno.Command('sh', { args: ['-c', command] })
-            .output()
-          let text = new TextDecoder()
-          return {
-            exitCode: out.code,
-            stdout: text.decode(out.stdout),
-            stderr: text.decode(out.stderr),
-          }
-        },
-      },
-      async function* () {},
-      root,
-    )
+    let fs = local(root)
     equal(await fs.run('fresh'), 'fresh')
     await Deno.writeTextFile(`${root}/notes`, 'edited')
     equal(Number(await fs.run('save')) > 0, true)
@@ -360,23 +417,7 @@ test('a snapshot keeps every byte when an interrupted write left the baseline em
     await Deno.mkdir(`${root}/.yak-recovery`)
     await Deno.writeTextFile(`${root}/.yak-recovery/baseline.json`, '')
     await Deno.writeTextFile(`${root}/notes`, 'kept')
-    let fs = filesystem(
-      {
-        getState: () => Promise.resolve({ status: 'running' }),
-        exec: async (command) => {
-          let out = await new Deno.Command('sh', { args: ['-c', command] })
-            .output()
-          let text = new TextDecoder()
-          return {
-            exitCode: out.code,
-            stdout: text.decode(out.stdout),
-            stderr: text.decode(out.stderr),
-          }
-        },
-      },
-      async function* () {},
-      root,
-    )
+    let fs = local(root)
     equal(Number(await fs.run('save')) > 0, true)
   } finally {
     await Deno.remove(root, { recursive: true })

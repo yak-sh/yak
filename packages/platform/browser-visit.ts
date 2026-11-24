@@ -108,7 +108,21 @@ export type Visit = {
   html?: string
 }
 export type BrowseVisit = Visit & { mockup?: MockupFile[] }
-export type Message = { type(): string; text(): string }
+export type Message = {
+  type(): string
+  text(): string
+  location?(): { url?: string }
+}
+// Cloudflare's edge answers every host's /cdn-cgi/ paths itself, and adds to
+// pages what fetches them (Speed Brain's Speculation-Rules header asks for
+// /cdn-cgi/speculation, which a sandboxed page's null origin may not read).
+// What the browser says about them is the edge's, never the app's.
+let EDGE = /\/cdn-cgi\//
+/// edge({ type: () => 'error', text: () => "Access to speculation rules at 'https://a.yaks.app/cdn-cgi/speculation' from origin 'null' has been blocked by CORS policy" }) -> true
+/// edge({ type: () => 'error', text: () => 'Failed to load resource', location: () => ({ url: 'https://a.yaks.app/cdn-cgi/speculation' }) }) -> true
+/// edge({ type: () => 'log', text: () => 'page ready' }) -> false
+export let edge = (m: Message) =>
+  EDGE.test(m.text()) || EDGE.test(m.location?.().url ?? '')
 /** An alert, confirm, prompt or beforeunload dialog the page opened. Input
  * waits while one is open, so a step that opens one would never return. */
 export type Dialog = {
@@ -686,7 +700,7 @@ let loaded = async (
         if (errors.length < 100) errors.push(message(e))
       }
       page.on('console', (m) => {
-        if (console.length < 100) {
+        if (console.length < 100 && !edge(m)) {
           console.push({ type: m.type(), text: m.text().slice(0, 2000) })
         }
       })

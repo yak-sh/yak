@@ -92,8 +92,11 @@ Fonts and layout can differ from the application that created the original.
 
 A sandbox sleeps five minutes after its last command, and a managed build stops
 it when the build ends. Before either shutdown, the platform retains a snapshot
-of its changed files and restores them when the sandbox wakes. Older snapshots
-are retained without an automatic purge. Processes stop at shutdown.
+of its changed files and restores them when the sandbox wakes. Files in `/tmp`
+and package managers' download caches (apt, npm, pip, Deno, Go and Cargo) are
+left out and refill when needed, so keep work in `/workspace`. The more a
+snapshot holds, the longer waking takes. Older snapshots are retained without an
+automatic purge. Processes stop at shutdown.
 
 `sandbox_ship` copies files into an app independently, so the app serves them
 without waking the sandbox.

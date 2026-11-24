@@ -1,5 +1,6 @@
 // Only filesystem effects live here. The image's unchanged bytes are
-// regenerable; every changed file and original-file deletion is retained.
+// regenerable, and so are temporary files and package caches; every other
+// changed file and original-file deletion is retained.
 export let script = String.raw`
 import io, json, os, stat, subprocess, sys, tarfile, time
 
@@ -9,6 +10,15 @@ baseline = os.path.join(held, 'baseline.json')
 archive = os.path.join(held, 'snapshot.tar.gz')
 ready = os.path.join(held, 'ready')
 excluded = {'.yak-recovery', 'proc', 'sys', 'dev'}
+# Temporary files, package managers' download caches and the yak CLI's
+# versions: each refills itself when needed, and together they were most of a
+# 1.7 GB snapshot whose restore held a waking sandbox for two minutes.
+regenerable = ('tmp', 'var/tmp', 'var/cache', 'var/lib/apt/lists',
+               'root/.npm/_cacache', 'root/.cache/deno', 'root/.cache/pip',
+               'root/.cache/go-build', 'root/.cargo/registry/cache',
+               'opt/yaks-cli')
+def kept(name):
+    return not any(name == r or name.startswith(r + '/') for r in regenerable)
 # Kernel views, wherever they are mounted (a runtime may mount procfs under
 # /run), hold no workbench bytes and refuse some reads with EINVAL.
 virtual = {'proc', 'sysfs', 'devtmpfs', 'devpts', 'cgroup', 'cgroup2',
@@ -37,7 +47,7 @@ def scan():
     found = {}
     skipped = mounts()
     def walk(name):
-        if os.path.normpath(path(name)) in skipped:
+        if os.path.normpath(path(name)) in skipped or not kept(name):
             return
         try:
             entry = os.lstat(path(name))
@@ -84,7 +94,9 @@ elif mode == 'save':
     except ValueError:
         before = {}
     current = scan()
-    removed = sorted(set(before) - set(current), key=len, reverse=True)
+    # A baseline written before a path was regenerable still lists it.
+    removed = sorted({n for n in before if n not in current and kept(n)},
+                     key=len, reverse=True)
     with tarfile.open(archive, 'w:gz', dereference=False, compresslevel=1) as out:
         content = json.dumps(removed).encode()
         entry = tarfile.TarInfo('.yak-recovery/deleted.json')
@@ -98,20 +110,18 @@ elif mode == 'save':
         raise RuntimeError('workbench files changed during snapshot; retry')
     print(os.path.getsize(archive))
 elif mode == 'restore':
+    # The download is extracted as it arrives, and kept whole beside it for
+    # the next save to replace; a cut download fails curl, gzip or the size.
     started = time.monotonic()
-    if len(sys.argv) > 3:
-        partial = archive + '.part'
-        try:
-            subprocess.run(['curl', '--fail', '--silent', '--show-error',
-                            '--noproxy', '*', '--output', partial, sys.argv[3]],
-                           check=True)
-            if os.path.getsize(partial) != int(sys.argv[4]):
-                raise RuntimeError('workbench snapshot is incomplete')
-            os.replace(partial, archive)
-        finally:
-            if os.path.exists(partial):
-                os.unlink(partial)
-    downloaded = time.monotonic()
+    partial = archive + '.part'
+    class Tee:
+        def __init__(self, source, out):
+            self.source, self.out, self.size = source, out, 0
+        def read(self, n=-1):
+            chunk = self.source.read(n)
+            self.out.write(chunk)
+            self.size += len(chunk)
+            return chunk
     deleted = '.yak-recovery/deleted.json'
     def remove(source, entry):
         removed = json.load(source.extractfile(entry))
@@ -122,31 +132,45 @@ elif mode == 'restore':
                 os.unlink(target)
             elif os.path.isdir(target):
                 os.rmdir(target)
-    def extract(source, entries):
-        for entry in entries:
-            if entry.name == deleted:
-                continue
-            target = path(entry.name)
-            if os.path.islink(target):
+    def extract(source, entry):
+        target = path(entry.name)
+        if os.path.islink(target):
+            os.unlink(target)
+        elif os.path.lexists(target) and not entry.isdir():
+            if os.path.isdir(target):
+                os.rmdir(target)
+            else:
                 os.unlink(target)
-            elif os.path.lexists(target) and not entry.isdir():
-                if os.path.isdir(target):
-                    os.rmdir(target)
-                else:
-                    os.unlink(target)
-            elif entry.isdir() and os.path.lexists(target) and not os.path.isdir(target):
-                os.unlink(target)
-            source.extract(entry, root, filter='fully_trusted')
-    with tarfile.open(archive, 'r|gz') as source:
-        first = source.next()
-        if first and first.name == deleted:
-            remove(source, first)
-            extract(source, iter(source))
-        else:
-            # Older archives wrote their deletion list last.
-            with tarfile.open(archive, 'r:gz') as old:
-                remove(old, old.getmember(deleted))
-            extract(source, iter(source))
-    print(json.dumps({'downloadMs': round(1000 * (downloaded - started)),
-                      'extractMs': round(1000 * (time.monotonic() - downloaded))}))
+        elif entry.isdir() and os.path.lexists(target) and not os.path.isdir(target):
+            os.unlink(target)
+        source.extract(entry, root, filter='fully_trusted')
+    download = None
+    try:
+        download = subprocess.Popen(['curl', '--fail', '--silent',
+                                     '--show-error', '--noproxy', '*',
+                                     sys.argv[3]], stdout=subprocess.PIPE)
+        with open(partial, 'wb') as out:
+            tee = Tee(download.stdout, out)
+            # Removed names and archived ones never overlap (save), so the
+            # deletion list applies wherever it comes, first or, in older
+            # archives, last.
+            with tarfile.open(fileobj=tee, mode='r|gz') as source:
+                for entry in source:
+                    if entry.name == deleted:
+                        remove(source, entry)
+                    else:
+                        extract(source, entry)
+            while tee.read(1 << 20):
+                pass
+        if download.wait():
+            raise RuntimeError('workbench snapshot download failed')
+        if tee.size != int(sys.argv[4]):
+            raise RuntimeError('workbench snapshot is incomplete')
+        os.replace(partial, archive)
+    finally:
+        if download and download.poll() is None:
+            download.kill()
+        if os.path.exists(partial):
+            os.unlink(partial)
+    print(json.dumps({'restoreMs': round(1000 * (time.monotonic() - started))}))
 `

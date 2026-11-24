@@ -10,7 +10,8 @@
 // `durable_object_io_tasks_prevent_eviction`).
 //
 // The door waits {@link PATIENCE} for it, and within that the answer is the
-// tool's own. Past it, the answer says the call is still running. The next
+// tool's own. Past it, the answer says the call is still running, and what it
+// is doing, where the tool has said (tool.ts `Ctx.doing`). The next
 // call with the same key joins a run still going, or is handed the answer of
 // one nobody heard, once, in place of running again.
 import type { Bundle } from '@yaks/graph'
@@ -30,10 +31,14 @@ export type Ended =
   | { refused: { code: string; text: string } }
 
 /** What a caller hears: how the call ended, when it was asked, and whether it
- * was asked by an earlier call that heard it still running; or that it is. */
+ * was asked by an earlier call that heard it still running; or that it is,
+ * and what it is doing when the run has said. */
 export type Heard =
   | Ended & { asked: string; late?: true }
-  | { running: string }
+  | { running: string; doing?: string }
+
+/** A run: given how to say what it is doing now, it ends. */
+export type Run = (doing: (step: string) => void) => Promise<Ended>
 
 /** The object's own storage, as much of it as this keeps. */
 export type Keep = {
@@ -43,7 +48,13 @@ export type Keep = {
 }
 
 type Unread = { asked: string; ended: number; out: Ended }
-type Job = { asked: string; ended: Promise<Ended>; heard: boolean; late?: true }
+type Job = {
+  asked: string
+  ended: Promise<Ended>
+  heard: boolean
+  late?: true
+  doing?: string
+}
 
 let UNREAD = 'unread'
 
@@ -67,7 +78,7 @@ export let outlasting = (keep: Keep, {
   after = timer,
 }: { patience?: number; now?: () => number; after?: After } = {}) => {
   let job: Promise<Job> | null = null
-  let begin = async (run: () => Promise<Ended>): Promise<Job> => {
+  let begin = async (run: Run): Promise<Job> => {
     let unread = await keep.get<Unread>(UNREAD)
     if (unread) {
       await keep.delete(UNREAD)
@@ -80,7 +91,13 @@ export let outlasting = (keep: Keep, {
         }
       }
     }
-    return { asked: new Date(now()).toISOString(), ended: run(), heard: false }
+    let j: Job = {
+      asked: new Date(now()).toISOString(),
+      ended: Promise.resolve({ said: [] }),
+      heard: false,
+    }
+    j.ended = run((step) => j.doing = step)
+    return j
   }
   // Kept once every caller waiting has been answered: a timer runs after the
   // promise callbacks that answer the callers who were still waiting.
@@ -90,7 +107,7 @@ export let outlasting = (keep: Keep, {
       await keep.put(UNREAD, { asked: j.asked, ended: now(), out })
     }
   }
-  return async (run: () => Promise<Ended>, wait = patience): Promise<Heard> => {
+  return async (run: Run, wait = patience): Promise<Heard> => {
     if (!job) {
       let mine: Promise<Job> = begin(run).then((j) => {
         j.ended.then((out) => after(0, () => settle(mine, j, out)))
@@ -105,7 +122,7 @@ export let outlasting = (keep: Keep, {
       new Promise<null>((done) => cancel = after(wait, () => done(null))),
     ])
     cancel()
-    if (!out) return { running: j.asked }
+    if (!out) return { running: j.asked, ...j.doing ? { doing: j.doing } : {} }
     j.heard = true
     return { ...out, asked: j.asked, ...j.late ? { late: true as const } : {} }
   }
@@ -149,13 +166,16 @@ export let outlasted = async (
   let name = asked.tool
   let heard = await objects.get(objects.idFromName(key)).call(asked)
   if ('running' in heard) {
+    let { running, doing } = heard
     return said(
-      (progress ??
-        `${name} asked at ${heard.running} is still running, and goes on.`) +
+      (doing
+        ? `${name} asked at ${running} is still running: ${doing}.`
+        : progress ??
+          `${name} asked at ${running} is still running, and goes on.`) +
         ' ' +
         `Call ${name} again with the same arguments to wait for it and hear ` +
         'how it ended.',
-      { running: true, asked: heard.running },
+      { running: true, asked: running, ...doing ? { doing } : {} },
       asked.call,
     )
   }

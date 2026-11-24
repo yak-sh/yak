@@ -25,11 +25,18 @@ let body = (text: string): Ended & { said: unknown } => ({
 let runs = () => {
   let begun = 0
   let end = (_: Ended) => {}
-  let run = () => {
+  let say = (_: string) => {}
+  let run = (doing: (step: string) => void) => {
     begun++
+    say = doing
     return new Promise<Ended>((done) => end = done)
   }
-  return { run, end: (out: Ended) => end(out), begun: () => begun }
+  return {
+    run,
+    end: (out: Ended) => end(out),
+    say: (step: string) => say(step),
+    begun: () => begun,
+  }
 }
 
 // The object's calls, on a clock the test advances.
@@ -53,6 +60,10 @@ test('a call past patience is still running; the next joins it and hears how it 
   let first = call(r.run, 20)
   await c.advance(20)
   equal(await first, { running: zero })
+  r.say('restoring files')
+  let waiting = call(r.run, 20)
+  await c.advance(20)
+  equal(await waiting, { running: zero, doing: 'restoring files' })
   let joined = call(r.run)
   await c.advance(0)
   r.end(body('deployed v42'))
@@ -118,6 +129,23 @@ test('the door says a late answer was asked earlier, and a refusal stays one', a
   equal((running.output as { value: unknown }).value, {
     running: true,
     asked: 'T',
+  })
+  let [waking] = await outlasted(
+    objects({ running: 'T', doing: 'the sandbox is waking' }),
+    'k',
+    { ...asked, tool: 'sandbox_shell' },
+    'The sandbox is preparing or running your command.',
+  )
+  equal(
+    (waking.content as { body: string }).body,
+    'sandbox_shell asked at T is still running: the sandbox is waking. Call ' +
+      'sandbox_shell again with the same arguments to wait for it and hear ' +
+      'how it ended.',
+  )
+  equal((waking.output as { value: unknown }).value, {
+    running: true,
+    asked: 'T',
+    doing: 'the sandbox is waking',
   })
   let [preparing] = await outlasted(
     objects({ running: 'T' }),
