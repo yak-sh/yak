@@ -285,6 +285,16 @@ who allowed them. A headless browser has no on-screen keyboard, so `keyboard`
 shrinks the window by its height, which is what a phone does for our pages:
 they ask for `interactive-widget=resizes-content` (workers/yak/pages.ts).
 
+The answer has a `timing` line for the page's load and one for each click
+the navigator swapped in place (`yak-page`, @yaks/web/navigate). Each line
+gives the time from click to the drawn frame, where the page came from
+(`fetch`, `held`, or `fresh` for the refetch drawn over a held page), the
+wait for the server, the swap, the nodes made, and the answer's
+Server-Timing. To time a navigation, tap its link in a step and add a
+`wait` long enough for the server, then read the line. A step's tap presses
+and clicks at once, so a fetch on hover gets no head start: a person's
+pointer usually gives it a few hundred ms.
+
 Saying something in checks' own chat (`/checks`), as the person, with
 the keyboard open. A draft is kept across visits, so clear the field first:
 
