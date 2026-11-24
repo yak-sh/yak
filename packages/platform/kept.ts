@@ -309,7 +309,7 @@ export let cardTag = (eid: string): string => `card:${eid}`
 
 // Bumped when how a page is woven changes and kept pages must not wait out
 // their freshness: every key moves, and the old pages are never read again.
-let PAGES = 4
+let PAGES = 5
 
 // What a key says of the session it is for.
 let heldBy = (session: string) => sha256(session).slice(0, 32)
@@ -320,7 +320,7 @@ let heldBy = (session: string) => sha256(session).slice(0, 32)
  * `session` keys a signed-in person's own copy of a page kept for strangers:
  * the digest of their session token, which only they hold, so nobody else's
  * request ever reads it, and a forged cookie names a key Site never filled. */
-/// pageAt('ada.yaks.app', '/menu/', '/menu/') -> 'https://site.invalid/@ada.yaks.app/menu/?g=4&mount=%2Fmenu%2F'
+/// pageAt('ada.yaks.app', '/menu/', '/menu/') -> 'https://site.invalid/@ada.yaks.app/menu/?g=5&mount=%2Fmenu%2F'
 export let pageAt = (
   host: string,
   path: string,
