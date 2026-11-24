@@ -369,6 +369,20 @@ test('the links a page marks to hold are fetched ahead while it is idle, one at 
   ])
 })
 
+test('pressing a link to a page held long ago draws it at once, and asks for it after', async () => {
+  let b = browsing(site)
+  await b.go(new URL('https://y.test/updates'))
+  await b.go(new URL('https://y.test/apps'))
+  b.tick(FRESH)
+  b.press('mousedown', 'a[href="/updates"]')
+  assertEquals(b.fetched.length, 2, 'the press asks for nothing held')
+  b.click('a[href="/updates"]')
+  await settled()
+  assertEquals(b.drawn.at(-1)!.from, 'held')
+  assertEquals(b.drawn.at(-1)!.phases.wait, 0)
+  assertEquals(b.fetched.length, 3)
+})
+
 test('sending a form lets go of every page held', async () => {
   let b = browsing(site)
   b.press('mousedown', 'a[href="/updates"]')

@@ -356,6 +356,8 @@ export let INTENT = 60
  * once the page is idle, one at a time, once a document's life, while it is
  * not hidden (a list's rows past what fits). */
 export let HOLD = 'data-hold'
+/** How many of a page's links marked `HOLD` are held, the first shown. */
+export let HOLDS = 10
 
 // Where a page's content is: what its skip link names, else its `main`.
 let content = (doc: Document) => {
@@ -411,7 +413,7 @@ type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
  *
  * A page is drawn in the frame of the click when it is held: fetched ahead
  * as a pointer rests on its link, presses it or a finger touches it
- * (`AHEAD`), or
+ * (`AHEAD`) while it is not held already, or
  * opened before, or marked `HOLD`, fetched while the page is idle. The
  * `HELD` pages opened last are held. A held page older
  * than `FRESH`, or one only looked ahead at, is asked for again once drawn,
@@ -539,7 +541,7 @@ export let start = (
   }
   let ahead = (e: Event) => {
     let to = followed(e, win.location.href, here)
-    if (to && !fresh(pages.get(page(to)))) ask(to, true)
+    if (to && !pages.has(page(to))) ask(to, true)
   }
   // A pointer passing over a link on its way elsewhere does not ask for it;
   // one that stays `INTENT` milliseconds, or presses, does.
@@ -562,6 +564,7 @@ export let start = (
     let next = () => {
       let to = [...doc.querySelectorAll(`a[${HOLD}]`)]
         .filter((a) => !a.closest('[hidden]'))
+        .slice(0, HOLDS)
         .map((a) => new URL(a.getAttribute('href')!, win.location.href))
         .find((to) =>
           to.origin == win.location.origin && page(to) != here &&
