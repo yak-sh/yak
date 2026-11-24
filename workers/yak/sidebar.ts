@@ -4,11 +4,16 @@ import { Badge, Button, Form, Icon, SideNav } from '@yaks/ui/parts'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from '@yaks/platform/routes'
+import { NAMES } from '@yaks/ui/navigate'
 import { acrossBadge, choice } from './space-picker.ts'
 
 export type Item = {
   href: string
   label: string
+  /** What the page it opens is called, where that is known here: the
+   * page's title says it the moment the link is pressed (@yaks/ui/navigate
+   * `NAMES`). */
+  names?: string
   icon: IconName
   image?: string
   current?: boolean
@@ -103,6 +108,7 @@ export let link = (at: Item) => {
       as: at.submit ? 'button' : 'a',
       type: at.submit ? 'submit' : undefined,
       title: at.label,
+      [NAMES]: at.names,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,
       target: at.external ? '_blank' : undefined,

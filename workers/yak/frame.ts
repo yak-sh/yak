@@ -20,6 +20,7 @@
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Form, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
+import { TITLE } from '@yaks/ui/navigate'
 import { icons } from './icons.ts'
 import { waitingBadge } from './sidebar.ts'
 
@@ -174,7 +175,7 @@ export let frame = (at: {
             {},
             h(
               Toolbar.Title,
-              { as: at.headed ? 'span' : undefined, 'data-title': '' },
+              { as: at.headed ? 'span' : undefined, [TITLE]: '' },
               at.title,
             ),
             at.sub ? h(Toolbar.Sub, {}, at.sub) : null,

@@ -410,11 +410,23 @@ type Held = {
   stop: AbortController
 }
 
-// What a click shows in its own frame while its page is on its way: the
-// link pressed takes the current link's marks in its list (its
-// `aria-current` and the classes it wears for it), and the content waits
+/** The mark on a link saying what the page it opens is called, and on a
+ * page the title that says what the page is: a click waiting for its page
+ * writes the one into the other at once (`going`). */
+export let NAMES = 'data-names'
+export let TITLE = 'data-title'
+
+// What a click shows in its own frame while its page is on its way, from
+// what the page holds: a layer the address opened (a phone's menu) closes,
+// the link pressed takes the current link's marks in its list (its
+// `aria-current` and the classes it wears for it), the page's title says
+// the name the link gives its page (`NAMES`), and the content waits
 // (`aria-busy`). The page, once laid over, says it all again.
-let going = (doc: Document, link: Element) => {
+let going = (win: Browsing, link: Element, to: URL) => {
+  let doc = win.document
+  if (win.location.hash && win.location.hash != to.hash) {
+    win.location.replace('#')
+  }
   let was = link.closest('nav')?.querySelector('a[aria-current="page"]')
   if (was && was != link) {
     let marks = [...was.classList].filter((c) => !link.classList.contains(c))
@@ -423,6 +435,9 @@ let going = (doc: Document, link: Element) => {
     link.classList.add(...marks)
     link.setAttribute('aria-current', 'page')
   }
+  let names = link.getAttribute(NAMES)
+  let title = names && doc.querySelector(`[${TITLE}]`)
+  if (title) title.textContent = names
   content(doc)?.setAttribute('aria-busy', 'true')
 }
 
@@ -439,8 +454,8 @@ let going = (doc: Document, link: Element) => {
  * to it (`AHEAD`), and let go of if the pointer moves on before it arrives.
  * A held page older than `FRESH`, or one whose answer asked (`AGAIN`), is
  * asked for again once drawn, and laid over what was drawn where it
- * changed. A click on a page not held shows itself at once (`going`) and
- * draws the page when it comes. Sending a form lets go of every held page.
+ * changed. A click on a page not held draws what it can of that page at
+ * once, from what the page holds (`going`), and the rest when it comes. Sending a form lets go of every held page.
  */
 export let start = (
   win: Browsing,
@@ -611,6 +626,8 @@ export let start = (
   }
   win.addEventListener('mouseout', left)
   win.addEventListener('focusout', left)
+  // A touch the browser takes for a scroll is no press.
+  win.addEventListener('pointercancel', left)
   win.addEventListener('focusin', ahead)
   win.addEventListener('mousedown', ahead)
   win.addEventListener('touchstart', ahead, { passive: true })
@@ -620,7 +637,7 @@ export let start = (
     if (!to) return
     e.preventDefault()
     if (!pages.has(page(to)) || looking?.key == page(to)) {
-      going(doc, (e.target as Element).closest('a[href]')!)
+      going(win, (e.target as Element).closest('a[href]')!, to)
       tell(doc, GOING, { began: now() })
     }
     go(to)

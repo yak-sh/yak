@@ -39,6 +39,7 @@ export let deskSide = (at: DeskPage, view: Setting, env: Host) => {
   let item = (key: keyof typeof icons, label: string): Item => ({
     href: managePath(key, at.space),
     label,
+    names: label,
     icon: icons[key],
     current: view == key || (view == 'new' && key == 'apps'),
     count: key == 'trash'

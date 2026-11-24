@@ -11,10 +11,12 @@ import {
   LEAVE,
   leaving,
   morph,
+  NAMES,
   PAGE,
   start,
   swap,
   type Swapped,
+  TITLE,
 } from './navigate.ts'
 
 let parse = (html: string) =>
@@ -141,7 +143,11 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
       return at.hash
     },
     assign: (to: string) => void loaded.push(to),
-    replace: (to: string) => void loaded.push(to),
+    // A fragment alone moves only the address's fragment.
+    replace: (to: string) => {
+      loaded.push(to)
+      if (to.startsWith('#')) at.hash = to
+    },
   }
   let win = {
     document: doc,
@@ -443,6 +449,33 @@ test('a click on a page not yet held shows itself at once: its link the current 
     false,
   )
   assertEquals(b.doc.querySelector('h1')?.textContent, 'Updates')
+})
+
+test('a click from an open menu on a page not yet held closes the menu and names the page in its first frame', async () => {
+  let page = (here: string, title: string) =>
+    framed(here, `<h1>${here}</h1>`).replace(
+      '<nav id="menu">',
+      `<b ${TITLE}>${title}</b><nav id="menu">`,
+    ).replace('href="/updates"', `href="/updates" ${NAMES}="Updates"`)
+  let b = browsing(
+    { '/apps': page('apps', 'Apps'), '/updates': page('updates', 'Updates') },
+    '/apps#menu',
+  )
+  b.slow()
+  b.click('a[href="/updates"]')
+  assertEquals(b.loaded, ['#'])
+  assertEquals(b.doc.querySelector(`[${TITLE}]`)?.textContent, 'Updates')
+  await b.answer()
+  assertEquals(b.loaded, ['#'], 'the menu closes once')
+  assertEquals(b.doc.querySelector('h1')?.textContent, 'updates')
+})
+
+test('a touch the browser takes for a scroll lets go of the page it looked ahead at', () => {
+  let b = browsing(site)
+  b.slow()
+  b.press('touchstart', 'a[href="/updates"]')
+  b.press('pointercancel', 'a[href="/updates"]')
+  assertEquals(b.stopped, ['https://y.test/updates'])
 })
 
 test('sending a form lets go of every page held', async () => {
