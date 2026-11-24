@@ -107,8 +107,9 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
   }).
 3. app_preview — check the private draft before releasing it, at width: 390
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
-   console messages, JavaScript errors, WCAG 2.1 AA accessibility problems
-   (rule, element and fix) and a private preview URL. Use path for another
+   console messages, JavaScript errors, whether the page fits the window's
+   width, WCAG 2.1 AA accessibility problems (rule, element and fix) and a
+   private preview URL. Use path for another
    page. Fix the reported problems before deploying and preview again. Its writes stay on
    the draft's branch of the app's rows, apart from the released app. The browser runs on Cloudflare:
    these connector tools need no local files, CLI, computer or browser.

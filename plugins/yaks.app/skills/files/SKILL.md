@@ -74,9 +74,11 @@ checkout, shell or computer is needed:
    `sandbox_ship`.
 2. Call `app_preview(app: 'recipes', width: 390, height: 844)` for a phone, then
    `app_preview(app: 'recipes', width: 1280, height: 900)` for a desktop.
-3. Read the screenshot, console messages, JavaScript errors, HTTP status and
-   WCAG 2.1 AA accessibility report. Fix the reported problems before deploying
-   and preview again. Each problem names its rule, element and one-line fix.
+3. Read the screenshot, console messages, JavaScript errors, HTTP status, the
+   layout line (whether the page fits the window's width, and what reaches past
+   its edge when it scrolls sideways) and WCAG 2.1 AA accessibility report. Fix
+   the reported problems before deploying and preview again. Each problem names
+   its rule, element and one-line fix.
 4. Release with `app_deploy` and share the released app's URL.
 
 A new app is released this way as soon as its first draft works: its first

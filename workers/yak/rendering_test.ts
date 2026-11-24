@@ -61,6 +61,9 @@ let devtools = (
   }
   return cdp
 }
+// A page that reaches past a phone's window, as @yaks/platform/preview-fit
+// measures it.
+let WIDE = { page: 470, window: 390, past: ['div.today (470 px)'] }
 let axe = (expression: string) =>
   expression.includes('innerText')
     ? 'Meetings\nAgenda'
@@ -74,6 +77,8 @@ let axe = (expression: string) =>
       }],
       incomplete: [],
     }
+    : expression.includes('(document, window)')
+    ? WIDE
     : undefined
 let page = (
   options: {
@@ -207,6 +212,7 @@ test('draft rendering captures loading diagnostics at the requested viewport and
   assertEquals(p.viewport(), { width: 390, height: 844 })
   assertEquals(result.image, 'png-bytes')
   assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
+  assertEquals(result.fit, WIDE)
   assertEquals(result.console, [{ type: 'log', text: 'page ready' }])
   assertStringIncludes(result.errors[0], 'page exception')
   assertEquals(result.status, 200)

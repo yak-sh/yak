@@ -8,6 +8,7 @@
 import { type Clock, type Hold, sleep, system } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
+import { FIT, type Fit } from './preview-fit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
 import {
   header,
@@ -220,6 +221,8 @@ export type Rendered = {
   /** How long the page took to load, and each move a step made in place
    * (`TIMELINE`). */
   timings?: Timing[]
+  /** How the page fits its window's width, with the accessibility check. */
+  fit?: Fit
   duration: number
 }
 /** One load or move on the page, in milliseconds: `load` is the document's
@@ -527,7 +530,9 @@ let checked = async (
   axe: Axe | null,
   time: Clock,
   report: (error: unknown) => void,
-): Promise<{ accessibility?: Checked; text: string; timings?: Timing[] }> => {
+): Promise<
+  { accessibility?: Checked; fit?: Fit; text: string; timings?: Timing[] }
+> => {
   try {
     return await bounded(
       time,
@@ -538,13 +543,22 @@ let checked = async (
         signal.throwIfAborted()
         let accessibility = axe ? await audit(world, axe) : undefined
         signal.throwIfAborted()
+        let measured = axe
+          ? await world.evaluate(`${FIT}(document, window)`) as Fit
+          : undefined
+        signal.throwIfAborted()
         let text = String(
           await world.evaluate(
             `(${clip})(document.body?.innerText ?? '', ${TEXT})`,
           ),
         )
         let timings = await world.evaluate(TIMELINE) as Timing[]
-        return { ...accessibility ? { accessibility } : {}, text, timings }
+        return {
+          ...accessibility ? { accessibility } : {},
+          ...measured ? { fit: measured } : {},
+          text,
+          timings,
+        }
       },
     )
   } catch (e) {
@@ -561,7 +575,7 @@ let checked = async (
 }
 
 type Loaded =
-  & Omit<Rendered, 'duration' | 'accessibility' | 'text' | 'timings'>
+  & Omit<Rendered, 'duration' | 'accessibility' | 'fit' | 'text' | 'timings'>
   & {
     page: Page
   }

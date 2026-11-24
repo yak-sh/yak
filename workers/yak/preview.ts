@@ -49,6 +49,7 @@ import {
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { report } from '@yaks/platform/preview-audit'
+import { fitted } from '@yaks/platform/preview-fit'
 import { ours } from './asking.ts'
 import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
@@ -667,7 +668,9 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
         JSON.stringify(text)
       }\nConsole: ${JSON.stringify(rendered.console)}\nErrors: ${
         JSON.stringify(rendered.errors)
-      }\n${report(rendered.accessibility)}`,
+      }\n${rendered.fit ? fitted(rendered.fit) + '\n' : ''}${
+        report(rendered.accessibility)
+      }`,
   }
 }
 

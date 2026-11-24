@@ -35,6 +35,7 @@
     "./located": "./located.ts",
     "./named": "./named.ts",
     "./preview-audit": "./preview-audit.ts",
+    "./preview-fit": "./preview-fit.ts",
     "./visits": "./visits.ts",
     "./installs": "./installs.ts",
     "./upstream": "./upstream.ts",
