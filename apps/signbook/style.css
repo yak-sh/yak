@@ -1,4 +1,4 @@
-/* The guest book's own look, in the names every kit part reads. Linen, the
+/* The visitors' book's own look, in the names every kit part reads. Linen, the
    theme main.ts wears, sets them all; these are the ones this app chose. */
 :root {
   --bg: light-dark(#f3f5f0, #1d2420);

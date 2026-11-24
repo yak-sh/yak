@@ -1,5 +1,5 @@
 /**
- * The guest book: a form that keeps what a visitor types until the book has
+ * The visitors' book: a form that keeps what a visitor types until the book has
  * it, and the notes left so far. The look is @yaks/ui's parts in this app's
  * own colours (style.css); the form's behaviour is @yaks/ux's `Submit` and
  * `Fields` over the store's drafts, so a half-written note survives a reload,
@@ -62,7 +62,7 @@ let Sign = () => {
   let [e, setE] = useState<Bundle>()
   return h(Submit<object>, {
     at: 'sign',
-    place: 'guestbook:sign',
+    place: 'signbook:sign',
     drafts: desk,
     e,
     onChange: setE,

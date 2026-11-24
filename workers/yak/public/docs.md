@@ -70,7 +70,7 @@ colours and type, set in the theme's custom properties (`--bg`, `--text`,
 any field a person types in with `drafts().bind(field, place)` from the client.
 
 Deeper: <https://yaks.app/docs/kits.md> — the files, colours and type, words
-from `copy.json`, and the guest book, a whole working example.
+from `copy.json`, and the visitors' book, a whole working example.
 
 ## Performance
 

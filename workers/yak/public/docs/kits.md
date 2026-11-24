@@ -12,7 +12,7 @@ guide:
     when a save failed). Naming them as platform dependencies in package.json,
     a TypeScript page module, dressing the page with wear(), giving the parts
     the app's own colours and type in the theme's custom property names, words
-    from copy.json, and the guest book, a whole working example.
+    from copy.json, and the visitors' book, a whole working example.
 ---
 
 # UI Kits
@@ -70,7 +70,7 @@ module to draw in, and loads the module:
 <html lang="en">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Guest book</title>
+  <title>Visitors' book</title>
   <link rel="stylesheet" href="style.css">
   <main>
     <h1 data-copy="title"></h1>
@@ -121,10 +121,10 @@ The words a script draws come from `copy.json` too
 each element that shows a snippet its `data-copy` key, so the person's pencil
 can edit it.
 
-## The guest book
+## The visitors' book
 
 A form that keeps what a visitor types until the book has it, and the notes left
-so far, newest first. It runs at <https://yourname.yaks.app/guestbook/>. Its
+so far, newest first. It runs at <https://yourname.yaks.app/signbook/>. Its
 `vocab.json` declares `note` with `name` and `message`, and its `copy.json`
 holds the words the module names.
 
@@ -183,7 +183,7 @@ let Sign = () => {
   let [e, setE] = useState<Bundle>()
   return h(Submit<object>, {
     at: 'sign',
-    place: 'guestbook:sign',
+    place: 'signbook:sign',
     drafts: desk,
     e,
     onChange: setE,
