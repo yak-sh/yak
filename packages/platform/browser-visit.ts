@@ -207,8 +207,7 @@ export type Rendered = {
   image: string
   /** The screenshots its `shot` steps took, in order. */
   shots: { name: string; image: string }[]
-  /** The page's visible text, its start and end within `TEXT` characters
-   * (`clip`). */
+  /** The page's visible text, its start and end within `TEXT` characters. */
   text: string
   console: { type: string; text: string }[]
   /** The dialogs the page opened, each dismissed as it opened: a confirm
@@ -502,29 +501,20 @@ let viewport = (view: View, keyboard = 0) => ({
 /** How much of a page's visible text a render carries. */
 export let TEXT = 6000
 
-/**
- * A page's visible text cut to `most` characters: its first third and its
- * last two, which on a chat or a feed are the newest lines and what the
- * window shows, with how much between them was left out. Run in the page,
- * so it names nothing outside itself.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(clip('short', 10), 'short')
- * assertEquals(clip('abcdefghijklmnopqrstuvwxyz', 9), 'abc\n… 17 characters left out …\nuvwxyz')
- * ```
- */
-export function clip(text: string, most: number): string {
+// Like TIMELINE, this is sent to the page as source. Keep the first third
+// and last two thirds so a long chat or feed includes its newest lines.
+let PAGE_TEXT = `(() => {
+  let text = document.body?.innerText ?? ''
+  let most = ${TEXT}
   if (text.length <= most) return text
-  let head = Math.floor(most / 3), tail = most - head
-  return `${text.slice(0, head)}\n… ${
-    text.length - most
-  } characters left out …\n${text.slice(-tail)}`
-}
+  let head = Math.floor(most / 3)
+  return text.slice(0, head) + '\\n… ' + (text.length - most) +
+    ' characters left out …\\n' + text.slice(head - most)
+})()`
 
 // The preview keeps its screenshot, console and errors if the check cannot
 // finish. Read visible text in the same isolated world as the audit; a visit
-// that asks for no audit reads only its text.
+// that asks for no audit still reads visible text and timings.
 let checked = async (
   page: Page,
   axe: Axe | null,
@@ -547,11 +537,7 @@ let checked = async (
           ? await world.evaluate(`${FIT}(document, window)`) as Fit
           : undefined
         signal.throwIfAborted()
-        let text = String(
-          await world.evaluate(
-            `(${clip})(document.body?.innerText ?? '', ${TEXT})`,
-          ),
-        )
+        let text = String(await world.evaluate(PAGE_TEXT))
         let timings = await world.evaluate(TIMELINE) as Timing[]
         return {
           ...accessibility ? { accessibility } : {},

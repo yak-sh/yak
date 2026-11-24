@@ -238,6 +238,62 @@ test('a page opens with the cookies it was sent and answers its visible text', a
   assertEquals(result.text, 'Meetings\nAgenda')
 })
 
+test('browse reads bounded visible text and both kinds of timing from the page', async () => {
+  let url = 'https://checks.yaks.app/settings'
+  let next = 'https://checks.yaks.app/domains'
+  let load = {
+    name: url,
+    requestStart: 10,
+    responseStart: 25.34,
+    responseEnd: 28,
+    domContentLoadedEventEnd: 36.13,
+    serverTiming: [{ name: 'kernel', duration: 12.67 }],
+  }
+  let head = 'a'.repeat(2000), tail = 'b'.repeat(4000)
+  let document = { body: { innerText: `${head}middle${tail}` } }
+  let performance = {
+    getEntriesByType: (type: string) => type == 'navigation' ? [load] : [],
+    getEntriesByName: (name: string) => {
+      if (name == url) return [load]
+      if (name == next) {
+        return [{ serverTiming: [{ name: 'kernel', duration: 4.34 }] }]
+      }
+      return name == 'yak-page'
+        ? [{
+          name,
+          duration: 12.34,
+          detail: { url: next, frame: 5.67, made: 'partial' },
+        }]
+        : []
+    },
+  }
+  let p = page({
+    world: (expression) =>
+      new Function('document', 'performance', `return (${expression})`)(
+        document,
+        performance,
+      ),
+  })
+  let result = await capture(p.browsing, { url, view, audit: false })
+  assertEquals(result.text, `${head}\n… 6 characters left out …\n${tail}`)
+  assertEquals(result.timings, [
+    {
+      name: 'load',
+      url,
+      ms: 36.1,
+      parts: { wait: 15.3, read: 2.7, build: 8.1 },
+      server: { kernel: 12.7 },
+    },
+    {
+      name: 'yak-page',
+      url: next,
+      ms: 12.3,
+      parts: { frame: 5.7, made: 'partial' },
+      server: { kernel: 4.3 },
+    },
+  ])
+})
+
 test('a page brought from a checkout answers its first load, and the site the rest', async () => {
   let p = page()
   await capture(p.browsing, {
