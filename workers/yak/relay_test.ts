@@ -15,7 +15,7 @@ import type { Level } from '@yaks/member'
 import { seededState, state } from './testing.ts'
 import { socketDirectory } from './socket-fixture.ts'
 import { Store, type Time } from './graph.ts'
-import { clock, test, until } from '@yaks/testing'
+import { cleanup, clock, test, until } from '@yaks/testing'
 
 let wire = (actor: Actor | null = { by: ADA }) => {
   let sent: Frame[] = []
@@ -131,13 +131,27 @@ let cookbooks = { private: stocked('private'), open: stocked('open') }
 // A cookbook with one recipe in it, and cooks watching it.
 let watching = async (
   access: keyof typeof cookbooks = 'private',
-  time?: Time,
+  now = Date.now,
 ) => {
-  let ctx = time ? state() : await cookbooks[access]()
-  let { wake, members } = kitchen(ctx, access, time)
+  let ctx = await cookbooks[access]()
+  let timers = clock()
+  let scheduled = Promise.resolve()
+  let timer: Time['timer'] = (fn, ms) => {
+    let cancel = timers.after(ms, fn)
+    // A peer write waits for the batch it joined. Advance once the batch
+    // schedules a callback, so tests can await delivery without sleeping.
+    scheduled = scheduled.then(() => timers.advance(ms))
+    return cancel
+  }
+  cleanup(async () => {
+    for (let turn = scheduled;; turn = scheduled) {
+      await turn
+      if (turn == scheduled) return
+    }
+  })
+  let { wake, members } = kitchen(ctx, access, { now, timer })
   let store = wake()
-  if (time) await stock(store, access)
-  else await store.door
+  await store.door
   let watch = async (actor: Actor | null = { by: ADA }, opening = false) => {
     let ws = wire(actor)
     ctx.live.push(ws)
@@ -172,12 +186,9 @@ test('a finger moves, and only the other cooks hear it', async () => {
 })
 
 test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
-  // The pace is read on the Store's clock, which only this case moves; its
-  // timers stay the runtime's.
+  // Advance the pace clock independently of frame delivery.
   let time = clock(Date.now())
-  let { store, watch } = await watching('private', {
-    now: time.now,
-  })
+  let { store, watch } = await watching('private', time.now)
   let ada = await watch(), bert = await watch()
   let move = (ws: ReturnType<typeof wire>, x: number) =>
     store.webSocketMessage(
