@@ -99,7 +99,6 @@ export let DemoLinks = () => (
   </div>
 )
 
-/** The same selector fits under the desktop phone and above the mobile strip. */
 export let Picks = () => (
   <Chips
     class='Home_Picks'

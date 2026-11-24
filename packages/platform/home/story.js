@@ -154,10 +154,10 @@ let ideas = (root) => {
   for (let button of root.querySelectorAll('[data-service-idea]')) {
     button.addEventListener('click', () => {
       let r = demo.getBoundingClientRect()
-      let box =
-        button.closest('.Story_Hero') || r.top < 0 || r.bottom > innerHeight
-          ? hero
-          : demo
+      let box = button.closest('.Story_Hero') || !r.height || r.top < 0 ||
+          r.bottom > innerHeight
+        ? hero
+        : demo
       if (!box.value) {
         box.value = `Make me an app that uses ${button.dataset.serviceIdea} to `
       }
