@@ -10,7 +10,7 @@ import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { lastDayLine, updates } from './updates.ts'
-import { AHEAD } from '@yaks/ui/navigate'
+import { AGAIN, AHEAD } from '@yaks/ui/navigate'
 import type { Telling } from './operator-updates.ts'
 import { SPACE } from './build-door.ts'
 
@@ -159,6 +159,7 @@ test('every space’s Updates in one place: labelled, counted from each space’
   })
   await ahead.body?.cancel()
   assertEquals(await waiting(), counted, 'a page fetched ahead reads nothing')
+  assertEquals(ahead.headers.has(AGAIN), true, 'and asks to be read again')
   let page = parseHTML(await (await get(talkPath('updates'))).text())
     .document
   let cards = [...page.querySelectorAll('.Update')].map((c) => ({
@@ -196,11 +197,6 @@ test('All updates sits above the space picker and opens with that space still se
   assertEquals(current?.getAttribute('href'), updates)
   let links = [...group.querySelectorAll('a.SideNav_Link')].map((a) =>
     a.getAttribute('href')
-  )
-  assertEquals(
-    group.querySelectorAll('a.SideNav_Link:not([data-hold])').length,
-    0,
-    'each is held before it is pressed',
   )
   assertEquals(links, [
     chatPath(club.slug),

@@ -333,6 +333,12 @@
     isolation: isolate;
     overflow: hidden auto;
   }
+  /* A page pressed for and not yet come: what stands waits, quietly, and
+     only if the wait is noticeable. */
+  .Frame_Body[aria-busy='true'] {
+    opacity: 0.6;
+    transition: opacity 0.2s 0.15s;
+  }
   /* The title bar holds the panel's controls in both layouts. */
   .Frame_AsideBody {
     padding: calc(1rem + env(safe-area-inset-top, 0px)) 1rem 1rem;

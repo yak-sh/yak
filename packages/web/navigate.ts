@@ -6,12 +6,14 @@
  * Each click is written to the browser's performance timeline as a
  * `yak-page` measure, from the click to the frame that draws the new page,
  * its detail where the page came from and where the time went (`Swapped`);
- * a held page asked for again and laid over is one more, from `fresh`. `yak admin browse` reads them
+ * a held page asked for again and laid over is one more, from `fresh`. A
+ * click on a page not held is a `yak-press` too: to the frame it shows
+ * itself in, before its page comes. `yak admin browse` reads them
  * back, which is how a slow click is seen as a number.
  *
  * @module
  */
-import { PAGE, start, type Swapped } from '@yaks/ui/navigate'
+import { GOING, PAGE, start, type Swapped } from '@yaks/ui/navigate'
 import { browserHistory } from './history.ts'
 
 if (typeof document != 'undefined') {
@@ -29,5 +31,16 @@ if (typeof document != 'undefined') {
         detail: { url, from, ...phases, frame, made: tally.made },
       })
     })
+  })
+  // A click on a page not held: the frame it shows itself in at once.
+  document.addEventListener(GOING, (e) => {
+    let { began } = (e as CustomEvent<{ began: number }>).detail
+    requestAnimationFrame(() =>
+      performance.measure('yak-press', {
+        start: began,
+        end: performance.now(),
+        detail: { url: location.href },
+      })
+    )
   })
 }

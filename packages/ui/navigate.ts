@@ -304,10 +304,7 @@ export type Browsing =
     Window,
     'document' | 'location' | 'addEventListener' | 'fetch' | 'scrollTo'
   >
-  & {
-    DOMParser: typeof DOMParser
-    requestIdleCallback?: Window['requestIdleCallback']
-  }
+  & { DOMParser: typeof DOMParser }
 
 /** Where a click's time went, in milliseconds: waiting for the page whole
  * and parsed (nothing, for one already held), and laying it over the page. */
@@ -352,12 +349,13 @@ export let FRESH = 10_000
 export let HELD = 24
 /** How long a pointer stays over a link before its page is asked for. */
 export let INTENT = 60
-/** The mark on a link whose page is held before it is clicked: asked for
- * once the page is idle, one at a time, once a document's life, while it is
- * not hidden (a list's rows past what fits). */
-export let HOLD = 'data-hold'
-/** How many of a page's links marked `HOLD` are held, the first shown. */
-export let HOLDS = 10
+/** The header on an answer to a look ahead (`AHEAD`) that left out what
+ * opening the page does (marking what it shows read): the page is asked for
+ * again once it is opened. */
+export let AGAIN = 'x-yak-again'
+/** Heard on the document as a click sets out for a page it does not hold,
+ * its detail when (`{ began }`): the frame drawn then is the click's first. */
+export let GOING = 'yak-going'
 
 // Where a page's content is: what its skip link names, else its `main`.
 let content = (doc: Document) => {
@@ -398,11 +396,35 @@ let followed = (
 }
 
 /** A page answered: its document's words, parsed as it arrived so a click
- * spends nothing on that, and where it was answered from. */
-type Answer = { text: string; page: Document; url: string }
+ * spends nothing on that, where it was answered from, and whether it asks to
+ * be asked for again once opened (`AGAIN`). */
+type Answer = { text: string; page: Document; url: string; again: boolean }
 /** A page held: its answer, or null where it cannot be swapped in, when it
- * was asked for, and whether it was only looked ahead at. */
-type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
+ * was asked for, whether it was only looked ahead at, whether a click has
+ * taken it up, and how to stop asking for it. */
+type Held = {
+  answer: Promise<Answer | null>
+  at: number
+  ahead: boolean
+  used?: boolean
+  stop: AbortController
+}
+
+// What a click shows in its own frame while its page is on its way: the
+// link pressed takes the current link's marks in its list (its
+// `aria-current` and the classes it wears for it), and the content waits
+// (`aria-busy`). The page, once laid over, says it all again.
+let going = (doc: Document, link: Element) => {
+  let was = link.closest('nav')?.querySelector('a[aria-current="page"]')
+  if (was && was != link) {
+    let marks = [...was.classList].filter((c) => !link.classList.contains(c))
+    was.classList.remove(...marks)
+    was.removeAttribute('aria-current')
+    link.classList.add(...marks)
+    link.setAttribute('aria-current', 'page')
+  }
+  content(doc)?.setAttribute('aria-busy', 'true')
+}
 
 /**
  * Follow the links of `win`'s pages in place: a click on a link to another
@@ -411,14 +433,14 @@ type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
  * focus, as a new document would. Answers `go`, which visits an address the
  * same way.
  *
- * A page is drawn in the frame of the click when it is held: fetched ahead
- * as a pointer rests on its link, presses it or a finger touches it
- * (`AHEAD`) while it is not held already, or
- * opened before, or marked `HOLD`, fetched while the page is idle. The
- * `HELD` pages opened last are held. A held page older
- * than `FRESH`, or one only looked ahead at, is asked for again once drawn,
- * and laid over what was drawn where it changed. Sending a form lets go of
- * every held page.
+ * A page is drawn in the frame of the click when it is held: opened before
+ * (the `HELD` opened last), or fetched ahead, one at a time, as a pointer
+ * rests on its link, presses it, a finger touches it or the keyboard comes
+ * to it (`AHEAD`), and let go of if the pointer moves on before it arrives.
+ * A held page older than `FRESH`, or one whose answer asked (`AGAIN`), is
+ * asked for again once drawn, and laid over what was drawn where it
+ * changed. A click on a page not held shows itself at once (`going`) and
+ * draws the page when it comes. Sending a form lets go of every held page.
  */
 export let start = (
   win: Browsing,
@@ -433,23 +455,35 @@ export let start = (
   // Back and Forward have already moved the address: the page loads there.
   let load = (to: URL, pop = false) =>
     pop ? win.location.replace(to.href) : win.location.assign(to.href)
-  let fetched = async (to: URL, ahead: boolean): Promise<Answer | null> => {
+  let fetched = async (
+    to: URL,
+    ahead: boolean,
+    signal: AbortSignal,
+  ): Promise<Answer | null> => {
     let answer = await win.fetch(to.href, {
       headers: ahead
         ? { accept: 'text/html', [AHEAD]: 'prefetch' }
         : { accept: 'text/html' },
       credentials: 'same-origin',
+      signal,
     }).catch(() => null)
     let type = answer?.headers.get('content-type') ?? ''
     if (!answer || !type.includes('text/html')) return null
     let text = await answer.text().catch(() => null)
     if (text == null) return null
     let page = new win.DOMParser().parseFromString(text, 'text/html')
-    return { text, page, url: answer.url || to.href }
+    let again = answer.headers.has(AGAIN)
+    return { text, page, url: answer.url || to.href, again }
   }
   let ask = (to: URL, ahead = false): Held => {
     let key = page(to)
-    let held: Held = { answer: fetched(to, ahead), at: now(), ahead }
+    let stop = new AbortController()
+    let held: Held = {
+      answer: fetched(to, ahead, stop.signal),
+      at: now(),
+      ahead,
+      stop,
+    }
     pages.delete(key)
     pages.set(key, held)
     for (let old of pages.keys()) {
@@ -526,12 +560,13 @@ export let start = (
     let held = pages.get(page(to))
     let from: From = held ? 'held' : 'fetch'
     let using = held ?? ask(to)
+    using.used = true
     let answer = await using.answer
     if (mine != turn) return
     if (!answer || !draw(to, answer, from, began, now() - began, pop)) {
       return load(answer ? new URL(answer.url) : to, pop)
     }
-    if (!held || (fresh(held) && !held.ahead)) return
+    if (!held || (fresh(held) && !(held.ahead && answer.again))) return
     let again = now()
     let newer = await ask(to).answer
     if (mine != turn || !newer || newer.text == answer.text) return
@@ -539,9 +574,24 @@ export let start = (
       load(new URL(newer.url), true)
     }
   }
+  // The one page being looked ahead at, which a pointer moving on, or
+  // another look ahead, lets go of unless a click took it up.
+  let looking: { key: string; held: Held } | undefined
+  let drop = () => {
+    if (!looking) return
+    let { key, held } = looking
+    looking = undefined
+    if (held.used) return
+    held.stop.abort()
+    if (pages.get(key) == held) pages.delete(key)
+  }
   let ahead = (e: Event) => {
     let to = followed(e, win.location.href, here)
-    if (to && !pages.has(page(to))) ask(to, true)
+    if (!to || pages.has(page(to))) return
+    drop()
+    let key = page(to), held = ask(to, true)
+    looking = { key, held }
+    held.answer.then(() => looking?.held == held && (looking = undefined))
   }
   // A pointer passing over a link on its way elsewhere does not ask for it;
   // one that stays `INTENT` milliseconds, or presses, does.
@@ -550,41 +600,28 @@ export let start = (
     clearTimeout(hovering)
     hovering = setTimeout(() => ahead(e), INTENT)
   })
-  // The links a page marks `HOLD`, asked for while nothing else is, each
-  // once: a held page is drawn on its click and asked for again then.
-  let idle = (then: () => void) =>
-    win.requestIdleCallback
-      ? win.requestIdleCallback(then, { timeout: 2000 })
-      : setTimeout(then, 200)
-  let holding = false
-  let asked = new Set<string>()
-  let hold = () => {
-    if (holding) return
-    holding = true
-    let next = () => {
-      let to = [...doc.querySelectorAll(`a[${HOLD}]`)]
-        .filter((a) => !a.closest('[hidden]'))
-        .slice(0, HOLDS)
-        .map((a) => new URL(a.getAttribute('href')!, win.location.href))
-        .find((to) =>
-          to.origin == win.location.origin && page(to) != here &&
-          !pages.has(page(to)) && !asked.has(page(to))
-        )
-      if (!to) return void (holding = false)
-      asked.add(page(to))
-      ask(to, true).answer.then(() => idle(next))
-    }
-    idle(next)
+  // Leaving the link (or the keyboard leaving it) before its page came.
+  let left = (e: Event) => {
+    let link = (e.target as Element | null)?.closest?.('a[href]')
+    let into = (e as MouseEvent).relatedTarget as Node | null
+    if (!link || (into && link.contains(into))) return
+    clearTimeout(hovering)
+    drop()
   }
-  hold()
-  doc.addEventListener(PAGE, hold)
+  win.addEventListener('mouseout', left)
+  win.addEventListener('focusout', left)
+  win.addEventListener('focusin', ahead)
   win.addEventListener('mousedown', ahead)
   win.addEventListener('touchstart', ahead, { passive: true })
-  win.addEventListener('submit', () => (pages.clear(), asked.clear()))
+  win.addEventListener('submit', () => pages.clear())
   win.addEventListener('click', (e: MouseEvent) => {
     let to = followed(e, win.location.href, here)
     if (!to) return
     e.preventDefault()
+    if (!pages.has(page(to)) || looking?.key == page(to)) {
+      going(doc, (e.target as Element).closest('a[href]')!)
+      tell(doc, GOING, { began: now() })
+    }
     go(to)
   })
   history.listen(({ path }) => {

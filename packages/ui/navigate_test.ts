@@ -3,9 +3,11 @@ import { test } from '@yaks/testing'
 import { DOMParser, parseHTML } from 'linkedom'
 import type { HistoryEntry } from './history.ts'
 import {
+  AGAIN,
   AHEAD,
   arrived,
   FRESH,
+  GOING,
   LEAVE,
   leaving,
   morph,
@@ -106,6 +108,9 @@ test('a swap runs a script it names for the first time once, and a written one e
   assert(style.parentNode == doc.head, 'what a script put in the head stays')
 })
 
+// Every promise already settled has run its callbacks.
+let settled = () => new Promise((done) => setTimeout(done, 0))
+
 // A window over a page at `path`, its fetches answered from `pages`.
 let browsing = (pages: Record<string, string>, path = '/apps') => {
   let { document } = parseHTML(pages[new URL(path, 'https://y.test').pathname])
@@ -113,6 +118,10 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
   let at = new URL(path, 'https://y.test')
   let loaded: string[] = []
   let fetched: string[] = []
+  let stopped: string[] = []
+  let again = new Set<string>()
+  let slow = false
+  let waiting: (() => void)[] = []
   let entries: HistoryEntry[] = []
   let pop: ((e: HistoryEntry) => void) | undefined
   let location = {
@@ -147,14 +156,24 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
       fetched.push(ahead ? `${url} ${ahead}` : url)
       let to = new URL(url)
       let html = pages[to.pathname]
-      return Promise.resolve(
+      let answer = () =>
         new Response(html ?? 'gone', {
-          headers: { 'content-type': html ? 'text/html' : 'text/plain' },
-        }),
-      )
+          headers: {
+            'content-type': html ? 'text/html' : 'text/plain',
+            ...again.has(to.pathname) ? { [AGAIN]: '1' } : {},
+          },
+        })
+      if (!slow) return Promise.resolve(answer())
+      // Held back until `answer()`, and refused once its asker stops.
+      return new Promise((done, fail) => {
+        waiting.push(() => done(answer()))
+        init.signal?.addEventListener('abort', () => {
+          stopped.push(url)
+          fail(new DOMException('stopped', 'AbortError'))
+        })
+      })
     },
     scrollTo: () => {},
-    requestIdleCallback: (then: () => void) => setTimeout(then, 0),
     DOMParser,
   } as unknown as Parameters<typeof start>[0]
   let history = {
@@ -205,6 +224,14 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
     go,
     left: () => left,
     tick: (ms: number) => void (time += ms),
+    stopped,
+    again,
+    // Answers wait until `answer` sends them.
+    slow: () => void (slow = true),
+    answer: async () => {
+      for (let send of waiting.splice(0)) send()
+      await settled()
+    },
   }
 }
 
@@ -303,12 +330,10 @@ test('Back swaps the page it comes to without a new history entry', async () => 
   assertEquals(b.entries, [])
 })
 
-// Every promise already settled has run its callbacks.
-let settled = () => new Promise((done) => setTimeout(done, 0))
-
-test('a page touched ahead draws in the click, then its opened answer lays over it where it changed', async () => {
+test('a page touched ahead draws in the click, then, its answer asking, its opened answer lays over it where it changed', async () => {
   let pages = { ...site }
   let b = browsing(pages)
+  b.again.add('/updates')
   b.press('touchstart', 'a[href="/updates"]')
   await settled()
   assertEquals(b.fetched, ['https://y.test/updates prefetch'])
@@ -345,30 +370,6 @@ test('a page opened before draws at once, and is asked for again once it is old'
   )
 })
 
-test('the links a page marks to hold are fetched ahead while it is idle, one at a time and once', async () => {
-  let held = (here: string) =>
-    framed(
-      here,
-      `<h1>${here}</h1>`,
-      '<nav><a data-hold href="/updates">U</a><a data-hold href="/apps">A</a>' +
-        '<a data-hold href="/gone">G</a><a data-hold href="https://far.test/">F</a>' +
-        '<p hidden><a data-hold href="/more">M</a></p></nav>',
-    )
-  let b = browsing({ '/apps': held('apps'), '/updates': held('updates') })
-  for (let i = 0; i < 5; i++) await settled()
-  assertEquals(b.fetched, [
-    'https://y.test/updates prefetch',
-    'https://y.test/gone prefetch',
-  ])
-  b.click('a[href="/updates"]')
-  for (let i = 0; i < 5; i++) await settled()
-  assertEquals(b.drawn[0].from, 'held')
-  assertEquals(b.fetched.slice(2), [
-    'https://y.test/updates',
-    'https://y.test/apps prefetch',
-  ])
-})
-
 test('pressing a link to a page held long ago draws it at once, and asks for it after', async () => {
   let b = browsing(site)
   await b.go(new URL('https://y.test/updates'))
@@ -381,6 +382,65 @@ test('pressing a link to a page held long ago draws it at once, and asks for it 
   assertEquals(b.drawn.at(-1)!.from, 'held')
   assertEquals(b.drawn.at(-1)!.phases.wait, 0)
   assertEquals(b.fetched.length, 3)
+})
+
+test('a pointer that moves on before its page comes lets it go, and one look ahead stands at a time', async () => {
+  let b = browsing(site)
+  b.slow()
+  b.press('mousedown', 'a[href="/updates"]')
+  b.press('mousedown', 'img')
+  assertEquals(b.stopped, ['https://y.test/updates'], 'another look ahead')
+  let out = new (b.doc.defaultView as unknown as typeof globalThis).Event(
+    'mouseout',
+    { bubbles: true },
+  )
+  b.doc.querySelector('a[href="/apps"]')!.dispatchEvent(out)
+  assertEquals(b.stopped, ['https://y.test/updates', 'https://y.test/apps'])
+  await b.answer()
+  b.click('a[href="/updates"]')
+  await b.answer()
+  assertEquals(b.drawn.map((d) => d.from), ['fetch'])
+})
+
+test('a page looked ahead at and opened soon after is asked for once, unless its answer asks again', async () => {
+  let b = browsing(site)
+  b.again.add('/apps')
+  b.press('touchstart', 'a[href="/updates"]')
+  await settled()
+  b.click('a[href="/updates"]')
+  await settled()
+  b.press('touchstart', 'a[href="/apps"]')
+  await settled()
+  b.click('a[href="/apps"]')
+  await settled()
+  assertEquals(b.fetched, [
+    'https://y.test/updates prefetch',
+    'https://y.test/apps prefetch',
+    'https://y.test/apps',
+  ])
+})
+
+test('a click on a page not yet held shows itself at once: its link the current one, the content waiting', async () => {
+  let b = browsing(site)
+  b.slow()
+  let gone = 0
+  b.doc.addEventListener(GOING, () => gone++)
+  b.click('a[href="/updates"]')
+  assertEquals(gone, 1)
+  assertEquals(
+    b.doc.querySelector('[aria-current="page"]')?.getAttribute('href'),
+    '/updates',
+  )
+  assertEquals(
+    b.doc.getElementById('content')?.getAttribute('aria-busy'),
+    'true',
+  )
+  await b.answer()
+  assertEquals(
+    b.doc.getElementById('content')?.hasAttribute('aria-busy'),
+    false,
+  )
+  assertEquals(b.doc.querySelector('h1')?.textContent, 'Updates')
 })
 
 test('sending a form lets go of every page held', async () => {

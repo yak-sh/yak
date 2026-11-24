@@ -290,7 +290,11 @@ the navigator swapped in place (`yak-page`, @yaks/web/navigate). Each line
 gives the time from click to the drawn frame, where the page came from
 (`fetch`, `held`, or `fresh` for the refetch drawn over a held page), the
 wait for the server, the swap, the nodes made, and the answer's
-Server-Timing. To time a navigation, tap its link in a step and add a
+Server-Timing. A click on a page not yet held also has a `yak-press` line:
+the time to the first frame, where the pressed link is lit and the content
+waits. A `fetched` line counts the pages the page fetched and the server's
+time on them, which is what looking ahead costs. To time a navigation, tap
+its link in a step and add a
 `wait` long enough for the server, then read the line. A step's tap presses
 and clicks at once, so a fetch on hover gets no head start: a person's
 pointer usually gives it a few hundred ms.

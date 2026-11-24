@@ -4,7 +4,7 @@
 // compiles it (T-148886).
 import { chooseDomain } from './domain-renewal.ts'
 import { copyOf } from './directory-copy.ts'
-import { lookingAhead } from '@yaks/ui/navigate'
+import { AGAIN, lookingAhead } from '@yaks/ui/navigate'
 import { spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
 import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
@@ -415,13 +415,16 @@ export let manage = async (
     let shown = await shownAnswer(req, env, space, who)
     if (shown) return shown
     let { updatesPage } = await import('./operator-page.ts')
-    return updatesPage(
-      env,
-      space,
-      who,
-      await beside(env, dir, space, who),
-      new URL(req.url).searchParams.has('dismissed'),
-      !lookingAhead(req),
+    return unread(
+      req,
+      updatesPage(
+        env,
+        space,
+        who,
+        await beside(env, dir, space, who),
+        new URL(req.url).searchParams.has('dismissed'),
+        !lookingAhead(req),
+      ),
     )
   }
   // Its Matches are its members' to pick in (matches.ts).
@@ -749,14 +752,27 @@ let everyUpdate = async (
   ).then((all) => new Map(all))
   apps.catch(() => {})
   let { allUpdatesPage } = await import('./operator-page.ts')
-  return allUpdatesPage(
-    env,
-    home,
-    held,
-    await beside(env, dir, home.space, home.who),
-    apps,
-    !lookingAhead(req),
+  return unread(
+    req,
+    allUpdatesPage(
+      env,
+      home,
+      held,
+      await beside(env, dir, home.space, home.who),
+      apps,
+      !lookingAhead(req),
+    ),
   )
+}
+
+// Updates fetched ahead marked nothing read, and say so: the navigator asks
+// for them again once they are opened (@yaks/ui/navigate `AGAIN`).
+let unread = async (req: Request, page: Promise<Response>) => {
+  let res = await page
+  if (!lookingAhead(req)) return res
+  let told = new Response(res.body, res)
+  told.headers.set(AGAIN, '1')
+  return told
 }
 
 // What the chat app's side holds (operator-page.ts `Beside`), asked at once:

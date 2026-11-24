@@ -228,7 +228,8 @@ export type Rendered = {
 /** One load or move on the page, in milliseconds: `load` is the document's
  * first, from asking to its content loaded; `yak-page` a move between
  * pages in place (@yaks/web/navigate), from the click to the frame that
- * drew it; `fetched` the server's time on every page the page fetched. `parts` says where the time went, `server` what the answer's
+ * drew it, and `yak-press` from such a click to the frame that first showed
+ * it; `fetched` the server's time on every page the page fetched. `parts` says where the time went, `server` what the answer's
  * `Server-Timing` said. */
 export type Timing = {
   name: string
@@ -276,7 +277,11 @@ let TIMELINE = `(() => {
     parts: { pages: pages.length },
     server: {},
   })
-  for (let m of performance.getEntriesByName('yak-page')) {
+  let moves = [
+    ...performance.getEntriesByName('yak-press'),
+    ...performance.getEntriesByName('yak-page'),
+  ].sort((a, b) => a.startTime - b.startTime)
+  for (let m of moves) {
     let { url = '', ...parts } = m.detail ?? {}
     out.push({
       name: m.name,
