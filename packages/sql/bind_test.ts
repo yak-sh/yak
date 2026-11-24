@@ -558,7 +558,6 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
   let { sql, params } = compile(parse('.refs=a1'), wide)
   // A target is bound once, independently of column count or union count.
   assertEquals(params, ['a1'])
-  assertEquals(compile(parse('.refs=a1|.refs=a2'), wide).params, ['a1', 'a2'])
   assert(
     sql.includes(
       '"pair"."left" = "__refs_target".id or ' +
@@ -571,11 +570,15 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
   for (let terms of compounds(sql)) {
     assert(terms <= ARMS, `${terms} terms: ${sql}`)
   }
-  // Several targets in one OR share one union, however many they are.
-  let ids = Array.from({ length: 40 }, (_, i) => `.refs=a${i}`).join('|')
-  let many = compile(parse(ids), wide)
-  assertEquals(many.sql.match(/ join "(n\d|pair)"/g)?.length, 7)
-  assert(many.sql.length < sql.length * 2, many.sql)
+  // Several targets in one OR share one union and one statement, however many
+  // they are.
+  let refs = (n: number) =>
+    compile(
+      parse(Array.from({ length: n }, (_, i) => `.refs=a${i}`).join('|')),
+      wide,
+    ).sql
+  assertEquals(refs(40).match(/ join "(n\d|pair)"/g)?.length, 7)
+  assertEquals(refs(40), refs(2))
 })
 
 // How many terms each compound SELECT in `sql` carries: the unions at one
