@@ -18,6 +18,30 @@ import {
  * statement naming them, a pragma included, with SQLITE_AUTH (T-34019). */
 export let foreign = (name: string): boolean => /^(sqlite_|_+cf_)/i.test(name)
 
+type MainTable = { name: string; type: unknown; withoutRowid: boolean }
+let listedTables = new WeakMap<Driver, {
+  at: number
+  tables: readonly MainTable[]
+}>()
+
+/** The main schema's own tables, shared by component discovery and statistics
+ * until DDL changes the schema. The pragma reads unbilled metadata directly.
+ * Engine tables are excluded, including sqlite_stat1, which ANALYZE may add. */
+export let mainTables = (driver: Driver): readonly MainTable[] => {
+  let at = revision(driver, 'schema')
+  let held = listedTables.get(driver)
+  if (held?.at === at) return held.tables
+  let tables = driver.query({ t: 'pragma', name: 'table_list' })
+    .filter((r) => r.schema == 'main' && !foreign(String(r.name)))
+    .map((r) => ({
+      name: String(r.name),
+      type: r.type,
+      withoutRowid: r.wr == 1,
+    }))
+  listedTables.set(driver, { at, tables })
+  return tables
+}
+
 /** Every table the file's schema lists, with the statement it was made by. */
 export let defined: Stmt = select({
   cols: [col('name'), col('sql')],
@@ -309,14 +333,11 @@ export function componentTables(
   let current = revision(driver, 'schema')
   let held = components.get(driver)
   if (!held || held.revision != current) {
-    // Direct metadata pragmas are unbilled on metered SQLite engines; their
-    // table-valued forms count every visited metadata row as a stored read.
-    let found = driver.query({ t: 'pragma', name: 'table_list' })
-      .filter((r) => r.schema == 'main' && r.type == 'table')
-      .map((r) => String(r.name))
-      .filter((name) =>
-        name != 'entity' && !name.startsWith('_yaks_') && !foreign(name)
+    let found = mainTables(driver)
+      .filter(({ name, type }) =>
+        type == 'table' && name != 'entity' && !name.startsWith('_yaks_')
       )
+      .map(({ name }) => name)
       .sort()
     held = { revision: current, tables: found, checked: new Map() }
     components.set(driver, held)

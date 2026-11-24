@@ -75,6 +75,7 @@ import {
 import {
   checks,
   foreign,
+  mainTables,
   objects,
   sole,
   type Stood,
@@ -1180,17 +1181,13 @@ let joined = (owed: string[] = [], more: string[]) => [
   ...new Set([...owed, ...more]),
 ]
 
-// Whether a table of the catalogue's list is one statistics are kept for:
-// the file's own, not the engine's.
-let kept = (r: Row) =>
-  r.schema == 'main' &&
-  (r.type == 'table' || r.type == 'shadow') &&
-  !foreign(String(r.name))
+// Statistics cover ordinary tables and the tables a virtual table stores its
+// rows in.
+let kept = ({ type }: { type: unknown }) => type == 'table' || type == 'shadow'
 
 /** The tables planner statistics are kept for ({@link analyzed}). */
 export let analyzable = (driver: Driver): string[] =>
-  driver.query({ t: 'pragma', name: 'table_list' }).filter(kept)
-    .map((r) => String(r.name))
+  mainTables(driver).filter(kept).map((r) => r.name)
 
 /** `statistics`, remembering as empty each of `made`, tables made since it
  * was taken: one a first write makes (./raise.ts) is made empty, and is owed
@@ -1236,11 +1233,8 @@ let owing = (
       owed: joined(owed, grown),
     }
   }
-  let tables = driver.query({ t: 'pragma', name: 'table_list' })
-  let names = tables.filter(kept)
-  let stats = tables.some((r) => r.name == 'sqlite_stat1')
-    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx', 'stat'])
-    : []
+  let names = mainTables(driver).filter(kept)
+  let stats = stat1(driver)
   let taken = new Set(stats.map((r) => String(r.tbl)))
   let indexes = new Set(stats.map((r) => String(r.idx)))
   // Adopt the statistics that stand, and owe the populated tables lacking
@@ -1250,16 +1244,18 @@ let owing = (
   if (
     previous ? bytes < previous.bytes * 10 : taken.has('entity')
   ) {
-    let missing = names.map((r) => String(r.name))
+    let missing = names.map((r) => r.name)
       .filter((name) => !taken.has(name) && !owed.includes(name))
     let filled = populated(driver, missing, 1)
     let partial = names.filter((r) =>
-      taken.has(String(r.name)) &&
-      driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
+      taken.has(r.name) &&
+      driver.query({ t: 'pragma', name: 'index_list', arg: r.name })
         .some((i) =>
-          !indexes.has(String(r.wr == 1 && i.origin == 'pk' ? r.name : i.name))
+          !indexes.has(
+            String(r.withoutRowid && i.origin == 'pk' ? r.name : i.name),
+          )
         )
-    ).map((r) => String(r.name))
+    ).map((r) => r.name)
     let ones = few(stats).filter((name) =>
       names.some((r) => r.name == name) && !owed.includes(name)
     )
@@ -1274,7 +1270,7 @@ let owing = (
   // Tenfold growth, or no statistics to adopt: every table that holds more
   // than a row afresh, found at two billed rows a table, and the bytes stored
   // now are what the next growth is measured from.
-  let all = names.map((r) => String(r.name))
+  let all = names.map((r) => r.name)
   let filled = populated(driver, all, 1)
   return {
     bytes,
