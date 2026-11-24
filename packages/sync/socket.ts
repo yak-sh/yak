@@ -43,6 +43,7 @@ import type { Vocab } from '@yaks/vocab'
 import { coalesced } from '@yaks/graph/bundle'
 import type { Coverage } from './coverage.ts'
 import { clock } from './clock.ts'
+import { type Revision, revisions, type Verdict } from './revision.ts'
 import type { Fetch } from './outbound.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
@@ -94,6 +95,10 @@ export type Frame = {
   transientReset?: string[]
   /** the subscription this frame answers */
   id: string
+  /** the store's revision its rows were read at (./revision.ts) */
+  revision?: Revision
+  /** the revision its subscription's frame before it said */
+  since?: Revision
   /** the entities now in the set (whole rows, unless `coverage` says what
    * each answers for), or, for a raw feed, the bundles as applied */
   bundles?: Bundle[]
@@ -183,6 +188,9 @@ export type Wire = {
   subscribe: (query: Ask, id?: string) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
+  /** ask a subscription again, whole: what it holds stays until the answer
+   * replaces it, and its frames still on their way from before are let go */
+  ask: (id: string) => void
   /**
    * Send `sync: peers` components to the server to relay. It is the only write
    * sent over the socket rather than posted, and it goes here because its
@@ -306,6 +314,7 @@ export let wire = (opts: WireOpts): Wire => {
   let refused = new Set<string>() // terminal until explicitly re-pointed
   let members = new Map<string, Set<Eid>>() // who is in each set
   let resetting = new Set<string>() // ids whose next frame is a reset
+  let revised = revisions() // of each row and subscription heard
   let socket: Socket | null = null
   let spoke = 0 // when the open socket last said anything
   let words = 0 // how many messages it has said
@@ -473,6 +482,24 @@ export let wire = (opts: WireOpts): Wire => {
     down = undefined
   }
 
+  // A frame that must not land (./revision.ts): its subscription is asked
+  // again, whole, its set kept so the answer can say what left it. One sent
+  // before the asking is let go; a frame missed is the server's failure.
+  let again = (id: string, why: Verdict) => {
+    if (why == 'asked') return
+    if (why == 'skipped') {
+      opts.report(new Error(`a frame of subscription ${id} never arrived`))
+    }
+    ask(id)
+  }
+  let ask = (id: string) => {
+    let query = asks.get(id)
+    if (query === undefined || refused.has(id)) return
+    revised.asked(id)
+    resetting.add(id)
+    send({ subscribe: query, id, ...asking() })
+  }
+
   // A frame, with the reopen bookkeeping done: a reset frame reports whatever
   // the client was holding and did not hear about again as gone, and every
   // frame keeps the membership set current so the next reset can do the same.
@@ -492,19 +519,22 @@ export let wire = (opts: WireOpts): Wire => {
       return
     }
     if (!asks.has(frame.id)) return
+    let wrong = revised.check(frame)
+    if (wrong) return again(frame.id, wrong)
+    revised.landed(frame)
     refused.delete(frame.id)
-    let held = members.get(frame.id) ?? new Set<Eid>()
-    members.set(frame.id, held)
+    let set = members.get(frame.id) ?? new Set<Eid>()
+    members.set(frame.id, set)
     let gone = [...(frame.gone ?? [])]
     let arrived = (frame.bundles ?? []).map((b) => b.entity.eid)
     if (!frame.refused && (resetting.delete(frame.id) || frame.reset)) {
       let seen = new Set(arrived)
-      for (let eid of held) if (!seen.has(eid)) gone.push(eid)
-      held.clear()
+      for (let eid of set) if (!seen.has(eid)) gone.push(eid)
+      set.clear()
       frame = { ...frame, reset: true }
     }
-    for (let eid of arrived) held.add(eid)
-    for (let eid of gone) held.delete(eid)
+    for (let eid of arrived) set.add(eid)
+    for (let eid of gone) set.delete(eid)
     resume()
     return opts.land({ ...frame, gone })
   }
@@ -572,6 +602,7 @@ export let wire = (opts: WireOpts): Wire => {
       for (let [id, query] of asks) {
         if (refused.has(id)) continue
         resetting.add(id) // its answer will be the whole set, as it now stands
+        revised.asked(id)
         s.send(stringify({ subscribe: query, id, ...asking() }))
       }
       resume() // at once, when nothing is asked
@@ -704,16 +735,19 @@ export let wire = (opts: WireOpts): Wire => {
       asks.set(key, query)
       members.set(key, new Set())
       resetting.add(key)
+      revised.asked(key)
       opts.pending?.(key)
       open()
       send({ subscribe: query, id: key, ...asking() })
       return key
     },
+    ask,
     unsubscribe: (id) => {
       asks.delete(id)
       refused.delete(id)
       members.delete(id)
       resetting.delete(id)
+      revised.closed(id)
       send({ unsubscribe: id })
       resume()
     },

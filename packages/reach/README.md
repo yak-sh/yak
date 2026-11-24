@@ -73,6 +73,13 @@ A member that refuses or fails is left out of the answer, and reported through
 `silent`. One that answers 503 fails the read, and so does a line every member
 refuses.
 
+`watch` is the read, live. With one member it is that member's own watch; with
+several, each member watching its part of the line sends news, and the line is
+read again, whole, and sent with `reset` when it moved. A member's frames say
+its store's revision as one number; a watch says each under the member's `at`
+(`named`), and a read again says the newest each member's news had said when it
+began, which its rows are no older than.
+
 ## Writes
 
 `routed` splits a batch into one part per member. Every `$alias` is minted once

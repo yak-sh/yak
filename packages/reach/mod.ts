@@ -94,13 +94,38 @@ export let homeOf = (b: Bundle): string | undefined => {
 
 /** A frame of a live watch, as @yaks/api's subscriptions send one: rows
  * (all of them with `reset`) and the eids `gone`, a reduction (`count`,
- * `tally`, `distinct`), or the error the line was refused with. */
+ * `tally`, `distinct`), or the error the line was refused with. `revision`
+ * is the store's revision the rows were read at, and `since` the one the
+ * frame before it said: one number from a member, and from a watch, each
+ * member's under its `at` ({@link named}). */
 export type Frame = {
   bundles?: Bundle[]
   gone?: string[]
   reset?: boolean
   refused?: unknown
+  revision?: number | Record<string, number>
+  since?: number | Record<string, number>
   [more: string]: unknown
+}
+
+/** A member's frame as a watch says it: its revisions under the member's
+ * `at`, since a revision orders one store's frames and no other's.
+ *
+ * ```ts
+ * import { named } from '@yaks/reach'
+ * import { assertEquals } from '@std/assert'
+ *
+ * assertEquals(
+ *   named({ bundles: [], revision: 7, since: 6 }, 'home/books'),
+ *   { bundles: [], revision: { 'home/books': 7 }, since: { 'home/books': 6 } },
+ * )
+ * ```
+ */
+export let named = (frame: Frame, at: string): Frame => {
+  let out = { ...frame }
+  if (typeof frame.revision == 'number') out.revision = { [at]: frame.revision }
+  if (typeof frame.since == 'number') out.since = { [at]: frame.since }
+  return out
 }
 
 /** The language every member shares, and how the composition reports. */
@@ -1108,16 +1133,22 @@ export let reach = (words: Words): Reach => {
    * of the line, and any frame one sends is news: the line is read again,
    * whole, and its answer sent with `reset` when it moved. So a watch answers
    * exactly what the read does, its merge, order and count included. Reads
-   * the news raises while one is out share the next. */
+   * the news raises while one is out share the next. Each frame's revisions
+   * are under their members' `at` ({@link named}); a read again says the
+   * newest each member's news had said when it began, which its rows are no
+   * older than. */
   let watch = (
     members: Member[],
     line: string,
     sink: (frame: Frame) => void,
   ): () => void => {
     let [one] = members
-    if (members.length == 1 && one.watch) return one.watch(line, sink)
+    if (members.length == 1 && one.watch) {
+      return one.watch(line, (frame) => sink(named(frame, one.at)))
+    }
     let closed = false, reading = false, again = false
     let said: string | undefined
+    let heard: Record<string, number> = {}
     let send = (frame: Frame, key: string) => {
       if (closed || key == said) return
       said = key
@@ -1128,12 +1159,15 @@ export let reach = (words: Words): Reach => {
       reading = true
       do {
         again = false
+        let at = { ...heard }
         try {
           let out = await read(members, line, true)
           let frame = Array.isArray(out)
             ? { bundles: out as Bundle[], reset: true }
             : out as Frame
-          send(frame, JSON.stringify(frame))
+          let key = JSON.stringify(frame)
+          if (Object.keys(at).length) frame = { ...frame, revision: at }
+          send(frame, key)
         } catch (e) {
           send({ refused: e }, `refused ${(e as Error)?.message}`)
         }
@@ -1144,7 +1178,16 @@ export let reach = (words: Words): Reach => {
     void ask()
     void news(members, line).then((lines) => {
       for (let [m, part] of lines) {
-        if (!closed) stops.push(m.watch!(part, () => void ask()))
+        if (closed) continue
+        stops.push(m.watch!(part, (frame) => {
+          let revision = named(frame, m.at).revision as
+            | Record<string, number>
+            | undefined
+          for (let [at, n] of Object.entries(revision ?? {})) {
+            heard[at] = Math.max(heard[at] ?? n, n)
+          }
+          void ask()
+        }))
       }
     }, (e) => send({ refused: e }, `refused ${(e as Error)?.message}`))
     return () => {

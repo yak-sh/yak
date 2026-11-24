@@ -10,7 +10,7 @@ import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { shop as shopVocab, shopGraph } from './testing.ts'
+import { shop as shopVocab, shopGraph, unstamped } from './testing.ts'
 import { api } from './route.ts'
 import { relay as relaying } from './relay.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
@@ -22,7 +22,7 @@ let TAB = derivedEid('fixture:tab')
 let ear = () => {
   let heard: Frame[] = []
   let to: Sink = (f) => {
-    heard.push(f)
+    heard.push(unstamped(f))
   }
   return { to, take: () => heard.splice(0, heard.length) }
 }

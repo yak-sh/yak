@@ -164,3 +164,10 @@ export let fake = (): Fake => {
   }
   return f
 }
+
+/** A frame as a test reads what it says, without the revision it was read at
+ * and the one before it: those are the store's to number. */
+export let unstamped = (f: Frame): Frame => {
+  let { revision: _, since: __, ...rest } = f
+  return rest
+}

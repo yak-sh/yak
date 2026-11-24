@@ -1310,7 +1310,7 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
   await heard(ws)
-  assertEquals(ws.sent, [
+  assertEquals(ws.sent.map(({ revision: _, ...f }) => f), [
     { id: 'r', bundles: [], coverage: {}, transientReset: [] },
   ])
 
@@ -1410,7 +1410,9 @@ test('a subscription asking `*` answers what /query answers', async () => {
     JSON.stringify({ subscribe: line, id: 'r' }),
   )
   await heard(ws)
-  assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
+  assertEquals(ws.sent.map(({ revision: _, ...f }) => f), [
+    { id: 'r', bundles: [], transientReset: [] },
+  ])
 
   await post(store, '/apply', [{
     entity: { eid: CAKE },

@@ -14,7 +14,7 @@ import { loadVocab } from '@yaks/vocab'
 import { backed, ddl, journal, log } from '@yaks/journal'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { journalDoc } from '@yaks/journal/vocab'
-import { comp, shop as shopVocab, shopGraph } from './testing.ts'
+import { comp, shop as shopVocab, shopGraph, unstamped } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
 let ADA = derivedEid('fixture:ada')
@@ -23,7 +23,7 @@ let ADA = derivedEid('fixture:ada')
 let ear = () => {
   let heard: Frame[] = []
   let to: Sink = (f) => {
-    heard.push(f)
+    heard.push(unstamped(f))
   }
   return { to, take: () => heard.splice(0, heard.length) }
 }
@@ -243,6 +243,23 @@ test('backlinks change only when a referrer changes', () => {
   assertEquals(joined.bundles?.[0].doc, undefined)
   g.apply([{ entity: { eid: 'b1' }, book: { author: null } }])
   assertEquals(take().map((f) => f.gone), [['b1']])
+})
+
+// A frame says the revision of the store its rows came from, and the one its
+// subscription's frame before it said, so a subscriber can tell an older copy
+// and a missed frame. The revision moves forward across a restart too.
+test('a frame says its revision and the revision its subscription said before', () => {
+  let graph = shop(), time = 100, heard: Frame[] = []
+  let subs = subscriptions(graph, { now: () => time })
+  subs.open((f) => void heard.push(f), 'cheap', '.book.price<20')
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 30 } }])
+  let stamps = () => heard.splice(0).map((f) => [f.revision, f.since])
+  equal(stamps(), [[100, undefined], [101, 100], [102, 101]])
+  time = 150
+  subscriptions(graph, { now: () => time })
+    .open((f) => void heard.push(f), 'cheap', '.book.price<20')
+  equal(stamps(), [[150, undefined]])
 })
 
 test('an aggregate is answered with its value, and again when it moves', () => {

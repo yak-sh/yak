@@ -44,7 +44,7 @@ test('/ws through this upgrade serves subscriptions', async () => {
       'message',
       JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
     )
-    assertEquals(socket.taken(), [
+    assertEquals(socket.taken().map(({ revision: _, ...f }) => f), [
       { id: 'c', bundles: [], coverage: {}, transientReset: [] },
     ])
 

@@ -105,6 +105,7 @@ export {
   type Frame,
   type Listening,
   type Opening,
+  type Revision,
   type Sink,
   type Subs,
   subscriptions,

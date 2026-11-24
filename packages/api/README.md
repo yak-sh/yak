@@ -198,7 +198,7 @@ const to = (frame: Frame) => {
 await subs.open(to, 'titles', '.book&.fields=book.title')
 equal(frames[0].coverage, { b1: { book: ['title'] } })
 await subs.open(to, 'count', '.book&.count')
-equal(frames[1], { id: 'count', count: 1 })
+equal(frames[1].count, 1)
 await subs.drop(to)
 ```
 
@@ -398,7 +398,16 @@ await subs.drop(to)
 
 Query frames contain current matching bundles and `gone` eids for deleted
 entities or entities that stopped matching. A refresh may send the whole answer.
-Queries that can test one entity at a time use
+
+Every frame carrying rows, `gone` eids or a reduction says the store's
+`revision` when it was sent, which its rows are no newer than, and `since`, the
+revision of its subscription's frame before it (absent on the first). The
+registry's revision moves on with every commit it hears and every change its
+`revision` token reveals; it starts at the time (`now`), so a registry made
+again after a restart starts past every frame the last one sent. A frame
+carrying only relayed or transient values says no revision. A subscriber can
+tell a frame older than a row it holds, or one whose `since` it never heard
+(@yaks/sync). Queries that can test one entity at a time use
 [@yaks/match](../match/README.md); queries with references, ordering, limits or
 walks use dependency reads or refreshes. A refresh runs only after a commit
 writes a component its query reads, on an entity it selects or on one a

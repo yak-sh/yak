@@ -164,11 +164,11 @@ export let hear = (
   })
 }
 
-// Whether a patch would change the row held: an entity field, component or
-// property it sets that does not already read so, or one it clears that is
-// there. A whole answer heard again after a reconnect is mostly rows that did
-// not move, and applying those would redo every reader's work for nothing.
-let changes = (held: Bundle | undefined, patch: Bundle): boolean => {
+/** Whether a patch would change the row held: an entity field, component or
+ * property it sets that does not already read so, or one it clears that is
+ * there. A whole answer heard again after a reconnect is mostly rows that did
+ * not move, and applying those would redo every reader's work for nothing. */
+export let changes = (held: Bundle | undefined, patch: Bundle): boolean => {
   if (!held || dead(held) || dead(patch)) return true
   for (let [key, value] of Object.entries(patch.entity)) {
     if (!same((held.entity as Record<string, unknown>)[key], value)) return true

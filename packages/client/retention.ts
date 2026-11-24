@@ -16,6 +16,7 @@ import { transient } from '@yaks/graph/read'
 import type { Store } from '@yaks/ram'
 import {
   type Ask,
+  changes,
   type Coverage,
   covers,
   delivered,
@@ -150,6 +151,19 @@ export let retention = (
   }
   let owners = new Map<Eid, Set<string>>()
   let pins = new Map<Eid, number>()
+  // The rows a pin held back from each subscription's answer. When the pin
+  // lets go, the write's answer or its revert is what is shown, and a
+  // subscription that heard something else is asked again.
+  let heldBack = new Map<Eid, Map<string, Bundle>>()
+  let unpinned = (id: string, rows: Bundle[]) =>
+    rows.filter((b) => {
+      let eid = b.entity.eid
+      if (!pins.has(eid)) return true
+      let heard = heldBack.get(eid) ?? new Map<string, Bundle>()
+      heard.set(id, b)
+      heldBack.set(eid, heard)
+      return false
+    })
   // An HTTP write can be accepted before its socket subscription hears it.
   // Keep only the local matches of that accepted write until each matching
   // subscription answers, so a row does not blink out between transports.
@@ -605,7 +619,7 @@ export let retention = (
       let receive = (rows: Bundle[], role: Map<Eid, Coverage>) =>
         snapshot(
           graph,
-          rows.filter((b) => role.has(b.entity.eid) && !pins.has(b.entity.eid)),
+          unpinned(frame.id, rows.filter((b) => role.has(b.entity.eid))),
           {
             mine,
             coverage: Object.fromEntries(
@@ -618,7 +632,7 @@ export let retention = (
         sub.query === true
           ? land(graph, {
             ...frame,
-            bundles: bundles.filter((b) => !pins.has(b.entity.eid)),
+            bundles: unpinned(frame.id, bundles),
             gone: [],
           }, mine)
           : after(
@@ -661,8 +675,15 @@ export let retention = (
       for (let id of subscriptions.keys()) notify(id)
       let active = true
       return (didAccept = false) => {
-        if (!active || closed) return
+        if (!active || closed) return []
         active = false
+        let again = new Set<string>()
+        for (let eid of eids) {
+          for (let [id, b] of heldBack.get(eid) ?? []) {
+            if (subscriptions.has(id) && changes(held(eid), b)) again.add(id)
+          }
+          heldBack.delete(eid)
+        }
         if (didAccept) {
           let written = new Set(eids)
           for (let [id, sub] of subscriptions) {
@@ -693,6 +714,7 @@ export let retention = (
         }
         sweep()
         for (let id of subscriptions.keys()) notify(id)
+        return [...again]
       }
     },
     epoch: async (epoch) => {

@@ -175,7 +175,9 @@ test('a subscription is answered, and a commit pushes to the socket', () => {
   ctx.live.push(ws)
 
   live.message(ws, ask('p', '.kind=product'))
-  assertEquals(ws.sent, [{ id: 'p', bundles: [], transientReset: [] }])
+  assertEquals(ws.sent.map(({ revision: _, ...f }) => f), [
+    { id: 'p', bundles: [], transientReset: [] },
+  ])
 
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
   let last = ws.sent.at(-1)!
@@ -213,7 +215,7 @@ test('a woken object serves the socket it inherited', () => {
   let [g, woken] = instance(storage, ctx)
   woken.wake()
   assertEquals(
-    ws.sent,
+    ws.sent.map(({ revision: _, ...f }) => f),
     [{ id: 'p', bundles: [], transientReset: [], reset: true }],
     'the set again, on waking',
   )

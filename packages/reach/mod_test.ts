@@ -248,3 +248,25 @@ test('a watch of one member is its own, and a line every member refuses is refus
   assertEquals('refused' in none.frames[0], true)
   none.stop()
 })
+
+test('a watch says each member revision under its address, and a read again says what its news had said', async () => {
+  let { fan, both, books } = await setup()
+  let own = watching(fan, [books], '.book')
+  await until(() => own.frames.length == 1)
+  let [first] = own.frames
+  assertEquals(Object.keys(first.revision as object), ['me/books'])
+  await books.apply([{ entity: { eid: 'emma' }, book: { pages: 1 } }], false)
+  await until(() => own.frames.length == 2)
+  assertEquals(own.frames[1].since, first.revision)
+  own.stop()
+  let lent = watching(fan, both, '.book&.loan.to=Ann')
+  await until(() => lent.now().length == 1)
+  await fan.written(both, undefined, [{
+    entity: { eid: 'emma' },
+    loan: { to: 'Ann' },
+  }])
+  await until(() => lent.now().length == 2)
+  let last = lent.frames.at(-1)!.revision as Record<string, number>
+  assertEquals(Object.keys(last).sort(), ['me/books', 'me/loans'])
+  lent.stop()
+})

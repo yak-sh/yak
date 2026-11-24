@@ -67,7 +67,10 @@ export type Replica = {
   /** apply one frame; `mine` is what this node is saying itself, which a
    * reset frame leaves out (inbound.ts `hear`) */
   land: (frame: Frame, mine?: Mine) => Bundle[] | Promise<Bundle[]>
-  protect: (eids: Eid[]) => (accepted?: boolean) => void
+  /** Hold these rows as a local write left them until it is answered. What
+   * it returns lets go, and names the subscriptions whose answers it held a
+   * row back from, which are asked again. */
+  protect: (eids: Eid[]) => (accepted?: boolean) => string[]
 }
 
 /** Local priming is optional: an authoritative server query may not be
@@ -269,7 +272,10 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let send = (bundles: Bundle[], held = false) => {
     let sent = outward(bundles, graph.vocab)
     if (!sent.length) return
-    let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
+    let protect = opts.replica?.protect(bundles.map((b) => b.entity.eid))
+    let release = protect && ((accepted?: boolean) => {
+      for (let id of protect(accepted)) w.ask(id)
+    })
     let answer = queue(() =>
       deliver(bundles, sent, held, undefined, release).then(async (applied) => {
         // A held deletion deferred the whole caller batch. The HTTP door

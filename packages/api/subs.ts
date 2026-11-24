@@ -78,6 +78,12 @@ import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 import { type PeerWriter, saving } from './save.ts'
 
+/** Which revision of the store a frame's rows were read at: one number, or,
+ * from a door over several stores, each store's under its name (@yaks/reach).
+ * A store's revision only moves forward, across restarts too, so of two
+ * frames about one row the one with the higher revision is the newer. */
+export type Revision = number | Record<string, number>
+
 /**
  * One push to one subscriber. `bundles` are whole entities that are now in
  * the set — for the raw feed (`subscribe: true`), the committed transaction
@@ -95,6 +101,11 @@ export type Frame = {
   transientReset?: Eid[]
   /** the subscription this frame answers */
   id: string
+  /** the store's revision when the frame left: its rows are no newer */
+  revision?: Revision
+  /** the revision of the subscription's previous frame, absent on its first:
+   * a subscriber that last heard another has missed one */
+  since?: Revision
   /** the entities now in the set (whole), or the composed transaction for a
    * raw feed */
   bundles?: Bundle[]
@@ -120,6 +131,13 @@ export type Frame = {
   /** why the subscription was refused, when it was */
   refused?: Refusal
 } & Partial<Reduced>
+
+// Whether a frame says what the store holds: rows, members leaving, or a
+// reduction. One carrying only relayed or transient values says what peers
+// are doing, which no revision of the store orders.
+let says = (f: Frame) =>
+  !!(f.bundles || f.gone || f.peers || f.peerGone) ||
+  'count' in f || 'tally' in f || 'distinct' in f
 
 /** Where a subscriber's frames go. One sink per client — the socket layer
  * makes one per connection, and the registry keys subscriptions by it. */
@@ -236,6 +254,8 @@ type Joint<T> = {
 }
 
 type Sub = {
+  /** the revision of the last frame sent ({@link Frame.since}) */
+  said?: number
   loading?: boolean
   dirty?: boolean
   abort?: AbortController
@@ -548,6 +568,16 @@ export let subscriptions = (graph: Graph, opts: {
     read: (q, opts) => base.read(q, readingOpts(opts)),
     rows: (q, opts) => base.rows(q, readingOpts(opts)),
     get: (ids, comps, opts) => base.get(ids, comps, readingOpts(opts)),
+  }
+  // The store's revision as this registry knows it (Frame `revision`): it
+  // moves on with every commit the registry hears, and with every change it
+  // learns of only from the store's token. It starts at the time, so a
+  // registry made again after a restart starts past every frame the one
+  // before it sent.
+  let now = opts.now ?? Date.now
+  let rev = now()
+  let advance = () => {
+    rev = Math.max(rev + 1, now())
   }
   let revision = opts.revision?.()
   let knownRevision = after(revision, (value) => {
@@ -868,8 +898,14 @@ export let subscriptions = (graph: Graph, opts: {
     let owner = () => held.get(sink)?.get(id)
     let sub: Sub | undefined
     let sendPublished: Sink = (frame) => {
+      sub ??= owner()
       if (sub && owner() !== sub) return
       let out: Frame = { ...frame }
+      if (says(frame)) {
+        out.revision = rev
+        if (sub?.said !== undefined) out.since = sub.said
+        if (sub) sub.said = rev
+      }
       for (let key of ['bundles', 'peers', 'relay'] as const) {
         if (frame[key]) out[key] = published(graph.vocab, frame[key])
       }
@@ -1788,6 +1824,7 @@ export let subscriptions = (graph: Graph, opts: {
   let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
   let commits = (txs: Bundle[][]): void | Promise<void> => {
     if (ending.signal.aborted || !txs.length) return
+    advance()
     let applied = txs.flat()
     for (let mine of held.values()) {
       for (let sub of mine.values()) {
@@ -2526,6 +2563,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
   let resync = (): void | Promise<void> => {
     if (ending.signal.aborted) return
+    advance()
     for (let mine of held.values()) {
       for (let sub of mine.values()) if (sub.loading) sub.dirty = true
     }

@@ -83,7 +83,7 @@ export {
   WriteRefused,
   WriteUnknown,
 } from './outbound.ts'
-export { hear, land, snapshot, strip } from './inbound.ts'
+export { changes, hear, land, snapshot, strip } from './inbound.ts'
 export { type Mine } from './saying.ts'
 export {
   type Ask,
@@ -133,6 +133,15 @@ export {
 } from './port.ts'
 
 export { type Coverage, covers, delivered } from './coverage.ts'
+export {
+  older,
+  type Revision,
+  REVISIONS,
+  type Revisions,
+  revisions,
+  type Stamped,
+  type Verdict,
+} from './revision.ts'
 
 export {
   durableOutbox,
