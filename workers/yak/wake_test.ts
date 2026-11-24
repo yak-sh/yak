@@ -279,6 +279,52 @@ test('a run Cloudflare could not answer is reported once no run has finished for
   ]])
 })
 
+// A one-shot row whose run was not answered, after a streak begun at
+// `since`: the instant it is armed to run again, if any.
+let retried = async (since: string, wake: Record<string, unknown>) => {
+  let writes: Bundle[] = []
+  let META = {
+    apply: (b: Bundle[]) => (writes.push(b[0]), Promise.resolve(b)),
+  }
+  let row = {
+    entity: { eid: 'remake-1' },
+    sweep: { kind: 'remake', since },
+    wake,
+  }
+  let warn = console.warn
+  console.warn = () => {}
+  try {
+    await reporting(
+      { META } as unknown as Env,
+      row,
+      () => Promise.reject(down),
+      () => at('05:00'),
+      () => Promise.resolve(),
+    )
+  } finally {
+    console.warn = warn
+  }
+  return (writes.at(-1)!.wake as { at?: string } | undefined)?.at
+}
+
+test('an unanswered one-shot runs again, later the longer it has gone unanswered', async () => {
+  let after = (minutes: number) =>
+    retried(new Date(at('05:00') - minutes * 60_000).toISOString(), {
+      at: null,
+    })
+  assertEquals(
+    await retried(iso('05:00'), { at: null }),
+    '2026-09-07T05:00:30.000Z',
+  )
+  assertEquals(await after(2), '2026-09-07T05:02:00.000Z')
+  assertEquals(await after(40), '2026-09-07T05:05:00.000Z')
+  // A recurring job's next run is its next instant.
+  assertEquals(
+    await retried(iso('05:00'), { at: null, every: '0 * * * *' }),
+    undefined,
+  )
+})
+
 test('a job whose R2 retries ran out reports a lasting outage once with its cause', async () => {
   let error = new Error(
     'head: We encountered an internal error. Please try again. (10001)',

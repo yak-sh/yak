@@ -14,6 +14,7 @@ import {
 } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
 import { strip } from '@yaks/esbuild/strip'
+import { unheard } from '@yaks/graph/errors'
 import type { Catalog } from '../../packages/esbuild/platform.ts'
 import * as apps from './apps.ts'
 import { writeResources } from './esbuild.ts'
@@ -902,16 +903,35 @@ test('a compile too big for the compiler says so, and the last release serves', 
         () => new Response('Failed to start container', { status: 500 }),
         'could not reach the compiler',
       ],
-      [
-        () => {
-          throw new Error('Network connection lost.')
-        },
-        'could not reach the compiler',
-      ],
     ] as const
   ) {
     fails = failure
     await assertRejects(() => s.tool('app_deploy'), Error, said)
+  }
+  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
+})
+
+test('a compiler with no container free, or out of reach, did not answer for now', async () => {
+  let fails: (() => Response) | null = null
+  await using s = await scenario((ask) => fails ? fails() : compiles(ask))
+  await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
+  await s.tool('app_deploy')
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  for (
+    let failure of [
+      () => new Response('no Container instance available', { status: 503 }),
+      () => {
+        throw new Error('Network connection lost.')
+      },
+    ]
+  ) {
+    fails = failure
+    let e = await assertRejects(
+      () => s.tool('app_deploy'),
+      Error,
+      'could not reach the compiler',
+    )
+    assert(unheard(e), String(e))
   }
   assertEquals((await s.served('main.ts')).body, '/* main.ts */')
 })

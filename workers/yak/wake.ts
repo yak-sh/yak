@@ -30,12 +30,15 @@
 // this one left (T-440).
 //
 // A run Cloudflare could not answer for now (@yaks/cloudflare/api `Unavailable`:
-// its own failure, through every resend), or a service out in the world could
-// not (@yaks/graph `unheard`, a phone provider's `Unsent`), is the same: no fault of the job's,
-// and the next run does what it could not. It is a line in the log and the
-// streak goes on; once no run has finished for `STUCK`, the outage is
-// reported once (`sweep.reported`), with the failure as its cause. Any other
-// failure is reported at once.
+// its own failure, through every resend), or a service could not (@yaks/graph
+// `unheard`: a phone provider's `Unsent`, or the compiler with no container
+// free, esbuild.ts `asked`), is the same: no fault of the job's, and the next
+// run does what it could not. A recurring job's next run is its next instant;
+// a one-shot's is armed on its row, sooner after a short streak and later
+// after a long one (`backoff`). It is a line in the log and the streak goes
+// on; once no run has finished for `STUCK`, the outage is reported once
+// (`sweep.reported`), with the failure as its cause. Any other failure is
+// reported at once.
 //
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
@@ -123,12 +126,21 @@ export type Report = (job: string, error: unknown) => Promise<unknown>
  * its row fires again at once. */
 export let MORE = Symbol('more')
 
+let recurring = (row: Fired) => {
+  let wake = row.wake as Partial<Schedule> | undefined
+  return !!(wake?.every || wake?.while?.length)
+}
 // A recurrence without an instant is paused. A one-shot's own firing cleared
 // its `at` (@yaks/wake `ring`), so a run it owes is still owed.
-let paused = (row: Fired) => {
-  let wake = row.wake as Partial<Schedule> | undefined
-  return !!(wake?.every || wake?.while?.length) && wake.at == null
-}
+let paused = (row: Fired) =>
+  recurring(row) && (row.wake as Partial<Schedule>).at == null
+
+/** How long a one-shot job waits before its next run, after a streak of
+ * unanswered runs that has lasted `lasted`: as long again, from half a
+ * minute to five, so a container starting is waited out in a few runs and
+ * an outage costs one run in five minutes. */
+export let backoff = (lasted: number): number =>
+  Math.min(Math.max(lasted, 30_000), 5 * 60_000)
 let again = (row: Fired) =>
   paused(row) ? {} : { wake: { at: new Date().toISOString() } }
 
@@ -154,6 +166,7 @@ export let reporting = async (
   await mark({ began })
   let ended: Marks = { began: null, since: null, reported: null }
   let more = false
+  let retry: string | undefined
   try {
     more = await run(() => now() - Date.parse(began) >= STEP) === MORE
   } catch (error) {
@@ -165,8 +178,17 @@ export let reporting = async (
       throw error
     }
     ended = await unanswered(row, began, error, now(), report)
+    if (!recurring(row)) {
+      retry = new Date(now() + backoff(now() - Date.parse(ended.since!)))
+        .toISOString()
+    }
   } finally {
-    await mark(ended, more).catch((e) => report(job, e))
+    await (retry
+      ? meta(env).apply(
+        [{ entity: row.entity, sweep: ended, wake: { at: retry } }],
+        KERNEL,
+      )
+      : mark(ended, more)).catch((e) => report(job, e))
   }
 }
 

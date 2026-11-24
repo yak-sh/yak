@@ -35,6 +35,7 @@ import { r2Objects } from './lib/objects.ts'
 import { countedSpend } from './meter.ts'
 import { refusedSpend } from '@yaks/platform/standing'
 import { caught } from './defects.ts'
+import { Unsent } from '@yaks/host/senders'
 import { type Ctx, refuse } from './tool.ts'
 import { BUILT, type Files, own } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
@@ -176,10 +177,20 @@ let named = (ask: Ask) =>
 // What yak-esbuild answers when a compile ran out of the compiler's memory
 // (esbuild/index.ts): its container, or esbuild's process in it, was killed.
 let OUTGREW = 507
+// What it answers when no container is free for the compile: the one it runs
+// is still starting, or Cloudflare had none to place for now.
+let NO_CONTAINER = 503
 
-/** The compiler, over the binding. A failure of the compiler itself is ours,
- * reported and refused in a sentence: a compile too big for the compiler, or
- * a compiler that could not be reached. */
+let UNREACHED = "app_deploy could not reach the compiler for this app's " +
+  'TypeScript and npm imports; the draft remains private and the last ' +
+  'release still serves — app_deploy again'
+
+/** The compiler, over the binding. A compiler that did not answer for now (no
+ * container free, or the binding cut) is `Unsent`: expected while its
+ * container starts, so it is answered as `unavailable` and a remake's alarm
+ * tries again (wake.ts `reporting`), reported only once that has gone on for
+ * minutes. A failure of the compiler itself is ours, reported and refused in
+ * a sentence: a compile too big for the compiler, or any other answer. */
 let asked = async (
   env: Env,
   ask: Ask,
@@ -200,26 +211,20 @@ let asked = async (
         )},"shared":true,"origin":${JSON.stringify(url(env))}}`,
       }),
     )
-    clock?.include(r.headers.get('server-timing'))
-    if (r.ok) return await r.json()
-    if (r.status != OUTGREW) {
-      throw new Error(
-        `yak-esbuild ${r.status}: ${(await r.text()).slice(0, 400)}`,
-      )
-    }
   } catch (e) {
-    caught(e, { request: 'esbuild', app: app.slug })
-    throw refuse(
-      'unavailable',
-      "app_deploy could not reach the compiler for this app's TypeScript " +
-        'and npm imports; the draft remains private and the last release ' +
-        'still serves — app_deploy again',
-    )
+    throw new Unsent(`${UNREACHED} (${e instanceof Error ? e.message : e})`)
   }
-  caught(new Error(`yak-esbuild ${OUTGREW}: ${await r.text()}`), {
+  clock?.include(r.headers.get('server-timing'))
+  if (r.ok) return await r.json()
+  let said = (await r.text()).slice(0, 400)
+  if (r.status == NO_CONTAINER) {
+    throw new Unsent(`${UNREACHED} (yak-esbuild ${r.status}: ${said})`)
+  }
+  caught(new Error(`yak-esbuild ${r.status}: ${said}`), {
     request: 'esbuild',
     app: app.slug,
   })
+  if (r.status != OUTGREW) throw refuse('unavailable', UNREACHED)
   throw refuse(
     'limit',
     `compiling ${named(ask)} ran out of the compiler's memory: it bundles ` +
