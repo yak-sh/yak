@@ -8,16 +8,35 @@
  * its detail where the page came from and where the time went (`Swapped`);
  * a held page asked for again and laid over is one more, from `fresh`. A
  * click on a page not held is a `yak-press` too: to the frame it shows
- * itself in, before its page comes. `yak admin browse` reads them
+ * itself in, before its page comes. Each page it asks for is a `yak-fetch`
+ * mark. `yak admin browse` reads them
  * back, which is how a slow click is seen as a number.
  *
  * @module
  */
-import { GOING, PAGE, start, type Swapped } from '@yaks/ui/navigate'
+import { AHEAD, GOING, PAGE, start, type Swapped } from '@yaks/ui/navigate'
 import { browserHistory } from './history.ts'
 
 if (typeof document != 'undefined') {
-  start(globalThis.window, browserHistory())
+  let win = globalThis.window
+  // Each page it asks for is a `yak-fetch` mark, whether ahead or not, so
+  // what its looking ahead costs is counted apart from a page's own fetches.
+  let fetch: typeof win.fetch = (url, init) => {
+    let ahead = new Headers(init?.headers).has(AHEAD)
+    performance.mark('yak-fetch', { detail: { url: String(url), ahead } })
+    return win.fetch(url, init)
+  }
+  start(
+    {
+      document,
+      location,
+      fetch,
+      addEventListener: win.addEventListener.bind(win),
+      scrollTo: win.scrollTo.bind(win),
+      DOMParser,
+    },
+    browserHistory(),
+  )
   document.addEventListener(PAGE, (e) => {
     let { began, phases, from, url, tally } = (e as CustomEvent<Swapped>)
       .detail

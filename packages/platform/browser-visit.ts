@@ -232,7 +232,7 @@ export type Rendered = {
  * first, from asking to its content loaded; `yak-page` a move between
  * pages in place (@yaks/web/navigate), from the click to the frame that
  * drew it, and `yak-press` from such a click to the frame that first showed
- * it; `fetched` the server's time on every page the page fetched. `parts` says where the time went, `server` what the answer's
+ * it; `fetched` the server's time on every page the navigator fetched. `parts` says where the time went, `server` what the answer's
  * `Server-Timing` said. */
 export type Timing = {
   name: string
@@ -267,19 +267,30 @@ let TIMELINE = `(() => {
     },
     server: server(load.name),
   })
-  // The pages the navigator fetched (ahead, or on a click), and the
-  // server's time on them all: the load a page's links put on the server.
-  let pages = performance.getEntriesByType('resource').filter((e) =>
-    e.initiatorType == 'fetch' && e.serverTiming?.some((t) => t.name == 'total')
-  )
-  if (pages.length) out.push({
-    name: 'fetched',
-    url: location.href,
-    ms: round(pages.reduce((n, e) =>
-      n + e.serverTiming.find((t) => t.name == 'total').duration, 0)),
-    parts: { pages: pages.length },
-    server: {},
-  })
+  // The pages the navigator fetched (its yak-fetch marks), how many of
+  // them ahead, and the server's time on them all: the load its looking
+  // ahead puts on the server.
+  let asked = performance.getEntriesByName('yak-fetch')
+  if (asked.length) {
+    let fetches = performance.getEntriesByType('resource')
+      .filter((e) => e.initiatorType == 'fetch')
+    let took = (m) => {
+      let e = fetches.find((e) =>
+        e.name == m.detail.url && e.startTime >= m.startTime - 1
+      )
+      return e?.serverTiming?.find((t) => t.name == 'total')?.duration ?? 0
+    }
+    out.push({
+      name: 'fetched',
+      url: location.href,
+      ms: round(asked.reduce((n, m) => n + took(m), 0)),
+      parts: {
+        pages: asked.length,
+        ahead: asked.filter((m) => m.detail.ahead).length,
+      },
+      server: {},
+    })
+  }
   let moves = [
     ...performance.getEntriesByName('yak-press'),
     ...performance.getEntriesByName('yak-page'),
