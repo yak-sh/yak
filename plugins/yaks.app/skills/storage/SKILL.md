@@ -74,7 +74,8 @@ The same person and stable **place** find the same text on every device and in
 every tab. `bind` restores the field and keeps typing, including partial numbers
 in a text input with `inputmode="numeric"`. A recovery copy, scoped to the app
 and person, preserves pending input across reloads when the store is out of
-reach. Fields wait read-only until `me()` identifies the person.
+reach. Fields wait read-only until `me()` answers. A visitor who is not signed
+in types too: their text is kept in this browser and never written to the store.
 
 Before replacing a field, call `unbind()`, then bind its replacement to the same
 place. Keep the desk across renders; `desk.close()` stops its bindings,

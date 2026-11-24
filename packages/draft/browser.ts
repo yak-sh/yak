@@ -23,6 +23,9 @@ export type BrowserOpts = Pick<DeskOpts, 'pace' | 'report'> & {
   stash?: Stash | false
 }
 
+/** Whose recovery copy a visitor nobody knows types into. */
+export let GUEST = 'guest'
+
 type Copy = { text: string; over: string; rev: number }
 type Copies = Record<string, Copy>
 let prefix = (scope: string, by: string) => `yaks:drafts:${scope}|${by}:`
@@ -136,7 +139,8 @@ export type BrowserDrafts = Drafts & {
     field: HTMLInputElement | HTMLTextAreaElement,
     place: string,
   ) => () => void
-  /** Settles once the person is known and their drafts may be typed. */
+  /** Settles once it is known who is typing (a person, or a visitor nobody
+   * knows) and their drafts may be typed. */
   ready: Promise<void>
   /** Run `fn` now and again whenever a text, place or identity it read
    * changes, until the returned function is called. */
@@ -157,7 +161,10 @@ export let browserDrafts = (
   })
   let closed = false
   let current = signal<ReturnType<typeof desk> | undefined>(undefined)
-  let make = (by: string) => {
+  // `by` is the person, or none for a visitor nobody knows: their typing is
+  // kept in the page and in this browser's recovery copy under GUEST, and
+  // never written to the store as a draft.
+  let make = (by?: string) => {
     if (closed) return
     let stash: Stash | undefined
     try {
@@ -165,11 +172,11 @@ export let browserDrafts = (
         ? undefined
         : opts.stash ?? globalThis.localStorage
       if (storage) {
-        let recover = opts.recover ?? []
+        let recover = by ? opts.recover ?? [] : []
         for (let previous of recover) {
-          if (previous !== by) adopted(storage, scope, previous, by)
+          if (previous !== by) adopted(storage, scope, previous, by!)
         }
-        stash = scoped(storage, scope, by, recover)
+        stash = scoped(storage, scope, by ?? GUEST, recover)
       }
     } catch (error) {
       report(error)
@@ -204,16 +211,15 @@ export let browserDrafts = (
       },
     }, { by: () => by, stash, pace: opts.pace, report })
   }
-  // Never open another person's recovery copy, nor spend without identity.
-  // A bound field is briefly read-only until me answers, not an editable field
-  // whose first keystrokes can disappear before it is safe to persist them.
+  // Never open another person's recovery copy. A bound field is briefly
+  // read-only until me answers, not an editable field whose first keystrokes
+  // can disappear before it is safe to persist them.
   let ready: Promise<void>
   if (opts.by) {
     make(opts.by)
     ready = Promise.resolve()
-  } else {ready = client.me().then((me) => {
-      if (me.person) make(me.person)
-    }).catch(report)}
+  } else {ready = client.me().then((me) => make(me.person ?? undefined))
+      .catch(report)}
   let drafts = () => {
     let d = current.value
     if (!d || closed) throw new Error('Draft identity is not ready')

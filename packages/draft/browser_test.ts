@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import { browserDrafts } from './browser.ts'
+import { browserDrafts, type Store } from './browser.ts'
 import type { Stash } from './mod.ts'
 
 let stash = (): Stash => {
@@ -261,4 +261,33 @@ test('follow hears the places holding text, typed here or heard from another dev
     'copy:hero.lede',
   ])
   desk.close()
+})
+
+test('a visitor nobody knows types, keeps it across a reload, and spends only what it became', async () => {
+  let storage = stash()
+  let sent: unknown[][] = []
+  let stranger: Store = {
+    me: () => Promise.resolve({ person: null }),
+    apply: (bundles) => {
+      sent.push(bundles)
+      return Promise.resolve({ bundles })
+    },
+    subscribe: () => () => {},
+  }
+  let first = browserDrafts(stranger, 'guestbook', { stash: storage })
+  await first.ready
+  first.type('sign', 'Hello from the party')
+  equal(first.text('sign'), 'Hello from the party')
+  first.close()
+  let again = browserDrafts(stranger, 'guestbook', { stash: storage })
+  await again.ready
+  try {
+    equal(again.text('sign'), 'Hello from the party')
+    let note = { entity: { eid: '$note' }, note: { message: 'Hello' } }
+    equal(await again.spend('sign', [note]), true)
+    equal(sent, [[note]])
+    equal(again.text('sign'), '')
+  } finally {
+    again.close()
+  }
 })
