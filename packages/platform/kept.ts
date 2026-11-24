@@ -85,6 +85,36 @@ export let immutable: { 'cache-control': string } = {
  * answer for a person. */
 export let browserImmutable: string = `private, max-age=${YEAR}, immutable`
 
+// What a browser's request for a page's file says it loads (`Sec-Fetch-Dest`):
+// everything but a page, a frame, a worker's script and the data a page asks
+// for by its own fetch.
+let LOADS = new Set([
+  'image',
+  'font',
+  'style',
+  'script',
+  'audio',
+  'video',
+  'track',
+])
+
+/** Whether the browser asked for a file a page loads: its picture, font,
+ * stylesheet, script or media, not a page or the page's own fetch. */
+export let loadsAsset = (req: Request): boolean =>
+  LOADS.has(req.headers.get('sec-fetch-dest') ?? '')
+
+/** Whether a Cache-Control lets the browser keep the answer without asking
+ * again: immutable, or fresh for a day or more. */
+/// keptLong('private, max-age=31536000, immutable') -> true
+/// keptLong('public, max-age=300') -> false
+/// keptLong('private, no-cache') -> false
+/// keptLong(null) -> false
+export let keptLong = (cache: string | null): boolean => {
+  if (!cache || /no-cache|no-store/i.test(cache)) return false
+  let age = /max-age=(\d+)/i.exec(cache)
+  return /immutable/i.test(cache) || !!age && Number(age[1]) >= 86400
+}
+
 // Files' local Cache API entries survive deploys, so a deploy of the platform
 // leaves every app's cached bytes in place. An address's answer is a release's immutable bytes,
 // but how Files frames them (a type, a header, a compiled script) is code: a

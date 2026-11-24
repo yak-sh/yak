@@ -14,6 +14,7 @@ import { type Clock, clock, timed } from './timing.ts'
 // Its requests use internal addresses from @yaks/platform/kept. Both the
 // gateway and the named Files entrypoint use the same local cache.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { filesIn } from './release.ts'
 import {
   type Loaded,
   mimeOf,
@@ -134,6 +135,24 @@ export let configOf = (
       let bytes = jsonc ?? json
       return bytes ? parse(new TextDecoder().decode(bytes)).config : {}
     }))
+
+/** Which served paths (decoded, below the app's address) a release holds a
+ * file at, its index and config read once per isolate: what a worker's page
+ * may name by the release's address (apps.ts `released`). Compiled packages
+ * are the release's too. Nothing, for a source with no index. */
+export let holding = async (
+  env: Env,
+  source: string,
+): Promise<(path: string) => boolean> => {
+  let [files, config] = await Promise.all([
+    filesIn(r2RawObjects(env.BLOBS), source),
+    configOf(r2Objects(env.BLOBS), source),
+  ])
+  let root = rootOf('', config).slice(1)
+  let at = root ? `${root}/` : ''
+  return (path) =>
+    !!files && (path.startsWith('__packages/') || `${at}${path}` in files)
+}
 
 /** Where a file of an app answers, in a sentence: its address under `at`, or
  * that it is source only, when the app's wrangler config serves a folder

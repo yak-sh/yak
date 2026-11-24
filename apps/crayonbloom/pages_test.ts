@@ -1,6 +1,6 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { stylesheet } from './look/look.ts'
+import { lookVersion, stylesheet } from './look/look.ts'
 import { placed } from './pages/chrome.ts'
 import { ready } from './pages/free.ts'
 import { home } from './pages/home.ts'
@@ -25,7 +25,7 @@ test('the home page sends an idea to the studio under its mount', async () => {
   )
   equal(
     document.querySelector('link[rel=stylesheet]')!.getAttribute('href'),
-    '/preview/look.css',
+    `/preview/look.css?v=${lookVersion}`,
   )
 })
 

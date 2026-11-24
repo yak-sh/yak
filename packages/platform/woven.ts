@@ -146,11 +146,14 @@ export let pinned = (
   page: string,
   app: Themed,
   cookies = true,
+  // The icon's address, named by what draws it where the caller knows
+  // (@yaks/platform/routes `iconAt`), so a browser keeps it.
+  icon = `${at}icon.png`,
 ): string => {
   let tags =
     (declares(page, 'link', 'rel', 'apple-touch-icon')
       ? ''
-      : `<link rel="apple-touch-icon" href="${at}icon.png">`) +
+      : `<link rel="apple-touch-icon" href="${icon}">`) +
     (declares(page, 'link', 'rel', 'manifest')
       ? ''
       : `<link rel="manifest" href="${at}${MANIFEST}" ` +

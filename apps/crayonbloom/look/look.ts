@@ -48,6 +48,7 @@ import sheet from './parts/Sheet.css' with { type: 'text' }
 import ticks from './parts/Ticks.css' with { type: 'text' }
 import desk from './parts/Desk.css' with { type: 'text' }
 import tray from './parts/Tray.css' with { type: 'text' }
+import { sha256 } from '@yaks/graph'
 
 /** The stylesheet, each sheet in the order a browser reads them. */
 export let stylesheet = [
@@ -97,3 +98,7 @@ export let stylesheet = [
   desk,
   tray,
 ].join('\n')
+
+/** The stylesheet's name of its bytes, which its address carries
+ * (`/look.css?v=…`), so a browser keeps it until the look changes. */
+export let lookVersion = sha256(stylesheet).slice(0, 16)

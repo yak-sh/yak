@@ -48,6 +48,11 @@ test('release URLs keep local assets under their mount', () => {
   assertEquals(about('../styles/main.css'), file)
   assertEquals(about('./me.png'), `${at}api/assets/${id}/about/me.png`)
   assertEquals(about('../../elsewhere.js'), '../../elsewhere.js')
+  // A worker's page moves only what the release holds.
+  let held = (ref: string) =>
+    assetUrl(ref, at, at, id, () => false, at, (p) => p == 'a b.svg')
+  assertEquals(held('./a%20b.svg'), `${at}api/assets/${id}/a%20b.svg`)
+  assertEquals(held('./look.css'), './look.css')
 })
 
 test('local import-map values, URL keys, and scopes follow a release', () => {
@@ -269,6 +274,7 @@ test("a release's pages and modules name every file they load", async () => {
     [
       'index.html imports later.js',
       'index.html loads style.css',
+      'index.html loads favicon.png',
       'index.html loads font.woff2',
       'index.html loads logo.png',
       'index.html loads still.jpg',

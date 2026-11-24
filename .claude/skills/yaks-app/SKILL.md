@@ -111,7 +111,10 @@ packages together (M-17).
   app's copy first (`page-copy.ts`): an element marked `data-copy` shows its
   snippet from the copy.json of the release it came from, or a preview's draft,
   and an app with none is served as written. A platform page's parts are
-  `ui-building`'s.
+  `ui-building`'s. Every file a page loads, a file page's or a worker's page's
+  and stylesheet's, is pointed at its release (`/api/assets/<release>/…`,
+  `immutable`, apps.ts `released`/`kept`); only the page revalidates, and an
+  asset loaded at an address it can be asked again at is reported (`mutable`).
 - **yaks.app's own pages**: the home page, its variants, pricing, help and the
   legal pages are the `home` app in the `yak` space (apps/home), drawn from
   `site/*.tsx` by `deno task content` and released with `yak admin push`. Site

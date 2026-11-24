@@ -51,6 +51,11 @@ let versioned = (
   return `${mount}api/assets/${release}/${path}${url.search}${url.hash}`
 }
 
+/** Point a local static reference at its release. `holds` says whether the
+ * release holds a file at a served path (decoded): a file page belongs to its
+ * release, so it holds everything the page names, but a worker's page or
+ * stylesheet names addresses the worker may answer itself, and only the
+ * release's own files move. */
 export let assetUrl = (
   ref: string,
   mount: string,
@@ -58,13 +63,52 @@ export let assetUrl = (
   release: string,
   reserved: (path: string) => boolean = () => false,
   base = mount,
+  holds: (path: string) => boolean = () => true,
 ): string => {
   let found = local(ref, mount, bare, reserved, base)
   return found && /\.[a-z0-9]+$/i.test(found.path) &&
-      !/\.html?$/i.test(found.path)
+      !/\.html?$/i.test(found.path) && holds(decoded(found.path))
     ? versioned(mount, release, found)
     : ref
 }
+
+let decoded = (path: string) => {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
+// `url(…)`, quoted or not, and `@import '…'`: every address a stylesheet
+// loads by.
+let CSS_URL =
+  /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)|(@import\s+)(["'])([^"']+)\5/gi
+
+/** A stylesheet with each address it loads by passed through `move`, quotes
+ * and all kept as written. */
+/// cssUrls("a{background:url('x.png')}", (r) => 'v/' + r) -> "a{background:url('v/x.png')}"
+/// cssUrls('@import "a.css";', (r) => 'v/' + r) -> '@import "v/a.css";'
+export let cssUrls = (css: string, move: (ref: string) => string): string =>
+  css.replace(
+    CSS_URL,
+    (
+      whole,
+      dq?: string,
+      sq?: string,
+      bare?: string,
+      at?: string,
+      q?: string,
+      imp?: string,
+    ) => {
+      if (at) return `${at}${q}${move(imp!)}${q}`
+      let ref = dq ?? sq ?? bare ?? ''
+      let next = move(ref)
+      if (next == ref) return whole
+      let quote = dq != null ? '"' : sq != null ? "'" : ''
+      return `url(${quote}${next}${quote})`
+    },
+  )
 
 let ADDRESS = /^(?:\/|\.\.?\/)/
 
@@ -253,10 +297,18 @@ export let LOADS: readonly (readonly [tag: string, attribute: string])[] = [
   ['source', 'src'],
 ]
 
+let ICONS = [
+  'icon',
+  'apple-touch-icon',
+  'apple-touch-icon-precomposed',
+  'mask-icon',
+]
+
 /** Whether a `<link>` of this rel and `as` loads the file it names. */
 export let linked = (rel: string, as: string): boolean => {
-  let rels = rel.split(/\s+/)
+  let rels = rel.toLowerCase().split(/\s+/)
   return rels.includes('stylesheet') || rels.includes('modulepreload') ||
+    rels.some((r) => ICONS.includes(r)) ||
     rels.includes('preload') &&
       ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as)
 }

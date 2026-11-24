@@ -50,6 +50,7 @@ import {
   apiOut,
   assetMaps,
   assetUrl,
+  cssUrls,
   linked,
   LOADS,
 } from '@yaks/platform/asset-url'
@@ -111,6 +112,7 @@ import {
   API_AT,
   chatPath,
   hostOf,
+  iconAt,
   iconVersion,
   manageAt,
   managePath,
@@ -170,6 +172,8 @@ import {
   fixed,
   immutable,
   keepable,
+  keptLong,
+  loadsAsset,
   NAMED_CLIENT,
   passed,
   uploaded,
@@ -567,25 +571,34 @@ let mapped = (
     ? assetMaps(html, at, bare, id, platformPath, base, client())
     : html
 }
+// The page's loads moved the same way: each element's file, and an icon's.
+// A worker's page (`html` null) is never held whole, so a `<base>` it carries
+// is heard as it streams, and stops the moves after it; and it names only
+// what the release `holds`, since the worker answers addresses of its own.
 let released = (
   page: Response,
-  html: string,
+  html: string | null,
   at: string,
   bare: string,
   source: string | null | undefined,
   base = at,
+  holds?: (path: string) => boolean,
 ) => {
   let id = releaseId(source)
-  if (!id || hasBase(html)) return page
+  if (!id || html != null && hasBase(html)) return page
   let rewrite = new HTMLRewriter()
+  let based = false
+  if (html == null) {
+    rewrite.on('base[href]', { element: () => void (based = true) })
+  }
   let move = (attr: string) => ({
     element: (el: {
       getAttribute(name: string): string | null
       setAttribute(name: string, value: string): void
     }) => {
       let ref = el.getAttribute(attr)
-      if (!ref) return
-      let next = assetUrl(ref, at, bare, id, platformPath, base)
+      if (!ref || based) return
+      let next = assetUrl(ref, at, bare, id, platformPath, base, holds)
       if (next != ref) el.setAttribute(attr, next)
     },
   })
@@ -701,7 +714,7 @@ export let unwritten = async (
 ) => {
   if (path == '/icon.png') {
     let display = new URL(req.url).searchParams.has('display')
-    let cache = display ? caching(req, space, app, path) : keeping(app)
+    let cache = caching(req, space, app, path)
     let drawn = app.generatedIcon && await r2RawObjects(env.BLOBS).open(
       generatedIconKey(space, app),
     )
@@ -1069,6 +1082,7 @@ let asset = async (
       base,
       req.headers.get(ADDRESS) ?? req.url,
       await copy,
+      iconAt(at, app, space),
     ))
   if (sandbox) {
     return new Response(page, {
@@ -1121,12 +1135,14 @@ export let woven = async (
   base = at,
   address = hostUrl(env, at),
   copy: Copy | null = null,
+  icon?: string,
 ) => {
   let own = pinned(
     at,
     mapped(original, at, bare, app.source, base),
     app,
     !local(app),
+    icon,
   )
   let page = filled(
     released(
@@ -1153,6 +1169,85 @@ export let woven = async (
   return await page.text()
 }
 
+// What an app's worker answered, kept by the browser as a file page's loads
+// are (T-3170). The worker writes its own addresses, so its page and its
+// stylesheet are each read for the release's files they name, which move to
+// the release's address, kept for good: a font or a picture the worker's page
+// names is fetched once, not on every page. What it answers with a validator
+// (its `env.FILES`' bytes carry one) is answered 304 when the browser
+// already holds it, which the worker's own fetch of its files could not hear.
+let kept = async (
+  req: Request,
+  env: Env,
+  app: App,
+  at: string,
+  bare: string,
+  page: Response,
+) => {
+  if (!['GET', 'HEAD'].includes(req.method) || page.status != 200) return page
+  let type = page.headers.get('content-type') ?? ''
+  let html = type.startsWith('text/html')
+  let css = type.startsWith('text/css')
+  let id = releaseId(app.source)
+  let address = new URL(req.headers.get(ADDRESS) ?? req.url).pathname
+  let base = address.slice(0, address.lastIndexOf('/') + 1)
+  let holds = id && (html || css) && page.body
+    ? await files.holding(env, app.source!).catch((e) => {
+      caught(e, { request: 'release files', app: app.eid })
+      return null
+    })
+    : null
+  if (html) {
+    return holds
+      ? released(page, null, at, bare, app.source, base, holds)
+      : page
+  }
+  if (css && holds) {
+    let sheet = cssUrls(
+      await page.text(),
+      (ref) => assetUrl(ref, at, bare, id!, platformPath, base, holds),
+    )
+    let headers = new Headers(page.headers)
+    headers.delete('content-length')
+    headers.set('etag', await pageTag(sheet))
+    page = new Response(sheet, { status: page.status, headers })
+  }
+  let etag = page.headers.get('etag')
+  if (etag && unchanged(req, etag)) {
+    await page.body?.cancel()
+    let headers = new Headers()
+    for (let name of ['cache-control', 'etag', 'vary', 'content-type']) {
+      let value = page.headers.get(name)
+      if (value) headers.set(name, value)
+    }
+    return new Response(null, { status: 304, headers })
+  }
+  return page
+}
+
+// A page's file that answered at an address it can be asked again at (the
+// app's own path, not a release's) is fetched again on the page's next load:
+// told to the tracker, once per app and path while the isolate lives, so a
+// regression in what gets kept shows up the day it lands (T-3170).
+let noticed = new Set<string>()
+// One its answer says must not be kept (`no-store`, a picture whose consent
+// can be taken back) is a decision, not a miss.
+let mutable = (req: Request, app: App, page: Response) => {
+  if (page.status != 200 || !loadsAsset(req)) return
+  let cache = page.headers.get('cache-control')
+  if (keptLong(cache) || /no-store/i.test(cache ?? '')) return
+  let path = new URL(req.url).pathname
+  let key = `${app.eid} ${path}`
+  if (noticed.has(key) || noticed.size > 1000) return
+  noticed.add(key)
+  // One bug per app: each of its files so loaded is an occurrence of it.
+  defect(
+    new Error('A page loads a file by an address the browser asks again'),
+    { request: 'asset caching', app: app.eid, path, cache: cache ?? '' },
+    { fault: `asset caching ${app.eid}` },
+  )
+}
+
 let versionedAsset = async (
   req: Request,
   env: Env,
@@ -1160,6 +1255,8 @@ let versionedAsset = async (
   source: string,
   path: string,
   c: Clock,
+  // The app's address as the browser asked it, its release's below it.
+  mount: string,
 ) => {
   let decoded = decodedPath(path)
   if (decoded == null || fence.inside(decoded)) {
@@ -1176,14 +1273,30 @@ let versionedAsset = async (
     await got.body?.cancel()
     return json(404, 'no_such_file')
   }
-  if ((got.headers.get('content-type') ?? '').startsWith('text/html')) {
+  let type = got.headers.get('content-type') ?? ''
+  if (type.startsWith('text/html')) {
     await got.body?.cancel()
     return json(404, 'no_such_file')
+  }
+  // A stylesheet's relative addresses already resolve inside its release;
+  // one naming a file by the app's own address is moved there too, so the
+  // fonts and pictures it loads are kept as it is. Its bytes still answer to
+  // their file's version: the same file at the same address moves the same.
+  let id = releaseId(source)
+  if (type.startsWith('text/css') && got.status == 200 && id) {
+    let base = mount + path.slice(1, path.lastIndexOf('/') + 1)
+    let sheet = cssUrls(
+      await got.text(),
+      (ref) => assetUrl(ref, mount, mount, id, platformPath, base),
+    )
+    let headers = new Headers(got.headers)
+    headers.delete('content-length')
+    got = new Response(sheet, { status: 200, headers })
   }
   return await media(
     req,
     got,
-    browserImmutable,
+    app.access == 'public' ? immutable['cache-control'] : browserImmutable,
     () => files.fileBytes(env, app.eid, source, path, source),
   ) ?? json(404, 'no_such_file')
 }
@@ -1358,7 +1471,9 @@ let appDoor = async (
     if (mayUse && source != app.source && !await dir.released(app, source)) {
       return json(404, 'no_such_file')
     }
-    return versionedAsset(req, env, app, source, versioned.path, c)
+    let asked = new URL(req.headers.get(ADDRESS) ?? req.url).pathname
+    let mount = asked.slice(0, asked.indexOf('/api/assets/') + 1)
+    return versionedAsset(req, env, app, source, versioned.path, c, mount)
   }
   if (path == '/release') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
@@ -2977,7 +3092,10 @@ let served = async (
   let page = answering == 'files' ? await file ?? own ?? nothingHere(env) : own!
   if (page != own) await own?.body?.cancel()
   // File pages already pass through woven(). Worker pages use the same
-  // reporter, without buffering or changing their navigation and asset URLs.
+  // reporter, streamed, with what they load of the release's files moved to
+  // the release (`kept`); a worker's stylesheet and its other files are
+  // kept the same way.
+  if (page == own) page = await kept(req, env, app, at, bare, page)
   if (
     page == own && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')
@@ -2992,6 +3110,7 @@ let served = async (
       req.headers.get(ADDRESS) ?? req.url,
     )
   }
+  mutable(req, app, page)
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
   // 5 are the one call above.
   let word = indexes(url.pathname, page.status)

@@ -506,9 +506,14 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
     ),
   )
   let html = await (await apps.fetch(visit('/cookbook/'), env)).text()
-  assert(
-    html.includes('<link rel="apple-touch-icon" href="/cookbook/icon.png">'),
-    html,
+  // Named by what draws it, so the browser keeps it.
+  let touch =
+    /<link rel="apple-touch-icon" href="(\/cookbook\/icon\.png\?v=[^"]+)">/
+      .exec(html)
+  assert(touch, html)
+  assertEquals(
+    (await apps.fetch(visit(touch[1]), env)).headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
   )
   assert(
     html.includes(

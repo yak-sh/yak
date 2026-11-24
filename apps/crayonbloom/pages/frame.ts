@@ -5,6 +5,7 @@ import { type ComponentChildren, h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Skip } from '@yaks/ui/parts'
 import { Bottom, type Place, Top } from './chrome.ts'
+import { lookVersion } from '../look/look.ts'
 
 export { type Place, placed } from './chrome.ts'
 
@@ -59,7 +60,10 @@ export let page = (
             href: place.at(`/look/fonts/${face}.ttf`),
           })
         ),
-        h('link', { rel: 'stylesheet', href: place.at('/look.css') }),
+        h('link', {
+          rel: 'stylesheet',
+          href: place.at(`/look.css?v=${lookVersion}`),
+        }),
         h('link', {
           rel: 'alternate',
           type: 'application/rss+xml',

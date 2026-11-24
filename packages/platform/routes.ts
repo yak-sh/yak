@@ -236,12 +236,26 @@ export let logoPath = (
  */
 export let logoUpload = (space: string): string =>
   `${managePath('settings', space)}?logo`
-/** The validator used by existing versioned home-screen icon URLs. */
+/** What draws an app's home-screen icon: its release, the space's logo and
+ * the artwork drawn for an app that has no icon of its own.
+ *
+ * ```ts
+ * import { iconVersion } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * let id = '0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69'
+ * assertEquals(
+ *   iconVersion({ source: `ada/.releases/7/${id}` }, { logo: null }),
+ *   `${id}.`,
+ * )
+ * ```
+ */
 export let iconVersion = (
-  app: { source?: string | null },
+  app: { source?: string | null; generatedIcon?: string },
   space: { logo?: { sha: string } | null },
 ): string =>
-  `${app.source?.slice(0, 12) ?? ''}.${space.logo?.sha.slice(0, 12) ?? ''}`
+  `${releaseId(app.source) ?? app.source ?? ''}.${
+    space.logo?.sha.slice(0, 12) ?? ''
+  }${app.generatedIcon ? `.${app.generatedIcon.slice(0, 12)}` : ''}`
 
 /** An app's icon below its address `at` (ending in a slash), named by what
  * draws it (`iconVersion`), so a browser keeps it until a release or the
@@ -258,7 +272,7 @@ export let iconVersion = (
  */
 export let iconAt = (
   at: string,
-  app: { source?: string | null },
+  app: { source?: string | null; generatedIcon?: string },
   space: { logo?: { sha: string } | null },
 ): string => `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space))}`
 
