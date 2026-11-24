@@ -353,7 +353,8 @@ export let HELD = 24
 /** How long a pointer stays over a link before its page is asked for. */
 export let INTENT = 60
 /** The mark on a link whose page is held before it is clicked: asked for
- * once the page is idle, one at a time, once a held page's life. */
+ * once the page is idle, one at a time, once a document's life, while it is
+ * not hidden (a list's rows past what fits). */
 export let HOLD = 'data-hold'
 
 // Where a page's content is: what its skip link names, else its `main`.
@@ -560,6 +561,7 @@ export let start = (
     holding = true
     let next = () => {
       let to = [...doc.querySelectorAll(`a[${HOLD}]`)]
+        .filter((a) => !a.closest('[hidden]'))
         .map((a) => new URL(a.getAttribute('href')!, win.location.href))
         .find((to) =>
           to.origin == win.location.origin && page(to) != here &&

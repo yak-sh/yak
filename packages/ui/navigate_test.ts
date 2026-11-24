@@ -351,7 +351,8 @@ test('the links a page marks to hold are fetched ahead while it is idle, one at 
       here,
       `<h1>${here}</h1>`,
       '<nav><a data-hold href="/updates">U</a><a data-hold href="/apps">A</a>' +
-        '<a data-hold href="/gone">G</a><a data-hold href="https://far.test/">F</a></nav>',
+        '<a data-hold href="/gone">G</a><a data-hold href="https://far.test/">F</a>' +
+        '<p hidden><a data-hold href="/more">M</a></p></nav>',
     )
   let b = browsing({ '/apps': held('apps'), '/updates': held('updates') })
   for (let i = 0; i < 5; i++) await settled()
