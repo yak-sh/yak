@@ -1,6 +1,6 @@
 // A step reads what was appended since the last, not the transcript's length:
 // on a transcript of thousands of lines it costs what it costs on a short one.
-import { line } from '@yaks/query'
+import { line, sub } from '@yaks/query'
 import { type Bundle, graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -19,6 +19,7 @@ import { running } from './run.ts'
 import { toolEid } from '@yaks/tools'
 import type { Event } from '@yaks/effects'
 import { sessionDerived } from './status.ts'
+import { past, transcriptSegments, within } from './window.ts'
 
 let vocab = loadVocab(
   [sessionDoc, toolsDoc, modelDoc, effectDoc, kernelDoc, archetypeDoc],
@@ -178,6 +179,19 @@ let pass = async (call: string) => {
     undefined as never,
   )
 }
+// A page of a transcript past one of its lines, as a reading pages back
+// through it, and the VM steps it took.
+let after = async (session: string, eid: string) => {
+  let [s] = await transcriptSegments(g, session)
+  let before = steps()
+  let rows = await g.read(
+    line`${sub(within(s))}&.order=-entry.seq&.limit=32${sub(past(s, eid))}&*`,
+  )
+  return { rows: rows.length, steps: steps() - before }
+}
+let older = await after('long', 'long.100'),
+  newer = await after('long', 'long.1900')
+
 let shortTool = await tool('tools', 1, alone('tools'))
 let longTool = await tool('turn', 1, alone('turn'))
 let passTool = await tool('turn', 2, pass)
@@ -218,5 +232,13 @@ test('a reading after thousands of lines landed costs what reading them all does
   ok(
     bulk < long.whole * 1.25,
     `${bulk} steps after 2,000 lines landed, ${long.whole} reading 2,000 whole`,
+  )
+})
+
+test('a page past an old line costs what a page past a new one does', () => {
+  ok(older.rows == 32 && newer.rows == 32)
+  ok(
+    older.steps < newer.steps * 1.5,
+    `${older.steps} steps past line 100, ${newer.steps} past line 1,900`,
   )
 })

@@ -61,6 +61,17 @@ export let within = (s: Segment): Built =>
     ? line`.entry.session=${s.session}&.entry.seq<=${s.through}`
     : line`.entry.session=${s.session}`
 
+/** A page's start past `eid`, in segment `s` read in seq's order. Every
+ * entry holds its seq, and saying so where {@link within} does not lets the
+ * page start at the anchor's seq (@yaks/sql `seekOf`), where it walked the
+ * session from its newest line on every page. Said here rather than in
+ * `within`: a test beside every query of a segment is paid on each row they
+ * read. */
+export let past = (s: Segment, eid: Eid): Built =>
+  Number.isFinite(s.through)
+    ? line`&.after=${eid}`
+    : line`&.entry.seq&.after=${eid}`
+
 /** A transcript's newest entries, oldest first, read back through its
  * segments a page at a time until `enough` holds of what was read, or to its
  * start (`whole`): what a turn reads costs the turn, not every line the
@@ -76,7 +87,9 @@ export let transcriptBack = async (
   while (i >= 0) {
     let page = line`${sub(within(segs[i]))}&.order=-entry.seq&.limit=${size}`
     let rows = await g.read(
-      after ? line`${sub(page)}&.after=${after}&*` : line`${sub(page)}&*`,
+      after
+        ? line`${sub(page)}${sub(past(segs[i], after))}&*`
+        : line`${sub(page)}&*`,
     )
     read.push(...rows)
     if (rows.length < size) i--, after = undefined

@@ -87,7 +87,7 @@ import {
   type TranscriptStatus,
   usingBefore,
 } from './state.ts'
-import { type Segment, transcriptSegments, within } from './window.ts'
+import { past, type Segment, transcriptSegments, within } from './window.ts'
 
 const SENDING = 'sending'
 const PROGRESS = 'tool_progress'
@@ -346,7 +346,7 @@ let pages = (r: Read) => {
           after = line``
         } else {
           took(i, rows, seqOf(rows.at(-1)!))
-          after = line`&.after=${rows.at(-1)!.entity.eid}`
+          after = past(segs[i], rows.at(-1)!.entity.eid)
         }
       }
       return got

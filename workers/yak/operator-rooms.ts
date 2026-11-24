@@ -372,20 +372,16 @@ export let replying = async (
 
 /** The rooms words said to the Operator in the conversation `session` is
  * of, a fork's being its top's, newest first: the only ones its `chat_read`
- * reads. Every step of a turn asks, so it reads from the rare side: the words
- * that came by a chat platform, sought on `channel.name`'s index, and then
- * which of them are this conversation's, never the conversation's history. */
+ * reads. Every step of a turn asks, and the words that came by a chat
+ * platform are few: @yaks/sql seeks them on `channel.name`'s index rather
+ * than walk the conversation's history. */
 export let roomsOf = async ({ g }: Store, at: string) => {
   let session = await topOf(g, at)
-  let heard = await g.rows(
-    line`.channel.name=${[...PLATFORMS.keys()]}&.fields=entity.eid`,
+  let entries = await g.read(
+    line`.channel.name=${[
+      ...PLATFORMS.keys(),
+    ]}&.intake.item&.entry.session=${session}&.order=-entry.seq&.limit=200&.fields=intake.item`,
   )
-  let entries = heard.length
-    ? await g.read(
-      line`.entry.session=${session}&.intake.item&.order=-entry.seq&.limit=200&.fields=intake.item`,
-      { eids: heard.map((b) => String(b['entity.eid'])) },
-    )
-    : []
   return roomsIn(
     g,
     await g.get(entries.map((b) => String(comp(b, 'intake').item))),

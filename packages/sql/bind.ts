@@ -3689,12 +3689,27 @@ let indexedRelation = (
   if (ctx.walk) return indexed
   if (ctx.present && root.index && root.comp != ctx.present) {
     let present = ctx.present
+    // An equality on the required component's own indexed property, which
+    // its own road seeks: the few words of a conversation heard on a chat
+    // platform (`.channel.name=discord`) among its every line.
+    let own = ctx.d.scoped ? undefined : flattened(clauses).flatMap((c) => {
+      if (
+        c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+        c.path[0] != present || opOf(c) != '' || !literals(c.value)?.length
+      ) return []
+      let p = ctx.v.prop(present, c.path[1])
+      let index = indexFor(ctx, present, c.path[1], clauses)
+      let seek = index && index.n >= 4 && ctx.d.indexed?.(present, index.name)
+      return p && !p.computed && !ctx.derived[c.path.join('.')] && seek
+        ? [{ pred: c, src: seek }]
+        : []
+    })[0]
     // The same rows driven from the required component's own table.
     let owning = (): Select => {
       let sparse = rel(from, o)
       return {
         ...sparse,
-        from: raw(ctx.d.table(present)),
+        from: raw(own?.src ?? ctx.d.table(present)),
         where: sparse.where,
         joins: [
           {
@@ -3741,13 +3756,26 @@ let indexedRelation = (
     // (`crowded`, asked again on each call of a kept statement), and the
     // statement takes that one road. One that cannot tell probes a bounded
     // prefix in the statement, and keeps both.
-    let many = ranged ? undefined : ctx.crowded?.(present, cap)
+    //
+    // A required component with an equality of its own seeks its rows by it
+    // however many rows it holds, so its census measures nothing: the rows
+    // that equality holds are probed instead, a bounded prefix of its index.
+    let many = ranged || own ? undefined : ctx.crowded?.(present, cap)
     if (many != null) {
       return many ? indexed : owning()
     }
-    let dense: Cond = raw(`exists (select 1 from ${stored} limit 1 offset ?)`, [
-      cap,
-    ])
+    let dense: Cond = own && !ranged
+      ? exists(select({
+        cols: [lit(1)],
+        from: raw(own.src),
+        where: clause(
+          { ...ctx, tables: new Set(), correlated: true },
+          own.pred,
+        ),
+        limit: lit(1),
+        offset: val(cap),
+      }))
+      : raw(`exists (select 1 from ${stored} limit 1 offset ?)`, [cap])
     // A masked presence count evaluates its policy per owner; keep its
     // census bounded above instead of counting the entire visible table.
     if (ranged) {
