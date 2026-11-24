@@ -47,7 +47,7 @@ let devtools = (
       }
       try {
         let value = contextId ? world(expression) : main(expression)
-        return Promise.resolve({ result: { value } })
+        return Promise.resolve(value).then((value) => ({ result: { value } }))
       } catch (e) {
         return Promise.resolve({
           result: {},
@@ -624,6 +624,37 @@ test('a check that stalls keeps the preview and fails at its own deadline', asyn
     'Accessibility check timed out after 10 seconds',
   )
   assertEquals(time.pending(), 0)
+})
+
+test('a missing media file leaves time for the rest of the accessibility audit', async () => {
+  let time = clock()
+  let p = page({
+    world: (source) => {
+      if (!source.includes('axe.run(document')) return axe(source)
+      let engine = {
+        run: (_: unknown, options: { preload?: { timeout: number } }) =>
+          new Promise((done) => {
+            // Axe continues with its document checks when preload times out.
+            time.after(
+              options.preload?.timeout ?? 10_000,
+              () => done(axe(source)),
+            )
+          }),
+      }
+      return new Function('axe', 'document', `return ${source}`)(engine, {})
+    },
+  })
+  let running = capture(
+    p.browsing,
+    { url: 'https://x.invalid/', view },
+    undefined,
+    time,
+  )
+  await time.advance(CHECK - 1)
+  await time.advance(1)
+  let result = await running
+  assertEquals(result.image, 'png-bytes')
+  assertEquals((result.accessibility as Audit).problems[0].rule, 'image-alt')
 })
 
 test('a slow load leaves the check its own time', async () => {

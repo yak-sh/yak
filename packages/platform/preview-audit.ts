@@ -71,6 +71,8 @@ export let audit = async (
   await page.evaluate(axe.source)
   let result = await page.evaluate(`axe.run(document, {
     runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
+    // Axe continues with the document when a stylesheet or media cannot load.
+    preload: { assets: ['cssom', 'media'], timeout: 1500 },
     resultTypes: ['violations', 'incomplete']
   }).then(({ violations, incomplete }) => ({ violations, incomplete }))`) as Result
   return {

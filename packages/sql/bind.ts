@@ -116,7 +116,7 @@ import {
   val,
   when,
 } from './ast.ts'
-import { inline, render } from './render.ts'
+import { inline, render, renderStable } from './render.ts'
 import { type Arm, ARMS, arms, cut, unionAllWithin } from './compound.ts'
 import { alternatives } from './alternatives.ts'
 import {
@@ -1606,12 +1606,11 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
       params: [...held.params, values[0]],
     })
   }
+  let visible = renderStable(among(col('eid', '__refs_seen'), each(values)))
   return cond({
     sql:
-      `${key} in (select "o" from (${held.sql}) as "__refs" where "t" in (select "id" from ${entity} as "__refs_seen" where "__refs_seen"."eid" in (${
-        values.map(() => '?').join(', ')
-      })))`,
-    params: [...held.params, ...values],
+      `${key} in (select "o" from (${held.sql}) as "__refs" where "t" in (select "id" from ${entity} as "__refs_seen" where ${visible.sql}))`,
+    params: [...held.params, ...visible.params],
   })
 }
 
@@ -1695,11 +1694,12 @@ let referrers = (
   // relation copied at every arm made a wide vocabulary's statement too long
   // to write out, and too deep for workerd to take named. With `pairs`, each
   // row names the target it points at beside its owner, for that question.
+  let addressed = values.length == 1
+    ? render(eq(col('eid'), val(values[0])))
+    : renderStable(among(col('eid'), each(values)))
   let target = `with "${name}" as materialized (select id from ${
     ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
-  } where eid ${
-    values.length == 1 ? '= ?' : `in (${values.map(() => '?').join(', ')})`
-  })`
+  } where ${addressed.sql})`
   let term = ([c, props]: Arm) =>
     `select ${ctx.d.ownerKey(c)}${
       pairs ? ` as "o", "${name}".id as "t"` : ''
@@ -1711,7 +1711,10 @@ let referrers = (
       from: from(raw(group.map(term).join(' union all ')), `__refs${i}`),
     })
   )))
-  return { sql: `${target} ${list.sql}`, params: [...values, ...list.params] }
+  return {
+    sql: `${target} ${list.sql}`,
+    params: [...addressed.params, ...list.params],
+  }
 }
 
 // Whether a read can be driven from a component's own table.

@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { and, eq, list } from '@yaks/query'
+import { and, eq, joined, line, list } from '@yaks/query'
 import { type Driver, render } from '@yaks/sql'
 import { get, storage } from './mod.ts'
 import { snapshot, textual } from './testing.ts'
@@ -19,7 +19,7 @@ let vocab = loadVocab({
     },
   },
 })
-let db = textual({ variableNumber: 100 }, snapshot(vocab))
+let db = textual({ variableNumber: 100, sqlLength: 100_000 }, snapshot(vocab))
 let driver: Driver = {
   query: (stmt) => {
     let q = render(stmt)
@@ -66,6 +66,18 @@ test('wide backlinks cannot name a hidden target', () => {
 })
 test('backlinks of several targets admit only those pointing at a visible one', () => {
   assertEquals(g.rows('.refs=public|.refs=hidden'), [{ eid: 'link' }])
+})
+let targets = [
+  'public',
+  'hidden',
+  ...Array.from(
+    { length: 1500 },
+    (_, i) => `not-in-the-store-${String(i).padStart(24, '0')}`,
+  ),
+]
+let many = joined(targets.map((eid) => line`.refs=${eid}`), '|')
+test('a wide set of backlink targets fits in the store’s statement and bind limits', () => {
+  assertEquals(g.rows(many), [{ eid: 'link' }])
 })
 test('scoped getters read physical eids that resemble human ids', () =>
   assertEquals(
