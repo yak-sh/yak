@@ -56,11 +56,6 @@ env.MAIL = {
   },
 } satisfies Binding
 
-// The id the letter to Dr Alvarez went out with; Jeff's alert of the tap it
-// waited for went out first.
-let asked1 = () =>
-  `sent-${letters.findIndex((l) => /alvarez/i.test(String(l.to))) + 1}`
-
 let asked: Request[] = []
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]
 let call = (name: string, args: unknown): Item[] => [{
@@ -80,9 +75,7 @@ let service = operatorService(
     asked.push(req)
     let forked = JSON.stringify(req.items).includes('fork of the')
     let last = req.items.at(-1)
-    let items = said(req, /They tapped Approve/)
-      ? reply('I sent Dr Alvarez the email and will tell you what they say.')
-      : forked
+    let items = forked
       ? last?.kind == 'result'
         ? reply('Asked Dr Alvarez about Tuesday at 3.')
         : call('mail_send', {
@@ -119,12 +112,9 @@ await receive(
   'Ask Dr Alvarez (alvarez@clinic.example) if Tuesday at 3 works for my checkup',
 )
 await service.drain()
-// Mail to someone new waits for the person's tap.
-let waited = letters.filter((l) => l.to != 'jeff@example.com').length
-await service.approve()
-await service.drain()
+let approvals = await store.g.read('.operator_approval')
 let sent = letters.find((l) => /alvarez/i.test(String(l.to)))!
-let SENT = asked1()
+let SENT = `sent-${letters.indexOf(sent) + 1}`
 let kept = (await store.g.read('.operator_letter&*'))
   .find((l) => /alvarez/i.test(String((l.mail as { to?: string }).to)))!
 let [fork] = await store.g.read(line`.spawned.parent=${rootOf(eid, person)}`)
@@ -188,8 +178,8 @@ await mailSend(env, ctx, space, store).run({
 await service.drain()
 let followed = letters.at(-1)!
 
-test("a fork's letter to someone new waits for the person's tap, then goes from the Operator's own address to its recipient, with the person copied and signed as their assistant", () => {
-  assertEquals(waited, 0)
+test("a fork sends the owner's requested letter to someone new without a tap, from the Operator's address, with the owner copied and signed as their assistant", () => {
+  assertEquals(approvals, [])
   assertEquals(sent.from, {
     name: `${space.operator} for Jeff Peterson`,
     email: from,
@@ -234,14 +224,6 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   )
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
-  // The approval alert, the letter, the approval follow-up, the reply,
-  // its answer, Jeff's alert about the reply, and his alert that the turn
-  // he asked from the chat and left ended.
-  let followedApproval = letters.find((l) =>
-    l.to == 'jeff@example.com' && l.subject == 'Follow-up to your answer'
-  )
-  assert(followedApproval)
-  assertStringIncludes(followedApproval.text!, 'I sent Dr Alvarez the email')
   let alert = letters.find((l) =>
     l.to == 'jeff@example.com' &&
     l.subject == 'alvarez@clinic.example replied to the letter you sent them'
@@ -253,7 +235,9 @@ test("a reply to the letter is answered in its writer's own conversation and in 
       l.to == 'jeff@example.com' && l.subject?.startsWith('Reply to “Ask Dr')
     ),
   )
-  assertEquals(meter, 7)
+  // The letter, its reply and answer, and Jeff's alerts for the reply and
+  // for the completed turn he left in chat.
+  assertEquals(meter, 5)
 })
 
 test('a letter answering the reply threads on it and keeps its subject', () => {
