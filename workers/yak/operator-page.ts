@@ -1723,7 +1723,6 @@ export type Beside = {
     eid: string
     slug: string
     title: string
-    source?: string | null
   }[]
   name?: string | null
   admin?: boolean

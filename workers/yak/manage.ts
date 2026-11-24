@@ -746,12 +746,7 @@ let beside = async (
   ])
   return {
     spaces,
-    apps: mine.map((a) => ({
-      eid: a.eid,
-      slug: a.slug,
-      title: a.title,
-      source: a.source,
-    })),
+    apps: mine.map((a) => ({ eid: a.eid, slug: a.slug, title: a.title })),
     name,
     admin: platformAdmin,
     panes,

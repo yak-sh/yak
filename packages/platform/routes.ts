@@ -241,6 +241,9 @@ export let iconAt = (
   space: { logo?: { sha: string } | null },
 ): string => `${at}icon.png?v=${encodeURIComponent(iconVersion(app, space))}`
 
+/** The icon in an app list, with the app's own mark as its fallback. */
+export let appMark = (at: string): string => `${at}/icon.png?display`
+
 /** Where the connections page serves the logos it does not keep as SVG
  * (workers/yak catalog.ts `logoDoor`), by the integration's name. */
 export let LOGOS = '/connections/logo/'

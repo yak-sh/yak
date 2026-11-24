@@ -11,8 +11,8 @@ import type { Beside } from './operator-page.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
   ADMIN,
+  appMark,
   chatPath,
-  iconAt,
   logoPath,
   managePath,
   talkPath,
@@ -49,7 +49,7 @@ export let talkSide = (
     href: aboutPath(space.slug, a.slug, open),
     beside: a.slug == at.app,
     icon: 'layout-grid',
-    image: iconAt(`https://${spaceHost(env, space.slug)}/${a.slug}/`, a, space),
+    image: appMark(`https://${spaceHost(env, space.slug)}/${a.slug}`),
     label: a.title || a.slug,
   }))
   return h(Sidebar, {

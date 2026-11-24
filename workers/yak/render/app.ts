@@ -20,6 +20,7 @@
 // its owner.
 
 import { parse } from '@yaks/query'
+import { appMark } from '@yaks/platform/routes'
 import type { ComponentRenderer } from '@yaks/preact'
 import { Badge, Icon, Menu, Rows, Time } from '@yaks/ui/parts'
 import { h } from 'preact'
@@ -78,7 +79,7 @@ export let app: ComponentRenderer = {
       Rows.Item,
       { as: 'li', ...sift },
       h(Rows.Mark, {
-        src: ctx.icon ?? `${at}/icon.png?display`,
+        src: ctx.icon ?? appMark(at),
         width: 32,
         height: 32,
         alt: '',

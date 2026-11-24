@@ -10,6 +10,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type Item, ModelError } from '@yaks/model'
 import { directoryOf } from './directory.ts'
+import { desk } from './desk-pages.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService, released } from './operator-testing.ts'
@@ -343,6 +344,24 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
 let owner = await sided('owner')
 let member = await sided('editor')
 let admin = await sided('owner', 'new', undefined, true)
+let library = parseHTML(
+  await desk({
+    space: space.slug,
+    apps: six,
+    view: 'apps',
+  }, p.env).text(),
+).document
+
+test('the sidebar and Apps page ask for the same app icons', () => {
+  let sources = (page: Document, selector: string) =>
+    [...page.querySelectorAll(selector)].map((img) => img.getAttribute('src'))
+      .sort()
+  assertEquals(
+    sources(owner.document, '[data-fit-list] .Sidebar_Icon'),
+    sources(library, '#apps .Rows_Mark'),
+  )
+})
+
 test('the side holds the space, the Operator, Updates, the apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
