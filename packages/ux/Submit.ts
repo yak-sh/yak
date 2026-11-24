@@ -1,7 +1,7 @@
 /** Controlled loading and submission with durable drafts. Domain data and
  * transport are supplied through callbacks. @module */
 import { h, type JSX } from 'preact'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Button, Form, Loading, Notice } from '@yaks/ui/parts'
@@ -79,6 +79,14 @@ export let Submit = <T>(
   }: SubmitProps<T>,
 ): JSX.Element => {
   let drafts = useDrafts(supplied)
+  // A draft typed in another tab, or restored once the person is known,
+  // draws again even where this page's Preact does not track the desk.
+  let [, drew] = useState(0)
+  useEffect(() =>
+    drafts.follow?.(() => {
+      drafts.text(place)
+      drew((n) => n + 1)
+    }), [drafts, place])
   let text = drafts.text(place)
   let values: Values | undefined = text ? JSON.parse(text) : undefined
   let state = submitOf<T>(e)

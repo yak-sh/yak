@@ -1,0 +1,16 @@
+{
+  "title": "Guest book",
+  "intro": "Leave a line for whoever comes next.",
+  "form": {
+    "name": "Your name",
+    "message": "Your note",
+    "send": "Sign the book",
+    "sending": "Signing…",
+    "owed": "Write your name and a note first.",
+    "sent": "Thank you. Your note is in the book."
+  },
+  "empty": {
+    "title": "Nobody has signed yet",
+    "body": "Be the first."
+  }
+}

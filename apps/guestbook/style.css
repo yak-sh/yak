@@ -1,0 +1,34 @@
+/* The guest book's own look, in the names every kit part reads. Linen, the
+   theme main.ts wears, sets them all; these are the ones this app chose. */
+:root {
+  --bg: light-dark(#f3f5f0, #1d2420);
+  --card: light-dark(#ffffff, #27302b);
+  --text: light-dark(#1f2a24, #e6ece8);
+  --muted: light-dark(#56645b, #a9b5ad);
+  --accent: light-dark(#2f6b4f, #8fd1ae);
+  --negative: light-dark(#a3412b, #f0a08c);
+  --font: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --size: 17px;
+  --small: 15px;
+  --radius: 10px;
+  --gap: 1rem;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--size) / 1.5 var(--font);
+}
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+h1 {
+  font-size: var(--h1);
+  margin: 0;
+}
+main > p {
+  color: var(--muted);
+  margin: 0 0 var(--gap);
+}

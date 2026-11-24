@@ -57,6 +57,21 @@ the eid creates one. Who may read and write is the app's `access`: `public`,
 Deeper: <https://yaks.app/docs/store.md> — every function of the client, the
 HTTP endpoints underneath, and who may read and write.
 
+## Forms, Lists and the UI Kits
+
+Build an app's forms and lists from the platform's kits, named `"platform"` in
+`package.json`: @yaks/ui's parts (`Card`, `Form`, `Button`, `Notice`, `Rows`,
+`Empty`, `Meter`, charts) and @yaks/ux's `Fields` and `Submit`. `Submit` keeps
+what a person types in a form as a draft in the store until it is saved, on
+every device, and says when a save failed. The parts paint with the app's own
+colours and type, set in the theme's custom properties (`--bg`, `--text`,
+`--accent`, `--font`) in its stylesheet. The page is a TypeScript module that
+`app_deploy` compiles. A page that is mostly reading stays plain HTML, and keeps
+any field a person types in with `drafts().bind(field, place)` from the client.
+
+Deeper: <https://yaks.app/docs/kits.md> — the files, colours and type, words
+from `copy.json`, and the guest book, a whole working example.
+
 ## Performance
 
 A page's load time is set by its network round trips, and a read that waits for

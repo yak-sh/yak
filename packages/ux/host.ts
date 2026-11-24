@@ -50,6 +50,11 @@ export type Drafts = {
   text: (place: string) => string
   type: (place: string, text: string) => void
   spend: (place: string) => void
+  /** Run `fn` now and again whenever a text it read changes, until the
+   * returned function is called: how a component follows a desk whose
+   * signals its Preact does not track, such as a yaks app's
+   * `./api/client.js` `drafts()`, bundled apart from the page. */
+  follow?: (fn: () => void) => () => void
 }
 
 /** Where a popout floats: beside `anchor`, on `side` first. @yaks/ui `Float`

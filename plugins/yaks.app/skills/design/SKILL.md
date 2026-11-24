@@ -47,8 +47,11 @@ Then review the plan against the request. Picture the app you would make for a
 similar request from someone else (a different sport, a different bread): any
 part of the plan that would be the same there is a default, so replace it with a
 choice made for this one. Put the colors and sizes in CSS custom properties at
-the top of the stylesheet (`--bg`, `--text`, `--accent`, `--step-1`), so every
-page shares them and a later change is one line.
+the top of the stylesheet, so every page shares them and a later change is one
+line. Use the names the platform's UI kits paint with, so their parts wear the
+plan too: `--bg`, `--surface`, `--card`, `--border`, `--text`, `--muted`,
+`--accent`, `--negative`, `--font`, `--size`, `--small`, `--gap` and `--radius`
+([kits](https://yaks.app/docs/kits.md), Colours and type).
 
 ## The first screen
 
@@ -91,6 +94,17 @@ nothing: leave them out.
   decoration.
 - Support a dark theme with `prefers-color-scheme` when the app is used at night
   or for long sessions, by giving the custom properties a second set of values.
+
+## Parts from the kits
+
+Draw forms, buttons, notices, lists and empty states with the parts of the
+platform's UI kits ([kits](https://yaks.app/docs/kits.md)) rather than writing
+each one: a field comes with its label, a form keeps what a person types, and a
+save says when it failed. Check them against this page's rules like any other
+markup. The design is in what the plan chose: the colours and type the parts
+wear, the layout they sit in, what the first screen shows and the one bold
+element. A part a kit lacks (a calendar grid, a map, a drawing) is the app's
+own, styled from the same custom properties.
 
 ## Layout
 

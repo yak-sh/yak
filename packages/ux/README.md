@@ -448,11 +448,15 @@ to its caller. `owed` is a set of dot-separated paths requiring an answer;
 state and require no host.
 
 `Submit` loads content through `read(at)` and keeps draft values through the
-supplied `drafts` desk, or the enclosing `Ux` host. Its caller chooses a stable
-`place` for that draft. The `render` callback receives the loaded `content`,
-`state`, `change`, `send` and `file` operations and composes the form. It owns
-validation and the form's labels. `initial(content)` supplies empty repeat
-values; `feedback()` optionally consumes native navigation feedback.
+supplied `drafts` desk, or the enclosing `Ux` host. A desk that offers
+`follow(fn)` is followed at the draft's place, so a draft restored once the
+person is known, or typed in another tab, draws even where the page's Preact
+does not track the desk's signals: a yaks app's `./api/client.js` `drafts()` is
+bundled apart from the page. Its caller chooses a stable `place` for that draft.
+The `render` callback receives the loaded `content`, `state`, `change`, `send`
+and `file` operations and composes the form. It owns validation and the form's
+labels. `initial(content)` supplies empty repeat values; `feedback()` optionally
+consumes native navigation feedback.
 
 State is `Submit{content, unread, values, tried, sending, sent, said, shown}` on
 `submitAt(at)`, emitted through `onChange` and read with `submitOf(e)`. `shown`

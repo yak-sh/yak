@@ -13,6 +13,7 @@ import { fixedStep, ownerOf } from '@yaks/game'
 import { type ControlsBundle, listen } from '@yaks/game/controls'
 import { frameLoop } from '@yaks/stage/render'
 import { kits, themes } from '@yaks/ui/ui'
+import { wear } from '@yaks/ui/wear'
 import { kit as hudKit } from '@yaks/game/hud'
 import { createLook, type View } from './look.ts'
 import { type Actions, renderUI } from './ui.ts'
@@ -45,21 +46,7 @@ type Simulation = {
 type Reply = { run: string; defender: string; message: string; at: number }
 
 async function boot() {
-  for (
-    let url of [
-      themes.everforest.css,
-      ...Object.values(kits.base).map((p) => p.css),
-      ...Object.values(hudKit).map((p) => p.css),
-    ]
-  ) {
-    let link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = url().href
-    document.head.insertBefore(
-      link,
-      document.querySelector('link[rel=stylesheet]'),
-    )
-  }
+  void wear(themes.everforest, kits.base, hudKit)
   let canvas = document.querySelector('canvas')!
   let root = document.querySelector<HTMLElement>('#hud')!
   let base = new URL('./api/', location.href)

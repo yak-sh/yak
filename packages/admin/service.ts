@@ -166,6 +166,7 @@ export let RELEASED: Release[] = [
     'voiced-video',
   ], 'jeff@yak.sh'),
   ...repoApps('yourname', [
+    'guestbook',
     'handouts',
     'holdfast',
     'housebook',

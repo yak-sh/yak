@@ -14,6 +14,7 @@
     "./guide": "./guide.ts",
     "./history": "./history.ts",
     "./navigate": "./navigate.ts",
+    "./wear": "./wear.ts",
     "./relative": "./relative.ts",
     "./lucide": "./lucide.d.ts",
     "./*.css": "./*.css"

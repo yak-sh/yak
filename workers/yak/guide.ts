@@ -533,6 +533,7 @@ let page = (slug: string): Page => {
 /** Every guide page, in the order an agent is offered them. */
 export let PAGES: Page[] = [
   'store',
+  'kits',
   'querying',
   'speed',
   'components',

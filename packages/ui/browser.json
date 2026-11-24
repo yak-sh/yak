@@ -12,7 +12,8 @@
     ".",
     "./ui",
     "./contents",
-    "./navigate"
+    "./navigate",
+    "./wear"
   ],
   "resources": [
     "**/*.css"
