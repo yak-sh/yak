@@ -3,12 +3,15 @@
  * graph's door, which reads, writes and watches across every store the
  * person reaches (yaks.app's reach-door.ts). Every script on the page asks for
  * it here and gets the same one (@yaks/client `shared`), grown with the words
- * each brings. It holds nothing on disk yet. Off a page (a test), its door is
- * at `http://page`, which nothing is sent to until a write or a watch asks.
+ * each brings. It holds nothing on disk yet. A page the server drew from rows
+ * carries them (`drawnRows`), and the graph starts holding them, shown until
+ * each subscription answers. Off a page (a test), its door is at
+ * `http://page`, which nothing is sent to until a write or a watch asks.
  *
  * @module
  */
-import { type Client, shared } from '@yaks/client'
+import { type Client, shared, wireStash } from '@yaks/client'
+import type { Bundle } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 
 /** The page graph's door: `/query`, `/apply` and `/ws` under it. No space
@@ -19,14 +22,36 @@ export let REACH = '/manage/account/reach'
  * the person the tab was drawn for. The door compares it with the session. */
 export let TAB_PERSON = 'x-yak-tab-person'
 
+/** The rows a page was drawn from, as the page carries them. */
+export type Drawn = { person: string; epoch: string; rows: Bundle[] }
+
+/** Where a page carries the rows it was drawn from. */
+export let DRAWN = 'script[data-page-graph]'
+
+/** The script carrying `rows`, which `person`'s page was drawn from. */
+export let drawnRows = (person: string, rows: Bundle[]): string =>
+  `<script type="application/json" data-page-graph>${
+    JSON.stringify({ person, epoch: crypto.randomUUID(), rows } as Drawn)
+      .replaceAll('<', '\\u003c')
+  }</script>`
+
+// What the page in `doc` carries for `person`, if anything.
+let drawn = (person: string, doc = globalThis.document): Drawn | undefined => {
+  let said = doc?.querySelector(DRAWN)?.textContent
+  let page = said ? JSON.parse(said) as Drawn : undefined
+  return page?.person == person ? page : undefined
+}
+
 /** The tab's page graph, drawn for `person`, declaring at least `words`. */
-export let pageGraph = (words: VocabDoc[], person: string): Client =>
-  shared(
+export let pageGraph = (words: VocabDoc[], person: string): Client => {
+  let start = drawn(person)
+  return shared(
     new URL(REACH, globalThis.location?.href ?? 'http://page').href,
     words,
     {
       vault: false,
-      wireVault: false,
+      wireVault: start ? wireStash(start) : false,
+      epoch: start?.epoch,
       page: false,
       headers: { [TAB_PERSON]: person },
       connect: (url) => {
@@ -37,3 +62,4 @@ export let pageGraph = (words: VocabDoc[], person: string): Client =>
       outboxScope: `${REACH}:${person}`,
     },
   )
+}

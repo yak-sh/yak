@@ -597,3 +597,30 @@ test("a page's newer value is never replaced by an older one of its own", async 
   assertEquals(await seen(), [{ x: 2, y: 2 }, { x: 2, y: 2 }])
   done()
 })
+
+test('a page shows the rows its server drew it from until its subscription answers, which replaces them', async () => {
+  let srv = server()
+  let writer = boxClient(srv)
+  writer.watch('.recipe')
+  writer.mutate([dal('r1'), { ...dal('r2'), doc: { title: 'Soup' } }])
+  await writer.idle()
+  // Drawn before r1 was renamed and r3 deleted, and before r2 was made.
+  let drawn = [
+    { ...dal('r1'), doc: { title: 'Old dal' } },
+    { ...dal('r3'), doc: { title: 'Gone' } },
+  ]
+  let page = boxClient(srv, {
+    wireVault: wireStash({ epoch: 'page', rows: drawn }),
+    epoch: 'page',
+  })
+  await page.ready
+  let dinners = page.watch('.recipe.course=dinner&?doc')
+  assertEquals(dinners.ready, false)
+  assertEquals(titles(dinners.value).sort(), ['Gone', 'Old dal'])
+  await page.idle()
+  assertEquals(dinners.ready, true)
+  assertEquals(titles(dinners.value).sort(), ['Dal', 'Soup'])
+  assertEquals(page.ent('r3'), undefined)
+  writer.close()
+  page.close()
+})

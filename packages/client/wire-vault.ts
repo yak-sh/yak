@@ -2,7 +2,7 @@
 // the Vault: this browser's own drafts are loaded unconditionally, while rows
 // that came from the server are only loaded for the epoch the server named,
 // and only up to a row limit.
-import type { Eid } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
 import { answerCache, type SavedAnswer } from './answers.ts'
 import type { Saved } from './vault.ts'
 
@@ -26,11 +26,20 @@ export type WireVault = {
 }
 
 /** The in-memory equivalent of {@link wireIdb}, for an application with no
- * IndexedDB. */
-export let wireStash = (): WireVault => {
-  let epoch: string | undefined
+ * IndexedDB. It can start holding `start.rows` under `start.epoch`: what a
+ * page drawn by its server read, which a client given that epoch shows until
+ * its subscriptions answer. */
+export let wireStash = (
+  start?: { epoch: string; rows: Bundle[] },
+): WireVault => {
+  let epoch = start?.epoch
   let answers: SavedAnswer[] = []
-  let rows = new Map<Eid, Saved>()
+  let rows = new Map<Eid, Saved>(
+    (start?.rows ?? []).map(({ entity: { eid, num, prefix }, ...comps }) => [
+      eid,
+      { eid, num, prefix, comps: comps as Saved['comps'] },
+    ]),
+  )
   let check = (limit: number) => {
     if (!Number.isSafeInteger(limit) || limit < 0) {
       throw new Error('invalid retention limit')
