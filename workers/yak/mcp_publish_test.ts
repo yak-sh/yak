@@ -362,7 +362,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assertEquals(cards(await empty.text()), 0)
     let home = () => k.at('yaks.app', '/').then((r) => r.text())
     let demos = (html: string) =>
-      [...parseHTML(html).document.querySelectorAll('#examples a[href]')]
+      [...parseHTML(html).document.querySelectorAll('a[href]')]
         .map((link) => link.getAttribute('href')!)
         .filter((href) => href.startsWith('https://yourname.yaks.app/'))
     let before = demos(await home())

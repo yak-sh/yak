@@ -378,6 +378,7 @@ test('erasing a space buries everything that named it', async () => {
       entity: { eid: '$host' },
       hostname: {
         name: 'recipes.example.com',
+        space: s.eid,
         serves: app,
         stage: 'active',
         at: new Date().toISOString(),
@@ -390,8 +391,8 @@ test('erasing a space buries everything that named it', async () => {
   ], as(ada))
   assertEquals((await at.query('.app')).length, 2) // ada's, and the platform's
 
-  // The one tombstone erase.ts writes. Death cascades in the store to every
-  // app, deploy, hostname and membership that named the space.
+  // The space's tombstone erase.ts writes. Death cascades in the store to
+  // every app, deploy, hostname and membership the space holds.
   await dir.apply({
     entities: [{ entity: { eid: s.eid }, tombstone: {} }],
   }, as(ada))

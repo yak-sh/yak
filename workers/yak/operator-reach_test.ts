@@ -2,6 +2,7 @@
 // page, and that Operator then reaches it with the role given, for whoever may
 // ask it at home (operator-reach.ts, T-136179).
 import { test } from '@yaks/testing'
+import { possessive } from '@yaks/text'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { handler } from './kernel.ts'
 import { platform } from './deploy-probe.ts'
@@ -254,7 +255,7 @@ test("a space's Operator reaches no other space until that space lets it in", ()
 
 test('let in from the People page, it works there with the role given, for a writer at home with no seat there', () => {
   assertEquals(letIn.status, 303)
-  assertStringIncludes(listed, `${shop}'s Operator · only looks`)
+  assertStringIncludes(listed, `${possessive(shop)} Operator · only looks`)
   assertEquals(during.there, books)
   assertEquals(during.role, 'viewer')
   assertEquals(during.apps, ['list'])

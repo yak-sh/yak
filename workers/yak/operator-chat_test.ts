@@ -233,7 +233,7 @@ test('a conversation opens in the chat app: its words, each step in plain words,
     [
       '7 steps',
       'The context the Operator was given',
-      'Read the schema',
+      'Checked what the data looks like',
       // graph_schema, called, is sent from then on
       'The context the Operator was given changed here',
       'Tried listing the files of notices',
