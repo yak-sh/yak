@@ -75,6 +75,7 @@ import {
 } from './api.ts'
 import { documentAt, mockupAt } from './browse-files.ts'
 import { visit } from './browse.ts'
+import type { Timing } from '@yaks/platform/browser-visit'
 import { deploys, git, type Login, rollback, table } from './deploys.ts'
 import type { Copying } from './copy.ts'
 import { copyThread } from './copy_thread.ts'
@@ -169,6 +170,19 @@ let website = async (at: Account, rejected?: string): Promise<string> => {
     )
   }
   return session
+}
+
+// One load or move on the page, as a line: how long, where, and where the
+// time went (@yaks/platform/browser-visit `Timing`).
+let timed = (t: Timing) => {
+  let parts = Object.entries(t.parts).map(([k, v]) => `${k} ${v}`)
+  let server = Object.entries(t.server).map(([k, v]) => `${k} ${v}`)
+  let path = URL.canParse(t.url)
+    ? new URL(t.url).pathname + new URL(t.url).search
+    : t.url
+  return `${t.name} ${t.ms} ms ${path} (${parts.join(' · ')}${
+    server.length ? `; server ${server.join(' · ')}` : ''
+  })`
 }
 
 let browserVisit = async (
@@ -473,6 +487,7 @@ export let runs = (
             Math.round(got.duration / 100) / 10
           }s of browser`,
           ...got.files.map((f) => `shot      ${f}`),
+          ...(got.timings ?? []).map((t) => `timing    ${timed(t)}`),
           ...got.dialogs.map((d) => `dialog    ${d.type}: ${d.message}`),
           ...got.errors.map((e) => `error     ${e.split('\n')[0]}`),
           ...got.console.filter((m) => m.type == 'error' || m.type == 'warn')

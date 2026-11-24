@@ -217,7 +217,65 @@ export type Rendered = {
   status: number
   /** The accessibility check, unless the visit asked for none. */
   accessibility?: Checked
+  /** How long the page took to load, and each move a step made in place
+   * (`timeline`). */
+  timings?: Timing[]
   duration: number
+}
+/** One load or move on the page, in milliseconds: `load` is the document's
+ * first, from asking to its content loaded; `yak-page` a move between
+ * pages in place (@yaks/web/navigate), from the click to the frame that
+ * drew it. `parts` says where the time went, `server` what the answer's
+ * `Server-Timing` said. */
+export type Timing = {
+  name: string
+  url: string
+  ms: number
+  parts: Record<string, number>
+  server: Record<string, number>
+}
+
+// The page's own timeline, read in the audit's world: the document's load
+// and every `yak-page` measure, each with the server's word on its answer.
+let timeline = () => {
+  let round = (n: number) => Math.round(n * 10) / 10
+  let server = (url: string) => {
+    let all = performance.getEntriesByName(url) as PerformanceResourceTiming[]
+    let last = all.findLast((e) => e.serverTiming?.length)
+    return Object.fromEntries(
+      (last?.serverTiming ?? []).map((t) => [t.name, round(t.duration)]),
+    )
+  }
+  let out = []
+  let load = performance.getEntriesByType('navigation')[0] as
+    | PerformanceNavigationTiming
+    | undefined
+  if (load) {
+    out.push({
+      name: 'load',
+      url: load.name,
+      ms: round(load.domContentLoadedEventEnd),
+      parts: {
+        wait: round(load.responseStart - load.requestStart),
+        read: round(load.responseEnd - load.responseStart),
+        build: round(load.domContentLoadedEventEnd - load.responseEnd),
+      },
+      server: server(load.name),
+    })
+  }
+  for (let m of performance.getEntriesByName('yak-page')) {
+    let { url, ...parts } = (m as PerformanceMeasure).detail ?? {}
+    out.push({
+      name: m.name,
+      url: String(url ?? ''),
+      ms: round(m.duration),
+      parts: Object.fromEntries(
+        Object.entries(parts).map(([k, v]) => [k, round(Number(v))]),
+      ),
+      server: server(String(url ?? '')),
+    })
+  }
+  return out
 }
 /** A render that failed, and the browser time it held all the same. */
 export type Fault = { failed: string; stack?: string; timeout?: boolean }
@@ -472,7 +530,7 @@ let checked = async (
   axe: Axe | null,
   time: Clock,
   report: (error: unknown) => void,
-): Promise<{ accessibility?: Checked; text: string }> => {
+): Promise<{ accessibility?: Checked; text: string; timings?: Timing[] }> => {
   try {
     return await bounded(
       time,
@@ -488,7 +546,8 @@ let checked = async (
             `(${clip})(document.body?.innerText ?? '', ${TEXT})`,
           ),
         )
-        return { ...accessibility ? { accessibility } : {}, text }
+        let timings = await world.evaluate(`(${timeline})()`) as Timing[]
+        return { ...accessibility ? { accessibility } : {}, text, timings }
       },
     )
   } catch (e) {
@@ -504,9 +563,11 @@ let checked = async (
   }
 }
 
-type Loaded = Omit<Rendered, 'duration' | 'accessibility' | 'text'> & {
-  page: Page
-}
+type Loaded =
+  & Omit<Rendered, 'duration' | 'accessibility' | 'text' | 'timings'>
+  & {
+    page: Page
+  }
 
 class BrowserClosed extends Error {
   constructor(stage: string, cause: unknown) {

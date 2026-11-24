@@ -306,9 +306,25 @@ export type Browsing =
   >
   & { DOMParser: typeof DOMParser }
 
-/** What a swap said once done: how long the click took to the new page, in
- * milliseconds, and what changed. The detail of `yak-page`. */
-export type Swapped = { ms: number; tally: Tally; url: string }
+/** Where a click's time went, in milliseconds: waiting for the answer's
+ * head, reading its body, parsing it, and laying it over the page. */
+export type Phases = {
+  fetch: number
+  read: number
+  parse: number
+  swap: number
+}
+
+/** What a swap said once done: when the click was (`began`, on the clock
+ * `start` was given), how long it took to the new page, in milliseconds,
+ * where that time went, and what changed. The detail of `yak-page`. */
+export type Swapped = {
+  ms: number
+  began: number
+  phases: Phases
+  tally: Tally
+  url: string
+}
 
 // Where a page's content is: what its skip link names, else its `main`.
 let content = (doc: Document) => {
@@ -349,6 +365,12 @@ export let start = (
     pending?.abort()
     let mine = pending = new AbortController()
     let began = now()
+    let lap = began
+    let split = () => {
+      let at = now(), took = at - lap
+      lap = at
+      return took
+    }
     let answer = await win.fetch(to.href, {
       headers: { accept: 'text/html' },
       credentials: 'same-origin',
@@ -357,10 +379,13 @@ export let start = (
     if (mine != pending) return
     let type = answer?.headers.get('content-type') ?? ''
     if (!answer || !type.includes('text/html')) return load(to, pop)
+    let fetch = split()
     let text = await answer.text().catch(() => null)
     if (mine != pending) return
     if (text == null) return load(to, pop)
+    let read = split()
     let next = new win.DOMParser().parseFromString(text, 'text/html')
+    let parse = split()
     if (!next.querySelector(`script[${TAKES}]`)) return load(to, pop)
     let at = new URL(answer.url || to.href)
     at.hash = to.hash
@@ -390,7 +415,14 @@ export let start = (
       main?.focus?.({ preventScroll: true })
     }
     pending = undefined
-    let detail: Swapped = { ms: now() - began, tally, url: at.href }
+    let phases = { fetch, read, parse, swap: split() }
+    let detail: Swapped = {
+      ms: lap - began,
+      began,
+      phases,
+      tally,
+      url: at.href,
+    }
     tell(doc, PAGE, detail)
   }
   win.addEventListener('click', (e: MouseEvent) => {
