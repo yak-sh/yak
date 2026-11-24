@@ -22,9 +22,9 @@ import {
   type Values,
 } from '@yaks/ux'
 
-type Note = {
+type Signature = {
   entity: { eid: string }
-  note: { name: string; message: string }
+  signature: { name: string; message: string }
   created?: { at: string }
 }
 
@@ -70,8 +70,11 @@ let Sign = () => {
     send: async (_at, v) => {
       try {
         await apply([{
-          entity: { eid: '$note' },
-          note: { name: String(v.name).trim(), message: String(v.message) },
+          entity: { eid: '$signature' },
+          signature: {
+            name: String(v.name).trim(),
+            message: String(v.message),
+          },
         }])
       } catch (err) {
         return (err as Error).message
@@ -123,19 +126,19 @@ let Sign = () => {
   })
 }
 
-/** Every note, newest first. */
+/** Every signature, newest first. */
 let Book = () => {
-  let [notes, setNotes] = useState<Note[]>()
+  let [signed, setSigned] = useState<Signature[]>()
   useEffect(() => {
-    return subscribe('.note&?created', (rows: Note[]) =>
-      setNotes(
+    return subscribe('.signature&?created', (rows: Signature[]) =>
+      setSigned(
         [...rows].sort((a, b) =>
           (b.created?.at ?? '').localeCompare(a.created?.at ?? '')
         ),
       ))
   }, [])
-  if (!notes) return null
-  if (!notes.length) {
+  if (!signed) return null
+  if (!signed.length) {
     return h(
       Empty,
       {},
@@ -146,15 +149,15 @@ let Book = () => {
   return h(
     Rows,
     {},
-    notes.map((n) =>
+    signed.map((n) =>
       h(
         Rows.Item,
         { key: n.entity.eid },
         h(
           Rows.Main,
           {},
-          h(Rows.Name, {}, n.note.name),
-          h(Rows.Meta, {}, n.note.message),
+          h(Rows.Name, {}, n.signature.name),
+          h(Rows.Meta, {}, n.signature.message),
         ),
         n.created ? h(Stamp, {}, relative(n.created.at, Date.now())) : null,
       )
