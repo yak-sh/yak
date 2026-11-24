@@ -902,7 +902,10 @@
         "haste": { "type": "number" },
         "force": { "type": "number" },
         "luck": { "type": "number" },
-        "plain": { "type": "boolean", "description": "True when a fallen creature can leave it as spoils: a plain piece of its tier." },
+        "plain": {
+          "type": "boolean",
+          "description": "True when a fallen creature can leave it as spoils: a plain piece of its tier."
+        },
         "recipe": { "type": "string" },
         "look": {
           "type": "array",
@@ -1201,8 +1204,18 @@
       "floor": "editor",
       "description": "The sound rows a creature cries and steps with; several creatures may share one. Until a row has a recording, and for a sound it names no row for, the procedural voice of its body plays.",
       "properties": {
-        "cry": { "type": "string", "ref": "sfx", "death": "detach", "description": "The sfx row the creature cries with; without one its body's procedural voice plays." },
-        "step": { "type": "string", "ref": "sfx", "death": "detach", "description": "The sfx row its footsteps play; without one its body's procedural steps play." }
+        "cry": {
+          "type": "string",
+          "ref": "sfx",
+          "death": "detach",
+          "description": "The sfx row the creature cries with; without one its body's procedural voice plays."
+        },
+        "step": {
+          "type": "string",
+          "ref": "sfx",
+          "death": "detach",
+          "description": "The sfx row its footsteps play; without one its body's procedural steps play."
+        }
       }
     },
     "den": {
@@ -1570,7 +1583,10 @@
       "description": "The description of one sound Vale needs. The shared sound builder reads this row and cites it in the generated recording.",
       "properties": {
         "name": { "type": "string", "index": true },
-        "loop": { "type": "boolean", "description": "True when the sound repeats for as long as it plays, rather than once." }
+        "loop": {
+          "type": "boolean",
+          "description": "True when the sound repeats for as long as it plays, rather than once."
+        }
       }
     },
     "player": {
@@ -1603,7 +1619,12 @@
       "floor": "person",
       "description": "One hero's invitation to another to join their party. The invited hero alone answers it with a party_reply row.",
       "properties": {
-        "from": { "type": "string", "ref": "player", "death": "cascade", "description": "The hero who invites." },
+        "from": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "description": "The hero who invites."
+        },
         "to": {
           "type": "string",
           "ref": "player",
@@ -1635,7 +1656,10 @@
           "index": true,
           "description": "The hero answering, the one invited."
         },
-        "accept": { "type": "boolean", "description": "True to join the party, false to decline." }
+        "accept": {
+          "type": "boolean",
+          "description": "True to join the party, false to decline."
+        }
       },
       "required": ["invite", "to", "accept"]
     },
@@ -1645,7 +1669,10 @@
       "floor": "owner",
       "description": "Whether damage can reach this hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change it.",
       "properties": {
-        "on": { "type": "boolean", "description": "True when damage reaches the hero, as in ordinary combat; false keeps them at full health." }
+        "on": {
+          "type": "boolean",
+          "description": "True when damage reaches the hero, as in ordinary combat; false keeps them at full health."
+        }
       }
     },
     "teleport_request": {
