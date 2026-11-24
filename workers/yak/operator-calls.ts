@@ -31,6 +31,7 @@
 // and the stream opened again charges only its own.
 import { type Clock, system } from '@yaks/fp'
 import { CallError } from '@yaks/tools'
+import { named } from '@yaks/session/turn'
 import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Backend,
@@ -781,18 +782,31 @@ Delegation policy: Your backend is the Operator's own work, which can do anythin
 // mostly be listening and only responding if mentioned or it's clear he
 // should talk").
 let ROOM = (name: string) =>
-  `Several people talk here, with each other as much as with you, and you are told who starts speaking. Most of what is said is not for you: say nothing and keep listening unless you are named (${name}), asked something directly, or it is plainly your turn, such as a question put to you or to the room that nobody else takes up. Someone thinking aloud or telling an idea at length is heard out, never answered sentence by sentence: listen until they hand you the turn. When you answer, answer the one who spoke to you.`
+  `Several people talk here, with each other as much as with you, and you are told who starts speaking. Most of what is said is not for you: say nothing and keep listening unless you are named (${name}) or asked something directly. A question put to the room is for the people in it, and news, plans and agreement among them are theirs: hear them, and do the work they ask of you without a word. Someone thinking aloud or telling an idea at length is heard out, never answered sentence by sentence: listen until they hand you the turn. When you answer, answer the one who spoke to you.`
+
+// What any talking model is told of staying quiet when asked (Jeff,
+// T-3152: "he was incapable of not responding"): everything is still heard,
+// kept and acted on; only its voice waits. A turned model says so with its
+// stream's `stay_silent`, `answer` and `talk` tools (@yaks/speech `talk`).
+let LISTENING = (name: string, duplex: boolean) =>
+  `When they ask you only to listen, take notes or keep a transcript, ${
+    duplex
+      ? 'from then on say nothing at all, not even that you are listening or ready,'
+      : 'call stay_silent, with no words, and from then on speak only by calling answer (or talk, once they ask you to stop listening),'
+  } until you are named (${name}), asked something, or have something they must hear. Everything said is still heard and kept, and you can read it back or sum it up when asked; you may still do what they ask through your tools while you listen.`
 
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator does the work, through `ask`, or for a `duplex` model, which has
  * no tools of its own, through the work it hands over; in a voice room
- * (`room`, its platform), when to speak at all. */
+ * (`room`, its platform), when to speak at all; and to stay quiet when asked
+ * to only listen. */
 export let instructed = (name: string, duplex = false, room?: string) =>
   [
     duplex
       ? `${butler(name, room)}\n\n${DUPLEX}`
       : `${butler(name, room)} ${TURNED}`,
     ...room ? [ROOM(name)] : [],
+    LISTENING(name, duplex),
   ].join('\n\n')
 
 /** What a larger model a talking model hands hard requests to on its
@@ -1185,9 +1199,19 @@ export let calling = async (
     instructions: string
     tools: Tool[]
     backend?: Backend
+    words: string[]
+    addressed: (words: string) => boolean
+    listening?: boolean
   } = {
     instructions: `${instructed(name, setup.duplex, roomTitle)}\n\n${FIXED}`,
     tools,
+    // Its name, which its hearing expects. Words that name it are said to
+    // it, as in a group text (@yaks/session/turn). In a voice room it always
+    // only listens, and speaks when named or when it chooses to answer
+    // (@yaks/speech `talk`).
+    words: [name],
+    addressed: (words) => named(words, [name, 'operator']),
+    ...ticket.room ? { listening: true } : {},
     ...own
       ? {
         backend: {

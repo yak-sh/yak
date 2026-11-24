@@ -132,6 +132,8 @@ export type Setup = {
   tools: { name: string; description: string; parameters: object }[]
   /** its first words, said as the stream opens (`Talking.opens`) */
   opens?: string
+  /** words its hearing should expect, such as the names it is called by */
+  words?: string[]
   /** a larger model a duplex model hands its work to on the provider's
    * side, one of its `backends`, told `instructions` and calling `tools`
    * through `told.call`; without one, the work goes to whoever runs the
@@ -302,8 +304,15 @@ export type Talker = {
 export type Turned = {
   duplex?: undefined
   /** the model asked for a response: to say `text`, or without it to go
-   * on, asking for `tools` alone when they are given */
-  respond: (text?: string, tools?: Setup['tools']) => string
+   * on, asking for `tools` alone when they are given, and with `call` for
+   * a call of one of them, never words; `instructions` are the response's
+   * in place of the session's */
+  respond: (asked?: {
+    text?: string
+    tools?: Setup['tools']
+    call?: boolean
+    instructions?: string
+  }) => string
   /** what stops the response under way */
   cancel: string
   /** what ends the caller's turn now, before the model hears it end */
@@ -970,14 +979,41 @@ export let first = (format: Raw): {
   }
 }
 
-// The stream's own tool: the model asks for it to say nothing while the
-// caller has more to say.
+// The stream's own tools. With `LISTEN` the model says nothing this turn,
+// while the caller has more to say. With `HUSH` it only listens from then
+// on: each turn is put to it as a choice of tools, never words, so it says
+// nothing (`LISTEN`) until it calls `ANSWER`, or `TALK` to stop listening.
 let LISTEN = {
   name: 'listen',
   description:
-    'Say nothing and keep listening: the caller stopped partway through what they are saying, cut off mid-sentence, trailing off to think, or with only an um or uh. They have more to say.',
+    'Say nothing this turn and keep listening: they stopped partway through what they are saying, cut off mid-sentence, trailing off to think, or with only an um or uh; or, while you only listen, what was said is not for you.',
   parameters: { type: 'object', properties: {} },
 }
+
+let HUSH = {
+  name: 'stay_silent',
+  description:
+    'They asked you only to listen, take notes or keep a transcript, or not to respond: call it instead of answering, with no words. From then on you only listen, still hearing everything and free to use your other tools, and speak only by calling answer.',
+  parameters: { type: 'object', properties: {} },
+}
+
+let ANSWER = {
+  name: 'answer',
+  description:
+    'While you only listen, speak: only when you were named or asked a question, or something urgent went wrong with what they asked of you. A statement, an update, an idea, thinking aloud, or a question put to others is never asked of you, and work you did with your other tools is not reported unless asked: for those call listen. Call it, then say your answer; you go on only listening after it.',
+  parameters: { type: 'object', properties: {} },
+}
+
+let TALK = {
+  name: 'talk',
+  description:
+    'While you only listen, they asked you to stop only listening and talk with them as before. Call it, then answer them.',
+  parameters: { type: 'object', properties: {} },
+}
+
+// What a model that only listens is told with each turn put to it.
+let HEEDING =
+  'You only listen now. This turn is put to you as a choice of tools, never words. listen, letting it pass, is the usual choice: for anything not said to you, and anything that asks nothing of you, such as news, a plan, agreement or a question to others. Call answer only when you are named, even where the transcript mishears the name, or asked a question yourself. Use another tool only for work someone asked of you. When unsure, listen.'
 
 /** How a talking model is set up: its model, voice, pace, instructions and
  * tools, each its provider's own where none is given. */
@@ -995,6 +1031,15 @@ export type Talking = {
   opens?: string
   /** a duplex model's larger model on the provider's side (`Setup.backend`) */
   backend?: Backend
+  /** words its hearing should expect, such as the names it is called by */
+  words?: string[]
+  /** whether words heard are said to the model, such as naming it: while it
+   * listens, a turn they end is answered in words */
+  addressed?: (words: string) => boolean
+  /** a turned model only listens (`HUSH`), always, as in a room of several
+   * people: each turn is put to it as a choice of tools, and it speaks only
+   * by calling `ANSWER` */
+  listening?: boolean
 }
 
 type Calls = NonNullable<Talker['calls']>
@@ -1017,8 +1062,9 @@ let talker = (provider: Provider, model?: string): Talker => {
   return t
 }
 
-// The stream's own `LISTEN` comes first among a turned model's tools; a
-// duplex model's tools are whoever runs the call.
+// The stream's own `LISTEN` and `HUSH` come first among a turned model's
+// tools, `HUSH` where it does not always listen; a duplex model's tools are
+// whoever runs the call.
 let setup = (
   t: Talker,
   o: Talking,
@@ -1030,8 +1076,11 @@ let setup = (
   speed: paced(t.speeds, o.speed),
   instructions: wording(o.instructions) +
     '\n\nMessages name their source. Source labels are context for you; never read them aloud.',
-  tools: t.duplex ? [] : [LISTEN, ...o.tools ?? []],
+  tools: t.duplex
+    ? []
+    : [LISTEN, ...o.listening ? [] : [HUSH], ...o.tools ?? []],
   ...o.opens ? { opens: o.opens } : {},
+  ...o.words?.length ? { words: o.words } : {},
   ...t.duplex && o.backend
     ? {
       backend: { ...o.backend, instructions: wording(o.backend.instructions) },
@@ -1105,6 +1154,12 @@ export let hangup = (o: Calling & { call: string }): Promise<void> =>
  * before it plays. A turn left unanswered is answered once they have been
  * quiet `LONG`.
  *
+ * Asked to stay silent (`HUSH`), or always (`listening`), the model only
+ * listens: each turn is still put to it once its words are heard, but as a
+ * choice of tools, never words, so it keeps hearing and may work without a
+ * word, and nothing is said until it calls `ANSWER`; a turn left unanswered
+ * stays so. A turn whose words are said to it (`addressed`) is answered.
+ *
  * Given a `call` its own line carries, picked up with `accept`, the stream
  * joins that call instead: the caller's audio and the model's go over the
  * line, never through `send` or `told.audio`, and what plays is stopped on
@@ -1144,14 +1199,38 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
   // under way waits for it to be done. `last` is the one asked for last, asked
   // again if it was refused; waiting asks to go on are one.
   let busy = false, last: string | undefined
-  let waiting: string[] = [], goOn = t.respond()
+  let waiting: string[] = [], going = t.respond()
+  // Whether the model only listens, which it asks for with `HUSH` and
+  // stops with `TALK`, or does always; and how a turn is put to it then.
+  let listens = false
+  let listening = () => !!o.listening || listens
+  let heeding = t.respond({
+    tools: [LISTEN, ANSWER, ...o.listening ? [] : [TALK], ...o.tools ?? []],
+    call: true,
+    instructions: `${set.instructions}\n\n${HEEDING}`,
+  })
+  // While it listens, a turn whose words are said to it (`addressed`) is
+  // answered in words, and any other put to it as a choice of tools, once
+  // its words are heard (`awaiting`). Whether the turn is being answered,
+  // so a tool's output is followed by words; and whether the response under
+  // way is a choice of tools, whose words, if any, are never said.
+  // A turn said to it that it let go on, such as its name alone, carries to
+  // the next (`called`).
+  let awaiting = false, answering = false, choosing = false, called = false
+  let put = () => {
+    let to = called || !!o.addressed?.(heard)
+    let m = !listening() || to ? going : heeding
+    answering = m == going
+    called = false
+    ask(pending = m)
+  }
   // The responses asked to say given words, and whether the one under way
   // is one. Such a response plays its answer alone: what the model says
   // before it (`aside`) is the words a second time, or words of its own.
   let scripts = new Set<string>(), scripted = false
   let asides = new Set<string>()
   let script = (text: string) => {
-    let m = t.respond(text)
+    let m = t.respond({ text })
     scripts.add(m)
     ask(m)
   }
@@ -1180,13 +1259,14 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
     if (unheard) held = []
     o.told.stopped?.()
     if (!unheard && open(heard)) return void (unanswered = true)
-    ask(pending = goOn)
+    if (unheard && listening()) return void (awaiting = true)
+    put()
   }
   let soon = () => {
     if (!ended && quiet >= QUIET) s.send(t.commit), end()
-    if (unanswered && quiet >= LONG) {
+    if (unanswered && !listening() && quiet >= LONG) {
       unanswered = false
-      ask(pending = t.respond(undefined, o.tools ?? []))
+      ask(pending = t.respond({ tools: o.tools ?? [] }))
     }
   }
   // The turn's answer is not said: what is held is dropped, the ask still
@@ -1200,7 +1280,8 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
     if (joined) s.send(joined.hush)
   }
   let ask = (m: string) => {
-    if (m != goOn || !waiting.includes(m)) waiting.push(m)
+    let on = m == going || m == heeding
+    if (!on || !waiting.includes(m)) waiting.push(m)
     next()
   }
   let next = () => {
@@ -1216,7 +1297,8 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
       for (let said of t.read(data, model)) {
         if (said.start) {
           if (pending) withdraw()
-          hearing = '', over = ended = unanswered = false, spoke = true
+          hearing = '', spoke = true, awaiting = false
+          over = ended = unanswered = false
         }
         // Their words still heard once their turn ended are its own.
         if (said.hearing) hearing += said.hearing
@@ -1231,12 +1313,15 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
           if (said.heard) o.told.heard?.(said.heard)
           heard = said.heard, unheard = false
           if (pending && open(heard)) withdraw(), unanswered = true
+          if (awaiting && !open(heard)) put()
+          awaiting = false
           let h = held ?? []
           held = undefined
           for (let { run } of h) run()
         }
         if (said.aside) asides.add(said.aside)
-        let spare = scripted && said.of != undefined && asides.has(said.of)
+        let spare = choosing ||
+          scripted && said.of != undefined && asides.has(said.of)
         let audio = spare ? undefined : said.audio
         if (audio) opens?.said(audio)
         if (audio && !hushed) {
@@ -1249,6 +1334,7 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
         if (said.begun) {
           busy = true
           scripted = scripts.has(last!)
+          choosing = last == heeding
           if (hushed) s.send(t.cancel)
         }
         if (said.busy && last) waiting.unshift(last), busy = true
@@ -1261,8 +1347,26 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
         if (said.error) o.told.lost?.(said.error)
         let call = said.call
         if (call?.name == LISTEN.name) {
+          called = listening() && answering
           if (pending) withdraw(), unanswered = true
           for (let m of t.answer(call.id, wording('Listening.'))) s.send(m)
+        } else if (call?.name == HUSH.name) {
+          listens = true
+          if (pending) withdraw()
+          let told = 'Silent: you only listen until you are addressed.'
+          for (let m of t.answer(call.id, wording(told))) s.send(m)
+        } else if (call?.name == ANSWER.name || call?.name == TALK.name) {
+          // Asked to speak while it only listens, it is asked for its words.
+          if (call.name == TALK.name) listens = false
+          answering = true
+          let speak = () => {
+            for (let m of t.answer(call.id, wording('Say it now.'))) s.send(m)
+            ask(pending = going)
+          }
+          out(speak, () => {
+            let output = wording('Not asked: they went on talking.')
+            for (let m of t.answer(call.id, output)) s.send(m)
+          })
         } else if (call) {
           let answer = (output: Words, more = true) => {
             for (
@@ -1271,7 +1375,9 @@ let turned = (o: Talks, t: Talker & Turned): Talk => {
                 wording(output, `the ${call.name} tool`),
               )
             ) s.send(m)
-            if (more) ask(goOn)
+            // While it listens, work on a turn it is not answering is
+            // done without a word.
+            if (more && (answering || !listening())) ask(going)
           }
           out(
             () => {

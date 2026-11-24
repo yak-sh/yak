@@ -354,6 +354,7 @@ let talking = (
   calls: (name: string, args: string) => Promise<Words>,
   speed?: number,
   opens?: string,
+  more: Partial<Parameters<typeof talk>[0]> = {},
 ) => {
   let s = socket()
   let told: unknown[] = []
@@ -364,6 +365,7 @@ let talking = (
     voice: 'cedar',
     speed,
     opens,
+    ...more,
     instructions: 'Be brief.',
     tools: [{ name: 'ask', description: 'Ask.', parameters: {} }],
     open: s.open,
@@ -677,8 +679,8 @@ test('a model that never begins its first words hears the caller after six secon
 // seconds of a quiet line at 8 kHz μ-law and `loud` a sound, `heard` their
 // words once heard, and `says` the model's audio. `sent` counts what was sent
 // of a type.
-let calling = () => {
-  let c = talking(() => Promise.resolve(''))
+let calling = (more?: Partial<Parameters<typeof talk>[0]>) => {
+  let c = talking(() => Promise.resolve(''), undefined, undefined, more)
   c.s.fire('open')
   let { s, stream, event } = c
   return {
@@ -784,6 +786,140 @@ test('an answer is not said when the caller stops where a sentence goes on, the 
   equal([answers(), sent('response.cancel')], [1, 3])
   heard('So I need a plumber.')
   equal(answers(), 2)
+})
+
+// A turn a caller takes, which the model answers with a call of `name`, or
+// with words; answered `asked` is how the turn was put to it: words, or a
+// call of a tool it must choose, and `asks` how many asks were sent.
+let listener = (listening?: boolean) => {
+  let c = calling({
+    listening,
+    addressed: (words) => words.startsWith('Ember'),
+  })
+  let n = 0
+  let creates = () => c.s.json().filter((m) => m.type == 'response.create')
+  let turn = (words: string, name?: string, args: object = {}) => {
+    c.speak()
+    c.quiet()
+    c.heard(words)
+    let ask = creates().at(-1)
+    if (name) {
+      c.event({
+        type: 'response.function_call_arguments.done',
+        call_id: `c${++n}`,
+        name,
+        arguments: JSON.stringify(args),
+      })
+    } else c.says()
+    c.done()
+    c.quiet(10)
+    return ask.response?.tool_choice == 'required' ? 'call' : 'words'
+  }
+  let output = () =>
+    String(
+      c.s.json().filter((m) => m.type == 'conversation.item.create').at(-1)
+        ?.item.output,
+    )
+  return {
+    ...c,
+    turn,
+    output,
+    asks: () => creates().length,
+    last: () => creates().at(-1),
+  }
+}
+
+// Asked to stay silent, the model only listens: each turn is put to it as a
+// choice of tools, none answered for it after a pause, until it says it
+// stops listening.
+test('a model asked to stay silent is put each turn as a choice of tools, and speaks only once it answers', () => {
+  let { turn, output, asks, says, done, last } = listener()
+  equal(turn('Just take a transcript.', 'stay_silent'), 'words')
+  equal([output(), asks()], [
+    'From the system:\nSilent: you only listen until you are addressed.',
+    1,
+  ])
+  equal(turn('The barn roof needs shingles.', 'listen'), 'call')
+  equal(asks(), 2)
+  equal(last().response.tools.map((t: { name: string }) => t.name), [
+    'listen',
+    'answer',
+    'talk',
+    'ask',
+  ])
+  // Named, it is asked for words; asked something else, it chooses to
+  // answer, and is asked for its words.
+  equal(turn('Ember, what did I say?'), 'words')
+  equal(turn('What is on the list?', 'answer'), 'call')
+  equal([output(), last()], ['From the system:\nSay it now.', {
+    type: 'response.create',
+  }])
+  says()
+  done()
+  equal(turn('And the fence is down.', 'listen'), 'call')
+  equal(turn('Okay, stop listening.', 'talk'), 'call')
+  done()
+  // Talking again, a turn it lets pass is answered after a long quiet.
+  equal(turn('So what now', 'listen'), 'words')
+  equal(last().response.tools.map((t: { name: string }) => t.name), ['ask'])
+})
+
+// In a room it always only listens, and is offered no way to stop.
+test('a model that always listens is put every turn as a choice of tools once its words are heard, and answers one that names it', () => {
+  let { turn, last, s, speak, quiet, asks } = listener(true)
+  equal(s.json()[0].session.tools.map((t: { name: string }) => t.name), [
+    'listen',
+    'ask',
+  ])
+  equal(turn('So anyway.', 'listen'), 'call')
+  equal(last().response.tools.map((t: { name: string }) => t.name), [
+    'listen',
+    'answer',
+    'ask',
+  ])
+  equal(last().response.instructions.includes('Be brief.'), true)
+  equal(last().response.instructions.includes('You only listen now.'), true)
+  equal(turn('Ember, what time is it?'), 'words')
+  equal(turn('Thanks.', 'listen'), 'call')
+  // Its name alone, let go on, carries to the turn after it.
+  equal(turn('Ember.', 'listen'), 'words')
+  equal(turn('What time is it?'), 'words')
+  equal(turn('Thanks.', 'listen'), 'call')
+  // Its turn over, nothing is asked until its words are heard.
+  speak()
+  quiet()
+  equal(asks(), 6)
+})
+
+// While it listens, what the model writes beside its choice of tools is never
+// said, and work on a turn not said to it is done without a word after.
+test('a listening model says nothing it writes while choosing, and works quietly on a turn not said to it', async () => {
+  let { told, speak, quiet, heard, says, done, event, asks, last, output } =
+    listener(true)
+  let call = (name: string, id: string) =>
+    event({
+      type: 'response.function_call_arguments.done',
+      call_id: id,
+      name,
+      arguments: '{"request":"Note it."}',
+    })
+  let turn = (words: string, name: string) => {
+    speak()
+    quiet()
+    heard(words)
+    event({ type: 'response.created' })
+    says()
+    call(name, words)
+    done()
+  }
+  let tools = () => last().response?.tool_choice ?? 'words'
+  turn('The fence is down.', 'ask')
+  await until(() => output().includes('the ask tool'))
+  equal([told.filter((t) => Array.isArray(t)).length, asks()], [0, 1])
+  // Said to it, the work's output is followed by words.
+  turn('Ember, note the fence.', 'ask')
+  await until(() => asks() == 3)
+  equal(tools(), 'words')
 })
 
 test('a call the provider’s own line carries is accepted with the session, then joined without audio', async () => {

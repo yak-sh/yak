@@ -772,6 +772,17 @@ test('a voice room tells the talking model it is with several people and speaks 
   equal(phone.includes('voice room'), false)
 })
 
+// Asked only to listen, a model on the phone or in a room says nothing until
+// it is named; a turned one says so with its listen tool.
+test('a talking model is told to stay quiet when asked only to listen, until it is named', () => {
+  let told = (duplex: boolean, room?: string) =>
+    instructed('Ember', duplex, room).includes(
+      'call stay_silent, with no words, and from then on speak only by calling answer',
+    )
+  equal([told(false), told(false, 'Discord'), told(true)], [true, true, false])
+  equal(instructed('Ember', true).includes('until you are named (Ember)'), true)
+})
+
 // In a voice room, who began speaking reaches the call, which tells its model
 // who it hears and keeps what it heard as theirs.
 test('in a voice room, the model is told who is speaking and what it heard is kept under their name', async () => {

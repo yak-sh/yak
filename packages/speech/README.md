@@ -66,15 +66,26 @@ argument; nothing here reads the environment.
   model says to it waits for their words, and is not said when they stopped
   where a sentence goes on (`open`: "the", "is", "um", a comma), when the model
   calls the stream's own `listen` tool, or when they talk again before it plays;
-  a turn left unanswered is answered once they have been quiet 5 s. `told.heard`
-  and `told.said` are each side's words, and `told.call(name, args)` answers a
-  tool the model asked for with its output, before it goes on, and `told.done()`
-  ends each of its responses. `say(text)` asks it to say something, and
-  `tell(text)` tells it something it knows from now on without answering it;
-  `spent()` answers the seconds heard and what the stream cost so far, and
-  `close()` ends it answering the same, each response priced at its model's
-  rates, or the stream's when it names none. A provider without the model
-  refuses.
+  a turn left unanswered is answered once they have been quiet 5 s. `words` are
+  what its hearing should expect, such as the names it is called by.
+  `told.heard` and `told.said` are each side's words, and
+  `told.call(name, args)` answers a tool the model asked for with its output,
+  before it goes on, and `told.done()` ends each of its responses. `say(text)`
+  asks it to say something, and `tell(text)` tells it something it knows from
+  now on without answering it; `spent()` answers the seconds heard and what the
+  stream cost so far, and `close()` ends it answering the same, each response
+  priced at its model's rates, or the stream's when it names none. A provider
+  without the model refuses.
+- A `Turned` model asked only to listen calls the stream's `stay_silent`, or
+  listens always (`listening`, as in a room of several people). Each turn still
+  reaches it once its words are heard, but put as a choice of tools, never
+  words, with a reminder that letting it pass (`listen`) is the usual choice:
+  whatever it writes beside its choice is never said, and work it does with its
+  tools on such a turn is done without a word after. It speaks only by calling
+  `answer`, or `talk` to stop listening (not offered when it listens always). A
+  turn whose words are said to it (`addressed(words)`, such as naming it) is
+  answered in words, and its name said alone, let go on, carries to the next
+  turn; no turn is answered for it after a pause.
 - `opens` is the model's first words, a call's greeting. Either kind of model is
   asked for them once as the stream opens, and the caller's audio reaches it as
   a quiet line (`muted`) until they have played: a hello the caller says over

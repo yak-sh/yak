@@ -325,11 +325,12 @@ export let OPENAI: Provider = {
     ],
     // Asked to say a message with its tools at hand, it sometimes asked to
     // listen instead and said nothing.
-    respond: (text, tools) =>
+    respond: ({ text, tools, call, instructions } = {}) =>
       JSON.stringify({
         type: 'response.create',
         ...text == undefined && !tools ? {} : {
           response: {
+            ...instructions && { instructions },
             ...text == undefined ? {} : {
               instructions:
                 `Say only the message below, without reading its source label aloud:\n${text}`,
@@ -337,6 +338,7 @@ export let OPENAI: Provider = {
             },
             ...tools &&
               { tools: tools.map((t) => ({ type: 'function', ...t })) },
+            ...call && { tool_choice: 'required' },
           },
         },
       }),
@@ -551,7 +553,12 @@ let session = (setup: Setup) => ({
   audio: {
     input: {
       ...setup.format ? { format: wire(setup.format) } : {},
-      transcription: { model: 'gpt-live-transcribe', language: 'en' },
+      // The names it is called by, which a transcript would mishear.
+      transcription: {
+        model: 'gpt-live-transcribe',
+        language: 'en',
+        ...setup.words?.length && { prompt: setup.words.join(', ') },
+      },
       // A phone held to the ear. The model says when the caller is done, in
       // about a second when it is sure; unsure, it waits up to 4 s at medium
       // eagerness, and mod.ts `talk` ends the turn sooner and answers it.
