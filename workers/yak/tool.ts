@@ -16,6 +16,7 @@ import type { Security } from '@yaks/mcp'
 import { type Level, writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
 import { Refused } from '@yaks/graph/errors'
+import { restoreDrafts } from '@yaks/platform/draft-choice'
 import type { Steps } from '@yaks/tools/title'
 import type { Image } from '@yaks/tools/value'
 import {
@@ -290,8 +291,18 @@ export let noApp = async (
   slug: unknown,
   apps?: App[],
 ) => {
-  let held = (apps ?? await ctx.dir.apps(space))
-    .filter((a) => a.space == space.eid && !a.trashed).map((a) => a.slug)
+  let here = (apps ?? await ctx.dir.apps(space))
+    .filter((a) => a.space == space.eid)
+  let kept = here.filter((a) => a.trashed && a.slug == slug)
+  if (kept.length && !space.trashed) {
+    let drafts = await ctx.dir.openDraftsOf(kept)
+    let recover = kept.flatMap((app) => {
+      let ids = drafts.get(app.eid)!
+      return ids.length ? [restoreDrafts(space.slug, app, ids)] : []
+    })
+    if (recover.length) return refuse('conflict', recover.join('\n'))
+  }
+  let held = here.filter((a) => !a.trashed).map((a) => a.slug)
   return refuse(
     'missing',
     `no app ${slug} in ${space.slug} — ${
@@ -862,7 +873,7 @@ let reached = async (
             'missing',
             `no app ${slug} in ${space.slug} — use the app eid from app_list for a deleted app`,
           )
-          : await noApp(scope, space, slug)
+          : await noApp(scope, space, slug, page?.roster ?? undefined)
       }
       awake(space, trash ? undefined : app)
       admitted(ctx, space, who, who.guest ? [app] : page?.roster)

@@ -5,7 +5,7 @@ import { equal, ok, test, throws } from '@yaks/testing'
 import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
-import { type Ctx, TOOLS } from './tools.ts'
+import { type Ctx, type Listed, TOOLS } from './tools.ts'
 import { digest } from '@yaks/graph/sha256'
 import { validateToolInput } from '@yaks/vocab/tools'
 
@@ -65,7 +65,12 @@ let choices = async (
     ok(/ · (just now|[^·]+ ago|in [^·]+) · /.test(line), message)
     for (let path of paths) ok(line.includes(path), message)
   }
+  return message
 }
+
+let recovery = (message: string, tool: string) =>
+  JSON.parse(message.split('\n').find((line) => line.startsWith(`${tool} `))!
+    .slice(tool.length + 1)) as Record<string, unknown>
 
 let SHARED = { 'copy.json': '{"hero":"Welcome"}', 'seed.json': '[]' }
 let OWN: Record<string, string>[] = [
@@ -115,11 +120,68 @@ test("an app with a live version keeps what live holds in every draft, and each 
       { path: 'a.txt', content: 'a' },
     ]
   ) {
-    await choices(
+    let refusal = await choices(
       () => run('app_files', { app, ...args }),
       ids.map((id, i) => [id, Object.keys(OWN[i])]),
     )
+    if (args.op != 'list') continue
+    ok(!refusal.includes('list takes nothing more'), refusal)
+    let draft = refusal.match(/Pass (draft): '<id>'/)![1]
+    let selected = refusal.match(/^\s*- (\S+) ·/m)![1]
+    let listed = (await run('app_files', { app, ...args, [draft]: selected }))
+      .value!
+    equal(listed.draft, selected)
+    equal(
+      Object.fromEntries(
+        (listed.files as { path: string; sha: string }[]).map((
+          f,
+        ) => [f.path, f.sha]),
+      ),
+      await shas({ ...live, ...SHARED, ...OWN[ids.indexOf(selected)] }),
+    )
   }
+})
+
+test('draft-only apps are listed, and a trashed one names the drafts and how to recover them', async () => {
+  let app = await made('draft-only')
+  let args = { app: `${space.slug}/${app}`, op: 'list' }
+  let ids = (await fanned(app)).value!.drafts as string[]
+  let unknown = await throws(
+    () => run('app_files', { ...args, app: `${space.slug}/unknown` }),
+    /its apps are [^.]*\bdraft-only\b/,
+  ) as Error
+  let listedSpace = unknown.message.match(/app_list\(space: '(.*?)'\)/)![1]
+  let listing = () => run('app_list', { space: listedSpace })
+  let spaces = (out: Awaited<ReturnType<typeof listing>>) =>
+    out.value!.spaces as Listed[]
+  let before = await listing()
+  let listed = spaces(before)[0].apps.find((a) => a.slug == app)!
+  equal(listed.version, 0)
+  equal([...(listed.drafts ?? [])].sort(), [...ids].sort())
+  for (let id of ids) ok(before.text.includes(id), before.text)
+
+  await run('app_delete', args)
+  let refused = await throws(
+    () => run('app_files', args),
+    'is in the trash',
+  ) as Error
+  for (let id of ids) ok(refused.message.includes(id), refused.message)
+  let inTrash = await listing()
+  let after = spaces(inTrash)[0]
+  ok(!after.apps.some((a) => a.slug == app))
+  let kept = after.trash.find((a) => a.slug == app)!
+  equal([...(kept.drafts ?? [])].sort(), [...ids].sort())
+  for (let id of ids) ok(inTrash.text.includes(id), inTrash.text)
+  let restore = recovery(refused.message, 'app_restore')
+  equal(restore.app, kept.eid)
+  let restored = await run('app_restore', restore)
+  ok(restored.text.includes('has no live version'), restored.text)
+  let again = await choices(
+    () => run('app_files', args),
+    ids.map((id, i) => [id, Object.keys(OWN[i])]),
+  )
+  ok(again.includes('has no live version'), again)
+  equal(await held(app, ids[0]), await shas({ ...SHARED, ...OWN[0] }))
 })
 
 // The call cut off where the last entry's bytes go out, so the drafts before
@@ -275,24 +337,69 @@ test('a plain write answers as it did, in the one draft it opened', async () => 
   equal(await open(app), [out.value!.draft])
   ok(out.text.includes(`In draft ${out.value!.draft}`), out.text)
   // A read of a file it lacks names the ones it holds, for the next read.
-  await throws(
+  let absent = await throws(
     () => run('app_files', { app, op: 'read', path: 'index.html' }),
-    'no file index.html; it holds copy.json, seed.json',
+    `no file index.html in draft ${
+      out.value!.draft
+    }; it holds copy.json, seed.json`,
+  ) as Error
+  equal(
+    (await run('app_files', recovery(absent.message, 'app_files'))).value!
+      .draft,
+    out.value!.draft,
   )
   let missing = await throws(
     () => run('app_files', { app, op: 'read', path: 'NOTES.md' }),
     'To create it, call app_files with',
   )
-  let create = JSON.parse((missing as Error).message.match(/\{.*\}/)![0])
+  let create = JSON.parse(
+    (missing as Error).message.match(
+      /To create it, call app_files with (\{.*\})/,
+    )![1],
+  )
   equal([create.app, create.draft, create.op, create.path], [
     app,
     out.value!.draft,
     'write',
     'NOTES.md',
   ])
+  let written = await run('app_files', { ...create, content: 'Notes' })
+  equal(written.value!.draft, out.value!.draft)
   // A refused argument ends with the whole shape its op takes.
   await throws(
     () => run('app_files', { app, content: 'x' }),
     'path is required — write takes path and content',
   )
+})
+
+test('missing reads and patches point to the files in the tree they searched', async () => {
+  let app = await made('missing-files')
+  await run('app_files', { app, files: sent({ 'index.html': '<p>Hi</p>' }) })
+  await run('app_deploy', { app })
+  let written = await run('app_files', { app, path: 'draft.txt', content: 'x' })
+  let draft = String(written.value!.draft)
+  for (
+    let args of [
+      { op: 'read', path: 'missing.html' },
+      { op: 'patch', path: 'missing.html', find: 'x', replace: 'y' },
+    ]
+  ) {
+    for (
+      let [target, tree, paths] of [
+        [draft, `draft ${draft}`, ['draft.txt', 'index.html']],
+        ['new', 'live v1', ['index.html']],
+      ] as const
+    ) {
+      let { message } = await throws(
+        () => run('app_files', { app, draft: target, ...args }),
+        `no file missing.html in ${tree}; it holds ${paths.join(', ')}`,
+      ) as Error
+      let listed = await run('app_files', recovery(message, 'app_files'))
+      equal(
+        (listed.value!.files as { path: string }[]).map((f) => f.path),
+        [...paths],
+      )
+      equal(listed.value!.draft, target == 'new' ? null : target)
+    }
+  }
 })

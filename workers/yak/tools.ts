@@ -377,6 +377,7 @@ import {
   indented,
   KEEP,
   nextVersion,
+  noFile,
   noted,
   own,
   pins,
@@ -405,7 +406,6 @@ import {
   history,
   modifying,
   NEW,
-  noFile,
   releasing,
   replaced,
   replayed,
@@ -572,7 +572,7 @@ let FILE = {
 // What app_files does to a file, in the order an app is built, and what each
 // takes: the op's schema and its refusal both say them from here.
 let TAKES: Record<string, string> = {
-  list: 'nothing more',
+  list: 'an optional draft',
   read: 'path, paths, or neither for every text file',
   write: 'path and content (base64 for bytes), or files: [{path, content}, …]',
   patch: 'path, find and replace, or edits: [{path, find, replace}, …]',
@@ -602,7 +602,7 @@ let FILES_INPUT: Shape = {
         'to use the only open draft. With none open, a read sees the live ' +
         'files and a write opens a draft. Released or discarded ids are ' +
         'closed. Use an open id or write without draft if none are open. ' +
-        'Use new to start from the live files in a separate draft.',
+        'Use new to read or list live files, or to start a separate draft from them on a write.',
     ),
     path: str(
       'path relative to the app root, e.g. index.html. For restore, ' +
@@ -3395,13 +3395,13 @@ export let edits = (args: Record<string, unknown>): Edit[] => {
 export let patching = (
   texts: Record<string, string>,
   list: Edit[],
-  there?: string[],
+  missing = (path: string) => noFile(path, Object.keys(texts)),
 ) => {
   let now = { ...texts }
   let lines = list.map(({ path, find, replace }, i) => {
     let was = now[path]
     let at = list.length > 1 ? `${path} (edits[${i}])` : path
-    if (was == null) throw refuse('missing', noFile(at, there))
+    if (was == null) throw refuse('missing', missing(at))
     now[path] = patched(was, find, replace, at)
     return was.slice(0, was.indexOf(find)).split('\n').length
   })
@@ -3796,6 +3796,7 @@ export type Listed = {
     access: Access
     errors: number
     home: boolean
+    drafts?: string[]
     usage: { requests: number; bytes: number } | null
     // Its share of what the space holds against `standing.limits.bytes` and
     // `.files`: its data and its photos and files (held.ts).
@@ -3815,6 +3816,7 @@ export type Listed = {
     title: string
     days: number
     held: Held
+    drafts?: string[]
   }[]
   members?: Someone[]
   invited?: Someone[]
@@ -4403,6 +4405,21 @@ let OURS: Row[] = [
           async () => drafting(blobs, ctx.dir, app, await mine()),
         )
       let at = (d: Draft, path: string) => `${d.root}/${path}`
+      let selectedDraft = (d: Draft) => d.of?.eid ?? (id == NEW ? id : null)
+      let missing = (d: Draft, path: string) => {
+        let tree = d.of
+          ? `draft ${d.of.eid}`
+          : app.version
+          ? `live v${app.version}`
+          : `unreleased ${app.slug}`
+        let draft = selectedDraft(d)
+        return noFile(
+          path,
+          own(Object.keys(d.files)),
+          tree,
+          { space: space.slug, app: app.slug, ...draft ? { draft } : {} },
+        )
+      }
       if (op == 'discard') {
         // A released draft's preview rows its release left on the branch go
         // with their branch (draft-merge.ts `keptDiscarded`).
@@ -4518,7 +4535,11 @@ let OURS: Row[] = [
               ]
               : [],
             !of
-              ? live
+              ? id == NEW
+                ? live
+                  ? `These are live v${version}.`
+                  : 'Nothing is released yet.'
+                : live
                 ? `These are live v${version}; this conversation has no ` +
                   'draft of the app, and its first write opens one.'
                 : 'Nothing is released yet, and this conversation has no ' +
@@ -4581,18 +4602,20 @@ let OURS: Row[] = [
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
         if (!bytes) {
+          let draft = selectedDraft(d)
           let create = {
             space: space.slug,
             app: app.slug,
-            ...d.of ? { draft: d.of.eid } : {},
+            ...draft ? { draft } : {},
             op: 'write',
             path,
             content: '<file text>',
           }
           throw refuse(
             'missing',
-            `${noFile(path, own(Object.keys(d.files)))}. To create it, call ` +
-              `app_files with ${JSON.stringify(create)}.`,
+            `${missing(d, path)}\nTo create it, call app_files with ${
+              JSON.stringify(create)
+            }.`,
           )
         }
         let { text: said, value, images } = await glance(path, bytes)
@@ -4835,7 +4858,7 @@ let OURS: Row[] = [
           let was = await d.view.read(at(d, p))
           if (was) texts[p] = decoded(was)
         }))
-        let done = patching(texts, list, own(Object.keys(d.files)))
+        let done = patching(texts, list, (path) => missing(d, path))
         let sent = paths.map((path) => ({
           path,
           bytes: new TextEncoder().encode(done.texts[path]),
@@ -6246,11 +6269,13 @@ let OURS: Row[] = [
         args.slug == null ? undefined : fresh(args.slug, 'slug'),
       )
       return {
-        text:
-          `${space.slug}/${app.slug} is back: ${
-            url(space, app, ctx.env)
-          } serves ` +
-          'again and its tools are yours again. Everything it saved is ' +
+        text: `${space.slug}/${app.slug} is back` +
+          (app.version
+            ? `: ${
+              url(space, app, ctx.env)
+            } serves again and its tools are yours again. `
+            : '. It has no live version yet. app_files lists its files and drafts. ') +
+          'Everything it saved is ' +
           'where it was.' + restoredAddress(previous, app.slug) +
           restoredWords(
             app.slug,
@@ -6462,6 +6487,10 @@ let OURS: Row[] = [
             : rate(listing.fee)
           : '',
       ])
+      let draftList = (app: App) => {
+        let ids = listing.drafts.get(app.eid)
+        return ids?.length ? { drafts: ids } : {}
+      }
       // Two readers, two forms (M-37853), and each carries every fact: Claude
       // on the web documents the words as what its model reads, Claude Code
       // hands its model the value in their place, and ChatGPT both (sources
@@ -6498,6 +6527,7 @@ let OURS: Row[] = [
             ]
               .filter(Boolean).join(', '),
             version: app.version ?? 0,
+            ...draftList(app),
             access: mode(app.access),
             errors: broken.get(app.eid) ?? 0,
             // The one the space's bare address opens (T-32947).
@@ -6527,6 +6557,7 @@ let OURS: Row[] = [
           title: a.title,
           days: daysLeft(a.trashed!),
           held: hold.apps.get(a.eid)!,
+          ...draftList(a),
         }))
         spaces.push({
           slug: space.slug,
@@ -6571,6 +6602,7 @@ let OURS: Row[] = [
                 a.access,
                 // Its address serves nothing yet (T-135905).
                 a.version ? '' : 'not deployed: no link to give yet',
+                a.drafts ? `open drafts ${a.drafts.join(', ')}` : '',
                 a.errors
                   ? `${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
                   : '',
@@ -6596,6 +6628,7 @@ let OURS: Row[] = [
                   [
                     `${a.title} (${a.slug})`,
                     'kept until restored or purged',
+                    a.drafts ? `open drafts ${a.drafts.join(', ')}` : '',
                     heldAloud(a.held),
                   ].filter(Boolean).join(', ')
                 ).join('; ')

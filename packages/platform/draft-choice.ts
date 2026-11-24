@@ -2,7 +2,38 @@ import { relative } from '@yaks/ui/relative'
 import { type Clock, system } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 
-type Draft = { eid: string; at: string | null }
+/** An open draft, including a legacy draft still named by the app row. */
+export type AppDraft = {
+  eid: string
+  base: number | null
+  by: string | null
+  via: string | null
+  at: string | null
+  /** When its preview was first requested, and the branch that preview uses. */
+  previewed: string | null
+  branch: number | null
+  legacy?: true
+}
+
+/** Keep a draft named by older app rows until it has a row of its own. */
+export let withLegacy = (
+  app: { draft?: string | null; version: number | null },
+  rows: AppDraft[],
+): AppDraft[] =>
+  app.draft && !rows.some((d) => d.eid == app.draft)
+    ? [...rows, {
+      eid: app.draft,
+      base: app.version,
+      by: null,
+      via: null,
+      at: null,
+      previewed: null,
+      branch: null,
+      legacy: true,
+    }]
+    : rows
+
+type Draft = Pick<AppDraft, 'eid' | 'at'>
 type Write = { path: string; at: string | null }
 
 /** A named draft or the app's only open draft. */
@@ -47,6 +78,19 @@ let closed = (
     : ' The app has no live version yet.')
 
 type App = { slug: string; version: number | null }
+
+/** How to recover an app in the trash that still holds open drafts. */
+export let restoreDrafts = (
+  space: string,
+  app: App & { eid: string },
+  ids: string[],
+) =>
+  `${space}/${app.slug} is in the trash${
+    app.version ? '' : ' and has no live version'
+  }. It still has open drafts ${ids.join(', ')}. ` +
+  'An editor can restore it with this call.\n' +
+  `app_restore ${JSON.stringify({ space, app: app.eid })}`
+
 type History<A> = {
   draftRelease: (app: A, draft: string) => Promise<number | null>
   written: (app: A, draft: string) => Promise<Write[]>
@@ -79,8 +123,9 @@ export let toolDraft =
         `${closed(app.slug, asked, app.version, released)}\n${next}`,
       )
     }
+    let live = app.version ? '' : ' The app has no live version yet.'
     throw new CallError(
       'arguments',
-      `${app.slug} has ${drafts.length} open drafts.\n${next}`,
+      `${app.slug} has ${drafts.length} open drafts.${live}\n${next}`,
     )
   }

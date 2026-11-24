@@ -89,6 +89,27 @@ let KEPT = ['blobs/', BUILT]
 export let own = (paths: string[]) =>
   paths.filter((p) => !KEPT.some((k) => p.startsWith(k)))
 
+/** A missing path, the files in the tree searched, and how to list them. */
+export let noFile = (
+  path: string,
+  there: string[],
+  tree?: string,
+  listing?: { space: string; app: string; draft?: string },
+) => {
+  let missed = `no file ${path}${tree ? ` in ${tree}` : ''}`
+  let names = [...there].sort().slice(0, 40)
+  let more = there.length - names.length
+  let held = names.length
+    ? `; it holds ${names.join(', ')}${more ? ` and ${more} more` : ''}`
+    : '; it holds no files yet'
+  return `${missed}${held}. ` +
+    (listing
+      ? `This call lists the files.\napp_files ${
+        JSON.stringify({ ...listing, op: 'list' })
+      }`
+      : "app_files(op: 'list') lists the files.")
+}
+
 /** The one key space pinned bytes live in: the sha alone, so two apps holding
  * the same file hold one object (D-34942). */
 export let SHA = 'sha/'

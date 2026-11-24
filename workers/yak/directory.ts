@@ -125,6 +125,7 @@ import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { type Id, idOf, unnamed } from '@yaks/platform/listing'
+import { type AppDraft, withLegacy } from '@yaks/platform/draft-choice'
 import { sharing } from './lib/shared.ts'
 import type { BrowserSession } from './browser-sessions.ts'
 
@@ -1882,6 +1883,15 @@ let byApp = <R extends Row, T>(
   return out
 }
 
+let draftRowsByApp = (rows: Row[]) =>
+  byApp(rows, (row) => row.app_draft?.app, appDraftOf)
+
+let openDraftIds = (apps: App[], rows: Map<string, AppDraft[]>) =>
+  new Map(apps.map((app) => [
+    app.eid,
+    withLegacy(app, rows.get(app.eid) ?? []).map((draft) => draft.eid),
+  ]))
+
 /** One file written into an app (written.ts `Written`), as a row reads. */
 export let writtenOf = (r: Row) => ({
   eid: r.entity.eid,
@@ -2385,6 +2395,7 @@ export type Listing = {
   fee?: number
   seats: Seat[]
   apps: App[]
+  drafts: Map<string, string[]>
   bound: Bundle[]
   held: Held[]
   persons: Map<string, Known>
@@ -2432,6 +2443,10 @@ let listed = (rows: ReadRow[], person: string): Listing => {
     ...platform ? { fee: platform.fee?.bps ?? 0 } : {},
     seats,
     apps,
+    drafts: openDraftIds(
+      apps.filter((app) => !app.version),
+      draftRowsByApp(rows),
+    ),
     bound: rows.map(({ policy: _, ...row }) => row as Bundle)
       .filter((row) => {
         let app = (row.binding as { app?: Id } | undefined)?.app
@@ -2451,11 +2466,26 @@ export let listingOf = async (
   let seats = await dir.seats(person)
   let apps = await dir.apps(seats.map((s) => s.space))
   let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space.eid)
-  let [bound, { held, persons }] = await Promise.all([
-    apps.length ? dir.read(line`.binding.app=${apps.map((a) => a.eid)}`) : [],
+  let unreleased = apps.filter((app) => !app.version)
+  let [details, { held, persons }] = await Promise.all([
+    apps.length
+      ? dir.read(chain([
+        line`.binding.app=${apps.map((a) => a.eid)}`,
+        ...unreleased.length
+          ? [line`.app_draft.app=${unreleased.map((a) => a.eid)}`]
+          : [],
+      ], '|'))
+      : [],
     dir.people(owned),
   ])
-  return { seats, apps, bound, held, persons }
+  return {
+    seats,
+    apps,
+    drafts: openDraftIds(unreleased, draftRowsByApp(details as Row[])),
+    bound: details.filter((row) => row.binding),
+    held,
+    persons,
+  }
 }
 
 // Every read carries the directory's revision. The app and the homes it borrows
@@ -3077,6 +3107,7 @@ export let directoryRows = (rows: {
           line`(.space.slug=${META.space}&?fee)`,
           line`(.space&.${sub(mine)}&${sub(SPACE_ABOUT)})`,
           line`(.app.space.${sub(mine)}&${sub(ABOUT)})`,
+          line`(.app_draft.app.app.space.${sub(mine)})`,
           line`(.binding.app.app.space.${sub(mine)})`,
           ...placed(line`.${sub(mine)}`),
         ], '|'),
@@ -3717,11 +3748,11 @@ export let directoryRows = (rows: {
     drafts: async (app: Pick<App, 'eid'>) =>
       (await self.draftsOf([app])).get(app.eid) ?? [],
     draftsOf: async (apps: Pick<App, 'eid'>[]) =>
-      byApp(
+      draftRowsByApp(
         await many(apps, (eids) => line`.app_draft.app=${eids}`),
-        (row) => row.app_draft?.app,
-        appDraftOf,
       ),
+    openDraftsOf: async (apps: App[]) =>
+      openDraftIds(apps, await self.draftsOf(apps)),
     // A released draft's preview rows kept on its branch, by the draft's
     // eid (draft-merge.ts `DraftRows`); none once merged or discarded.
     draftRows: async (app: App, draft: string) => {

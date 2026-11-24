@@ -44,11 +44,14 @@ import {
   addressed,
   type Files,
   KEEP,
+  noFile,
   own,
   same,
   SHA,
 } from '@yaks/platform/versions'
 import { linkFor } from '@yaks/platform/preview'
+import { type AppDraft, withLegacy } from '@yaks/platform/draft-choice'
+export { type AppDraft, withLegacy }
 
 /** One file written into an app (the directory's `written` row): the sha it
  * left at the path, null where it deleted the file, and the sha it replaced,
@@ -79,27 +82,6 @@ export let AGE = 30 * 24 * 60 * 60_000
 // historical rows written before that guarantee.
 let after = (a: Written, b: Written) =>
   (a.at ?? '') != (b.at ?? '') ? (a.at ?? '') > (b.at ?? '') : a.eid > b.eid
-
-/** One open draft of an app, the directory's `app_draft` row: the live
- * version it opened on, the person whose it is and the connector session
- * that opened it. Neither names the draft an app held before drafts were rows
- * (`app.draft`, read as one of these until the store mover writes its row:
- * `legacy`); anyone with a seat may release it. A release or a discard
- * deletes the row. */
-export type AppDraft = {
-  eid: string
-  base: number | null
-  by: string | null
-  via: string | null
-  at: string | null
-  /** When its preview link was first asked for; none where nobody has
-   * previewed it, so a write to it tells no preview's pages. */
-  previewed: string | null
-  /** The branch of the app's store its preview reads and writes on (graph.ts
-   * `#onBranch`), made when it was first previewed; none before. */
-  branch: number | null
-  legacy?: true
-}
 
 /** What a call names to open a draft of its own beside the ones it holds:
  * an agent offering options holds one per option. */
@@ -162,22 +144,6 @@ let openedFor = (app: App, asked: typeof NEW | Opens) =>
  * chooses among them. */
 export let draftsOf = async (dir: Directory, app: App) =>
   withLegacy(app, await dir.drafts(app))
-
-/** An app's `app_draft` rows, with the draft `app.draft` still names where
- * no row stands for it. */
-export let withLegacy = (app: App, rows: AppDraft[]): AppDraft[] =>
-  app.draft && !rows.some((d) => d.eid == app.draft)
-    ? [...rows, {
-      eid: app.draft,
-      base: app.version,
-      by: null,
-      via: null,
-      at: null,
-      previewed: null,
-      branch: null,
-      legacy: true,
-    }]
-    : rows
 
 /** Whether a draft is the caller's own: one its connector session opened,
  * or, for a person at their own browser, the one their hands share. */
@@ -856,21 +822,6 @@ export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) =>
       }]
       : [{ entity: { eid: d.eid }, $delete: true }],
   }, vouched(who))
-
-/** The refusal for a path an app keeps no file at, naming the paths it does
- * keep (`there`) where the caller has them, so the next call reads one of
- * those rather than guessing another name. */
-export let noFile = (path: string, there?: string[], app?: string) => {
-  let missed = `no file ${path}${app ? ` in ${app}` : ''}`
-  if (!there) return `${missed} — app_files(op: 'list') says what is there`
-  if (!there.length) return `${missed}: the app holds no files yet`
-  let some = [...there].sort().slice(0, SHOWN_PATHS)
-  let more = there.length - some.length
-  return `${missed}; it holds ${some.join(', ')}` +
-    (more ? `, and ${more} more that app_files(op: 'list') names` : '')
-}
-// How many of an app's paths a refusal names before it points at the list.
-let SHOWN_PATHS = 40
 
 /** A delete sent again is already done if this draft records its deletion,
  * or if a competing writer deleted it while the caller retried. */
