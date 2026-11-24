@@ -20,7 +20,9 @@ let no = (): never => {
   throw new Error('no vault is set up here')
 }
 
-let shut: Vault = {
+type HostedVault = Vault & Pick<D1Vault, 'erase'>
+
+let shut: HostedVault = {
   salt: no,
   read: no,
   seal: no,
@@ -30,6 +32,7 @@ let shut: Vault = {
   past: () => undefined,
   restore: () => false,
   purge: () => {},
+  erase: async () => {},
   lock: (_, fn) => fn(),
 }
 
@@ -64,22 +67,23 @@ let timed = (vault: D1Vault): D1Vault => {
     past: waiting(vault.past),
     restore: waiting(vault.restore),
     purge: waiting(vault.purge),
+    erase: waiting(vault.erase),
   }
 }
 
 // Per binding, then per key: the workerd probes share one database between
 // kernels that may each be handed a key.
-let vaults = new WeakMap<object, Map<string, Vault>>()
+let vaults = new WeakMap<object, Map<string, HostedVault>>()
 
 /** Whether this deploy can keep a key. */
 export let vaulted = (env: Partial<Env>): boolean =>
   !!env.VAULT && !!env.VAULT_KEY
 
 /** The vault over this env's bindings, or the shut one. */
-export let vaultOf = (env: Partial<Env>): Vault => {
+export let vaultOf = (env: Partial<Env>): HostedVault => {
   let { VAULT: db, VAULT_KEY: key } = env
   if (!db || !key) return shut
-  let keyed = vaults.get(db) ?? new Map<string, Vault>()
+  let keyed = vaults.get(db) ?? new Map<string, HostedVault>()
   vaults.set(db, keyed)
   let held = keyed.get(key) ?? timed(d1Vault(db, keyOf(key)))
   keyed.set(key, held)

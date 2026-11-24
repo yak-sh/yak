@@ -5,6 +5,9 @@ import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { mint } from '@yaks/graph'
+import { sealed } from '@yaks/secrets'
+import { integrationEid } from '@yaks/connections/identity'
+import { link } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 import { fixture } from '../../packages/mcp-client/testing.ts'
@@ -29,6 +32,11 @@ import { handleChannels, receive } from './operator-channels.ts'
 import type { Request as ModelRequest } from '@yaks/model'
 import { drain } from './operator-store.ts'
 import { compiler, platform as runtime } from './testing.ts'
+import { d1 } from '../../packages/d1/testing.ts'
+import type { D1Like } from '@yaks/d1'
+import { vaultOf } from './vault.ts'
+import { PLATFORM_OBJECT } from './door.ts'
+import { KERNEL, meta } from './meta.ts'
 
 // The machine, and the gateway in the apps' namespace that reaches it while
 // it is `up`.
@@ -519,7 +527,27 @@ for (
   }
 }
 
-let notices = runtime('mcp-notices')
+let vaultBindings = () => ({
+  VAULT: d1() as unknown as D1Like,
+  VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(42))),
+})
+let notices = runtime('mcp-notices', vaultBindings())
+let savedFor = (server: string, owner: string, value = 'fixture key') => {
+  let name = `mcp:${server}`
+  let key = sealed(`connection:${server}`, value)
+  let integration = { entity: { eid: integrationEid(name) } }
+  return {
+    ids: [integration.entity.eid, key.entity.eid],
+    key: key.entity.eid,
+    rows: [{
+      ...integration,
+      integration: { name, owner },
+    }, {
+      ...key,
+      connection: { owner, integration: name, status: 'connected' },
+    }],
+  }
+}
 let roster = directoryOf(notices.env.STORE)
 let sharingIn = async (name: string) => {
   let person = mint(), seat = mint(), at = mint(), away = mint()
@@ -606,13 +634,164 @@ test('deleting a seat tells the connector and keeps their servers', async () => 
   assertEquals(await servers(), kept)
 })
 
-test('deleting the space tells the connector even when the seat and servers are removed in the cascade', async () => {
-  let { at, person, apply, servers, body } = erased
+test('space trash restores MCP credentials and permanent erasure only removes credentials exclusive to it', async () => {
+  let { at, person, apply, servers, body, letters } = erased
+  let connected = Object.fromEntries(
+    (await servers()).map((r) => [
+      (r.mcp_server as { name: string }).name,
+      r.entity.eid,
+    ]),
+  )
+  let books = savedFor(connected.Books!, person)
+  let art = savedFor(connected.Art!, person)
+  let mine = savedFor(connected.Mine!, person)
+  let away = savedFor(connected.Away!, person)
+  let app = mint()
+  let use = link(app, 'uses', art.key)
+  await apply([
+    ...books.rows,
+    ...art.rows,
+    ...mine.rows,
+    ...away.rows,
+    { entity: { eid: app }, app: { slug: 'reader' } },
+    { ...use, uses: { each: true } },
+  ])
+  let vault = vaultOf(notices.env)
+  let reads = () =>
+    Promise.all([books, art, mine, away].map((g) => vault.read(g.key)))
+  let before = await reads()
+  assertEquals(before.map((r) => r?.value), Array(4).fill('fixture key'))
+  await apply([{
+    ...sealed(`connection:${connected.Books}`, 'rotated fixture key'),
+  }])
+  let latest = await reads()
+  assertEquals(
+    (await vault.trash()).filter((r) => r.eid == books.key).length,
+    1,
+  )
+  let space = { entity: { eid: at } }
+  await apply([{ ...space, trashed: {} }])
+  assertEquals(await reads(), latest)
+  assertEquals(await letters(), [])
+  await apply([{ ...space, trashed: null }])
+  assertEquals(await reads(), latest)
+  await apply([{ ...space, trashed: {} }])
   await apply([{ entity: { eid: at }, tombstone: {} }])
   assertEquals(await roster.role({ eid: at }, person), null)
-  assertStringIncludes(await body(), 'was deleted')
   assertEquals(
     (await servers()).map((row) => (row.mcp_server as { name: string }).name),
     ['Away'],
   )
+  let { read } = ctxOf(notices.env).graph
+  await notices.settled()
+  assertEquals(await read(line`.entity.eid=${[...books.ids, ...mine.ids]}`), [])
+  assertEquals(
+    (await read(line`.entity.eid=${[...art.ids, ...away.ids, use.entity.eid]}`))
+      .length,
+    5,
+  )
+  assertEquals(await reads(), [undefined, latest[1], undefined, latest[3]])
+  assertEquals(
+    (await vault.trash()).filter((r) => r.eid == books.key).length,
+    0,
+  )
+  await vault.seal(books.key, latest[0]!)
+  assertEquals(await vault.read(books.key), undefined)
+  let letter = await body()
+  assertStringIncludes(letter, 'was deleted')
+  assertStringIncludes(
+    letter,
+    'We removed the saved sign-in or key for:\n  - Books',
+  )
+  assertStringIncludes(
+    letter,
+    'We kept the sign-in or key still used elsewhere for:\n  - Art',
+  )
+})
+
+test('the startup cleanup on a copy of the old directory is selective and idempotent', async () => {
+  let vault = vaultBindings()
+  let source = runtime('mcp-backfill', {
+    ...vault,
+    CF_VERSION_METADATA: { id: mint() },
+  })
+  let old = meta(source.env)
+  let owner = mint(), erased = mint(), trashed = mint()
+  let server = (space: string) => ({
+    entity: { eid: mint() },
+    mcp_server: {
+      owner,
+      space,
+      name: 'Fixture',
+      url: 'https://fixture.test/mcp',
+    },
+  })
+  let gone = server(erased),
+    recoverable = server(trashed),
+    live = server(trashed)
+  let orphan = savedFor(gone.entity.eid, owner)
+  let saved = savedFor(recoverable.entity.eid, owner)
+  let standing = savedFor(live.entity.eid, owner)
+  await old.apply([
+    { entity: { eid: owner }, person: {} },
+    { entity: { eid: erased }, space: { slug: 'past-space' } },
+    { entity: { eid: trashed }, space: { slug: 'kept-space' }, trashed: {} },
+    gone,
+    recoverable,
+    live,
+    ...orphan.rows,
+    ...saved.rows,
+    ...standing.rows,
+  ], KERNEL)
+  await source.settled()
+  // The old release erased the space and server history only. Keep a second
+  // server's archive as a control for a deletion that can still be restored.
+  await old.apply(
+    [gone, recoverable].map(({ entity }) => ({
+      entity,
+      tombstone: {},
+    })),
+    KERNEL,
+  )
+  await old.apply([{ entity: { eid: erased }, tombstone: {} }], KERNEL)
+  await old.purgeTrashEntities!([erased, gone.entity.eid])
+  await source.settled()
+  let stored = vaultOf(source.env)
+  let read = (at: typeof old, ids: string[]) =>
+    at.query(line`.entity.eid=${ids}`)
+  assertEquals((await read(old, orphan.ids)).length, 2)
+  assertEquals(!!await stored.read(orphan.key), true)
+  let controls = [...saved.ids, ...standing.ids]
+  let copiedVault = vaultBindings()
+  let copied = vaultOf(copiedVault)
+  for (let [eid, secret] of await stored.all()) {
+    await copied.seal(eid, secret)
+  }
+  let open = async (from: typeof source) => {
+    let next = runtime('mcp-backfill', {
+      ...copiedVault,
+      CF_VERSION_METADATA: { id: mint() },
+    })
+    next.object(
+      PLATFORM_OBJECT,
+      from.states.get(PLATFORM_OBJECT)!.storage.checkpoint(),
+    )
+    let at = meta(next.env)
+    await read(at, controls)
+    await next.settled()
+    return { next, at }
+  }
+  let first = await open(source)
+  assertEquals(await read(first.at, orphan.ids), [])
+  assertEquals(await copied.read(orphan.key), undefined)
+  assertEquals((await read(first.at, controls)).length, 4)
+  assertEquals(
+    (await copied.all()).map(([eid]) => eid).sort(),
+    [saved.key, standing.key].sort(),
+  )
+  assertEquals((await read(old, orphan.ids)).length, 2)
+  assertEquals(!!await stored.read(orphan.key), true)
+  let second = await open(first.next)
+  assertEquals(await read(second.at, orphan.ids), [])
+  assertEquals(await read(second.at, controls), await read(first.at, controls))
 })

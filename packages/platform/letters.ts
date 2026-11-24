@@ -187,7 +187,7 @@ export let mcpUnshared = (
   space: { title: string; host: string },
   names: string[],
   seat: 'editor' | 'viewer' | null,
-  deleted: boolean,
+  deleted: false | { removed: string[]; retained: string[] },
 ) => ({
   subject: `Your MCP servers are no longer shared in ${space.title}`,
   body: [
@@ -196,11 +196,30 @@ export let mcpUnshared = (
       : `You no longer own ${space.title} (${space.host}).`,
     'People in that space can no longer use the MCP servers you shared ' +
     `with everyone there.\n\n${bullets(names)}`,
-    ...deleted ? [] : [
-      'Your sign-in or key was kept.' +
-      (seat ? ' You can still use your servers there yourself.' : ''),
-      `If you own ${space.title} again, your servers are shared there again.`,
-    ],
+    ...deleted
+      ? [
+        ...deleted.removed.length
+          ? [
+            `We removed the saved sign-in or key for:\n${
+              bullets(deleted.removed)
+            }`,
+          ]
+          : [],
+        ...deleted.retained.length
+          ? [
+            'We kept the sign-in or key still used elsewhere for:\n' +
+            bullets(deleted.retained),
+          ]
+          : [],
+        ...!deleted.removed.length && !deleted.retained.length
+          ? ['There was no saved sign-in or key for the servers listed above.']
+          : [],
+      ]
+      : [
+        'Your sign-in or key was kept.' +
+        (seat ? ' You can still use your servers there yourself.' : ''),
+        `If you own ${space.title} again, your servers are shared there again.`,
+      ],
   ].join('\n\n'),
 })
 

@@ -1,6 +1,6 @@
 // The directory's store words, beside platformDoc's.
 import { CORE_URI, type PropSchema, type VocabDoc } from '@yaks/vocab'
-import { sweepDoc } from './sweep-vocab.ts'
+import { mcpRetirementDoc, sweepDoc } from './sweep-vocab.ts'
 import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 import { NAME_SOURCES } from './named.ts'
@@ -1157,6 +1157,7 @@ export let docs: VocabDoc[] = [
   previewDoc,
   referralDoc,
   sweepDoc,
+  mcpRetirementDoc,
   useDoc,
   servingDoc,
   // The release's start-up work that seeds the schedules (directory-effects.ts).

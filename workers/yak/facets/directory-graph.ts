@@ -18,6 +18,7 @@
 import {
   about,
   type Bundle,
+  doomed,
   type Graph,
   type Plugin,
   type Tx,
@@ -28,6 +29,7 @@ import { dead, TOMBSTONE } from '@yaks/graph/bundle'
 import { after, each, together } from '@yaks/fp'
 import { line } from '@yaks/query'
 import { sharing } from '@yaks/connections/mcp'
+import { orphans, retirement, retiring } from '@yaks/connections/mcp-retirement'
 import { spaceHost } from '@yaks/platform/host'
 import { mcpUnshared } from '@yaks/platform/letters'
 import {
@@ -149,14 +151,14 @@ let unshared = (tx: Tx, env: Env, before: Connector[], killed: Set<string>) =>
     before,
     [] as Letter[],
     (letters, { space, person, names, title, slug, email }) =>
-      after(
+      killed.has(space) ? letters : after(
         tx.read(line`.member.space=${space}&.member.person=${person}`),
         ([held]: Row[]) => {
           let seat = held?.member?.role ?? null
           if (seat == 'owner') return letters
           let host = spaceHost(env, slug)
           letters.push({
-            ...mcpUnshared({ title, host }, names, seat, killed.has(space)),
+            ...mcpUnshared({ title, host }, names, seat, false),
             to: email,
             about: space,
           })
@@ -164,6 +166,57 @@ let unshared = (tx: Tx, env: Env, before: Connector[], killed: Set<string>) =>
         },
       ),
   )
+
+let erasedMcp = (
+  tx: Tx,
+  graph: Graph,
+  env: Env,
+  killed: string[],
+  connectors: Connector[],
+  bundles: Bundle[],
+) =>
+  after(killed.length ? tx.get(killed, ['space']) : [], (rows) => {
+    let spaces = rows.filter((b) => !!b.space).map((b) => b.entity.eid)
+    if (!spaces.length) return []
+    return after(tx.read(line`.mcp_server.space=${spaces}`), (rows) => {
+      let servers = rows.map((b) => ({
+        id: b.entity.eid,
+        ...b.mcp_server as { owner: string; name: string; space: string },
+      }))
+      if (!servers.length) return []
+      return after(doomed(tx, graph.vocab, killed), (gone) =>
+        after(retirement(tx, servers, new Set(gone), bundles), (plans) => {
+          let notices = connectors.filter((c) =>
+            spaces.includes(c.space)
+          ).map(
+            ({ space, person, names, title, slug, email }) => {
+              let selected = servers.filter((s) =>
+                s.space == space && s.owner == person && names.includes(s.name)
+              )
+              let named = (kind: 'removed' | 'retained') =>
+                selected.filter((s) =>
+                  plans.some((p) => p.id == s.id && p[kind])
+                )
+                  .map((s) => s.name).sort()
+              return {
+                ...mcpUnshared(
+                  { title, host: spaceHost(env, slug) },
+                  names,
+                  null,
+                  {
+                    removed: named('removed'),
+                    retained: named('retained'),
+                  },
+                ),
+                to: email,
+                about: space,
+              }
+            },
+          )
+          return retiring(plans, notices)
+        }))
+    })
+  })
 
 /** Each space whose seats a commit wrote or took away, told to its Operator
  * (build-door.ts `heard`). An owner who shared MCP servers is told what
@@ -175,7 +228,7 @@ export let seatsHeard = (
     await (await heard(env, space)).body?.cancel()
   },
 ): Plugin => {
-  let keys = ['member', '$delete', TOMBSTONE]
+  let keys = ['member', '$delete', TOMBSTONE, '$retireMcp']
   let before = new WeakMap<
     object,
     {
@@ -188,12 +241,19 @@ export let seatsHeard = (
   let leaving = hook(keys, (bundles, tx, _err, context) => {
     if (!context?.transaction || !store.meta) return bundles
     let at = context.transaction
+    let graph = context.graph as Graph
+    let candidates = bundles.filter((b) => b.$retireMcp).map((b) =>
+      b.entity.eid
+    )
+    if (candidates.length && !context.trusted) {
+      throw new Refused('only the platform collects orphaned MCP credentials')
+    }
     let killed = killing(bundles)
     let touched = bundles.filter((b) => 'member' in b || dead(b))
       .map((b) => b.entity.eid)
     let direct = tx.get(touched, ['member'])
     let cascade = killed.length
-      ? about(tx, (context.graph as Graph).vocab, killed, ['member'])
+      ? about(tx, graph.vocab, killed, ['member'])
       : []
     return after(together([direct, cascade]), ([direct, cascade]) => {
       let seats = [
@@ -207,10 +267,29 @@ export let seatsHeard = (
           after(sharingSeats(tx, seats), (servers) => addressing(tx, servers)),
           boundLines(tx, owners),
         ]),
-        ([connectors, lines]) => {
-          before.set(at, { spaces, connectors, owners })
-          return [...bundles, ...lines]
-        },
+        ([connectors, lines]) =>
+          after(
+            together([
+              erasedMcp(
+                tx,
+                graph,
+                store.env as Env,
+                killed,
+                connectors,
+                bundles,
+              ),
+              candidates.length ? orphans(graph, tx, candidates) : [],
+            ]),
+            ([erased, abandoned]) => {
+              before.set(at, { spaces, connectors, owners })
+              return [
+                ...bundles.filter((b) => !b.$retireMcp),
+                ...lines,
+                ...erased,
+                ...retiring(abandoned),
+              ]
+            },
+          ),
       )
     })
   })
@@ -286,6 +365,7 @@ export let seatsHeard = (
   })
   return {
     name: 'yak/seats',
+    requests: ['$retireMcp'],
     admission: () => true,
     wants: (bundles) => {
       let killed = killing(bundles)

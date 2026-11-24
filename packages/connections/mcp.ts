@@ -16,6 +16,7 @@
 // space is, and to anyone else it is not connected.
 import { line } from '@yaks/query'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import type { Step } from '@yaks/tools/title'
@@ -40,6 +41,7 @@ import { connect, credential, type Ctx, need, pick } from './connections.ts'
 import { integrationEid } from './identity.ts'
 import { registration } from './clients.ts'
 import { keyed, known } from './integrations.ts'
+import { mcpIntegration as integration } from './mcp-retirement.ts'
 
 let refuse = (code: string, text: string) => new CallError(code, text)
 
@@ -222,7 +224,6 @@ let https = (said: string) => {
 }
 let comp = (row: Bundle | undefined, name: string) =>
   (row?.[name] ?? {}) as Comp
-let integration = (id: string) => `mcp:${id}`
 let input = { type: 'object', properties: {} }
 // How a call to a server's sign-in or status reads to the person.
 let checking = (label: string): Step => ({
@@ -433,11 +434,21 @@ export let remoteCommands = (
     }
     return found
   }
+  let afterServer = (id: string, owner: string, rows: Bundle[]) =>
+    host.graph.apply([{
+      entity: { eid: id },
+      $was: {
+        mcp_server: { owner: token(owner) },
+        tombstone: { '': null },
+      },
+    }, ...rows])
+  let writingFor = (s: GraphServer, rows: Bundle[]) =>
+    afterServer(s.id, whose(s), rows)
   // The server's integration as one a person gives a key to: no sign-in, and
   // the key sent to the server's host alone. One it signed in through before
   // becomes this, and its connection asks for a key.
   let keying = (s: GraphServer) =>
-    host.graph.apply([{
+    writingFor(s, [{
       entity: { eid: integrationEid(integration(s.id)) },
       integration: {
         name: integration(s.id),
@@ -461,7 +472,8 @@ export let remoteCommands = (
     let name = integration(s.id)
     let b = await pick(host.graph.read, whose(s), name)
     if (b) return b
-    await host.graph.apply(
+    await writingFor(
+      s,
       await need(host.graph.read, { owner: whose(s), integration: name }),
     )
     return await pick(host.graph.read, whose(s), name)
@@ -492,7 +504,7 @@ export let remoteCommands = (
     if (found) {
       let client = s.server.oauth?.clientId ??
         await found.register(host.redirect!)
-      await host.graph.apply([{
+      await writingFor(s, [{
         entity: { eid: integrationEid(name) },
         integration: {
           ...found.integration,
@@ -507,7 +519,7 @@ export let remoteCommands = (
       i && !keyed(i) && !i.client && s.server.oauth?.clientId &&
       i.client_id != s.server.oauth.clientId
     ) {
-      await host.graph.apply([{
+      await writingFor(s, [{
         entity: { eid: integrationEid(name) },
         integration: { client_id: s.server.oauth.clientId },
       }])
@@ -518,7 +530,7 @@ export let remoteCommands = (
       (comp(held, 'connection').status == 'connected' || challenge.scope)
     ) {
       let scopes = comp(held, 'connection').scopes as string[] ?? []
-      await host.graph.apply([{
+      await writingFor(s, [{
         entity: held.entity,
         connection: {
           ...comp(held, 'connection').status == 'connected'
@@ -861,7 +873,7 @@ export let remoteCommands = (
       : []
     let needs = next && !machine ? await waiting(next) : undefined
     if (decided === undefined && host.space && !machine) {
-      await host.graph.apply([{
+      await afterServer(row.entity.eid, person, [{
         entity: row.entity,
         mcp_server: { everyone: needs != 'sign-in' },
       }])
@@ -960,7 +972,7 @@ export let remoteCommands = (
         `${s.label} names no sign-in, so it takes no OAuth client.`,
       )
     }
-    await host.graph.apply([
+    await writingFor(s, [
       registration(name, given),
       {
         entity: { eid: integrationEid(name) },

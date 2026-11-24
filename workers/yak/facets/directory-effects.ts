@@ -7,6 +7,7 @@
 // first app (reward.ts).
 import { derivedEid } from '@yaks/graph/identity'
 import type { Taken } from '@yaks/graph'
+import { purgeEntities } from '@yaks/graph/trash'
 import { line } from '@yaks/query'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
@@ -23,6 +24,12 @@ import type { Env } from '../env.ts'
 import { retired } from '../file-retirement.ts'
 import { r2RawObjects } from '../lib/objects.ts'
 import { drawingIcons } from './app-icons.ts'
+import {
+  type Retirement,
+  retireOrphans,
+} from '@yaks/connections/mcp-retirement'
+import { letterRows } from '../mail.ts'
+import { vaultOf } from '../vault.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
@@ -92,6 +99,18 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       await seeded(at.graph, schedules, now)
       let [wrap] = await at.graph.read(line`.entity.eid=${ROW} ?wake`)
       await at.graph.apply(forward(wrap, now))
+    },
+    collect_mcp_orphans: () => retireOrphans(at.graph),
+    erase_mcp_credentials: async ({ entity }, tx, write) => {
+      let [row] = await tx.get([entity.eid], ['mcp_retirement'])
+      let on = row?.mcp_retirement as Retirement | undefined
+      if (!on) return
+      await vaultOf(at.env).erase(on.secrets)
+      await purgeEntities(at.graph, on.rows)
+      await write([
+        ...on.notices.flatMap((letter) => letterRows(letter, at.env)),
+        { entity, tombstone: {} },
+      ])
     },
     // Carried until every place it goes took it, as trash is (trash-effects.ts):
     // a reply nobody hears is the one thing a support thread is for.

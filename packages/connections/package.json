@@ -14,7 +14,8 @@
     "./authorize-cli": "./authorize_cli.ts",
     "./views": "./views.ts",
     "./yaks-app": "./yaks-app.ts",
-    "./mcp": "./mcp.ts"
+    "./mcp": "./mcp.ts",
+    "./mcp-retirement": "./mcp-retirement.ts"
   },
   "license": "Apache-2.0",
   "description": "Integrations and connections: the outside services a space can reach, the link between a space or a person and one, and the credential behind it, kept as a secret.",

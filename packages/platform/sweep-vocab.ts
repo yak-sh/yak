@@ -1,5 +1,42 @@
 // The directory's calendar job tag, shared by its store words.
 import type { VocabDoc } from '@yaks/vocab'
+import { owned, text } from './schema.ts'
+
+let ids = owned({ type: 'array', items: text })
+export let mcpRetirementDoc: VocabDoc = {
+  reserved: false,
+  $defs: {
+    mcp_retirement: {
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      description: 'MCP credential erasure and the notices it owes.',
+      properties: {
+        rows: ids,
+        secrets: ids,
+        notices: owned({
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { to: text, about: text, subject: text, body: text },
+          },
+        }),
+      },
+    },
+    erase_mcp_credentials: {
+      effect: true,
+      created: ['mcp_retirement'],
+      description: 'Erase retired MCP secrets and send the notices they owe.',
+    },
+    collect_mcp_orphans: {
+      effect: true,
+      start: true,
+      description: 'Collect orphaned MCP credentials from earlier erasures.',
+    },
+  },
+}
+
 export let sweepDoc: VocabDoc = {
   $defs: {
     file_retirement: {

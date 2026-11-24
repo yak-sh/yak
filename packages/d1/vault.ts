@@ -21,13 +21,16 @@
 // Every statement here is safe to run twice: an upsert, a delete, a read.
 
 import {
+  among,
   and,
   col,
   type CreateTable,
   desc,
   eq,
+  exists,
   lt,
   ne,
+  not,
   select,
   type Stmt,
   table,
@@ -62,6 +65,8 @@ export type D1Vault = {
   past: (id: string) => Promise<Sealed | undefined>
   restore: (id: string) => Promise<boolean>
   purge: (id: string) => Promise<void>
+  /** Permanently erase the active secrets and all saved versions of these eids. */
+  erase: (eids: string[]) => Promise<void>
   all: () => Promise<[string, Sealed][]>
   lock: <T>(eid: string, fn: () => Promise<T>) => Promise<T>
 }
@@ -75,6 +80,9 @@ let LEASE = 30_000
 let VAULT = 'yak_vault'
 let LOCK = 'yak_vault_lock'
 let TRASH = 'yak_vault_trash'
+// Erasure keeps only the identity so a seal already on its way cannot
+// recreate the deleted value.
+let ERASED = 'yak_vault_erased'
 
 let key = { name: 'k', type: 'text', pk: true }
 let SCHEMA: CreateTable[] = [
@@ -104,6 +112,7 @@ let SCHEMA: CreateTable[] = [
       { name: 'expires', type: 'integer', notNull: true },
     ],
   },
+  { t: 'create table', name: ERASED, ifNot: true, cols: [key] },
 ]
 
 // The lease on `k` for `holder` until `expires`, taken only over one that ran
@@ -129,7 +138,14 @@ let put = (k: string, v: string, replace: boolean): Stmt => ({
   t: 'insert',
   into: VAULT,
   cols: ['k', 'v'],
-  rows: [[val(k), val(v)]],
+  q: select({
+    cols: [val(k), val(v)],
+    where: not(exists(select({
+      cols: [val(k)],
+      from: table(ERASED),
+      where: eq(col('k'), val(k)),
+    }))),
+  }),
   upsert: [replace ? { on: [col('k')], set: { v: col('v', 'excluded') } } : {}],
 })
 
@@ -347,6 +363,22 @@ export let d1Vault = <S extends Prepared<S>>(
     },
     purge: async (id) => {
       await run(removed(TRASH, id))
+    },
+    erase: async (eids) => {
+      for (let at = 0; at < eids.length; at += 50) {
+        let ids = eids.slice(at, at + 50).map(val)
+        await run([
+          {
+            t: 'insert',
+            into: ERASED,
+            cols: ['k'],
+            rows: ids.map((id) => [id]),
+            upsert: [{}],
+          },
+          { t: 'delete', from: VAULT, where: among(col('k'), ids) },
+          { t: 'delete', from: TRASH, where: among(col('eid'), ids) },
+        ])
+      }
     },
     all: async () => {
       let rows = await run(select({

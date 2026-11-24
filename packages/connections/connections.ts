@@ -221,6 +221,24 @@ let held = async (read: Read, eid: Eid): Promise<Bundle> => {
   return b
 }
 
+// An exchange may outlast the connection it started on.
+let stillHeld = (row: Bundle): Bundle => ({
+  entity: row.entity,
+  $was: {
+    entity: { eid: token(row.entity.eid) },
+    tombstone: { '': null },
+  },
+})
+
+let keeping = (c: Ctx, b: Bundle) =>
+  records<Tokens & Kept>(
+    {
+      apply: (rows) => c.graph.apply([stillHeld(b), ...rows]),
+    },
+    c.vault,
+    '',
+  )
+
 // The `uses` links at one end, and the far end of one.
 let links = (read: Read, at: 'from' | 'to', eid: Eid | Eid[]) =>
   read(line`.${EDGE}.${at}=${eid}&.${USES}${sub(ALL)}`)
@@ -1106,7 +1124,7 @@ let signIn = async (
         read: () => Promise.resolve(staged),
         update: (_, fn) => fn(staged),
       }
-      : records(c.graph, c.vault, ''),
+      : keeping(c, b),
     key: nameOf(b),
     redirect: c.redirect ?? '',
     fetch: c.fetch,
@@ -1273,7 +1291,7 @@ export let connect = async (
       throw new Error(`${name} is connected by signing in, not with a key`)
     }
     return c.graph.apply([{
-      entity: { eid: connection },
+      ...stillHeld(b),
       [SECRET]: { name: nameOf(b), value: keptOf(name, fieldsOf(i), given) },
       [CONNECTION]: now,
     }, ...await answered(c.graph.read, b, connection)])
@@ -1333,6 +1351,8 @@ export let connect = async (
   let transient = existing && grant.status != 'connected'
   let out = transient ? await links(c.graph.read, 'to', connection) : []
   return c.graph.apply([
+    stillHeld(b),
+    ...existing ? [stillHeld(existing)] : [],
     {
       entity: { eid: target.entity.eid },
       ...target.$was ? { $was: target.$was } : {},
@@ -1458,7 +1478,7 @@ export let disconnect = async (
 // marks the connection broken; a failure on the wire leaves it be.
 let marking = async (
   c: Ctx,
-  connection: Eid,
+  connection: Bundle,
   step: () => Promise<string | undefined>,
 ): Promise<string | undefined> => {
   try {
@@ -1469,7 +1489,7 @@ let marking = async (
       e instanceof BrokerError && e.refused
     ) {
       await c.graph.apply([{
-        entity: { eid: connection },
+        ...stillHeld(connection),
         [CONNECTION]: { status: 'broken' satisfies Status },
       }])
     }
@@ -1584,11 +1604,11 @@ export let credential = async (
   let raw = await reveal(c.vault, nameOf(b), { env: () => undefined })
   if (field != null && field != fieldsOf()[0].name) return undefined
   if (comp(b, CONNECTION).broker) {
-    return marking(c, connection, () => brokered(c, b))
+    return marking(c, b, () => brokered(c, b))
   }
   if (raw && !raw.trimStart().startsWith('{')) return raw
   let oauth = await signIn(c, b)
-  return marking(c, connection, oauth.token)
+  return marking(c, b, oauth.token)
 }
 
 /** What the vault keeps for a brokered connection, beside its access token:
@@ -1616,7 +1636,7 @@ let keptGrant = (
 // called its integration then, whatever its integration names now.
 let brokered = (c: Ctx, b: Bundle, stale?: string) => {
   let now = (c.now ?? Date.now)()
-  return records<Tokens & Kept>(c.graph, c.vault, '').update(
+  return keeping(c, b).update(
     nameOf(b),
     async (r) => {
       let good = r.access_token &&
@@ -1650,10 +1670,10 @@ export let refresh = async (
 ): Promise<string | undefined> => {
   let b = await held(c.graph.read, connection)
   if (comp(b, CONNECTION).broker) {
-    return marking(c, connection, () => brokered(c, b, stale))
+    return marking(c, b, () => brokered(c, b, stale))
   }
   let oauth = await signIn(c, b)
-  return marking(c, connection, () => oauth.refresh(stale))
+  return marking(c, b, () => oauth.refresh(stale))
 }
 
 /** Send a request through a connection for the one who holds it, its
