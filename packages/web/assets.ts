@@ -28,6 +28,8 @@ import { dirname, join } from 'node:path'
 export type Asset = {
   name: string
   bundle?: URL | Written
+  /** the bare specifiers a bundle leaves to its page's import map */
+  external?: string[]
   body?: (signal?: AbortSignal) => Body | Promise<Body>
   file?: URL
   named?: boolean
@@ -45,7 +47,9 @@ export let make = async (
   asset: Asset,
   signal?: AbortSignal,
 ): Promise<Body> => {
-  if (asset.bundle) return await bundle(asset.bundle, signal)
+  if (asset.bundle) {
+    return await bundle(asset.bundle, signal, { external: asset.external })
+  }
   if (asset.body) return await asset.body(signal)
   if (asset.file) return await bytes(asset.file)
   throw new Error(`${asset.name} is a source, not made`)

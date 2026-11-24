@@ -112,6 +112,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { kinds } from '@yaks/data-editor'
 
 import type { Domain, DomainPage } from '@yaks/platform/domain-pages'
+import { importMap } from './page-imports.ts'
 
 export type Kids = ComponentChildren
 
@@ -206,7 +207,8 @@ let documented = (
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<meta name="color-scheme" content="light dark">${
+<meta name="color-scheme" content="light dark">
+${importMap(file)}${
     framed
       ? `
 <meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">

@@ -7,11 +7,12 @@ import { context, type Plugin, type PluginBuild } from 'esbuild'
 import { denoPlugins, urlToEsbuildResolution } from '@luca/esbuild-deno-loader'
 import * as disk from '@yaks/file/io'
 import { released } from './release.ts'
-import { compiled, type Written } from './page.ts'
+import { type Bundling, compiled, type Written } from './page.ts'
 
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
+  opts: Bundling = {},
 ): Promise<string> => {
   let at = entry instanceof URL ? entry : entry.at
   let dir = await disk.makeTempDir({ prefix: 'yaks-page-' })
@@ -25,6 +26,7 @@ export let bundle = async (
       absWorkingDir: dir,
       entryPoints: [from.href],
       bundle: true,
+      external: opts.external,
       format: 'esm',
       platform: 'browser',
       target: 'esnext',

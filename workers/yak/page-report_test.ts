@@ -32,7 +32,11 @@ let loaded = (
   headers: Record<string, string> = {},
 ) => {
   let { document, window } = parseHTML(html)
-  let [first, ...rest] = [...document.querySelectorAll('script')]
+  let [first, ...rest] = [
+    ...document.querySelectorAll<HTMLScriptElement>(
+      'script:not([type=importmap])',
+    ),
+  ]
   let sent: { url: string; body: Blob }[] = []
   Object.defineProperty(document, 'currentScript', { value: first })
   // linkedom resolves no base, and the wrapper reads addresses against it.

@@ -28,9 +28,13 @@ import {
 } from '@yaks/platform/home/assets'
 import { kit } from './sheet-assets.ts'
 import { pageDocs } from './operator-words.ts'
+import { SHARED } from './page-imports.ts'
 
 let here = (path: string) => new URL(path, import.meta.url)
 let of = (specifier: string) => new URL(import.meta.resolve(specifier))
+
+// What the page scripts leave to the page to load once (./page-imports.ts).
+let external = Object.keys(SHARED)
 
 /** The files of the site but those it draws (`drawn`). */
 export let ASSETS: Asset[] = [
@@ -44,7 +48,8 @@ export let ASSETS: Asset[] = [
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
   { name: '_edit.js', bundle: here('./edit-mode.ts') },
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
-  { name: '_talk.js', bundle: here('./operator-rows.ts') },
+  { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
+  { name: '_talk.js', bundle: here('./operator-rows.ts'), external },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   {
     name: '_domains.js',
@@ -55,22 +60,25 @@ export let ASSETS: Asset[] = [
   // The service worker that shows pushed notifications, at the root it
   // serves, under the address the browsers that allowed it registered.
   { name: 'push.js', file: of('@yaks/push/worker') },
-  { name: '_sort.js', bundle: here('./sort.ts') },
+  { name: '_sort.js', bundle: here('./sort.ts'), external },
   {
     name: '_inbox-actions.js',
     bundle: of('@yaks/platform/updates-browser'),
+    external,
     named: true,
   },
   // The Friends page kept current (@yaks/platform/friends-browser).
   {
     name: '_friends.js',
     bundle: of('@yaks/platform/friends-browser'),
+    external,
     named: true,
   },
   // The Profile page kept current (@yaks/platform/profile-browser).
   {
     name: '_profile.js',
     bundle: of('@yaks/platform/profile-browser'),
+    external,
     named: true,
   },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },

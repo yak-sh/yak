@@ -4,11 +4,12 @@
 import { context } from 'esbuild'
 import { imported } from '@yaks/fp/imports'
 import { fileURLToPath } from 'node:url'
-import { compiled, type Written } from './page.ts'
+import { type Bundling, compiled, type Written } from './page.ts'
 
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
+  opts: Bundling = {},
 ): Promise<string> => {
   let at = entry instanceof URL ? entry : entry.at
   let dir = new URL('./', at)
@@ -32,6 +33,7 @@ export let bundle = async (
       },
     }],
     bundle: true,
+    external: opts.external,
     format: 'esm',
     platform: 'browser',
     target: 'esnext',

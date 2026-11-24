@@ -204,6 +204,11 @@ export let compiled = async (
   }
 }
 
+/** How one browser module is bundled: the bare specifiers it leaves to the
+ * page to resolve (its import map), so every module on the page that imports
+ * one shares the one copy the page loads. */
+export type Bundling = { external?: string[] }
+
 // Deno fetches every import it can read in a module's source with the module
 // graph, a dynamic one that never runs included, so the bundlers are imported
 // by a computed address: a host serving only bodies made ahead downloads no
@@ -220,10 +225,11 @@ let bundlers = {
 export let bundle = async (
   entry: URL | Written,
   signal?: AbortSignal,
+  opts: Bundling = {},
 ): Promise<string> => {
   if (signal?.aborted) throw new Error('browser bundle was stopped')
   let at = entry instanceof URL ? entry : entry.at
   let from = at.protocol == 'file:' ? bundlers.local : bundlers.remote
   let bundler: { bundle: typeof bundle } = await importing(from.href)
-  return bundler.bundle(entry, signal)
+  return bundler.bundle(entry, signal, opts)
 }

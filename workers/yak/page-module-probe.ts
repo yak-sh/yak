@@ -17,11 +17,24 @@ type Page = {
   resolve?: (specifier: string, from: string) => string
 }
 
-let address = (specifier: string, from: string) => {
-  if (/^(?:\.{0,2}\/|[a-z][a-z\d+.-]*:)/i.test(specifier)) {
-    return new URL(specifier, from).href
+// Where a specifier is, as a browser resolves it: by its address, or a bare
+// one through the page's import map (`imports`, read off its document).
+let address =
+  (imports: Record<string, string>) => (specifier: string, from: string) => {
+    if (/^(?:\.{0,2}\/|[a-z][a-z\d+.-]*:)/i.test(specifier)) {
+      return new URL(specifier, from).href
+    }
+    let mapped = imports[specifier]
+    if (mapped) return new URL(mapped, from).href
+    throw new TypeError(`Unmapped module specifier: ${specifier}`)
   }
-  throw new TypeError(`Unmapped module specifier: ${specifier}`)
+
+// The import map a page's document holds, if any.
+let mapOf = (doc: unknown): Record<string, string> => {
+  let map = (doc as Document | undefined)?.querySelector?.(
+    'script[type="importmap"]',
+  )?.textContent
+  return map ? JSON.parse(map).imports ?? {} : {}
 }
 
 // Deno's node:vm holds a module's callbacks outside the garbage collector's
@@ -73,7 +86,7 @@ export let pageModule = async (source: string, page: Page) => {
   })
   context.window = context.self = context
   let window = new WeakRef(context)
-  let resolve = page.resolve ?? address
+  let resolve = page.resolve ?? address(mapOf(page.globals?.document))
   let modules = new Map<string, Promise<SourceTextModule | SyntheticModule>>()
   let running = new Map<string, Promise<Exports>>()
   let load = (url: string) => {
