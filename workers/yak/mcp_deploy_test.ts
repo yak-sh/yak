@@ -9,6 +9,7 @@ import {
 } from '@std/assert'
 import {
   connector,
+  fresh,
   kernel,
   meta,
   reviewed,
@@ -175,6 +176,19 @@ test('an app names no app, and the copy works at its own address', async () => {
     let copy = await k.at(host, `/${numbered}/`)
     assertEquals(copy.status, 200)
     assertStringIncludes(await copy.text(), '<h1>Chores</h1>')
+
+    // Each says where it stands among published apps, and each space its
+    // plan and, to its owner, whether it sells (T-3006).
+    let mine = await his.tool('app_list')
+    assertMatch(
+      mine,
+      new RegExp(`Chores: .*published as ${published} \\(version 1\\)`),
+    )
+    assertMatch(mine, /is on the free plan\. It takes no payments yet/)
+    assertMatch(
+      await hers.tool('app_list', { space }),
+      /\/sisters\/ — .*installed from a published app at its version 1/,
+    )
 
     // Her five copies are one install, credited to his space (T-131912).
     assertStringIncludes(
@@ -658,6 +672,45 @@ test('app_stats with no analytics token says so, once', async () => {
     assertStringIncludes(said, 'not switched on')
   } finally {
     await k.stop()
+  }
+})
+
+// Left without an app, it counts every app of the space at once, as the
+// Visits page does, busiest first.
+test('app_stats with no app counts every app of the space', async () => {
+  let k = await fresh({ CF_ACCOUNT: 'acc0unt', CF_ANALYTICS_TOKEN: 'a token' })
+  let space = unique('visits35')
+  let { cookie, eids } = await seed(k, [{
+    slug: space,
+    apps: ['quiet', 'busy'],
+  }])
+  let [quiet, busy] = [eids[`${space}/quiet`], eids[`${space}/busy`]]
+  let real = globalThis.fetch
+  globalThis.fetch =
+    ((to: string | Request, init?: RequestInit) =>
+      String(to instanceof Request ? to.url : to).includes('analytics_engine')
+        ? Promise.resolve(Response.json({
+          data: / AS day,/.test(String(init?.body))
+            ? [
+              {
+                app: quiet,
+                day: new Date().toISOString().slice(0, 10),
+                views: 2,
+              },
+              {
+                app: busy,
+                day: new Date().toISOString().slice(0, 10),
+                views: 9,
+              },
+            ]
+            : [],
+        }))
+        : real(to, init)) as typeof fetch
+  try {
+    let said = await connector(k, cookie).tool('app_stats', { space })
+    assertMatch(said, /- busy — 9 \(.*\)\n- quiet — 2 \(/)
+  } finally {
+    globalThis.fetch = real
   }
 })
 

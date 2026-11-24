@@ -6,8 +6,8 @@ import { installPair, made } from '../../packages/workerd/testing.ts'
 import * as apps from './apps.ts'
 import { platform } from './testing.ts'
 import { ADA, as, SECRET, seeded, visit } from './serving-data-probe.ts'
-import { storeName } from './directory.ts'
-import { whereaboutsOf } from './whereabouts.ts'
+import { directoryOf, storeName, url } from './directory.ts'
+import { whereaboutsOf, whereaboutsShow } from './whereabouts.ts'
 
 test("an app's open pages keep where their person is, across their tabs", async () => {
   let runtime = platform(SECRET)
@@ -55,6 +55,12 @@ test("an app's open pages keep where their person is, across their tabs", async 
   await tab(back, false)
   equal(await where(), [['apps', app.eid, 'here']])
   equal([front.sent, back.sent], [[], []]) // nothing to answer
+  // Their Operator reads which app it is, by its address.
+  let shown = whereaboutsShow(env, ADA, space.eid, () => directoryOf(env.STORE))
+  let { channels } = JSON.parse(String(await shown.run({})))
+  equal(channels.map((c: Record<string, string>) => [c.app, c.url, c.state]), [
+    [`${space.slug}/${app.slug}`, url(space, app, env), 'here'],
+  ])
   // A tab said on a hibernated socket can be what wakes the store.
   runtime.evict(storeName(space, app))
   await tab(front, false)

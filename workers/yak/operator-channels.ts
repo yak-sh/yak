@@ -108,6 +108,9 @@ export type Request = {
   // channel: of yaks.app, or of the app's page for its corner's note; of
   // the app's page whose code sent them, on the `page` channel.
   page?: string
+  // The tab of the app beside the chat in front of the person, on the
+  // `chat` channel (operator-view.ts `paneOf`).
+  pane?: string
   // What the app's page said beside the words, on the `chat` channel for
   // its corner's note and on the `page` channel: the passage, the release.
   context?: Record<string, unknown>
@@ -991,7 +994,7 @@ let BY: Record<
       : request.context && request.page
       ? fromApp(request.page, request.app, request.context)
       : request.page
-      ? onPage(request.page, request.app)
+      ? onPage(request.page, request.app, request.pane)
       : ''),
   email: (request, id) =>
     `By email${request.signup ? ', signing up' : ''} (letter ${short(id)}): `,

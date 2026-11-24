@@ -168,6 +168,57 @@ export let planned = (space: Pick<Metered, 'slug' | 'tier'>): string => {
   } compute seconds a month.`
 }
 
+/** A space's plan as its Billing page shows it, in a line: the plan, the day
+ * one given free runs through or a cancelled one ends, the AI credit left this
+ * month where it holds any, and whom it is billed to where that was read.
+ *
+ * ```ts
+ * import { billing } from '@yaks/platform/standing'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(
+ *   billing(
+ *     {
+ *       slug: 'ada',
+ *       tier: 'plus',
+ *       budget: null,
+ *       meter: null,
+ *       plan: { tier: 'plus', ending: '2026-12-03T00:00:00Z' },
+ *     },
+ *     new Date('2026-11-24'),
+ *     { name: 'Ada', email: 'ada@example.com' },
+ *   ),
+ *   'ada is on the Plus plan, ending 2026-12-03, billed to Ada <ada@example.com>.',
+ * )
+ * ```
+ */
+export let billing = (
+  space: Metered & {
+    plan?: { tier?: Tier | null; ending?: string | null } | null
+    comped?: string | null
+  },
+  now: Date = new Date(),
+  payer?: { name: string; email: string } | null,
+): string => {
+  let free = !paid(space.plan?.tier ?? null) && space.comped &&
+      Date.parse(space.comped) > now.getTime()
+    ? space.comped
+    : null
+  let credit = space.credit ? creditOf(space, now) : 0
+  return `${space.slug} is on ${
+    [
+      planName(space.tier),
+      free && `given free through ${free.slice(0, 10)}`,
+      space.plan?.ending && `ending ${space.plan.ending.slice(0, 10)}`,
+      credit &&
+      `${dollars(Math.max(0, credit - drawnOf(space, now)))} of ${
+        dollars(credit)
+      } AI credit left this month`,
+      payer && `billed to ${payer.name || payer.email} <${payer.email}>`,
+    ].filter(Boolean).join(', ')
+  }.`
+}
+
 /** A ceiling a space answers to: what it has used and what it is allowed. */
 export type Gauge = { used: number; limit: number }
 export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited

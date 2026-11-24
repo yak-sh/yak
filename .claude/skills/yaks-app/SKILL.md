@@ -204,41 +204,41 @@ sandbox for billing, not a canary.
 
 "Live at 100%" is the Worker. Each Durable Object (a store, the directory) moves
 to the new version on its own, seconds later; Cloudflare releases them
-eventually consistently. A busy object finishes on the code it has for up to
-30 minutes before taking up a deploy (wrangler.toml
+eventually consistently. A busy object finishes on the code it has for up to 30
+minutes before taking up a deploy (wrangler.toml
 `[durable_objects.code_update_strategy]`, deferred, `max_delay = 1800`), so an
 Operator is not reset under its reply (T-2212). An object failing every request
 counts as busy, so a deploy while production fails its probe goes live with
 immediate updates (wrangler.ts `updateMode`); a version already live is hurried
 by deploying it again with `--durable-objects-code-update-mode immediate`
-(workers/yak/README.md). A store a newer Worker reaches
-answers it on the code it has, and restarts itself only when that code refused
-the caller (running.ts `owed`, graph.ts `#fetch`): the refusal may be a door or
-a word only the new deploy has, and the caller's door sends it again to the new
-code. Never restart an object to hurry a deploy along: the instance after a
-`ctx.abort()` waited 21 and 32 s to run its first line twice on 2026-11-07,
-where Cloudflare's own moves started in under a second (T-150897). Work an
-object starts behind an answer waits until its caller has read the answer
-through, and a beat more (running.ts `onceRead`, `BEAT`): on a timer set as the
-handler returns it runs before the runtime has sent the answer on. A store still
-behind its caller answers a refusal as a failure the caller's door retries, and
-reports it (running.ts `skewed`). So a call from the new Worker can reach a
-store still on the previous code: a new store route or RPC answers as missing
-for a while, and a probe right after a deploy can see the old behavior. A bug's
-occurrence carries the version it ran (`commit`); one from the previous version
-in that window is the lag, not the change. Keep a Worker-to-store call working
-against the previous store code. A restart can cut off an answer already being
-read, so the store door (door.ts `storeOf`) reads every answer it may send again
-whole inside its retry, and a caller never handles a reset. It can send a call
-again only when its body is bytes, so a caller hands it a visitor's body read
-whole, never the request's stream, and a store's write answers a resend's
-idempotency key without applying it twice (forms.ts `formIn`). A lost connection
-("Network connection lost.") is a reset too (@yaks/durable-object `moved`): a
-call cut off is sent again, and an instance whose own storage lost its
-connection reports nothing it meets, since its replacement redoes the work
-(defects.ts `redone`). A reset that still outlasts the retries files under one
-bug per wording (defects.ts `defect`), whichever caller and deploy it names. The
-tracker's own deploy waits for its object (`workers/tracker/deploy.ts`).
+(workers/yak/README.md). A store a newer Worker reaches answers it on the code
+it has, and restarts itself only when that code refused the caller (running.ts
+`owed`, graph.ts `#fetch`): the refusal may be a door or a word only the new
+deploy has, and the caller's door sends it again to the new code. Never restart
+an object to hurry a deploy along: the instance after a `ctx.abort()` waited 21
+and 32 s to run its first line twice on 2026-11-07, where Cloudflare's own moves
+started in under a second (T-150897). Work an object starts behind an answer
+waits until its caller has read the answer through, and a beat more (running.ts
+`onceRead`, `BEAT`): on a timer set as the handler returns it runs before the
+runtime has sent the answer on. A store still behind its caller answers a
+refusal as a failure the caller's door retries, and reports it (running.ts
+`skewed`). So a call from the new Worker can reach a store still on the previous
+code: a new store route or RPC answers as missing for a while, and a probe right
+after a deploy can see the old behavior. A bug's occurrence carries the version
+it ran (`commit`); one from the previous version in that window is the lag, not
+the change. Keep a Worker-to-store call working against the previous store code.
+A restart can cut off an answer already being read, so the store door (door.ts
+`storeOf`) reads every answer it may send again whole inside its retry, and a
+caller never handles a reset. It can send a call again only when its body is
+bytes, so a caller hands it a visitor's body read whole, never the request's
+stream, and a store's write answers a resend's idempotency key without applying
+it twice (forms.ts `formIn`). A lost connection ("Network connection lost.") is
+a reset too (@yaks/durable-object `moved`): a call cut off is sent again, and an
+instance whose own storage lost its connection reports nothing it meets, since
+its replacement redoes the work (defects.ts `redone`). A reset that still
+outlasts the retries files under one bug per wording (defects.ts `defect`),
+whichever caller and deploy it names. The tracker's own deploy waits for its
+object (`workers/tracker/deploy.ts`).
 
 The sandbox names a prebuilt toolchain image in `sandbox/wrangler.toml`, tagged
 with `sandbox/base/Dockerfile`'s hash. Provision a changed image before landing
@@ -542,17 +542,27 @@ from that:
 - **Input is precious** (M-59093). The owner, verbatim: "everything they input
   into a computer is precious and should be preserved". A draft, an unsent
   message or a form gets no short lifetime.
-- **A letter to a person comes from their Operator.** Anything yaks.app
-  mails a person that they might answer is from the Operator of the space it
-  concerns: its name, the space's own address (`<space>@yaks.app`), its first
-  person, and what a reply can ask for (@yaks/platform/letters). A letter the
-  Operator writes lives in its store (operator-channels.ts `letterRows`, and
-  mail.ts `owe` from the kernel for one yaks.app owes the person, uncounted),
-  so a reply from anyone finds it (inbox.ts `replied`). A confirmation link
-  goes through the directory, from the same address, so the space's trash or
-  allowance never holds it back. Only the sign-in code (from bot.yak.sh,
-  Reply-To `signup@`, which reaches the person's own Operator) and the "Not
-  delivered" answer to a stranger stay the platform's.
+- **A letter to a person comes from their Operator.** Anything yaks.app mails a
+  person that they might answer is from the Operator of the space it concerns:
+  its name, the space's own address (`<space>@yaks.app`), its first person, and
+  what a reply can ask for (@yaks/platform/letters). A letter the Operator
+  writes lives in its store (operator-channels.ts `letterRows`, and mail.ts
+  `owe` from the kernel for one yaks.app owes the person, uncounted), so a reply
+  from anyone finds it (inbox.ts `replied`). A confirmation link goes through
+  the directory, from the same address, so the space's trash or allowance never
+  holds it back. Only the sign-in code (from bot.yak.sh, Reply-To `signup@`,
+  which reaches the person's own Operator) and the "Not delivered" answer to a
+  stranger stay the platform's.
+- **The Operator sees everything its person can, never more** (T-3006). The
+  owner, verbatim: "the operator should feel closer to omniscient than blind. he
+  should be able to see everything possible." Anything a page shows a person (an
+  app's files, rows, errors and visits, their Updates, friends, plan, budget,
+  domains, connections, selling, what they published and installed, the page
+  they're on) the Operator reads through a tool or its turn's context. A new
+  page or a new fact on one comes with its way in: a line in a tool that already
+  reads that area (app_list, whereabouts_show, `self` reads of its own store),
+  never a tool per page. What it can reach is said in tool descriptions; only
+  what is current goes in a turn's context.
 - **Money spends from one budget per space** (D-398), whatever the source.
   Something new that costs money spends from it rather than growing an allowance
   of its own; embedding calls don't count yet (T-59279).
@@ -585,9 +595,8 @@ page from `workers/yak/public/docs.md` and add its slug to `PAGES` in
 `workers/yak/guide.ts`. The pre-commit hook redraws the connector skills under
 `plugins/yaks.app/` from the page and stages them, and `workers/yak/content.ts`
 is written wherever the Worker is built or tested (`gen.ts`); don't edit those
-projections by hand. Examples and claims
-must be checked against the implementing packages and working apps, not just
-against other prose.
+projections by hand. Examples and claims must be checked against the
+implementing packages and working apps, not just against other prose.
 
 ## Debugging an app
 

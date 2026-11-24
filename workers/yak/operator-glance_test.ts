@@ -5,12 +5,19 @@ import { toolEid } from '@yaks/tools/result'
 import { operatorMemory } from './operator-testing.ts'
 import { rootOf } from './operator-root.ts'
 import { notification } from './operator-updates.ts'
-import { type Glance, glanceOf, looks, recentOf } from './operator-glance.ts'
+import {
+  type Glance,
+  glanceOf,
+  looks,
+  recentOf,
+  updatesList,
+} from './operator-glance.ts'
 
 let space = crypto.randomUUID(), person = crypto.randomUUID()
 let root = rootOf(space, person)
 let [building, built] = [crypto.randomUUID(), crypto.randomUUID()]
 let writing = toolEid('app_write')
+let potluck = crypto.randomUUID()
 let store = operatorMemory()
 // Each row a minute after the one before, from 20:00.
 let minute = 0
@@ -60,7 +67,24 @@ await store.g.apply([
     }),
     ...at(),
   },
+  // A question they answered in their Updates.
+  {
+    entity: { eid: potluck },
+    task: {},
+    filed: { assignee: person },
+    decision: {
+      question: 'Which day for the potluck?',
+      choices: [{ label: 'Friday' }, { label: 'Saturday' }],
+    },
+    doc: { title: 'Potluck day' },
+    ...at(),
+  },
 ], { trusted: true })
+// Answered by their press (operator-updates.ts), at 20:20.
+await store.g.apply([{
+  entity: { eid: potluck },
+  decided: { choice: 'Friday', by: person, at: '2026-11-06T20:20:00.000Z' },
+}], { trusted: true })
 let g: Glance = {
   store,
   space,
@@ -86,6 +110,11 @@ let SAID = [
   'Nov 6th, 2026, 8:00 PM UTC, From the person:\nBuild me a recipe box',
   'Nov 6th, 2026, 8:01 PM UTC, From the Operator:\nBuilding it now.',
 ].join('\n\n')
+
+let UPDATES =
+  '- Unread, Nov 6th, 2026, 8:09 PM UTC: Your recipe box has a new version.' +
+  '\n\nAnswered lately:\n' +
+  '- Nov 6th, 2026, 8:20 PM UTC: Which day for the potluck? They chose: Friday'
 
 let sources = operatorMemory(), sourcePerson = crypto.randomUUID()
 let sourceRoot = rootOf(space, sourcePerson), helper = crypto.randomUUID()
@@ -163,9 +192,15 @@ test("a call's voice looks up its work, their Updates, their apps and more of th
   )
   equal(read, {
     work: WORK,
-    updates:
-      '- Unread, Nov 6th, 2026, 8:09 PM UTC: Your recipe box has a new version.',
+    updates: UPDATES,
     apps: '- home/recipes: Recipe Box',
     conversation: SAID,
   })
+})
+
+test('the Operator reads their Updates as the voice does', async () => {
+  equal(
+    await updatesList(g).run({}),
+    UPDATES,
+  )
 })

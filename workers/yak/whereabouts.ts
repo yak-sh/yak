@@ -21,6 +21,8 @@ import {
 } from '@yaks/notify/whereabouts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
+import { type Directory, url } from './directory.ts'
+import type { Host as HostEnv } from '@yaks/platform/host'
 
 /** The directory as whereabouts reads and writes it. */
 export type Kept = {
@@ -92,39 +94,59 @@ export let whereaboutsItem = async (
 }
 
 /** The Operator's `whereabouts_show`: where the person it works for is now,
- * channel by channel, and where something that needs them reaches them. */
+ * channel by channel, and where something that needs them reaches them. A
+ * page open says which it is: another space's Operator by its space, an app
+ * by its address, read from the directory (`dir`). */
 export let whereaboutsShow = (
-  env: Pick<Env, 'STORE'>,
+  env: Pick<Env, 'STORE'> & HostEnv,
   person: string,
   space: string,
-): Tool => ({
-  name: 'whereabouts_show',
-  title: 'See where they are',
-  readOnly: true,
-  description:
-    'Where the person you work for is available right now, channel by channel: this Operator open and focused or in a background tab, another yaks.app page open, their Discord status, and when they last texted or emailed you. `reach` says where something that needs them would reach them now: the tab they are looking at, a browser notification, Discord, or their usual channel. Only they are shown, never anyone else.',
-  parameters: { type: 'object', properties: {} },
-  run: async () => {
-    let now = Date.now()
-    let rows = await whereaboutsOf(env, person)
-    let g = glance(rows, { place: space, now })
-    return JSON.stringify({
-      line: whereaboutsLine('They', g),
-      reach: reachBy(g),
-      channels: rows.flatMap(({ whereabouts: p }) => {
+  dir: () => Pick<Directory, 'at' | 'appAt'>,
+): Tool => {
+  // Where a channel's row says they are: another space's Operator, or an
+  // app's page, which names nothing once the app is gone.
+  let placed = async (channel: string, place?: string) => {
+    if (channel == 'operator') {
+      if (place == space) return { here: 'this Operator' }
+      let at = place ? await dir().at(place) : null
+      return { here: at ? `the Operator of ${at.slug}` : 'another Operator' }
+    }
+    let held = channel == 'apps' && place ? await dir().appAt(place) : null
+    return held && !held.app.trashed
+      ? {
+        app: `${held.space.slug}/${held.app.slug}`,
+        url: url(held.space, held.app, env),
+      }
+      : {}
+  }
+  return {
+    name: 'whereabouts_show',
+    title: 'See where they are',
+    readOnly: true,
+    description:
+      "Where the person you work for is available right now, channel by channel: this Operator open and focused or in a background tab, another space's Operator or an app's page open (which, with its address), their Discord status, and when they last texted or emailed you. `reach` says where something that needs them would reach them now: the tab they are looking at, a browser notification, Discord, or their usual channel. Only they are shown, never anyone else.",
+    parameters: { type: 'object', properties: {} },
+    run: async () => {
+      let now = Date.now()
+      let rows = await whereaboutsOf(env, person)
+      let g = glance(rows, { place: space, now })
+      let channels = await Promise.all(rows.map(async ({ whereabouts: p }) => {
         let at = (p as { at?: string })?.at
         if (!p || !at) return []
         let { channel, place, state } = p as Record<string, string>
         return [{
           channel,
-          ...channel == 'operator'
-            ? { here: place == space ? 'this Operator' : 'another Operator' }
-            : {},
+          ...await placed(channel, place),
           state,
           ago: ago(at, now),
           faded: !(now - Date.parse(at) < FADE[channel as Channel]),
         }]
-      }),
-    })
-  },
-})
+      }))
+      return JSON.stringify({
+        line: whereaboutsLine('They', g),
+        reach: reachBy(g),
+        channels: channels.flat(),
+      })
+    },
+  }
+}

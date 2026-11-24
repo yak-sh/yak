@@ -229,6 +229,11 @@ export let operatorDoc: VocabDoc = {
           description:
             'The address of the yaks.app page the words were written on, on the chat channel.',
         },
+        pane: {
+          type: 'string',
+          description:
+            'The tab of the app open beside the chat that was in front of the person, on the chat channel: keeps (Data), does (Commands), runs (Workflow) or screens (Screens), the screens with which they showed, as screens:draft or screens:live.',
+        },
         about: {
           type: 'string',
           ref: 'entity',

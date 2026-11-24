@@ -92,7 +92,7 @@ import {
 } from './speech.ts'
 import { ModelError } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
-import { talks } from './operator-view.ts'
+import { paneOf, talks } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { outcomeOf } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
@@ -1200,6 +1200,11 @@ export let operatorAnswer = async (
     // The app open beside the chat, which the words are about, and the page
     // of yaks.app they were written on, which its box names (operator-box.ts `Ask`).
     let app = String(form.get('app') ?? '')
+    // The tab of that app in front of them (operator-view.ts `paneOf`).
+    let pane = paneOf(
+      String(form.get('made') ?? ''),
+      String(form.get('screen') ?? ''),
+    )
     // From the corner's note (`notePage`), what the app's page gave, and
     // that page, which the words were written beside.
     let context = aboutOf(String(form.get('context') ?? ''))
@@ -1217,7 +1222,7 @@ export let operatorAnswer = async (
         channel: 'chat',
         files,
         page: page.href,
-        ...SLUG.test(app) ? { app } : {},
+        ...SLUG.test(app) ? { app, ...pane ? { pane } : {} } : {},
         ...context ? { context } : {},
         // Sent from the New app screen (desk-pages.ts `asking`).
         ...form.has('new_app') ? { new_app: true } : {},
@@ -3287,6 +3292,12 @@ let send = async (b) => {
     let request = b.entity.eid
     submission = new FormData(form)
     submission.set('request', request)
+    // The tab of the app beside the chat in front of them, and which screens.
+    let made = document.querySelector('input[name=made]:checked')
+    let screen = document.querySelector('input[name=screen]:checked')?.value ??
+      document.querySelector('[data-frame]')?.dataset.frame
+    if (made) submission.set('made', made.value)
+    if (screen) submission.set('screen', screen)
     submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (signal.aborted) return

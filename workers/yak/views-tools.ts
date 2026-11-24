@@ -1,9 +1,9 @@
 // The view tools, their rows apart from views.ts so a page that only serves a
 // space never compiles the roster's words (T-148886).
-import { APP, inApp, SPACE as SPACE_ARG } from './tool.ts'
+import { APP, inApp, inSpace, SPACE as SPACE_ARG } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
 import { url as appUrl } from './directory.ts'
-import { ago, NOT_ON, statsOf } from './views.ts'
+import { ago, NOT_ON, statsFor, statsOf } from './views.ts'
 import { installedBy, ratedAs } from './gallery-row.ts'
 
 // The rows, said as rows: the words each says about itself are in
@@ -26,11 +26,11 @@ let STATS: Row[] = [
             'months, so anything past 90 is the same answer as 90.',
         },
       },
-      required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app } = await inApp(ctx, args)
       let days = args.days == null ? undefined : Number(args.days)
+      if (args.app == null) return await everyApp(ctx, args, days)
+      let { space, app } = await inApp(ctx, args)
       // No token, no numbers — one sentence rather than an error, because
       // there is nothing the agent or the person can do about it (views.ts).
       // A published app's installs and rating are credited to its space
@@ -67,6 +67,36 @@ let STATS: Row[] = [
     },
   },
 ]
+
+// Every live app of the space in a line, busiest first, as its Visits page
+// counts them: every app in the same few queries (views.ts `statsFor`).
+let everyApp = async (
+  ctx: Parameters<Row['run']>[0],
+  args: Parameters<Row['run']>[1],
+  days?: number,
+) => {
+  let { space } = await inSpace(ctx, args)
+  let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
+  let asked = apps.length
+    ? statsFor(ctx.env, apps.map((a) => a.eid), days)
+    : null
+  if (!apps.length) return { text: `${space.slug} has no apps.`, space }
+  if (!asked) return { text: NOT_ON, space }
+  let all = await asked
+  let seen = apps.map((app) => ({ app, stats: all.get(app.eid)! }))
+    .sort((a, b) => b.stats.total - a.stats.total)
+  let [first] = seen
+  return {
+    text: [
+      `${space.slug}, visits in ${first!.stats.days} days${ago(first!.stats)}:`,
+      ...seen.map(({ app, stats }) =>
+        `- ${app.slug} — ${stats.total} (${appUrl(space, app, ctx.env)})`
+      ),
+      'Name an app for its pages, referring sites and countries.',
+    ].join('\n'),
+    space,
+  }
+}
 
 /** The connector row for reading an app's visitor counts. */
 export let viewsTools = STATS.map(worded)

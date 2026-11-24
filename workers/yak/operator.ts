@@ -162,6 +162,7 @@ import {
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textPerson, textSend } from './operator-texts.ts'
 import { kept as kernelDir, whereaboutsShow } from './whereabouts.ts'
+import { updatesList } from './operator-glance.ts'
 import { placeSet } from '@yaks/platform/located'
 import { nameSet } from '@yaks/platform/named'
 import {
@@ -2643,7 +2644,8 @@ export let operating = (
     let mine = () => [
       platformBug(ctx, space),
       textSend(env, ctx, space),
-      whereaboutsShow(env, ctx.person!, space.eid),
+      whereaboutsShow(env, ctx.person!, space.eid, dir),
+      updatesList({ store, space: space.eid, person: ctx.person!, dir: dir() }),
       placeSet(() => kernelDir(env), ctx.person!),
       ...!confirm && naming(channel)
         ? [nameSet(() => kernelDir(env), ctx.person, space.eid)]

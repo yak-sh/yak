@@ -297,7 +297,8 @@ import {
   selling,
 } from './sell.ts'
 import { rate } from '@yaks/platform/fee'
-import { payments } from './payments.ts'
+import { payments, plans } from './payments.ts'
+import { billedTo } from './billing.ts'
 import { pricing, refusedPrice } from './pricing.ts'
 import { INTERVALS, priceTag } from '@yaks/platform/price'
 import { pair } from './screen.ts'
@@ -335,6 +336,7 @@ import { scheduleUse, start } from './used.ts'
 import { countedSpend } from './meter.ts'
 import {
   atCeiling,
+  billing,
   count,
   gauged,
   type Held,
@@ -3693,6 +3695,31 @@ let trackAhead = (ctx: Ctx, space: string | null, app: string | null) => {
   }
 }
 
+/** Whether a space takes payments, as its Selling page says (sell.ts), and
+ * what yaks.app keeps of a sale (`cut`). */
+let sells = (space: Space, cut: string) => {
+  let state = selling(space)
+  let kept = space.seller?.house
+    ? 'on yaks.app’s own account, with no fee'
+    : `yaks.app keeps ${cut} of each sale`
+  return state == 'ready'
+    ? `It takes payments, ${kept}.`
+    : state == 'setup'
+    ? `Selling waits on the owner finishing at Stripe (space_sell gives the link again); then ${kept}.`
+    : `It takes no payments yet (space_sell sets that up on the Plus plan; ${kept}).`
+}
+
+/** An app's place among published apps: what it offers others, or what it
+ * was installed from. */
+let sharing = (app: App) =>
+  app.published
+    ? `published as ${app.published.name} (version ${app.published.version})`
+    : app.installed
+    ? `installed from a published app at its version ${app.installed.version}${
+      app.installed.sandboxed ? ', walled off' : ''
+    }`
+    : ''
+
 /** Someone in a space or an app, as app_list answers them (people.ts). */
 type Someone = ReturnType<typeof shown>
 
@@ -6319,6 +6346,20 @@ let OURS: Row[] = [
         ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )
       let now = new Date()
+      // What the Billing and Selling pages show beside the month: whom the
+      // provider bills, asked only of the one space its owner names, as the
+      // Billing page asks it; and the platform's cut of a sale.
+      let [payer, cut] = await Promise.all([
+        namedSpace != null && seats.length == 1 &&
+          seats[0]!.role == 'owner' && seats[0]!.space.plan?.customer
+          ? plans(ctx.env).then((lent) => billedTo(lent, seats[0]!.space))
+            .catch((e) => {
+              caught(e, { request: 'app_list payer', space: namedSpace })
+              return null
+            })
+          : null,
+        seats.some((s) => s.role == 'owner') ? feeOf(ctx.dir).then(rate) : '',
+      ])
       // Two readers, two forms (M-37853), and each carries every fact: Claude
       // on the web documents the words as what its model reads, Claude Code
       // hands its model the value in their place, and ChatGPT both (sources
@@ -6415,6 +6456,10 @@ let OURS: Row[] = [
                 ? ` — in the trash: nothing here answers until space_restore(space: '${space.slug}')`
                 : ''
             }`,
+          // Its plan and whom it bills, and whether it takes payments, as
+          // its Billing and Selling pages say them.
+          billing(space, now, payer) +
+            (role == 'owner' ? ` ${sells(space, cut)}` : ''),
           // Where the space stands this month (T-32758), so the agent knows
           // before it makes the sixth app, not when the door says no.
           ...alive ? [gauged(space, alive, now, ctx.env, hold)] : [],
@@ -6428,6 +6473,7 @@ let OURS: Row[] = [
                   ? `${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
                   : '',
                 heldAloud(a.held),
+                sharing(apps[i]!),
               ].filter(Boolean).join(', ')
             }`,
             ...named == null ? [] : [

@@ -16,6 +16,7 @@ import { updatesOf } from './operator-updates.ts'
 import { message } from '@yaks/model'
 import { kindOf, ordered, source, textOf } from '@yaks/session'
 import type { Comp } from '@yaks/graph'
+import type { Tool } from '@yaks/session'
 import { inputSource } from './operator-provenance.ts'
 
 type Store = OperatorStore
@@ -104,6 +105,41 @@ export let updatesText = async (g: Glance, most = 8) => {
     : 'Their Updates are empty.'
 }
 
+/** The questions they answered in their Updates lately, newest first, each
+ * with the choice they pressed; an answer leaves their Updates. Words they
+ * wrote about an update came to the conversation as their own. */
+export let answeredText = async (g: Glance, most = 8) => {
+  let rows = await g.store.g.read(
+    line`.decision&.decided.by=${g.person}&.order=-decided.at&.limit=${most}&.fields=decision.question,decided.choice,decided.at`,
+  )
+  return rows.length
+    ? rows.map((r) => {
+      let asked = r.decision as Comp, said = r.decided as Comp
+      return `- ${moment(String(said.at))}: ${
+        cut(String(asked.question ?? ''), 240)
+      } They chose: ${said.choice}`
+    }).join('\n')
+    : 'They have answered nothing there yet.'
+}
+
+/** Their Updates, then what they answered there lately. */
+let updatesAnswered = async (g: Glance, most?: number) =>
+  `${await updatesText(g, most)}\n\nAnswered lately:\n${await answeredText(g)}`
+
+/** The Operator's own read of the person's Updates, as their page lists
+ * them: what waits on them, the newest of what they were told, and what
+ * they answered lately. Only theirs: their Updates are no one else's. */
+export let updatesList = (g: Glance): Tool => ({
+  name: 'updates_list',
+  title: 'Read their Updates',
+  step: { doing: 'Reading their Updates…', done: 'Read their Updates' },
+  readOnly: true,
+  description:
+    'The Updates of the person you work for, as their page lists them: what waits on them (questions only they can answer, with the choices), the newest of what they were told, and what they answered there lately. Read it before telling them something again or asking what they decided.',
+  parameters: NONE,
+  run: () => updatesAnswered(g, 20),
+})
+
 /** Their apps, in every space they are in, as space/app and its title. */
 export let appsText = async (g: Glance) => {
   let apps = await g.dir.reachable(g.person)
@@ -153,9 +189,9 @@ export let looks = (g: Glance): Look[] => [
   {
     name: 'updates',
     description:
-      'What waits on them in their Updates (questions only they can answer, with the choices) and the newest of what they were told. Use it when they ask whether anything needs them or what happened.',
+      'What waits on them in their Updates (questions only they can answer, with the choices), the newest of what they were told, and what they answered there lately. Use it when they ask whether anything needs them or what happened.',
     parameters: NONE,
-    read: () => updatesText(g),
+    read: () => updatesAnswered(g),
   },
   {
     name: 'apps',
