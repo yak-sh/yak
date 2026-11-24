@@ -6,12 +6,15 @@
 // and a watch is the reach's live watch, each subscription on the tab's one
 // socket.
 //
+// The person's side (@yaks/platform/side-rows) and their Updates badges are
+// reads of the person the directory answers, live on its `/person/ws`.
+//
 // One write is not rows: an Updates card's action (updates.ts `acting`) is
 // done here and answered with its receipt, the way the card's page graph
 // shows it at once and the server confirms it.
 import { attach } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
-import { watched } from '@yaks/api/reached'
+import { type Kept, watched } from '@yaks/api/reached'
 import { refusal } from '@yaks/api/refuse'
 import { status } from '@yaks/graph/errors'
 import { doorOf, IDEMPOTENCY } from '@yaks/durable-object/door'
@@ -21,6 +24,8 @@ import {
   watchWaiting,
 } from '@yaks/platform/update-waiting'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { sideLine } from '@yaks/platform/side-rows'
+import { sideRows } from './side.ts'
 import { REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { whole } from '@yaks/query'
 import { CallError, refused as toolRefused } from '@yaks/tools/errors'
@@ -85,7 +90,11 @@ export let reachDoor = async (
   try {
     if (door == '/query' && req.method == 'GET') {
       let q = new URL(req.url).searchParams
-      if (q.get('q') == UPDATE_WAITING) {
+      let line = q.get('q') ?? ''
+      if (sideLine(line)) {
+        return Response.json(await sideRows(dir, person, line))
+      }
+      if (line == UPDATE_WAITING) {
         let seats = await waitingSeats(dir, person)
         let rows = await Promise.all(
           seats.map(async ({ space, role, bundle }) => {
@@ -111,7 +120,7 @@ export let reachDoor = async (
         await read(
           env,
           await reach(),
-          whole(q.get('q') ?? ''),
+          whole(line),
           q.get('live') == '1',
         ),
       )
@@ -138,18 +147,21 @@ export let reachDoor = async (
       attach(
         watched({
           watch: (line, sink) => {
+            // A read of the person the directory answers live.
+            let personal = (emit: (frame: Kept) => void) =>
+              watching(
+                meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
+                'directory',
+                line,
+                emit,
+                { ...vouched(who), ...KERNEL },
+                '/person/ws',
+              )
+            if (sideLine(line)) return personal(sink)
             if (line == UPDATE_WAITING) {
               let headers = vouched(who)
               return watchWaiting(
-                (emit) =>
-                  watching(
-                    meta(env).door ?? storeOf(env.STORE, PLATFORM_STORE),
-                    'directory',
-                    line,
-                    emit,
-                    { ...headers, ...KERNEL },
-                    '/waiting/ws',
-                  ),
+                personal,
                 (seat) => (emit) => {
                   let { space, slug } = waitingFrom(seat)
                   let ask = builderOf(env, space)

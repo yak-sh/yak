@@ -5,11 +5,12 @@ import { parseHTML } from 'linkedom'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Item, Sidebar } from './sidebar.ts'
+import { icons } from './icons.ts'
 
 let items: Item[] = [
-  { href: '/first', label: 'First', icon: 'bot' },
-  { href: '/second', label: 'Second', icon: 'bell', count: 2 },
-  { href: '/third', label: 'Third', icon: 'bell', waiting: 5 },
+  { href: '/first', label: 'First', icon: icons.bot },
+  { href: '/second', label: 'Second', icon: icons.bell, count: 2 },
+  { href: '/third', label: 'Third', icon: icons.bell, waiting: 5 },
 ]
 let drawn = (selected: string, collapsed = false) =>
   parseHTML(renderToString(h(Sidebar, {
@@ -29,7 +30,12 @@ let drawn = (selected: string, collapsed = false) =>
       id: 'account',
       label: 'Account',
       items: [
-        { href: '/logout', label: 'Sign out', icon: 'log-out', submit: true },
+        {
+          href: '/logout',
+          label: 'Sign out',
+          icon: icons['log-out'],
+          submit: true,
+        },
       ],
     }],
   }))).document

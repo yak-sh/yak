@@ -11,7 +11,11 @@ import {
   waitingCounts,
   waitingWords,
 } from '@yaks/platform/update-waiting'
-import { bindBadges } from '@yaks/platform/updates-browser'
+import { bindSide } from '@yaks/platform/side-browser'
+import { section, sideParts, type SideView } from '@yaks/platform/side-parts'
+import { SIDE_SPACES, sideApps, sideWords } from '@yaks/platform/side-rows'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { friendSide } from '@yaks/platform/friends'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
@@ -103,10 +107,28 @@ let linked = (
   return Object.assign(client, { close: end })
 }
 
-test('one page graph keeps its Updates badges live across seated Operators and directory requests', async () => {
+// The Operator's side of `view` as the server draws it before the page
+// graph has said anything: no badges, no Updates across spaces.
+let sideOf = (view: SideView) => {
+  let parts = sideParts(view, [], [])
+  return renderToString(
+    h(
+      'nav',
+      { class: 'Sidebar', 'data-side-view': JSON.stringify(view) },
+      h(
+        'div',
+        { class: 'Sidebar_Space' },
+        h('div', { class: 'Sidebar_Whose' }, parts.picker),
+        section(parts.apps!, false),
+      ),
+    ),
+  )
+}
+
+test('one page graph keeps its side live: spaces, apps, and Updates badges across seated Operators and directory requests', async () => {
   await using runtime = platform()
   let { env } = runtime
-  let { dir, space: home } = await seeded(env)
+  let { dir, space: home, app: { eid: book } } = await seeded(env)
   let friend = crypto.randomUUID()
   let seat = crypto.randomUUID()
   let club = crypto.randomUUID()
@@ -127,6 +149,7 @@ test('one page graph keeps its Updates badges live across seated Operators and d
 
   let sources: string[] = []
   let opened: ReturnType<typeof linked>[] = []
+  let joined = new Set<Pair[1]>()
   let join = (name: string, res: Response, object: {
     webSocketMessage: (ws: Pair[1], data: string) => unknown
     webSocketClose: (
@@ -138,9 +161,11 @@ test('one page graph keeps its Updates badges live across seated Operators and d
   }) => {
     equal(res.status, 101)
     sources.push(name)
+    // Several sockets open to one object at once: each takes its own.
     let pair = made.find((pair) =>
-      pair[1] === runtime.sockets.get(name)?.at(-1)
+      runtime.sockets.get(name)?.includes(pair[1]) && !joined.has(pair[1])
     )!
+    joined.add(pair[1])
     let server = pair[1]
     let wire = linked(
       pair,
@@ -212,15 +237,22 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       frames.push(...('frames' in packet ? packet.frames : [packet])
         .filter((f) => f.bundles))
     })
-    let pane = `<nav data-update-badges="${ADA}">
-      <span data-across="" hidden></span>
-      <span data-across="ada" hidden></span>
-      <span data-across="club" hidden></span>
-    </nav>`
+    // The Updates badges' frames, which say each member's revision.
+    let waits = () => frames.filter((f) => typeof f.revision == 'object')
+    let pane = sideOf({
+      person: ADA,
+      here: { slug: 'ada', title: 'ada', owner: true, own: true },
+      talk: {
+        space: home.eid,
+        open: 'new',
+        all: false,
+        at: 'https://ada.yaks.app',
+      },
+    })
     let { document, window } = parseHTML(`<html><body>${pane}</body></html>`)
     let next = socket
     let time = clock(Date.now())
-    let page = client(loadVocab([waitingWords]), [], {
+    let page = client(loadVocab([waitingWords, sideWords]), [], {
       url: `https://yaks.app${REACH}`,
       connect: () => {
         let current = next
@@ -235,16 +267,66 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       vault: false,
       wireVault: false,
     })
-    let stop = bindBadges(document, () => page)
+    let stop = bindSide(document, () => page)
     let watch = page.watch(UPDATE_WAITING)
+    let spaces = page.watch(SIDE_SPACES)
+    let apps = page.watch(sideApps(home.eid))
     let badge = (slug = '') =>
       document.querySelector(`[data-across="${slug}"]`)!
     let counts = () => Object.fromEntries(waitingCounts(watch.value))
+    let side = () => ({
+      spaces: [...document.querySelectorAll('.Sidebar_Whose .Identity_Name')]
+        .map((n) => n.textContent),
+      apps: [
+        ...document.querySelectorAll(
+          '[data-side-part="side-apps"] a .SideNav_Label',
+        ),
+      ].map((n) => n.textContent),
+      across: !!document.querySelector('[data-side-part="side-personal"]'),
+    })
     try {
       await until(() => watch.ready || watch.refused !== undefined)
       equal(watch.refused, undefined)
       equal(counts(), { ada: 1, club: 0 })
-      let initial = frames.at(-1)!.revision as Record<string, number>
+      await until(() => spaces.ready && apps.ready)
+      await until(() => side().apps.length == 1)
+      equal(side(), {
+        spaces: ['ada', 'ada', 'club'],
+        apps: ['Cookbook'],
+        across: true,
+      })
+
+      // An app made, renamed and put in the trash, each on the side as the
+      // directory takes it.
+      let jots = crypto.randomUUID()
+      await dir.apply({
+        entities: [{
+          entity: { eid: jots },
+          doc: { title: 'Jots' },
+          app: {
+            slug: 'jots',
+            space: home.eid,
+            version: 1,
+            access: 'public',
+            store: 'ada/jots',
+          },
+        }],
+      }, ADA_OWNS)
+      await until(() => side().apps.length == 2)
+      equal(side().apps, ['Cookbook', 'Jots'])
+      await dir.apply({
+        entities: [{ entity: { eid: jots }, doc: { title: 'Jottings' } }],
+      }, ADA_OWNS)
+      await until(() => side().apps.includes('Jottings'))
+      await dir.apply({
+        entities: [{
+          entity: { eid: jots },
+          trashed: { at: new Date().toISOString(), by: ADA },
+        }],
+      }, ADA_OWNS)
+      await until(() => side().apps.length == 1)
+      equal(side().apps, ['Cookbook'])
+      let initial = waits().at(-1)!.revision as Record<string, number>
       equal(
         Object.keys(initial).sort(),
         [
@@ -253,9 +335,13 @@ test('one page graph keeps its Updates badges live across seated Operators and d
           `operator/${club}`,
         ].sort(),
       )
+      // The directory answers the spaces, the apps and its share of the
+      // badges, each on its own socket; each seated Operator its count.
       equal(
-        sources.sort(),
+        sources.toSorted(),
         [
+          PLATFORM_OBJECT,
+          PLATFORM_OBJECT,
           PLATFORM_OBJECT,
           `builder ${home.eid}`,
           `builder ${club}`,
@@ -265,7 +351,7 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       await tell(club, ADA)
       await until(() => badge().textContent == '2')
       equal(counts(), { ada: 1, club: 1 })
-      equal(frames.at(-1)!.since, initial)
+      equal(waits().at(-1)!.since, initial)
 
       await dir.stamp({
         entities: [
@@ -307,18 +393,27 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       document.body.innerHTML = pane
       document.dispatchEvent(new window.Event(PAGE))
       equal(badge().textContent, '3')
-      equal(sources.length, 3)
+      equal(side().apps, ['Cookbook'])
+      equal(sources.length, 5)
 
       await dir.apply(
         { entities: [{ entity: { eid: seat }, $delete: true }] },
         ADA_OWNS,
       )
-      await until(() => badge().textContent == '2')
+      // A seat taken away takes its space off the side, and Updates across
+      // spaces with it, now there is one.
+      await until(() => !side().across)
       equal(counts(), { ada: 2 })
-      equal(badge('club').hasAttribute('hidden'), true)
+      equal(side().spaces, ['ada'])
+      equal(badge(), null)
       equal(watch.value.length, 1)
+      equal(spaces.value.length, 1)
 
       socket.close()
+      // What changes while the page is away is drawn once it is back.
+      await dir.apply({
+        entities: [{ entity: { eid: book }, doc: { title: 'Recipes' } }],
+      }, ADA_OWNS)
       await dir.stamp({
         entities: [
           friendSide(ADA, friend, { decided: { verdict: 'approved' } }),
@@ -328,9 +423,18 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       next = linked(made.at(-1)!)
       next.readyState = 0
       await time.advance(250)
-      await until(() => badge().textContent == '1')
-      equal(counts(), { ada: 1 })
-      equal(sources.length, 5)
+      await until(() => counts().ada == 1)
+      await until(() => side().apps[0] == 'Recipes')
+      equal(
+        sources.slice(5).sort(),
+        [
+          PLATFORM_OBJECT,
+          PLATFORM_OBJECT,
+          PLATFORM_OBJECT,
+          `builder ${home.eid}`,
+        ]
+          .sort(),
+      )
 
       let updates = await manage(
         new Request('https://yaks.app/ada/updates', {
@@ -340,11 +444,12 @@ test('one page graph keeps its Updates badges live across seated Operators and d
       )
       equal(updates.status, 200)
       await updates.body?.cancel()
-      await until(() => badge().hasAttribute('hidden'))
-      equal(counts(), { ada: 0 })
+      await until(() => counts().ada == 0)
     } finally {
       stop()
       watch.close()
+      spaces.close()
+      apps.close()
       page.close()
     }
   } finally {

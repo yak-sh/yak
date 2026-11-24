@@ -10,33 +10,36 @@ export let fitList = (list: HTMLElement, win: Browser): () => void => {
   let view = list.closest<HTMLElement>('[data-fit-scroll]')!
   let more = list.querySelector<HTMLButtonElement>('[data-fit-more]')!
   let label = more.querySelector<HTMLElement>('[data-fit-label]')!
-  let rows = [...list.children].filter((row) => row !== more) as HTMLElement[]
+  // Read each time: rows come and go as what the list shows changes.
+  let rows = () =>
+    [...list.children].filter((row) => row !== more) as HTMLElement[]
 
   let expand = (open: boolean) => {
     more.setAttribute('aria-expanded', String(open))
     label.textContent = more.title = open ? 'Less' : 'More'
   }
   let fit = () => {
-    if (!view.clientHeight) return
-    for (let row of rows) row.hidden = false
+    let all = rows()
+    if (!view.clientHeight || !all.length) return
+    for (let row of all) row.hidden = false
     more.hidden = false
 
     let end = view.lastElementChild!.getBoundingClientRect().bottom
     let overflow = end + view.scrollTop - bottom(view, win)
-    let last = rows.at(-1)!.getBoundingClientRect().bottom
+    let last = all.at(-1)!.getBoundingClientRect().bottom
     let reserve = more.getBoundingClientRect().bottom - last
     if (overflow <= reserve) {
       more.hidden = true
       expand(false)
     } else if (more.getAttribute('aria-expanded') != 'true') {
-      let cropped = rows.filter((row) =>
+      let cropped = all.filter((row) =>
         row.getBoundingClientRect().bottom > last - overflow
       )
       for (let row of cropped) row.hidden = true
     }
   }
   let toggle = () => {
-    let first = rows.find((row) => row.hidden)
+    let first = rows().find((row) => row.hidden)
     expand(!!first)
     fit()
     first?.focus()

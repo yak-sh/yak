@@ -3,7 +3,9 @@
 // press (talk-beside.ts holds what is beside the conversation). Sidebar owns
 // their drawing.
 import { h } from 'preact'
-import { type Item, Sidebar } from './sidebar.ts'
+import { Sidebar } from './sidebar.ts'
+import { icons } from './icons.ts'
+import { aboutPath, sideParts, type SideView } from '@yaks/platform/side-parts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
@@ -11,17 +13,13 @@ import type { Beside } from './operator-page.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
   ADMIN,
-  appMarkImage,
   chatPath,
   logoPath,
   managePath,
   talkPath,
 } from '@yaks/platform/routes'
 
-/** An app beside the conversation already open: every app shares the one
- * conversation, so the side keeps it lit and marks the app only Open. */
-export let aboutPath = (space: string, app: string, open = 'new') =>
-  `${chatPath(space, open)}?app=${encodeURIComponent(app)}`
+export { aboutPath }
 
 export let talkSide = (
   env: Env,
@@ -31,59 +29,38 @@ export let talkSide = (
   at: { current: string[]; waiting: number; app?: string; here: string },
 ) => {
   let owner = who.role == 'owner'
-  let here = beside.spaces?.find((s) => s.slug == space.slug) ?? {
-    slug: space.slug,
-    title: space.title,
-    owner,
-    own: false,
-    operator: space.operator,
-    logo: logoPath(space),
-  }
-  let spaces = beside.spaces ?? []
-  let apps = beside.apps ?? []
   // `updates` is the space's Updates, `all` every space's.
   let reading = at.current.some((c) => c == 'updates' || c == 'all')
   let open = at.current.find((c) => c && c != 'updates' && c != 'all') ??
     'new'
-  let items: Item[] = apps.map((a) => ({
-    href: aboutPath(space.slug, a.slug, open),
-    beside: a.slug == at.app,
-    icon: 'layout-grid',
-    image: appMarkImage(`https://${spaceHost(env, space.slug)}/${a.slug}`, a),
-    label: a.title || a.slug,
-  }))
+  let view: SideView = {
+    person: who.person ?? '',
+    here: {
+      slug: space.slug,
+      title: space.title,
+      owner,
+      own: false,
+      operator: space.operator,
+      logo: logoPath(space),
+    },
+    talk: {
+      space: space.eid,
+      open,
+      app: at.app,
+      all: at.current.includes('all'),
+      at: `https://${spaceHost(env, space.slug)}`,
+    },
+  }
+  let parts = sideParts(view, beside.spaces ?? [], beside.apps ?? [])
   return h(Sidebar, {
     base: url(env),
     home: chatPath(space.slug),
     label: 'Menu',
-    badgePerson: spaces.length > 1 ? who.person : null,
+    view: who.person ? view : undefined,
     fold: { collapsed: !!beside.panes?.collapsed, back: at.here },
-    personal: spaces.length > 1
-      ? {
-        id: 'side-personal',
-        label: 'Across your spaces',
-        items: [
-          {
-            href: `${talkPath('updates')}?in=${encodeURIComponent(space.slug)}`,
-            current: at.current.includes('all'),
-            icon: 'inbox',
-            label: 'All updates',
-            names: 'All updates',
-            across: true,
-          },
-        ],
-      }
-      : undefined,
+    personal: parts.personal,
     space: {
-      picker: [
-        here,
-        spaces.some((s) => s.slug == space.slug) ? spaces : [here, ...spaces],
-        (s) => chatPath(s.slug),
-        null,
-        (s) => s.operator ?? '',
-        undefined,
-        true,
-      ],
+      picker: parts.picker,
       sections: [
         {
           id: 'side-operator',
@@ -93,28 +70,20 @@ export let talkSide = (
               href: chatPath(space.slug),
               // The conversation stays the page with an app open beside it.
               current: !reading,
-              icon: 'message-circle',
+              icon: icons['message-circle'],
               label: space.operator,
             },
             {
               href: talkPath('updates', space.slug),
               current: at.current.includes('updates'),
-              icon: 'bell',
+              icon: icons.bell,
               label: 'Updates',
               names: 'Updates',
               waiting: at.waiting,
             },
           ],
         },
-        {
-          id: 'side-apps',
-          label: 'Your apps',
-          heading: true,
-          note: `Each opens beside your one chat with ${space.operator}.`,
-          fit: true,
-          items,
-          empty: `None yet. Ask ${space.operator} to make one.`,
-        },
+        parts.apps!,
         {
           id: 'side-settings',
           label: 'Settings',
@@ -122,7 +91,7 @@ export let talkSide = (
           // has its Operator's alone.
           items: [{
             href: managePath(owner ? 'apps' : 'operator', space.slug),
-            icon: 'sliders-horizontal',
+            icon: icons['sliders-horizontal'],
             label: 'Manage',
             names: owner ? 'Apps' : 'Operator',
           }],
@@ -133,7 +102,7 @@ export let talkSide = (
       ? [{
         id: 'side-admin',
         label: 'Platform',
-        items: [{ href: ADMIN, icon: 'shield', label: 'Admin' }],
+        items: [{ href: ADMIN, icon: icons.shield, label: 'Admin' }],
       }]
       : undefined,
   })

@@ -72,7 +72,7 @@ import { day, esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { deskFrame } from './desk-pages.ts'
 import { FRAMED } from './frame.ts'
-import { type IconName } from './icons.ts'
+import { type IconName, icons } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
@@ -668,7 +668,13 @@ let desk = (
     icon: IconName,
     label: string,
     count?: number,
-  ): Item => ({ href, icon, label, count, current: current == key })
+  ): Item => ({
+    href,
+    icon: icons[icon],
+    label,
+    count,
+    current: current == key,
+  })
   let nav = [
     ...KEYS.map((key) =>
       link(

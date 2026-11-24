@@ -439,6 +439,7 @@ import {
   type Row as DirectoryRow,
 } from './directory.ts'
 import { UPDATE_WAITING } from '@yaks/platform/update-waiting'
+import { sideLine } from '@yaks/platform/side-rows'
 import {
   isRetired,
   RECEIPTS,
@@ -2270,12 +2271,17 @@ export class Store extends Durable {
               'edge',
               'decided',
               'proposed',
+              // What the side draws (./side.ts): names, logos and icons.
+              'doc',
+              'operator',
+              'space_logo',
+              'app_icon',
+              'email',
             ].some((key) => key in b)
           ),
         hold: (work) => this.#ctx.waitUntil?.(work),
-        read: async (_, read) => {
+        read: async (line, read) => {
           if (!read?.person) return []
-          let { waitingSeats } = await import('./updates.ts')
           let dir = directoryRows({
             query: async (q) => {
               let rows = await g.read(q) as DirectoryRow[]
@@ -2284,13 +2290,22 @@ export class Store extends Durable {
             },
             apply: async (rows) => await g.apply(rows, { trusted: true }),
           })
+          if (line != UPDATE_WAITING) {
+            let { sideRows } = await import('./side.ts')
+            return await sideRows(dir, read.person, line)
+          }
+          let { waitingSeats } = await import('./updates.ts')
           return (await waitingSeats(dir, read.person)).map(({ bundle }) =>
             bundle
           )
         },
-        tags: { request: 'directory Updates count' },
+        tags: { request: 'directory read of a person' },
       })
-      watching = beside(watching, pending, (line) => line == UPDATE_WAITING)
+      watching = beside(
+        watching,
+        pending,
+        (line) => line == UPDATE_WAITING || sideLine(line),
+      )
     }
     let live = sockets(
       watching,
@@ -5370,7 +5385,7 @@ export class Store extends Durable {
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))
     }
-    if (path == '/waiting/ws' && kernel && this.#name() == PLATFORM_STORE) {
+    if (path == '/person/ws' && kernel && this.#name() == PLATFORM_STORE) {
       return this.#live.accept(request, this.#callerRead(request))
     }
     if (path.startsWith('/branches') && kernel) {

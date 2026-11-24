@@ -1,3 +1,4 @@
+import type { Picked } from '@yaks/platform/side-rows'
 import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
@@ -268,7 +269,7 @@ ${
       : ''
   }${
     main.includes(' data-inbox-actions') ||
-      main.includes(' data-update-badges=') &&
+      main.includes(' data-side-view=') &&
         !main.includes(' data-operator-chat=')
       ? `<script type="module" src="${file('_inbox-actions.js')}"></script>`
       : ''
@@ -725,20 +726,7 @@ type Listed = MarkedApp & {
   access?: string | null
 }
 
-/** A space the side's selector offers: whether it is the person's to own,
- * whether it is the one they open first (`member.own`), and of one they are
- * only a member of, its owner's name. */
-export type Picked = {
-  slug: string
-  title: string
-  owner: boolean
-  own: boolean
-  whose?: string
-  // What its Operator is called.
-  operator?: string
-  // Where its logo is drawn from (@yaks/platform/routes `logoPath`), where it has one.
-  logo?: string
-}
+export type { Picked }
 
 export type DeskPage = {
   /** the space the page is in, or on a page of the person's own, the one the

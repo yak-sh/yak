@@ -170,6 +170,9 @@ let load = async (
   let html = await (await chatPage(p.env, space, as, open, beside, app))
     .text()
   let { document: next, Event } = parseHTML(html)
+  // The side drawn live from the tab's page graph is reach-door_test.ts's:
+  // here the page holds its conversation alone.
+  next.querySelector('[data-side-view]')?.removeAttribute('data-side-view')
   let { document, windowEvents } = view ??
     { document: next, windowEvents: next.createElement('div') }
   if (view) {

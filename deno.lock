@@ -4475,6 +4475,7 @@
             "npm:es-module-lexer@2.3.2",
             "npm:linkedom@~0.18.12",
             "npm:lucide@1.31.0",
+            "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
             "npm:ua-parser-js@1.0.41",
             "npm:uqr@0.1.3"

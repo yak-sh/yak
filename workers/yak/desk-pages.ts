@@ -5,7 +5,7 @@ import { Head } from '@yaks/ui/parts'
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
 import { frame, FRAMED } from './frame.ts'
-import { choice, spaceTile } from './space-picker.ts'
+import { choice, spaceTile } from '@yaks/platform/side-parts'
 import { Time } from '@yaks/ui/parts'
 import { agentSetup, pasteLink } from './signin-pages.ts'
 import {

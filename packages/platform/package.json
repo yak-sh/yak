@@ -20,6 +20,9 @@
     "./page-graph": "./page-graph.ts",
     "./updates-browser": "./updates-browser.ts",
     "./update-waiting": "./update-waiting.ts",
+    "./side-rows": "./side-rows.ts",
+    "./side-parts": "./side-parts.ts",
+    "./side-browser": "./side-browser.ts",
     "./space-logo": "./space-logo.ts",
     "./domain-pages": "./domain-pages.ts",
     "./domain-browser": "./domain-browser.ts",
@@ -182,6 +185,7 @@
     "es-module-lexer": "2.3.2",
     "lucide": "1.31.0",
     "preact": "10.29.7",
+    "preact-render-to-string": "6.7.0",
     "ua-parser-js": "1.0.41",
     "uqr": "0.1.3"
   },

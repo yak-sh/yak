@@ -104,6 +104,7 @@ import { admin, refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
 import { moved, redirect, shelf } from './apps.ts'
+import { pickable, sideApps } from './side.ts'
 import { kernels } from '@yaks/platform/ladder'
 import {
   billedDomains,
@@ -668,35 +669,6 @@ let sentFrom = (req: Request, env: Env) => {
   return new URL(at.pathname + at.search, hostUrl(env))
 }
 
-// The spaces the side's selector offers (pages.ts `Picked`): every one this
-// person may work in, the platform's own `yak` among them for its owners, as
-// the admin's directory lists their seats, the one they open first at the
-// top, then those they own, then those they are a member of, each named by
-// whose it is: every owner's name in one read.
-let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
-  let kept = (await dir.seated(person)).filter((s) =>
-    !s.space.trashed && writes(s.role)
-  )
-    .sort((a, b) =>
-      Number(b.own) - Number(a.own) ||
-      Number(b.role == 'owner') - Number(a.role == 'owner')
-    )
-  let names = await dir.persons([
-    ...new Set(
-      kept.flatMap((s) => s.role != 'owner' && s.owner ? [s.owner] : []),
-    ),
-  ])
-  return kept.map((s) => ({
-    slug: s.space.slug,
-    title: s.space.title,
-    owner: s.role == 'owner',
-    own: s.own,
-    whose: s.role == 'owner' ? undefined : names.get(s.owner!)?.name,
-    operator: s.space.operator,
-    logo: logoPath(s.space),
-  }))
-}
-
 // The person's Updates from every space's Operator they talk with, at
 // `/updates` (operator-page.ts `allUpdatesPage`), beside the side of
 // the space they came from (`?in=`), else their own. An address from before the space was in
@@ -777,9 +749,9 @@ let beside = async (
   space: Space,
   who: Owner,
 ): Promise<Beside> => {
-  let [spaces, { mine }, name, panes, ways, platformAdmin] = await Promise.all([
+  let [spaces, apps, name, panes, ways, platformAdmin] = await Promise.all([
     pickable(dir, who.person),
-    dir.apps(space).then((apps) => shelf(apps, space, who)),
+    sideApps(dir, space, who),
     dir.nameAt(who.person),
     dir.panes(who.person),
     // As the page asked it ahead (`foresee`), so it is answered from there.
@@ -795,13 +767,7 @@ let beside = async (
   ])
   return {
     spaces,
-    apps: mine.map(({ eid, slug, title, source, generatedIcon }) => ({
-      eid,
-      slug,
-      title,
-      source,
-      generatedIcon,
-    })),
+    apps,
     name,
     admin: platformAdmin,
     panes,
