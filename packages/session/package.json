@@ -19,6 +19,7 @@
     "./status": "./status.ts",
     "./wait": "./wait.ts",
     "./admission": "./admission.ts",
+    "./deferred": "./deferred.ts",
     "./cli": "./cli.ts",
     "./ended": "./ended.ts",
     "./transcript": "./transcript.ts",

@@ -33,6 +33,10 @@
       "noun": "goal",
       "verb": "new",
       "title": "Set a goal",
+      "step": {
+        "doing": "Setting a goal…",
+        "done": "Set a goal"
+      },
       "description": "Set a standing purpose that work serves rather than finishes: it has no status and is never done. satisfied_by links the work that already serves it. Returns applied bundles.",
       "input": {
         "title": {
@@ -71,6 +75,10 @@
       "noun": "goal",
       "verb": "list",
       "title": "List goals",
+      "step": {
+        "doing": "Checking its goals…",
+        "done": "Checked its goals"
+      },
       "description": "Return whole goals matching query, always narrowed by .goal; without one, every goal. Filters use .component.property=value; bare words search text. The work serving a goal is .satisfies.to=<goal>.",
       "input": {
         "query": {
@@ -95,6 +103,10 @@
       "noun": "goal",
       "verb": "update",
       "title": "Update a goal",
+      "step": {
+        "doing": "Updating a goal…",
+        "done": "Updated a goal"
+      },
       "description": "Patch a goal's words or scope, and link work that serves it. Omitted fields stay; null clears. Returns applied bundles.",
       "input": {
         "goal": {

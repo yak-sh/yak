@@ -986,7 +986,7 @@ export let basics = async (
 export let chatRoomSet = (store: Store): Tool => ({
   name: 'chat_room_set',
   title: 'Mark a chat room private',
-  step: { doing: 'Marking the room…', done: 'Marked the room' },
+  step: { doing: 'Making the room private…', done: 'Made the room private' },
   description:
     'Say whether a chat room (a Discord channel) you were addressed in is private: a server or channel the space connected where only its own people talk, not one open to the public. In a private room, anyone whose role allows what someone there asks may approve it for them; elsewhere only the person who asked confirms it is theirs. Only an owner says so.',
   parameters: {

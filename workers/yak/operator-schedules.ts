@@ -107,7 +107,10 @@ export let wakeTools = (store: Store): Tool[] => [
   {
     name: 'wake_set',
     title: 'Come back at a time, once or on a cadence',
-    step: { doing: 'Setting a wake-up…', done: 'Set a wake-up' },
+    step: {
+      doing: 'Setting a reminder to come back…',
+      done: 'Set a reminder to come back',
+    },
     description:
       'Come back later, once or on a cadence, with the current permissions of the person you work for. Give say to wake your conversation; give tool and args to schedule the same tool call you would make now, without a model turn (for a script: tool code_mode, args {script: code}). Give helper for a fresh helper each run, after the call if supplied, with its outcome included for checking; its report stays with the run, and it tells them with notification_send only when they should hear. You may also give say after a tool call. Each run and its outcome is kept; failures reach your conversation and the tracker. Give at, every, or both. Model work spends from the space’s budget.',
     parameters: {
@@ -188,7 +191,10 @@ export let wakeTools = (store: Store): Tool[] => [
   {
     name: 'wake_list',
     title: 'List wake-ups',
-    step: { doing: 'Reading wake-ups…', done: 'Read wake-ups' },
+    step: {
+      doing: 'Checking the reminders it set…',
+      done: 'Checked the reminders it set',
+    },
     description:
       'The wake-ups set for the person you work for that will fire again: each one’s id, when it next fires, how it recurs, its words, and when it last fired.',
     readOnly: true,
@@ -209,7 +215,7 @@ export let wakeTools = (store: Store): Tool[] => [
   {
     name: 'wake_cancel',
     title: 'Cancel a wake-up',
-    step: { doing: 'Cancelling a wake-up…', done: 'Cancelled a wake-up' },
+    step: { doing: 'Cancelling a reminder…', done: 'Cancelled a reminder' },
     description:
       'Cancel a wake-up set for the person you work for, by the id wake_set or wake_list gave, so it never fires again.',
     parameters: {
@@ -281,7 +287,10 @@ export let subscriptionTools = (
   {
     name: 'subscription_set',
     title: 'Be told when something changes: watch a query',
-    step: { doing: 'Subscribing…', done: 'Subscribed' },
+    step: {
+      doing: 'Setting up a watch for changes…',
+      done: 'Set up a watch for changes',
+    },
     description:
       `Be woken when something changes for the person you work for: a reading tool's answer or a query you watch live, and within seconds of each commit that changes its rows (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). Writes close together make one turn, and nothing is spent while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need. Give tool and args to watch a reading tool's answer to those args, as you would call it now: only a tool whose description says Subscribable, whose answer is a store query's rows; any other (an outside API, a listing) is never re-asked on a clock and is refused. Or give query, as graph_query's q.`,
     parameters: {
@@ -337,7 +346,10 @@ export let subscriptionTools = (
   {
     name: 'subscription_list',
     title: 'List subscriptions',
-    step: { doing: 'Reading subscriptions…', done: 'Read subscriptions' },
+    step: {
+      doing: 'Checking what it watches for…',
+      done: 'Checked what it watches for',
+    },
     description:
       'What you are subscribed to for the person you work for: each subscription’s id, the tool and args it watches the answer of or its query, its words, how many rows it watches and when it last looked.',
     readOnly: true,
@@ -353,7 +365,10 @@ export let subscriptionTools = (
   {
     name: 'subscription_cancel',
     title: 'Cancel a subscription',
-    step: { doing: 'Cancelling a subscription…', done: 'Cancelled' },
+    step: {
+      doing: 'Stopping a watch for changes…',
+      done: 'Stopped a watch for changes',
+    },
     description:
       'Cancel a subscription of the person you work for by its id from subscription_set or subscription_list. Available when acting on the subscription owner’s own request. Use subscription_list in turns triggered by a subscription, an app page, an error report, or another person’s thread.',
     parameters: {

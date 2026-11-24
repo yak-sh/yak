@@ -811,7 +811,10 @@ export let memberList = (
 ): Tool => ({
   name: 'member_list',
   title: 'See who is in the space',
-  step: { doing: 'Reading members…', done: 'Read members' },
+  step: {
+    doing: 'Checking who is in your space…',
+    done: 'Checked who is in your space',
+  },
   readOnly: true,
   description:
     `Who is in ${space.slug} and as what: each member's seat, its person (eid and name) and their role (owner, editor or viewer). An owner reads every seat; anyone else reads their own. Name a person (their eid) or a role to read only those.${SUBSCRIBABLE}`,

@@ -22,6 +22,17 @@ import type { Tool } from './react.ts'
 /** The name of the tool that loads deferred ones. */
 export let LOAD = 'tool_load'
 
+/** What the loader says of itself wherever it is offered: its name, title,
+ * how a call to it reads to the person (@yaks/tools `stepOf`), and the first
+ * of its description, which a turn follows with the tools it can load. */
+export let LOADER: Pick<Tool, 'name' | 'title' | 'step' | 'description'> = {
+  name: LOAD,
+  title: 'Load tools',
+  step: { doing: 'Getting ready…', done: 'Got ready' },
+  description:
+    'Load tools you are not sent yet by name. Their schemas are sent with your next turn. Load every one a task needs in one call.',
+}
+
 // A deferred tool as the catalog lists it: its title, or its description's
 // first sentence.
 let line = (t: Tool) =>
@@ -64,8 +75,8 @@ export let named = (name: string, known: Set<string>): string | undefined => {
 export let unknown = (
   missing: string[],
   names: string[],
-  withheld = new Map<string, string>(),
-) => {
+  withheld: Map<string, string> = new Map(),
+): string => {
   let words = (n: string) => n.split('__').at(-1)!.split('_')
   let near = (n: string) =>
     names.filter((k) => words(k).some((w) => words(n).includes(w))).sort()
@@ -132,10 +143,8 @@ export let loading = (offered: Tool[], separate = false): Tool[] => {
   let known = new Set(later.map((t) => t.name))
   let sent = new Set(tools.filter((t) => !t.deferred).map((t) => t.name))
   let load: Tool = {
-    name: LOAD,
-    title: 'Load tools',
-    description:
-      'Load tools you are not sent yet by name. Their schemas are sent with your next turn. Load every one a task needs in one call.' +
+    ...LOADER,
+    description: LOADER.description +
       (separate
         ? ' The current context lists the tools you can load.'
         : ' These are the tools you can load:\n' + later.map(line).join('\n')),

@@ -194,7 +194,7 @@ export let relayTools = (
         name: nameOf(namespace, 'message_relay'),
         title: 'Record their words',
         step: {
-          doing: 'Recording their words…',
+          doing: 'Recording your words…',
           done: 'Recorded their words',
         },
         description:
@@ -365,7 +365,7 @@ export let decisionRelay = (
 ): Tool => ({
   name: 'decision_relay',
   title: 'Record their answer',
-  step: { doing: 'Recording their answer…', done: 'Recorded their answer' },
+  step: { doing: 'Recording your answer…', done: 'Recorded your answer' },
   description:
     'Answer one of the person\'s open decisions with one of their own messages in this conversation, as theirs: use it whenever what they said to you answers a decision waiting on them ("go with the gothic one"), so it closes and leaves their Updates. You choose only which decision, which message and which listed choice it picks, and supply no words. Only their own words answer: never a decision they did not answer, and never your guess at what they want.',
   parameters: {

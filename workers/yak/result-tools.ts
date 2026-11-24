@@ -89,6 +89,10 @@ export let resultStore = (ctx: Ctx, args: Args = {}, local?: ResultHost) => {
 export let resultTools = (ctx: Ctx, local?: ResultHost): Tool[] => [{
   name: 'result_query',
   title: 'Query kept result',
+  step: {
+    doing: 'Looking through an earlier answer…',
+    done: 'Looked through an earlier answer',
+  },
   description: 'Run a jq filter against a complete tool result kept by id in ' +
     'this space. Returns {values: [...]} for the jq output stream. Use .result ' +
     'for ordinary graph answers; custom tool answers keep their exact data under ' +

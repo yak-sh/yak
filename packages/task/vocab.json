@@ -98,6 +98,10 @@
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
+      "step": {
+        "doing": "Adding to its to-do list…",
+        "done": "Added to its to-do list"
+      },
       "description": "Create one task or atomic batch. Rows inherit filing; id ($name), parent and requires connect trees/dependencies. check previews without saving. Returns applied bundles.",
       "input": {
         "title": {
@@ -228,6 +232,10 @@
       "noun": "task",
       "verb": "list",
       "title": "List tasks",
+      "step": {
+        "doing": "Checking its to-do list…",
+        "done": "Checked its to-do list"
+      },
       "description": "Return whole tasks matching query, always narrowed by .task. Without a query, selects .task.status=open. Filters use .component.property=value; bare words search text.",
       "input": {
         "query": {
@@ -587,6 +595,10 @@
       "noun": "decision",
       "verb": "new",
       "title": "Ask a decision",
+      "step": {
+        "doing": "Asking you to decide…",
+        "done": "Asked you to decide"
+      },
       "description": "Ask a task question with 2–4 choices and a recommended label; a choice may show an image, prose or a draft by its id. Assign the person being asked. Requiring work waits for its answer. Returns applied bundles.",
       "input": {
         "question": {
@@ -659,6 +671,10 @@
       "noun": "decision",
       "verb": "answer",
       "title": "Answer a decision",
+      "step": {
+        "doing": "Answering a question…",
+        "done": "Answered a question"
+      },
       "description": "Answer with a listed choice’s label or your own words. Records decided{choice} attributed to the caller, completes the task, and releases work requiring it. An answered or cancelled decision refuses another answer. Returns applied bundles.",
       "input": {
         "decision": {

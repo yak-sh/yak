@@ -410,6 +410,10 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         ...(t.title ?? t.annotations?.title
           ? { title: t.title ?? t.annotations?.title }
           : {}),
+        step: {
+          doing: `Using ${server.label ?? server.name}…`,
+          done: `Used ${server.label ?? server.name}`,
+        },
         description: `[${server.label ?? server.name}] ${
           t.description ?? t.name
         }`,

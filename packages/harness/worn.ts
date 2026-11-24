@@ -207,6 +207,11 @@ export let readText = (g: Graph, b: Bundle): string => {
  */
 export let readOpen = (how: Wear = {}): NamedTool => ({
   name: 'read_open',
+  title: 'Read instructions',
+  step: {
+    doing: 'Reading the instructions for this…',
+    done: 'Read the instructions for this',
+  },
   description:
     'Open one of the Reads your instructions list under "## Reads", in full, ' +
     'by its id there (or its title). Open one before work it covers.',

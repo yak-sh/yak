@@ -11,8 +11,16 @@
       "verb": "apply",
       "title": "Apply atomic changes",
       "step": {
-        "doing": "Changing the data\u2026",
-        "done": "Changed the data"
+        "doing": "Updating the data in %{app}…",
+        "done": "Updated the data in %{app}",
+        "by": {
+          "app": {
+            "": {
+              "doing": "Updating the data…",
+              "done": "Updated the data"
+            }
+          }
+        }
       },
       "description": "Create, edit, link or trash entities atomically via edits/links, q, bundles, or id/text (path defaults to doc.body). Ids accept eids, human ids and names; $name creates an entity reusable within this call. Omitted fields stay; null clears properties/components. Text edits replace literal find (one match unless all), then prepend/append; reads are guarded automatically, with optional was tokens. links add relations the store declares; drop removes them. q patches one entity: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. The array argument is bundles (not entities): [{entity:{eid},component:{fields}}], $was guards and $delete moves an entity and its deletion cascade to recoverable trash. graph_trash reads saved deletions; graph_restore restores them. Returns applied bundles with resolved ids, $alias and stamps. check previews then rolls back; reuse $names, since preview ids are temporary. Name only components and properties graph_schema lists; a guessed name is refused. https://yaks.app/docs/store",
       "input": {
@@ -180,8 +188,16 @@
       "verb": "query",
       "title": "Query entities",
       "step": {
-        "doing": "Looking through the data\u2026",
-        "done": "Looked through the data"
+        "doing": "Looking through the data in %{app}…",
+        "done": "Looked through the data in %{app}",
+        "by": {
+          "app": {
+            "": {
+              "doing": "Looking through the data…",
+              "done": "Looked through the data"
+            }
+          }
+        }
       },
       "description": "Query .component.property=value with & (and), | (or), bare search words, presence .component/!component (a kind's name reads as the components the kind is), or ?component to include without filtering. A name alone is a component, so always qualify a property with its component: .app.version, never .version. q is the whole query, with no .where or .query around it, e.g. .doc.title~=recipe&.created.at>2026-11-01 .order=-created.at .limit=5. Each store has its own components: call graph_schema first and name only what it lists. It reads live entities only: a deleted one has no component to query, and there is no .tombstone. Every row is an entity, so .entity alone names nothing: a query names the components its rows carry. Filter by id with .entity.eid=T-12, .entity.eid=#3b5bc70420, or .eid=T-12. Supply an id after =. graph_show reads entities by id. Operators: != ~= < >, lists a,b, ranges 1..9. To match part of a value, ~= (.web.url~=cloudflare); there is no bare ~. To find text by its words, use bare search words; by meaning, .near=T-12. Use .order=doc.title to sort by a property. Use .fields=doc.title to return one property or .fields=doc to return the whole component. Other directives include .limit=20 and .refs=T-12. filters narrow all of q. Returns named components; * or no named component returns whole entities. Bare search defaults to 20 compact hits. doc.body includes $was. graph_show reads whole entities. A guessed name is refused with the declared names nearest it. https://yaks.app/docs/querying",
       "input": {
@@ -226,8 +242,8 @@
       "verb": "show",
       "title": "Show entities",
       "step": {
-        "doing": "Reading records\u2026",
-        "done": "Read records"
+        "doing": "Looking up the details…",
+        "done": "Looked up the details"
       },
       "description": "Read whole entities by eid, human id (T-12), a short handle (#3b5bc70420 or unambiguous bare hex 3b5bc70420), or name, once each: id for one, ids for several. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
       "input": {
@@ -259,6 +275,10 @@
       "noun": "graph",
       "verb": "trash",
       "title": "Read graph trash",
+      "step": {
+        "doing": "Looking through deleted records…",
+        "done": "Looked through deleted records"
+      },
       "description": "Read recoverable graph deletions, grouped by deletion id and time, with their saved bundles. Omit ids to list the trash; ids selects groups containing those entity eids. id reads one group; after continues after the last group id returned. Returned bundles are saved snapshots, not live entities. graph_restore restores a deletion. Permanent purging requires the person's confirmation page.",
       "input": {
         "ids": {
@@ -294,8 +314,16 @@
       "verb": "schema",
       "title": "Read the schema",
       "step": {
-        "doing": "Reading the schema\u2026",
-        "done": "Read the schema"
+        "doing": "Checking what %{app} keeps…",
+        "done": "Checked what %{app} keeps",
+        "by": {
+          "app": {
+            "": {
+              "doing": "Checking what the data looks like…",
+              "done": "Checked what the data looks like"
+            }
+          }
+        }
       },
       "description": "Read vocabulary JSON Schema. No arguments returns a component/property index; component returns full declarations, types, refs and write examples. When a name is absent, the tool looks for those words in the vocabulary's names and descriptions. kind returns its definition and associated components, taking precedence over component; a kind's name sent as component is that kind. https://yaks.app/docs/components",
       "input": {
@@ -327,6 +355,10 @@
       "tool": true,
       "verb": "search",
       "title": "Search text",
+      "step": {
+        "doing": "Searching for “%{words}”…",
+        "done": "Searched for “%{words}”"
+      },
       "description": "Search indexed words and, with vectors, meaning. Ranked compact bundles contain entity.eid and hit:{id,title,kind,excerpt,source}; source is text, meaning or both. In excerpts, \\u0001/\\u0002 delimit matches. graph_show reads whole entities. https://yaks.app/docs/querying",
       "input": {
         "words": {
@@ -353,6 +385,10 @@
       "noun": "graph",
       "verb": "restore",
       "title": "Restore graph trash",
+      "step": {
+        "doing": "Bringing back deleted records…",
+        "done": "Brought back deleted records"
+      },
       "description": "Restore one saved deletion by id, or the newest deletions containing ids (entity eids), including their deletion cascades. Supply id or ids. Restore missing entities, components and properties while preserving later live values. Returns applied bundles. Read graph_trash first to choose the deletion. Permanent purging requires the person's confirmation page.",
       "input": {
         "ids": {

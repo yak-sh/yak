@@ -362,6 +362,7 @@ export let placeSet = (
 ): Tool => ({
   name: 'place_set',
   title: 'Note where they are',
+  step: { doing: 'Noting where you are…', done: 'Noted where you are' },
   description:
     'Record where the person you work for lives, works or is now, in their own words: "I\'m actually in Kalamazoo" is home (or current, if they are only there for now). Their word outranks their billing address, phone and connection. Keep it approximate: a city or town, never a street. forget true takes back what they said of that place.',
   parameters: {

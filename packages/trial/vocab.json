@@ -594,6 +594,10 @@
       "noun": "trial",
       "verb": "pass",
       "title": "Set what a judge must get right in a round",
+      "step": {
+        "doing": "Setting what a judge looks for…",
+        "done": "Set what a judge looks for"
+      },
       "description": "Set a round's passing share: how much of the known answers a judge sat it must agree with before its verdicts count. A number for a person to choose; the tally says who set it.",
       "input": {
         "round": {
@@ -619,6 +623,10 @@
       "noun": "trial",
       "verb": "hold",
       "title": "Hold out some of a round's pairs",
+      "step": {
+        "doing": "Setting some pairs aside…",
+        "done": "Set some pairs aside"
+      },
       "description": "Mark a share of a round's pairs `held_out`, chosen from those no person has tapped yet: a person's tap on one is kept from every selector's examples and tests the selector instead. Run again, it adds only what the share still lacks and moves nothing.",
       "input": {
         "round": {
@@ -644,6 +652,10 @@
       "noun": "trial",
       "verb": "tally",
       "title": "Tally a round of a trial",
+      "step": {
+        "doing": "Counting up the picks…",
+        "done": "Counted up the picks"
+      },
       "description": "Print what a round's rows say. For a skill round: for each variant, persona arm and case, how often a person preferred its attempts, how often neither, and how many grabbed them; then the round's known answers, each automated judge's agreement on them, and each judge's verdicts on the rest, a judge that did not pass shown apart as not to be used. For a match round (trial_match): every side, highest rated first, by its id, with what was measured of it (its place, its rating, and under each question the picks it won and how many people and passing judges made them), the first `few` marked as the ones a decision offers. Reads only.",
       "input": {
         "round": {
@@ -675,6 +687,10 @@
       "noun": "trial",
       "verb": "plan",
       "title": "Plan a round of a skill trial",
+      "step": {
+        "doing": "Planning a comparison…",
+        "done": "Planned a comparison"
+      },
       "description": "Write a round of a skill trial from its file, to improve a skill on cases its users bring: the skill it develops (found by its title, made where there is none), the variants (candidate texts of the skill; give the skill's current text as one, and say what each later one came `from`), the cases writers are handed, the wording writers are given, the model asked, judges and a `plan` of what to write. With `plan.paired`, every two variants' attempts at one case, arm and run are a pair to compare. Planning again with the same key replaces what the plan no longer holds. It writes no results: an attempt with an `output` or a guess with `guesses` is refused, since only a run writes those. Nothing is asked until trial_cap.",
       "input": {
         "round": {
@@ -691,6 +707,10 @@
       "noun": "trial",
       "verb": "match",
       "title": "Plan matches between drafts, images or documents",
+      "step": {
+        "doing": "Pairing up versions to compare…",
+        "done": "Paired up versions to compare"
+      },
       "description": "Plan a round of pair matches between any sides: drafts of an app, images or documents, by id. Each two sides are a pair under each question asked, so copy and layout can be judged apart. People tap between them, and with a judge each pair is also compared by a model in both orders, asked once trial_cap sets a cap; a judge's verdicts count only once it agrees with enough of the people's picks (trial_pass). trial_tally says where each side stands. Planning again with the same key and sides lands on the same rows.",
       "input": {
         "key": {
@@ -750,6 +770,10 @@
       "noun": "trial",
       "verb": "cap",
       "title": "Set a round's cap, which runs it",
+      "step": {
+        "doing": "Starting a round of comparisons…",
+        "done": "Started a round of comparisons"
+      },
       "description": "Say what a round still owes and what it will cost, then, with a cap above what its calls have cost so far, set the cap and start asking: every writer, then each judge of what was written, until what the round's calls cost in all would pass the cap. Ask with cap 0 first and tell whoever pays what it will cost; set only a cap they gave. The run goes on after this answers; trial_tally reads what came back.",
       "input": {
         "round": {
@@ -775,6 +799,10 @@
       "noun": "trial",
       "verb": "adopt",
       "title": "Make a variant its skill's next version",
+      "step": {
+        "doing": "Keeping the winning version…",
+        "done": "Kept the winning version"
+      },
       "description": "Make one of a round's variants the text of the skill the round develops: the skill's instructions become the variant's text, and the variant is marked as the skill's next version. Choose the winner people preferred (trial_tally names it). Where the skill is published, its listing keeps the version it published until it is published again, which asks for the new version's review.",
       "input": {
         "round": {

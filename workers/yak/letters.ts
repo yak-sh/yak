@@ -78,6 +78,10 @@ let listing = (ctx: Ctx): Tool => ({
   name: 'mail_list',
   readOnly: true,
   title: "List an app's email",
+  step: {
+    doing: 'Checking the email of %{app}…',
+    done: 'Checked the email of %{app}',
+  },
   description:
     `List an app's email records as bundles: JSON objects with entity ids, ` +
     `message text, mail headers and delivery fields when present. Sent mail ` +

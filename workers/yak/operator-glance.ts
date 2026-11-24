@@ -132,7 +132,7 @@ let updatesAnswered = async (g: Glance, most?: number) =>
 export let updatesList = (g: Glance): Tool => ({
   name: 'updates_list',
   title: 'Read their Updates',
-  step: { doing: 'Reading their Updates…', done: 'Read their Updates' },
+  step: { doing: 'Reading your Updates…', done: 'Read your Updates' },
   readOnly: true,
   description:
     'The Updates of the person you work for, as their page lists them: what waits on them (questions only they can answer, with the choices), the newest of what they were told, and what they answered there lately. Read it before telling them something again or asking what they decided.',

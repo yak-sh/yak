@@ -128,6 +128,10 @@
       "noun": "memory",
       "verb": "save",
       "title": "Save a memory",
+      "step": {
+        "doing": "Remembering this…",
+        "done": "Remembered this"
+      },
       "description": "Save verbatim words or mark their entity with on. said+feedback marks that person's earliest matching words; otherwise creates a doc for absent words. id patches; omitted fields stay. Replacing standalone words requires memory_recall's $was.doc.body as was; marked comments/entries retain text. feedback names the correcting person. Returns applied bundles.",
       "input": {
         "said": {
@@ -182,6 +186,18 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
+      "step": {
+        "doing": "Recalling notes about “%{said}”…",
+        "done": "Recalled notes about “%{said}”",
+        "by": {
+          "said": {
+            "": {
+              "doing": "Recalling earlier notes…",
+              "done": "Recalled earlier notes"
+            }
+          }
+        }
+      },
       "description": "Read whole memories with context and $was.doc.body for memory_save.was. said ranks meaning with vectors, otherwise matches all words newest first. near ranks meaning; said then filters text. Without either, newest first. ids/scope/feedback filter.",
       "input": {
         "said": {
@@ -228,6 +244,10 @@
       "noun": "memory",
       "verb": "forget",
       "title": "Forget a memory",
+      "step": {
+        "doing": "Forgetting a note…",
+        "done": "Forgot a note"
+      },
       "description": "Forget one memory by id. A memory holding its own words goes to the trash whole; a mark on an entry, comment or doc is removed and the words stay where they were said. Either comes back from the trash. Returns the applied bundle.",
       "input": {
         "id": {
@@ -248,6 +268,10 @@
       "noun": "memory",
       "verb": "source",
       "title": "Where somebody said these words",
+      "step": {
+        "doing": "Finding where this was said…",
+        "done": "Found where this was said"
+      },
       "description": "Find the earliest entity the named person wrote containing these words verbatim. Other authors' quotes do not count. Returns whole bundles; refuses when no source exists. Use its id with memory_save.on.",
       "input": {
         "said": {
@@ -274,6 +298,10 @@
       "noun": "memory",
       "verb": "around",
       "title": "Read the transcript around an entry",
+      "step": {
+        "doing": "Looking back over the conversation…",
+        "done": "Looked back over the conversation"
+      },
       "description": "Return whole transcript entries around an entry, in order, including tool calls and results. before and after count entries. Refuses a non-entry id.",
       "input": {
         "id": {
@@ -305,6 +333,10 @@
       "noun": "memory",
       "verb": "target",
       "title": "What an entity is aimed at",
+      "step": {
+        "doing": "Looking up what this is about…",
+        "done": "Looked up what this is about"
+      },
       "description": "Read whole entities named by its components' target fields; for a comment, what it comments on. Refuses an entity with no target.",
       "input": {
         "id": {
@@ -326,6 +358,10 @@
       "noun": "memory",
       "verb": "thread",
       "title": "Read the discussion an entity is in",
+      "step": {
+        "doing": "Reading the discussion around this…",
+        "done": "Read the discussion around this"
+      },
       "description": "Return the root target and all its comments and replies as whole bundles, oldest first. A target without comments answers alone.",
       "input": {
         "id": {
@@ -347,6 +383,10 @@
       "noun": "memory",
       "verb": "session",
       "title": "Where something happened",
+      "step": {
+        "doing": "Finding where this happened…",
+        "done": "Found where this happened"
+      },
       "description": "Return the session that wrote an entity, then its worked-on or claimed tasks, as whole bundles. Refuses an entity with no session.",
       "input": {
         "id": {

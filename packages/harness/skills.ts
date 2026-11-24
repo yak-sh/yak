@@ -61,6 +61,11 @@ export let skillItems = async (
  * signed as the session that asked. */
 export let skillRead: NamedTool = {
   name: 'skill_read',
+  title: 'Read a skill',
+  step: {
+    doing: 'Reading up on how to do this…',
+    done: 'Read up on how to do this',
+  },
   description:
     'Load skill instructions by exact title after its description matches ' +
     'the work. Reads the graph without provisioning a machine or executing ' +

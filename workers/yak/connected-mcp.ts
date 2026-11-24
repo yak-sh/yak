@@ -319,6 +319,7 @@ export let connectedTools = async (
   (await listConnectedCommands(ctx, '', asking)).map((command) => ({
     name: nameOf(command.namespace, command.name),
     title: command.title,
+    ...command.step ? { step: command.step } : {},
     description: command.description,
     inputSchema: command.input as Record<string, unknown>,
     readOnly: command.readOnly,

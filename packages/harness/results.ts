@@ -7,6 +7,11 @@ import { ToolError } from '@yaks/session'
 
 export let resultTool = (g: Graph): Tool => ({
   name: 'result_query',
+  title: 'Query kept result',
+  step: {
+    doing: 'Looking through an earlier answer…',
+    done: 'Looked through an earlier answer',
+  },
   description:
     'Run a jq filter against a complete tool result kept by id. Returns {values: [...]} for the jq output stream. Use .result for graph rows; third-party MCP replies retain .structuredContent and .content. Plain text is a jq string.',
   parameters: {

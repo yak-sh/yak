@@ -303,6 +303,10 @@ export let sets = (registry: Registry): string => pathsOf(registry.providers())
 let fields = {
   name: 'code_mode',
   title: 'Run code',
+  step: {
+    doing: 'Working through several steps…',
+    done: 'Worked through several steps',
+  },
   inputSchema: {
     type: 'object',
     properties: {

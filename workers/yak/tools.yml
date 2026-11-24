@@ -21,6 +21,14 @@
 
 mcp_connect:
   title: Connect an MCP server
+  step:
+    doing: 'Connecting %{name}…'
+    done: 'Connected %{name}'
+    by:
+      name:
+        '':
+          doing: 'Connecting a service…'
+          done: 'Connected a service'
   description: >-
     Connect or update an MCP server in a space, for you: that space's Operator
     uses its tools in turns with you, and apps you allow call them as you. An
@@ -38,12 +46,18 @@ mcp_connect:
     connections page; pass header when it names the header the key goes in.
 mcp_remove:
   title: Remove an MCP server
+  step:
+    doing: 'Disconnecting a service…'
+    done: 'Disconnected a service'
   description: >-
     Put one of your MCP servers in the trash, with its commands and the lists
     it shows your Operator. Its credential is kept, and the connections page
     brings it all back.
 space_new:
   title: Create a space
+  step:
+    doing: 'Creating the space %{slug}…'
+    done: 'Created the space %{slug}'
   description: >-
     Create another space, a group of apps sharing an address and membership,
     at <slug>.yaks.app, with the signed-in person as its owner. Signing in
@@ -53,6 +67,9 @@ space_new:
     specify space when more than one could match.
 space_set:
   title: Name, address, logo or visitor spending
+  step:
+    doing: 'Changing your space''s settings…'
+    done: 'Changed your space''s settings'
   description: >-
     Change a space's name or move it to another address, at any time, set
     its logo, or set how much of its monthly model and voice budget its
@@ -85,6 +102,9 @@ space_set:
     Documentation: https://yaks.app/docs/home.
 space_delete:
   title: Delete a space
+  step:
+    doing: 'Moving a space to the trash…'
+    done: 'Moved a space to the trash'
   description: >-
     Move a space to recoverable trash. Its apps stop serving, but their files
     and saved data stay intact. The space slug and shared domains, hostnames
@@ -96,6 +116,9 @@ space_delete:
     when the person specifically chose it. Documentation: https://yaks.app/docs/errors.
 space_restore:
   title: Restore a deleted space
+  step:
+    doing: 'Bringing back a deleted space…'
+    done: 'Brought back a deleted space'
   description: >-
     Restore a space from trash, with every app and its files and saved data.
     Its shared names remain held while trashed, so its original addresses
@@ -104,6 +127,9 @@ space_restore:
     expiry. Documentation: https://yaks.app/docs/errors.
 space_sell:
   title: Connect Stripe to a space
+  step:
+    doing: 'Setting up payments for your space…'
+    done: 'Set up payments for your space'
   description: >-
     Connect this space to Stripe so its apps can take payments. Requires the
     Plus plan and the space owner. This makes them a new Stripe account;
@@ -323,8 +349,8 @@ sandbox_stop:
 attachment_read:
   title: Read source text
   step:
-    doing: 'Reading source text…'
-    done: 'Read source text'
+    doing: 'Reading what you attached…'
+    done: 'Read what you attached'
   description: >-
     Read original UTF-8 text from a message or file by its attachment id in
     this space. Call inside code_mode: structuredContent.result[0].output.value.text contains
@@ -397,6 +423,14 @@ sandbox_ship:
     Documentation: https://yaks.app/docs/sandbox.
 app_preview:
   title: Preview an app
+  step:
+    doing: 'Opening %{app}…'
+    done: 'Opened %{app}'
+    by:
+      width:
+        '390':
+          doing: 'Opening %{app} at phone size…'
+          done: 'Opened %{app} at phone size'
   description: >-
     Open a page of the app in a browser on Cloudflare: the staged draft,
     built privately, before app_deploy, or with released: true the released
@@ -428,8 +462,8 @@ app_preview:
 app_deploy:
   title: Release a version
   step:
-    doing: 'Releasing %{app}…'
-    done: 'Released %{app}'
+    doing: 'Releasing a new version of %{app}…'
+    done: 'Released a new version of %{app}'
   description: >-
     Release one draft of the app as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
@@ -488,6 +522,9 @@ app_deploy:
     Documentation: https://yaks.app/docs.
 store_load:
   title: Load a data file into the store
+  step:
+    doing: 'Loading data into %{app}…'
+    done: 'Loaded data into %{app}'
   description: >-
     Write a data file the app already contains into the app's store, now.
     path is a file (data/cities.json) or a folder, loading every *.json and
@@ -545,6 +582,9 @@ app_rollback:
     https://yaks.app/docs/errors.
 store_restore:
   title: Restore the store to a point in time
+  step:
+    doing: 'Restoring the data of %{app}…'
+    done: 'Restored the data of %{app}'
   description: >-
     Put everything the app has saved back to how it was at a moment: the
     whole store, every row of it, as of that time. For a write that went
@@ -568,6 +608,9 @@ store_restore:
     https://yaks.app/docs/files.
 store_trace:
   title: Record the next Store requests
+  step:
+    doing: 'Watching how %{app} reads and saves…'
+    done: 'Watched how %{app} reads and saves'
   description: >-
     Platform-admin only. Record the next N requests to an app's Store into
     its space's tracker. next is 0..100; optional rate sets ordinary-request
@@ -577,6 +620,9 @@ store_trace:
     This does not make synthetic app requests.
 store_inspect:
   title: Inspect store size and dry-run cost
+  step:
+    doing: 'Checking how much %{app} holds…'
+    done: 'Checked how much %{app} holds'
   description: >-
     Show bounded table row counts and index names for an app's store. Name
     eid for bounded physical identity, tombstone and component-table
@@ -593,6 +639,9 @@ store_inspect:
     this tool never retries or applies the write.
 store_writes:
   title: Inspect kept store writes
+  step:
+    doing: 'Looking at recent changes to %{app}…'
+    done: 'Looked at recent changes to %{app}'
   description: >-
     List writes the named app's store still holds, including interrupted
     writes that a storage reset stopped. Name seq to inspect one write's
@@ -604,6 +653,9 @@ store_writes:
     without restoring the app. A store handle is not an app id. Nothing is retried.
 store_retry:
   title: Retry an interrupted store write
+  step:
+    doing: 'Trying a change to %{app} again…'
+    done: 'Tried a change to %{app} again'
   description: >-
     Explicitly retry one interrupted or unreviewed write by its seq, after
     inspecting its body and fixing the cause of interruption. Only the space
@@ -612,6 +664,9 @@ store_retry:
     it again.
 store_effect_retry:
   title: Retry an app store's failed effect runs
+  step:
+    doing: 'Retrying the background work of %{app}…'
+    done: 'Retried the background work of %{app}'
   description: >-
     Put an app store's failed effect runs back to pending with a fresh attempt
     allowance, after fixing what failed them, so the store works them again:
@@ -621,6 +676,9 @@ store_effect_retry:
     failed again.
 builder_choose:
   title: Choose an output take
+  step:
+    doing: 'Choosing which result to keep…'
+    done: 'Chose which result to keep'
   description: >-
     Make one retained builder output the take in use for its build and slot.
     Other slots keep their choices. This makes no call and spends nothing.
@@ -628,6 +686,9 @@ builder_choose:
     editor may choose.
 builder_build:
   title: Run an app's builder now
+  step:
+    doing: 'Generating content in %{app}…'
+    done: 'Generated content in %{app}'
   description: >-
     Build new bindings or ones whose own inputs changed. A changed template,
     model or tool never redoes current outputs by itself. outdated redoes
@@ -683,6 +744,9 @@ app_set:
     https://yaks.app/docs/home.
 connection_attach:
   title: Let an app use an existing connection
+  step:
+    doing: 'Letting %{app} use a connection…'
+    done: 'Let %{app} use a connection'
   description: >-
     Give an app access to one connected connection its space already owns.
     Only the space's owner may do this. The app starts members-only, receives
@@ -699,6 +763,9 @@ connection_attach:
     this tool or its answer. Documentation: https://yaks.app/docs/code.
 store_attach:
   title: Let an app use another app's store
+  step:
+    doing: 'Letting %{app} use another app''s data…'
+    done: 'Let %{app} use another app''s data'
   description: >-
     Give an app the store of another app in its space, the way
     connection_attach gives it a connection: an app that shows, edits or runs
@@ -714,6 +781,9 @@ store_attach:
     https://yaks.app/docs/sharing.
 connection_lend:
   title: Lend a connection to installed copies
+  step:
+    doing: 'Sharing a connection with copies of %{app}…'
+    done: 'Shared a connection with copies of %{app}'
   description: >-
     Lend a shared connection this app uses to copies installed from it. Only
     the owner of the app's space may lend its own connection. Each copy gets
@@ -726,6 +796,9 @@ connection_lend:
     https://yaks.app/docs/sharing.
 service_connect:
   title: Connect selected app service operations
+  step:
+    doing: 'Connecting an app''s service…'
+    done: 'Connected an app''s service'
   description: >-
     Connect an app to selected operations of a published app service, as the
     signed-in person. This grants those operations only, never merchant store
@@ -733,6 +806,9 @@ service_connect:
     Purchases still require checkout or the payer's explicit purchase authority.
 integration_publish:
   title: Publish an app service
+  step:
+    doing: 'Listing the service of %{app} in the directory…'
+    done: 'Listed the service of %{app} in the directory'
   description: >-
     Publish the app's service commands in the integration directory. A declared
     command opts in with service: {pricing: "its pricing terms"}. The listing
@@ -741,6 +817,9 @@ integration_publish:
     withdraws discovery and preserves customer orders and connections.
 integration_set:
   title: Describe or list a custom integration
+  step:
+    doing: 'Describing a service you added…'
+    done: 'Described a service you added'
   description: >-
     Change what a custom integration this space made says about itself: its
     title, a one-line tagline, its https site, and instructions, markdown for
@@ -758,6 +837,9 @@ integration_set:
     Documentation: https://yaks.app/docs/code.
 integration_list:
   title: Search the integration directory
+  step:
+    doing: 'Looking for a service to connect…'
+    done: 'Looked for a service to connect'
   description: >-
     Find an outside service a yaks app can call, in the integration directory
     at https://yaks.app/integrations: every service in the host catalog, and
@@ -773,6 +855,14 @@ integration_list:
     is public. Documentation: https://yaks.app/docs/code.
 connection_need:
   title: Say an app needs a key or a sign-in
+  step:
+    doing: 'Setting up a connection to %{integration}…'
+    done: 'Set up a connection to %{integration}'
+    by:
+      integration:
+        '':
+          doing: 'Setting up a connection…'
+          done: 'Set up a connection'
   description: >-
     Say that an app calls an outside service with a key or a sign-in (an API
     key, a Google account): it makes a connection for the person to connect
@@ -797,6 +887,9 @@ connection_need:
     Documentation: https://yaks.app/docs/code.
 connection_list:
   title: List connections
+  step:
+    doing: 'Checking your connections…'
+    done: 'Checked your connections'
   description: >-
     The space's connections to outside services: each one's service, whether
     it is connected, and which apps use it by which env.NAME. A key is never
@@ -805,6 +898,9 @@ connection_list:
     https://yaks.app/docs/code.
 app_delete:
   title: Delete an app
+  step:
+    doing: 'Moving %{app} to the trash…'
+    done: 'Moved %{app} to the trash'
   description: >-
     Move an app to recoverable trash. Its address stops answering, its tools
     and pages leave the roster and it stops being the front page. All files,
@@ -816,6 +912,9 @@ app_delete:
     Documentation: https://yaks.app/docs/errors.
 app_restore:
   title: Restore a deleted app
+  step:
+    doing: 'Bringing back %{app}…'
+    done: 'Brought back %{app}'
   description: >-
     Restore an app from trash with all files, versions and saved data.
     Its old slug is used if free; otherwise it gets a free numbered slug and
@@ -827,6 +926,9 @@ app_restore:
     Documentation: https://yaks.app/docs/errors.
 app_erase:
   title: Ask to erase an app from the trash
+  step:
+    doing: 'Asking you to confirm erasing %{app}…'
+    done: 'Asked you to confirm erasing %{app}'
   description: >-
     Ask the owner to permanently erase an app already in trash, only when
     they specifically chose permanent erasure. The tool erases nothing:
@@ -856,8 +958,13 @@ app_errors:
 app_list:
   title: List the person's apps
   step:
-    doing: 'Listing apps…'
-    done: 'Listed apps'
+    doing: 'Looking at %{app}…'
+    done: 'Looked at %{app}'
+    by:
+      app:
+        '':
+          doing: 'Looking at your apps…'
+          done: 'Looked at your apps'
   description: >-
     What the person already has here, short enough to pass on as it is:
     every space of theirs and which app its address opens, its plan as the
@@ -884,8 +991,13 @@ app_list:
 commands:
   title: List commands
   step:
-    doing: 'Listing the commands of %{app}…'
-    done: 'Listed the commands of %{app}'
+    doing: 'Looking at what %{app} can do…'
+    done: 'Looked at what %{app} can do'
+    by:
+      app:
+        '':
+          doing: 'Looking at what your apps can do…'
+          done: 'Looked at what your apps can do'
   description: >-
     The commands yaks apps, connected app services, your MCP servers and
     your connections offer, with the arguments each one accepts. An
@@ -902,8 +1014,8 @@ commands:
 command:
   title: Run a command
   step:
-    doing: 'Running %{name} in %{app}…'
-    done: 'Ran %{name} in %{app}'
+    doing: 'Using %{app}…'
+    done: 'Used %{app}'
   description: >-
     Run a command: name it and pass its arguments as args, exactly as commands
     lists them. Set app to the listed address for a connected service, MCP
@@ -1075,8 +1187,8 @@ number_verify:
 search_stats:
   title: Read Google Search numbers
   step:
-    doing: 'Reading Search Console…'
-    done: 'Read Search Console'
+    doing: 'Reading your Google Search numbers…'
+    done: 'Read your Google Search numbers'
   description: >-
     How a site does in Google Search, from the person's own Google Search
     Console: the clicks, impressions, click-through rate and average position
@@ -1096,8 +1208,8 @@ search_sitemap:
 number_status:
   title: Check phone numbers
   step:
-    doing: 'Checking numbers…'
-    done: 'Checked numbers'
+    doing: 'Checking your phone numbers…'
+    done: 'Checked your phone numbers'
   description: >-
     The numbers a space holds: where each texts from (the space, an app, or
     nowhere yet), the price set at purchase, where its toll-free verification
@@ -1109,6 +1221,9 @@ number_status:
     password.
 app_publish:
   title: Publish an app for others to install
+  step:
+    doing: 'Publishing %{app} for others to install…'
+    done: 'Published %{app} for others to install'
   description: >-
     Publish this app so anyone in any other space can install it by name.
     Someone else then calls app_install and gets their own copy: their own
@@ -1142,6 +1257,9 @@ app_publish:
     https://yaks.app/docs/sharing.
 app_transfer:
   title: Offer an app transfer
+  step:
+    doing: 'Offering to hand %{app} over…'
+    done: 'Offered to hand %{app} over'
   description: >-
     Offer to give an app you own to another yaks.app user. Use when the person
     asks to give or transfer their app. Name a confirmed friend by friend
@@ -1155,6 +1273,9 @@ app_transfer:
 
 app_unpublish:
   title: Unpublish an app
+  step:
+    doing: 'Stopping others from installing %{app}…'
+    done: 'Stopped others from installing %{app}'
   description: >-
     Stop offering the app for install. It stays exactly as it is, and so
     does every copy anyone installed, since their data is theirs, but nobody
@@ -1166,6 +1287,14 @@ app_unpublish:
     https://yaks.app/docs/sharing.
 app_published:
   title: List published apps
+  step:
+    doing: 'Looking for apps to install that match “%{words}”…'
+    done: 'Looked for apps to install that match “%{words}”'
+    by:
+      words:
+        '':
+          doing: 'Looking at apps you can install…'
+          done: 'Looked at apps you can install'
   description: >-
     What other people have published here, newest first: the name to install
     by, what the app is, and which space it came from. app_install gives
@@ -1177,6 +1306,9 @@ app_published:
     public. Documentation: https://yaks.app/docs/sharing.
 app_install:
   title: Install a published app
+  step:
+    doing: 'Installing %{name}…'
+    done: 'Installed %{name}'
   description: >-
     Take an app somebody published (app_published lists them) and make the
     person their own copy of it: their own address, their own data store,
@@ -1200,6 +1332,9 @@ app_install:
     https://yaks.app/docs/sharing.
 app_update:
   title: Update an installed app
+  step:
+    doing: 'Updating %{app}…'
+    done: 'Updated %{app}'
   description: >-
     Move an installed app to whatever version its publisher offers now. A
     copy of an app no longer published moves to the version it serves, for
@@ -1217,6 +1352,9 @@ app_update:
     https://yaks.app/docs/sharing.
 app_rate:
   title: Rate something your space installed
+  step:
+    doing: 'Rating something you installed…'
+    done: 'Rated something you installed'
   description: >-
     Rate a published app or skill (by its published name) or an integration
     in the directory (by its name) one to five stars for a space the person
@@ -1230,6 +1368,14 @@ app_rate:
     https://yaks.app/docs/sharing.
 member_add:
   title: Invite someone
+  step:
+    doing: 'Inviting %{name}…'
+    done: 'Invited %{name}'
+    by:
+      name:
+        '':
+          doing: 'Inviting %{email}…'
+          done: 'Invited %{email}'
   description: >-
     Invite someone by email address, or a confirmed friend by friend (their
     person id from friend_list): an editor writes, a viewer only reads,
@@ -1260,6 +1406,9 @@ member_add:
     Documentation: https://yaks.app/docs/sharing.
 member_remove:
   title: Remove someone
+  step:
+    doing: 'Removing %{email}…'
+    done: 'Removed %{email}'
   description: >-
     Remove a membership, or withdraw an invitation not yet accepted: pass an
     app slug to revoke its app-specific invitation, or omit app to revoke
@@ -1273,6 +1422,9 @@ member_remove:
     from space membership. Documentation: https://yaks.app/docs/sharing.
 friend_add:
   title: Add a friend
+  step:
+    doing: 'Adding a friend…'
+    done: 'Added a friend'
   description: >-
     Ask someone to be the person's friend on yaks.app, accept their request,
     or say yes to a suggested friend. Name them by person from friend_list,
@@ -1281,6 +1433,9 @@ friend_add:
     Use only when the person asks to add this friend.
 friend_list:
   title: List friends
+  step:
+    doing: 'Looking at your friends…'
+    done: 'Looked at your friends'
   description: >-
     The person's friends on yaks.app, and everyone waiting on an answer: who
     asked them (asked), who yaks.app suggests they may know (suggested), and
@@ -1292,6 +1447,9 @@ friend_list:
     their own. Their Friends page (/manage/account/friends) shows the same.
 friend_message:
   title: Message a friend
+  step:
+    doing: 'Messaging a friend…'
+    done: 'Messaged a friend'
   description: >-
     Send a message to one of the person's confirmed friends (friend, their
     person id from friend_list). It lands in the friend's Updates, where they
@@ -1301,12 +1459,18 @@ friend_message:
     on the app, can have their Operator help there with their own access.
 friend_messages:
   title: Read messages with friends
+  step:
+    doing: 'Reading your messages with friends…'
+    done: 'Read your messages with friends'
   description: >-
     The person's recent messages with their confirmed friends, newest first:
     each with the friend, whether it was sent to them or by them, whether a
     friend's Operator wrote it, and whether they have read it.
 friend_presence:
   title: Hide or show presence
+  step:
+    doing: 'Changing whether friends see you online…'
+    done: 'Changed whether friends see you online'
   description: >-
     Hide from the person's friends when they are on yaks.app, when they last
     were and what they have open (hidden true), or show it again (hidden
@@ -1315,11 +1479,17 @@ friend_presence:
     Only confirmed friends ever see it. Use only when the person asks.
 friend_remove:
   title: Remove a friend
+  step:
+    doing: 'Removing a friend…'
+    done: 'Removed a friend'
   description: >-
     Unfriend someone, turn down their request, or dismiss a suggested friend.
     The other person is not told. Use only when the person asks.
 grant:
   title: Create a CLI token
+  step:
+    doing: 'Making a sign-in token for the command line…'
+    done: 'Made a sign-in token for the command line'
   description: >-
     A short-lived token that signs the `yak` CLI in as this person: the same
     identity and exactly the same access they have here, never more. For
@@ -1338,6 +1508,9 @@ grant:
     it. Documentation: https://yaks.app/docs/sharing.
 screen_pair:
   title: Pair a TV
+  step:
+    doing: 'Pairing a TV…'
+    done: 'Paired a TV'
   description: >-
     Pair a TV, or any screen with a browser, with this person, so it shows,
     read-only, whatever draft their agent is building: the app they last
@@ -1350,6 +1523,9 @@ screen_pair:
     themselves. Returns a confirmation, or says the code matches no screen.
 feedback:
   title: Send feedback about yaks.app
+  step:
+    doing: 'Sending feedback to the yaks.app team…'
+    done: 'Sent feedback to the yaks.app team'
   description: >-
     {{feedback}} For feedback about yaks.app itself, include the app if relevant.
     Use app_errors for errors in the app you are building.
@@ -1359,13 +1535,8 @@ feedback:
 guide:
   title: Read the guide
   step:
-    doing: 'Reading the guide on %{page}…'
-    done: 'Read the guide on %{page}'
-    by:
-      page:
-        '':
-          doing: 'Reading the guide…'
-          done: 'Read the guide'
+    doing: 'Checking the yaks.app guide…'
+    done: 'Checked the yaks.app guide'
   description: >-
     The guide, read here instead of fetched from the web. With no page: the
     overview, which says what an app is, how its pages read and write its
@@ -1389,6 +1560,14 @@ about:
     keeps and whatever the person has said in that space.
 gallery_search:
   title: Search the gallery
+  step:
+    doing: 'Searching the gallery for “%{words}”…'
+    done: 'Searched the gallery for “%{words}”'
+    by:
+      words:
+        '':
+          doing: 'Looking through the gallery…'
+          done: 'Looked through the gallery'
   description: >-
     Find an app somebody has already made and shown at
     https://yaks.app/gallery: a recipe box, a sign-up sheet, a tracker. Pass
@@ -1398,6 +1577,9 @@ gallery_search:
     https://yaks.app/docs/sharing.
 memory_save:
   title: Save a memory
+  step:
+    doing: 'Remembering this…'
+    done: 'Remembered this'
   description: >-
     Save a memory for the space: a sentence or a note kept for everyone
     working there and found again by what it is about. A person's own words
@@ -1413,6 +1595,14 @@ memory_save:
     context as confirmation. Documentation: https://yaks.app/docs/memory.
 memory_recall:
   title: Recall memories
+  step:
+    doing: 'Recalling notes about “%{said}”…'
+    done: 'Recalled notes about “%{said}”'
+    by:
+      said:
+        '':
+          doing: 'Recalling earlier notes…'
+          done: 'Recalled earlier notes'
   description: >-
     The memories kept for the space, ranked against the words passed: what
     the person has said about how they want things done, and notes saved
@@ -1421,6 +1611,9 @@ memory_recall:
     it. Documentation: https://yaks.app/docs/memory.
 app_stats:
   title: Read app traffic
+  step:
+    doing: 'Checking how many people visit %{app}…'
+    done: 'Checked how many people visit %{app}'
   description: >-
     Return page-view counts for an app: the total over the last 30 days by
     default, and counts by page, referring site and country. Leave app out
@@ -1437,6 +1630,9 @@ app_stats:
 # any more, answered until the next listing (published.ts).
 sandbox_exec:
   title: Run a sandbox command (listed name)
+  step:
+    doing: 'Running a command…'
+    done: 'Ran a command'
   description: >-
     The name sandbox_shell was listed under: run cmd in the person's
     sandbox in this space, in cwd (default /workspace), for at most timeout seconds
@@ -1450,6 +1646,9 @@ sandbox_exec:
     Documentation: https://yaks.app/docs/sandbox.
 app_secret_set:
   title: Set a worker secret
+  step:
+    doing: 'Saving a secret key for %{app}…'
+    done: 'Saved a secret key for %{app}'
   description: >-
     Give the app's worker a key it reads as env.NAME. The value becomes a
     connection the app uses directly (connection_list shows it), kept in the
@@ -1461,6 +1660,9 @@ app_secret_set:
     confirmation, never the value. Documentation: https://yaks.app/docs/code.
 app_secret_list:
   title: List worker secrets
+  step:
+    doing: 'Checking the secret keys of %{app}…'
+    done: 'Checked the secret keys of %{app}'
   description: >-
     The names the app's worker reads as env.NAME from a connected key.
     Values are never returned, by this tool or any other. connection_list
@@ -1468,6 +1670,9 @@ app_secret_list:
     https://yaks.app/docs/code.
 app_secret_remove:
   title: Remove a worker secret
+  step:
+    doing: 'Removing a secret key from %{app}…'
+    done: 'Removed a secret key from %{app}'
   description: >-
     Stop the app's worker reading env.NAME. Only the app's use of the key
     goes: the key itself stays the space's connection (connection_list shows
@@ -1477,6 +1682,9 @@ app_secret_remove:
 
 builder_supply:
   title: Supply a builder artifact
+  step:
+    doing: 'Adding a finished piece to %{app}…'
+    done: 'Added a finished piece to %{app}'
   description: >-
     Answer exactly one outer binding of any builder with an artifact already
     in this app's store. Supply takes the builder, the first entity of its
@@ -1489,6 +1697,9 @@ builder_supply:
 
 gallery_review:
   title: Review a gallery listing
+  step:
+    doing: 'Reviewing a gallery listing…'
+    done: 'Reviewed a gallery listing'
   description: >-
     Approve or decline a submitted gallery listing as the platform admin.
     Every submission goes to the platform's owner for review, so decide one
@@ -1500,6 +1711,9 @@ gallery_review:
 
 gallery_feature:
   title: Feature something shared on yaks.app
+  step:
+    doing: 'Featuring something in the gallery…'
+    done: 'Featured something in the gallery'
   description: >-
     Put the platform's featured mark on a published app (space/app), a
     published skill (its published name), an integration in the directory (its
@@ -1512,6 +1726,9 @@ gallery_feature:
 
 gallery_code_review:
   title: Review a gallery app's code
+  step:
+    doing: 'Reviewing the code of a gallery app…'
+    done: 'Reviewed the code of a gallery app'
   description: >-
     Record the platform admin's code review of an app somebody else asked into
     the gallery, and send the platform's owner its review request with the
@@ -1542,12 +1759,18 @@ operator_chat:
     through a person's conversation.
 conversation_projects:
   title: List the spaces you can talk in
+  step:
+    doing: 'Looking at the spaces you can talk in…'
+    done: 'Looked at the spaces you can talk in'
   description: >-
     The spaces whose operator you may talk with: each where your seat writes,
     by its id and title, with your own id. Each is a project the other
     conversation tools take.
 conversation_start:
   title: Start talking with your operator
+  step:
+    doing: 'Starting a conversation…'
+    done: 'Started a conversation'
   description: >-
     Start a conversation with this space's operator and answer at once, without
     waiting for its reply: the session it is, its status and the input your
@@ -1558,6 +1781,9 @@ conversation_start:
     a retry never starts it twice. Only members who write may talk.
 conversation_send:
   title: Say more to your operator
+  step:
+    doing: 'Adding to a conversation…'
+    done: 'Added to a conversation'
   description: >-
     Give more words to a conversation of yours with this space's operator, with
     the files you name and the model you choose, and answer at once without
@@ -1565,6 +1791,9 @@ conversation_send:
     conversation_read reads the reply.
 conversation_read:
   title: Read a conversation
+  step:
+    doing: 'Reading a conversation…'
+    done: 'Read a conversation'
   description: >-
     Read a conversation with this space's operator: a page of the messages said
     in it, newest last, polled again for a reply still being written. With lines
@@ -1576,6 +1805,9 @@ conversation_read:
     platform's admin anyone's.
 conversation_recent:
   title: List your operator conversations
+  step:
+    doing: 'Looking at your recent conversations…'
+    done: 'Looked at your recent conversations'
   description: >-
     Your conversations with this space's operator, newest first: each session
     with its status, title and when it last changed.
@@ -1607,6 +1839,9 @@ operator_read:
     Model instruction snapshots are omitted unless context is true.
 operator_remove:
   title: Remove your operator's work
+  step:
+    doing: 'Removing earlier work…'
+    done: 'Removed earlier work'
   description: >-
     Remove rows from this space's private operator work, each with what exists
     only because of it: a task with its comments, sessions and their lines, a
@@ -1676,6 +1911,9 @@ library_remove:
     replaces instead.
 operator_stop:
   title: Stop an operator conversation
+  step:
+    doing: 'Stopping a conversation…'
+    done: 'Stopped a conversation'
   description: >-
     Stop an operator conversation or task and every helper working under it,
     however deep: the step each is in is withdrawn and no step goes on past
@@ -1683,6 +1921,9 @@ operator_stop:
     stays. You stop your own; the platform's admin anyone's.
 operator_retry:
   title: Retry an operator request
+  step:
+    doing: 'Trying a request again…'
+    done: 'Tried a request again'
   description: >-
     Run an operator request that could not finish again, as the same request,
     once what failed it is fixed: its failure and the answer that told of it

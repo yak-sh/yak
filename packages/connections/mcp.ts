@@ -18,6 +18,7 @@ import { line } from '@yaks/query'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
+import type { Step } from '@yaks/tools/title'
 import {
   checkNamespaces,
   checkToolNames,
@@ -50,6 +51,8 @@ export type Command = {
   at: string
   name: string
   title: string
+  /** how a call reads to the person while it runs and once it answered */
+  step?: Step
   description: string
   readOnly: boolean
   input: unknown
@@ -221,11 +224,17 @@ let comp = (row: Bundle | undefined, name: string) =>
   (row?.[name] ?? {}) as Comp
 let integration = (id: string) => `mcp:${id}`
 let input = { type: 'object', properties: {} }
+// How a call to a server's sign-in or status reads to the person.
+let checking = (label: string): Step => ({
+  doing: `Checking your connection to ${label}…`,
+  done: `Checked your connection to ${label}`,
+})
 let status = (s: GraphServer, description: string): RemoteCommand => ({
   at: integration(s.id),
   name: 'connection_status',
   namespace: s.server.namespace!,
   title: `Check ${s.label}`,
+  step: checking(s.label),
   description,
   readOnly: true,
   input,
@@ -253,6 +262,7 @@ let described = (s: GraphServer, tools: Listed): RemoteCommand[] =>
       namespace: s.server.namespace!,
       ...s.server.machine ? { machine: s.server.machine } : {},
       title: `${s.label}: ${titled(t.title ?? t.name)}`,
+      step: { doing: `Using ${s.label}…`, done: `Used ${s.label}` },
       description:
         `[What the MCP server ${s.label} says of its tool, in its own words] ${
           cut(t.description ?? t.name, DESCRIBED)
@@ -607,6 +617,7 @@ export let remoteCommands = (
         name: auth ? 'sign_in' : 'connection_status',
         namespace: s.server.namespace!,
         title: auth ? `Sign in to ${s.label}` : `Check ${s.label}`,
+        step: checking(s.label),
         description,
         readOnly: true,
         input,

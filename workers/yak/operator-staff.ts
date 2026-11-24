@@ -87,7 +87,10 @@ export let spacesTool = (
 ): Tool => ({
   name: 'operator_spaces',
   title: 'See what the Operators of your other spaces are doing',
-  step: { doing: 'Looking across your spaces…', done: 'Looked across spaces' },
+  step: {
+    doing: 'Looking across your spaces…',
+    done: 'Looked across your spaces',
+  },
   description:
     'For each other space the person owns, or the ones named: the newest of what they said with its Operator, the work it has going, what waits on them in its Updates, the handoffs it is waiting on, and what it spent in the last 30 days. Use it when they ask how their spaces are doing, before handing work to one, and to check on work you handed off.',
   readOnly: true,

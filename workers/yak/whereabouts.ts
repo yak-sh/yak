@@ -122,6 +122,7 @@ export let whereaboutsShow = (
   return {
     name: 'whereabouts_show',
     title: 'See where they are',
+    step: { doing: 'Checking where you are…', done: 'Checked where you are' },
     readOnly: true,
     description:
       "Where the person you work for is available right now, channel by channel: this Operator open and focused or in a background tab, another space's Operator or an app's page open (which, with its address), their Discord status, and when they last texted or emailed you. `reach` says where something that needs them would reach them now: the tab they are looking at, a browser notification, Discord, or their usual channel. Only they are shown, never anyone else.",

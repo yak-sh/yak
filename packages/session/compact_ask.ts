@@ -114,7 +114,16 @@ export let compactAsk = async (
     ...told ? [told] : [],
     { entity: { eid: model }, model: { name: served.name } },
 
-    { entity: { eid: tool }, tool: { name: 'session_compact' } },
+    {
+      entity: { eid: tool },
+      tool: {
+        name: 'session_compact',
+        step: {
+          doing: 'Tidying up the conversation…',
+          done: 'Tidied up the conversation',
+        },
+      },
+    },
     {
       entity: { eid: call },
       call: { to: tool, source },

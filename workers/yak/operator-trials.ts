@@ -288,6 +288,10 @@ export let pickTools = (
   return [{
     name: 'trial_pairs',
     title: 'Show the next pairs to pick between',
+    step: {
+      doing: 'Picking the next pairs for you to compare…',
+      done: 'Picked the next pairs for you to compare',
+    },
     readOnly: true,
     description:
       "The next pairs in a skill trial's round that this person has not picked between, each numbered for trial_pick: the ones their earlier picks leave closest, so a pair those already settle is not shown. Show them to the person as they are, never saying which variant wrote which, and ask the pair's question where it asks one, otherwise which they would rather read on from, or neither.",

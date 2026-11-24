@@ -359,6 +359,18 @@
       "noun": "step",
       "verb": "list",
       "title": "List steps for your agent",
+      "step": {
+        "doing": "Checking the steps waiting in %{app}…",
+        "done": "Checked the steps waiting in %{app}",
+        "by": {
+          "app": {
+            "": {
+              "doing": "Checking the steps waiting on you…",
+              "done": "Checked the steps waiting on you"
+            }
+          }
+        }
+      },
       "description": "The workflow steps waiting for your own agent: each its step id, title, instructions and binding (the input rows' ids in entities, the query's variables in vars). Do each one with your own tools and models, then answer it with step_answer. A step whose last answer was refused says why in failed.",
       "input": {}
     },
@@ -368,6 +380,10 @@
       "noun": "step",
       "verb": "answer",
       "title": "Answer a step",
+      "step": {
+        "doing": "Answering a step…",
+        "done": "Answered a step"
+      },
       "description": "Answer a step from step_list with its outputs, as a worker answers a builder: each output {slot, inputs, components}, where slot is a unique name, inputs lists the binding's entity ids it used, and components are the output row's components (doc, and the app's own). A file goes to the app's ./api/blob first, and a component names the eid it answered. The workflow carries on from the outputs, and the step closes once they are written. It spends nothing.",
       "input": {
         "step": {
@@ -397,6 +413,10 @@
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
+      "step": {
+        "doing": "Generating content…",
+        "done": "Generated content"
+      },
       "description": "Build bindings with new or changed inputs, independent of floor and staged. Current outputs are untouched unless --rebuild redoes every selected binding, or --outdated redoes bindings under an older definition. Both combine with --only and --limit. Alternate provider, model, template or native input creates a shadow variant.",
       "input": {
         "builder": {
@@ -536,6 +556,10 @@
       "noun": "builder",
       "verb": "supply",
       "title": "Supply an existing artifact",
+      "step": {
+        "doing": "Adding a finished piece…",
+        "done": "Added a finished piece"
+      },
       "description": "Answer one binding's slot with an existing artifact, spending nothing. The binding is current until its own inputs change. A staged builder accepts supply; an archived builder does not.",
       "input": {
         "builder": {
@@ -608,6 +632,10 @@
       "noun": "builder",
       "verb": "choose",
       "title": "Choose an output take",
+      "step": {
+        "doing": "Choosing which result to keep…",
+        "done": "Chose which result to keep"
+      },
       "description": "Make one retained output the take in use for its build and slot, without a call or spending. Other slots stay chosen as they are.",
       "input": {
         "output": {

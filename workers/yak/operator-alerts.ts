@@ -534,7 +534,10 @@ let pushed = async (
 export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
   name: 'notification_send',
   title: 'Notify them',
-  step: { doing: 'Notifying them…', done: 'Notified them' },
+  step: {
+    doing: 'Sending you a notification…',
+    done: 'Sent you a notification',
+  },
   description:
     'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, read later by someone who has not seen this conversation and may not be a programmer: one line saying what happened, with a link to the thing itself (the page, the app, the preview), never a report of your work, which stays in this chat it links to. No file names, tool names, ids or error messages. An ask is never a notice: a choice between things, or something only they can give or settle, is a decision_new of its own, one per ask. Write as yourself, in the first person (“I finished your [recipe page](…)”), and call them by the name they gave you. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone; a reply to a text or an email reaches you here. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
   parameters: {

@@ -135,6 +135,10 @@ export let handOff = async (
 export let handoffsTool = (store: OperatorStore, person: string): Tool => ({
   name: 'operator_handoffs',
   title: 'List work handed off to other Operators',
+  step: {
+    doing: 'Checking on work handed to your other spaces…',
+    done: 'Checked on work handed to your other spaces',
+  },
   description:
     "List the most recent handoffs you sent for this person to other spaces' Operators, what you asked and when, whether each has a report, any failure, and which are stalled (no reply after an hour). Follow one up with session_send and its session, the conversation it started there.",
   readOnly: true,

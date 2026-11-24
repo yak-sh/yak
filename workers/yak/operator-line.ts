@@ -597,7 +597,10 @@ export let phoneNumbers = (
   name: 'phone_numbers',
   role: 'self',
   title: 'Their phone numbers',
-  step: { doing: 'Reading their numbers…', done: 'Read their numbers' },
+  step: {
+    doing: 'Checking your phone numbers…',
+    done: 'Checked your phone numbers',
+  },
   description:
     "List the numbers on the phone account the person you work for connected, and how you use each: outbound, your phone_send texts go from it; inbound, texts that reach it come to you. The two are independent. Give a number (or its label) to set either: set only what they asked for. \"Text from the church line\" is outbound on. When they have more than one number and have not said which, ask them. Inbound on points the number's SMS URL callback at yaks.app, in place of any it had (its email and forwarding stay as they are); off puts the callback back as it was. Turn inbound on only when they ask for texts to it to come to you. A number they connected from their own account is never cancelled by yaks.app: nothing here can cancel, release or reroute it. Once their provider approves the number's 10DLC registration, record the campaign id it gives as campaign: until then, carriers block the number's texts to many people.",
   parameters: {

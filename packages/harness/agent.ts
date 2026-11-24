@@ -3,6 +3,7 @@ import { type Built, line, sub } from '@yaks/query'
 import { edgeEid } from '@yaks/edge'
 import { inputText, senders } from './input_text.ts'
 import { dispatchStatus } from '@yaks/session/admission'
+import { LOADER } from '@yaks/session/deferred'
 // The harness is its agent: the rows every transcript is read from, the runner
 // it lends them (@yaks/session run.ts), and the operations a caller needs —
 // start a session, send it a message, list sessions, read one back. It runs
@@ -115,7 +116,12 @@ export let seed = (
         serves: { name: o.model },
       }]
       : [],
-    ...(o.tools ?? []).map((t) => ({
+    // A turn holding deferred tools is offered the loader beside them
+    // (@yaks/session `loading`), and its calls are named by this row too.
+    ...[
+      ...o.tools ?? [],
+      ...o.tools?.some((t) => t.deferred) ? [LOADER] : [],
+    ].map((t: Pick<Tool, 'name' | 'title' | 'step' | 'description'>) => ({
       entity: { eid: toolEid(t.name) },
       [TOOL]: {
         name: t.name,
