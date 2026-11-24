@@ -6,6 +6,7 @@
 import { cleanup, equal, test } from '@yaks/testing'
 import { assertRejects, assertStringIncludes } from '@std/assert'
 import { answer, type Browsing, type Visit } from '@yaks/platform/browser-visit'
+import { FIT } from '@yaks/platform/preview-fit'
 import { actions } from './browser/testing.ts'
 import { connector, fresh, type Kernel, seed } from './probe.ts'
 import { verify } from './lib/token.ts'
@@ -36,15 +37,21 @@ let browsing: Browsing = {
           createCDPSession: () =>
             Promise.resolve({
               send: (method: string, params?: { expression?: string }) => {
-                let audited = params?.expression?.includes('innerText')
+                let expression = params?.expression
+                let width = visit.view.width
+                let value = expression?.includes('innerText')
                   ? text
-                  : { violations: [], incomplete: [] }
+                  : expression?.startsWith(FIT)
+                  ? { page: width, window: width, past: [] }
+                  : expression?.includes('axe.run(document')
+                  ? { violations: [], incomplete: [] }
+                  : []
                 return Promise.resolve(
                   method == 'Page.getFrameTree'
                     ? { frameTree: { frame: { id: 'main' } } }
                     : method == 'Page.createIsolatedWorld'
                     ? { executionContextId: 1 }
-                    : { result: { value: audited } },
+                    : { result: { value } },
                 )
               },
             }),
