@@ -92,12 +92,14 @@ export type Telling = {
   by?: string
   via?: string
   from?: string
+  /** the words it answers, when it is a reply (@yaks/notify `reply`) */
+  replies?: string
   id?: string
 }
 
 /** A notification's row. */
 export let notification = (
-  { to, words, subject, about, by, via, from, id }: Telling,
+  { to, words, subject, about, by, via, from, replies, id }: Telling,
 ): Bundle => ({
   entity: {
     eid: id ? derivedEid('operator-told|' + id) : crypto.randomUUID(),
@@ -108,6 +110,7 @@ export let notification = (
     ...from ? { from } : {},
   },
   doc: subject ? { title: subject, body: words } : { body: words },
+  ...replies ? { reply: { to: replies } } : {},
   ...by || via
     ? { $actor: { ...by ? { by } : {}, ...via ? { via } : {} } }
     : {},
@@ -273,9 +276,9 @@ let aboutsOf = async (store: Store, rows: (Bundle | undefined)[]) => {
  * the page scrolls to, and that entry's place in it. */
 export type Place = { chat: string; entry?: string; seq?: number }
 
-// An entry's place: its session and seq, standing for the call it answers
-// where it is a result, which the chat draws as that call's line.
-let placed = async (store: Store, b: Bundle | undefined) => {
+/** An entry's place: its session and seq, standing for the call it answers
+ * where it is a result, which the chat draws as that call's line. */
+export let placed = async (store: Store, b: Bundle | undefined) => {
   let call = comp(b, 'result')?.call
   if (call) [b] = await store.g.get([String(call)])
   let entry = comp(b, 'entry')
@@ -467,6 +470,25 @@ export let openedIn = async (
   }
 }
 
+/** Of `eids`, the rows told or put to `person` that they have read,
+ * dismissed or answered, or that were withdrawn: what a notification of
+ * them no longer needs to say. Rows that are not theirs are left out. */
+export let handledOf = async (store: Store, person: string, eids: string[]) => {
+  let rows = eids.length ? await store.g.get(eids) : []
+  let theirs = rows.filter((r): r is Bundle =>
+    !!r && (comp(r, 'notification')?.to == person ||
+      comp(r, 'filed')?.assignee == person)
+  )
+  let marks = await Promise.all(theirs.map(async (r) => {
+    if (r.decided || r.cancelled || r.completed) return true
+    let [attended] = await store.g.read(
+      line`.subscription.actor=${person}&.subscription.target=${r.entity.eid}&*`,
+    )
+    return !!(attended?.opened || attended?.archived)
+  }))
+  return theirs.filter((_, i) => marks[i]).map((r) => r.entity.eid)
+}
+
 /**
  * What a person does in their Updates: reads them (`{}`, or `{seen}` to
  * mark what they read now as read, or `{dismissed}` for the notices they
@@ -474,7 +496,9 @@ export let openedIn = async (
  * a file one of their questions shows (`{shown, eid}`: its address and
  * media type), answers a question with a choice (`{choose, choice}`), or
  * sends words about one (`{reply, say}`), which opens the chat; words on
- * what a stranger's conversation raised answer it.
+ * what a stranger's conversation raised answer it. `{handled}` names rows a
+ * device still shows notifications of, and answers which of them they have
+ * read or answered since, which that device takes away (`handledOf`).
  */
 export let updating = async (
   store: Store,
@@ -510,6 +534,10 @@ export let updating = async (
   }
   if (args.dismissed === true) {
     return await updatesOf(store, person, space, 50, true)
+  }
+  if (Array.isArray(args.handled)) {
+    let asked = args.handled.filter((e): e is string => typeof e == 'string')
+    return { handled: await handledOf(store, person, asked.slice(0, 50)) }
   }
   if (args.count === true) {
     return { waiting: await waitingOf(store, person, space) }

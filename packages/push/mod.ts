@@ -275,3 +275,36 @@ export let push = async (
     Number.isFinite(after) ? after : 1000,
   )
 }
+
+/** How one message pushed to several browsers went: those that took it,
+ * those whose subscription is gone, and the first refusal of any other. */
+export type Spread = {
+  sent: Subscription[]
+  gone: Subscription[]
+  refused?: Unpushed | Error
+}
+
+/** Push `payload` to each of `browsers` at once (`push`): which took it,
+ * which are gone, and the first refusal, which a host retries or falls back
+ * from when none took it. */
+export let pushAll = async (
+  browsers: Subscription[],
+  payload: string,
+  vapid: Vapid,
+  send?: (request: Request) => Promise<Response>,
+): Promise<Spread> => {
+  let outcomes = await Promise.allSettled(
+    browsers.map((b) => push(b, payload, vapid, send)),
+  )
+  let were = (want: Pushed) =>
+    browsers.filter((_, i) => {
+      let o = outcomes[i]
+      return o.status == 'fulfilled' && o.value == want
+    })
+  let failed = outcomes.find((o) => o.status == 'rejected')
+  return {
+    sent: were('sent'),
+    gone: were('gone'),
+    ...failed ? { refused: failed.reason } : {},
+  }
+}

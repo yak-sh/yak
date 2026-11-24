@@ -79,6 +79,19 @@
       },
       "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"
     },
+    "reply": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the words it answers: an entry, a comment or a letter, which may live in another graph"
+        }
+      },
+      "description": "these words answer words somebody said: a notification telling them the answer to what they wrote is a reply, shown as its own words"
+    },
     "subscription": {
       "component": true,
       "type": "object",

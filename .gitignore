@@ -86,6 +86,7 @@ node_modules
 /workers/yak/public/_words.js
 /workers/yak/public/_settings.js
 /workers/yak/public/_alerts.js
+/workers/yak/public/push.js
 /workers/yak/public/_sort.js
 /workers/yak/public/_inbox-actions.js
 /workers/yak/public/_friends.js

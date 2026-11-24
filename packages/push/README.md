@@ -38,6 +38,60 @@ subscription. `pushRequest` builds the same request without sending it, and
 `isSubscription(value)` says whether a value a page posted is a subscription a
 message can go to.
 
+`pushAll(browsers, payload, vapid, send?)` pushes one payload to several
+browsers at once and answers which took it (`sent`), which are `gone`, and the
+first refusal of any other, which a host retries or falls back from when none
+took it.
+
+## Notifications
+
+`@yaks/push/notice` draws a notification as a view of a row. A host's renderer
+returns a small tree, the way a page's renderer returns elements: one
+`Notification` with its `title`, its `tag`, where pressing it opens (`url`), its
+`icon` and its `badge` (the small monochrome icon Android shows), holding its
+body and an `Action` for each button. A button posts its `form` to `post` from
+the service worker. `noticeOf(tree)` is the push surface's host: function
+components are called, elements become their text, and a link is its label.
+
+```ts
+import { h } from 'preact'
+import { noticeOf, Notification, said } from '@yaks/push/notice'
+
+let notice = noticeOf(
+  h(
+    Notification,
+    { title: 'Elihu replied', tag: 'row-eid', url: '/ana' },
+    'Yes.',
+  ),
+)
+said(notice!, 2) // the push that shows it, the installed icon counting 2
+```
+
+`said(notice, count?)` is the push that shows a notification, cut to what one
+shows and to what a push carries. A notification with the tag of one already
+shown replaces it. `closing(tags, count?)` is the push that takes away the
+notifications of `tags` once what they were about was read or answered.
+`quietly(endpoint)` says whether a browser may be pushed one: Safari takes back
+the subscription of a site whose push shows nothing, so Apple's push service is
+never sent a closing.
+
+## In the browser
+
+`worker.js` is the service worker a host serves at its root: it shows a pushed
+notification and sets the installed app's icon count, takes away the
+notifications a closing names, opens a notification's `url` in a window of the
+site already open when there is one, and posts a pressed button's form, opening
+the notification instead when that fails. Every push that is not a closing shows
+a notification, even one whose words can't be read.
+
+`@yaks/push/browser` is the page's half. `subscribe(key, { worker, waiting })`
+asks the browser's permission, registers the worker (`/push.js` by default) and
+subscribes with the site's public key, trying again while the browser's push
+service refuses (`persist`); a reason the person can act on is `Unallowed`.
+`badge(count)` sets the installed app's icon. `tidy(handled)` asks `handled`
+which tags of the notifications this device shows were handled since and closes
+those: a device that is never pushed a closing loses them as its page is seen.
+
 ## Testing
 
 `@yaks/push/testing`'s `browser(endpoint)` is a browser with keys of its own:

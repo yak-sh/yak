@@ -1696,6 +1696,7 @@ let leftBy = async (
       ...words.trim() ? { subject: `Reply to “${quoted(words)}”` } : {},
       words: text,
       from: input.entity.eid,
+      replies: input.entity.eid,
       by: space,
       via: session,
       id: `left|${input.entity.eid}|${person}`,

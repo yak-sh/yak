@@ -836,6 +836,22 @@ export let operatorDoc: VocabDoc = {
       description:
         'Tell the person what the Operator tells or asks them, the way they chose to be alerted: a notification it wrote them, or a decision assigned to them, an approval among them (operator-alerts.ts).',
     },
+    operator_alert_read: {
+      effect: true,
+      target: '.subscription',
+      created: ['opened', 'archived'],
+      tries: 3,
+      description:
+        'Take away the browser notifications of what the Operator told or asked a person once they read or dismissed it in the app, on every device that can be pushed it quietly (operator-alerts.ts `unalert`).',
+    },
+    operator_alert_answered: {
+      effect: true,
+      target: '.decision',
+      created: ['decided', 'cancelled'],
+      tries: 3,
+      description:
+        'Take away the browser notifications of a question the Operator asked once it is answered or withdrawn, on every device that can be pushed it quietly (operator-alerts.ts `unalert`).',
+    },
     operator_decision_answer: {
       effect: true,
       target:

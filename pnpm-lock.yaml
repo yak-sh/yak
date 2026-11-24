@@ -4026,6 +4026,9 @@ importers:
       '@yaks/mail':
         specifier: 0.2.23
         version: link:../mail
+      '@yaks/markdown':
+        specifier: 0.2.30
+        version: link:../markdown
       '@yaks/member':
         specifier: 0.2.25
         version: link:../member
@@ -4041,9 +4044,15 @@ importers:
       '@yaks/provenance':
         specifier: 0.2.28
         version: link:../provenance
+      '@yaks/push':
+        specifier: 0.2.33
+        version: link:../push
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query
+      '@yaks/render':
+        specifier: 0.2.24
+        version: link:../render
       '@yaks/session':
         specifier: 0.2.33
         version: link:../session
@@ -4260,6 +4269,9 @@ importers:
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
+      preact:
+        specifier: 10.29.7
+        version: 10.29.7(preact-render-to-string@6.7.0)
 
   packages/query:
     dependencies:

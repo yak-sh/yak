@@ -4,17 +4,21 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./notice": "./notice.ts",
+    "./browser": "./browser.ts",
+    "./worker": "./worker.js",
     "./vocab": "./vocab.ts",
     "./testing": "./testing.ts"
   },
   "license": "Apache-2.0",
-  "description": "Web Push: a browser's subscription, kept on its person, and a message pushed to it, encrypted for that browser and signed with the site's VAPID key.",
+  "description": "Web Push: a browser's subscription, kept on its person; a message pushed to it, encrypted for that browser and signed with the site's VAPID key; a notification as a view of a row, and the service worker that shows it and takes it away.",
   "dependencies": {
     "@yaks/graph": "0.2.33",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",
-    "@yaks/testing": "0.2.30"
+    "@yaks/testing": "0.2.30",
+    "preact": "10.29.7"
   }
 }

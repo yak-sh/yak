@@ -17,19 +17,23 @@ import { Blocked } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
 import {
   isSubscription,
-  push,
+  pushAll,
   type Subscription,
   subscriptionEid,
   Unpushed,
   type Vapid,
 } from '@yaks/push'
+import { closing, noticeOf, quietly, said } from '@yaks/push/notice'
+import { resolve } from '@yaks/render'
+import { h } from 'preact'
+import { pushViews, type Telling } from '@yaks/platform/operator-push'
 import type { Tool } from '@yaks/session'
 import { CallError } from '@yaks/tools/errors'
 import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { alerted } from '@yaks/platform/letters'
-import { chatPath, talkPath } from '@yaks/platform/routes'
+import { chatPath, logoPath, talkPath } from '@yaks/platform/routes'
 import {
   askAnchor,
   listsOf,
@@ -344,7 +348,15 @@ export let alert = async (
     : undefined
   let route = await routeFor(dir, to, written, undefined, reach, direct)
   if (!route) return
-  let note = { words, subject, id: eid, about: told.about, asks, at: written }
+  let note = {
+    words,
+    subject,
+    id: eid,
+    about: told.about,
+    asks,
+    at: written,
+    row,
+  }
   let outcome: Bundle[]
   try {
     let letter = await sent(env, store, dir, space, to, route, note)
@@ -370,7 +382,7 @@ export let alert = async (
 }
 
 // One alert: its words and subject, its notification's eid, what it is
-// about and when it was written.
+// about, when it was written, and the row it is.
 type Note = {
   words: string
   subject?: string
@@ -378,6 +390,7 @@ type Note = {
   about?: string
   asks?: boolean
   at?: string
+  row: Bundle
 }
 
 // An alert on its way: a notification on each browser allowed, a message on
@@ -399,13 +412,16 @@ let sent = async (
   // What asks them opens at itself in their Updates, answered there.
   let answer = note.asks ? `${updates}#${updateAnchor(id)}` : undefined
   if (route.by == 'push') {
-    let open = answer ??
+    let open = answer ?? await replyAt(env, store, space, note.row) ??
       openAt(url(env, chatPath(space.slug)), updates, note.about)
+    let telling = tellingOf(env, space, open)
+    let notice = noticeIn(store, note.row, telling)
     let count = await waitingOn(env, store, person, space.eid)
-    let told = { words: subject ?? words, open, id, count }
     let refused: Unpushed | undefined
     try {
-      if (await pushed(env, dir, route.to, space, told)) return undefined
+      if (notice && await pushed(env, dir, route.to, said(notice, count))) {
+        return undefined
+      }
     } catch (error) {
       if (!(error instanceof Unpushed)) throw error
       refused = error
@@ -460,9 +476,6 @@ let sent = async (
   return [recipient, { ...letter, operator_letter: { person } }]
 }
 
-// The most of an alert's line a notification shows.
-let SHOWN = 200
-
 // How many things wait on the person, as the bar beside their conversation
 // counts them, which the installed page's icon shows; null when that could
 // not be read. Never fails the alert it rides on.
@@ -485,34 +498,49 @@ let waitingOn = async (
   }
 }
 
-// Whether an alert reached any of `browsers`, each pushed the Operator's
-// name, the alert in a line, where it opens and how many things wait on the
-// person. A browser whose subscription is gone is dropped; one the push
-// service refused is retained, and when none took it the first refusal is
-// handed back to the alert for fallback or retry.
-let pushed = async (
+/** What a notification of `space`'s Operator needs beside its row
+ * (operator-push.tsx): its name, the space's icon, yaks.app's badge, where
+ * pressing it opens, and where an answer from its buttons goes. */
+export let tellingOf = (env: Env, space: Space, open: string): Telling => ({
+  operator: space.operator,
+  open,
+  icon: url(env, logoPath(space, 'icon') ?? '/icon-192.png'),
+  badge: url(env, '/badge-96.png'),
+  answer: url(env, talkPath('updates', space.slug)),
+})
+
+/** Row `row` as a notification (operator-push.tsx `Push`), or null for a
+ * row no notification draws. */
+export let noticeIn = (store: Store, row: Bundle, telling: Telling) => {
+  let view = resolve(pushViews, row, 'Push', store.vocab)
+  return view ? noticeOf(h(view.Render, { e: row, ctx: telling })) : null
+}
+
+// Where a reply opens: the conversation at the words it answers, drawn
+// from just before them (updates.ts `chatAt`); none for another row.
+let replyAt = async (env: Env, store: Store, space: Space, row: Bundle) => {
+  let to = part(row, 'reply')?.to
+  if (!to) return undefined
+  let { placed } = await import('./operator-updates.ts')
+  let { chatAt } = await import('./updates.ts')
+  let [words] = await store.g.get([String(to)])
+  let from = await placed(store, words)
+  return from ? url(env, chatAt(space, { from })) : undefined
+}
+
+/** Whether `payload` reached any of `browsers`. A browser whose
+ * subscription is gone is dropped; one the push service refused is
+ * retained, and when none took it the first refusal is handed back to the
+ * alert for fallback or retry. */
+export let pushed = async (
   env: Env,
   dir: Directory,
   browsers: Subscription[],
-  space: Space,
-  told: { words: string; open: string; id: string; count: number | null },
+  payload: string,
 ) => {
   let vapid = vapidOf(env)
   if (!vapid) throw refuse('push', 'Browser notifications are not switched on.')
-  let payload = JSON.stringify({
-    title: space.operator,
-    body: lineOf(told.words, SHOWN),
-    url: told.open,
-    tag: told.id,
-    ...told.count == null ? {} : { count: told.count },
-  })
-  let outcomes = await Promise.allSettled(
-    browsers.map((b) => push(b, payload, vapid)),
-  )
-  let gone = browsers.filter((_, i) => {
-    let o = outcomes[i]
-    return o.status == 'fulfilled' && o.value == 'gone'
-  })
+  let { sent, gone, refused } = await pushAll(browsers, payload, vapid)
   if (gone.length) {
     await dir.apply({
       entities: gone.map((b) => ({
@@ -521,13 +549,54 @@ let pushed = async (
       })),
     })
   }
-  if (outcomes.some((o) => o.status == 'fulfilled' && o.value == 'sent')) {
-    return true
-  }
-  let failed = outcomes.find((o) => o.status == 'rejected')
-  if (failed) throw failed.reason
+  if (sent.length) return true
+  if (refused) throw refused
   return false
 }
+
+/**
+ * The `operator_alert_read` and `operator_alert_answered` effects: row `eid`,
+ * a notification or question the Operator told a person, was read,
+ * dismissed or answered in the app, by `person` or by whoever answered it.
+ * Its notification (its `Push` view's tag) is taken away from each of their
+ * browsers that can be pushed a closing quietly, and the icon's count set
+ * again. Safari can't be, and an iPhone keeps it until it is opened
+ * (@yaks/push/notice `quietly`). Nothing is pushed for a row never told.
+ */
+export let unalert = async (
+  env: Env,
+  store: Store,
+  person: string | undefined,
+  eid: string,
+) => {
+  let [row] = await store.g.get([eid])
+  if (!row?.delivered) return
+  let told = toldOf(row) ?? (row.decision ? { to: assignee(row) } : null)
+  let to = person ?? told?.to
+  if (!to || (told && told.to != to)) return
+  let dir = directoryOf(env.STORE)
+  let by = String(part(row, 'created')?.by ?? '')
+  let [space, browsers] = await Promise.all([
+    by ? dir.at(by) : null,
+    dir.pushes(to),
+  ])
+  let quiet = browsers.filter((b) => quietly(b.endpoint)).map(subscription)
+  if (!space || !quiet.length || !vapidOf(env)) return
+  let notice = noticeIn(store, row, tellingOf(env, space, ''))
+  if (!notice) return
+  let count = await waitingOn(env, store, to, space.eid)
+  try {
+    await pushed(env, dir, quiet, closing([notice.tag], count))
+  } catch (error) {
+    if (error instanceof Unpushed && error.retry) {
+      throw Object.assign(refuse('push', error.message), { retry: error.retry })
+    }
+    if (!(error instanceof Unpushed)) throw error
+  }
+}
+
+// Whom a question was put to.
+let assignee = (row: Bundle) => String(part(row, 'filed')?.assignee ?? '')
 
 /** The Operator's `notification_send`: words for the person it works for, in
  * their Updates and told to them the way they chose (`alert`). */

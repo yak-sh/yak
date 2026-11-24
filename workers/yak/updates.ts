@@ -181,7 +181,7 @@ let leads = (env: Env, space: Space, u: Update, apps: Apps) => {
  * entry it was written from, drawn from just before that entry so an old
  * one is on the page (operator-page.ts `chatPage`, `from`), and named in the
  * address the page scrolls to and marks (`row-<entry>`). */
-export let chatAt = (space: Space, u: Update) => {
+export let chatAt = (space: Space, u: Pick<Update, 'from'>) => {
   let at = chatPath(space.slug, u.from?.chat)
   let { entry, seq } = u.from ?? {}
   return entry ? `${at}${seq ? `?from=${seq - 1}` : ''}#row-${entry}` : at

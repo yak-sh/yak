@@ -8,7 +8,7 @@ import { directoryOf, stamp } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { letterFor, receive, textSigned } from './operator-channels.ts'
-import { notification } from './operator-updates.ts'
+import { notification, updating } from './operator-updates.ts'
 import { notificationSend, routeFor } from './operator-alerts.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { endpoints } from './endpoints.ts'
@@ -104,7 +104,7 @@ let told = async (text: string, about?: string, subject?: string) => {
 }
 let page = async (view: string, fields: Record<string, string> | object) => {
   let body: BodyInit = JSON.stringify(fields)
-  if (view != 'push') {
+  if (view != 'push' && !Array.isArray(fields)) {
     body = new FormData()
     for (let [k, v] of Object.entries(fields)) body.set(k, String(v))
   }
@@ -304,6 +304,13 @@ let opened = async () =>
 let about = crypto.randomUUID()
 let byPush = await told('Your report is ready.\nIt has three charts.', about)
 let onBoth = await opened()
+// Read in the app, it is taken away from every browser, and a device still
+// showing it hears it was handled.
+let unhandled = await page('handled', [byPush.notification])
+await updating(store, held, { open: byPush.notification })
+await service.drain()
+let closedOnBoth = await opened()
+let handled = await page('handled', [byPush.notification, eid])
 pushes['/laptop'] = 530
 let partial = await told('One push service is down.')
 let partialPush = await opened()
@@ -360,17 +367,27 @@ test('an alert to a person who chose push is a notification on each browser they
   assertEquals(byPush.reaches, 'push')
   assertEquals(Object.keys(onBoth).sort(), ['laptop', 'phone'])
   let shown = onBoth.phone
-  // The alert in a line, opening their Updates at what it is about, and
-  // how many things need them for the installed icon.
+  // What happened and its words, opening their Updates at what it is
+  // about, wearing yaks.app's icon for a space with no logo, and how many
+  // things need them for the installed icon.
   assertEquals([shown.title, shown.body], [
-    space.operator,
-    'Your report is ready.',
+    `${space.operator} sent a note`,
+    'Your report is ready.\nIt has three charts.',
   ])
+  assertEquals(new URL(shown.icon).pathname, '/icon-192.png')
+  assertEquals(new URL(shown.badge).pathname, '/badge-96.png')
   assertEquals(new URL(shown.url).pathname, '/ana/updates')
   assertEquals(new URL(shown.url).hash, `#ask-${about}`)
   assertEquals(shown.tag, byPush.notification)
   assertEquals(shown.count, 0)
   assertEquals(typeof (byPush.row.delivered as { at: string }).at, 'string')
+})
+test('once read in the app, its notification is taken away on every browser, and the icon counted again', () => {
+  let closing = { close: [byPush.notification], count: 0 }
+  assertEquals(closedOnBoth, { laptop: closing, phone: closing })
+  assertEquals([unhandled.said, handled.said], [{ handled: [] }, {
+    handled: [byPush.notification],
+  }])
 })
 test('a browser that took back its subscription is dropped, and the rest still hear', () => {
   assertEquals([goneOnce, Object.keys(onPhone)], [['/laptop'], ['phone']])

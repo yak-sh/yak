@@ -20,6 +20,9 @@ on that record.
   written from, where its reader opens the conversation it came from. Its words
   are its `doc{body}`. It is a thread of its own; @yaks/inbox lanes it as
   Updates. It is not a letter, so it carries no [@yaks/mail](../mail) `deliver`.
+- `reply{to}` records that a row's words answer words somebody said: `to` is the
+  entry, comment or letter it answers. A notification carrying it tells its
+  reader the answer to what they wrote, and is shown as its own words.
 - `subscription{actor, target, mode}` records whether an actor watches (`watch`)
   or mutes (`mute`) a target. The actor is the entity identifying the recipient.
   An absent mode neither watches nor mutes. Personal `opened{at, by, via}` and

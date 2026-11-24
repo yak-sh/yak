@@ -1,57 +1,9 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { renderToString as render } from 'preact-render-to-string'
-import { CallError } from '@yaks/tools/errors'
-import { LONG_WORK, offer, persist } from './alerts-browser.ts'
+import { LONG_WORK, offer } from './alerts-browser.ts'
 import { alertsOffer } from './operator-page.ts'
-
-// The browser's push service refusing a subscription for a while (bug
-// a0001c73): the page tries again later and says so once.
-let refused = () =>
-  new DOMException('Registration failed - push service error', 'AbortError')
-
-let run = (answers: (string | Error)[]) => {
-  let slept: number[] = []
-  let said = 0
-  let attempt = () => {
-    let answer = answers.shift()!
-    return answer instanceof Error
-      ? Promise.reject(answer)
-      : Promise.resolve(answer)
-  }
-  let done = persist(attempt, {
-    waits: [1, 2, 3],
-    sleep: (ms) => Promise.resolve(void slept.push(ms)),
-    waiting: () => said++,
-  })
-  return { done, slept, said: () => said }
-}
-
-test('persist tries again while the push service refuses, saying so once', async () => {
-  let r = run([refused(), refused(), 'sub'])
-  assertEquals(await r.done, 'sub')
-  assertEquals(r.slept, [1, 2])
-  assertEquals(r.said(), 1)
-})
-
-test('persist answers at once when the push service takes it', async () => {
-  let r = run(['sub'])
-  assertEquals(await r.done, 'sub')
-  assertEquals([r.slept, r.said()], [[], 0])
-})
-
-test('persist gives up with a refusal the person reads', async () => {
-  let r = run([refused(), refused(), refused(), refused()])
-  await assertRejects(() => r.done, CallError, 'not answering')
-  assertEquals(r.slept, [1, 2, 3])
-})
-
-test('persist passes any other failure through untried', async () => {
-  let r = run([new DOMException('bad key', 'InvalidAccessError')])
-  await assertRejects(() => r.done, DOMException, 'bad key')
-  assertEquals(r.slept, [])
-})
 
 // The offer in the conversation, on a linkedom page, with a browser that can
 // be allowed and has not been: hidden until the Operator starts long work,

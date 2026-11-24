@@ -47,6 +47,9 @@ export let ASSETS: Asset[] = [
   { name: '_talk.js', bundle: here('./operator-rows.ts') },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
+  // The service worker that shows pushed notifications, at the root it
+  // serves, under the address the browsers that allowed it registered.
+  { name: 'push.js', file: of('@yaks/push/worker') },
   { name: '_sort.js', bundle: here('./sort.ts') },
   {
     name: '_inbox-actions.js',

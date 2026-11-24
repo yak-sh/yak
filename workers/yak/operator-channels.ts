@@ -1836,6 +1836,19 @@ export let handleChannels = (
         (ms) => Promise.resolve(attempt?.defer?.(ms)),
       )
     },
+    // Once read or answered in the app, its notifications go away.
+    operator_alert_read: async (event) => {
+      let [row] = await g.get([event.entity.eid])
+      let { actor, target } = part<Comp | undefined>(row, 'subscription') ??
+        {}
+      if (!actor || !target) return
+      let { unalert } = await import('./operator-alerts.ts')
+      await unalert(env, operator.store, String(actor), String(target))
+    },
+    operator_alert_answered: async (event) => {
+      let { unalert } = await import('./operator-alerts.ts')
+      await unalert(env, operator.store, undefined, event.entity.eid)
+    },
     operator_handoff_send: async (event) => {
       let [row] = await g.get([event.entity.eid])
       if (!row?.operator_handoff || row.completed) return

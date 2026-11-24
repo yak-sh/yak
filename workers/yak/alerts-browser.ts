@@ -1,11 +1,16 @@
 // Alerts on the device a person is holding (operator-alerts.ts): allowing a
-// browser's notifications, the offer in the conversation that does it in one
-// press once the Operator starts long work (operator-page.ts `alertsOffer`),
-// and the installed page's icon showing how many things need them. Apple delivers web push only to a page
-// added to an iPhone's Home Screen, after a press there, so in an iPhone's
-// browser the offer says to add it first.
+// browser's notifications (@yaks/push/browser), the offer in the conversation
+// that does it in one press once the Operator starts long work
+// (operator-page.ts `alertsOffer`), the installed page's icon showing how
+// many things need them, and the notifications this device still shows of
+// things they read or answered since, taken away as the page is seen. Apple
+// delivers web push only to a page added to an iPhone's Home Screen, after a
+// press there, so in an iPhone's browser the offer says to add it first.
 import { CallError } from '@yaks/tools/errors'
+import { badge, subscribe, tidy, Unallowed } from '@yaks/push/browser'
 import { leaving, PAGE } from '@yaks/ui/navigate'
+
+export { badge }
 
 let report = (error: unknown) =>
   queueMicrotask(() => {
@@ -19,78 +24,21 @@ let refusal = async (response: Response, otherwise: string) => {
     : new CallError('arguments', message)
 }
 
-// How long to wait before each new try when the browser's push service
-// refuses a subscription.
-let WAITS = [10_000, 60_000, 300_000]
-
-/** Runs `attempt` again, after each of `waits`, while the browser's push
- * service refuses it. Chrome answers `AbortError` ("Registration failed -
- * push service error") when its push service cannot register the browser for
- * a while; a bad key would be an `InvalidAccessError` instead. `waiting` is
- * called once, at the first refusal, so the page can say it will try again. */
-export let persist = async <T>(
-  attempt: () => Promise<T>,
-  {
-    waits = WAITS,
-    sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms)),
-    waiting,
-  }: {
-    waits?: number[]
-    sleep?: (ms: number) => Promise<void>
-    waiting?: () => void
-  } = {},
-): Promise<T> => {
-  for (let i = 0;; i++) {
-    try {
-      return await attempt()
-    } catch (error) {
-      if ((error as Error)?.name != 'AbortError') throw error
-      if (i == waits.length) {
-        throw new CallError(
-          'arguments',
-          "This browser's push service is not answering. Try again later.",
-        )
-      }
-      if (i == 0) waiting?.()
-      await sleep(waits[i])
-    }
-  }
-}
-
-/** Allows notifications on this browser: asks its permission, registers the
- * worker that shows them (public/push.js), subscribes with yaks.app's public
- * VAPID `key` and keeps the subscription at `at` (operator-page.ts `?push`).
+/** Allows notifications on this browser: subscribes it with yaks.app's
+ * public VAPID `key` (@yaks/push/browser `subscribe`, the worker at
+ * /push.js) and keeps the subscription at `at` (operator-page.ts `?push`).
  * Call it from the press itself: a browser asks only then. While the push
- * service refuses, it tries again later (`persist`), calling `waiting` once. */
+ * service refuses, it tries again later, calling `waiting` once. */
 export let allow = async (
   key: string,
   at: string,
   waiting?: () => void,
 ) => {
-  if (!('serviceWorker' in navigator) || !('PushManager' in globalThis)) {
-    throw new CallError(
-      'arguments',
-      'This browser cannot show notifications. Choose another way.',
-    )
-  }
-  if (await Notification.requestPermission() != 'granted') {
-    throw new CallError(
-      'arguments',
-      'Notifications are blocked for yaks.app in this browser. Allow them in its settings, then try again.',
-    )
-  }
-  let worker = await navigator.serviceWorker.register('/push.js')
-  await navigator.serviceWorker.ready
-  let server = Uint8Array.from(
-    atob(key.replaceAll('-', '+').replaceAll('_', '/')),
-    (c) => c.charCodeAt(0),
-  )
-  let sub = await worker.pushManager.getSubscription() ??
-    await persist(() =>
-      worker.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: server,
-      }), { waiting })
+  let sub = await subscribe(key, { waiting }).catch((error) => {
+    throw error instanceof Unallowed
+      ? new CallError('arguments', error.message)
+      : error
+  })
   let response = await fetch(at, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -104,13 +52,19 @@ export let allow = async (
   }
 }
 
-/** The installed page's icon shows `count` things waiting, or none. */
-export let badge = (count: number) => {
-  let shown = count > 0
-    ? navigator.setAppBadge?.(count)
-    : navigator.clearAppBadge?.()
-  shown?.catch(() => {})
-}
+/** Takes away the notifications this device shows of things the person
+ * read or answered since, asking the page's Operator at `at` which
+ * (operator-page.ts `?handled`). */
+export let tidied = (at: string) =>
+  tidy(async (tags) => {
+    let response = await fetch(`${at}?handled=1`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(tags),
+    })
+    if (!response.ok) throw await refusal(response, 'Not read.')
+    return (await response.json()).handled ?? []
+  })
 
 // An iPhone or iPad, whose browser takes no push until the page is added to
 // its Home Screen and opened from there. iPadOS calls itself a Mac with touch.
@@ -158,6 +112,7 @@ export let offer = async (root: Document = document, signal?: AbortSignal) => {
   let box = root.querySelector<HTMLElement>('[data-alerts-offer]')
   if (!box) return
   if (box.dataset.badge) badge(Number(box.dataset.badge))
+  if (box.dataset.on != null) seen(root, box.dataset.at!, signal)
   let part = (name: string) =>
     box.querySelector<HTMLElement>(`[data-shows=${name}]`)
   if (!part('offer')) return
@@ -235,6 +190,16 @@ export let offer = async (root: Document = document, signal?: AbortSignal) => {
     }, 'Alerts could not be turned on. Try again.'),
     { signal },
   )
+}
+
+// Whenever the page is seen, now and each time it is shown again, the
+// notifications of what was handled since go.
+let seen = (root: Document, at: string, signal?: AbortSignal) => {
+  let look = () => {
+    if (root.visibilityState == 'visible') tidied(at).catch(report)
+  }
+  look()
+  root.addEventListener('visibilitychange', look, { signal })
 }
 
 if (typeof document != 'undefined') {

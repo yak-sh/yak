@@ -1001,6 +1001,17 @@ export let operatorAnswer = async (
       return Response.json({ message: e.message }, { status: 400 })
     }
   }
+  // Of the rows this device still shows notifications of, those the person
+  // read or answered since, which it takes away (alerts-browser.ts).
+  if (q.has('handled') && req.method == 'POST') {
+    let tags = await req.json().catch(() => null)
+    if (!Array.isArray(tags)) {
+      return Response.json({ message: 'Send the tags shown.' }, { status: 400 })
+    }
+    return Response.json(
+      await operatorDoor(env, space, who, 'updates', { handled: tags }),
+    )
+  }
   // The room of a chat server the Operator hears in full, chosen by the
   // space's owner on its chat card (`chatCard`), and the page drawn again.
   if (q.has('chat') && req.method == 'POST') {

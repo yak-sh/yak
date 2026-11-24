@@ -283,11 +283,12 @@ export let operatorConfig: Config = {
     // chatter the store lends for its platform.
     { use: '@yaks/chat', facets: ['vocab', 'effects'] },
     // A person's Updates from the Operator (operator-updates.ts): what it
-    // tells them, and what each has read.
+    // tells them, which of it answers what they wrote, and what each has
+    // read.
     {
       use: '@yaks/notify',
       facets: ['vocab'],
-      words: ['notification', 'subscription'],
+      words: ['notification', 'reply', 'subscription'],
     },
     { use: '@yaks/draft', facets: ['vocab', 'graph'] },
     // Its tasks, goals and memories are numbered, each in its letter's
