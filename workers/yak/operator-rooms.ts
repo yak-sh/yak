@@ -372,18 +372,19 @@ export let replying = async (
 
 /** The rooms words said to the Operator in the conversation `session` is
  * of, a fork's being its top's, newest first: the only ones its `chat_read`
- * reads. */
+ * reads. Every step of a turn asks, so it reads from the rare side: the words
+ * that came by a chat platform (`channel.name`, indexed), then those of the
+ * conversation, never the conversation's whole history. */
 export let roomsOf = async ({ g }: Store, at: string) => {
   let session = await topOf(g, at)
   let entries = await g.read(
-    line`.entry.session=${session}&.intake.item&.channel.name&.order=-entry.seq&.limit=200&.fields=intake.item,channel.name`,
+    line`.channel.name=${[
+      ...PLATFORMS.keys(),
+    ]}&.intake.item&.entry.session=${session}&.order=-entry.seq&.limit=200&.fields=intake.item`,
   )
   return roomsIn(
     g,
-    await g.get(
-      entries.filter((b) => PLATFORMS.has(String(comp(b, 'channel').name)))
-        .map((b) => String(comp(b, 'intake').item)),
-    ),
+    await g.get(entries.map((b) => String(comp(b, 'intake').item))),
     true,
   )
 }

@@ -417,6 +417,7 @@
       "properties": {
         "name": {
           "type": "string",
+          "index": true,
           "description": "The channel: chat, email, text, voice, or another the host names."
         },
         "framing": {

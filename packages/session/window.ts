@@ -55,11 +55,13 @@ export let transcriptSegments = async (
   return segments
 }
 /** The query for one segment of a transcript: its session's entries, up to
- * where a fork left it. */
+ * where a fork left it. Every entry holds its seq, and saying so lets a page
+ * past `.after` start at the anchor's seq (@yaks/sql `seekOf`) rather than
+ * walk the session's whole history from its newest line on every page. */
 export let within = (s: Segment): Built =>
   Number.isFinite(s.through)
     ? line`.entry.session=${s.session}&.entry.seq<=${s.through}`
-    : line`.entry.session=${s.session}`
+    : line`.entry.session=${s.session}&.entry.seq`
 
 /** A transcript's newest entries, oldest first, read back through its
  * segments a page at a time until `enough` holds of what was read, or to its
