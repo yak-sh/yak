@@ -1,7 +1,7 @@
 /** @jsxImportSource preact */
 // The hero yak's run (yak.js) clicked through on the home story, its words
 // the keys they are read from.
-import { test } from '@yaks/testing'
+import { lend, test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { parseHTML } from 'linkedom'
@@ -29,7 +29,9 @@ let markup = renderToString(
 )
 
 // the home story, for someone who asks for less motion (`calm`) or not,
-// with the person's own `words` in the idea box
+// with the person's own `words` in the idea box. The globals yak.js reads are
+// lent until the page is disposed: left behind, the stubbed fetch and Event
+// answered every later test in the runtime.
 let page = ({ calm = true, words = '' } = {}) => {
   let { document, window } = parseHTML(
     `<!doctype html><html><body>${markup}</body></html>`,
@@ -40,7 +42,7 @@ let page = ({ calm = true, words = '' } = {}) => {
   box.focus = () => void focused++
   box.setSelectionRange = () => {}
   let fetched: string[] = []
-  Object.assign(globalThis, {
+  let backs = Object.entries({
     document,
     Image: window.Image,
     Event: window.Event,
@@ -48,7 +50,7 @@ let page = ({ calm = true, words = '' } = {}) => {
     fetch: (
       url: string,
     ) => (fetched.push(url), Promise.resolve(new Response(new Blob(['webp'])))),
-  })
+  }).map(([name, value]) => lend(name, value))
   run(document.body)
   let slot = document.querySelector('[data-wander]')!
   let says = slot.querySelector('.Home_YakSays') as HTMLElement
@@ -66,11 +68,12 @@ let page = ({ calm = true, words = '' } = {}) => {
     fetched,
     focused: () => focused,
     pose: () => slot.querySelector('.Home_YakPose') as HTMLImageElement,
+    [Symbol.dispose]: () => backs.reverse().forEach((back) => back()),
   }
 }
 
 test('each click says the next line, the start step types into the box, and the last stays', () => {
-  let p = page()
+  using p = page()
   let said = RUN.map(() => p.click().said)
   assertEquals(said, RUN.map((s) => `home.yak.${s.pose}`))
   assertEquals(p.box.value, 'home.yak.typing-type')
@@ -82,7 +85,7 @@ test('each click says the next line, the start step types into the box, and the 
 })
 
 test("a person's own words in the box are kept, and he points at the button", () => {
-  let p = page({ words: 'a sign-up sheet' })
+  using p = page({ words: 'a sign-up sheet' })
   RUN.slice(0, 4).forEach(() => p.click())
   assertEquals(p.click().said, 'home.yak.typing-had')
   assertEquals(p.box.value, 'a sign-up sheet')
@@ -91,7 +94,7 @@ test("a person's own words in the box are kept, and he points at the button", ()
 
 test('with motion, each pose plays once over his seat and the words are typed a letter at a time', async () => {
   using time = new FakeTime()
-  let p = page({ calm: false })
+  using p = page({ calm: false })
   RUN.slice(0, 4).forEach(() => p.click())
   await time.tickAsync(0)
   assertEquals(p.pose().dataset.on, '')
