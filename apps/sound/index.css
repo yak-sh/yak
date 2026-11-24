@@ -9,12 +9,62 @@ body {
 }
 
 header {
-  margin: 0 1em;
-  overflow: hidden;
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
 }
 
-nav {
+#nav {
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+#sensitivity {
+  width: clamp(5rem, 22vw, 8rem);
+}
+
+.note-readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  line-height: 1.6rem;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+#current-note {
+  min-width: 2.3ch;
+  font-family: system-ui, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+#current-note[data-empty] {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 460px) {
+  .note-readout {
+    flex-basis: 100%;
+  }
 }
 
 main {
@@ -32,6 +82,25 @@ canvas {
   transform-origin: top right;
   transform: scaleY(var(--scale, 1));
   image-rendering: pixelated;
+}
+
+#save {
+  color: var(--fg);
+}
+
+.microphone-prompt {
+  position: absolute;
+  inset: 1rem 1rem auto;
+  z-index: 1;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: center;
+}
+
+#microphone-retry {
+  min-height: 44px;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.75rem;
 }
 
 #scale {
