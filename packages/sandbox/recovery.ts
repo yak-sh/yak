@@ -168,7 +168,9 @@ let archived = async (
 
 /** Recoverable workbench files, independent of the container SDK. Immutable
  * archives and receipts have no expiry; the DO holds only the current head.
- * A failed archive or head write leaves the container running. */
+ * A failed archive or head write leaves the container running. An upload cut
+ * off where no `catch` runs (the object reset mid-save) is aborted by the
+ * bucket's rule for `workbench/` (workers/yak/README.md, bucket setup). */
 export let recovery = (
   box: Filesystem,
   state: State,

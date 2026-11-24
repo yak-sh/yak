@@ -26,6 +26,8 @@ minify = true
 APEX = "yaks.app"
 
 # Immutable workbench filesystem snapshots, retained until a person purges them.
+# The bucket's `workbench-abandoned-uploads` rule aborts a snapshot upload left
+# incomplete under `workbench/` after a day (../README.md, bucket setup).
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "yak-blobs"

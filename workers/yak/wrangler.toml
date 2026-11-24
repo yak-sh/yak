@@ -74,7 +74,11 @@ region = "aws:us-east-2"
 # all, and every deploy was pushing observability_enabled: false. `logs` is
 # console output and thrown errors; `invocation_logs` is the one line per
 # request that carries the path, status and duration — the half that answers a
-# latency question. Included up to 20M events a month on Workers Paid.
+# latency question. Workers Paid includes 20M events a month across the
+# account and bills $0.60 a million past that; Cloudflare does not sample past
+# the allowance. Every request here writes several events (yak-front, Site, the
+# kernel, each Store and directory hop), about one per Workers or Durable Object
+# request: Nov 5–24, 2026, that was some 57M events (T-3094).
 #
 # This is telemetry ABOUT the platform and is not where an app's failures go:
 # app failures go through the tracker intake (unseen.ts). A log nobody opens
@@ -85,8 +89,8 @@ enabled = true
 invocation_logs = true
 
 # Cloudflare's runtime spans cover fetches, R2 reads and Durable Object hops.
-# No head_sampling_rate: the included monthly events are sampled by Cloudflare
-# after the allowance, rather than expanding the platform's bill.
+# No head_sampling_rate, so every request is traced and logged; the
+# allowance and its price are above.
 [observability.traces]
 enabled = true
 
