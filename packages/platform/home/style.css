@@ -587,6 +587,9 @@
   top: 0;
   min-width: 0;
   padding-block: .45rem .65rem;
+}
+
+.Home_Contents[data-cover] {
   background: var(--bg);
 }
 
@@ -1105,7 +1108,7 @@
     margin-block-start: -5rem;
   }
 
-  .Home_Contents::after {
+  .Home_Contents[data-cover]::after {
     content: '';
     position: absolute;
     inset: 100% 0 auto;

@@ -214,6 +214,7 @@ let mount = (root) => {
   let scenes = [...root.querySelectorAll('[data-demo-scene]')]
   let steps = [...root.querySelectorAll('[data-story-step]')]
   let nav = root.querySelector('[data-feature-nav]')
+  let contents = nav.parentElement
   let jumps = [...nav.querySelectorAll('[data-feature-link]')]
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   let narrow = matchMedia('(width < 64rem)')
@@ -223,9 +224,12 @@ let mount = (root) => {
   let pose = mascot(root, calm, narrow)
 
   let draw = (motion = !calm.matches) => {
-    let at = reading(
-      steps.map((el) => el.getBoundingClientRect()),
-      readingLine(),
+    let rects = steps.map((el) => el.getBoundingClientRect())
+    let at = reading(rects, readingLine())
+    // Cover the features as they scroll under the tabs.
+    contents.toggleAttribute(
+      'data-cover',
+      rects[1].top <= contents.getBoundingClientRect().bottom,
     )
     reveal(lines[i], at, calm.matches)
     mark(steps, at)
