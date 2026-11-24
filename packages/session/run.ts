@@ -560,6 +560,15 @@ let covered = ({ joined, took }: Advance) =>
   !!took && took.status != 'pending' &&
   joined.every((eid) => took.added.some((b) => b.entity.eid == eid))
 
+let selectedTurn = async (g: Graph, session: Eid) => {
+  let using = await usingOf(g, session)
+  // An imported transcript may have asks without a provider selection.
+  return using || await hasAsk(g, session) ? { using } : undefined
+}
+
+let canAnswer = (r: Runner, session: Eid, turn?: { using?: Comp }) =>
+  !!turn && (r.answers?.(turn.using, session) ?? true)
+
 /** One step owed to a transcript by a change to `cause`. */
 let advance = (
   g: Graph,
@@ -584,7 +593,8 @@ let advance = (
   }
   let done = Promise.resolve().then(async () => {
     await first?.catch(() => {})
-    if (!await answering(g, session, r)) {
+    let turn = await selectedTurn(g, session)
+    if (!await canAnswer(r, session, turn)) {
       let status = await prepared(g, session)
       if (ENDED.includes(status)) {
         await end()
@@ -592,10 +602,9 @@ let advance = (
       }
       // A host that can answer it may yet join; a command line other than
       // ours takes its turns itself, so nothing will, and nothing waits.
-      if (
-        (await usingOf(g, session) || await hasAsk(g, session)) &&
-        !await outside(g, session)
-      ) await r.attempt?.defer?.(r.waiting ?? 1000)
+      if (turn && !await outside(g, session, turn.using)) {
+        await r.attempt?.defer?.(r.waiting ?? 1000, 'Waiting for a provider')
+      }
       return
     }
     await holding(g, `${RUN}/${session}`, {
@@ -693,13 +702,7 @@ export let answering = async (
   g: Graph,
   session: Eid,
   r: Runner,
-): Promise<boolean> => {
-  let using = await usingOf(g, session)
-  // An imported transcript can have thousands of asks and no provider
-  // selection, so an ask is looked for alone.
-  if (!using && !await hasAsk(g, session)) return false
-  return r.answers ? await r.answers(using, session) : true
-}
+): Promise<boolean> => canAnswer(r, session, await selectedTurn(g, session))
 
 /** Answer a transcript's request for a turn here, where this host answers the
  * provider it asks for: {@link settle} it, or, where this process is already

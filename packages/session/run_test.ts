@@ -1260,6 +1260,21 @@ test('a transcript another command line runs leaves no work waiting for a host',
   assertEquals(availability.outside, [])
 })
 
+let managed = proc(store(), 'w1', fake().model, { answers: () => false })
+await managed.g.apply([
+  ...ask('queued-cli', 'managed', CLI),
+  ...ask('native-cli', 'native', CLI),
+  { entity: { eid: 'native-cli' }, native: {} },
+])
+test('the native runner defers its own unavailable provider while managed launches wait in their own queue', async () => {
+  await managed.fx.work(managed.g)
+  await managed.fx.idle()
+  let pending = await managed.g.read(
+    '.effect.handler=session_run .effect.state=pending .fields=effect.target',
+  )
+  assertEquals(pending.map((b) => (b.effect as Comp).target), ['native-cli:in'])
+})
+
 // A transcript that ends is told to its host, however it ended: a reply, and
 // a stop written later while it rested, which no step of its own took.
 let ending = await (async () => {

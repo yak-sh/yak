@@ -283,9 +283,8 @@ async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
 // `native` where that command line is our own harness.
 let owners = (g: Graph) => ['native', 'process'].filter((c) => g.vocab.comp(c))
 
-/** Whether a command line other than our own harness runs `session` (it has a
- * `process` and no `native`): its turns are taken there, so no host answers
- * it, here or anywhere (`answers`).
+/** Whether a managed command line owns the session's turns. This holds as
+ * soon as it selects a process provider and while its process is running.
  *
  * ```ts
  * import { outside } from '@yaks/session'
@@ -293,7 +292,15 @@ let owners = (g: Graph) => ['native', 'process'].filter((c) => g.vocab.comp(c))
  * // if (await outside(graph, session)) return
  * ```
  */
-export let outside = async (g: Graph, session: Eid): Promise<boolean> => {
+export let outside = async (
+  g: Graph,
+  session: Eid,
+  using?: Comp,
+): Promise<boolean> => {
   let [owner] = await g.get([session], owners(g))
-  return !!owner?.process && !owner.native
+  if (owner?.native) return false
+  if (owner?.process) return true
+  if (using?.provider == null) return false
+  let [provider] = await g.get([String(using.provider)], ['provider'])
+  return (provider?.provider as Comp | undefined)?.transport == 'process'
 }
