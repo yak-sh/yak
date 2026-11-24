@@ -8,7 +8,7 @@
 // collects the identity documents — and every one of them is a promise made to
 // a seller on the terms page and a liability decision for the platform. A diff
 // that moves one is a diff that has to say so out loud.
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
 import type { Sale } from '@yaks/host/payments'
 import { shopped, shops } from './shops.ts'
@@ -196,6 +196,37 @@ test('a checkout is a payment on the seller’s account, its tags on the payment
   await lent.checkout('acct_1', { ...sale, bps: 250 })
   equal(s.asked[1].body['payment_intent_data[application_fee_amount]'], '140')
   equal('customer_email' in s.asked[1].body, false)
+})
+
+// The house sells on the platform's own account: no `Stripe-Account`, no
+// application fee whatever the rate, Managed Payments off since it sells
+// printed things as itself, its name after the platform's on the statement,
+// and the mark that tells its events from the platform's plans.
+test('a house checkout is a payment on the platform’s own account', async () => {
+  using s = stripe(() => ({ url: 'https://checkout.stripe.com/c' }))
+  await lent.checkout('', { ...sale, bps: 250, descriptor: 'PrintBound' })
+  equal(s.asked[0].on, null)
+  let body = s.asked[0].body
+  equal(
+    [
+      'payment_intent_data[application_fee_amount]' in body,
+      body['managed_payments[enabled]'],
+      body['payment_intent_data[statement_descriptor_suffix]'],
+      body['metadata[house]'],
+      body['payment_intent_data[metadata][house]'],
+    ],
+    [false, 'false', 'PRINTBOUND', 'true', 'true'],
+  )
+  // A seller's own account names them already: no suffix, no mark.
+  await lent.checkout('acct_1', { ...sale, descriptor: 'PrintBound' })
+  equal(
+    Object.keys(s.asked[1].body).filter((k) =>
+      /descriptor|house|managed/.test(k)
+    ),
+    [],
+  )
+  // What renews would be read as the platform's own plans.
+  await throws(() => lent.checkout('', { ...sale, per: 'month' }), 'renews')
 })
 
 // A subscription's payments are its invoices, so its fee is a share of each
@@ -440,6 +471,15 @@ test('a refund or a dispute moves its payment', async () => {
     await moved('charge.dispute.closed', { charge: 'ch_1', status: 'won' }),
     ['restored', paid],
   )
+  // A house sale's dispute names no account, and its charge is the
+  // platform's own.
+  let house = heard({
+    type: 'charge.dispute.created',
+    data: { object: { charge: 'ch_1' } },
+  })
+  equal(house.account, '')
+  if (house.about == 'payment') await house.payment()
+  equal(s.asked.at(-1)!.on, null)
   equal(await moved('charge.dispute.created', {}), ['disputed', null])
   equal(await moved('charge.dispute.updated', { charge: 'ch_1' }), 'other')
   equal(await moved('payout.paid', {}), 'other')

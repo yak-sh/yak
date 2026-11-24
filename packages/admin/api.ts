@@ -430,6 +430,24 @@ export let feeNow = (session: string): Promise<Fee> =>
 export let setFee = (session: string, bps: number): Promise<Fee> =>
   said(posted(apex(FEE), { bps: String(bps) }, session))
 
+/** Whether a space sells as the house, on the platform's own account
+ * (workers/yak/sell.ts `houses`). */
+export type House = { space: string; house: boolean }
+
+export let HOUSE = '/api/house'
+
+/** Whether it does. Only an owner of the `yak` space is answered. */
+export let houseNow = (session: string, space: string): Promise<House> =>
+  said(sent(apex(`${HOUSE}?space=${encodeURIComponent(space)}`), session))
+
+/** Mark it, or take the mark off. */
+export let setHouse = (
+  session: string,
+  space: string,
+  house: boolean,
+): Promise<House> =>
+  said(posted(apex(HOUSE), { space, house: String(house) }, session))
+
 /** A space's monthly model and voice budget (workers/yak/budget.ts). */
 export type { SpaceBudget } from '@yaks/platform/budget'
 import type { SpaceBudget } from '@yaks/platform/budget'

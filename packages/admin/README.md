@@ -38,7 +38,10 @@ directory, its price beside it, and the directory's base persona names it
 (@yaks/platform/operator-model). A row here with no price takes its list price
 first, so this graph's row stays the one source.
 
-Store queries, writes, uploads, fee, model, client, tunnel and migration
+`yak admin house <space> [on|off]` reads or sets whether a space sells as the
+house, on the platform's own Stripe account (workers/yak/sell.ts `houses`).
+
+Store queries, writes, uploads, fee, house, model, client, tunnel and migration
 requests send the chosen connection's bearer. The platform checks that account's
 existing permissions. Infrastructure operations (`deploys`, `errors`, `tail`,
 `rollback`, `revert`) use this box's credentials and require the selected

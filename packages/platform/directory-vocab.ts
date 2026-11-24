@@ -543,6 +543,11 @@ export let directoryDoc: VocabDoc = {
     // space could write for itself is a space selling before its provider ever
     // said it may. Only the provider's webhook and `space_sell` write them,
     // through the kernel's own door (directory.ts `stamp`).
+    //
+    // `house` marks a space that sells on the platform's own account rather
+    // than one of its own (T-2983): the platform is the merchant and pays
+    // the provider's fees, no fee is taken, and there is no `account`. Only
+    // the platform's owner sets it, with `yak admin house`.
     seller: {
       component: true,
       type: 'object',
@@ -551,6 +556,7 @@ export let directoryDoc: VocabDoc = {
         account: owned(text),
         ready: owned(bool),
         submitted: owned(bool),
+        house: owned(bool),
       },
     },
     // A number the platform holds for a space (numbers.ts): bought through

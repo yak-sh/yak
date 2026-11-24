@@ -846,17 +846,18 @@ billing.ts is the platform's own plan: Stripe sells to us, and tells us at
 `POST /stripe/webhook`. @yaks/stripe serves that door (its `webhook` door, lent
 through config.ts `payments`, which names this secret beside the key and price
 ids above, and served by payment-doors.ts): it verifies each event and reads six
-v1 events and nothing else. A block of AI credit (billing.ts `buy`) is a
-Checkout in payment mode: `checkout.session.completed` credits it when its money
-is there, and `checkout.session.async_payment_succeeded` when it arrives later.
-The dashboard steps are the Connect ones below with these differences:
+v1 events and nothing else, and passes the house's sales, refunds and disputes
+to sell.ts (below). A block of AI credit (billing.ts `buy`) is a Checkout in
+payment mode: `checkout.session.completed` credits it when its money is there,
+and `checkout.session.async_payment_succeeded` when it arrives later. The
+dashboard steps are the Connect ones below with these differences:
 
-| step | where                                                                                                                                                                                                                            |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3    | **Events from**: **Your account**                                                                                                                                                                                                |
-| 4    | Select these six v1 events, and only these: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed` |
-| 6    | Endpoint URL: `https://yaks.app/stripe/webhook`                                                                                                                                                                                  |
-| 8    | `npx wrangler secret put STRIPE_WEBHOOK_SECRET`                                                                                                                                                                                  |
+| step | where                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3    | **Events from**: **Your account**                                                                                                                                                                                                                                                                                                                                                        |
+| 4    | Select these twelve v1 events, and only these: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, and for the house's sales `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, `refund.created`, `refund.updated`, `refund.failed` |
+| 6    | Endpoint URL: `https://yaks.app/stripe/webhook`                                                                                                                                                                                                                                                                                                                                          |
+| 8    | `npx wrangler secret put STRIPE_WEBHOOK_SECRET`                                                                                                                                                                                                                                                                                                                                          |
 
 ## A plan paid by invoice
 
@@ -925,6 +926,12 @@ Then, from `workers/yak`:
 ```sh
 npx wrangler secret put STRIPE_CONNECT_WEBHOOK_SECRET   # paste the whsec_
 ```
+
+**The house.** A space `yak admin house <space> on` marks sells on the
+platform's own account instead (sell.ts `houses`): the platform is the merchant,
+its fee credit pays Stripe's fees, and no fee is taken. Its events arrive at
+`POST /stripe/webhook`, naming no account, and sell.ts finds the space by the
+`space` tag and believes it only for a space marked as the house.
 
 **v1 events, not v2.** There is a v2 Accounts API with thin `v2.core.account.*`
 events; this platform speaks v1 throughout (Jeff, 2026-09-06: "v1"), so the

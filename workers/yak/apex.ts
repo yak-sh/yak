@@ -172,6 +172,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // this is not a tool — the connector's roster is fixed and public (T-34541),
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
+  // Which spaces sell on the platform's own account (sell.ts `houses`), the
+  // same owner's door for the same reason.
+  if (path == '/api/house') return sell.houses(req, env)
   // A space's model budget, set by the same owner (budget.ts, T-137556),
   // before the connector for the same reason as the fee's.
   if (path == '/api/budget') return budget.fetch(req, env)

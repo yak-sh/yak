@@ -172,6 +172,8 @@ export type Seller = {
   account: string
   ready: boolean
   submitted: boolean
+  /** it sells on the platform's own account, and `account` is '' */
+  house?: boolean
 }
 
 /** A space as the directory reads it: what its plan and meter read
@@ -938,6 +940,7 @@ export type Row = MeteredRow & {
     account?: string | null
     ready?: boolean | null
     submitted?: boolean | null
+    house?: boolean | null
   }
   trend?: {
     requests?: ByDay
@@ -1492,14 +1495,15 @@ let referralOf = (r: Row): Referral[] =>
 // The seller's row, or null where nothing has ever connected. An account with
 // neither answer yet — minted a second ago, the webhook not in — reads false
 // on both, which is the truth: nothing may be sold through it until its
-// provider says so.
+// provider says so. The house has no account of its own.
 let sellerOf = (r: Row): Seller | null =>
-  r.seller?.account
+  r.seller?.account || r.seller?.house
     ? {
       via: r.seller.via ?? '',
-      account: r.seller.account,
+      account: r.seller.account ?? '',
       ready: !!r.seller.ready,
       submitted: !!r.seller.submitted,
+      ...(r.seller.house ? { house: true } : {}),
     }
     : null
 

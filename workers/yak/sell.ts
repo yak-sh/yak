@@ -21,6 +21,13 @@
 // them in its own dashboard. A platform that copied them would be a platform
 // holding money data it does not need and cannot keep current.
 //
+// The house is the exception (T-2983): a space the platform's owner marks
+// (`house`) sells on the platform's own account, because the platform is the
+// merchant for it already. Its checkouts name no account and take no fee, and
+// the provider's word on its sales arrives at the platform's own door naming
+// no account, so its tags say which space it was, and only a space marked as
+// the house is believed.
+//
 // This is a different relationship from billing.ts, which is the platform's own
 // plan: there the provider sells to us and we are the customer. Nothing crosses
 // between them: what the provider hears about a seller's account reaches
@@ -175,7 +182,11 @@ export let sellerOf = (shop: Shop): Seller => ({ via, ...shop })
  * the form and still be held while the provider verifies them, and taking somebody's
  * customer's money in that window is a payment that fails at the till. */
 export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
-  !space.seller?.account ? 'none' : space.seller.ready ? 'ready' : 'setup'
+  !space.seller?.account && !space.seller?.house
+    ? 'none'
+    : space.seller.ready
+    ? 'ready'
+    : 'setup'
 
 // New payments require a paid plan. Existing orders and the provider's events
 // still settle after a downgrade, and the seller can always disconnect their
@@ -634,34 +645,38 @@ export let buying = async (
   }
   let email = String((body as { email?: unknown })?.email ?? '').trim()
   try {
+    // The rate as it stands right now, read fresh (`dirOf`): a sale is
+    // charged what the owner set a moment ago, never what a cached row still
+    // says. The house pays none: it would be paid to the platform itself.
+    let house = !!at.space.seller!.house
+    let bps = house ? 0 : await feeOf(dirOf(env))
+    let made = quote
+      ? await checkoutQuote(store!, quote, {
+        space: at.space.eid,
+        app: at.app,
+        bps,
+        done: success,
+        cancel,
+        ...(email ? { email } : {}),
+      })
+      : sale({
+        space: at.space.eid,
+        app: at.app,
+        lines: priceless!.lines,
+        packed: priceless!.packed,
+        bps,
+        ...(email ? { email } : {}),
+        success,
+        cancel,
+        buyer: at.buyer,
+        via: at.via,
+        source: at.source,
+      })
     let url = await lent.checkout(
-      // The seller's account, which makes it their charge rather than ours.
+      // The seller's account, which makes it their charge rather than ours;
+      // the house's is the platform's own, ''.
       at.space.seller!.account,
-      quote
-        ? await checkoutQuote(store!, quote, {
-          space: at.space.eid,
-          app: at.app,
-          bps: await feeOf(dirOf(env)),
-          done: success,
-          cancel,
-          ...(email ? { email } : {}),
-        })
-        : sale({
-          space: at.space.eid,
-          app: at.app,
-          lines: priceless!.lines,
-          packed: priceless!.packed,
-          // The rate as it stands right now, read fresh (`dirOf`): a sale is
-          // charged what the owner set a moment ago, never what a cached row
-          // still says.
-          bps: await feeOf(dirOf(env)),
-          ...(email ? { email } : {}),
-          success,
-          cancel,
-          buyer: at.buyer,
-          via: at.via,
-          source: at.source,
-        }),
+      { ...made, descriptor: at.space.title || at.space.slug },
     )
     return Response.json({
       url,
@@ -855,14 +870,20 @@ export let receipt = (
  */
 export let apply = async (env: Env, heard: Shopped): Promise<string> => {
   let on = heard.account
-  if (!on) return 'not a connected account event'
   let dir = dirOf(env)
-  let space = await dir.seller(via, on)
+  let payment = heard.about == 'payment' ? await heard.payment() : null
+  let space = on
+    ? await dir.seller(via, on)
+    : await housed(dir, tagsOf(heard, payment).space)
   // An account we have no space for: a seller who disconnected, or another
   // platform's event at our door. Nothing to retry — a second delivery finds
   // the same nothing — so it is not filed and the door answers 200 rather than
-  // making the provider repeat an unanswerable question for days.
-  if (!space) return 'no space sells through that account'
+  // making the provider repeat an unanswerable question for days. On the
+  // platform's own account, a payment of the platform's plans, or of a space
+  // no longer marked as the house.
+  if (!space) {
+    return on ? 'no space sells through that account' : 'not a house sale'
+  }
   if (heard.about == 'seller') {
     // The id comes from the row we already hold, never from the payload: the
     // event was attributed by that id, and an account that answered a
@@ -896,9 +917,29 @@ export let apply = async (env: Env, heard: Shopped): Promise<string> => {
     return `${app.slug}: refund ${refund.status}`
   }
   if (heard.about == 'payment') {
-    return await settled(env, space, heard.to, await heard.payment())
+    return await settled(env, space, heard.to, payment)
   }
   return 'nothing to do'
+}
+
+// What an event about a sale carries: the checkout's tags, a refund's, or
+// those of the payment it moved.
+let tagsOf = (
+  heard: Shopped,
+  payment: Payment | null,
+): Record<string, string> =>
+  heard.about == 'sale'
+    ? heard.sale.tags
+    : heard.about == 'refund'
+    ? heard.refund.tags
+    : payment?.tags ?? {}
+
+// The space a sale on the platform's own account was for, by the space its
+// tags name, and only where that space is marked as the house: an event on
+// our own account carries no account to find a seller by.
+let housed = async (dir: Directory, space?: string) => {
+  let found = space ? await dir.at(space) : null
+  return found?.seller?.house ? found : null
 }
 
 // ---- the sale, written into the app's own store ----------------------------
@@ -1110,19 +1151,9 @@ export let priceAt = async (dir: Directory, file: Response) => {
  * ride along. A CLI sends no `Origin` at all and is unaffected.
  */
 export let fees = async (req: Request, env: Env) => {
-  let dir = dirOf(env)
-  let meta = await dir.space(dirPart.META.space)
-  if (!meta) {
-    return json(503, 'no_platform', 'the directory has not seeded yet')
-  }
-  let who = await adminWho(
-    env,
-    req,
-    (person) => dir.role(meta, person),
-  )
-  if (who.role != 'owner') {
-    return json(403, 'not_owner', `the fee is set by an owner of ${meta.slug}`)
-  }
+  let at = await owner(req, env, 'the fee is set')
+  if (at instanceof Response) return at
+  let { meta, who } = at
   if (req.method == 'POST') {
     // Read as digits and not as a number: `Number('')` and `Number(null)` are
     // both 0, so a post that named no rate at all would otherwise read as the
@@ -1148,4 +1179,67 @@ export let fees = async (req: Request, env: Env) => {
   }
   let bps = meta.fee
   return Response.json({ bps, rate: rate(bps) })
+}
+
+// The platform's own space and the caller, where the caller owns it, which is
+// owning the platform; else the refusal, saying what only an owner does.
+let owner = async (req: Request, env: Env, what: string) => {
+  let dir = dirOf(env)
+  let meta = await dir.space(dirPart.META.space)
+  if (!meta) {
+    return json(503, 'no_platform', 'the directory has not seeded yet')
+  }
+  let who = await adminWho(env, req, (person) => dir.role(meta, person))
+  return who.role == 'owner'
+    ? { dir, meta, who }
+    : json(403, 'not_owner', `${what} by an owner of ${meta.slug}`)
+}
+
+/**
+ * `GET /api/house?space=<slug>` reads whether a space sells as the house, on
+ * the platform's own account, and `POST /api/house` (`space=<slug>`,
+ * `house=true` or `false`) marks it or takes the mark off: `yak admin house`
+ * on the owner's box, and the only writer of `seller{house}`. Gated as the
+ * fee is: the platform pays the house's fees. A space selling through an
+ * account of its own stops selling first, so its account is never forgotten
+ * here by accident.
+ */
+export let houses = async (req: Request, env: Env) => {
+  let at = await owner(req, env, 'the house is set')
+  if (at instanceof Response) return at
+  let { dir, who } = at
+  let asked = req.method == 'POST'
+    ? await req.formData()
+    : new URL(req.url).searchParams
+  let slug = String(asked.get('space') ?? '')
+  let space = slug ? await dir.space(slug) : null
+  if (!space) return json(404, 'no_space', `no space ${slug || '(none)'}`)
+  if (req.method == 'POST') {
+    let house = asked.get('house')
+    if (house != 'true' && house != 'false') {
+      return json(400, 'bad_house', 'house is true or false')
+    }
+    if (space.seller?.account) {
+      return json(
+        409,
+        'selling',
+        `${space.slug} sells through its own account; stop selling first`,
+      )
+    }
+    if ((house == 'true') != !!space.seller?.house) {
+      await stamp(env, {
+        entities: [{
+          entity: { eid: space.eid },
+          seller: house == 'true'
+            ? { via, house: true, ready: true, submitted: true }
+            : null,
+        }],
+      }, { actor: { by: who.actor ?? who.person!, via: who.via } })
+    }
+    return Response.json({ space: space.slug, house: house == 'true' })
+  }
+  if (req.method != 'GET') {
+    return json(405, 'method_not_allowed', 'get the house, or post one')
+  }
+  return Response.json({ space: space.slug, house: !!space.seller?.house })
 }

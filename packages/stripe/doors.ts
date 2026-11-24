@@ -1,6 +1,6 @@
 // Stripe's webhook doors, as @yaks/host's `Door`s: `webhook`, the endpoint
 // on the platform's own account, which hears about its subscriptions
-// (./plans.ts `changed`), and `connect`, the Connect endpoint, which hears
+// (./plans.ts `changed`) and the house's sales (./shops.ts `housed`), and `connect`, the Connect endpoint, which hears
 // about its sellers' accounts (./shops.ts `shopped`). Stripe delivers the two
 // to endpoints of their own, each signed with its own `whsec_…`, so each door
 // verifies with its own secret, and one verified with the other's hears
@@ -13,7 +13,7 @@
 import type { Door, Heard } from '@yaks/host/payments'
 import { ours, refusal } from '@yaks/hook'
 import { changed, type Options as Priced } from './plans.ts'
-import { type Options as Shopping, shopped } from './shops.ts'
+import { housed, type Options as Shopping, shopped } from './shops.ts'
 
 /** What a config gives the provider: the plans' key, clock and prices, the
  * shops' Connect client, and each door's signing secret by its name. A door
@@ -44,7 +44,15 @@ async (request) => {
 }
 
 /** Stripe's doors, each secret read from `options` as a request arrives. */
-export let doors = (options: Options): Record<string, Door> => ({
-  webhook: door(() => options.doors?.webhook, changed(options), options),
-  connect: door(() => options.doors?.connect, shopped(options), options),
-})
+export let doors = (options: Options): Record<string, Door> => {
+  let plan = changed(options)
+  let shop = shopped(options)
+  return {
+    webhook: door(
+      () => options.doors?.webhook,
+      (event) => housed(event) ? shop(event) : plan(event),
+      options,
+    ),
+    connect: door(() => options.doors?.connect, shop, options),
+  }
+}

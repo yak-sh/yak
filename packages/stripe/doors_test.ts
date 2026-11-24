@@ -51,3 +51,36 @@ test('a door hears only what its own secret signed', async () => {
 test('a door with no secret hears nothing', async () => {
   equal(await doors({}).webhook(posted(RAW)), undefined)
 })
+
+test('the platform’s door hears a house sale as a sale and its plans as plans', async () => {
+  let heard = async (type: string, object: Record<string, unknown>) => {
+    let raw = JSON.stringify({ type, data: { object } })
+    let out = await open.webhook(
+      posted(raw, await signed(SECRETS.webhook, raw, AT)),
+    )
+    return out && 'heard' in out
+      ? [out.heard.about, 'account' in out.heard ? out.heard.account : null]
+      : out
+  }
+  let session = { mode: 'payment', payment_status: 'paid' }
+  equal(
+    await heard('checkout.session.completed', {
+      ...session,
+      metadata: { space: 'e-space', house: 'true' },
+    }),
+    ['sale', ''],
+  )
+  equal(
+    await heard('checkout.session.completed', {
+      ...session,
+      metadata: { space: 'e-space', credit: '5' },
+    }),
+    ['purchase', null],
+  )
+  equal(
+    await heard('charge.refunded', { payment_intent: 'pi_1' }),
+    ['payment', ''],
+  )
+  equal(await heard('refund.created', { id: 're_1' }), ['refund', ''])
+  equal(await heard('invoice.paid', {}), ['subscription', null])
+})

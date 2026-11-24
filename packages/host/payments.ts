@@ -231,8 +231,19 @@ export type Plans = {
 
 /** A seller's account as its provider reads it: its id, whether it may take
  * payments now, and whether its owner finished the provider's form, which
- * alone does not make it ready. */
-export type Seller = { account: string; ready: boolean; submitted: boolean }
+ * alone does not make it ready.
+ *
+ * The house is a seller that sells on the host's own account rather than one
+ * of its own: the host is the merchant, the provider's fees are the host's,
+ * and no fee is taken, since the host would pay it to itself. Its account is
+ * '' wherever {@link Shops} names one, and every event about its sales names
+ * none ({@link Shopped}). */
+export type Seller = {
+  account: string
+  ready: boolean
+  submitted: boolean
+  house?: boolean
+}
 
 /** One line of a sale: what the buyer reads it as, its price in the
  * currency's smallest unit, and how many. */
@@ -292,6 +303,10 @@ export type Sale = {
   bps: number
   /** the buyer's address to start the page with, if one is known */
   email?: string
+  /** the seller's name, which the buyer's card statement reads after the
+   * host's on a sale on the host's own account; a seller's own account
+   * already names them there */
+  descriptor?: string
   /** where the provider hands the buyer back when they paid, and when they
    * did not: addresses the host checked as `URL` writes them, so a
    * placeholder the provider fills in on the way back arrives
@@ -382,7 +397,8 @@ export type Term = {
 }
 
 /** One verified event a seller's account posted, read, with the account it
- * happened on ('' where it names none): the seller's account changed, or it
+ * happened on ('' where it names none, as an event about a house sale on the
+ * host's own account does, whose tags say whose sale it was): the seller's account changed, or it
  * revoked the host's permission to act on it, or a checkout completed, or a
  * payment moved, or a subscription's term moved (it renewed, was cancelled or
  * lapsed), or something the host has no word for. */
@@ -414,7 +430,8 @@ export type Shopped =
  * account opened once and finished through the provider's onboarding, or one
  * the seller already had and connected at the provider's own page, and
  * hosted checkouts on it, paid once or by subscription, which the host takes
- * a fee from. */
+ * a fee from. An account named '' is the host's own, the house's
+ * ({@link Seller}): its checkouts take no fee and are paid once. */
 export type Shops = {
   /** whether it can be asked anything here: its credentials are set */
   on: () => boolean

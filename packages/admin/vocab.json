@@ -270,6 +270,38 @@
         "bps"
       ]
     },
+    "admin_house": {
+      "tool": true,
+      "destructive": false,
+      "idempotent": true,
+      "noun": "admin",
+      "verb": "house",
+      "title": "Read or mark a space as the house",
+      "description": "Whether a space sells on the platform’s own Stripe account, the house: the platform is the merchant and pays its fees, and no fee is taken. Read it, or turn it on or off. A space selling through an account of its own stops selling first. The selected account must have the platform role.\n\n  yak admin house printbound --as admin@bot.yak.sh\n  yak admin house printbound on --as admin@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "the space, by its slug"
+        },
+        "house": {
+          "type": "string",
+          "enum": ["on", "off"],
+          "description": "on to sell on the platform’s own account, off to stop"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "space",
+        "house"
+      ],
+      "required": [
+        "space"
+      ]
+    },
     "admin_model": {
       "tool": true,
       "destructive": false,

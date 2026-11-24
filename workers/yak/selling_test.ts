@@ -1,5 +1,5 @@
 import { line } from '@yaks/query'
-import { meta } from './meta.ts'
+import { KERNEL, meta, metaOf } from './meta.ts'
 /// <reference lib="deno.ns" />
 // Selling through the platform in memory: the shop example, checkout inputs,
 // a seller's signed events, account removal and the platform fee.
@@ -12,7 +12,7 @@ import { keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { appVocab } from './vocab.ts'
 import * as apps from './apps.ts'
-import { directory, stamp } from './directory.ts'
+import { appStore, directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env, Vars } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
@@ -552,5 +552,137 @@ test('an account its owner already has is connected instead of a new one', async
   assertEquals(
     await sell.linkable(env, (await scenario.dir.space('ada'))!),
     false,
+  )
+})
+
+// ---- the house (T-2983) ----------------------------------------------------
+
+// An owner of `yak` marks a space as the house, and it sells on the platform's
+// own account: its checkout names no account and takes no fee, whatever the
+// rate, and the platform's own door hears its sale, refund and dispute naming
+// none, finding the space by the tags the checkout carried.
+test('the house sells on the platform’s own account and hears its sales there', async () => {
+  await using k = await shopping()
+  await k.deploy()
+  let [shirt] = await k.shirts()
+  let env = {
+    ...k.env,
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_WEBHOOK_SECRET: WHSEC,
+  } as Env
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
+  let cookie = await as(ADA)
+  let mark = (house: string) =>
+    sell.houses(
+      new Request('https://yaks.app/api/house', {
+        ...setting(cookie, ''),
+        body: `space=ada&house=${house}`,
+      }),
+      env,
+    )
+  assertEquals((await mark('true')).status, 403, 'only the platform’s owner')
+  await seated(env, dir)
+  await sell.fees(
+    new Request('https://yaks.app/api/fee', setting(cookie, '250')),
+    env,
+  )
+  assertEquals(await (await mark('true')).json(), { space: 'ada', house: true })
+  assertEquals(await sold(env), {
+    via: 'stripe',
+    account: '',
+    ready: true,
+    submitted: true,
+    house: true,
+  })
+
+  let real = globalThis.fetch
+  let asked: { path: string; on: string | null; body: string }[] = []
+  let charge = {
+    payment_intent: 'pi_house',
+    metadata: { space: k.space.eid, app: 'shop', house: 'true' },
+  }
+  using _ = stub(globalThis, 'fetch', (url, init) => {
+    if (!String(url).startsWith('https://api.stripe.com/')) {
+      return real(url, init)
+    }
+    asked.push({
+      path: new URL(String(url)).pathname,
+      on: new Headers(init?.headers).get('stripe-account'),
+      body: decodeURIComponent(String(init?.body ?? '')),
+    })
+    return Promise.resolve(
+      Response.json({ url: 'https://checkout.stripe.com/c', ...charge }),
+    )
+  })
+  let space = { ...(await dir.space('ada'))!, tier: 'plus' as const }
+  let paying = await sell.buying(env, {
+    space,
+    app: 'shop',
+    root: 'https://ada.yaks.app/shop/',
+  }, { items: [{ product: shirt.entity.eid, qty: 1 }] })
+  assertEquals(paying.status, 200)
+  let [made] = asked
+  assertEquals(made.on, null)
+  assert(!made.body.includes('application_fee_amount'))
+  assertStringIncludes(made.body, 'metadata[fee]=0')
+  assertStringIncludes(made.body, 'statement_descriptor_suffix]=ADA')
+
+  let heard = async (type: string, object: Record<string, unknown>) =>
+    (JSON.parse(
+      await delivered(
+        async (path, init) =>
+          (await paymentDoor(
+            new Request(`https://yaks.app${path}`, init),
+            env,
+          ))!,
+        '/stripe/webhook',
+        WHSEC,
+        type,
+        object,
+      ),
+    ) as { did: string }).did
+  let session = {
+    id: 'cs_house',
+    mode: 'payment',
+    payment_intent: 'pi_house',
+    payment_status: 'paid',
+    amount_total: 2800,
+    metadata: {
+      ...charge.metadata,
+      fee: '0',
+      items: packed([{ product: shirt.entity.eid, qty: 1 }]),
+    },
+  }
+  assertEquals(
+    await heard('checkout.session.completed', session),
+    'shop: paid 2800',
+  )
+  // Its order names the platform's own account, '', which a refund is made
+  // on.
+  let [order] = await metaOf(appStore(env.STORE, space, k.app, env), {
+    ...KERNEL,
+    'x-yak-person': k.app.eid,
+    'x-yak-role': 'editor',
+  }).query(line`.order.intent=pi_house`)
+  assertEquals((order.order as { account: string }).account, '')
+  assertEquals(
+    await heard('charge.refunded', { ...charge, refunded: true }),
+    'shop: refunded',
+  )
+  assertEquals(
+    await heard('charge.dispute.created', { charge: 'ch_house' }),
+    'shop: disputed',
+  )
+  assertEquals(asked.at(-1)!.on, null, 'its charge is read on our own account')
+
+  // Unmarked, the platform's door believes none of it.
+  assertEquals(await (await mark('false')).json(), {
+    space: 'ada',
+    house: false,
+  })
+  assertEquals(await sold(env), null)
+  assertEquals(
+    await heard('charge.dispute.closed', { charge: 'ch_house', status: 'won' }),
+    'not a house sale',
   )
 })

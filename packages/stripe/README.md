@@ -85,7 +85,14 @@ payment-mode session on the account (`Stripe-Account`), its lines inline
 0), and the tags on both the session and its PaymentIntent, so a refund's charge
 carries them; a tag carries 500 characters (`tag`), as a metadata value does.
 Its return addresses get their braces back, which `URL` percent-encodes, so
-Stripe still finds its `{CHECKOUT_SESSION_ID}` in them.
+Stripe still finds its `{CHECKOUT_SESSION_ID}` in them. The house sells on the
+platform's own account instead, named `''` wherever an account is: no
+`Stripe-Account` header and no application fee. Managed Payments is turned off
+(`managed_payments[enabled]=false`), since it is on by default for the
+platform's plans and covers digital goods only. The sale's `descriptor` is the
+card statement's suffix (`descriptor`, as in `YAKS.APP* PRINTBOUND`), and
+`house: 'true'` rides the metadata. The house sells nothing that renews: those
+events on the platform's own account would read as its plans.
 `shopped(options)(event)` reads `account.updated`,
 `account.application.deauthorized`, `checkout.session.completed`,
 `charge.refunded` and `charge.dispute.created` or `.closed`; a dispute's charge
@@ -95,12 +102,13 @@ is read back on the account, since a dispute carries no metadata.
 
 `doors(options)` (`@yaks/stripe/doors`) are Stripe's two webhook endpoints,
 which a host serves at `/stripe/<name>`: `webhook`, events from the platform's
-own account, read by `changed`, and `connect`, events from connected accounts,
-read by `shopped`. Stripe signs each endpoint's events with its own `whsec_…`,
-so each door verifies the raw body with its own secret (@yaks/hook's
-`refusal('stripe', …)`) and answers `{heard}` or `{refused, ours}`, `ours` where
-a well-formed signature did not match, which is what a wrong secret looks like.
-A door with no secret answers `undefined`.
+own account, read by `changed` save the house's sales, refunds and disputes
+(`housed`), read by `shopped` naming no account, and `connect`, events from
+connected accounts, read by `shopped`. Stripe signs each endpoint's events with
+its own `whsec_…`, so each door verifies the raw body with its own secret
+(@yaks/hook's `refusal('stripe', …)`) and answers `{heard}` or
+`{refused, ours}`, `ours` where a well-formed signature did not match, which is
+what a wrong secret looks like. A door with no secret answers `undefined`.
 
 `@yaks/stripe/testing` stands in for Stripe in a test: `signed(secret, raw, at)`
 is the `Stripe-Signature` header Stripe puts on a webhook,

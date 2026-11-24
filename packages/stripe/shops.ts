@@ -24,6 +24,18 @@
 // control, so its details are changed in their own dashboard, and the same
 // direct charges and application fee apply to it.
 //
+// The house sells on the platform's own account instead (@yaks/host/payments
+// `Seller`), named '' wherever an account is: the same calls with no
+// `Stripe-Account` header, so the charge is the platform's, Stripe's fees come
+// out of the platform's balance (and its fee credit), and no application fee
+// is named, since Stripe takes none from an account for itself. Managed
+// Payments, on by default on the platform's account for its plans, is turned
+// off for these: it sells digital goods as merchant of record, and the house
+// sells printed books as itself. The card statement reads the platform's
+// prefix and the seller's name after it (`YAKS.APP* PRINTBOUND`). Its events
+// arrive at the platform's own endpoint, which `housed` tells from the
+// platform's own plans.
+//
 // v1 throughout, deliberately: `POST /v1/accounts` with controller properties,
 // and the v1 event names. There is a v2 Accounts API with its own thin
 // `v2.core.*` events; mixing the two would mean a reader of one set of names
@@ -240,9 +252,11 @@ export let cut = (sale: Pick<Sale, 'lines' | 'shipping' | 'bps'>): number => {
 // `charge.refunded`, whose object inherits the PaymentIntent's metadata and
 // knows nothing of the session, so without them the refund of a sale could
 // not be told whose it was.
-let once = (sale: Sale) => {
-  let fee = cut(sale)
+let once = (sale: Sale, house: boolean) => {
+  let fee = house ? 0 : cut(sale)
+  let suffix = house && sale.descriptor ? descriptor(sale.descriptor) : ''
   return {
+    ...(house ? { managed_payments: { enabled: false } } : {}),
     ...(sale.shipping
       ? {
         shipping_options: [{
@@ -259,7 +273,8 @@ let once = (sale: Sale) => {
       : {}),
     payment_intent_data: {
       ...(fee > 0 ? { application_fee_amount: fee } : {}),
-      metadata: sale.tags,
+      ...(suffix ? { statement_descriptor_suffix: suffix } : {}),
+      metadata: house ? marked(sale.tags) : sale.tags,
       ...(sale.destination ? { shipping: sale.destination } : {}),
     },
   }
@@ -279,17 +294,37 @@ let renewing = (sale: Sale) => ({
   },
 })
 
+/// descriptor('PrintBound') -> 'PRINTBOUND'
+/// descriptor('Crayon "Bloom" <Books>') -> 'CRAYON BLOOM BOOKS'
+/// descriptor('1234') -> ''
+/** A seller's name as a statement descriptor suffix: upper case, without the
+ * characters Stripe refuses there (`<>\'"*`), at most 22 characters, and ''
+ * where no letter is left, which Stripe requires one of. Stripe itself cuts
+ * the suffix to what fits after the account's prefix. */
+export let descriptor = (name: string): string => {
+  let out = name.toUpperCase().replace(/[<>\\'"*]/g, '').replace(/\s+/g, ' ')
+    .trim().slice(0, 22).trim()
+  return /\p{L}/u.test(out) ? out : ''
+}
+
+/** The metadata key a house sale's objects carry, which tells its events on
+ * the platform's own account from the platform's plans (`housed`). */
+export let HOUSE = 'house'
+
+let marked = (tags: Tags): Tags => ({ ...tags, [HOUSE]: 'true' })
+
 /**
  * The Checkout Session, as the form fields of `POST /v1/checkout/sessions`,
- * made on the seller's account (the `Stripe-Account` header `checkout` adds):
- * in payment mode for a sale paid once, and in subscription mode for one that
- * says how often it renews, where every line recurs at that interval.
+ * made on the seller's account (the `Stripe-Account` header `checkout` adds),
+ * or on the platform's own for the house: in payment mode for a sale paid
+ * once, and in subscription mode for one that says how often it renews, where
+ * every line recurs at that interval.
  *
  * The tags ride `metadata`, and the payment or the subscription it makes as
- * well. Lines go out as inline `price_data`, numbered as Stripe's form
- * encoding numbers a list.
+ * well, with the house's mark on a house sale. Lines go out as inline
+ * `price_data`, numbered as Stripe's form encoding numbers a list.
  */
-export let session = (sale: Sale): Record<string, unknown> => ({
+export let session = (sale: Sale, house = false): Record<string, unknown> => ({
   mode: sale.per ? 'subscription' : 'payment',
   ...(sale.expires
     ? { expires_at: Math.floor(Date.parse(sale.expires) / 1000) }
@@ -306,8 +341,8 @@ export let session = (sale: Sale): Record<string, unknown> => ({
   success_url: back(sale.done),
   cancel_url: back(sale.cancel),
   ...(sale.email ? { customer_email: sale.email } : {}),
-  metadata: sale.tags,
-  ...(sale.per ? renewing(sale) : once(sale)),
+  metadata: house ? marked(sale.tags) : sale.tags,
+  ...(sale.per ? renewing(sale) : once(sale, house)),
 })
 
 /** A completed session as the sale it made. The buyer's address is
@@ -434,15 +469,21 @@ export let shops = (options: Options): Shops => {
       )
     },
     // On the seller's account: that one header is the whole of what makes it
-    // their charge rather than the platform's.
-    checkout: (on, sale) =>
-      made(
+    // their charge rather than the platform's. The house's has none, and
+    // sells nothing that renews: a subscription's events on the platform's
+    // own account are read as the platform's plans.
+    checkout: (on, sale) => {
+      if (!on && sale.per) {
+        throw new Error('the house sells nothing that renews')
+      }
+      return made(
         'a checkout session',
         '/v1/checkout/sessions',
-        session(sale),
+        session(sale, !on),
         on,
         sale.key,
-      ),
+      )
+    },
     paid: async (on, checkout) => {
       let o = await found(
         options,
@@ -526,8 +567,24 @@ let subscribedBy = (type: string, o: Record<string, unknown>) => {
   )
 }
 
+/** Whether a verified event Stripe posted about the platform's own account is
+ * about a house sale, which `shopped` reads, rather than about the platform's
+ * plans, which ./plans.ts `changed` reads: a checkout carrying the house's
+ * mark, or a payment refunded or disputed. The platform's plans read neither
+ * of the second, and a refund or dispute of one of theirs reads as a payment
+ * the shops know nothing of. */
+export let housed = (event: unknown): boolean => {
+  let e = (event ?? {}) as Event
+  let type = e.type ?? ''
+  return type == 'checkout.session.completed'
+    ? (e.data?.object?.metadata as Tags | undefined)?.[HOUSE] == 'true'
+    : type == 'charge.refunded' || type.startsWith('charge.dispute.') ||
+      type.startsWith('refund.')
+}
+
 /** A verified event Stripe posted to the Connect endpoint, read, with the
- * account it happened on. */
+ * account it happened on: '' for one about a house sale, posted to the
+ * platform's own endpoint. */
 export let shopped = (options: Keyed) => (event: unknown): Shopped => {
   let e = (event ?? {}) as Event
   let type = e.type ?? ''

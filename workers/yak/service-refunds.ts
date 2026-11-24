@@ -71,7 +71,7 @@ export let requestRefund = async (store: Meta, ask: RefundAsk, now: string) => {
     return ask.request
   }
   let sale = await get<SaleRow>(store, ask.order)
-  if (!sale?.order?.intent || !sale.order.account) {
+  if (!sale?.order?.intent || sale.order.account == null) {
     throw refuse('refund', 'paid order not found')
   }
   let pending = await store.query(
@@ -156,7 +156,9 @@ export let recoverRefund = async (
     row.refund_failed
   ) return
   let sale = await get<SaleRow>(store, row.refund_request.order)
-  if (!sale?.order?.intent || !sale.order.account) {
+  // A house sale's account is '', the platform's own (@yaks/host/payments
+  // `Seller`).
+  if (!sale?.order?.intent || sale.order.account == null) {
     throw new Error('refund lost its paid order')
   }
   let refund = await lent.refund(sale.order.account, {

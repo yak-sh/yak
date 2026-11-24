@@ -41,6 +41,7 @@ import {
   freeSpacesNow,
   funnelNow,
   gravesIn,
+  houseNow,
   linkFor,
   moveIn,
   operatorGraph,
@@ -55,6 +56,7 @@ import {
   setComp,
   setFee,
   setFreeSpaces,
+  setHouse,
   setTunnel,
   standing,
   storeApply,
@@ -497,6 +499,32 @@ export let runs = (
         ? await feeNow(at.bearer)
         : await setFee(at.bearer, Number(bps))
       return [said(call, `${now.bps} bps — ${now.rate} of each sale`)]
+    }),
+
+    // Whether a space sells on the platform's own account, the house: read
+    // it, or mark it `on` or `off`. Answered only to an owner of `yak`.
+    admin_house: verb(async (call) => {
+      let a = argsOf(call)
+      let space = word(a, 'space')
+      if (!space) throw new CallError('space', 'name the space, by its slug')
+      let to = word(a, 'house')
+      if (to != null && to != 'on' && to != 'off') {
+        throw new CallError('house', `on or off, not ${to}`)
+      }
+      let at = await acting(a)
+      let now = to == null
+        ? await houseNow(at.bearer, space)
+        : await setHouse(at.bearer, space, to == 'on')
+      return [
+        said(
+          call,
+          `${now.space} ${
+            now.house
+              ? 'sells on the platform’s own account'
+              : 'is not the house'
+          }`,
+        ),
+      ]
     }),
 
     // What every yaks.app Operator runs on: read it, or make this graph's
