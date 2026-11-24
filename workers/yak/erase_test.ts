@@ -189,7 +189,7 @@ test('what a delete would destroy is named, not counted', () => {
   assertStringIncludes(said, 'herbusiness.com stops serving')
   assertStringIncludes(
     said,
-    '(833) 555-0100 stops taking calls and texts; it costs $1.50 a month',
+    '(833) 555-0100 will be returned to the phone company automatically',
   )
   assertStringIncludes(said, '2 people lose their way in: Dana, Sam')
   assertStringIncludes(said, 'shoplab.yaks.app goes back into circulation')

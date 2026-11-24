@@ -146,12 +146,13 @@ export let REPEATABLE =
  * or answers with a 5xx, is asked once more, each asking with half the
  * time. A slow answer is always `Unsent`, for the caller to ask again later:
  * a second one of a repeatable method, and the timeout of any other, which is
- * asked once ({@link TimedOut}).
+ * asked once ({@link TimedOut}). A caller can also ask for a single attempt.
  */
 export let bounded = (
   request: ReturnType<typeof requester>,
   time: Clock,
   by = Infinity,
+  retry = true,
 ): Call =>
 async (method, params) => {
   let once = async (until: number) => {
@@ -166,7 +167,7 @@ async (method, params) => {
     }
   }
   let end = () => Math.min(by, time.now() + CALL)
-  if (!REPEATABLE.test(method)) return await once(end())
+  if (!retry || !REPEATABLE.test(method)) return await once(end())
   let slow = (e: unknown) => e instanceof Unsent
   let last = end()
   try {

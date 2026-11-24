@@ -8,6 +8,7 @@ import { type Built, line as q } from '@yaks/query'
 import { left } from '@yaks/platform/meter'
 import { caught } from './defects.ts'
 import {
+  directoryOf,
   idOf,
   type PhoneLine,
   type Row,
@@ -175,12 +176,14 @@ let boundLegacy = async (env: Env, line: PhoneLine, voice: Voice) => {
 /** Apply an owner departure to every line in that space. The hourly meter
  * also converges any provider call that could not finish here. */
 export let ownersLeft = async (env: Env, space: string, seats: string[]) => {
+  let home = await directoryOf(env.STORE).at(space)
+  // Permanent erasure leaves the carrier release job in charge of this line.
+  if (!home) return
   let rows = await read(
     env,
     q`.phone_line.space=${space}&!phone_line.returned&?trashed`,
   )
   if (!rows.length) return
-  let home = await spaceNow(env, space)
   for (let row of rows) {
     let l = row.phone_line as Row['phone_line']
     if (!l) continue

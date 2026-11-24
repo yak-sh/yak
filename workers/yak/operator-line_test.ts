@@ -115,6 +115,7 @@ let dids = [{
   sms_enabled: '0',
 }] as Record<string, string>[]
 let asked: URLSearchParams[] = []
+let unavailable: (() => Promise<Response>) | undefined
 let real = globalThis.fetch
 afterAll(() => globalThis.fetch = real)
 globalThis.fetch = (input, init) => {
@@ -122,6 +123,7 @@ globalThis.fetch = (input, init) => {
   if (url.host != 'voip.ms') return real(input, init)
   let q = url.searchParams
   asked.push(q)
+  if (unavailable) return unavailable()
   let ok = (more: object) =>
     Promise.resolve(Response.json({ status: 'success', ...more }))
   if (q.get('api_password') != 'pw') {
@@ -822,4 +824,67 @@ test("disconnecting a person's own voip.ms account puts back its callbacks and a
     ['1', church],
   )
   ok(!dids.some((d) => d.sms_url_callback?.startsWith('https://yaks.app/')))
+})
+
+test('disconnect revokes a voip.ms credential during an outage and drops texts sent to the old callback', async () => {
+  assertEquals((await page('jeff@example.com', 'pw') as Said).no, false)
+  let c = ctxOf(env)
+  let [row] = await c.graph.read(
+    '.connection.integration=voipms&.connection.status=connected&*',
+  )
+  await setting({ number: '+12695550111', inbound: true })
+  let callback = dids.find((d) => d.did == '2695550111')!.sms_url_callback
+  let form = new FormData()
+  form.set('do', 'disconnect')
+  form.set('connection', row.entity.eid)
+  let first = asked.length
+  let accessAtAttempt: unknown
+  unavailable = async () => {
+    accessAtAttempt = [
+      await c.vault.read(row.entity.eid),
+      await c.graph.read(line`.entity.eid=${row.entity.eid}&.connection`),
+    ]
+    return new Response(null, { status: 503 })
+  }
+  let out
+  try {
+    out = await connecting(
+      new Request('https://yaks.app/manage/connections?space=jeff'),
+      env,
+      space,
+      held,
+      form,
+    ) as Said
+  } finally {
+    unavailable = undefined
+  }
+  assertEquals(out.no, false, out.say)
+  assertStringIncludes(out.say, '(269) 555-0111')
+  assert(!out.say.includes('(269) 555-0100'))
+  assertStringIncludes(out.say, 'voip.ms')
+  assertStringIncludes(out.say, 'drops')
+  assertEquals(accessAtAttempt, [undefined, []])
+  assertEquals(asked.slice(first).map((q) => q.get('method')), ['getDIDsInfo'])
+  assertEquals(await c.vault.read(row.entity.eid), undefined)
+  assertEquals(
+    (await c.vault.trash()).filter((s) => s.eid == row.entity.eid),
+    [],
+  )
+
+  let from = '+12695550155'
+  let sender = lineSender(row.entity.eid, '+12695550111', from)
+  let delivered = await lineDoor(
+    new Request(
+      callback.replace('{ID}', 'disconnected').replace('{FROM}', from.slice(2))
+        .replace('{TO}', '2695550111').replace(
+          '{MESSAGE}',
+          'A text after disconnect',
+        ),
+    ),
+    env,
+    'voipms',
+    voipms,
+  )
+  assertEquals(await delivered.text(), 'ok')
+  assertEquals(await c.graph.read(line`.entity.eid=${sender}&.person`), [])
 })

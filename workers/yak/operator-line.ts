@@ -42,12 +42,15 @@ import {
 } from '@yaks/connections'
 import {
   type Account,
+  type Attempt,
   Blocked,
   Denied,
   echo,
   type Held,
   type Own,
+  shown,
 } from '@yaks/phone'
+import { caught } from './defects.ts'
 import { mobile } from '@yaks/phone/mobile'
 import { phoneOf, phones } from './phones.ts'
 import { charged } from './text-spend.ts'
@@ -80,25 +83,29 @@ export let owned = async (env: Env): Promise<Record<string, Own>> =>
  * each field its provider's `own` names; null while one is missing. It asks
  * the provider for only the methods the integration lists, so a person's
  * own number is never cancelled or rerouted from here. */
-let accountOf = async (
+let accountKey = async (
   c: Connections,
   own: Own,
   via: string,
   connection: string,
   number?: string,
-): Promise<Account | null> => {
+): Promise<((attempt?: Attempt) => Account) | null> => {
   let fields = Object.entries(own.fields)
   let read = await Promise.all(
     fields.map(([, field]) => credential(c, connection, field!)),
   )
   if (read.some((value) => !value)) return null
-  return own.account({
+  let settings = {
     via,
     ...Object.fromEntries(fields.map(([setting], i) => [setting, read[i]])),
     methods: (await known(c.graph.read, via))?.methods ?? [],
     ...(number ? { number } : {}),
-  })
+  }
+  return (attempt) => own.account(settings, attempt)
 }
+
+let accountOf = async (...args: Parameters<typeof accountKey>) =>
+  (await accountKey(...args))?.() ?? null
 
 // The kernel's seal on one connected number, carried by its callback URL.
 let ticketOf = (env: Env, connection: string, number: string) =>
@@ -135,6 +142,7 @@ export type Owned = {
   sms: boolean
   label?: string
   callback?: string
+  pointed?: boolean
   campaign?: string
 }
 /** How the Operator uses one of them: its own setting. */
@@ -193,7 +201,7 @@ let listed = async (
   )
   let here = doorOf(env, via)
   await ctxOf(env).graph.apply([
-    ...lines.map((l): Bundle => ({
+    ...await Promise.all(lines.map(async (l): Promise<Bundle> => ({
       entity: { eid: identityEid(OWN, [connection, l.number]) },
       [OWN]: {
         connection,
@@ -203,14 +211,34 @@ let listed = async (
         callback: l.callback?.startsWith(here)
           ? kept.get(l.number)?.callback ?? null
           : l.callback ?? null,
+        pointed: await targets(env, here, connection, l),
       },
-    })),
+    }))),
     ...[...kept.keys()].filter((n) => !lines.some((l) => l.number == n))
       .map((n): Bundle => ({
         entity: { eid: identityEid(OWN, [connection, n]) },
         $delete: true,
       })),
   ])
+}
+
+let targets = async (
+  env: Env,
+  here: string,
+  connection: string,
+  held: Held,
+) => {
+  if (!held.callback?.startsWith(here)) return false
+  let token = new URL(held.callback).pathname.slice(
+    new URL(here).pathname.length,
+  )
+  let claim = await opened<{ connection: string; number?: string }>(
+    'line',
+    token,
+    secretOf(env),
+  )
+  return claim?.connection == connection &&
+    (!claim.number || claim.number == held.number)
 }
 
 // A number as a person reads it: its label, when the account gives one.
@@ -291,57 +319,117 @@ export let pointed = async (
   // Where a number's texts went is kept before they are pointed here.
   await listed(env, via, connection, lines)
   for (let held of lines) {
-    let ours = !!held.callback?.startsWith(here)
     if (inbound.has(held.number)) {
       let callback = await callbackOf(env, own, via, connection, held.number)
-      if (held.callback != callback) await account.point(held.number, callback)
-    } else if (off.has(held.number) && ours) {
-      await account.point(held.number, kept.get(held.number)?.callback)
+      if (held.callback == callback) continue
+      // A carrier may accept the change without answering.
+      await pointing(env, connection, held.number, true)
+      await account.point(held.number, callback)
+    } else if (
+      off.has(held.number) && await targets(env, here, connection, held)
+    ) {
+      await account.point(
+        held.number,
+        kept.get(held.number)?.callback,
+        held.callback,
+      )
+      await pointing(env, connection, held.number, false)
     }
   }
 }
 
+let pointing = (
+  env: Env,
+  connection: string,
+  number: string,
+  pointed: boolean,
+) =>
+  ctxOf(env).graph.apply([{
+    entity: { eid: identityEid(OWN, [connection, number]) },
+    [OWN]: { pointed },
+  }])
+
 // A connection's row, the phone it connects a person's number through, and
 // the account its credential opens; undefined while any is missing.
-let opening = async (env: Env, connection: string) => {
+let ownLine = async (env: Env, connection: string) => {
   let [line] = await meta(env).query(
     q`.entity.eid=${connection}&.${CONNECTION}&*`,
   )
   if (!line) return undefined
   let via = String(comp(line, CONNECTION).integration ?? '')
   let own = (await owned(env))[via]
-  if (!own) return undefined
-  let account = await accountOf(ctxOf(env), own, via, connection)
-  return account ? { line, via, own, account } : undefined
+  return own ? { line, via, own } : undefined
 }
 
-/**
- * Before connection `connection` ends: put back as it was the callback of
- * each of its numbers pointed here. That is all ending yaks.app's use of a
- * number a person connected does at their provider: it is theirs, and is
- * never cancelled from here. A key the provider no longer takes leaves the
- * callbacks as they are, since nothing here can reach them; voip.ms not
- * answering throws, so the person tries again before their texts are lost.
- */
-export let unlined = async (env: Env, connection: string) => {
-  let open = await opening(env, connection)
+let opening = async (env: Env, connection: string) => {
+  let open = await ownLine(env, connection)
   if (!open) return
-  let { via, account } = open
+  let { via, own } = open
+  let account = await accountOf(ctxOf(env), own, via, connection)
+  return account ? { ...open, account } : undefined
+}
+
+/** Capture the callback settings and credential in this request before
+ * revocation. The returned function makes one bounded cleanup attempt. */
+export let unlining = async (env: Env, connection: string) => {
+  let open = await ownLine(env, connection)
+  if (!open) return
+  let { via, own, line } = open
   let kept = new Map(
     (await numbersOf(env, connection)).map((n) => [n.number, n]),
   )
+  let legacy = String(comp(line, CONNECTION).account ?? '')
+  let possible = [
+    ...new Set([
+      ...[...kept.values()].filter((n) => n.pointed ?? n.sms).map((n) =>
+        n.number
+      ),
+      ...legacy.startsWith('+') && kept.get(legacy)?.pointed !== false
+        ? [legacy]
+        : [],
+    ]),
+  ]
   let here = doorOf(env, via)
-  let lines
-  try {
-    lines = await account.lines()
-  } catch (error) {
-    if (error instanceof Denied) return
-    throw error
-  }
-  for (let held of lines) {
-    if (held.callback?.startsWith(here)) {
-      await account.point(held.number, kept.get(held.number)?.callback)
+  let openAccount = await accountKey(ctxOf(env), own, via, connection)
+  let report = (e: unknown) => {
+    if (!(e instanceof Denied)) {
+      caught(e, { request: 'reset disconnected phone callbacks', connection })
     }
+  }
+  let incomplete = (numbers: string[]) =>
+    'Disconnected. Your API credentials were removed. ' +
+    (numbers.length
+      ? `${numbers.map(shown).join(', ')} may still send texts to yaks.app. `
+      : 'We couldn’t verify which numbers still send texts to yaks.app. ') +
+    'Update any remaining SMS URL callbacks in your voip.ms account. ' +
+    'yaks.app drops texts sent to this disconnected connection.'
+  return async () => {
+    if (!openAccount) return incomplete(possible)
+    let account = openAccount({ by: Date.now() + 2_000 })
+    let lines
+    try {
+      lines = await account.lines()
+    } catch (error) {
+      report(error)
+      return incomplete(possible)
+    }
+    let pending = (await Promise.all(lines.map(async (held) => {
+      if (!await targets(env, here, connection, held)) return []
+      try {
+        await account.point(
+          held.number,
+          kept.get(held.number)?.callback,
+          held.callback,
+        )
+        return []
+      } catch (error) {
+        report(error)
+        return [held.number]
+      }
+    }))).flat()
+    return pending.length
+      ? incomplete(pending)
+      : 'Disconnected. Your API credentials were removed and any SMS callbacks to this connection were reset.'
   }
 }
 
@@ -753,17 +841,22 @@ export let lineDoor = async (
     ticket,
     secretOf(env),
   )
-  if (!held?.connection || !held.number) {
+  if (!held?.connection) {
     return new Response('not ours', { status: 403 })
   }
   let ok = () =>
     new Response('ok', { headers: { 'content-type': 'text/plain' } })
-  let arrival = own.called(url.searchParams)
   let [line] = await meta(env).query(
     q`.entity.eid=${held.connection}&.${CONNECTION}&*`,
+    { live: true },
   )
+  // A carrier may still hold the callback after revocation. Acknowledge it
+  // without reading the text or creating a sender or conversation.
+  if (!line) return ok()
+  if (!held.number) return new Response('not ours', { status: 403 })
+  let arrival = own.called(url.searchParams)
   let owner = String(comp(line, CONNECTION).owner ?? '')
-  if (!arrival || echo(arrival) || !line || !owner) return ok()
+  if (!arrival || echo(arrival) || !owner) return ok()
   if (held.number != arrival.to) {
     return new Response('not this line', { status: 403 })
   }

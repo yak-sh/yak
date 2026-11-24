@@ -129,7 +129,7 @@ let stillStopping = async (env: Env, work: Release): Promise<{
 }> => {
   if (!work.permanent || bothStopped(work)) return {}
   let line = await held(env, idOf(work.line))
-  if (!line?.trashed || line.returned) return {}
+  if (!line || line.returned) return {}
   return await syncVoice(env, line, { in: false, out: false }).then(
     () => ({ stopped: { in: true, out: true } }),
     (error) => ({
@@ -201,21 +201,15 @@ export let finishRelease = async (
 export let stopCalls = (env: Env, line: string) =>
   finishRelease(env, eidOf(line))
 
-export let returnNumber = async (env: Env, line: string) => {
+/** Keep a permanent return for the wake, carrying over any work to stop calls. */
+export let returnWork = async (env: Env, line: string): Promise<Bundle[]> => {
   let work = await read(env, eidOf(line))
-  if (!work?.permanent) {
-    let next = releaseWork(line, true, nowOf(env))
-    let at = next.phone_release.at
-    await stamp(env, {
-      entities: [{
-        ...next,
-        phone_release: {
-          ...next.phone_release,
-          ...!work ? { stopped_in: at, stopped_out: at } : {},
-        },
-      }],
-    })
-  }
+  return work?.permanent ? [] : [releaseWork(line, true, nowOf(env))]
+}
+
+export let returnNumber = async (env: Env, line: string) => {
+  let entities = await returnWork(env, line)
+  if (entities.length) await stamp(env, { entities })
   if (await stopCalls(env, line)) return true
   let standing = await held(env, line)
   return !standing || !!standing.returned

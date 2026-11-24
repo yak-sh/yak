@@ -20,11 +20,19 @@ import {
   fresh,
   letters,
   seed,
+  signedIn,
   signIn as browserSignIn,
   unique,
 } from './probe.ts'
 import { endpoints } from './endpoints.ts'
-import { collected, doomed, erase, untrashSpace } from './erase.ts'
+import {
+  closed,
+  collected,
+  doomed,
+  erase,
+  ticket as spaceTicket,
+  untrashSpace,
+} from './erase.ts'
 import { door, ticket } from './confirm.ts'
 import { managePath } from '@yaks/platform/routes'
 import { arrived } from './operator-texts.ts'
@@ -35,6 +43,7 @@ import { monthly, released } from './numbers.ts'
 import { allowed, minutes, orders, pointed } from './number-upkeep.ts'
 import { restoredNumber } from './number-trash.ts'
 import { GRACE, stamp } from './directory.ts'
+import { finishRelease } from './number-release.ts'
 import { usage } from '@yaks/platform/numbers'
 import { locatedEid } from '@yaks/platform/located'
 import type { Env } from './env.ts'
@@ -852,6 +861,7 @@ let localLine = async () => {
     vms.slowRestriction = false
     vms.slowCancel = null
     vms.slowGroups = 0
+    vms.cdr = []
   }
   return { k, env, space, line, release, tool, cookie, person, stop }
 }
@@ -956,6 +966,96 @@ test('a carrier-confirmed return leaves the trash and stops monthly billing even
     assertEquals(vms.groups.size, 0)
     assertEquals(vms.accounts.size, 0)
     assertEquals(await k.dir.trash([line.eid]), [])
+  } finally {
+    await stop()
+  }
+})
+
+test('space erasure queues a number return without asking the carrier', async () => {
+  let { k, env, space, line, cookie, person, stop } = await localLine()
+  try {
+    await stamp(env, {
+      entities: [{ entity: { eid: space.eid }, trashed: {} }],
+    })
+    vms.slowCancel = 'held'
+    let before = vms.asked.length
+    let response = await k.at('yaks.app', `/space/${space.slug}/delete`, {
+      method: 'POST',
+      headers: { cookie },
+      body: new URLSearchParams({
+        t: await spaceTicket(space, person, env.SESSION_SECRET!, true),
+      }),
+    })
+    let page = await response.text()
+    assertEquals(response.status, 200, page)
+    assertStringIncludes(page, `${space.slug}.yaks.app is gone`)
+    assertStringIncludes(page, '(269) 201-5487')
+    assertStringIncludes(page, 'automatically')
+    assertEquals(vms.asked.length, before)
+    assertEquals(await k.dir.at(space.eid), null)
+    assertEquals(vms.held.size, 1)
+
+    let [job] = await k.dir.read(q`.phone_release.line=${line.eid}&?wake`)
+    assertEquals(await finishRelease(env, job.entity.eid), false)
+    assertEquals(vms.held.get('2692015487')?.routing, 'sys:hangup')
+    assertEquals([...vms.accounts.values()][0]?.only, '192.0.2.1')
+    let spent = async () => (await k.dir.space('yak'))?.meter?.texts ?? 0
+    let previous = await spent()
+    await stamp(env, {
+      entities: [{
+        entity: { eid: line.eid },
+        wake: { at: new Date().toISOString() },
+      }],
+    })
+    await until(async () => await spent() > previous, {
+      label: 'the retained line’s monthly charge reached the platform',
+    })
+    assertEquals(await spent() - previous, line.monthly)
+    assertEquals(await k.dir.read(q`.entity.eid=${space.eid}`), [])
+
+    vms.slowCancel = null
+    await retryRelease(k, env, line.eid)
+    assertEquals(vms.held.size, 0)
+    assertEquals(vms.accounts.size, 0)
+    assertEquals(await k.dir.read(q`.entity.eid=${line.eid}`), [])
+    assertEquals(await k.dir.trash([line.eid]), [])
+  } finally {
+    await stop()
+  }
+})
+
+test('account purge reports its pending number return and still removes the account', async () => {
+  let { k, env, space, line, person, stop } = await localLine()
+  try {
+    let address = `${space.slug}@bot.yak.sh`
+    await stamp(env, {
+      entities: [{ entity: { eid: person }, email: { address } }],
+    })
+    let [owner] = await k.dir.owners((await k.dir.space('yak'))!)
+    let who = { person: owner, role: 'owner' as const }
+    await closed(env, k.dir, address, who)
+    vms.slowCancel = 'held'
+    let before = vms.asked.length
+    let response = await k.at(
+      'yaks.app',
+      `/space/yak/confirm/account/${person}`,
+      {
+        method: 'POST',
+        headers: { cookie: await signedIn(k, owner) },
+        body: new URLSearchParams({ confirm: person }),
+      },
+    )
+    let page = await response.text()
+    assertEquals(response.status, 200, page)
+    assertStringIncludes(page, `${person} is erased from the trash`)
+    assertStringIncludes(page, '(269) 201-5487')
+    assertStringIncludes(page, 'automatically')
+    assertEquals(vms.asked.length, before)
+    assertEquals(await k.dir.at(space.eid), null)
+    assertEquals(await k.dir.emailAt(person), null)
+    vms.slowCancel = null
+    await retryRelease(k, env, line.eid)
+    assertEquals(vms.held.size, 0)
   } finally {
     await stop()
   }

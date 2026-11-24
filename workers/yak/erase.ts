@@ -69,9 +69,8 @@ import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
 import { purgedPrefix, retiring, retiringPrefix } from './file-retirement.ts'
 import { refuse } from './tool.ts'
-import { Unsent } from '@yaks/host/senders'
 import { dollars } from './numbers.ts'
-import { returnNumber } from './number-release.ts'
+import { returnWork } from './number-release.ts'
 import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
 import { unkept } from './newcomer.ts'
@@ -249,9 +248,7 @@ export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
   ),
   ...d.hosts.map((h) => `${h.name} stops serving and is given back`),
   ...d.lines.map((l) =>
-    `${shown(l.number)} stops taking calls and texts; it costs ${
-      dollars(l.monthly)
-    } a month until this confirmed purge returns it to the phone company`
+    `${shown(l.number)} will be returned to the phone company automatically`
   ),
   ...(d.members.length > 1
     ? [
@@ -453,18 +450,6 @@ export let erase = async (
   // hostname nothing here remembers (T-33038 domain_detach holds the same
   // order for one domain).
   if (d.hosts.length) reachable(env)
-  // Its numbers, each given back at the provider and then its row buried,
-  // which its death would not take (directory-vocab.ts `phone_line`): a
-  // number held past its space is billed every month with nobody to bill.
-  for (let line of d.lines) {
-    if (!await returnNumber(env, line.eid)) {
-      throw new Unsent(
-        `The phone company is still returning ${
-          shown(line.number)
-        }. We will retry automatically.`,
-      )
-    }
-  }
   for (let host of d.hosts) {
     await release(env, host.name)
     await unmail(env, host.mail)
@@ -497,8 +482,13 @@ export let erase = async (
   // contract's `death = "cascade"`), so this one tombstone buries the
   // directory's whole record of the space — and frees the slug, which is
   // unique across the platform and now belongs to nobody.
-  let gone = await dir.apply({
+  // Keep the carrier work in the same commit as the space's death. A line
+  // stays held until the carrier confirms its return, even past its space.
+  let returns = (await Promise.all(d.lines.map((l) => returnWork(env, l.eid))))
+    .flat()
+  let gone = await dir.stamp({
     entities: [
+      ...returns,
       { entity: { eid: d.space.eid }, tombstone: {} },
       ...d.hosts.filter((h) => !h.space).map((h) => ({
         entity: { eid: h.eid },
@@ -510,7 +500,6 @@ export let erase = async (
     d.space.eid,
     ...d.apps.map((a) => a.eid),
     ...d.hosts.map((h) => h.eid),
-    ...d.lines.map((l) => l.eid),
   ])
   // Everyone who was in it just lost every view its apps declared
   // (declared.ts, T-33004) — the same move being removed from a space makes.
@@ -519,14 +508,32 @@ export let erase = async (
     await reachChanged(env, m.person)
     await vacated(env, dir, m.person, who)
   }
-  return { files, apps: d.apps.length, hosts: d.hosts.length }
+  return {
+    files,
+    apps: d.apps.length,
+    hosts: d.hosts.length,
+    returning: d.lines.map((l) => l.number),
+  }
 }
+
+let returnsOf = (numbers: string[]) =>
+  numbers.length
+    ? ` yaks.app will keep trying automatically to return ${
+      numbers.map(shown).join(', ')
+    } to the phone company. The return needs no action from you.`
+    : ''
 
 // What went, as a sentence: the same summary the page and the tool answer
 // both say back.
 export let went = (
   d: Doomed,
-  out: { files: number; apps: number; hosts: number; trashed?: boolean },
+  out: {
+    files: number
+    apps: number
+    hosts: number
+    trashed?: boolean
+    returning?: string[]
+  },
   env: HostEnv = {},
 ) =>
   out.trashed
@@ -538,7 +545,9 @@ export let went = (
         out.hosts
           ? `, ${out.hosts} ${out.hosts == 1 ? 'domain' : 'domains'} given back`
           : ''
-      }. The address is free for somebody else to take.`
+      }. The address is free for somebody else to take.${
+        returnsOf(out.returning ?? [])
+      }`
 
 // ---- the trash: deleted, and brought back (T-34430, T-34431) ----
 //
@@ -1159,11 +1168,14 @@ export let trashedAccount: Kind<Closing> = {
   ],
   press: () => 'Erase account forever',
   act: async (env, dir, _space, c, who) => {
+    let numbers = [] as string[]
     for (let space of c.spaces) {
       let out = await erase(env, dir, await doomed(dir, space), who)
       if (out.trashed) {
-        return 'Newly owned spaces moved to trash. Confirm the account purge separately.'
+        return 'Newly owned spaces moved to trash. Confirm the account purge separately.' +
+          returnsOf(numbers)
       }
+      numbers.push(...out.returning ?? [])
     }
     if (c.heirs.length) {
       await dir.stamp({
@@ -1174,7 +1186,7 @@ export let trashedAccount: Kind<Closing> = {
       }, vouched(who))
     }
     await buried(env, dir, c.person, who)
-    return `${c.address} is erased from the trash.`
+    return `${c.address} is erased from the trash.${returnsOf(numbers)}`
   },
 }
 

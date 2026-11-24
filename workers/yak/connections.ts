@@ -622,26 +622,26 @@ let usersOf = async (env: Env, connection: string): Promise<string[]> =>
   (await readOf(env)(line`.edge.to=${connection}&.${USES}&*`))
     .map((l) => String(comp(l, 'edge').from))
 
-/** End connection `eid`, as its Disconnect button does: the apps that used
- * it ask for another, a person's own number stops sending its texts here
- * (operator-line.ts `unlined`), and a bot the space brought stops with it,
- * failing which its next alarm finds no token and stops. */
+/** End connection `eid` and rebind its apps. Carrier callback cleanup is
+ * best-effort after revoking access. A bot stops when its token goes. */
 export let ended = async (
   env: Env,
   eid: string,
   apps?: string[],
 ) => {
   apps ??= await usersOf(env, eid)
-  let { unlined } = await import('./operator-line.ts')
-  await unlined(env, eid)
+  let { unlining } = await import('./operator-line.ts')
+  let callbacks = await unlining(env, eid)
   let chat = await import('./chat.ts')
   let bot = await chat.botFor(env, eid)
+  if (callbacks) await vaultOf(env).erase([eid])
   await disconnect(ctxOf(env), eid, ownersOf(env))
   if (bot) {
     await chat.quiet(env, bot)
       .catch((e) => caught(e, { request: 'chat quiet', connection: eid }))
   }
   await rebound(env, apps)
+  return callbacks ? await callbacks() : 'Disconnected.'
 }
 
 // The same for each of those apps: after a key is kept, a sign-in finished,
@@ -1583,8 +1583,7 @@ export let connecting = async (
       }
     }
     if (act == 'disconnect') {
-      await ended(env, eid, apps)
-      return { say: 'Disconnected.', no: false }
+      return { say: await ended(env, eid, apps), no: false }
     }
     if (owner == space.eid && await asking(c.graph.read, eid)) {
       return no('Each person connects their own, from the app.')

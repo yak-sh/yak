@@ -53,6 +53,10 @@
           "type": "string",
           "description": "the URL its texts were sent to before its host pointed them at itself; absent when none was. They go back there when the number stops taking texts in"
         },
+        "pointed": {
+          "type": "boolean",
+          "description": "whether the carrier last had this connection's SMS callback, or the host tried to set it and has yet to confirm the result"
+        },
         "campaign": {
           "type": "string",
           "description": "the 10DLC campaign id its texts to many people are registered under, recorded once the provider approved it; absent until then, while carriers block those texts",

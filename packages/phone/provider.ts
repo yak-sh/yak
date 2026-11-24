@@ -31,11 +31,14 @@ export type Held = {
 /** A person's own account at a provider: a {@link Sender}, the numbers it
  * holds, and `point`, which sends a number's texts to a URL, or to none when
  * `url` is absent, and leaves every other way they reach the person as it
- * was. */
+ * was. If `before` is given, change only a callback still at that URL. */
 export type Account = Sender & {
   lines: () => Promise<Held[]>
-  point: (number: string, url?: string) => Promise<void>
+  point: (number: string, url?: string, before?: string) => Promise<void>
 }
+
+/** A single attempt at each carrier request, within one shared deadline. */
+export type Attempt = { by: number }
 
 /** How a person connects a number of their own through a provider: their
  * account, and the callback its texts reach a host by. */
@@ -45,7 +48,7 @@ export type Own = {
   /** their account, opened with those settings and the methods its
    * integration lists, the only ones it asks for: it reads, texts and
    * points, and has no way to give a number back or reroute its calls */
-  account: (options: Transport) => Account
+  account: (options: Transport, attempt?: Attempt) => Account
   /** the query a callback URL asks the provider to fill in, appended to
    * the host's own address */
   callback: string

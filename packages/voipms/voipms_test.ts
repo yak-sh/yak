@@ -292,21 +292,37 @@ test('a search voip.ms is slow to answer is asked once more, and a second slow a
 })
 
 // An account whose API never answers, on a clock the test holds.
-let silent = () => {
+let silent = (ms?: number) => {
   let time = clock()
-  let line = voipms({
-    user: 'u',
-    key: 'k',
-    number: '+12695550100',
-    fetch: (_url, init) => {
-      let signal = init!.signal!
-      return new Promise((_, no) =>
-        signal.addEventListener('abort', () => no(signal.reason))
-      )
+  let asked: string[] = []
+  let line = voipms(
+    {
+      user: 'u',
+      key: 'k',
+      number: '+12695550100',
+      fetch: (url, init) => {
+        asked.push(new URL(String(url)).searchParams.get('method')!)
+        let signal = init!.signal!
+        return new Promise((_, no) =>
+          signal.addEventListener('abort', () => no(signal.reason))
+        )
+      },
     },
-  }, time)
-  return { line, time }
+    time,
+    ms == null ? undefined : { by: time.now() + ms },
+  )
+  return { line, time, asked }
 }
+
+test('a one-shot carrier attempt ends at its deadline without another request', async () => {
+  let { line, time, asked } = silent(50)
+  let denied = assertRejects(() => line.lines(), Unsent, 'did not answer')
+  await time.advance(50)
+  await denied
+  await assertRejects(() => line.lines(), Unsent, 'did not answer')
+  assertEquals(asked, ['getDIDsInfo'])
+  assertEquals(time.pending(), 0)
+})
 
 test('a method voip.ms is slow to answer is Unsent, but a text it may have taken is not', async () => {
   let reading = silent()

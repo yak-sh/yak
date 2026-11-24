@@ -620,9 +620,9 @@ export let directoryDoc: VocabDoc = {
     // charged to the space began (workers/yak/number-upkeep.ts). Whichever
     // space or app row wears it as `phone{number}` is where it texts from;
     // the line says only who holds it. The row wears the wake that charges
-    // each later month (meter-graph.ts `lines`). The space keeps it, so
-    // erasing the space releases it at the provider and buries it (erase.ts)
-    // rather than its death taking it.
+    // each later month (meter-graph.ts `lines`). A space's erasure leaves the
+    // line for the return job to release and bury, with the platform paying
+    // any carrier charges after erasure.
     //
     // Stamped, all of it, for the reason `seller` is: it is money the
     // platform spends, written only by the number tools (numbers.ts).
@@ -671,7 +671,7 @@ export let directoryDoc: VocabDoc = {
     },
     phone_release: {
       description:
-        'Carrier work to stop or permanently return a number already in the trash. ' +
+        'Carrier work to stop or permanently return a number after it or its space is deleted. ' +
         'Its line is the phone_line, which holds the number (phone_line.number).',
       component: true,
       type: 'object',

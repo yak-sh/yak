@@ -46,6 +46,7 @@ export type { Options, Transport } from './options.ts'
 
 export {
   type Account,
+  type Attempt,
   type Heard,
   type Held,
   listens,

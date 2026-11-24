@@ -11,6 +11,7 @@ import { Unsent } from '@yaks/host/senders'
 import {
   type Account,
   type Arrival,
+  type Attempt,
   Blocked,
   type Held,
   type Numbers,
@@ -58,7 +59,7 @@ type Did = Record<string, string | number | null | undefined>
 let didsOf = async (call: Call) =>
   ((await call('getDIDsInfo')).dids ?? []) as Did[]
 
-let point = async (call: Call, at: string, url?: string) => {
+let point = async (call: Call, at: string, url?: string, before?: string) => {
   let did = (await didsOf(call)).find((d) =>
     ten(String(d.did ?? '')) == ten(at)
   )
@@ -67,6 +68,7 @@ let point = async (call: Call, at: string, url?: string) => {
   // second asking.
   let on = String(did.sms_enabled) == '1' &&
     String(did.sms_url_callback_enabled) == '1'
+  if (before && (!on || did.sms_url_callback != before)) return
   if (url ? on && did.sms_url_callback == url : !on) return
   // setSMS sets every way a number's texts reach its owner at once, so
   // each is said again as the account has it; no url turns the callback off.
@@ -123,8 +125,14 @@ export let TEXTING = ['getDIDsInfo', 'sendSMS', 'sendMMS', 'setSMS']
 export let voipms = (
   { number, methods = TEXTING, ...account }: Voipms,
   time: Clock = system,
+  attempt?: Attempt,
 ): Account => {
-  let call = bounded(requester({ ...account, methods }), time)
+  let call = bounded(
+    requester({ ...account, methods }),
+    time,
+    attempt?.by,
+    !attempt,
+  )
   let lines = async (): Promise<Held[]> =>
     (await didsOf(call)).map((d) => ({
       number: e164(String(d.did ?? '')),
@@ -148,7 +156,7 @@ export let voipms = (
   return {
     lines,
     from,
-    point: (at, url) => point(call, at, url),
+    point: (at, url, before) => point(call, at, url, before),
     send: async ({ to, text, from: given }: Text): Promise<Receipt> => {
       if (text.length > VOIPMS.mms) {
         throw new Blocked(VOIPMS.blocked.sms_toolong, 'sms_toolong')
@@ -492,11 +500,18 @@ export let numbers = (
 }
 
 // A voip.ms account from the settings a host gives it.
-let opened = (options: import('@yaks/phone').Transport): Account => {
+let opened = (
+  options: import('@yaks/phone').Transport,
+  attempt?: Attempt,
+): Account => {
   if (!options.key || !options.user) {
     throw new Error('a voipms sender needs `user` and `key`')
   }
-  return voipms({ ...options, key: options.key, user: options.user })
+  return voipms(
+    { ...options, key: options.key, user: options.user },
+    system,
+    attempt,
+  )
 }
 
 /**
@@ -514,8 +529,10 @@ let opened = (options: import('@yaks/phone').Transport): Account => {
  * ok(!('release' in line))
  * ```
  */
-export let connected = (options: import('@yaks/phone').Transport): Account =>
-  opened({ ...options, methods: options.methods ?? [] })
+export let connected = (
+  options: import('@yaks/phone').Transport,
+  attempt?: Attempt,
+): Account => opened({ ...options, methods: options.methods ?? [] }, attempt)
 
 /** The transport plugged into @yaks/phone's provider boundary, and a
  * person's own number: their sign-in email and API password, kept in their

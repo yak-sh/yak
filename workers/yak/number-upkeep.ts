@@ -26,10 +26,12 @@
 // provider answered (phone-slow.ts `tally`), and the meter notes each
 // provider's hour once, so only one that stays slow is reported.
 import { line as q } from '@yaks/query'
+import { type Bundle, token } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { Unsent } from '@yaks/host/senders'
 import { monthOf } from '@yaks/platform/meter'
 import { usage } from '@yaks/platform/numbers'
-import { idOf, stamp } from './directory.ts'
+import { idOf, META, type PhoneLine, stamp } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import { phoneNamed } from './phones.ts'
@@ -55,6 +57,60 @@ let lines = async (env: Env) =>
   await meta(env).query(
     q`.phone_line&!phone_line.ordering&!phone_line.returned&?trashed`,
   )
+
+let releasing = async (env: Env) =>
+  new Set(
+    (await meta(env).query(q`.phone_release`)).map((r) =>
+      idOf((r.phone_release as { line: string }).line)
+    ),
+  )
+
+/** The platform covers a carrier charge once the paying space is erased. */
+export let spendLine = async (
+  env: Env,
+  line: Pick<PhoneLine, 'eid' | 'space' | 'number'>,
+  now: Date,
+  dollars: number,
+  calls?: { before?: string | null; through: string },
+) => {
+  let stillHeld: Bundle = {
+    entity: { eid: line.eid },
+    $was: {
+      tombstone: { '': null },
+      phone_line: {
+        number: token(line.number),
+        returned: null,
+        ...calls ? { called: token(calls.before ?? null) } : {},
+      },
+    },
+    ...calls ? { phone_line: { called: calls.through } } : {},
+  }
+  while (true) {
+    let [payer] = await meta(env).query(q`.entity.eid=${line.space}&.space`, {
+      live: true,
+    })
+    payer ??= (await meta(env).query(q`.space.slug=${META.space}`, {
+      live: true,
+    }))[0]
+    if (!payer) throw new Error('The platform space is missing')
+    try {
+      await stamp(env, {
+        entities: [{
+          entity: payer.entity,
+          $was: {
+            tombstone: { '': null },
+            space: { slug: token((payer.space as { slug: string }).slug) },
+          },
+          spend: { month: monthOf(now), texts: dollars },
+        }, stillHeld],
+      })
+      return true
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+      if (error.eid == line.eid) return false
+    }
+  }
+}
 
 /** Confirm the carrier's result for a submitted order. The existing budget
  * hold and line stay in place while the carrier has yet to show the DID. */
@@ -103,8 +159,9 @@ export let pointed = async (
   met: Tally = tally(),
 ): Promise<number> => {
   let n = 0
+  let pending = await releasing(env)
   for (let row of await lines(env)) {
-    if (row.trashed) continue
+    if (row.trashed || pending.has(row.entity.eid)) continue
     let line = row.phone_line as Line
     let phone = await phoneNamed(env, line.via)
     let point = phone?.numbers?.().point
@@ -146,22 +203,14 @@ export let minutes = async (
       return []
     })
     if (!took.length) continue
-    await stamp(env, {
-      entities: [
-        {
-          entity: { eid: idOf(line.space) },
-          spend: {
-            month: monthOf(now),
-            texts: took.reduce((sum, c) => sum + usage(c.cost), 0),
-          },
-        },
-        {
-          entity: { eid: row.entity.eid },
-          phone_line: { called: took.at(-1)!.at },
-        },
-      ],
-    })
-    charged += took.length
+    let paid = await spendLine(
+      env,
+      { eid: row.entity.eid, space: idOf(line.space), number: line.number },
+      now,
+      took.reduce((sum, c) => sum + usage(c.cost), 0),
+      { before: line.called, through: took.at(-1)!.at },
+    )
+    if (paid) charged += took.length
   }
   return charged
 }
@@ -172,11 +221,7 @@ export let allowed = async (
   now: Date,
   met: Tally = tally(),
 ): Promise<void> => {
-  let pending = new Set(
-    (await meta(env).query(q`.phone_release`)).map((r) =>
-      idOf((r.phone_release as { line: string }).line)
-    ),
-  )
+  let pending = await releasing(env)
   for (let row of await lines(env)) {
     if (pending.has(row.entity.eid)) continue
     let line = row.phone_line as Line
