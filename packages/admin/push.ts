@@ -11,8 +11,8 @@
 // newest text git has that the app held too: copy.json by key (@yaks/copy
 // `merge`, where a key edited on the page keeps the page's text), every other
 // file by line. A Git checkout commits the merge and the release uses the
-// committed bytes. Where git and the platform changed
-// the same source lines, the push refuses before writing anything. A conflict
+// committed bytes. Where git and the platform changed the same source lines,
+// the platform's lines win and git keeps its version in history. A conflict
 // in the app's generated lock clears it from the draft so the release compiler
 // regenerates it from the merged package.json.
 //
@@ -36,7 +36,7 @@ import * as systemProcess from '@yaks/process/system'
 import { dirname } from 'node:path'
 
 import { merge as byKey } from '@yaks/copy'
-import { merge as byLine } from 'node-diff3'
+import { diffIndices } from 'node-diff3'
 import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
 
@@ -300,32 +300,42 @@ let listed = async (
 
 let COPY = 'copy.json'
 
-/** A file git and the platform both changed in the same lines. */
-export class Unmerged extends Error {
-  override name = 'Unmerged'
-}
+let lines = (text: string) => text.split(/(?<=\n)/).filter(Boolean)
 
-let lines = (text: string) => text.split(/(?<=\n)/)
+let edits = (base: string[], text: string) =>
+  diffIndices(base, lines(text)).map(({
+    buffer1: [start, length],
+    buffer2Content,
+  }) => ({ start, end: start + length, text: buffer2Content.join('') }))
 
-/// merged('a.ts', 'a\nB\nc\nd\n', 'a\nb\nc\nD\n', 'a\nb\nc\nd\n') -> 'a\nB\nc\nD\n'
-/// merged('a.ts', '', 'x\n', '') -> 'x\n'
-/** The platform's text of a file merged over git's, against the newest text
- * both held: copy.json by key, any other file by line. */
-export let merged = (
-  path: string,
-  ours: string,
-  live: string,
-  base: string,
-): string => {
-  if (path == COPY) return byKey(ours, live, base)
-  let { conflict, result } = byLine(lines(live), lines(base), lines(ours))
-  if (conflict) {
-    throw new Unmerged(
-      `${path} was changed on the platform and in git in the same lines; ` +
-        'nothing was written: merge the live file into git by hand, then push',
-    )
-  }
-  return result.join('')
+type Edit = ReturnType<typeof edits>[number]
+
+let overlaps = (a: Edit, b: Edit) =>
+  a.start < b.end && b.start < a.end ||
+  a.start == b.start && a.end == b.end
+
+// Two insertions at the same point overlap. A change ending where another
+// begins still fits beside it.
+let mergeLines = (ours: string, live: string, base: string) => {
+  let before = lines(base)
+  let incoming = edits(before, live)
+  let conflict = false
+  let kept = edits(before, ours).filter((edit) => {
+    let other = incoming.find((other) => overlaps(edit, other))
+    if (!other) return true
+    conflict ||= edit.start != other.start || edit.end != other.end ||
+      edit.text != other.text
+    return false
+  })
+  let at = 0
+  let merged = [...incoming, ...kept]
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .map(({ start, end, text }) => {
+      let unchanged = before.slice(at, start).join('')
+      at = end
+      return unchanged + text
+    })
+  return { content: merged.join('') + before.slice(at).join(''), conflict }
 }
 
 // The file at `path` the app holds as `sha`, as the platform changed it and
@@ -338,7 +348,7 @@ let carried = async (
   sha: string,
   ours: string,
   checkout: Checkout,
-): Promise<string | undefined> => {
+) => {
   let texts = [ours]
   for await (let prior of checkout.earlier(path)) {
     if (typeof prior == 'string') texts.push(prior)
@@ -356,8 +366,9 @@ let carried = async (
   }
   let held = new Set(past.replaced.map((w) => (w as { sha?: unknown }).sha))
   let base = texts[shas.findIndex((s) => held.has(s))] ?? ''
-  let content = merged(path, ours, live.content, base)
-  return content == ours ? undefined : content
+  return path == COPY
+    ? { content: byKey(ours, live.content, base), conflict: false }
+    : mergeLines(ours, live.content, base)
 }
 
 // Each file the app holds as the platform changed it, merged over the
@@ -385,12 +396,11 @@ let changes = async (
         : keep.has(path) || pinned(path, keep) || asset(path)
     ) continue
     let text = mine && 'content' in mine.f ? mine.f.content : ''
-    try {
-      let content = await carried(ask, at, path, sha, text, checkout)
-      if (content != null) out.push({ path, content, from: sha })
-    } catch (e) {
-      if (path != LOCK || !compiled || !(e instanceof Unmerged)) throw e
+    let merged = await carried(ask, at, path, sha, text, checkout)
+    if (path == LOCK && compiled && merged?.conflict) {
       relock = true
+    } else if (merged && merged.content != text) {
+      out.push({ path, content: merged.content, from: sha })
     }
   }
   return { carry: out, relock }

@@ -5,20 +5,31 @@
       "description": "A guest's email, kept private: only the people who run the guestbook can see it",
       "readers": "editor",
       "properties": {
-        "name": {"type": "string", "title": "Guest's name"},
-        "email": {"type": "string", "title": "Email address"},
-        "wish": {"type": "string", "ref": "entity", "death": "keep", "title": "Their guestbook message"}
+        "name": { "type": "string", "title": "Guest's name" },
+        "email": { "type": "string", "title": "Email address" },
+        "wish": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "title": "Their guestbook message"
+        }
       }
     },
     "wish": {
       "title": "Guestbook message",
       "description": "A message left for Margaret by a guest or by family who can't make it",
       "properties": {
-        "name": {"type": "string", "title": "Who it's from"},
-        "message": {"type": "string", "title": "Message for Margaret"},
-        "here": {"type": "string", "title": "At the party, or sending love from afar"},
-        "photos": {"type": "string", "title": "Pictures and drawings (file addresses, space-separated)"},
-        "at": {"type": "string", "title": "When it was written"}
+        "name": { "type": "string", "title": "Who it's from" },
+        "message": { "type": "string", "title": "Message for Margaret" },
+        "here": {
+          "type": "string",
+          "title": "At the party, or sending love from afar"
+        },
+        "photos": {
+          "type": "string",
+          "title": "Pictures and drawings (file addresses, space-separated)"
+        },
+        "at": { "type": "string", "title": "When it was written" }
       }
     }
   }

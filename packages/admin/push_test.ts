@@ -10,7 +10,6 @@ import {
   push,
   type PushProgress,
   read,
-  Unmerged,
   versions,
 } from './push.ts'
 
@@ -801,7 +800,7 @@ let fixed = async (
       name: 'app_files',
       arguments: { app: 'app', op: 'read', path },
     })) as { content: { text: string }[] }).content[0].text
-  return { said, wrote, read, held: p.held('app') }
+  return { said, wrote, read, held: p.held('app'), deployed: p.deployed }
 }
 
 test('a release from git keeps a fix made on the platform, merged with git’s change, and hands it to git', async () => {
@@ -903,26 +902,23 @@ test('a conflicting lock is regenerated from the merged manifest and carried int
   ])
 })
 
-test('a release whose git changed the lines the platform changed writes nothing', async () => {
-  let p = platform({
-    app: new Map([['a.ts', { path: 'a.ts', content: 'x\n' }]]),
-  })
-  await p.ask('tools/call', {
-    name: 'app_files',
-    arguments: { app: 'app', files: [{ path: 'a.ts', content: 'live\n' }] },
-  })
-  let writes = p.writes.length
-  await assertRejects(
-    () =>
-      push(p.ask, [{ path: 'a.ts', content: 'ours\n' }], { app: 'app' }, {
-        checkout: {
-          earlier: async function* () {
-            yield 'x\n'
-          },
-        },
-      }),
-    Unmerged,
-    'a.ts was changed on the platform and in git in the same lines',
+test('a release takes the live lines where edits overlap and keeps separate Git edits', async () => {
+  let path = 'index.html'
+  let r = await fixed(
+    { [path]: 'Live heading\nStart\nLive paragraph\nFooter\n' },
+    { [path]: ['Heading\nStart\nParagraph\nFooter\n'] },
+    { [path]: 'Git heading\nStart\nParagraph\nGit footer\n' },
   )
-  assertEquals([p.writes.length, p.deployed], [writes, []])
+  let content = 'Live heading\nStart\nLive paragraph\nGit footer\n'
+  assertEquals(r.wrote, [{ path, content }])
+  assertEquals(await r.read(path), content)
+  assertEquals(r.deployed, ['app'])
+})
+
+test('a release without a common ancestor keeps the live file', async () => {
+  let path = 'index.html'
+  let content = '<p>Live guestbook</p>'
+  let r = await fixed({ [path]: content }, {}, { [path]: '<p>Git page</p>' })
+  assertEquals(r.wrote, [{ path, content }])
+  assertEquals(await r.read(path), content)
 })

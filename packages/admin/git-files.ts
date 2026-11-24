@@ -59,9 +59,8 @@ export let fileHistory = async function* (
   }
 }
 
-/** A manual push saves the merged paths in its own commit. Git's path-limited
- * commit preserves staged changes elsewhere. The caller's checkout may also
- * have changes to generated files, so its commit runs only this writer. */
+/** A manual push commits any local work on the carried paths before replacing
+ * it. Path-limited commits leave the rest of the caller's index alone. */
 export let saveCarried = async (
   dir: string,
   to: Target,
@@ -70,8 +69,9 @@ export let saveCarried = async (
   writer: string,
 ) => {
   let repo = await run(['rev-parse', '--is-inside-work-tree'], dir)
-  await writeCarried(dir, files)
-  if (!repo.ok || repo.out.trim() != 'true') return
+  if (!repo.ok || repo.out.trim() != 'true') {
+    return await writeCarried(dir, files)
+  }
   let paths = files.map((f) => f.path)
   let git = async (...args: string[]) => {
     let r = await run(['--literal-pathspecs', ...args], dir)
@@ -82,17 +82,50 @@ export let saveCarried = async (
         }: ${r.err.trim()}`,
       )
     }
+    return r.out
   }
-  await git('add', '--intent-to-add', '--', ...paths)
-  await git(
-    'commit',
-    '--only',
-    '--no-verify',
-    '-m',
-    carrying(to, files, writer),
+
+  let head = await run(['rev-parse', '--verify', 'HEAD'], dir)
+  let tracked = head.ok
+    ? await git(
+      'diff',
+      '--relative',
+      '--name-only',
+      '-z',
+      'HEAD',
+      '--',
+      ...paths,
+    )
+    : await git('ls-files', '--cached', '-z', '--', ...paths)
+  let untracked = await git(
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '-z',
     '--',
     ...paths,
   )
+  let local = (tracked + untracked).split('\0').filter(Boolean)
+  let commit = (message: string, selected: string[]) =>
+    git('commit', '--only', '--no-verify', '-m', message, '--', ...selected)
+  if (local.length) {
+    if (untracked) {
+      await git(
+        'add',
+        '--intent-to-add',
+        '--',
+        ...untracked.split('\0').filter(Boolean),
+      )
+    }
+    let app = to.space ? `${to.space}/${to.app}` : to.app
+    await commit(
+      `${app}: save local edits before carrying platform changes\n\nWriter: ${writer}`,
+      local,
+    )
+  }
+  await writeCarried(dir, files)
+  await git('add', '--intent-to-add', '--', ...paths)
+  await commit(carrying(to, files, writer), paths)
 }
 
 /** Git's NUL-delimited batch replies. Blob lengths frame the raw bytes, so
