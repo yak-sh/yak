@@ -974,7 +974,9 @@ let lead = (at: DeskPage, by: string) =>
   h(
     'p',
     null,
-    at.sell == 'ready'
+    at.house
+      ? `This space sells on yaks.app’s own ${by} account, as the house, so no yaks.app fee is taken.`
+      : at.sell == 'ready'
       ? `Payments go to your ${by} account, and ${by} pays them into your bank. You manage refunds and disputes in your ${by} dashboard.`
       : !at.paying && at.sell != 'none'
       ? `Your ${by} account is connected. Upgrade to the Plus plan to take new payments.`
@@ -1075,7 +1077,8 @@ let EXAMPLE = 2000
 
 // Every cost of selling, and a sale worked through them.
 let costing = (at: DeskPage, by: string, costs: Costs, env: Host) => {
-  let bps = at.fee ?? 0
+  // The house's sales are the platform's own, which pays itself nothing.
+  let bps = at.house ? 0 : at.fee ?? 0
   let card = `${rate(costs.card.bps)} + ${small(costs.card.cents)}`
   let sale = kept(EXAMPLE, bps, costs.card)
   let line = (name: Kids, value: string) =>

@@ -951,6 +951,7 @@ let desk = async (
     // the platform's payment provider can be asked at all, since a button
     // that cannot work is worse than no block.
     sell: provider.shops.on() ? selling(space) : undefined,
+    house: !!space.seller?.house,
     link: view == 'selling' && provider.shops.on()
       ? await linkable(env, space)
       : undefined,

@@ -746,6 +746,9 @@ export type DeskPage = {
   viewDays?: number
   viewsOff?: string
   sell?: 'none' | 'setup' | 'ready'
+  /** whether the space sells as the house, on the platform's own account,
+   * which takes no fee (sell.ts, T-2983) */
+  house?: boolean
   /** whether the owner can connect a payment account they already have
    * instead of opening one (sell.ts `linkable`) */
   link?: boolean

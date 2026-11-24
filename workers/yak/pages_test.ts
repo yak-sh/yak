@@ -1119,6 +1119,14 @@ test('selling spells out every cost and works a $20 sale through them', async ()
     await selling({ paying: false, fee: 100 }),
     'The Plus plan: $12 a month',
   )
+  let house = await selling({
+    paying: true,
+    sell: 'ready',
+    house: true,
+    fee: 100,
+  })
+  assertStringIncludes(house, 'as the house')
+  assertStringIncludes(house, 'yaks.app: nothing per sale')
 })
 
 test('a service detail URL is a server-open modal with its pitch, access, provider, space and Connect form', async () => {
