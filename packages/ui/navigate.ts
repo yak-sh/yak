@@ -476,6 +476,11 @@ export let start = (
       return false
     }
     let first = from != 'fresh'
+    // A layer the old address opened (`#menu`, shown by `:target`) closes,
+    // as it would on a new document: writing history leaves `:target` be.
+    if (first && win.location.hash && win.location.hash != at.hash) {
+      win.location.replace('#')
+    }
     if (first && !pop) {
       history.write({ path: at.pathname + at.search + at.hash, state: null })
     }

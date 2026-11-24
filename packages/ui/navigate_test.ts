@@ -108,7 +108,7 @@ test('a swap runs a script it names for the first time once, and a written one e
 
 // A window over a page at `path`, its fetches answered from `pages`.
 let browsing = (pages: Record<string, string>, path = '/apps') => {
-  let { document } = parseHTML(pages[path])
+  let { document } = parseHTML(pages[new URL(path, 'https://y.test').pathname])
   let doc = document as unknown as Document
   let at = new URL(path, 'https://y.test')
   let loaded: string[] = []
@@ -127,6 +127,9 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
     },
     get search() {
       return at.search
+    },
+    get hash() {
+      return at.hash
     },
     assign: (to: string) => void loaded.push(to),
     replace: (to: string) => void loaded.push(to),
@@ -222,6 +225,14 @@ test('a click on a link of the site swaps its page in and keeps the shell', asyn
   assertEquals(b.loaded, [])
   assertEquals(b.left(), 1)
   assertEquals(tally.made, 0, 'the heading is the same node, its words changed')
+})
+
+test('a layer the address opened closes when its page is left', async () => {
+  let b = browsing(site, '/apps#menu')
+  b.click('a[href="/updates"]')
+  await b.swapped
+  assertEquals(b.loaded, ['#'])
+  assertEquals(b.entries.map((e) => e.path), ['/updates'])
 })
 
 test('a link the navigator cannot swap in is followed as a link', async () => {
