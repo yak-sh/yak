@@ -98,6 +98,7 @@ import {
   type Join,
   joinErrors,
   joinSchema,
+  repairManifest,
   VOCABS,
   withoutJoin,
 } from '@yaks/platform/manifest'
@@ -1536,6 +1537,7 @@ let published = async (
   keep = false,
   closing: AppDraft | null = null,
   rows: Rows = 'none',
+  repair = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1778,7 +1780,7 @@ let published = async (
       }
     }
   }
-  let willSeed = !app.seeded && keys.some(seedy)
+  let willSeed = !repair && !app.seeded && keys.some(seedy)
   // Stage the home's table before recording the consumer release. Its whole
   // manifest is written back, so it stays the document the home declared —
   // projected to types, a sibling's deploy would silently unsearch the
@@ -2089,7 +2091,7 @@ let published = async (
   // script that failed to load put back, the live version compiled again)
   // tells nobody, and a run of deploys in an hour is one change.
   let person = who.person
-  if (person && !recompile) {
+  if (person && !recompile && !repair) {
     let title = app.title || app.slug
     background(after(async () => {
       let name = await ctx.dir.nameAt(person) ?? 'Someone'
@@ -2284,6 +2286,7 @@ export let released = async (
     draft: asked = null,
     rows = 'none',
     patience,
+    repair = false,
   }: {
     target?: Version
     reload?: Reload
@@ -2317,6 +2320,8 @@ export let released = async (
     /** How long it waits its turn behind another release (versions.ts
      * `waiting`, `TURN`). */
     patience?: number
+    /** A platform vocabulary repair changes live files and schema only. */
+    repair?: boolean
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -2469,12 +2474,53 @@ export let released = async (
       keep,
       taken,
       rows,
+      repair,
     )
     released = true
     await c.time('purge', () => purged)
     return out
   } finally {
     if (!released) await unfenced(ctx.dir, standing, fence, who)
+  }
+}
+
+let repairVocab = async (ctx: Ctx, args: Args): Promise<Out> => {
+  if (!await admin(ctx)) throw refuse('access', 'platform admin required')
+  let base = args.base
+  if (typeof base != 'number' || !Number.isSafeInteger(base) || base < 1) {
+    throw refuse('arguments', 'base is the live version to repair')
+  }
+  let message = text(args.message, 'message').trim()
+  if (!message) throw refuse('arguments', 'message is required')
+  let source = repairManifest(text(args.repair_vocab, 'repair_vocab'))
+  let { space, app, who, store } = await inApp(ctx, args, true, true)
+  let raw = r2RawObjects(ctx.env.BLOBS)
+  let [file] = await hashed([{
+    path: 'vocab.json',
+    bytes: new TextEncoder().encode(source),
+  }])
+  let { version, said } = await released(ctx, space, app, who, store, {
+    expectedVersion: base,
+    message,
+    patience: TURN,
+    repair: true,
+    over: async (live) => {
+      if (VOCABS.some((path) => path in live)) {
+        throw refuse(
+          'conflict',
+          'the live release already has a vocabulary file',
+        )
+      }
+      let full = await fullAt(ctx.env, space, [file])
+      if (full) throw refuse('space_full', full)
+      await raw.put(addressed(file.sha), file.bytes)
+      return { ...live, [file.path]: file.sha }
+    },
+  })
+  return {
+    text: `repaired ${space.slug}/${app.slug} v${version}${said}`,
+    space,
+    value: { deployed: true, version },
   }
 }
 
@@ -5081,6 +5127,9 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         reload: { type: 'string', enum: ['optional', 'required'] },
+        repair_vocab: str(
+          'platform admin only: the missing vocab.json, applied to live files with base and message',
+        ),
         base: {
           type: 'integer',
           minimum: 0,
@@ -5116,6 +5165,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
+      if (args.repair_vocab != null) return await repairVocab(ctx, args)
       let c = ctx.clock ?? clock()
       let { space, app, who, store } = await c.time(
         'inApp',

@@ -44,6 +44,61 @@ let jeff54 = unique('jeff54')
 let jeff_work54 = unique('jeff-work54')
 let maya54 = unique('maya54')
 
+test('a platform vocabulary repair preserves the live app and its owner’s draft', async () => {
+  let k = await kernel()
+  let owner = await signIn(k)
+  let space = unique('repair')
+  await owned(k, owner.person, space)
+  let agent = connector(k, owner.cookie)
+  let platform = connector(k, k.owner.cookie)
+  let at = { space, app: 'bakes' }
+  await agent.tool('app_new', { space, slug: at.app, title: 'Bakes' })
+  let write = (content: string) =>
+    agent.answer('app_files', {
+      ...at,
+      op: 'write',
+      path: 'index.html',
+      content,
+    })
+  await write('<h1>Live bakes</h1>')
+  await agent.tool('app_deploy', at)
+  let draft = (await write('<h1>Unreleased bakes</h1>')).value?.draft
+  let identity = (await k.dir.app((await k.dir.space(space))!, at.app))!
+  let first = (await k.dir.deployAt(identity, 1))!
+  let save = (entities: unknown[]) =>
+    agent.answer('graph_apply', { ...at, entities })
+  let read = async (query: string) =>
+    (await agent.answer('graph_query', { ...at, query })).rows
+  await save([{ entity: { eid: '$kept' }, doc: { title: 'Keep this' } }])
+  let kept = await read('.doc.title="Keep this"')
+  assertEquals(kept.length, 1)
+  await assertRejects(() => read('.bread'), Error, 'unknown prop: .bread')
+  let repair = {
+    ...at,
+    base: 1,
+    message: 'Declare the bread name the page reads',
+    repair_vocab:
+      '{"$defs":{"bread":{"properties":{"name":{"type":"string"}}}}}',
+  }
+  await assertRejects(
+    () => agent.tool('app_deploy', repair),
+    Error,
+    'platform admin required',
+  )
+  await platform.tool('app_deploy', repair)
+  let second = (await k.dir.deployAt(identity, 2))!
+  assertEquals(second.files['index.html'], first.files['index.html'])
+  assertEquals(Object.keys(second.files).sort(), ['index.html', 'vocab.json'])
+  assert(second.by && second.by != owner.person)
+  assertEquals((await k.dir.drafts(identity)).map((d) => d.eid), [draft])
+  assertEquals(await read('.doc.title="Keep this"'), kept)
+  assertEquals(await read('.bread'), [])
+  await save([{ entity: { eid: '$bread' }, bread: { name: 'Country loaf' } }])
+  assertEquals((await read('.bread')).map((row) => row.bread), [
+    { name: 'Country loaf' },
+  ])
+})
+
 test(
   'the connector: tools, a space made, an app served, errors seen',
   async () => {
@@ -1523,15 +1578,17 @@ test(
       assertStringIncludes(all, `https://${jeff54}.yaks.app/garden/`)
       // Its garden went to the trash a moment ago, so the space has no apps
       // and one recoverable thing in the trash (erase.ts, T-34430).
+      let [work, ...workDetails] =
+        (await agent.tool('app_list', { space: jeff_work54 })).split('\n')
       assertEquals(
-        (await agent.tool('app_list', { space: jeff_work54 })).split('\n'),
-        [
-          `${jeff_work54} — https://${jeff_work54}.yaks.app/ — you are the owner`,
-          '- no apps yet',
-          'In the trash: Work garden (garden), kept until restored or purged — app_restore ' +
-          'brings one back',
-        ],
+        work,
+        `${jeff_work54} — https://${jeff_work54}.yaks.app/ — you are the owner`,
       )
+      assert(workDetails.includes('- no apps yet'))
+      assert(workDetails.includes(
+        'In the trash: Work garden (garden), kept until restored or purged — app_restore ' +
+          'brings one back',
+      ))
 
       // Thrown away for good: an app made, written, deployed, then erased
       // whole — its address stops answering, the listing forgets it, and an

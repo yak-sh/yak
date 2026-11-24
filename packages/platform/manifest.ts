@@ -230,6 +230,32 @@ export let kindErrors = (kinds: unknown): string[] => {
  * are there first. */
 export let VOCABS: string[] = ['vocab.yml', 'vocab.json']
 
+/** The component declarations for a live app that shipped without a manifest. */
+export let repairManifest = (source: string): string => {
+  let doc: unknown
+  try {
+    doc = JSON.parse(source)
+  } catch {
+    throw refuse('arguments', 'repair_vocab must be a JSON document')
+  }
+  if (
+    !object(doc) || Object.keys(doc).length != 1 || !object(doc.$defs) ||
+    !Object.keys(doc.$defs).length ||
+    Object.values(doc.$defs).some((def) =>
+      !object(def) || !object(def.properties) ||
+      Object.keys(def).some((key) =>
+        !['description', 'properties'].includes(key)
+      )
+    )
+  ) {
+    throw refuse(
+      'arguments',
+      `repair_vocab declares components with properties under $defs — ${EXAMPLE}`,
+    )
+  }
+  return source
+}
+
 /**
  * An app's `vocab.json` as one document: a JSON Schema 2020-12 document with
  * `$defs`, which is the one form a manifest is written in. A manifest of
