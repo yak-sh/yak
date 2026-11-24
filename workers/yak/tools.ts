@@ -292,8 +292,8 @@ import {
   backTo as sellingAt,
   connect,
   disconnect,
-  feeOf,
   linkable,
+  platformFee,
   refusedSell,
   selling,
 } from './sell.ts'
@@ -4187,7 +4187,9 @@ let OURS: Row[] = [
         return {
           text: `${space.slug} is already selling: ${name} has them ready to ` +
             `take payments, and every app here can charge through POST ` +
-            `/api/pay/checkout. We take ${rate(await feeOf(ctx.dir))} of ` +
+            `/api/pay/checkout. We take ${
+              rate(await platformFee(ctx.env))
+            } of ` +
             `each sale.`,
           space,
         }
@@ -4205,7 +4207,7 @@ let OURS: Row[] = [
           `can be sold in ${space.slug} until they have been through it. They ` +
           `are the merchant: their charge, their money, their name on the ` +
           `statement, and refunds and disputes are theirs. We take ` +
-          `${rate(await feeOf(ctx.dir))} ` +
+          `${rate(await platformFee(ctx.env))} ` +
           `of each sale. Call space_sell again for a fresh link — it opens the ` +
           `same ${name} account, never a second one.` +
           (await linkable(ctx.env, space)
@@ -6408,7 +6410,9 @@ let OURS: Row[] = [
               return null
             })
           : null,
-        seats.some((s) => s.role == 'owner') ? feeOf(ctx.dir).then(rate) : '',
+        seats.some((s) => s.role == 'owner')
+          ? platformFee(ctx.env).then(rate)
+          : '',
       ])
       // Two readers, two forms (M-37853), and each carries every fact: Claude
       // on the web documents the words as what its model reads, Claude Code

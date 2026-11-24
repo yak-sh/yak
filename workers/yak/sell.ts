@@ -116,6 +116,11 @@ export let feeOf = async (
   dir: { space: (slug: string) => Promise<Space | null> },
 ) => (await dir.space(dirPart.META.space))?.fee ?? 0
 
+/** The platform's cut, read through the kernel's own directory: a caller's
+ * view may not reach the platform's row (an Operator's reads only its
+ * person's spaces, where `feeOf` finds none and answers 0). */
+export let platformFee = (env: Env) => feeOf(dirOf(env))
+
 /**
  * The rate as the pricing page says it. The page is a file — hand-written,
  * crawled, served straight off the assets binding — so the live rate is
@@ -656,7 +661,7 @@ export let buying = async (
     // charged what the owner set a moment ago, never what a cached row still
     // says. The house pays none: it would be paid to the platform itself.
     let house = !!at.space.seller!.house
-    let bps = house ? 0 : await feeOf(dirOf(env))
+    let bps = house ? 0 : await platformFee(env)
     let made = quote
       ? await checkoutQuote(store!, quote, {
         space: at.space.eid,
