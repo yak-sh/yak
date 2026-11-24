@@ -106,7 +106,15 @@ import { connectedInstructions, connectedTools } from './connected-mcp.ts'
 import { decisionRelay, relayTools, waitingOn } from './operator-relay.ts'
 import { listsOf } from './operator-lists.ts'
 import { ledger } from './ledger.ts'
-import { admin, type Args, type Ctx, inSpace, refuse } from './tool.ts'
+import {
+  admin,
+  type Args,
+  type Ctx,
+  inApp,
+  inSpace,
+  refuse,
+  text as argText,
+} from './tool.ts'
 import { transferEmail } from './app-transfer.ts'
 import type { Caller } from './session.ts'
 import { adminTools } from './operator-admin.ts'
@@ -228,7 +236,8 @@ import {
   topicOf,
 } from './operator-oracles.ts'
 import { attachmentKey } from './attachments.ts'
-import { outsiders } from './connections.ts'
+import { outsiders, spaceConnections } from './connections.ts'
+import { sandboxed } from '@yaks/platform/installs'
 
 type Store = OperatorStore
 export type Options = {
@@ -2586,10 +2595,10 @@ export let operating = (
         connecting,
         remote,
         trials,
-        // App transfers need their own approval, including in a turn replaying
-        // an approved call. Other escalating calls stay out of live scripts.
+        // App transfers and updates that need approval have their own ask,
+        // including when replaying an approved script.
         unscripted: new Set(
-          asking ? Object.keys(ESCALATING) : ['app_transfer'],
+          asking ? Object.keys(ESCALATING) : ['app_transfer', 'app_update'],
         ),
       })
         .then((r) => reached('roster', r)),
@@ -2735,6 +2744,21 @@ export let operating = (
             texted: !!confirm,
             place: space.title || space.slug,
             ours: (connection, app) => outsiders(env, space, connection, app),
+            connections: async (args, tool) => {
+              let scope = { ...ctx }
+              let call = { ...args }
+              if (tool == 'member_add') {
+                let { space } = await inSpace(scope, call)
+                let app = await scope.dir.app(space, argText(call.app, 'app'))
+                return app && !app.trashed
+                  ? spaceConnections(env, space, app)
+                  : []
+              }
+              let { space, app } = await inApp(scope, call)
+              return tool == 'app_update' && !sandboxed(app)
+                ? []
+                : spaceConnections(env, space, app)
+            },
           },
         ))
         : tools

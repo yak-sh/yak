@@ -91,6 +91,7 @@ import {
   using,
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
+import { sandboxed } from '@yaks/platform/installs'
 import { integrationLogo } from '@yaks/platform/routes'
 import { sampling } from '@yaks/platform/visits'
 import { PROVISIONAL } from '@yaks/effects'
@@ -1132,16 +1133,24 @@ export let holdOf = async (
   }
 }
 
-/** Whether connection `connection` is space `space`'s own, which any app of
- * the space may be given without asking (operator-approvals.ts). */
+let keptConnections = (env: Env, space: string, ids: string[]) =>
+  ids.length
+    ? readOf(env)(line`.entity.eid=${ids}&.${CONNECTION}.owner=${space}`)
+    : []
+
+/** Whether connection `connection` is space `space`'s own. */
 export let spaceKeeps = async (env: Env, space: string, connection: string) =>
   EID.test(connection) &&
-  comp(
-      (await readOf(env)(
-        line`.entity.eid=${connection}&.${CONNECTION}`,
-      ))[0],
-      CONNECTION,
-    ).owner == space
+  (await keptConnections(env, space, [connection])).length > 0
+
+/** The names of the space's own connections this app is linked to. */
+export let spaceConnections = async (env: Env, space: Space, app: App) => {
+  let links = await readOf(env)(line`.edge.from=${app.eid}&.${USES}`)
+  let ids = links.map((l) => String(comp(l, 'edge').to))
+  return (await keptConnections(env, space.eid, ids))
+    .map((row) => String(comp(row, CONNECTION).title || integrationOf(row)))
+    .sort()
+}
 
 /** Who outside space `space` would call out through connection `connection`
  * once app `app` (its slug or eid) is given it, in the person's words: nobody
@@ -1169,7 +1178,7 @@ export let outsiders = async (
     !!at.join && Object.keys(at.join).length > 0 &&
     'anyone its join policy lets in',
     sampling(at) && !!at.demo && 'strangers trying its sample',
-    !!at.installed?.sandboxed && 'code another space published',
+    sandboxed(at) && 'code another space published',
   ].filter((who): who is string => typeof who == 'string')
 }
 

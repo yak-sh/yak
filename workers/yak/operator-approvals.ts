@@ -98,6 +98,8 @@ let roleOf = (a: Args) => {
  * wrote to before. */
 export type Known = (address: string) => Promise<boolean>
 
+type Widening = 'member_add' | 'app_set' | 'app_update'
+
 /** What a call's escalation turns on beside its arguments: the addresses
  * the Operator knows, whether the turn's words came by a number alone
  * (`texted`), which anyone can show, the space's title (`place`), which
@@ -111,6 +113,8 @@ export type Turn = {
    * an app (connections.ts `outsiders`): none, and it is given without
    * asking; null where the connection is not the space's own */
   ours?: (connection: string, app: string) => Promise<string[] | null>
+  /** The space's connections the app already uses, for an act widening it. */
+  connections?: (args: Args, tool: Widening) => Promise<string[]>
   texted?: boolean
   place?: string
   role?: Role
@@ -158,6 +162,12 @@ let opens = (join: unknown) =>
   !(typeof join == 'object' && !Array.isArray(join) &&
     !Object.keys(join).length)
 
+let widening = (tool: string, args: Args): Widening | undefined => {
+  if (args.app == null) return
+  if (tool == 'member_add' || tool == 'app_set' && opens(args.join)) return tool
+  if (tool == 'app_update' && args.skill == null) return tool
+}
+
 type Escalation = string | { say: string; args: Args }
 
 /** The privileged acts, yaks.app's own tools, each as what it does with
@@ -168,6 +178,7 @@ export let ESCALATING: Record<
   (
     a: Args,
     turn: Turn,
+    connections: string[],
   ) => Escalation | undefined | Promise<Escalation | undefined>
 > = {
   mail_send: async (a, { known }) => {
@@ -213,6 +224,10 @@ export let ESCALATING: Record<
       .join(' and ')
     return said ? said[0].toUpperCase() + said.slice(1) : undefined
   },
+  app_update: (a, _, connections) =>
+    connections.length
+      ? `Update the sandboxed app ${a.app} to its publisher's code`
+      : undefined,
   // A paired screen is shown, until it is unpaired, every draft the person
   // writes in any space (screen.ts).
   screen_pair: (a) =>
@@ -512,12 +527,28 @@ export let confirming = (
   // What a call of a tool needs, as the tool declares it: the Operator's own
   // on itself, a platform tool's on its row.
   let needOf = (t: Tool) => (t as Tool & Routed).role ?? needed(t.name)
-  let request = (t: Tool, args: Args, act: Escalation) =>
-    ask({
+  let connectionsFor = async (tool: string, args: Args) => {
+    let act = widening(tool, args)
+    return act ? await turn.connections?.(args, act) ?? [] : []
+  }
+  let request = (
+    t: Tool,
+    args: Args,
+    act: Escalation,
+    connections: string[],
+  ) => {
+    let call = typeof act == 'string' ? { args, say: act } : act
+    let using = connections.length
+      ? `, with the app using the space's ${listed(connections)} ` +
+        (connections.length == 1 ? 'connection' : 'connections')
+      : ''
+    return ask({
       tool: t.name,
       need: needOf(t),
-      ...typeof act == 'string' ? { args, say: act } : act,
+      args: call.args,
+      say: call.say + using,
     })
+  }
   return [
     ...tools.map((t) => {
       let says = ESCALATING[t.name]
@@ -530,9 +561,12 @@ export let confirming = (
         ? {
           ...t,
           run: async (args: Args, context?: Parameters<Tool['run']>[1]) => {
-            let act = await says?.(args, turn) ??
+            let connections = await connectionsFor(t.name, args)
+            let act = await says?.(args, turn, connections) ??
               (beyond ? t.title ?? t.name : undefined)
-            return act ? request(t, args, act) : t.run(args, context)
+            return act
+              ? request(t, args, act, connections)
+              : t.run(args, context)
           },
         }
         : t
@@ -563,11 +597,12 @@ export let confirming = (
           throw refuse('arguments', `This turn holds no tool called ${name}.`)
         }
         let call = (args.args ?? {}) as Args
+        let connections = await connectionsFor(name, call)
         let act = name == 'app_transfer'
-          ? await ESCALATING[name](call, turn)
+          ? await ESCALATING[name](call, turn, connections)
           : String(args.say ?? '').trim().replace(/[.?!]+$/, '')
         if (!act) throw refuse('arguments', 'Say what it does.')
-        return request(t, call, act)
+        return request(t, call, act, connections)
       },
     },
   ]

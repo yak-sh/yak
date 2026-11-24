@@ -39,7 +39,10 @@ import {
   own,
   spaceKeeps,
 } from './connections.ts'
-import { TOOLS } from './tools.ts'
+import { call, TOOLS } from './tools.ts'
+import { operating } from './operator.ts'
+import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { type Approval, digestOf } from './operator-approvals.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { db, named, platform } from './testing.ts'
@@ -617,6 +620,137 @@ test('who outside the space a connection it keeps would reach through an app', a
     'anyone its join policy lets in',
     'code another space published',
   ])
+})
+
+let connectionApprovals = async (s: Awaited<ReturnType<typeof setup>>) => {
+  let store = operatorMemory()
+  let operator = operating(store, s.p.env, {
+    ...operatorModel(() => Promise.reject(new Error('No model call expected'))),
+    directory: () => s.dir,
+  })
+  let { run } = await operator.tools({ person: s.person }, s.space)
+  let asked = async () =>
+    (await store.g.read(line`.operator_approval`)).map((row) => ({
+      eid: row.entity.eid,
+      ask: row.operator_approval as Approval,
+    }))
+  return { run, asked, approve: operator.approve }
+}
+
+let keepKey = async (
+  s: Awaited<ReturnType<typeof setup>>,
+  integration: string,
+) => {
+  await s.post({
+    do: 'add',
+    integration,
+    hosts: 'api.example.test',
+    key: 'test-key',
+  })
+  return (await s.shown()).list.find((one) => one.integration == integration)!
+    .eid
+}
+
+test('Operator app invites and join approvals name the space connections already attached', async () => {
+  let s = await setup()
+  let app = await liveApp(s)
+  let approvals = await connectionApprovals(s)
+  let attach = async (integration: string) => {
+    let connection = await keepKey(s, integration)
+    let said = await approvals.run('connection_attach', {
+      app: app.slug,
+      connection,
+    })
+    assertStringIncludes(said, 'The credential stays in the vault')
+  }
+  await attach('Weather')
+  await attach('Maps')
+  await keepKey(s, 'Unused')
+  await approvals.run('member_add', {
+    app: app.slug,
+    email: 'new@example.test',
+  })
+  await approvals.run('app_set', {
+    app: app.slug,
+    join: { domain: 'example.test', role: 'viewer' },
+  })
+  let pending = (await approvals.asked()).map(({ ask }) => ask)
+    .sort((a, b) => a.tool.localeCompare(b.tool))
+  assertEquals(
+    pending.map(({ tool, say }) => ({
+      tool,
+      names: ['Maps', 'Unused', 'Weather'].filter((name) => say.includes(name)),
+    })),
+    [
+      { tool: 'app_set', names: ['Maps', 'Weather'] },
+      { tool: 'member_add', names: ['Maps', 'Weather'] },
+    ],
+  )
+  assertEquals(await s.at.query(line`.invite`), [])
+  assertEquals((await s.dir.app(s.space, app.slug))!.join, undefined)
+  assertEquals(
+    Object.keys(await envOf(ctxOf(s.p.env), app.eid)).sort(),
+    ['MAPS', 'WEATHER'],
+  )
+  await approvals.run('app_set', { app: app.slug, join: {} })
+  assertEquals((await approvals.asked()).length, pending.length)
+})
+
+test('Operator updates a sandboxed copy with a space connection only after approval', async () => {
+  let s = await setup()
+  let ctx = { env: s.p.env, dir: s.dir, person: s.person }
+  let publisher = { ...ctx, person: crypto.randomUUID() }
+  await call(publisher, 'space_new', { slug: 'publisher', title: 'Publisher' })
+  let source = { space: 'publisher', app: 'notes' }
+  await call(publisher, 'app_new', {
+    space: source.space,
+    slug: source.app,
+    title: 'Notes',
+  })
+  let release = async (heading: string) => {
+    await call(publisher, 'app_files', {
+      ...source,
+      path: 'index.html',
+      content: `<h1>${heading}</h1>`,
+    })
+    await call(publisher, 'app_deploy', source)
+    await call(publisher, 'app_publish', { ...source, name: 'publisher-notes' })
+  }
+  await release('First')
+  for (let app of ['linked', 'unlinked']) {
+    let target = { space: s.space.slug, app }
+    await call(ctx, 'app_install', {
+      space: target.space,
+      name: 'publisher-notes',
+      as: app,
+    })
+    await call(ctx, 'app_set', { ...target, sandboxed: true })
+  }
+  let installed = (app: string) => s.dir.app(s.space, app)
+  let copy = (await installed('linked'))!
+  let before = copy.installed!.version
+  await call(ctx, 'connection_attach', {
+    space: s.space.slug,
+    app: copy.slug,
+    connection: await keepKey(s, 'Weather'),
+  })
+  await release('Second')
+  let approvals = await connectionApprovals(s)
+  await approvals.run('app_update', { app: 'unlinked' })
+  assertEquals((await approvals.asked()).length, 0)
+  assertEquals((await installed('unlinked'))!.installed!.version, before + 1)
+  await approvals.run('app_update', { app: copy.slug })
+  assertEquals((await installed(copy.slug))!.installed!.version, before)
+  let [pending] = await approvals.asked()
+  assertEquals(pending.ask.tool, 'app_update')
+  assertStringIncludes(pending.ask.say, 'Weather')
+  let approved = await approvals.approve(pending.eid, digestOf(pending.ask), {
+    press: true,
+    who: s.person,
+  })
+  assertEquals(approved.state, 'done')
+  assertEquals((await installed(copy.slug))!.installed!.version, before + 1)
+  assertEquals(Object.keys(await envOf(ctxOf(s.p.env), copy.eid)), ['WEATHER'])
 })
 
 // Every act the page posts, and one app's link to a connection as each side
