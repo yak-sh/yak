@@ -74,7 +74,11 @@ let CONNECTIONS: Row[] = [
       let anyone = args.anyone == null ? null : args.anyone === true
       let hold = await holdOf(ctx.env, space, who, b, app.eid)
       let refused = barred('attach', hold) ??
-        (anyone == null ? undefined : barred(anyone ? 'open' : 'close', hold))
+        (anyone == null ? undefined : barred(anyone ? 'open' : 'close', {
+          ...hold,
+          // the link is made by this attach, so it need not exist yet
+          link: hold.link ?? ({} as NonNullable<typeof hold.link>),
+        }))
       if (refused) throw refuse('access', refused)
       let bundles = await attach(c.graph.read, {
         owner: space.eid,
