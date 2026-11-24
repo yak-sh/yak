@@ -207,7 +207,7 @@ test('All updates sits above the space picker and opens with that space still se
     .map((b) => b.getAttribute('data-across'))
   assertEquals(badges.sort(), ['', club.slug, own.slug].sort())
   assert(page.includes('_inbox-actions'))
-  assert(group.closest('[data-update-badges]'))
+  assert(group.closest('[data-side-view]'))
   let all = group.previousElementSibling?.querySelector('a')
   assert(all?.querySelector('[data-across=""]'))
   let current = group.querySelector('[aria-current="page"]')
