@@ -1,0 +1,20 @@
+{
+  "hero.kicker": "A guestbook for",
+  "hero.title": "Margaret's 70th",
+  "hero.lead": "Come to the party or can't make it? Leave Margaret a message she can keep.",
+  "form.title": "Sign the guestbook",
+  "form.name": "Your name",
+  "form.message": "Your message for Margaret",
+  "form.messagePlaceholder": "Happy birthday! Share a memory, a wish, or just your love…",
+  "form.here": "Will you be at the party?",
+  "form.yes": "I'll be there",
+  "form.no": "I can't make it, sending love",
+  "form.photos": "Add pictures or drawings (optional, up to 4)",
+  "form.photosHint": "Old photos of Margaret, drawings from the grandchildren, anything she'd love to see.",
+  "form.email": "Your email (optional)",
+  "form.emailHint": "Only so Margaret's family can send you a thank-you note after the party. It is never shown on this page.",
+  "form.send": "Leave my message",
+  "list.title": "Messages for Margaret",
+  "list.empty": "No messages yet. Be the first to write one!",
+  "foot": "With love, from all of us 🌼"
+}
