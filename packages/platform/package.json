@@ -24,6 +24,7 @@
     "./domain-transfer": "./domain-transfer.ts",
     "./ladder": "./ladder.ts",
     "./preview": "./preview.ts",
+    "./draft-choice": "./draft-choice.ts",
     "./home": "./home/mod.tsx",
     "./home/sky": "./home/sky.tsx",
     "./home/assets": "./home/assets.ts",

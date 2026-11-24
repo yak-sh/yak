@@ -23,20 +23,17 @@ previous files, vocabulary and worker serving together.
 
 ### Drafts
 
-An app holds a draft for each writer, so people and agents editing one app at
-once never release each other's edits:
-
-- Each conversation writes in a draft of its own, opened by its first write over
-  the live files. A person's own edits in the browser share one draft.
-- Every write answers its draft's id and your other open drafts of the app.
-  `draft: '<id>'` keeps a call in that draft, after a reconnect or from another
-  chat. `drafts: [{files}, …]` makes two to four in one write, each its own
-  files over the `files` they share, for Options. `draft: 'new'` opens one more.
-- A read with no `draft` sees this conversation's draft over the live files, or
-  the live files where it has none.
-- `app_files(app, op: 'list')` names the paths your draft changed, says when a
-  release since it opened changed one of them too, and lists every other open
-  draft: who holds it, which paths, since when. Nothing is locked.
+- Every write returns its draft id. Use `draft: '<id>'` to choose among several
+  open drafts. If you omit `draft` when there are several, the tool lists their
+  ids, ages and changed paths. It selects the only open draft automatically.
+  With none open, a read sees the live files and a write opens a draft.
+- Use `draft: 'new'` to open a separate draft over the live files.
+  `drafts: [{files}, …]` writes two to four drafts for Options. Each entry's
+  files are laid over the call's shared `files`. One entry is a plain write.
+- `app_files(app, op: 'list', draft)` names the paths the selected draft
+  changed, says when a release since it opened changed one of them too, and
+  lists every other open draft: who holds it, which paths, since when. Nothing
+  is locked.
 - `app_deploy` releases one draft: the one named, else this conversation's, else
   your one open draft. Paths it did not change stay as live has them, and the
   other drafts stay open.
@@ -85,6 +82,11 @@ A new app is released this way as soon as its first draft works: its first
 version serves at `https://<space>.yaks.app/<app>/`, private to the space when
 `app_new` made it `access: 'private'`. A draft's link is for a change to an app
 that is already live, and for Options.
+
+Pass `draft` with an open draft id when several are open. Omit it to preview the
+only open draft. Use `released: true` to preview the live app. A released or
+discarded draft id is closed. When no draft is open, an `app_files` write
+without `draft` opens a new one.
 
 `path: 'about/'` opens another page. `wait` is milliseconds after
 DOMContentLoaded to capture asynchronous rendering and diagnostics, from 0 to

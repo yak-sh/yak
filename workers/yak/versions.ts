@@ -299,6 +299,7 @@ export let record = async (
           ...speaks ? { speaks } : { lenses: app.lenses },
           app: app.eid,
           version,
+          ...taken ? { draft: taken.eid } : {},
           files: JSON.stringify(files),
           worker,
           script: app.script ?? '',

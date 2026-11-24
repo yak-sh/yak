@@ -242,11 +242,14 @@ app_files:
     restore: path with sha or at puts one back, and with no path goes back
     one write; a restore is itself a write;
     discard: closes a draft unreleased.
-    Edits land in a draft: each conversation writes in a draft of its own,
-    opened by its first write over the live files, and every write answers
-    that draft's id and your other open drafts. Pass draft to keep working
-    in one; drafts makes two to four at once; with several, write and delete
-    name one. Nobody locks anything. list and a read of several files or all
+    Pass draft with an open draft id when several drafts are open. Omit it
+    to use the only open draft. With none open, reads see the live files and
+    writes open a draft. Released or discarded draft ids are closed. Use
+    an open id, or write without draft to open a new one when none are open.
+    Every write returns its draft id. Use draft: new to start from the live
+    files in a separate draft. One drafts entry is a plain write. Two to four
+    entries write separate drafts. For more, send batches of at most four.
+    list and a read of several files or all
     of them end with the messages of the newest releases: read them before
     changing the app. A write of a .json file says whether it parses. Check
     the draft with app_preview at phone and desktop widths, including its
@@ -435,7 +438,11 @@ app_preview:
     Open a page of the app in a browser on Cloudflare: the staged draft,
     built privately, before app_deploy, or with released: true the released
     app at its own address with its live data, to check what people see after
-    app_deploy or after rows were written. Returns the address, a PNG
+    app_deploy or after rows were written. Pass draft with an open draft id
+    when several drafts are open. Omit it to show the only open draft.
+    Released or discarded draft ids are closed. Use released: true to see
+    the live app. When no draft is open, an app_files write without draft
+    opens one. Returns the address, a PNG
     screenshot the client displays, the page's visible text, and console
     messages, JavaScript errors, the page's HTTP status, whether the page fits
     the window's width (and what reaches past its edge when it scrolls

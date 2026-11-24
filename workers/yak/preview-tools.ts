@@ -42,7 +42,10 @@ export let tools = [worded(
             'default true; false returns the address without running a browser',
         },
         draft: str(
-          "the id of the draft to show, from app_files: each draft has a link of its own, over the app's live rows on a branch that keeps its preview's writes from the released app. Left out, this conversation's own draft, else your one open draft",
+          'Pass an open draft id when several drafts are open. Omit draft to ' +
+            'show the only open draft. Released or discarded ids are closed. ' +
+            'Use released: true for the live app, or write with app_files ' +
+            'without draft to open a new draft when none are open.',
         ),
         released: {
           type: 'boolean',

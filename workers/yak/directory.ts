@@ -819,6 +819,7 @@ export type Row = MeteredRow & {
   deploy?: {
     app: Id
     version: number
+    draft?: Id
     files?: string
     worker?: string
     script?: string
@@ -3776,6 +3777,15 @@ export let directoryRows = (rows: {
     // the moment it writes one.
     deploys: async (app: Pick<App, 'eid'>, through?: number) =>
       (await self.deploysOf([app], through)).get(app.eid) ?? [],
+    draftRelease: async (app: App, draft: string) => {
+      let [release, kept] = await Promise.all([
+        one(
+          line`.deploy.app=${app.eid}&.deploy.draft=${draft}&.fields=deploy.version`,
+        ),
+        self.draftRows(app, draft),
+      ])
+      return release?.deploy?.version ?? kept?.version ?? null
+    },
     deploysOf: async (apps: Pick<App, 'eid'>[], through?: number) => {
       let range = through == null ? NONE : line`&.deploy.version<=${through}`
       let all = byApp(

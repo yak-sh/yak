@@ -50,6 +50,7 @@ import {
 import { bound, type Env } from './env.ts'
 import { report } from '@yaks/platform/preview-audit'
 import { fitted } from '@yaks/platform/preview-fit'
+import { toolDraft, WRITE_DRAFT } from '@yaks/platform/draft-choice'
 import { ours } from './asking.ts'
 import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
@@ -106,11 +107,9 @@ import {
   type Drafted,
   drafting,
   draftsOf,
-  guessed,
   newest,
   overlaid,
   previewed,
-  releasing,
   served,
   type Tell,
   withLegacy,
@@ -610,25 +609,22 @@ export let issued = async (
   }
 }
 
-/** The draft a preview of an app shows when the caller names none: of
- * several of the conversation's own, the one it last wrote or previewed
- * (written.ts `guessed`), else theirs as a release would take it
- * (`releasing`). Refused where the app has no open draft. */
-export let shownDraft = async (
+let shownDraft = async (
   ctx: Ctx,
   space: Space,
   app: App,
-  who: Who,
   asked?: string | null,
 ) => {
-  let drafts = await draftsOf(ctx.dir, app)
-  let d = await guessed(ctx.dir, app, drafts, who, asked) ??
-    releasing(app, drafts, who, asked)
+  let d = await toolDraft(asked, ctx.env.CLOCK)(
+    ctx.dir,
+    app,
+    await draftsOf(ctx.dir, app),
+  )
   if (!d) {
     throw refuse(
       'missing',
-      `${space.slug}/${app.slug} has no open draft: app_files writes open ` +
-        'one, and app_preview with released: true shows the live app',
+      `${space.slug}/${app.slug} has no open draft. ${WRITE_DRAFT} ` +
+        'Call app_preview with released: true to see the live app.',
     )
   }
   return d
@@ -817,7 +813,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
   if (args.draft != null && typeof args.draft != 'string') {
     throw refuse('arguments', "draft: the id of one of the app's drafts")
   }
-  let of = await shownDraft(ctx, space, app, who, args.draft as string)
+  let of = await shownDraft(ctx, space, app, args.draft as string | undefined)
   let { draft, link, mount, at } = await linkOf(ctx, space, app, who, of)
   await following(ctx, space, app, draft, link, mount, who)
   let url = at + path

@@ -148,6 +148,12 @@
         "version": {
           "type": "number"
         },
+        "draft": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the eid of the draft this release closed, kept after the draft row is deleted"
+        },
         "files": {
           "type": "string"
         },

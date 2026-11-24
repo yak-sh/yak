@@ -113,6 +113,25 @@ export type Opens = { opens: string }
  * call opens ({@link anew}). */
 export type Asked = string | Opens | null
 
+export type DraftTarget =
+  | Asked
+  | ((
+    dir: Directory,
+    app: App,
+    drafts: AppDraft[],
+  ) => Promise<AppDraft | null>)
+
+export let selecting = (
+  dir: Directory,
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  target?: DraftTarget,
+) =>
+  typeof target == 'function'
+    ? target(dir, app, drafts)
+    : chosen(app, drafts, who, target)
+
 /**
  * `draft` as the call `call` names it. {@link NEW} with a call to name it by
  * opens the draft named for that call, so the same call run again after it
@@ -253,10 +272,8 @@ let lastWorked = async (
     ),
   )
 
-/** The draft a read, a patch or a preview works in: as {@link chosen}, but
- * of several of the caller's own and none named, the one it last wrote or
- * previewed. A read changes nothing, and a patch refuses where the draft
- * lacks the text it replaces, so only a whole-file write still refuses. */
+/** The draft an internal read uses. Of several of the caller's own, select
+ * the one it last wrote or previewed. */
 export let guessed = async (
   dir: Pick<Directory, 'written'>,
   app: App,
@@ -298,19 +315,19 @@ export let shipping = async (
 }
 
 /**
- * Where one call's `n` drafts go (app_files `drafts`): the first where the
- * call works (the draft `asked` names, else the caller's own, else one the
- * call opens) and each later one opened beside it, named for the call and its
+ * Where one call's `n` drafts go (app_files `drafts`): the first goes to the
+ * selected draft or opens one. Each later draft is named for the call and its
  * place. `from` is the draft they start from, chosen as though the drafts
  * this call opens were not there, so the call sent again after it was cut off
  * starts where its first run did and lands in the drafts that run opened.
  * `fresh` says which later ones are not open yet, so take what `from` holds.
  */
-export let fanned = (
+export let fanned = async (
+  dir: Directory,
   app: App,
   drafts: AppDraft[],
   who: Who,
-  asked: string | null,
+  asked: DraftTarget,
   n: number,
   call?: string,
 ) => {
@@ -320,7 +337,13 @@ export let fanned = (
   )
   let eid = (a: Asked) => typeof a == 'object' && a ? openedFor(app, a) : null
   let ours = new Set(opens.map(eid))
-  let from = chosen(app, drafts.filter((d) => !ours.has(d.eid)), who, asked)
+  let from = await selecting(
+    dir,
+    app,
+    drafts.filter((d) => !ours.has(d.eid)),
+    who,
+    asked,
+  )
   let into = opens.map((a, i) => i == 0 && from ? from.eid : a)
   let open = new Set(drafts.map((d) => d.eid))
   return {
@@ -656,7 +679,7 @@ export let modifying = async <T>(
     attempt: number,
   ) => Promise<{ changes: Change[]; value: T }>,
   tell: Tell,
-  asked?: Asked,
+  asked?: DraftTarget,
   now = () => new Date().toISOString(),
 ): Promise<{
   value: T
@@ -672,7 +695,9 @@ export let modifying = async <T>(
   let stored = new Set<string>()
   // The eid a draft opened on purpose takes ({@link NEW}), the same however
   // often the write goes round.
-  let opened = opensNew(asked) ? openedFor(app, asked) : null
+  let opened = typeof asked != 'function' && opensNew(asked)
+    ? openedFor(app, asked)
+    : null
   let row = app
   for (let n = 0; n < 5; n++) {
     // The app's drafts and its newest write, which names the draft a writer
@@ -689,8 +714,11 @@ export let modifying = async <T>(
     ])
     row = standing
     let drafts = withLegacy(row, rows)
-    let into = chosen(row, drafts, who, asked)
+    let into = await selecting(dir, row, drafts, who, asked)
     row = await waiting(dir, space, row, who, into?.eid ?? null)
+    // A release completed while waiting. Select again from the open drafts
+    // before treating an unchanged write as a success.
+    if (row.version != standing.version) continue
     try {
       let draft = await drafting(raw, dir, row, into)
       let { changes, value } = await act(draft, row, n)
