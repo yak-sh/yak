@@ -16,7 +16,7 @@ export let apiOut = (asset: string): string | null =>
 /** Point a local static reference at its release without moving navigation.
  * `base` is where the page resolves it from: the mount, or the page's own
  * folder under it. */
-let local = (
+export let localAsset = (
   ref: string,
   mount: string,
   bare: string,
@@ -31,7 +31,7 @@ let local = (
   } catch {
     return null
   }
-  if (url.origin != from.origin) return null
+  if (url.origin != from.origin || url.username || url.password) return null
   if (reserved(url.pathname)) return null
   let path = url.pathname.startsWith(mount)
     ? url.pathname.slice(mount.length)
@@ -49,7 +49,7 @@ let local = (
 let versioned = (
   mount: string,
   release: string,
-  found: NonNullable<ReturnType<typeof local>>,
+  found: NonNullable<ReturnType<typeof localAsset>>,
   assets: Assets = {},
 ) => {
   let { path, url } = found
@@ -72,7 +72,7 @@ export let assetUrl = (
   holds: (path: string) => boolean = () => true,
   assets: Assets = {},
 ): string => {
-  let found = local(ref, mount, bare, reserved, base)
+  let found = localAsset(ref, mount, bare, reserved, base)
   return found && /\.[a-z0-9]+$/i.test(found.path) &&
       !/\.html?$/i.test(found.path) && holds(decoded(found.path))
     ? versioned(mount, release, found, assets)
@@ -149,7 +149,7 @@ let mapUrl = (
   assets: Assets,
 ) => {
   if (!ADDRESS.test(ref)) return ref
-  let found = local(ref, mount, bare, reserved, base)
+  let found = localAsset(ref, mount, bare, reserved, base)
   return found && !/\.html?$/i.test(found.path)
     ? versioned(mount, release, found, assets)
     : ref
@@ -305,7 +305,7 @@ export let assetMaps = (
         Object.entries(map.scopes).flatMap(([scope, imports]) => {
           let mapped = mapEntries(imports, move)
           let directory = scope.endsWith('/')
-            ? local(scope, mount, bare, reserved, base)?.path
+            ? localAsset(scope, mount, bare, reserved, base)?.path
             : null
           let scoped = directory == null ? [] : Object.keys(assets)
             .map((path) => path.split('/').map(encodeURIComponent).join('/'))
@@ -366,11 +366,25 @@ let ICONS = [
 /** Whether a `<link>` of this rel and `as` loads the file it names. */
 export let linked = (rel: string, as: string): boolean => {
   let rels = rel.toLowerCase().split(/\s+/)
-  return rels.includes('stylesheet') || rels.includes('modulepreload') ||
-    rels.some((r) => ICONS.includes(r)) ||
+  return !!linkKind(rels, as) || rels.includes('modulepreload') ||
     rels.includes('preload') &&
-      ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as)
+      ['script', 'font', 'image', 'audio', 'video'].includes(as)
 }
+
+type LinkAsset = 'style' | 'image'
+
+let linkKind = (rels: string[], as: string): LinkAsset | null => {
+  if (
+    rels.includes('stylesheet') || rels.includes('preload') && as == 'style'
+  ) {
+    return 'style'
+  }
+  return rels.some((r) => ICONS.includes(r)) ? 'image' : null
+}
+
+/** Styles and icons are linked assets even when a worker generates them. */
+export let linkedAsset = (rel: string, as: string): LinkAsset | null =>
+  linkKind(rel.toLowerCase().split(/\s+/), as)
 
 /** A reference a release's page or module makes to a file the release does
  * not hold: `file` is the one that names it, `ref` the address as written,
@@ -445,7 +459,7 @@ export let unfound = async (
   ) => {
     let next: string[] = []
     for (let [ref, imports] of refs) {
-      let at = local(ref.trim(), '/', '/', reserved, base)
+      let at = localAsset(ref.trim(), '/', '/', reserved, base)
       if (!at || !/\.[a-z0-9]+$/i.test(at.path) || /\.html?$/i.test(at.path)) {
         continue
       }

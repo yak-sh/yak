@@ -114,6 +114,7 @@
     "./file-root": "./file-root.ts",
     "./files": "./files.ts",
     "./asset-url": "./asset-url.ts",
+    "./worker-assets": "./worker-assets.ts",
     "./fingerprint": "./fingerprint.ts",
     "./files-routes": "./files-routes.ts",
     "./blob-routes": "./blob-routes.ts",
