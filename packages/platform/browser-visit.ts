@@ -228,7 +228,7 @@ export type Rendered = {
 /** One load or move on the page, in milliseconds: `load` is the document's
  * first, from asking to its content loaded; `yak-page` a move between
  * pages in place (@yaks/web/navigate), from the click to the frame that
- * drew it. `parts` says where the time went, `server` what the answer's
+ * drew it; `fetched` the server's time on every page the page fetched. `parts` says where the time went, `server` what the answer's
  * `Server-Timing` said. */
 export type Timing = {
   name: string
@@ -262,6 +262,19 @@ let TIMELINE = `(() => {
       build: round(load.domContentLoadedEventEnd - load.responseEnd),
     },
     server: server(load.name),
+  })
+  // The pages the navigator fetched (ahead, or on a click), and the
+  // server's time on them all: the load a page's links put on the server.
+  let pages = performance.getEntriesByType('resource').filter((e) =>
+    e.initiatorType == 'fetch' && e.serverTiming?.some((t) => t.name == 'total')
+  )
+  if (pages.length) out.push({
+    name: 'fetched',
+    url: location.href,
+    ms: round(pages.reduce((n, e) =>
+      n + e.serverTiming.find((t) => t.name == 'total').duration, 0)),
+    parts: { pages: pages.length },
+    server: {},
   })
   for (let m of performance.getEntriesByName('yak-page')) {
     let { url = '', ...parts } = m.detail ?? {}
