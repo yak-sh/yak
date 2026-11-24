@@ -16,6 +16,15 @@ import type { Line } from '@yaks/phone'
 
 export type { Control }
 export { carryDirect, type DirectMessage } from './direct.ts'
+export {
+  admitDirect,
+  dateDirect,
+  DIRECT_CAP,
+  directDeadline,
+  directUntil,
+  expireDirect,
+  nextDirect,
+} from './held.ts'
 
 /** A message as a platform's plugin reads it: where it was said, by whom, in
  * which words, and whether it was said to the bot that heard it. */

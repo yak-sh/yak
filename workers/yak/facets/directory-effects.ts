@@ -118,11 +118,11 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       ? {
         chat_dm_arrived: async (event) => {
           let { carryDirect } = await import('../chat.ts')
-          await carryDirect(at.env as Env, event.entity.eid)
+          await carryDirect(at.env as Env, at.graph, event.entity.eid)
         },
         chat_linked: async (event) => {
           let { linkedNow } = await import('../chat.ts')
-          await linkedNow(at.env as Env, event.entity.eid)
+          await linkedNow(at.env as Env, at.graph, event.entity.eid)
         },
         support_reply: async (event, _tx, _write, attempt) => {
           try {

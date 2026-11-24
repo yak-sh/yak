@@ -1044,6 +1044,9 @@ importers:
       '@yaks/effects':
         specifier: 0.2.33
         version: link:../effects
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
@@ -1053,6 +1056,9 @@ importers:
       '@yaks/phone':
         specifier: 0.2.30
         version: link:../phone
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

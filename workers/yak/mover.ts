@@ -74,6 +74,7 @@ import { proRule } from './pro-move.ts'
 import { starterRule } from './starter-move.ts'
 import { proGrantRule } from './pro-grant-move.ts'
 import { holdExpiryRule } from './hold-expiry-move.ts'
+import { dateDirect } from '@yaks/chat'
 import { recipientRule } from './recipient-move.ts'
 import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
 import { draftRule } from './draft-move.ts'
@@ -220,6 +221,15 @@ export let RULES: Rule[] = [
   checkNewcomerRule,
   starterRule,
   holdExpiryRule,
+  {
+    mark: 'yak/store/chat-dm-expiry/1',
+    stores: [PLATFORM_STORE],
+    core: ['chat_dm'],
+    live: 'all',
+    find:
+      ql`.chat_dm.said&!chat_dm.until&.created.at&.fields=created.at,chat_dm.said`,
+    move: dateDirect,
+  },
   proGrantRule,
 ]
 

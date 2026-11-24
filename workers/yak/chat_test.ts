@@ -376,8 +376,15 @@ test('platform DMs reach the chosen Operator and a message sent before linking i
     await p.settled()
     await dm('m2', 'ann', '!space other Hello other')
     await p.settled()
+    let queuedAt = Date.now()
     await dm('m3', 'guest', 'Hello after linking')
     await p.settled()
+    let [held] = await at.query(
+      line`.entity.eid=${messageEid('discord', 'm3')}&.chat_dm`,
+    )
+    let until = Date.parse(String((held.chat_dm as { until?: string }).until))
+    assertEquals(until >= queuedAt + 7 * 86_400_000, true)
+    assertEquals(until <= Date.now() + 7 * 86_400_000, true)
     assertEquals(model.asked.length, 2)
     assertStringIncludes(
       sent[2].text,

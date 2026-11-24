@@ -354,6 +354,7 @@ import { load } from './load.ts'
 import { metering } from './metered.ts'
 import { appTexter } from './app-texts.ts'
 import { appChatters } from './chat.ts'
+import { expireDirect, nextDirect } from '@yaks/chat'
 import { heldBy, mailTags, outgoing, platformPost } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
@@ -2129,6 +2130,12 @@ export class Store extends Durable {
       created: (e) => this.#armAt(e.comp?.at),
       changed: { at: (e) => this.#armAt(e.comp?.at) },
     })
+    if (this.#get('name') == PLATFORM_STORE) {
+      fx.on('chat_dm', {
+        created: (e) => this.#armAt(e.comp?.until),
+        changed: { until: (e) => this.#armAt(e.comp?.until) },
+      })
+    }
     wakeRegistered()
     // The app's own commands are run by the host's runner (`#commands`), and
     // the calls nobody waits on by the two effects @yaks/tools declares, which
@@ -3096,6 +3103,9 @@ export class Store extends Durable {
     earliest(
       await soonest(this.#graph, now),
       due(await this.#pendingEffects(), now),
+      this.#get('name') == PLATFORM_STORE
+        ? await nextDirect(this.#graph)
+        : null,
     )
 
   // The pending runs this object has the code for.
@@ -3471,6 +3481,11 @@ export class Store extends Durable {
       let running = this.#effectsReady && this.#effects.running().length
       return earliest(pending, running ? now + Store.RETRY : null)
     }),
+    direct: this.#own(
+      () => expireDirect(this.#graph, this.#now()),
+      () =>
+        this.#get('name') == PLATFORM_STORE && !this.#dormant && !this.#refused,
+    ),
     // An alarm sooner than a failed drain's retry leaves it armed.
     vectors: this.#own(() => {
       this.#vectors.run()

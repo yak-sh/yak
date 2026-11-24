@@ -63,7 +63,9 @@ export let rows = (
       ...meter(undefined, options),
       // The directory's own, which tells a space's Operator of its seats
       // through whatever BUILDER the env holds when it commits.
-      ...owning(undefined, { store: { meta: true, env } } as Options),
+      ...owning(undefined, {
+        store: { meta: true, env, now: () => env.CLOCK?.now() ?? Date.now() },
+      } as Options),
       ...signin(undefined, { store: { now: () => Date.now() } } as Options),
     ]
   ) g.use(plugin)

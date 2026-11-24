@@ -18,6 +18,7 @@
 import {
   about,
   type Bundle,
+  type Comp,
   doomed,
   type Graph,
   type Plugin,
@@ -31,6 +32,8 @@ import { line } from '@yaks/query'
 import { sharing } from '@yaks/connections/mcp'
 import { orphans, retirement, retiring } from '@yaks/connections/mcp-retirement'
 import { spaceHost } from '@yaks/platform/host'
+import { admitDirect } from '@yaks/chat'
+import { linkedAccounts, PLATFORMS } from '../chat.ts'
 import { mcpUnshared } from '@yaks/platform/letters'
 import {
   decide as decideAppTransfer,
@@ -375,7 +378,35 @@ export let seatsHeard = (
   }
 }
 
+let directSeat = (tx: Tx, { via, account }: Comp) => {
+  let id = String(account)
+  let user = PLATFORMS.get(String(via))?.user
+  return after(
+    linkedAccounts(tx.read, user, [id]),
+    (linked) =>
+      after(
+        inside(tx).seats(linked.get(id) ?? ''),
+        (seats) => seats.some(({ space }) => !space.trashed),
+      ),
+  )
+}
+
 export let plugins = (_host: unknown, options: Options): Plugin[] => [
+  {
+    name: 'yak/direct-intake',
+    authorize: hook(['chat_dm'], (bundles, tx, _err, context) => {
+      if (!context?.trusted || !options.store.meta) return bundles
+      return each(bundles, [] as Bundle[], (out, row) => {
+        if (!row.chat_dm || row.$was?.chat_dm?.via !== null) {
+          return [...out, row]
+        }
+        return after(
+          admitDirect(tx, row, options.store.now(), (dm) => directSeat(tx, dm)),
+          (queued) => queued ? [...out, queued] : out,
+        )
+      })
+    }),
+  },
   {
     name: 'yak/directory',
     requests: ['$own'],

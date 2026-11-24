@@ -14,6 +14,8 @@
   "description": "Chat platforms as plugins: a message said in a room, who said it, and the reply, for any platform (Discord, Slack, \u2026) that gives itself as data.",
   "dependencies": {
     "@yaks/graph": "0.2.33",
+    "@yaks/fp": "0.2.23",
+    "@yaks/query": "0.2.32",
     "@yaks/vocab": "0.2.32",
     "@yaks/effects": "0.2.33",
     "@yaks/host": "0.2.29",

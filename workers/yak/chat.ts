@@ -25,17 +25,20 @@
 // by its connection's, and only into that connection's server
 // (`appChatters`).
 
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
-import { line } from '@yaks/query'
+import { type Line, line } from '@yaks/query'
+import { after, system } from '@yaks/fp'
 import {
   type Answer,
   type Basics,
   carryDirect as carry,
   confined,
+  directDeadline,
   type DirectMessage,
+  directUntil,
   kept,
   type Media,
   messageEid,
@@ -611,24 +614,35 @@ export let linked = async (env: Env, platform: Platform, id: string) =>
 
 /** {@link linked} for many accounts at once, in one read of their
  * connections: those linked here, each to its person. */
-export let linkedAll = async (
+export let linkedAll = (
   env: Env,
   platform: Platform,
   ids: string[],
-): Promise<Map<string, string>> => {
-  let found = new Map<string, string>()
-  if (!platform.user || !ids.length) return found
-  let rows = await read(
-    env,
-    line`.${CONNECTION}.integration=${platform.user}&.${CONNECTION}.account=${ids}&.${CONNECTION}.status=connected&.${CONNECTION}.owner.person&*`,
+): Promise<Map<string, string>> =>
+  Promise.resolve(linkedAccounts((q) => read(env, q), platform.user, ids))
+
+/** Linked people read through either the directory door or its transaction. */
+export let linkedAccounts = (
+  read: (q: Line) => Bundle[] | Promise<Bundle[]>,
+  integration: string | undefined,
+  ids: string[],
+) => {
+  if (!integration || !ids.length) return new Map<string, string>()
+  return after(
+    read(
+      line`.${CONNECTION}.integration=${integration}&.${CONNECTION}.account=${ids}&.${CONNECTION}.status=connected&.${CONNECTION}.owner.person&*`,
+    ),
+    (rows) => {
+      let found = new Map<string, string>()
+      for (let b of rows) {
+        let { owner, account } = comp(b, CONNECTION)
+        if (owner && !found.has(String(account))) {
+          found.set(String(account), String(owner))
+        }
+      }
+      return found
+    },
   )
-  for (let b of rows) {
-    let { owner, account } = comp(b, CONNECTION)
-    if (owner && !found.has(String(account))) {
-      found.set(String(account), String(owner))
-    }
-  }
-  return found
 }
 
 /** Where the Operator of a space writes to one of its people alone on a
@@ -985,12 +999,21 @@ let queueDirect = async (env: Env, p: Platform, said: Said) => {
 /** Carry a DM to a linked sender's own conversation, or tell them how to
  * link. The destination sticks across retries, and the Builder takes the
  * message idempotently. The directory drops the words once they're taken. */
-export let carryDirect = async (env: Env, eid: string, replay = false) => {
+export let carryDirect = async (
+  env: Env,
+  graph: Graph,
+  eid: string,
+  replay = false,
+) => {
   let [row] = await read(env, line`.entity.eid=${eid}&.chat_dm&*`)
   let dm = comp(row, 'chat_dm') as Partial<DirectMessage> & { via?: string }
   let p = PLATFORMS.get(dm.via ?? '')
   let { said } = dm
   if (!said || !p?.user) return
+  let clock = env.CLOCK ?? system
+  let until = directDeadline(row)
+  let live = () => until > clock.now()
+  if (!live()) return
   let { directoryOf, KERNEL, meta } = await need()
   let patch = (next: Comp, was?: Record<string, string | null>) =>
     meta(env).apply([{
@@ -1013,10 +1036,17 @@ export let carryDirect = async (env: Env, eid: string, replay = false) => {
         throw error
       }
     },
-    forward: (person, space, said) =>
-      toOperator(env, space, person, { via: p.name, said, linked: true }),
+    forward: async (person, space, said) => {
+      if (live()) {
+        await toOperator(env, space, person, {
+          via: p.name,
+          said,
+          linked: true,
+        })
+      }
+    },
     explain: async (why) => {
-      if (replay && why == 'link') return
+      if (!live() || replay && why == 'link') return
       await p.send(await speaker(env, p), {
         room: said.room,
         reply_to: said.id,
@@ -1024,13 +1054,19 @@ export let carryDirect = async (env: Env, eid: string, replay = false) => {
       })
     },
     done: async () => {
-      await patch({
-        said: null,
-        until: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-      })
+      if (!live()) return
+      try {
+        await graph.book([{
+          entity: { eid },
+          chat_dm: { said: null, until: directUntil(clock.now()) },
+          $was: { chat_dm: { said: token(said) } },
+        }])
+      } catch (error) {
+        if (!(error instanceof Stale && error.eid == eid)) throw error
+      }
     },
   })
-  if (result == 'reread') await carryDirect(env, eid, replay)
+  if (result == 'reread') await carryDirect(env, graph, eid, replay)
 }
 
 let dmAnswer = (
@@ -1059,7 +1095,7 @@ let dmAnswer = (
  * as theirs (operator-escalate.ts `linkedTo`), so a request made before
  * linking goes on without waiting for anyone its role does not need.
  */
-export let linkedNow = async (env: Env, connection: string) => {
+export let linkedNow = async (env: Env, graph: Graph, connection: string) => {
   let [row] = await read(env, line`.entity.eid=${connection}&*`)
   let c = comp(row ?? undefined, CONNECTION)
   let platform = [...PLATFORMS.values()].find((p) =>
@@ -1073,7 +1109,7 @@ export let linkedNow = async (env: Env, connection: string) => {
       String(c.account)
     }&.chat_dm.said&.order=created.at`,
   )
-  for (let b of queued) await carryDirect(env, b.entity.eid, true)
+  for (let b of queued) await carryDirect(env, graph, b.entity.eid, true)
   let { directoryOf } = await need()
   let dir = directoryOf(env.STORE)
   let [seats, known] = await Promise.all([

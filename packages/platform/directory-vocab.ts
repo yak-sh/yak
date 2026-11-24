@@ -1070,16 +1070,16 @@ export let referralDoc: VocabDoc = {
       component: true,
       type: 'object',
       journal: false,
-      expire: '.chat_dm.until<=now',
+      index: [['via', 'account']],
       description:
-        'A direct message to the platform bot, kept until its sender’s Operator takes it. The message ID prevents a Gateway replay from taking it twice.',
+        'A direct message to the platform bot, kept for up to seven days while it waits for its sender’s Operator. A receipt prevents a Gateway replay from taking it twice.',
       properties: {
         via: owned(text),
         account: owned(text),
         said: owned({ type: 'object', additionalProperties: true }),
         person: owned(ref('keep')),
         space: owned(ref('keep')),
-        until: owned(time),
+        until: owned({ ...time, index: true }),
       },
     },
     chat_dm_arrived: {
