@@ -297,6 +297,8 @@ export let QUERIES: string[] = [
   // backlinks and reverse hops
   '.refs=a1',
   '.refs=b1',
+  '.refs=a1|.refs=b1',
+  '.refs=a1|.refs=b1|.reviews',
   '.reviews',
   '!reviews',
   '.reviews>=2',

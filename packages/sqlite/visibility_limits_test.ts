@@ -35,6 +35,7 @@ store.tx((tx) =>
     { entity: { eid: 'public,literal' } },
     { entity: { eid: 'literal-link' }, pointers: { p0: 'public,literal' } },
     { entity: { eid: 'link' }, pointers: { p0: 'public', p1: 'hidden' } },
+    { entity: { eid: 'shade' }, pointers: { p2: 'hidden' } },
   ])
 )
 let g = graph({
@@ -62,6 +63,9 @@ test('wide backlinks stay scoped under the host parameter limit', () => {
 })
 test('wide backlinks cannot name a hidden target', () => {
   assertEquals(g.rows('.refs=hidden'), [])
+})
+test('backlinks of several targets admit only those pointing at a visible one', () => {
+  assertEquals(g.rows('.refs=public|.refs=hidden'), [{ eid: 'link' }])
 })
 test('scoped getters read physical eids that resemble human ids', () =>
   assertEquals(

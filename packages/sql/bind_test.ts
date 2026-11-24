@@ -571,6 +571,11 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
   for (let terms of compounds(sql)) {
     assert(terms <= ARMS, `${terms} terms: ${sql}`)
   }
+  // Several targets in one OR share one union, however many they are.
+  let ids = Array.from({ length: 40 }, (_, i) => `.refs=a${i}`).join('|')
+  let many = compile(parse(ids), wide)
+  assertEquals(many.sql.match(/ join "(n\d|pair)"/g)?.length, 7)
+  assert(many.sql.length < sql.length * 2, many.sql)
 })
 
 // How many terms each compound SELECT in `sql` carries: the unions at one

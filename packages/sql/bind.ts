@@ -1583,19 +1583,52 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
   if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
-  let held = referrers(ctx, r.value)
-  if (!held) return FALSE
-  // The target is one the scope admits, asked once: its lookup in each arm
-  // is the identity's alone, so an engine that refuses a relation named past
-  // its cursors (@yaks/sql `cursors`) can have it written out at each arm.
+  let values = targets.get(r) ?? [r.value]
+  // Whether the scope admits a target is asked beside the union, never in
+  // it: its lookup in each arm is the identity's alone, so an engine that
+  // refuses a relation named past its cursors (@yaks/sql `cursors`) can have
+  // it written out at each arm.
   let entity = source(ctx, 'entity')
-  let seen = !ctx.d.unscoped || ctx.d.unscoped('entity') == entity
-    ? ''
-    : ` and exists (select 1 from ${entity} as "__refs_seen" where "__refs_seen"."eid" = ?)`
+  let scoped = !!ctx.d.unscoped && ctx.d.unscoped('entity') != entity
+  let held = referrers(ctx, values, scoped && values.length > 1)
+  if (!held) return FALSE
+  let key = ctx.d.ownerKey('entity')
+  if (!scoped) {
+    return cond({ sql: `${key} in (${held.sql})`, params: held.params })
+  }
+  // One target is asked once whether it is admitted. Several are each asked
+  // of the rows that point at them: an owner pointing at a target the scope
+  // hides is not its backlink, though it points at another that it admits.
+  if (values.length == 1) {
+    return cond({
+      sql:
+        `${key} in (${held.sql}) and exists (select 1 from ${entity} as "__refs_seen" where "__refs_seen"."eid" = ?)`,
+      params: [...held.params, values[0]],
+    })
+  }
   return cond({
-    sql: `${ctx.d.ownerKey('entity')} in (${held.sql})${seen}`,
-    params: seen ? [...held.params, r.value] : held.params,
+    sql:
+      `${key} in (select "o" from (${held.sql}) as "__refs" where "t" in (select "id" from ${entity} as "__refs_seen" where "__refs_seen"."eid" in (${
+        values.map(() => '?').join(', ')
+      })))`,
+    params: [...held.params, ...values],
   })
+}
+
+// The targets of the `.refs=` alternatives of one OR, merged into one
+// backlink union (`union`): every `.refs=` compiles to a union as wide as
+// the vocabulary's reference columns, so a union per target made five of
+// them in one statement longer than workerd reads (render.ts `LENGTH`, bug
+// 55599897). Keyed by the clause standing in for them.
+let targets = new WeakMap<Refs, string[]>()
+let backlinks = (alts: Clause[]): Clause[] => {
+  let refs = alts.filter((c): c is Refs =>
+    c.kind == 'refs' && c.op == '=' && !!c.value
+  )
+  if (refs.length < 2) return alts
+  let merged: Refs = { ...refs[0] }
+  targets.set(merged, [...new Set(refs.map((r) => r.value))])
+  return [merged, ...alts.filter((c) => !refs.includes(c as Refs))]
 }
 
 // A vocabulary's reference properties by table, cut to what one compound
@@ -1648,22 +1681,29 @@ let PREFIX = 1024
 // it names is tested against the selection's spine, which already says what
 // is visible. Scoping each row as well read every referrer's visibility three
 // times over, 30 s for a model with 557,859 referrers (T-132056).
-let referrers = (ctx: Ctx, value: string): Frag | undefined => {
+let referrers = (
+  ctx: Ctx,
+  values: string[],
+  pairs = false,
+): Frag | undefined => {
   let groups = refGroups(ctx.v)
   if (!groups[0].length) return
   let name = '__refs_target'
   while (ctx.v.comp(name)) name += '_'
-  // Every arm shares this lookup of the target's identity; whether the scope
-  // admits it is asked once beside them (`refsUnion`), since a scope's
+  // Every arm shares this lookup of the targets' identities; whether the
+  // scope admits them is asked beside them (`refsUnion`), since a scope's
   // relation copied at every arm made a wide vocabulary's statement too long
-  // to write out, and too deep for workerd to take named.
+  // to write out, and too deep for workerd to take named. With `pairs`, each
+  // row names the target it points at beside its owner, for that question.
   let target = `with "${name}" as materialized (select id from ${
     ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
-  } where eid = ?)`
+  } where eid ${
+    values.length == 1 ? '= ?' : `in (${values.map(() => '?').join(', ')})`
+  })`
   let term = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)} from "${name}" cross join ${
-      ctx.d.joined?.(c) ?? ctx.d.table(c)
-    } on ` +
+    `select ${ctx.d.ownerKey(c)}${
+      pairs ? ` as "o", "${name}".id as "t"` : ''
+    } from "${name}" cross join ${ctx.d.joined?.(c) ?? ctx.d.table(c)} on ` +
     props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
   let list = render(unionAllWithin(groups.map((group, i) =>
     select({
@@ -1671,7 +1711,7 @@ let referrers = (ctx: Ctx, value: string): Frag | undefined => {
       from: from(raw(group.map(term).join(' union all ')), `__refs${i}`),
     })
   )))
-  return { sql: `${target} ${list.sql}`, params: [value, ...list.params] }
+  return { sql: `${target} ${list.sql}`, params: [...values, ...list.params] }
 }
 
 // Whether a read can be driven from a component's own table.
@@ -1771,7 +1811,7 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
 // is what forced this shape. Each group is still one indexed `in`, so the cut
 // costs nothing that the scan it replaced did not.
 let union = (ctx: Ctx, alts: Clause[]): Cond => {
-  let branches = alts.flatMap((x) => {
+  let branches = backlinks(alts).flatMap((x) => {
     // NULL and empty text are distinct index points. Their boolean OR after
     // a compound equality prefix otherwise reads the whole prefix in SQLite.
     let empty = flattened([x]).find((c): c is Pred =>
@@ -4593,7 +4633,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let backlink = filters.find((c): c is Refs =>
     c.kind == 'refs' && c.op == '=' && !!c.value
   )
-  let held = backlink && referrers(ctx, backlink.value!)
+  let held = backlink && referrers(ctx, [backlink.value!])
   let few = held && raw(
     `not exists (${held.sql} limit 1 offset ${MANY})`,
     held.params,
@@ -5211,7 +5251,7 @@ let lower = (
       !order && !after && !fields && !unordered && !physical &&
       !ctx.spine && !ctx.eids && !ctx.correlated && !reads.length &&
       !claims(ctx, 'refs') && (ctx.d.scoped || ctx.d.spine == '"entity"')
-    ? referrers(ctx, target)
+    ? referrers(ctx, [target])
     : undefined
   if (limit && held) {
     let list = fresh(ctx, [held.sql], '__backlinks_')
