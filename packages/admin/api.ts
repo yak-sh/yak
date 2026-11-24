@@ -43,6 +43,7 @@ import {
   type Frame,
   IncompleteBrowse,
   packet,
+  PROGRESS,
   WIRE,
 } from '@yaks/platform/browser-wire'
 import type { Result, Step } from '@yaks/platform/browser-visit'
@@ -382,6 +383,7 @@ export let browse = (
       headers: {
         accept: WIRE,
         'content-type': file ? WIRE : 'application/json',
+        [PROGRESS]: '1',
       },
       ...file
         ? { upload: () => packet({ head: asked, ...file() }) }

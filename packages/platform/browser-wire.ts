@@ -2,8 +2,20 @@
 // name a byte count, followed by exactly that many raw file bytes. A visit
 // ends with a result header, so even a clean EOF can be detected as a loss.
 export let WIRE = 'application/vnd.yaks.browse'
+// The client requests progress frames, and the browser echoes the header
+// when it will keep the stream active. Either side can deploy first.
+export let PROGRESS = 'x-yak-browse-progress'
+export let BROWSE_BEAT = 2_000
+export let BROWSE_IDLE = 4 * BROWSE_BEAT
 export let HTML_LIMIT = 4_000_000
 export let HTML_BYTES = HTML_LIMIT * 3
+
+export let browsePage = (url: string) => {
+  if (!URL.canParse(url)) return '(invalid address)'
+  let { origin, pathname } = new URL(url)
+  let path = pathname.replace(/\/(?:~[^/]+|_preview\/[^/]+).*$/, '/<preview>')
+  return (origin + path).slice(0, 250)
+}
 
 type Bytes = ReadableStream<Uint8Array>
 export type Frame<H> = { head: H; size?: number; body?: Bytes }
@@ -111,8 +123,9 @@ export let frames = async function* <H>(
   }
 }
 
-/** Edit control headers in flight. File bytes pass through unchanged. */
-export let mapped = <H extends object>(
+/** Edit reply headers in flight. File bytes pass through unchanged and the
+ * result finishes the reply. */
+export let mapped = <H extends { kind: string }>(
   body: Bytes | null,
   map: (head: H) => H,
   failed?: (e: unknown) => void,
@@ -122,6 +135,7 @@ export let mapped = <H extends object>(
       for await (let { head, size, body: file } of frames<H>(body)) {
         yield header(map(head), size)
         if (file) yield* file
+        else if (head.kind == 'result') return
       }
     } catch (e) {
       failed?.(e)

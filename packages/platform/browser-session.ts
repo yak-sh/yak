@@ -11,6 +11,7 @@ export type Sessions<B> = {
 export type SessionOptions = {
   hold: Hold
   report: (error: unknown) => void
+  progress?: (stage: string) => void
 }
 
 export let OPEN = 8_000
@@ -97,14 +98,19 @@ export let withSession = async <B, T>(
   sessions: Sessions<B>,
   openBy: number,
   time: Clock,
-  { hold, report }: SessionOptions,
+  { hold, report, progress }: SessionOptions,
   run: (browser: B) => Promise<T>,
 ): Promise<T> => {
   let left = () => openBy - time.now()
-  let release = (id: string) => released(sessions, id, time, hold, report)
+  let release = (id: string) => {
+    progress?.('releasing the browser session')
+    return released(sessions, id, time, hold, report)
+  }
   let open = async (replace: boolean): Promise<{ id: string; browser: B }> => {
+    progress?.('acquiring a browser session')
     let id = await acquired(sessions, left, time, hold, report)
     try {
+      progress?.('connecting to the browser session')
       let browser = await bounded(
         time,
         Math.min(CONNECT, left()),

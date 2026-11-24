@@ -2,8 +2,15 @@ import * as fs from '@yaks/file/io'
 import { streamingFetch } from '@yaks/process/http'
 import type { BrowseFrame } from '@yaks/platform/browser-visit'
 import { mockupAssets, mockupPath } from '@yaks/platform/browser-mockup'
-import { header, readAsk, streamed, WIRE } from '@yaks/platform/browser-wire'
-import { equal, test, throws } from '@yaks/testing'
+import {
+  BROWSE_IDLE,
+  header,
+  PROGRESS,
+  readAsk,
+  streamed,
+  WIRE,
+} from '@yaks/platform/browser-wire'
+import { clock, equal, test, throws } from '@yaks/testing'
 import type { Browse } from './api.ts'
 import { mockupAt } from './browse-files.ts'
 import { visit } from './browse.ts'
@@ -139,9 +146,16 @@ test('a visit with actions reports an incomplete answer without replaying or pub
         send,
       )
     ) as Error
+    equal(failure.message.includes('HTTP 200) (Cloudflare ray test-ray)'), true)
     equal(
-      failure.message,
-      '/api/browse lost its answer (HTTP 200) (Cloudflare ray test-ray). The browser may have taken the requested steps. Check the page before retrying.',
+      failure.message.includes('waiting for the next frame after end.png'),
+      true,
+    )
+    equal(
+      failure.message.endsWith(
+        'The browser may have taken the requested steps. Check the page before retrying.',
+      ),
+      true,
     )
     equal(calls, 1)
     equal(await fs.readTextFile(`${dir}/end.png`), 'previous')
@@ -162,4 +176,100 @@ test('a gateway failure before the screenshot stream retries once with the same 
     let got = await visit('session', asked, dir, undefined, send)
     equal(got.text, 'Seen')
     equal(calls, 2)
+  }))
+
+test('a complete result publishes its files while the HTTP body is still open', () =>
+  inDir(async (dir) => {
+    let cancelled = false
+    let send: typeof fetch = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(shot('end', 1))
+              controller.enqueue(new Uint8Array([7]))
+              controller.enqueue(end)
+            },
+            cancel() {
+              cancelled = true
+            },
+          }),
+          { headers: { 'content-type': WIRE } },
+        ),
+      )
+    let time = clock()
+    let got = await visit(
+      'session',
+      asked,
+      dir,
+      undefined,
+      send,
+      undefined,
+      time,
+    )
+    equal(got.text, 'Seen')
+    equal(await fs.readFile(got.files[0]), new Uint8Array([7]))
+    equal(cancelled, true)
+  }))
+
+test('a silent stream retries a read-only visit and describes the last phase', () =>
+  inDir(async (dir) => {
+    let time = clock()
+    let listening = Promise.withResolvers<void>()
+    let calls = 0
+    let signal: AbortSignal | null | undefined
+    let send: typeof fetch = (_, init) => {
+      if (++calls != 1) {
+        return Promise.resolve(
+          answer([shot('end', 1), new Uint8Array([7]), end]),
+        )
+      }
+      signal = init?.signal
+      let sent = false
+      let body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent) {
+            listening.resolve()
+            return
+          }
+          controller.enqueue(header(
+            {
+              kind: 'progress',
+              stage: 'waiting for the page to reach DOMContentLoaded',
+              ms: 2_000,
+            } satisfies BrowseFrame,
+          ))
+          sent = true
+        },
+      }, { highWaterMark: 0 })
+      return Promise.resolve(
+        new Response(body, {
+          headers: {
+            'content-type': WIRE,
+            [PROGRESS]: '1',
+            'cf-ray': 'stalled-ray',
+          },
+        }),
+      )
+    }
+    let failures: string[] = []
+    let result = visit(
+      'session',
+      { url: 'https://yaks.app/app/~token/?query=private' },
+      dir,
+      undefined,
+      send,
+      (e) => {
+        failures.push(e.message)
+      },
+      time,
+    )
+    await listening.promise
+    await time.advance(BROWSE_IDLE)
+    equal((await result).text, 'Seen')
+    equal(calls, 2)
+    equal(signal?.aborted, true)
+    equal(failures, [
+      '/api/browse lost its answer (HTTP 200) (Cloudflare ray stalled-ray) for https://yaks.app/app/<preview> while waiting for the page to reach DOMContentLoaded (2000 ms in the browser service) after 8000 ms: no browse bytes for 8 seconds. Try the visit again.',
+    ])
   }))

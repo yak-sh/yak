@@ -11,12 +11,13 @@ import { audit, type Axe, type Checked, interruption } from './preview-audit.ts'
 import { FIT, type Fit } from './preview-fit.ts'
 import { bounded, BrowserTimeout } from './browser-time.ts'
 import {
-  header,
   HTML_BYTES,
   HTML_LIMIT,
+  PROGRESS,
   readAsk,
   WIRE,
 } from './browser-wire.ts'
+import { type Screens, streamBrowse } from './browser-stream.ts'
 import { holding } from '@yaks/blob/stream'
 import {
   type MockupAssets,
@@ -285,12 +286,9 @@ export type Result = (Omit<Rendered, 'image' | 'shots'> | Failed) & {
 }
 export type BrowseFrame =
   | { kind: 'reset' }
+  | { kind: 'progress'; stage: string; ms: number }
   | { kind: 'shot'; name: string }
   | { kind: 'result'; result: Result }
-type Screens = {
-  reset: () => Promise<void>
-  shot: (name: string, image: string) => Promise<void>
-}
 
 let failure = (e: unknown): Fault => ({
   failed: e instanceof Error ? e.message : String(e),
@@ -631,6 +629,11 @@ let loaded = async (
   files?: MockupAssets,
 ): Promise<Loaded> => {
   let stage = 'opening the page'
+  let waitingFor = (next: string) => {
+    stage = next
+    screens?.progress(next)
+  }
+  waitingFor(stage)
   let finding: { step: string; selector: string } | undefined
   let deadline = time.now() + ms
   let loading = bounded(
@@ -679,7 +682,7 @@ let loaded = async (
       if (files) await serveMockup(page, files, error)
       else if (html != null) await answered(page, html, error)
       signal.throwIfAborted()
-      stage = 'loading the page'
+      waitingFor('waiting for the page to reach DOMContentLoaded')
       let status = 0
       try {
         status = (await page.goto(url, {
@@ -705,12 +708,12 @@ let loaded = async (
       let ready = async () => {
         let loading = navigation?.()
         if (!loading) return
-        stage = 'loading the page after navigation'
+        waitingFor('waiting for DOMContentLoaded after navigation')
         await loading
         signal.throwIfAborted()
       }
       if (view.wait) {
-        stage = 'waiting after the page loaded'
+        waitingFor(`waiting ${view.wait} ms after the page loaded`)
         await pause(
           view.wait,
           'The post-load wait',
@@ -730,15 +733,17 @@ let loaded = async (
         signal.throwIfAborted()
         if (!('wait' in step)) await ready()
         let at = `Step ${i + 1}`
-        stage = `taking step ${i + 1}`
+        waitingFor(`taking step ${i + 1}`)
         if ('wait' in step) {
-          stage += ` (waiting ${step.wait} ms)`
+          waitingFor(`${stage} (waiting ${step.wait} ms)`)
           await pause(step.wait, at, deadline - time.now(), signal, time)
           continue
         }
         if ('shot' in step) {
-          stage += ' (taking a screenshot)'
+          waitingFor(`${stage} (taking a screenshot)`)
           let image = await shoot()
+          signal.throwIfAborted()
+          waitingFor(`sending the screenshot for step ${i + 1}`)
           if (screens) await screens.shot(step.shot, image)
           else shots.push({ name: step.shot, image })
           continue
@@ -746,11 +751,11 @@ let loaded = async (
         navigation ??= navigating(page)
         try {
           await taken(page, view, step, async (selector, action) => {
-            stage = `taking step ${i + 1} (waiting for a visible element)`
+            waitingFor(`taking step ${i + 1} (waiting for a visible element)`)
             finding = { step: at, selector }
             let el = await shown(page, selector, at, signal)
             finding = undefined
-            stage = `taking step ${i + 1} (${action} the element)`
+            waitingFor(`taking step ${i + 1} (${action} the element)`)
             return el
           }, signal)
         } catch (e) {
@@ -762,8 +767,10 @@ let loaded = async (
       }
       signal.throwIfAborted()
       await ready()
-      stage = 'taking the final screenshot'
+      waitingFor('taking the final screenshot')
       let image = await shoot()
+      signal.throwIfAborted()
+      waitingFor('sending the final screenshot')
       if (screens) await screens.shot('end', image)
       return {
         page,
@@ -804,7 +811,11 @@ export let capture = async (
   let end = opening + render
   let left = () => end - time.now()
   let attempt = (openBy: number) =>
-    withSession(browsing, openBy, time, { hold, report }, async (browser) => {
+    withSession(browsing, openBy, time, {
+      hold,
+      report,
+      progress: screens?.progress,
+    }, async (browser) => {
       await screens?.reset()
       let { page, ...shot } = await loaded(
         browser,
@@ -814,6 +825,7 @@ export let capture = async (
         screens,
         files,
       )
+      screens?.progress("reading the page's text and timings")
       return {
         ...shot,
         ...await checked(
@@ -922,43 +934,6 @@ let run = async (
   return { ...result, ...faults.length ? { faults } : {} }
 }
 
-let stream = (
-  req: Request,
-  browsing: Browsing,
-  time: Clock,
-  hold?: Hold,
-) => {
-  let { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
-  let write = writable.getWriter()
-  let frame = (head: BrowseFrame, size?: number) =>
-    write.write(header(head, size))
-  let screens: Screens = {
-    reset: () => frame({ kind: 'reset' }),
-    shot: async (name, image) => {
-      // CDP gives one base64 screenshot at a time. Decode it in bounded
-      // pieces as the receiver takes the PNG.
-      let padding = image.endsWith('==') ? 2 : image.endsWith('=') ? 1 : 0
-      let size = Math.floor((image.length - padding) * 3 / 4)
-      await frame({ kind: 'shot', name }, size)
-      for (let at = 0; at < image.length; at += 64 * 1024) {
-        await write.write(
-          Uint8Array.fromBase64(image.slice(at, at + 64 * 1024)),
-        )
-      }
-    },
-  }
-  let send = async () => {
-    let said = await run(req, browsing, time, hold, screens)
-    let result = 'failed' in said
-      ? said
-      : (({ image: _image, shots: _shots, ...result }) => result)(said)
-    await frame({ kind: 'result', result })
-    await write.close()
-  }
-  send().catch((e) => write.abort(e).catch(() => {}))
-  return new Response(readable, { headers: { 'content-type': WIRE } })
-}
-
 /** The browser service's reply carries elapsed time on both paths. */
 export let answer = (
   browsing: Browsing,
@@ -967,7 +942,16 @@ export let answer = (
 ): (req: Request) => Promise<Response> =>
 async (req: Request): Promise<Response> => {
   if (req.headers.get('accept') == WIRE) {
-    return stream(req, browsing, time, hold)
+    return streamBrowse(
+      req.headers.get(PROGRESS) == '1',
+      time,
+      async (screens) => {
+        let said = await run(req, browsing, time, hold, screens)
+        if ('failed' in said) return said
+        let { image: _image, shots: _shots, ...result } = said
+        return result
+      },
+    )
   }
   let result = await run(req, browsing, time, hold)
   let status = !('failed' in result)

@@ -14,6 +14,7 @@ import { MOCKUP_ORIGIN } from '@yaks/platform/browser-mockup'
 import {
   frames,
   packet,
+  PROGRESS,
   readAsk,
   streamed,
   WIRE,
@@ -422,5 +423,35 @@ test('a stalled action reports its page, caller and step without preview credent
     browse_page: `https://${k.host}/app/<preview>`,
     browse_caller: checks.person,
     browse_input: 'touch',
+  })
+})
+
+test('a slow browser visit streams the phase it is waiting on and its timeout result', async () => {
+  let r = await browse({
+    url: `${manage.url}?slow`,
+    view: { wait: 0 },
+    steps: [{ shot: 'first' }, { shot: 'before' }, { tap: '#stalled' }],
+  }, {
+    cookie: checks.cookie,
+    accept: WIRE,
+    [PROGRESS]: '1',
+  })
+  equal(r.headers.get(PROGRESS), '1')
+  let progress: string[] = []
+  let failed
+  for await (let { head, body } of frames<BrowseFrame>(r.body)) {
+    if (head.kind == 'progress') progress.push(head.stage)
+    if (head.kind == 'result') failed = head.result
+    if (body) await new Response(body).arrayBuffer()
+  }
+  equal(
+    progress.includes('waiting for the page to reach DOMContentLoaded'),
+    true,
+  )
+  equal(progress.includes('taking step 3 (tapping the element)'), true)
+  match(failed, {
+    failed:
+      'Browser visit while taking step 3 (tapping the element) timed out after 20 seconds',
+    timeout: true,
   })
 })

@@ -21,7 +21,13 @@ import {
   waitRoom,
 } from '@yaks/platform/browser-visit'
 
-import { type Frame, mapped, packet, WIRE } from '@yaks/platform/browser-wire'
+import {
+  type Frame,
+  mapped,
+  packet,
+  PROGRESS,
+  WIRE,
+} from '@yaks/platform/browser-wire'
 
 // A failure yak-browser answered, raised here with the stack it had there.
 let relayed = ({ failed, stack, timeout }: Fault) =>
@@ -99,6 +105,7 @@ export let browseStream = async (
   env: Pick<Env, 'BROWSER' | 'CLOCK'>,
   visit: Frame<BrowseVisit>,
   where: Record<string, string>,
+  progress: boolean,
 ) => {
   if (!env.BROWSER) {
     throw new Error('Cloudflare Browser Rendering is not configured')
@@ -116,6 +123,7 @@ export let browseStream = async (
           headers: {
             accept: WIRE,
             'content-type': transfer ? WIRE : 'application/json',
+            ...progress ? { [PROGRESS]: '1' } : {},
           },
           body: transfer ? packet(visit) : JSON.stringify(visit.head),
           signal,
@@ -137,7 +145,9 @@ export let browseStream = async (
     }
     return frame
   }, (e) => caught(e, where))
-  return new Response(body, { headers: { 'content-type': WIRE } })
+  let headers = new Headers({ 'content-type': WIRE })
+  if (r.headers.get(PROGRESS) == '1') headers.set(PROGRESS, '1')
+  return new Response(body, { headers })
 }
 
 /** A render for app_preview: what {@link seen} answers, its accessibility

@@ -52,8 +52,10 @@ import {
 } from '@yaks/platform/browser-mockup'
 import { browseStream, seen, timedOut } from './browser.ts'
 import {
+  browsePage,
   HTML_BYTES,
   HTML_LIMIT,
+  PROGRESS,
   readAsk,
   WIRE,
 } from '@yaks/platform/browser-wire'
@@ -133,12 +135,6 @@ export let browsingAdmin = async (req: Request, env: Env) => {
     env.SESSION_SECRET,
   )
   return visit && visit.until > Date.now() ? visit.person : null
-}
-
-let pageAddress = (url: string) => {
-  let { origin, pathname } = new URL(url)
-  let path = pathname.replace(/\/(?:~[^/]+|_preview\/[^/]+).*$/, '/<preview>')
-  return (origin + path).slice(0, 250)
 }
 
 let adminCaller = async (req: Request, env: Env, dir: Directory) => {
@@ -304,7 +300,7 @@ export let fetch = async (
     if (asked instanceof Response) return asked
     let { visit, person, file } = asked
     Object.assign(where, {
-      browse_page: pageAddress(visit.url),
+      browse_page: browsePage(visit.url),
       browse_caller: person,
       browse_input: visit.view.touch ? 'touch' : 'mouse',
       browse_document: visit.mockup != null
@@ -315,7 +311,12 @@ export let fetch = async (
     })
     if (req.headers.get('accept') == WIRE) {
       try {
-        return await browseStream(env, { ...file, head: visit }, where)
+        return await browseStream(
+          env,
+          { ...file, head: visit },
+          where,
+          req.headers.get(PROGRESS) == '1',
+        )
       } catch (e) {
         await file?.close()
         throw e
