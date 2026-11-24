@@ -437,6 +437,7 @@ proved. Existing queued letters and receiving cursors are retained.
 | `REALTIME_APP`, `REALTIME_TOKEN`, `TURN_KEY`, `TURN_TOKEN`       | voice       | the platform's one Cloudflare Realtime SFU app id and secret, and its one TURN key id and token (1Password, "yaks.app Realtime …")                                                                                                                            | every app's `./api/rtc/` answers 503 `voice_off`                                                                                     |
 | `STRIPE_KEY`                                                     | billing     | restricted Stripe API key (checkout, portal, Subscriptions read and write, Connect accounts and their checkouts); config.ts `payments` hands it to @yaks/stripe as its `key`                                                                                  | billing doors say the paid tier is not switched on                                                                                   |
 | `STRIPE_WEBHOOK_SECRET`                                          | billing     | `whsec_…` of the **Your account** destination (see the billing section); billing.ts verifies `POST /stripe/webhook` with it                                                                                                                                   | events go unread and are filed where the owner sees them                                                                             |
+| `STRIPE_CLIENT_ID`                                               | selling     | a `[vars]` line, not a secret: the platform's Connect OAuth `client_id` (`ca_…`, live or sandbox to match `STRIPE_KEY`); config.ts `payments` hands it to @yaks/stripe as its `client`, and a seller connects an account they already have through it         | the Selling page offers only a new account                                                                                           |
 | `STRIPE_CONNECT_WEBHOOK_SECRET`                                  | selling     | `whsec_…` of the **Connected accounts** destination (see the Connect section); sell.ts verifies `POST /stripe/connect` with it                                                                                                                                | `POST /stripe/connect` answers 503; selling otherwise works                                                                          |
 | `PHONE_SENDER`                                                   | texts       | a `[vars]` line in wrangler.toml, not a secret: the phone and `number` every platform text goes from, and the only number a text signs up at, e.g. `{ via = "telnyx", number = "+18663141594" }`; a space's `sender{via}` beside `phone{number}` overrides it | nothing texts or calls                                                                                                               |
 | `PINNACLE_API_KEY`, `PINNACLE_SIGNING_SECRET`, `PINNACLE_NUMBER` | texts       | Pinnacle send key, webhook secret and default sending number; receive at `/pinnacle/webhook`                                                                                                                                                                  | Pinnacle is unconfigured                                                                                                             |
@@ -888,6 +889,19 @@ The platform API key is the **same** one — a direct charge is our key acting o
 the merchant's account through a `Stripe-Account` header, never a key of theirs
 — so `STRIPE_KEY` needs nothing done to it.
 
+A seller who already has a Stripe account connects it through Connect's OAuth
+for Standard accounts (sell.ts `linking`), which needs, sandbox first, then
+live:
+
+1. Dashboard → Settings → Connect → Onboarding options → OAuth: turn on
+   onboarding accounts with OAuth, and add the redirect URI
+   `https://yaks.app/selling/callback` (staging:
+   `https://yaks.fyi/selling/callback`).
+2. Copy the `client_id` (`ca_…`) into `STRIPE_CLIENT_ID` in wrangler.toml's
+   `[vars]` (staging: `[env.staging.vars]`).
+3. Give the restricted `STRIPE_KEY` the **Connect OAuth** resource's Write
+   permission, which trading the code for the account's id needs.
+
 @yaks/stripe serves that door too (its `connect` door, the secret named in
 config.ts `payments`). Until the secret is set, `POST /stripe/connect` answers
 503 in one sentence and everything else still works: a space connects, a
@@ -918,7 +932,8 @@ names above are the ones the handler reads. Ticking a v2 event name is a webhook
 that delivers and does nothing.
 
 **No account-created event.** We create the account ourselves and write its id
-down in the same breath (sell.ts `connect`), so there is nothing to be told.
+down in the same breath (sell.ts `connect`), or are handed one a seller
+connected (sell.ts `callback`), so there is nothing to be told.
 
 ## Verifying a deploy
 

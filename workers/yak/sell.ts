@@ -57,7 +57,10 @@ import {
 import { paid } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { manageAt } from '@yaks/platform/routes'
+import { type Door, MANAGE, manageAt } from '@yaks/platform/routes'
+import { telling } from '@yaks/platform/cookie'
+import { hold, take } from './attempts.ts'
+import { whoIs } from './session.ts'
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { adminWho } from './asking.ts'
 import { refuse } from './tool.ts'
@@ -224,6 +227,123 @@ export let connect = async (env: Env, space: Space, email: string) => {
     await wrote(env, space, space.seller)
   }
   return { account: id, url: await lent.onboarding(id, backTo(space, env)) }
+}
+
+// ---- connecting an account they already have -------------------------------
+//
+// Somebody who already sells through an account at the provider would rather
+// keep it than open a second one: their customers, payouts and history are
+// there. "Start selling" opens a new account by default, and offers this
+// beside it: the provider's own page, where they sign in and allow yaks.app
+// to charge on their account, then hand them back here. The account is still
+// theirs and the platform holds the same three facts about it; their apps
+// sell through it exactly as through a new one, at the same fee.
+
+/** Where the provider hands a seller back after connecting an account they
+ * already have: one address at the apex, the one listed in the provider's
+ * settings, whichever space it was begun from. */
+export let CALLBACK = '/selling/callback'
+
+// The kind of attempt it waits as (attempts.ts), and what it waits with: the
+// space and the owner who began it.
+let ATTEMPT = 'sell'
+type Linking = { space: string; person: string }
+
+/** Whether this space can connect an account its owner already has: the
+ * provider can connect one here, and the space has no account that is
+ * already taking payments, which a second would split the books of. */
+export let linkable = async (env: Env, space: Space) =>
+  selling(space) != 'ready' &&
+  !!(await shops(env)).authorize('', hostUrl(env, CALLBACK))
+
+/** The address of the provider's page where this space's owner connects an
+ * account they already have, the attempt held until it hands them back. */
+export let linking = async (env: Env, space: Space, person: string) => {
+  let no = refusedSell(space, env)
+  if (no) throw refuse('limit', no)
+  if (selling(space) == 'ready') {
+    throw refuse('conflict', `${space.slug} is already taking payments`)
+  }
+  let state = crypto.randomUUID()
+  let to = (await shops(env)).authorize(state, hostUrl(env, CALLBACK))
+  if (!to) throw refuse('unavailable', 'connecting an account is not set up')
+  await hold(env, ATTEMPT, state, { space: space.slug, person } as Linking)
+  return to
+}
+
+// Why an account a seller connected cannot sell for this space, in a sentence
+// they read; null when it can.
+let refusedLink = async (env: Env, space: Space, account: string) => {
+  let other = await dirOf(env).seller(via, account)
+  return other && other.eid != space.eid
+    ? 'that account already sells for another space'
+    : selling(space) == 'ready' && space.seller?.account != account
+    ? `${space.slug} is already taking payments through another account`
+    : refusedSell(space, env)
+}
+
+/**
+ * The provider handing a seller back after they connected an account they
+ * already have (apex.ts routes {@link CALLBACK} here). The attempt its `state`
+ * names must have been begun by the person signed in where it lands, who
+ * still owns its space. The account it connected becomes the space's seller,
+ * replacing one opened here that never finished setup, and they are brought
+ * back to the selling page told how it went.
+ */
+export let callback: Door<Env> = async ({ env, req, path, space }) => {
+  if (space != null || path != CALLBACK) return null
+  let q = new URL(req.url).searchParams
+  let held = await take<Linking>(env, ATTEMPT, q.get('state'))
+  let dir = dirOf(env)
+  let at = held && await dir.space(held.space)
+  let who = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)
+  let { name } = await payments(env)
+  let told = (say: string, no = true) =>
+    telling(
+      new Response(null, {
+        status: 303,
+        headers: { location: at ? backTo(at, env) : hostUrl(env, MANAGE) },
+      }),
+      { say, no },
+      MANAGE,
+    )
+  // Turning the provider down is the person's choice, not a failure.
+  if (held && q.get('error') == 'access_denied') {
+    return told(`${name} was not connected.`)
+  }
+  let why = !held
+    ? 'its attempt was never begun, or was already finished'
+    : !at
+    ? 'its space is gone'
+    : who?.person != held.person
+    ? 'someone else is signed in where it came back'
+    : who.role != 'owner'
+    ? 'the person who began it does not own its space'
+    : !q.get('code')
+    ? `${name} sent no code: ${q.get('error') ?? 'nothing said'}`
+    : null
+  if (why || !at) {
+    caught(new Error(`Connecting an account came back unfinished: ${why}.`), {
+      request: `GET ${CALLBACK}`,
+      ...held ? { space: held.space } : {},
+    })
+    return told(`${name} was not connected. Try again.`)
+  }
+  try {
+    let shop = await (await shops(env)).authorized(q.get('code')!)
+    let no = await refusedLink(env, at, shop.account)
+    if (no) return told(`${name} was not connected: ${no}.`)
+    await wrote(env, at, sellerOf(shop))
+    return told(
+      shop.ready
+        ? `Your ${name} account is connected.`
+        : `Your ${name} account is connected. Finish its setup at ${name} to take payments.`,
+      false,
+    )
+  } catch (e) {
+    caught(e, { request: `GET ${CALLBACK}`, space: at.slug })
+    return told(`we couldn't connect your ${name} account — try again`)
+  }
 }
 
 /**

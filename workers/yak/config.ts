@@ -354,7 +354,8 @@ export let phoneConfig: Config = {
 
 /**
  * The payment provider the platform takes money through (payments.ts): its
- * plugin lends it under its name, with its key, the clock its calls wait on,
+ * plugin lends it under its name, with its key, the Connect client a seller
+ * connects an account they already have through, the clock its calls wait on,
  * each plan's prices as they are sold here, by the month and the year, the
  * prices a plan no longer sells but its subscribers before a raise are still
  * on, and the secret each of its webhook doors verifies with, which it serves at
@@ -370,6 +371,7 @@ export let payments: Config & { via: string } = {
     facets: ['graph'],
     with: {
       key: { secret: 'STRIPE_KEY' },
+      client: { secret: 'STRIPE_CLIENT_ID' },
       clock: { binding: 'CLOCK' },
       prices: {
         plus: {

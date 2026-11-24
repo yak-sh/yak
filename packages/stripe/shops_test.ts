@@ -26,7 +26,11 @@ let stripe = (answer: (path: string) => unknown) => {
     globalThis,
     'fetch',
     (url: string | URL | Request, init?: RequestInit) => {
-      let path = new URL(String(url)).pathname
+      // The API's paths bare, another of Stripe's hosts named whole.
+      let at = new URL(String(url))
+      let path = at.host == 'api.stripe.com'
+        ? at.pathname
+        : at.origin + at.pathname
       asked.push({
         path,
         on: new Headers(init?.headers).get('stripe-account'),
@@ -75,19 +79,83 @@ test('an account is the charge-merchants-directly model, in full', async () => {
   equal('email' in s.asked[1].body, false)
 })
 
+// An account as Stripe reads it back: one this platform made, or one a seller
+// brought, which only they control.
+let ours = { id: 'acct_1', controller: { is_controller: true } }
+let theirs = { id: 'acct_2', charges_enabled: true, details_submitted: true }
+
 test('onboarding comes back to where it was asked from, both ways', async () => {
-  using s = stripe(() => ({ url: 'https://connect.stripe.com/x' }))
+  using s = stripe((path) =>
+    path == '/v1/accounts/acct_1'
+      ? ours
+      : { url: 'https://connect.stripe.com/x' }
+  )
   equal(
     await lent.onboarding('acct_1', 'https://back'),
     'https://connect.stripe.com/x',
   )
-  equal(s.asked[0].path, '/v1/account_links')
-  equal(s.asked[0].body, {
+  equal(s.asked[1].path, '/v1/account_links')
+  equal(s.asked[1].body, {
     account: 'acct_1',
     type: 'account_onboarding',
     return_url: 'https://back',
     refresh_url: 'https://back',
   })
+})
+
+test('an account a seller brought is finished in their own dashboard', async () => {
+  using s = stripe(() => theirs)
+  equal(
+    await lent.onboarding('acct_2', 'https://back'),
+    'https://dashboard.stripe.com/',
+  )
+  equal(s.asked.map((a) => a.path), ['/v1/accounts/acct_2'])
+})
+
+test('an existing account connects through OAuth only with a client', () => {
+  equal(lent.authorize('s1', 'https://back'), null)
+  let at = new URL(
+    shops({ key: 'sk', client: 'ca_1' }).authorize('s1', 'https://back')!,
+  )
+  equal(at.origin + at.pathname, 'https://connect.stripe.com/oauth/authorize')
+  equal(Object.fromEntries(at.searchParams), {
+    response_type: 'code',
+    client_id: 'ca_1',
+    scope: 'read_write',
+    state: 's1',
+    redirect_uri: 'https://back',
+  })
+})
+
+test('a code is traded once for the account it connected', async () => {
+  using s = stripe((path) =>
+    path == 'https://connect.stripe.com/oauth/token'
+      ? { stripe_user_id: 'acct_2' }
+      : theirs
+  )
+  equal(await lent.authorized('ac_1'), {
+    account: 'acct_2',
+    ready: true,
+    submitted: true,
+  })
+  equal(s.asked[0].path, 'https://connect.stripe.com/oauth/token')
+  equal(s.asked[0].body, { grant_type: 'authorization_code', code: 'ac_1' })
+  equal(s.asked[0].key, 'oauth:ac_1')
+  equal(s.asked[1].path, '/v1/accounts/acct_2')
+})
+
+test('a spent code is refused in Stripe’s own words', async () => {
+  using _ = stripe(() =>
+    Response.json({
+      error: 'invalid_grant',
+      error_description: 'Authorization code does not exist: ac_1',
+    }, { status: 400 })
+  )
+  let e = await lent.authorized('ac_1').catch((e) => e)
+  equal(
+    e.message,
+    'stripe: Authorization code does not exist: ac_1 (invalid_grant)',
+  )
 })
 
 let sale: Sale = {

@@ -888,7 +888,32 @@ let selling = (at: DeskPage, env: Host) => {
           ? `Disconnect ${by}`
           : at.sell == 'setup'
           ? 'Continue setup'
+          : at.paying
+          ? `Create a ${by} account`
           : `Connect ${by}`,
+      ),
+    )
+    : null
+  // A new account is the way most people take; one they already have is
+  // offered under it (sell.ts `linking`).
+  let existing = at.paying && at.link
+    ? h(
+      'form',
+      {
+        class: 'Page_Form',
+        method: 'post',
+        action: managePath('selling', at.space),
+      },
+      held('sell', 'link'),
+      h(
+        Form.Hint,
+        null,
+        `Already have a ${by} account? `,
+        h(
+          Button,
+          { type: 'submit', mod: 'quiet' },
+          at.sell == 'setup' ? 'Connect it instead' : 'Connect it',
+        ),
       ),
     )
     : null
@@ -927,8 +952,9 @@ let selling = (at: DeskPage, env: Host) => {
           ? `Payments go to your ${by} account. You manage refunds and disputes there.`
           : at.sell == 'setup'
           ? `Finish connecting your ${by} account to start accepting payments.`
-          : `Connect your ${by} account to accept payments from your customers.`,
+          : `Payments from your customers go to a ${by} account of your own.`,
       ),
+      existing,
       at.paying
         ? h(
           Form.Hint,

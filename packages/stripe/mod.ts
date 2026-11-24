@@ -33,7 +33,15 @@ export let form = (
 export class StripeError extends Error {
   code?: string
   constructor(body: unknown, status: number) {
-    let e = (body as { error?: { message?: string; code?: string } })?.error
+    let said = body as {
+      error?: string | { message?: string; code?: string }
+      error_description?: string
+    }
+    // Connect's OAuth endpoints say it the OAuth way: the code in `error`,
+    // the sentence beside it.
+    let e = typeof said?.error == 'string'
+      ? { code: said.error, message: said.error_description }
+      : said?.error
     super(
       e?.message
         ? `stripe: ${e.message}${e.code ? ` (${e.code})` : ''}`
@@ -83,7 +91,8 @@ export let list = async function* <T extends { id: string }>(
 }
 
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
-// Stripe's v1 API takes.
+// Stripe's v1 API takes. `path` is on the API's host unless it names another
+// of Stripe's own, as Connect's OAuth endpoints do (connect.stripe.com).
 //
 // `on` is a connected account: the platform key acting on somebody
 // else's account, which Stripe reads off the `Stripe-Account` header and
@@ -124,7 +133,7 @@ export let ask = async (
   }
   for (let n = 1;; n++) {
     let last = n == TRIES
-    let r = await fetch(`${API}${path}`, { method, headers, body })
+    let r = await fetch(new URL(path, API), { method, headers, body })
       .catch((e) => {
         if (last) throw e
         return null

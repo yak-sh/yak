@@ -14,6 +14,16 @@
 // (./mod.ts `ask`), and names an `application_fee_amount` Stripe moves to it
 // out of the same payment.
 //
+// A seller who already has a Stripe account connects it instead, through
+// Connect's OAuth for Standard accounts (docs.stripe.com/connect/oauth-standard-accounts):
+// Stripe's page asks them to sign in and allow the platform, and hands them
+// back with a code the platform trades for the account's id. Stripe calls
+// OAuth not recommended for new platforms because Account Links onboard an
+// account the platform makes; it remains the one way to connect an account
+// that already exists. The account is theirs, not the platform's to
+// control, so its details are changed in their own dashboard, and the same
+// direct charges and application fee apply to it.
+//
 // v1 throughout, deliberately: `POST /v1/accounts` with controller properties,
 // and the v1 event names. There is a v2 Accounts API with its own thin
 // `v2.core.*` events; mixing the two would mean a reader of one set of names
@@ -48,7 +58,33 @@ export type Account = {
   charges_enabled?: boolean
   details_submitted?: boolean
   payouts_enabled?: boolean
+  /** `is_controller` true for an account the platform made; unset for one
+   * a seller connected */
+  controller?: { is_controller?: boolean }
 }
+
+/** Stripe's host for Connect's OAuth, and where a seller whose account the
+ * platform does not control changes its details: their own dashboard. */
+export let CONNECT = 'https://connect.stripe.com'
+export let DASHBOARD = 'https://dashboard.stripe.com/'
+
+/** What the shops are lent: the key and clock, and the platform's Connect
+ * `client_id` (ca_…), which a seller connects an account they already have
+ * through; without one they can only open a new one. */
+export type Options = Keyed & { client?: string }
+
+/// authorizeAt('ca_1', 's1', 'https://yaks.app/selling/callback') -> 'https://connect.stripe.com/oauth/authorize?response_type=code&client_id=ca_1&scope=read_write&state=s1&redirect_uri=https%3A%2F%2Fyaks.app%2Fselling%2Fcallback'
+/** The address of Stripe's page where a seller connects an account they
+ * already have. `read_write` is the only scope a platform may ask for, and
+ * `redirect_uri` must be one listed in the platform's OAuth settings. */
+export let authorizeAt = (client: string, state: string, back: string) =>
+  `${CONNECT}/oauth/authorize?${new URLSearchParams({
+    response_type: 'code',
+    client_id: client,
+    scope: 'read_write',
+    state,
+    redirect_uri: back,
+  })}`
 
 /** The slice of a completed Checkout Session read here. */
 export type Session = {
@@ -348,7 +384,7 @@ let termAt = async (options: Keyed, on: string, id: string) => {
 
 /** Stripe's shops, every call made with `options` as they read at the
  * time. */
-export let shops = (options: Keyed): Shops => {
+export let shops = (options: Options): Shops => {
   // The address of what one POST made, which Stripe always answers with.
   let made = async (
     what: string,
@@ -371,8 +407,32 @@ export let shops = (options: Keyed): Shops => {
       if (!a.id) throw new Error('stripe made an account with no id')
       return sellerOf(a)
     },
-    onboarding: (id, back) =>
-      made('an account link', '/v1/account_links', link(id, back)),
+    // An account the seller brought is not ours to onboard: Stripe makes no
+    // Account Link for it, and its owner finishes in their own dashboard.
+    onboarding: async (id, back) => {
+      let a = await ask(options, `/v1/accounts/${encodeURIComponent(id)}`)
+      return (a as Account).controller?.is_controller
+        ? await made('an account link', '/v1/account_links', link(id, back))
+        : DASHBOARD
+    },
+    authorize: (state, back) =>
+      options.client ? authorizeAt(options.client, state, back) : null,
+    // The code is good once, so the trade is never retried under a new key.
+    authorized: async (code) => {
+      let token = await ask(
+        options,
+        `${CONNECT}/oauth/token`,
+        { grant_type: 'authorization_code', code },
+        undefined,
+        'POST',
+        `oauth:${code}`,
+      )
+      let id = String(token.stripe_user_id ?? '')
+      if (!id) throw new Error('stripe connected an account with no id')
+      return sellerOf(
+        await ask(options, `/v1/accounts/${encodeURIComponent(id)}`) as Account,
+      )
+    },
     // On the seller's account: that one header is the whole of what makes it
     // their charge rather than the platform's.
     checkout: (on, sale) =>

@@ -32,6 +32,8 @@ import {
 import { platform as bindings } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { operators } from './operator-service-probe.ts'
+import type { D1Like } from '@yaks/d1'
+import { d1 } from '../../packages/d1/testing.ts'
 
 let platform = (vars: Vars = {}) => {
   let scenario = bindings(SECRET, { BUILDER: operators, ...vars })
@@ -441,4 +443,114 @@ test('the fee is whole basis points, and never more than the sale', async () => 
   assertEquals((await feeAt(env, setting(cookie, '10000'))).status, 200)
   assertEquals((await feeAt(env, setting(cookie, '0'))).status, 200)
   assertEquals(await sell.feeOf(dir), 0)
+})
+
+// ---- an account its owner already has (T-2970) ----------------------------
+
+let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
+
+// Stripe, as far as connecting an existing account reaches it: the code
+// traded for the account's id, and the account read back. Every other call
+// goes where it was going.
+let stripeLinks = (account: Record<string, unknown>) => {
+  let real = globalThis.fetch
+  let asked: string[] = []
+  let fetch = stub(globalThis, 'fetch', (url, init) => {
+    let at = new URL(String(url))
+    if (!at.host.endsWith('stripe.com')) return real(url, init)
+    asked.push(at.host + at.pathname)
+    return Promise.resolve(Response.json(
+      at.pathname == '/oauth/token' ? { stripe_user_id: account.id } : account,
+    ))
+  })
+  return { asked, [Symbol.dispose]: () => fetch.restore() }
+}
+
+// The provider handing someone back to the callback with `query`, signed in
+// as `who`.
+let returned = async (env: Env, query: string, who = ADA) =>
+  (await sell.callback({
+    env,
+    path: sell.CALLBACK,
+    space: null,
+    req: new Request(`https://yaks.app${sell.CALLBACK}?${query}`, {
+      headers: { cookie: await as(who) },
+    }),
+  }))!
+
+test('an account its owner already has is connected instead of a new one', async () => {
+  await using scenario = platform({
+    STRIPE_KEY: 'sk_probe',
+    STRIPE_CLIENT_ID: 'ca_probe',
+    VAULT: d1() as unknown as D1Like,
+    VAULT_KEY: KEY,
+  })
+  let { env } = scenario
+  let { space } = await seeded(env, 'public', scenario.dir)
+  await stamp(env, {
+    entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
+  })
+  let page = await (await apps.fetch(
+    new Request('https://yaks.app/manage/ada/selling', {
+      headers: { cookie: await as(ADA) },
+    }),
+    env,
+  )).text()
+  assertStringIncludes(page, 'Create a Stripe account')
+  assertStringIncludes(page, 'value="link"')
+  // Pressing it sends them to Stripe's own page, which hands them back to
+  // the callback with the state it was sent with.
+  let sent = await pressed(env, 'link')
+  assertEquals(sent.status, 303)
+  let to = new URL(sent.headers.get('location')!)
+  assertEquals(
+    to.origin + to.pathname,
+    'https://connect.stripe.com/oauth/authorize',
+  )
+  assertEquals(to.searchParams.get('client_id'), 'ca_probe')
+  assertEquals(
+    to.searchParams.get('redirect_uri'),
+    `https://yaks.app${sell.CALLBACK}`,
+  )
+  let state = to.searchParams.get('state')!
+  using s = stripeLinks({
+    id: 'acct_mine',
+    charges_enabled: true,
+    details_submitted: true,
+  })
+  // Somebody else's browser cannot finish it, and the attempt is spent.
+  let stranger = await returned(env, `code=ac_1&state=${state}`, 'someone')
+  assertEquals(stranger.headers.get('location'), sell.backTo(space, env))
+  assertEquals(await sold(env), null)
+  assertEquals(s.asked, [])
+  // Begun again and finished by its owner, the account is the space's seller,
+  // ready as Stripe says, and nothing new was opened at Stripe.
+  let again = new URL((await pressed(env, 'link')).headers.get('location')!)
+    .searchParams.get('state')!
+  let back = await returned(env, `scope=read_write&code=ac_2&state=${again}`)
+  assertEquals(back.status, 303)
+  assertEquals(back.headers.get('location'), sell.backTo(space, env))
+  assertStringIncludes(
+    decodeURIComponent(back.headers.get('set-cookie')!),
+    'Your Stripe account is connected.',
+  )
+  assertEquals(await sold(env), {
+    via: 'stripe',
+    account: 'acct_mine',
+    ready: true,
+    submitted: true,
+  })
+  assertEquals(s.asked, [
+    'connect.stripe.com/oauth/token',
+    'api.stripe.com/v1/accounts/acct_mine',
+  ])
+  // The same return twice connects nothing twice.
+  await returned(env, `code=ac_2&state=${again}`)
+  assertEquals(s.asked.length, 2)
+  // A space already taking payments is not offered a second account.
+  assertEquals((await pressed(env, 'link')).status, 400)
+  assertEquals(
+    await sell.linkable(env, (await scenario.dir.space('ada'))!),
+    false,
+  )
 })

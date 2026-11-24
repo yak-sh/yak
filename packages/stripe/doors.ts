@@ -13,11 +13,12 @@
 import type { Door, Heard } from '@yaks/host/payments'
 import { ours, refusal } from '@yaks/hook'
 import { changed, type Options as Priced } from './plans.ts'
-import { shopped } from './shops.ts'
+import { type Options as Shopping, shopped } from './shops.ts'
 
-/** What a config gives the provider: the plans' key, clock and prices, and
- * each door's signing secret by its name. A door with none hears nothing. */
-export type Options = Priced & {
+/** What a config gives the provider: the plans' key, clock and prices, the
+ * shops' Connect client, and each door's signing secret by its name. A door
+ * with none hears nothing. */
+export type Options = Priced & Shopping & {
   doors?: { webhook?: string; connect?: string }
 }
 

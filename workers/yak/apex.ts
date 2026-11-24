@@ -228,8 +228,8 @@ let atApex = async (req: Request, env: Env, path: string) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
-  // Crawlers, connection callbacks and the catalog's logos are the apex's
-  // own doors.
+  // Crawlers, connection callbacks, a seller's connected account and the
+  // catalog's logos are the apex's own doors.
   let said = await seo(req, path, env, () =>
     publisherPage.addresses(
       directory(bound(env.DIRECTORY, dirPart.fetch, env), {
@@ -240,6 +240,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
       env,
     )) ??
     await callback({ env, req, path, space: null }) ??
+    await sell.callback({ env, req, path, space: null }) ??
     await logoDoor(env, path)
   if (said) return said
   // The apex's public pages are cached behind a separate entrypoint; only

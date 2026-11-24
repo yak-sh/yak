@@ -107,7 +107,9 @@ space_sell:
   title: Connect Stripe to a space
   description: >-
     Connect this space to Stripe so its apps can take payments. Requires the
-    Plus plan and the space owner. The tool returns a link where the person
+    Plus plan and the space owner. This makes them a new Stripe account;
+    someone who already has one connects it on their space's Selling page
+    instead, so ask first. The tool returns a link where the person
     finishes setting up with Stripe (their name, their bank account,
     whatever Stripe asks); all of that happens at Stripe, and yaks.app never
     sees or holds any of it. They are the merchant: the charge, the money,

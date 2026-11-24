@@ -745,6 +745,9 @@ export type DeskPage = {
   viewDays?: number
   viewsOff?: string
   sell?: 'none' | 'setup' | 'ready'
+  /** whether the owner can connect a payment account they already have
+   * instead of opening one (sell.ts `linkable`) */
+  link?: boolean
   /** whether the platform's payment provider takes sellers at all, which
    * puts Selling in the side on every manage page */
   shops?: boolean

@@ -284,9 +284,11 @@ import {
   shellReceipt,
 } from '@yaks/machine/tools'
 import {
+  backTo as sellingAt,
   connect,
   disconnect,
   feeOf,
+  linkable,
   rate,
   refusedSell,
   selling,
@@ -4132,7 +4134,11 @@ let OURS: Row[] = [
           `statement, and refunds and disputes are theirs. We take ` +
           `${rate(await feeOf(ctx.dir))} ` +
           `of each sale. Call space_sell again for a fresh link — it opens the ` +
-          `same ${name} account, never a second one.`,
+          `same ${name} account, never a second one.` +
+          (await linkable(ctx.env, space)
+            ? ` If they already have a ${name} account they would rather ` +
+              `use, they connect it on ${sellingAt(space, ctx.env)} instead.`
+            : ''),
         space,
       }
     },

@@ -411,7 +411,8 @@ export type Shopped =
   )
 
 /** What a provider lends a party selling on an account of its own: the
- * account opened once and finished through the provider's onboarding, and
+ * account opened once and finished through the provider's onboarding, or one
+ * the seller already had and connected at the provider's own page, and
  * hosted checkouts on it, paid once or by subscription, which the host takes
  * a fee from. */
 export type Shops = {
@@ -424,8 +425,17 @@ export type Shops = {
    * and carrying `tags` */
   open: (who: { email?: string; tags: Tags }) => Promise<Seller>
   /** the address of the provider's onboarding for an account, handing them
-   * back to `back` when they finish or the address goes stale */
+   * back to `back` when they finish or the address goes stale: the provider's
+   * own page for an account the seller brought, which only they may change */
   onboarding: (account: string, back: string) => Promise<string>
+  /** the address of the provider's page where a seller connects an account
+   * they already have, handing them back to `back` with `state` and a code
+   * {@link authorized} reads; null where the provider cannot connect one
+   * here */
+  authorize: (state: string, back: string) => string | null
+  /** the account a seller connected at {@link authorize}, from the code they
+   * were handed back with, which is good once */
+  authorized: (code: string) => Promise<Seller>
   /** the address of a hosted checkout on a seller's account */
   checkout: (account: string, sale: Sale) => Promise<string>
   /** a checkout on a seller's account as it stands, read back by its id,

@@ -97,7 +97,7 @@ import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp, Taken } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
-import { reveal, sealed, SECRET, secretEid, unsealed } from '@yaks/secrets'
+import { reveal, SECRET } from '@yaks/secrets'
 import type { Service } from './connected.ts'
 import {
   type App,
@@ -126,6 +126,7 @@ import { held as live } from './browser-sessions.ts'
 import { type Ctx as Asking, EID, refuse } from './tool.ts'
 export { EID }
 import { vaulted, vaultOf } from './vault.ts'
+import { hold, take } from './attempts.ts'
 import { drawn } from './theirs.ts'
 import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 
@@ -133,9 +134,6 @@ import { adopting, BROKER, instructionsOf, offersOf } from './catalog.ts'
 export let CALLBACK = '/connections/callback'
 /** Where a service's webhooks for one app and connection arrive. */
 export let HOOKS = `${OURS}/hooks/`
-
-// The vault's name for an attempt waiting on its return, by its `state`.
-let pendingAt = (state: string) => `connect:${state}`
 
 // The biggest webhook body kept, as a store keeps it: one blob.
 let HOOK_ROOM = 1_000_000
@@ -1305,25 +1303,12 @@ let signingIn = async (
     back,
     ...app ? { app } : {},
   }
-  await ctxOf(env).graph.apply([
-    sealed(pendingAt(attempt.state), JSON.stringify(held)),
-  ])
+  await hold(env, ATTEMPT, attempt.state, held)
   return new Response(null, { status: 303, headers: { location: to } })
 }
 
-// The attempt a return names, taken from the vault so no other return can
-// finish it; nothing for a state that names none, or one already spent.
-let taken = async (env: Env, state: string | null): Promise<Held | null> => {
-  if (!state) return null
-  let name = pendingAt(state)
-  let vault = vaultOf(env)
-  return await vault.lock(secretEid(name), async () => {
-    let text = await reveal(vault, name, { env: () => undefined })
-    if (!text) return null
-    await ctxOf(env).graph.apply([unsealed(name)])
-    return JSON.parse(text) as Held
-  })
-}
+// The kind of attempt a connection's sign-in is held as (attempts.ts).
+let ATTEMPT = 'connect'
 
 /**
  * A POST from the connections page: a key pasted into a connection, a Connect
@@ -1608,7 +1593,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   let answer = (to: string) =>
     new Response(null, { status: 303, headers: { location: to } })
   let state = new URL(req.url).searchParams.get('state')
-  let held = await taken(env, state)
+  let held = await take<Held>(env, ATTEMPT, state)
   let dir = dirOf(env)
   let at = held ? await dir.space(held.space) : null
   let here = at && await whoIs(req, env, (p) => dir.role(at, p), at.eid)

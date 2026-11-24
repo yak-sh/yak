@@ -43,6 +43,8 @@ import {
   connect,
   disconnect,
   feeOf,
+  linkable,
+  linking,
   rate,
   refusedSell,
   selling,
@@ -950,6 +952,9 @@ let desk = async (
     // the platform's payment provider can be asked at all, since a button
     // that cannot work is worse than no block.
     sell: provider.shops.on() ? selling(space) : undefined,
+    link: view == 'selling' && provider.shops.on()
+      ? await linkable(env, space)
+      : undefined,
     shops: provider.shops.on(),
     provider: provider.name,
     paying: paid(space.tier),
@@ -1402,6 +1407,16 @@ let saved = async (
   if (till == 'stop') {
     if (space.seller?.account) await disconnect(env, space)
     return redirect(sentFrom(req, env).href, 303)
+  }
+  // "I already have one": the provider's page where the owner connects an
+  // account they have, which hands them back to sell.ts `callback`.
+  if (till == 'link') {
+    try {
+      return redirect(await linking(env, space, who.person), 303)
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return refused('selling', { say: sentence(e.message), no: true })
+    }
   }
   if (till == 'start') {
     let no = refusedSell(space, env)

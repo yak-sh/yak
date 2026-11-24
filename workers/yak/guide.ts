@@ -404,7 +404,9 @@ page mail for the whole thing (${url(env, '/docs/mail.md')}).
 
 A store on Plus can take payments without keys or code. The seller connects
 an account of their own at the payment provider to their space once
-(space_sell, or the button on their space page), and after that any app in it
+(space_sell, or the button on their space page). space_sell makes a new
+account; someone who already has one connects it from the Selling page instead,
+so ask first. After that any app in it
 posts a cart to ./api/pay/checkout — items: [{product: eid, qty, options}] —
 and is answered {url}, the provider's payment page to send the buyer to. That endpoint reads
 price_cents and the title off each product row in the app's own store, so a page

@@ -64,10 +64,17 @@ After a downgrade, existing orders, refunds and disputes still update, and the
 Stripe account stays connected. See <https://yaks.app/pricing> for plans.
 
 The seller connects once per space, not per app: with the `space_sell` tool, or
-the button on the space's own page. Either opens Stripe's own onboarding, where
-the seller enters their business details and bank account, and returns them to
-yaks.app when it is finished. Stripe decides when the account may accept
-charges, and the space records that as `seller.ready`.
+the button on the space's Selling page. Either makes a new Stripe account and
+opens Stripe's own onboarding, where the seller enters their business details
+and bank account, and returns them to yaks.app when it is finished. Stripe
+decides when the account may accept charges, and the space records that as
+`seller.ready`.
+
+A seller who already has a Stripe account connects it instead, from the link
+under that button on the Selling page: Stripe asks them to sign in and allow
+yaks.app, and hands them back. The space then sells through that account exactly
+as through a new one, at the same fee. Its details are changed in the seller's
+own Stripe Dashboard. An account sells for one space at a time.
 
 Until then the checkout endpoint refuses with `409` and the code `not_selling`,
 so a page can show "this shop is not open yet" instead of failing when somebody
