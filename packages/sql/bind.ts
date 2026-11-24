@@ -2798,19 +2798,21 @@ let implied = (ctx: Ctx, c: Clause): string[] => {
 // An OR's indexed arms are selected before the outer WHERE is applied. Carry
 // its required components and exact entity addresses into each arm: applying
 // the narrowing only outside a UNION still scans every entity inside it.
-// Nested disjunctions inherit the same scope.
+// Correlated alternatives filter the same row as the outer WHERE, which
+// already applies those predicates once.
 let addressed = (
   ctx: Ctx,
   cs: Clause[],
   shapes: Map<Clause, Cond>,
 ): Clause[] => {
+  if (ctx.row || ctx.correlated) return cs
   let scope = cs.filter((c): c is Pred =>
     c.kind == 'pred' && !c.not && !c.where && !claims(ctx, 'pred') &&
     (c.path.join('.') == 'entity.eid' && c.op == '=' && c.value != null ||
       c.path.length == 1 && c.op == '!' ||
       c.path.length == 2 && needs(opOf(c), c.value) && carried(ctx, c))
   )
-  return scope.length && !ctx.row
+  return scope.length
     ? cs.map((c) =>
       c.kind == 'or' && !shapes.has(c)
         ? {

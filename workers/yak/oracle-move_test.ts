@@ -3,8 +3,10 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { OWNERS } from '@yaks/platform/operator-owner'
-import { operatorStore } from './operator-store.ts'
+import { MEMORY_OWNERS } from '@yaks/platform/operator-memory'
+import { operatorStore, operatorVocab } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
+import { snapshot } from '../../packages/sqlite/testing.ts'
 import { operatorApi } from './operator-api.ts'
 import { seenBy } from './operator-access.ts'
 import {
@@ -18,6 +20,53 @@ import { oracleOf } from './operator-oracles.ts'
 import { state } from './testing.ts'
 
 let id = () => crypto.randomUUID()
+
+test('members and guests can read whole Operator sessions while oracle quarantine is pending', async () => {
+  using db = durable(snapshot(operatorVocab))
+  let store = await operatorStore(db)
+  for (let mark of [OWNERS, MEMORY_OWNERS]) store.marks!.set(mark, 'done')
+  let [person, other, space, session, hidden, entry] = Array.from(
+    { length: 6 },
+    id,
+  )
+  let topic = id()
+  let source = derivedEid(`operator-oracle|memories|${topic}`)
+  await store.g.apply([
+    {
+      entity: { eid: session },
+      session: {},
+      operator_session: { person, space },
+    },
+    {
+      entity: { eid: hidden },
+      session: {},
+      operator_session: { person: other, space },
+    },
+    {
+      entity: { eid: entry },
+      entry: { session, seq: 1 },
+      content: { body: 'Hello' },
+    },
+    { entity: { eid: topic }, topic: { name: 'Legacy projection' } },
+    { entity: { eid: source }, entry: { session, seq: 2 }, stop: {} },
+    link(topic, 'contains', source),
+  ], { trusted: true })
+  let reads = () =>
+    Promise.all(
+      [true, false].map((member) =>
+        seenBy(store, { person, member }).read('.session')
+      ),
+    )
+  let before = await reads()
+  for (let rows of before) {
+    equal(rows.map((b) => [b.entity.eid, (b.session as Comp).status]), [
+      [session, 'running'],
+    ])
+  }
+  equal(await oracleBackfill(store), false)
+  equal(await reads(), before)
+})
+
 let [person, other, space, subject] = Array.from({ length: 4 }, id)
 let base = await operatorStore(durable())
 let kept = new Map<string, string>()

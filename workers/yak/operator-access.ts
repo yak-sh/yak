@@ -160,11 +160,13 @@ export let theirFiles = async (
 // Until the alarm quarantines old projections, hide their topics, links and
 // sources through their existing links. Policy relations inspect the underlying
 // graph, so hiding a topic cannot make its source appear unlinked and public.
-let oracles = (person: string) =>
+// Once owners are written, the owner policy already screens every tagged
+// projection, including quarantined rows whose owner names nobody.
+let oracles = (person: string, kept: boolean) =>
   or(
-    eq('operator_oracle.person', person),
+    kept ? present('operator_oracle') : eq('operator_oracle.person', person),
     and(
-      absent('operator_oracle'),
+      ...kept ? [] : [absent('operator_oracle')],
       absent('topic'),
       absent('edge.from.topic'),
       absent('edge.to.topic'),
@@ -189,23 +191,26 @@ export type Reader = { person: string; member: boolean }
 export let sight = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
   { person, member }: Reader,
-): ReadOpts => ({
-  visibility: {
-    entity: and(
-      visibleOwner(person, member, owned(store)),
-      ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
-      ...store.marks && store.marks.get(MEMORY_OWNERS) != 'done'
-        ? [
-          or(
-            absent('memory'),
-            present('operator_memory'),
-            eq('owner.person', person),
-          ),
-        ]
-        : [],
-    ),
-  },
-})
+): ReadOpts => {
+  let kept = owned(store)
+  return {
+    visibility: {
+      entity: and(
+        visibleOwner(person, member, kept),
+        ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person, kept)],
+        ...store.marks && store.marks.get(MEMORY_OWNERS) != 'done'
+          ? [
+            or(
+              absent('memory'),
+              present('operator_memory'),
+              eq('owner.person', person),
+            ),
+          ]
+          : [],
+      ),
+    },
+  }
+}
 
 // Each id a batch names, a bundle's own and every reference's, with the kind
 // the reference declares, as the write resolves them (@yaks/graph `apply`).
