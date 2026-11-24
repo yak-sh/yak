@@ -3,7 +3,9 @@ import { test } from '@yaks/testing'
 import { DOMParser, parseHTML } from 'linkedom'
 import type { HistoryEntry } from './history.ts'
 import {
+  AHEAD,
   arrived,
+  FRESH,
   LEAVE,
   leaving,
   morph,
@@ -132,10 +134,14 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
   let win = {
     document: doc,
     location,
-    addEventListener: (type: string, fn: EventListener) =>
-      doc.addEventListener(type, fn),
-    fetch: (url: string) => {
-      fetched.push(url)
+    addEventListener: (
+      type: string,
+      fn: EventListener,
+      o?: AddEventListenerOptions,
+    ) => doc.addEventListener(type, fn, o),
+    fetch: (url: string, init: RequestInit = {}) => {
+      let ahead = new Headers(init.headers).get(AHEAD)
+      fetched.push(ahead ? `${url} ${ahead}` : url)
       let to = new URL(url)
       let html = pages[to.pathname]
       return Promise.resolve(
@@ -163,16 +169,21 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
   let swapped = new Promise<Swapped>((done) =>
     doc.addEventListener(PAGE, (e) => done((e as CustomEvent<Swapped>).detail))
   )
+  let drawn: Swapped[] = []
+  doc.addEventListener(PAGE, (e) => drawn.push((e as CustomEvent).detail))
   let left = 0
   doc.addEventListener(LEAVE, () => left++)
-  let go = start(win, history, () => 0)
+  let time = 0
+  let go = start(win, history, () => time)
   let view = doc.defaultView as unknown as typeof globalThis
-  let click = (selector: string, init: MouseEventInit = {}) => {
-    let e = new view.Event('click', { bubbles: true, cancelable: true })
+  let press = (type: string, selector: string, init: MouseEventInit = {}) => {
+    let e = new view.Event(type, { bubbles: true, cancelable: true })
     Object.assign(e, init)
     doc.querySelector(selector)!.dispatchEvent(e)
     return e.defaultPrevented
   }
+  let click = (selector: string, init: MouseEventInit = {}) =>
+    press('click', selector, init)
   let back = (path: string) => {
     at = new URL(path, at)
     pop!({ path, state: null })
@@ -183,10 +194,13 @@ let browsing = (pages: Record<string, string>, path = '/apps') => {
     fetched,
     entries,
     swapped,
+    drawn,
+    press,
     click,
     back,
     go,
     left: () => left,
+    tick: (ms: number) => void (time += ms),
   }
 }
 
@@ -275,6 +289,56 @@ test('Back swaps the page it comes to without a new history entry', async () => 
   await b.swapped
   assertEquals(b.doc.querySelector('h1')?.textContent, 'Apps')
   assertEquals(b.entries, [])
+})
+
+// Every promise already settled has run its callbacks.
+let settled = () => new Promise((done) => setTimeout(done, 0))
+
+test('a page touched ahead draws in the click, then its opened answer lays over it where it changed', async () => {
+  let pages = { ...site }
+  let b = browsing(pages)
+  b.press('touchstart', 'a[href="/updates"]')
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/updates prefetch'])
+  pages['/updates'] = framed('updates', '<h1>Updates</h1><p>read</p>')
+  b.click('a[href="/updates"]')
+  await settled()
+  assertEquals(b.drawn.map((d) => [d.from, d.phases.wait]), [
+    ['held', 0],
+    ['fresh', 0],
+  ])
+  assertEquals(b.fetched.at(-1), 'https://y.test/updates')
+  assertEquals(b.doc.querySelector('p')?.textContent, 'read')
+  assertEquals(b.entries.map((e) => e.path), ['/updates'])
+})
+
+test('a page opened before draws at once, and is asked for again once it is old', async () => {
+  let b = browsing(site)
+  await b.go(new URL('https://y.test/updates'))
+  await b.go(new URL('https://y.test/apps'))
+  await b.go(new URL('https://y.test/updates'))
+  assertEquals(
+    b.fetched.length,
+    2,
+    'the page opened just now is not asked again',
+  )
+  b.tick(FRESH)
+  await b.go(new URL('https://y.test/apps'))
+  await settled()
+  assertEquals(b.drawn.map((d) => d.from), ['fetch', 'fetch', 'held', 'held'])
+  assertEquals(
+    b.fetched.length,
+    3,
+    'asked again, and the same page laid over nothing',
+  )
+})
+
+test('sending a form lets go of every page held', async () => {
+  let b = browsing(site)
+  b.press('mousedown', 'a[href="/updates"]')
+  b.press('submit', 'nav')
+  await b.go(new URL('https://y.test/updates'))
+  assertEquals(b.drawn.map((d) => d.from), ['fetch'])
 })
 
 test('a script binds what each page brings once, and lets go when its page leaves', () => {

@@ -1,10 +1,12 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
 // Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
-// import at most @yaks/platform/cookie, so the front Worker can hold it.
+// import at most @yaks/platform/cookie, and @yaks/ui/navigate's
+// `lookingAhead`, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
 import { PATHS } from './variant.ts'
+import { lookingAhead } from '@yaks/ui/navigate'
 
 export type { Visited }
 
@@ -128,10 +130,10 @@ export let stepOf = (
 
 /** Whether this answer at the apex is a person opening one of its pages: a
  * GET answered with a page, or a 304 for a page the browser holds, by a
- * browser rather than a crawler. */
+ * browser rather than a crawler, and opened rather than fetched ahead. */
 export let isPage = (req: Request, res: Response) =>
   req.method == 'GET' && (res.status == 304 || isView(res)) &&
-  isPerson(req)
+  isPerson(req) && !lookingAhead(req)
 
 /** Whether this answer at the apex is a person visiting a home page: a GET
  * of `/` or of a home page's own address (variant.ts) that was answered, from

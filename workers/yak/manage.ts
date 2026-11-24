@@ -3,6 +3,7 @@
 // first request to `/manage`, so an isolate that only serves pages never
 // compiles it (T-148886).
 import { copyOf } from './directory-copy.ts'
+import { lookingAhead } from '@yaks/ui/navigate'
 import { spaceHost, url as hostUrl } from '@yaks/platform/host'
 import { browserImmutable } from '@yaks/platform/kept'
 import { heard, type Said, telling, unsaid } from '@yaks/platform/cookie'
@@ -418,6 +419,7 @@ export let manage = async (
       who,
       await beside(env, dir, space, who),
       new URL(req.url).searchParams.has('dismissed'),
+      !lookingAhead(req),
     )
   }
   // Its Matches are its members' to pick in (matches.ts).
@@ -750,6 +752,7 @@ let everyUpdate = async (
     held,
     await beside(env, dir, home.space, home.who),
     apps,
+    !lookingAhead(req),
   )
 }
 

@@ -306,25 +306,49 @@ export type Browsing =
   >
   & { DOMParser: typeof DOMParser }
 
-/** Where a click's time went, in milliseconds: waiting for the answer's
- * head, reading its body, parsing it, and laying it over the page. */
-export type Phases = {
-  fetch: number
-  read: number
-  parse: number
-  swap: number
-}
+/** Where a click's time went, in milliseconds: waiting for the page whole
+ * (nothing, for one already held), parsing it, and laying it over the page. */
+export type Phases = { wait: number; parse: number; swap: number }
+
+/** Where the page a swap drew came from: fetched on the click (`fetch`),
+ * held already, fetched ahead or opened before (`held`), or the answer
+ * asked for after drawing a held one, laid over it (`fresh`). */
+export type From = 'fetch' | 'held' | 'fresh'
 
 /** What a swap said once done: when the click was (`began`, on the clock
  * `start` was given), how long it took to the new page, in milliseconds,
- * where that time went, and what changed. The detail of `yak-page`. */
+ * where that time went, where the page came from, and what changed. The
+ * detail of `yak-page`. */
 export type Swapped = {
   ms: number
   began: number
   phases: Phases
+  from: From
   tally: Tally
   url: string
 }
+
+/** The header a page fetched ahead carries: the person has not opened it
+ * yet, so the server reads it without doing what opening it does (marking
+ * what it shows read, counting a view). Browsers' own prefetches say so in
+ * `Sec-Purpose`, which a script cannot set. */
+export let AHEAD = 'purpose'
+
+/** Whether a request only looks ahead at a page (`AHEAD`, or a browser's
+ * own prefetch), rather than a person opening it. */
+/// lookingAhead(new Request('https://y.test/', { headers: { purpose: 'prefetch' } })) -> true
+/// lookingAhead(new Request('https://y.test/')) -> false
+export let lookingAhead = (req: Request): boolean =>
+  /prefetch/.test(
+    req.headers.get('sec-purpose') ?? req.headers.get(AHEAD) ?? '',
+  )
+
+/** How long a page held stays good enough to draw without asking for it
+ * again, in milliseconds, and how many pages are held. */
+export let FRESH = 10_000
+export let HELD = 24
+/** How long a pointer stays over a link before its page is asked for. */
+export let INTENT = 60
 
 // Where a page's content is: what its skip link names, else its `main`.
 let content = (doc: Document) => {
@@ -341,12 +365,49 @@ let tell = (doc: Document, type: string, detail?: unknown) => {
   doc.dispatchEvent(new view.CustomEvent(type, { bubbles: true, detail }))
 }
 
+// The page a link leads to, where the navigator follows it: a link of the
+// same origin, to another page, that the browser is not asked to keep to
+// itself (a new window, a download, a modifier key).
+let followed = (
+  e: MouseEvent | Event,
+  base: string,
+  here: string,
+): URL | null => {
+  let link = (e.target as Element | null)?.closest?.('a[href]') as
+    | HTMLAnchorElement
+    | null
+  let m = e as MouseEvent
+  if (
+    !link || e.defaultPrevented || m.button > 0 || m.metaKey || m.ctrlKey ||
+    m.shiftKey || m.altKey || link.hasAttribute('download') ||
+    (link.target && link.target != '_self')
+  ) return null
+  let to = new URL(link.getAttribute('href')!, base)
+  if (to.origin != new URL(base).origin) return null
+  if (page(to) == here && (to.hash || to.href.endsWith('#'))) return null
+  return to
+}
+
+/** A page answered: its document's words and where it was answered from. */
+type Answer = { text: string; url: string }
+/** A page held: its answer, or null where it cannot be swapped in, when it
+ * was asked for, and whether it was only looked ahead at. */
+type Held = { answer: Promise<Answer | null>; at: number; ahead: boolean }
+
 /**
  * Follow the links of `win`'s pages in place: a click on a link to another
- * page of the same origin, and Back and Forward between such pages, fetch it
- * and `swap` it in. The new page's content (`content`) starts at its top and
- * takes the focus, as a new document would. Answers `go`, which visits an
- * address the same way.
+ * page of the same origin, and Back and Forward between such pages, `swap`
+ * it in. The new page's content (`content`) starts at its top and takes the
+ * focus, as a new document would. Answers `go`, which visits an address the
+ * same way.
+ *
+ * A page is drawn in the frame of the click when it is held: fetched ahead
+ * as a pointer rests on its link, presses it or a finger touches it
+ * (`AHEAD`), or
+ * opened before. The `HELD` pages opened last are held. A held page older
+ * than `FRESH`, or one only looked ahead at, is asked for again once drawn,
+ * and laid over what was drawn where it changed. Sending a form lets go of
+ * every held page.
  */
 export let start = (
   win: Browsing,
@@ -356,38 +417,51 @@ export let start = (
   let doc = win.document
   let ran = sources(doc, win.location.href)
   let here = page(win.location)
-  let pending: AbortController | undefined
+  let turn = 0
+  let pages = new Map<string, Held>()
   // Back and Forward have already moved the address: the page loads there.
   let load = (to: URL, pop = false) =>
     pop ? win.location.replace(to.href) : win.location.assign(to.href)
-  let go = async (to: URL, pop = false) => {
-    if (stays(doc)) return load(to, pop)
-    pending?.abort()
-    let mine = pending = new AbortController()
-    let began = now()
-    let lap = began
-    let split = () => {
-      let at = now(), took = at - lap
-      lap = at
-      return took
-    }
+  let fetched = async (to: URL, ahead: boolean): Promise<Answer | null> => {
     let answer = await win.fetch(to.href, {
-      headers: { accept: 'text/html' },
+      headers: ahead
+        ? { accept: 'text/html', [AHEAD]: 'prefetch' }
+        : { accept: 'text/html' },
       credentials: 'same-origin',
-      signal: mine.signal,
     }).catch(() => null)
-    if (mine != pending) return
     let type = answer?.headers.get('content-type') ?? ''
-    if (!answer || !type.includes('text/html')) return load(to, pop)
-    let fetch = split()
+    if (!answer || !type.includes('text/html')) return null
     let text = await answer.text().catch(() => null)
-    if (mine != pending) return
-    if (text == null) return load(to, pop)
-    let read = split()
-    let next = new win.DOMParser().parseFromString(text, 'text/html')
-    let parse = split()
-    if (!next.querySelector(`script[${TAKES}]`)) return load(to, pop)
-    let at = new URL(answer.url || to.href)
+    return text == null ? null : { text, url: answer.url || to.href }
+  }
+  let ask = (to: URL, ahead = false): Held => {
+    let key = page(to)
+    let held: Held = { answer: fetched(to, ahead), at: now(), ahead }
+    pages.delete(key)
+    pages.set(key, held)
+    for (let old of pages.keys()) {
+      if (pages.size <= HELD) break
+      pages.delete(old)
+    }
+    held.answer.then((a) => a || pages.get(key) != held || pages.delete(key))
+    return held
+  }
+  let fresh = (held: Held | undefined): held is Held =>
+    !!held && now() - held.at < FRESH
+  // Draw `answer` as the page at `to`; false where it cannot be.
+  let draw = (
+    to: URL,
+    answer: Answer,
+    from: From,
+    began: number,
+    wait: number,
+    pop: boolean,
+  ) => {
+    let lap = now()
+    let next = new win.DOMParser().parseFromString(answer.text, 'text/html')
+    let parse = now() - lap
+    if (!next.querySelector(`script[${TAKES}]`)) return false
+    let at = new URL(answer.url)
     at.hash = to.hash
     let tally: Tally
     try {
@@ -397,13 +471,14 @@ export let start = (
       // A page half laid over is no page: the next loads as a document, and
       // the reporter hears why (M-37965).
       globalThis.reportError?.(error)
-      return load(at, pop)
+      return false
     }
-    if (!pop) {
+    let first = from != 'fresh'
+    if (first && !pop) {
       history.write({ path: at.pathname + at.search + at.hash, state: null })
     }
     here = page(at)
-    if (!pop) {
+    if (first && !pop) {
       let target = at.hash &&
         doc.getElementById(decodeURIComponent(at.hash.slice(1)))
       let main = content(doc) as HTMLElement | null
@@ -414,29 +489,56 @@ export let start = (
       }
       main?.focus?.({ preventScroll: true })
     }
-    pending = undefined
-    let phases = { fetch, read, parse, swap: split() }
+    let end = now()
+    let phases = { wait, parse, swap: end - lap - parse }
     let detail: Swapped = {
-      ms: lap - began,
+      ms: end - began,
       began,
       phases,
+      from,
       tally,
       url: at.href,
     }
     tell(doc, PAGE, detail)
+    return true
   }
+  let go = async (to: URL, pop = false) => {
+    if (stays(doc)) return load(to, pop)
+    let mine = ++turn
+    let began = now()
+    let held = pages.get(page(to))
+    let from: From = held ? 'held' : 'fetch'
+    let using = held ?? ask(to)
+    let answer = await using.answer
+    if (mine != turn) return
+    if (!answer || !draw(to, answer, from, began, now() - began, pop)) {
+      return load(answer ? new URL(answer.url) : to, pop)
+    }
+    if (!held || (fresh(held) && !held.ahead)) return
+    let again = now()
+    let newer = await ask(to).answer
+    if (mine != turn || !newer || newer.text == answer.text) return
+    if (!draw(to, newer, 'fresh', again, now() - again, true)) {
+      load(new URL(newer.url), true)
+    }
+  }
+  let ahead = (e: Event) => {
+    let to = followed(e, win.location.href, here)
+    if (to && !fresh(pages.get(page(to)))) ask(to, true)
+  }
+  // A pointer passing over a link on its way elsewhere does not ask for it;
+  // one that stays `INTENT` milliseconds, or presses, does.
+  let hovering: ReturnType<typeof setTimeout> | undefined
+  win.addEventListener('mouseover', (e: MouseEvent) => {
+    clearTimeout(hovering)
+    hovering = setTimeout(() => ahead(e), INTENT)
+  })
+  win.addEventListener('mousedown', ahead)
+  win.addEventListener('touchstart', ahead, { passive: true })
+  win.addEventListener('submit', () => pages.clear())
   win.addEventListener('click', (e: MouseEvent) => {
-    let link = (e.target as Element | null)?.closest?.('a[href]') as
-      | HTMLAnchorElement
-      | null
-    if (
-      !link || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey ||
-      e.shiftKey || e.altKey || link.hasAttribute('download') ||
-      (link.target && link.target != '_self')
-    ) return
-    let to = new URL(link.getAttribute('href')!, win.location.href)
-    if (to.origin != win.location.origin) return
-    if (page(to) == here && (to.hash || to.href.endsWith('#'))) return
+    let to = followed(e, win.location.href, here)
+    if (!to) return
     e.preventDefault()
     go(to)
   })

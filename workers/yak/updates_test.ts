@@ -10,6 +10,7 @@ import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { lastDayLine, updates } from './updates.ts'
+import { AHEAD } from '@yaks/ui/navigate'
 import type { Telling } from './operator-updates.ts'
 import { SPACE } from './build-door.ts'
 
@@ -107,10 +108,10 @@ test('an update’s words, and a question that needs the person, are drawn from 
 let across = async () => {
   let own = (await k.dir.own(other.person))!
   let club = (await k.dir.at(eids[slug]))!
-  let get = (path: string, accept = 'text/html') =>
+  let get = (path: string, accept = 'text/html', more = {}) =>
     k.at('yaks.app', path, {
       redirect: 'manual',
-      headers: { cookie: other.cookie, accept },
+      headers: { cookie: other.cookie, accept, ...more },
     })
   let waiting = async () =>
     await (await get(`${talkPath('updates')}?waiting`, 'application/json'))
@@ -153,6 +154,11 @@ test('every space’s Updates in one place: labelled, counted from each space’
   assertEquals(counted[club.slug] >= 1 && counted[own.slug] >= 1, true)
   assertEquals(counted[club.slug], await badge(club))
   assertEquals(counted[own.slug], await badge(own))
+  let ahead = await get(talkPath('updates'), 'text/html', {
+    [AHEAD]: 'prefetch',
+  })
+  await ahead.body?.cancel()
+  assertEquals(await waiting(), counted, 'a page fetched ahead reads nothing')
   let page = parseHTML(await (await get(talkPath('updates'))).text())
     .document
   let cards = [...page.querySelectorAll('.Update')].map((c) => ({

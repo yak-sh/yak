@@ -5,7 +5,8 @@
  *
  * Each click is written to the browser's performance timeline as a
  * `yak-page` measure, from the click to the frame that draws the new page,
- * its detail where the time went (`Swapped`). `yak admin browse` reads them
+ * its detail where the page came from and where the time went (`Swapped`);
+ * a held page asked for again and laid over is one more, from `fresh`. `yak admin browse` reads them
  * back, which is how a slow click is seen as a number.
  *
  * @module
@@ -16,7 +17,8 @@ import { browserHistory } from './history.ts'
 if (typeof document != 'undefined') {
   start(globalThis.window, browserHistory())
   document.addEventListener(PAGE, (e) => {
-    let { began, phases, url, tally } = (e as CustomEvent<Swapped>).detail
+    let { began, phases, from, url, tally } = (e as CustomEvent<Swapped>)
+      .detail
     let swapped = performance.now()
     requestAnimationFrame(() => {
       let end = performance.now()
@@ -24,7 +26,7 @@ if (typeof document != 'undefined') {
       performance.measure('yak-page', {
         start: began,
         end,
-        detail: { url, ...phases, frame, made: tally.made },
+        detail: { url, from, ...phases, frame, made: tally.made },
       })
     })
   })

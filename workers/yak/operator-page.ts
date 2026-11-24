@@ -2546,20 +2546,22 @@ let updateColumn = (space: Space, who: Who) => ({
 })
 
 /** Updates from the Operator (updates.ts), beside the chat app's side, or
- * with `dismissed` the notices the person dismissed. */
+ * with `dismissed` the notices the person dismissed. `opened` says the
+ * person opened them, rather than the page being fetched ahead. */
 export let updatesPage = async (
   env: Env,
   space: Space,
   who: Who,
   beside: Beside = {},
   dismissed = false,
+  opened = true,
 ) => {
   // Opening them reads them, and the count beside them goes with it. The
   // rows of their servers' lists that wait on them are here too, before
   // their Updates.
   let lists = reading(env, space, who)
   let [news, views, , put, friends] = await Promise.all([
-    updatesOf(env, space, who, !dismissed),
+    updatesOf(env, space, who, opened && !dismissed),
     visitsOf(env, beside.apps ?? []),
     lists.listing,
     dismissed ? dismissedOf(env, space, who) : undefined,
@@ -2613,19 +2615,21 @@ export let updatesPage = async (
 
 /** The person's Updates from every space's Operator together
  * (updates.ts `allUpdates`), beside the chat app's side of `home`, the
- * space they came from. Opening them reads them, in every space. `apps` are
- * each space's the person may open, by slug. */
+ * space they came from. Opening them reads them, in every space, where
+ * `opened` says the person did. `apps` are each space's the person may
+ * open, by slug. */
 export let allUpdatesPage = async (
   env: Env,
   home: Seat,
   seats: Seat[],
   beside: Beside,
   apps: Promise<Map<string, Apps>>,
+  opened = true,
 ) => {
   let { space, who } = home
   let lists = reading(env, space, who)
   let [news, shelves] = await Promise.all([
-    updatesAcross(env, seats, { seen: true }),
+    updatesAcross(env, seats, { seen: opened }),
     apps,
     lists.listing,
   ])
