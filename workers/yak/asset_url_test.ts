@@ -48,6 +48,11 @@ test('release URLs keep local assets under their mount', () => {
   assertEquals(about('../styles/main.css'), file)
   assertEquals(about('./me.png'), `${at}api/assets/${id}/about/me.png`)
   assertEquals(about('../../elsewhere.js'), '../../elsewhere.js')
+  let ambiguous = 'https://shop.example//other.example/look.css'
+  assertEquals(
+    assetUrl(ambiguous, '/', '/', id, () => false, 'https://shop.example/'),
+    ambiguous,
+  )
   // A worker's page moves only what the release holds.
   let held = (ref: string) =>
     assetUrl(ref, at, at, id, () => false, at, (p) => p == 'a b.svg')

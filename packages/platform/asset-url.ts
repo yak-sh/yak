@@ -31,7 +31,10 @@ export let localAsset = (
   } catch {
     return null
   }
-  if (url.origin != from.origin || url.username || url.password) return null
+  if (
+    url.origin != from.origin || url.username || url.password ||
+    url.pathname.startsWith('//')
+  ) return null
   if (reserved(url.pathname)) return null
   let path = url.pathname.startsWith(mount)
     ? url.pathname.slice(mount.length)

@@ -175,10 +175,13 @@ export let namedWorkerAsset = async (
   if (!matching && page.ok && page.status != 206) {
     await found.page.body?.cancel()
     let visible = new URL(req.headers.get(ADDRESS) ?? req.url)
+    visible.search = original.search
     return new Response(null, {
       status: 307,
       headers: {
-        location: visible.pathname + original.search,
+        location: visible.pathname.startsWith('//')
+          ? visible.href
+          : visible.pathname + visible.search,
         'cache-control': 'private, no-store',
       },
     })
