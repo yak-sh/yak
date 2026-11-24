@@ -771,8 +771,8 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { site: owned(text), at: owned(time) },
     },
-    // What a space just spent on its month: a letter, a build, a model call, a
-    // voice's lease, an app's text, container seconds. The directory adds it to the `meter`
+    // What a space just spent on its month: a letter, a model call, a voice's
+    // lease, an app's text, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at
     // once both count, and takes it off again: it is never kept. A `held`
     // spend is a model call or a voice's lease holding its most before it
@@ -789,7 +789,6 @@ export let directoryDoc: VocabDoc = {
         month: text,
         held: { type: 'boolean' },
         emails: num,
-        builds: num,
         models: num,
         realtime: num,
         texts: num,

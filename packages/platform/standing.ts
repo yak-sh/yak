@@ -9,7 +9,6 @@ import {
   allowance,
   BUDGET,
   budgeted,
-  builds,
   ceilings,
   FILES,
   letters,
@@ -155,8 +154,8 @@ export let planName = (tier: Tier | null): string =>
  *
  * equal(
  *   planned({ slug: 'yourname', tier: 'plus' }),
- *   'yourname is on the Plus plan: as many apps as it likes, 2,500 emails, ' +
- *     '100 built-in builds and 36,000 compute seconds a month.',
+ *   'yourname is on the Plus plan: as many apps as it likes, 2,500 emails and ' +
+ *     '36,000 compute seconds a month.',
  * )
  * ```
  */
@@ -164,9 +163,7 @@ export let planned = (space: Pick<Metered, 'slug' | 'tier'>): string => {
   let apps = ceilings(space.tier, space.slug)?.apps
   return `${space.slug} is on ${planName(space.tier)}: ${
     apps == null ? 'as many apps as it likes' : `${count(apps)} apps`
-  }, ${count(letters(space.tier))} emails, ${
-    count(builds(space.tier))
-  } built-in builds and ${
+  }, ${count(letters(space.tier))} emails and ${
     count(allowance('seconds', space.tier))
   } compute seconds a month.`
 }
@@ -290,7 +287,6 @@ let NAME: Record<Ceiling, string> = {
   bytes: 'app data',
   files: 'photos and files',
   emails: 'emails',
-  builds: 'builds',
   seconds: 'compute seconds',
 }
 
@@ -300,7 +296,6 @@ let READ: Record<Ceiling, (g: Gauge) => string> = {
   bytes: (g) => `${size(g.used)} of ${size(g.limit)} of app data`,
   files: (g) => `${size(g.used)} of ${size(g.limit)} of photos and files`,
   emails: (g) => `${count(g.used)} of ${count(g.limit)} emails`,
-  builds: (g) => `${count(g.used)} of ${count(g.limit)} builds`,
   seconds: (g) => `${count(g.used)} of ${count(g.limit)} compute seconds`,
 }
 
@@ -362,7 +357,6 @@ export let atCeiling = (
 ): string => {
   if (space.newcomer && what != 'apps' && budgeted(what)) return UNKEPT
   let free = ceilings(space.tier, space.slug)!
-  // Comped spaces can hit the letter/build allowances, not the app ceiling.
   let said = {
     apps: () =>
       `${space.slug} is on ${
@@ -378,13 +372,6 @@ export let atCeiling = (
         count(letters(space.tier))
       } emails a month, and this month's are sent — it can send ` +
       `again on the 1st, and letters written to it still arrive`,
-    // The month's built-in builds, used (T-1655: nothing counts them since
-    // the builder was deleted).
-    builds: () =>
-      `${space.slug} is on ${planName(space.tier)}, which is ${
-        count(builds(space.tier))
-      } built-in builds a month, and this month's are used — it ` +
-      `can build again on the 1st, or keep building with a connected agent`,
     // Every model call on the space stops here, the Operator's and its apps'
     // alike, so it names neither: models answer again on the 1st. Voice
     // spends the same dollars, so each sentence says both.
@@ -433,14 +420,15 @@ export let UNKEPT: string =
  * equal(
  *   beyond(),
  *   '$100 of AI use a month, 50 GB of app data, 250 GB of photos and ' +
- *     'files, 10,000 emails and 500 built-in builds a month',
+ *     'files and 10,000 emails a month',
  * )
  * ```
  */
 export let beyond = (): string =>
   `$${BUDGET.pro} of AI use a month, ${size(PRO.bytes)} of app data, ` +
-  `${size(PRO.files)} of photos and files, ${count(letters('pro'))} emails ` +
-  `and ${count(builds('pro'))} built-in builds a month`
+  `${size(PRO.files)} of photos and files and ${
+    count(letters('pro'))
+  } emails a month`
 
 // Where every refusal ends: the page that describes the plans, after the plan
 // above this one, which allows more of everything, and the building credit

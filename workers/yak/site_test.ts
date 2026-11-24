@@ -17,7 +17,6 @@ import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
 import {
   BUDGET,
-  BUILDS,
   CURRENCY,
   FILES,
   FREE,
@@ -460,7 +459,6 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
     ['AI use a month', (t) => t == 'pro' ? `$${BUDGET.pro}` : 'Included'],
-    ['Builds a month', (t) => String(BUILDS[t])],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
   ]

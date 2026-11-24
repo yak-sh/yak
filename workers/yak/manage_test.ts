@@ -523,10 +523,13 @@ test('billing shows the space’s allowances', async () => {
     let text of [
       'Nothing is billed.',
       '0 of 5',
+      'Models and voice',
+      'from this space’s budget',
       '0% used',
       '30 of 100',
     ]
   ) assertStringIncludes(html, text)
+  assert(!html.includes('Built-in builds'))
 })
 
 test('old connection detail links redirect to hashes without losing search or testing context', async () => {

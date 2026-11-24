@@ -177,7 +177,7 @@ and the pricing page hold what each one carries:
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
   by the year (D-412, T-135234). It holds about five times the Plus plan's
   allowances (50 GB of app data, 250 GB of photos and files, 10,000 emails,
-  5,000,000 request units, 500 builds and 50 compute hours a month, three
+  5,000,000 request units and 50 compute hours a month, three
   sandboxes at once) and twice its AI budget, which its cards say first
   (T-1317). It adds the Operator built in, so staff ask by email or chat and
   yaks.app makes the change, and support. Past that budget it spends AI

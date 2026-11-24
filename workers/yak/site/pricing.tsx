@@ -123,7 +123,6 @@ export let Pricing = () => (
               visits: noted('visits'),
               emails: noted('emails'),
               ai: noted('ai'),
-              builds: noted('builds'),
               compute: noted('compute'),
               sandboxes: noted('sandboxes'),
             }).map(([row, slots]) => (

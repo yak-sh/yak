@@ -158,10 +158,10 @@ The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.
 
-Model use is one allowance for every model call on a space: the Operator's, and
-the ones its apps make. Each call is weighed by its model's price against the
-space's monthly budget, counted whether or not a conversation deploys. Apps
-built or changed through your connected agent do not use it.
+Your Operator and your apps share the space's monthly AI budget for models,
+generated media, voice and texts. The Operator's model calls count as they
+happen, including conversations that never deploy an app. A connected assistant
+such as Claude or ChatGPT uses its own subscription to build and change apps.
 
 Each person has a sandbox in each space: a private Linux container where the
 Operator or your agent runs commands and keeps files while it works, to run a

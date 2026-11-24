@@ -400,7 +400,7 @@ export let measured = async (
       total.rows_written += got.rows_written
     }
     // The space's own reading: its apps summed, and nothing it spent. What a
-    // space spends (letters, builds, models, voice, seconds) is counted where
+    // space spends (letters, models, voice, texts, seconds) is counted where
     // it happens and added up by the directory (meter.ts `spend`), and a
     // reading that carried it back would write over a count that landed
     // while the sweep ran. A space whose meter is on another month is turned

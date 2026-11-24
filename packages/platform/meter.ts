@@ -37,10 +37,6 @@ export type Meter = {
   // Stored R2 bytes, independent of the calendar month; absent before rollout.
   files?: number
   emails: number
-  // Monthly built-in builds. `built` keeps a lifetime total for usage
-  // reporting; both plans enforce their build allowance against the monthly
-  // `builds`. Nothing counts them since the builder was deleted (T-1655).
-  builds: number
   // Dollars spent on models this month: the Operator's and the apps' calls,
   // each weighed by its model's price (models.ts).
   models: number
@@ -55,7 +51,6 @@ export type Meter = {
   // container-second are billed separately, and one number made of both is a
   // number nobody can add up.
   seconds: number
-  built: number
   // Every dollar models, voice and texts have spent here, all months
   // together: what the starter is drawn against (`starterOf`).
   drawn?: number
@@ -155,12 +150,10 @@ export let meterOf = (r: MeteredRow): Meter | null =>
       ...r.meter.visits == null ? {} : { visits: r.meter.visits },
       files: r.meter.files ?? 0,
       emails: r.meter.emails ?? 0,
-      builds: r.meter.builds ?? 0,
       models: r.meter.models ?? 0,
       realtime: r.meter.realtime ?? 0,
       texts: r.meter.texts ?? 0,
       seconds: r.meter.seconds ?? 0,
-      built: r.meter.built ?? 0,
       drawn: r.meter.drawn ?? 0,
       visitors: r.meter.visitors ?? 0,
       refunded: r.meter.refunded ?? 0,
@@ -239,7 +232,6 @@ export let requestUnits = (
  * (`Limited`), and the dollars that spend its budget. */
 let SPENDS: Spend[] = [
   'emails',
-  'builds',
   'models',
   'realtime',
   'texts',
@@ -487,28 +479,25 @@ export let left = (
 
 // A month with nothing spent yet. What the space holds (`bytes`, `files`) is
 // not a month's figure, so a new month neither starts it over nor writes it.
-let empty = (month: string, built = 0): Omit<Meter, 'bytes'> => ({
+let empty = (month: string): Omit<Meter, 'bytes'> => ({
   month,
   ...none(),
   emails: 0,
-  builds: 0,
   models: 0,
   realtime: 0,
   texts: 0,
   seconds: 0,
   visitors: 0,
-  built,
   at: '',
 })
 
 // This month's reading, whatever the row holds — a month behind is nothing
-// spent, and no row at all is the same. What it carries through is what is
-// not started over by a new month: `built`, a lifetime figure, and what the
-// space holds (held.ts).
+// spent, and no row at all is the same. What the space holds carries through
+// the month (held.ts).
 export let spent = (space: Metered, now: Date = new Date()): Meter =>
   thisMonth(space.meter, monthOf(now)) ??
     {
-      ...empty(monthOf(now), space.meter?.built ?? 0),
+      ...empty(monthOf(now)),
       bytes: space.meter?.bytes ?? 0,
       files: space.meter?.files ?? 0,
     }
@@ -516,19 +505,18 @@ export let spent = (space: Metered, now: Date = new Date()): Meter =>
 /**
  * A meter with a spend added, as the patch that writes it: onto what it holds
  * when it holds the spend's month, and onto a fresh month when it holds
- * another. `built` counts every build ever and `drawn` every dollar, so a
- * new month carries them. A refund counts on the month beside what each
+ * another. `drawn` counts dollars across all months, so a new month carries
+ * it. A refund counts on the month beside what each
  * source cost, and comes off `drawn`, so the month and the starter read as if
  * the dollars refunded had never been spent.
  *
  * ```ts
  * import { added } from '@yaks/platform/meter'
  *
- * let sep = { month: '2026-09', models: 0.5, built: 3 }
+ * let sep = { month: '2026-09', models: 0.5 }
  * added(sep, { month: '2026-09', models: 0.25 })
  * // { month: '2026-09', models: 0.75 }
- * added(sep, { month: '2026-10', builds: 1 }).built // 4
- * added(sep, { month: '2026-10', builds: 1 }).models // 0
+ * added(sep, { month: '2026-10', emails: 1 }).models // 0
  * added({ ...sep, drawn: 4 }, { month: '2026-10', models: 0.5 }).drawn // 4.5
  * added({ ...sep, drawn: 4 }, { month: '2026-09', refunded: 0.5 })
  * // { month: '2026-09', refunded: 0.5, drawn: 3.5 }
@@ -541,11 +529,8 @@ export let added = (
   let n = (v: unknown) => Number(v ?? 0)
   let month = String(spend.month)
   let held = meter?.month == month ? meter : undefined
-  let out: Record<string, unknown> = held
-    ? { month }
-    : empty(month, n(meter?.built))
+  let out: Record<string, unknown> = held ? { month } : empty(month)
   for (let k of COUNTERS) if (n(spend[k])) out[k] = n(held?.[k]) + n(spend[k])
-  if (n(spend.builds)) out.built = n(meter?.built) + n(spend.builds)
   let cost = DOLLARS.reduce((sum, k) => sum + n(spend[k]), 0) -
     n(spend.refunded)
   if (cost) out.drawn = n(meter?.drawn) + cost

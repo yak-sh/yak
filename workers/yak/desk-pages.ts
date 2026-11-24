@@ -2953,12 +2953,6 @@ let ALLOWANCES: [Ceiling, string, (n: number) => string, string][] = [
   ['files', 'Photos and files', size, ''],
   ['emails', 'Emails', count, 'Sent and received.'],
   [
-    'builds',
-    'Built-in builds',
-    count,
-    'Building with your own agent isn’t counted.',
-  ],
-  [
     'seconds',
     'Compute seconds',
     count,

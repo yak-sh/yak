@@ -413,7 +413,7 @@
         },
         "spend": {
           "type": "object",
-          "description": "Dollars spent from the space's budget by day, YYYY-MM-DD, added as each is spent: models, builds, generated media, voice and texts."
+          "description": "Dollars spent from the space's budget by day, YYYY-MM-DD, added as each is spent: models, generated media, voice and texts."
         },
         "sources": {
           "type": "object",
@@ -464,17 +464,11 @@
         "emails": {
           "type": "number"
         },
-        "builds": {
-          "type": "number"
-        },
         "models": {
           "type": "number",
           "description": "dollars spent on models this month, each call weighed by its model's price"
         },
         "seconds": {
-          "type": "number"
-        },
-        "built": {
           "type": "number"
         },
         "drawn": {

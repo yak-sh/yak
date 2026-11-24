@@ -86,30 +86,10 @@ export let weighed = async (
 ) =>
   await stamp(env, { entities: [{ entity: { eid: app }, meter: { bytes } }] })
 
-// ---- the builds (T-34241) ---------------------------------------------------
-
-/**
- * One completed build and what it cost: the month's builds, model dollars
- * and container seconds, and the space's lifetime builds, each one higher.
- *
- * TODO(T-1655): nothing calls this since the builder's own loop was deleted
- * (T-1647); a new app is the Operator's, whose spending is counted as every
- * model call is. It stays only while the plans still promise "built-in
- * builds", which that task takes out with the meter it counts.
- */
-export let countedBuild = (
-  env: { STORE: Namespace },
-  space: Pick<Space, 'eid'>,
-  cost: number,
-  seconds = 0,
-  now = new Date(),
-) => spending(env, space, { builds: 1, models: cost, seconds }, now)
-
 // ---- the workbench (T-34264) ------------------------------------------------
 //
-// Container seconds, counted where they happen like the letters and the
-// builds: nothing in the analytics knows what a sandbox compiled. The unit
-// is one second of container wall time (what Cloudflare bills on), measured
+// Container seconds are counted where they happen. The unit is one second
+// of container wall time (what Cloudflare bills on), measured
 // from a call's first sandbox command to the moment it lets the container go
 // (sandbox.ts `Spend`), rounded up.
 //
@@ -117,13 +97,7 @@ export let countedBuild = (
 // `BUDGET`), and the month's {@link SECONDS}, which is what bounds the lone
 // calls that belong to no build (tools.ts `bench` asks before each).
 
-/**
- * The model dollars and container seconds spent, on the space's month, with
- * no build beside them.
- *
- * The door for a lone sandbox tool call (tools.ts `bench`), and for whatever
- * else spends model dollars or container seconds with no build beside them.
- */
+/** Add model dollars and container seconds to the space's month. */
 export let countedSpend = async (
   env: { STORE: Namespace },
   space: Pick<Space, 'eid'>,

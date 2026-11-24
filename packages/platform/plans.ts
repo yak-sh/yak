@@ -22,7 +22,7 @@ export let paid = (tier: Tier | null | undefined): boolean =>
 export let COMPED: string[] = ['yourname', 'yak']
 
 /**
- * The tier a space is on. Paid features and mail/build allowances: `plus`
+ * The tier a space is on. Paid features and usage allowances: `plus`
  * also applies to comps. Their separate app/data exemption is resolved by
  * `ceilings` from COMPED. A space given the Plus plan free until a day
  * (`comped`, a month for each person its owner invited who built an app,
@@ -127,16 +127,6 @@ export let LETTERS: Record<Tier, number> = {
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 
-// Monthly allowances for the optional built-in builder. Making and changing
-// apps through a connected agent (app_new, app_files) is not metered here.
-export let BUILDS: Record<Tier, number> = {
-  free: 5,
-  plus: 100,
-  pro: 500,
-}
-
-export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
-
 // Each space's models and voice spend its one monthly dollar budget, and a
 // person's first space draws on {@link STARTER} before it. The free month is
 // sized so a year of free spaces spends the model credits we hold rather than
@@ -226,7 +216,6 @@ export let freeSpaces = (
  * space budget; their separate counters still say what each source cost. */
 export type Spend =
   | 'emails'
-  | 'builds'
   | 'models'
   | 'realtime'
   | 'texts'
@@ -240,7 +229,6 @@ export type Limited = Exclude<Spend, Dollars>
 
 let ALLOWANCE: Record<Limited, Record<Tier, number>> = {
   emails: LETTERS,
-  builds: BUILDS,
   seconds: SECONDS,
 }
 export let LIMITED: Limited[] = Object.keys(ALLOWANCE) as Limited[]

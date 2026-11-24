@@ -19,7 +19,6 @@ import {
 } from '@yaks/platform/meter'
 import {
   BUDGET,
-  BUILDS,
   ceilings,
   FILES,
   FREE,
@@ -50,13 +49,7 @@ import { platform } from './testing.ts'
 import { meta } from './meta.ts'
 import type { Env } from './env.ts'
 import type { Host } from '@yaks/platform/host'
-import {
-  counted,
-  countedBuild,
-  countedRealtime,
-  countedSpend,
-  weighed,
-} from './meter.ts'
+import { counted, countedRealtime, countedSpend, weighed } from './meter.ts'
 import { size } from '@yaks/fp'
 import {
   atCeiling,
@@ -406,11 +399,9 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
     rows_written: 0,
     bytes: 0,
     emails: 0,
-    builds: 0,
     models: 0,
     realtime: 0,
     seconds: 0,
-    built: 0,
     at: NOW.toISOString(),
     ...meter,
   },
@@ -455,7 +446,6 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
     files: 50 * 1024 ** 3,
   })
   assertEquals(LETTERS.plus, 2_500)
-  assertEquals(BUILDS.plus, 100)
   for (let tier of [null, 'free', 'plus'] as const) {
     assertEquals(ceilings(tier, 'yourname'), null)
   }
@@ -548,13 +538,6 @@ test('a refusal names the ceiling and where the plans are written', () => {
   )
 })
 
-let refusedBuild = (s: Space, now: Date) =>
-  refusedSpend(s, 'builds', {}, 0, now)
-
-// The builder's ceiling (T-34241). A build is one app shipped, so the count is
-// written once by the loop that finished one (`countedBuild`) and read before
-// it starts (`refusedBuild`).
-
 // The directory that count is written to, in memory, holding one space `jeff`
 // with the meter given, and that space as the directory has it now.
 let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
@@ -576,98 +559,16 @@ let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
   return { env, dir, space: await held(), held, read }
 }
 
-test('a free space gets five builds each month regardless of lifetime use', async () => {
-  for (let builds of [0, 1, 4]) {
-    assertEquals(refusedBuild(space({ builds, built: 40 }), NOW), null)
-  }
-  let c = await counting()
-  await countedBuild(c.env, c.space, 0.25, 0, NOW)
-  let one = { month: '2026-09', builds: 1, models: 0.25, seconds: 0, built: 1 }
-  assertEquals(
-    await c.read('month', 'builds', 'models', 'seconds', 'built'),
-    one,
-  )
-
-  let after = space({ builds: 5, models: 0.25, built: 45 })
-  let no = (refusedBuild(after, NOW))!
-  assert(no)
-  assertStringIncludes(no, 'https://yaks.app/manage/jeff/billing')
-  assert(!/checkout|subscribe/i.test(no), no)
-  assert(refusedBuild(space({ builds: 6 }), NOW))
-
-  // A refusal costs them nothing — not the build, and not the sentence: the
-  // count is written by the loop that finished one, and this one never ran.
-  assertEquals(spent(after, NOW).builds, 5)
-  assertEquals(
-    await c.read('month', 'builds', 'models', 'seconds', 'built'),
-    one,
-  )
-
-  // The monthly allowance resets; the lifetime figure remains available.
-  let october = new Date('2026-10-02T00:00:00Z')
-  assertEquals(spent(after, october).built, 45)
-  assertEquals(spent(after, october).builds, 0)
-  assertEquals(refusedBuild(after, october), null)
-})
-
-test('a paid space counts its builds down, and the month gives them back', async () => {
-  let plus = (builds: number, month = '2026-09') =>
-    space({ month, builds, built: 40 }, 'plus')
-  assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
-  let no = (refusedBuild(plus(BUILDS.plus), NOW))!
-  assertStringIncludes(no, `${BUILDS.plus} built-in builds a month`)
-  assertStringIncludes(no, 'build again on the 1st')
-  assertStringIncludes(no, 'https://yaks.app/manage/jeff/billing')
-  // Last month's builds are not this month's.
-  assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
-
-  // What its model cost is the month's, added to what the space's other
-  // model calls spent, in dollars, and its container seconds beside them
-  // (sandbox.ts, T-34264).
-  let c = await counting({
-    month: '2026-09',
-    builds: 2,
-    models: 0.5,
-    built: 40,
-  })
-  await countedBuild(c.env, c.space, 0.25, 12, NOW)
-  assertEquals(await c.read('month', 'builds', 'models', 'seconds', 'built'), {
-    month: '2026-09',
-    builds: 3,
-    models: 0.75,
-    seconds: 12,
-    built: 41,
-  })
-})
-
-test('the build line warns at 80%, and the line says both numbers', () => {
-  assertEquals(
-    level(space({ builds: BUILDS.plus * 0.8 - 1, built: 40 }, 'plus'), 1, NOW),
-    'ok',
-  )
-  assertEquals(
-    level(space({ builds: BUILDS.plus * 0.8, built: 40 }, 'plus'), 1, NOW),
-    'near',
-  )
-  assertEquals(
-    level(space({ builds: BUILDS.plus, built: 40 }, 'plus'), 1, NOW),
-    'over',
-  )
-  assertEquals(level(space({ builds: 3, built: 40 }), 1, NOW), 'ok')
-  assertEquals(level(space({ builds: 4, built: 40 }), 1, NOW), 'near')
-  assertEquals(level(space({ builds: 5, built: 40 }), 1, NOW), 'over')
-
-  // Build counts are per space; model cost is attributed to this space while
-  // each space's models and voice share its budget.
-  let said = gauged(space({ builds: 1, models: 4, built: 1 }), 2, NOW)
-  assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 compute seconds')
+test('standing reports compute usage and the share of the space budget', () => {
+  let said = gauged(space({ seconds: 15, models: 4 }), 2, NOW)
+  assertStringIncludes(said, '15 of 3,600 compute seconds')
   assertStringIncludes(said, "20% of jeff's model and voice budget used")
   let plus = gauged(
-    space({ builds: 4, models: 0.0012, built: 44 }, 'plus'),
+    space({ seconds: 30, models: 0.0012 }, 'plus'),
     9,
     NOW,
   )
-  assertStringIncludes(plus, `4 of ${BUILDS.plus} builds`)
+  assertStringIncludes(plus, '30 of 36,000 compute seconds')
   assertStringIncludes(plus, "under 1% of jeff's model and voice budget used")
 })
 
@@ -847,7 +748,7 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   assertEquals(got.meter?.requests, 77)
   assertEquals(spent(got, NOW).files, 55)
   assertEquals(spent(got, NOW).requests, 0)
-  await countedBuild(env, got, 0, 0, NOW)
+  await countedSpend(env, got, 0, 1, NOW)
   assertEquals((await dir.space('jeff'))!.meter?.files, 55)
   files.held.delete('jeff/a/photo')
   await sweep(env, NOW)
@@ -953,7 +854,7 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
       'bytes',
       'files',
       'emails',
-      'builds',
+      'seconds',
       'models',
     ] as const
   ) {
@@ -980,7 +881,6 @@ test("each space answers to its own allowances and budget, never its owner's oth
   let b = as('b', { emails: 99, seconds: 3_000 })
   let full = as('full', {
     emails: 100,
-    builds: 5,
     models: BUDGET.free + STARTER,
   })
   let paid = {
@@ -992,8 +892,7 @@ test("each space answers to its own allowances and budget, never its owner's oth
   let no = refusedSpend(full, 'emails', {}, 0, NOW)!
   assert(!no.includes('shared'), no)
   assertStringIncludes(no, 'Putting full on the Plus plan allows more')
-  assert(refusedSpend(full, 'builds', {}, 0, NOW))
-  // What a build holds uncounted is added to the reading.
+  // Pending compute time is added to the reading.
   assertEquals(refusedSpend(b, 'seconds', {}, 599, NOW), null)
   assert(refusedSpend(b, 'seconds', {}, 600, NOW))
   assertEquals(budget(a, NOW), { spent: 0.125, limit: BUDGET.free })
@@ -1036,13 +935,12 @@ test('a conversation that shipped nothing pays for its model and seconds', async
     month: '2026-09',
     models: 0.5,
     seconds: 2,
-    built: 3,
   })
-  let after = { models: 0.75, seconds: 7, built: 3 }
+  let after = { models: 0.75, seconds: 7 }
   await countedSpend(c.env, c.space, 0.25, 5, NOW)
-  assertEquals(await c.read('models', 'seconds', 'built'), after)
+  assertEquals(await c.read('models', 'seconds'), after)
   await countedSpend(c.env, c.space, 0, 0, NOW)
-  assertEquals(await c.read('models', 'seconds', 'built'), after)
+  assertEquals(await c.read('models', 'seconds'), after)
 })
 
 // The meter is the directory's to add up (meter.ts `spend`): a count that
@@ -1099,8 +997,8 @@ test('spends counted at once all count, and the sweep keeps them', async () => {
 
 test('a spend lands on its day, and a letter costs no day', async () => {
   let c = await counting()
-  await countedBuild(c.env, c.space, 0.25, 0, NOW)
-  await countedBuild(c.env, c.space, 0.5, 0, NOW)
+  await countedSpend(c.env, c.space, 0.25, 0, NOW)
+  await countedSpend(c.env, c.space, 0.5, 0, NOW)
   await counted(c.env, c.space, NOW)
   // Read the way the admin's page reads it.
   let { spaces } = await c.dir.census()

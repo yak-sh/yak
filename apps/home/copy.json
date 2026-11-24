@@ -889,7 +889,7 @@
       },
       "assistant": {
         "term": "Your Claude or ChatGPT plan pays for your assistant, and yaks.app keeps what it makes online.",
-        "detail": "Your assistant builds and changes your apps on your own subscription, and that never spends a space's AI use. A space's AI use is for the AI its apps use themselves, such as reading a photo or speaking, and for yaks.app's built-in builder."
+        "detail": "Your assistant builds and changes your apps on your own subscription, and that never spends a space's AI use. Your Operator and the AI features in your apps, like reading a photo or speaking, use the same AI budget for that space."
       },
       "tax": {
         "term": "Prices include tax.",
@@ -947,13 +947,6 @@
         "free": "Included",
         "plus": "Included",
         "pro": "$100"
-      },
-      "builds": {
-        "name": "Builds a month %{note}",
-        "note": "With yaks.app's built-in builder, for people without an assistant of their own. A build counts when it puts an app online.",
-        "free": "5",
-        "plus": "100",
-        "pro": "500"
       },
       "compute": {
         "name": "Compute time a month %{note}",
@@ -1027,7 +1020,7 @@
     },
     "start": {
       "title": "How do I start?",
-      "lead": "%{sign-in} with your email. We send a six-digit code; yaks.app does not use passwords. You land on your own space, and the steps for Claude or ChatGPT are there. After connecting, ask your assistant to build an app.",
+      "lead": "%{sign-in} with your email. We send a six-digit code; yaks.app does not use passwords. In your space, choose New app and tell your Operator what you need. You can also connect Claude or ChatGPT and ask it to build the app.",
       "sign-in": "Sign in"
     },
     "ask": {
@@ -1133,7 +1126,7 @@
     },
     "service": {
       "title": "The service",
-      "hosts": "yaks.app hosts small apps built for you by your own assistant: Claude, ChatGPT, or another assistant that supports the same connector. You ask for an app, your assistant builds it, and it runs at an address of yours.",
+      "hosts": "yaks.app hosts apps that you ask your yaks.app Operator or a connected assistant such as Claude or ChatGPT to build. Your apps run at an address of yours.",
       "new": "yaks.app is a new, small service. Features will change, and some of them will break."
     },
     "accounts": {
