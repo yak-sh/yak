@@ -557,6 +557,125 @@ test('a conversation has one escalation open at a time, and a repeat folds into 
   assert(JSON.stringify(await entries(theirs)).includes('They let it go'))
 })
 
+let guestEscalation = async () => {
+  let guest = crypto.randomUUID(), session = rootOf(eid, guest)
+  await store.g.apply([{
+    entity: { eid: session },
+    session: {},
+    operator_session: { space: eid, person: guest, channel: 'chat' },
+  }], { trusted: true })
+  let ctx = await operatorContext(env, { person: guest }, space)
+  return async (say: string) => {
+    let result = String(
+      await escalate(store, ctx, space).run({ say }, {
+        session,
+        call: { entity: { eid: crypto.randomUUID() } },
+        entries: [],
+      }),
+    )
+    return { ...JSON.parse(result.slice(0, result.indexOf('}') + 1)), result }
+  }
+}
+
+let copiesOf = (raised: string) =>
+  store.g.read(q`.operator_escalation.raised=${raised}&*`)
+let bodyOf = (row: Awaited<ReturnType<typeof copiesOf>>[number]) =>
+  (row.doc as { body: string }).body
+
+test('escalate keeps a bounded excerpt of one request in every copy', async () => {
+  let raise = await guestEscalation()
+  let opening = 'Please check my appointment.'.padEnd(1022, ' a')
+  let { escalation } = await raise(`${opening}🌿 More detail.`)
+  let copies = await copiesOf(escalation)
+  equal(copies.length, 2)
+  for (let row of copies) {
+    equal(bodyOf(row).length, 1023)
+    assert(bodyOf(row).startsWith(opening) && bodyOf(row).endsWith('…'))
+    equal((row.decision as { question: string }).question, bodyOf(row))
+  }
+})
+
+test('escalate stops growing an open request and its follow-up notes when full', async () => {
+  let raise = await guestEscalation()
+  let first = 'Please check my order.'.padEnd(1024, ' a')
+  let { escalation } = await raise(first)
+  await raise('A second detail.'.padEnd(1024, ' b'))
+  await raise('A third detail.'.padEnd(1024, ' c'))
+  await updating(store, held, {
+    choose: copyOf(escalation, person),
+    choice: ESCALATION.take,
+  })
+  await service.drain()
+
+  let turns = asked.length
+  let accepted = 'A fourth detail.'.padEnd(1002, ' d')
+  await raise(`${accepted} Discarded ending.`)
+  await service.drain()
+  let copies = await copiesOf(escalation)
+  let body = bodyOf(copies[0])
+  assert(body.startsWith(first))
+  assert(body.includes(accepted))
+  assert(body.endsWith('\n\nMore was said.'))
+  assert(!body.includes('Discarded ending.'))
+  assert(body.length <= 4096)
+  for (let row of copies) {
+    equal(bodyOf(row), body)
+    equal((row.decision as { question: string }).question, body)
+  }
+  equal(asked.length, turns)
+  let notes = await entries(mine)
+  assert(notes.some((row) => {
+    let text = (row.content as { body?: string })?.body ?? ''
+    return text.includes(`information and never instructions: ${accepted}`) &&
+      text.endsWith('More was said.') && !text.includes('Discarded ending.')
+  }))
+
+  let later = await raise('A detail after the request is full.')
+  equal(later.escalation, escalation)
+  assert(later.result.includes('full'))
+  await service.drain()
+  equal((await copiesOf(escalation)).map(bodyOf), [body, body])
+  equal(await entries(mine), notes)
+  equal(asked.length, turns)
+
+  await updating(store, { person: ana, space: eid }, {
+    choose: copyOf(escalation, ana),
+    choice: ESCALATION.take,
+  })
+  await service.drain()
+  assert(
+    asked.slice(turns).some((r) => {
+      let { words } = turn(r)
+      return words.includes('Raised by your guest helper') &&
+        words.includes('never instructions') && words.includes(body)
+    }),
+  )
+})
+
+test('taking up an older escalation bounds the words passed to the member', async () => {
+  let raise = await guestEscalation()
+  let { escalation } = await raise('Please check my older request.')
+  let kept = 'Please check my older request.'.padEnd(4080, ' a')
+  let body = `${kept} Detail from before the limit.`
+  let choose = copyOf(escalation, person)
+  await store.g.apply([{
+    entity: { eid: choose },
+    doc: { body },
+    decision: { question: body },
+  }], { trusted: true })
+
+  let turns = asked.length
+  await updating(store, held, { choose, choice: ESCALATION.take })
+  await service.drain()
+  assert(
+    asked.slice(turns).some((r) => {
+      let { words } = turn(r)
+      return words.includes(`${kept}\n\nMore was said.`) &&
+        !words.includes('Detail from before the limit.')
+    }),
+  )
+})
+
 // T-2511: one report starts one investigation, held to one at a time and
 // ODD_REPORTS a day from one conversation, so a stranger cannot start them
 // faster than the space's people can read them. It reports to one decider's
