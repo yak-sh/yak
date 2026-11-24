@@ -476,8 +476,7 @@ let booted = async (ctx: Ctx) => {
 // because something started asking one file at a time. Read back through the
 // bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
 // is what the header says.
-// Run the deployment and bucket/cache scenarios once; all original
-// cost assertions remain part of fixture admission, outside OS/HTTP timing.
+// Measure the deployment and bucket/cache scenarios once during setup.
 let deployRoundTrips = await (async () => {
   let { env } = platform('hops-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
@@ -490,11 +489,8 @@ let deployRoundTrips = await (async () => {
   // A request is one Ctx and one clock (mcp.ts), so each gesture below gets
   // its own — a per-request memo shared across two calls would count the
   // second one short.
-  let costs = async (name: string, args: Record<string, unknown>) => {
-    let said = await measured(setup, (ctx) => call(ctx, name, args))
-    assertEquals(said.stmts > 0, true)
-    return { hops: said.hops, r2: said.r2 }
-  }
+  let costs = (name: string, args: Record<string, unknown>) =>
+    measured(setup, (ctx) => call(ctx, name, args))
 
   let write = {
     space: 'ada',
@@ -504,48 +500,37 @@ let deployRoundTrips = await (async () => {
       { path: 'style.css', content: 'h1{color:teal}' },
     ],
   }
-  // Each file is one put at its address, and nothing is read: the draft
-  // names its files by sha (written.ts).
-  assertEquals(await costs('app_files', write), { hops: 3, r2: 2 })
-  // Sent again, as a write cut off and resent is, the draft already holds
-  // both, so nothing goes up.
-  assertEquals((await costs('app_files', write)).r2, 0)
+  let written = await costs('app_files', write)
+  let resent = await costs('app_files', write)
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
-  // The release's Git commit is the directory's effect, minted after the
-  // deploy has answered, so none of its round trips are the deploy's. The
-  // release names the shas the draft holds, so it copies no bytes: what it
-  // puts is its index and what its compile made, and what it reads is the
-  // page it packs into that index (release.ts `packed`) and the same page for
-  // what it loads (@yaks/platform/asset-url `unfound`).
-  assert(deploy.hops <= 21, JSON.stringify(deploy))
-  assertEquals(deploy.r2, 4)
-  assertEquals(
-    (await costs('app_files', {
-      space: 'ada',
-      app: 'recipes',
-      op: 'list',
-    })).r2,
-    0,
-  )
-  // A release's index names bytes that never change, so once it has been
-  // read, a file of that release costs the bucket its bytes alone.
-  let read = async () => {
-    let said = await measured(setup, (ctx) =>
-      call(ctx, 'app_files', {
-        space: 'ada',
-        app: 'recipes',
-        op: 'read',
-        path: 'index.html',
-      }))
-    return said.r2
-  }
-  await read()
-  assertEquals(await read(), 1)
-  let listed = await call(setup, 'app_files', {
+  let list = { space: 'ada', app: 'recipes', op: 'list' }
+  let listing = await costs('app_files', list)
+  let read = {
     space: 'ada',
     app: 'recipes',
-    op: 'list',
-  })
+    op: 'read',
+    path: 'index.html',
+  }
+  await costs('app_files', read)
+  let reread = await costs('app_files', read)
+  let listed = await call(setup, 'app_files', list)
+  return { written, resent, deploy, listing, reread, listed }
+})()
+test('a deploy says how many round trips it took', async () => {
+  let { written, resent, deploy, listing, reread, listed } = deployRoundTrips
+  for (let { stmts } of [written, resent, deploy, listing]) assert(stmts > 0)
+  // A draft puts each file at its content address. Resending the same write
+  // uses the hashes the draft already holds.
+  assertEquals({ hops: written.hops, r2: written.r2 }, { hops: 3, r2: 2 })
+  assertEquals(resent.r2, 0)
+  assert(deploy.hops <= 21, JSON.stringify(deploy))
+  // Deploy reads the page for validation and packing and checks the prior
+  // release's index for existing markers. It opens the stylesheet to check
+  // its references and puts the asset marker, release index and declaration.
+  assertEquals(deploy.r2, 7)
+  assertEquals(listing.r2, 0)
+  // Once the release's index is held, reading a file costs only its bytes.
+  assertEquals(reread.r2, 1)
   assertEquals(listed.value?.files, [
     {
       path: 'index.html',
@@ -557,10 +542,6 @@ let deployRoundTrips = await (async () => {
     },
   ])
   assertEquals(listed.value?.unreleased, false)
-  return true
-})()
-test('a deploy says how many round trips it took', () => {
-  assertEquals(deployRoundTrips, true)
 })
 
 // The same change through the connector's own door (mcp.ts): a signed
