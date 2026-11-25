@@ -57,7 +57,6 @@ let opened = await (async () => {
         { entity: { eid: session + '-said' } } as never,
         g,
         {} as never,
-        {} as never,
       )
     }
     // A command line's `session new --persona` opens the same way, by begin.

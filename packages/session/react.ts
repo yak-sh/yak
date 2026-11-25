@@ -737,8 +737,8 @@ export let retryingStep = (
   session: Eid,
   phase: string,
 ): ModelError | undefined =>
-  deps.attempt && !deps.attempt.last() && !deps.signal?.aborted
-    ? deps.retry?.(error, session, phase)
+  deps.retry && deps.attempt && !deps.attempt.last() && !deps.signal?.aborted
+    ? deps.retry(error, session, phase)
     : undefined
 
 // The context window a model holds, in tokens: its row's, else that of the

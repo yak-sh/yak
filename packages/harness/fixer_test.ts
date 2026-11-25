@@ -87,7 +87,6 @@ let http = await (async () => {
         { entity: { eid: 'input' } } as never,
         f.host.graph,
         {} as never,
-        {} as never,
       )
     }
     let [session] = await f.host.graph.get(['fixer'])
@@ -133,7 +132,6 @@ let managed = await (async () => {
     await handlers.session_run(
       { entity: { eid: 'input' } } as never,
       f.host.graph,
-      {} as never,
       {} as never,
     )
     let [session] = await f.host.graph.get(['managed'])
