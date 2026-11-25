@@ -259,7 +259,10 @@ let MOST = 30_000
 // deploy, an evicted object) opens again, after a wait that doubles to
 // `MOST`, and its first answer is said with `reset`, since what left while it
 // was away is said no other way. One the store refuses to open is said as the
-// store's refusal and left closed; one that failed is tried again.
+// store's refusal and left closed; one that failed is tried again. `saying`,
+// when given, is handed each socket as it opens, to say on it what the
+// caller has to say (a tab's whereabouts), and what it returns is called
+// when that socket goes.
 export let watching = (
   door: Door,
   at: string,
@@ -267,9 +270,15 @@ export let watching = (
   sink: (frame: Frame) => void,
   headers: Record<string, string>,
   path = '/ws',
+  saying?: (say: (frame: unknown) => void) => () => void,
 ): () => void => {
   let closed = false, wire: Wire | undefined, wait = 250, again = false
   let timer: ReturnType<typeof setTimeout> | undefined
+  let unsay: (() => void) | undefined
+  let gone = () => {
+    unsay?.()
+    unsay = undefined
+  }
   let open = async () => {
     let res = await door(path, { headers: { upgrade: 'websocket' } }, headers)
     let ws = (res as Response & { webSocket?: Wire }).webSocket
@@ -312,9 +321,11 @@ export let watching = (
     })
     ws.addEventListener('close', () => wire == ws && retry())
     ws.send(JSON.stringify({ subscribe: line, id: 'w' }))
+    unsay = saying?.((frame) => wire == ws && ws.send(JSON.stringify(frame)))
   }
   let retry = () => {
     if (closed || timer !== undefined) return
+    gone()
     wire = undefined
     again = true
     timer = setTimeout(() => {
@@ -337,6 +348,7 @@ export let watching = (
   start()
   return () => {
     closed = true
+    gone()
     clearTimeout(timer)
     wire?.close(1000)
     wire = undefined

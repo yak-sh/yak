@@ -1,6 +1,5 @@
 import { possessive } from '@yaks/text'
 import { Notice, Transcript } from '@yaks/ui/parts'
-import { BEAT } from '@yaks/notify/whereabouts'
 import { wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
@@ -1913,7 +1912,7 @@ let chatScript = (
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 // Imports may arrive after a second navigation has already replaced this page.
@@ -2372,14 +2371,12 @@ let hear = (frame) => {
   if (reading) again = true
   doing(o.doing)
 }
-// Where its person is: whether this tab is in view and focused, said on the
-// socket when it changes and every few minutes while open, so their
+// The conversation, watched in the tab's page graph, whose socket says
+// where its person is: whether this tab is in view and focused, so their
 // Operator knows to tell them here, notify them, or reach them elsewhere
 // (whereabouts.ts).
+let conversation = pageTalk('${space.eid}', '${who.person}', open == 'new' ? undefined : open)
 let wire
-let sayTab = () => { if (wire?.readyState == 1) wire.send(JSON.stringify({ tab: { visible: document.visibilityState == 'visible', focused: document.hasFocus() } })) }
-for (let on of ['visibilitychange', 'focus', 'blur']) (on == 'visibilitychange' ? document : window).addEventListener(on, sayTab, { signal })
-let tabBeat = setInterval(sayTab, ${BEAT})
 let listen = () => {
   let socket = wire = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
@@ -2388,7 +2385,6 @@ let listen = () => {
   // (public/deploy.js).
   socket.onopen = () => {
     cancel(opening); live = true
-    sayTab()
     if (opened) dispatchEvent(new Event('yak-reconnect'))
     opened = true
   }
@@ -2435,7 +2431,7 @@ let send = async (b) => {
 }
 signal.addEventListener('abort', () => {
   clearInterval(datesBeat)
-  clearInterval(tabBeat)
+  conversation.close()
   for (let id of timers) cancel(id)
   if (wire) {
     wire.onopen = wire.onmessage = wire.onclose = null

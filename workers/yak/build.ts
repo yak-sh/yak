@@ -65,7 +65,7 @@ export type State = Hibernation & Restartable & {
   waitUntil?(work: Promise<unknown>): void
 }
 
-// What a page watching the Operator says of its tab (@yaks/notify
+// What a page reading the Operator's store says of its tab (@yaks/notify
 // `tabSaid`), none for any other frame.
 let tabOf = (data: string | ArrayBuffer): Tab | undefined => {
   try {
@@ -75,8 +75,11 @@ let tabOf = (data: string | ArrayBuffer): Tab | undefined => {
 
 // Who is at a socket: a page watching the Operator, or a browser lent to it
 // (operator-browser.ts).
-type Watching = Held & { operator: true; tab?: Tab }
+type Watching = Held & { operator: true }
 type Socket = Watching | Lent
+// A page reading the Operator's store (operator-api.ts), and where its tab
+// is, once it said.
+type Paged = { read?: { person?: string }; tab?: Tab }
 
 export class Builder extends Durable {
   #ctx: State
@@ -1148,39 +1151,45 @@ export class Builder extends Durable {
     )
   }
 
-  // Where `held`'s person is on this Operator, across their tabs open on it
-  // (all but `closing`), kept as their whereabouts (whereabouts.ts).
-  async #present(held: Watching, closing?: Wire) {
+  // Where `person` is on this Operator, across their tabs watching a
+  // conversation of theirs here (all but `closing`), each a socket of its
+  // store that said its tab, kept as their whereabouts (whereabouts.ts).
+  async #present(person: string, closing?: Wire) {
     let tabs = this.#ctx.getWebSockets().filter((ws) => ws != closing)
-      .map((ws) => ws.deserializeAttachment() as Socket | null)
-      .filter((h): h is Watching =>
-        !!h && 'operator' in h && h.person == held.person
-      )
-      .map((h) => h.tab ?? { visible: true, focused: false })
+      .flatMap((ws) => {
+        let held = ws.deserializeAttachment() as Paged | null
+        return paged(held) && held!.tab && held!.read?.person == person
+          ? [held!.tab]
+          : []
+      })
+    let { store } = await this.#stored()
+    let { spaceOf } = await import('./operator-root.ts')
+    let place = this.ctx.id?.name ?? await spaceOf(store)
+    if (!place) return
     let { present } = await import('./whereabouts.ts')
     await present(this.#env, {
-      person: held.person,
+      person,
       channel: 'operator',
-      place: held.space,
+      place,
       state: tabsState(tabs),
     })
   }
 
   /** A frame from a page reading the Operator's store, or from a browser
-   * lent to it. A page watching the Operator says only whether its tab is
-   * visible and focused (`{tab}`), which is where its person is. */
+   * lent to it. A page saying where its tab is (`{tab}`) says where its
+   * person is. */
   override webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
-    let held = ws.deserializeAttachment() as Socket | null
-    if (held && 'operator' in held) {
-      let tab = tabOf(data)
-      if (!tab) return
-      ws.serializeAttachment({ ...held, tab })
-      return void this.#present(held).catch((e) =>
-        caught(e, { request: 'operator whereabouts' })
-      )
-    }
+    let held = ws.deserializeAttachment() as Socket | Paged | null
     // A page reading the Operator's store through @yaks/api.
     if (paged(held)) {
+      let tab = tabOf(data)
+      let person = (held as Paged).read?.person
+      if (tab && person) {
+        ws.serializeAttachment({ ...held, tab })
+        return void this.#present(person).catch((e) =>
+          caught(e, { request: 'operator whereabouts' })
+        )
+      }
       return void this.#stored().then(({ door }) => door.message(ws, data))
         .catch((e) => caught(e, { request: 'operator socket' }))
     }
@@ -1195,13 +1204,14 @@ export class Builder extends Durable {
   /** A socket closed. A lent browser's calls fail at once, rather than
    * waiting out the person. */
   override webSocketClose(ws: Wire): void {
-    let held = ws.deserializeAttachment() as Socket | null
-    if (held && 'operator' in held) {
-      return void this.#present(held, ws).catch((e) =>
-        caught(e, { request: 'operator whereabouts' })
-      )
-    }
+    let held = ws.deserializeAttachment() as Socket | Paged | null
     if (paged(held)) {
+      let { tab, read } = held as Paged
+      if (tab && read?.person) {
+        void this.#present(read.person, ws).catch((e) =>
+          caught(e, { request: 'operator whereabouts' })
+        )
+      }
       return void this.#stored().then(({ door }) => door.close(ws))
         .catch((e) => caught(e, { request: 'operator socket' }))
     }

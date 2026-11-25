@@ -117,7 +117,7 @@ p.env.BUILDER = {
       }
       client.close = () => {
         if (client.readyState == 3) return
-        client.readyState = 3
+        client.readyState = server.readyState = 3
         void object.webSocketClose(server)
         client.emit('close')
       }
@@ -275,6 +275,7 @@ let load = async (
   signals(document)
   signals(windowEvents)
   document.hasFocus = () => true
+  Object.defineProperty(document, 'visibilityState', { value: 'visible' })
   for (
     let part of document.querySelectorAll(
       '#content, #entry-menu, #ask, [data-voice]',
@@ -348,8 +349,10 @@ let load = async (
     }
   }
   let intervals = new Set<number>()
+  // The page's beats: the tab's page graph's outlive it, and are not its.
   let every = () => {
-    intervals.add(++n)
+    ++n
+    if (!new Error().stack?.includes('_page-client')) intervals.add(n)
     return n
   }
   // Lets `ms` of the held clock pass, the page's waits running in the order
@@ -840,7 +843,7 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   second.open()
   assertEquals(second.sockets.length, 1)
   assertEquals(second.stores.length, 1)
-  assertEquals(second.intervals.size, 2)
+  assertEquals(second.intervals.size, 1)
   assertEquals(doc.querySelectorAll('#ask').length, 1)
   assert(doc.getElementById('menu') == menu)
   assertStringIncludes(
@@ -849,9 +852,16 @@ test('swapping between conversations and leaving for Manage lets go of each chat
   )
   assertEquals(doc.querySelectorAll('[data-task]').length, 1)
 
-  let before = second.sockets[0].sent.length
+  // Where the tab is goes on its page graph's socket, not the Operator's.
+  let tabs = () =>
+    second.stores.flatMap((s) => s.sent).filter((d) => 'tab' in JSON.parse(d))
+      .length
+  let before = [second.sockets[0].sent.length, tabs()]
   second.focus()
-  assertEquals(second.sockets[0].sent.length, before + 1)
+  assertEquals([second.sockets[0].sent.length, tabs()], [
+    before[0],
+    before[1] + 1,
+  ])
   let trigger = doc.querySelector('[data-menu-trigger]')!
   second.press(trigger)
   second.press(doc.querySelector('[data-entry-copy]')!)
@@ -888,6 +898,32 @@ test('swapping between conversations and leaving for Manage lets go of each chat
     'Post the road millage notice',
   )
   back.leave()
+})
+
+test('a tab watching its conversation is where its person is on that Operator, until it is left', async () => {
+  let { seen } = await import('./whereabouts.ts')
+  // Someone of their own, so no other test's tab of theirs is open.
+  let cy = crypto.randomUUID()
+  await directoryOf(p.env.STORE).apply({
+    entities: [
+      { entity: { eid: cy }, person: {} },
+      {
+        entity: { eid: crypto.randomUUID() },
+        member: { person: cy, space: eid, role: 'editor' },
+      },
+    ],
+  }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+  let tab = async () => (await seen(p.env, cy, eid))?.tab
+  let page = await load(storage(), false, 'new', {}, undefined, undefined, {
+    person: cy,
+    role: 'editor',
+    space: eid,
+  } as Who)
+  await page.heard()
+  page.focus()
+  await until(async () => await tab() == 'here', { label: 'here' })
+  page.leave()
+  await until(async () => await tab() == undefined, { label: 'gone' })
 })
 
 let onRoad = await load(stash, false, road)

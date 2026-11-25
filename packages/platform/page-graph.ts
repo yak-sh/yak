@@ -3,7 +3,9 @@
  * graph's door, which reads, writes and watches across every store the
  * person reaches (yaks.app's reach-door.ts). Every script on the page asks for
  * it here and gets the same one (@yaks/client `shared`), grown with the words
- * each brings. It holds nothing on disk yet. A page the server drew from rows
+ * each brings. It says where its tab is (@yaks/notify/tab), which its door
+ * says on to the Operator whose conversation the tab watches. It holds
+ * nothing on disk yet. A page the server drew from rows
  * carries them (`drawnRows`), and the graph starts holding them, shown until
  * each subscription answers. Off a page (a test), its door is at
  * `http://page`, which nothing is sent to until a write or a watch asks.
@@ -51,7 +53,6 @@ export let pageGraph = (words: VocabDoc[], person: string): Client => {
       vault: false,
       wireVault: start ? wireStash(start) : false,
       epoch: start?.epoch,
-      page: false,
       headers: { [TAB_PERSON]: person },
       connect: (url) => {
         let socket = new URL(url)

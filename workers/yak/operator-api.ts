@@ -13,7 +13,7 @@
 // seat as the directory has it now, on every frame in and every delivery out:
 // once they no longer write in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
-import { beside, computed } from '@yaks/api/reached'
+import { beside, computed, reached } from '@yaks/api/reached'
 import { type Hibernation, sockets } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
@@ -22,6 +22,7 @@ import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
 import { settingsRow, settingsSpace } from '@yaks/platform/operator-settings'
 import { settingsIn } from './operator-persona.ts'
+import { talkAsked, talkRow } from '@yaks/platform/operator-talk'
 import {
   type Matches,
   matchesAsked,
@@ -183,6 +184,17 @@ export let operatorApi = (
     },
     tags: { request: 'Operator matches' },
   })
+  // The person's conversation with the Operator, which the chat page
+  // watches; its socket carries where their tab is (build.ts).
+  let talks = reached({
+    read: async (asked, read) => {
+      let person = read?.person, space = await spaceOf(store)
+      let talk = talkAsked(asked)
+      if (!person || !space || talk?.space != space) return []
+      return [talkRow(String(person), talk)]
+    },
+    tags: { request: 'Operator conversation' },
+  })
   // Whether each person holds a seat, as the directory last said for their
   // socket: what it is read with.
   let members = new Map<string, boolean>()
@@ -190,15 +202,19 @@ export let operatorApi = (
     beside(
       beside(
         beside(
-          beside(subs, waiting, personal),
-          drafts,
-          (asked) => draftsSpace(asked) != undefined,
+          beside(
+            beside(subs, waiting, personal),
+            drafts,
+            (asked) => draftsSpace(asked) != undefined,
+          ),
+          settings,
+          (asked) => settingsSpace(asked) != undefined,
         ),
-        settings,
-        (asked) => settingsSpace(asked) != undefined,
+        matches,
+        (asked) => matchesAsked(asked) != undefined,
       ),
-      matches,
-      (asked) => matchesAsked(asked) != undefined,
+      talks,
+      (asked) => talkAsked(asked) != undefined,
     ),
     {
       acceptWebSocket: (ws) => ctx.acceptWebSocket(ws),

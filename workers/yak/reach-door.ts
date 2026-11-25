@@ -10,7 +10,9 @@
 // reads of the person the directory answers, live on its `/person/ws`; their
 // Updates cards and drafts in a space (@yaks/platform/update-rows,
 // operator-drafts) are the space's Operator store's, live on its
-// `/api/waiting/ws`, and a write of drafts goes to that store. A space's
+// `/api/waiting/ws`, and a write of drafts goes to that store. Their
+// conversation with that Operator (@yaks/platform/operator-talk) is its
+// store's too, and the tab's whereabouts are said on to it. A space's
 // visits (@yaks/platform/visit-counts) are in no store: they are read from
 // Cloudflare's analytics here, again each time the space's apps move.
 //
@@ -54,6 +56,8 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { personLine } from '@yaks/platform/person-lines'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftsSpace, operatorWrite } from '@yaks/platform/operator-drafts'
+import { talkAsked } from '@yaks/platform/operator-talk'
+import { type Tab, tabSaid } from '@yaks/notify/whereabouts'
 import {
   reachedWrites,
   settingsRow,
@@ -114,6 +118,15 @@ import { peopleApply } from './people-writes.ts'
 import { connecting, connectionsRow, pageOf } from './connections.ts'
 
 let TAGS = { request: 'reach door' }
+
+// What a page graph's socket says of its tab (@yaks/notify `tabSaid`), none
+// for any other message.
+let tabOf = (data: unknown): Tab | undefined => {
+  if (typeof data != 'string') return
+  try {
+    return tabSaid(JSON.parse(data))
+  } catch { /* not a tab's say */ }
+}
 
 // A refusal as @yaks/api says one, at its status; a failure is reported and
 // said as 503, which the page's sync tries again.
@@ -457,6 +470,22 @@ export let reachDoor = async (
     if (door == '/ws' && upgrading(req)) {
       let stores: Promise<Reach[]> | undefined
       let { socket, response } = workerUpgrade(req)
+      // Where the tab is (@yaks/notify/tab), as the page graph last said it,
+      // said on to each Operator whose conversation the tab watches, which
+      // keeps it as the person's whereabouts there (build.ts).
+      let tab: Tab | undefined
+      let sayers = new Set<(frame: unknown) => void>()
+      socket.addEventListener('message', (e) => {
+        let said = tabOf(e.data)
+        if (!said) return
+        tab = said
+        for (let say of sayers) say({ tab })
+      })
+      let sayTab = (say: (frame: unknown) => void) => {
+        if (tab) say({ tab })
+        sayers.add(say)
+        return () => void sayers.delete(say)
+      }
       attach(
         watched({
           watch: (line, sink) => {
@@ -580,9 +609,11 @@ export let reachDoor = async (
                 stop?.()
               }
             }
-            // What the space's Operator store answers of the person.
+            // What the space's Operator store answers of the person; a
+            // conversation of theirs there carries where the tab is.
+            let talk = talkAsked(line)
             let operator = cardsSpace(line) ?? draftsSpace(line) ??
-              settingsSpace(line) ?? matchesAsked(line)?.space
+              settingsSpace(line) ?? matchesAsked(line)?.space ?? talk?.space
             if (operator != undefined) {
               let closed = false
               let stop: (() => void) | undefined
@@ -597,6 +628,7 @@ export let reachDoor = async (
                   sink,
                   { ...vouched(who), [SPACE]: operator },
                   '/api/waiting/ws',
+                  talk && sayTab,
                 )
               }, (error) => closed || sink({ refused: error }))
               return () => {
