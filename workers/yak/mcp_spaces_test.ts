@@ -5,13 +5,13 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import {
   accepted,
   commandsOf,
   connector,
   kernel,
-  letters,
+  letter,
   meta,
   owned,
   seed,
@@ -182,7 +182,10 @@ test('the front page moves, and only the owner moves it', async () => {
     assert(!cleared.text.includes(' opens '), cleared.text)
     assertEquals(appsIn(cleared).some((a) => a.home), false)
 
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let ann = await signIn(
+      k,
+      `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`,
+    )
     await agent.tool('member_add', {
       space: frontSpace,
       email: ann.email,
@@ -637,20 +640,17 @@ test(
       let said = await agent.tool('space_delete', { space: binspace50 })
       assertStringIncludes(said, 'nothing is deleted')
       assertStringIncludes(said, 'stops answering')
-      let mail = await until(
-        () =>
-          letters(k, them.email).findLast((l) => l.subject.includes('Delete')),
-        { timeout: 20_000, poll: 100, label: 'the delete letter' },
-      )
+      let mail = await letter(k, them.email, `/space/${binspace50}/delete?t=`)
+      assertStringIncludes(mail.subject, 'Delete')
       assertStringIncludes(
-        mail!.body,
+        mail.body,
         'It puts the space in the trash. Nothing is erased',
       )
       let link = new RegExp(
         `https://yaks\\.app(/space/${binspace50}/delete\\?t=[^\\s]+)`,
       )
-        .exec(mail!.body)
-      assert(link, `no confirmation link in: ${mail!.body}`)
+        .exec(mail.body)
+      assert(link, `no confirmation link in: ${mail.body}`)
 
       // The owner opens it, and the page asks in the trash's words.
       let asking = await (await k.at('yaks.app', link[1], {

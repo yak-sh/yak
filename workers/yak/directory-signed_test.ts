@@ -27,7 +27,8 @@ import {
   type ServingCopyState,
   ServingCopyUnavailable,
 } from './serving-copy.ts'
-import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
+import { ADA_OWNS, seeded, visit } from './serving-probe.ts'
+import { preparedPlatform } from './testing.ts'
 
 let flush = async () => {
   // A turn apart: gathered reads leave on the next task (directory-copy.ts
@@ -431,7 +432,7 @@ let deadline = async (
 let fixture = async (kind: 'grant' | 'member') => {
   let copy = independent()
   let names: string[] = []
-  let p = platform({
+  let p = preparedPlatform(SECRET, {
     SERVING_COPY: {
       idFromName: (name) => {
         names.push(name)
@@ -597,10 +598,18 @@ for (let kind of ['grant', 'member'] as const) {
         equal(first.status, 200)
         ok(firstBody.includes('private worker: '))
         ok(!firstBody.includes('none'))
-        equal(rpcBody.includes('signed-only-secret'), kind == 'member', rpcBody)
+        equal(
+          rpcBody.includes('signed-only-secret'),
+          kind == 'member',
+          rpcBody,
+        )
         ok(page.pending)
         equal([page.response.status, pageBody], [200, firstBody])
-        equal(mcpBody.includes('signed-only-secret'), kind == 'member', mcpBody)
+        equal(
+          mcpBody.includes('signed-only-secret'),
+          kind == 'member',
+          mcpBody,
+        )
         ok(revokedPage.unavailable, 'fenced private page must await authority')
         ok(revokedMcp.unavailable, 'fenced MCP must await authority')
         ok(!revokedPageBody.includes('private worker:'))

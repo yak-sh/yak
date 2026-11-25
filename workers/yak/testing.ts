@@ -267,7 +267,11 @@ export let unclassified = (held: Held, stamp: string) => {
   for (let name of ['retired', 'archetype']) {
     d.query({ t: 'drop', kind: 'table', name })
   }
-  d.query({ t: 'delete', from: 'entity', where: among(col('id'), descriptors) })
+  d.query({
+    t: 'delete',
+    from: 'entity',
+    where: among(col('id'), descriptors),
+  })
   keep(held, 'schema', stamp)
 }
 
@@ -283,6 +287,14 @@ export let platform = (
   load?: Load,
 ) => {
   let p = lasting(secret, vars, load, !load && !Object.keys(vars).length)
+  cleanup(p[Symbol.asyncDispose])
+  return p
+}
+
+/** A private copy of the standard deployed directory. Use when the supplied
+ * bindings change requests a test drives, without changing deployment. */
+export let preparedPlatform = (secret: string, vars: Partial<Env> = {}) => {
+  let p = lasting(secret, vars, undefined, true)
   cleanup(p[Symbol.asyncDispose])
   return p
 }

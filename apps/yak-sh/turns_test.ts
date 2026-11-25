@@ -13,13 +13,13 @@ let BANDS = SECTIONS.filter((s) =>
 )
 let STACK = SECTIONS.find((s) => s.view == 'Stack')!
 let all = (b: typeof BANDS[0]) => beatsOf(b.body).beats.length
+let source = await files((path) => fetch(new URL(path, dir)))
 
 // The page as `start` makes it, its bands told their beats in the order the
 // page draws them.
 let page = async () => {
   let y = await yak({ retry: 0 })
-  await y.graph.apply(seed())
-  await y.graph.apply(await files((path) => fetch(new URL(path, dir))))
+  await y.graph.apply([...seed(), ...source])
   await y.settled()
   let t = term(y)
   let d = turns(y, t)

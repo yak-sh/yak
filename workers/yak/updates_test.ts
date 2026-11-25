@@ -141,13 +141,30 @@ let across = async () => {
   }
   // What the space's own Updates badge says, beside its chat.
   let badge = async (space: Space) => {
-    let d = parseHTML(await (await get(chatPath(space.slug))).text()).document
-    return Number(
+    let html = await (await get(chatPath(space.slug))).text()
+    let d = parseHTML(html).document
+    let conversation = d.querySelector('[data-operator-opening]')
+      ?.getAttribute('data-operator-opening')
+    if (conversation) {
+      let response = await get(conversation)
+      assertEquals(response.status, 200)
+      html = await response.text()
+      d = parseHTML(html).document
+    }
+    let initial = Number(
       d.querySelector(
         `a[href="${talkPath('updates', space.slug)}"] [data-waiting]`,
       )
         ?.getAttribute('data-waiting'),
     )
+    if (!d.querySelector('[data-later]')) return initial
+    // The chat can draw while its lists are still being read. Follow the
+    // page's lists request and count what the browser adds to the bell.
+    let from = html.match(/fetch\("([^"]+lists=1[^"]*)"/)?.[1]
+    assert(from, 'the chat tells the browser where to read its lists')
+    let response = await get(from, 'application/json')
+    assertEquals(response.status, 200)
+    return initial + (await response.json()).waiting
   }
   // The Operator telling them, as the kernel brings it (updates.ts `tell`).
   let tell = async (space: Space, telling: Telling) => {

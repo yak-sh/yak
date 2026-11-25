@@ -10,7 +10,7 @@ import {
   assertObjectMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { ticket } from './erase.ts'
 import type { Space } from './directory.ts'
 import {
@@ -20,7 +20,7 @@ import {
   client,
   connector,
   kernel,
-  letters,
+  letter,
   meta,
   seed,
   tagged,
@@ -80,17 +80,14 @@ test('a space erased: the letter, the act, and the name back', async () => {
     assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 404)
 
     // The letter names what would go, and carries the link.
-    let mail = await until(
-      () =>
-        letters(k, them.email).findLast((l) => l.subject.includes('Delete')),
-      { timeout: 20_000, poll: 100, label: 'the delete letter' },
-    )
-    assertStringIncludes(mail!.body, `https://${slug}.yaks.app/notes/`)
+    let mail = await letter(k, them.email, `/space/${slug}/delete?t=`)
+    assertStringIncludes(mail.subject, 'Delete')
+    assertStringIncludes(mail.body, `https://${slug}.yaks.app/notes/`)
     // From the space's Operator, even with the space in the trash.
-    assertEquals(mail!.from, `${slug}@yaks.app`)
+    assertEquals(mail.from, `${slug}@yaks.app`)
     let link = /https:\/\/yaks\.app(\/space\/[\w-]+\/delete\?t=[^\s]+)/
-      .exec(mail!.body)
-    assert(link, `no confirmation link in: ${mail!.body}`)
+      .exec(mail.body)
+    assert(link, `no confirmation link in: ${mail.body}`)
     let at = link[1]
     assertStringIncludes(at, `/space/${slug}/delete?`)
 

@@ -13,7 +13,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { weigh } from '@yaks/model'
-import { embeds, modelPage, platform } from './testing.ts'
+import { embeds, modelPage, preparedPlatform } from './testing.ts'
 import creatures from '../../apps/vale/data/creatures/01.json' with {
   type: 'json',
 }
@@ -51,7 +51,7 @@ let app = async (
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   })
-  let p = platform('a probe secret', {
+  let p = preparedPlatform('a probe secret', {
     AI,
     MODEL_FETCH: () =>
       Promise.resolve(
@@ -263,7 +263,10 @@ for (
       let rows = await v.read('.build&.failed&*')
       return rows.length ? rows : null
     }, { label: 'visible creature build failure' })
-    assertStringIncludes(String((build.failed as Comp).reason), rejected.reason)
+    assertStringIncludes(
+      String((build.failed as Comp).reason),
+      rejected.reason,
+    )
     assert((build.build as Comp).key)
     assertEquals((build.build as Comp).for, SOURCE)
     assertEquals((await v.read('.built')).length, 0)

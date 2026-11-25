@@ -1,9 +1,10 @@
 // The data editor through the whole kernel (probe.ts `kernel`): its door, then
 // The editor source driven on a linkedom document over the client, as a
 // clerk would use it on a township's notices, meetings and links.
-import { test, until } from '@yaks/testing'
+import { cleanup, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { setImmediate } from 'node:timers/promises'
 import {
   accepted,
   browser,
@@ -79,18 +80,23 @@ await agent.tool('app_deploy', at)
 // does to it. The drafts are a desk in memory; @yaks/draft has its own tests.
 let page = (cookie: string) => {
   let door = browser(k, host, cookie)
+  cleanup(door.stop)
   let store = appStore(`${door.origin}/site/api/`)
   let typed = new Map<string, string>()
-  // The page's work is its calls to the store: it has settled when none is
-  // in flight. A handler starts its call as it is dispatched, and the next
-  // call of a chain starts in the microtasks before `until` looks again.
-  let busy = 0
+  let pending = new Set<Promise<unknown>>()
   let held =
     <A extends unknown[], T>(f: (...a: A) => Promise<T>) => (...a: A) => {
-      busy++
-      return f(...a).finally(() => busy--)
+      let work = f(...a).finally(() => pending.delete(work))
+      pending.add(work)
+      return work
     }
-  let settled = () => until(() => busy == 0, { label: 'the page’s calls' })
+  let settled = async () => {
+    while (pending.size) {
+      await Promise.allSettled(pending)
+      // Let the event handler consume its answer and start its next call.
+      await setImmediate()
+    }
+  }
   let { document } = parseHTML(
     '<!doctype html><html><body><div id="data"></div></body></html>',
   )
@@ -148,19 +154,20 @@ let page = (cookie: string) => {
         new document.defaultView!.Event('input'),
       )
     },
-    start: () =>
-      open({
+    start: async () => {
+      await open({
         root,
         client,
         kinds: appKinds,
         accepts: null,
         view,
         files: '/site/api/blob/',
-      }),
+      })
+      await settled()
+    },
     rows: () =>
       [...root.querySelectorAll('.Rows_Name')].map((r) => r.textContent),
     text: () => root.textContent,
-    stop: () => door.stop(),
   }
 }
 
@@ -239,14 +246,10 @@ for (let [origin, mount] of [[host, '/site'], [custom, '']]) {
     assertStringIncludes(css, '--edge-filter: var(--drawn)')
     assertStringIncludes(css, 'filter: var(--edge-filter)')
     let p = page(them.cookie)
-    try {
-      await p.start()
-      await p.go('#announcement/new')
-      for (let name of ['Card', 'Card_Head', 'Field', 'Button']) {
-        assert(p.root.querySelector(`.${name}`), name)
-      }
-    } finally {
-      p.stop()
+    await p.start()
+    await p.go('#announcement/new')
+    for (let name of ['Card', 'Card_Head', 'Field', 'Button']) {
+      assert(p.root.querySelector(`.${name}`), name)
     }
   })
 }
@@ -269,7 +272,9 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   assertEquals(p.typed.size, 0)
 
   // Once the app has written it, the row shows it, and an edit leaves it be.
-  let reader = appStore(`${browser(k, host, them.cookie).origin}/site/api/`)
+  let readerDoor = browser(k, host, them.cookie)
+  cleanup(readerDoor.stop)
+  let reader = appStore(`${readerDoor.origin}/site/api/`)
   let [notice] = await reader.query('.announcement')
   await reader.apply([{
     entity: { eid: notice.entity.eid },
@@ -356,7 +361,6 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   await p.press('Click again to delete')
   await p.go('#announcement')
   assertStringIncludes(p.text(), 'Nothing here yet')
-  p.stop()
 })
 
 test('a form says what the store refused and keeps what was typed', async () => {
@@ -367,7 +371,6 @@ test('a form says what the store refused and keeps what was typed', async () => 
   await p.press('Save')
   assertStringIncludes(p.text(), 'Attendance should be a number')
   assertEquals(p.field('meeting.attendance').value, 'twelve')
-  p.stop()
 })
 
 test('what was typed and not saved comes back, and can be discarded', async () => {
@@ -381,7 +384,6 @@ test('what was typed and not saved comes back, and can be discarded', async () =
   assertStringIncludes(p.text(), 'unsaved changes are back')
   await p.press('Discard changes')
   assertEquals(p.field('doc.title').value, '')
-  p.stop()
 })
 
 test('someone who may only read sees the rows and no way to change them', async () => {
@@ -405,7 +407,6 @@ test('someone who may only read sees the rows and no way to change them', async 
   await p.go(p.root.querySelector('.Rows_Name')!.getAttribute('href')!)
   assertEquals(p.root.querySelectorAll('button').length, 0)
   assert(p.field('meeting.attendance').disabled)
-  p.stop()
 })
 
 test('words become controls, and the rest is left out', () => {

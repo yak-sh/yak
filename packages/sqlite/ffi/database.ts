@@ -197,6 +197,11 @@ export class Database {
     return this.#handle
   }
 
+  /** Retain a native callback installed on this connection until it closes. */
+  keepCallback(callback: Deno.UnsafeCallback): void {
+    this.#callbacks.add(callback)
+  }
+
   /** Path of the database file. */
   get path(): string {
     return this.#path
@@ -596,7 +601,7 @@ export class Database {
 
     unwrap(err, this.#handle)
 
-    this.#callbacks.add(cb as Deno.UnsafeCallback)
+    this.keepCallback(cb as Deno.UnsafeCallback)
   }
 
   /**
@@ -771,8 +776,8 @@ export class Database {
 
     unwrap(err, this.#handle)
 
-    this.#callbacks.add(cb as Deno.UnsafeCallback)
-    this.#callbacks.add(cbFinal as Deno.UnsafeCallback)
+    this.keepCallback(cb as Deno.UnsafeCallback)
+    this.keepCallback(cbFinal as Deno.UnsafeCallback)
   }
 
   /**

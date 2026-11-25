@@ -1,7 +1,7 @@
 // Delivered comment history must not make a bus pass scan its target joins.
 import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
-import { type Bundle, graph, type Visibility } from '@yaks/graph'
+import { graph, type Visibility } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
@@ -54,17 +54,20 @@ for (let count of [100, 1000]) {
   }, { entity: { eid: 'pick' }, entry: { session: 'native' }, using: {} }], {
     trusted: true,
   })
-  let comments: Bundle[] = Array.from(
-    { length: count },
-    (_, i) => ({
-      entity: { eid: 'comment' + i },
-      comment: { target: 'target' },
-      notified: {},
-      doc: { body: 'seen' },
-      $actor: { by: 'human', via: 'human' },
-    }),
+  await g.apply([{
+    entity: { eid: 'comment' },
+    comment: { target: 'target' },
+    notified: {},
+    doc: { body: 'seen' },
+    $actor: { by: 'human', via: 'human' },
+  }], { trusted: true })
+  let [sample] = await g.get(['comment'])
+  store.tx((tx) =>
+    tx.patch(Array.from({ length: count - 1 }, (_, i) => ({
+      ...sample,
+      entity: { eid: `comment${i}`, archetype: sample.entity.archetype },
+    })))
   )
-  await g.apply(comments, { trusted: true })
   await g.apply([{
     entity: { eid: 'unread' },
     comment: { target: 'target' },

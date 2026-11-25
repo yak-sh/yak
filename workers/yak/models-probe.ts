@@ -9,7 +9,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { monthOf } from '@yaks/platform/meter'
-import { embeds, platform } from './testing.ts'
+import { embeds, preparedPlatform } from './testing.ts'
 import * as apps from './apps.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -43,7 +43,7 @@ export let vale = async (
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   })
-  let p = platform(
+  let p = preparedPlatform(
     'a probe secret',
     {
       AI,

@@ -4,7 +4,7 @@ import './runtime-resolve.ts'
 import { settingsEid as spaceEid } from '@yaks/platform/space-pages'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
-import { cleanup, clock, kept, until } from '@yaks/testing'
+import { cleanup, clock, kept } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import { unsealed } from './invite.ts'
 import type { Custom } from './domains.ts'
@@ -31,7 +31,12 @@ import { domainsApi } from '../../packages/resend/testing.ts'
 import { Ajv } from 'ajv'
 import { run as jq } from '@gabrielbryk/jq-ts'
 
-let logs = new Map<string, string>()
+type Log = {
+  mail: Map<string, Letter[]>
+  delivered: EventTarget
+  conversions: { data: Record<string, unknown>[]; access_token: string }[]
+}
+let logs = new Map<string, Log>()
 
 // Compile each schema when a reply uses it. Most tests call only a few of the
 // listed tools, and connectors for other callers can share these validators.
@@ -281,7 +286,6 @@ let boot = async (
     ])
   let secret = crypto.randomUUID()
   let log = crypto.randomUUID()
-  logs.set(log, '')
   let cf = cloudflare(log, bindings.REGISTRAR_EXPIRY as string | undefined)
   let domains = domainsApi('a-token')
   let views = dataset()
@@ -352,7 +356,6 @@ let boot = async (
       await service.stop()
       await p[Symbol.asyncDispose]()
       await cf.stop()
-      logs.delete(log)
     })()
   let door = driven(service.url, secret, log, apex(), cf.url)
   let deliveries = async () => {
@@ -539,7 +542,9 @@ export let client = (
     body: T,
   ): Promise<T extends unknown[] ? Bundle[] : Envelope> => {
     let r = await post(body)
-    if (r.status != 200) throw new Error(`apply ${r.status}: ${await r.text()}`)
+    if (r.status != 200) {
+      throw new Error(`apply ${r.status}: ${await r.text()}`)
+    }
     return await r.json()
   }
   let put = (path: string, body: string, type?: string) =>
@@ -584,7 +589,10 @@ export let connector = (
   // later request, the way a client does — it names this client's stream and
   // the tool list it cached (mcp.ts).
   let session = ''
-  let schemas = listedFor(k, `${k.host}${path} ${cookie ?? ''} ${bearer ?? ''}`)
+  let schemas = listedFor(
+    k,
+    `${k.host}${path} ${cookie ?? ''} ${bearer ?? ''}`,
+  )
   let ask = async (method: string, params: unknown = {}) => {
     let r = await k.at(k.host, path, {
       method: 'POST',
@@ -668,10 +676,8 @@ export let connector = (
   return { call, tool, answer, narrow }
 }
 
-// Every letter the kernel has sent to an address, oldest first, read off its
-// log: the stand-in for Email Sending writes one line per letter
-// (`cloudflare`). An app's letter may be addressed to several readers at
-// once, so "to this address" is membership, not equality.
+// Every letter the kernel has sent to an address, oldest first. A letter
+// addressed to several readers appears in each reader's mailbox.
 export type Letter = {
   from?: string
   name?: string
@@ -682,32 +688,46 @@ export type Letter = {
 }
 
 export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
-  [...(logs.get(k.log) ?? '').matchAll(/yak-mail (\{.*\})/g)]
-    .map((m) => JSON.parse(m[1]) as Letter)
-    .filter((l) => [l.to].flat().includes(to))
+  (logs.get(k.log)?.mail.get(to) ?? []).map((l) => structuredClone(l))
 
 /** Every event Meta's Conversions API was sent (meta-ads.ts), with the token
  * it came with. */
 export let toldMeta = (k: Pick<Kernel, 'log'>) =>
-  [...(logs.get(k.log) ?? '').matchAll(/yak-meta (\{.*\})/g)]
-    .flatMap((m) => {
-      let { data, access_token } = JSON.parse(m[1])
-      return (data as Record<string, unknown>[]).map((event) => ({
-        token: access_token as string,
+  structuredClone(logs.get(k.log)?.conversions ?? [])
+    .flatMap(({ data, access_token }) =>
+      data.map((event) => ({
+        token: access_token,
         event,
       }))
-    })
+    )
 
 // Wait for this delivery, not for every unrelated alarm in the shared kernel.
 // A mover or an in-flight request elsewhere can remain active after this
 // letter was delivered; its lifetime cannot gate reading the receipt.
 let posted = async <T>(
-  k: Partial<Pick<Kernel, 'deliveries'>>,
+  k: Mailbox,
+  to: string,
   find: () => T,
   label: string,
-) => {
+): Promise<NonNullable<T>> => {
   await k.deliveries?.()
-  return until(find, { timeout: 20_000, poll: 10, label })
+  let existing = find()
+  if (existing) return existing
+  let log = logs.get(k.log)
+  if (!log) throw new Error(`No mail log for ${label}`)
+  let { promise, resolve, reject } = Promise.withResolvers<NonNullable<T>>()
+  let found = () => {
+    let value = find()
+    if (value) resolve(value)
+  }
+  log.delivered.addEventListener(to, found)
+  let deadline = setTimeout(() => reject(new Error(`No ${label}`)), 20_000)
+  try {
+    return await promise
+  } finally {
+    clearTimeout(deadline)
+    log.delivered.removeEventListener(to, found)
+  }
 }
 
 // The latest letter to an address that says a thing, past the letters it had
@@ -723,6 +743,7 @@ export let letter = (
 ) =>
   posted(
     k,
+    to,
     () =>
       letters(k, to).slice(after).findLast((l) =>
         `${l.subject}\n${l.body}`.includes(saying)
@@ -743,6 +764,7 @@ export let mailed = (
 ) =>
   posted(
     k,
+    to,
     () =>
       letters(k, to).slice(after).map((l) => DIGITS.exec(l.subject)?.[1])
         .findLast(Boolean) ?? '',
@@ -1012,8 +1034,7 @@ export let seed = async (
 //
 // The conversations a kernel has with Cloudflare, over the API's
 // `{success, errors, result}` envelope. A letter sent through Email Sending,
-// by its API or its binding, is written to `log` as one `yak-mail` line, which
-// is where a test reads its letters back (`letters`). And the three calls a domain makes — list by name,
+// by its API or its binding, is recorded in `log` for `letters`. And the three calls a domain makes — list by name,
 // create, delete — go to custom hostnames kept in memory. A hostname is
 // answered active, which is the state a domain reaches once the person's
 // record resolves; the words each step is read by are held against recorded
@@ -1035,6 +1056,12 @@ export let cloudflare = (
   log = crypto.randomUUID(),
   registrarExpiry = new Date(Date.now() + 365 * 86_400_000).toISOString(),
 ) => {
+  let logbook: Log = {
+    mail: new Map(),
+    delivered: new EventTarget(),
+    conversions: [],
+  }
+  logs.set(log, logbook)
   let held = new Map<string, Custom>()
   let dns = new Map<string, string[]>()
   // The records written in the platform's own zone (zone.ts), by their id.
@@ -1179,21 +1206,22 @@ export let cloudflare = (
     body = '',
     replyTo?: string,
     from?: { address: string; name: string },
-  ) =>
-    logs.set(
-      log,
-      (logs.get(log) ?? '') +
-        `yak-mail ${
-          JSON.stringify({
-            to,
-            subject,
-            body,
-            replyTo,
-            from: from?.address,
-            name: from?.name,
-          })
-        }\n`,
-    )
+  ) => {
+    let letter = {
+      to,
+      subject,
+      body,
+      replyTo,
+      from: from?.address,
+      name: from?.name,
+    }
+    for (let reader of new Set([to].flat())) {
+      let inbox = logbook.mail.get(reader)
+      if (!inbox) logbook.mail.set(reader, inbox = [])
+      inbox.push(letter)
+      logbook.delivered.dispatchEvent(new Event(reader))
+    }
+  }
   let service = endpoint(async (req) => {
     let url = new URL(req.url)
     let written = /^\/zones\/[^/]+\/dns_records(?:\/([^/]+))?$/
@@ -1206,11 +1234,7 @@ export let cloudflare = (
       return ok(Object.fromEntries(names))
     }
     if (url.pathname.startsWith('/meta/')) {
-      logs.set(
-        log,
-        (logs.get(log) ?? '') +
-          `yak-meta ${JSON.stringify(await req.json())}\n`,
-      )
+      logbook.conversions.push(await req.json())
       return Response.json({ events_received: 1 })
     }
     if (url.pathname == '/probe/txt' || url.pathname == '/probe/mx') {
@@ -1238,7 +1262,7 @@ export let cloudflare = (
       })
     }
     if (url.pathname == '/tracker-probe' && req.method == 'POST') {
-      logs.set(log, (logs.get(log) ?? '') + `yak-tracker ${await req.text()}\n`)
+      await req.text()
       return new Response(null, { status: 200 })
     }
     if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
@@ -1332,7 +1356,10 @@ export let cloudflare = (
         return Promise.resolve({ messageId: crypto.randomUUID() })
       },
     },
-    stop: service.stop,
+    stop: async () => {
+      await service.stop()
+      logs.delete(log)
+    },
   }
 }
 

@@ -52,22 +52,36 @@ export let bounded = (limits: Limits): Driver => {
   return d
 }
 
+let statementCosts = () =>
+  Deno.dlopen(sqlitePath, {
+    sqlite3_trace_v2: {
+      parameters: ['pointer', 'u32', 'function', 'pointer'],
+      result: 'i32',
+    },
+    sqlite3_stmt_status: {
+      parameters: ['pointer', 'i32', 'i32'],
+      result: 'i32',
+    },
+  })
+let costs: ReturnType<typeof statementCosts> | undefined
+
 /** A Driver over a fresh in-memory database, and the virtual machine steps its
- * statements have taken (counted by tens): what a read costs, however few the
- * rows it answers. */
+ * statements have taken: what a read costs, however few the rows it answers. */
 export let stepping = (): { driver: Driver; steps: () => number } => {
   let db = new Database(':memory:')
   let n = 0
-  let tick = new Deno.UnsafeCallback(
-    { parameters: ['pointer'], result: 'i32' },
-    () => (n += 10, 0),
+  let api = (costs ??= statementCosts()).symbols
+  let profile = new Deno.UnsafeCallback(
+    { parameters: ['u32', 'pointer', 'pointer', 'pointer'], result: 'i32' },
+    (
+      _event,
+      _data,
+      statement,
+    ) => (n += api.sqlite3_stmt_status(statement, 4, 1), 0),
   )
-  Deno.dlopen(sqlitePath, {
-    sqlite3_progress_handler: {
-      parameters: ['pointer', 'i32', 'function', 'pointer'],
-      result: 'void',
-    },
-  }).symbols.sqlite3_progress_handler(db.unsafeHandle, 10, tick.pointer, null)
+  // SQLITE_TRACE_PROFILE fires once for each completed statement.
+  api.sqlite3_trace_v2(db.unsafeHandle, 2, profile.pointer, null)
+  db.keepCallback(profile as Deno.UnsafeCallback)
   return { driver: driver(db), steps: () => n }
 }
 
