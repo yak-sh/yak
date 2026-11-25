@@ -890,11 +890,11 @@ test(
             op: 'patch',
             edits: [
               { path: 'site.css', find: 'blue', replace: 'green' },
-              { path: 'index.html', find: 'Nowhere', replace: 'x' },
+              { path: 'site.css', find: 'blue', replace: 'x' },
             ],
           }),
         Error,
-        'find matched 0 times in index.html (edits[1])',
+        'find matched 0 times in site.css (edits[1]). Edits apply in order.',
       )
       assertEquals(
         await agent.tool('app_files', { ...app, op: 'read', path: 'site.css' }),

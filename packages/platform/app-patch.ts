@@ -40,7 +40,12 @@ let locations = (text: string, find: string, parts: string[]) => {
   return shown.join('\n')
 }
 
-let patched = (was: string, { find, replace }: Edit, where: string) => {
+let patched = (
+  was: string,
+  { find, replace }: Edit,
+  where: string,
+  batch: boolean,
+) => {
   let parts = was.split(find)
   let hits = parts.length - 1
   if (hits == 1) {
@@ -51,7 +56,9 @@ let patched = (was: string, { find, replace }: Edit, where: string) => {
   if (!hits) {
     throw new CallError(
       'arguments',
-      found + ': read the file back and copy the text exactly',
+      batch
+        ? `find matched 0 times in ${where}. Edits apply in order. Make find match the text left by any earlier edits.`
+        : found + ': read the file back and copy the text exactly',
     )
   }
   throw new CallError(
@@ -66,17 +73,20 @@ let patched = (was: string, { find, replace }: Edit, where: string) => {
 export let patching = (
   texts: Record<string, string>,
   list: Edit[],
-  missing = (path: string, where: string) =>
-    noFile(path, Object.keys(texts), undefined, undefined, where),
+  {
+    batch = list.length > 1,
+    missing = (path: string, where: string) =>
+      noFile(path, Object.keys(texts), undefined, undefined, where),
+  } = {},
 ) => {
   let now = { ...texts }
   let lines = list.map((edit, i) => {
     let { path } = edit
-    let where = list.length > 1 ? `${path} (edits[${i}])` : path
+    let where = batch ? `${path} (edits[${i}])` : path
     if (!Object.hasOwn(now, path)) {
       throw new CallError('missing', missing(path, where))
     }
-    let { text, line } = patched(now[path], edit, where)
+    let { text, line } = patched(now[path], edit, where, batch)
     now[path] = text
     return line
   })

@@ -422,10 +422,11 @@ test('a patch takes a list of edits across files, in order, all or none', () => 
   ])
   let refused = (args: Record<string, unknown>, t = texts) =>
     assertThrows(() => patching(t, edits(args)), Error).message
-  assertStringIncludes(
-    refused({ edits: [list[0], { path: 'a.css', find: 'nope', replace: '' }] }),
-    'find matched 0 times in a.css (edits[1])',
-  )
+  let missed = refused({ edits: [list[0], { ...list[0], replace: '' }] })
+  assertStringIncludes(missed, 'find matched 0 times in a.css (edits[1])')
+  assertStringIncludes(missed, 'Edits apply in order')
+  assertStringIncludes(missed, 'text left by any earlier edits')
+  assertEquals(texts['a.css'], 'h1 { color: red }\np { color: red }\n')
   assertStringIncludes(
     refused({ edits: [list[0], { path: 'c.js', find: 'x', replace: '' }] }),
     'no file c.js (edits[1]); it holds a.css, b.html',

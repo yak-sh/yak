@@ -4904,11 +4904,10 @@ let OURS: Row[] = [
           let was = await d.view.read(at(d, p))
           if (was) texts[p] = decoded(was)
         }))
-        let done = patching(
-          texts,
-          list,
-          (path, where) => missing(d, path, where),
-        )
+        let done = patching(texts, list, {
+          batch: args.edits != null,
+          missing: (path, where) => missing(d, path, where),
+        })
         let sent = paths.map((path) => ({
           path,
           bytes: new TextEncoder().encode(done.texts[path]),
