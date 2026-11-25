@@ -210,6 +210,7 @@
     display: grid;
     gap: .75rem;
     justify-items: start;
+    margin-bottom: 1.5rem;
   }
   .Invite_Link .Copy {
     max-width: 100%;
