@@ -36,6 +36,7 @@ let browsing: Browsing = {
           },
           createCDPSession: () =>
             Promise.resolve({
+              on: () => {},
               send: (method: string, params?: { expression?: string }) => {
                 let expression = params?.expression
                 let width = visit.view.width

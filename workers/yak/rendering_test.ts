@@ -34,6 +34,7 @@ let devtools = (
 ) => {
   let worlds = 0
   let cdp: Session = {
+    on: () => {},
     send: (method, params) => {
       if (method == 'Page.getFrameTree') {
         return Promise.resolve({ frameTree: { frame: { id: 'main' } } })
@@ -351,22 +352,39 @@ test('browse reads bounded visible text and both kinds of timing from the page',
   ])
 })
 
-test('a slow phone opens the page cold, then again through what it cached', async () => {
-  let p = page()
+// What a visit tells DevTools beyond reading its page, in order, from a
+// browser whose site has one service worker registered.
+let told = (p: ReturnType<typeof page>) => {
   let sent: string[] = []
-  let { createCDPSession, goto } = p.p
+  let { createCDPSession } = p.p
   p.p.createCDPSession = async () => {
     let cdp = await createCDPSession()
+    let hear = new Map<string, (said: unknown) => void>()
     return {
+      on: (event, fn) => hear.set(event, fn),
       send: (method, params) => {
         if (method.startsWith('Runtime') || method.startsWith('Page')) {
           return cdp.send(method, params)
         }
         sent.push(`${method} ${JSON.stringify(params ?? {})}`)
+        hear.get('ServiceWorker.workerRegistrationUpdated')?.({
+          registrations: [{
+            registrationId: '7',
+            scopeURL: 'https://yaks.app/',
+            isDeleted: false,
+          }],
+        })
         return Promise.resolve({})
       },
     }
   }
+  return sent
+}
+
+test('a slow phone opens the page cold, then again through what it cached', async () => {
+  let p = page()
+  let sent = told(p)
+  let { goto } = p.p
   let went: string[] = []
   p.p.goto = (url, o) => (went.push(url), goto(url, o))
   await capture(p.browsing, {
@@ -385,6 +403,33 @@ test('a slow phone opens the page cold, then again through what it cached', asyn
   assertEquals(went, [
     'https://yaks.app/checks',
     'https://yaks.app/checks?again',
+  ])
+})
+
+test("a visit pushes a message to its site's service worker, and takes it and the page off the network", async () => {
+  let p = page()
+  let sent = told(p)
+  p.p.browser = () => ({
+    targets: () => [
+      { type: () => 'page', createCDPSession: p.p.createCDPSession },
+      { type: () => 'service_worker', createCDPSession: p.p.createCDPSession },
+    ],
+  })
+  await capture(p.browsing, {
+    url: 'https://yaks.app/checks',
+    view,
+    steps: [{ push: { url: '/checks' } }, { offline: true }],
+    audit: false,
+  })
+  let offline =
+    'Network.emulateNetworkConditions {"offline":true,"latency":0,"downloadThroughput":-1,"uploadThroughput":-1}'
+  assertEquals(sent, [
+    'ServiceWorker.enable {}',
+    'ServiceWorker.deliverPushMessage {"origin":"https://yaks.app","registrationId":"7","data":"{\\"url\\":\\"/checks\\"}"}',
+    'Network.enable {}',
+    offline,
+    'Network.enable {}',
+    offline,
   ])
 })
 

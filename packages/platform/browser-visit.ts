@@ -93,6 +93,10 @@ export type Cookie = {
  *   shot      take a screenshot, kept under this name
  *   open      open this address, relative to the page, as a person opening
  *             it again does: a warm open, through what the first one cached
+ *   push      push this message to the site's service worker, as its push
+ *             service would
+ *   offline   take the page and its service worker off the network (true),
+ *             or back onto it at the view's speed (false)
  */
 export type Step =
   | { tap: string }
@@ -105,6 +109,8 @@ export type Step =
   | { wait: number }
   | { shot: string }
   | { open: string }
+  | { push: unknown }
+  | { offline: boolean }
 /** What yak-browser is asked to open. */
 export type Visit = {
   url: string
@@ -187,6 +193,9 @@ export type Page = {
     timeout: number
   }): Promise<{ status(): number } | null>
   createCDPSession(): Promise<Session>
+  browser(): {
+    targets(): { type(): string; createCDPSession(): Promise<Session> }[]
+  }
   browserContext(): {
     overridePermissions(origin: string, permissions: string[]): Promise<void>
   }
@@ -226,6 +235,8 @@ export type Element = {
 export type Session = {
   // deno-lint-ignore no-explicit-any
   send(method: any, params?: Record<string, unknown>): Promise<any>
+  // deno-lint-ignore no-explicit-any
+  on(event: any, hear: (said: any) => void): unknown
 }
 /**
  * A browser to open, acquired as a session and then connected to, and the
@@ -621,6 +632,46 @@ let throttled = async (page: Page, view: View, url: string) => {
   }
 }
 
+// The page's network, and its service workers', which DevTools sets apart.
+let network = async (page: Page, view: View, offline: boolean) => {
+  let net = view.network && NETWORKS[view.network]
+  let workers = page.browser().targets()
+    .filter((t) => t.type() == 'service_worker')
+  for (let cdp of [page, ...workers].map((t) => t.createCDPSession())) {
+    let session = await cdp
+    await session.send('Network.enable')
+    await session.send('Network.emulateNetworkConditions', {
+      offline,
+      latency: net ? net.latency : 0,
+      downloadThroughput: net ? net.down : -1,
+      uploadThroughput: net ? net.up : -1,
+    })
+  }
+}
+
+// A message pushed to every service worker of the page's site, as its push
+// service would deliver it.
+let push = async (page: Page, origin: string, said: unknown) => {
+  let cdp = await page.createCDPSession()
+  let ids = new Set<string>()
+  cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
+    for (let r of registrations) {
+      if (!r.isDeleted && new URL(r.scopeURL).origin == origin) {
+        ids.add(r.registrationId)
+      }
+    }
+  })
+  await cdp.send('ServiceWorker.enable')
+  if (!ids.size) throw new Error(`no service worker at ${origin}`)
+  for (let registrationId of ids) {
+    await cdp.send('ServiceWorker.deliverPushMessage', {
+      origin,
+      registrationId,
+      data: JSON.stringify(said),
+    })
+  }
+}
+
 let viewport = (view: View, keyboard = 0) => ({
   width: view.width,
   height: Math.max(1, view.height - Math.max(0, keyboard)),
@@ -878,6 +929,15 @@ let loaded = async (
             waitUntil: 'domcontentloaded',
             timeout: LOAD,
           }))?.status() ?? 0
+          continue
+        }
+        if ('push' in step) {
+          waitingFor('pushing a message')
+          await push(page, new URL(url).origin, step.push)
+          continue
+        }
+        if ('offline' in step) {
+          await network(page, view, step.offline)
           continue
         }
         if ('shot' in step) {

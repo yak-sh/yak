@@ -11,6 +11,7 @@ export type Actions = Pick<
   | 'mouse'
   | 'touchscreen'
   | 'browserContext'
+  | 'browser'
   | 'mainFrame'
   | 'setRequestInterception'
 >
@@ -20,6 +21,7 @@ export let actions = (did: (line: string) => void = () => {}): Actions => {
   let frame = {}
   return {
     bringToFront: () => Promise.resolve(),
+    browser: () => ({ targets: () => [] }),
     mainFrame: () => frame,
     setRequestInterception: (on) => done(`intercept ${on}`),
     waitForSelector: async (s) => (await done(`find ${s}`), {

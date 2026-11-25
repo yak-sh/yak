@@ -93,6 +93,7 @@ let browsing: Browsing = {
           },
           createCDPSession: () =>
             Promise.resolve({
+              on: () => {},
               send: (method: string) =>
                 Promise.resolve(
                   method == 'Page.getFrameTree'
