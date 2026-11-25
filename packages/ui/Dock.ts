@@ -111,4 +111,12 @@ export let specimens = (): Specimen[] => [[
     h(Dot, { mod: 'positive', class: 'Dock_Here' }),
     h(Badge, null, '2'),
   ),
+], [
+  'Dock, Launcher-bar, Presence away',
+  h(
+    Dock.Launcher,
+    { mod: 'bar' },
+    'Friends',
+    h(Dot, { mod: 'caution', class: 'Dock_Here Dock_Presence' }),
+  ),
 ]]
