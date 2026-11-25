@@ -389,12 +389,6 @@ test('a deleted app comes back from the Trash', async () => {
   )
 })
 
-test('selling stops from its page', async () => {
-  let selling = managePath('selling', slug)
-  let stopped = await post(selling, { sell: 'stop' })
-  assertEquals(stopped.headers.get('location'), to(selling))
-})
-
 // An Operator conversation opens in its chat app. Its side holds the space's
 // apps, each opening a chat about it with the app beside it, and Updates
 // opens beside it.

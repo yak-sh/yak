@@ -1,7 +1,8 @@
 // What the person's own pages draw, read from the directory: the sidebar's
 // spaces and apps (@yaks/platform/side-rows), their account, browsers and
-// friends (@yaks/platform/account-rows), and the apps a space's Apps page
-// lists (@yaks/platform/space-apps). A page asks it as it is drawn
+// friends (@yaks/platform/account-rows), the apps a space's Apps page lists
+// (@yaks/platform/space-apps), and a space's month against its allowances
+// (@yaks/platform/payment-rows). A page asks it as it is drawn
 // (manage.ts `beside`), and the directory answers the same as a live read of
 // the person (graph.ts `/person/ws`), so the side the page drew and the one
 // its rows redraw agree.
@@ -52,6 +53,9 @@ import { offerRows, offersSpace } from '@yaks/platform/update-rows'
 import { offersIn } from './updates.ts'
 import { shelf } from './apps.ts'
 import { kernels } from '@yaks/platform/ladder'
+import { allowancesRow, paymentPart } from '@yaks/platform/payment-rows'
+import { gauges } from '@yaks/platform/standing'
+import { budget, spent } from '@yaks/platform/meter'
 import type { Who } from './session.ts'
 
 // The apps of other people's spaces this person may open (T-124081): each app
@@ -275,6 +279,8 @@ let sideRows = async (
   line: string,
 ): Promise<Bundle[]> => {
   if (line == SIDE_SPACES) return spaceRows(person, await pickable(dir, person))
+  let paid = paymentPart(line)
+  if (paid) return await paymentRows(dir, person, paid)
   let apps = appsSpace(line)
   let offers = offersSpace(line)
   let listed = listedSpace(line)
@@ -291,3 +297,41 @@ let sideRows = async (
     ? appRows(person, eid, await sideApps(dir, space, who))
     : offerRows(person, eid, await offersIn(dir, space, who))
 }
+
+// A space's payments, to its owner. The allowances are the page's rows, the
+// month as the space's row holds it. The rest the page graph's door reads of
+// the provider (payment-reads.ts) on the space's row as the directory
+// answers it here, `paymentAccount`, which the page never sees.
+let paymentRows = async (
+  dir: Directory,
+  person: string,
+  { part, space: eid }: NonNullable<ReturnType<typeof paymentPart>>,
+): Promise<Bundle[]> => {
+  let seat = (await dir.seated(person)).find((s) =>
+    s.space.eid == eid && !s.space.trashed && s.role == 'owner'
+  )
+  if (!seat) return []
+  let { space } = seat
+  if (part == 'allowances') {
+    let { all } = shelf(await dir.apps(space), space, { person, role: 'owner' })
+    return [allowancesRow(eid, {
+      limits: gauges(space, all.length),
+      budget: budget(space),
+      read: spent(space).at || null,
+    })]
+  }
+  return [{ entity: { eid }, paymentAccount: accountOf(space) }]
+}
+
+/** What a space's payments are read of its directory row: its plan,
+ * seller, credit and month. */
+export let accountOf = (space: Space) => ({
+  tier: space.tier,
+  plan: space.plan,
+  seller: space.seller ?? null,
+  credit: space.credit ?? null,
+  comped: space.comped ?? null,
+  budget: space.budget,
+  starter: space.starter ?? null,
+  meter: space.meter,
+})

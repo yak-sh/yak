@@ -2314,6 +2314,16 @@ export class Store extends Durable {
               'invite',
               'operator_reach',
               'tombstone',
+              // A space's plan, seller, credit and month (payment-rows).
+              'plan',
+              'seller',
+              'credit',
+              'comped',
+              'comp',
+              'fee',
+              'budget',
+              'starter',
+              'meter',
             ].some((key) => key in b)
           ),
         // Where friends are moves with time and with writes this read does

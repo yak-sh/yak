@@ -110,6 +110,14 @@ export let ASSETS: Asset[] = [
     external,
     named: true,
   },
+  // A space's Selling and Billing kept current
+  // (@yaks/platform/payment-browser).
+  {
+    name: '_payment.js',
+    bundle: of('@yaks/platform/payment-browser'),
+    external,
+    named: true,
+  },
   // A space's Updates cards kept current
   // (@yaks/platform/updates-list-browser).
   {

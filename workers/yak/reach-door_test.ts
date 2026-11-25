@@ -61,6 +61,12 @@ import {
   listedOf,
   spaceApps,
 } from '@yaks/platform/space-apps'
+import {
+  allowancesLine,
+  allowancesOf,
+  planLine,
+  planOf,
+} from '@yaks/platform/payment-rows'
 import type { AppsView } from '@yaks/platform/space-apps-view'
 import { managePath } from '@yaks/platform/routes'
 import { ALL } from './updates.ts'
@@ -275,6 +281,43 @@ test('a tab chooses how its person is told things away from the page', async () 
   })
   equal(alertingOf(await rowsOf(ada, ALERTING))?.channel, 'updates')
   equal(alertingOf(await rowsOf(bea, ALERTING))?.channel, null)
+})
+
+test('a tab reads its space’s plan and month, and only its owner acts on them', async () => {
+  let own = (await k.dir.seated(ada.person))
+    .find((s) => s.space.slug == 'adas')!.space
+  let plan = planOf(await rowsOf(ada, planLine(own.eid)))
+  equal([plan?.tier, plan?.known], ['free', false])
+  let month = allowancesOf(await rowsOf(ada, allowancesLine(own.eid)))
+  equal(month?.limits.apps?.used, 2)
+  for (let line of [planLine(own.eid), allowancesLine(own.eid)]) {
+    equal(await rowsOf(bea, line), [], line)
+  }
+  let act = (who: Tab, comp: Record<string, unknown>) =>
+    wrote(who, [{ entity: { eid: crypto.randomUUID() }, ...comp }])
+  // A seller account connected, and disconnected from its page.
+  await k.dir.stamp({
+    entities: [{
+      entity: { eid: own.eid },
+      seller: { via: 'stripe', account: 'acct_ada', ready: true },
+    }],
+  })
+  equal((await act(bea, { sellStop: { space: own.eid } })).status, 403)
+  equal((await act(ada, { sellStop: { space: own.eid } })).status, 200)
+  equal((await k.dir.space(own.slug))?.seller, null)
+  // What the free plan cannot do is refused in words the page says.
+  let capped = await act(ada, { creditCap: { space: own.eid, cap: 25 } })
+  equal(
+    [capped.status, capped.body.message],
+    [400, 'AI credit comes with the Pro plan.'],
+  )
+  let left = await act(ada, {
+    leave: { space: own.eid, door: 'portal' },
+  })
+  equal(
+    [left.status, left.body.message],
+    [400, 'The paid tier is not switched on here.'],
+  )
 })
 
 test('a tab writes its person’s account, messages and asks through the door, and only theirs', async () => {

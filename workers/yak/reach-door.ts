@@ -18,6 +18,12 @@
 // (apps-reads.ts), is read as the page asks, and a watch of it is answered
 // once.
 //
+// A space's plan card, where it stands with selling and whom it is billed to
+// (@yaks/platform/payment-rows) no store holds: each is read of the space and
+// its payment provider (payment-reads.ts), and read again whenever the
+// directory says the space's row moved. Its owner's acts on them are done
+// here as them.
+//
 // Some writes are not rows: an Updates card's action (updates.ts `acting`),
 // the person's own account, messages and friend asks (account-writes.ts),
 // and who is in a space they own (people-writes.ts), are done here and answered with what they came to,
@@ -46,6 +52,8 @@ import {
 import type { Update } from '@yaks/platform/update-rows'
 import { AGENTS, brokenSpace } from '@yaks/platform/space-apps'
 import { agentsIn, brokenOf } from './apps-reads.ts'
+import { paymentPart, paymentWrite } from '@yaks/platform/payment-rows'
+import { ownedSpace, paymentApply, paymentRead } from './payment-reads.ts'
 import { writes } from '@yaks/member'
 import { personRows, visitsRows } from './side.ts'
 import { countsSpace } from '@yaks/platform/visit-counts'
@@ -174,6 +182,13 @@ export let reachDoor = async (
         )
       }
       if (once(line)) return Response.json(await readOnce(line))
+      let paid = paymentPart(line)
+      if (paid && paid.part != 'allowances') {
+        let space = await ownedSpace(dir, person, paid.space)
+        return Response.json(
+          space ? await paymentRead(env, dir, space, paid.part) : [],
+        )
+      }
       let named = settingsSpace(line)
       if (named != undefined) {
         let seat = await seatIn(named)
@@ -237,6 +252,19 @@ export let reachDoor = async (
           })
         )
       }
+      let paying = paymentWrite(bundles)
+      if (paying) {
+        let space = await ownedSpace(dir, person, paying.space)
+        if (!space) {
+          return Response.json(
+            { error: 'Forbidden', message: 'Only the space’s owner may.' },
+            { status: 403 },
+          )
+        }
+        return Response.json(
+          await paymentApply(paying.act, env, req, dir, space, person),
+        )
+      }
       let setting = settingsWrite(bundles)
       if (setting) {
         let seat = await seatIn(setting.space)
@@ -291,6 +319,29 @@ export let reachDoor = async (
                 { ...vouched(who), ...KERNEL },
                 '/person/ws',
               )
+            // What no store holds of a space's payments, read again each
+            // time the directory says its row moved.
+            let paid = paymentPart(line)
+            if (paid && paid.part != 'allowances') {
+              let { part, space: eid } = paid
+              let asked = 0
+              return personal((frame) => {
+                if (frame.refused) return sink(frame)
+                let mine = ++asked
+                let row = frame.bundles?.find((b) => b.paymentAccount)
+                ownedSpace(dir, person, eid).then(async (space) =>
+                  space && row
+                    ? await paymentRead(env, dir, {
+                      ...space,
+                      ...row.paymentAccount as Partial<typeof space>,
+                    }, part)
+                    : []
+                ).then(
+                  (bundles) => mine == asked && sink({ bundles, reset: true }),
+                  (error) => mine == asked && sink({ refused: error }),
+                )
+              })
+            }
             if (line != UPDATE_WAITING && personLine(line)) {
               return personal(sink)
             }

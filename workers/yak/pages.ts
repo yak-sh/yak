@@ -10,7 +10,6 @@ import {
   status,
 } from '@yaks/platform/page-parts'
 export { copyable, firstAsk, heading, labeled, send, state, status }
-import { DOMAIN_RENEWAL } from '@yaks/platform/plans'
 import { Head } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 // The kernel's own pages, in the home page's voice (workers/yak/public): what
@@ -52,7 +51,7 @@ import type { Agent } from './connected.ts'
 
 import type { Connections, Face } from './connections.ts'
 
-import { day, esc, fileDrop, markup, raw } from './html.ts'
+import { esc, fileDrop, markup, raw } from './html.ts'
 
 import type { Befriended } from './friends.ts'
 
@@ -74,33 +73,12 @@ import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
 
 import { versionOf } from './running.ts'
 
-import { yak } from './mascot.ts'
-
 import { asset, links } from './sheets.ts'
 import { FRAMED } from './frame.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
 import { decodeHTML } from 'entities'
 
-import { BLOCK, type Budget } from '@yaks/platform/meter'
-import { size } from '@yaks/fp'
 import { FILED } from '@yaks/api/refuse'
-import {
-  beyond,
-  type Ceiling,
-  count,
-  dollars,
-  type Gauge,
-} from '@yaks/platform/standing'
-import {
-  ceilings,
-  PRICE,
-  PRO_GRANT,
-  SUBSCRIBED,
-  YEARLY,
-} from '@yaks/platform/plans'
-
-import type { Card as Billed, Payer, Want } from './billing.ts'
-import type { Costs } from '@yaks/host/payments'
 
 import type { Accepts } from '@yaks/blob'
 
@@ -136,26 +114,6 @@ export let held = (name: string, value?: string | null) =>
 
 export let home = (env: Host) =>
   h('a', { class: 'Away', href: url(env, '/') }, 'yaks.app')
-
-// What a plan costs, said on its button: "$49 a month", "$490 a year".
-let priced = (want: Want) =>
-  `$${count((want.per == 'year' ? YEARLY : PRICE)[want.tier]!)} a ${want.per}`
-
-export let billButton = (
-  door: string,
-  label: string,
-  target?: string,
-  want?: Want,
-) =>
-  h(Button, {
-    type: 'button',
-    mod: door != 'portal' && 'go',
-    class: 'Bill_Go',
-    'data-door': door,
-    'data-target': target,
-    'data-plan': want?.tier,
-    'data-per': want?.per,
-  }, label)
 
 // The style guide's parts (public/style-guide.html, One design language),
 // said once: a card's head, a status word, and a field under its label.
@@ -268,6 +226,10 @@ ${
   }${
     main.includes('data-visits-view=')
       ? `<script type="module" src="${file('_visits.js')}"></script>`
+      : ''
+  }${
+    main.includes('data-payment-view=')
+      ? `<script type="module" src="${file('_payment.js')}"></script>`
       : ''
   }${
     main.includes('data-domain-search=')
@@ -720,41 +682,16 @@ export type DeskPage = {
   viewDays?: number
   /** the eid of the space the page is of, which its lines name */
   spaceEid?: string
-  sell?: 'none' | 'setup' | 'ready'
-  /** whether the space sells as the house, on the platform's own account,
-   * which takes no fee (sell.ts, T-2983) */
-  house?: boolean
-  /** whether the owner can connect a payment account they already have
-   * instead of opening one (sell.ts `linkable`) */
-  link?: boolean
   /** whether the platform's payment provider takes sellers at all, which
    * puts Selling in the side on every manage page */
   shops?: boolean
-  /** the name of the payment provider the space pays and sells through
-   * (payments.ts), as the selling and billing cards say it */
-  provider?: string
-  /** what selling through that provider costs a seller, as it publishes */
-  costs?: Costs
-  plan?: Billed
   domains?: DomainPage
   renewals?: Domain[]
-  /** the Billing page's month: each allowance the space answers to and how
-   * much of it is used, its model budget, when the hourly sweep last read
-   * them, and whom the payment provider bills (`undefined` when it couldn't
-   * be asked) */
-  bill?: {
-    limits: Partial<Record<Ceiling, Gauge>>
-    budget: Budget
-    read: string | null
-    payer?: Payer | null
-  }
   /** on a paid plan, which is what taking payments needs */
   paying?: boolean
   /** whether its apps' pages say "Website by yaks.app" at their foot
    * (`byline`), which Settings offers on a paid plan */
   byline?: boolean
-  /** what the platform takes from each sale, in basis points */
-  fee?: number
   say?: string
   no?: boolean
   view?: Setting
@@ -1362,23 +1299,6 @@ export let closed = (env: Host = {}) =>
 export let said = (say?: string, no?: boolean) =>
   say ? h(Notice, { mod: no && 'negative', role: 'status' }, say) : null
 
-// What the plan card draws: the space it bills and what it pays.
-export type PlanCard = {
-  slug: string
-  // The space's name, as its buttons say whom they buy for.
-  title?: string
-  // What this space pays (billing.ts `Card`, T-33125). This is the surface
-  // that starts a purchase, and it is signed-in web only: the agent surface
-  // may name the pricing page and nothing else (C-33033).
-  plan: Billed
-  // The name of the payment provider that bills it (payments.ts), as the
-  // plan card says it.
-  provider?: string
-  // Who pays, as the provider has them.
-  payer?: Payer | null
-}
-
-// A space's address, its name typed in the box and the apex after it.
 export let addressBox = (
   id: string,
   name: string,
@@ -1409,256 +1329,6 @@ export let MOVES =
   'You can change it at any time. Every app moves with it, and ' +
   'the old address sends people to the new one until someone else takes ' +
   'that name.'
-
-// The plan card, for a person who is signed in (T-33125). One card: the paid
-// plans when they are free, manage-billing when they are paying. Each button
-// POSTs to billing.ts and follows the URL the payment provider answers, so no
-// provider's address is written into this page and nothing here knows a key.
-// Each plan is offered by the month and the year only where that price exists
-// (billing.ts `Card`).
-//
-// A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
-// to know, and the hour is noise on a monthly bill.
-export let plan = (
-  y: PlanCard,
-  env: Host,
-  target?: string,
-) => {
-  let { tier } = y.plan
-  let ends = y.plan.ends ? day(y.plan.ends) : ''
-  let limits = ceilings(tier)!
-  let allowance = tier == 'pro'
-    ? `Unlimited apps, unlimited visitors, ${beyond()}, and email support`
-    : `${
-      limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-    }, unlimited visitors, ${size(limits.bytes)} of app data`
-  let host = spaceHost(env, y.slug)
-  let head = tier == 'free'
-    ? h(
-      'p',
-      null,
-      `${host} is on the `,
-      h('b', null, 'free'),
-      ` plan — ${allowance}. Your first subscription adds $${SUBSCRIBED} ` +
-        'of building credit. ',
-      h('a', { href: url(env, '/pricing') }, 'Compare plans'),
-      '.',
-    )
-    : h(
-      'p',
-      null,
-      `${host} is on `,
-      h('b', null, NAMES[tier]),
-      ` — ${allowance}.`,
-      ends ? ` It runs until ${ends} and then stops renewing.` : '',
-      y.plan.free
-        ? ` It’s free through ${day(y.plan.free)}: a month for each person ` +
-          'you invited who built their first app. Subscribe now to keep it ' +
-          'after that; nothing is charged before then.'
-        : '',
-    )
-  // The button names the space it buys for: a plan is a space's, never the
-  // person's (D-131886), and someone with two spaces pays for the one named.
-  let space = y.title || host
-  let buy = (want: Want) =>
-    billButton(
-      'checkout',
-      `${y.plan.free && want.tier == 'plus' ? 'Keep' : 'Get'} ${
-        NAMES[want.tier]
-      } for ${space} — ${priced(want)}`,
-      target,
-      want,
-    )
-  // Someone the provider has met can always reach their own billing, whatever plan
-  // they are on today: an invoice from a month they paid for is theirs to
-  // read after they cancel.
-  // A space waiting on its first invoice is offered nothing more to buy: a
-  // second subscription would bill it twice (billing.ts `awaiting`).
-  let open = (tier == 'free' || y.plan.free) && !y.plan.awaiting
-  let doors = [
-    ...(open
-      ? [
-        ...(['plus', 'pro'] as const).flatMap((tier) =>
-          y.plan.sold[tier].map((per) => buy({ tier, per }))
-        ),
-      ]
-      : []),
-    y.plan.known ? billButton('portal', 'Manage billing', target) : null,
-  ].filter(Boolean)
-  // An organization that pays by check or bank transfer asks for an invoice
-  // instead, where the plan card posts to a settings page.
-  let invoiced = y.plan.awaiting
-    ? h(
-      Form.Hint,
-      null,
-      'The Pro plan starts when its invoice is paid. Manage billing shows the invoice.',
-    )
-    : target && y.plan.invoice && open
-    ? byInvoice(target, y.plan.invoice)
-    : null
-  // What the Pro plan adds, for every space not on it yet: a paying Plus
-  // space moves to it from the billing portal.
-  let more = tier == 'pro' ? null : h(
-    Form.Hint,
-    null,
-    `The Pro plan gives ${beyond()}, and email support. Taking it adds ` +
-      `$${PRO_GRANT} of building credit once.`,
-    tier == 'plus' && y.plan.known ? ' Switch to it from Manage billing.' : '',
-  )
-  // Where the Pro plan has no price yet, a free space still hears
-  // how to get it: the pricing page offers it everywhere.
-  let ask = tier == 'free' && !y.plan.sold.pro.length
-    ? h(
-      Form.Hint,
-      null,
-      'The Pro plan is not on sale here yet. Email ',
-      h('a', { href: 'mailto:hello@yaks.app' }, 'hello@yaks.app'),
-      ' to start on it.',
-    )
-    : null
-  return h(
-    Card,
-    { class: 'Bill', id: 'plan' },
-    heading('Plan', {
-      status: tier == 'free'
-        ? status('Free')
-        : status(tier == 'plus' ? 'Plus' : 'Pro', 'positive'),
-      actions: doors.length ? doors : null,
-    }),
-    head,
-    billedLine(y.plan, y.payer, y.provider),
-    h(Form.Hint, null, DOMAIN_RENEWAL),
-    target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
-    invoiced,
-    more,
-    ask,
-    h(Notice, { class: 'Bill_Say', role: 'status' }),
-  )
-}
-
-// The plan card's invoice (T-163754): the Pro plan for a year, invoiced to
-// the address typed here and paid by bank transfer or check. A plain form to
-// the settings page, like the cap, since nothing leaves for the provider's
-// page: the invoice follows by email, and the plan starts when it is paid.
-let byInvoice = (target: string, due: number) =>
-  h(
-    More,
-    null,
-    h(More.Summary, null, 'Pay by invoice instead'),
-    h(
-      More.Body,
-      null,
-      h(
-        Form,
-        { class: 'Page_Form', method: 'post', action: target },
-        h(Form.Hidden, { name: 'billing', value: 'invoice' }),
-        labeled(
-          'invoice-email',
-          'Send the invoice to',
-          h(Field, {
-            id: 'invoice-email',
-            placeholder: 'billing@example.org',
-            name: 'email',
-            type: 'email',
-            autocomplete: 'email',
-            required: true,
-          }),
-          `For an organization that pays by check or bank transfer: ${NAMES.pro} for a year, ${
-            priced({ tier: 'pro', per: 'year' })
-          }, due ${due} days after each invoice is sent. The plan starts when the first invoice is paid, and each year's invoice comes as the year turns.`,
-        ),
-        labeled(
-          'invoice-name',
-          'Made out to',
-          h(Field, {
-            id: 'invoice-name',
-            placeholder: 'e.g. Oak Street Church',
-            name: 'name',
-            maxlength: 200,
-            autocomplete: 'organization',
-          }),
-          'Your organization’s name, as the invoice should show it.',
-        ),
-        h(Button, { type: 'submit', mod: 'go' }, 'Send the invoice'),
-      ),
-    ),
-  )
-
-// The plan card's AI credit (D-134567): past its monthly budget a space
-// spends credit bought in blocks, up to the cap its owner types here, which
-// is $0 until they choose one. The cap is a plain form to the settings page;
-// the block is a billing button like the plans', since it leaves for the
-// provider's checkout.
-let credit = (
-  c: NonNullable<Billed['credit']>,
-  space: string,
-  target: string,
-) =>
-  h(
-    Form,
-    {
-      class: 'Page_Form',
-      method: 'post',
-      action: target,
-      'data-save': 'credit-cap',
-    },
-    h(Form.Hidden, { name: 'billing', value: 'cap' }),
-    labeled(
-      'credit-cap',
-      'Monthly cap on AI credit',
-      h(
-        Form.Line,
-        null,
-        h(Field, {
-          id: 'credit-cap',
-          placeholder: 'e.g. 25',
-          name: 'cap',
-          type: 'number',
-          min: 0,
-          step: 1,
-          inputmode: 'numeric',
-          value: c.cap,
-          required: true,
-        }),
-        c.buy ? billButton('credit', `Buy $${BLOCK} of credit`, target) : null,
-      ),
-      c.cap
-        ? `Past its monthly AI budget, ${space} spends credit you buy in $${BLOCK} blocks, never more than ${
-          dollars(c.cap)
-        } a month. ${dollars(c.left)} is left to spend this month, and ${
-          dollars(c.drawn)
-        } spent. Credit not spent carries to next month.`
-        : `Past its monthly AI budget, ${space} can spend credit you buy in $${BLOCK} blocks, up to a monthly cap in dollars you choose here. Nothing is ever charged past it.`,
-    ),
-  )
-
-// Whom the plan is billed to, where the payment provider has met the space:
-// the address its receipts go to, or, when the provider couldn't be asked just
-// now (`undefined`), only that it bills the space. A space the provider never
-// met is billed to nobody. A page not told the provider's name leaves it out.
-let billedLine = (card: Billed, payer?: Payer | null, provider?: string) => {
-  if (!card.known) {
-    return card.tier == 'free' ? h(Form.Hint, null, 'Nothing is billed.') : null
-  }
-  let through = provider ? ` through ${provider}` : ''
-  return payer?.email
-    ? h(
-      'p',
-      null,
-      'Billed to ',
-      h('b', null, payer.email),
-      payer.name ? ` (${payer.name})` : '',
-      `${through}. Manage billing changes the card, the address and who receives the receipts.`,
-    )
-    : h(
-      'p',
-      null,
-      `Billed${through}. Manage billing shows the card and the receipts.`,
-    )
-}
-
-// A paid plan as it is said: "the Plus plan", never bare "Plus" (M-37846).
-let NAMES = { plus: 'the Plus plan', pro: 'the Pro plan' }
 
 // Connector forms do not ask the same questions. Keep each answer beside the
 // provider step that asks for it, so a person never has to work out whether a
@@ -1701,40 +1371,6 @@ if (tabs) {
     if (e.target.name == 'agent') {
       history.replaceState(null, '', '#' + e.target.value)
     }
-  }, { signal })
-}
-`)
-
-// The billing buttons: ask our own door for the payment provider's URL and
-// follow it. The
-// URL is minted per person and expires, so it is never written into the page.
-export let billing = () =>
-  run(`
-for (let b of document.querySelectorAll('.Bill_Go')) {
-  b.addEventListener('click', async () => {
-    let say = b.closest('.Bill').querySelector('.Bill_Say')
-    b.disabled = true
-    say.className = 'Notice Bill_Say Loading'
-    say.innerHTML = ${
-    JSON.stringify(yak('calculating') + '<span>One moment…</span>')
-  }
-    try {
-      let r = await fetch(b.dataset.target || '/api/billing/' + b.dataset.door, {
-        method: 'POST',
-        body: new URLSearchParams({
-          billing: b.dataset.door,
-          ...(b.dataset.plan ? { plan: b.dataset.plan, per: b.dataset.per } : {}),
-        }),
-      })
-      let out = await r.json()
-      if (out.url) { location = out.url; return }
-      say.className = 'Notice Bill_Say Notice-negative'
-      say.textContent = out.error ? out.error.message : 'That did not go through.'
-    } catch (_) {
-      say.className = 'Notice Bill_Say Notice-negative'
-      say.textContent = "That didn't go through. Try again?"
-    }
-    b.disabled = false
   }, { signal })
 }
 `)

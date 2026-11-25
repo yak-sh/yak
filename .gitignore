@@ -95,6 +95,7 @@ node_modules
 /workers/yak/public/_operator-settings.js
 /workers/yak/public/_visits.js
 /workers/yak/public/_apps.js
+/workers/yak/public/_payment.js
 /workers/yak/public/_page-client.js
 
 # Temporary standalone platform compiler configs.

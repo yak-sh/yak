@@ -49,7 +49,8 @@ import { page as galleryPage } from './gallery.ts'
 import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { agentSetup, askEmail } from './signin-pages.ts'
-import { plan } from './pages.ts'
+import { paymentView } from '@yaks/platform/payment-view'
+import { Fragment, h } from 'preact'
 import { markup } from './html.ts'
 import * as site from './site/mod.ts'
 import { said as copied } from './site/copy.ts'
@@ -355,6 +356,25 @@ let TIERS = ['free', 'plus', 'pro'] as const
 let LIMITS = { free: FREE, plus: PLUS, pro: PRO }
 // A signed-in plan card with nothing on sale: what it says, not what it sells.
 let UNSOLD = { plus: [], pro: [] }
+
+// The signed-in plan card of dana's space on `tier`.
+let planCard = (tier: Tier) =>
+  flat(markup(h(
+    Fragment,
+    null,
+    paymentView(
+      {
+        person: 'p',
+        view: 'billing',
+        space: { eid: 'e', slug: 'dana', title: '' },
+        apex: 'yaks.app',
+      },
+      {
+        plan: { tier, ends: '', known: tier != 'free', sold: UNSOLD },
+        apps: [],
+      },
+    ),
+  )))
 
 // The copy each tier's allowances should read as, off the meter's own numbers.
 let allowance = (tier: Tier) => {
@@ -1204,17 +1224,7 @@ test('ChatGPT gets a downloadable icon within its upload limit', () => {
 test('the signed-in plan copy derives both tiers from the meter', () => {
   for (let tier of ['free', 'plus'] as const) {
     let { apps, data } = allowances[tier]
-    let html = flat(
-      markup(
-        plan(
-          {
-            slug: 'dana',
-            plan: { tier, ends: '', known: tier != 'free', sold: UNSOLD },
-          },
-          {},
-        ),
-      ),
-    )
+    let html = planCard(tier)
     assertStringIncludes(
       html,
       `${apps}, unlimited visitors, ${data}`,
@@ -1253,14 +1263,7 @@ test('every place a person decides names the building credit the code grants', a
     }
   }
   assertStringIncludes(await askEmail({}).text(), starter)
-  let card = (tier: Tier) =>
-    flat(markup(plan(
-      {
-        slug: 'dana',
-        plan: { tier, ends: '', known: tier != 'free', sold: UNSOLD },
-      },
-      {},
-    )))
+  let card = planCard
   assertStringIncludes(card('free'), subscribed)
   assertEquals(card('plus').includes(subscribed), false)
   let space = { slug: 'dana', budget: null, meter: null }

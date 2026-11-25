@@ -63,6 +63,7 @@ import type {
   Tags,
 } from '@yaks/host/payments'
 import { manageAt, planSettings } from '@yaks/platform/routes'
+import type { Payer, PlanCard, Want } from '@yaks/platform/payment-rows'
 import * as dirPart from './directory.ts'
 import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { CURRENCY, paid, type Tier } from '@yaks/platform/plans'
@@ -282,9 +283,6 @@ let waitingOn = (space: Space) =>
 
 // ---- what is for sale -----------------------------------------------------
 
-/** A plan a person can buy, and how often it is paid for. */
-export type Want = { tier: 'plus' | 'pro'; per: Per }
-
 /** What a checkout form asks for: `plan=pro` and `per=year`, each
  * optional. A page kept from before the rename still buys the same plan. */
 export let wanted = (form: FormData | null): Want => ({
@@ -293,28 +291,6 @@ export let wanted = (form: FormData | null): Want => ({
     : 'plus',
   per: form?.get('per') == 'year' ? 'year' : 'month',
 })
-
-/** What the signed-in plan card shows (pages.ts `plan`): the space's tier,
- * the day it lapses if it is leaving, whether the provider has ever known it
- * — which is what makes the manage door worth offering — and how each paid
- * plan is sold here: by the month, by the year, or not yet at all. */
-export type Card = {
-  tier: Tier
-  ends: string
-  known: boolean
-  /** the day the Plus plan given free runs through, while it does */
-  free?: string
-  sold: Record<Want['tier'], Per[]>
-  /** the days an invoice gives to pay, where the yearly plan may be paid by
-   * invoice */
-  invoice?: number
-  /** whether its subscription is made and waits on its first payment */
-  awaiting?: boolean
-  /** its AI credit, where its plan buys credit or it holds some: the cap,
-   * what is left to spend this month, what this month drew, and whether a
-   * block may be bought now */
-  credit?: { cap: number; left: number; drawn: number; buy: boolean }
-}
 
 /** The day a space's Plus plan given free runs through (`comped`, a month
  * for each person its owner invited who built an app), while it runs and
@@ -331,7 +307,11 @@ export let freeThrough = (
 let sold = (lent: Plans, tier: Want['tier']): Per[] =>
   (['month', 'year'] as const).filter((per) => lent.offers(tier, per))
 
-export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
+export let planCard = (
+  lent: Plans,
+  space: Space,
+  now = new Date(),
+): PlanCard => {
   let free = freeThrough(space)
   let credits = CREDITED.includes(space.tier ?? 'free') || !!space.credit
   return {
@@ -354,10 +334,6 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
       : {},
   }
 }
-
-/** Whom a space is billed to: the email and name its payer holds, which is
- * where the receipts go and what the portal changes. */
-export type Payer = { email: string; name: string }
 
 /** Whom the provider bills for a space; null for a space it has never met,
  * or whose payer was deleted there. */

@@ -1540,7 +1540,6 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
       let res = desk({
         space: 'ada',
         apps: [],
-        sell: 'none',
         view: 'connections',
         connections,
       }, s.p.env)

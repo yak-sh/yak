@@ -20,18 +20,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Beside } from './operator-page.ts'
 import { pilled, standing } from './gallery-row.ts'
-import {
-  billedTo,
-  buy,
-  buyDomain,
-  checkout,
-  invoice,
-  planCard,
-  portal,
-  renewDomain,
-  setCap,
-  wanted,
-} from './billing.ts'
+import { buyDomain, renewDomain } from './billing.ts'
 import { payments, plans } from './payments.ts'
 import {
   chatRows,
@@ -40,15 +29,8 @@ import {
   connectionsOf,
   enabled,
 } from './connections.ts'
-import {
-  connect,
-  disconnect,
-  feeOf,
-  linkable,
-  linking,
-  refusedSell,
-  selling,
-} from './sell.ts'
+import { paymentRead } from './payment-reads.ts'
+import { allowancesLine, type Part } from '@yaks/platform/payment-rows'
 import { type DeskPage, nothingHere, sentence } from './pages.ts'
 import { desk as deskPage } from './desk-pages.ts'
 import { logoed, logoImage, logoPosted } from './logo.ts'
@@ -85,12 +67,10 @@ import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { writes } from '@yaks/member'
 import { TOOLS } from './tools.ts'
-import { caught, defect } from './defects.ts'
+import { caught } from './defects.ts'
 import { type Clock, clock } from './timing.ts'
 import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
-import { budget, spent } from '@yaks/platform/meter'
-import { gauges } from '@yaks/platform/standing'
 import { DAYS } from './views.ts'
 import { admin } from './tool.ts'
 import { reachOf } from './operator-reach.ts'
@@ -114,7 +94,7 @@ import {
   friendsOf,
   SIGNED_IN,
 } from '@yaks/platform/account-rows'
-import { SIDE_SPACES } from '@yaks/platform/side-rows'
+import { SIDE_SPACES, sideApps as sideAppsLine } from '@yaks/platform/side-rows'
 import {
   billedDomains,
   domainOffers,
@@ -529,7 +509,6 @@ let foresee = (
   let sided = view == 'updates' || view == 'matches' ||
     view == 'operator' && chat
   void Promise.allSettled([
-    feeOf(dir),
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
@@ -792,11 +771,9 @@ let desk = async (
   let [
     { here, all },
     drawn,
-    fee,
     connections,
     picks,
     operator,
-    billed,
     provider,
     panes,
     lines,
@@ -809,8 +786,9 @@ let desk = async (
     // carried for its first paint: Apps' apps, as the directory answers them
     // live, and what is broken in each, one read of the space's tracker, no
     // app's store woken (apps-reads.ts); Visits' apps and their views
-    // (side.ts `visitsRows`); and People's lines, as its view watches them
-    // (@yaks/platform/people-view).
+    // (side.ts `visitsRows`); People's lines, as its view watches them
+    // (@yaks/platform/people-view); and what Selling and Billing are drawn
+    // from (@yaks/platform/payment-rows).
     view == 'apps'
       ? Promise.all([
         listedApps(dir, space, who).then((apps) =>
@@ -832,8 +810,9 @@ let desk = async (
           }),
         ).map((l) => personRows(dir, owner, l)),
       ).then((all) => all.flat())
+      : view == 'selling' || view == 'billing'
+      ? paymentDrawn(env, dir, space, owner, view)
       : undefined,
-    feeOf(dir),
     // What this space calls out through (connections.ts), read only for the
     // page that shows it; on the person's own space (`member.own`), what they
     // connected for themselves and the services holding a grant from them.
@@ -873,14 +852,6 @@ let desk = async (
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who, dir)
       )
-      : undefined,
-    // Whom the payment provider bills, for the Billing page (T-131895). A
-    // read that fails is reported, and the page says only that it bills.
-    view == 'billing'
-      ? plans(env).then((lent) => billedTo(lent, space)).catch((e) => {
-        caught(e, { request: 'read billing customer', space: space.slug })
-        return undefined
-      })
       : undefined,
     payments(env),
     // How the person keeps the panes (directory.ts `Panes`).
@@ -930,20 +901,9 @@ let desk = async (
       monthly: dollars(l.monthly),
       days: daysLeft(l.trashed!),
     })),
-    // Where the space stands with selling (sell.ts, T-34524), and only where
-    // the platform's payment provider can be asked at all, since a button
-    // that cannot work is worse than no block.
-    sell: provider.shops.on() ? selling(space) : undefined,
-    house: !!space.seller?.house,
-    link: view == 'selling' && provider.shops.on()
-      ? await linkable(env, space)
-      : undefined,
     shops: provider.shops.on(),
-    provider: provider.name,
-    costs: provider.shops.costs,
     paying: paid(space.tier),
     byline: !!space.byline,
-    plan: planCard(provider.plans, space),
     domains: domains && {
       domains,
       search: q.get('q') ?? undefined,
@@ -954,17 +914,6 @@ let desk = async (
       ordered: q.get('domain') ?? undefined,
     },
     renewals,
-    // The space's month against its allowances (@yaks/platform/meter), as the
-    // directory's row holds it.
-    bill: view == 'billing'
-      ? {
-        limits: gauges(space, all.length),
-        budget: budget(space),
-        read: spent(space).at || null,
-        payer: billed,
-      }
-      : undefined,
-    fee,
     agents: known,
     connections,
     spaces: picks.some((s) => s.slug == space.slug) ? picks : [
@@ -986,6 +935,28 @@ let desk = async (
     no: saying(req, said)?.no,
   }, env)
   return spend(req, keptIn(page, space.slug))
+}
+
+// The rows Selling or Billing of `space` is drawn from: its plan card, and
+// on Selling where it stands and its apps, on Billing whom it is billed to
+// and its month, each read as the page graph's door reads it.
+let paymentDrawn = async (
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  person: string,
+  view: 'selling' | 'billing',
+) => {
+  let parts: Exclude<Part, 'allowances'>[] = view == 'selling'
+    ? ['planCard', 'selling']
+    : ['planCard', 'billedTo']
+  let lines = [
+    view == 'selling' ? sideAppsLine(space.eid) : allowancesLine(space.eid),
+  ]
+  return (await Promise.all([
+    ...parts.map((part) => paymentRead(env, dir, space, part)),
+    ...lines.map((line) => personRows(dir, person, line)),
+  ])).flat()
 }
 
 // The lines of the page graph each page of the person's own is drawn from
@@ -1267,24 +1238,6 @@ let saved = async (
       ? refused('connections', said)
       : answered(req, env, said)
   }
-  if (form.get('billing') == 'checkout') {
-    return checkout(env, req, space, wanted(form))
-  }
-  if (form.get('billing') == 'portal') return portal(env, req, space)
-  // The plan card's pay-by-invoice form: a plain form like the cap's, since
-  // nothing leaves for the provider's page.
-  if (form.get('billing') == 'invoice') {
-    let no = await invoice(env, req, space, {
-      email: String(form.get('email') ?? '').trim(),
-      name: String(form.get('name') ?? '').trim(),
-    })
-    if (no) return refused('billing', { say: sentence(no), no: true })
-    return answered(req, env, {
-      say: 'The invoice reaches the address you gave within the hour. ' +
-        'The Pro plan starts when it is paid.',
-    })
-  }
-  if (form.get('billing') == 'credit') return buy(env, req, space)
   if (form.get('billing') == 'domain') {
     let checkout = await buyDomain(env, req, space, form)
     if (view != 'domains' || scripted(req)) return checkout
@@ -1359,13 +1312,6 @@ let saved = async (
       })
     }
   }
-  // The plan card's cap on AI credit: a plain form, so it lands back on the
-  // page saying it saved, or why not.
-  if (form.get('billing') == 'cap') {
-    let no = await setCap(env, req, space, Number(form.get('cap')))
-    if (no) return refused('billing', { say: sentence(no), no: true })
-    return answered(req, env, { say: 'Saved.' })
-  }
   // The other button on this page: one app out of the trash (erase.ts,
   // T-34430). Its own form, so it is its own POST — a plain button and no
   // script, the way the drop zone and the settings form are — and it lands
@@ -1386,43 +1332,6 @@ let saved = async (
     let line = (await dir.lines(space)).find((l) => l.eid == number)
     if (line?.trashed) await restoredNumber(env, dir, line, who)
     return redirect(sentFrom(req, env).href, 303)
-  }
-  // The selling block's button (sell.ts, T-34524). Its own form and its own
-  // POST, like the restore button above — and `start` answers a redirect to
-  // the payment provider's own hosted onboarding, which is the one thing on
-  // this page that leaves the site. A call to it that fails is filed and the
-  // page comes back saying so, rather than a 502 on somebody's own front door.
-  let till = String(form.get('sell') ?? '').trim()
-  if (till == 'stop') {
-    if (space.seller?.account) await disconnect(env, space)
-    return redirect(sentFrom(req, env).href, 303)
-  }
-  // "I already have one": the provider's page where the owner connects an
-  // account they have, which hands them back to sell.ts `callback`.
-  if (till == 'link') {
-    try {
-      return redirect(await linking(env, space, who.person), 303)
-    } catch (e) {
-      if (!(e instanceof CallError)) throw e
-      return refused('selling', { say: sentence(e.message), no: true })
-    }
-  }
-  if (till == 'start') {
-    let no = refusedSell(space, env)
-    if (no) {
-      return refused('selling', { say: no, no: true })
-    }
-    try {
-      let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
-      return redirect(made.url, 303)
-    } catch (e) {
-      defect(e, { request: 'POST /manage/selling' })
-      let { name } = await payments(env)
-      return refused('selling', {
-        say: `we couldn't reach ${name} just now — try again in a minute`,
-        no: true,
-      })
-    }
   }
   // Remove submits a plain field. The upload is handled before formData.
   if (form.has('unlogo')) {

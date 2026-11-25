@@ -24,12 +24,8 @@ import {
   More,
   Notice,
   Rows,
-  Table,
   TabSet,
 } from '@yaks/ui/parts'
-import type { Costs } from '@yaks/host/payments'
-import { kept, rate } from '@yaks/platform/fee'
-import { amount } from '@yaks/platform/price'
 import { h } from 'preact'
 import type {
   Borrowed,
@@ -72,18 +68,21 @@ import {
   type Setting,
 } from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
-import { size } from '@yaks/fp'
 import { type ProfileView, profileView } from '@yaks/platform/profile-view'
 import { accountOf, signedInOf } from '@yaks/platform/account-rows'
 import { appsOf, pickedOf } from '@yaks/platform/side-rows'
-import { type Ceiling, count, share } from '@yaks/platform/standing'
-import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
+import { count } from '@yaks/platform/standing'
+import { STARTER } from '@yaks/platform/plans'
 import { domainRenewals, domainsPage } from '@yaks/platform/domain-pages'
+import {
+  paymentOf,
+  type PaymentView,
+  paymentView,
+} from '@yaks/platform/payment-view'
+import { yak } from './mascot.ts'
 
 import {
   addressBox,
-  billButton,
-  billing,
   copying,
   type DeskPage,
   dropping,
@@ -99,7 +98,6 @@ import {
   MOVES,
   page,
   type Picked,
-  plan,
   said,
   send,
   sentence,
@@ -108,9 +106,6 @@ import {
   status,
   tabbing,
 } from './pages.ts'
-
-// The meter's prices are whole US dollars, as on the public pricing page.
-let plusPrice = () => `$${count(PRICE.plus)}`
 
 // A label for what may be left empty.
 let optional = (label: Kids) => [
@@ -609,310 +604,24 @@ let preferences = (at: DeskPage, env: Host) => {
   ]
 }
 
-// Selling (T-34524): a space starts taking payments in its apps here, so the
-// page says what selling is and what every part of it costs before the
-// button is pressed. Each number is read where it is set: the platform's fee
-// from the directory (sell.ts `feeOf`), the plan's price from
-// @yaks/platform/plans, and the provider's own fees from what it publishes
-// (@yaks/host/payments `Costs`), and the $20 sale is worked from those
-// (@yaks/platform/fee `kept`).
-let selling = (at: DeskPage, env: Host) => {
-  let by = at.provider
-  if (!at.sell || !by) {
-    return h('p', null, 'Selling is not available here yet.')
+// Selling and Billing, drawn from the space's rows as the browser draws them
+// again (@yaks/platform/payment-view), which the page carries for its first
+// paint (`data-view`).
+let payment = (at: DeskPage, env: Host, view: 'selling' | 'billing') => {
+  let rows = at.drawn ?? []
+  let shown: PaymentView = {
+    person: at.person ?? '',
+    view,
+    space: { eid: at.spaceEid ?? '', slug: at.space, title: named(picked(at)) },
+    apex: apex(env),
+    loading: markup(yak('calculating')),
   }
-  let ready = at.sell == 'ready'
-  let connected = at.sell != 'none'
-  let stop = ready || (!at.paying && connected)
-  let account = at.paying || connected
-    ? h(
-      'form',
-      {
-        class: 'Page_Form',
-        method: 'post',
-        action: managePath('selling', at.space),
-      },
-      held('sell', stop ? 'stop' : 'start'),
-      h(
-        Button,
-        { type: 'submit', mod: !stop && 'go' },
-        stop
-          ? `Disconnect ${by}`
-          : at.sell == 'setup'
-          ? 'Continue setup'
-          : at.paying
-          ? `Create a ${by} account`
-          : `Connect ${by}`,
-      ),
-    )
-    : null
-  // A new account is the way most people take; one they already have is
-  // offered under it (sell.ts `linking`).
-  let existing = at.paying && at.link
-    ? h(
-      'form',
-      {
-        class: 'Page_Form',
-        method: 'post',
-        action: managePath('selling', at.space),
-      },
-      held('sell', 'link'),
-      h(
-        Form.Hint,
-        null,
-        `Already have a ${by} account? `,
-        h(
-          Button,
-          { type: 'submit', mod: 'quiet' },
-          at.sell == 'setup' ? 'Connect it instead' : 'Connect it',
-        ),
-      ),
-    )
-    : null
-  // The card that starts selling, with the lead under the first one only.
-  let start = (title: string, said?: Kids) =>
-    h(
-      Card,
-      { class: 'Bill' },
-      heading(title, {
-        status: ready
-          ? status('Connected', 'positive')
-          : at.sell == 'setup'
-          ? status('Setup unfinished', 'negative')
-          : null,
-        actions: at.paying ? account : billButton(
-          'checkout',
-          `Subscribe — ${plusPrice()} a month`,
-          managePath('selling', at.space),
-        ),
-      }),
-      said,
-      existing,
-      // Where the Subscribe button says how it went (pages.ts `billing`);
-      // the account's forms load a page of their own.
-      at.paying ? null : h(Notice, { class: 'Bill_Say', role: 'status' }),
-    )
-  return [
-    start(
-      ready ? 'Payments are connected' : 'Sell from your apps',
-      lead(at, by),
-    ),
-    offered(at, by),
-    at.costs ? costing(at, by, at.costs, env) : null,
-    // Once the costs are read, the button is at hand again rather than a
-    // scroll back up.
-    ready ? null : start(
-      !at.paying
-        ? 'Start selling on the Plus plan'
-        : at.sell == 'setup'
-        ? `Finish setting up ${by}`
-        : 'Start selling',
-    ),
-    at.paying ? null : billing(),
-  ]
-}
-
-// What the first card says under its title, for where the space stands.
-let lead = (at: DeskPage, by: string) =>
-  h(
-    'p',
-    null,
-    at.house
-      ? `This space sells on yaks.app’s own ${by} account, as the house, so no yaks.app fee is taken.`
-      : at.sell == 'ready'
-      ? `Payments go to your ${by} account, and ${by} pays them into your bank. You manage refunds and disputes in your ${by} dashboard.`
-      : !at.paying && at.sell != 'none'
-      ? `Your ${by} account is connected. Upgrade to the Plus plan to take new payments.`
-      : at.sell == 'setup'
-      ? `Finish connecting your ${by} account to start taking payments.`
-      : `Your apps can take card payments, and ${by} pays the money into your bank account.${
-        at.paying
-          ? ''
-          : ` Selling comes with the Plus plan, ${plusPrice()} a month.`
-      }`,
-  )
-
-// A row of facts: what it is, and a line that says more.
-let fact = (name: Kids, meta: Kids) =>
-  h(
-    Rows.Item,
-    { as: 'li' },
-    h(
-      Rows.Main,
-      null,
-      h(Rows.Name, { as: 'span' }, name),
-      h(Rows.Meta, null, meta),
-    ),
-  )
-
-// The space's apps by name, as one phrase: a few, and how many more.
-let appsNamed = (apps: { title: string; slug: string }[]) => {
-  let names = apps.map((a) => a.title || a.slug)
-  let shown = names.length > 4
-    ? [...names.slice(0, 3), `${names.length - 3} more`]
-    : names
-  return new Intl.ListFormat('en', { type: 'conjunction' }).format(shown)
-}
-
-// What a space can sell, and how a sale reaches the seller.
-let offered = (at: DeskPage, by: string) => [
-  h(
-    Card,
-    null,
-    heading('What you can sell'),
-    h(
-      Card.Sub,
-      null,
-      at.apps.length
-        ? `Every app in this space can take payments: ${appsNamed(at.apps)}.`
-        : 'Every app you make in this space can take payments.',
-    ),
-    h(
-      Rows,
-      { as: 'ul' },
-      fact(
-        'Things with a price',
-        'An app lists what it sells, each with a price, and with sizes or stock where it has them. A buyer can put several in one cart, with a flat shipping rate.',
-      ),
-      fact(
-        'Work priced per order',
-        'An app can price each order on its own, with its shipping and tax, the way a book printed to order is priced.',
-      ),
-      fact(
-        'Paid once',
-        'Each sale is one payment. Subscriptions aren’t offered yet.',
-      ),
-    ),
-  ),
-  h(
-    Card,
-    null,
-    heading('How a sale reaches you'),
-    h(
-      Rows,
-      { as: 'ul' },
-      fact(
-        `The buyer pays on ${by}’s page`,
-        `Your app sends them to a ${by} checkout page to pay by card. Their card number never reaches your app or yaks.app.`,
-      ),
-      fact(
-        'You get the order',
-        'The order shows up in your app, and the buyer gets a receipt by email from it.',
-      ),
-      fact(
-        `${by} pays you`,
-        'The money, less the fees below, goes into your bank account.',
-      ),
-      fact(
-        'You look after your buyers',
-        `You deliver what you sold and answer your buyers. Refunds and disputes are in your ${by} dashboard. Your bank details and ID go to ${by}, and yaks.app never sees them.`,
-      ),
-    ),
-  ),
-]
-
-// Cents as a person reads a fee: `30¢`, `$15`, or `$0.88` in a sum.
-let small = (cents: number) => cents < 100 ? `${cents}¢` : amount(cents)
-let usd = (cents: number) => `$${(cents / 100).toFixed(2)}`
-
-// The sale the costs are worked through.
-let EXAMPLE = 2000
-
-// Every cost of selling, and a sale worked through them.
-let costing = (at: DeskPage, by: string, costs: Costs, env: Host) => {
-  // The house's sales are the platform's own, which pays itself nothing.
-  let bps = at.house ? 0 : at.fee ?? 0
-  let card = `${rate(costs.card.bps)} + ${small(costs.card.cents)}`
-  let sale = kept(EXAMPLE, bps, costs.card)
-  let line = (name: Kids, value: string) =>
-    h(
-      Table.Row,
-      null,
-      h(Table.Cell, null, name),
-      h(Table.Cell, { mod: 'num' }, value),
-    )
+  let drawn = paymentOf(shown.space.eid, rows)
   return h(
-    Card,
-    null,
-    heading('What it costs'),
-    h(
-      Rows,
-      { as: 'ul' },
-      at.paying ? null : fact(
-        `The Plus plan: ${plusPrice()} a month`,
-        'Selling comes with the Plus and Pro plans.',
-      ),
-      fact(`${by}: ${card} a payment`, [
-        `On a card from the ${costs.country}. A card from another country adds ${
-          rate(costs.abroad)
-        }. Rates in other countries are on `,
-        h(
-          'a',
-          { href: costs.pricing, target: '_blank', rel: 'noopener' },
-          `${by}’s pricing page`,
-        ),
-        '.',
-      ]),
-      fact(
-        bps
-          ? `yaks.app: ${rate(bps)} of each sale`
-          : 'yaks.app: nothing per sale',
-        bps
-          ? 'Taken from the same payment. Nothing else is charged per sale.'
-          : 'yaks.app takes no cut of your sales.',
-      ),
-      fact(
-        'Payouts',
-        `${by} pays into your bank about ${costs.payout.days} days after each sale. Your first payout comes about ${costs.payout.first} days after your first sale.`,
-      ),
-      fact(
-        'Refunds',
-        (costs.refunded
-          ? `${by} gives its fee back on a refund.`
-          : `${by} keeps its fee on a refunded payment.`) +
-          (bps ? ' yaks.app gives its fee back.' : ''),
-      ),
-      fact(
-        `Disputes: ${small(costs.dispute)}`,
-        `If a buyer disputes a charge with their bank, ${by} charges you ${
-          small(costs.dispute)
-        }, and gives it back if you win.`,
-      ),
-      fact(
-        'Sales tax',
-        'Checkout adds no sales tax: the buyer pays the price your app shows. Any sales tax you owe is yours to pay.',
-      ),
-    ),
-    h(Card.Title, { as: 'h3' }, `A ${amount(EXAMPLE)} sale`),
-    h(
-      Table,
-      { cols: [null, 'num'] },
-      h(
-        Table.Body,
-        null,
-        line('The buyer pays', usd(EXAMPLE)),
-        line(`${by}’s fee, ${card}`, `−${usd(sale.provider)}`),
-        line(`yaks.app’s fee, ${rate(bps)}`, `−${usd(sale.platform)}`),
-        line(h('b', null, 'Reaches your bank'), usd(sale.seller)),
-      ),
-    ),
-    h(
-      Form.Hint,
-      null,
-      'The same fee is on the ',
-      h(
-        'a',
-        { href: url(env, '/pricing'), target: '_blank', rel: 'noopener' },
-        'pricing page',
-      ),
-      ', and the ',
-      h(
-        'a',
-        { href: url(env, '/terms'), target: '_blank', rel: 'noopener' },
-        'terms',
-      ),
-      ' say what selling asks of you.',
-    ),
+    'div',
+    { 'data-view': 'payment', 'data-payment-view': JSON.stringify(shown) },
+    drawn ? paymentView(shown, drawn) : null,
+    drawing(at),
   )
 }
 
@@ -2588,33 +2297,15 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     ]
   }
   if (view == 'visits') body = visitsPage(at, site)
-  if (view == 'selling') body = selling(at, env)
+  if (view == 'selling') body = payment(at, env, 'selling')
   if (view == 'settings') body = preferences(at, env)
   if (view == 'domains' && at.domains) {
     body = domainsPage(at.space, at.apps, at.domains)
   }
   if (view == 'billing') {
     body = [
-      plan(
-        {
-          slug: at.space,
-          title: named(picked(at)),
-          plan: at.plan ??
-            {
-              tier: 'free',
-              ends: '',
-              known: false,
-              sold: { plus: [], pro: [] },
-            },
-          provider: at.provider,
-          payer: at.bill?.payer,
-        },
-        env,
-        managePath('billing', at.space),
-      ),
-      at.bill ? allowances(at.bill, env, at.space) : null,
+      payment(at, env, 'billing'),
       domainRenewals(at.space, at.renewals ?? []),
-      billing(),
     ]
   }
   if (view == 'trash') body = trash(at, env)
@@ -2663,89 +2354,5 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     }),
     view == 'new' ? copying() : null,
     ['new', 'agents'].includes(view) ? agentLive('/oauth/agents') : null,
-  )
-}
-
-// Each allowance as the Billing page names it, how its figures read, and what
-// a person needs to know about counting it.
-let ALLOWANCES: [Ceiling, string, (n: number) => string, string][] = [
-  ['apps', 'Apps', count, ''],
-  [
-    'requests',
-    'Request units',
-    count,
-    'Visitors are always served, past it too.',
-  ],
-  ['bytes', 'App data', size, ''],
-  ['files', 'Photos and files', size, ''],
-  ['emails', 'Emails', count, 'Sent and received.'],
-  [
-    'seconds',
-    'Compute seconds',
-    count,
-    'The sandbox, and compiling at deploy.',
-  ],
-]
-
-// One allowance as a row: its name, how much of it is used, and, from four
-// fifths of it, how it stands.
-let gaugeRow = (name: string, figure: string, hint: string, share: number) =>
-  h(
-    Rows.Item,
-    { as: 'li' },
-    h(
-      Rows.Main,
-      null,
-      h(Rows.Name, { as: 'span' }, name),
-      h(Rows.Meta, null, figure, hint ? ` · ${hint}` : ''),
-    ),
-    share >= 1
-      ? status('At the limit', 'negative')
-      : share >= WARN
-      ? status('Near the limit', 'negative')
-      : null,
-  )
-
-/** The Billing page's month (T-131895): every allowance the space answers to
- * and how much of it is used, with its budget for models and voice. */
-let allowances = (
-  bill: NonNullable<DeskPage['bill']>,
-  env: Host,
-  slug: string,
-) => {
-  let rows = ALLOWANCES.filter(([what]) => bill.limits[what])
-    .map(([what, name, read, hint]) => {
-      let g = bill.limits[what]!
-      // Request units are read by the hourly sweep, so before its first
-      // reading of the month there is no figure, and zero would be a claim.
-      let figure = what == 'requests' && !bill.read
-        ? `None counted yet this month, of ${read(g.limit)}`
-        : `${read(g.used)} of ${read(g.limit)}`
-      return gaugeRow(name, figure, hint, g.used / g.limit)
-    })
-  let { spent, limit } = bill.budget
-  let read = bill.read ? `, last read at ${bill.read.slice(11, 16)} UTC` : ''
-  return h(
-    Card,
-    null,
-    heading('This month'),
-    h(
-      Card.Sub,
-      null,
-      `What ${
-        spaceHost(env, slug)
-      } has used since the 1st, counted hourly${read}. Each starts again on the 1st, except what the space holds.`,
-    ),
-    h(
-      Rows,
-      { as: 'ul' },
-      rows,
-      gaugeRow(
-        'Models and voice',
-        `${share(spent, limit)} used`,
-        'Your Operator’s and your apps’ models and voices, from this space’s budget.',
-        limit ? spent / limit : 0,
-      ),
-    ),
   )
 }
