@@ -338,6 +338,10 @@ export let client = (srv: Server): Client => {
     timer,
     time: () => now,
     report: (t) => trouble.push(t),
+    // A connection that held a second is opened again at once.
+    held: 1_000,
+    spread: 0,
+    random: () => 1,
   })
   return {
     graph: g,

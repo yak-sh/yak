@@ -151,8 +151,17 @@ export type WireOpts = {
   /** how a reconnect is scheduled (default: `setTimeout`) */
   timer?: Timer
   /** the reconnect delay in ms after a failed attempt, doubling to `most`
-   * (default: 250); a connection that held this long is retried at once */
+   * (default: 250), each drawn between half of it and all of it */
   wait?: number
+  /** how long in ms a connection holds before its loss starts the backoff
+   * again rather than going on with it (default: 10_000) */
+  held?: number
+  /** the window in ms a connection that held is opened again within, at a
+   * moment drawn at random in it (default: 1_000) */
+  spread?: number
+  /** each draw in [0, 1) a reconnect's moment is taken from (default:
+   * `Math.random`) */
+  random?: () => number
   /** the longest reconnect delay in ms, and how long an outage may go
    * unresumed before it is reported (default: 30_000) */
   most?: number
@@ -304,6 +313,9 @@ export let wire = (opts: WireOpts): Wire => {
   let connect = opts.connect ?? global()
   let timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let first = opts.wait ?? 250
+  let steady = opts.held ?? 10_000
+  let spread = opts.spread ?? 1_000
+  let random = opts.random ?? Math.random
   let most = opts.most ?? 30_000
   let quiet = opts.quiet ?? 10_000
   let network = opts.network ?? browser()
@@ -539,21 +551,25 @@ export let wire = (opts: WireOpts): Wire => {
     return opts.land({ ...frame, gone })
   }
 
-  // `now`: the connection that dropped had held for a while, which is what a
+  // `held`: the connection that dropped had held for a while, which is what a
   // server handing over to its replacement looks like, so the next one opens
-  // at once. A connection that fails, or drops as soon as it opened, waits out
-  // the backoff, so a server that accepts and hangs up is never hammered.
-  let retry = (now = false) => {
+  // within `spread`, at a moment drawn at random: a deploy drops every page's
+  // socket at once, and they come back spread out rather than together. A
+  // connection that fails, or drops before it held, waits out the backoff,
+  // each wait drawn too, so a server that accepts and hangs up is never
+  // hammered, and pages that failed together do not try again together.
+  let retry = (held = false) => {
     if (closed || retrying) return
-    if (now) return open()
+    let ms = held ? random() * spread : wait * (1 + random()) / 2
+    if (!held) wait = backoff(wait, most)
+    if (ms <= 0) return open()
     retrying = true
     let mine = ++turn
     timer(() => {
       if (mine != turn) return
       retrying = false
       open()
-    }, wait)
-    wait = backoff(wait, most)
+    }, ms)
   }
 
   // The network is back, so the outage so far was this machine's: the wire
@@ -707,7 +723,7 @@ export let wire = (opts: WireOpts): Wire => {
       // A connection that held for a while restarts the backoff, and the
       // next one is on its way before the page hears of the loss; one that
       // failed, or dropped as soon as it opened, keeps backing off.
-      let held = opened !== undefined && agreed.read() - opened >= first
+      let held = opened !== undefined && agreed.read() - opened >= steady
       if (held) wait = first
       retry(held)
       if (begun) overdue(outage)

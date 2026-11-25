@@ -76,7 +76,8 @@ export type ClientOpts = {
   /** headers added to every `POST /apply` — an `authorization`, say */
   headers?: Record<string, string>
   /** the reconnect delay in ms after a failed attempt, doubling to `most`
-   * (default: 250); a connection that held this long is retried at once */
+   * (default: 250), each drawn between half of it and all of it; a
+   * connection that held ten seconds opens again within a second */
   wait?: number
   /** the longest reconnect delay in ms, and how long an outage may go
    * unresumed before it is reported (default: 30_000) */

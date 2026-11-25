@@ -107,7 +107,7 @@ import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { upgrading } from './protocol.ts'
 import { KERNEL, meta } from './meta.ts'
-import { type Reach, read, rereading, watch, watching } from './reach.ts'
+import { type Reach, read, rereading, socketsOf, watch } from './reach.ts'
 import { reachWrite } from './agent.ts'
 import { vouched, type Who } from './session.ts'
 import type { Clock } from './timing.ts'
@@ -493,29 +493,28 @@ export let reachDoor = async (
     }
     if (door == '/ws' && upgrading(req)) {
       let stores: Promise<Reach[]> | undefined
+      // The tab's lines at one store share one socket there: the directory
+      // and each space's Operator see a socket per tab, not per line.
+      let watching = socketsOf()
       let { socket, response } = workerUpgrade(req)
       // Where the tab is (@yaks/notify/tab), as the page graph last said it,
       // said on to each Operator whose conversation the tab watches, which
       // keeps it as the person's whereabouts there (build.ts).
       let tab: Tab | undefined
-      let sayers = new Set<(frame: unknown) => void>()
+      let sayers = new Set<(tab: Tab) => void>()
       socket.addEventListener('message', (e) => {
         let said = tabOf(e.data)
         if (!said) return
         tab = said
-        for (let say of sayers) say({ tab })
+        for (let say of sayers) say(said)
       })
+      // Each socket that says the tab is told only what changed of it: the
+      // friends watch's directory socket (on every framed page) and each
+      // Operator's conversation alike hear its visibility, focus or idle
+      // moving, never the same tab said again.
       let sayTab = (say: (frame: unknown) => void) => {
-        if (tab) say({ tab })
-        sayers.add(say)
-        return () => void sayers.delete(say)
-      }
-      // The friends watch is on every framed page. Its directory socket
-      // follows that page and carries only visibility, focus or idle changes.
-      let sayPresence = (say: (frame: unknown) => void) => {
         let last: Tab | undefined
-        return sayTab((frame) => {
-          let next = tabSaid(frame)!
+        let told = (next: Tab) => {
           if (
             next.visible == last?.visible && next.focused == last.focused &&
             next.idle == last.idle
@@ -523,8 +522,11 @@ export let reachDoor = async (
             return
           }
           last = next
-          say(frame)
-        })
+          say({ tab: next })
+        }
+        if (tab) told(tab)
+        sayers.add(told)
+        return () => void sayers.delete(told)
       }
       attach(
         watched({
@@ -542,7 +544,7 @@ export let reachDoor = async (
                   ...of == FRIENDS ? { [PAGE_PRESENCE]: '1' } : {},
                 },
                 '/person/ws',
-                of == FRIENDS ? sayPresence : undefined,
+                of == FRIENDS ? sayTab : undefined,
               )
             // What no store holds of a space's payments, read again each
             // time the directory says its row moved.

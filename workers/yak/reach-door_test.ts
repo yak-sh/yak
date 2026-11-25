@@ -1042,18 +1042,11 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
         ].sort(),
       )
       // The directory answers the spaces, the apps and its share of the
-      // badges, each on its own socket; each seated Operator its count.
+      // badges, all on the tab's one socket there; each seated Operator its
+      // count, on one socket each.
       equal(
         sources.toSorted(),
-        [
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          `builder ${home.eid}`,
-          `builder ${club}`,
-        ].sort(),
+        [PLATFORM_OBJECT, `builder ${home.eid}`, `builder ${club}`].sort(),
       )
 
       await tell(club, ADA)
@@ -1102,7 +1095,7 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       document.dispatchEvent(new window.Event(PAGE))
       equal(badge().textContent, '3')
       equal(side().apps, ['Cookbook'])
-      equal(sources.length, 7)
+      equal(sources.length, 3)
 
       await dir.apply(
         { entities: [{ entity: { eid: seat }, $delete: true }] },
@@ -1134,15 +1127,8 @@ test('one page graph keeps its side live: spaces, apps, and Updates badges acros
       await until(() => counts().ada == 1)
       await until(() => side().apps[0] == 'Recipes')
       equal(
-        sources.slice(7).sort(),
-        [
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          PLATFORM_OBJECT,
-          `builder ${home.eid}`,
-        ]
-          .sort(),
+        sources.slice(3).sort(),
+        [PLATFORM_OBJECT, `builder ${home.eid}`].sort(),
       )
 
       // A browser signing in elsewhere is on Profile's list, and off it once

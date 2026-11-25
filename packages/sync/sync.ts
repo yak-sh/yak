@@ -57,6 +57,7 @@ import {
   type Timer,
   type Wire,
   wire,
+  type WireOpts,
 } from './socket.ts'
 
 /** Optional working-set policy. The client supplies retention here, rather
@@ -104,15 +105,9 @@ export type SyncOpts = {
   timer?: Timer
   /** headers on every `POST /apply` — an authorization, say */
   headers?: Record<string, string>
-  /** the reconnect delay in ms after a failed attempt, doubling to `most`
-   * (default: 250); a connection that held this long is retried at once */
-  wait?: number
-  /** the longest reconnect delay in ms, and how long an outage may go
-   * unresumed before it is reported (default: 30_000) */
-  most?: number
   /** where a refusal or a transport failure is surfaced (default: a warning) */
   report?: Report
-}
+} & Pick<WireOpts, 'wait' | 'most' | 'held' | 'spread' | 'random'>
 
 /** A graph's connection to a server: its subscriptions, and the state of the
  * socket they are held on. */
@@ -414,6 +409,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     time: opts.time,
     wait: opts.wait,
     most: opts.most,
+    held: opts.held,
+    spread: opts.spread,
+    random: opts.random,
     pending,
     again: said.again,
     land: (frame: Frame) => {

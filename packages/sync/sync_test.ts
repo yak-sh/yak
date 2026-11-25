@@ -505,6 +505,9 @@ let drops = () => {
     },
     land: () => {},
     report: (e) => said.push(e),
+    held: 1_000,
+    spread: 0,
+    random: () => 1,
   }).subscribe('.recipe', 'q')
   let last = () => sockets[sockets.length - 1]
   let tell = (frame: object) =>

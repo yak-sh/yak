@@ -375,10 +375,14 @@ A row a pending write holds keeps the write's copy whatever a subscription says
 of it meanwhile. When the write is answered, a subscription that said something
 other than the row now shown, the write's answer or its revert, is asked again.
 
-A connection that held at least `wait` (default 250 ms) and dropped, as one does
-when its server hands over to a replacement, is reopened at once. A failed
-attempt is retried after a delay doubling from `wait` to `most` (default 30
-seconds), resetting on open. `timer` supplies reconnect and pace timers. Refused
+A connection that held at least `held` (default 10 seconds) and dropped, as one
+does when its server hands over to a replacement, is reopened within `spread`
+(default 1 second), at a moment drawn at random, so the pages a deploy drops
+together do not all come back in the same instant. A failed attempt, or a
+connection that dropped before it held, is retried after a delay doubling from
+`wait` (default 250 ms) to `most` (default 30 seconds), each drawn between half
+of it and all of it; only a connection that held starts it again from `wait`.
+`random` supplies the draws, and `timer` the reconnect and pace timers. Refused
 subscriptions are not reopened automatically; explicitly subscribe on their id
 to retry. The first successful frame after reconnecting replaces prior
 membership, adding missing entities to `gone`. Cached data alone never makes a

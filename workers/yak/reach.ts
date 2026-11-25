@@ -39,7 +39,7 @@ import {
   packagesOf,
   platformDocs,
 } from './vocab.ts'
-import { once } from '@yaks/fp'
+import { type Clock, once, system } from '@yaks/fp'
 import { type Asked, bareLine, type Line } from '@yaks/query'
 import {
   type Ask,
@@ -251,33 +251,100 @@ type Wire = {
   ) => void
 }
 
-// How long a store's socket that closed waits before it opens again, at most.
+// How long a store's socket that closed waits before it opens again: a wait
+// drawn at random below `wait`, which doubles from `FIRST` to `MOST` while the
+// socket keeps failing, and starts again at `FIRST` only once a socket has
+// held for `HELD`. Drawn at random, a deploy that closes every tab's socket
+// at once has them open again spread across the wait rather than together,
+// and one a store accepts and closes again (a refusal, an overload) backs off
+// rather than coming back four times a second.
+let FIRST = 1_000
 let MOST = 30_000
+let HELD = 10_000
 
-// One line watched on one store's own socket (graph.ts `/ws`), as the
-// caller: each frame it sends, its id taken off. A socket that drops (a
-// deploy, an evicted object) opens again, after a wait that doubles to
-// `MOST`, and its first answer is said with `reset`, since what left while it
-// was away is said no other way. One the store refuses to open is said as the
-// store's refusal and left closed; one that failed is tried again. `saying`,
-// when given, is handed each socket as it opens, to say on it what the
-// caller has to say (a tab's whereabouts), and what it returns is called
-// when that socket goes.
-export let watching = (
+type Watch = (
   door: Door,
   at: string,
   line: string,
   sink: (frame: Frame) => void,
   headers: Record<string, string>,
-  path = '/ws',
+  path?: string,
   saying?: (say: (frame: unknown) => void) => () => void,
-): () => void => {
-  let closed = false, wire: Wire | undefined, wait = 250, again = false
-  let timer: ReturnType<typeof setTimeout> | undefined
+) => () => void
+
+/** One socket per store, path and caller, carrying every line watched there
+ * (graph.ts `/ws`), as the caller: each frame it sends, its id taken off, to
+ * the line it answers. A tab keeps one (reach-door.ts), so its lines at one
+ * store cost that store one socket, however many it watches. A socket that
+ * drops (a deploy, an evicted object) opens again after a wait (`FIRST`,
+ * `MOST`, `HELD`), and each line's first answer then is said with `reset`,
+ * since what left while it was away is said no other way. One the store
+ * refuses to open is said to each line as the store's refusal and left
+ * closed; one that failed is tried again. `saying`, when given, is handed
+ * each socket as it opens, to say on it what the caller has to say (a tab's
+ * whereabouts), and what it returns is called when that socket goes; lines
+ * with something to say share a socket only with lines that do too. The last
+ * line closed closes the socket. */
+export let socketsOf = (
+  { clock = system, random = Math.random }: {
+    clock?: Clock
+    random?: () => number
+  } = {},
+): Watch => {
+  let held = new Map<string, ReturnType<typeof shared>>()
+  return (door, at, line, sink, headers, path = '/ws', saying) => {
+    let key = JSON.stringify([path, at, headers, !!saying])
+    let add = held.get(key)
+    if (!add) {
+      add = shared(
+        door,
+        at,
+        headers,
+        path,
+        saying,
+        clock,
+        random,
+        () => held.delete(key),
+      )
+      held.set(key, add)
+    }
+    return add(line, sink)
+  }
+}
+
+/** One line watched on a socket of its own (`socketsOf`). */
+export let watching: Watch = (...args) => socketsOf()(...args)
+
+// One socket at a store, and the lines watched on it.
+let shared = (
+  door: Door,
+  at: string,
+  headers: Record<string, string>,
+  path: string,
+  saying: ((say: (frame: unknown) => void) => () => void) | undefined,
+  clock: Clock,
+  random: () => number,
+  done: () => void,
+) => {
+  type Line = { line: string; sink: (frame: Frame) => void; first: boolean }
+  let lines = new Map<string, Line>()
+  let next = 0, wait = FIRST, again = false, opening = false
+  let wire: Wire | undefined
+  let timer: (() => void) | undefined
+  let steady: (() => void) | undefined
   let unsay: (() => void) | undefined
+  let each = (frame: Frame) => {
+    for (let one of lines.values()) one.sink(frame)
+  }
+  let subscribe = (ws: Wire, id: string, one: Line) => {
+    one.first = again
+    ws.send(JSON.stringify({ subscribe: one.line, id }))
+  }
   let gone = () => {
     unsay?.()
     unsay = undefined
+    steady?.()
+    steady = undefined
   }
   let open = async () => {
     let res = await door(path, { headers: { upgrade: 'websocket' } }, headers)
@@ -292,14 +359,15 @@ export let watching = (
       )
     }
     ws.accept()
-    if (closed) return ws.close(1000)
+    if (!lines.size) return ws.close(1000)
     wire = ws
-    let first = again
+    steady = clock.after(HELD, () => void (wait = FIRST))
     ws.addEventListener('message', (e) => {
-      if (closed || wire != ws) return
-      let frame: Frame
+      if (wire != ws) return
+      let id: string, frame: Frame
       try {
-        let { id: _, ...said } = JSON.parse(String(e.data)) as Frame
+        let { id: was, ...said } = JSON.parse(String(e.data)) as Frame
+        id = String(was)
         frame = said
       } catch (error) {
         caught(error, { request: 'reach member socket frame', store: at })
@@ -307,10 +375,11 @@ export let watching = (
         retry()
         return
       }
-      if (first && frame.bundles) frame.reset = true
-      if (frame.bundles) first = false
-      wait = 250
-      sink(frame)
+      let one = lines.get(id)
+      if (!one) return
+      if (one.first && frame.bundles) frame.reset = true
+      if (frame.bundles) one.first = false
+      one.sink(frame)
       if (path != '/ws' && frame.refused) {
         let { error } = frame.refused as { error?: string }
         if (status(Object.assign(new Error(), { name: error })) >= 500) {
@@ -320,38 +389,51 @@ export let watching = (
       }
     })
     ws.addEventListener('close', () => wire == ws && retry())
-    ws.send(JSON.stringify({ subscribe: line, id: 'w' }))
+    for (let [id, one] of lines) subscribe(ws, id, one)
     unsay = saying?.((frame) => wire == ws && ws.send(JSON.stringify(frame)))
   }
   let retry = () => {
-    if (closed || timer !== undefined) return
+    if (!lines.size || timer !== undefined) return
     gone()
     wire = undefined
     again = true
-    timer = setTimeout(() => {
+    timer = clock.after(random() * wait, () => {
       timer = undefined
       start()
-    }, wait)
+    })
     wait = Math.min(wait * 2, MOST)
   }
   let start = () => {
-    if (closed) return
-    open().catch((e) => {
-      if (closed) return
-      sink({ refused: e })
+    if (!lines.size) return
+    opening = true
+    open().finally(() => opening = false).catch((e) => {
+      if (!lines.size) return
+      each({ refused: e })
       if (((e as { status?: number })?.status ?? status(e)) >= 500) {
         caught(e, { request: 'reach member socket', store: at })
         retry()
       }
     })
   }
-  start()
-  return () => {
-    closed = true
-    gone()
-    clearTimeout(timer)
-    wire?.close(1000)
-    wire = undefined
+  return (line: string, sink: (frame: Frame) => void) => {
+    let id = `w${next++}`
+    let one: Line = { line, sink, first: false }
+    lines.set(id, one)
+    // A socket refused for good opens again for a line asked anew.
+    if (wire) subscribe(wire, id, one)
+    else if (!opening && timer === undefined) start()
+    return () => {
+      if (!lines.delete(id)) return
+      if (lines.size) {
+        return void wire?.send(JSON.stringify({ unsubscribe: id }))
+      }
+      done()
+      gone()
+      timer?.()
+      timer = undefined
+      wire?.close(1000)
+      wire = undefined
+    }
   }
 }
 
