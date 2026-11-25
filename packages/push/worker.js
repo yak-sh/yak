@@ -192,7 +192,11 @@ let opening = (to) => {
     if (!open) return self.clients.openWindow(url.href)
     // A window this worker does not control can't be moved; it opens anew.
     await open.focus()
-    return open.url == url.href ? open : open.navigate(url.href)
+    let here = new URL(url)
+    if (here.searchParams.get('_yak_open') == 'push') {
+      here.searchParams.delete('_yak_open')
+    }
+    return open.url == here.href ? open : open.navigate(url.href)
       .catch(() => self.clients.openWindow(url.href))
   })
 }

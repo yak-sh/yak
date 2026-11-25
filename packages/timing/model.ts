@@ -5,7 +5,7 @@ import type { Ran } from './ran.ts'
 
 /** One completed minute's measurements of one piece of code. */
 export type Timing = {
-  op: Kind | 'interaction'
+  op: Kind | 'interaction' | 'open'
   name: string
   plugin: string
   at: string
@@ -20,7 +20,7 @@ export type Timing = {
 /** A summary bundle, identified by its process and minute's code coordinates. */
 export type TimingRow = {
   entity: { eid: string }
-  during: { process: string }
+  during: { process: string; entity?: string }
   timing: Timing
 }
 

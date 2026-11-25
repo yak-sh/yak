@@ -85,7 +85,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "The call, effect, entry or process being run."
+          "description": "The call, effect, entry or process being run, or the signed-in person whose browser opened a document."
         },
         "app": {
           "type": "string",

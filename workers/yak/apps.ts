@@ -3173,7 +3173,7 @@ let served = async (
   if (to.to == 'data') {
     if (edge) return passed()
     if (to.part == 'interaction') {
-      return (await import('./page-report.ts')).interactions(req, env)
+      return (await import('./page-report.ts')).interactions(req, env, true)
     }
     if (to.part == 'sign-in') return redirect(signInAt(req.url, env), 303)
     if (to.part == 'nothing') return nothingHere(env)

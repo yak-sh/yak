@@ -24,6 +24,7 @@ import {
   type Vapid,
 } from '@yaks/push'
 import { closing, noticeOf, quietly, refreshed, said } from '@yaks/push/notice'
+import { pushAddress } from '@yaks/platform/open-script'
 import { resolve } from '@yaks/render'
 import { h } from 'preact'
 import { pushViews, type Telling } from '@yaks/platform/operator-push'
@@ -540,7 +541,7 @@ let noticeFor = async (
     ? `${updates}#${updateAnchor(row.entity.eid)}`
     : await replyAt(env, store, space, row) ??
       openAt(url(env, chatPath(space.slug)), updates, note.about)
-  return noticeIn(store, row, tellingOf(env, space, open))
+  return noticeIn(store, row, tellingOf(env, space, pushAddress(open)))
 }
 
 // Where a reply opens: the conversation at the words it answers, drawn
@@ -630,7 +631,7 @@ export let unalert = async (
       body: '',
       icon,
       badge,
-      url: open,
+      url: pushAddress(open),
     },
     notice.tag,
     empty,

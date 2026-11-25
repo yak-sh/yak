@@ -25,6 +25,8 @@ import { caught } from './defects.ts'
 import type { Bar } from '@yaks/platform/visits'
 import { sharing } from './lib/shared.ts'
 import { inline, type Script, tagged } from '@yaks/platform/woven'
+import { OPEN_PATH } from '@yaks/timing/interaction'
+import { openScript } from '@yaks/platform/open-script'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 
@@ -65,7 +67,10 @@ let read = (assets: Assets) =>
   Promise.all(FILES.map(async (path): Promise<Script> => {
     let res = await assets.fetch(new Request(`https://assets.invalid${path}`))
     if (!res.ok) throw new Error(`page script ${path}: ${res.status}`)
-    return await inline(await res.text())
+    let source = await res.text()
+    return await inline(
+      path == '/report.js' ? `${source}\n;${openScript()}` : source,
+    )
   }))
 
 // Read once per isolate: the files are the deploy's own and never change
@@ -98,7 +103,11 @@ export let pageScript = async (
     }
     let doors: Record<string, string> = api ? { 'data-yak-api': api } : {}
     let worn: [Script, Record<string, string>][] = [
-      [report, {}],
+      [report, {
+        'data-yak-open': api
+          ? OPEN_PATH
+          : `${at.replace(/\/$/, '')}/_web/assets/interaction?open=1`,
+      }],
       [release, doors],
       [location, {}],
       [install, {}],

@@ -23,7 +23,8 @@
  *
  * @module
  */
-import { FRESH, picture } from './picture.ts'
+import { FRESH, FRESH_URL, FRESH_WAIT, picture } from './picture.ts'
+import { keptReports } from './kept-reports.ts'
 
 /** The caches this worker keeps pages and files in. */
 export let PAGES = 'yak-pages'
@@ -41,6 +42,9 @@ export type Keeping = {
   files?: number
   databases?: string
   opens?: (pushed: unknown) => string | undefined
+  opening?: (source: 'picture' | 'push') => string
+  address?: (url: string) => string
+  report?: string
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
@@ -142,6 +146,8 @@ let PUSHED = 10_000
 export let keeping = (scope: Scope, opts: Keeping): void => {
   scope.addEventListener('activate', (e) => e.waitUntil(scope.clients.claim()))
   let { caches, location } = scope
+  let address = opts.address ?? ((url: string) => url)
+  let keyOf = (url: string) => pageKey(address(url))
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
   // The page each kept page's picture asked for, until its bootstrap takes it.
   let asked = new Map<string, Promise<Response>>()
@@ -153,6 +159,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     let said = await (await caches.open(PAGES)).match(location.origin + FORGOT)
     return said ? Number(await said.text()) : 0
   }
+  let reports = opts.report && keptReports(scope, opts.report, forgotAt)
   let forget = async () => {
     asked.clear()
     let { databases } = opts
@@ -166,15 +173,19 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       location.origin + FORGOT,
       new Response(String(Date.now())),
     )
+    if (reports) await reports.forget()
   }
-  let keep = async ({ keep: url, html, at, since }: Snapshot) => {
+  let keep = async (
+    { keep: url, html, at, since }: Snapshot,
+    source: 'picture' | 'push' = 'picture',
+  ) => {
     if (new URL(url).origin != location.origin) return
     if (since < await forgotAt()) return
     let pages = await caches.open(PAGES)
     await pages.delete(pageKey(url))
     await pages.put(
       pageKey(url),
-      new Response(picture(html, at), {
+      new Response(picture(html, at, opts.opening?.(source)), {
         headers: {
           'content-type': 'text/html; charset=utf-8',
           'cache-control': 'no-store',
@@ -184,23 +195,41 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     await trim(pages, most.pages)
     await trim(await caches.open(FILES), most.files)
   }
-  let page = async (req: Request) => {
-    let kept = await (await caches.open(PAGES)).match(pageKey(req.url))
-    if (!kept) return scope.fetch(req)
-    let now = scope.fetch(req.url, {
-      credentials: 'same-origin',
-      headers: { accept: 'text/html' },
-      cache: 'no-store',
+  let timed = async (got: Promise<Response>, began: number) => {
+    let res = await got
+    if (!opts.opening || res.type == 'opaque' || res.type == 'opaqueredirect') {
+      return res
+    }
+    let headers = new Headers(res.headers)
+    headers.set(FRESH_WAIT, String(performance.now() - began))
+    if (res.url) headers.set(FRESH_URL, res.url)
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
     })
+  }
+  let page = async (req: Request) => {
+    let key = keyOf(req.url)
+    let kept = await (await caches.open(PAGES)).match(key)
+    if (!kept) return scope.fetch(req)
+    let now = timed(
+      scope.fetch(key, {
+        credentials: 'same-origin',
+        headers: { accept: 'text/html' },
+        cache: 'no-store',
+      }),
+      performance.now(),
+    )
     // Nobody may come for it: the picture is closed before its bootstrap ran.
     now.catch(() => {})
-    asked.set(pageKey(req.url), now)
+    asked.set(key, now)
     return kept
   }
   // The page at `url` as it is now, kept as if it had just been left. One
   // that sends elsewhere (signed out) or fails is not kept.
   let refresh = async (url: string) => {
-    let key = pageKey(new URL(url, location.origin).href)
+    let key = keyOf(new URL(url, location.origin).href)
     if (new URL(key).origin != location.origin) return
     let since = Date.now()
     let now = await scope.fetch(key, {
@@ -211,13 +240,14 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     })
     let html = (now.headers.get('content-type') ?? '').includes('text/html')
     if (!now.ok || !html || (now.url && pageKey(now.url) != key)) return
-    await keep({ keep: key, html: await now.text(), at: since, since })
+    await keep({ keep: key, html: await now.text(), at: since, since }, 'push')
   }
   let fresh = (req: Request) => {
-    let key = pageKey(req.url)
+    let key = keyOf(req.url)
     let held = asked.get(key)
     asked.delete(key)
-    return held?.catch(() => scope.fetch(req)) ?? scope.fetch(req)
+    let fetch = () => timed(scope.fetch(req), performance.now())
+    return held?.catch(fetch) ?? fetch()
   }
   let file = async (req: Request) => {
     let files = await caches.open(FILES)
@@ -228,6 +258,10 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     return got
   }
   scope.addEventListener('fetch', (e) => {
+    if (
+      reports && e.request.method == 'POST' &&
+      e.request.url == location.origin + opts.report
+    ) return e.respondWith(reports.send(e.request))
     let how = route(e.request, location.origin, opts)
     if (how == 'forget') e.waitUntil(forget())
     else if (how == 'page') e.respondWith(page(e.request))

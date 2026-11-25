@@ -21,14 +21,20 @@ export let KEPT = 'data-kept'
 /** The header the bootstrap's fetch carries, which a service worker may
  * answer with the page it already asked the network for (`@yaks/web/worker`). */
 export let FRESH = 'x-yak-fresh'
+export let FRESH_WAIT = 'x-yak-fresh-wait'
+export let FRESH_URL = 'x-yak-fresh-url'
 
 // The bootstrap, written as the script it runs, since a bundler's helpers
 // would not come along with a function's own text. It asks for the page as
 // it is now, and writes it over the picture once both are in; a page that
 // cannot be had says so, and the picture stays, marked as kept.
-export let BOOT = `(() => {
+let boot = (opening = 'null') =>
+  `(() => {
+  let opened = ${opening}
+  let began = performance.now()
   let status = () => document.querySelector('[data-kept-status]')
   let failed = () => {
+    opened?.offline()
     let at = new Date(Number(document.documentElement.getAttribute('${KEPT}')))
     let said = status()
     if (said) said.textContent = 'Offline. This is how it looked at ' +
@@ -38,11 +44,13 @@ export let BOOT = `(() => {
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { accept: 'text/html', '${FRESH}': '1' },
-  }).then((r) =>
-    r.ok && (r.headers.get('content-type') || '').includes('text/html')
-      ? r.text().then((html) => ({ html, url: r.url }))
+  }).then((r) => {
+    let wait = r.headers.get('${FRESH_WAIT}')
+    opened?.waited(wait == null ? performance.now() - began : Number(wait))
+    return r.ok && (r.headers.get('content-type') || '').includes('text/html')
+      ? r.text().then((html) => ({ html, url: r.headers.get('${FRESH_URL}') || r.url }))
       : null
-  ).then(async (page) => {
+  }).then(async (page) => {
     if (!page) return failed()
     // What the page waits on before it can paint, its sheets and the
     // scripts its head runs in order, asked for first, so the picture stays
@@ -62,11 +70,13 @@ export let BOOT = `(() => {
       await new Promise((ready) =>
         document.addEventListener('DOMContentLoaded', ready, { once: true }))
     }
+    if (document.visibilityState != 'hidden') await opened?.frame
     document.open()
     document.write(page.html)
     document.close()
   }).catch(failed)
 })()`
+export let BOOT: string = boot()
 
 // What a picture says while the page is asked for, over everything.
 let STATUS =
@@ -96,11 +106,14 @@ let FRAME_SRC = /(<iframe\b[^>]*?\s)src(\s*=)/gi
  * assertEquals(kept.indexOf('<script>(() =>') > kept.indexOf('<head>'), true)
  * ```
  */
-export let picture = (snapshot: string, at: number): string =>
+export let picture = (snapshot: string, at: number, opening?: string): string =>
   snapshot
     .replace(SCRIPT, '')
     .replace(FRAME_SRC, '$1data-kept-src$2')
     .replace(/<html\b/i, `<html ${KEPT}="${at}"`)
     .replace(/<body\b[^>]*>/i, (body) => body + STATUS)
     // Last: what the bootstrap says is no part of the page to change.
-    .replace(/<head\b[^>]*>/i, (head) => `${head}<script>${BOOT}</script>`)
+    .replace(
+      /<head\b[^>]*>/i,
+      (head) => `${head}<script>${boot(opening)}</script>`,
+    )

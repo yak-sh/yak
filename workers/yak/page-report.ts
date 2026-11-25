@@ -28,6 +28,7 @@ import { arrival } from './arrival.ts'
 import { sessionPerson } from './session.ts'
 import { bound, type Env } from './env.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
+import { pageKind } from '@yaks/platform/interaction'
 
 export let PATH = '/api/report'
 
@@ -91,7 +92,11 @@ export let answer = (req: Request, env: Host): Promise<Response> => {
 }
 
 /** The platform's own interaction batches, from its browser pages. */
-export let interactions = async (req: Request, env: Env): Promise<Response> => {
+export let interactions = async (
+  req: Request,
+  env: Env,
+  app = false,
+): Promise<Response> => {
   let { ERRORS } = env
   if (
     req.method != 'POST' || !ERRORS || env.ENVIRONMENT == 'staging' ||
@@ -103,10 +108,25 @@ export let interactions = async (req: Request, env: Env): Promise<Response> => {
     person &&
     await directory(bound(env.DIRECTORY, directoryFetch, env)).tested(person)
   ) return new Response(null, { status: 204 })
+  let opened = new URL(req.url).searchParams.has('open')
+  let referer = URL.parse(req.headers.get('referer') ?? '')
+  let page = referer
+    ? pageKind(referer.pathname, referer.searchParams.has('app'))
+    : 'other'
   return reportInteractions(req, {
     sink: (rows) => ERRORS.send(rows),
     environment: 'production',
     commit: env.CF_VERSION_METADATA?.id,
+    ...opened
+      ? {
+        opened: {
+          person,
+          page: app && page != 'app-data' && page != 'app-inspect'
+            ? 'app'
+            : page,
+        },
+      }
+      : {},
     failed: (error) => caught(error, { request: INTERACTION_PATH }),
   })
 }

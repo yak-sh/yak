@@ -5,7 +5,9 @@
 import { type Host, url } from '@yaks/platform/host'
 import { island, signedIn } from '@yaks/platform/site-nav'
 import { DATA_TIMING } from '@yaks/platform/ladder'
-import { INTERACTION_PATH } from '@yaks/timing/interaction'
+import { INTERACTION_PATH, OPEN_PATH } from '@yaks/timing/interaction'
+import { EARLY_REPORT } from '@yaks/platform/early-report'
+import { openScript } from '@yaks/platform/open-script'
 
 declare const YAK_NAMED: Record<string, string> | undefined
 
@@ -51,15 +53,20 @@ export let links = (
   favicon = true,
 ) => {
   let at = (name: string) => asset(env, name, names, base)
-  let reporter = `<script src="${at('report.js')}" data-yak-at="${
+  let reporter = `<script src="${at('report.js')}" defer data-yak-at="${
     url(env, '/')
-  }"></script>\n`
+  }"></script><script data-yak-early-report>${EARLY_REPORT}</script>\n`
+  let opening = base ? base + DATA_TIMING + '?open=1' : OPEN_PATH
   let icon = favicon
     ? `<link rel="icon" href="${
       at('favicon-32.png')
     }" type="image/png" sizes="32x32">`
     : ''
-  return `${reported ? '' : reporter}${interaction(env, names, base)}
+  return `${
+    reported ? '' : reporter
+  }<script data-yak-open="${opening}">${openScript()}</script>${
+    interaction(env, names, base)
+  }
 ${icon}
 <link rel="preload" href="${at(FONT)}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${at(sheet)}">`

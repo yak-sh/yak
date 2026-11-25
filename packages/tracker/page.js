@@ -223,7 +223,7 @@
   }
 
   // A miss is answered with its handling, settled once it is said or let go.
-  addEventListener('error', (e) => {
+  let error = (e) => {
     let el = missed(e)
     if (el) {
       // The address that 404'd is the news — the page is dead for the want of
@@ -268,12 +268,13 @@
       line: e.lineno,
       mechanism: 'onerror',
     })
-  }, true)
+  }
+  addEventListener('error', error, true)
 
   // A refusal from ./api/client.js that the page never caught carries the
   // answer's status, and goes to the door as the fetch below sends it: the door
   // judges a no somebody meant, and only a break draws over the page.
-  addEventListener('unhandledrejection', (e) => {
+  let rejection = (e) => {
     if (decided(e.reason)) return
     let status = e.reason && e.reason.status
     ;(status < 500 ? send : broke)({
@@ -283,7 +284,8 @@
       status,
       mechanism: 'onunhandledrejection',
     })
-  })
+  }
+  addEventListener('unhandledrejection', rejection)
 
   // What an error was wrapped around, down its `cause` chain, as the server's
   // reporter keeps it (report.ts `causes`): each link's stack, else its value.
@@ -530,4 +532,9 @@
       ;(document.body || document.documentElement).append(line)
     } catch { /* a reporter that throws is worse than one that misses */ }
   })
+  let early = globalThis[Symbol.for('yaks.early-report')]?.() ?? []
+  for (let event of early) {
+    if (event.type == 'error') error(event)
+    else rejection(event)
+  }
 })()

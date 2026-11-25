@@ -30,6 +30,7 @@ let loaded = (
   page: string,
   status = 204,
   headers: Record<string, string> = {},
+  before?: (window: Window) => void,
 ) => {
   let { document, window } = parseHTML(html)
   let [first, ...rest] = [
@@ -44,6 +45,20 @@ let loaded = (
   let fetch = (_url?: string) =>
     Promise.resolve(new Response(null, { status, headers }))
   let scope = { fetch, console: { error: () => {} } }
+  if (before) {
+    let early = document.querySelector('script[data-yak-early-report]')!
+    new Function(
+      'globalThis',
+      'addEventListener',
+      'removeEventListener',
+      early.textContent ?? '',
+    )(
+      scope,
+      window.addEventListener.bind(window),
+      window.removeEventListener.bind(window),
+    )
+    before(window as unknown as Window)
+  }
   new Function(
     'document',
     'location',
@@ -78,7 +93,11 @@ let loaded = (
 let ran = async (own: string, frame = at, page = at) => {
   let html = await shell({}, 'Operator', null, 200, own).text()
   let { window, first, rest, sent } = loaded(html, page)
-  for (let script of rest.filter((s) => !s.src)) {
+  for (
+    let script of rest.filter((s) =>
+      !s.src && !s.matches('[data-yak-early-report], [data-yak-open]')
+    )
+  ) {
     try {
       new Function(script.textContent ?? '')()
     } catch (error) {
@@ -136,6 +155,27 @@ test('a break is tagged with the browser that sent it', async () => {
     'user-agent': safari,
   })
   equal((row.error as { tags: Record<string, string> }).tags.agent, safari)
+})
+
+test('a parser-time throw reaches the tracker after the deferred reporter starts', async () => {
+  let html = await shell({}, 'Operator', null, 200, '').text()
+  let { first, sent } = loaded(html, at, 204, {}, (win) => {
+    let error = Object.assign(Error('parser-time throw'), {
+      stack: `Error: parser-time throw\n    at ${at}:40:1`,
+    })
+    win.dispatchEvent(
+      Object.assign(new (win as Window & typeof globalThis).Event('error'), {
+        error,
+        filename: at,
+        message: error.message,
+        lineno: 40,
+      }),
+    )
+  })
+  ok(first.hasAttribute('defer'))
+  equal(sent.length, 1)
+  let [row] = await filed(sent[0].body)
+  ok(JSON.stringify(row).includes('parser-time throw'))
 })
 
 test('the iOS shell is filed from no page, tagged as it says, at its commit', async () => {

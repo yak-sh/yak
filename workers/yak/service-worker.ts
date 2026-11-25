@@ -10,10 +10,15 @@
 import '@yaks/push/worker'
 import { opens } from '@yaks/push/notice'
 import { keeping, type Scope } from '@yaks/web/worker'
+import { OPEN_PATH } from '@yaks/timing/interaction'
+import { openScript, plainAddress } from '@yaks/platform/open-script'
 
 keeping(globalThis as unknown as Scope, {
   forget: ['/logout', '/login'],
   named: '/_yak/',
   databases: 'yaks-page:',
   opens,
+  address: plainAddress,
+  opening: (source) => openScript(OPEN_PATH, source),
+  report: OPEN_PATH,
 })

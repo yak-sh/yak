@@ -337,6 +337,15 @@ let TIMELINE = `(() => {
   }
   // When the page could first be used: its own yak-usable mark.
   let usable = performance.getEntriesByName('yak-usable')[0]
+  let picture = performance.getEntriesByName('yak-picture-paint')[0]
+  let fresh = performance.getEntriesByName('yak-open-server')[0]
+  if (picture) out.push({
+    name: 'picture',
+    url: location.href,
+    ms: round(picture.startTime),
+    parts: fresh ? { wait: round(fresh.detail) } : {},
+    server: {},
+  })
   if (usable) out.push({
     name: 'usable',
     url: location.href,
