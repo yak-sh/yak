@@ -400,7 +400,7 @@ test('the side holds the space, the Operator, Updates, the apps and Manage', () 
     'Township',
     op,
     'Updates',
-    'Your apps',
+    'Edit apps',
     'Recipe box',
     'Holdfast',
     'Book club',
@@ -415,7 +415,7 @@ test('the side holds the space, the Operator, Updates, the apps and Manage', () 
     Township: null,
     [op]: chatPath('clerk'),
     Updates: talkPath('updates', 'clerk'),
-    'Your apps': null,
+    'Edit apps': null,
     'Recipe box': aboutPath('clerk', 'app0'),
     Holdfast: aboutPath('clerk', 'app1'),
     'Book club': aboutPath('clerk', 'app2'),
@@ -424,15 +424,15 @@ test('the side holds the space, the Operator, Updates, the apps and Manage', () 
     RSVP: aboutPath('clerk', 'app5'),
     Manage: managePath('apps', 'clerk'),
   })
-  // The conversation on screen is the side's current tab, and the apps say
-  // they open beside it.
+  // The conversation on screen is the side's current tab.
   assertEquals(
     owner.document.querySelector('.SideNav [aria-current="page"]')?.textContent,
     op,
   )
   assertEquals(
-    owner.document.querySelector('.Sidebar_Note')?.textContent,
-    `Each opens beside your one chat with ${op}.`,
+    owner.document.querySelector('#side-apps')?.nextElementSibling
+      ?.hasAttribute('data-fit-list'),
+    true,
   )
   // A member may open none of the settings but the Operator's.
   assertEquals(member.said, owner.said)

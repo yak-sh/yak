@@ -1338,8 +1338,7 @@
     font-size: var(--fine);
     font-weight: 800;
   }
-  .Sidebar_None,
-  .Sidebar_Note {
+  .Sidebar_None {
     margin: 0 .6rem;
     color: var(--muted);
     font-size: var(--fine);
@@ -1433,7 +1432,7 @@
       flex-direction: column;
       padding: 0;
     }
-    .Sidebar-rail :is(.Sidebar_Title, .Sidebar_Group, .Sidebar_None, .Sidebar_Note, .Sidebar_Shut) {
+    .Sidebar-rail :is(.Sidebar_Title, .Sidebar_Group, .Sidebar_None, .Sidebar_Shut) {
       display: none;
     }
     .Sidebar-rail .Sidebar_Unshut {

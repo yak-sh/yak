@@ -80,8 +80,6 @@ export type Section = {
   id: string
   label: string
   heading?: boolean
-  /** A line under the heading saying what its links open. */
-  note?: string
   fit?: boolean
   items: Item[]
   empty?: string
@@ -185,9 +183,6 @@ export let section = (at: Section, collapsed: boolean) =>
     { class: 'Sidebar_Section', 'data-side-part': at.id },
     at.heading
       ? h('h3', { class: 'Sidebar_Group', id: at.id }, at.label)
-      : null,
-    at.note && at.items.length
-      ? h('p', { class: 'Sidebar_Note' }, at.note)
       : null,
     at.items.length
       ? h(
@@ -416,9 +411,8 @@ export let sideParts = (
       : undefined,
     apps: {
       id: 'side-apps',
-      label: 'Your apps',
+      label: 'Edit apps',
       heading: true,
-      note: `Each opens beside your one chat with ${operator}.`,
       fit: true,
       items: apps.map((a) => ({
         href: aboutPath(here.slug, a.slug, talk?.open),
