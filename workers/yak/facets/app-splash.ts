@@ -13,7 +13,7 @@ import { generatedIconKey, ICON_PNG } from '@yaks/platform/app-icon'
 import { MANIFEST } from '@yaks/platform/routes'
 import { ensureSplash, pageSheets, palette } from '@yaks/platform/splash'
 import { sharing } from '@yaks/fp'
-import { caught } from '../defects.ts'
+import { defect } from '../defects.ts'
 
 let released = ({ app, space }: OnOffer) =>
   (app.version ?? 0) > 0 && !app.trashed && !space.trashed
@@ -124,14 +124,16 @@ export let drawingSplashes = (store: Stored, dir: Directory): Handlers => {
             // Asked for by a release or the backfill, which both read the
             // app released: one gone by now is worth knowing about.
             if (said == 'gone') {
-              caught(new Error('A splash was asked for an app not released'), {
+              defect(new Error('A splash was asked for an app not released'), {
                 request: 'app splash',
                 app: entity.eid,
               })
             }
           },
+          // A run has no caller whose input could be refused, so a refusal
+          // here is a failure too, and filed like one.
           (e) => {
-            caught(e, { request: 'app splash', app: entity.eid })
+            defect(e, { request: 'app splash', app: entity.eid })
             throw e
           },
         ).finally(() => pending.delete(entity.eid))
