@@ -33,6 +33,7 @@ import {
   taskSession,
   type Told,
   type Tool,
+  type ToolContext,
   topOf,
   transcript,
   usingOf as usingIn,
@@ -183,6 +184,7 @@ import {
   ESCALATING,
   type Press,
   type Standing,
+  steering,
 } from './operator-approvals.ts'
 import { heardIn, unvouched } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
@@ -2658,6 +2660,12 @@ export let operating = (
     let kept = (tools: Tool[]) => (listed = tools)
     let hold = (name: string) =>
       listed.find((t) => t.name == name && !t.withheld)
+    // How the words this turn answers came, which with what it read since
+    // says whether someone else's may be steering it (operator-approvals.ts
+    // `steering`): a wake set in it keeps that (operator-schedules.ts).
+    let came = { texted: !!confirm, relayed: RELAYED.has(channel) }
+    let steers = (context?: ToolContext) =>
+      !o.approved && steering(came, context)
     // What a member's turn holds beyond the space's tools: their alerts,
     // texts, mail, numbers, wakes and subscriptions.
     let mine = () => [
@@ -2677,7 +2685,7 @@ export let operating = (
       imageNew(env, space, store),
       ...voiceTools(env, ctx, space, store),
       ...pickTools(store, ctx.person!),
-      ...wakeTools(store),
+      ...wakeTools(store, steers),
       memberList(dir(), space, ctx.person!, ctx.role ?? null),
       ...subscriptionTools(store, watching, hold),
       escalationAnswer(store, ctx, space),
@@ -2744,8 +2752,7 @@ export let operating = (
               let people = await ctx.dir.persons(await ctx.dir.members(space))
               return [...people.values()].map((k) => k.email)
             }),
-            texted: !!confirm,
-            relayed: RELAYED.has(channel),
+            ...came,
             place: space.title || space.slug,
             ours: (connection, app) => outsiders(env, space, connection, app),
             connections: async (args, tool) => {
@@ -2930,7 +2937,7 @@ export let operating = (
           },
         })
       },
-      helper: async (session, ask, brief) => {
+      helper: async (session, ask, brief, heard) => {
         let input = helperInput(session)
         if ((await g.get([input]))[0]) return
         let space = await dir().at(ask.space)
@@ -2946,6 +2953,7 @@ export let operating = (
             body:
               `You are a scheduled helper. Do this work here and give a short report. Your report stays with this run and reaches nobody: when the person should hear something, tell them yourself with notification_send.\n\n${brief}`,
           },
+          ...heard ? { heard: {} } : {},
           using: usingOf(selected.model, selected.provider),
           $actor: { by: ask.space, via: session },
         }], { trusted: true })
@@ -3266,6 +3274,7 @@ export let operating = (
     with: {
       ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
       ...o.unverified ? { unverified: { number: o.unverified } } : {},
+      ...o.heard ? { heard: {} } : {},
     },
   })
   // What the person said before on the subject of the words they now give
@@ -3880,6 +3889,9 @@ export type Asking = {
   framing?: string
   /** Writer of injected words, independent of the person whose access applies. */
   from?: string
+  // That the words may be someone else's (operator-schedules.ts): they are
+  // `heard`, so they steer their turn (@yaks/session `steered`).
+  heard?: boolean
   // The call whose talking model asked in these words, for the caller.
   call?: string
   // The model that answers these words, where not the Operator's own (a

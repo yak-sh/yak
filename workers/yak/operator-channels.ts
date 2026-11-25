@@ -293,7 +293,15 @@ export let receive = async (
   store: Store,
   request: Request,
   text: string,
-  options: { id?: string; mail?: Comp; title?: string; also?: Bundle[] } = {},
+  options: {
+    id?: string
+    mail?: Comp
+    title?: string
+    also?: Bundle[]
+    // Words that may be someone else's, as a wake's set in a steered turn
+    // (operator-schedules.ts): they steer the turn they start.
+    heard?: boolean
+  } = {},
 ) => {
   let id = options.id ?? crypto.randomUUID()
   let [existing] = await store.g.get([id])
@@ -313,6 +321,7 @@ export let receive = async (
         body: text,
       },
       ...(options.mail ? { mail: options.mail } : {}),
+      ...options.heard ? { heard: {} } : {},
     },
     ...attachmentRows(id, (request.files ?? []).map(attachedOf)),
     ...options.also ?? [],
@@ -926,7 +935,10 @@ export let fire = async (
     store,
     { space, person: wake.for, channel, about: row.entity.eid },
     what ? `${wake.note}\n\n${what}` : wake.note,
-    { id: derivedEid(`operator-fired|${row.entity.eid}|${occurrence}`) },
+    {
+      id: derivedEid(`operator-fired|${row.entity.eid}|${occurrence}`),
+      heard: !!row.heard,
+    },
   )
 }
 
@@ -1785,6 +1797,7 @@ export let handleChannels = (
               : {},
             framing,
             from: FROM[request.channel]?.(request),
+            ...row.heard ? { heard: true } : {},
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             ...request.provider ? { provider: request.provider } : {},

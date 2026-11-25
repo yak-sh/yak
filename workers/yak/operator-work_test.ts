@@ -57,7 +57,7 @@ await store.g.apply([{
   session: {},
   operator_session: { space: eid, person },
 }], { trusted: true })
-let tools = wakeTools(store)
+let tools = wakeTools(store, () => false)
 let context = {
   session,
   call: { entity: { eid: crypto.randomUUID() } },

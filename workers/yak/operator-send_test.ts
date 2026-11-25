@@ -151,7 +151,7 @@ test("a stranger wakes no thread but the room's it was addressed in, and nobody 
 })
 
 test('a wake-up set in a helper wakes the conversation it works for', async () => {
-  let set = wakeTools(store).find((t) => t.name == 'wake_set')!
+  let set = wakeTools(store, () => false).find((t) => t.name == 'wake_set')!
   let told = JSON.parse(String(
     await set.run({ say: 'Look again.', at: '1h' }, {
       session: helper,

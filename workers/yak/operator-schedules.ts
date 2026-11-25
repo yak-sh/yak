@@ -6,14 +6,17 @@
 // run here: the wake's note becomes their words in the conversation that set
 // it (`wake.target`, operator-channels.ts `operator_receive`), a call
 // runs with no model turn (@yaks/wake/run), and a brief starts a fresh helper
-// given the call's outcome. A subscription is a wake that watches a query
-// (`watch`): it fires only when the query's rows changed, and its note comes
-// with what changed. It keeps no cadence: each commit to what it reads stirs
-// it (@yaks/wake `stir`), the space's apps telling the Operator of theirs
-// (graph.ts `#herald`, build.ts `HEARD`) and this store hearing its own
-// (`ownCommits`), so it looks a beat later and rests until the next. The
-// tools are the Operator's published ones; their names and schemas are kept
-// (M-37853).
+// given the call's outcome. A wake set in a turn someone else's words may
+// have steered (operator-approvals.ts `steering`) is `heard`, and so is what
+// it starts: the run of its call, its helper's turn and the turn its words
+// begin, whose privileged acts then wait for the person's tap. A subscription
+// is a wake that watches a query (`watch`): it fires only when the query's
+// rows changed, and its note comes with what changed. It keeps no cadence:
+// each commit to what it reads stirs it (@yaks/wake `stir`), the space's apps
+// telling the Operator of theirs (graph.ts `#herald`, build.ts `HEARD`) and
+// this store hearing its own (`ownCommits`), so it looks a beat later and
+// rests until the next. The tools are the Operator's published ones; their
+// names and schemas are kept (M-37853).
 import { line } from '@yaks/query'
 import { type Bundle, derivedEid, type Plugin } from '@yaks/graph'
 import { short } from '@yaks/id'
@@ -102,8 +105,12 @@ let shownWatch = (b: Bundle) => {
 let settingOf = async (store: Store, context?: ToolContext) =>
   context ? { target: await topOf(store.g, context.session) } : {}
 
+/** Whether someone else's words may be steering the turn a tool is called
+ * in (operator-approvals.ts `steering`). */
+export type Steers = (context?: ToolContext) => boolean
+
 /** The tools that set, list and cancel a person's wake-ups. */
-export let wakeTools = (store: Store): Tool[] => [
+export let wakeTools = (store: Store, steers: Steers): Tool[] => [
   {
     name: 'wake_set',
     title: 'Come back at a time, once or on a cadence',
@@ -178,6 +185,7 @@ export let wakeTools = (store: Store): Tool[] => [
           ...helper ? { brief: helper } : {},
         },
         ...tool ? { call: { to: toolEid(tool), args: args.args ?? {} } } : {},
+        ...steers(context) ? { heard: {} } : {},
       }
       await store.g.apply([
         ...tool
@@ -458,6 +466,7 @@ let failed = async (
   let wake = (row.occurrence as { wake: string }).wake
   let id = derivedEid(`operator-work-failed|${row.entity.eid}`)
   if ((await store.g.get([id]))[0]) return
+  let [set] = await store.g.get([wake])
   defect(new Error(`Scheduled Operator work failed: ${error}`), {
     request: 'operator scheduled work',
     schedule: wake,
@@ -473,7 +482,7 @@ let failed = async (
       about: wake,
     },
     `Scheduled work ${row.entity.eid} failed. Find the cause and recover it.\n\n${text}`,
-    { id },
+    { id, heard: !!set?.heard },
   )
 }
 
@@ -510,9 +519,28 @@ export let finished = async (
 export type Capabilities = {
   /** a runner over the tools the person may use now, for the occurrence */
   runner: (occurrence: string, ask: Ask) => Promise<Runner>
-  /** start a fresh helper in the occurrence's session */
-  helper: (occurrence: string, ask: Ask, brief: string) => Promise<void>
+  /** start a fresh helper in the occurrence's session, given its brief as
+   * someone else's words where they are `heard` */
+  helper: (
+    occurrence: string,
+    ask: Ask,
+    brief: string,
+    heard: boolean,
+  ) => Promise<void>
 }
+
+/** What an occurrence of a `heard` wake reads first, so its call, a script
+ * and its helper's turn are steered (@yaks/session `steered`). */
+let steeredIn = (occurrence: string): Bundle => ({
+  entity: { eid: derivedEid(`operator-work-heard|${occurrence}`) },
+  entry: { session: occurrence, from: 'the system' },
+  content: {
+    body:
+      "This was set in a turn that read someone else's words, so it may be theirs.",
+  },
+  notice: {},
+  heard: {},
+})
 
 /**
  * What a wake set for a person asks when it fires at `at` (@yaks/wake
@@ -542,8 +570,12 @@ export let fired = async (
     await fire(store, space, row, watch ? 'subscription' : 'wake', at, changes)
     return
   }
+  let heard = !!row.heard
   let ran = await run(store.g, row, at, {
-    runner: (occurrence) => capabilities.runner(occurrence, ask),
+    runner: async (occurrence) => {
+      if (heard) await store.g.apply([steeredIn(occurrence)], { trusted: true })
+      return capabilities.runner(occurrence, ask)
+    },
     with: {
       session: {},
       operator_session: ask,
@@ -565,6 +597,7 @@ export let fired = async (
         `${wake.brief}\n\nScheduled occurrence: ${at}\nCall outcome${
           error ? ' (failed)' : ''
         }:\n${text}`,
+        heard,
       )
       return
     } catch (e) {
