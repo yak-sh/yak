@@ -223,6 +223,7 @@ import {
   type Hibernation,
   opaque,
   profile,
+  socketRenewals,
   type Sockets,
   sockets,
   type Wire,
@@ -1052,7 +1053,7 @@ export class Store extends Durable {
     if (rowsWritten != null) hop('rowsWritten', rowsWritten)
   }
   #people = new Map<string, string | null>()
-  #live!: Sockets
+  #live!: ReturnType<typeof sockets>
   // The restart a socket's newer caller is owed, kept until a refusal on one
   // of this object's sockets pays it (`#fetch`): a socket's refusals come in
   // frames, after its handshake was answered.
@@ -2287,6 +2288,12 @@ export class Store extends Durable {
       (line) => borrows(line, this.#uses()),
     )
     let directory = branch == null && name == PLATFORM_STORE
+    let renewals = directory
+      ? socketRenewals(this.clock.arm, {
+        now: this.#now,
+        keep: (work) => this.#ctx.waitUntil?.(work),
+      })
+      : undefined
     if (directory) {
       let pending = computed(g, {
         // Where an app's drafts stand moves with that app alone
@@ -2370,8 +2377,10 @@ export class Store extends Durable {
         // Friends page says where it is (friends-browser `EVERY`).
         renew: (answer) =>
           Array.isArray(answer) && answer.some((b) => b.befriended)
-            ? Date.now() + SEEN_EVERY
+            ? this.#now() + SEEN_EVERY
             : undefined,
+        clock: clockOf(this.#time),
+        renewAt: renewals?.at,
         hold: (work) => this.#ctx.waitUntil?.(work),
         read: async (line, read) => {
           if (!read?.person) return []
@@ -2414,6 +2423,7 @@ export class Store extends Durable {
       at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
+        renewals,
         deferStatic: true,
         // A socket a newer deploy opened, refused what its code may not know
         // yet: the object restarts onto that deploy, as for a refused request.
@@ -3654,6 +3664,11 @@ export class Store extends Durable {
       let fired = await this.#fire(now)
       return earliest(await soonest(this.#graph, now), this.#again(fired, now))
     }),
+    sockets: this.#own(
+      () => this.#live.renew(),
+      () =>
+        !this.#dormant && !this.#refused && this.#get('name') == PLATFORM_STORE,
+    ),
     // The runs pending as the pool takes its batch, and the minute a run in
     // flight holds (`#holding`).
     effects: this.#own(async () => {

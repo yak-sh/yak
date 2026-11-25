@@ -16,7 +16,7 @@
 // once they no longer write in the space it hears nothing more, and closes.
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { beside, computed, type Reached } from '@yaks/api/reached'
-import { type Hibernation, sockets } from '@yaks/durable-object'
+import { type Hibernation, socketRenewals, sockets } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
 import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
@@ -52,6 +52,8 @@ export type Seating = {
   report?: (error: Error) => void
   clock?: Clock
   hold?: (work: Promise<void>) => void
+  /** The object's alarm, shared with its other work. */
+  arm?: (at: number) => Promise<void>
   /** the person's conversations, as their chat pages watch them
    * (operator-host.ts `operatorFrames`); none are answered without */
   talks?: Reached
@@ -99,9 +101,10 @@ let personal = (asked: string) =>
 export let operatorApi = (
   store: OperatorStore,
   ctx: Hibernation,
-  { seat, report, clock = system, hold, talks }: Seating,
+  { seat, report, clock = system, hold, arm, talks }: Seating,
 ) => {
   let subs = subscriptions(store.g)
+  let renewals = arm && socketRenewals(arm, { now: clock.now, keep: hold })
   let waiting = computed(store.g, {
     affects: (bundles) => bundles.some((b) => inputs.some((key) => key in b)),
     hold,
@@ -137,6 +140,7 @@ export let operatorApi = (
       Array.isArray(answer)
         ? (answer[0]?.$expires as { at: number } | undefined)?.at
         : undefined,
+    renewAt: renewals?.at,
     tags: { request: 'Operator Updates' },
   })
   // The person's drafts, as their page graph holds them
@@ -219,6 +223,7 @@ export let operatorApi = (
     },
     report,
     {
+      renewals,
       // A socket keeps who opened it, and is read with their sight as their
       // seat stands.
       read: (read) => {
@@ -268,5 +273,6 @@ export let operatorApi = (
     close: live.close,
     /** Its sockets' subscriptions opened again, as the object wakes. */
     wake: live.wake,
+    renew: live.renew,
   }
 }

@@ -26,13 +26,13 @@ export type Reached = {
     line: string,
     opts?: ReadOpts,
     writer?: PeerWriter,
-  ) => void
+  ) => void | Promise<void>
   /** Reopen saved watches. With `quiet`, each is held and not asked until
    * {@link Reached.resume} or the next {@link Reached.hear}: a page that
    * kept its answers through its host's sleep is not sent them again. */
-  restore: (openings: Opening[], quiet?: boolean) => void
+  restore: (openings: Opening[], quiet?: boolean) => void | Promise<void>
   /** Ask every watch held quiet. */
-  resume: () => void
+  resume: () => void | Promise<void>
   close: (sink: Sink, id: string) => void
   drop: (sink: Sink) => void
   /** A member's graph moved: every line `only` names (every line, without
@@ -88,6 +88,8 @@ export let reached = (opts: {
   tags?: Tags
   /** When a time-dependent answer next changes without a write. */
   renew?: (answer: Bundle[] | Reduced) => number | undefined
+  /** Schedule a renewal at an absolute time. Defaults to the clock's timer. */
+  renewAt?: (at: number, read: () => Promise<void>) => () => void
   clock?: Clock
   /** The local revision at which a derived read starts. */
   revision?: () => number
@@ -106,10 +108,11 @@ export let reached = (opts: {
       if (!current()) return
       let next = opts.renew?.(answer)
       if (next !== undefined) {
-        watch.cancel = clock.after(
-          Math.min(2 ** 31 - 1, Math.max(1, next - clock.now())),
-          () => void ask(sink, id, watch),
-        )
+        let read = () => ask(sink, id, watch)
+        let now = clock.now()
+        watch.cancel = opts.renewAt
+          ? opts.renewAt(Math.max(now + 1, next), read)
+          : clock.after(Math.min(2 ** 31 - 1, Math.max(1, next - now)), read)
       }
       let frame: Frame = Array.isArray(answer)
         ? { id, bundles: answer, reset: true }
@@ -145,21 +148,34 @@ export let reached = (opts: {
     mine.get(id)?.cancel?.()
     let watch: Watch = { line, asked: 0, opts: read, writer }
     mine.set(id, watch)
-    if (!quiet) void ask(sink, id, watch)
+    if (!quiet) {
+      let asked = ask(sink, id, watch)
+      if (opts.renewAt) return asked
+    }
   }
+  let joined = (work: Promise<void>[]) =>
+    work.length ? Promise.all(work).then(() => {}) : undefined
   return {
     open: (sink, id, line, read, writer) => open(sink, id, line, read, writer),
     restore: (openings, quiet) => {
+      let work: Promise<void>[] = []
       for (let { sink, id, query, opts: read, writer } of openings) {
-        if (query !== true) open(sink, id, query, read, writer, quiet)
+        if (query === true) continue
+        let asked = open(sink, id, query, read, writer, quiet)
+        if (asked) work.push(asked)
       }
+      return joined(work)
     },
     resume: () => {
+      let work: Promise<void>[] = []
       for (let [sink, mine] of held) {
         for (let [id, watch] of mine) {
-          if (!watch.asked) void ask(sink, id, watch)
+          if (watch.asked) continue
+          let asked = ask(sink, id, watch)
+          if (opts.renewAt) work.push(asked)
         }
       }
+      return joined(work)
     },
     watching: () => [...held.values()].some((mine) => mine.size > 0),
     close: (sink, id) => {
@@ -274,16 +290,13 @@ export let beside = (
     },
     restore: (openings, deferStatic) => {
       for (let o of openings) lend(o.sink, o.id, theirs(o.query))
-      lent.restore(openings.filter((o) => theirs(o.query)), deferStatic)
-      return subs.restore(
-        openings.filter((o) => !theirs(o.query)),
-        deferStatic,
+      return after(
+        lent.restore(openings.filter((o) => theirs(o.query)), deferStatic),
+        () =>
+          subs.restore(openings.filter((o) => !theirs(o.query)), deferStatic),
       )
     },
-    resume: () => {
-      lent.resume()
-      return subs.resume?.()
-    },
+    resume: () => after(lent.resume(), () => subs.resume?.()),
     close: (sink, id) => {
       if (lend(sink, id, false)) return lent.close(sink, id)
       return subs.close(sink, id)

@@ -825,6 +825,7 @@ export class Builder extends Durable {
           talks: this.#frames.talks,
           clock: this.#env.CLOCK,
           hold: (work) => this.#ctx.waitUntil?.(work),
+          arm: this.clock.arm,
           // A page's socket stands by its person's seat in the space as it is
           // now, an administrator's read as an owner's, as `#operate` reads it.
           seat: async (person, administrative) => {
@@ -942,6 +943,7 @@ export class Builder extends Durable {
             this.#resume()
             return null
           },
+          sockets: async () => (await this.#stored()).door.renew(),
           contacts: async () => {
             let { contactBackfill } = await import('./contact-move.ts')
             return backfill(contactBackfill(store, this.#env))

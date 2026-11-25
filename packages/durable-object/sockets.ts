@@ -94,6 +94,56 @@ export type Sockets = {
   wake(deferStatic?: boolean): void | Promise<void>
 }
 
+type Renewals = {
+  at: (at: number, read: () => Promise<void>) => () => void
+  run: () => Promise<number | null>
+}
+
+type LiveSockets = Sockets & {
+  /** Refresh timed watches from the object's alarm and return the next due time. */
+  renew(): Promise<number | null>
+}
+
+/** Schedule subscription reads on the object's existing alarm. On a cold
+ * alarm, the adapter restores the socket's watches and reads their current
+ * answers, which supply fresh deadlines. The runtime holds no timer between
+ * reads. */
+export let socketRenewals = (
+  arm: (at: number) => Promise<void>,
+  {
+    now = Date.now,
+    keep,
+  }: { now?: () => number; keep?: (work: Promise<void>) => void } = {},
+): Renewals => {
+  let held = new Map<() => Promise<void>, number>()
+  let running = false
+  return {
+    at: (at: number, read: () => Promise<void>) => {
+      held.set(read, at)
+      if (!running) {
+        let armed = arm(at).catch((e) => fault(e, 'socket renewal alarm'))
+        keep?.(armed)
+      }
+      return () => void held.delete(read)
+    },
+    run: async (): Promise<number | null> => {
+      let at = now()
+      let due = [...held].filter(([, time]) => time <= at)
+      running = true
+      try {
+        await Promise.all(due.map(([read]) => {
+          if (held.delete(read)) return read()
+        }))
+        let next = Infinity
+        for (let time of held.values()) next = Math.min(next, time)
+        return next == Infinity ? null : next
+      } finally {
+        running = false
+      }
+    },
+  }
+}
+
 // The runtime's socket factory: two ends of one connection, the client half
 // handed back in the 101 response, the server half handed to the runtime.
 // Declared structurally (the global is looked up at call time) so this package
@@ -319,12 +369,14 @@ export let sockets = (
      * refused request, since a socket's refusals come after its handshake was
      * answered. */
     refused?: (refusal: { error: string; message: string }) => void
+    /** The alarm-backed scheduler used by this registry's timed watches. */
+    renewals?: Renewals
     /** How a burst of watch changes is put off until its stored map is
      * written once (default: a timer of {@link SETTLE} ms, which also keeps
      * the object from hibernating before the write is made). */
     defer?: (write: () => void) => void
   } = {},
-): Sockets => {
+): LiveSockets => {
   let sinks = new Map<
     Wire,
     ReturnType<typeof queue> & { forget: (id: string) => void }
@@ -650,7 +702,7 @@ export let sockets = (
     return after(out, () => send)
   }
 
-  return {
+  let adapter: LiveSockets = {
     accept: (request, opts, writer) => {
       if ((request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket') {
         return json(
@@ -771,6 +823,12 @@ export let sockets = (
 
     close: drop,
 
+    renew: async () => {
+      if (!opts.renewals) return null
+      await adapter.wake()
+      return await opts.renewals.run()
+    },
+
     wake: (deferStatic = false) => {
       if (waking) {
         return deferStatic ? waking : waking.then(() => subs.resume?.())
@@ -804,4 +862,5 @@ export let sockets = (
       return out
     },
   }
+  return adapter
 }

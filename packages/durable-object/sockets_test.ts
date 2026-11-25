@@ -8,6 +8,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
 import { type Subs, subscriptions as subscribed } from '@yaks/api'
+import { beside, reached } from '@yaks/api/reached'
 import {
   type Bundle,
   derivedEid,
@@ -20,7 +21,8 @@ import { pack } from './watches.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
 import { durable, shop, store } from './testing.ts'
-import { type Sockets, sockets, type Wire } from './sockets.ts'
+import { socketRenewals, type Sockets, sockets, type Wire } from './sockets.ts'
+import { clock } from './alarm.ts'
 import { holds } from './holds.ts'
 
 let PERSON = derivedEid('fixture:person')
@@ -112,6 +114,70 @@ let ask = (id: string, query: string) =>
   JSON.stringify({ subscribe: query, id })
 let send = (live: Sockets, ws: Wire, message: unknown) =>
   live.message(ws, JSON.stringify(message))
+
+test('a watch refreshes from the alarm before and after hibernation', async () => {
+  let ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let now = 10_000, alarm: number | null = null
+  let storage = {
+    getAlarm: () => Promise.resolve(alarm),
+    setAlarm: (at: number) => Promise.resolve(void (alarm = at)),
+    deleteAlarm: () => Promise.resolve(void (alarm = null)),
+  }
+  let instance = () => {
+    let time = clock(storage, { sockets: () => live.renew() }, {
+      now: () => now,
+    })
+    let renewals = socketRenewals(time.arm, { now: () => now })
+    let g = graph({ storage: ram(shop), vocab: shop })
+    let timed = reached({
+      read: () =>
+        Promise.resolve([{
+          entity: { eid: 'product' },
+          product: { price: now },
+        }]),
+      renew: () => now + 30_000,
+      renewAt: renewals.at,
+      clock: {
+        now: () => now,
+        after: () => {
+          throw new Error('a watch scheduled a runtime timer')
+        },
+      },
+    })
+    let live = sockets(
+      beside(subscriptions(g), timed, () => true),
+      ctx,
+      undefined,
+      {
+        renewals,
+      },
+    )
+    return { live, ring: time.ring }
+  }
+  let warm = instance()
+  await warm.live.message(ws, ask('price', '.product'))
+  assertEquals(alarm, 40_000)
+  now = 40_000
+  await warm.ring()
+  assertEquals(alarm, 70_000)
+
+  // Only the runtime's socket attachments and storage carry into this alarm.
+  let cold = instance()
+  now = 70_000
+  await cold.ring()
+  assertEquals(alarm, 100_000)
+  assertEquals(ws.sent.map((f) => f.bundles?.[0].product), [
+    { price: 10_000 },
+    { price: 40_000 },
+    { price: 70_000 },
+  ])
+  await cold.live.message(ws, JSON.stringify({ unsubscribe: 'price' }))
+  now = 100_000
+  await cold.ring()
+  assertEquals(alarm, null)
+  assertEquals(ws.sent.length, 3)
+})
 
 test('hibernating clock probes do not recover attachments or touch subscriptions and storage', () => {
   let untouched = new Proxy({}, {

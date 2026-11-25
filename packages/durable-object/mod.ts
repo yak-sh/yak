@@ -155,6 +155,7 @@ export {
 } from './ceiling.ts'
 export {
   type Hibernation,
+  socketRenewals,
   type Sockets,
   sockets,
   type Wire,
