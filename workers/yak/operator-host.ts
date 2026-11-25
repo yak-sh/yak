@@ -1178,41 +1178,57 @@ let newest = (arrived: Bundle[], entries: Bundle[], session: string) => {
 // line is not among those read, drawn after them as that line, under its id
 // (`inputOf`). A page read while the Operator takes it in shows it, the line
 // put in its place replaces it, and one taken in between the two reads here
-// is still drawn.
+// is still drawn. Those it has not answered (`waiting`) are the turn under
+// way; one answered without being taken in, such as one refused, is not. An
+// app's words are not the person's: the conversation has them as their
+// notice (app-operator.ts `told`), and a break is a task of its own.
 let arriving = async (
   store: Store,
   row: Bundle,
   entries: Bundle[],
-): Promise<Bundle[]> => {
+): Promise<{ lines: Bundle[]; waiting: Bundle[] }> => {
   let own = comp(row, 'operator_session')
   let person = String(own?.person ?? '')
   if (
     !person ||
     row.entity.eid != await rootAt(store, String(own?.space ?? ''), person)
-  ) return []
+  ) return NOTHING
   let drawn = new Set(entries.map((b) => b.entity.eid))
   let since = String(comp(entries[0], 'created')?.at ?? '')
-  let requests = await store.g.read(
+  let requests = (await store.g.read(
     q`.operator_request.person=${person} ?doc ?created .order=-created.at .limit=20`,
-  )
-  return requests.flatMap((r): Bundle[] => {
+  )).filter((r) => {
     let asked = comp(r, 'operator_request')!
-    let line = inputOf(r.entity.eid)
-    let at = String(comp(r, 'created')?.at ?? '')
-    let body = String(comp(r, 'doc')?.body ?? '')
-    if (
+    return !(
       asked.session && asked.session != row.entity.eid || asked.task ||
-      asked.channel == 'error' ||
-      drawn.has(line) || at < since || !body.trim()
-    ) return []
-    return [{
-      entity: { eid: line },
-      content: { body },
-      created: { at },
-      channel: { name: String(asked.channel) },
-    }]
+      NOT_SAID.has(String(asked.channel)) ||
+      drawn.has(inputOf(r.entity.eid)) ||
+      String(comp(r, 'created')?.at ?? '') < since ||
+      !String(comp(r, 'doc')?.body ?? '').trim()
+    )
   }).reverse()
+  if (!requests.length) return NOTHING
+  let answered = new Set(
+    (await store.g.read(
+      q`.operator_answer.request=${
+        requests.map((r) => r.entity.eid)
+      } .fields=operator_answer.request`,
+    )).map((b) => String(comp(b, 'operator_answer')?.request)),
+  )
+  let lines = requests.map((r): Bundle => ({
+    entity: { eid: inputOf(r.entity.eid) },
+    content: { body: String(comp(r, 'doc')?.body) },
+    created: { at: String(comp(r, 'created')?.at) },
+    channel: { name: String(comp(r, 'operator_request')!.channel) },
+  }))
+  return {
+    lines,
+    waiting: lines.filter((_, i) => !answered.has(requests[i].entity.eid)),
+  }
 }
+let NOTHING: { lines: Bundle[]; waiting: Bundle[] } = { lines: [], waiting: [] }
+// The channels whose words never become a line of the person's conversation.
+let NOT_SAID = new Set(['error', 'app'])
 
 /** What was said in the walkthrough of `app` marked in this store through
  * its step numbered `step` (from 0), the tools it called by name, and the
@@ -1368,11 +1384,11 @@ export let conversationOf = async (
     let names = namer(seen)
     let view = await viewOf(store, entries, !!everyone)
     seen.helpers = await lined(store, seen.helpers, names, opens)
-    let arrived = helper ? [] : await arriving(store, row, entries)
-    let shown = [...entries, ...arrived]
+    let arrived = helper ? NOTHING : await arriving(store, row, entries)
+    let shown = [...entries, ...arrived.lines]
     // Words sent and not yet taken in are the turn under way: the newest
     // input, which the Operator answers next.
-    let working = [...entries, ...newest(arrived, entries, eid)]
+    let working = [...entries, ...newest(arrived.waiting, entries, eid)]
     let drawn = drawnLines(shown, names, seen, view)
     await opening(store, seen, drawn, shown, wanted, named, called, opens)
     let [page, self] = helper

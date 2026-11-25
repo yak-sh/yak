@@ -16,6 +16,7 @@ import { handleChannels, receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { drain } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'
+import { conversationOf } from './operator-host.ts'
 import type { Request } from '@yaks/model'
 
 let k = await kernel()
@@ -389,4 +390,37 @@ test('a send is refused to a reader who does not write the space, and says somet
   let other = await seed(k, [{ slug: unique('reader'), apps: [] }])
   let [code] = await said(await send({ say: 'Hi' }, { cookie: other.cookie }))
   assertEquals(code, 403)
+})
+
+test("a conversation at rest stays at rest after an app's words, and only unanswered words are a turn", async () => {
+  let drawn = async () => {
+    let c = await conversationOf(store, '/operator', root)
+    return [c.now, c.aside?.turn?.what ?? null]
+  }
+  assertEquals(await drawn(), ['', null])
+  let asks = async (answered: boolean) => {
+    let eid = crypto.randomUUID()
+    await store.g.apply([
+      {
+        entity: { eid },
+        operator_request: {
+          space: spaceId,
+          person: owner,
+          session: root,
+          channel: 'chat',
+        },
+        doc: { body: 'Is the hall free Friday?' },
+      },
+      ...answered
+        ? [{
+          entity: { eid: derivedEid('operator-answer|' + eid) },
+          operator_answer: { request: eid, text: 'Try again later.' },
+        }]
+        : [],
+    ], { trusted: true })
+  }
+  await asks(true)
+  assertEquals(await drawn(), ['', null])
+  await asks(false)
+  assertEquals(await drawn(), ['Thinking…', 'Thinking…'])
 })
