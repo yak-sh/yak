@@ -48,13 +48,24 @@ let OPENING = `(endpoint, source) => {
     let at = Math.floor(performance.timeOrigin)
     let sent = false
     let ready = false
+    let replaced = Infinity
     let observer
     let saw = () => performance.getEntriesByName('first-contentful-paint')[0]?.startTime
     let send = (leaving = false) => {
       if (sent || (!leaving && (!ready || open.paint == null))) return
       sent = true
       observer?.disconnect()
-      open.paint ??= saw() ?? null
+      // Paint Timing can publish after the frame callback. Its timestamp
+      // still belongs to the picture if the fresh document was not in yet.
+      let exact = saw()
+      if (exact != null && exact <= replaced) {
+        open.paint = exact
+        open.estimated = false
+        if (picture) {
+          performance.clearMarks('yak-picture-paint')
+          performance.mark('yak-picture-paint', { startTime: exact })
+        }
+      }
       if (open.usable != null) open.usable = Math.max(open.usable, open.paint ?? 0)
       if (!id) return
       let body = JSON.stringify({ id, at, points: [], open })
@@ -92,6 +103,7 @@ let OPENING = `(endpoint, source) => {
       }, 0))))
     held = {
       frame,
+      swapping: () => replaced = performance.now(),
       waited: (ms) => {
         open.server = ms
         performance.mark('yak-open-server', { detail: ms })

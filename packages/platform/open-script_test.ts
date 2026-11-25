@@ -23,6 +23,7 @@ let browser = (href = 'https://yaks.app/ada') => {
       entries.has(name) ? [entries.get(name)] : [],
     mark: (name: string, { startTime = clock } = {}) =>
       entries.set(name, { startTime }),
+    clearMarks: (name: string) => entries.delete(name),
   }
   let location = new URL(href)
   let history = {
@@ -110,8 +111,10 @@ test('a picture and its replacement report one paired sample and use the picture
   let b = browser()
   let held = b.run('push')
   b.parsed(30)
-  b.frame(600, 590)
+  b.frame(600)
   await held.frame
+  held.swapping()
+  b.frame(620, 590)
   held.waited(300)
   equal(b.sent.length, 0)
   b.run()

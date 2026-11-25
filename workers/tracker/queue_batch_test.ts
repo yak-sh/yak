@@ -2,6 +2,7 @@ import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { capture } from '@yaks/tracker/report'
 import { Stopped } from '@yaks/durable-object/ceiling'
+import { interactionRows } from '@yaks/timing/interaction'
 import { consume, type Later, type Message } from './queue.ts'
 import { worker } from './worker.ts'
 
@@ -61,6 +62,34 @@ test('batching preserves per-message validation and separates scopes and bundle 
   equal(scopes.map((call) => call.rows.length), [1, 100, 1])
   equal(scopes.at(-1)?.scope, space)
   equal(separated.ack.length, 4)
+})
+test('an in-budget page open reaches tracker storage without a slow-interaction occurrence', async () => {
+  let open = interactionRows(
+    {
+      id: crypto.randomUUID(),
+      at: Date.UTC(2026, 10, 25),
+      points: [],
+      open: {
+        source: 'picture',
+        picture: true,
+        device: 'phone',
+        installed: true,
+        paint: 90,
+        usable: 940,
+        server: 250,
+        estimated: false,
+      },
+    },
+    undefined,
+    { page: 'operator', person: crypto.randomUUID() },
+  )
+  let stored: Bundle[][] = []
+  let heard = await take(
+    [open],
+    (rows) => Promise.resolve(void stored.push(rows)),
+  )
+  equal(stored, [open])
+  equal(heard.rejected, [])
 })
 let duplicate = { ...platform[0], error: { message: 'changed on resend' } }
 let duplicates: Bundle[][] = []

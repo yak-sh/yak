@@ -74,6 +74,7 @@ let boot = (opening = 'null') =>
         document.addEventListener('DOMContentLoaded', ready, { once: true }))
     }
     if (document.visibilityState != 'hidden') await opened?.frame
+    opened?.swapping()
     document.open()
     document.write(page.html)
     document.close()
