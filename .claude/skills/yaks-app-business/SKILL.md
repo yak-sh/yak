@@ -295,7 +295,13 @@ Jeff's: a reading writes nothing in Meta.
   shown only at its own address, where an ad for that audience points:
   site/churches.tsx at /churches, site/organizations.tsx at /organizations,
   site/townships.tsx at /townships, and the Operator page at /operator.
-  /townships says what the township app does (published as `township-office`,
+  A landing page that wants the home page's sky, yak, tabs, phone, plans and
+  questions is told with them, never copied: home.tsx `Told` draws a
+  `Landing` (@yaks/platform/home: its features from parts.ts `FEATURES`, its
+  demos and their pictures, its questions) in the words under its own key in
+  the copy, each the home page's where it has none (site/copy.ts `voiced`).
+  The home page is the first; site/games.tsx at /games, unlisted with
+  noindex until Jeff approves it, is the second. /townships says what the township app does (published as `township-office`,
   its sample at yourname.yaks.app/township) and holds no box: its button
   installs that app, and its calculator of Open Meetings Act dates imports the
   sample's own deadlines.js, so the page and every township's meeting pages
