@@ -465,6 +465,8 @@ let foresee = (
     dir.nameAt(person),
     seats,
     ...view == 'shared' ? [dir.granted(person)] : [],
+    // Profile's linked chat accounts (side.ts `personRows`, CHAT_LINKS).
+    ...view == 'profile' ? [dir.ownConnections(person)] : [],
     // The chat draws the lists their servers offer (operator-lists.ts), once
     // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
