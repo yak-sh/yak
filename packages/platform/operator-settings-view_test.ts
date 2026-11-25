@@ -23,14 +23,14 @@ test('the texts card names the numbers to text and call, to anyone', () => {
   equal(link(both, 'sms'), [`sms:${N}`, 'Text'])
   equal(link(both, 'tel'), [`tel:${N}`, '866-314-1594'])
   equal(
-    says(both).includes('Text or call 866-314-1594 to reach your Operator.'),
+    says(both).includes('Text or call 866-314-1594 to contact your Operator.'),
     true,
   )
   let stranger = texts(null, N, N)
   equal(link(stranger, 'tel'), [`tel:${N}`, '866-314-1594'])
   equal(says(stranger).includes('from the mobile number you agree'), true)
   equal(link(texts(agreed, N), 'tel'), null)
-  equal(says(texts(agreed, N)).includes('Text 866-314-1594 to reach'), true)
+  equal(says(texts(agreed, N)).includes('Text 866-314-1594 to contact'), true)
   let none = texts(agreed)
   equal(link(none, 'sms'), null)
   equal(

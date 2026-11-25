@@ -1728,13 +1728,15 @@ test('the bar’s button to the aside shows a dot for each, “+N” past four, 
     },
   })
   let label = button().getAttribute('aria-label')
+  let description = button().getAttribute('aria-description')
   page.leave()
   assertEquals(first.hidden, false)
   assertEquals(first.opens, '#aside')
   assertEquals(first.dots.length, 4, 'four dots, then how many more')
   assertEquals(listed >= 1 + helpers.length, true, 'the turn and each helper')
   assertEquals(first.more, `+${listed - 4}`)
-  assertStringIncludes(label!, '2 failed')
+  assertEquals(label, 'Open the conversation panel')
+  assertStringIncludes(description!, '2 failed')
 })
 
 // A step that changed no line.

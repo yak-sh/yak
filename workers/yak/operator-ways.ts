@@ -163,7 +163,7 @@ export let Ways = (
     h(
       Card.Head,
       null,
-      h(Card.Title, { id: 'reach' }, `Reach ${space.operator}`),
+      h(Card.Title, { id: 'reach' }, `Contact ${space.operator}`),
     ),
     lines(space, ways, here),
     copying(),

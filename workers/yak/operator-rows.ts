@@ -31,8 +31,7 @@ export let asideHtml = (aside: Aside, now = Date.now()) =>
   renderToString(h(Aside, { aside, now }))
 
 /** The summary the bar's button to the aside wears, as HTML. */
-export let glanceHtml = (aside: Aside, reach = false) =>
-  renderToString(h(Glance, { aside, reach }))
+export let glanceHtml = (aside: Aside) => renderToString(h(Glance, { aside }))
 
 /** The turn's line as HTML. */
 export let turnHtml = (turn: Turn | null, now = Date.now()) =>

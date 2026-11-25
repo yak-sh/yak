@@ -279,31 +279,18 @@ export let glanceOf = ({ turn, helpers, self }: Aside) => {
   }
 }
 
-/** What the bar's button to the aside is called while it wears the
- * summary. */
-export let glanced = (aside: Aside, reach = false) => {
-  let { dots, label } = glanceOf(aside)
-  return !dots.length && reach ? 'Ways to reach your Operator' : label
-}
-
 /** The summary the bar's button to the aside wears (frame.ts `Aside`'s
- * `mark`) where the aside is not in sight: its dots and "+N", or "Reach"
- * where nothing runs and the aside holds the ways to reach the Operator,
- * after the button's icon. Its `data-label` is what the button is then
- * called. */
-export let Glance = (
-  { aside, reach = false }: { aside: Aside; reach?: boolean },
-) => {
-  let { dots, more } = glanceOf(aside)
-  let idle = !dots.length && reach
+ * `mark`) where the aside is put away: dots and "+N" after the icon. Its
+ * `data-label` describes the activity to screen readers. */
+export let Glance = ({ aside }: { aside: Aside }) => {
+  let { dots, more, label } = glanceOf(aside)
   return h(
     'span',
     {
       class: 'Talk_Glance',
       'data-glance': '',
-      'data-label': glanced(aside, reach),
+      'data-label': label,
     },
-    idle ? h(Popover.Count, { 'aria-hidden': 'true' }, 'Reach') : null,
     dots.map((mod) => h(Dot, { mod, 'aria-hidden': 'true' })),
     more ? h(Popover.Count, { 'aria-hidden': 'true' }, `+${more}`) : null,
   )

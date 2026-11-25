@@ -387,8 +387,8 @@ export let textsCard = (
           from && call && from !== call ? ' or call ' : !from ? 'Call ' : null,
           call ? h('a', { href: `tel:${call}` }, shown(call)) : null,
           texting
-            ? ' to reach your Operator.'
-            : ' from the mobile number you agree to texts at below to reach your Operator.',
+            ? ' to contact your Operator.'
+            : ' from the mobile number you agree to texts at below to contact your Operator.',
         )
         : null,
       texting

@@ -18,7 +18,7 @@ let folds = {
   },
   aside: {
     shut: 'shut',
-    said: (shut) => shut ? 'Show the panel' : 'Hide the panel',
+    said: (shut, form) => shut ? form.dataset.show : form.dataset.hide,
     draw: (shut) =>
       document.getElementById('aside').closest('.Shell')
         .classList.toggle('Shell-shut', shut),
@@ -41,8 +41,9 @@ addEventListener('submit', async (e) => {
   fold.draw(shut)
   field.value = shut ? 'open' : fold.shut
   let button = form.querySelector('button')
-  button.title = fold.said(shut)
-  button.setAttribute('aria-label', fold.said(shut))
+  let said = fold.said(shut, form)
+  button.title = said
+  button.setAttribute('aria-label', said)
   button.setAttribute('aria-expanded', String(!shut))
   let sent = await fetch(form.action, { method: 'POST', body })
     .then((r) => r.ok, () => false)

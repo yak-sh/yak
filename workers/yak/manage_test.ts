@@ -310,13 +310,13 @@ test('the aside is put away and opened again, and every page keeps it', async ()
       button.getAttribute('aria-label'),
     ]
   }
-  assertEquals(await drawn(), [false, 'true', 'Hide the panel'])
+  assertEquals(await drawn(), [false, 'true', 'Hide the conversation panel'])
   let shut = await toggle('shut', chat)
   assertEquals(shut.status, 303)
   assertEquals(shut.headers.get('location'), to(chat))
-  assertEquals(await drawn(), [true, 'false', 'Show the panel'])
+  assertEquals(await drawn(), [true, 'false', 'Show the conversation panel'])
   await toggle('open', chat)
-  assertEquals(await drawn(), [false, 'true', 'Hide the panel'])
+  assertEquals(await drawn(), [false, 'true', 'Hide the conversation panel'])
 })
 
 // The space's Settings: its address and homepage, its name, and the way to

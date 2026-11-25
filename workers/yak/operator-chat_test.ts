@@ -461,9 +461,13 @@ test('the page lists every way to reach the Operator below its helpers, each one
       .text(),
   )
   let section = document.querySelector('[data-reach]')!
+  let open = document.querySelector('[data-aside-open]')!
+  assertEquals(open.textContent, '')
+  assertEquals(open.getAttribute('href'), '#aside')
+  assertEquals(open.getAttribute('aria-label'), 'Open the conversation panel')
   assertEquals(
     section.querySelector('#reach')?.textContent,
-    `Reach ${space.operator}`,
+    `Contact ${space.operator}`,
   )
   // Below the helpers, shown with none running, and not in the side.
   assertEquals(
@@ -972,7 +976,7 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
     'Running',
   )
   assertEquals(document.querySelector('.Talk_Helper'), null)
-  // The rest of its row is the aside's, which opens nowhere, and no Reach
+  // The rest of its row is the aside's, which opens nowhere, and no contact
   // card: where it runs and its model by its label, in one line under its
   // standing, in view; the Helpers box folds it away.
   let aside = document.querySelector('[data-aside]')!
@@ -986,7 +990,9 @@ test('a helper’s page is zoomed in: one line in the bar, the way back out, its
   assertEquals(aside.querySelector('[data-reach]'), null)
   assertEquals(aside.hasAttribute('hidden'), false)
   assertEquals(
-    document.querySelector('[data-aside-open]')?.getAttribute('aria-label'),
+    document.querySelector('[data-aside-open]')?.getAttribute(
+      'aria-description',
+    ),
     'Running',
   )
   let listed = parseHTML(

@@ -191,7 +191,10 @@ export let contactAdd = (
   name: 'contact_add',
   role: 'self',
   title: 'Add your contact',
-  step: { doing: 'Saving how to reach you…', done: 'Saved how to reach you' },
+  step: {
+    doing: 'Saving your contact details…',
+    done: 'Saved your contact details',
+  },
   description:
     'Add the email address or US mobile number the person asked you to reach them at, including in an anonymous conversation. source is their own entry id: find it with graph_query(self:true). A mobile number shows an inline optional consent form and texts an ownership code for them to enter; you cannot agree for them. An email receives an ownership verification code. Ask them to type it here, then call with code and source naming their code entry. Until confirmed it is not a contact and receives no work or alerts. On confirmation it becomes their directory email{address} or phone{number} + sms_consent{person,consent,at,space,source}, and chosen notification channel. Use notification_send for their requested completion, even while verification is pending; it waits for confirmation. Read confirmed contacts by calling without address. Never use mail_send to bypass verification of their own new address. Pending requests are operator_contact{person,address,source,session,expires} in your graph; only this confirmation path changes directory contacts.',
   parameters: {

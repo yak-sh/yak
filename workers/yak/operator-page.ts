@@ -90,7 +90,7 @@ import {
   Aside,
   type Aside as Asided,
   Glance,
-  glanced,
+  glanceOf,
   type HelperLine,
   Mark,
 } from './operator-aside.ts'
@@ -1252,12 +1252,11 @@ type TalkPage = {
   // the app open beside it, and its canvas (@yaks/platform/app-canvas-view)
   app?: MarkedApp
   canvas?: Node
-  // what it is doing now, at the top of the aside (operator-aside.ts), and
-  // the summary of it the bar's button to the aside wears, and what that
-  // button is then called
+  // what it is doing now at the top of the aside (operator-aside.ts), and
+  // the summary the bar's button wears and describes
   aside?: Node
   mark?: Node
-  said?: string
+  asideDescription?: string
   // whether the lists that do not wait on the person stand beside it
   column?: boolean
   // on a page zoomed in on part of a conversation (a helper's), the way
@@ -1339,9 +1338,9 @@ let talkPage = (
       content,
       aside: aside
         ? {
-          label: 'What is happening',
+          label: 'conversation panel',
           mark: aside.mark,
-          said: aside.said,
+          description: aside.asideDescription,
           content: [
             aside.aside,
             lists.length ? talkBeside(lists, !!listed) : null,
@@ -1711,9 +1710,9 @@ let chatParts = async (
       : undefined,
     mark: [
       h(Icon, { of: icons['panel-right'] }),
-      h(Glance, { aside: happening, reach }),
+      h(Glance, { aside: happening }),
     ],
-    said: glanced(happening, reach),
+    asideDescription: glanceOf(happening).label,
     script: chatScript(
       talked.aside ?? { turn: null, helpers: [] },
       at,
@@ -2346,10 +2345,10 @@ let shown = () => {
   let reach = !!a.querySelector('[data-reach]')
   a.hidden = !helping && !reach && !turn && !happening.self
   for (let glance of document.querySelectorAll('[data-glance]')) {
-    let next = drawn(glanceHtml(happening, reach))
+    let next = drawn(glanceHtml(happening))
     glance.replaceWith(next)
     let open = next.closest('[data-aside-open]')
-    open?.setAttribute('aria-label', next.dataset.label)
+    open?.setAttribute('aria-description', next.dataset.label)
     open?.setAttribute('title', next.dataset.label)
   }
 }

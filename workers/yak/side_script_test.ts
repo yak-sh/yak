@@ -87,7 +87,7 @@ test('the aside’s toggle puts it away, then opens it', async () => {
           side: null,
           title: 'Hazel',
           content: 'The conversation.',
-          aside: { label: 'What is happening', content: 'Helpers', back: '/' },
+          aside: { label: 'conversation panel', content: 'Helpers', back: '/' },
         }),
       ))
     }</body></html>`,
@@ -108,10 +108,10 @@ test('the aside’s toggle puts it away, then opens it', async () => {
     button.getAttribute('aria-label'),
   ]
   let press = () => on.submit({ target: button, preventDefault() {} })
-  assertEquals(seen(), [false, 'true', 'Hide the panel'])
+  assertEquals(seen(), [false, 'true', 'Hide the conversation panel'])
   await press()
-  assertEquals(seen(), [true, 'false', 'Show the panel'])
+  assertEquals(seen(), [true, 'false', 'Show the conversation panel'])
   await press()
-  assertEquals(seen(), [false, 'true', 'Hide the panel'])
+  assertEquals(seen(), [false, 'true', 'Hide the conversation panel'])
   assertEquals(sent, ['shut', 'open'])
 })

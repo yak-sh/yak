@@ -298,7 +298,7 @@ export let ESCALATING: Record<
   // A new address is confirmed by its code in the person's own words, and a
   // new number on a card in their chat, which a number alone can fake.
   contact_add: (a) =>
-    a.address && !a.code ? `Reach you at ${a.address} too` : undefined,
+    a.address && !a.code ? `Contact you at ${a.address} too` : undefined,
   // Spending on the space's budget each month until it is released.
   number_buy: (a) =>
     `Buy the phone number ${a.number}${

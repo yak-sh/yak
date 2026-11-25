@@ -27,15 +27,15 @@ import { waitingBadge } from './sidebar.ts'
 /** Where the aside is, which the bar's button opens where it has no room. */
 export let ASIDE = 'aside'
 
-/** What a page keeps at its right: what it is called, what the bar's button
- * to it wears (its icon unless the page says more) and is called (its
- * `label` unless the page says), what it holds, whether the person keeps it
+/** What a page keeps at its right: its name in a sentence, what the bar's
+ * button wears (its icon unless the page says more), the button's optional
+ * description, what the panel holds, whether the person keeps it
  * put away, the page a press on its toggle comes back to, and whether it
  * stands hidden, for a view of the page shown later (talk-views.ts). */
 export type Aside = {
   label: string
   mark?: Kids
-  said?: string
+  description?: string
   content: Kids
   shut?: boolean
   back: string
@@ -60,7 +60,9 @@ let menu = (waiting?: number) =>
 
 // The title bar's toggle keeps the desktop choice on the person's row.
 let toggle = (at: Aside) => {
-  let said = at.shut ? 'Show the panel' : 'Hide the panel'
+  let show = `Show the ${at.label}`
+  let hide = `Hide the ${at.label}`
+  let said = at.shut ? show : hide
   return h(
     'form',
     {
@@ -68,6 +70,8 @@ let toggle = (at: Aside) => {
       method: 'post',
       action: managePath('profile'),
       'data-side': '',
+      'data-show': show,
+      'data-hide': hide,
     },
     h(Form.Hidden, {
       name: 'aside',
@@ -106,8 +110,9 @@ let asideTools = (at: Aside) =>
         class: 'Frame_AsideOpen',
         'data-pane': '',
         'data-aside-open': '',
-        title: at.said ?? at.label,
-        'aria-label': at.said ?? at.label,
+        title: at.description ?? `Open the ${at.label}`,
+        'aria-label': `Open the ${at.label}`,
+        'aria-description': at.description,
         'aria-controls': ASIDE,
         'aria-expanded': 'false',
       },
