@@ -1025,6 +1025,47 @@ type Speaking = {
   name: string
 }
 
+/**
+ * Who has spoken in a voice room. What its talking model asks is its own
+ * summary of what it heard, so an ask may carry anyone's words who spoke
+ * since its asker's last ask, or since the call began where it has not asked
+ * (`asks`); a line heard now, anyone's who spoke since the newest ask, or
+ * before any, anyone's where more than one spoke (`heard`).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { voices } from './operator-calls.ts'
+ * let v = voices()
+ * v.spoke('ann')
+ * equal([v.heard(), v.asks('ann'), v.heard()], [false, false, false])
+ * v.spoke('bo')
+ * equal(v.heard(), true)
+ * v.spoke('ann')
+ * equal([v.asks('ann'), v.asks('ann'), v.heard(), v.asks('bo')], [true, false, false, true])
+ * ```
+ */
+export let voices = () => {
+  let all = new Set<string>()
+  // Whether another spoke since each asker's last ask.
+  let since = new Map<string, boolean>()
+  let asker: string | undefined
+  let others = (account: string) =>
+    since.get(account) ?? [...all].some((a) => a != account)
+  return {
+    spoke: (account: string) => {
+      all.add(account)
+      for (let a of since.keys()) if (a != account) since.set(a, true)
+    },
+    asks: (account: string) => {
+      let heard = others(account)
+      since.set(account, false)
+      asker = account
+      return heard
+    },
+    heard: () => asker ? others(asker) : all.size > 1,
+  }
+}
+
 let speakingIn = async (
   env: Env,
   room: NonNullable<Ticket['room']>,
@@ -1085,8 +1126,12 @@ export let calling = async (
   let speaker:
     | { account: string; known: Promise<Speaking | undefined> }
     | undefined
+  // Who has spoken: an ask, or a line kept, that may carry someone else's
+  // words is `heard` and steers its turn (operator-approvals.ts `steering`).
+  let others = ticket.room ? voices() : undefined
   let spoke = ticket.room
     ? (account: string) => {
+      others!.spoke(account)
       if (speaker?.account == account) return
       let known = speakingIn(env, ticket.room!, account).catch((error) => {
         if (speaker?.known == known) speaker = undefined
@@ -1103,7 +1148,9 @@ export let calling = async (
   // to their conversation, answered by `model`.
   let asking = (model: string, call?: string) => async (text: string) => {
     let id = requestId(space.eid, opens.turn(++turn))
-    let writer = await speaker?.known
+    let asker = speaker
+    let heard = !!asker && others!.asks(asker.account)
+    let writer = await asker?.known
     await receive(
       operator.store,
       {
@@ -1124,7 +1171,7 @@ export let calling = async (
         ...call ? { call } : {},
       },
       text,
-      { id },
+      { id, ...heard ? { heard } : {} },
     )
     await armed()
   }
@@ -1164,7 +1211,10 @@ export let calling = async (
   // A talking model's call, line by line, kept in order: where it began,
   // then what was said on it.
   let noted = Promise.resolve()
-  let note = (text: string, o: { said?: boolean; began?: boolean }) =>
+  let note = (
+    text: string,
+    o: { said?: boolean; began?: boolean; heard?: boolean },
+  ) =>
     noted = noted.then(() =>
       operator.note({ person: ticket.person }, space, text, {
         call: ticket.call,
@@ -1252,7 +1302,11 @@ export let calling = async (
         glance: glanceOf(glance),
         // Behind a talking model the Operator answers with the fastest model.
         ask: asking(CALL_MODELS[0], ticket.call),
-        note: (text, said) => note(text, { said }),
+        note: (text, said) =>
+          note(text, {
+            said,
+            ...!said && others?.heard() ? { heard: true } : {},
+          }),
         tools: own,
         talk,
       })

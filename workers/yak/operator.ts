@@ -3593,6 +3593,7 @@ export let operating = (
       intake: { source: '' },
       notice: {},
       channel: channelOf('voice', o.began ? '' : HEARD),
+      ...o.heard ? { heard: {} } : {},
     }
     await g.apply([
       ...fresh ? [fresh] : [],
@@ -3975,12 +3976,14 @@ export type Operator = {
   ) => Promise<{ task: string; session: string; input: string }>
   /** A line of a call its talking model hears and speaks: the caller's
    * words, its talking model's (`said`), or that the call began (`began`),
-   * kept in the person's conversation as passive context, starting no turn. */
+   * kept in the person's conversation as passive context, starting no turn.
+   * Words that may be someone else's than the turn's person are `heard`,
+   * and steer it (@yaks/session `steered`). */
   note: (
     held: Asker,
     space: Space,
     text: string,
-    o: { call: string; said?: boolean; began?: boolean },
+    o: { call: string; said?: boolean; began?: boolean; heard?: boolean },
   ) => Promise<void>
   /** The tools the person's conversation is offered, for another model
    * working for them to call through the same reach: each `run` answers in
