@@ -50,6 +50,22 @@ await g.apply([
     words('And the logo?'),
     { ...reply('The guide.'), output: { source: 'late-2' } },
   ),
+  // Words given just after a reply was written, before its step was told
+  // (`after-4`): the reply still answers its own turn's words.
+  { entity: { eid: 'after' }, session: {} },
+  ...lines(
+    'after',
+    words('Join us'),
+    { ask: { through: 'after-1' } },
+    { ...reply('I joined.'), output: { source: 'after-2' } },
+    words('Just listen'),
+  ),
+  {
+    entity: { eid: 'aside' },
+    session: {},
+    spawned: { parent: 'talk', call: 'talk-4' },
+  },
+  ...lines('aside', words('Look'), reply('Found it.'), words('And more')),
   // A reply's thought comes before it, and is no reply.
   { entity: { eid: 'thinking' }, session: {} },
   ...lines(
@@ -112,6 +128,29 @@ test('a reply answers the words its ask heard, not those given while it was writ
       'late-3',
       ['late-3'],
     ]],
+  )
+})
+
+test('a reply said while newer words wait answers its own turn, however late they came', async () => {
+  let read = async (session: string, replied: boolean) => {
+    let a = await answerOf(g, session, undefined, replied)
+    return [a.text, a.fault, a.given.map((b) => b.entity.eid)]
+  }
+  assertEquals(
+    await Promise.all([
+      read('after', true),
+      read('aside', true),
+      read('after', false),
+    ]),
+    [
+      ['I joined.', undefined, ['after-1']],
+      ['Found it.', undefined, []],
+      [
+        'This ended without an answer. The people who run this service have been told.',
+        'ended without an answer',
+        ['after-4'],
+      ],
+    ],
   )
 })
 

@@ -2334,7 +2334,7 @@ export let operating = (
   let answered = async (session: string, carrying = false) => {
     let [row] = await g.get([session], ['spawned', 'occurrence'])
     if (carrying && row?.occurrence) return
-    let reply = await answerOf(g, session, NAMING)
+    let reply = await answerOf(g, session, NAMING, carrying)
     if (row?.occurrence) {
       await workFinished(store, row, reply.text, reply.fault)
       return

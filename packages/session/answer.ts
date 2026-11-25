@@ -103,11 +103,15 @@ export let origins = (
 // The inputs the newest turn answers, the newest of the words its reply heard
 // (`mark`), and where it ends (`through`, past its reply). The turn ends at
 // its reply, or where the transcript does when it ended without one (stopped,
-// failed). Undefined where they lie before the lines read (`whole` false).
+// failed). A reply said while newer words wait (`replied`) ends its turn
+// however late those words were written: before the reply or after it, they
+// are the next turn's. Undefined where they lie before the lines read
+// (`whole` false).
 let turnAt = (
   entries: Bundle[],
   calls: Map<string, string>,
   whole = true,
+  replied = false,
 ) => {
   let newest = entries.findLastIndex(given)
   if (newest < 0) {
@@ -116,7 +120,7 @@ let turnAt = (
       : undefined
   }
   let reply = entries.findLastIndex(said)
-  let end = reply > newest ? reply : entries.length
+  let end = reply > newest || replied && reply >= 0 ? reply : entries.length
   let heard = end < entries.length ? heardTo(entries, end, whole) : end
   let found = origins(entries, end, calls, whole)
   if (!found || heard == undefined) return
@@ -305,12 +309,15 @@ export type Answer = Reply & { mark?: Bundle; given: Bundle[] }
  * weeks: a helper's own turn, and a conversation's back to the reply before
  * the words it answers and before each call that started a helper whose
  * report stands for words. `naming` says who a failure's words name
- * ({@link replyOf}).
+ * ({@link replyOf}). `replied` reads the turn of the newest reply, said while
+ * newer words wait (./run.ts `Runner.replied`): those words are the next
+ * turn's, not one that ended without an answer.
  */
 export let answerOf = async (
   g: Graph,
   session: Eid,
   naming?: Naming,
+  replied = false,
 ): Promise<Answer> => {
   let [row] = await g.get([session], ['spawned'])
   let link = comp(row, 'spawned')
@@ -334,11 +341,16 @@ export let answerOf = async (
   let { entries, whole } = await transcriptBack(g, session, async (read) => {
     if (helper) return read.some(given)
     await starts(read)
-    return !!turnAt(read, calls, false)
+    return !!turnAt(read, calls, false, replied)
   })
-  if (helper) return { ...replyOf(turnOf(entries), naming), given: [] }
+  if (helper) {
+    let lines = replied
+      ? entries.slice(0, entries.findLastIndex(said) + 1)
+      : entries
+    return { ...replyOf(turnOf(lines), naming), given: [] }
+  }
   await starts(entries)
-  let turn = turnAt(entries, calls, whole)
+  let turn = turnAt(entries, calls, whole, replied)
   let reply = replyOf(turnOf(entries.slice(0, turn?.through)), naming)
   return { ...reply, mark: turn?.mark, given: turn?.given ?? [] }
 }
