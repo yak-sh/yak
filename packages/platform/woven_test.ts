@@ -10,20 +10,19 @@ import { assert, assertEquals } from '@std/assert'
 import {
   based,
   manifesting,
+  paintedColors,
   pinned,
-  PLATFORM_BACKGROUND,
-  PLATFORM_THEME,
   type Theme,
 } from './woven.ts'
 
 let ICON = '<link rel="apple-touch-icon" href="/cookbook/icon.png">'
 let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
-  'crossorigin="use-credentials">'
+  'crossorigin="use-credentials" data-yak-manifest>'
 let CAPABLE = '<meta name="apple-mobile-web-app-capable" content="yes">'
 let MOBILE = '<meta name="mobile-web-app-capable" content="yes">'
 let STATUS_BAR =
-  '<meta name="apple-mobile-web-app-status-bar-style" content="default">'
-let PLATFORM_META = `<meta name="theme-color" content="${PLATFORM_THEME}">`
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+let MANAGED_META = '<meta data-yak-theme-color>'
 
 let page = (head: string) => `<!doctype html><html><head>${head}</head><body>`
 
@@ -41,7 +40,7 @@ test('a page with none of the five tags is given all of them, in its head', () =
   )
   assert(out.includes(ICON), out)
   assert(out.includes(MANIFEST), out)
-  assert(out.includes(PLATFORM_META), out)
+  assert(out.includes(MANAGED_META), out)
   assert(out.includes(CAPABLE), out)
   assert(out.includes(MOBILE), out)
   assert(out.includes(STATUS_BAR), out)
@@ -55,7 +54,7 @@ test('a page that declares one is given only the other four', () => {
   assert(one.includes(mine), one)
   assert(!one.includes(ICON), one)
   assert(one.includes(MANIFEST), one)
-  assert(one.includes(PLATFORM_META), one)
+  assert(one.includes(MANAGED_META), one)
 
   let theirs = '<link rel=manifest href="app.webmanifest" crossorigin>'
   let two = pinned('/cookbook/', page(theirs), app('Cookbook'))
@@ -68,7 +67,7 @@ test('a page naming its own theme-color or Apple tags keeps them, untouched', ()
   let mine = '<meta name="theme-color" content="#1b3a2f">'
   let out = pinned('/cookbook/', page(mine), app('Cookbook'))
   assert(out.includes(mine), out)
-  assert(!out.includes(PLATFORM_META), out)
+  assert(!out.includes(MANAGED_META), out)
   // Every other tag still lands — one answer per question, decided alone.
   assert(out.includes(ICON), out)
   assert(out.includes(CAPABLE), out)
@@ -136,32 +135,35 @@ test("the app's own theme colour is what the injected meta and the manifest both
   assertEquals(m.background_color, '#fff')
 })
 
-test('a hostile stored colour is refused at injection, wearing the platform instead', () => {
-  // The generic graph_apply tier can set `theme` past app_set's validator, so
-  // a value carrying a quote, angle bracket or script must never reach the head
-  // or the manifest — it falls back to the platform colour.
+test('hostile stored colours fall back to the page', () => {
   let evil = app('Cookbook', {
     themeColor: '#000"><script>alert(1)</script>',
     backgroundColor: 'x" onload="y',
   })
   let out = pinned('/cookbook/', page('<title>x</title>'), evil)
-  assert(out.includes(PLATFORM_META), out)
+  assert(out.includes(MANAGED_META), out)
   assert(!out.includes('<script>'), out)
   let m = manifesting(evil, '/cookbook/')
-  assertEquals(m.theme_color, PLATFORM_THEME)
-  assertEquals(m.background_color, PLATFORM_BACKGROUND)
+  assertEquals(m.theme_color, undefined)
+  assertEquals(m.background_color, undefined)
 })
 
 test('the generated manifest names the app, its root, its icon and its colours', () => {
-  let m = manifesting(app('Cookbook'), '/cookbook/')
+  let url = new URL('https://example.com/cookbook/manifest.webmanifest')
+  url.search = 'background_color=f9f6ed&theme_color=385744'
+  let m = manifesting(
+    app('Cookbook'),
+    '/cookbook/',
+    undefined,
+    paintedColors(url),
+  )
   assertEquals(m.name, 'Cookbook')
   assertEquals(m.short_name, 'Cookbook')
   assertEquals(m.start_url, '/cookbook/')
   assertEquals(m.scope, '/cookbook/')
   assertEquals(m.display, 'standalone')
-  // No colour of its own, so the platform's answers — never a browser grey.
-  assertEquals(m.theme_color, PLATFORM_THEME)
-  assertEquals(m.background_color, PLATFORM_BACKGROUND)
+  assertEquals(m.theme_color, '#385744')
+  assertEquals(m.background_color, '#f9f6ed')
   assertEquals(m.icons, [
     { src: '/cookbook/icon.png', type: 'image/png', sizes: '512x512' },
     { src: '/cookbook/icon.png', type: 'image/png', sizes: '192x192' },

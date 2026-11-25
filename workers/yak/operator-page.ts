@@ -37,7 +37,10 @@ import {
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { CONTEXT } from './app-operator.ts'
-import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
+import {
+  PLATFORM_BACKGROUND,
+  PLATFORM_DARK_BACKGROUND,
+} from '@yaks/platform/woven'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
 import { attachmentKey } from './attachments.ts'
 import { mailFrom } from '@yaks/platform/host'
@@ -1199,6 +1202,10 @@ let installable = (space: Space) =>
     }),
     h('meta', { name: 'mobile-web-app-capable', content: 'yes' }),
     h('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }),
+    h('meta', {
+      name: 'apple-mobile-web-app-status-bar-style',
+      content: 'black-translucent',
+    }),
     h('meta', { name: 'apple-mobile-web-app-title', content: space.operator }),
   ])
 
@@ -1216,6 +1223,10 @@ export let installing = (space: Space) => {
     display: 'standalone',
     background_color: PLATFORM_BACKGROUND,
     theme_color: PLATFORM_BACKGROUND,
+    color_scheme_dark: {
+      background_color: PLATFORM_DARK_BACKGROUND,
+      theme_color: PLATFORM_DARK_BACKGROUND,
+    },
     icons: [
       space.logo
         ? { src: logoPath(space, 'icon'), type: 'image/png', sizes: '512x512' }

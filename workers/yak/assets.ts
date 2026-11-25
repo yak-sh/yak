@@ -190,6 +190,7 @@ export let ASSETS: Asset[] = [
     bundle: of('@yaks/platform/interaction-browser'),
     named: true,
   },
+  { name: '_install.js', bundle: of('@yaks/platform/install-browser') },
   { name: '_home.css', file: homeStyle, named: true },
   { name: '_home.js', bundle: homeScript, named: true },
   ...homeFigures,

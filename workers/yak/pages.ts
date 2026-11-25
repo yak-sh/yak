@@ -73,7 +73,10 @@ export { esc } from './html.ts'
 import { managePath, type MarkedApp, type Setting } from '@yaks/platform/routes'
 
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
-import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
+import {
+  PLATFORM_BACKGROUND,
+  PLATFORM_DARK_BACKGROUND,
+} from '@yaks/platform/woven'
 
 import { versionOf } from './running.ts'
 
@@ -164,7 +167,7 @@ ${importMap(file)}${
     framed
       ? `
 <meta name="theme-color" content="${PLATFORM_BACKGROUND}" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#2b231f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="${PLATFORM_DARK_BACKGROUND}" media="(prefers-color-scheme: dark)">
 <script type="module" src="${file('_navigate.js')}" data-navigate></script>`
       : ''
   }

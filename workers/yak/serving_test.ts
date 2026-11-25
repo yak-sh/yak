@@ -36,12 +36,7 @@ import {
   storeName,
 } from './directory.ts'
 import { pageScript } from './page-script.ts'
-import {
-  badged,
-  badgeOf,
-  PLATFORM_BACKGROUND,
-  PLATFORM_THEME,
-} from '@yaks/platform/woven'
+import { badged, badgeOf } from '@yaks/platform/woven'
 import { planned } from './assets.ts'
 import { client as clientNamed } from './sheets.ts'
 import * as dirPart from './directory.ts'
@@ -179,7 +174,7 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assertEquals(woven(html).length, 4, html)
+  assertEquals(woven(html).length, 5, html)
   assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
   // And the client an app imports is the platform's own, beside the doors it
   // wraps.
@@ -519,14 +514,14 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   assert(
     html.includes(
       '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
-        'crossorigin="use-credentials">',
+        'crossorigin="use-credentials" data-yak-manifest>',
     ),
     html,
   )
   // The page named its own theme-color, so the kernel defers rather than
   // injecting a second one — but it still gives the app the two Apple words,
   // which the page named neither of.
-  assertEquals(html.match(/theme-color/g)?.length, 1)
+  assertEquals(html.match(/<meta name="theme-color"/g)?.length, 1)
   assert(
     html.includes(
       '<meta name="apple-mobile-web-app-capable" content="yes">',
@@ -535,7 +530,7 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assert(
     html.includes(
-      '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
     ),
     html,
   )
@@ -557,11 +552,13 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   let installed = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(new Uint8Array(await installed.arrayBuffer()), tile)
 
-  // And the manifest, generated from the app: no colour of its own set
-  // through `app_set`, so the platform's own answers rather than a guess off
-  // the page (T-33055) — the page's own theme-color meta is about the page,
-  // not the manifest a wholly separate resource names.
+  // The browser passes the page's painted background and theme colour to
+  // the generated manifest when it loads the page.
   let got = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
+  assertEquals((await got.json()).background_color, undefined)
+  let painted =
+    '/cookbook/manifest.webmanifest?background_color=fff8ec&theme_color=1b3a2f'
+  got = await apps.fetch(visit(painted), env)
   assertEquals(got.status, 200)
   assertEquals(got.headers.get('content-type'), 'application/manifest+json')
   assertEquals(await got.json(), {
@@ -570,8 +567,8 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
     start_url: '/cookbook/',
     scope: '/cookbook/',
     display: 'standalone',
-    background_color: PLATFORM_BACKGROUND,
-    theme_color: PLATFORM_THEME,
+    background_color: '#fff8ec',
+    theme_color: '#1b3a2f',
     icons: [
       { src: '/cookbook/icon.png?v=.', type: 'image/png', sizes: '512x512' },
       { src: '/cookbook/icon.png?v=.', type: 'image/png', sizes: '192x192' },
@@ -583,14 +580,18 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   files.held.set('ada/cookbook/icon.png', new TextEncoder().encode('mine'))
   files.held.set(
     'ada/cookbook/manifest.webmanifest',
-    new TextEncoder().encode('{"name":"Ours"}'),
+    new TextEncoder().encode('{"name":"Ours","background_color":"#112233"}'),
   )
   let own = await apps.fetch(visit('/cookbook/icon.png'), env)
   assertEquals(await own.text(), 'mine')
   let ownMark = await apps.fetch(visit('/cookbook/icon.png?display'), env)
   assertEquals(await ownMark.text(), 'mine')
-  let theirs = await apps.fetch(visit('/cookbook/manifest.webmanifest'), env)
-  assertEquals(await theirs.json(), { name: 'Ours' })
+  let theirs = await apps.fetch(visit(painted), env)
+  assertEquals(await theirs.json(), {
+    name: 'Ours',
+    background_color: '#112233',
+    theme_color: '#1b3a2f',
+  })
 })
 
 test('the generated icon serves at both icon addresses', async () => {
@@ -750,9 +751,13 @@ test("an app's own colours, set through app_set, win over the platform's", async
     html,
   )
 
-  let got =
-    await (await apps.fetch(visit('/cookbook/manifest.webmanifest'), env))
-      .json()
+  let got = await (await apps.fetch(
+    visit(
+      '/cookbook/manifest.webmanifest?background_color=112233&theme_color=445566',
+    ),
+    env,
+  ))
+    .json()
   assertEquals(
     (got as Record<string, unknown>).theme_color,
     '#1b3a2f',
@@ -1534,8 +1539,8 @@ test('worker HTML carries its reporter without changing its page or headers', as
       )
       let body = await page.text()
       let scripts = woven(body)
-      assertEquals(scripts.length, 4)
-      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 4)
+      assertEquals(scripts.length, 5)
+      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 5)
       assertStringIncludes(unwoven(body), html)
       // The worker's own policy still holds, and lets the platform's inline
       // scripts run by their hashes and nothing else.
@@ -1550,7 +1555,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
     })
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
-    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 4)
+    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 5)
     assertStringIncludes(unwoven(body), html)
   }
 })
@@ -2182,6 +2187,45 @@ test("a private app's release asset is its worker's to give a stranger", async (
   assertEquals((await other.json()).error.code, 'not_a_reader')
 })
 
+test('a worker storefront can install without opening its private files', async () => {
+  let open = true
+  let own = false
+  await using k = await router((req) => {
+    let { pathname } = new URL(req.url)
+    if (own && pathname == '/manifest.webmanifest') {
+      return Response.json({ name: 'Storefront', background_color: '#abcdef' })
+    }
+    if (open && pathname == '/') {
+      return new Response('<!doctype html><head><title>Shop</title></head>', {
+        headers: { 'content-type': 'text/html' },
+      })
+    }
+    return new Response(null, { status: 404 })
+  })
+  await k.dir.apply({
+    entities: [{ entity: { eid: k.app.eid }, app: { access: 'private' } }],
+  }, ADA_OWNS)
+
+  let html = await (await k.at('/')).text()
+  assertStringIncludes(html, 'href="/manifest.webmanifest"')
+  assertStringIncludes(html, 'content="black-translucent"')
+  let path = '/manifest.webmanifest?background_color=123456&theme_color=345678'
+  let manifest = await (await k.at(path)).json()
+  assertEquals(manifest.background_color, '#123456')
+  assertEquals(manifest.theme_color, '#345678')
+  assertEquals(manifest.start_url, '/')
+
+  own = true
+  assertEquals(await (await k.at(path)).json(), {
+    name: 'Storefront',
+    background_color: '#abcdef',
+    theme_color: '#345678',
+  })
+  own = false
+  open = false
+  assertEquals((await k.at(path)).status, 404)
+})
+
 // Where Cloudflare refuses the hop to the cache in front of `Files`, as it
 // does inside an app worker's own call (files.ts `door`), the page and the
 // upload are still served, whoever asks.
@@ -2555,7 +2599,7 @@ test("a visitor's page wears the bar that keeps what they made", async () => {
     tags,
     'data-yak-keep="https://yaks.app/install?name=notes" data-yak-keep-says="Keep it"',
   )
-  assertEquals(hashes.length, 4)
+  assertEquals(hashes.length, 5)
 })
 
 // The badge is a door (T-131901): a published app's opens its own page on

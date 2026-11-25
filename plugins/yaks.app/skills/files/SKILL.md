@@ -541,20 +541,23 @@ Each page is served with the two links an installed app needs already in its
 iOS reads only the first; it does not use an icon named only in a manifest.
 Other browsers and platforms read the second, a manifest generated from the app:
 its title as the `name`, its own address as `start_url` and `scope`,
-`display: standalone`, the icon at 512 and 192, and the colour the page sets in
-`<meta name="theme-color">` where it sets one.
+`display: standalone`, and the icon at 512 and 192. When the page loads, its
+computed background and theme supply the generated manifest's colours for the
+active scheme. The page can declare its theme with `<meta name="theme-color">`
+or the `--theme-color` CSS custom property.
 
 **The app's own links and files take precedence.** Each link is added only where
 the page has none, so an app that writes its own `apple-touch-icon` keeps it and
-still gets the manifest link, and an app that ships its own
-`manifest.webmanifest` is served that file rather than the generated one. A
-manifest link on the app's own address that names no `crossorigin` is given
-`crossorigin="use-credentials"`, so a private app's manifest is fetched with its
-member's sign-in and succeeds. An `icon.png` of the app's own is served instead
-of the rendered one: a picture fetched with `op: fetch`, or one `sandbox_ship`
-copies in. An image is decoded when it is written, as a browser would decode it,
-and one that does not decode is refused. A PNG's bytes cannot be written out by
-hand, so an icon an assistant makes is an SVG.
+still gets the manifest link. If the default link points to an app's own
+`manifest.webmanifest`, the file supplies its own fields and the platform fills
+any missing colour fields. A manifest link on the app's own address that names
+no `crossorigin` is given `crossorigin="use-credentials"`, so a private app's
+manifest is fetched with its member's sign-in and succeeds. An `icon.png` of the
+app's own is served instead of the rendered one: a picture fetched with
+`op: fetch`, or one `sandbox_ship` copies in. An image is decoded when it is
+written, as a browser would decode it, and one that does not decode is refused.
+A PNG's bytes cannot be written out by hand, so an icon an assistant makes is an
+SVG.
 
 ## Uploading a file with `upload`
 

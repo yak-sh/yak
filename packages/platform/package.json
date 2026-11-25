@@ -194,6 +194,7 @@
     "./operator-push": "./operator-push.tsx",
     "./interaction": "./interaction.ts",
     "./interaction-browser": "./interaction-browser.ts",
+    "./install-browser": "./install-browser.ts",
     "./interaction-report": "./interaction-report.ts"
   },
   "license": "Apache-2.0",

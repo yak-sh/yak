@@ -357,6 +357,7 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
     display: 'standalone',
     background_color: '#fdf7ee',
     theme_color: '#fdf7ee',
+    color_scheme_dark: { background_color: '#2b231f', theme_color: '#2b231f' },
     icons: [{ src: '/connector-512.png', type: 'image/png', sizes: '512x512' }],
   })
 })

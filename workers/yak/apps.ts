@@ -170,7 +170,10 @@ import {
   hasBase,
   intoHead,
   manifesting,
+  paintedColors,
+  paintedManifest,
   pinned,
+  pinnedPage,
 } from '@yaks/platform/woven'
 import { json, MEMBER, SAYS, WAITING } from '@yaks/platform/refused'
 import { Refused } from '@yaks/graph/errors'
@@ -259,6 +262,7 @@ type Rewriter = {
         setAttribute(name: string, value: string): void
         prepend(s: string, o: Html): void
         before(s: string, o: Html): void
+        onEndTag(fn: (end: { before(s: string, o: Html): void }) => void): void
       }): void
     },
   ): Rewriter
@@ -775,6 +779,7 @@ export let unwritten = async (
   path: string,
   at: string,
   retry = false,
+  publicWorker = false,
 ) => {
   if (path == '/icon.png') {
     let display = new URL(req.url).searchParams.has('display')
@@ -830,16 +835,43 @@ export let unwritten = async (
     })
   }
   if (path != `/${MANIFEST}`) return null
-  // The app's own colours (`app.theme`, set through `app_set`), or the
-  // platform's where it named none — `manifesting` decides, off the row
-  // already in hand, so this needs no trip to the app's own front page.
   let icon = await iconAddress(env, space, app, at)
-  return new Response(JSON.stringify(manifesting(app, at, icon), null, 2), {
-    headers: {
-      'content-type': 'application/manifest+json',
-      'cache-control': keeping(app),
+  let painted = paintedColors(new URL(req.url))
+  let name = publicWorker ? { slug: app.slug, theme: app.theme } : app
+  return new Response(
+    req.method == 'HEAD'
+      ? null
+      : JSON.stringify(manifesting(name, at, icon, painted), null, 2),
+    {
+      headers: {
+        'content-type': 'application/manifest+json',
+        'cache-control': keeping(app),
+      },
     },
-  })
+  )
+}
+
+// A worker can open its storefront while keeping its files private. Its own
+// manifest still has first say. A generated one is available to a visitor
+// who can open the start page through the worker.
+let storefront = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+) => {
+  let start = new URL(req.url)
+  start.pathname = start.pathname.slice(0, -MANIFEST.length)
+  start.search = ''
+  let headers = new Headers(req.headers)
+  headers.delete('if-none-match')
+  headers.delete('if-modified-since')
+  headers.set('accept', 'text/html')
+  let page = await ran(env, space, app, new Request(start, { headers }), who)
+  await page?.body?.cancel()
+  return page?.status == 200 &&
+    !!page.headers.get('content-type')?.startsWith('text/html')
 }
 
 // A folder asked for without its slash, sent to it: the location is relative,
@@ -1118,6 +1150,9 @@ let asset = async (
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
   if (!type.startsWith('text/html')) {
+    if (path == `/${MANIFEST}` && req.method == 'GET') {
+      got = await paintedManifest(req, got, app)
+    }
     return await media(
       req,
       got,
@@ -3298,6 +3333,7 @@ let served = async (
   // files door serves them as they are to everyone else.
   if (
     !itself && path != '/icon.png' && !fence.page(path) &&
+    (!mayRead || path != `/${MANIFEST}` || !url.search) &&
     ['GET', 'HEAD'].includes(req.method) && (app.worker !== '' || !mayRead)
   ) {
     let asset = releaseAsset(await releaseAssets(env, app.source), path)
@@ -3373,6 +3409,21 @@ let served = async (
       bare,
     )
   }
+  if (
+    answering == 'pass' && path == `/${MANIFEST}` &&
+    ['GET', 'HEAD'].includes(req.method) &&
+    await storefront(req, env, space, app, who)
+  ) {
+    await own?.body?.cancel()
+    return wall(
+      reporting(
+        (await unwritten(req, env, space, app, path, at, false, true))!,
+        req,
+        at,
+        app,
+      ),
+    )
+  }
   let page = answering == 'files' ? await file ?? own ?? nothingHere(env) : own!
   if (page != own) await own?.body?.cancel()
   // File pages already pass through woven(). Worker pages use the same
@@ -3394,15 +3445,27 @@ let served = async (
   if (!itself) page = await releasedAlias(req, env, app, at, path, page)
   if (worker) {
     page = await kept(req, env, app, at, bare, page)
+    if (!itself && path == `/${MANIFEST}` && req.method == 'GET') {
+      page = await paintedManifest(req, page, app)
+    }
   }
   if (
     worker && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')
   ) {
+    let [words, touch] = await Promise.all([
+      copy ?? copyFor(env, space, app),
+      !itself && page.status == 200 ? iconAddress(env, space, app, at) : null,
+    ])
     page = await reported(
       env,
       at,
-      filled(page, await (copy ?? copyFor(env, space, app))),
+      filled(
+        touch
+          ? pinnedPage(page, at, app, touch, !local(app), new HTMLRewriter())
+          : page,
+        words,
+      ),
       app.version ?? 0,
       wearing(req, space, app, env, who),
       appPreview(app, bare),

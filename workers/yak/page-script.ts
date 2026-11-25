@@ -35,6 +35,7 @@ let FILES = [
   '/visit.js',
   '/location.js',
   '/edit.js',
+  '/_install.js',
 ]
 
 /** The platform's scripts a page wears beyond the reporter and the release
@@ -85,9 +86,10 @@ export let pageScript = async (
   { badge, draft, bar, preview, byline, edit, note, api }: Scripts,
 ) => {
   try {
-    let [report, release, badged, barred, location, pencil] = await scripts(
-      assets,
-    )
+    let [report, release, badged, barred, location, pencil, install] =
+      await scripts(
+        assets,
+      )
     if (draft) {
       return tagged(at, version, [
         [location],
@@ -99,6 +101,7 @@ export let pageScript = async (
       [report, {}],
       [release, doors],
       [location, {}],
+      [install, {}],
     ]
     if (badge != null) {
       worn.push([badged, {

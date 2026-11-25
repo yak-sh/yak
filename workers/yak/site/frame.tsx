@@ -11,6 +11,10 @@
 // idling (mascot.ts `Idle`, idle.js); the home page's hero is its own.
 import type { ComponentChildren } from 'preact'
 import { Address } from '@yaks/ui'
+import {
+  PLATFORM_BACKGROUND,
+  PLATFORM_DARK_BACKGROUND,
+} from '@yaks/platform/woven'
 import { Idle } from '../mascot.ts'
 import { fields } from '../link-preview.ts'
 import { attr, said, text } from './copy.ts'
@@ -62,6 +66,27 @@ let Head = (
     <meta name='viewport' content='width=device-width, initial-scale=1' />
     <title {...text(`${page}.title`)} />
     <meta name='color-scheme' content='light dark' />
+    {path == '/' && (
+      <>
+        <link rel='manifest' href='/manifest.webmanifest' />
+        <meta name='mobile-web-app-capable' content='yes' />
+        <meta name='apple-mobile-web-app-capable' content='yes' />
+        <meta
+          name='apple-mobile-web-app-status-bar-style'
+          content='black-translucent'
+        />
+        <meta
+          name='theme-color'
+          media='(prefers-color-scheme: light)'
+          content={PLATFORM_BACKGROUND}
+        />
+        <meta
+          name='theme-color'
+          media='(prefers-color-scheme: dark)'
+          content={PLATFORM_DARK_BACKGROUND}
+        />
+      </>
+    )}
     <link rel='canonical' href={SITE + path} />
     {robots && <meta name='robots' content={robots} />}
     {Object.entries(fields({}, {

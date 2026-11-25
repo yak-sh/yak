@@ -5,6 +5,7 @@
 // space's page opens. yaks.app weaves them at its gateway (workers/yak
 // apps.ts `woven`), and the box's `yak/files` facet into the release pages it
 // serves (./files-routes.ts).
+import { holding } from '@yaks/blob'
 import { esc } from './escape.ts'
 import { type Host, url } from './host.ts'
 import { free, type Metered } from './meter.ts'
@@ -74,14 +75,9 @@ let declares = (page: string, tag: string, attr: string, value: string) =>
     'i',
   ).test(page)
 
-// The platform's own palette (@yaks/ui's linen theme: `--accent`, `--bg`), for
-// an app that never set its own (T-33055): the one look a generated manifest
-// and the tags beside it can give honestly, since the browser's grey chrome
-// and blank splash read as broken while a borrowed brand at least reads as
-// intentional. An app carries its own instead (`Theme`, set through
-// `app_set`), and this is only ever the fallback.
-export let PLATFORM_THEME = '#4c773e'
+// The platform's own page background in its two linen schemes.
 export let PLATFORM_BACKGROUND = '#fdf7ee'
+export let PLATFORM_DARK_BACKGROUND = '#2b231f'
 
 /** An app's own colours, both CSS, either half null where its owner set
  * none. */
@@ -92,22 +88,23 @@ export type Theme = {
 /** An app as its colours are read off it. */
 export type Themed = { theme?: Theme | null }
 
-// The colour this app's chrome paints with: its own, if its owner set one
-// (`app_set(theme_color: …)`), else the platform's. A stored colour is woven
-// straight into a `<meta content>` attribute and the manifest JSON below, so
-// it must be safe here, not only where app_set wrote it — the generic
-// graph_apply tier can set the `theme` component past that validator. The
-// charset (the twin of workers/yak tools.ts `CSS_COLOR`, kept in step) admits
-// hex, rgb()/hsl() and named colours but no quote, angle bracket or
-// backslash, so a value that fails it is junk or an injection attempt: fall
-// back to the platform's rather than emit it.
+// Stored colours also arrive through graph_apply. Only insert values safe
+// for both CSS and an HTML attribute.
 let CSS_COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
-let safeColor = (v: string | null | undefined, fallback: string) =>
-  v && CSS_COLOR.test(v) ? v : fallback
-let themeColorOf = (app: Themed) =>
-  safeColor(app.theme?.themeColor, PLATFORM_THEME)
-let backgroundColorOf = (app: Themed) =>
-  safeColor(app.theme?.backgroundColor, PLATFORM_BACKGROUND)
+let safeColor = (v: string | null | undefined) =>
+  v && CSS_COLOR.test(v) ? v : undefined
+
+/** Colours resolved by the installing page's browser, encoded as sRGB. */
+export let paintedColors = (url: URL): Theme => {
+  let color = (name: string) => {
+    let value = url.searchParams.get(name)
+    return value && /^[a-f0-9]{6}$/i.test(value) ? '#' + value : null
+  }
+  return {
+    backgroundColor: color('background_color'),
+    themeColor: color('theme_color'),
+  }
+}
 
 // The tags an app added to a home screen needs, and almost no app writes
 // (T-34493, T-33055). iOS takes its icon from `<link rel="apple-touch-icon">`
@@ -150,27 +147,48 @@ export let pinned = (
   // (@yaks/platform/routes `iconAt`), so a browser keeps it.
   icon = `${at}icon.png`,
 ): string => {
-  let tags =
-    (declares(page, 'link', 'rel', 'apple-touch-icon')
-      ? ''
-      : `<link rel="apple-touch-icon" href="${icon}">`) +
-    (declares(page, 'link', 'rel', 'manifest')
+  let tags = pinTags(
+    at,
+    (tag, attr, value) => declares(page, tag, attr, value),
+    app,
+    cookies,
+    icon,
+  )
+  return credentialed(tags ? intoHead(page, tags) : page, cookies)
+}
+
+/** The missing install tags, given the declarations the host saw. */
+let pinTags = (
+  at: string,
+  has: (tag: string, attr: string, value: string) => boolean,
+  app: Themed,
+  cookies: boolean,
+  icon: string,
+) => {
+  let theme = safeColor(app.theme?.themeColor)
+  return (has('link', 'rel', 'apple-touch-icon')
+    ? ''
+    : `<link rel="apple-touch-icon" href="${icon}">`) +
+    (has('link', 'rel', 'manifest')
       ? ''
       : `<link rel="manifest" href="${at}${MANIFEST}" ` +
-        `crossorigin="${cookies ? 'use-credentials' : 'anonymous'}">`) +
-    (declares(page, 'meta', 'name', 'theme-color')
+        `crossorigin="${
+          cookies ? 'use-credentials' : 'anonymous'
+        }" data-yak-manifest>`) +
+    (has('meta', 'name', 'theme-color')
       ? ''
-      : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
-    (declares(page, 'meta', 'name', 'mobile-web-app-capable')
+      : theme
+      ? `<meta name="theme-color" content="${theme}">`
+      : '<meta data-yak-theme-color>') +
+    (has('meta', 'name', 'mobile-web-app-capable')
       ? ''
       : '<meta name="mobile-web-app-capable" content="yes">') +
-    (declares(page, 'meta', 'name', 'apple-mobile-web-app-capable')
+    (has('meta', 'name', 'apple-mobile-web-app-capable')
       ? ''
       : '<meta name="apple-mobile-web-app-capable" content="yes">') +
-    (declares(page, 'meta', 'name', 'apple-mobile-web-app-status-bar-style')
+    (has('meta', 'name', 'apple-mobile-web-app-status-bar-style')
       ? ''
-      : '<meta name="apple-mobile-web-app-status-bar-style" content="default">')
-  return credentialed(tags ? intoHead(page, tags) : page, cookies)
+      : '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">')
 }
 
 // A browser fetches the manifest a page links without the person's cookies
@@ -182,6 +200,7 @@ export let pinned = (
 // `crossorigin` of its own keeps it, and one to another origin is left as
 // written, since that origin admits credentials only if it says so.
 let elsewhere = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i
+let manifestHere = (href: string) => !elsewhere.test(href)
 let hrefOf = (tag: string) =>
   /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
     ?.slice(1).find((v) => v != null) ?? ''
@@ -190,7 +209,7 @@ let credentialed = (page: string, cookies: boolean) =>
     /<link\b[^>]*>/gi,
     (tag) =>
       declares(tag, 'link', 'rel', 'manifest') &&
-        !/\scrossorigin\b/i.test(tag) && !elsewhere.test(hrefOf(tag))
+        !/\scrossorigin\b/i.test(tag) && manifestHere(hrefOf(tag))
         ? tag.replace(
           /^<link/i,
           `<link crossorigin="${cookies ? 'use-credentials' : 'anonymous'}"`,
@@ -200,28 +219,159 @@ let credentialed = (page: string, cookies: boolean) =>
 
 /** What an app's manifest says when the app wrote none: its name, its own
  * root as the scope a standalone window stays inside, the icon at the two
- * sizes an installer looks for, and the two colours — the app's own, or the
- * platform's. The same icon file at both sizes: one square png, and resizing
- * it at the edge would be a second set of bytes to serve and cache for an
- * installer that scales anyway. */
+ * sizes an installer looks for, and the colours saved by the app or read
+ * from its page. The same icon file at both sizes. */
 export let manifesting = (
   app: Themed & { title?: string | null; slug: string },
   at: string,
   icon = `${at}icon.png`,
+  painted?: Theme,
 ) => ({
   name: app.title || app.slug,
   short_name: app.title || app.slug,
   start_url: at,
   scope: at,
   display: 'standalone',
-  background_color: backgroundColorOf(app),
-  theme_color: themeColorOf(app),
+  ...manifestColors(app, painted),
   icons: ['512x512', '192x192'].map((sizes) => ({
     src: icon,
     type: 'image/png',
     sizes,
   })),
 })
+
+/** Defaults for the colour fields a manifest leaves out. */
+export let manifestColors = (app: Themed, painted?: Theme) => ({
+  background_color: safeColor(app.theme?.backgroundColor) ??
+    painted?.backgroundColor ?? undefined,
+  theme_color: safeColor(app.theme?.themeColor) ??
+    painted?.themeColor ?? undefined,
+})
+
+// A page that uses the platform's manifest link can ship manifest fields of
+// its own. Use the painted colours only for the fields its file omits.
+export let paintedManifest = async (
+  req: Request,
+  page: Response,
+  app: Themed,
+) => {
+  let painted = paintedColors(new URL(req.url))
+  if (
+    (!painted.backgroundColor && !painted.themeColor) ||
+    page.status != 200 || !page.body
+  ) return page
+  let contents = await holding({ stream: page.body }, 64 * 1024)
+  if (!(contents instanceof Uint8Array)) {
+    return new Response(contents.stream, page)
+  }
+  let original = new Response(contents, page)
+  let value: unknown
+  try {
+    value = JSON.parse(new TextDecoder().decode(contents))
+  } catch {
+    return original
+  }
+  if (!value || typeof value != 'object' || Array.isArray(value)) {
+    return original
+  }
+  let defaults = Object.entries(manifestColors(app, painted)).filter((
+    [key, color],
+  ) => color && !Object.hasOwn(value, key))
+  if (!defaults.length) return original
+  let body = JSON.stringify({ ...value, ...Object.fromEntries(defaults) })
+  let headers = new Headers(page.headers)
+  for (let name of ['content-length', 'content-encoding', 'etag']) {
+    headers.delete(name)
+  }
+  return new Response(body, { headers })
+}
+
+type HTML = { html: boolean }
+type InstallElement = {
+  getAttribute(name: string): string | null
+  setAttribute(name: string, value: string): void
+  before(s: string, o: HTML): void
+  onEndTag(fn: (end: { before(s: string, o: HTML): void }) => void): void
+}
+type InstallRewriter = {
+  on(
+    selector: string,
+    handlers: { element(el: InstallElement): void },
+  ): InstallRewriter
+  onDocument(
+    handlers: { end(end: { append(s: string, o: HTML): void }): void },
+  ): InstallRewriter
+  transform(page: Response): Response
+}
+
+// Worker pages can stream. Collect declarations while the head passes and
+// add the missing tags at its end, before any of the page's body is read.
+export let pinnedPage = (
+  page: Response,
+  at: string,
+  app: Themed,
+  icon: string,
+  cookies: boolean,
+  rewrite: InstallRewriter,
+) => {
+  let words = new Set<string>()
+  let done = false
+  let tags = () => {
+    if (done) return ''
+    done = true
+    return pinTags(
+      at,
+      (tag, _, value) => words.has(tag + ':' + value),
+      app,
+      cookies,
+      icon,
+    )
+  }
+  rewrite
+    .on('link[rel]', {
+      element: (link) => {
+        let rel = link.getAttribute('rel')!.toLowerCase().split(/\s+/)
+        for (let word of rel) {
+          words.add('link:' + word)
+          if (word == 'apple-touch-icon-precomposed') {
+            words.add('link:apple-touch-icon')
+          }
+        }
+        if (
+          rel.includes('manifest') &&
+          link.getAttribute('crossorigin') == null &&
+          manifestHere(link.getAttribute('href') ?? '')
+        ) {
+          link.setAttribute(
+            'crossorigin',
+            cookies ? 'use-credentials' : 'anonymous',
+          )
+        }
+      },
+    })
+    .on('meta[data-yak-theme-color]', {
+      element: () => words.add('meta:theme-color'),
+    })
+    .on('meta[name]', {
+      element: (el) =>
+        words.add('meta:' + el.getAttribute('name')!.toLowerCase()),
+    })
+    .on('head', {
+      element: (el) => el.onEndTag((end) => end.before(tags(), { html: true })),
+    })
+    .on('body', { element: (el) => el.before(tags(), { html: true }) })
+    .onDocument({ end: (end) => end.append(tags(), { html: true }) })
+  let headers = new Headers(page.headers)
+  headers.delete('content-length')
+  headers.delete('etag')
+  return rewrite.transform(
+    new Response(page.body, {
+      status: page.status,
+      statusText: page.statusText,
+      headers,
+    }),
+  )
+}
 
 // The platform's own scripts are woven into a page's text rather than named
 // by a `src`. Each must run before the page's own code, which made them
