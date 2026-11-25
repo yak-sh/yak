@@ -56,9 +56,10 @@ node_modules
 /workers/yak/front/public/
 /workers/yak/public/_compiler/
 
-# The kit's share of yaks.app's stylesheets, composed from @yaks/ui, and
-# what it points at (workers/yak/sheet-assets.ts).
+# The kit's share of yaks.app's stylesheets, composed from @yaks/ui, its
+# guide's sheets, and what they point at (workers/yak/sheet-assets.ts).
 /workers/yak/public/_ui.css
+/workers/yak/public/_guide.*.css
 /workers/yak/public/_ui/
 
 # The site's own pages, drawn from the kit's parts (workers/yak/site/).
