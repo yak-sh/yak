@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type FetchLike, FILES, keeping, type Scope } from './worker.ts'
-import { FRESH, KEPT } from './picture.ts'
+import { FRESH, KEPT, SHELL } from './picture.ts'
 
 // The address a request names, a Request or a string.
 let key = (r: RequestInfo | URL) =>
@@ -65,6 +65,7 @@ let worker = (files = 2) => {
     files,
     databases: 'yaks-page:',
     opens: (p) => (p as { url?: string }).url,
+    shelled: (url) => new URL(url).pathname.startsWith('/manage'),
   })
   let waiting: Promise<unknown>[] = []
   let settled = async () => {
@@ -93,9 +94,14 @@ let worker = (files = 2) => {
     return answer ? await (await answer).text() : null
   }
   let open = (path: string) => ask(path, { mode: 'navigate' })
-  let leave = async (path: string, html: string, since = Date.now()) => {
+  let leave = async (
+    path: string,
+    html: string,
+    since = Date.now(),
+    shell?: string,
+  ) => {
     hear.get('message')!({
-      data: { keep: 'https://yaks.app' + path, html, at: 1, since },
+      data: { keep: 'https://yaks.app' + path, html, shell, at: 1, since },
       waitUntil: (p: Promise<unknown>) => void waiting.push(p),
     })
     await settled()
@@ -185,4 +191,26 @@ test('a push keeps the page its notification opens as it is then, to draw at onc
   assertEquals(drawn.includes('the reply'), true)
   assertEquals(drawn.includes(KEPT), true)
   assertEquals(await w.open('/gone'), 'gone')
+})
+
+test('a page with no picture of its own opens at once as the shell where the shell stands for it', async () => {
+  let w = worker()
+  w.site.set('/manage/updates', page('the updates'))
+  w.site.set('/pricing', page('prices'))
+  await w.leave('/manage/chat', page('the chat'), Date.now(), page(''))
+  w.asked.length = 0
+  let drawn = (await w.open('/manage/updates'))!
+  assertEquals([drawn.includes(SHELL), drawn.includes('the chat')], [
+    true,
+    false,
+  ])
+  assertEquals(
+    await w.ask('/manage/updates', { fresh: true }),
+    page('the updates'),
+  )
+  assertEquals(w.asked, ['/manage/updates'])
+  // Not where the site says the shell does not stand.
+  assertEquals(await w.open('/pricing'), page('prices'))
+  await w.ask('/logout', { mode: 'navigate', method: 'POST' })
+  assertEquals(await w.open('/manage/updates'), page('the updates'))
 })

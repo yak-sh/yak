@@ -30,7 +30,7 @@ let browser = (href = 'https://yaks.app/ada') => {
     replaceState: (_state: unknown, _title: string, url: string) =>
       location.href = url,
   }
-  let run = (source?: 'picture' | 'push') =>
+  let run = (source?: 'picture' | 'shell' | 'push') =>
     new Function(
       'window',
       'top',
@@ -104,6 +104,7 @@ test('a cold document opened from a notification records paint, readiness and th
     usable: 360,
     server: 120,
     estimated: false,
+    controlled: false,
   }])
 })
 
@@ -160,5 +161,43 @@ test('an offline kept picture reports its paint without pretending its scripts r
     usable: null,
     server: null,
     estimated: true,
+    controlled: false,
   }])
+})
+
+test('a shell paints on the picture budget and is usable on the cold one', async () => {
+  let b = browser()
+  let held = b.run('shell')
+  b.parsed(30)
+  b.frame(200)
+  await held.frame
+  held.swapping()
+  held.waited(2000)
+  b.run()
+  b.entries.set('yak-usable', { startTime: 2400 })
+  b.parsed(2500)
+  equal(b.sent.map((p) => [p.open?.source, p.open?.picture]), [['shell', true]])
+  let rows: Bundle[] = []
+  await reportInteractions(
+    new Request('https://yaks.app/api/interaction?open=1', {
+      method: 'POST',
+      body: JSON.stringify(b.sent[0]),
+    }),
+    {
+      sink: (got) => Promise.resolve(void rows.push(...got)),
+      now: () => b.at,
+      failed: (error) => {
+        throw error
+      },
+      opened: { page: 'updates', person: crypto.randomUUID() },
+    },
+  )
+  let timings = rows.filter((row) => row.timing) as TimingRow[]
+  equal(
+    timings.map((row) => [row.timing.total, row.timing.counts.overBudget]),
+    [
+      [200, 0],
+      [2400, 0],
+    ],
+  )
 })

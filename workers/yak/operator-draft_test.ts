@@ -18,7 +18,8 @@ import {
   operatorAnswer,
   storeAnswer,
 } from './operator-page.ts'
-import { REACH, type StoreDoor } from '@yaks/platform/routes'
+import { type StoreDoor } from '@yaks/platform/routes'
+import { REACH } from '@yaks/platform/page-graph'
 import { talkAsked, talkRow, type Told } from '@yaks/platform/operator-talk'
 import {
   installPair,

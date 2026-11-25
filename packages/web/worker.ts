@@ -5,6 +5,9 @@
  * - A page a person opens that was kept is answered with its picture at
  *   once, and the page as it is now is asked for at the same moment, for the
  *   picture's bootstrap to take (`FRESH`).
+ * - A page opened with no picture of its own, at an address the site's
+ *   shell stands for (`shelled`), is answered with the shell the same way:
+ *   the newest one a page sent as it was left.
  * - A page sends its snapshot as it is left or hidden (./keep.ts), and the
  *   picture of it is kept under its address, the newest `pages` of them.
  * - A file named by its bytes (`named`, a path prefix) never changes, so it
@@ -34,7 +37,8 @@ export let FILES = 'yak-files'
  * files named by their bytes are, and how many of each are kept. Forgetting
  * also deletes the IndexedDB databases whose names start with `databases`:
  * what its pages kept of their own. `opens` reads the page a push's
- * notification opens from what was pushed. */
+ * notification opens from what was pushed. `shelled` says whether the
+ * site's shell stands for a page at an address. */
 export type Keeping = {
   forget: string[]
   named?: string
@@ -42,15 +46,22 @@ export type Keeping = {
   files?: number
   databases?: string
   opens?: (pushed: unknown) => string | undefined
-  opening?: (source: 'picture' | 'push') => string
+  shelled?: (url: string) => boolean
+  opening?: (source: 'picture' | 'shell' | 'push') => string
   address?: (url: string) => string
   report?: string
 }
 
 /** What a page sends its worker as it is left (./keep.ts): its address, its
- * whole document, when the snapshot was taken and when the page was loaded,
- * in milliseconds since the epoch. */
-export type Snapshot = { keep: string; html: string; at: number; since: number }
+ * whole document, its shell where it has one, when the snapshot was taken
+ * and when the page was loaded, in milliseconds since the epoch. */
+export type Snapshot = {
+  keep: string
+  html: string
+  shell?: string
+  at: number
+  since: number
+}
 
 /** How a request is answered: `page` from a kept picture where there is one,
  * `fresh` with the page already asked for, `file` from what was kept,
@@ -97,8 +108,10 @@ export let pageKey = (url: string): string => {
   return at.href
 }
 
-// Where the time the pages were last forgotten is kept, beside them.
+// Where the time the pages were last forgotten is kept, beside them, and
+// the shell.
 let FORGOT = '/.forgot'
+let SHELL = '/.shell'
 
 /** What a service worker needs of its global scope. */
 export type Scope = {
@@ -151,8 +164,9 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
   // The page each kept page's picture asked for, until its bootstrap takes it.
   let asked = new Map<string, Promise<Response>>()
+  let own = [FORGOT, SHELL].map((path) => location.origin + path)
   let trim = async (cache: Cache, keep: number) => {
-    let keys = (await cache.keys()).filter((r) => !r.url.endsWith(FORGOT))
+    let keys = (await cache.keys()).filter((r) => !own.includes(r.url))
     await Promise.all(keys.slice(0, -keep).map((r) => cache.delete(r)))
   }
   let forgotAt = async () => {
@@ -175,8 +189,15 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     )
     if (reports) await reports.forget()
   }
+  let stored = (html: string) =>
+    new Response(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    })
   let keep = async (
-    { keep: url, html, at, since }: Snapshot,
+    { keep: url, html, shell, at, since }: Snapshot,
     source: 'picture' | 'push' = 'picture',
   ) => {
     if (new URL(url).origin != location.origin) return
@@ -185,13 +206,14 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     await pages.delete(pageKey(url))
     await pages.put(
       pageKey(url),
-      new Response(picture(html, at, opts.opening?.(source)), {
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'no-store',
-        },
-      }),
+      stored(picture(html, at, opts.opening?.(source))),
     )
+    if (shell && opts.shelled?.(url)) {
+      await pages.put(
+        location.origin + SHELL,
+        stored(picture(shell, at, opts.opening?.('shell'), true)),
+      )
+    }
     await trim(pages, most.pages)
     await trim(await caches.open(FILES), most.files)
   }
@@ -209,10 +231,19 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
       headers,
     })
   }
+  // A page's own picture, else the shell where it stands for the page: never
+  // in a frame, whose page is another's.
+  let kept = async (req: Request, key: string) => {
+    let pages = await caches.open(PAGES)
+    let shell = (req.destination || 'document') == 'document' &&
+      opts.shelled?.(key)
+    return await pages.match(key) ??
+      (shell ? await pages.match(location.origin + SHELL) : undefined)
+  }
   let page = async (req: Request) => {
     let key = keyOf(req.url)
-    let kept = await (await caches.open(PAGES)).match(key)
-    if (!kept) return scope.fetch(req)
+    let drawn = await kept(req, key)
+    if (!drawn) return scope.fetch(req)
     let now = timed(
       scope.fetch(key, {
         credentials: 'same-origin',
@@ -224,7 +255,7 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     // Nobody may come for it: the picture is closed before its bootstrap ran.
     now.catch(() => {})
     asked.set(key, now)
-    return kept
+    return drawn
   }
   // The page at `url` as it is now, kept as if it had just been left. One
   // that sends elsewhere (signed out) or fails is not kept.
@@ -282,7 +313,10 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   })
   scope.addEventListener('message', (e) => {
     let said = e.data as Partial<Snapshot> | null
-    if (typeof said?.keep == 'string' && typeof said.html == 'string') {
+    if (
+      typeof said?.keep == 'string' && typeof said.html == 'string' &&
+      (said.shell == null || typeof said.shell == 'string')
+    ) {
       e.waitUntil(keep(said as Snapshot))
     }
   })

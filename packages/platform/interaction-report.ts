@@ -32,14 +32,24 @@ let milestone = (n: unknown): n is number | null => n === null || duration(n)
 
 let opening = (value: unknown): Open | undefined => {
   if (!OBJECT(value)) return
-  let { source, picture, device, installed, paint, usable, server, estimated } =
-    value as Partial<Open>
+  let {
+    source,
+    picture,
+    device,
+    installed,
+    paint,
+    usable,
+    server,
+    estimated,
+    controlled,
+  } = value as Partial<Open>
   if (
     !source || !OPEN_SOURCES.includes(source) ||
     !device || !DEVICES.includes(device) ||
     typeof picture != 'boolean' ||
-    source != 'push' && picture != (source == 'picture') ||
+    source != 'push' && picture != (source == 'picture' || source == 'shell') ||
     typeof installed != 'boolean' || typeof estimated != 'boolean' ||
+    controlled != null && typeof controlled != 'boolean' ||
     !milestone(paint) || !milestone(usable) || !milestone(server) ||
     paint != null && usable != null && usable < paint
   ) return
@@ -52,6 +62,7 @@ let opening = (value: unknown): Open | undefined => {
     usable,
     server,
     estimated,
+    ...controlled == null ? {} : { controlled },
   }
 }
 

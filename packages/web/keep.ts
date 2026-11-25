@@ -2,12 +2,13 @@
  * A page's part in being kept (./worker.ts): it registers its site's worker
  * once it has loaded, and sends the worker a snapshot of itself as the person last saw it,
  * whenever it is hidden, left for another page in place (`yak-leave`), or
- * unloaded. A picture already (./picture.ts) sends none: the page it becomes
- * sends its own.
+ * unloaded. A page with parts of its own (`OWN`) sends its shell beside it:
+ * the same document with those parts empty. A picture already (./picture.ts)
+ * sends none: the page it becomes sends its own.
  *
  * @module
  */
-import { KEPT, SCROLL } from './picture.ts'
+import { KEPT, OWN, SCROLL } from './picture.ts'
 import { LEAVE } from '@yaks/ui/navigate'
 import type { Snapshot } from './worker.ts'
 
@@ -39,7 +40,7 @@ let scroll = (pane: Element) =>
     : String(Math.max(0, pane.scrollTop || 0))
 
 /** The snapshot of the page in `win` as it shows now, without what is not
- * shown. */
+ * shown, and its shell where it has parts of its own. */
 export let snapshot = (win: Window): Snapshot => {
   let { documentElement: root, scrollingElement: page } = win.document
   let shown = root.cloneNode(true) as Element
@@ -49,9 +50,16 @@ export let snapshot = (win: Window): Snapshot => {
     copy.setAttribute(SCROLL, scroll(panes[i]))
   }
   for (let e of shown.querySelectorAll(UNSEEN)) e.remove()
+  let doc = (e: Element) => '<!doctype html>' + e.outerHTML
+  let shell = shown.querySelector(`[${OWN}]`) &&
+    shown.cloneNode(true) as Element
+  for (let own of shell ? shell.querySelectorAll(`[${OWN}]`) : []) {
+    own.replaceChildren()
+  }
   return {
     keep: win.location.href,
-    html: '<!doctype html>' + shown.outerHTML,
+    html: doc(shown),
+    ...shell ? { shell: doc(shell) } : {},
     at: Date.now(),
     since: win.performance.timeOrigin,
   }

@@ -22,7 +22,7 @@ export type Point = {
   render: number
 }
 export let OPEN_PATH: string = INTERACTION_PATH + '?open=1'
-export let OPEN_SOURCES = ['cold', 'picture', 'push'] as const
+export let OPEN_SOURCES = ['cold', 'picture', 'shell', 'push'] as const
 export let DEVICES = ['iphone-compact', 'phone', 'tablet', 'desktop'] as const
 export type Open = {
   source: typeof OPEN_SOURCES[number]
@@ -33,6 +33,8 @@ export type Open = {
   usable: number | null
   server: number | null
   estimated: boolean
+  // a service worker answered the page's address, as the page says
+  controlled?: boolean
 }
 export type Batch = { id: string; at: number; points: Point[]; open?: Open }
 export type Phases = Pick<Point, 'input' | 'server' | 'script' | 'render'>
@@ -58,11 +60,13 @@ export let interactionName = (
 
 // T-3503's fast-4G runs: 152–512 ms to the picture and 945–1441 ms
 // to a fresh reopen, with cold paint and usable usually within 2.1 and 3.3 s.
+// A shell paints as soon as a picture, and is usable when a cold page is.
 // The existing under100 count tracks the picture's paint goal.
 export let openMilestones = (
   open: Open,
 ): { name: string; ms: number | null; budget: number }[] => {
-  let [paint, usable] = open.picture ? [550, 1500] : [2200, 3500]
+  let paint = open.picture ? 550 : 2200
+  let usable = open.picture && open.source != 'shell' ? 1500 : 3500
   return [
     { name: 'paint', ms: open.paint, budget: paint },
     { name: 'usable', ms: open.usable, budget: usable },
@@ -110,6 +114,9 @@ export let interactionRows = (
           under100: Number(ms != null && ms < SLOW),
           overBudget: Number(ms != null && ms > budget),
           installed: Number(open.installed),
+          ...open.controlled == null
+            ? {}
+            : { controlled: Number(open.controlled) },
           ...name == 'paint'
             ? {
               estimated: Number(open.estimated && ms != null),

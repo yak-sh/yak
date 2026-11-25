@@ -55,7 +55,6 @@ export let UPDATES = '/updates'
  * number alone (yaks.app's operator-approvals.ts). */
 export let APPROVE = '/approve'
 export let ACCOUNT = 'account'
-export { REACH, TAB_PERSON } from './page-graph.ts'
 /** A page of one space's. */
 export type SpaceView =
   | 'apps'
@@ -488,6 +487,24 @@ export let spaced = (path: string): Managed | null => {
   if (two == null) return { space: one, view: 'operator', open: 'new' }
   if (talks(two)) return { space: one, view: two }
   return OPEN.test(two) ? { space: one, view: 'operator', open: two } : null
+}
+/** Whether `path` is a page a signed-in person opens in the frame: a space's
+ * page, every space's Updates, a settings page, or an address moved to one;
+ * never a store's door, a logo or a manifest.
+ *
+ * ```ts
+ * import { framed } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(framed('/ada/updates'), true)
+ * assertEquals(framed('/manage/account/friends'), true)
+ * assertEquals(framed('/manage/ada/logo/' + 'a'.repeat(64)), false)
+ * assertEquals(framed('/pricing'), false)
+ * ```
+ */
+export let framed = (path: string): boolean => {
+  let at = managed(path) ?? spaced(path)
+  return !!at && !('door' in at && at.door || 'logo' in at && at.logo ||
+    'manifest' in at && at.manifest)
 }
 /** Where an address that names no space (`/manage`, or one from before the
  * space was in the path) is now, for `space`: a page names its own, and none

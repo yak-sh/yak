@@ -2,13 +2,13 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { keep, type Window } from './keep.ts'
-import { KEPT, picture, SCROLL } from './picture.ts'
+import { KEPT, OWN, picture, SCROLL } from './picture.ts'
 import { LEAVE } from '@yaks/ui/navigate'
 
 // A page in a browser with a worker, and what it sent the worker.
 let tab = (html: string) => {
   let { document, window } = parseHTML(html)
-  let sent: { keep: string; html: string }[] = []
+  let sent: { keep: string; html: string; shell?: string }[] = []
   let registered: string[] = []
   let shown = 'visible'
   Object.defineProperty(document, 'visibilityState', { get: () => shown })
@@ -50,6 +50,17 @@ test('a page registers its worker once loaded, and sends it what it shows as it 
   assertEquals(
     t.sent[0].html,
     '<!doctype html><html><body><p>Seen last</p></body></html>',
+  )
+})
+
+test('a page with parts of its own sends its shell beside it, those parts empty', () => {
+  let t = tab(
+    `<html><body><nav>Side</nav><h1 ${OWN}>Chat</h1><main ${OWN}><p>Hi</p></main></body></html>`,
+  )
+  t.hide()
+  assertEquals(
+    t.sent[0].shell,
+    `<!doctype html><html><body><nav>Side</nav><h1 ${OWN}=""></h1><main ${OWN}=""></main></body></html>`,
   )
 })
 

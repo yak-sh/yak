@@ -12,11 +12,23 @@
  * is now and writes it over the picture in place. Its scripts then run once,
  * as on any load.
  *
+ * A **shell** is the picture of the frame a site's pages share, for an
+ * address with no picture of its own: the last page left, with what is its
+ * own (`OWN`: its title, its body) left empty. It is drawn the same way, and
+ * replaced the same way.
+ *
  * @module
  */
 
 /** The attribute a picture's root wears, saying when it was taken. */
 export let KEPT = 'data-kept'
+
+/** The attribute on each part of a page that is its own, rather than the
+ * frame it shares with the site's other pages: what a shell leaves empty. */
+export let OWN = 'data-kept-own'
+
+/** The attribute a shell's root wears beside `KEPT`. */
+export let SHELL = 'data-kept-shell'
 
 /** A pane's starting scroll position in a picture, in pixels or at its end. */
 export let SCROLL = 'data-kept-scroll'
@@ -38,10 +50,12 @@ let boot = (opening = 'null') =>
   let status = () => document.querySelector('[data-kept-status]')
   let failed = () => {
     opened?.offline()
-    let at = new Date(Number(document.documentElement.getAttribute('${KEPT}')))
+    let root = document.documentElement
+    let at = new Date(Number(root.getAttribute('${KEPT}')))
     let said = status()
-    if (said) said.textContent = 'Offline. This is how it looked at ' +
-      at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.'
+    if (said) said.textContent = root.hasAttribute('${SHELL}') ? 'Offline.'
+      : 'Offline. This is how it looked at ' +
+        at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.'
   }
   fetch(location.href, {
     credentials: 'same-origin',
@@ -83,8 +97,8 @@ let boot = (opening = 'null') =>
 export let BOOT: string = boot()
 
 // What a picture says while the page is asked for, over everything.
-let STATUS =
-  '<p role="status" data-kept-status style="position:fixed;z-index:2147483647;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);margin:0;padding:4px 12px;border-radius:999px;background:rgba(0,0,0,.72);color:#fff;font:13px/1.5 system-ui,sans-serif;pointer-events:none">Updating…</p>'
+let status = (said: string) =>
+  `<p role="status" data-kept-status style="position:fixed;z-index:2147483647;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);margin:0;padding:4px 12px;border-radius:999px;background:rgba(0,0,0,.72);color:#fff;font:13px/1.5 system-ui,sans-serif;pointer-events:none">${said}</p>`
 
 // A script, whole: what it says is most of a page's bytes (the rows it was
 // drawn from, its own code), and none of it runs in a picture.
@@ -109,7 +123,8 @@ let SCROLLING = `(() => {
 /**
  * The picture of `snapshot`, taken at `at` (milliseconds since the epoch):
  * its scripts gone, its frames empty, its root marked kept, its status line
- * saying it is updating, and its bootstrap first in its head.
+ * saying it is updating, and its bootstrap first in its head. A `shell`'s
+ * root says so, and its status line that the page is opening.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -125,12 +140,20 @@ let SCROLLING = `(() => {
  * assertEquals(kept.indexOf('<script>(() =>') > kept.indexOf('<head>'), true)
  * ```
  */
-export let picture = (snapshot: string, at: number, opening?: string): string =>
+export let picture = (
+  snapshot: string,
+  at: number,
+  opening?: string,
+  shell = false,
+): string =>
   snapshot
     .replace(SCRIPT, '')
     .replace(FRAME_SRC, '$1data-kept-src$2')
-    .replace(/<html\b/i, `<html ${KEPT}="${at}"`)
-    .replace(/<body\b[^>]*>/i, (body) => body + STATUS)
+    .replace(/<html\b/i, `<html ${KEPT}="${at}"${shell ? ` ${SHELL}` : ''}`)
+    .replace(
+      /<body\b[^>]*>/i,
+      (body) => body + status(shell ? 'Opening…' : 'Updating…'),
+    )
     .replace(
       /<\/body\s*>/i,
       (body) =>

@@ -5,7 +5,7 @@ import { clock, equal, test, until } from '@yaks/testing'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { REACH, TAB_PERSON } from '@yaks/platform/routes'
+import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import {
   UPDATE_WAITING,
   waitingCounts,

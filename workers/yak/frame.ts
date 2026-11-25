@@ -25,7 +25,7 @@ import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Form, Icon, Layer, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { managePath } from '@yaks/platform/routes'
 import { TITLE } from '@yaks/ui/navigate'
-import { SCROLL } from '@yaks/web/picture'
+import { OWN, SCROLL } from '@yaks/web/picture'
 import { icons } from './icons.ts'
 import {
   barLauncher,
@@ -203,10 +203,16 @@ export let frame = (at: {
             { class: 'Frame_Heading' },
             h(
               Toolbar.Title,
-              { as: at.headed ? 'span' : undefined, [TITLE]: '' },
+              {
+                as: at.headed ? 'span' : undefined,
+                [TITLE]: '',
+                [OWN]: '',
+              },
               at.title,
             ),
-            at.sub ? h(Toolbar.Sub, { class: 'Frame_Sub' }, at.sub) : null,
+            at.sub
+              ? h(Toolbar.Sub, { class: 'Frame_Sub', [OWN]: '' }, at.sub)
+              : null,
           ),
           at.tools,
           at.aside ? asideTools(at.aside) : null,
@@ -219,6 +225,7 @@ export let frame = (at: {
             id: 'content',
             tabindex: '-1',
             [SCROLL]: at.contentScroll ?? '0',
+            [OWN]: '',
           },
           at.content,
         ),
@@ -233,7 +240,7 @@ export let frame = (at: {
             'data-swipe': '',
             hidden: at.aside.hidden || undefined,
           },
-          h('div', { class: 'Frame_AsideBody' }, at.aside.content),
+          h('div', { class: 'Frame_AsideBody', [OWN]: '' }, at.aside.content),
         )
         : null,
       at.beside,

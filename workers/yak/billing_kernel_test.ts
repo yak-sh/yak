@@ -16,7 +16,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { managePath, REACH, TAB_PERSON } from '@yaks/platform/routes'
+import { managePath } from '@yaks/platform/routes'
+import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import {
   apexPost,
   fresh,

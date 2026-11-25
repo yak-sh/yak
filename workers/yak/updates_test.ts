@@ -4,13 +4,8 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { bearerFor, connector, kernel, seed, signIn, unique } from './probe.ts'
 import { ADMIN as ADMIN_ACCOUNT } from '@yaks/platform/bots'
-import {
-  ADMIN,
-  chatPath,
-  managePath,
-  REACH,
-  talkPath,
-} from '@yaks/platform/routes'
+import { ADMIN, chatPath, managePath, talkPath } from '@yaks/platform/routes'
+import { REACH } from '@yaks/platform/page-graph'
 import { UPDATE_WAITING, waitingCounts } from '@yaks/platform/update-waiting'
 import type { Bundle } from '@yaks/graph'
 import { renderToString } from 'preact-render-to-string'

@@ -42,7 +42,6 @@ import {
   managed,
   managePath,
   type ManageView,
-  REACH,
   renamed,
   signInAt,
   spaced,
@@ -50,6 +49,7 @@ import {
   type Talk,
   talkPath,
 } from '@yaks/platform/routes'
+import { REACH } from '@yaks/platform/page-graph'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
 import { asking, bearerIn } from './asking.ts'

@@ -9,7 +9,8 @@ import {
 } from '@yaks/platform/account-rows'
 import { noted } from '@yaks/notify/whereabouts'
 import { connector, kernel, pressPeople, saveAccount, signIn } from './probe.ts'
-import { managePath, REACH, TAB_PERSON, talkPath } from '@yaks/platform/routes'
+import { managePath, talkPath } from '@yaks/platform/routes'
+import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 
 let k = await kernel()
 let [ann, bo, cy, dee, eve, fay] = await Promise.all(

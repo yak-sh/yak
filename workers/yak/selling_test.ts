@@ -19,7 +19,7 @@ import { added, asked } from './examples/shop/cart.js'
 import { delivered } from '@yaks/stripe/testing'
 import { paymentDoor } from './payment-doors.ts'
 import * as sell from './sell.ts'
-import { REACH, TAB_PERSON } from '@yaks/platform/routes'
+import { REACH, TAB_PERSON } from '@yaks/platform/page-graph'
 import { packed } from '@yaks/host/payments'
 import { call, type Ctx } from './tools.ts'
 import {

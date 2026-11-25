@@ -43,6 +43,7 @@ let OPENING = `(endpoint, source) => {
       paint: null, usable: null,
       server: picture || !nav || !nav.responseStart ? null : nav.responseStart - nav.requestStart,
       estimated: false,
+      controlled: !!navigator.serviceWorker?.controller,
     }
     let id = !checked && crypto.randomUUID?.()
     let at = Math.floor(performance.timeOrigin)
@@ -133,7 +134,7 @@ let OPENING = `(endpoint, source) => {
 /** Script installed by a platform page or a picture that stands in for it. */
 export let openScript = (
   endpoint?: string,
-  source?: 'picture' | 'push',
+  source?: 'picture' | 'shell' | 'push',
 ): string =>
   `(${OPENING})(${
     endpoint
