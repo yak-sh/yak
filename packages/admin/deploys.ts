@@ -380,7 +380,8 @@ export let command = async (
 
 export class GitFailure extends Error {
   constructor(readonly command: string, readonly result: Ran) {
-    super(`git ${command} exited ${result.code}: ${result.err.trim()}`)
+    let detail = result.err.trim() || result.out.trim()
+    super(`git ${command} exited ${result.code}${detail ? `: ${detail}` : ''}`)
   }
 }
 

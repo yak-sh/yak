@@ -1,5 +1,11 @@
 import { equal, test } from '@yaks/testing'
-import { carrying, fileHistory, filesAt, objects } from './git-files.ts'
+import {
+  carrying,
+  commitCarried,
+  fileHistory,
+  filesAt,
+  objects,
+} from './git-files.ts'
 import { fileOf } from './push.ts'
 
 let encode = (text: string) => new TextEncoder().encode(text)
@@ -35,7 +41,7 @@ test('app history reads the platform hash already carried for this file', async 
   equal(await Array.fromAsync(history), [{ sha }, 'merged'])
 })
 
-test('app release batches files and resolves only file links at the commit', async () => {
+test('app release keeps the Git source path of each served file', async () => {
   let reads: string[][] = []
   let listed = [
     '100644 blob a\tapps/demo/z.bin',
@@ -49,7 +55,7 @@ test('app release batches files and resolves only file links at the commit', asy
     d: encode('gone'),
     'head:shared/file.txt': encode('linked'),
   }
-  let found = await filesAt(
+  let { files, source } = await filesAt(
     () => Promise.resolve(listed),
     (specs) => {
       reads.push(specs)
@@ -58,7 +64,7 @@ test('app release batches files and resolves only file links at the commit', asy
     'head',
     'apps/demo',
   )
-  equal(found, [
+  equal(files, [
     fileOf('a.txt', encode('linked')),
     fileOf('z.bin', encode('binary\0')),
   ])
@@ -66,4 +72,37 @@ test('app release batches files and resolves only file links at the commit', asy
     'head:shared/file.txt',
     'head:apps/demo/gone',
   ]])
+  equal(source('a.txt'), 'shared/file.txt')
+  equal(source('z.bin'), 'apps/demo/z.bin')
+  let prior = await Array.fromAsync(fileHistory(
+    (args) =>
+      Promise.resolve({
+        out: args[0] == 'show'
+          ? args[1] == 'old:shared/file.txt' ? 'prior linked text' : ''
+          : args.at(-1) == 'shared/file.txt'
+          ? 'old\x00\x01'
+          : '',
+        ok: true,
+        code: 0,
+        err: '',
+      }),
+    'a.txt',
+    source('a.txt'),
+    'head',
+  ))
+  equal(prior, ['prior linked text'])
+})
+
+test('carrying a file that leaves the index clean needs no commit', async () => {
+  let committed = false
+  await commitCarried(
+    '/tree',
+    (_cwd, args) => {
+      if (args[0] == 'commit') committed = true
+      return Promise.resolve('')
+    },
+    ['shared/file.txt'],
+    'Carry platform edit',
+  )
+  equal(committed, false)
 })

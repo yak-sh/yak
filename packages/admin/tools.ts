@@ -85,7 +85,7 @@ import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
 import { homeOf, push, type PushProgress, read, versions } from './push.ts'
-import { fileHistory, saveCarried } from './git-files.ts'
+import { fileHistory, saveCarried, workingSource } from './git-files.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 import { modelLine, operatorModel, operatorRows } from './model.ts'
@@ -922,22 +922,28 @@ export let runs = (
           to.app,
         ]),
       )
+      let run = (args: string[], cwd: string) => git(cwd, args, host.stopping)
+      let source = await workingSource(dir, run)
       let lines = await push(rpc(at.bearer), files, to, {
         ...known,
         checkout: {
-          earlier: (path) =>
-            fileHistory(
-              (args) => git(dir, args, host.stopping),
-              path,
-              `./${path}`,
-            ),
+          earlier: async function* (path) {
+            if (source) {
+              yield* fileHistory(
+                (args) => run(args, source.root),
+                path,
+                await source.path(path),
+              )
+            }
+          },
           write: (files) =>
             saveCarried(
               dir,
               to,
               files,
-              (args, cwd) => git(cwd, args, host.stopping),
+              run,
               `yak admin push as ${at.address}`,
+              source,
             ),
         },
         confirm: a.confirm === true,

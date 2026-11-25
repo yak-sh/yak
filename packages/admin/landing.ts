@@ -6,6 +6,7 @@
 import * as fs from '@yaks/file/io'
 import { CallError } from '@yaks/tools/errors'
 import { land, type Run } from '@yaks/git/land'
+import { GitFailure } from './deploys.ts'
 
 /** git as a landing runs it, and where it says what happened. */
 export type Landing = {
@@ -39,9 +40,9 @@ export let onMain = async (
   let need: Need = async (cwd, args, refusal) => {
     let r = await run(args, cwd)
     if (!r.ok) {
-      let message = `git ${args[0]} exited ${r.code}: ${r.err.trim()}`
-      if (refusal) throw new CallError(refusal, message)
-      throw new Error(message)
+      let error = new GitFailure(args[0], r)
+      if (refusal) throw new CallError(refusal, error.message)
+      throw error
     }
     return r.out.trim()
   }

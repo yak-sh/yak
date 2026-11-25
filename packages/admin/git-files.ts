@@ -1,6 +1,7 @@
 import * as fs from '@yaks/file/io'
-import { posix } from 'node:path'
+import { isAbsolute, posix, relative, resolve, sep } from 'node:path'
 import type { Ran, Run } from '@yaks/git/land'
+import type { Need } from './landing.ts'
 import { type Carried, type File, fileOf, type Target } from './push.ts'
 import { output } from './subprocess.ts'
 
@@ -12,6 +13,19 @@ export let writeCarried = async (dir: string, files: Carried[]) => {
     let at = `${dir}/${path}`
     await fs.mkdir(posix.dirname(at), { recursive: true })
     await fs.writeTextFile(at, content)
+  }
+}
+
+/** Stage the source paths that were written and commit only a changed tree. */
+export let commitCarried = async (
+  tree: string,
+  need: Need,
+  paths: string[],
+  message: string,
+) => {
+  await need(tree, ['--literal-pathspecs', 'add', '--', ...paths])
+  if (await need(tree, ['diff', '--cached', '--name-only', '-z'])) {
+    await need(tree, ['commit', '-q', '--no-verify', '-m', message])
   }
 }
 
@@ -59,6 +73,30 @@ export let fileHistory = async function* (
   }
 }
 
+/** The Git source of each file in a working directory, including file links. */
+export let workingSource = async (dir: string, run: Run) => {
+  let repo = await run(['rev-parse', '--show-toplevel'], dir)
+  if (!repo.ok) return
+  let root = repo.out.trim()
+  return {
+    root,
+    path: async (path: string) => {
+      let file = resolve(dir, path)
+      let target = await fs.realPath(file).catch((error) => {
+        if (fs.isNotFound(error)) return file
+        throw error
+      })
+      let source = relative(root, target)
+      if (
+        isAbsolute(source) || source == '..' || source.startsWith(`..${sep}`)
+      ) {
+        throw new Error(`${path} links outside the Git checkout`)
+      }
+      return source
+    },
+  }
+}
+
 /** A manual push commits any local work on the carried paths before replacing
  * it. Path-limited commits leave the rest of the caller's index alone. */
 export let saveCarried = async (
@@ -67,14 +105,13 @@ export let saveCarried = async (
   files: Carried[],
   run: Run,
   writer: string,
+  source: Awaited<ReturnType<typeof workingSource>>,
 ) => {
-  let repo = await run(['rev-parse', '--is-inside-work-tree'], dir)
-  if (!repo.ok || repo.out.trim() != 'true') {
-    return await writeCarried(dir, files)
-  }
-  let paths = files.map((f) => f.path)
+  if (!source) return await writeCarried(dir, files)
+  let { root } = source
+  let paths = await Promise.all(files.map(({ path }) => source.path(path)))
   let git = async (...args: string[]) => {
-    let r = await run(['--literal-pathspecs', ...args], dir)
+    let r = await run(['--literal-pathspecs', ...args], root)
     if (!r.ok) {
       throw new Error(
         `${writer}: git ${args[0]} failed in ${dir} for ${
@@ -85,11 +122,10 @@ export let saveCarried = async (
     return r.out
   }
 
-  let head = await run(['rev-parse', '--verify', 'HEAD'], dir)
+  let head = await run(['rev-parse', '--verify', 'HEAD'], root)
   let tracked = head.ok
     ? await git(
       'diff',
-      '--relative',
       '--name-only',
       '-z',
       'HEAD',
@@ -106,8 +142,17 @@ export let saveCarried = async (
     ...paths,
   )
   let local = (tracked + untracked).split('\0').filter(Boolean)
-  let commit = (message: string, selected: string[]) =>
-    git('commit', '--only', '--no-verify', '-m', message, '--', ...selected)
+  let commit = (message: string, selected: string[], ...flags: string[]) =>
+    git(
+      'commit',
+      '--only',
+      '--no-verify',
+      ...flags,
+      '-m',
+      message,
+      '--',
+      ...selected,
+    )
   if (local.length) {
     if (untracked) {
       await git(
@@ -123,9 +168,12 @@ export let saveCarried = async (
       local,
     )
   }
-  await writeCarried(dir, files)
+  await writeCarried(
+    root,
+    files.map((file, i) => ({ ...file, path: paths[i] })),
+  )
   await git('add', '--intent-to-add', '--', ...paths)
-  await commit(carrying(to, files, writer), paths)
+  await commit(carrying(to, files, writer), paths, '--allow-empty')
 }
 
 /** Git's NUL-delimited batch replies. Blob lengths frame the raw bytes, so
@@ -187,7 +235,7 @@ export let filesAt = async (
   read: Blobs,
   sha: string,
   dir: string,
-): Promise<File[]> => {
+) => {
   let listed = await run([
     'ls-tree',
     '-r',
@@ -210,19 +258,29 @@ export let filesAt = async (
     if (!bytes[i]) throw new Error(`git cat-file did not return blob ${oid}`)
     return bytes[i]!
   })
-  let links = entries.flatMap(({ path, link }, i) =>
-    link
-      ? [
-        `${sha}:${
-          posix.normalize(posix.join(posix.dirname(path), text.decode(own[i])))
-        }`,
-      ]
-      : []
-  )
-  let targets = links.length ? await read(links) : []
+  let links = new Map(entries.flatMap(({ path, rel, link }, i) => {
+    if (!link) return []
+    let target = text.decode(own[i])
+    let source = posix.join(posix.dirname(path), target)
+    return [[rel, posix.isAbsolute(target) ? target : source] as const]
+  }))
+  let targets = links.size
+    ? await read([...links.values()].map((path) => `${sha}:${path}`))
+    : []
   let next = 0
-  return entries.flatMap(({ rel, link }, i) => {
+  let sources = new Map<string, string>()
+  let files: File[] = entries.flatMap(({ rel, link }, i) => {
     let bytes = link ? targets[next++] : own[i]
+    if (link && bytes) sources.set(rel, links.get(rel)!)
     return bytes ? [fileOf(rel, bytes)] : []
   }).sort((a, b) => a.path < b.path ? -1 : 1)
+  return {
+    files,
+    source: (path: string) => {
+      if (links.has(path) && !sources.has(path)) {
+        throw new Error(`${dir}/${path} has no file target in Git`)
+      }
+      return sources.get(path) ?? `${dir}/${path}`
+    },
+  }
 }

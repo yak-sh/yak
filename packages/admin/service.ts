@@ -39,6 +39,7 @@ import { homeOf, push, versions } from './push.ts'
 import {
   blobs,
   carrying,
+  commitCarried,
   fileHistory,
   filesAt,
   writeCarried,
@@ -424,7 +425,12 @@ export let box = (
     },
     release: async (sha, to) => {
       let at = await account(host)(to.as ?? ADMIN)
-      let files = await filesAt(run, blobs(dir, stopping), sha, to.dir)
+      let { files, source } = await filesAt(
+        run,
+        blobs(dir, stopping),
+        sha,
+        to.dir,
+      )
       let key = JSON.stringify([zone(), at.address, 'main', to.space, to.app])
       return await push(rpc(at.bearer), files, to, {
         ...await versions(homeOf(host.config.db), key),
@@ -435,14 +441,21 @@ export let box = (
             fileHistory(
               (args) => git(dir, args, stopping),
               path,
-              `${to.dir}/${path}`,
+              source(path),
               sha,
             ),
           // What the app holds and git does not lands on main before the
           // release, so the next push carries it from git.
           write: async (carried) => {
             let writer = `deploy catch-up for ${to.space}/${to.app}`
-            let paths = carried.map((f) => `${to.dir}/${f.path}`)
+            let sources = carried.map((f) => ({ ...f, path: source(f.path) }))
+            let paths = [...new Set(sources.map((f) => f.path))]
+            let inputs = [
+              ...new Set([
+                ...paths,
+                ...carried.map((f) => `${to.dir}/${f.path}`),
+              ]),
+            ]
             let landed = await onMain(dir, `carry-${to.app}`, {
               run: (args, cwd) => git(cwd, args, stopping),
               out: () => {},
@@ -451,15 +464,13 @@ export let box = (
               formatCommit:
                 `${to.space}/${to.app}: format carried files for release`,
             }, async (tree, need) => {
-              await writeCarried(`${tree}/${to.dir}`, carried)
-              await need(tree, ['--literal-pathspecs', 'add', '--', ...paths])
-              await need(tree, [
-                'commit',
-                '-q',
-                '--no-verify',
-                '-m',
+              await writeCarried(tree, sources)
+              await commitCarried(
+                tree,
+                need,
+                paths,
                 carrying(to, carried, writer),
-              ])
+              )
               return []
             }, async (base, need) => {
               let changed = await need(dir, [
@@ -469,7 +480,7 @@ export let box = (
                 sha,
                 base,
                 '--',
-                ...paths,
+                ...inputs,
               ])
               if (changed) {
                 throw new Error(
@@ -484,7 +495,7 @@ export let box = (
             return await Promise.all(carried.map(async ({ path }) => ({
               path,
               content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(
-                await blob(`${landed}:${to.dir}/${path}`),
+                await blob(`${landed}:${source(path)}`),
               ),
             })))
           },
