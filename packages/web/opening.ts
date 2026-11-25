@@ -213,9 +213,9 @@ let SAID = SCRIPT.replace(/\n\s+/g, '\n')
 /** The style and script a page's head carries for `o`, before any file it
  * names. */
 export let openingHead = (o: Opening): string =>
-  `${style(o)}<script>(${SAID})(${JSON.stringify(o)},${JSON.stringify(PAGES)},${
-    JSON.stringify(FORGOT)
-  })</script>`
+  `${style(o)}<script ${OPENING}>(${SAID})(${JSON.stringify(o)},${
+    JSON.stringify(PAGES)
+  },${JSON.stringify(FORGOT)})</script>`
 
 let esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
 

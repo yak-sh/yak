@@ -42,7 +42,7 @@ let opening = (
     PerformanceObserver: { supportedEntryTypes: ['paint'] },
   }
   if (o.reporter === false) w[Symbol.for('yaks.early-report')] = () => []
-  let script = html.match(/<script>([\s\S]*?)<\/script>/)![1]
+  let script = html.match(/<script data-yak-opening>([\s\S]*?)<\/script>/)![1]
   new Function(
     'window',
     'top',
