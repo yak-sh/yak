@@ -85,6 +85,12 @@ export let immutable: { 'cache-control': string } = {
  * answer for a person. */
 export let browserImmutable: string = `private, max-age=${YEAR}, immutable`
 
+/** Freshness of a file whose bare address follows the app's current release. */
+export let staticCaching = (shared: boolean): string =>
+  shared
+    ? 'public, max-age=60, stale-while-revalidate=300'
+    : 'private, max-age=60, must-revalidate'
+
 // What a browser's request for a page's file says it loads (`Sec-Fetch-Dest`):
 // everything but a page, a frame, a worker's script and the data a page asks
 // for by its own fetch.
@@ -113,6 +119,14 @@ export let keptLong = (cache: string | null): boolean => {
   if (!cache || /no-cache|no-store/i.test(cache)) return false
   let age = /max-age=(\d+)/i.exec(cache)
   return /immutable/i.test(cache) || !!age && Number(age[1]) >= 86400
+}
+
+/** A load can reuse long-lived bytes or a fresh file it can revalidate. */
+export let assetKept = (headers: Headers): boolean => {
+  let cache = headers.get('cache-control')
+  if (!cache || /no-cache|no-store/i.test(cache)) return false
+  let age = /(?:^|,)\s*max-age=(\d+)/i.exec(cache)
+  return keptLong(cache) || headers.has('etag') && Number(age?.[1]) > 0
 }
 
 // Files' local Cache API entries survive deploys, so a deploy of the platform

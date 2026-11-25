@@ -290,11 +290,16 @@ test('a release file is kept for good, publicly for a public app', async () => {
 
 test('a file the worker hands on at its own address answers 304 when it is held', async () => {
   let font = await at('/made/fonts/f.ttf')
+  equal(
+    font.headers.get('cache-control'),
+    'private, max-age=60, must-revalidate',
+  )
   equal(await font.text(), 'font bytes')
   let held = await at('/made/fonts/f.ttf', {
     headers: { 'if-none-match': font.headers.get('etag')! },
   })
   equal(held.status, 304)
+  equal(held.headers.get('cache-control'), font.headers.get('cache-control'))
   equal(await held.text(), '')
 })
 

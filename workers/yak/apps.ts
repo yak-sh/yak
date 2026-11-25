@@ -185,15 +185,16 @@ import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, shown, told, unkept } from './page-cache.ts'
 import {
   type Alone,
+  assetKept,
   browserImmutable,
   CLIENT,
   fixed,
   immutable,
   keepable,
-  keptLong,
   loadsAsset,
   NAMED_CLIENT,
   passed,
+  staticCaching,
   uploaded,
 } from '@yaks/platform/kept'
 import { sessionCookie } from './browser-cookie.ts'
@@ -632,19 +633,12 @@ let released = (
   return rewrite.transform(page)
 }
 
-// What the browser may keep, and for how long. A new release moves the source
-// pointer, so nothing here may be held past a revalidation: `no-cache` is
-// "ask every time", not "do not store", and with an ETag beside it that ask
-// is answered by a 304 carrying no bytes. `private` on an app that is not
-// public keeps its pages out of every shared cache between here and the
-// person reading them, which is the whole of the rule: a private app's bytes
-// belong to its members and to no proxy.
-//
-// A file's validator is its content, and a page's is the document as sent
-// (`woven`).
+// Pages revalidate to follow the live release and the visitor's standing.
 export let keeping = (app: App) =>
   `${app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
+
+let sharedFiles = (app: App) => reads(mode(app.access), null) && !sandboxed(app)
 
 // Icons named by their inputs can stay in the browser across page swaps.
 // Unversioned requests and addresses from an earlier release revalidate.
@@ -673,14 +667,12 @@ let iconNamed = async (
     ? app.version && !app.source ? null : markVersion(app)
     : iconVersion(app, space, await iconArt(env, app))
 
-let caching = async (
+let iconCaching = async (
   req: Request,
   env: Env,
   space: Space,
   app: App,
-  path: string,
 ) => {
-  if (path != '/icon.png') return keeping(app)
   let q = new URL(req.url).searchParams
   let display = q.has('display')
   let version = await iconNamed(env, space, app, display)
@@ -707,7 +699,7 @@ let iconAsked = async (req: Request, env: Env, space: Space, app: App) => {
         encodeURIComponent(version ?? '')
       }`,
     etag: own ? etagOf(own.original.slice(0, 24)) : null,
-    cache: await caching(req, env, space, app, '/icon.png'),
+    cache: await iconCaching(req, env, space, app),
   }
 }
 
@@ -783,7 +775,7 @@ export let unwritten = async (
 ) => {
   if (path == '/icon.png') {
     let display = new URL(req.url).searchParams.has('display')
-    let cache = await caching(req, env, space, app, path)
+    let cache = await iconCaching(req, env, space, app)
     let drawn = app.generatedIcon && await r2RawObjects(env.BLOBS).open(
       generatedIconKey(space, app),
     )
@@ -1153,10 +1145,16 @@ let asset = async (
     if (path == `/${MANIFEST}` && req.method == 'GET') {
       got = await paintedManifest(req, got, app)
     }
+    // A worker can hand Files' answer out under its own access rules.
+    let cache = path == '/icon.png'
+      ? await iconCaching(req, env, space, app)
+      : path == `/${MANIFEST}` || got.status == 416
+      ? keeping(app)
+      : staticCaching(sharedFiles(app) && !bearing(req))
     return await media(
       req,
       got,
-      await caching(req, env, space, app, path),
+      cache,
       () => files.fileBytes(env, app.eid, prefix, path, app.source ?? ''),
     ) ?? nothingHere(env)
   }
@@ -1423,17 +1421,15 @@ let releasedAlias = async (
   return assetRedirect(req, mount, path, asset)
 }
 
-// A page's file that answered at an address it can be asked again at (the
-// app's own path, not a release's) is fetched again on the page's next load:
-// told to the tracker, once per app and path while the isolate lives, so a
-// regression in what gets kept shows up the day it lands (T-3170).
+// Report a page's file that loads without reusable bytes, once per app and
+// path while the isolate lives (T-3170).
 let noticed = new Set<string>()
 // One its answer says must not be kept (`no-store`, a picture whose consent
 // can be taken back) is a decision, not a miss.
 let mutable = (req: Request, app: App, page: Response) => {
   if (page.status != 200 || !loadsAsset(req)) return
   let cache = page.headers.get('cache-control')
-  if (keptLong(cache) || /no-store/i.test(cache ?? '')) return
+  if (assetKept(page.headers) || /no-store/i.test(cache ?? '')) return
   let path = new URL(req.url).pathname
   let key = `${app.eid} ${path}`
   if (noticed.has(key) || noticed.size > 1000) return
@@ -1494,7 +1490,7 @@ let versionedAsset = async (
   return await media(
     req,
     got,
-    app.access == 'public' ? immutable['cache-control'] : browserImmutable,
+    sharedFiles(app) ? immutable['cache-control'] : browserImmutable,
     () => files.fileBytes(env, app.eid, source, path, source),
   ) ?? json(404, 'no_such_file')
 }
@@ -1667,9 +1663,7 @@ let appDoor = async (
       return asset?.sha == sha ? asset : null
     }
     let current = await inRelease(app.source)
-    let cache = app.access == 'public'
-      ? immutable['cache-control']
-      : browserImmutable
+    let cache = sharedFiles(app) ? immutable['cache-control'] : browserImmutable
     if (current?.public) return contentBytes(req, raw, current, cache)
     if (mayUse) {
       if (current) return contentBytes(req, raw, current, cache)

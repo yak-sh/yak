@@ -73,6 +73,27 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     }
 
     await wrote('first')
+    let bare = '/page/images/bg.svg?view=grid'
+    let imageHeaders = { 'sec-fetch-dest': 'image' }
+    let plain = await at(bare, { headers: imageHeaders })
+    assertEquals(plain.status, 200)
+    let plainCache = plain.headers.get('cache-control')
+    assertEquals(plainCache, 'public, max-age=60, stale-while-revalidate=300')
+    let plainTag = plain.headers.get('etag')!
+    assertMatch(plainTag, /^"[0-9a-f]+"$/)
+    assertEquals(await plain.text(), '<svg>first</svg>')
+    let readAgain = await at(bare, {
+      headers: { ...imageHeaders, cookie, 'if-none-match': plainTag },
+    })
+    assertEquals(readAgain.status, 304)
+    assertEquals(readAgain.headers.get('cache-control'), plainCache)
+    assertEquals(readAgain.headers.get('etag'), plainTag)
+    assertEquals(await readAgain.text(), '')
+    let plainHead = await at(bare, { method: 'HEAD' })
+    assertEquals(plainHead.headers.get('cache-control'), plainCache)
+    assertEquals(plainHead.headers.get('etag'), plainTag)
+    assertEquals(await plainHead.text(), '')
+
     let firstPage = await at('/page/')
     let firstTag = firstPage.headers.get('etag')
     let first = await firstPage.text()
@@ -147,6 +168,11 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertEquals(await range.text(), 'body')
 
     await wrote('second')
+    let changedImage = await at(bare, {
+      headers: { 'if-none-match': plainTag },
+    })
+    assertEquals(changedImage.status, 200)
+    assertEquals(await changedImage.text(), '<svg>second</svg>')
     let conditional = await at('/page/', {
       headers: { 'if-none-match': firstTag! },
     })
@@ -180,9 +206,30 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertEquals(await (await at(css2)).text(), changed)
 
     await agent.tool('app_set', { ...app, access: 'private' })
+    let signedOut = await at(bare, {
+      headers: { ...imageHeaders, 'if-none-match': plainTag },
+      redirect: 'manual',
+    })
+    assertEquals(signedOut.status, 303)
+    let privateImage = await at(bare, { headers: { ...imageHeaders, cookie } })
+    assertEquals(privateImage.status, 200)
+    assertEquals(
+      privateImage.headers.get('cache-control'),
+      'private, max-age=60, must-revalidate',
+    )
+    assertEquals(await privateImage.text(), '<svg>first</svg>')
+    let privateAgain = await at(bare, {
+      headers: { ...imageHeaders, cookie, 'if-none-match': plainTag },
+    })
+    assertEquals(privateAgain.status, 304)
+    assertEquals(privateAgain.headers.get('etag'), plainTag)
     assertEquals((await at(css1)).status, 401)
     let member = await at(css1, { headers: { cookie } })
     assertEquals(member.status, 200)
+    assertEquals(
+      member.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
     assertEquals(await member.text(), sheet)
 
     await agent.tool('app_set', { ...app, access: 'public' })
