@@ -1514,11 +1514,12 @@
   }
 
   /* The plans, on the home page and the pricing page: narrower than the
-     examples, since there are only three. */
+     examples, since there are only three, and as wide as their words are
+     large. */
   .Cost {
     display: grid;
     gap: 1.25rem;
-    width: min(100%, 52rem);
+    width: min(100%, 49em);
     justify-self: center;
   }
 
@@ -1796,7 +1797,7 @@
 
   .Plan_Price {
     color: var(--text);
-    font-size: 2rem;
+    font-size: calc(var(--size) * 1.9);
     font-weight: 800;
     line-height: 1.1;
   }

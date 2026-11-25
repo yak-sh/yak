@@ -1,6 +1,14 @@
 @import url('style.css');
 
+/* The home page's type scale: the site's tokens re-pointed so its words grow
+   with the window, from a phone's 18px body to 21px on a wide screen, and
+   every part sized by a token grows with them. */
 .Story_Page {
+  --size: clamp(1.125rem, 1rem + .3vw, 1.3125rem);
+  --small: clamp(1rem, .875rem + .25vw, 1.125rem);
+  --fine: clamp(.9375rem, .8125rem + .25vw, 1.0625rem);
+  --lead: clamp(1.25rem, 1.05rem + .45vw, 1.5rem);
+  --title-size: clamp(1.5rem, 1.1rem + 1vw, 2.15rem);
   --measure: 45rem;
   --phone-width: 22rem;
   --phone-height: clamp(6rem, 18dvh, 8.5rem);
@@ -55,7 +63,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: clamp(1rem, 1.8vw, 1.65rem);
-  max-width: 42rem;
+  max-width: 48rem;
 }
 
 .Home_Story .Home_Words > * {
@@ -63,7 +71,7 @@
 }
 
 .Home_Story .Title-hero {
-  --title-size: clamp(2.35rem, 3.9vw, 4.4rem);
+  --title-size: clamp(2.35rem, 1.25rem + 3.4vw, 4.75rem);
   text-wrap: balance;
   color: light-dark(#293843, #f1f1f8);
 }
@@ -75,7 +83,7 @@
 }
 
 .Home_Lead {
-  max-width: 34rem;
+  max-width: 30em;
   color: inherit;
 }
 
@@ -87,7 +95,7 @@
 }
 
 .Home_Ask-hero {
-  max-width: 35rem;
+  max-width: 40rem;
   align-items: end;
 }
 
@@ -719,7 +727,7 @@
   display: flex;
   align-items: start;
   gap: .75rem;
-  font-size: clamp(1.5rem, 1rem + 1.2vw, 2.15rem);
+  font-size: clamp(1.6rem, 1.1rem + 1.4vw, 2.5rem);
   line-height: 1.2;
 }
 
@@ -872,7 +880,7 @@
   border: 1px solid light-dark(#ced6e5, #4e596e);
   border-radius: .9rem;
   background: light-dark(#fbfcff, #282e3b);
-  font: .86rem/1.55 system-ui, sans-serif;
+  font: var(--fine)/1.55 system-ui, sans-serif;
   color: light-dark(#263249, #e6eaf3);
 }
 
@@ -974,6 +982,8 @@
 
 .Home_Details {
   gap: clamp(2.5rem, 5vw, 5rem);
+  width: min(100%, 49em);
+  justify-self: center;
   padding-block: 3rem 1rem;
 }
 
@@ -1047,7 +1057,7 @@
 
 .Home_FootLead {
   display: grid;
-  grid-template-columns: auto minmax(0, 32rem);
+  grid-template-columns: auto minmax(0, 34em);
   gap: .7rem;
   align-items: center;
   margin-block-end: 2rem;
@@ -1093,8 +1103,8 @@
 
 @media (width >= 64rem) {
   .Story_Page {
-    --measure: min(94rem, 78vw);
-    --phone-width: clamp(18rem, 25vw, 23rem);
+    --measure: min(100rem, 100% - 2 * max(7rem, 9vw));
+    --phone-width: clamp(18rem, 25vw, 26rem);
     --phone-height: clamp(10rem, calc(100dvh - 16rem), 45rem);
   }
 
@@ -1113,7 +1123,7 @@
     position: absolute;
     right: calc(100% + .85rem);
     bottom: 1.3rem;
-    width: clamp(5.5rem, 9vw, 8rem);
+    width: clamp(5.5rem, 8vw, 8rem);
     margin: 0;
   }
 
