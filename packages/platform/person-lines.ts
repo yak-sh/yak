@@ -22,7 +22,7 @@ import { offersSpace } from './update-rows.ts'
 import { reachedLine } from './operator-settings.ts'
 import { listedSpace } from './space-apps.ts'
 import { peopleLine } from './people-rows.ts'
-import { paymentLine } from './payment-rows.ts'
+import { paymentLine, paymentPart } from './payment-rows.ts'
 import { spaceLine } from './space-pages.ts'
 import { draftedApp } from './app-canvas.ts'
 import { GRANTS } from './agents.ts'
@@ -100,13 +100,11 @@ let DIRECTORY_VIEWS = [
   // A space's plan, seller, credit and month (payment-rows).
   'plan',
   'seller',
-  'credit',
   'comped',
   'comp',
   'fee',
   'budget',
   'starter',
-  'meter',
   // A space's domains and phone numbers (space-pages).
   'hostname',
   'domain_order',
@@ -151,6 +149,13 @@ export let personChanges = (bundles: Bundle[]) => {
     bundles.some((b) =>
       ['$delete', 'connection', 'uses', 'mcp_server'].some((key) => key in b)
     )
+  // Model reservations and settlements move the paying space's month.
+  // Its payment views read the meter and credit. Other directory views do
+  // not need to reread their seats on every model call.
+  let spending = new Set(
+    bundles.filter((b) => 'meter' in b || 'credit' in b)
+      .map((b) => b.entity.eid),
+  )
   let presence = bundles.some((b) => 'whereabouts' in b)
   return {
     releases: other && connections ? [] : releases,
@@ -160,7 +165,9 @@ export let personChanges = (bundles: Bundle[]) => {
       let space = releaseSpace(line)
       if (space && spaces.has(space)) return true
       if (movedSpace(line) != undefined) return connections
-      return other || line == FRIENDS && presence
+      let payment = paymentPart(line)
+      return other || line == FRIENDS && presence ||
+        !!payment && spending.has(payment.space)
     },
   }
 }
