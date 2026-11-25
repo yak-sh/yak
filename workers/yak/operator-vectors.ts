@@ -7,9 +7,9 @@
 // A store uses the space it keeps, or learns it from its sessions
 // (operator-root.ts `spaceOf`). Its texts stay owed until that space is known.
 import type { Embedder } from '@yaks/embedding'
+import { once } from '@yaks/fp'
 import type { Env } from './env.ts'
-import { embedder, withheld } from './embedding.ts'
-import { embeddings } from './metered.ts'
+import { SPACE } from './embedding-model.ts'
 import { spaceOf } from './operator-root.ts'
 import type { OperatorStore, Vectors } from './operator-store.ts'
 import { caught } from './defects.ts'
@@ -29,11 +29,21 @@ export let operatorVectors = (
   // before its first session was written answers no space, and is asked again.
   let asking: Promise<void> | null = null
   let again = false
-  let lend = (eid: string) =>
-    embedder({
-      ...env,
-      AI: withheld(embeddings(env, async (dir) => await dir.at(eid) ?? null)),
+  let lend = (eid: string): Embedder => {
+    let wired = once(async () => {
+      let [{ embedder, withheld }, { embeddings }] = await Promise.all([
+        import('./embedding.ts'),
+        import('./metered.ts'),
+      ])
+      let model = embedder({
+        ...env,
+        AI: withheld(embeddings(env, async (dir) => await dir.at(eid) ?? null)),
+      })
+      if (!model) throw new Error('Operator embedder is unavailable')
+      return model
     })
+    return { model: SPACE, embed: async (text) => (await wired()).embed(text) }
+  }
   let model = (): Embedder | null => {
     if (made || !env.AI) return made
     let at = spaceOf(o.space())

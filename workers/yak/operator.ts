@@ -240,7 +240,7 @@ import {
   TOPIC,
   topicOf,
 } from './operator-oracles.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { outsiders, spaceConnections } from './connections.ts'
 import { sandboxed } from '@yaks/platform/installs'
 

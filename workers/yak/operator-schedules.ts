@@ -18,7 +18,7 @@
 // rests until the next. The tools are the Operator's published ones; their
 // names and schemas are kept (M-37853).
 import { line } from '@yaks/query'
-import { type Bundle, derivedEid, type Plugin } from '@yaks/graph'
+import { type Bundle, derivedEid } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { type Tool, type ToolContext, topOf } from '@yaks/session'
 import {
@@ -416,20 +416,6 @@ export let heard = (store: Store, mine: boolean, now = Date.now()) =>
     now,
     { which: (b) => !!watchOf(b)?.local == mine },
   )
-
-/** What tells the Operator's store of its own commits, for the
- * subscriptions over it: `stirred` after each commit beyond the scheduler's
- * own (one of wakes alone, as a look that rests writes), so a look never
- * stirs another. */
-export let ownCommits = (stirred: () => void): Plugin => ({
-  name: 'yak/subscriptions',
-  hooks: {
-    effect: (bundles) => {
-      if (bundles.some((b) => !b.wake)) stirred()
-      return bundles
-    },
-  },
-})
 
 /** How many subscriptions one batch of `uncadenced` moves. */
 let BATCH = 50

@@ -10,17 +10,10 @@ import type { Meta } from '@yaks/sqlite'
 import { type Attached, attachedTo, attachmentOf } from '@yaks/blob/attachment'
 import { and, eq, fields, list } from '@yaks/query/core'
 import type { Graph } from '@yaks/graph'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
+import { FILES } from './operator-file-marks.ts'
 import type { Space } from './directory.ts'
 import type { Kept } from './operator-draw.ts'
-
-/** Where a store says no line of it names its files on itself any more
- * (files-move.ts `filesBackfill`). */
-export let FILES = 'operator:files'
-
-/** Where a store says its inputs' items are all in @yaks/session's
- * `intake{item}` (files-move.ts `intakeBackfill`). */
-export let INTAKE = 'operator:intake'
 
 /** A line's files and the message they are attached beside, which the
  * conversation's links to them name (`?attachment=<message>&file=<i>`). */

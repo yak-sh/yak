@@ -7,7 +7,7 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { owns } from './operator-access.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { asIs, fileText, SHOWN } from './operator-channels.ts'
 import {
   attachmentId,

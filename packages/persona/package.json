@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./name": "./name.ts",
     "./part": "./part.ts",
     "./tools": "./tools.ts",
     "./effects": "./effects.ts",

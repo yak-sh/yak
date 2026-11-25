@@ -24,7 +24,7 @@ import { type Blobs, blobSchema, memoryBlobs, sqliteBlobs } from '@yaks/blob'
 import { prefixes } from '@yaks/id'
 import { phoneTexts } from './phone-move.ts'
 import { channeled, CHANNELS } from './channel-move.ts'
-import { FILES, INTAKE } from './operator-files.ts'
+import { FILES, INTAKE } from './operator-file-marks.ts'
 import { operatorDoc } from '@yaks/platform/operator-vocab'
 import { ORACLES, PROJECTS } from './oracle-move.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
@@ -147,7 +147,7 @@ export type Vectors = {
 export let operatorStore = async (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
-  lends: Pick<Bound, 'senders' | 'chatters'> = {},
+  lends: Pick<Bound, 'senders' | 'chatters' | 'chatter'> = {},
   vectors?: Vectors,
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
@@ -285,6 +285,7 @@ export type Bound = {
   extend?: Extension[]
   senders?: Host['senders']
   chatters?: Host['chatters']
+  chatter?: Host['chatter']
   fit?: () => void
   effects?: Parameters<typeof effects>[1]
   /** the drains of its vectors, which a committed write starts */
@@ -303,6 +304,7 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
       ...lent('operator', bound.blobs ?? memoryBlobs()),
       senders: bound.senders ?? {},
       chatters: bound.chatters ?? {},
+      chatter: bound.chatter,
       ...bound.meaning ? { meaning: bound.meaning } : {},
     },
     // A text a write changed is embedded once it has committed.
@@ -346,8 +348,8 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     fx: host.fx,
     meaning: host.meaning,
     vocab: host.vocab,
-    /** the chatters lent it, by platform (chat.ts `chatters`) */
-    chatters: host.chatters,
+    /** the chatter lent it for a platform (chat.ts `chatters`) */
+    chatter: (via: string) => host.chatters?.[via] ?? host.chatter?.(via),
     known,
     // A tool's answer as its reader reads it (@yaks/tools `drawing`).
     readable: drawing(host.vocab, known),

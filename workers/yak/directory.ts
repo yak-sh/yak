@@ -13,7 +13,7 @@ import {
 } from '@yaks/query'
 import { after, together } from '@yaks/fp'
 import type { Row as WhereaboutsRow } from '@yaks/notify/whereabouts'
-import { christened, pick } from '@yaks/persona'
+import { christened, pick } from '@yaks/persona/name'
 import { calledOf } from './operator-name.ts'
 import type { Door as Entry } from './arrival.ts'
 import {

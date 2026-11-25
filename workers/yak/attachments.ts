@@ -11,20 +11,7 @@ import { operatorDoor } from './build-door.ts'
 import type { Who } from './session.ts'
 import type { Bundle } from '@yaks/graph'
 
-/** Where the space keeps the Operator's attachments in the bucket. */
-let attachmentPrefix = (space: Pick<Space, 'store'>) =>
-  `${space.store}/.operator/`
-
-/** Where the attachment with this digest is kept in the space's bucket.
- *
- * ```ts
- * import { attachmentKey } from './attachments.ts'
- * import { assertEquals } from '@std/assert'
- * assertEquals(attachmentKey({ store: 'ada' }, 'c0ffee'), 'ada/.operator/c0ffee')
- * ```
- */
-export let attachmentKey = (space: Pick<Space, 'store'>, sha: string) =>
-  attachmentPrefix(space) + sha
+import { attachmentPrefix } from './attachment-key.ts'
 
 /** The space's Operator attachments, a @yaks/blob store under their prefix,
  * counted as every trip to the bucket is (lib/objects.ts). */

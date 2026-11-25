@@ -40,7 +40,8 @@ import {
 import { operating } from './operator.ts'
 import { receive } from './operator-channels.ts'
 import { sandboxes } from '../../packages/sandbox/testing.ts'
-import { attachmentBytes, attachmentKey } from './attachments.ts'
+import { attachmentBytes } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { digest } from '@yaks/graph/sha256'
 

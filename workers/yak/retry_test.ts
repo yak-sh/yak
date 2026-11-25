@@ -2,7 +2,7 @@
 // before failing, and each new stub permits only one call.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { wiped } from './build-door.ts'
+import { WALKED, WALKTHROUGH, wiped } from './build-door.ts'
 import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import type { Namespace } from '@yaks/durable-object/door'
@@ -17,7 +17,7 @@ import {
 } from '@yaks/sandbox/cloudflare'
 import { backoff, evicted, retried } from '@yaks/durable-object'
 import { listen, rostered, said, told } from './stream.ts'
-import { asked, WALKED, WALKTHROUGH } from './walkthrough.ts'
+import { asked } from './walkthrough.ts'
 import { fetchOf } from './door.ts'
 import { namespace } from '../../packages/durable-object/testing.ts'
 

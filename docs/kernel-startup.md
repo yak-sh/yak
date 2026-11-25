@@ -701,3 +701,58 @@ medians of 8 alternating rounds), main at `2052f6b4c` against this change:
 | The Builder's class alone           |   20 → 13 | 1.14 → 0.57 MB |    52 → 30 |      18 → 5 |
 | A space's page (kernel.ts)          |   61 → 72 | 1.46 → 1.31 MB |    69 → 64 |     19 → 19 |
 | A Store (graph.ts)                  | 105 → 120 | 2.35 → 2.20 MB |   104 → 98 |     31 → 27 |
+
+## Cold Operator Updates read (T-3613)
+
+A fresh Deno process drove the emitted Builder's `/operator/updates` door
+against a copy of the checks Operator store. The loader hook counted the emitted
+chunks that the read opened, including any dynamic imports it ran. Uncached load
+time is the median of five fresh processes importing those chunks with Deno's
+code cache disabled.
+
+| Cumulative change                                                         | Chunks loaded | Emitted MB | Load ms |
+| ------------------------------------------------------------------------- | ------------: | ---------: | ------: |
+| Starting checkout, `f27059922`                                            |           274 |       4.82 |     608 |
+| Defer mail, chat, vector providers and subscription work                  |           199 |       3.65 |     389 |
+| Separate Operator settings data and defer persona code                    |           190 |       2.75 |     373 |
+| Separate file migration marks                                             |           191 |       2.75 |     362 |
+| Separate attachment keys                                                  |           189 |       2.70 |     380 |
+| Defer room and walkthrough code and narrow the directory's persona import |           170 |       2.39 |     305 |
+
+The starting and final reads returned identical Updates JSON. These are
+module-load timings in Deno. The previous 59-chunk count in `d6e29ff9f` covered
+a narrower set of entry points.
+
+The eager edges returned with these changes:
+
+- `cc0835f68` imported the persona module for the settings overlay. `1adffdce6`
+  also brought it in through the settings socket read.
+- `1ad52d4f7` imported the file migration mark into store boot and the
+  attachment door into conversation reads. `c17a72711` added the intake mark.
+- `2c4caf692`, `eddc03fd8`, `6bffb71a4` and `564bb8b70` loaded the mail sender,
+  vector provider, chatters and subscription scheduler during boot.
+- `c894bb65e` and `bf81e7ffb` added the room code and jq-backed result reads to
+  the conversation host. `be295fa43` imported the persona package into directory
+  reads for naming helpers.
+
+Every kernel build prints the static closure from the Updates entry points,
+including the Operator store's graph and effect facets. For the exact emitted
+path, run the probe below from the repository root. The first command that runs
+the probe records the modules opened by the read. The second replays only those
+imports in a new process.
+
+```sh
+mkdir -p .scratch/operator-read
+deno run -A workers/yak/gen.ts
+deno run -A workers/yak/assets.ts
+deno run -A workers/yak/bundle.ts .scratch/operator-read/out .scratch/operator-read/meta.json
+deno run -A --no-check --no-code-cache bench/operator-read.ts \
+  .scratch/operator-read/out .scratch/operator-read/meta.json.modules.json \
+  > .scratch/operator-read/read.json
+deno run -A --no-check --no-code-cache bench/operator-read.ts \
+  .scratch/operator-read/out .scratch/operator-read/read.json --load
+```
+
+On yaks.app, `operator_boot_wait` identifies the Builder request that started
+the store. Its duration is inside `operator_wait`, which can sum overlapping
+calls.

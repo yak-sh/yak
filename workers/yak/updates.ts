@@ -45,7 +45,7 @@ export { type Apps, bySha, chatAt, draftAt }
 import { lastDay } from './views.ts'
 import { PICTURES } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { type Directory, directory, directoryOf, fetch } from './directory.ts'
 import { EID, inApp } from './tool.ts'
 import { linkOf } from './preview.ts'

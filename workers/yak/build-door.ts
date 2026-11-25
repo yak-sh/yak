@@ -5,7 +5,7 @@ import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { ahead, fetchOf, HEARD, WAKE } from './door.ts'
 import type { Space } from './directory.ts'
-import { type Settings, worn } from './operator-persona.ts'
+import { type Settings, worn } from './operator-settings.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { url } from '@yaks/platform/host'
@@ -36,6 +36,10 @@ export let paged = (attached: unknown): boolean =>
 /** The header the kernel names the space with at the handshake — the object's
  * own name is that eid, and this is how it learns it. */
 export let SPACE = 'x-space-eid'
+
+/** Where the kernel asks for a walkthrough and where a visitor steps in. */
+export let WALKTHROUGH = '/operator/walkthrough'
+export let WALKED = '/operator/walked'
 
 /** The header the kernel says the space it read in, beside its vouch for the
  * asker's seat there (session.ts `vouched`): the object takes the kernel's

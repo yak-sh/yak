@@ -4,13 +4,8 @@ import { mint } from '@yaks/graph'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { inputOf } from '@yaks/session/intake'
 import { operatorMemory } from './operator-testing.ts'
-import {
-  attachedOf,
-  type File,
-  FILES,
-  filesOf,
-  INTAKE,
-} from './operator-files.ts'
+import { attachedOf, type File, filesOf } from './operator-files.ts'
+import { FILES, INTAKE } from './operator-file-marks.ts'
 import { BATCH, filesBackfill, intakeBackfill } from './files-move.ts'
 import { ATTACHMENTS } from './attachment-move.ts'
 import { OUTPUTS } from './operator-store.ts'

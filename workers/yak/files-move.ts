@@ -17,7 +17,7 @@ import type { Meta } from '@yaks/sqlite'
 import { attachedTo, attachmentOf } from '@yaks/blob/attachment'
 import { ATTACHMENTS } from './attachment-move.ts'
 import { OUTPUTS } from './operator-store.ts'
-import { FILES, INTAKE } from './operator-files.ts'
+import { FILES, INTAKE } from './operator-file-marks.ts'
 
 /** How many lines one batch moves. */
 export let BATCH = 50

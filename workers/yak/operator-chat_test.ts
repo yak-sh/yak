@@ -6,7 +6,8 @@
 // page and in its instructions.
 
 import { settingsAt } from './build-door.ts'
-import { checked, type Settings } from './operator-persona.ts'
+import { checked } from './operator-persona.ts'
+import type { Settings } from './operator-settings.ts'
 import { CallError } from '@yaks/tools/errors'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'

@@ -18,7 +18,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
-import { type Chatter, type Control, Unsent } from '@yaks/host/senders'
+import { type Control, Unsent } from '@yaks/host/senders'
 import { notice } from './mod.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -40,7 +40,7 @@ export let owed = (message: Bundle | undefined): boolean =>
  * host's reporter hears it.
  */
 export let posting = (
-  chatterOf: (via: string) => Chatter | undefined,
+  chatterOf: NonNullable<Host['chatter']>,
   now = (): string => new Date().toISOString(),
 ): Handler =>
 async (event, tx, write, attempt) => {
@@ -60,7 +60,7 @@ async (event, tx, write, attempt) => {
     await bounce(why)
     throw new Error(`chat message ${entity.eid}: ${why}`)
   }
-  let chatter = chatterOf(via)
+  let chatter = await chatterOf(via)
   let waiting = !chatter
     ? `waiting for a chatter: nothing lends ${via}`
     : chatter.waiting?.()
@@ -114,6 +114,8 @@ async (event, tx, write, attempt) => {
 
 /** `@yaks/chat/effects`: `chat_post`, through the chatter the host lends for
  * each message's platform. */
-export let effects = (host?: Pick<Host, 'chatters'> | null): Handlers => ({
-  chat_post: posting((via) => host?.chatters?.[via]),
+export let effects = (
+  host?: Pick<Host, 'chatters' | 'chatter'> | null,
+): Handlers => ({
+  chat_post: posting((via) => host?.chatters?.[via] ?? host?.chatter?.(via)),
 })

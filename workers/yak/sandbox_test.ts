@@ -52,7 +52,7 @@ import { meta } from './meta.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
 import { SECONDS } from '@yaks/platform/plans'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { digest } from '@yaks/graph/sha256'
 import {
   operatorMemory,

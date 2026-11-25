@@ -16,7 +16,8 @@ import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
 import { envelope, signed, signedFor } from '@yaks/platform/letters'
 import { sha256 } from '@yaks/graph/sha256'
-import { attachmentKey, attachments } from './attachments.ts'
+import { attachments } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { type Put, stage } from '@yaks/blob'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { attachedOf, type File } from './operator-files.ts'
@@ -754,8 +755,10 @@ export let chatHeard = async (
     item,
     leads,
   )
-  let working = operator.store.chatters?.[via]?.working
-  if (fresh && session && working) {
+  let working = fresh && session
+    ? (await operator.store.chatter(via))?.working
+    : undefined
+  if (session && working) {
     let shown = showing(
       {
         every: working.every,

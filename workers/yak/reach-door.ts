@@ -100,7 +100,7 @@ import { CallError, refused as toolRefused } from '@yaks/tools/errors'
 import { workerUpgrade } from '@yaks/workerd'
 import { inReach } from './declared.ts'
 import { builderOf, operatorDoor, settingsAt, SPACE } from './build-door.ts'
-import { checked, wearing } from './operator-persona.ts'
+import { wearing } from './operator-settings.ts'
 import { caught } from './defects.ts'
 import type { Directory } from './directory.ts'
 import { storeOf } from './door.ts'
@@ -400,6 +400,7 @@ export let reachDoor = async (
             { status: 403 },
           )
         }
+        let { checked } = await import('./operator-persona.ts')
         return Response.json([await settingsOf(seat, checked(setting.set))])
       }
       // A pick on the Matches page, made as the person, answered with the

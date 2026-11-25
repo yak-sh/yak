@@ -119,6 +119,8 @@ export interface Host {
    * @yaks/chat's `chat_post` by the platform's name. The host owns which
    * bot's credential each connection posts with. */
   chatters?: Readonly<Record<string, Chatter>>
+  /** Resolve a named chatter on demand if none was lent at assembly. */
+  chatter?: (via: string) => Chatter | undefined | Promise<Chatter | undefined>
   /** Explicit workspace execution bindings; never an implicit local default. */
   workspaces?: import('@yaks/machine/targets').Workspaces
   /** Default sandbox intentions; provisioning is the sandbox effect's work. */

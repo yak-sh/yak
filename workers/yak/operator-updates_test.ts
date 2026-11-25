@@ -18,7 +18,7 @@ import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer, updatesApply } from './updates.ts'
 import { clock } from './timing.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { spaced, talkPath } from '@yaks/platform/routes'
 import { present } from './whereabouts.ts'
 

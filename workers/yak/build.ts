@@ -10,15 +10,16 @@ import type { Hibernation, Wire } from '@yaks/durable-object'
 import { type DurableStorage, freely } from '@yaks/durable-object/sql'
 import type { Alarms } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
+import { once } from '@yaks/fp'
 import { type Level, writes } from '@yaks/member'
 import { directory } from './directory.ts'
 import { onceRead, restart, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
-import type { Settings } from './operator-persona.ts'
+import type { Settings } from './operator-settings.ts'
 import type { Env } from './env.ts'
 import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
-import { reported, type Tally, tallying } from './lib/hops.ts'
+import { hop, reported, type Tally, tallying } from './lib/hops.ts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -26,9 +27,10 @@ import { managePath } from '@yaks/platform/routes'
 import type { Handoff } from '@yaks/platform/operator-handoff'
 import { HEARD, WAKE } from './door.ts'
 import { type Tab, tabSaid, tabsState } from '@yaks/notify/whereabouts'
-import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
 import { GRAPH, type Graphed } from './operator-graph.ts'
+import { ownCommits } from './operator-commits.ts'
+import { operatorVectors } from './operator-vectors.ts'
 import { type Bookmarked, bookmarks, RESTORING } from './bookmarks.ts'
 import {
   NOBODY,
@@ -37,6 +39,7 @@ import {
   paged,
   seatOf,
   SPACE,
+  WALKTHROUGH,
 } from './build-door.ts'
 
 /**
@@ -724,6 +727,7 @@ export class Builder extends Durable {
     return this.#store ??= unstopped(
       () => this.#store = undefined,
       async () => {
+        let starting = Date.now()
         let { operatorStore, owing } = await import('./operator-store.ts')
         let { SLICE } = await import('@yaks/durable-object/alarm')
         let { operatorFrames } = await import('./operator-host.ts')
@@ -747,9 +751,16 @@ export class Builder extends Durable {
               .catch((e) => caught(e, { request: 'operator effects' })),
           )
         }
-        let { operatorPost } = await import('./metered.ts')
-        let { operatorVectors } = await import('./operator-vectors.ts')
-        let { chatters } = await import('./chat.ts')
+        let post = once(async () => {
+          let { operatorPost } = await import('./metered.ts')
+          return operatorPost(this.#env, async (letter) => {
+            let { owes } = await import('./operator-channels.ts')
+            return await owes(store, letter)
+          })
+        })
+        let chat = once(async () =>
+          (await import('./chat.ts')).chatters(this.#env)
+        )
         let store: OperatorStore = await operatorStore(
           this.#ctx.storage,
           {
@@ -763,12 +774,9 @@ export class Builder extends Durable {
           },
           {
             senders: {
-              operator: operatorPost(this.#env, async (letter) => {
-                let { owes } = await import('./operator-channels.ts')
-                return await owes(store, letter)
-              }),
+              operator: { send: async (m) => (await post()).send(m) },
             },
-            chatters: chatters(this.#env),
+            chatter: async (via) => (await chat())[via],
           },
           operatorVectors(this.#env, {
             space: () => store,
@@ -786,13 +794,13 @@ export class Builder extends Durable {
         owing(store.fx, () => this.#work())
         // A commit here stirs the subscriptions over this store, one stir at
         // a time: one under way already looks after the commit.
-        let { heard, ownCommits } = await import('./operator-schedules.ts')
         let stirring = false
         store.g.use(ownCommits(() => {
           if (stirring) return
           stirring = true
           this.#ctx.waitUntil?.(
-            heard(store, true)
+            import('./operator-schedules.ts')
+              .then(({ heard }) => heard(store, true))
               .then((at) => at == null ? undefined : this.clock.arm(at))
               .catch((e) => caught(e, { request: 'operator subscriptions' }))
               .finally(() => stirring = false),
@@ -843,6 +851,7 @@ export class Builder extends Durable {
         // something. Worked, not only armed: an alarm the reset cut off can hold
         // the next one back for minutes.
         this.#owed = nudge
+        hop('operator_boot_wait', Date.now() - starting)
         return {
           store,
           named,

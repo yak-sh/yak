@@ -19,16 +19,9 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { theirs } from '@yaks/session/conversation'
 import { toolEid } from '@yaks/tools/result'
 import type { Env } from './env.ts'
-import { builderOf, SPACE } from './build-door.ts'
+import { builderOf, SPACE, WALKTHROUGH } from './build-door.ts'
 import { keptValue } from './results.ts'
 import { spoken } from './operator-draw.ts'
-
-/** Where the kernel asks a space's object for a walkthrough (build.ts). */
-export let WALKTHROUGH = '/operator/walkthrough'
-
-/** Where it asks for a walkthrough's lines through a step, for a visitor
- * stepping in (operator-host.ts `walkedOf`). */
-export let WALKED = '/operator/walked'
 
 /** One step of a walkthrough as it leaves the demo space (`said`): what was
  * said in it, the person's request first, the names of the tools it called,

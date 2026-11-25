@@ -207,7 +207,9 @@ test('a sent picture opens in place, and a document is saved', async () => {
 // page's script mounts it (with what the page tells it, `given`), with no
 // other script on the page: what it holds is its own.
 let fresh = await (await chatPage(p.env, space, who, 'new')).text()
-let given = JSON.parse(/^let given = (.+)$/m.exec(fresh)![1])
+let chatScript = parseHTML(fresh).document
+  .querySelector('script[data-operator-chat]')!.textContent!
+let given = JSON.parse(/^let given = (.+)$/m.exec(chatScript)![1])
 // What a browser's DataTransfer holds of it: files in, a list out.
 class Held {
   list: File[] = []

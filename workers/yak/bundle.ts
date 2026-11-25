@@ -26,6 +26,33 @@ export let closure = (meta: Metafile, entry: string): Set<string> => {
   return held
 }
 
+// The modules explicitly opened by an Updates read, plus the facets
+// operatorStore binds. Each root brings its static imports with it.
+let operatorRead = (meta: Metafile) => {
+  let roots = new Set([
+    'index.ts',
+    'build.ts',
+    'defects-runtime.ts',
+    'code-runtime.ts',
+    'operator-root.ts',
+    'operator-store.ts',
+    'operator-host.ts',
+    'operator-api.ts',
+    '../../packages/durable-object/alarm.ts',
+    ...meta.inputs['operator-load.ts'].imports
+      .filter((i) => i.kind == 'dynamic-import').map((i) => i.path),
+  ])
+  let chunks = new Set(
+    Object.entries(meta.outputs)
+      .filter(([, { entryPoint }]) => entryPoint && roots.has(entryPoint))
+      .flatMap(([file]) => [...closure(meta, file)]),
+  )
+  let bytes = [...chunks].reduce((n, file) => n + meta.outputs[file].bytes, 0)
+  console.log(
+    `Operator Updates read before chunk grouping · ${chunks.size} chunks · ${bytes} bytes`,
+  )
+}
+
 // The node modules workerd lacks under wrangler.toml's compatibility_date
 // and flags: at 2025-05-08 with nodejs_compat, workerd 1.20261104 has no
 // node:fs, node:os or node:child_process (node:fs/promises it has).
@@ -109,6 +136,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
     let names = planned(join(root, 'public')).names
     let built = await build({ ...options(root, names), outdir: scratch })
     let source = built.metafile!
+    operatorRead(source)
     let entry = Object.keys(source.outputs).find((file) =>
       source.outputs[file].entryPoint == 'index.ts'
     )!

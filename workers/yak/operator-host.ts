@@ -38,7 +38,7 @@ import {
   placed,
   theirFiles,
 } from './operator-access.ts'
-import type { Held } from './build-door.ts'
+import { type Held, WALKED, WALKTHROUGH } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
@@ -49,13 +49,7 @@ import { attachmentOf } from '@yaks/blob/attachment'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { OperatorStore } from './operator-store.ts'
-import {
-  stepsOf,
-  WALKED,
-  type Walked,
-  WALKTHROUGH,
-  type Walkthrough,
-} from './walkthrough.ts'
+import type { Walked, Walkthrough } from './walkthrough.ts'
 import { transcript } from '@yaks/session/transcript'
 import { toldOf } from '@yaks/session/told'
 import { dispatchStatus } from '@yaks/session/admission'
@@ -82,7 +76,6 @@ import {
 } from './operator-aside.ts'
 import { type Spending, spent } from './operator-spending.ts'
 import { margins, metadata } from './operator-metadata.ts'
-import { roomsBy } from './operator-rooms.ts'
 import { define } from '@yaks/render'
 import {
   type Asked,
@@ -102,6 +95,10 @@ import {
 } from '@yaks/session/conversation'
 
 type Store = OperatorStore
+let roomsBy = async (store: Store, entries: Bundle[]) => {
+  let { roomsBy } = await import('./operator-rooms.ts')
+  return roomsBy(store, entries)
+}
 // What the channels take a person's words in with: loaded by the request that
 // sends some, not by every read (operator-channels.ts).
 let channels = () => import('./operator-channels.ts')
@@ -1257,6 +1254,7 @@ let markedOf = async (store: Store, app: string) => {
   )
   if (!row) return null
   let session = row.entity.eid
+  let { stepsOf } = await import('./walkthrough.ts')
   return {
     session,
     steps: stepsOf(await transcript(store.g, session), app, session),

@@ -50,7 +50,7 @@ import {
   PLATFORM_DARK_BACKGROUND,
 } from '@yaks/platform/woven'
 import { keepFile, type Request as Intake } from './operator-channels.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey } from './attachment-key.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
@@ -80,7 +80,7 @@ import {
   matchesView,
 } from '@yaks/platform/operator-matches-view'
 import { personRows } from './side.ts'
-import { wearing } from './operator-persona.ts'
+import { wearing } from './operator-settings.ts'
 import { alertsRow, declinedRow, pushRow, vapidOf } from './operator-alerts.ts'
 import { publicKey } from '@yaks/push'
 import {

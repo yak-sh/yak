@@ -9,7 +9,8 @@ import { BUILDING } from './newcomer.ts'
 import { TOOLS } from './tools.ts'
 import { stepsOf as named } from './site/home.tsx'
 import { said } from './site/copy.ts'
-import { asked, WALKED, type Walked } from './walkthrough.ts'
+import { asked, type Walked } from './walkthrough.ts'
+import { WALKED } from './build-door.ts'
 
 /** What a visitor stepping into a home-page demo (D-462) is given: the
  * name the demo app is published under, the step's title on the home page,

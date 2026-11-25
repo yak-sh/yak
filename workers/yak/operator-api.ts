@@ -23,7 +23,6 @@ import { UPDATE_WAITING, waitingBundle } from '@yaks/platform/update-waiting'
 import { cardsSpace, updateRows } from '@yaks/platform/update-rows'
 import { draftRows, draftsSpace } from '@yaks/platform/operator-drafts'
 import { settingsRow, settingsSpace } from '@yaks/platform/operator-settings'
-import { settingsIn } from './operator-persona.ts'
 import { talkAsked } from '@yaks/platform/operator-talk'
 import {
   type Matches,
@@ -167,6 +166,7 @@ export let operatorApi = (
     read: async (asked, read) => {
       let space = await spaceOf(store)
       if (!read?.person || !space || settingsSpace(asked) != space) return []
+      let { settingsIn } = await import('./operator-persona.ts')
       return [settingsRow(space, await settingsIn(store.g.storage, space))]
     },
     tags: { request: 'Operator settings' },

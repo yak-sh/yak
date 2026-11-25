@@ -28,6 +28,7 @@ import { line, stringify, whole } from '@yaks/query'
 import { fill } from '@yaks/yaml'
 import { PERSONA } from './content.ts'
 import type { Space } from './directory.ts'
+import { type Settings, worn } from './operator-settings.ts'
 import type { Env } from './env.ts'
 import { FREE, LETTERS, PRICE } from '@yaks/platform/plans'
 import { KERNEL, meta } from './meta.ts'
@@ -99,19 +100,6 @@ let docs = (
     { entity: { eid: key(d.key) }, doc: { title: d.title, body: d.body } },
     link(from, d.reads ? 'reads' : 'contains', key(d.key), i + 1),
   ])
-
-/** The Operator's settings, as its page and its door speak them. Its persona
- * keeps them as its own words: the name is its `doc{title}`, the voice its
- * @yaks/speech `speech{voice, pace, model, backend}`, and the cache its
- * @yaks/model `cache{retention}`; none, the platform's own. */
-export type Settings = {
-  name?: string | null
-  voice?: string | null
-  voice_speed?: string | null
-  voice_model?: string | null
-  voice_backend?: string | null
-  cache_retention?: number | null
-}
 
 /** The settings persona `row` holds, its speech worn on its base's
  * (`base`). */
@@ -189,28 +177,6 @@ let stored = (eid: Eid, set: Settings): Bundle => {
 // directory row) does not hold is left out, so moving it writes no null.
 let present = (o: Settings): Settings =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
-
-/** `space` as its Operator's settings say: theirs where the persona holds
- * them, a setting it does not hold being the platform's own. */
-export let worn = (space: Space, own: Settings): Space => ({
-  ...space,
-  operator: own.name || space.operator,
-  voice: own.voice ?? null,
-  voice_speed: own.voice_speed ?? null,
-  voice_model: own.voice_model ?? null,
-  voice_backend: own.voice_backend ?? null,
-  cache_retention: own.cache_retention ?? null,
-})
-
-/** The settings `space` wears (`worn`), as its settings page draws them
- * (@yaks/platform/operator-settings). */
-export let wearing = (space: Space) => ({
-  name: space.operator,
-  voice: space.voice ?? null,
-  voice_speed: space.voice_speed ?? null,
-  voice_model: space.voice_model ?? null,
-  voice_backend: space.voice_backend ?? null,
-})
 
 /**
  * The Operator's settings off its persona in the store `g` reads, with
