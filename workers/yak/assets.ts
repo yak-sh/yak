@@ -69,6 +69,12 @@ export let ASSETS: Asset[] = [
     ...operator,
     named: true,
   },
+  {
+    name: '_operator-opening.js',
+    bundle: of('@yaks/platform/operator-opening-browser'),
+    ...paged,
+    named: true,
+  },
   // Drawn (`drawn`), and named by its bytes here once it is written.
   { name: '_words.js', named: true },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },

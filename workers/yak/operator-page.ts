@@ -1,5 +1,5 @@
 import { possessive } from '@yaks/text'
-import { Notice, Transcript } from '@yaks/ui/parts'
+import { Loading, Notice, Transcript } from '@yaks/ui/parts'
 import { wordsPage } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import {
@@ -1665,6 +1665,63 @@ export let chatPage = async (
   return c.measure('render', () => talkPage(env, space, who, beside, chat))
 }
 
+/** The main chat's frame, before the browser asks for its conversation. */
+export let openingChat = async (...args: Parameters<typeof chatPage>) => {
+  let [env, space, who, open, side, chosen, from, c] = args
+  let beside = await side ?? {}
+  let app = chosen ? beside.apps?.find((a) => a.slug == chosen) : undefined
+  let chat = chatPath(space.slug, open)
+  let here = app ? aboutPath(space.slug, app.slug, open) : chat
+  let query = new URLSearchParams({ conversation: '1' })
+  if (app) query.set('app', app.slug)
+  if (from != null) query.set('from', String(from))
+  let full = `${chat}?${query}`
+  let aside = { turn: null, helpers: [] }
+  return (c ?? clock()).measure(
+    'render',
+    () =>
+      talkPage(env, space, who, beside, {
+        title: space.operator,
+        status: 200,
+        waiting: 0,
+        listed: [],
+        current: [open],
+        here,
+        chat,
+        main: column(
+          '',
+          h(
+            'div',
+            {
+              'data-operator-opening': full,
+              'data-person': who.person,
+              'data-space': space.eid,
+            },
+            h(
+              Loading,
+              { 'data-operator-loading': '' },
+              'Loading conversation…',
+            ),
+            h('noscript', null, h('a', { href: full }, 'Open conversation')),
+          ),
+        ),
+        skip: ['#content', 'Skip to content'],
+        script: `<script type="module" src="${
+          asset(env, '_operator-opening.js')
+        }"></script>`,
+        aside: beside.ways && h(Aside, {
+          aside,
+          now: Date.now(),
+          reach: h(Reaching, { space, ways: beside.ways, here }),
+        }),
+        app,
+        canvas: app && who.person
+          ? canvasOf(env, space, who.person, beside, app)
+          : undefined,
+      }),
+  )
+}
+
 // What a chat draws, or where its address sends the person: the conversation
 // as its page holds it.
 let chatParts = async (
@@ -1678,6 +1735,7 @@ let chatParts = async (
   lists = reading(env, space, who),
 ): Promise<Response | TalkPage> => {
   let at = managePath('operator', space.slug)
+  let primary = open == 'new'
   // The space's address opens the person's one conversation, and a new chat
   // only until they have one (T-141349).
   // Their lists are read with every conversation, at once with it, and
@@ -1857,6 +1915,7 @@ let chatParts = async (
       !!speechOf(env),
       asking.request,
       mentions,
+      primary,
     ),
     chat,
     app,
@@ -2210,11 +2269,12 @@ let chatScript = (
   paid: boolean,
   visit: string,
   mentions?: string,
+  primary = false,
 ) =>
   `<script type="module" data-operator-chat="${visit}">
 import { follow } from '${file('follow.js')}'
 import { frames } from '${file('frames.js')}'
-import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '${
+import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, rememberChat, selfHtml, showing, sleep, turnHtml } from '${
     file('_talk.js')
   }'
 import words from '${file('_words.js')}'
@@ -2240,6 +2300,11 @@ let root = ${JSON.stringify(root)}
 let chats = ${JSON.stringify(chatPath(space.slug, ''))}
 menus(document, signal)
 let box = document.querySelector('[data-conversation]')
+let keepChat = ${
+    primary
+      ? `rememberChat(box, '${space.eid}', '${who.person}', signal)`
+      : '() => {}'
+  }
 // An id in a line drawn here opens where the person's server says
 // (\`mentions\`), as it does in the lines the page came drawn with.
 let mentions = ${JSON.stringify(mentions ?? '')}
@@ -2337,6 +2402,7 @@ let talk = mountTalk({
 // The page can be used from here: its box takes words and its lines follow.
 // A load's timings read this mark (@yaks/platform/browser-visit).
 if (!performance.getEntriesByName('yak-usable').length) performance.mark('yak-usable')
+window[Symbol.for('yaks.open')]?.ready()
 let heading = document.querySelector('[data-title]')
 // The conversation's title is its view's (@yaks/platform/talk-views), which
 // a press showing it again names the page with, and the bar's while it shows.
@@ -2556,7 +2622,7 @@ let doing = (now = 'idle') => {
   talking = now
   show()
 }
-let redrawn = () => doing(talk.doing())
+let redrawn = () => { doing(talk.doing()); keepChat() }
 redrawn()
 // What the page puts in the box is the person's draft, as if they typed it:
 // a way to start's words, for them to finish, and a line quoted from its
@@ -2711,6 +2777,7 @@ let hear = (o) => {
   dates(document)
   if (reading) heard.push(o.at)
   doing(o.doing)
+  keepChat()
 }
 // The conversation's row (@yaks/platform/operator-talk): answered whole as
 // its watch opens, again after a reconnect (\`opened\`), with where the

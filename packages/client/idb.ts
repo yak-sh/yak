@@ -288,6 +288,15 @@ export let wireIdb = (
     return false
   }
   return {
+    peek: (epoch, eid) =>
+      transaction('readonly', async (rows, meta) => {
+        if (await ask(meta.get('epoch')) !== epoch) return
+        let row = await ask(rows.get(eid))
+        if (row) {
+          let { num, prefix, comps } = row
+          return { eid, num, prefix, comps }
+        }
+      }),
     loadAnswers: async (epoch, bytes) => {
       let bounded = answerCache(bytes)
       let oversized = await transaction('readonly', async (_rows, meta) => {

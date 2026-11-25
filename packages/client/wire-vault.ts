@@ -11,6 +11,8 @@ import type { Saved } from './vault.ts'
  * `save` and `drop` are conditional on that same epoch, so a late write from a
  * tab still on the previous epoch cannot bring its rows back. */
 export type WireVault = {
+  /** Read one kept row without loading the working set or claiming its epoch. */
+  peek: (epoch: string, eid: Eid) => Promise<Saved | undefined>
   /** Optionally, the saved query results: ids and coverage, bounded by a byte
    * budget. They are guarded by the same epoch as the rows, and `loadAnswers`
    * never checks or changes the epoch itself. */
@@ -59,6 +61,8 @@ export let wireStash = (
     while (rows.size > limit) rows.delete(rows.keys().next().value!)
   }
   return {
+    peek: (expected, eid) =>
+      Promise.resolve(epoch === expected ? rows.get(eid) : undefined),
     loadAnswers: (expected, bytes) => {
       let bounded = answerCache(bytes)
       if (epoch === expected) {

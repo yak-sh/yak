@@ -277,6 +277,9 @@ for (let name of ['memory', 'indexedDB']) {
     let vault = name === 'memory' ? wireStash() : wireIdb({ indexedDB })
     assertEquals(await vault.load('one', 3), [])
     await vault.save('one', ['a', 'b', 'c', 'd'].map(saved), 3)
+    assertEquals(await vault.peek('two', 'd'), undefined)
+    assertEquals((await vault.peek('one', 'd'))?.eid, 'd')
+    assertEquals(await vault.peek('one', 'a'), undefined)
     assertEquals(
       (await vault.load('one', 3)).map((r) => r.eid),
       ['b', 'c', 'd'],

@@ -15,7 +15,7 @@ let navigation = {
 let browser = (href = 'https://yaks.app/ada') => {
   let document = Object.assign(new EventTarget(), {
     readyState: 'loading',
-    querySelector: () => null,
+    querySelector: (): object | null => null,
   })
   let window = new EventTarget()
   let sent: Batch[] = []
@@ -85,6 +85,7 @@ let browser = (href = 'https://yaks.app/ada') => {
   }
   return {
     run,
+    document,
     parsed,
     frame,
     sent,
@@ -94,6 +95,19 @@ let browser = (href = 'https://yaks.app/ada') => {
     at: performance.timeOrigin,
   }
 }
+
+test('an Operator opening records the frame paint and waits for the composer to be usable', () => {
+  let b = browser()
+  b.document.querySelector = () => ({})
+  let open = b.run()
+  b.parsed(200)
+  b.frame(250, 220)
+  equal(b.sent, [])
+  b.entries.set('yak-usable', { startTime: 900 })
+  b.document.readyState = 'complete'
+  open.ready()
+  equal(b.sent.map(({ open }) => [open?.paint, open?.usable]), [[220, 900]])
+})
 
 let reported = async (
   b: ReturnType<typeof browser>,

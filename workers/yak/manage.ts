@@ -405,14 +405,16 @@ export let manage = async (
     return matchesPage(req, env, space, who, await beside(env, dir, space, who))
   }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
-    let { chatPage, operatorAnswer, storeAnswer } = await c.time(
+    let { chatPage, openingChat, operatorAnswer, storeAnswer } = await c.time(
       'page_modules',
       () => import('./operator-page.ts'),
     )
     if (at.door) return storeAnswer(req, env, space, who, at.door)
     if (chat) {
+      let full = url.searchParams.has('conversation') ||
+        req.headers.get('purpose') == 'prefetch'
       return reading
-        ? ready(chatPage(
+        ? ready((chat == 'new' && !full ? openingChat : chatPage)(
           env,
           space,
           who,

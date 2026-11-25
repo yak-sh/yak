@@ -487,11 +487,21 @@ test('a dashboard page reads the directory in one trip', async () => {
   let settings = await timing(managePath('operator', slug))
   assertEquals(/hops;dur=(\d+)/.exec(settings)?.[1], '2')
   assertMatch(settings, /operator_wait;dur=\d+/)
-  // The chat asks its space's Operator once beside it, for the conversation
-  // and the Updates together, handing it the space and seat it read, so the
-  // Operator asks the directory nothing (T-149700); what it waited on the
-  // Operator is said.
-  let chat = await timing(chatPath(slug))
+  // The opening frame only needs the directory. The read started after paint
+  // gets the conversation and Updates from the Operator in one trip.
+  let opening = await k.at('yaks.app', chatPath(slug), { headers: { cookie } })
+  let shell = parseHTML(await opening.text()).document
+  let pending = shell.querySelector('[data-operator-opening]')!
+  assertEquals(opening.status, 200)
+  assert(pending)
+  assertEquals(
+    opening.headers.get('server-timing')?.includes('operator_wait'),
+    false,
+  )
+  let path = pending.getAttribute('data-operator-opening')!
+  let drawn = await k.at('yaks.app', path, { headers: { cookie } })
+  let chat = drawn.headers.get('server-timing') ?? ''
+  assert(parseHTML(await drawn.text()).document.querySelector('#ask textarea'))
   assertEquals(/hops;dur=(\d+)/.exec(chat)?.[1], '2')
   assertMatch(chat, /operator_wait;dur=\d+/)
   // A page of the person's own asks only about them, at once.

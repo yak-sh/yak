@@ -17,6 +17,7 @@ import {
 } from './operator-aside.ts'
 
 export { mountTalk } from './operator-talk-browser.ts'
+export { rememberChat } from '@yaks/platform/operator-copy-browser'
 
 // Its message box (operator-box-browser.ts), whose words are drafts bound here, in
 // the same bundle, so a draft changed anywhere draws the box again.

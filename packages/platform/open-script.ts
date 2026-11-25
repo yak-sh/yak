@@ -121,10 +121,9 @@ let OPENING = `(endpoint, source) => {
       },
       ready: () => parsed(() => {
         let mark = performance.getEntriesByName('yak-usable')[0]
-        if (mark || !document.querySelector('script[data-operator-chat]:not([hidden] *)')) {
-          open.usable = mark?.startTime ?? performance.now()
-          if (!mark) performance.mark('yak-usable')
-        }
+        if (!mark && document.querySelector('[data-operator-opening], script[data-operator-chat]:not([hidden] *)')) return
+        open.usable = mark?.startTime ?? performance.now()
+        if (!mark) performance.mark('yak-usable')
         ready = true
         send()
       }),
