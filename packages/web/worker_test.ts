@@ -106,6 +106,16 @@ let worker = (files = 2) => {
     })
     await settled()
   }
+  // What a picture that could not be replaced tells its worker.
+  let failed = (path: string) => {
+    let heard: unknown[] = []
+    hear.get('message')!({
+      data: { network: 'https://yaks.app' + path },
+      ports: [{ postMessage: (m: unknown) => heard.push(m) }],
+      waitUntil: (p: Promise<unknown>) => void waiting.push(p),
+    })
+    return heard
+  }
   let push = async (pushed: unknown) => {
     hear.get('push')!({
       data: { json: () => pushed },
@@ -119,6 +129,7 @@ let worker = (files = 2) => {
     ask,
     open,
     leave,
+    failed,
     push,
     stores,
     databases: () => databases,
@@ -213,4 +224,13 @@ test('a page with no picture of its own opens at once as the shell where the she
   assertEquals(await w.open('/pricing'), page('prices'))
   await w.ask('/logout', { mode: 'navigate', method: 'POST' })
   assertEquals(await w.open('/manage/updates'), page('the updates'))
+})
+
+test('a picture that could not be replaced opens next from the network, once', async () => {
+  let w = worker()
+  w.site.set('/checks', page('now'))
+  await w.leave('/checks', page('as last seen'))
+  assertEquals(w.failed('/checks#row-1'), [true])
+  assertEquals(await w.open('/checks'), page('now'))
+  assertEquals((await w.open('/checks'))!.includes(KEPT), true)
 })

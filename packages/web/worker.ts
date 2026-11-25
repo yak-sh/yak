@@ -22,11 +22,15 @@
  *   every kept page, any snapshot taken by a page loaded before it, and the
  *   databases its pages kept (`databases`).
  *
+ * - A picture that cannot be replaced by its page sends its address
+ *   (`NETWORK`) before it loads again, and that next open of it comes from
+ *   the network; one the worker cannot draw does too.
+ *
  * Every other request goes to the network as if there were no worker.
  *
  * @module
  */
-import { FRESH, FRESH_URL, FRESH_WAIT, picture } from './picture.ts'
+import { FRESH, FRESH_URL, FRESH_WAIT, NETWORK, picture } from './picture.ts'
 import { keptReports } from './kept-reports.ts'
 
 /** The caches this worker keeps pages and files in. */
@@ -38,7 +42,9 @@ export let FILES = 'yak-files'
  * also deletes the IndexedDB databases whose names start with `databases`:
  * what its pages kept of their own. `opens` reads the page a push's
  * notification opens from what was pushed. `shelled` says whether the
- * site's shell stands for a page at an address. */
+ * site's shell stands for a page at an address. `broke` is the door a
+ * picture reports at when it falls back to the network
+ * (@yaks/tracker/report), and `pictures: false` draws none. */
 export type Keeping = {
   forget: string[]
   named?: string
@@ -50,6 +56,7 @@ export type Keeping = {
   opening?: (source: 'picture' | 'shell' | 'push') => string
   address?: (url: string) => string
   report?: string
+  broke?: string
   pictures?: boolean
 }
 
@@ -136,7 +143,13 @@ export type Scope = {
   ): void
   addEventListener(
     type: 'message',
-    hear: (e: { data: unknown; waitUntil(p: Promise<unknown>): void }) => void,
+    hear: (
+      e: {
+        data: unknown
+        ports?: readonly Pick<MessagePort, 'postMessage'>[]
+        waitUntil(p: Promise<unknown>): void
+      },
+    ) => void,
   ): void
   addEventListener(
     type: 'push',
@@ -182,6 +195,8 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   let most = { pages: opts.pages ?? 24, files: opts.files ?? 400 }
   // The page each kept page's picture asked for, until its bootstrap takes it.
   let asked = new Map<string, Promise<Response>>()
+  // The pages whose next open comes from the network: their picture failed.
+  let unpictured = new Set<string>()
   let own = [FORGOT, SHELL].map((path) => location.origin + path)
   let trim = async (cache: Cache, keep: number) => {
     let keys = (await cache.keys()).filter((r) => !own.includes(r.url))
@@ -192,6 +207,22 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     return said ? Number(await said.text()) : 0
   }
   let reports = opts.report && keptReports(scope, opts.report, forgotAt)
+  // What the worker itself could not do, told at the site's door.
+  let tell = (e: unknown) => {
+    if (!opts.broke) return
+    let error = e instanceof Error ? e : Error(String(e))
+    scope.fetch(location.origin + opts.broke, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: 'The worker could not draw a kept page: ' + error.message,
+        stack: `${error.stack ?? ''}\n${location.origin}/worker.js`,
+        page: location.origin + '/worker.js',
+        mechanism: 'catch',
+      }),
+    }).catch(() => {})
+  }
   let forget = async () => {
     asked.clear()
     let { databases } = opts
@@ -225,12 +256,23 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
     await pages.delete(pageKey(url))
     await pages.put(
       pageKey(url),
-      stored(picture(html, at, opts.opening?.(source))),
+      stored(
+        picture(html, at, {
+          opening: opts.opening?.(source),
+          door: opts.broke,
+        }),
+      ),
     )
     if (shell && opts.shelled?.(url)) {
       await pages.put(
         location.origin + SHELL,
-        stored(picture(shell, at, opts.opening?.('shell'), true)),
+        stored(
+          picture(shell, at, {
+            opening: opts.opening?.('shell'),
+            door: opts.broke,
+            shell: true,
+          }),
+        ),
       )
     }
     await trim(pages, most.pages)
@@ -262,7 +304,11 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   }
   let page = async (req: Request) => {
     let key = keyOf(req.url)
-    let drawn = await kept(req, key)
+    if (unpictured.delete(key)) return scope.fetch(req)
+    let drawn = await kept(req, key).catch((e) => {
+      tell(e)
+      return undefined
+    })
     if (!drawn) return scope.fetch(req)
     let now = timed(
       scope.fetch(key, {
@@ -333,6 +379,12 @@ export let keeping = (scope: Scope, opts: Keeping): void => {
   })
   scope.addEventListener('message', (e) => {
     let said = e.data as Partial<Snapshot> | null
+    let failed = (e.data as { [NETWORK]?: unknown } | null)?.[NETWORK]
+    if (typeof failed == 'string') {
+      unpictured.add(keyOf(failed))
+      asked.delete(keyOf(failed))
+      return e.ports?.[0]?.postMessage(true)
+    }
     if (
       typeof said?.keep == 'string' && typeof said.html == 'string' &&
       (said.shell == null || typeof said.shell == 'string')

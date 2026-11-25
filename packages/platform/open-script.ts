@@ -98,9 +98,13 @@ let OPENING = `(endpoint, source) => {
     }
     let frame = new Promise((done) => parsed(() =>
       requestAnimationFrame(() => setTimeout(() => {
-        let seen = saw()
-        if (seen != null || !observer || picture) paint(seen ?? performance.now(), seen == null)
-        done()
+        // Timing never holds what waits on the frame (@yaks/web/picture).
+        try {
+          let seen = saw()
+          if (seen != null || !observer || picture) paint(seen ?? performance.now(), seen == null)
+        } finally {
+          done()
+        }
       }, 0))))
     held = {
       frame,

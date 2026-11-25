@@ -39,60 +39,135 @@ export let FRESH = 'x-yak-fresh'
 export let FRESH_WAIT = 'x-yak-fresh-wait'
 export let FRESH_URL = 'x-yak-fresh-url'
 
+/** What a picture's bootstrap sends its worker to have the next open of its
+ * page come from the network (`@yaks/web/worker`). */
+export let NETWORK = 'network'
+
+/** How long a picture waits for its page before it gives up on it, and how
+ * long the page written over it may take to finish parsing. */
+export let LATE = 6_000
+export let WRITTEN = 8_000
+
+/** What a picture's bootstrap says, beside the open timing (`opening`): the
+ * door it reports a picture that fell back to (@yaks/tracker/report). */
+export type Boot = { opening?: string; door?: string }
+
 // The bootstrap, written as the script it runs, since a bundler's helpers
 // would not come along with a function's own text. It asks for the page as
-// it is now, and writes it over the picture once both are in; a page that
-// cannot be had says so, and the picture stays, marked as kept.
-let boot = (opening = 'null') =>
+// it is now, and writes it over the picture once both are in. A picture
+// that cannot be had offline stays, marked as kept. Any other way it cannot
+// be replaced (an answer that is no page, a throw, a step that never ends,
+// a shell offline) reports why and loads the page from the network, once: a
+// picture is never what a person is left with.
+let boot = ({ opening, door }: Boot = {}) =>
   `(() => {
-  let opened = ${opening}
+  let opened = null
+  try { opened = ${opening ?? 'null'} } catch {}
   let began = performance.now()
+  let root = document.documentElement
+  let shell = root.hasAttribute('${SHELL}')
+  let stage = 'asked'
+  let settled = false
+  let door = ${JSON.stringify(door ?? null)}
+  let tell = (why) => {
+    if (!door) return
+    try {
+      let body = JSON.stringify({
+        message: 'A kept ' + (shell ? 'shell' : 'picture') + ' fell back to the network: ' + why,
+        stack: location.href + ' (kept ' + (shell ? 'shell' : 'picture') + ', ' + stage + ')',
+        page: location.href,
+        mechanism: 'catch',
+      })
+      if (!navigator.sendBeacon?.(door, new Blob([body], { type: 'application/json' }))) {
+        fetch(door, { method: 'POST', body, keepalive: true }).catch(() => {})
+      }
+    } catch {}
+  }
+  let reload = () => {
+    let gone = false
+    let again = () => gone || (gone = true, location.reload())
+    let worker = navigator.serviceWorker?.controller
+    if (!worker) return again()
+    let line = new MessageChannel()
+    line.port1.onmessage = again
+    worker.postMessage({ '${NETWORK}': location.href }, [line.port2])
+    setTimeout(again, 1000)
+  }
+  let network = (why) => {
+    if (settled) return
+    settled = true
+    clearTimeout(late)
+    tell(why)
+    reload()
+  }
+  let late = setTimeout(() => network('not replaced in ${LATE} ms'), ${LATE})
   let status = () => document.querySelector('[data-kept-status]')
-  let failed = () => {
+  let offline = () => {
+    if (shell) return network('offline')
+    settled = true
+    clearTimeout(late)
     opened?.offline()
-    let root = document.documentElement
     let at = new Date(Number(root.getAttribute('${KEPT}')))
     let said = status()
-    if (said) said.textContent = root.hasAttribute('${SHELL}') ? 'Offline.'
-      : 'Offline. This is how it looked at ' +
-        at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.'
+    if (said) said.textContent = 'Offline. This is how it looked at ' +
+      at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.'
   }
   fetch(location.href, {
     credentials: 'same-origin',
     cache: 'no-store',
     headers: { accept: 'text/html', '${FRESH}': '1' },
   }).then((r) => {
+    stage = 'read'
     let wait = r.headers.get('${FRESH_WAIT}')
-    opened?.waited(wait == null ? performance.now() - began : Number(wait))
-    return r.ok && (r.headers.get('content-type') || '').includes('text/html')
-      ? r.text().then((html) => ({ html, url: r.headers.get('${FRESH_URL}') || r.url }))
-      : null
-  }).then(async (page) => {
-    if (!page) return failed()
-    // What the page waits on before it can paint, its sheets and the
-    // scripts its head runs in order, asked for first, so the picture stays
-    // until the page can take its place, never a blank page between.
-    let head = page.html.slice(0, page.html.search(/<body[\s>]/i))
-    let held = [...head.matchAll(/<(link|script)\b[^>]*>/gi)]
-      .map(([tag]) => tag)
-      .filter((tag) => /rel=["']?stylesheet/i.test(tag) ||
-        (/^<script/i.test(tag) && !/\b(type=["']?module|defer|async)\b/i.test(tag)))
-      .map((tag) => /\b(?:href|src)=["']?([^"' >]+)/i.exec(tag)?.[1])
-      .filter(Boolean)
-    await Promise.all(held.map((at) => fetch(at).then((r) => r.blob(), () => {})))
-    if (page.url && page.url != location.href) {
-      history.replaceState(history.state, '', page.url)
+    try { opened?.waited(wait == null ? performance.now() - began : Number(wait)) } catch {}
+    if (!r.ok || !(r.headers.get('content-type') || '').includes('text/html')) {
+      return network('answered ' + r.status)
     }
-    if (document.readyState == 'loading') {
-      await new Promise((ready) =>
-        document.addEventListener('DOMContentLoaded', ready, { once: true }))
-    }
-    if (document.visibilityState != 'hidden') await opened?.frame
-    opened?.swapping()
-    document.open()
-    document.write(page.html)
-    document.close()
-  }).catch(failed)
+    return r.text().then(async (html) => {
+      let url = r.headers.get('${FRESH_URL}') || r.url
+      // What the page waits on before it can paint, its sheets and the
+      // scripts its head runs in order, asked for first, so the picture stays
+      // until the page can take its place, never a blank page between.
+      stage = 'files'
+      let head = html.slice(0, html.search(/<body[\\s>]/i))
+      let held = [...head.matchAll(/<(link|script)\\b[^>]*>/gi)]
+        .map(([tag]) => tag)
+        .filter((tag) => /rel=["']?stylesheet/i.test(tag) ||
+          (/^<script/i.test(tag) && !/\\b(type=["']?module|defer|async)\\b/i.test(tag)))
+        .map((tag) => /\\b(?:href|src)=["']?([^"' >]+)/i.exec(tag)?.[1])
+        .filter(Boolean)
+      await Promise.all(held.map((at) => fetch(at).then((r) => r.blob()).catch(() => {})))
+      if (settled) return
+      if (url && url != location.href) {
+        history.replaceState(history.state, '', url)
+      }
+      stage = 'parsed'
+      if (document.readyState == 'loading') {
+        await new Promise((ready) =>
+          document.addEventListener('DOMContentLoaded', ready, { once: true }))
+      }
+      // The open timing's frame, but never longer than a second of it.
+      stage = 'frame'
+      if (document.visibilityState != 'hidden' && opened?.frame) {
+        await Promise.race([opened.frame, new Promise((on) => setTimeout(on, 1000))])
+      }
+      if (settled) return
+      stage = 'written'
+      try { opened?.swapping() } catch {}
+      document.open()
+      document.write(html)
+      document.close()
+      settled = true
+      clearTimeout(late)
+      // The page written over the picture finishes parsing, or comes again
+      // from the network.
+      setTimeout(() => {
+        if (document.readyState != 'loading') return
+        tell('written page still loading after ${WRITTEN} ms')
+        reload()
+      }, ${WRITTEN})
+    })
+  }, offline).catch((e) => network('threw ' + ((e && e.message) || e)))
 })()`
 export let BOOT: string = boot()
 
@@ -143,8 +218,7 @@ let SCROLLING = `(() => {
 export let picture = (
   snapshot: string,
   at: number,
-  opening?: string,
-  shell = false,
+  { shell = false, ...said }: Boot & { shell?: boolean } = {},
 ): string =>
   snapshot
     .replace(SCRIPT, '')
@@ -163,5 +237,5 @@ export let picture = (
     )
     .replace(
       /<head\b[^>]*>/i,
-      (head) => `${head}<script>${boot(opening)}</script>`,
+      (head) => `${head}<script>${boot(said)}</script>`,
     )
