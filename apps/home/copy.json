@@ -890,15 +890,20 @@
         "helper": {
           "short": "Characters",
           "heading": "Characters who talk with your players.",
-          "body": "Give your game characters who answer what players say to them: a shopkeeper, a guide, a rival. An AI writes each answer from what your game knows."
+          "body": "Give your game characters who answer what players say to them: a shopkeeper, a guide, a rival. An AI writes each answer from what your game knows.",
+          "point2": "You choose how much of your monthly AI budget players may spend",
+          "point3": "Each player has a daily limit, so no stranger spends the whole budget"
         },
         "code": {
           "short": "Code",
           "heading": "Your game is code you can open and change.",
-          "body": "Games are TypeScript that runs in the browser, with three.js for 3D. Read and change every file yourself, or ask your assistant. yaks.app saves the game and keeps every player in step, so there’s no server for you to run.",
+          "body": "Your game is written in TypeScript and runs in the browser, with three.js for 3D. Read and change every file yourself, or ask your assistant. yaks.app saves the game and keeps every player in step, so there’s no server for you to run.",
           "point1": "Add packages from npm",
           "point2": "Ready-made parts for game controls, on-screen displays and 3D worlds",
           "point3": "Build from Claude or ChatGPT as well as here"
+        },
+        "domain": {
+          "body": "Give your game its own web address on the Personal or Pro plan. Buy a domain through yaks.app and we’ll connect it for you. You can also connect a domain you already own."
         }
       },
       "faq": {
