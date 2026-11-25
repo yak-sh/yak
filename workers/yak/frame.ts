@@ -192,7 +192,12 @@ export let frame = (at: {
       at.aside
         ? h(
           Shell.Aside,
-          { id: ASIDE, class: 'Frame_Aside', 'aria-label': at.aside.label },
+          {
+            id: ASIDE,
+            class: 'Frame_Aside',
+            'aria-label': at.aside.label,
+            'data-swipe': '',
+          },
           h('div', { class: 'Frame_AsideBody' }, at.aside.content),
         )
         : null,

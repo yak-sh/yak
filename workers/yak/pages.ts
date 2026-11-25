@@ -273,6 +273,10 @@ ${
       ? `<script type="module" src="${file('_fit-list.js')}"></script>`
       : ''
   }${
+    main.includes('data-swipe')
+      ? `<script type="module" src="${file('_swipe.js')}"></script>`
+      : ''
+  }${
     main.includes('data-app-mark')
       ? `<script type="module" src="${file('_image-fallback.js')}"></script>`
       : ''

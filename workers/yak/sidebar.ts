@@ -76,6 +76,7 @@ export let Sidebar = (at: Sidebar) => {
       as: Slides,
       class: at.fold?.collapsed ? 'Sidebar Sidebar-rail' : 'Sidebar',
       id: 'menu',
+      'data-swipe': '',
       'aria-label': at.label,
       'data-side-view': at.view ? JSON.stringify(at.view) : undefined,
     },

@@ -15,6 +15,7 @@
     "./sort",
     "./sending",
     "./fit-list",
+    "./swipe",
     "./image-fallback"
   ]
 }

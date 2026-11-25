@@ -14,6 +14,7 @@
     "./sort": "./sort-browser.ts",
     "./sending": "./sending.ts",
     "./fit-list": "./fit-list.ts",
+    "./swipe": "./swipe.ts",
     "./image-fallback": "./image-fallback.ts"
   },
   "license": "Apache-2.0",

@@ -175,6 +175,8 @@ export let ASSETS: Asset[] = [
   },
   { name: '_contents.js', bundle: of('@yaks/ui/contents'), named: true },
   { name: '_fit-list.js', bundle: of('@yaks/ux/fit-list'), named: true },
+  // A swipe sideways on a phone opens the page's sidebar (pages.ts).
+  { name: '_swipe.js', bundle: of('@yaks/ux/swipe'), named: true },
   // A form the browser sends shows it is sending (pages.ts `documented`).
   { name: '_sending.js', bundle: of('@yaks/ux/sending'), named: true },
   {
