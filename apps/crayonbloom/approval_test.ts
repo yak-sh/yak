@@ -8,6 +8,7 @@ import { parseTools } from '@yaks/tools/declared'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Dispatch } from '../../workers/yak/door.ts'
 import { appStore, storeName } from '../../workers/yak/directory.ts'
+import { hosting } from '../../workers/yak/directory-rows-probe.ts'
 import {
   ADA,
   ADA_OWNS,
@@ -29,9 +30,9 @@ let components = Object.fromEntries(
 let tools = { ask_print_approval: $defs.ask_print_approval }
 
 test('a prepared document is approved by its owner before it is quoted, and a new one is asked again', async () => {
-  await using p = platform()
+  await using p = hosting(platform())
   let { env } = p
-  let { space, app } = await seeded(env, 'private')
+  let { space, app } = await seeded(env, 'private', p.dir)
   let asked: string[] = []
   env.DISPATCH = {
     get: () => ({

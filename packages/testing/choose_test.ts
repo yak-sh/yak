@@ -174,6 +174,28 @@ test('a test importing a declaration that calls an edited local helper runs past
   equal(selected.beyond, 1)
 })
 
+test('a test of a public wrapper in the same module competes for the budget', async () => {
+  let files = ['direct_test.ts', 'wrapper_test.ts']
+  let s = await importing(files)
+  let texts: Record<string, string> = {
+    'a.ts': 'export let leaf = () => 1\n' +
+      'let helper = () => leaf()\nexport let wrapper = () => helper()',
+    'direct_test.ts': "import { leaf } from './a.ts'",
+    'wrapper_test.ts': "import { wrapper } from './a.ts'",
+  }
+  let selected = await choose(files, {
+    changed: ['a.ts'],
+    all: true,
+    budget: 0,
+    cost: () => 1,
+    edits: { 'a.ts': ['leaf'] },
+    source: (f) => texts[f],
+    inspect: () => Promise.resolve(s),
+  })
+  equal(selected.run, ['direct_test.ts'])
+  equal(selected.beyond, 1)
+})
+
 test('directory reads stay in the run and computed imports compete by distance', async () => {
   let files = ['other_test.ts', 'loader_test.ts', 'listing_test.ts']
   let s = await importing([...files, 'loaded.ts'], files)

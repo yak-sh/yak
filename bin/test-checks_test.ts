@@ -36,23 +36,6 @@ test('source checks format, lint and byte-check the change', () => {
   equal(checks([]), [])
 })
 
-test('a change dry-runs the publish of each package it is in', () => {
-  let published = (changed: string[]) =>
-    checks(changed).find((c) => c.name == 'publish')?.args.slice(5)
-  equal(
-    published([
-      'packages/a/a.ts',
-      'packages/a/sub/b_test.ts',
-      'packages/b/deno.json',
-      'workers/yak/a.ts',
-      'bin/a.ts',
-      'packages/README.md',
-    ]),
-    ['packages/a', 'packages/b', 'workers/yak'],
-  )
-  equal(published(['bin/a.ts', 'deno.json']), undefined)
-})
-
 let file = Deno.makeTempFileSync({ suffix: '.ts' })
 let called: Check[] = []
 let files = await format([file, `${file}.deleted`], (c) => {

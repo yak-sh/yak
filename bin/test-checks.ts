@@ -1,8 +1,6 @@
-// Local source checks cover the change: its lint, its raw bytes, the
-// public API of each package it touches as JSR's publisher reads it (slow
-// types: an export without its declared type), and the types of what it
-// reaches. Runtime tests follow consumers. Main CI checks every module's
-// types, and every package's public API, after the push.
+// Local source checks cover the change's lint and bytes and the types of
+// what it reaches. Runtime tests follow consumers. Main CI checks every
+// module's types and every package's public API after the push.
 
 import type { Survey } from '@yaks/testing/deps'
 import { types } from './check-types.ts'
@@ -10,10 +8,6 @@ import { formatting } from '@yaks/git/land'
 import config from '../deno.json' with { type: 'json' }
 
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
-// The workspace member a path is in, by the layout package.json's workspaces
-// name; bin/publish.ts dry-runs those that publish.
-let member = (path: string) =>
-  path.match(/^(?:packages|workers)\/[^/]+(?=\/)/)?.[0]
 let formatted = (path: string) =>
   /\.(?:[mc]?[jt]sx?|jsonc?|md|markdown|ya?ml|css|scss|html)$/.test(path)
 
@@ -25,15 +19,13 @@ export type Check = {
   env?: Record<string, string>
 }
 
-/** Format, lint and byte-check existing changed files, and dry-run the
- * publish of each package they are in. */
+/** Format, lint and byte-check existing changed files. */
 export let checks = (changed: string[]): Check[] => {
   let fmt = changed.filter(formatted)
   let lint = changed.filter(code)
   // The workspace's own config, named: a yaks app's package.json is a config
   // to Deno too, and found beside a file it would replace the workspace's.
   let options = ['--config', 'deno.json', '--permit-no-files']
-  let members = [...new Set(changed.flatMap((path) => member(path) ?? []))]
   return [
     ...fmt.length
       ? [{
@@ -48,19 +40,6 @@ export let checks = (changed: string[]): Check[] => {
       ? [{
         name: 'bytes',
         args: ['run', '--allow-read', 'bin/check-bytes.ts', ...changed],
-      }]
-      : [],
-    ...members.length
-      ? [{
-        name: 'publish',
-        args: [
-          'run',
-          '-A',
-          'bin/publish.ts',
-          '--dry-run',
-          '--allow-dirty',
-          ...members,
-        ],
       }]
       : [],
   ]

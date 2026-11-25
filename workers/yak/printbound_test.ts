@@ -4,7 +4,6 @@ import { commands, parseTools } from '@yaks/tools/declared'
 import { toolRow } from '@yaks/tools/result'
 import printbound from '../../apps/printbound/worker.ts'
 import manifest from '../../apps/printbound/vocab.json' with { type: 'json' }
-import { library } from '../../apps/printbound/document_fixture.ts'
 import { font } from '../../apps/printbound/font_fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -21,7 +20,6 @@ import { appStore } from './directory.ts'
 import { declared } from './directory-fixture.ts'
 import { appDoc } from './vocab.ts'
 import { commandWorker, GRANT, SELF } from './dispatch.ts'
-import { pdf } from './raster/pdf.ts'
 import type { Env } from './env.ts'
 
 let answer = async <T = Record<string, unknown>>(
@@ -31,6 +29,9 @@ let answer = async <T = Record<string, unknown>>(
   assert(response.ok, `${response.status}: ${text.slice(0, 500)}`)
   return JSON.parse(text || 'null') as T
 }
+
+let pixel =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
 
 test('a private PrintBound storefront prepares a full book and fulfills only its buyer’s reviewed edition', async () => {
   await using p = platform(SECRET)
@@ -115,9 +116,24 @@ test('a private PrintBound storefront prepares a full book and fulfills only its
   }])
   let calls: number[] = [], renders = 0
   p.env.RASTER = {
-    fetch: (req: Request) => {
+    fetch: async (req: Request) => {
+      let url = new URL(req.url)
+      assertEquals([req.method, url.pathname, url.searchParams.get('render')], [
+        'POST',
+        '/pdf',
+        '1',
+      ])
+      let page = Number(url.searchParams.get('page'))
+      assert(Number.isInteger(page) && page >= 1 && page <= 32)
+      let reader = req.body!.getReader()
+      try {
+        let { value } = await reader.read()
+        assertEquals(new TextDecoder().decode(value?.subarray(0, 5)), '%PDF-')
+      } finally {
+        await reader.cancel()
+      }
       renders++
-      return pdf(req, library)
+      return Response.json({ image: pixel, color: false })
     },
   } as Env['RASTER']
   p.env.DISPATCH = {

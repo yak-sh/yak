@@ -63,8 +63,8 @@ export let imported = (text: string): Imported[] =>
     },
   )
 
-/** How many modules can relay an edited declaration through their own
- * declarations. Local helpers and re-exports keep the same distance. */
+/** How many declarations can relay an edited name. Private helpers and
+ * re-exports keep the same distance. */
 export const STEPS = 2
 
 /**
@@ -72,8 +72,9 @@ export const STEPS = 2
  * declarations, by checkout path, `*` for its top-level code): 0 for a file
  * importing an edited declaration by name, directly or from a module
  * re-exporting it, or reading it off the whole module (`m.fields`), and for
- * one directly importing a module whose top-level code is edited; 1 for one
- * naming a declaration that names an edited one, or one step through a
+ * one directly importing a module whose top-level code is edited. Local
+ * private helpers belong to the declarations that use them. Calling a
+ * public declaration adds a step, even inside its own module, as does a
  * re-export of a module with edited top-level code; and so on
  * to `steps`. A file naming none is left out. Each file is read for the root it stands for
  * (`root`, an example page's plan module), and modules as `info` resolved
@@ -111,6 +112,19 @@ export let naming = (
     if (!parsed.has(module)) parsed.set(module, imported(text(module)))
     return parsed.get(module)!
   }
+  let exported = new Map<string, Set<string>>()
+  let publicName = (module: string, name: string) => {
+    if (!exported.has(module)) {
+      let lines = text(module).split('\n').filter((l) =>
+        l.startsWith('export ')
+      )
+      exported.set(
+        module,
+        new Set(lines.flatMap((l) => DECLARED.exec(l)?.[1] ?? [])),
+      )
+    }
+    return exported.get(module)!.has(name)
+  }
   // The declarations of a module whose lines say `word`.
   let owners = new Map<string, (string | undefined)[]>()
   let saying = (module: string, word: string) => {
@@ -141,7 +155,7 @@ export let naming = (
         if (d != n || module != m) go.push({ m: module, n: d, step: distance })
       }
     }
-    if (n != '*') next(m, n, step)
+    if (n != '*') next(m, n, step + Number(publicName(m, n)))
     for (let e of importers.get(m) ?? []) {
       for (let i of of(e)) {
         if (resolved.get(e)?.get(i.from) != m) continue

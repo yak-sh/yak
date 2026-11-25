@@ -4,14 +4,22 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import * as apps from './apps.ts'
-import { appStore } from './directory.ts'
+import { appStore, releaseOf } from './directory.ts'
 import { keepDeclaration } from './declaration.ts'
-import { releaseOf } from './directory.ts'
 import { listCommands } from './declared.ts'
 import { errorsAt } from './app-errors.ts'
 import type { Comp } from '@yaks/graph'
 import type { Dispatch } from './door.ts'
-import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
+import {
+  ADA,
+  ADA_OWNS,
+  as,
+  SECRET,
+  seeded,
+  visit,
+} from './serving-data-probe.ts'
+import { platform } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
 
 let ELI = 'e0000000-0000-4000-8000-000000000001'
 let words = {
@@ -51,9 +59,10 @@ let words = {
 }
 
 test('a page invokes declared commands as its owner; the command door refuses an editor', async () => {
-  await using p = platform()
+  await using p = platform(SECRET)
   let { env } = p
-  let { dir, space, app } = await seeded(env, 'private')
+  lifecycleStores(env)
+  let { dir, space, app } = await seeded(env, 'private', p.dir)
   await dir.apply({
     entities: [
       { entity: { eid: ELI }, person: {} },

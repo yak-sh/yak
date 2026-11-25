@@ -5,14 +5,16 @@ import { parseTools } from '@yaks/tools/declared'
 import { keepDeclaration } from './declaration.ts'
 import { releaseOf } from './directory.ts'
 import { serviceOffer } from './app-services.ts'
-import { as, platform, seeded, visit } from './serving-probe.ts'
+import { as, SECRET, seeded, visit } from './serving-data-probe.ts'
+import { platform } from './directory-rows-probe.ts'
+import { lifecycleStores } from './app-lifecycle-probe.ts'
 import * as apps from './apps.ts'
 import { answer as apex } from './apex.ts'
 import { parseHTML } from 'linkedom'
 
 test('app service catalog follows the declaration without copying a command schema', async () => {
-  await using p = platform()
-  let { dir, space, app } = await seeded(p.env, 'private')
+  await using p = platform(SECRET)
+  let { dir, space, app } = await seeded(p.env, 'private', p.dir)
   let words = {
     $defs: {
       quote: {
@@ -54,14 +56,15 @@ import {
   verifyService,
 } from './service-call.ts'
 import { meta } from './meta.ts'
-import { ADA, ADA_OWNS } from './serving-probe.ts'
+import { ADA, ADA_OWNS } from './serving-data-probe.ts'
 import type { Dispatch } from './door.ts'
 import { assertRejects } from '@std/assert'
 
 test('service customers retain their identity and lose authority after revocation', async () => {
-  await using p = platform()
+  await using p = platform(SECRET)
   let { env } = p
-  let source = await seeded(env, 'private')
+  lifecycleStores(env)
+  let source = await seeded(env, 'private', p.dir)
   let { dir } = source
   let eli = mint()
   await dir.apply({

@@ -136,10 +136,10 @@ stronger.
 `deno task test` with no paths uses the dependency graph to select tests and
 doctests the branch and working changes reach, including consumers, the nearest
 first and the rest of them left to main's CI (`--all` runs them here). It applies
-formatting to changed files and lints them. It dry-runs the publish of each
-package the change touches, so an export without its declared type fails the
-run (a second or so a package); every package's public API at once is main's
-CI's (`deno task check:publish`). Beside the tests it checks the types of source and doc comments the
+formatting to changed files and lints them. Main's CI dry-runs publication
+for every package (`deno task check:publish`). To check a package's public API
+on its own, run `deno run -A bin/publish.ts --dry-run --allow-dirty packages/<name>`.
+Beside the tests it checks the types of source and doc comments the
 change reaches: each changed module, direct importers (including type-only
 imports), and transitive importers within its package, stopping at a module
 composing a whole platform. `deno task check:types` does the same alone, and

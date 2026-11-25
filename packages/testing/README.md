@@ -364,18 +364,19 @@ file given runs.
 
 `choose` always keeps changed files, tests importing edited declarations, direct
 consumers of other changes, and tests that read the changed file or list its
-directory. An edit to a local helper counts for each declaration using that
-helper. Files importing a declaration through another module's code rank next,
-up to `STEPS` such steps (`naming` in `names.ts`). Other files rank by
-**distance**, the number of imports from a changed module to the file or a
-recorded read. Distance stops at a module that loads more than `WIDE` others.
-Such a module composes a platform, so nearly every change reaches its importers
-and that path says nothing about them. Given each path's package (`owner`), the
-files of a changed package a distance reaches, its README examples among them,
-come first. The files importing a changed package from another, and a changed
-package's files reached only through a wide module, come next. The rest run
-nearest and cheapest first, followed by files with no distance if budget
-remains. The runner counts deferred files as `beyond`.
+directory. A private helper is part of the declarations that use it. Calling
+another exported declaration adds a step within or across modules. Tests of
+those callers rank after direct consumers, up to `STEPS` steps (`naming` in
+`names.ts`). Other files rank by **distance**, the number of imports from a
+changed module to the file or a recorded read. Distance stops at a module that
+loads more than `WIDE` others. Such a module composes a platform, so nearly
+every change reaches its importers and that path says nothing about them. Given
+each path's package (`owner`), the files of a changed package a distance
+reaches, its README examples among them, come first. The files importing a
+changed package from another, and a changed package's files reached only through
+a wide module, come next. The rest run nearest and cheapest first, followed by
+files with no distance if budget remains. The runner counts deferred files as
+`beyond`.
 
 In this repository, `deno task test` chooses what runs before it starts
 anything, then starts one runner runtime for each platform holding a file that
