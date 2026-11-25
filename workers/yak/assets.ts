@@ -49,7 +49,14 @@ export let ASSETS: Asset[] = [
   { name: '_edit.js', bundle: here('./edit-mode.ts') },
   // The Operator chat's conversation (operator-rows.ts), for its page alone.
   { name: '_page-client.js', bundle: of('@yaks/client'), named: true },
-  { name: '_talk.js', bundle: here('./operator-rows.ts'), external },
+  {
+    name: '_talk.js',
+    bundle: here('./operator-rows.ts'),
+    external,
+    named: true,
+  },
+  // Drawn (`drawn`), and named by its bytes here once it is written.
+  { name: '_words.js', named: true },
   { name: '_settings.js', bundle: here('./settings.ts'), named: true },
   { name: '_alerts.js', bundle: here('./alerts-browser.ts'), named: true },
   // The service worker that shows pushed notifications, at the root it
@@ -199,6 +206,9 @@ export let ASSETS: Asset[] = [
   ...[
     'report.js',
     'deploy.js',
+    'follow.js',
+    'frames.js',
+    'voice.js',
     'drop.js',
     'idle.js',
     'away.js',

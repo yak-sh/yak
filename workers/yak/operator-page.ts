@@ -27,6 +27,7 @@ import {
 import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, page as drawn, type Picked, run, script, shell } from './pages.ts'
+import { asset } from './sheets.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
 import { type Ways, Ways as Reaching } from './operator-ways.ts'
 import { frame, FRAMED } from './frame.ts'
@@ -1786,6 +1787,7 @@ let chatParts = async (
     ],
     asideDescription: glanceOf(happening).label,
     script: chatScript(
+      (name) => asset(env, name),
       talked.aside ?? { turn: null, helpers: [] },
       at,
       who,
@@ -2117,8 +2119,11 @@ export let matchesPage = async (
 // row in the tab's page graph (@yaks/platform/operator-talk), each step's
 // lines drawn from the entries its frame sends (operator-talk.ts) and what it
 // says aloud said to a person who talked. `boxOf` is the box, where the page has one; `paid` is whether the
-// platform's speech is on, for a browser that has none of its own.
+// platform's speech is on, for a browser that has none of its own. Its
+// modules are imported at their bytes' addresses (`file`), which a browser
+// keeps for good, so opening the page again asks for none of them.
 let chatScript = (
+  file: (name: string) => string,
   now: Asided,
   at: string,
   who: Who,
@@ -2133,11 +2138,13 @@ let chatScript = (
   mentions?: string,
 ) =>
   `<script type="module" data-operator-chat="${visit}">
-import { follow } from '/follow.js'
-import { frames } from '/frames.js'
-import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '/_talk.js'
-import words from '/_words.js'
-import { voice } from '/voice.js'
+import { follow } from '${file('follow.js')}'
+import { frames } from '${file('frames.js')}'
+import { asideHtml, browserDrafts, covers, dates, glanceHtml, helperHtml, leaving, long, markHtml, menus, mountAsk, mountTalk, operatorAt, ordered, pageDrafts, pageTalk, selfHtml, showing, sleep, turnHtml } from '${
+    file('_talk.js')
+  }'
+import words from '${file('_words.js')}'
+import { voice } from '${file('voice.js')}'
 // Imports may arrive after a second navigation has already replaced this page,
 // and a conversation standing hidden as one of its page's views starts when
 // a press first shows it, and runs on while another view shows
