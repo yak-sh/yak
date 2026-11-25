@@ -32,6 +32,7 @@
  * @module
  */
 
+import { type Clock, system } from '@yaks/fp'
 import type { HistoryPort } from './history.ts'
 import { type Result, result } from './interaction.ts'
 
@@ -405,6 +406,11 @@ export let INTENT = 60
  * page its server is slow to answer, where a finger's touch gives too little
  * head start. */
 export let READY = 'data-ready'
+/** A menu link whose page is held while the browser is idle, after READY
+ * links. */
+export let HOLD = 'data-hold'
+// Bound the work a long sidebar can start in the background.
+let HOLDS = 10
 /** The header on an answer to a look ahead (`AHEAD`) that left out what
  * opening the page does (marking what it shows read): the page is asked for
  * again once it is opened. */
@@ -428,9 +434,23 @@ let tell = (doc: Document, type: string, detail?: unknown) => {
   doc.dispatchEvent(new view.CustomEvent(type, { bubbles: true, detail }))
 }
 
-// The page a link leads to, where the navigator follows it: a link of the
-// same origin, to another page, that the browser is not asked to keep to
-// itself (a new window, a download, a modifier key).
+// Links the navigator can follow are same-origin page links in this tab.
+let destination = (
+  link: HTMLAnchorElement,
+  base: string,
+  here: string,
+): URL | null => {
+  if (
+    link.hasAttribute('download') || (link.target && link.target != '_self')
+  ) {
+    return null
+  }
+  let to = new URL(link.getAttribute('href')!, base)
+  if (to.origin != new URL(base).origin) return null
+  if (page(to) == here && (to.hash || to.href.endsWith('#'))) return null
+  return to
+}
+
 let followed = (
   e: MouseEvent | Event,
   base: string,
@@ -443,14 +463,9 @@ let followed = (
   let m = e as MouseEvent
   if (
     !link || e.defaultPrevented || m.button > 0 || m.metaKey || m.ctrlKey ||
-    m.shiftKey || m.altKey || link.hasAttribute('download') ||
-    (link.target && link.target != '_self') ||
-    (readyOnly && !link.hasAttribute(READY))
+    m.shiftKey || m.altKey || (readyOnly && !link.hasAttribute(READY))
   ) return null
-  let to = new URL(link.getAttribute('href')!, base)
-  if (to.origin != new URL(base).origin) return null
-  if (page(to) == here && (to.hash || to.href.endsWith('#'))) return null
-  return to
+  return destination(link, base, here)
 }
 
 /** A page answered: its document's words, parsed as it arrived so a click
@@ -461,7 +476,7 @@ type Answer = {
   page: Document
   url: string
   again: boolean
-  ok: boolean
+  status: number
   received: number
 }
 /** A page held: its answer, or null where it cannot be swapped in, when it
@@ -469,11 +484,16 @@ type Answer = {
  * taken it up, and how to stop asking for it. */
 type Held = {
   answer: Promise<Answer | null>
+  received?: Answer
   at: number
   ahead: boolean
   used?: boolean
   stop: AbortController
 }
+
+let enterable = (answer: Answer) =>
+  answer.status >= 200 && answer.status < 300 &&
+  !answer.again && !!answer.page.querySelector(`script[${TAKES}]`)
 
 /** The mark on a link saying what the page it opens is called, and on a
  * page the title that says what the page is: a click waiting for its page
@@ -521,10 +541,11 @@ let going = (win: Browsing, link: Element, to: URL) => {
  * asked for again once drawn, and laid over what was drawn where it
  * changed. A click on a page not held draws what it can of that page at
  * once, from what the page holds (`going`), and the rest when it comes.
- * A link marked `READY` is asked for ahead once each page holding it is drawn.
+ * Links marked `READY` or `HOLD` are asked for as the browser idles.
  * A page with its own document scripts can supply `enter` to open only its
  * READY links this way, keeping that document's ordinary links with the
- * browser. An expired or incomplete answer opens through the browser.
+ * browser. Each usable answer stands until a refresh replaces it or the
+ * server no longer serves the page.
  * A page that draws the address itself (`DRAW`) is drawn in place, with no
  * fetch. Sending a form makes every held page old: still drawn at once, and
  * asked for again.
@@ -532,7 +553,8 @@ let going = (win: Browsing, link: Element, to: URL) => {
 export let start = (
   win: Browsing,
   history: HistoryPort,
-  now: () => number = () => performance.now(),
+  now: Clock['now'] = () => performance.now(),
+  after: Clock['after'] = system.after,
 ): (to: URL, pop?: boolean) => Promise<void> => {
   let doc = win.document
   let ran = sources(doc, win.location.href)
@@ -546,6 +568,7 @@ export let start = (
     to: URL,
     ahead: boolean,
     signal: AbortSignal,
+    denied: () => void,
   ): Promise<Answer | null> => {
     let answer = await win.fetch(to.href, {
       headers: ahead
@@ -554,8 +577,9 @@ export let start = (
       credentials: 'same-origin',
       signal,
     }).catch(() => null)
-    let type = answer?.headers.get('content-type') ?? ''
-    if (!answer || !type.includes('text/html')) return null
+    if (!answer) return null
+    if ([401, 403, 404, 410].includes(answer.status)) denied()
+    if (!answer.headers.get('content-type')?.includes('text/html')) return null
     let url = new URL(answer.url || to.href)
     if (url.origin != to.origin) return null
     let text = await answer.text().catch(() => null)
@@ -563,24 +587,39 @@ export let start = (
     let received = now()
     let page = new win.DOMParser().parseFromString(text, 'text/html')
     let again = answer.headers.has(AGAIN)
-    return { text, page, url: url.href, again, ok: answer.ok, received }
+    return { text, page, url: url.href, again, status: answer.status, received }
   }
-  let ask = (to: URL, ahead = false): Held => {
-    let key = page(to)
-    let stop = new AbortController()
-    let held: Held = {
-      answer: fetched(to, ahead, stop.signal),
-      at: now(),
-      ahead,
-      stop,
-    }
+  let keep = (key: string, held: Held) => {
     pages.delete(key)
     pages.set(key, held)
     for (let old of pages.keys()) {
       if (pages.size <= HELD) break
       pages.delete(old)
     }
-    held.answer.then((a) => a || pages.get(key) != held || pages.delete(key))
+  }
+  let ask = (to: URL, ahead = false, previous?: Held): Held => {
+    let key = page(to)
+    let stop = new AbortController()
+    let held: Held = {
+      answer: fetched(to, ahead, stop.signal, () => {
+        if (previous && pages.get(key) == previous) pages.delete(key)
+      }),
+      at: now(),
+      ahead,
+      stop,
+    }
+    if (!previous) keep(key, held)
+    held.answer.then((answer) => {
+      if (answer) held.received = answer
+      if (pages.get(key) != (previous ?? held)) return
+      if (!previous) {
+        if (!answer) pages.delete(key)
+      } else if (answer && enterable(answer)) {
+        keep(key, held)
+      } else if (answer && answer.status >= 200 && answer.status < 300) {
+        pages.delete(key)
+      }
+    })
     return held
   }
   let fresh = (held: Held | undefined): held is Held =>
@@ -705,38 +744,38 @@ export let start = (
       return pressed?.drawn(0)
     }
     let held = pages.get(page(to))
-    if (win.enter && held && !fresh(held)) {
+    if (win.enter && !held) {
       pressed?.leaving()
       return load(to, pop)
     }
-    let from: From = held ? 'held' : 'fetch'
+    let from: From = held?.received ? 'held' : 'fetch'
     let using = held ?? ask(to)
     using.used = true
     let answer = await using.answer
     if (mine != turn) return pressed?.cancel()
-    if (
-      win.enter && answer?.ok && !answer.again &&
-      answer.page.querySelector(`script[${TAKES}]`)
-    ) {
+    if (win.enter && answer && enterable(answer)) {
       let at = new URL(answer.url)
       at.hash = to.hash
       history.write({ path: page(at) + at.hash, state: null })
       pressed?.leaving()
       try {
+        closed = true
+        stopRefresh?.()
         return win.enter(answer.text)
       } catch (error) {
         globalThis.reportError?.(error)
         return load(at, true)
       }
     }
+    let wait = answer ? Math.max(0, answer.received - began) : 0
     if (
       win.enter || !answer ||
-      !draw(to, answer, from, began, now() - began, pop)
+      !draw(to, answer, from, began, wait, pop)
     ) {
       pressed?.leaving()
       return load(answer ? new URL(answer.url) : to, pop)
     }
-    pressed?.drawn(Math.max(0, answer.received - began))
+    pressed?.drawn(wait)
     if (!held || (fresh(held) && !(held.ahead && answer.again))) return
     let again = now()
     let newer = await ask(to).answer
@@ -745,24 +784,65 @@ export let start = (
       load(new URL(newer.url), true)
     }
   }
-  // Each page a link marked `READY` leads to that is not held, asked for
-  // ahead once the browser is idle: not one the page shows itself, nor one
-  // a page that is left by loading the next (`stays`) could draw.
-  let readying = () => {
-    let idle = win.requestIdleCallback?.bind(win) ??
-      ((fn: () => void) => setTimeout(fn))
-    idle(() => {
-      if (stays(doc)) return
-      for (let link of doc.querySelectorAll(`a[${READY}][href]`)) {
-        let to = new URL(link.getAttribute('href')!, win.location.href)
+  let readyLinks = () => {
+    let targets = new Map<string, URL>()
+    let add = (mark: string, most: number) => {
+      for (
+        let link of doc.querySelectorAll<HTMLAnchorElement>(`a[${mark}][href]`)
+      ) {
+        if (most <= 0) break
+        if (link.closest('[hidden]')) continue
+        let to = destination(link, win.location.href, here)
+        if (!to) continue
         let key = page(to)
-        if (
-          to.origin == win.location.origin && key != here &&
-          !pages.has(key) && !drawing(to)
-        ) ask(to, true)
+        if (key == here || targets.has(key) || drawing(to)) continue
+        targets.set(key, to)
+        most--
       }
-    })
+    }
+    add(READY, Infinity)
+    if (!win.enter) add(HOLD, HOLDS)
+    return targets
   }
+  let closed = false, warming = false
+  let stopRefresh: (() => void) | undefined
+  let visible = () => doc.visibilityState != 'hidden'
+  let warm = async () => {
+    let from: string
+    do {
+      from = here
+      if (closed || stays(doc) || !visible()) break
+      for (let [key, to] of readyLinks()) {
+        if (closed || from != here || stays(doc) || !visible()) break
+        let held = pages.get(key)
+        if (!held || (win.enter && held.received && !fresh(held))) {
+          await ask(to, true, held).answer
+        }
+      }
+    } while (from != here)
+    warming = false
+    if (
+      win.enter && !closed && visible() &&
+      doc.querySelector(`a[${READY}][href]`)
+    ) {
+      stopRefresh = after(FRESH, readying)
+    }
+  }
+  let readying = () => {
+    if (closed || warming) return
+    stopRefresh?.()
+    warming = true
+    if (win.enter) void warm()
+    else if (win.requestIdleCallback) win.requestIdleCallback(() => void warm())
+    else after(0, () => void warm())
+  }
+  doc.addEventListener('visibilitychange', () => {
+    if (!visible()) stopRefresh?.()
+    else readying()
+  })
+  win.addEventListener('pageshow', (e: PageTransitionEvent) => {
+    if (e.persisted) readying()
+  })
   readying()
   // The one page being looked ahead at, which a pointer moving on, or
   // another look ahead, lets go of unless a click took it up.
@@ -818,7 +898,7 @@ export let start = (
     let pressed = result(doc, e)
     e.preventDefault()
     let own = drawing(to)
-    if (!own && (!pages.has(page(to)) || looking?.key == page(to))) {
+    if (!own && !pages.get(page(to))?.received) {
       going(win, (e.target as Element).closest('a[href]')!, to)
       tell(doc, GOING, { began: now() })
     }

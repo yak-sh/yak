@@ -1,6 +1,7 @@
 // yaks.app's sidebar: one frame and navigation tree, specialized by data.
 import { type ComponentChildren, h } from 'preact'
 import { Button, Form, Icon, layer, SideNav } from '@yaks/ui/parts'
+import { HOLD } from '@yaks/ui/navigate'
 import { type IconName, icons } from './icons.ts'
 import { Idle } from './mascot.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -89,7 +90,7 @@ export let Sidebar = (at: Sidebar) => {
         { class: 'Sidebar_Top' },
         h(
           'a',
-          { class: 'Sidebar_Brand', href: at.home },
+          { class: 'Sidebar_Brand', href: at.home, [HOLD]: '' },
           h(Idle, { base: at.base, size: 36 }),
           worded('yaks.app'),
         ),
@@ -108,6 +109,7 @@ export let Sidebar = (at: Sidebar) => {
             mod: 'go',
             class: 'Sidebar_Back',
             href: at.back.href,
+            [HOLD]: '',
             title: `Back to ${at.back.name}`,
             'aria-label': `Back to ${at.back.name}`,
           },

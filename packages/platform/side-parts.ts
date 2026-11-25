@@ -29,7 +29,7 @@ import { Icon } from '@yaks/ui/Icon'
 import { Identity } from '@yaks/ui/Identity'
 import { Menu } from '@yaks/ui/Menu'
 import { SideNav } from '@yaks/ui/SideNav'
-import { NAMES, READY } from '@yaks/ui/navigate'
+import { HOLD, NAMES, READY } from '@yaks/ui/navigate'
 import {
   accountView,
   appMarkImage,
@@ -113,6 +113,7 @@ export let link = (at: Item) => {
       title: at.label,
       [NAMES]: at.names,
       [READY]: at.ready || undefined,
+      [HOLD]: !(at.submit || at.external) || undefined,
       'data-side-app': at.app ? JSON.stringify(at.app) : undefined,
       mod: at.current && 'on',
       'aria-current': at.current ? 'page' : at.beside ? 'true' : undefined,

@@ -1,5 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { DOMParser, parseHTML } from 'linkedom'
 import type { HistoryEntry } from './history.ts'
 import {
@@ -10,6 +10,7 @@ import {
   type Drawing,
   FRESH,
   GOING,
+  HOLD,
   KEPT,
   LEAVE,
   leaving,
@@ -157,6 +158,7 @@ let browsing = (
   let fetched: string[] = []
   let stopped: string[] = []
   let again = new Set<string>()
+  let statuses = new Map<string, number>()
   let slow = false
   let waiting: (() => void)[] = []
   let entries: HistoryEntry[] = []
@@ -196,14 +198,16 @@ let browsing = (
       let ahead = new Headers(init.headers).get(AHEAD)
       fetched.push(ahead ? `${url} ${ahead}` : url)
       let to = new URL(url)
-      let html = pages[to.pathname]
-      let answer = () =>
-        new Response(html ?? 'gone', {
+      let answer = () => {
+        let html = pages[to.pathname]
+        return new Response(html ?? 'gone', {
+          status: statuses.get(to.pathname),
           headers: {
             'content-type': html ? 'text/html' : 'text/plain',
             ...again.has(to.pathname) ? { [AGAIN]: '1' } : {},
           },
         })
+      }
       if (!slow) return Promise.resolve(answer())
       // Held back until `answer()`, and refused once its asker stops.
       return new Promise((done, fail) => {
@@ -215,6 +219,7 @@ let browsing = (
       })
     },
     scrollTo: () => {},
+    requestIdleCallback: (fn: () => void) => setTimeout(fn, 0),
     DOMParser,
     enter,
   } as unknown as Parameters<typeof start>[0]
@@ -239,7 +244,8 @@ let browsing = (
   let left = 0
   doc.addEventListener(LEAVE, () => left++)
   let time = 0
-  let go = start(win, history, () => time)
+  let timers = clock()
+  let go = start(win, history, () => time + timers.now(), timers.after)
   let view = doc.defaultView as unknown as typeof globalThis
   let press = (type: string, selector: string, init: MouseEventInit = {}) => {
     let e = new view.Event(type, { bubbles: true, cancelable: true })
@@ -266,8 +272,11 @@ let browsing = (
     go,
     left: () => left,
     tick: (ms: number) => void (time += ms),
+    advance: timers.advance,
+    pending: timers.pending,
     stopped,
     again,
+    statuses,
     // Answers wait until `answer` sends them.
     slow: () => void (slow = true),
     answer: async () => {
@@ -306,7 +315,50 @@ test('a ready link can open its held HTML as a document', async () => {
   assertEquals(b.loaded, [])
 })
 
-test('an expired ready document is opened through the browser', async () => {
+test('a ready document still opens instantly while its refresh is pending', async () => {
+  let chat = framed('chat', '<textarea></textarea>')
+  let entered: string[] = []
+  let b = browsing(
+    {
+      '/': `<a href="/chat" ${READY}>Chat</a>`,
+      '/chat': chat,
+    },
+    '/',
+    (html) => entered.push(html),
+  )
+  await settled()
+  b.slow()
+  await b.advance(FRESH)
+  assertEquals(b.fetched, Array(2).fill('https://y.test/chat prefetch'))
+  assert(b.click('a'))
+  await settled()
+  assertEquals(entered, [chat])
+  assertEquals(b.loaded, [])
+  await b.answer()
+  assertEquals(b.pending(), 0, 'no refreshes after entering the chat')
+})
+
+test('a failed refresh leaves the ready document available until a usable answer replaces it', async () => {
+  let before = framed('chat', '<h1>Before</h1>')
+  let after = framed('chat', '<h1>After</h1>')
+  let pages = { '/': `<a href="/chat" ${READY}>Chat</a>`, '/chat': before }
+  let entered: string[] = []
+  let b = browsing(pages, '/', (html) => entered.push(html))
+  await settled()
+  b.statuses.set('/chat', 503)
+  await b.advance(FRESH)
+  await settled()
+  b.statuses.delete('/chat')
+  pages['/chat'] = after
+  await b.advance(FRESH)
+  await settled()
+  assert(b.click('a'))
+  await settled()
+  assertEquals(entered, [after])
+  assertEquals(b.fetched, Array(3).fill('https://y.test/chat prefetch'))
+})
+
+test('a ready document falls back to native navigation when the server revokes access', async () => {
   let entered: string[] = []
   let b = browsing(
     {
@@ -317,8 +369,11 @@ test('an expired ready document is opened through the browser', async () => {
     (html) => entered.push(html),
   )
   await settled()
-  b.tick(FRESH)
+  b.statuses.set('/chat', 403)
+  await b.advance(FRESH)
+  await settled()
   assert(b.click('a'))
+  await settled()
   assertEquals(entered, [])
   assertEquals(b.loaded, ['https://y.test/chat'])
 })
@@ -484,6 +539,40 @@ test('a page a link marked ready leads to is held once its page is drawn, and a 
   await b.go(new URL('https://y.test/apps'))
   await settled()
   assertEquals(b.fetched.length, 3, 'held already: not asked again')
+})
+
+test('the menu warms pages behind its views one at a time, and a press draws without waiting', async () => {
+  let b = browsing({
+    ...site,
+    '/apps': framed(
+      'apps',
+      '',
+      `
+      <a ${HOLD} href="/view">Drawn here</a>
+      <a ${HOLD} href="/updates">Updates</a>
+      <a ${HOLD} href="/connections">Connections</a>
+      <a ${HOLD} href="/hidden" hidden>Hidden</a>
+    `,
+    ),
+    '/connections': framed('connections', '<h1>Connections</h1>'),
+  })
+  b.doc.addEventListener(DRAW, (e) => {
+    let { detail } = e as CustomEvent<Drawing>
+    if (detail.to.pathname == '/view') detail.draw = () => {}
+  })
+  b.slow()
+  await settled()
+  assertEquals(b.fetched, ['https://y.test/updates prefetch'])
+  await b.answer()
+  assertEquals(b.fetched, [
+    'https://y.test/updates prefetch',
+    'https://y.test/connections prefetch',
+  ])
+  await b.answer()
+  b.click('a[href="/connections"]')
+  let { from, phases } = await b.swapped
+  assertEquals([from, phases.wait], ['held', 0])
+  assertEquals(b.fetched.length, 2)
 })
 
 test('a pointer that moves on before its page comes lets it go, and one look ahead stands at a time', async () => {

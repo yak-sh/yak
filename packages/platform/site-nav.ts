@@ -1,3 +1,4 @@
+import { AHEAD, READY } from '@yaks/ui/navigate'
 import { MANAGE } from './routes.ts'
 
 export let WHO = '/login/who'
@@ -8,25 +9,39 @@ export let CHAT = 'chat'
 export let signedIn =
   `<a class="Nav_Link Nav_Open" href="${MANAGE}">Open yaks.app</a>`
 
-/** The site's cached pages paint the remembered link first. The browser's
- * session check supplies the chat to keep ready. */
+/** The site's cached pages paint and warm the remembered link first. For a
+ * newly recognized session, the check supplies the chat directly. */
 export let island = (module: string) =>
   `<script>(() => {
   let root = document.documentElement, key = 'yak:signed'
   let mark = (on) => root.toggleAttribute('data-signed', on)
   try { mark(!!localStorage.getItem(key)) } catch {}
-  fetch('${WHO}?${CHAT}').then((r) => r.ok ? r.json() : null).then(async (who) => {
+  let remembered = root.hasAttribute('data-signed')
+  let checking = fetch('${WHO}?${CHAT}').then((r) => r.ok ? r.json() : null, () => null)
+  let who
+  checking.then((answer) => {
+    who = answer
     if (!who) return
     mark(who.signedIn)
     try {
       who.signedIn ? localStorage.setItem(key, '1') : localStorage.removeItem(key)
     } catch {}
-    if (!who.chat) return
+    if (!who.signedIn) document.querySelector('.Nav_Open')?.removeAttribute('${READY}')
+  }).catch((error) => globalThis.reportError?.(error))
+  let warm = async () => {
+    let to = remembered ? '${MANAGE}' : (await checking)?.chat
+    if (!to) return
+    let first = fetch(to, {
+      headers: { accept: 'text/html', '${AHEAD}': 'prefetch' },
+      credentials: 'same-origin',
+    }).catch(() => null)
     let { ready } = await import(${JSON.stringify(module)})
-    if (document.readyState == 'loading') {
-      await new Promise((done) => document.addEventListener('DOMContentLoaded', done, { once: true }))
-    }
     let link = document.querySelector('.Nav_Open')
-    if (link) ready(link, who.chat)
-  }, () => {}).catch((error) => globalThis.reportError?.(error))
+    if (!link && document.readyState == 'loading') {
+      await new Promise((done) => document.addEventListener('DOMContentLoaded', done, { once: true }))
+      link = document.querySelector('.Nav_Open')
+    }
+    if (link && who?.signedIn !== false) ready(link, to, first)
+  }
+  warm().catch((error) => globalThis.reportError?.(error))
 })()</script>`
