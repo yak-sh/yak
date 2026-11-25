@@ -656,6 +656,19 @@ export let iconAddress = async (
   mount: string,
 ) => iconAt(mount, app, space, await iconArt(env, app))
 
+// The version an icon's address names, so a browser may keep it: the list's
+// mark (`display`, @yaks/platform/routes `appMark`) or the home screen's icon
+// (`iconAt`). None for a mark the app has nothing to name by yet.
+let iconNamed = async (
+  env: Env,
+  space: Space,
+  app: App,
+  display: boolean,
+) =>
+  display
+    ? app.version && !app.source ? null : markVersion(app)
+    : iconVersion(app, space, await iconArt(env, app))
+
 let caching = async (
   req: Request,
   env: Env,
@@ -666,9 +679,7 @@ let caching = async (
   if (path != '/icon.png') return keeping(app)
   let q = new URL(req.url).searchParams
   let display = q.has('display')
-  let version = display
-    ? app.version && !app.source ? null : markVersion(app)
-    : iconVersion(app, space, await iconArt(env, app))
+  let version = await iconNamed(env, space, app, display)
   return version && q.get('v') == version
     ? display || app.access != 'public'
       ? browserImmutable
@@ -3335,11 +3346,20 @@ let served = async (
   // the release (`kept`); a worker's stylesheet and its other files are
   // kept the same way.
   let worker = page == own
-  // Older pages and manifests can still ask the alias as an image.
+  // An icon loaded by an address that names no version, or an old one (an
+  // older page, a manifest, a list drawn from a row without its release),
+  // moves to the address the browser keeps, whoever wrote the link.
   if (!worker && path == '/icon.png' && page.status == 200 && loadsAsset(req)) {
-    if (!url.searchParams.has('display') && !url.searchParams.has('v')) {
+    let display = url.searchParams.has('display')
+    let version = await iconNamed(env, space, app, display)
+    if (version != null && url.searchParams.get('v') != version) {
       await page.body?.cancel()
-      page = redirect(await iconAddress(env, space, app, at), 307)
+      page = redirect(
+        `${at}icon.png?${display ? 'display&' : ''}v=${
+          encodeURIComponent(version)
+        }`,
+        307,
+      )
     }
   }
   // The Files validator identifies the release's original bytes before

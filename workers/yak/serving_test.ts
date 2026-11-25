@@ -73,7 +73,7 @@ import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { addressed } from '@yaks/platform/versions'
-import { appMark, REACH, TAB_PERSON } from '@yaks/platform/routes'
+import { appMark, iconAt, REACH, TAB_PERSON } from '@yaks/platform/routes'
 import { generatedIconKey } from '@yaks/platform/app-icon'
 import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
@@ -675,6 +675,25 @@ test('a generated display icon has a new cacheable URL', async () => {
   let stale = await open(first)
   assertEquals(stale.headers.get('cache-control'), 'private, no-cache')
   await stale.body?.cancel()
+  // A page loading the mark or the icon by an address naming no version, or
+  // an old one, is moved to the address the browser keeps (T-3334).
+  let icon = iconAt('/cookbook/', { ...pending, generatedIcon }, space)
+  for (
+    let [asked, kept] of [
+      ['/cookbook/icon.png?display', third],
+      [first, third],
+      ['/cookbook/icon.png', icon],
+      ['/cookbook/icon.png?v=old', icon],
+    ]
+  ) {
+    let image = { cookie, 'sec-fetch-dest': 'image' }
+    let moved = await apps.fetch(visit(asked, { headers: image }), env)
+    await moved.body?.cancel()
+    assertEquals([moved.status, moved.headers.get('location')], [307, kept])
+  }
+  let image = { cookie, 'sec-fetch-dest': 'image' }
+  let held = await apps.fetch(visit(third, { headers: image }), env)
+  assertEquals(await held.text(), 'generated art')
 })
 
 test('an app that wrote an icon.svg and no icon.png is served the svg drawn', async () => {
