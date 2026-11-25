@@ -42,20 +42,30 @@ export let BOOT = `(() => {
     r.ok && (r.headers.get('content-type') || '').includes('text/html')
       ? r.text().then((html) => ({ html, url: r.url }))
       : null
-  ).then((page) => {
+  ).then(async (page) => {
     if (!page) return failed()
-    let write = () => {
-      if (page.url && page.url != location.href) {
-        history.replaceState(history.state, '', page.url)
-      }
-      document.open()
-      document.write(page.html)
-      document.close()
+    // What the page waits on before it can paint, its sheets and the
+    // scripts its head runs in order, asked for first, so the picture stays
+    // until the page can take its place, never a blank page between.
+    let head = page.html.slice(0, page.html.search(/<body[\s>]/i))
+    let held = [...head.matchAll(/<(link|script)\b[^>]*>/gi)]
+      .map(([tag]) => tag)
+      .filter((tag) => /rel=["']?stylesheet/i.test(tag) ||
+        (/^<script/i.test(tag) && !/\b(type=["']?module|defer|async)\b/i.test(tag)))
+      .map((tag) => /\b(?:href|src)=["']?([^"' >]+)/i.exec(tag)?.[1])
+      .filter(Boolean)
+    await Promise.all(held.map((at) => fetch(at).then((r) => r.blob(), () => {})))
+    if (page.url && page.url != location.href) {
+      history.replaceState(history.state, '', page.url)
     }
     if (document.readyState == 'loading') {
-      document.addEventListener('DOMContentLoaded', write, { once: true })
-    } else write()
-  }, failed)
+      await new Promise((ready) =>
+        document.addEventListener('DOMContentLoaded', ready, { once: true }))
+    }
+    document.open()
+    document.write(page.html)
+    document.close()
+  }).catch(failed)
 })()`
 
 // What a picture says while the page is asked for, over everything.
@@ -91,5 +101,6 @@ export let picture = (snapshot: string, at: number): string =>
     .replace(SCRIPT, '')
     .replace(FRAME_SRC, '$1data-kept-src$2')
     .replace(/<html\b/i, `<html ${KEPT}="${at}"`)
-    .replace(/<head\b[^>]*>/i, (head) => `${head}<script>${BOOT}</script>`)
     .replace(/<body\b[^>]*>/i, (body) => body + STATUS)
+    // Last: what the bootstrap says is no part of the page to change.
+    .replace(/<head\b[^>]*>/i, (head) => `${head}<script>${BOOT}</script>`)
