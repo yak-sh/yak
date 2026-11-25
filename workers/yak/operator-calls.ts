@@ -30,6 +30,8 @@
 // so an object restarted under a call loses at most that much of its charge,
 // and the stream opened again charges only its own.
 import { type Clock, system } from '@yaks/fp'
+import type { Bundle, Comp } from '@yaks/graph'
+import { line as q } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { named } from '@yaks/session/turn'
 import type { Frame, Line, Ring } from '@yaks/phone'
@@ -68,7 +70,7 @@ import {
 } from './speech.ts'
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
-import { receive, requestId } from './operator-channels.ts'
+import { NOTES, receive, requestId } from './operator-channels.ts'
 import { glanceOf, type Look, looks } from './operator-glance.ts'
 import { settingsAt, SPACE } from './build-door.ts'
 import { settled } from './operator-persona.ts'
@@ -401,6 +403,9 @@ export type Talking = Around & {
   /** each line said on the call, the caller's or (`said`) the model's, for
    * their conversation, settled once it is kept there */
   note: (text: string, said: boolean) => Promise<void>
+  /** that someone asked for notes of the call (`TAKE_NOTES`), kept so they
+   * are written once it ends */
+  notes?: () => Promise<void>
 }
 
 // The least audio sent to the line at once: a tenth of a second in its
@@ -757,6 +762,16 @@ export let ASK = {
   },
 }
 
+/** What a talking model calls when someone asks it to take notes of the
+ * call: the call is marked, and its notes written from its lines once it
+ * ends (`notesOf`). */
+export let TAKE_NOTES = {
+  name: 'take_notes',
+  description:
+    'Someone asked you to take notes, keep minutes or a transcript of this call, or to sum it up afterwards: call it once, with no words, and keep listening. Everything said on the call is kept as text, and when it ends the Operator writes the notes from it and puts them in their Updates. Never say you cannot take notes or have no recording.',
+  parameters: { type: 'object', properties: {} },
+}
+
 // Who a talking model is and how it sounds, said to both kinds: on the
 // phone with one person, or in a chat platform's voice room with several.
 let butler = (name: string, room?: string) =>
@@ -794,7 +809,11 @@ let LISTENING = (name: string, duplex: boolean) =>
     duplex
       ? 'from then on say nothing at all, not even that you are listening or ready,'
       : 'call stay_silent, with no words, and from then on speak only by calling answer (or talk, once they ask you to stop listening),'
-  } until you are named (${name}), asked something, or have something they must hear. Everything said is still heard and kept, and you can read it back or sum it up when asked; you may still do what they ask through your tools while you listen.`
+  } until you are named (${name}), asked something, or have something they must hear. Everything said is still heard and kept, and you can read it back or sum it up when asked; you may still do what they ask through your tools while you listen.${
+    duplex
+      ? ''
+      : ` When they ask you to take notes or keep minutes, call ${TAKE_NOTES.name} too.`
+  }`
 
 /** What a talking model is told: who it is, how it sounds, and that the
  * Operator does the work, through `ask`, or for a `duplex` model, which has
@@ -883,6 +902,17 @@ export let talking = (o: Talking): Call => {
     plays: () => c.plays(!asking),
     ended: () => c.finish('ended'),
     call: async (name, args) => {
+      if (name == TAKE_NOTES.name) {
+        if (!o.notes) return `There is no tool called ${name}.`
+        return await o.notes().then(
+          () =>
+            'Noted. Keep listening: the notes are written from what is said once the call ends.',
+          (error) => {
+            c.report(error)
+            return FAILED
+          },
+        )
+      }
       let look = looks.get(name)
       if (look) {
         return await look.read().catch((error) => {
@@ -1189,7 +1219,7 @@ export let calling = async (
         new Date(),
         'voice',
       ),
-    done: ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
+    done: async ({ seconds, turns, ended }: Parameters<Around['done']>[0]) => {
       if (live.get(key) == call) live.delete(key)
       // How long each turn waited, for comparing providers, models and
       // lines.
@@ -1204,23 +1234,34 @@ export let calling = async (
         ended,
         turns,
       }))
-      return Promise.resolve()
+      // Notes asked of it are written from every line it kept.
+      await noted
+      let asked = await notesOf(operator.store, space, ticket, ticket.call)
+        .catch((e) => defect(e, CALL))
+      if (asked) await armed()
     },
     hangup: o.hangup,
   }
   // A talking model's call, line by line, kept in order: where it began,
   // then what was said on it.
   let noted = Promise.resolve()
-  let note = (
+  let keeping = (
     text: string,
-    o: { said?: boolean; began?: boolean; heard?: boolean },
-  ) =>
-    noted = noted.then(() =>
+    o: { said?: boolean; began?: boolean; notes?: boolean; heard?: boolean },
+  ) => {
+    let kept = noted.then(() =>
       operator.note({ person: ticket.person }, space, text, {
         call: ticket.call,
         ...o,
       })
-    ).catch((e) => defect(e, CALL))
+    )
+    noted = kept.catch((e) => defect(e, CALL))
+    return kept
+  }
+  let note = (text: string, o: Parameters<typeof keeping>[1]) => {
+    keeping(text, o)
+    return noted
+  }
   let glance = {
     store: operator.store,
     space: space.eid,
@@ -1233,7 +1274,7 @@ export let calling = async (
   let roomTitle = ticket.room
     ? (await import('./chat.ts')).PLATFORMS.get(ticket.room.via)?.title
     : undefined
-  let tools = [ASK, ...looked.map(({ read: _, ...tool }) => tool)]
+  let tools = [ASK, TAKE_NOTES, ...looked.map(({ read: _, ...tool }) => tool)]
   // A duplex model whose Operator picked a larger model on its provider's
   // side hands its work there, offered the Operator's own tools through the
   // caller's reach; where those cannot be read, the call goes on handing its
@@ -1307,11 +1348,90 @@ export let calling = async (
             said,
             ...!said && others?.heard() ? { heard: true } : {},
           }),
+        notes: () => keeping('', { notes: true }),
         tools: own,
         talk,
       })
     },
   }
+}
+
+let part = (b: Bundle, name: string) => b[name] as Comp | undefined
+
+/**
+ * What was said on a call, a line each, oldest first, from the rows its
+ * conversation kept of it (`Operator.note`): the caller's words as heard,
+ * under who spoke in a voice room, and its voice's under `name`. Where it
+ * began, that notes were asked for, and what its voice asked the Operator
+ * are no one's words aloud.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { transcriptOf } from './operator-calls.ts'
+ * let row = (seq: number, call: object, body = '') => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq },
+ *   operator_call: { call: 'c', ...call }, content: { body },
+ * })
+ * equal(transcriptOf([
+ *   row(3, {}, 'Ann: Ship it Friday.'),
+ *   row(1, { began: true }, 'They called you.'),
+ *   row(2, { said: true }, 'Hello.'),
+ *   row(4, { notes: true }, 'Notes were asked for.'),
+ *   row(5, { asked: true }, 'Book the hall'),
+ * ], 'Ember'), ['Ember: Hello.', 'Ann: Ship it Friday.'])
+ * ```
+ */
+export let transcriptOf = (rows: Bundle[], name: string) =>
+  rows.toSorted((a, b) =>
+    Number(part(a, 'entry')?.seq) - Number(part(b, 'entry')?.seq)
+  ).flatMap((b) => {
+    let called = part(b, 'operator_call')
+    let body = String(part(b, 'content')?.body ?? '').trim()
+    if (!called || called.began || called.notes || called.asked || !body) {
+      return []
+    }
+    return [called.said ? `${name}: ${body}` : body]
+  })
+
+/**
+ * Notes of `call`, written now from every line its conversation kept
+ * (`transcriptOf`), when they were asked for on it (`TAKE_NOTES`, chat-voice
+ * `voice_notes`), or `always`: the call's lines go to the Operator in that
+ * conversation on the `notes` channel, whose answer is put in Updates
+ * (operator-channels.ts). Lines written into notes once are not again: the
+ * request is named by the call and how many lines it had. Answers whether a
+ * request was written.
+ */
+export let notesOf = async (
+  store: Pick<Operator['store'], 'g'>,
+  space: Space,
+  ticket: Pick<Ticket, 'person' | 'via' | 'to'>,
+  call: string,
+  always = false,
+) => {
+  let rows = await store.g.read(q`.operator_call.call=${call}&*`)
+  if (!always && !rows.some((r) => part(r, 'operator_call')?.notes)) {
+    return false
+  }
+  let lines = transcriptOf(rows, space.operator ?? 'the Operator')
+  if (!lines.length) return false
+  await receive(
+    store as Operator['store'],
+    {
+      space: space.eid,
+      person: ticket.person,
+      channel: NOTES,
+      via: ticket.via,
+      reply_to: ticket.to,
+    },
+    lines.join('\n'),
+    {
+      id: requestId(space.eid, `notes ${call} ${lines.length}`),
+      title: 'Notes of the call',
+      heard: true,
+    },
+  )
+  return true
 }
 
 /** The line a call's audio streams over, and how it is hung up: a phone

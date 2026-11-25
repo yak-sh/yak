@@ -43,7 +43,7 @@ import {
 import { passes } from '@yaks/session/turn'
 import { derivedEid } from '@yaks/graph/identity'
 import { short } from '@yaks/id'
-import { CALLED, channelOf, HEARD } from './operator-view.ts'
+import { CALLED, channelOf, HEARD, NOTED } from './operator-view.ts'
 import { cameBy } from './operator-draw.ts'
 import { fetchable } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
@@ -2682,7 +2682,10 @@ export let operating = (
         ? [chatRoomSet(store)]
         : [],
       ...voiced
-        ? [(await import('./chat-voice.ts')).voiceJoin(env, store, space)]
+        ? await import('./chat-voice.ts').then((v) => [
+          v.voiceJoin(env, store, space),
+          v.voiceNotes(store, space, note, env),
+        ])
         : [],
       acts && wide.length
         ? chatSend(env, store, true)
@@ -3640,13 +3643,16 @@ export let operating = (
   // model: where it began, then each line as it was said, the caller's as
   // their words by phone and the talking model's as the Operator's own
   // (`notice.own`), so its next turn reads what it said as said by itself.
+  // That notes of it were asked for is the system's line, as where it began
+  // is.
   let note: Operator['note'] = async (held, space, text, o) => {
     let { session, fresh } = await conversing(held, space)
+    let marked = o.began || o.notes
     let line = o.said ? { content: { body: text }, notice: { own: true } } : {
-      content: { body: o.began ? CALLED : text },
+      content: { body: o.began ? CALLED : o.notes ? NOTED : text },
       intake: { source: '' },
       notice: {},
-      channel: channelOf('voice', o.began ? '' : HEARD),
+      channel: channelOf('voice', marked ? '' : HEARD),
       ...o.heard ? { heard: {} } : {},
     }
     await g.apply([
@@ -3657,7 +3663,7 @@ export let operating = (
           session,
           from: o.said
             ? 'your voice on the call'
-            : o.began
+            : marked
             ? 'the system'
             : 'the person on the phone',
         },
@@ -3666,6 +3672,7 @@ export let operating = (
           call: o.call,
           ...o.said ? { said: true } : {},
           ...o.began ? { began: true } : {},
+          ...o.notes ? { notes: true } : {},
         },
         $actor: { by: o.said ? space.eid : held.person, via: session },
       },
@@ -4029,15 +4036,22 @@ export type Operator = {
     o?: Asking,
   ) => Promise<{ task: string; session: string; input: string }>
   /** A line of a call its talking model hears and speaks: the caller's
-   * words, its talking model's (`said`), or that the call began (`began`),
-   * kept in the person's conversation as passive context, starting no turn.
+   * words, its talking model's (`said`), that the call began (`began`), or
+   * that notes of it were asked for (`notes`), kept in the person's
+   * conversation as passive context, starting no turn.
    * Words that may be someone else's than the turn's person are `heard`,
    * and steer it (@yaks/session `steered`). */
   note: (
     held: Asker,
     space: Space,
     text: string,
-    o: { call: string; said?: boolean; began?: boolean; heard?: boolean },
+    o: {
+      call: string
+      said?: boolean
+      began?: boolean
+      notes?: boolean
+      heard?: boolean
+    },
   ) => Promise<void>
   /** The tools the person's conversation is offered, for another model
    * working for them to call through the same reach: each `run` answers in

@@ -969,7 +969,9 @@ type Fold = {
 // The caller's words on a call, as they were heard.
 let heard = (b?: Bundle) => {
   let called = comp(b, 'operator_call')
-  if (!b || !called || called.said || called.began || !b.notice) return
+  if (
+    !b || !called || called.said || called.began || called.notes || !b.notice
+  ) return
   let said = spoken(b, String(comp(b, 'content')?.body ?? ''))
   return said ? { b, said } : undefined
 }
@@ -1034,11 +1036,12 @@ let contact = (b: Bundle): Said => ({
 })
 
 // A line of a call its talking model hears and speaks: theirs, or its own
-// (old rows, before its own were outputs). Where the call began is the
-// model's to read; what it asked of the Operator is the person's words.
+// (old rows, before its own were outputs). Where the call began, and that
+// notes of it were asked for, are the model's to read; what it asked of the
+// Operator is the person's words.
 let onCall = (b: Bundle, heard: Heard): Said | null | undefined => {
   let called = comp(b, 'operator_call')!
-  if (called.began) return null
+  if (called.began || called.notes) return null
   if (!b.notice || !said(b)) return undefined
   return called.said
     ? { node: reply(spoken(b, said(b))) }

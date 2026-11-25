@@ -478,6 +478,11 @@ export let operatorDoc: VocabDoc = {
           description:
             'What the talking model asked the Operator for the caller (operator_request.call), rather than what either said aloud.',
         },
+        notes: {
+          type: 'boolean',
+          description:
+            'That notes of the call were asked for here, rather than words said on it: when the call ends, the Operator writes them from its lines, in Updates (operator-calls.ts `notesOf`).',
+        },
       },
     },
     operator_stopped: {

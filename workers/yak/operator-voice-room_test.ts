@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
-import { discord } from '@yaks/discord'
+import { discord, line as roomLine } from '@yaks/discord'
+import type { Socket, Talked } from '@yaks/speech'
 import type { Comp } from '@yaks/graph'
 import { inputOf } from '@yaks/session/intake'
 import { guestOf, linked } from './chat.ts'
@@ -8,7 +9,8 @@ import { owned } from './directory-fixture.ts'
 import { platform } from './directory-rows-probe.ts'
 import { opened } from './lib/token.ts'
 import { KERNEL, meta } from './meta.ts'
-import type { Ticket } from './operator-calls.ts'
+import { calling, type Ticket } from './operator-calls.ts'
+import { setupOf } from './speech.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 import { drain } from './operator-store.ts'
 import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
@@ -180,4 +182,96 @@ test("a stranger's voice turn reads what was said, not a member's tool calls", a
   equal(calls(guest), 0)
   equal(guest.filter((line) => line.includes('is invited')).length, 1)
   equal(calls(await turn('ann')), 2)
+})
+
+// Asked aloud to take notes, the call is marked; once it ends, the Operator
+// writes them from every line the call kept, never its audio, into the
+// Updates of everyone in the space.
+test('a voice room call with lines and a notes request yields notes when it ends', async () => {
+  let { env, dir } = platform('voice-notes')
+  let space = (await dir.at(
+    await owned({ dir, person: crypto.randomUUID() }, 'barn'),
+  ))!
+  let room = {
+    via: 'discord',
+    connection: crypto.randomUUID(),
+    server: 'barn',
+    room: 'lounge',
+  }
+  let stream = new URL(await roomCall(env, space, room, 'ann'))
+  let ticket = (await opened<Ticket>(
+    'call',
+    stream.searchParams.get('call')!,
+    env.SESSION_SECRET!,
+  ))!
+  let store = operatorMemory()
+  let read: string[] = []
+  let operator = operating(
+    store,
+    env,
+    operatorModel((req) => {
+      read.push(req.items.map((i) => 'text' in i ? i.text : '').join('\n'))
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: '- The barn opens Friday.' }],
+        cost: 0,
+      })
+    }),
+  )
+  handleChannels(operator, env)
+  let on: ((e: { data?: unknown }) => void)[] = []
+  let wire: Socket = {
+    send: () => {},
+    close: () => {},
+    addEventListener: (type, f) => void (type == 'message' && on.push(f)),
+  }
+  let c = await calling(env, operator, space, ticket, () => undefined, {
+    setup: setupOf(env, space),
+    perMinute: 0,
+    hangup: () => Promise.resolve(),
+    line: 'discord',
+  })
+  let told!: Talked
+  let call = c.talks({ stream: { wire, line: roomLine } }, (t) => {
+    told = t
+    let spent = () => ({ seconds: 0, dollars: 0 })
+    return {
+      send: () => {},
+      say: () => {},
+      tell: () => {},
+      spent,
+      close: spent,
+    }
+  })
+  c.begin(call)
+  let say = (words: string) => {
+    told.heard!(words)
+    told.done!()
+  }
+  say('Ann: Ember, take notes and stay quiet.')
+  equal(
+    await told.call('take_notes', '{}'),
+    'Noted. Keep listening: the notes are written from what is said once the call ends.',
+  )
+  say('Ann: The barn opens Friday.')
+  await drain(store)
+  // Nothing is written while the call goes on.
+  equal([read, await store.g.read('.notification')], [[], []])
+  on.forEach((h) => h({ data: JSON.stringify({ event: 'stop' }) }))
+  // Once it ends, the Operator is given every line said on it.
+  await call.ended
+  await drain(store)
+  equal(read.length, 1)
+  equal(
+    read[0].includes(
+      'Ann: Ember, take notes and stay quiet.\nAnn: The barn opens Friday.',
+    ),
+    true,
+  )
+  let notes = await store.g.read('.notification&*')
+  equal(notes.map((n) => [(n.notification as Comp).to, n.doc]), [[
+    space.eid,
+    { title: 'Notes of the Discord call', body: '- The barn opens Friday.' },
+  ]])
 })

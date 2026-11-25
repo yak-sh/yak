@@ -133,6 +133,11 @@ export let HEARD = 'By phone: '
  * it, which the conversation leaves out. */
 export let CALLED = 'They called you, and your voice on the call answered.'
 
+/** What the Operator reads where notes of such a call were asked for, which
+ * the conversation leaves out. */
+export let NOTED =
+  'Notes of this call were asked for: when it ends, you write them from what was said on it, for their Updates.'
+
 /** How words came (@yaks/session `channel`): their channel, and the framing
  * the model reads before them, which the conversation leaves out. */
 export let channelOf = (name: string, framing = '') => ({
@@ -208,7 +213,9 @@ export let wordsOf = (entries: Bundle[]): string[] => {
   return sorted.flatMap((b) => {
     let body = String(comp(b, 'content')?.body ?? '')
     let called = comp(b, 'operator_call')
-    if (!body || inside.has(b.entity.eid) || called?.began) return []
+    if (!body || inside.has(b.entity.eid) || called?.began || called?.notes) {
+      return []
+    }
     // A helper's report, the platform's own words and a model's thought are
     // no one's speech.
     if (told(b, body) || b.system || b.reasoning) return []

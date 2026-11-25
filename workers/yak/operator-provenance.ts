@@ -14,7 +14,7 @@ export let inputSource = (entry: Bundle): string | undefined => {
   if (channel == 'voice') {
     return call?.asked || call?.said
       ? 'your voice on the call'
-      : call?.began
+      : call?.began || call?.notes
       ? 'the system'
       : 'the person on the phone'
   }
